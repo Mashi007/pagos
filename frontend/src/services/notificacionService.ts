@@ -363,6 +363,55 @@ export type ReciboConciliacionFila = ClienteRetrasadoItem & {
   documento_tipo?: string | null
 }
 
+/** Detalle por cédula en POST /notificaciones/recibos/ejecutar (truncado en servidor). */
+export interface RecibosEjecutarEnvioDetalle {
+  cedula?: string
+
+  motivo?: string
+
+  error?: string
+
+  [key: string]: unknown
+}
+
+/** Respuesta de POST /notificaciones/recibos/ejecutar (simulación o envío real). */
+export interface RecibosEjecutarEnvioResponse {
+  fecha_dia: string
+
+  slot: string
+
+  solo_simular: boolean
+
+  sin_casos_en_ventana: boolean
+
+  pagos_en_ventana: number
+
+  cedulas_distintas: number
+
+  enviados: number
+
+  fallidos: number
+
+  omitidos_sin_email: number
+
+  omitidos_ya_enviado: number
+
+  omitidos_desistimiento: number
+
+  omitidos_sin_datos: number
+
+  omitidos_error_estado_cuenta: number
+
+  omitidos_cedula_desalineada: number
+
+  detalles: RecibosEjecutarEnvioDetalle[]
+
+  /** Códigos de negocio p. ej. `email_activo_recibos_desactivado` (HTTP 200). */
+  error?: string
+
+  hoy_negocio?: string
+}
+
 /** Un registro del historial de envíos por cédula (para reportes/legales). */
 
 export interface HistorialEnvioItem {
@@ -1309,14 +1358,14 @@ class NotificacionService {
     )
   }
 
-  /** Ejecuta envío Recibos (mismo criterio que el job programado). */
+  /** Ejecuta envío Recibos (mismo criterio que el motor de envío en servidor). */
   async ejecutarRecibosEnvio(body: {
     fecha_caracas?: string
     solo_simular?: boolean
     /** Solo envío real: día pasado explícito (admin). */
     forzar_envio_fecha_pasada?: boolean
-  }): Promise<Record<string, unknown>> {
-    return await apiClient.post(
+  }): Promise<RecibosEjecutarEnvioResponse> {
+    return await apiClient.post<RecibosEjecutarEnvioResponse>(
       `${API_V1}/notificaciones/recibos/ejecutar`,
       {
         fecha_caracas: body.fecha_caracas,
@@ -1349,7 +1398,7 @@ class NotificacionService {
 
   /**
    * Vista previa de la plantilla **ya persistida** (BD o archivo por defecto), con el mismo pipeline
-   * que `send_email` — idéntica fuente que job y envío masivo Recibos.
+   * que `send_email` — idéntica fuente que el envío masivo Recibos en servidor.
    */
   async obtenerPlantillaRecibosHtmlVistaEnvio(): Promise<{ html: string }> {
     return await apiClient.get<{ html: string }>(
@@ -1357,7 +1406,7 @@ class NotificacionService {
     )
   }
 
-  /** Persiste la plantilla en el servidor (mismo archivo que usa el job). */
+  /** Persiste la plantilla en el servidor (misma fuente que el envío Recibos en servidor). */
   async guardarPlantillaRecibosHtml(html: string): Promise<{ ok: boolean }> {
     return await apiClient.put(`${API_V1}/notificaciones/recibos/plantilla-correo-html`, {
       html,

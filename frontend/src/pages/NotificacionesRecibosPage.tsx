@@ -41,13 +41,14 @@ import {
 import {
   notificacionService,
   type ReciboConciliacionFila,
+  type RecibosEjecutarEnvioResponse,
 } from '../services/notificacionService'
 import { apiClient } from '../services/api'
 import { pathApiComprobanteImagenDesdeHref } from '../utils/comprobanteImagenAuth'
 import { prestamoService } from '../services/prestamoService'
 import { NOTIFICACIONES_RECIBOS_LISTADO_QUERY_KEY_PREFIX } from '../constants/queryKeys'
 import { toast } from 'sonner'
-import { getErrorMessage } from '../types/errors'
+import { getErrorMessage, isAxiosError } from '../types/errors'
 import {
   SortArrowsCuotas,
   filaCoincideFiltroCedulaNotif,
@@ -92,6 +93,21 @@ function textoFechaRegistroListado(s: string | null | undefined): string {
   const t = String(s ?? '').trim()
   if (!t) return '-'
   return t.length >= 16 ? t.slice(0, 16).replace('T', ' ') : t
+}
+
+function mensajeRecibosRespuestaError(codigo: string): string {
+  switch (codigo) {
+    case 'email_activo_recibos_desactivado':
+      return 'Recibos está desactivado en Configuración > Correo (servicio recibos). Actívelo para envío real o use «Simular» (con modo pruebas puede enviarse muestra SMTP).'
+    case 'envio_real_solo_fecha_recepcion_hoy_caracas':
+      return 'El envío real solo aplica al día de hoy en Caracas, salvo «Enviar lote pasado (real)» con confirmación.'
+    default:
+      return codigo ? `Respuesta del servidor: ${codigo}` : 'Error al ejecutar Recibos.'
+  }
+}
+
+function respuestaRecibosTieneErrorNegocio(out: RecibosEjecutarEnvioResponse): boolean {
+  return typeof out.error === 'string' && out.error.trim().length > 0
 }
 
 function CeldaFotografiaPagoRecibo({ row }: { row: ReciboConciliacionFila }) {
@@ -275,19 +291,37 @@ export default function NotificacionesRecibosPage() {
     number | null
   >(null)
   const [paginaRecibosListado, setPaginaRecibosListado] = useState(1)
+  const [envioManualEnCurso, setEnvioManualEnCurso] = useState(false)
+  const [envioLotePasadoEnCurso, setEnvioLotePasadoEnCurso] = useState(false)
+  const [simulacionEnCurso, setSimulacionEnCurso] = useState(false)
 
   const listadoKey = useMemo(
     () => [...NOTIFICACIONES_RECIBOS_LISTADO_QUERY_KEY_PREFIX, fechaCaracas || 'hoy'],
     [fechaCaracas]
   )
 
-  const { data, isFetching, refetch } = useQuery({
+  const {
+    data,
+    isFetching,
+    isError,
+    isPlaceholderData,
+    error: listadoError,
+    refetch,
+  } = useQuery({
     queryKey: listadoKey,
     queryFn: () =>
       notificacionService.listarRecibosConciliacion({
         fecha_caracas: fechaCaracas.trim() || undefined,
       }),
     enabled: activeTab === 'listado',
+    placeholderData: previousData => previousData,
+    retry: (failureCount, err) => {
+      if (isAxiosError(err)) {
+        const s = err.response?.status
+        if (typeof s === 'number' && s >= 400 && s < 500) return false
+      }
+      return failureCount < 2
+    },
   })
 
   const totalPagosListado = data?.total_pagos ?? 0
@@ -561,22 +595,30 @@ export default function NotificacionesRecibosPage() {
       )
       return
     }
+    setEnvioManualEnCurso(true)
     try {
       const out = await notificacionService.ejecutarRecibosEnvio({
         fecha_caracas: fechaCaracasTrim || undefined,
         solo_simular: false,
         forzar_envio_fecha_pasada: false,
       })
+      if (respuestaRecibosTieneErrorNegocio(out)) {
+        toast.error(mensajeRecibosRespuestaError(String(out.error)))
+        await refetch()
+        return
+      }
       if (out.sin_casos_en_ventana === true) {
         toast('Sin casos en la ventana: no se envió ningún correo.')
-        void refetch()
+        await refetch()
         return
       }
       const resumen = `enviados=${String(out.enviados)} fallidos=${String(out.fallidos)} cedulas=${String(out.cedulas_distintas)}`
       toast.success(`Envío manual: ${resumen}`)
-      void refetch()
+      await refetch()
     } catch (e) {
       toast.error(getErrorMessage(e))
+    } finally {
+      setEnvioManualEnCurso(false)
     }
   }
 
@@ -600,26 +642,64 @@ export default function NotificacionesRecibosPage() {
         'Se respeta idempotencia (recibos_email_envio por cédula y día). Los destinatarios son los del cliente.'
     )
     if (!ok) return
+    setEnvioLotePasadoEnCurso(true)
     try {
       const out = await notificacionService.ejecutarRecibosEnvio({
         fecha_caracas: fechaCaracasTrim,
         solo_simular: false,
         forzar_envio_fecha_pasada: true,
       })
+      if (respuestaRecibosTieneErrorNegocio(out)) {
+        toast.error(mensajeRecibosRespuestaError(String(out.error)))
+        await refetch()
+        return
+      }
       if (out.sin_casos_en_ventana === true) {
         toast('Sin casos en la ventana: no se envió ningún correo.')
-        void refetch()
+        await refetch()
         return
       }
       const resumen = `enviados=${String(out.enviados)} fallidos=${String(out.fallidos)} cedulas=${String(out.cedulas_distintas)}`
       toast.success(`Lote pasado: ${resumen}`)
-      void refetch()
+      await refetch()
     } catch (e) {
       toast.error(getErrorMessage(e))
+    } finally {
+      setEnvioLotePasadoEnCurso(false)
+    }
+  }
+
+  const simularEnvio = async () => {
+    setSimulacionEnCurso(true)
+    try {
+      const out = await notificacionService.ejecutarRecibosEnvio({
+        fecha_caracas: fechaCaracasTrim || undefined,
+        solo_simular: true,
+        forzar_envio_fecha_pasada: false,
+      })
+      if (respuestaRecibosTieneErrorNegocio(out)) {
+        toast.error(mensajeRecibosRespuestaError(String(out.error)))
+        return
+      }
+      if (out.sin_casos_en_ventana === true) {
+        toast(
+          'Simulación: sin casos en la ventana (ningún pago en la franja o ninguna cédula procesable).'
+        )
+        return
+      }
+      toast.success(
+        `Simulación: ${String(out.cedulas_distintas)} cédula(s), ${String(out.pagos_en_ventana)} pago(s) en ventana. No se escribe recibos_email_envio; con modo pruebas activo puede enviarse muestra SMTP por cédula.`
+      )
+    } catch (e) {
+      toast.error(getErrorMessage(e))
+    } finally {
+      setSimulacionEnCurso(false)
     }
   }
 
   const esFechaPasadaReal = Boolean(fechaCaracasTrim && fechaCaracasTrim < hoyCaracasIso)
+  const accionRecibosEnCurso =
+    envioManualEnCurso || envioLotePasadoEnCurso || simulacionEnCurso
 
   return (
     <div className="space-y-6">
@@ -639,32 +719,76 @@ export default function NotificacionesRecibosPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="max-w-md space-y-2">
-                <Label htmlFor="fecha-rec">Día de corte Caracas (YYYY-MM-DD)</Label>
+                <Label htmlFor="fecha-rec">Día de corte Caracas</Label>
                 <Input
                   id="fecha-rec"
-                  placeholder="Vacío = hoy — ventana: 00:00 a 23:45 Caracas de ese día"
+                  type="date"
+                  className="max-w-[11.5rem]"
                   value={fechaCaracas}
-                  title="Incluye pagos con fecha_registro ese día calendario Caracas desde 00:00 hasta 23:45 inclusive."
+                  title="Pagos con fecha_registro ese día en America/Caracas, 00:00–23:45 inclusive. Vacío = hoy."
                   onChange={e => setFechaCaracas(e.target.value)}
+                  disabled={accionRecibosEnCurso}
+                  helperText="Vacío = hoy. Ventana: 00:00–23:45 Caracas del día elegido."
                 />
                 <p className="text-xs text-muted-foreground">
                   Hoy (Caracas): <span className="font-mono">{hoyCaracasIso}</span>
                 </p>
+                <details className="rounded-md border border-slate-200 bg-slate-50/80 px-3 py-2 text-xs text-slate-700">
+                  <summary className="cursor-pointer font-medium text-slate-900">
+                    Ayuda: listado, ventana y envíos
+                  </summary>
+                  <div className="mt-2 space-y-2 leading-relaxed">
+                    <p>
+                      El listado muestra pagos pendientes de Recibos para el día de corte (aún sin registro
+                      en <code className="text-[11px]">recibos_email_envio</code> para ese día).
+                    </p>
+                    <p>
+                      <strong>Envío manual</strong> es SMTP real para <strong>hoy</strong> Caracas o fecha
+                      vacía. Para un día anterior use <strong>Enviar lote pasado (real)</strong> (confirmación).
+                    </p>
+                    <p>
+                      <strong>Simular</strong> recorre la misma lógica sin persistir envíos; con modo pruebas
+                      en Configuración &gt; Correo puede enviarse muestra SMTP por cédula.
+                    </p>
+                  </div>
+                </details>
               </div>
-              <p className="text-sm text-muted-foreground">
-                La tabla muestra solo pagos de clientes a los que <strong>aún no</strong> se les ha
-                registrado el correo Recibos para el día de corte elegido (tras «Envío manual» o lote
-                pasado, esas cédulas dejan de aparecer). El envío es <strong>solo manual</strong> desde
-                esta pantalla; no hay cron en servidor. Tras conciliar o procesar en{' '}
-                <strong>Pagos</strong> (incl. Gmail manual), la lista se refresca al volver aquí o al
-                pulsar «Actualizar listado». Respete modo pruebas y correo activo en Configuración Recibos.
-              </p>
+
+              {isError ? (
+                <div
+                  className="flex flex-col gap-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-950 sm:flex-row sm:items-center sm:justify-between"
+                  role="alert"
+                >
+                  <span>
+                    No se pudo cargar el listado: {getErrorMessage(listadoError)}
+                    {isPlaceholderData ? (
+                      <>
+                        {' '}
+                        <span className="block pt-1 text-xs font-normal text-red-900/90">
+                          La tabla debajo puede corresponder a la última fecha cargada con éxito;
+                          corrija el día de corte o pulse Reintentar.
+                        </span>
+                      </>
+                    ) : null}
+                  </span>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="shrink-0 border-red-300 bg-white text-red-900 hover:bg-red-100"
+                    onClick={() => void refetch()}
+                  >
+                    Reintentar
+                  </Button>
+                </div>
+              ) : null}
+
               <div className="flex flex-wrap gap-2">
                 <Button
                   type="button"
                   variant="outline"
                   onClick={() => void refetch()}
-                  disabled={isFetching}
+                  disabled={isFetching || accionRecibosEnCurso}
                 >
                   <RefreshCw
                     className={`mr-2 h-4 w-4 ${isFetching ? 'animate-spin' : ''}`}
@@ -675,18 +799,43 @@ export default function NotificacionesRecibosPage() {
                   type="button"
                   onClick={() => void ejecutar()}
                   disabled={
-                    isFetching || (data !== undefined && totalPagosListado === 0)
+                    isFetching ||
+                    isError ||
+                    accionRecibosEnCurso ||
+                    (data !== undefined && totalPagosListado === 0)
                   }
+                  aria-busy={envioManualEnCurso}
                   title={
                     data !== undefined && totalPagosListado === 0
                       ? 'No hay pagos pendientes en esta ventana para la fecha indicada.'
                       : esFechaPasadaReal
                         ? 'Para SMTP real con fecha anterior a hoy use «Enviar lote pasado (real)» (confirmación). Este botón solo envía el día de hoy (o fecha vacía = hoy).'
-                        : undefined
+                        : envioManualEnCurso
+                          ? 'Enviando correos y actualizando listado…'
+                          : undefined
                   }
                 >
-                  <Mail className="mr-2 h-4 w-4" />
-                  Envío manual
+                  {envioManualEnCurso ? (
+                    <Loader2 className="mr-2 h-4 w-4 shrink-0 animate-spin" aria-hidden />
+                  ) : (
+                    <Mail className="mr-2 h-4 w-4 shrink-0" aria-hidden />
+                  )}
+                  {envioManualEnCurso ? 'Enviando…' : 'Envío manual'}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => void simularEnvio()}
+                  disabled={isFetching || isError || accionRecibosEnCurso}
+                  aria-busy={simulacionEnCurso}
+                  title="Misma lógica que el envío real sin registrar recibos_email_envio. Permite cualquier fecha válida; con modo pruebas puede enviarse muestra SMTP."
+                >
+                  {simulacionEnCurso ? (
+                    <Loader2 className="mr-2 h-4 w-4 shrink-0 animate-spin" aria-hidden />
+                  ) : (
+                    <FlaskConical className="mr-2 h-4 w-4 shrink-0" aria-hidden />
+                  )}
+                  {simulacionEnCurso ? 'Simulando…' : 'Simular'}
                 </Button>
                 <Button
                   type="button"
@@ -695,16 +844,44 @@ export default function NotificacionesRecibosPage() {
                   onClick={() => void ejecutarLotePasadoReal()}
                   disabled={
                     isFetching ||
+                    isError ||
+                    accionRecibosEnCurso ||
                     (data !== undefined && totalPagosListado === 0) ||
                     !fechaCaracasTrim ||
                     fechaCaracasTrim >= hoyCaracasIso
                   }
-                  title="SMTP real para la fecha y franja seleccionadas (día anterior a hoy en Caracas)."
+                  aria-busy={envioLotePasadoEnCurso}
+                  title={
+                    envioLotePasadoEnCurso
+                      ? 'Enviando lote y actualizando listado…'
+                      : 'SMTP real para la fecha y franja seleccionadas (día anterior a hoy en Caracas).'
+                  }
                 >
-                  <Mail className="mr-2 h-4 w-4" />
-                  Enviar lote pasado (real)
+                  {envioLotePasadoEnCurso ? (
+                    <Loader2 className="mr-2 h-4 w-4 shrink-0 animate-spin" aria-hidden />
+                  ) : (
+                    <Mail className="mr-2 h-4 w-4 shrink-0" aria-hidden />
+                  )}
+                  {envioLotePasadoEnCurso ? 'Enviando lote…' : 'Enviar lote pasado (real)'}
                 </Button>
               </div>
+
+              {accionRecibosEnCurso ? (
+                <p
+                  className="flex items-center gap-2 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-950"
+                  role="status"
+                  aria-live="polite"
+                >
+                  <Loader2 className="h-4 w-4 shrink-0 animate-spin text-blue-700" aria-hidden />
+                  <span>
+                    {envioManualEnCurso
+                      ? 'Ejecutando envío manual Recibos (SMTP + registro en BD). Luego se actualiza el listado…'
+                      : envioLotePasadoEnCurso
+                        ? 'Ejecutando envío de lote pasado Recibos. Luego se actualiza el listado…'
+                        : 'Ejecutando simulación Recibos (sin persistir envíos en BD)…'}
+                  </span>
+                </p>
+              ) : null}
 
               {esFechaPasadaReal && totalPagosListado > 0 ? (
                 <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">
