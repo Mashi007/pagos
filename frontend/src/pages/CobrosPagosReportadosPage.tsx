@@ -932,7 +932,7 @@ export default function CobrosPagosReportadosPage() {
           ) : !data?.items?.length ? (
             <p className="text-gray-500">No hay registros.</p>
           ) : (
-            <div className="relative w-full max-w-full min-w-0 overflow-x-hidden rounded-lg border">
+            <div className="relative w-full max-w-full min-w-0 overflow-x-auto rounded-lg border">
               {refreshing ? (
                 <div
                   className="absolute inset-0 z-10 flex items-start justify-center bg-background/70 pt-10 backdrop-blur-[1px]"
@@ -945,62 +945,64 @@ export default function CobrosPagosReportadosPage() {
                   </span>
                 </div>
               ) : null}
-              <table className="w-full min-w-0 table-fixed text-sm">
+              <table className="w-full min-w-[960px] table-fixed text-sm">
                 <colgroup>
-                  <col style={{ width: '9%' }} />
-                  <col style={{ width: '10%' }} />
                   <col style={{ width: '8%' }} />
-                  <col style={{ width: '8%' }} />
-                  <col style={{ width: '10%' }} />
+                  <col style={{ width: '11%' }} />
                   <col style={{ width: '8%' }} />
                   <col style={{ width: '7%' }} />
-                  <col style={{ width: '9%' }} />
-                  <col style={{ width: '17%' }} />
+                  <col style={{ width: '11%' }} />
+                  <col style={{ width: '7%' }} />
+                  <col style={{ width: '7%' }} />
                   <col style={{ width: '8%' }} />
-                  <col style={{ width: '6%' }} />
+                  <col style={{ width: '15%' }} />
+                  <col style={{ width: '7%' }} />
+                  <col style={{ width: '11%' }} />
                 </colgroup>
 
                 <thead>
                   <tr className="border-b bg-muted/50">
-                    <th className="px-3 py-3 text-left font-semibold">
+                    <th className="px-2 py-2 text-left text-xs font-semibold sm:text-sm">
                       Cédula
                     </th>
 
-                    <th className="px-3 py-3 text-left font-semibold">Banco</th>
+                    <th className="px-2 py-2 text-left text-xs font-semibold sm:text-sm">
+                      Banco
+                    </th>
 
-                    <th className="px-3 py-3 text-right font-semibold">
+                    <th className="px-2 py-2 text-right text-xs font-semibold sm:text-sm">
                       Monto
                     </th>
 
-                    <th className="px-3 py-3 text-left font-semibold">
+                    <th className="px-2 py-2 text-left text-xs font-semibold sm:text-sm">
                       Fecha pago
                     </th>
 
-                    <th className="px-3 py-3 text-left font-semibold">
+                    <th className="px-2 py-2 text-left text-xs font-semibold sm:text-sm">
                       Nº operación
                     </th>
 
-                    <th className="px-3 py-3 text-left font-semibold">
+                    <th className="px-2 py-2 text-left text-xs font-semibold sm:text-sm">
                       Fecha reporte
                     </th>
 
-                    <th className="px-3 py-3 text-left font-semibold">
+                    <th className="px-2 py-2 text-left text-xs font-semibold sm:text-sm">
                       Origen
                     </th>
 
-                    <th className="px-3 py-3 text-center font-semibold">
+                    <th className="px-2 py-2 text-center text-xs font-semibold sm:text-sm">
                       Comprobante
                     </th>
 
-                    <th className="px-3 py-3 text-left font-semibold">
+                    <th className="px-2 py-2 text-left text-xs font-semibold sm:text-sm">
                       Observación
                     </th>
 
-                    <th className="px-3 py-3 text-left font-semibold">
+                    <th className="px-2 py-2 text-left text-xs font-semibold sm:text-sm">
                       Estado
                     </th>
 
-                    <th className="px-3 py-3 text-left font-semibold">
+                    <th className="px-2 py-2 text-right text-xs font-semibold sm:text-sm">
                       Acciones
                     </th>
                   </tr>
@@ -1014,7 +1016,7 @@ export default function CobrosPagosReportadosPage() {
                     >
                       <td
                         className={
-                          'whitespace-nowrap px-3 py-3 align-top ' +
+                          'whitespace-nowrap px-2 py-2 align-middle text-xs sm:text-sm ' +
                           (/c[eé]dula/i.test(row.observacion || '')
                             ? 'bg-destructive/10 font-medium text-destructive'
                             : '')
@@ -1035,16 +1037,16 @@ export default function CobrosPagosReportadosPage() {
                         {row.cedula_display}
                       </td>
 
-                      <td className="min-w-0 px-3 py-3 align-top">
+                      <td className="min-w-0 px-2 py-2 align-middle">
                         <span
-                          className="block truncate"
+                          className="block truncate text-xs sm:text-sm"
                           title={row.institucion_financiera}
                         >
                           {row.institucion_financiera}
                         </span>
                       </td>
 
-                      <td className="whitespace-nowrap px-3 py-3 text-right align-top">
+                      <td className="whitespace-nowrap px-2 py-2 text-right align-middle text-xs sm:text-sm">
                         <span>
                           {row.monto} {row.moneda}
                         </span>
@@ -1075,13 +1077,13 @@ export default function CobrosPagosReportadosPage() {
                         )}
                       </td>
 
-                      <td className="whitespace-nowrap px-3 py-3 align-top">
+                      <td className="whitespace-nowrap px-2 py-2 align-middle text-xs sm:text-sm">
                         {row.fecha_pago}
                       </td>
 
                       <td
                         className={
-                          'min-w-0 px-3 py-3 align-top ' +
+                          'min-w-0 px-2 py-2 align-middle ' +
                           (/DUPLICADO/i.test(row.observacion || '')
                             ? 'bg-amber-500/15 font-medium text-amber-900 dark:text-amber-100'
                             : '')
@@ -1092,60 +1094,60 @@ export default function CobrosPagosReportadosPage() {
                             : row.numero_operacion
                         }
                       >
-                        <span className="block truncate font-mono text-xs">
+                        <span className="block truncate font-mono text-[11px] sm:text-xs">
                           {row.numero_operacion}
                         </span>
                       </td>
 
-                      <td className="whitespace-nowrap px-3 py-3 align-top">
+                      <td className="whitespace-nowrap px-2 py-2 align-middle text-xs sm:text-sm">
                         {new Date(row.fecha_reporte).toLocaleDateString()}
                       </td>
 
                       <td
-                        className="min-w-0 px-3 py-3 align-top text-xs"
+                        className="min-w-0 px-2 py-2 align-middle text-[11px] sm:text-xs"
                         title="Infopagos y formulario publico comparten esta cola y las mismas reglas."
                       >
                         {etiquetaCanalReportado(row.canal_ingreso)}
                       </td>
 
-                      <td className="px-2 py-3 align-middle">
+                      <td className="px-2 py-2 align-middle">
                         {row.tiene_comprobante ? (
                           <button
                             type="button"
                             onClick={() => handleVerComprobante(row.id)}
                             disabled={viewingComprobanteId === row.id}
-                            className="flex w-full min-w-0 flex-col items-center justify-center gap-1 rounded-lg border border-slate-200/80 bg-slate-50/80 px-2 py-2 text-center text-xs font-semibold text-[#1e3a5f] shadow-sm transition-colors hover:border-[#1e3a5f]/30 hover:bg-white focus:outline-none focus:ring-2 focus:ring-[#1e3a5f]/25 disabled:opacity-60 sm:flex-row sm:text-left"
+                            className="mx-auto inline-flex max-w-full min-w-0 items-center justify-center gap-1 rounded-md border border-border bg-muted/30 px-2 py-1 text-[11px] font-medium text-foreground shadow-none transition-colors hover:bg-muted/60 focus:outline-none focus:ring-2 focus:ring-ring/40 disabled:opacity-60"
                             title="Abrir imagen o PDF del comprobante"
                           >
                             {viewingComprobanteId === row.id ? (
                               <Loader2
-                                className="h-4 w-4 shrink-0 animate-spin"
+                                className="h-3.5 w-3.5 shrink-0 animate-spin"
                                 aria-hidden
                               />
                             ) : (
                               <Eye
-                                className="h-4 w-4 shrink-0 opacity-80"
+                                className="h-3.5 w-3.5 shrink-0 opacity-80"
                                 aria-hidden
                               />
                             )}
-                            <span className="leading-tight underline decoration-[#1e3a5f]/35 underline-offset-2">
-                              Ver comprobante
+                            <span className="truncate underline decoration-muted-foreground/40 underline-offset-2">
+                              Ver
                             </span>
                           </button>
                         ) : (
                           <div
-                            className="flex min-h-[52px] flex-col items-center justify-center rounded-lg border border-dashed border-muted-foreground/25 bg-muted/20 px-2 py-2 text-center"
+                            className="mx-auto flex max-w-[5.5rem] items-center justify-center rounded-md border border-dashed border-muted-foreground/30 bg-muted/15 px-1.5 py-1 text-center"
                             title="Sin archivo adjunto en este reporte"
                           >
-                            <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                              No disponible
+                            <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                              Sin archivo
                             </span>
                           </div>
                         )}
                       </td>
 
                       <td
-                        className="min-w-0 px-3 py-3 align-top"
+                        className="min-w-0 px-2 py-2 align-middle"
                         title={
                           /NO CLIENTES/i.test(row.observacion || '')
                             ? 'NO CLIENTES: la cédula del reporte (' +
@@ -1178,7 +1180,7 @@ export default function CobrosPagosReportadosPage() {
                         )}
                       </td>
 
-                      <td className="whitespace-nowrap px-3 py-3 align-top">
+                      <td className="whitespace-nowrap px-2 py-2 align-middle">
                         {(() => {
                           const cfg = ESTADO_CONFIG[row.estado] ?? {
                             label: row.estado,
@@ -1192,26 +1194,26 @@ export default function CobrosPagosReportadosPage() {
                           return (
                             <Badge
                               variant={cfg.variant}
-                              className="inline-flex items-center gap-1 font-normal"
+                              className="inline-flex max-w-full items-center gap-0.5 px-1.5 py-0.5 text-[11px] font-normal leading-tight"
                               title={cfg.label}
                             >
                               <Icon
-                                className="h-3.5 w-3.5 shrink-0"
+                                className="h-3 w-3 shrink-0"
                                 aria-hidden
                               />
 
-                              <span>{cfg.short}</span>
+                              <span className="truncate">{cfg.short}</span>
                             </Badge>
                           )
                         })()}
                       </td>
 
-                      <td className="px-3 py-3 align-top">
-                        <div className="flex flex-wrap items-center justify-start gap-1">
+                      <td className="px-2 py-2 align-middle">
+                        <div className="flex flex-nowrap items-center justify-end gap-0.5 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                           {/* Estado envío recibo: X = no enviado, visto = entregado, triángulo = en revisión */}
 
                           <span
-                            className="flex h-8 w-8 shrink-0 items-center justify-center text-muted-foreground"
+                            className="flex h-7 w-7 shrink-0 items-center justify-center text-muted-foreground"
                             title={
                               row.estado === 'aprobado'
                                 ? row.tiene_recibo_pdf && row.correo_enviado_a
@@ -1223,18 +1225,18 @@ export default function CobrosPagosReportadosPage() {
                             {row.estado === 'aprobado' ? (
                               row.tiene_recibo_pdf && row.correo_enviado_a ? (
                                 <CheckCircle
-                                  className="h-4 w-4 text-green-600"
+                                  className="h-3.5 w-3.5 text-green-600"
                                   aria-hidden
                                 />
                               ) : (
                                 <XCircle
-                                  className="h-4 w-4 text-muted-foreground"
+                                  className="h-3.5 w-3.5 text-muted-foreground"
                                   aria-hidden
                                 />
                               )
                             ) : (
                               <AlertTriangle
-                                className="h-4 w-4 text-blue-600"
+                                className="h-3.5 w-3.5 text-blue-600"
                                 aria-hidden
                               />
                             )}
@@ -1244,7 +1246,7 @@ export default function CobrosPagosReportadosPage() {
                             type="button"
                             variant="ghost"
                             size="icon"
-                            className="h-8 w-8 shrink-0"
+                            className="h-7 w-7 shrink-0"
                             title="Ver detalle"
                             onClick={() =>
                               navigate(
@@ -1252,7 +1254,7 @@ export default function CobrosPagosReportadosPage() {
                               )
                             }
                           >
-                            <FileText className="h-4 w-4" />
+                            <FileText className="h-3.5 w-3.5" />
                           </Button>
 
                           {(row.estado === 'pendiente' ||
@@ -1262,7 +1264,7 @@ export default function CobrosPagosReportadosPage() {
                               type="button"
                               variant="ghost"
                               size="icon"
-                              className="h-8 w-8 shrink-0"
+                              className="h-7 w-7 shrink-0"
                               title="Editar (monto, referencia, cédula, etc.)"
                               onClick={() =>
                                 navigate(
@@ -1272,7 +1274,7 @@ export default function CobrosPagosReportadosPage() {
                                 )
                               }
                             >
-                              <Edit className="h-4 w-4" />
+                              <Edit className="h-3.5 w-3.5" />
                             </Button>
                           )}
 
@@ -1282,20 +1284,20 @@ export default function CobrosPagosReportadosPage() {
                               type="button"
                               variant="ghost"
                               size="icon"
-                              className="h-8 w-8 shrink-0 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                              className="h-7 w-7 shrink-0 text-destructive hover:bg-destructive/10 hover:text-destructive"
                               title="Rechazar (escribir mensaje y enviar correo)"
                               onClick={() => handleAbrirModalRechazo(row)}
                               disabled={changingEstadoId === row.id}
                             >
                               {changingEstadoId === row.id ? (
-                                <Loader2 className="h-4 w-4 animate-spin" />
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
                               ) : (
-                                <XCircle className="h-4 w-4" />
+                                <XCircle className="h-3.5 w-3.5" />
                               )}
                             </Button>
                           )}
 
-                          <div className="relative inline-block h-8 w-8 shrink-0 overflow-hidden rounded-md">
+                          <div className="relative inline-block h-7 w-7 shrink-0 overflow-hidden rounded-md">
                             <select
                               className="absolute inset-0 box-border h-full max-h-full w-full min-w-0 max-w-full cursor-pointer opacity-0 disabled:cursor-not-allowed"
                               value=""
@@ -1328,13 +1330,13 @@ export default function CobrosPagosReportadosPage() {
                             </select>
 
                             <span
-                              className="pointer-events-none flex h-8 w-8 items-center justify-center rounded-md border border-input bg-background"
+                              className="pointer-events-none flex h-7 w-7 items-center justify-center rounded-md border border-input bg-background"
                               title="Estado"
                             >
                               {changingEstadoId === row.id ? (
-                                <Loader2 className="h-4 w-4 animate-spin" />
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
                               ) : (
-                                <Settings className="h-4 w-4" />
+                                <Settings className="h-3.5 w-3.5" />
                               )}
                             </span>
                           </div>
@@ -1343,7 +1345,7 @@ export default function CobrosPagosReportadosPage() {
                             type="button"
                             variant="ghost"
                             size="icon"
-                            className="relative z-10 h-8 w-8 shrink-0 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                            className="relative z-10 h-7 w-7 shrink-0 text-destructive hover:bg-destructive/10 hover:text-destructive"
                             title="Eliminar"
                             onClick={() =>
                               handleEliminar(row.id, row.referencia_interna)
@@ -1351,9 +1353,9 @@ export default function CobrosPagosReportadosPage() {
                             disabled={deletingId === row.id}
                           >
                             {deletingId === row.id ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
                             ) : (
-                              <Trash2 className="h-4 w-4" />
+                              <Trash2 className="h-3.5 w-3.5" />
                             )}
                           </Button>
                         </div>
