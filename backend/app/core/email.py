@@ -101,6 +101,42 @@ def _normalize_attachments_for_smtp(
     return out
 
 
+# Gmail (552 5.3.4) y muchos SMTP limitan el tamaño total del mensaje (~25 MB con MIME/encoding).
+# Umbral conservador en bytes del PDF bruto antes de base64 y cabeceras.
+_COBRANZA_RECIBO_SMTP_MAX_BYTES = 18 * 1024 * 1024
+
+
+def cobros_recibo_attachments_or_oversize_note(
+    filename: str,
+    pdf_bytes: Optional[bytes],
+) -> Tuple[Optional[List[AttachmentType]], str]:
+    """
+    Devuelve (lista_adjuntos_o_None, sufijo_para_el_cuerpo).
+
+    Si el PDF supera el umbral seguro para SMTP típico, no adjunta y devuelve texto aclaratorio
+    para el cuerpo (evita 552 5.3.4 y reduce tiempo bloqueado en envío).
+    """
+    if not pdf_bytes:
+        return None, ""
+    raw = bytes(pdf_bytes)
+    if len(raw) <= _COBRANZA_RECIBO_SMTP_MAX_BYTES:
+        fn = (filename or "recibo.pdf").strip().replace("\r", "").replace("\n", "") or "recibo.pdf"
+        return [(fn, raw)], ""
+    mb = max(1, int(len(raw) / (1024 * 1024)))
+    note = (
+        f"\n\n(Nota) El recibo en PDF es demasiado grande para adjuntarlo por este correo (~{mb} MB). "
+        "No se adjuntó el archivo para evitar que el servidor lo rechace (límite de tamaño). "
+        "Puede solicitar el recibo por WhatsApp o por los canales de atención habituales, indicando su número de referencia.\n"
+    )
+    logger.info(
+        "[SMTP_ENVIO] recibo_pdf omitido por tamano filename=%s bytes=%s umbral=%s",
+        filename,
+        len(raw),
+        _COBRANZA_RECIBO_SMTP_MAX_BYTES,
+    )
+    return None, note
+
+
 def cuerpo_parece_html(cuerpo: Optional[str]) -> bool:
     """
     Indica si el cuerpo debe enviarse como text/html (no solo texto plano).

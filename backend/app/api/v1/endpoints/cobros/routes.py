@@ -31,7 +31,7 @@ from app.models.prestamo import Prestamo
 from app.models.pago import Pago
 from app.services.cobros.recibo_pdf import WHATSAPP_LINK, WHATSAPP_DISPLAY
 from app.services.documentos_cliente_centro import generar_recibo_pdf_desde_pago_reportado
-from app.core.email import send_email
+from app.core.email import cobros_recibo_attachments_or_oversize_note, send_email
 from app.utils.cliente_emails import emails_destino_desde_objeto, unir_destinatarios_log
 from app.services.notificaciones_exclusion_desistimiento import (
     cliente_bloqueado_por_desistimiento,
@@ -1581,17 +1581,34 @@ def aprobar_pago_reportado(
     )
     cobros_correo_activo = get_email_activo_servicio("cobros")
     if to_emails and cobros_correo_activo:
-        body = f"Su reporte de pago ha sido aprobado. Número de referencia: {_referencia_display(pr.referencia_interna)}. Adjunto encontrará el recibo.\n\nRapiCredit C.A."
+        att, size_note = cobros_recibo_attachments_or_oversize_note(
+            f"recibo_{pr.referencia_interna}.pdf", pdf_bytes
+        )
+        body = (
+            f"Su reporte de pago ha sido aprobado. Número de referencia: {_referencia_display(pr.referencia_interna)}.\n\n"
+            + (
+                "Adjunto encontrará el recibo en PDF.\n\n"
+                if att
+                else "No se adjunta el recibo en este correo (archivo demasiado grande para el servidor de correo).\n\n"
+            )
+            + size_note
+            + "RapiCredit C.A."
+        )
         ok_mail, err_mail = send_email(
             to_emails,
             f"Recibo de reporte de pago {_referencia_display(pr.referencia_interna)}",
             body,
-            attachments=[(f"recibo_{pr.referencia_interna}.pdf", pdf_bytes)],
+            attachments=att,
             servicio="cobros",
             respetar_destinos_manuales=True,
         )
         if ok_mail:
             logger.info("[COBROS] Aprobar ref=%s: recibo enviado por correo a %s.", pr.referencia_interna, dest_log)
+            if not att:
+                mensaje_final = (
+                    "Pago aprobado. Se envió un correo sin adjunto: el PDF del recibo supera el límite del proveedor "
+                    "de correo; el cliente puede solicitar copia por WhatsApp o desde cobranzas."
+                )
         else:
             logger.error(
                 "[COBROS] Aprobar ref=%s: correo NO enviado a %s. Error: %s.",
@@ -1832,15 +1849,24 @@ def enviar_recibo_manual(
     pdf_bytes = generar_recibo_pdf_desde_pago_reportado(db, pr)
     pr.recibo_pdf = pdf_bytes
     db.commit()
+    att, size_note = cobros_recibo_attachments_or_oversize_note(
+        f"recibo_{pr.referencia_interna}.pdf", bytes(pdf_bytes)
+    )
     body = (
         f"Recibo de reporte de pago. Número de referencia: {_referencia_display(pr.referencia_interna)}.\n\n"
-        "Adjunto encontrará el recibo.\n\nRapiCredit C.A."
+        + (
+            "Adjunto encontrará el recibo en PDF.\n\n"
+            if att
+            else "No se adjunta el recibo en este correo (archivo demasiado grande para el servidor de correo).\n\n"
+        )
+        + size_note
+        + "RapiCredit C.A."
     )
     ok_mail, err_mail = send_email(
         to_emails,
         f"Recibo de reporte de pago {_referencia_display(pr.referencia_interna)}",
         body,
-        attachments=[(f"recibo_{pr.referencia_interna}.pdf", bytes(pdf_bytes))],
+        attachments=att,
         servicio="cobros",
         respetar_destinos_manuales=True,
     )
@@ -1860,6 +1886,14 @@ def enviar_recibo_manual(
         pr.referencia_interna,
         unir_destinatarios_log(to_emails),
     )
+    if not att:
+        return {
+            "ok": True,
+            "mensaje": (
+                "Correo enviado sin adjunto: el PDF del recibo supera el límite del servidor de correo. "
+                "Indique al cliente que solicite copia por WhatsApp o cobranzas."
+            ),
+        }
     return {"ok": True, "mensaje": "Recibo enviado por correo."}
 
 
@@ -2132,12 +2166,24 @@ def cambiar_estado_pago(
         dest_log_ap = unir_destinatarios_log(to_emails)
         cobros_correo_activo = get_email_activo_servicio("cobros")
         if to_emails and cobros_correo_activo:
-            body_mail = f"Su reporte de pago ha sido aprobado. Número de referencia: {_referencia_display(pr.referencia_interna)}. Adjunto encontrará el recibo.\n\nRapiCredit C.A."
+            att, size_note = cobros_recibo_attachments_or_oversize_note(
+                f"recibo_{pr.referencia_interna}.pdf", pdf_bytes
+            )
+            body_mail = (
+                f"Su reporte de pago ha sido aprobado. Número de referencia: {_referencia_display(pr.referencia_interna)}.\n\n"
+                + (
+                    "Adjunto encontrará el recibo en PDF.\n\n"
+                    if att
+                    else "No se adjunta el recibo en este correo (archivo demasiado grande para el servidor de correo).\n\n"
+                )
+                + size_note
+                + "RapiCredit C.A."
+            )
             ok_mail, err_mail = send_email(
                 to_emails,
                 f"Recibo de reporte de pago {_referencia_display(pr.referencia_interna)}",
                 body_mail,
-                attachments=[(f"recibo_{pr.referencia_interna}.pdf", pdf_bytes)],
+                attachments=att,
                 servicio="cobros",
                 respetar_destinos_manuales=True,
             )
@@ -2147,7 +2193,14 @@ def cambiar_estado_pago(
                     pr.referencia_interna,
                     dest_log_ap,
                 )
-                mensaje = "Estado actualizado a aprobado. Recibo enviado por correo."
+                mensaje = (
+                    "Estado actualizado a aprobado. Recibo enviado por correo."
+                    if att
+                    else (
+                        "Estado actualizado a aprobado. Se envió correo sin adjunto: el PDF supera el límite del "
+                        "proveedor de correo."
+                    )
+                )
             else:
                 logger.error(
                     "[COBROS] Cambiar a aprobado ref=%s: correo NO enviado a %s. Error: %s.",

@@ -41,7 +41,7 @@ from app.services.cobros.recibo_pdf import (
 from app.services.documentos_cliente_centro import generar_recibo_pdf_desde_pago_reportado
 from app.services.cobros.recibo_cuotas_lookup import texto_cuotas_aplicadas_pago_reportado
 from app.services.cobros import cobros_publico_reporte_service as cpr
-from app.core.email import send_email
+from app.core.email import cobros_recibo_attachments_or_oversize_note, send_email
 from app.services.notificaciones_exclusion_desistimiento import cliente_bloqueado_por_desistimiento
 from app.core.security import decode_token, create_recibo_infopagos_token, create_cobros_public_token
 from app.core.config import settings
@@ -609,17 +609,26 @@ async def enviar_reporte_publico(
                 to_emails = []
 
             if to_emails:
+                att, size_note = cobros_recibo_attachments_or_oversize_note(
+                    f"recibo_{referencia}.pdf", pdf_bytes
+                )
                 body = (
                     f"Se ha recibido su reporte de pago.\n\n"
                     f"Número de referencia: {cpr.referencia_display(referencia)}\n\n"
-                    f"El recibo se adjunta. Si necesita información adicional, contáctenos por WhatsApp: {WHATSAPP_LINK}\n\n"
-                    "RapiCredit C.A."
+                    + (
+                        "El recibo se adjunta en PDF.\n\n"
+                        if att
+                        else "El recibo no se adjunta en este correo (archivo demasiado grande para el servidor de correo).\n\n"
+                    )
+                    + f"Si necesita información adicional, contáctenos por WhatsApp: {WHATSAPP_LINK}\n\n"
+                    + size_note
+                    + "RapiCredit C.A."
                 )
                 ok_mail, err_mail = send_email(
                     to_emails,
                     f"Recibo de reporte de pago {cpr.referencia_display(referencia)}",
                     body,
-                    attachments=[(f"recibo_{referencia}.pdf", pdf_bytes)],
+                    attachments=att,
                     servicio="cobros",
                     respetar_destinos_manuales=True,
                 )
@@ -856,17 +865,26 @@ async def enviar_reporte_infopagos(
                 to_emails = []
 
             if to_emails:
+                att, size_note = cobros_recibo_attachments_or_oversize_note(
+                    f"recibo_{referencia}.pdf", pdf_bytes
+                )
                 body = (
                     f"Se ha registrado un pago a su nombre.\n\n"
                     f"Número de referencia: {cpr.referencia_display(referencia)}\n\n"
-                    f"El recibo se adjunta. Si necesita información adicional, contáctenos por WhatsApp: {WHATSAPP_LINK}\n\n"
-                    "RapiCredit C.A."
+                    + (
+                        "El recibo se adjunta en PDF.\n\n"
+                        if att
+                        else "El recibo no se adjunta en este correo (archivo demasiado grande para el servidor de correo).\n\n"
+                    )
+                    + f"Si necesita información adicional, contáctenos por WhatsApp: {WHATSAPP_LINK}\n\n"
+                    + size_note
+                    + "RapiCredit C.A."
                 )
                 ok_mail, err_mail = send_email(
                     to_emails,
                     f"Recibo de pago {cpr.referencia_display(referencia)}",
                     body,
-                    attachments=[(f"recibo_{referencia}.pdf", pdf_bytes)],
+                    attachments=att,
                     servicio="cobros",
                     respetar_destinos_manuales=True,
                 )
