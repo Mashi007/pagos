@@ -8,7 +8,7 @@ Uso (raíz del repo, con DATABASE_URL / .env del backend):
   python scripts/backfill_pagos_doc_canon.py
 
 Opcional:
-  python scripts/backfill_pagos_doc_canon.py --batch 3000
+  python scripts/backfill_pagos_doc_canon.py --batch 4000
 """
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ BACKEND = ROOT / "backend"
 if str(BACKEND) not in sys.path:
     sys.path.insert(0, str(BACKEND))
 
-from sqlalchemy import select, update  # noqa: E402
+from sqlalchemy import and_, func, or_, select  # noqa: E402
 
 from app.core.database import SessionLocal  # noqa: E402
 from app.core.documento import normalize_documento  # noqa: E402
@@ -30,18 +30,24 @@ from app.models.pago import Pago  # noqa: E402
 
 def main() -> int:
     p = argparse.ArgumentParser()
-    p.add_argument("--batch", type=int, default=2500, help="Filas por iteración")
+    p.add_argument("--batch", type=int, default=4000, help="Filas por lote (bulk_update)")
     args = p.parse_args()
 
     db = SessionLocal()
     total = 0
     try:
-        last_id = 0
         while True:
+            nd_nonempty = func.trim(func.coalesce(Pago.numero_documento, "")) != ""
+            rp_nonempty = func.trim(func.coalesce(Pago.referencia_pago, "")) != ""
             rows = (
                 db.execute(
                     select(Pago.id, Pago.numero_documento, Pago.referencia_pago)
-                    .where(Pago.id > last_id)
+                    .where(
+                        or_(
+                            and_(Pago.doc_canon_numero.is_(None), nd_nonempty),
+                            and_(Pago.doc_canon_referencia.is_(None), rp_nonempty),
+                        )
+                    )
                     .order_by(Pago.id.asc())
                     .limit(args.batch)
                 )
@@ -49,24 +55,23 @@ def main() -> int:
             )
             if not rows:
                 break
-            for rid, nd, rp in rows:
-                cn = normalize_documento(nd)
-                cr = normalize_documento(rp)
-                db.execute(
-                    update(Pago)
-                    .where(Pago.id == rid)
-                    .values(doc_canon_numero=cn, doc_canon_referencia=cr)
-                )
-                total += 1
-                last_id = int(rid)
+            mappings = [
+                {
+                    "id": int(rid),
+                    "doc_canon_numero": normalize_documento(nd),
+                    "doc_canon_referencia": normalize_documento(rp),
+                }
+                for rid, nd, rp in rows
+            ]
+            db.bulk_update_mappings(Pago, mappings)
             db.commit()
-            print(f"… actualizados hasta id={last_id} (lote +{len(rows)})", flush=True)
-            if len(rows) < args.batch:
-                break
+            total += len(mappings)
+            mx = max(m["id"] for m in mappings)
+            print(f"… +{len(mappings)} filas (último id={mx}), acumulado {total}", flush=True)
     finally:
         db.close()
 
-    print(f"Listo. Filas actualizadas: {total}")
+    print(f"Listo. Filas actualizadas en total: {total}")
     return 0
 
 
