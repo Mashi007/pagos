@@ -115,10 +115,6 @@
       text-align: right;
       margin-top: 1px;
     }
-    .header-divider {
-      height: 2px;
-      background: linear-gradient(90deg, #e63946 0%, #e63946 30%, rgba(255,255,255,0.06) 100%);
-    }
 
     /* ── SUCCESS BANNER ── */
     .success-banner {
@@ -264,55 +260,56 @@
       margin: 28px 0;
     }
 
-    /* ── SIGNATURE / FOOTER ── */
+    /* ── SIGNATURE / FOOTER (verde + negro, bloque contacto estrecho) ── */
     .signature {
-      background: linear-gradient(165deg, #132238 0%, #0d1b2a 42%, #0a1522 100%);
+      background: linear-gradient(180deg, #030806 0%, #06140c 45%, #020403 100%);
       padding: 0;
       position: relative;
       overflow: hidden;
     }
-    .sig-red-top {
+    .sig-accent-top {
       height: 3px;
-      background: linear-gradient(90deg, #ff4d5e 0%, #e63946 35%, #c1121f 100%);
-      box-shadow: 0 1px 0 rgba(255,255,255,0.12);
+      background: linear-gradient(90deg, #14532d 0%, #22c55e 40%, #4ade80 70%, #166534 100%);
     }
     .sig-inner {
-      padding: 16px 28px 18px;
+      padding: 14px 20px 18px;
       position: relative;
       z-index: 2;
     }
     .sig-deco-circle {
       position: absolute;
-      bottom: -36px; right: -36px;
-      width: 120px; height: 120px;
+      bottom: -40px; right: -20px;
+      width: 100px; height: 100px;
       border-radius: 50%;
-      border: 22px solid rgba(230,57,70,0.10);
+      border: 18px solid rgba(34, 197, 94, 0.12);
       z-index: 1;
     }
     .sig-deco-circle2 {
       position: absolute;
-      top: 8px; left: 55%;
-      width: 48px; height: 48px;
+      top: 6px; left: 8%;
+      width: 40px; height: 40px;
       border-radius: 50%;
-      border: 10px solid rgba(255,255,255,0.05);
+      border: 8px solid rgba(74, 222, 128, 0.08);
       z-index: 1;
     }
     .sig-header {
       display: flex;
       align-items: center;
-      justify-content: space-between;
+      justify-content: center;
+      text-align: center;
       margin-bottom: 12px;
       padding-bottom: 12px;
-      border-bottom: 1px solid rgba(255,255,255,0.16);
+      border-bottom: 1px solid rgba(34, 197, 94, 0.28);
     }
     .sig-brand-block {
       display: flex;
       align-items: center;
+      justify-content: center;
       gap: 14px;
     }
     .sig-logo {
       width: 46px; height: 46px;
-      background: #e63946;
+      background: #15803d;
       border-radius: 10px;
       display: flex; align-items: center; justify-content: center;
       font-family: 'Montserrat', sans-serif;
@@ -325,25 +322,24 @@
       font-family: 'Montserrat', sans-serif;
       font-weight: 900;
       font-size: 19px;
-      color: #ffffff;
+      color: #f8fafc;
       letter-spacing: -0.5px;
       line-height: 1.05;
-      text-shadow: 0 1px 2px rgba(0,0,0,0.35);
     }
-    .sig-brand-text .sig-name span { color: #ff4d5e; }
+    .sig-brand-text .sig-name span { color: #4ade80; }
     .sig-brand-text .sig-dept {
       font-size: 11px;
-      color: #b8c9dc;
+      color: #bbf7d0;
       font-weight: 600;
-      letter-spacing: 1.8px;
+      letter-spacing: 1.6px;
       text-transform: uppercase;
-      margin-top: 4px;
+      margin-top: 5px;
     }
     .sig-tagline {
       font-family: 'Montserrat', sans-serif;
       font-size: 11px;
       font-weight: 600;
-      color: rgba(255,255,255,0.35);
+      color: rgba(187, 247, 208, 0.45);
       letter-spacing: 2px;
       text-transform: uppercase;
       text-align: right;
@@ -352,57 +348,81 @@
     .sig-tagline strong {
       display: block;
       font-size: 12px;
-      color: rgba(255,255,255,0.5);
+      color: rgba(187, 247, 208, 0.65);
+    }
+    /* Contenedor fijo: acota el ancho real de las cajas (también en clientes caprichosos con grid). */
+    .sig-contact-wrap {
+      max-width: 292px;
+      width: 86%;
+      margin-left: auto;
+      margin-right: auto;
     }
     .sig-grid {
       display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 12px;
+      grid-template-columns: 1fr;
+      gap: 10px;
+      width: 100%;
+      max-width: 100%;
     }
     .sig-item {
       display: flex;
-      align-items: flex-start;
+      align-items: center;
       gap: 12px;
-      padding: 12px 14px;
+      padding: 10px 12px;
       margin: 0;
+      width: 100%;
+      max-width: 100%;
+      box-sizing: border-box;
       border-radius: 10px;
-      background: rgba(255,255,255,0.07);
-      border: 1px solid rgba(255,255,255,0.14);
-      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+      background: linear-gradient(145deg, #050a08 0%, #0c1812 100%);
+      border: 1px solid rgba(34, 197, 94, 0.35);
+      box-shadow: 0 0 0 1px rgba(0,0,0,0.4), 0 4px 14px rgba(0,0,0,0.35);
+    }
+    .sig-item.sig-item-wa {
+      border-color: rgba(37, 211, 102, 0.45);
+      background: linear-gradient(145deg, #041008 0%, #0a1f14 100%);
     }
     .s-icon-box {
-      width: 32px; height: 32px;
-      background: rgba(230,57,70,0.22);
+      width: 36px; height: 36px;
+      background: rgba(22, 101, 52, 0.65);
       border-radius: 8px;
       display: flex; align-items: center; justify-content: center;
-      font-size: 14px;
+      font-size: 15px;
       flex-shrink: 0;
-      border: 1px solid rgba(255,107,122,0.45);
-      box-shadow: inset 0 1px 0 rgba(255,255,255,0.12);
+      border: 1px solid rgba(74, 222, 128, 0.5);
+    }
+    .sig-item-wa .s-icon-box {
+      background: #128C7E;
+      border: 1px solid #25D366;
+    }
+    .sig-item-body {
+      flex: 1;
+      min-width: 0;
     }
     .sig-item .s-label {
       font-size: 10px;
-      color: #9eb3cc;
-      font-weight: 600;
+      color: #86efac;
+      font-weight: 700;
       text-transform: uppercase;
-      letter-spacing: 1.2px;
+      letter-spacing: 1.1px;
       display: block;
-      margin-bottom: 4px;
+      margin-bottom: 3px;
     }
     .sig-item .s-value {
       font-size: 13px;
-      color: #f1f5f9;
+      color: #ecfdf5;
       font-weight: 600;
-      line-height: 1.45;
+      line-height: 1.4;
+      overflow-wrap: anywhere;
     }
     .sig-item a.s-value {
-      color: #ffc9cf;
+      color: #d1fae5;
       text-decoration: none;
-      border-bottom: 1px solid rgba(255,201,207,0.45);
+      border-bottom: 1px solid rgba(134, 239, 172, 0.55);
     }
     .sig-item a.s-value:hover {
       color: #ffffff;
-      border-bottom-color: rgba(255,255,255,0.7);
+      border-bottom-color: #4ade80;
     }
 
     /* ── LEGAL ── */
@@ -437,7 +457,6 @@
         <span class="brand-sub">C.A. Venezuela</span>
       </div>
     </div>
-    <div class="header-divider"></div>
   </div>
 
   <!-- SUCCESS BANNER -->
@@ -490,7 +509,7 @@
 
   <!-- SIGNATURE -->
   <div class="signature">
-    <div class="sig-red-top"></div>
+    <div class="sig-accent-top"></div>
     <div class="sig-deco-circle"></div>
     <div class="sig-deco-circle2"></div>
     <div class="sig-inner">
@@ -503,22 +522,23 @@
         </div>
 
       </div>
-      <div class="sig-grid">
-        <div class="sig-item">
-          <div class="s-icon-box">✉️</div>
-          <div>
-            <span class="s-label">Email</span>
-            <a class="s-value" href="mailto:cobranza@rapicreditca.com">cobranza@rapicreditca.com</a>
+      <div class="sig-contact-wrap">
+        <div class="sig-grid">
+          <div class="sig-item">
+            <div class="s-icon-box">✉️</div>
+            <div class="sig-item-body">
+              <span class="s-label">Email</span>
+              <a class="s-value" href="mailto:cobranza@rapicreditca.com">cobranza@rapicreditca.com</a>
+            </div>
+          </div>
+          <div class="sig-item sig-item-wa">
+            <div class="s-icon-box">📲</div>
+            <div class="sig-item-body">
+              <span class="s-label">WhatsApp</span>
+              <a class="s-value" href="https://wa.me/584244579934">+58 424-4579934</a>
+            </div>
           </div>
         </div>
-        <div class="sig-item">
-          <div class="s-icon-box">📲</div>
-          <div>
-            <span class="s-label">WhatsApp</span>
-            <a class="s-value" href="https://wa.me/584244579934">+58 424-4579934</a>
-          </div>
-        </div>
-
       </div>
     </div>
   </div>
