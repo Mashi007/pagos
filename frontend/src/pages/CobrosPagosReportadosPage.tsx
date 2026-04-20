@@ -932,7 +932,7 @@ export default function CobrosPagosReportadosPage() {
           ) : !data?.items?.length ? (
             <p className="text-gray-500">No hay registros.</p>
           ) : (
-            <div className="relative w-full max-w-full min-w-0 overflow-x-auto rounded-lg border">
+            <div className="relative w-full max-w-full min-w-0 overflow-x-hidden rounded-lg border">
               {refreshing ? (
                 <div
                   className="absolute inset-0 z-10 flex items-start justify-center bg-background/70 pt-10 backdrop-blur-[1px]"
@@ -945,19 +945,19 @@ export default function CobrosPagosReportadosPage() {
                   </span>
                 </div>
               ) : null}
-              <table className="w-full min-w-[1560px] table-fixed text-sm">
+              <table className="w-full min-w-0 table-fixed text-sm">
                 <colgroup>
-                  <col style={{ width: '110px' }} />
-                  <col style={{ width: '170px' }} />
-                  <col style={{ width: '120px' }} />
-                  <col style={{ width: '110px' }} />
-                  <col style={{ width: '150px' }} />
-                  <col style={{ width: '110px' }} />
-                  <col style={{ width: '110px' }} />
-                  <col style={{ width: '130px' }} />
-                  <col style={{ width: '260px' }} />
-                  <col style={{ width: '120px' }} />
-                  <col style={{ width: '170px' }} />
+                  <col style={{ width: '8%' }} />
+                  <col style={{ width: '13%' }} />
+                  <col style={{ width: '8%' }} />
+                  <col style={{ width: '7%' }} />
+                  <col style={{ width: '10%' }} />
+                  <col style={{ width: '8%' }} />
+                  <col style={{ width: '7%' }} />
+                  <col style={{ width: '8%' }} />
+                  <col style={{ width: '20%' }} />
+                  <col style={{ width: '9%' }} />
+                  <col style={{ width: '10%' }} />
                 </colgroup>
 
                 <thead>
@@ -1085,7 +1085,7 @@ export default function CobrosPagosReportadosPage() {
                         className={
                           'min-w-0 px-2 py-2 align-middle ' +
                           (/DUPLICADO/i.test(row.observacion || '')
-                            ? 'bg-amber-500/15 font-medium text-amber-900 dark:text-amber-100'
+                            ? 'bg-destructive/10 font-medium text-destructive'
                             : '')
                         }
                         title={
@@ -1163,18 +1163,26 @@ export default function CobrosPagosReportadosPage() {
                         }
                       >
                         {row.observacion ? (
-                          <span
+                          <div
                             className={
-                              'line-clamp-2 text-xs ' +
+                              'text-xs ' +
                               (/NO CLIENTES/i.test(row.observacion || '')
                                 ? 'font-medium text-destructive'
                                 : /DUPLICADO/i.test(row.observacion || '')
-                                  ? 'font-semibold text-amber-900 dark:text-amber-100'
+                                  ? 'font-semibold text-destructive'
                                   : 'text-muted-foreground')
                             }
                           >
-                            {row.observacion}
-                          </span>
+                            {(row.observacion || '')
+                              .split('/')
+                              .map(part => part.trim())
+                              .filter(Boolean)
+                              .map((part, idx) => (
+                                <span key={`${row.id}-obs-${idx}`} className="block leading-5">
+                                  {part}
+                                </span>
+                              ))}
+                          </div>
                         ) : (
                           '-'
                         )}
@@ -1209,7 +1217,7 @@ export default function CobrosPagosReportadosPage() {
                       </td>
 
                       <td className="px-2 py-2 align-middle">
-                        <div className="flex flex-nowrap items-center justify-end gap-0.5 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                        <div className="grid grid-cols-2 justify-items-center gap-1">
                           {/* Estado envío recibo: X = no enviado, visto = entregado, triángulo = en revisión */}
 
                           <span
@@ -1275,25 +1283,6 @@ export default function CobrosPagosReportadosPage() {
                               }
                             >
                               <Edit className="h-3.5 w-3.5" />
-                            </Button>
-                          )}
-
-                          {(row.estado === 'pendiente' ||
-                            row.estado === 'en_revision') && (
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7 shrink-0 text-destructive hover:bg-destructive/10 hover:text-destructive"
-                              title="Rechazar (escribir mensaje y enviar correo)"
-                              onClick={() => handleAbrirModalRechazo(row)}
-                              disabled={changingEstadoId === row.id}
-                            >
-                              {changingEstadoId === row.id ? (
-                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                              ) : (
-                                <XCircle className="h-3.5 w-3.5" />
-                              )}
                             </Button>
                           )}
 
