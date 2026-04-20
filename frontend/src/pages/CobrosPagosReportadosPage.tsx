@@ -226,6 +226,9 @@ export default function CobrosPagosReportadosPage() {
 
   const [loading, setLoading] = useState(true)
 
+  /** Recarga con datos previos en pantalla (evita pantalla en blanco "Cargando..." durante listado-y-kpis lento). */
+  const [refreshing, setRefreshing] = useState(false)
+
   const [page, setPage] = useState(1)
 
   const [estado, setEstado] = useState<string>('')
@@ -279,7 +282,9 @@ export default function CobrosPagosReportadosPage() {
       if (overrides.page !== undefined) setPage(overrides.page)
     }
 
-    setLoading(true)
+    const initialLoad = data === null
+    setLoading(initialLoad)
+    setRefreshing(!initialLoad)
 
     try {
       const filterParams = {
@@ -311,6 +316,7 @@ export default function CobrosPagosReportadosPage() {
       toast.error(e?.message || 'Error al cargar.')
     } finally {
       setLoading(false)
+      setRefreshing(false)
     }
   }
 
@@ -907,12 +913,38 @@ export default function CobrosPagosReportadosPage() {
 
       <Card>
         <CardContent className="pt-6">
-          {loading ? (
-            <p>Cargando...</p>
+          {loading && data === null ? (
+            <div
+              className="flex flex-col items-center justify-center gap-3 py-16 text-muted-foreground"
+              role="status"
+              aria-live="polite"
+            >
+              <Loader2 className="h-10 w-10 animate-spin text-primary" />
+              <p className="text-base font-medium text-foreground">
+                Consultando cola de reportes…
+              </p>
+              <p className="max-w-md text-center text-sm">
+                Si la cartera es grande, el servidor puede tardar hasta un
+                minuto en el primer análisis; las siguientes búsquedas suelen ir
+                más rápido.
+              </p>
+            </div>
           ) : !data?.items?.length ? (
             <p className="text-gray-500">No hay registros.</p>
           ) : (
-            <div className="overflow-x-auto rounded-lg border">
+            <div className="relative overflow-x-auto rounded-lg border">
+              {refreshing ? (
+                <div
+                  className="absolute inset-0 z-10 flex items-start justify-center bg-background/70 pt-10 backdrop-blur-[1px]"
+                  role="status"
+                  aria-live="polite"
+                >
+                  <span className="flex items-center gap-2 rounded-md border bg-card px-3 py-2 text-sm shadow-sm">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Actualizando listado…
+                  </span>
+                </div>
+              ) : null}
               <table className="w-full min-w-[1180px] table-fixed text-sm">
                 <colgroup>
                   <col style={{ width: '10%' }} />
