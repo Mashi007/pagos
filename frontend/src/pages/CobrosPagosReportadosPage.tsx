@@ -945,64 +945,64 @@ export default function CobrosPagosReportadosPage() {
                   </span>
                 </div>
               ) : null}
-              <table className="w-full min-w-[960px] table-fixed text-sm">
+              <table className="w-full min-w-[1560px] table-fixed text-sm">
                 <colgroup>
-                  <col style={{ width: '8%' }} />
-                  <col style={{ width: '11%' }} />
-                  <col style={{ width: '8%' }} />
-                  <col style={{ width: '7%' }} />
-                  <col style={{ width: '11%' }} />
-                  <col style={{ width: '7%' }} />
-                  <col style={{ width: '7%' }} />
-                  <col style={{ width: '8%' }} />
-                  <col style={{ width: '15%' }} />
-                  <col style={{ width: '7%' }} />
-                  <col style={{ width: '11%' }} />
+                  <col style={{ width: '110px' }} />
+                  <col style={{ width: '170px' }} />
+                  <col style={{ width: '120px' }} />
+                  <col style={{ width: '110px' }} />
+                  <col style={{ width: '150px' }} />
+                  <col style={{ width: '110px' }} />
+                  <col style={{ width: '110px' }} />
+                  <col style={{ width: '130px' }} />
+                  <col style={{ width: '260px' }} />
+                  <col style={{ width: '120px' }} />
+                  <col style={{ width: '170px' }} />
                 </colgroup>
 
                 <thead>
                   <tr className="border-b bg-muted/50">
-                    <th className="px-2 py-2 text-left text-xs font-semibold sm:text-sm">
+                    <th className="whitespace-nowrap border-r border-border/60 px-2 py-2 text-left text-xs font-semibold sm:text-sm">
                       Cédula
                     </th>
 
-                    <th className="px-2 py-2 text-left text-xs font-semibold sm:text-sm">
+                    <th className="whitespace-nowrap border-r border-border/60 px-2 py-2 text-left text-xs font-semibold sm:text-sm">
                       Banco
                     </th>
 
-                    <th className="px-2 py-2 text-right text-xs font-semibold sm:text-sm">
+                    <th className="whitespace-nowrap border-r border-border/60 px-2 py-2 text-right text-xs font-semibold sm:text-sm">
                       Monto
                     </th>
 
-                    <th className="px-2 py-2 text-left text-xs font-semibold sm:text-sm">
+                    <th className="whitespace-nowrap border-r border-border/60 px-2 py-2 text-left text-xs font-semibold sm:text-sm">
                       Fecha pago
                     </th>
 
-                    <th className="px-2 py-2 text-left text-xs font-semibold sm:text-sm">
+                    <th className="whitespace-nowrap border-r border-border/60 px-2 py-2 text-left text-xs font-semibold sm:text-sm">
                       Nº operación
                     </th>
 
-                    <th className="px-2 py-2 text-left text-xs font-semibold sm:text-sm">
+                    <th className="whitespace-nowrap border-r border-border/60 px-2 py-2 text-left text-xs font-semibold sm:text-sm">
                       Fecha reporte
                     </th>
 
-                    <th className="px-2 py-2 text-left text-xs font-semibold sm:text-sm">
+                    <th className="whitespace-nowrap border-r border-border/60 px-2 py-2 text-left text-xs font-semibold sm:text-sm">
                       Origen
                     </th>
 
-                    <th className="px-2 py-2 text-center text-xs font-semibold sm:text-sm">
+                    <th className="whitespace-nowrap border-r border-border/60 px-2 py-2 text-center text-xs font-semibold sm:text-sm">
                       Comprobante
                     </th>
 
-                    <th className="px-2 py-2 text-left text-xs font-semibold sm:text-sm">
+                    <th className="whitespace-nowrap border-r border-border/60 px-2 py-2 text-left text-xs font-semibold sm:text-sm">
                       Observación
                     </th>
 
-                    <th className="px-2 py-2 text-left text-xs font-semibold sm:text-sm">
+                    <th className="whitespace-nowrap border-r border-border/60 px-2 py-2 text-left text-xs font-semibold sm:text-sm">
                       Estado
                     </th>
 
-                    <th className="px-2 py-2 text-right text-xs font-semibold sm:text-sm">
+                    <th className="whitespace-nowrap px-2 py-2 text-right text-xs font-semibold sm:text-sm">
                       Acciones
                     </th>
                   </tr>
