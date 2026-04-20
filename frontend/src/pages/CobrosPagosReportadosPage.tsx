@@ -948,16 +948,15 @@ export default function CobrosPagosReportadosPage() {
               <table className="w-full min-w-0 table-fixed text-sm">
                 <colgroup>
                   <col style={{ width: '8%' }} />
-                  <col style={{ width: '13%' }} />
+                  <col style={{ width: '15%' }} />
                   <col style={{ width: '8%' }} />
                   <col style={{ width: '7%' }} />
                   <col style={{ width: '10%' }} />
                   <col style={{ width: '8%' }} />
-                  <col style={{ width: '7%' }} />
-                  <col style={{ width: '8%' }} />
-                  <col style={{ width: '20%' }} />
                   <col style={{ width: '9%' }} />
-                  <col style={{ width: '10%' }} />
+                  <col style={{ width: '24%' }} />
+                  <col style={{ width: '9%' }} />
+                  <col style={{ width: '12%' }} />
                 </colgroup>
 
                 <thead>
@@ -984,10 +983,6 @@ export default function CobrosPagosReportadosPage() {
 
                     <th className="whitespace-nowrap border-r border-border/60 px-2 py-2 text-left text-xs font-semibold sm:text-sm">
                       Fecha reporte
-                    </th>
-
-                    <th className="whitespace-nowrap border-r border-border/60 px-2 py-2 text-left text-xs font-semibold sm:text-sm">
-                      Origen
                     </th>
 
                     <th className="whitespace-nowrap border-r border-border/60 px-2 py-2 text-center text-xs font-semibold sm:text-sm">
@@ -1101,13 +1096,6 @@ export default function CobrosPagosReportadosPage() {
 
                       <td className="whitespace-nowrap px-2 py-2 align-middle text-xs sm:text-sm">
                         {new Date(row.fecha_reporte).toLocaleDateString()}
-                      </td>
-
-                      <td
-                        className="min-w-0 px-2 py-2 align-middle text-[11px] sm:text-xs"
-                        title="Infopagos y formulario publico comparten esta cola y las mismas reglas."
-                      >
-                        {etiquetaCanalReportado(row.canal_ingreso)}
                       </td>
 
                       <td className="px-2 py-2 align-middle">
