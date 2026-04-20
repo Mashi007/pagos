@@ -108,6 +108,7 @@ from app.services.cobros.pago_reportado_documento import (
     claves_documento_pago_para_reportado,
     claves_documento_para_lote_reportados,
     documento_numero_desde_pago_reportado,
+    pago_reportado_colisiona_tabla_pagos,
 )
 from app.services.pagos.comprobante_link_desde_gmail import (
     enriquecer_items_link_comprobante_desde_gmail,
@@ -2266,6 +2267,16 @@ def importar_un_pago_reportado_a_pagos(
     claves_pr = claves_documento_pago_para_reportado(pr)
 
     if claves_pr:
+
+        if pago_reportado_colisiona_tabla_pagos(db, pr):
+
+            return _err_con_pce(
+
+                "Ya existe un pago con este comprobante en la tabla pagos",
+
+                cedula_cliente=cedula_raw,
+
+            )
 
         if any(k in documentos_ya_en_bd for k in claves_pr):
 

@@ -42,6 +42,7 @@ from app.api.v1.endpoints.pagos import _aplicar_pago_a_cuotas_interno
 from app.services.cobros.pago_reportado_documento import (
     claves_documento_pago_para_reportado,
     documento_numero_desde_pago_reportado,
+    pago_reportado_colisiona_tabla_pagos,
     primer_pago_id_si_existe_para_claves_reportado,
     primer_reportado_id_por_norm_batch,
     primer_reportado_id_por_norm_peer_first_map,
@@ -333,6 +334,15 @@ def _pagos_canonicos_presentes_para_claves(db: Session, claves: Set[str]) -> fro
             if v:
                 found.add(v)
     return frozenset(found)
+
+
+def _rechazar_aprobacion_si_documento_ya_en_pagos(db: Session, pr: PagoReportado) -> None:
+    """Regla operativa: no aprobar si el comprobante ya existe en cartera (`pagos`)."""
+    if pago_reportado_colisiona_tabla_pagos(db, pr):
+        raise HTTPException(
+            status_code=400,
+            detail="No se puede aprobar: el número de documento / comprobante ya consta en la tabla de pagos.",
+        )
 
 
 def _pago_canon_existe_en_tabla_pagos(db: Session, n_norm: str) -> bool:
@@ -1319,7 +1329,6 @@ def _registrar_historial(db: Session, pago_id: int, estado_anterior: str, estado
 
 def _crear_pago_desde_reportado_y_aplicar_cuotas(db: Session, pr: PagoReportado, usuario_email: Optional[str]) -> None:
     """Tras aprobar un pago reportado: crea registro en tabla pagos y aplica a cuotas (cascada) para que prestamos y estado de cuenta se actualicen. Debe llamarse ANTES de commit; si falla lanza HTTPException."""
-    _rechazar_si_numero_operacion_duplicado(db, pr.numero_operacion)
     cedula_norm = _normalize_cedula_for_client_lookup(
         ((pr.tipo_cedula or "") + (pr.numero_cedula or "")).replace("-", "").replace(" ", "").strip().upper()
     )
@@ -1355,6 +1364,7 @@ def _crear_pago_desde_reportado_y_aplicar_cuotas(db: Session, pr: PagoReportado,
             ya,
         )
         return
+    _rechazar_aprobacion_si_documento_ya_en_pagos(db, pr)
     fecha_ts = datetime.combine(pr.fecha_pago, dt_time.min) if pr.fecha_pago else datetime.now()
     moneda_pr = ((getattr(pr, "moneda", None) or "USD") or "").strip().upper()
     if moneda_pr == "USDT":
@@ -1453,6 +1463,8 @@ def aprobar_pago_reportado(
         return {"ok": True, "mensaje": "Ya estaba aprobado."}
     if pr.estado == "rechazado":
         raise HTTPException(status_code=400, detail="No se puede aprobar un pago rechazado.")
+    if pr.estado in ("pendiente", "en_revision"):
+        _rechazar_aprobacion_si_documento_ya_en_pagos(db, pr)
     estado_anterior = pr.estado
     pr.estado = "aprobado"
     pr.motivo_rechazo = None
@@ -1979,6 +1991,8 @@ def cambiar_estado_pago(
             status_code=400,
             detail="Este reporte ya fue importado a la tabla de pagos; no se vuelve a aprobar desde aquí.",
         )
+    if body.estado == "aprobado" and pr.estado in ("pendiente", "en_revision"):
+        _rechazar_aprobacion_si_documento_ya_en_pagos(db, pr)
     estado_anterior = pr.estado
     pr.estado = body.estado
     pr.motivo_rechazo = (body.motivo or "").strip()[:2000] if body.estado == "rechazado" else None

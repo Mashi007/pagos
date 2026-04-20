@@ -233,6 +233,40 @@ def primer_reportado_id_por_norm_batch(
     return first
 
 
+def pago_reportado_colisiona_tabla_pagos(db: "Session", pr: PagoReportado) -> bool:
+    """
+    True si el comprobante del reporte ya existe en cartera (`pagos`).
+
+    Usa ``doc_canon_numero`` / ``doc_canon_referencia`` cuando existan (migración 041)
+    y, en respaldo, coincidencia literal en ``numero_documento`` / ``referencia_pago``.
+    """
+    claves_raw = claves_documento_pago_para_reportado(pr)
+    if not claves_raw:
+        return False
+    candidatos: Set[str] = set()
+    for k in claves_raw:
+        if not k:
+            continue
+        c = normalize_documento(k) or k
+        if c:
+            candidatos.add(c)
+    if candidatos:
+        lst = list(candidatos)
+        for i in range(0, len(lst), 450):
+            part = lst[i : i + 450]
+            if not part:
+                continue
+            if db.execute(select(Pago.id).where(Pago.doc_canon_numero.in_(part)).limit(1)).first():
+                return True
+            if db.execute(select(Pago.id).where(Pago.doc_canon_referencia.in_(part)).limit(1)).first():
+                return True
+    if db.execute(select(Pago.id).where(Pago.numero_documento.in_(list(claves_raw))).limit(1)).first():
+        return True
+    if db.execute(select(Pago.id).where(Pago.referencia_pago.in_(list(claves_raw))).limit(1)).first():
+        return True
+    return False
+
+
 def reportado_toca_claves_canonicas_en_pagos(
     pr: PagoReportado,
     claves_doc_en_pagos: frozenset,
