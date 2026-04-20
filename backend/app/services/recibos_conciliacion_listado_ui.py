@@ -2,6 +2,10 @@
 Filas para GET /notificaciones/recibos/listado: pagos conciliados en la ventana 24h hasta 15:00 (Caracas),
 con nombre/cédula, fecha de registro, monto pagado, comprobante (misma resolución de URL que GET /pagos)
 y préstamo para PDF.
+
+Se excluyen filas cuya cédula ya tiene envío Recibos registrado en ``recibos_email_envio`` para ese
+``fecha_dia`` y el slot de ventana (misma regla que el envío real / job): en pantalla solo queda lo
+pendiente de enviar.
 KPIs de correos desde envios_notificacion tipo_tab=recibos.
 """
 from __future__ import annotations
@@ -29,6 +33,7 @@ from app.services.pagos.comprobante_link_desde_gmail import (
 )
 from app.services.recibos_conciliacion_email_job import (
     bounds_fecha_registro_recibos_24h_hasta_15,
+    cedulas_recibos_ya_enviadas_en_fecha,
     _pago_aplicado_a_cuota_exists,
 )
 from app.utils.cedula_almacenamiento import texto_cedula_comparable_bd
@@ -133,8 +138,15 @@ def listar_recibos_ventana_con_ui(
     *,
     fecha_dia: date,
 ) -> Tuple[List[Dict[str, Any]], Dict[str, int], int, int]:
-    """Devuelve (filas para tabla + KPIs, total_pagos, cedulas_distintas)."""
+    """Devuelve (filas para tabla + KPIs, total_pagos, cedulas_distintas). Solo pendientes de envío Recibos."""
     pagos_orm = _fetch_pagos_recibos_ventana_orm(db, fecha_dia=fecha_dia)
+    ya = cedulas_recibos_ya_enviadas_en_fecha(db, fecha_dia)
+    if ya:
+        pagos_orm = [
+            p
+            for p in pagos_orm
+            if texto_cedula_comparable_bd((getattr(p, "cedula_cliente", None) or "").strip()) not in ya
+        ]
     if not pagos_orm:
         return [], _kpis_recibos_correo(db), 0, 0
 

@@ -14,6 +14,8 @@ Regla: el **envío real** (no simulación) solo corre si ``fecha_dia`` es **hoy*
 salvo reenvío admin con ``permite_envio_real_fecha_no_hoy``.
 
 Idempotencia en BD: columna ``slot`` fija ``RECIBOS_VENTANA_SLOT`` (histórico puede tener valores antiguos).
+El listado admin y el envío real consideran solo cédulas **pendientes** (sin fila en ``recibos_email_envio``
+para ese ``fecha_dia`` y slot); tras un envío exitoso esas filas dejan de mostrarse hasta otro día/ventana.
 
 PDF: misma fuente que el portal (``obtener_datos_estado_cuenta_cliente`` + ``generar_pdf_estado_cuenta``),
 con ``base_url`` y ``recibo_token`` resueltos por ``base_url_y_token_recibo_para_pdf_estado_cuenta`` (sin
@@ -99,12 +101,29 @@ def _pago_aplicado_a_cuota_exists():
     return or_(cuota_direct, via_cp)
 
 
+def cedulas_recibos_ya_enviadas_en_fecha(db: Session, fecha_dia: date) -> set[str]:
+    """Cédulas (normalizadas) con envío Recibos persistido para ``fecha_dia`` y slot fijo de ventana."""
+    rows = db.execute(
+        select(RecibosEmailEnvio.cedula_normalizada).where(
+            RecibosEmailEnvio.fecha_dia == fecha_dia,
+            RecibosEmailEnvio.slot == RECIBOS_VENTANA_SLOT,
+        )
+    ).scalars().all()
+    return {(str(x) or "").strip() for x in rows if x and str(x).strip()}
+
+
 def listar_pagos_recibos_ventana(
     db: Session,
     *,
     fecha_dia: date,
+    excluir_cedulas_ya_enviadas: bool = False,
 ) -> List[Dict[str, Any]]:
-    """Pagos conciliados PAGADO en la ventana 24h hasta 15:00 Caracas del día de referencia."""
+    """Pagos conciliados PAGADO en la ventana 24h hasta 15:00 Caracas del día de referencia.
+
+    Si ``excluir_cedulas_ya_enviadas`` es True, omite filas cuya cédula ya tiene fila en
+    ``recibos_email_envio`` para ese ``fecha_dia`` y ``RECIBOS_VENTANA_SLOT`` (listado y envío real
+    solo pendientes). La simulación (``solo_simular``) usa False para seguir viendo toda la ventana.
+    """
     start_naive, end_naive = bounds_fecha_registro_recibos_24h_hasta_15(fecha_dia)
     rows = db.execute(
         select(Pago)
@@ -131,7 +150,12 @@ def listar_pagos_recibos_ventana(
                 "monto_pagado": float(getattr(pg, "monto_pagado", 0) or 0),
             }
         )
-    return out
+    if not excluir_cedulas_ya_enviadas:
+        return out
+    omit = cedulas_recibos_ya_enviadas_en_fecha(db, fecha_dia)
+    if not omit:
+        return out
+    return [r for r in out if (r.get("cedula_normalizada") or "").strip() not in omit]
 
 
 def _cedulas_distintas_desde_pagos(rows: List[Dict[str, Any]]) -> List[str]:
@@ -207,7 +231,11 @@ def ejecutar_recibos_envio_slot(
             "detalles": [],
         }
 
-    pagos = listar_pagos_recibos_ventana(db, fecha_dia=fecha_dia)
+    pagos = listar_pagos_recibos_ventana(
+        db,
+        fecha_dia=fecha_dia,
+        excluir_cedulas_ya_enviadas=not solo_simular,
+    )
     cedulas = _cedulas_distintas_desde_pagos(pagos)
 
     if not pagos or not cedulas:
@@ -533,13 +561,17 @@ def enviar_correo_prueba_recibos_datos_reales(
     if not dest or "@" not in dest:
         return {"success": False, "mensaje": "Indique un correo de destino válido."}
 
-    pagos = listar_pagos_recibos_ventana(db, fecha_dia=fecha_dia)
+    pagos = listar_pagos_recibos_ventana(
+        db,
+        fecha_dia=fecha_dia,
+        excluir_cedulas_ya_enviadas=True,
+    )
     cedulas = _cedulas_distintas_desde_pagos(pagos)
     if not pagos or not cedulas:
         return {
             "success": False,
             "mensaje": (
-                "No hay pagos en la ventana Recibos para esa fecha (Caracas); no se puede generar una muestra "
+                "No hay pagos pendientes de envío Recibos para esa fecha (Caracas); no se puede generar una muestra "
                 "con datos reales. Revise el listado Recibos o la fecha de corte."
             ),
             "fecha_dia": fecha_dia.isoformat(),

@@ -48,7 +48,7 @@ def get_recibos_listado(
     ),
     db: Session = Depends(get_db),
 ):
-    """Pagos conciliados PAGADO con fecha_registro en la ventana y vínculo a cuotas."""
+    """Pagos conciliados PAGADO en la ventana con vínculo a cuotas, excluyendo cédulas ya enviadas Recibos ese día."""
     raw_fc = (fecha_caracas or "").strip()
     try:
         d = parse_fecha_referencia_negocio(raw_fc) if raw_fc else hoy_negocio()

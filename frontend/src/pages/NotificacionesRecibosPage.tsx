@@ -205,6 +205,27 @@ function CeldaFotografiaPagoRecibo({ row }: { row: ReciboConciliacionFila }) {
 
 type TabId = 'listado' | 'configuracion'
 
+const RECIBOS_LISTADO_PAGE_SIZE = 10
+
+/** Hasta ``maxButtons`` números de página centrados alrededor de ``current`` (ej. 1–5 en página 1 de 14). */
+function numerosPaginaVisibles(
+  current: number,
+  total: number,
+  maxButtons = 5
+): number[] {
+  if (total <= 0) return []
+  if (total <= maxButtons) {
+    return Array.from({ length: total }, (_, i) => i + 1)
+  }
+  let start = Math.max(1, current - Math.floor(maxButtons / 2))
+  let end = start + maxButtons - 1
+  if (end > total) {
+    end = total
+    start = Math.max(1, end - maxButtons + 1)
+  }
+  return Array.from({ length: end - start + 1 }, (_, i) => start + i)
+}
+
 /** Día calendario America/Caracas en YYYY-MM-DD (alineado al backend). */
 function fechaHoyIsoCaracas(): string {
   return new Intl.DateTimeFormat('en-CA', {
@@ -252,6 +273,7 @@ export default function NotificacionesRecibosPage() {
   const [descargandoEstadoCuentaId, setDescargandoEstadoCuentaId] = useState<
     number | null
   >(null)
+  const [paginaRecibosListado, setPaginaRecibosListado] = useState(1)
 
   const listadoKey = useMemo(
     () => ['notificaciones', 'recibos', 'listado', fechaCaracas || 'hoy'],
@@ -276,7 +298,12 @@ export default function NotificacionesRecibosPage() {
     setFiltroCedula('')
     setSortCol(null)
     setSortDir('asc')
+    setPaginaRecibosListado(1)
   }, [fechaCaracas])
+
+  useEffect(() => {
+    setPaginaRecibosListado(1)
+  }, [filtroCedula, sortCol, sortDir])
 
   const aplicarOrdenAsc = useCallback((c: NotificacionesCuotasSortCol) => {
     setSortCol(c)
@@ -359,6 +386,25 @@ export default function NotificacionesRecibosPage() {
     return sortedList.filter(row => filaCoincideFiltroCedulaNotif(row, q))
   }, [sortedList, filtroCedula])
 
+  const totalFilasListado = listaFiltradaCedula.length
+  const totalPaginasListado = Math.max(1, Math.ceil(totalFilasListado / RECIBOS_LISTADO_PAGE_SIZE))
+
+  useEffect(() => {
+    if (paginaRecibosListado > totalPaginasListado) {
+      setPaginaRecibosListado(totalPaginasListado)
+    }
+  }, [paginaRecibosListado, totalPaginasListado])
+
+  const filasPaginaRecibos = useMemo(() => {
+    const start = (paginaRecibosListado - 1) * RECIBOS_LISTADO_PAGE_SIZE
+    return listaFiltradaCedula.slice(start, start + RECIBOS_LISTADO_PAGE_SIZE)
+  }, [listaFiltradaCedula, paginaRecibosListado])
+
+  const numerosPaginaRecibos = useMemo(
+    () => numerosPaginaVisibles(paginaRecibosListado, totalPaginasListado, 5),
+    [paginaRecibosListado, totalPaginasListado]
+  )
+
   const handleDescargarEstadoCuentaPdf = async (prestamoId: number) => {
     setDescargandoEstadoCuentaId(prestamoId)
     try {
@@ -422,7 +468,7 @@ export default function NotificacionesRecibosPage() {
           }`}
         >
           <LayoutList className="h-4 w-4" aria-hidden />
-          Listado y ejecución
+          Listado y envío
         </button>
         <button
           type="button"
@@ -588,7 +634,7 @@ export default function NotificacionesRecibosPage() {
         <>
           <Card>
             <CardHeader>
-              <CardTitle>Vista previa y ejecución</CardTitle>
+              <CardTitle>Pendientes de envío</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="max-w-md space-y-2">
@@ -605,8 +651,10 @@ export default function NotificacionesRecibosPage() {
                 </p>
               </div>
               <p className="text-sm text-muted-foreground">
-                El envío manual usa SMTP real a los correos del cliente (misma lógica que el job del día
-                en curso). Respete modo pruebas / correo activo en Configuración Recibos.
+                La tabla muestra solo pagos de clientes a los que <strong>aún no</strong> se les ha
+                registrado el correo Recibos para la fecha y franja elegidas (tras envío manual, job
+                programado o lote pasado, esas cédulas dejan de aparecer). El envío manual usa la misma
+                lógica que el job; respete modo pruebas y correo activo en Configuración Recibos.
               </p>
               <div className="flex flex-wrap gap-2">
                 <Button
@@ -795,7 +843,7 @@ export default function NotificacionesRecibosPage() {
                           </td>
                         </tr>
                       ) : (
-                        listaFiltradaCedula.map(row => (
+                        filasPaginaRecibos.map(row => (
                           <tr
                             key={`rec-${row.pago_id}`}
                             className="border-b border-gray-200 bg-white hover:bg-gray-50"
@@ -820,6 +868,58 @@ export default function NotificacionesRecibosPage() {
                     </tbody>
                   </table>
                 </div>
+
+                {totalFilasListado > 0 ? (
+                  <nav
+                    className="mt-6 flex flex-col items-center gap-3"
+                    aria-label="Paginación del listado Recibos"
+                  >
+                    <div className="flex flex-wrap items-center justify-center gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="rounded-md border-gray-300"
+                        disabled={paginaRecibosListado <= 1}
+                        onClick={() => setPaginaRecibosListado(p => Math.max(1, p - 1))}
+                      >
+                        ← Anterior
+                      </Button>
+                      {numerosPaginaRecibos.map(n => (
+                        <Button
+                          key={`rec-pag-${n}`}
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className={
+                            n === paginaRecibosListado
+                              ? 'min-w-[2.25rem] rounded-md border-blue-600 bg-blue-600 text-white shadow-none hover:bg-blue-700 hover:text-white'
+                              : 'min-w-[2.25rem] rounded-md border-gray-300 bg-white text-gray-900 hover:bg-gray-50'
+                          }
+                          aria-current={n === paginaRecibosListado ? 'page' : undefined}
+                          onClick={() => setPaginaRecibosListado(n)}
+                        >
+                          {n}
+                        </Button>
+                      ))}
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="rounded-md border-gray-300"
+                        disabled={paginaRecibosListado >= totalPaginasListado}
+                        onClick={() =>
+                          setPaginaRecibosListado(p => Math.min(totalPaginasListado, p + 1))
+                        }
+                      >
+                        Siguiente →
+                      </Button>
+                    </div>
+                    <p className="text-center text-sm text-muted-foreground">
+                      Página {paginaRecibosListado} de {totalPaginasListado}
+                    </p>
+                  </nav>
+                ) : null}
               </Fragment>
             </CardContent>
           </Card>

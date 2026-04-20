@@ -231,11 +231,8 @@ def test_ejecutar_pasa_base_url_y_recibo_token_al_pdf_cuando_hay_base_publica():
         "app.services.recibos_conciliacion_email_job.obtener_recibos_cliente_estado_cuenta",
         return_value=[],
     ), patch(
-        "app.services.recibos_conciliacion_email_job._base_url_publico_recibos_pdf",
-        return_value="https://api.example.com",
-    ), patch(
-        "app.services.recibos_conciliacion_email_job._recibo_token_para_pdf_recibos",
-        return_value="jwt-recibo-test",
+        "app.services.recibos_conciliacion_email_job.base_url_y_token_recibo_para_pdf_estado_cuenta",
+        return_value=("https://api.example.com", "jwt-recibo-test"),
     ), patch(
         "app.services.recibos_conciliacion_email_job.generar_pdf_estado_cuenta",
         return_value=pdf_ok,
