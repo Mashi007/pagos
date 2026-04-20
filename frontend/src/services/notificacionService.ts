@@ -1347,6 +1347,16 @@ class NotificacionService {
     )
   }
 
+  /**
+   * Vista previa de la plantilla **ya persistida** (BD o archivo por defecto), con el mismo pipeline
+   * que `send_email` — idéntica fuente que job y envío masivo Recibos.
+   */
+  async obtenerPlantillaRecibosHtmlVistaEnvio(): Promise<{ html: string }> {
+    return await apiClient.get<{ html: string }>(
+      `${API_V1}/notificaciones/recibos/plantilla-html-envio-preview`
+    )
+  }
+
   /** Persiste la plantilla en el servidor (mismo archivo que usa el job). */
   async guardarPlantillaRecibosHtml(html: string): Promise<{ ok: boolean }> {
     return await apiClient.put(`${API_V1}/notificaciones/recibos/plantilla-correo-html`, {

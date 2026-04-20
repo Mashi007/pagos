@@ -56,6 +56,18 @@ def post_recibos_plantilla_html_preview(payload: RecibosPlantillaHtmlBody) -> di
     return {"html": out or ""}
 
 
+@router.get("/plantilla-html-envio-preview")
+def get_recibos_plantilla_html_envio_preview(db: Session = Depends(get_db)) -> dict[str, Any]:
+    """
+    HTML de la parte ``text/html`` que usarán **hoy** job y envíos reales: misma fuente que
+    ``_cuerpo_html_recibos_confirmacion`` (BD o archivo) + ``preparar_body_html_para_mime`` (igual que
+    ``send_email``). Una sola lectura en servidor; alinea la UI con lo persistido sin depender del editor.
+    """
+    raw = _cuerpo_html_recibos_confirmacion(db)
+    out = preparar_body_html_para_mime(raw)
+    return {"html": out or ""}
+
+
 @router.put("/plantilla-correo-html")
 def put_recibos_plantilla_correo_html(
     payload: RecibosPlantillaHtmlBody, db: Session = Depends(get_db)

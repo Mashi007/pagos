@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { Link } from 'react-router-dom'
 
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 
 import {
+  AlertTriangle,
   Clock,
   Eye,
   Mail,
@@ -173,10 +174,30 @@ export function ConfiguracionRecibos({ emergencyResetSeq = 0 }: Props) {
    * La vista previa del iframe usa solo esto, no el editor en vivo, para coincidir con el correo enviado.
    */
   const [htmlVistaSmtp, setHtmlVistaSmtp] = useState('')
+  /** HTML procesado de la plantilla persistida (BD/archivo): misma fuente que job y envío real. */
+  const [htmlVistaSmtpGuardada, setHtmlVistaSmtpGuardada] = useState('')
+  const [vistaGuardadaCargando, setVistaGuardadaCargando] = useState(false)
+  const [vistaGuardadaError, setVistaGuardadaError] = useState<string | null>(null)
+  /** Último HTML crudo traído o guardado en servidor; sirve para detectar borrador sin persistir. */
+  const [plantillaCrudaUltimaServidor, setPlantillaCrudaUltimaServidor] = useState('')
   const [plantillaCargando, setPlantillaCargando] = useState(false)
   const [plantillaError, setPlantillaError] = useState<string | null>(null)
   const [guardandoPlantillaCorreo, setGuardandoPlantillaCorreo] = useState(false)
   const previewSeq = useRef(0)
+
+  const cargarVistaPreviaPlantillaGuardada = useCallback(async () => {
+    setVistaGuardadaCargando(true)
+    setVistaGuardadaError(null)
+    try {
+      const { html } = await notificacionService.obtenerPlantillaRecibosHtmlVistaEnvio()
+      setHtmlVistaSmtpGuardada(String(html ?? '').trim())
+    } catch (e) {
+      setHtmlVistaSmtpGuardada('')
+      setVistaGuardadaError(getErrorMessage(e))
+    } finally {
+      setVistaGuardadaCargando(false)
+    }
+  }, [])
 
   const cargarPlantillaDesdeServidor = useCallback(async () => {
     setPlantillaCargando(true)
@@ -184,12 +205,14 @@ export function ConfiguracionRecibos({ emergencyResetSeq = 0 }: Props) {
     try {
       const raw = await notificacionService.obtenerPlantillaHtmlRecibos()
       setEditorHtml(raw)
+      setPlantillaCrudaUltimaServidor(raw)
     } catch (e) {
       setPlantillaError(getErrorMessage(e))
     } finally {
       setPlantillaCargando(false)
     }
-  }, [])
+    void cargarVistaPreviaPlantillaGuardada()
+  }, [cargarVistaPreviaPlantillaGuardada])
 
   useEffect(() => {
     void cargarPlantillaDesdeServidor()
@@ -230,6 +253,11 @@ export function ConfiguracionRecibos({ emergencyResetSeq = 0 }: Props) {
     }
   }, [editorHtml])
 
+  const hayCambiosPlantillaSinGuardar = useMemo(
+    () => editorHtml !== plantillaCrudaUltimaServidor,
+    [editorHtml, plantillaCrudaUltimaServidor]
+  )
+
   useEffect(() => {
     if (!data) return
     setEmailActivoRecibos((data.email_activo_recibos ?? 'true') === 'true')
@@ -247,10 +275,16 @@ export function ConfiguracionRecibos({ emergencyResetSeq = 0 }: Props) {
     setGuardando(false)
     setProbando(false)
     setGuardandoPlantillaCorreo(false)
+    setVistaGuardadaCargando(false)
   }, [emergencyResetSeq])
 
   const puedeCancelarEmergencia =
-    guardando || probando || isFetching || guardandoPlantillaCorreo || plantillaCargando
+    guardando ||
+    probando ||
+    isFetching ||
+    guardandoPlantillaCorreo ||
+    plantillaCargando ||
+    vistaGuardadaCargando
 
   const cancelarEmergenciaConfig = () => {
     setGuardando(false)
@@ -596,15 +630,29 @@ export function ConfiguracionRecibos({ emergencyResetSeq = 0 }: Props) {
                 HTML del correo Recibos y vista previa
               </CardTitle>
               <CardDescription className="mt-1">
-                La vista previa aplica al HTML del cuadro el <strong>mismo pipeline que SMTP</strong> (p. ej.{' '}
-                <code className="text-[11px]">{'{{LOGO_URL}}'}</code>, data URLs).{' '}
-                <strong>Enviar prueba</strong>, el <strong>envío manual</strong> y el <strong>job</strong> usan
-                solo la plantilla <strong>guardada</strong> en servidor (BD; si no hay, archivo del código).
-                Guarde con el botón verde antes de probar o enviar masivo para que lo guardado coincida con lo
-                que edita; tras guardar, el editor se recarga desde el servidor.
+                Hay dos vistas: <strong>borrador</strong> (HTML del cuadro + pipeline SMTP) y{' '}
+                <strong>plantilla guardada</strong> (lee BD/archivo en el servidor y aplica el mismo pipeline que
+                el job). Así se ve exactamente el <code className="text-[11px]">text/html</code> que se enviará
+                mientras edita sin guardar. <strong>Enviar prueba</strong>, envío manual y job solo usan la
+                versión persistida; guarde con el botón verde antes de probar o ejecutar masivo.
               </CardDescription>
             </div>
             <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="shrink-0"
+                disabled={vistaGuardadaCargando}
+                onClick={() => void cargarVistaPreviaPlantillaGuardada()}
+                title="Solo actualiza la vista de la plantilla persistida (no cambia el editor)"
+              >
+                <RefreshCw
+                  className={`mr-2 h-4 w-4 ${vistaGuardadaCargando ? 'animate-spin' : ''}`}
+                  aria-hidden
+                />
+                {vistaGuardadaCargando ? 'Actualizando vista envío…' : 'Actualizar vista envío'}
+              </Button>
               <Button
                 type="button"
                 variant="outline"
@@ -641,7 +689,7 @@ export function ConfiguracionRecibos({ emergencyResetSeq = 0 }: Props) {
                   setHtmlVistaSmtp('')
                   setPlantillaError(null)
                 }}
-                title="Vacía el editor y la vista previa"
+                title="Vacía el editor y la vista previa del borrador (la vista «envío» sigue mostrando lo guardado en servidor)"
               >
                 Vaciar editor
               </Button>
@@ -653,9 +701,23 @@ export function ConfiguracionRecibos({ emergencyResetSeq = 0 }: Props) {
             <p className="text-sm text-red-700">{plantillaError}</p>
           ) : null}
 
+          {hayCambiosPlantillaSinGuardar ? (
+            <div
+              className="flex flex-wrap items-start gap-2 rounded-md border border-amber-300 bg-amber-50/90 px-3 py-2 text-sm text-amber-950"
+              role="status"
+            >
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" aria-hidden />
+              <p>
+                Hay cambios en el editor <strong>sin guardar en el servidor</strong>. Job, envío masivo y
+                «Enviar prueba» usan la plantilla persistida; la sección <strong>Plantilla guardada</strong>{' '}
+                abajo muestra ese HTML. Guarde con el botón verde para alinear envíos con el borrador.
+              </p>
+            </div>
+          ) : null}
+
           <div className="flex flex-col gap-2">
             <label htmlFor="recibos-html-editor" className="text-xs font-medium text-gray-700">
-              HTML (borrador: la vista previa usa este texto; prueba y envíos masivos usan lo guardado en BD)
+              HTML (borrador: la vista previa del cuadro usa este texto; job y prueba SMTP leen solo lo guardado)
             </label>
             <Textarea
               id="recibos-html-editor"
@@ -669,20 +731,45 @@ export function ConfiguracionRecibos({ emergencyResetSeq = 0 }: Props) {
 
           <div>
             <p className="mb-2 text-xs font-medium text-gray-600">
-              Vista previa (igual al SMTP, parte HTML del mensaje)
+              Vista previa del borrador (mismo pipeline SMTP que la parte <code className="text-[11px]">text/html</code>)
             </p>
             {htmlVistaSmtp.trim() ? (
               <iframe
-                title="Vista previa correo Recibos: mismo HTML que la parte text/html del envío"
+                title="Vista previa borrador Recibos: HTML del editor tras pipeline SMTP"
                 sandbox="allow-same-origin allow-popups"
-                className="h-[min(720px,80vh)] w-full max-w-full rounded-md border border-slate-200 bg-slate-100"
+                className="h-[min(360px,50vh)] w-full max-w-full rounded-md border border-slate-200 bg-slate-100"
                 srcDoc={htmlVistaSmtp}
               />
             ) : (
               <p className="rounded-md border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-gray-500">
                 {plantillaCargando
                   ? 'Cargando plantilla del servidor…'
-                  : 'Escriba HTML arriba o pulse «Traer del servidor». La vista previa aparece al poco tiempo (mismo HTML que el envío).'}
+                  : 'Escriba HTML arriba o pulse «Traer del servidor». La vista previa del borrador aparece al poco tiempo.'}
+              </p>
+            )}
+          </div>
+
+          <div className="border-t border-slate-200 pt-4">
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+              <p className="text-xs font-medium text-gray-800">
+                Plantilla guardada en servidor (misma fuente que job y envío real)
+              </p>
+            </div>
+            {vistaGuardadaError ? (
+              <p className="mb-2 text-sm text-red-700">{vistaGuardadaError}</p>
+            ) : null}
+            {htmlVistaSmtpGuardada.trim() ? (
+              <iframe
+                title="Vista previa plantilla Recibos persistida: mismo HTML text/html que envían job y clientes"
+                sandbox="allow-same-origin allow-popups"
+                className="h-[min(360px,50vh)] w-full max-w-full rounded-md border border-emerald-200/80 bg-slate-100"
+                srcDoc={htmlVistaSmtpGuardada}
+              />
+            ) : (
+              <p className="rounded-md border border-dashed border-emerald-200/70 bg-emerald-50/40 px-4 py-6 text-center text-sm text-gray-600">
+                {vistaGuardadaCargando
+                  ? 'Generando vista desde la plantilla persistida en el servidor…'
+                  : 'Pulse «Actualizar vista envío» o «Traer del servidor» para cargar la vista de lo guardado en BD (o archivo por defecto).'}
               </p>
             )}
           </div>
