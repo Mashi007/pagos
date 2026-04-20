@@ -856,6 +856,11 @@ class ApiClient {
 
     const diagnosticoPaqueteTimeout = 180000
 
+    // Cobros listado+KPIs: muchas filas + validadores por lote pueden superar 60s en Render frío.
+    const isListadoKpisPagosReportados = url.includes('listado-y-kpis')
+
+    const listadoKpisPagosReportadosTimeout = 120000
+
     // Sesión al arranque: Render frío + CORS preflight puede dejar el GET por detrás de un timeout corto.
     const isAuthMe = url.includes('/auth/me')
 
@@ -863,6 +868,8 @@ class ApiClient {
 
     if (isAuthMe) {
       defaultTimeout = SLOW_ENDPOINT_TIMEOUT_MS
+    } else if (isListadoKpisPagosReportados) {
+      defaultTimeout = listadoKpisPagosReportadosTimeout
     } else if (isRevisionManual) {
       defaultTimeout = revisionManualTimeout
     } else if (isReportesDashboard) {

@@ -10,7 +10,8 @@ from collections import Counter
 from datetime import date, datetime, time as dt_time, timedelta
 from zoneinfo import ZoneInfo
 from decimal import Decimal
-from typing import Optional, List, Tuple, Any, Dict
+from types import SimpleNamespace
+from typing import Optional, List, Tuple, Any, Dict, Set
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
@@ -382,7 +383,10 @@ def _observacion_reglas_carga(
 
 
 def _pago_reportado_list_items_from_rows(
-    db: Session, rows: List[PagoReportado]
+    db: Session,
+    rows: List[PagoReportado],
+    *,
+    primer_id_por_norm_precalc: Optional[Dict[str, int]] = None,
 ) -> List[PagoReportadoListItem]:
     """Misma lógica de observaciones / tasa que el listado paginado."""
     if not rows:
@@ -412,16 +416,19 @@ def _pago_reportado_list_items_from_rows(
     conteo_norm_en_pagina = Counter(n for n in norm_por_fila if n)
 
     norms_en_batch = {n for n in norm_por_fila if n}
-    created_at_desde = None
-    if rows:
-        fechas_c = [r.created_at for r in rows if getattr(r, "created_at", None) is not None]
-        if fechas_c:
-            created_at_desde = min(fechas_c) - timedelta(days=45)
-    primer_id_por_norm = primer_reportado_id_por_norm_batch(
-        db,
-        norms_en_batch,
-        created_at_desde=created_at_desde,
-    )
+    if primer_id_por_norm_precalc is not None:
+        primer_id_por_norm = primer_id_por_norm_precalc
+    else:
+        created_at_desde = None
+        if rows:
+            fechas_c = [r.created_at for r in rows if getattr(r, "created_at", None) is not None]
+            if fechas_c:
+                created_at_desde = min(fechas_c) - timedelta(days=45)
+        primer_id_por_norm = primer_reportado_id_por_norm_batch(
+            db,
+            norms_en_batch,
+            created_at_desde=created_at_desde,
+        )
 
     partes_por_fila = _observacion_reglas_carga(
         db,
@@ -692,6 +699,59 @@ def _filtros_fecha_cedula_institucion_reportados(
     return out
 
 
+def _where_clauses_cola_reportados(
+    estado: Optional[str],
+    incluir_exportados: bool,
+    exportados_subq: Any,
+    filtros: List[Any],
+) -> List[Any]:
+    """Predicados WHERE compartidos: cola pendiente / en_revision / aprobado (+ exportados + filtros fecha/cédula/banco)."""
+    wh: List[Any] = []
+    if estado == "aprobado":
+        wh.append(PagoReportado.estado == "aprobado")
+        if not incluir_exportados:
+            wh.append(~PagoReportado.id.in_(exportados_subq))
+    elif estado in ("pendiente", "en_revision"):
+        wh.append(PagoReportado.estado == estado)
+        if not incluir_exportados:
+            wh.append(~PagoReportado.id.in_(exportados_subq))
+    else:
+        wh.append(PagoReportado.estado.in_(("pendiente", "en_revision", "aprobado")))
+        if not incluir_exportados:
+            wh.append(~PagoReportado.id.in_(exportados_subq))
+    wh.extend(filtros)
+    return wh
+
+
+def _primer_id_por_norm_global_para_where(db: Session, wh: List[Any]) -> Dict[str, int]:
+    """
+    Calcula una sola vez el mapa documento_normalizado -> id del primer PagoReportado (cola),
+    para no repetir escaneos masivos de `pagos_reportados` en cada lote de 400 filas del listado/KPIs.
+    """
+    if not wh:
+        return {}
+    lite = (
+        select(PagoReportado.numero_operacion, PagoReportado.referencia_interna)
+        .select_from(PagoReportado)
+        .where(*wh)
+    )
+    all_norms: Set[str] = set()
+    res = db.execute(lite)
+    while True:
+        block = res.fetchmany(2000)
+        if not block:
+            break
+        for op, ref in block:
+            _, n_eff = documento_numero_desde_pago_reportado(
+                SimpleNamespace(numero_operacion=op, referencia_interna=ref)
+            )
+            if n_eff:
+                all_norms.add(n_eff)
+    if not all_norms:
+        return {}
+    return primer_reportado_id_por_norm_batch(db, all_norms, created_at_desde=None)
+
+
 def _list_pagos_reportados_payload(
     db: Session,
     *,
@@ -703,8 +763,15 @@ def _list_pagos_reportados_payload(
     page: int,
     per_page: int,
     incluir_exportados: bool = False,
+    emit_manual_estado_counts_for_kpis: bool = False,
 ) -> dict:
-    """Misma lógica que GET /pagos-reportados (reutilizada por listado-y-kpis)."""
+    """
+    Misma lógica que GET /pagos-reportados (reutilizada por listado-y-kpis).
+
+    Si `emit_manual_estado_counts_for_kpis` y `estado` es None (lista la cola completa
+    pendiente+en_revision+aprobado), se añade `_manual_kpi_counts` al dict de retorno
+    para evitar un segundo barrido completo en listado-y-kpis (solo uso interno).
+    """
     _regularizar_reportados_gemini_ok_sin_falla_manual(db, max_ids=24)
     exportados_subq = select(PagoReportadoExportado.pago_reportado_id)
     filtros = _filtros_fecha_cedula_institucion_reportados(
@@ -732,27 +799,17 @@ def _list_pagos_reportados_payload(
 
     # Cola manual: pendiente / en_revision / aprobado que NO cumplen validadores (misma regla que Excel Cobros).
     # Cumplen 100% (reglas OK; Gemini true o false sin observación) → no entran aquí; flujo automático fuera de la cola.
-    q = select(PagoReportado)
-    if estado == "aprobado":
-        q = q.where(PagoReportado.estado == "aprobado")
-        if not incluir_exportados:
-            q = q.where(~PagoReportado.id.in_(exportados_subq))
-    elif estado in ("pendiente", "en_revision"):
-        q = q.where(PagoReportado.estado == estado)
-        if not incluir_exportados:
-            q = q.where(~PagoReportado.id.in_(exportados_subq))
-    else:
-        q = q.where(PagoReportado.estado.in_(("pendiente", "en_revision", "aprobado")))
-        if not incluir_exportados:
-            q = q.where(~PagoReportado.id.in_(exportados_subq))
-    for w in filtros:
-        q = q.where(w)
-    q = q.order_by(
+    wh = _where_clauses_cola_reportados(estado, incluir_exportados, exportados_subq, filtros)
+    primer_precalc = _primer_id_por_norm_global_para_where(db, wh)
+    q = select(PagoReportado).where(*wh).order_by(
         case((PagoReportado.estado == "rechazado", 1), else_=0),
         PagoReportado.created_at.asc(),
     )
 
-    batch = 200
+    emit_counts = bool(emit_manual_estado_counts_for_kpis and estado is None)
+    by_estado_manual: Dict[str, int] = {"pendiente": 0, "en_revision": 0, "aprobado": 0}
+
+    batch = 400
     offset_scan = 0
     skip_need = (page - 1) * per_page
     take_need = per_page
@@ -762,10 +819,16 @@ def _list_pagos_reportados_payload(
         rows = db.execute(q.offset(offset_scan).limit(batch)).scalars().all()
         if not rows:
             break
-        for it in _pago_reportado_list_items_from_rows(db, rows):
+        for it in _pago_reportado_list_items_from_rows(
+            db, rows, primer_id_por_norm_precalc=primer_precalc
+        ):
             if not _item_falla_validadores_cobros_excel(it):
                 continue
             total += 1
+            if emit_counts:
+                st = (it.estado or "").strip()
+                if st in by_estado_manual:
+                    by_estado_manual[st] += 1
             if skip_need > 0:
                 skip_need -= 1
                 continue
@@ -774,7 +837,10 @@ def _list_pagos_reportados_payload(
                 take_need -= 1
         offset_scan += len(rows)
 
-    return {"items": page_items, "total": total, "page": page, "per_page": per_page}
+    out: Dict[str, Any] = {"items": page_items, "total": total, "page": page, "per_page": per_page}
+    if emit_counts:
+        out["_manual_kpi_counts"] = dict(by_estado_manual)
+    return out
 
 
 def _kpis_pagos_reportados_payload(
@@ -785,11 +851,14 @@ def _kpis_pagos_reportados_payload(
     cedula: Optional[str],
     institucion: Optional[str],
     incluir_exportados: bool = False,
+    manual_queue_counts: Optional[Dict[str, int]] = None,
 ) -> dict:
     """
     Conteos por estado con mismos filtros fecha/cédula/institución que el listado.
     pendiente / en_revision / aprobado: solo los que NO cumplen validadores (cola de análisis manual).
     importado / rechazado: totales SQL (estados terminales).
+
+    Si `manual_queue_counts` viene del listado (mismo barrido), no se vuelve a escanear la cola.
     """
     filtros = _filtros_fecha_cedula_institucion_reportados(
         fecha_desde=fecha_desde,
@@ -814,29 +883,31 @@ def _kpis_pagos_reportados_payload(
         if row.estado in counts:
             counts[row.estado] = int(row.cnt or 0)
 
-    exportados_subq = select(PagoReportadoExportado.pago_reportado_id)
-    q_scan = select(PagoReportado).where(
-        PagoReportado.estado.in_(("pendiente", "en_revision", "aprobado"))
-    )
-    if not incluir_exportados:
-        q_scan = q_scan.where(~PagoReportado.id.in_(exportados_subq))
-    for w in filtros:
-        q_scan = q_scan.where(w)
-    q_scan = q_scan.order_by(PagoReportado.created_at.asc())
+    if manual_queue_counts is not None:
+        counts["pendiente"] = int(manual_queue_counts.get("pendiente", 0))
+        counts["en_revision"] = int(manual_queue_counts.get("en_revision", 0))
+        counts["aprobado"] = int(manual_queue_counts.get("aprobado", 0))
+    else:
+        exportados_subq = select(PagoReportadoExportado.pago_reportado_id)
+        wh_kpi = _where_clauses_cola_reportados(None, incluir_exportados, exportados_subq, filtros)
+        primer_kpi = _primer_id_por_norm_global_para_where(db, wh_kpi)
+        q_scan = select(PagoReportado).where(*wh_kpi).order_by(PagoReportado.created_at.asc())
 
-    batch = 200
-    offset_scan = 0
-    while True:
-        rows_b = db.execute(q_scan.offset(offset_scan).limit(batch)).scalars().all()
-        if not rows_b:
-            break
-        for it in _pago_reportado_list_items_from_rows(db, rows_b):
-            if not _item_falla_validadores_cobros_excel(it):
-                continue
-            st = (it.estado or "").strip()
-            if st in ("pendiente", "en_revision", "aprobado"):
-                counts[st] += 1
-        offset_scan += len(rows_b)
+        batch = 400
+        offset_scan = 0
+        while True:
+            rows_b = db.execute(q_scan.offset(offset_scan).limit(batch)).scalars().all()
+            if not rows_b:
+                break
+            for it in _pago_reportado_list_items_from_rows(
+                db, rows_b, primer_id_por_norm_precalc=primer_kpi
+            ):
+                if not _item_falla_validadores_cobros_excel(it):
+                    continue
+                st = (it.estado or "").strip()
+                if st in ("pendiente", "en_revision", "aprobado"):
+                    counts[st] += 1
+            offset_scan += len(rows_b)
 
     counts["total"] = sum(counts[k] for k in ("pendiente", "en_revision", "aprobado", "rechazado", "importado"))
     return counts
@@ -927,8 +998,10 @@ def list_pagos_reportados_y_kpis(
 
     KPIs alineados con el listado (con o sin filas ya exportadas al Excel, según incluir_exportados).
 
-    En BD son dos consultas secuenciales en un solo request HTTP (menos latencia de red que dos peticiones).
+    Sin filtro `estado`: un solo barrido de la cola manual alimenta listado + KPIs (mitad de trabajo BD vs antes).
+    Con `estado` o pestaña filtrada: listado acotado + KPIs con barrido completo (misma semántica que antes).
     """
+    emit_kpi_from_list = estado is None
     lista = _list_pagos_reportados_payload(
         db,
         estado=estado,
@@ -939,7 +1012,9 @@ def list_pagos_reportados_y_kpis(
         page=page,
         per_page=per_page,
         incluir_exportados=incluir_exportados,
+        emit_manual_estado_counts_for_kpis=emit_kpi_from_list,
     )
+    manual_queue = lista.pop("_manual_kpi_counts", None) if emit_kpi_from_list else None
     kpis = _kpis_pagos_reportados_payload(
         db,
         fecha_desde=fecha_desde,
@@ -947,6 +1022,7 @@ def list_pagos_reportados_y_kpis(
         cedula=cedula,
         institucion=institucion,
         incluir_exportados=incluir_exportados,
+        manual_queue_counts=manual_queue,
     )
     return {**lista, "kpis": kpis}
 
