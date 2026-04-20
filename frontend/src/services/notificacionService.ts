@@ -1348,7 +1348,25 @@ class NotificacionService {
     slot: string
     total_pagos: number
     cedulas_distintas: number
-    kpis: { correos_enviados: number; correos_rebotados: number }
+    kpis: {
+      correos_enviados: number
+      correos_rebotados: number
+      /** Cédulas distintas con al menos un registro en recibos_email_envio para este día de corte. */
+      cedulas_registradas_envio_dia: number
+      /** Filas en recibos_email_envio ese día (suma de lotes; suele coincidir con cédulas salvo dos slots). */
+      registros_envio_dia_total: number
+      /**
+       * Un elemento por cada commit de envío real: orden 1, 2, … y correos_registrados_lote = filas
+       * insertadas en ese instante (agrupación por creado_en en BD, PostgreSQL).
+       */
+      olas_envio_recibos_dia: Array<{
+        orden: number
+        creado_en: string
+        correos_registrados_lote: number
+      }>
+      pagos_en_ventana_total: number
+      cedulas_en_ventana_total: number
+    }
     pagos: ReciboConciliacionFila[]
   }> {
     const q = new URLSearchParams()

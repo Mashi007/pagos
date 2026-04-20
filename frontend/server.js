@@ -126,7 +126,7 @@ function buildContentSecurityPolicy(apiUrl) {
     "object-src 'none'",
     "script-src 'self'",
     "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' data: https:",
+    "img-src 'self' data: https: blob:",
     "font-src 'self' data:",
     `connect-src ${connectBits.join(' ')}`,
     "frame-src 'self' blob: data:",

@@ -40,9 +40,11 @@ from app.core.email_config_holder import get_email_activo_servicio
 from app.api.v1.endpoints.validadores import validate_cedula
 from app.api.v1.endpoints.pagos import _aplicar_pago_a_cuotas_interno
 from app.services.cobros.pago_reportado_documento import (
+    claves_documento_pago_para_reportado,
     documento_numero_desde_pago_reportado,
     primer_pago_id_si_existe_para_claves_reportado,
     primer_reportado_id_por_norm_batch,
+    primer_reportado_id_por_norm_peer_first_map,
     reportado_toca_claves_canonicas_en_pagos,
 )
 from app.services.cobros.cedula_reportar_bs_service import (
@@ -293,45 +295,56 @@ def _autorizados_bs_claves_cached(db: Session) -> frozenset:
         return data
 
 
-# Lectura de toda la tabla `pagos` (numero_documento + referencia_pago) es costosa en cartera grande.
-# Invalidación explícita al importar/aprobar; TTL largo evita repetir el escaneo en cada lote del listado.
-_PAGOS_DOC_CANONICOS_CACHE_TTL_SEC = 300.0
-_pagos_doc_canonicos_cache: Optional[Tuple[float, frozenset]] = None
-
-
-def _pagos_documentos_canonicos_uncached(db: Session) -> frozenset:
-    """
-    Claves canónicas (normalize_documento) de todo lo guardado en pagos como documento/referencia.
-    Incluye numero_documento y referencia_pago para alinear con la regla: nunca duplicar el mismo comprobante.
-    """
-    rows = db.execute(select(Pago.numero_documento, Pago.referencia_pago)).all()
-    out: set = set()
-    for nd, ref in rows:
-        for v in (nd, ref):
-            c = normalize_documento(v)
+def _collect_candidatos_canon_desde_reportados(rows: List[PagoReportado]) -> Set[str]:
+    """Claves canónicas candidatas del lote (reportados) para cruzar con `pagos` por IN indexado."""
+    out: Set[str] = set()
+    for r in rows:
+        for k in claves_documento_pago_para_reportado(r):
+            if not k:
+                continue
+            c = normalize_documento(k) or k
             if c:
                 out.add(c)
-    return frozenset(out)
+    return out
 
 
-def _pagos_documentos_canonicos_cached(db: Session) -> frozenset:
-    """Cache corto: el listado cobros no escanea pagos en cada request completo sin límite."""
-    global _pagos_doc_canonicos_cache
-    now = time.monotonic()
-    with _cobros_list_aux_lock:
-        if _pagos_doc_canonicos_cache is not None:
-            ts, data = _pagos_doc_canonicos_cache
-            if now - ts < _PAGOS_DOC_CANONICOS_CACHE_TTL_SEC:
-                return data
-        data = _pagos_documentos_canonicos_uncached(db)
-        _pagos_doc_canonicos_cache = (now, data)
-        return data
+def _pagos_canonicos_presentes_para_claves(db: Session, claves: Set[str]) -> frozenset:
+    """
+    Subconjunto de `claves` que existen en cartera (`pagos.doc_canon_*`), vía consultas acotadas.
+    Requiere columnas doc_canon_* pobladas (migración 041 + backfill).
+    """
+    if not claves:
+        return frozenset()
+    found: Set[str] = set()
+    chunk_size = 450
+    lst = [x for x in claves if x]
+    for i in range(0, len(lst), chunk_size):
+        part = lst[i : i + chunk_size]
+        if not part:
+            continue
+        for v in db.execute(
+            select(Pago.doc_canon_numero).where(Pago.doc_canon_numero.in_(part))
+        ).scalars().all():
+            if v:
+                found.add(v)
+        for v in db.execute(
+            select(Pago.doc_canon_referencia).where(Pago.doc_canon_referencia.in_(part))
+        ).scalars().all():
+            if v:
+                found.add(v)
+    return frozenset(found)
 
 
-def _invalidate_pagos_documentos_canonicos_cache() -> None:
-    global _pagos_doc_canonicos_cache
-    with _cobros_list_aux_lock:
-        _pagos_doc_canonicos_cache = None
+def _pago_canon_existe_en_tabla_pagos(db: Session, n_norm: str) -> bool:
+    """True si el canónico aparece en `pagos` (numero o referencia indexados)."""
+    if not n_norm:
+        return False
+    row = db.execute(
+        select(Pago.id).where(
+            or_(Pago.doc_canon_numero == n_norm, Pago.doc_canon_referencia == n_norm)
+        ).limit(1)
+    ).first()
+    return row is not None
 
 
 def _observacion_reglas_carga(
@@ -345,6 +358,9 @@ def _observacion_reglas_carga(
 ) -> list:
     """
     Para cada fila: NO CLIENTES, No pag Bs., DUPLICADO.
+
+    ``claves_doc_en_pagos``: canónicos ya presentes en cartera para las claves del lote
+    (consulta indexada a ``pagos.doc_canon_*``, no toda la tabla en RAM).
 
     DUPLICADO entre reportados: solo si no es el primer reporte con ese documento normalizado
     (primer id global por created_at/id). Si falta en el mapa (escaneo acotado), se usa el
@@ -410,7 +426,8 @@ def _pago_reportado_list_items_from_rows(
     fechas_tasa = list({r.fecha_pago for r in rows if r.fecha_pago is not None})
     tasas_por_fecha = obtener_tasas_por_fechas(db, fechas_tasa)
 
-    claves_doc_en_pagos = _pagos_documentos_canonicos_cached(db)
+    candidatos = _collect_candidatos_canon_desde_reportados(rows)
+    claves_doc_en_pagos = _pagos_canonicos_presentes_para_claves(db, candidatos)
     norm_por_fila = []
     for r in rows:
         _, n_eff = documento_numero_desde_pago_reportado(r)
@@ -549,7 +566,6 @@ def _regularizar_reportados_gemini_ok_sin_falla_manual(db: Session, max_ids: int
         )
     except Exception:
         return
-    touched = False
     for pid in ids:
         try:
             pr = db.get(PagoReportado, pid)
@@ -563,17 +579,13 @@ def _regularizar_reportados_gemini_ok_sin_falla_manual(db: Session, max_ids: int
                 db.add(pr)
                 db.commit()
                 db.refresh(pr)
-                touched = True
             if getattr(pr, "estado", None) == "aprobado":
                 cpr.intentar_importar_reportado_automatico(db, pr, ref, "COBROS_COLA_REGULARIZA")
-                touched = True
         except Exception:
             try:
                 db.rollback()
             except Exception:
                 pass
-    if touched:
-        _invalidate_pagos_documentos_canonicos_cache()
 
 
 def _estado_label_excel(estado: str) -> str:
@@ -751,7 +763,7 @@ def _primer_id_por_norm_global_para_where(db: Session, wh: List[Any]) -> Dict[st
                 all_norms.add(n_eff)
     if not all_norms:
         return {}
-    return primer_reportado_id_por_norm_batch(db, all_norms, created_at_desde=None)
+    return primer_reportado_id_por_norm_peer_first_map(db, all_norms)
 
 
 def _list_pagos_reportados_payload(
@@ -1436,7 +1448,6 @@ def aprobar_pago_reportado(
         try:
             _crear_pago_desde_reportado_y_aplicar_cuotas(db, pr, usuario_email)
             db.commit()
-            _invalidate_pagos_documentos_canonicos_cache()
         except HTTPException:
             pass
         return {"ok": True, "mensaje": "Ya estaba aprobado."}
@@ -1450,7 +1461,6 @@ def aprobar_pago_reportado(
     try:
         _crear_pago_desde_reportado_y_aplicar_cuotas(db, pr, usuario_email)
         db.commit()
-        _invalidate_pagos_documentos_canonicos_cache()
     except HTTPException:
         db.rollback()
         raise
@@ -1805,8 +1815,7 @@ def _rechazar_si_numero_operacion_duplicado(db: Session, numero_operacion: str) 
     n_norm = normalize_documento(num_op)
     if not n_norm:
         return
-    claves = _pagos_documentos_canonicos_uncached(db)
-    if n_norm in claves:
+    if _pago_canon_existe_en_tabla_pagos(db, n_norm):
         raise HTTPException(
             status_code=400,
             detail="DUPLICADO: ese número de operación / documento / serial ya está registrado en la tabla de pagos (no se permite duplicar).",
@@ -1983,7 +1992,6 @@ def cambiar_estado_pago(
         try:
             _crear_pago_desde_reportado_y_aplicar_cuotas(db, pr, usuario_email)
             db.commit()
-            _invalidate_pagos_documentos_canonicos_cache()
         except HTTPException as exc:
             detail_txt = exc.detail if isinstance(exc.detail, str) else repr(exc.detail)
             logger.warning(

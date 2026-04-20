@@ -67,7 +67,7 @@ class ContentSecurityPolicyMiddleware(BaseHTTPMiddleware):
     - default-src 'self': Por defecto, solo recursos del mismo origen
     - script-src: Scripts solo del mismo origen + nonce
     - style-src: Estilos solo del mismo origen + nonce
-    - img-src: Imágenes de mismo origen + https
+    - img-src: Imágenes de mismo origen + https + data + blob (previews)
     - font-src: Fuentes del mismo origen
     - connect-src: Conexiones API al backend
     - frame-src: No permitir iframes
@@ -93,7 +93,7 @@ class ContentSecurityPolicyMiddleware(BaseHTTPMiddleware):
             "style-src 'self' 'unsafe-hashes'",
             
             # Images: self + https externo (para CDN)
-            "img-src 'self' https: data:",
+            "img-src 'self' https: data: blob:",
             
             # Fonts: solo self
             "font-src 'self'",

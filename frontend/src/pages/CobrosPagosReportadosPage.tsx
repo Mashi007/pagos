@@ -932,7 +932,7 @@ export default function CobrosPagosReportadosPage() {
           ) : !data?.items?.length ? (
             <p className="text-gray-500">No hay registros.</p>
           ) : (
-            <div className="relative overflow-x-auto rounded-lg border">
+            <div className="relative w-full max-w-full min-w-0 overflow-x-hidden rounded-lg border">
               {refreshing ? (
                 <div
                   className="absolute inset-0 z-10 flex items-start justify-center bg-background/70 pt-10 backdrop-blur-[1px]"
@@ -945,39 +945,23 @@ export default function CobrosPagosReportadosPage() {
                   </span>
                 </div>
               ) : null}
-              <table className="w-full min-w-[1180px] table-fixed text-sm">
+              <table className="w-full min-w-0 table-fixed text-sm">
                 <colgroup>
+                  <col style={{ width: '9%' }} />
                   <col style={{ width: '10%' }} />
-
                   <col style={{ width: '8%' }} />
-
-                  <col style={{ width: '9%' }} />
-
-                  <col style={{ width: '7%' }} />
-
-                  <col style={{ width: '7%' }} />
-
-                  <col style={{ width: '9%' }} />
-
-                  <col style={{ width: '7%' }} />
-
-                  <col style={{ width: '7%' }} />
-
                   <col style={{ width: '8%' }} />
-
+                  <col style={{ width: '10%' }} />
+                  <col style={{ width: '8%' }} />
+                  <col style={{ width: '7%' }} />
                   <col style={{ width: '9%' }} />
-
+                  <col style={{ width: '17%' }} />
+                  <col style={{ width: '8%' }} />
                   <col style={{ width: '6%' }} />
-
-                  <col style={{ width: '13%' }} />
                 </colgroup>
 
                 <thead>
                   <tr className="border-b bg-muted/50">
-                    <th className="px-3 py-3 text-left font-semibold">
-                      Nombre
-                    </th>
-
                     <th className="px-3 py-3 text-left font-semibold">
                       Cédula
                     </th>
@@ -1028,17 +1012,6 @@ export default function CobrosPagosReportadosPage() {
                       key={row.id}
                       className="border-b transition-colors hover:bg-muted/20"
                     >
-                      <td className="min-w-0 px-3 py-3 align-top">
-                        <span
-                          className="block truncate"
-                          title={
-                            String(row.nombres) + ' ' + String(row.apellidos)
-                          }
-                        >
-                          {row.nombres} {row.apellidos}
-                        </span>
-                      </td>
-
                       <td
                         className={
                           'whitespace-nowrap px-3 py-3 align-top ' +

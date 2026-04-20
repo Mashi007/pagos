@@ -10,6 +10,7 @@ from sqlalchemy.orm import validates
 from sqlalchemy.sql import func, text
 
 from app.core.database import Base
+from app.core.documento import normalize_documento
 from app.utils.cedula_almacenamiento import normalizar_cedula_almacenamiento
 
 
@@ -46,6 +47,9 @@ class Pago(Base):
     link_comprobante = Column(Text, nullable=True)
     # NOT NULL en BD; obligatorio al insertar
     referencia_pago = Column(String(100), nullable=False, server_default=text("''"))
+    # Canónicos de `normalize_documento` (Cobros: duplicados vs pagos con IN indexado; ver sql/041).
+    doc_canon_numero = Column(Text, nullable=True)
+    doc_canon_referencia = Column(Text, nullable=True)
     # Huella normalizada para prevenir duplicados funcionales (prestamo + fecha + monto + referencia).
     ref_norm = Column(Text, nullable=True)
     # Auditoria moneda (solo datos en BD; monto_pagado siempre USD cuando aplica conversion)
@@ -81,3 +85,5 @@ def _set_ref_norm(_mapper, _connection, target: Pago) -> None:
     # Prioriza numero_documento; si no existe usa referencia_pago.
     base = target.numero_documento or target.referencia_pago
     target.ref_norm = _normalizar_referencia_pago(base)
+    target.doc_canon_numero = normalize_documento(target.numero_documento)
+    target.doc_canon_referencia = normalize_documento(target.referencia_pago)

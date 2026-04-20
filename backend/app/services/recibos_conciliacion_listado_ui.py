@@ -4,9 +4,13 @@ Filas para GET /notificaciones/recibos/listado: pagos conciliados en la ventana 
 (misma resolución de URL que GET /pagos) y préstamo para PDF.
 
 Se excluyen filas cuya cédula ya tiene envío Recibos registrado en ``recibos_email_envio`` para ese
-``fecha_dia`` y slot de idempotencia (misma regla que el envío real / job): en pantalla solo queda lo
+``fecha_dia`` y slot de idempotencia (misma regla que el envío real): en pantalla solo queda lo
 pendiente de enviar.
-KPIs de correos desde envios_notificacion tipo_tab=recibos.
+KPIs: histórico global en ``envios_notificacion`` (tipo_tab=recibos) y, por **día de corte** (fecha de
+registro de pagos en ventana Caracas), olas de envío: cada ejecución manual hace un ``commit`` y en
+PostgreSQL las filas nuevas de ``recibos_email_envio`` comparten el mismo ``creado_en`` de transacción;
+``GROUP BY creado_en`` ordenado cronológicamente da el 1.er envío, 2.o envío, etc. Cambiar el día de
+corte en la UI reinicia la serie (otro ``fecha_dia``).
 """
 from __future__ import annotations
 
@@ -23,6 +27,7 @@ from app.models.cuota_pago import CuotaPago
 from app.models.envio_notificacion import EnvioNotificacion
 from app.models.pago import Pago
 from app.models.prestamo import Prestamo
+from app.models.recibos_email_envio import RecibosEmailEnvio
 from app.api.v1.endpoints.pagos.pago_serializacion_respuesta import (
     _enriquecer_pagos_pago_reportado_id,
     _pago_to_response,
@@ -32,6 +37,7 @@ from app.services.pagos.comprobante_link_desde_gmail import (
     enriquecer_items_link_comprobante_desde_pago_reportado,
 )
 from app.services.recibos_conciliacion_email_job import (
+    RECIBOS_VENTANA_SLOTS_IDEMPOTENCIA,
     bounds_fecha_registro_recibos_dia_caracas_00_2345,
     cedulas_recibos_ya_enviadas_en_fecha,
     _pago_aplicado_a_cuota_exists,
@@ -108,7 +114,32 @@ def _pick_cuota_representativa(pg: Pago, cuotas: List[Cuota]) -> Optional[Cuota]
     return max(pool, key=lambda c: (c.numero_cuota or 0, c.id))
 
 
-def _kpis_recibos_correo(db: Session) -> Dict[str, int]:
+def _kpis_recibos_listado(
+    db: Session,
+    *,
+    fecha_dia: date,
+    pagos_en_ventana_total: int,
+    cedulas_en_ventana_total: int,
+) -> Dict[str, Any]:
+    """
+    ``correos_*``: histórico global (todos los días).
+
+    ``olas_envio_recibos_dia``: por cada ``commit`` de envío real, un grupo de filas en
+    ``recibos_email_envio`` con el mismo ``creado_en`` (PostgreSQL: ``now()`` estable por transacción).
+    Orden cronológico = 1.er envío del día de corte, 2.o envío, …
+
+    ``cedulas_registradas_envio_dia``: cédulas distintas ya registradas para este ``fecha_dia`` (techo
+    útil frente a ``cedulas_en_ventana_total``).
+    """
+    base: Dict[str, Any] = {
+        "correos_enviados": 0,
+        "correos_rebotados": 0,
+        "cedulas_registradas_envio_dia": 0,
+        "registros_envio_dia_total": 0,
+        "olas_envio_recibos_dia": [],
+        "pagos_en_ventana_total": int(pagos_en_ventana_total),
+        "cedulas_en_ventana_total": int(cedulas_en_ventana_total),
+    }
     try:
         env = (
             db.scalar(
@@ -128,27 +159,85 @@ def _kpis_recibos_correo(db: Session) -> Dict[str, int]:
             )
             or 0
         )
-        return {"correos_enviados": int(env), "correos_rebotados": int(reb)}
+        base["correos_enviados"] = int(env)
+        base["correos_rebotados"] = int(reb)
+
+        reg = (
+            db.scalar(
+                select(func.count(func.distinct(RecibosEmailEnvio.cedula_normalizada))).where(
+                    RecibosEmailEnvio.fecha_dia == fecha_dia,
+                    RecibosEmailEnvio.slot.in_(RECIBOS_VENTANA_SLOTS_IDEMPOTENCIA),
+                )
+            )
+            or 0
+        )
+        base["cedulas_registradas_envio_dia"] = int(reg)
+
+        lotes = db.execute(
+            select(RecibosEmailEnvio.creado_en, func.count(RecibosEmailEnvio.id))
+            .where(
+                RecibosEmailEnvio.fecha_dia == fecha_dia,
+                RecibosEmailEnvio.slot.in_(RECIBOS_VENTANA_SLOTS_IDEMPOTENCIA),
+            )
+            .group_by(RecibosEmailEnvio.creado_en)
+            .order_by(RecibosEmailEnvio.creado_en.asc())
+        ).all()
+
+        olas: List[Dict[str, Any]] = []
+        sum_registros = 0
+        for i, row in enumerate(lotes, start=1):
+            cre = row[0]
+            cnt = int(row[1] or 0)
+            sum_registros += cnt
+            ts = cre.isoformat() if hasattr(cre, "isoformat") else str(cre)
+            olas.append(
+                {
+                    "orden": i,
+                    "creado_en": ts,
+                    "correos_registrados_lote": cnt,
+                }
+            )
+        base["olas_envio_recibos_dia"] = olas
+        base["registros_envio_dia_total"] = int(sum_registros)
     except Exception:
-        return {"correos_enviados": 0, "correos_rebotados": 0}
+        pass
+    return base
 
 
 def listar_recibos_ventana_con_ui(
     db: Session,
     *,
     fecha_dia: date,
-) -> Tuple[List[Dict[str, Any]], Dict[str, int], int, int]:
+) -> Tuple[List[Dict[str, Any]], Dict[str, Any], int, int]:
     """Devuelve (filas para tabla + KPIs, total_pagos, cedulas_distintas). Solo pendientes de envío Recibos."""
-    pagos_orm = _fetch_pagos_recibos_ventana_orm(db, fecha_dia=fecha_dia)
+    pagos_orm_all = _fetch_pagos_recibos_ventana_orm(db, fecha_dia=fecha_dia)
+    ced_ventana: set[str] = set()
+    for p in pagos_orm_all:
+        raw = (getattr(p, "cedula_cliente", None) or "").strip()
+        nn = texto_cedula_comparable_bd(raw)
+        if nn:
+            ced_ventana.add(nn)
+    pagos_en_ventana_total = len(pagos_orm_all)
+    cedulas_en_ventana_total = len(ced_ventana)
+
     ya = cedulas_recibos_ya_enviadas_en_fecha(db, fecha_dia)
+    pagos_orm = list(pagos_orm_all)
     if ya:
         pagos_orm = [
             p
             for p in pagos_orm
             if texto_cedula_comparable_bd((getattr(p, "cedula_cliente", None) or "").strip()) not in ya
         ]
+
+    kpis = _kpis_recibos_listado(
+        db,
+        fecha_dia=fecha_dia,
+        pagos_en_ventana_total=pagos_en_ventana_total,
+        cedulas_en_ventana_total=cedulas_en_ventana_total,
+    )
+
     if not pagos_orm:
-        return [], _kpis_recibos_correo(db), 0, 0
+        return [], kpis, 0, 0
 
     pago_ids = [int(p.id) for p in pagos_orm]
     cuotas_map = _cuotas_por_pago_id(db, pago_ids)
@@ -241,7 +330,6 @@ def listar_recibos_ventana_con_ui(
         }
         filas.append(fila)
 
-    kpis = _kpis_recibos_correo(db)
     total = len(filas)
     cedulas_dist = len(ced_norms)
     return filas, kpis, total, cedulas_dist

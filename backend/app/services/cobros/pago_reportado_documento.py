@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import re
 from datetime import datetime
+from types import SimpleNamespace
 from typing import TYPE_CHECKING, Dict, Iterable, Optional, Set
 
 from sqlalchemy import select
@@ -131,6 +132,47 @@ def primer_pago_id_si_existe_para_claves_reportado(db: "Session", pr: PagoReport
 _ESTADOS_REPORTADO_DUP_PEER = ("pendiente", "en_revision", "aprobado")
 
 
+def primer_reportado_id_por_norm_peer_first_map(
+    db: "Session",
+    norms: Set[str],
+) -> Dict[str, int]:
+    """
+    Para cada documento normalizado en ``norms``, id del ``PagoReportado`` más antiguo
+    (created_at asc, id asc) entre estados pendiente / en_revision / aprobado.
+
+    Misma semántica que ``primer_reportado_id_por_norm_batch(..., created_at_desde=None)``
+    cuando ese barrido cubriría toda la cola, pero:
+
+    - Solo lee ``id``, ``numero_operacion``, ``referencia_interna`` (sin hidratar ORM completo).
+    - Sale en cuanto tiene primer id para cada norm en ``norms`` (evita leer el resto de la tabla).
+    """
+    first: Dict[str, int] = {}
+    if not norms:
+        return first
+    pending_left = len(norms)
+    stmt = (
+        select(PagoReportado.id, PagoReportado.numero_operacion, PagoReportado.referencia_interna)
+        .where(PagoReportado.estado.in_(_ESTADOS_REPORTADO_DUP_PEER))
+        .order_by(PagoReportado.created_at.asc(), PagoReportado.id.asc())
+    )
+    res = db.execute(stmt)
+    while pending_left > 0:
+        block = res.fetchmany(4000)
+        if not block:
+            break
+        for pid, op, ref in block:
+            _, n_eff = documento_numero_desde_pago_reportado(
+                SimpleNamespace(numero_operacion=op, referencia_interna=ref)
+            )
+            if not n_eff or n_eff not in norms or n_eff in first:
+                continue
+            first[n_eff] = int(pid)
+            pending_left -= 1
+            if pending_left <= 0:
+                break
+    return first
+
+
 def primer_reportado_id_por_norm_batch(
     db: "Session",
     norms: Set[str],
@@ -196,8 +238,9 @@ def reportado_toca_claves_canonicas_en_pagos(
     claves_doc_en_pagos: frozenset,
 ) -> bool:
     """
-    True si alguna clave del reporte, normalizada como en `_pagos_documentos_canonicos_*`,
-    aparece ya en cartera (comparacion contra conjunto de canonicos de pagos).
+    True si alguna clave del reporte, normalizada como `normalize_documento`,
+    aparece en el conjunto ``claves_doc_en_pagos`` (típicamente canónicos presentes en
+    ``pagos.doc_canon_*`` cruzados por lote contra las claves del reporte).
     """
     if not claves_doc_en_pagos:
         return False

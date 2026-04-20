@@ -254,6 +254,30 @@ function fechaHoyIsoCaracas(): string {
   }).format(new Date())
 }
 
+/** ``creado_en`` de ``recibos_email_envio`` (ISO) mostrado en Caracas. */
+function fmtInstanteRegistroRecibosCaracas(isoUtc: string): string {
+  const t = String(isoUtc || '').trim()
+  if (!t) return '—'
+  const ms = Date.parse(t)
+  if (Number.isNaN(ms)) return t
+  return new Intl.DateTimeFormat('es-VE', {
+    timeZone: 'America/Caracas',
+    dateStyle: 'short',
+    timeStyle: 'medium',
+  }).format(new Date(ms))
+}
+
+/** Rótulo legible para cada lote (orden cronológico del backend). */
+function etiquetaOrdinalEnvioRecibos(n: number): string {
+  if (!Number.isFinite(n) || n < 1) return `Envío ${String(n)}`
+  if (n === 2) return '2.o envío'
+  const mod10 = n % 10
+  const mod100 = n % 100
+  if (mod10 === 1 && mod100 !== 11) return `${n}.er envío`
+  if (mod10 === 3 && mod100 !== 13) return `${n}.er envío`
+  return `${n}.º envío`
+}
+
 export default function NotificacionesRecibosPage() {
   const qc = useQueryClient()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -329,6 +353,11 @@ export default function NotificacionesRecibosPage() {
   const list: ReciboConciliacionFila[] = data?.pagos ?? []
   const kpiEnviados = data?.kpis?.correos_enviados ?? 0
   const kpiRebotados = data?.kpis?.correos_rebotados ?? 0
+  const kpiRegDia = data?.kpis?.cedulas_registradas_envio_dia ?? 0
+  const kpiCedVentana = data?.kpis?.cedulas_en_ventana_total ?? 0
+  const kpiPagosVentana = data?.kpis?.pagos_en_ventana_total ?? 0
+  const kpiRegistrosTotal = data?.kpis?.registros_envio_dia_total ?? 0
+  const olasEnvio = data?.kpis?.olas_envio_recibos_dia ?? []
 
   useEffect(() => {
     setFiltroCedula('')
@@ -751,6 +780,12 @@ export default function NotificacionesRecibosPage() {
                       <strong>Simular</strong> recorre la misma lógica sin persistir envíos; con modo pruebas
                       en Configuración &gt; Correo puede enviarse muestra SMTP por cédula.
                     </p>
+                    <p>
+                      Los KPIs de <strong>envíos por lote</strong> listan cada ejecución manual que registró
+                      filas en <code className="text-[11px]">recibos_email_envio</code> para el día de corte
+                      elegido (misma ventana de <strong>fecha de registro</strong> 00:00–23:45 Caracas). Otro
+                      día de corte en el calendario empieza la serie de nuevo.
+                    </p>
                   </div>
                 </details>
               </div>
@@ -907,28 +942,89 @@ export default function NotificacionesRecibosPage() {
                 </p>
               ) : null}
 
-              <div className="mb-2 grid grid-cols-2 gap-4 sm:grid-cols-2">
-                <div className="flex items-center gap-3 rounded-lg border border-green-200 bg-green-50 p-4">
-                  <Mail className="h-8 w-8 text-green-600" aria-hidden />
-                  <div>
-                    <p className="text-2xl font-bold text-green-800">{kpiEnviados}</p>
-                    <p className="text-xs font-medium text-green-700">Correos enviados</p>
-                    <p className="mt-1 text-[11px] text-green-700/90">
-                      Histórico Recibos (tipo_tab <code className="text-[10px]">recibos</code> en BD)
-                    </p>
+              <div className="mb-2 space-y-4">
+                <div className="rounded-lg border border-indigo-200 bg-indigo-50/90 p-4">
+                  <div className="mb-3 flex flex-wrap items-start gap-2">
+                    <Mail className="mt-0.5 h-6 w-6 shrink-0 text-indigo-600" aria-hidden />
+                    <div>
+                      <p className="text-sm font-semibold text-indigo-950">
+                        Envíos por ejecución (día de corte {data?.fecha_dia ?? '—'})
+                      </p>
+                      <p className="mt-1 text-[11px] leading-snug text-indigo-900/90">
+                        Cada ítem es un lote registrado en <code className="text-[10px]">recibos_email_envio</code>{' '}
+                        al completar un envío manual: 1.er envío, 2.o envío, … según el instante de registro
+                        en BD (un commit por ejecución, PostgreSQL). La ventana sigue siendo la de{' '}
+                        <strong>fecha de registro</strong> 00:00–23:45 Caracas de ese día.
+                      </p>
+                    </div>
                   </div>
+                  {olasEnvio.length === 0 ? (
+                    <p className="text-sm text-indigo-900/80">
+                      Sin envíos registrados aún para este día de corte.
+                    </p>
+                  ) : (
+                    <ul
+                      className="divide-y divide-indigo-100/90 text-sm text-indigo-950"
+                      role="list"
+                      aria-label="Envíos por lote en orden cronológico"
+                    >
+                      {olasEnvio.map(o => (
+                        <li
+                          key={`ola-${o.orden}-${o.creado_en}`}
+                          className="flex flex-col gap-1 py-2.5 first:pt-0 last:pb-0 sm:flex-row sm:items-baseline sm:justify-between sm:gap-6"
+                        >
+                          <span className="shrink-0 font-semibold text-indigo-950">
+                            {etiquetaOrdinalEnvioRecibos(o.orden)}
+                          </span>
+                          <span className="min-w-0 text-indigo-900 sm:text-right">
+                            <span className="tabular-nums font-semibold text-indigo-950">
+                              {o.correos_registrados_lote ?? 0}
+                            </span>{' '}
+                            correo(s) registrado(s){' '}
+                            <span className="text-indigo-700/85">·</span>{' '}
+                            <span className="text-indigo-800/90">
+                              {fmtInstanteRegistroRecibosCaracas(o.creado_en)} (Caracas)
+                            </span>
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  <p className="mt-3 border-t border-indigo-200/80 pt-2 text-xs text-indigo-900/90">
+                    <span className="font-medium">Resumen día de corte:</span>{' '}
+                    <span className="tabular-nums font-semibold">{kpiRegistrosTotal}</span> filas en BD
+                    (suma de lotes){' '}
+                    <span className="text-indigo-800/80">·</span>{' '}
+                    <span className="tabular-nums font-semibold">{kpiRegDia}</span> cédulas distintas con
+                    registro / <span className="tabular-nums font-semibold">{kpiCedVentana}</span> cédulas
+                    distintas en ventana de pagos
+                  </p>
                 </div>
-                <div className="flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 p-4">
-                  <AlertTriangle className="h-8 w-8 text-red-600" aria-hidden />
-                  <div>
-                    <p className="text-2xl font-bold text-red-800">{kpiRebotados}</p>
-                    <p className="text-xs font-medium text-red-700">Correos rebotados</p>
-                    <p className="mt-1 text-[11px] text-red-700/90">
-                      Envíos con fallo SMTP u error de entrega en Recibos
+                <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 p-4">
+                  <LayoutList className="h-8 w-8 shrink-0 text-slate-600" aria-hidden />
+                  <div className="min-w-0">
+                    <p className="text-2xl font-bold tabular-nums text-slate-900">
+                      {kpiPagosVentana}
+                      <span className="text-lg font-semibold text-slate-600">
+                        {' '}
+                        · {totalPagosListado} pend.
+                      </span>
+                    </p>
+                    <p className="text-xs font-medium text-slate-800">Pagos en ventana (00:00–23:45)</p>
+                    <p className="mt-1 text-[11px] leading-snug text-slate-600">
+                      Total pagos con <strong>fecha de registro</strong> en la franja vs. pendientes de envío
+                      Recibos en la tabla.
                     </p>
                   </div>
                 </div>
               </div>
+              <p className="mb-2 text-center text-xs text-muted-foreground">
+                Histórico global Recibos (todos los días):{' '}
+                <span className="font-semibold tabular-nums text-foreground">{kpiEnviados}</span> envíos
+                exitosos ·{' '}
+                <span className="font-semibold tabular-nums text-foreground">{kpiRebotados}</span> fallidos
+                en <code className="text-[10px]">envios_notificacion</code>.
+              </p>
 
               <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
                 <div className="max-w-md flex-1 space-y-2">
