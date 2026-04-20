@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useDeferredValue, useEffect, useState } from 'react'
 
 import { Link } from 'react-router-dom'
 
@@ -24,6 +24,7 @@ import {
 } from '../ui/card'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
+import { Textarea } from '../ui/textarea'
 import {
   Select,
   SelectContent,
@@ -165,18 +166,19 @@ export function ConfiguracionRecibos({ emergencyResetSeq = 0 }: Props) {
   const [recibosBcc1, setRecibosBcc1] = useState('')
   const [recibosBcc2, setRecibosBcc2] = useState('')
 
-  const [plantillaHtml, setPlantillaHtml] = useState<string | null>(null)
+  /** HTML que edita el usuario (también fuente de la vista previa). */
+  const [editorHtml, setEditorHtml] = useState('')
   const [plantillaCargando, setPlantillaCargando] = useState(false)
   const [plantillaError, setPlantillaError] = useState<string | null>(null)
+  const htmlVistaPrevia = useDeferredValue(editorHtml)
 
-  const cargarVistaPreviaPlantilla = useCallback(async () => {
+  const cargarPlantillaDesdeServidor = useCallback(async () => {
     setPlantillaCargando(true)
     setPlantillaError(null)
     try {
       const html = await notificacionService.obtenerPlantillaHtmlRecibos()
-      setPlantillaHtml(html)
+      setEditorHtml(html)
     } catch (e) {
-      setPlantillaHtml(null)
       setPlantillaError(getErrorMessage(e))
     } finally {
       setPlantillaCargando(false)
@@ -184,8 +186,8 @@ export function ConfiguracionRecibos({ emergencyResetSeq = 0 }: Props) {
   }, [])
 
   useEffect(() => {
-    void cargarVistaPreviaPlantilla()
-  }, [cargarVistaPreviaPlantilla])
+    void cargarPlantillaDesdeServidor()
+  }, [cargarPlantillaDesdeServidor])
 
   useEffect(() => {
     if (!data) return
@@ -519,45 +521,83 @@ export function ConfiguracionRecibos({ emergencyResetSeq = 0 }: Props) {
             <div>
               <CardTitle className="flex items-center gap-2 text-base">
                 <Eye className="h-4 w-4 text-slate-600" aria-hidden />
-                Vista previa del correo (HTML)
+                HTML del correo Recibos y vista previa
               </CardTitle>
               <CardDescription className="mt-1">
-                Mismo HTML que el envío Recibos: se obtiene del servidor al cargar y al pulsar
-                «Actualizar». Si editó la plantilla en el backend, use actualizar para ver el cambio sin
-                reiniciar.
+                La vista previa inferior refleja <strong>lo que escriba o pegue</strong> en el cuadro de
+                texto. «Traer del servidor» reemplaza el editor con la plantilla actual del backend (la que
+                usa el envío real SMTP); los cambios aquí son solo locales hasta que actualice el archivo en
+                el servidor.
               </CardDescription>
             </div>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="shrink-0"
-              disabled={plantillaCargando}
-              onClick={() => void cargarVistaPreviaPlantilla()}
-            >
-              <RefreshCw
-                className={`mr-2 h-4 w-4 ${plantillaCargando ? 'animate-spin' : ''}`}
-                aria-hidden
-              />
-              {plantillaCargando ? 'Cargando…' : 'Actualizar'}
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="shrink-0"
+                disabled={plantillaCargando}
+                onClick={() => void cargarPlantillaDesdeServidor()}
+              >
+                <RefreshCw
+                  className={`mr-2 h-4 w-4 ${plantillaCargando ? 'animate-spin' : ''}`}
+                  aria-hidden
+                />
+                {plantillaCargando ? 'Cargando…' : 'Traer del servidor'}
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="shrink-0 text-slate-600"
+                disabled={!editorHtml.trim()}
+                onClick={() => {
+                  setEditorHtml('')
+                  setPlantillaError(null)
+                }}
+                title="Vacía el editor y la vista previa"
+              >
+                Vaciar editor
+              </Button>
+            </div>
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
           {plantillaError ? (
             <p className="text-sm text-red-700">{plantillaError}</p>
-          ) : plantillaHtml ? (
-            <iframe
-              title="Vista previa correo Recibos"
-              sandbox="allow-same-origin allow-popups"
-              className="h-[min(720px,80vh)] w-full max-w-full rounded-md border border-slate-200 bg-slate-100"
-              srcDoc={plantillaHtml}
+          ) : null}
+
+          <div className="flex flex-col gap-2">
+            <label htmlFor="recibos-html-editor" className="text-xs font-medium text-gray-700">
+              HTML (vista previa en vivo)
+            </label>
+            <Textarea
+              id="recibos-html-editor"
+              spellCheck={false}
+              value={editorHtml}
+              onChange={e => setEditorHtml(e.target.value)}
+              placeholder="Pegue o escriba HTML… Use «Traer del servidor» para cargar la plantilla actual."
+              className="min-h-[220px] max-h-[min(50vh,420px)] resize-y font-mono text-xs leading-relaxed"
             />
-          ) : (
-            <p className="text-sm text-gray-500">
-              {plantillaCargando ? 'Cargando plantilla…' : 'Sin datos.'}
-            </p>
-          )}
+          </div>
+
+          <div>
+            <p className="mb-2 text-xs font-medium text-gray-600">Vista previa</p>
+            {htmlVistaPrevia.trim() ? (
+              <iframe
+                title="Vista previa correo Recibos (contenido del editor)"
+                sandbox="allow-same-origin allow-popups"
+                className="h-[min(720px,80vh)] w-full max-w-full rounded-md border border-slate-200 bg-slate-100"
+                srcDoc={htmlVistaPrevia}
+              />
+            ) : (
+              <p className="rounded-md border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-gray-500">
+                {plantillaCargando && !editorHtml
+                  ? 'Cargando plantilla del servidor…'
+                  : 'Escriba HTML arriba o pulse «Traer del servidor» para ver la vista previa.'}
+              </p>
+            )}
+          </div>
         </CardContent>
       </Card>
 
