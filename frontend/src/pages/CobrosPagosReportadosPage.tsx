@@ -21,7 +21,7 @@
 
  */
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 
 import { useNavigate } from 'react-router-dom'
 
@@ -42,7 +42,6 @@ import {
   type CambiarEstadoPagoResponse,
   type TendenciaFalloGeminiPunto,
   type TendenciaFallosGeminiResponse,
-  etiquetaCanalReportado,
 } from '../services/cobrosService'
 
 import { Button } from '../components/ui/button'
@@ -269,19 +268,11 @@ export default function CobrosPagosReportadosPage() {
     useState<TendenciaFallosGeminiResponse | null>(null)
 
   const [tendenciaLoading, setTendenciaLoading] = useState(true)
+  const [searchNonce, setSearchNonce] = useState(0)
+  const loadSeqRef = useRef(0)
 
-  const load = async (overrides?: { estado?: string; page?: number }) => {
-    const effectiveEstado =
-      overrides?.estado !== undefined ? overrides.estado : estado
-
-    const effectivePage = overrides?.page !== undefined ? overrides.page : page
-
-    if (overrides) {
-      if (overrides.estado !== undefined) setEstado(overrides.estado)
-
-      if (overrides.page !== undefined) setPage(overrides.page)
-    }
-
+  const load = async () => {
+    const requestSeq = ++loadSeqRef.current
     const initialLoad = data === null
     setLoading(initialLoad)
     setRefreshing(!initialLoad)
@@ -298,16 +289,17 @@ export default function CobrosPagosReportadosPage() {
       }
 
       const res = await listPagosReportadosConKpis({
-        page: effectivePage,
+        page,
 
         per_page: 20,
 
-        estado: effectiveEstado || undefined,
+        estado: estado || undefined,
 
         incluir_exportados: incluirExportados,
 
         ...filterParams,
       })
+      if (requestSeq !== loadSeqRef.current) return
 
       setData(res)
 
@@ -315,14 +307,17 @@ export default function CobrosPagosReportadosPage() {
     } catch (e: any) {
       toast.error(e?.message || 'Error al cargar.')
     } finally {
-      setLoading(false)
-      setRefreshing(false)
+      if (requestSeq === loadSeqRef.current) {
+        setLoading(false)
+        setRefreshing(false)
+      }
     }
   }
 
   useEffect(() => {
     load()
-  }, [page, incluirExportados])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page, incluirExportados, estado, searchNonce])
 
   useEffect(() => {
     let cancelled = false
@@ -355,7 +350,8 @@ export default function CobrosPagosReportadosPage() {
   }, [diasTendencia])
 
   const handleKpiClick = (estadoKey: string) => {
-    load({ estado: estadoKey, page: 1 })
+    setEstado(estadoKey)
+    setPage(1)
   }
 
   const handleCambiarEstado = async (
@@ -396,7 +392,7 @@ export default function CobrosPagosReportadosPage() {
         })
       }
 
-      await load()
+      setSearchNonce(prev => prev + 1)
 
       if (nuevoEstado === 'rechazado') {
         setRechazarModal({ open: false, row: null })
@@ -453,7 +449,7 @@ export default function CobrosPagosReportadosPage() {
         return
       }
       toast.success(res?.mensaje || 'Pago reportado eliminado.')
-      await load()
+      setSearchNonce(prev => prev + 1)
     } catch (e: unknown) {
       const detail = (e as { response?: { data?: { detail?: string } } })
         ?.response?.data?.detail
@@ -503,7 +499,8 @@ export default function CobrosPagosReportadosPage() {
           ' registro(s).'
       )
 
-      await load({ page: 1 })
+      setPage(1)
+      setSearchNonce(prev => prev + 1)
     } catch (e: any) {
       toast.error(e?.message || 'No se pudo exportar el Excel de corrección.')
     } finally {
@@ -622,7 +619,14 @@ export default function CobrosPagosReportadosPage() {
             </span>
           </label>
 
-          <Button onClick={() => load()}>Buscar</Button>
+          <Button
+            onClick={() => {
+              setPage(1)
+              setSearchNonce(prev => prev + 1)
+            }}
+          >
+            Buscar
+          </Button>
 
           <Button
             variant="outline"

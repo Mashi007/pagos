@@ -158,8 +158,13 @@ export function PagosList() {
   const [showVaciarTablaGmail, setShowVaciarTablaGmail] = useState(false)
   const [isVaciarTablaGmail, setIsVaciarTablaGmail] = useState(false)
   const [submenuGmailOpen, setSubmenuGmailOpen] = useState(false)
-  const [procesarGmailManualMenuOpen, setProcesarGmailManualMenuOpen] =
-    useState(false)
+  const [revisionPage, setRevisionPage] = useState(1)
+  const [editingRevisionId, setEditingRevisionId] = useState<number | null>(null)
+  const [revisionObservacionDraft, setRevisionObservacionDraft] = useState('')
+  const [savingRevisionId, setSavingRevisionId] = useState<number | null>(null)
+  const [deletingRevisionId, setDeletingRevisionId] = useState<number | null>(
+    null
+  )
   const queryClient = useQueryClient()
 
   const {
@@ -199,22 +204,6 @@ export function PagosList() {
   const handleDetenerSeguimientoGmail = () => {
     stopGmailPolling()
     toast.info('Seguimiento detenido')
-  }
-
-  const handleDescargarExcelGmailPendientesRevision = async () => {
-    setProcesarGmailManualMenuOpen(false)
-    setIsDescargandoGmailExcel(true)
-    try {
-      await pagoService.downloadGmailExcelTemporal()
-      toast.success(
-        'Excel descargado: comprobantes que no pasaron validación automática (tabla temporal).'
-      )
-      void pagoService.getGmailStatus().then(setGmailStatus)
-    } catch (e) {
-      toast.error(getErrorMessage(e))
-    } finally {
-      setIsDescargandoGmailExcel(false)
-    }
   }
 
   const textoProximoEscaneoGmailServidor = (iso: string | null | undefined) => {
@@ -480,6 +469,16 @@ export function PagosList() {
     refetchOnMount: true,
     refetchOnWindowFocus: false, // Desactivado para no interrumpir batch con GETs innecesarios
   })
+  const {
+    data: revisionData,
+    isLoading: isLoadingRevision,
+    isError: isRevisionError,
+  } = useQuery({
+    queryKey: ['pagos-con-errores-tab', revisionPage, perPage],
+    queryFn: () => pagoConErrorService.getAll(revisionPage, perPage),
+    staleTime: 15_000,
+    refetchOnWindowFocus: false,
+  })
 
   /** Solo lista normal + filtro cédula: API devuelve suma de montos de todos los pagos que coinciden. */
   const resumenTotalCedula = useMemo(() => {
@@ -523,6 +522,50 @@ export function PagosList() {
     const filterValue = value === 'all' ? '' : value
     setFilters(prev => ({ ...prev, [key]: filterValue }))
     setPage(1)
+  }
+  const handleEditarRevision = (pago: PagoConError) => {
+    setEditingRevisionId(pago.id)
+    setRevisionObservacionDraft((pago.observaciones ?? '').trim())
+  }
+  const handleGuardarRevision = async (id: number) => {
+    if (editingRevisionId !== id) return
+    setSavingRevisionId(id)
+    try {
+      await pagoConErrorService.update(id, {
+        observaciones: revisionObservacionDraft.trim() || null,
+      })
+      toast.success('Observación guardada')
+      setEditingRevisionId(null)
+      setRevisionObservacionDraft('')
+      await queryClient.invalidateQueries({ queryKey: ['pagos-con-errores'] })
+      await queryClient.invalidateQueries({
+        queryKey: ['pagos-con-errores-tab'],
+      })
+    } catch (e) {
+      toast.error(getErrorMessage(e))
+    } finally {
+      setSavingRevisionId(null)
+    }
+  }
+  const handleEliminarRevision = async (id: number) => {
+    if (!window.confirm(`¿Eliminar el pago pendiente ID ${id}?`)) return
+    setDeletingRevisionId(id)
+    try {
+      await pagoConErrorService.delete(id)
+      toast.success('Pago pendiente eliminado')
+      if ((revisionData?.pagos?.length ?? 0) <= 1 && revisionPage > 1) {
+        setRevisionPage(prev => Math.max(1, prev - 1))
+      }
+      await queryClient.invalidateQueries({ queryKey: ['pagos-con-errores'] })
+      await queryClient.invalidateQueries({
+        queryKey: ['pagos-con-errores-tab'],
+      })
+      await queryClient.invalidateQueries({ queryKey: ['pagos'], exact: false })
+    } catch (e) {
+      toast.error(getErrorMessage(e))
+    } finally {
+      setDeletingRevisionId(null)
+    }
   }
   const getEstadoBadge = (estado: string) => {
     const estados: Record<string, { color: string; label: string }> = {
@@ -676,63 +719,22 @@ export function PagosList() {
             Descargar Excel
           </Button>
         )}
-        <div className="inline-flex items-stretch rounded-xl border border-input bg-background shadow-sm">
-          <Button
-            variant="outline"
-            size="lg"
-            type="button"
-            onClick={() => void runGmail('all')}
-            disabled={loadingGmail}
-            className="rounded-none rounded-l-xl border-0 px-6 py-6 text-base font-semibold shadow-none hover:bg-accent"
-            title="Ejecuta el pipeline Gmail (misma acción que Agregar pago → Generar Excel desde email → Procesar correos)"
-          >
-            {loadingGmail ? (
-              <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-            ) : (
-              <Mail className="mr-2 h-5 w-5" />
-            )}
-            Procesar manualmente
-          </Button>
-          <Popover
-            open={procesarGmailManualMenuOpen}
-            onOpenChange={setProcesarGmailManualMenuOpen}
-          >
-            <PopoverTrigger asChild>
-              <Button
-                variant="outline"
-                size="lg"
-                type="button"
-                disabled={isDescargandoGmailExcel}
-                className="rounded-none rounded-r-xl border-0 border-l border-input px-3 py-6 shadow-none hover:bg-accent"
-                aria-label="Más opciones: descargar Excel pendientes de revisión"
-                title="Descargar Excel solo con comprobantes pendientes de revisión (no autoconciliados)"
-              >
-                <ChevronDown className="h-5 w-5" />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-80 max-w-[90vw] p-3" align="end">
-              <p className="mb-2 text-xs leading-snug text-muted-foreground">
-                Plantilla A–D (y NR con alta automática) que pasó validadores y generó
-                pago en BD no aparece en este Excel. Aquí quedan duplicados, rechazos de
-                negocio, NR sin monto operativo legible u otros pendientes de revisión.
-              </p>
-              <Button
-                type="button"
-                variant="secondary"
-                className="w-full justify-start gap-2"
-                disabled={isDescargandoGmailExcel}
-                onClick={() => void handleDescargarExcelGmailPendientesRevision()}
-              >
-                {isDescargandoGmailExcel ? (
-                  <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
-                ) : (
-                  <Download className="h-4 w-4 shrink-0" />
-                )}
-                Descargar Excel (pendientes de revisión)
-              </Button>
-            </PopoverContent>
-          </Popover>
-        </div>
+        <Button
+          variant="outline"
+          size="lg"
+          type="button"
+          onClick={() => void runGmail('all')}
+          disabled={loadingGmail}
+          className="px-6 py-6 text-base font-semibold"
+          title="Ejecuta el pipeline Gmail (misma acción que Agregar pago → Generar Excel desde email → Procesar correos)"
+        >
+          {loadingGmail ? (
+            <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+          ) : (
+            <Mail className="mr-2 h-5 w-5" />
+          )}
+          Procesar manualmente
+        </Button>
         <Popover open={agregarPagoOpen} onOpenChange={setAgregarPagoOpen}>
           <PopoverTrigger asChild>
             <Button
@@ -893,34 +895,6 @@ export function PagosList() {
                         <span>Detener seguimiento</span>
                       </button>
                     )}
-                    <button
-                      type="button"
-                      className="flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left text-sm hover:bg-blue-50 disabled:opacity-50"
-                      onClick={async () => {
-                        setAgregarPagoOpen(false)
-                        setIsDescargandoGmailExcel(true)
-                        try {
-                          await pagoService.downloadGmailExcelTemporal()
-                          toast.success('Excel descargado')
-                          pagoService.getGmailStatus().then(setGmailStatus)
-                        } catch (e) {
-                          toast.error(getErrorMessage(e))
-                        } finally {
-                          setIsDescargandoGmailExcel(false)
-                        }
-                      }}
-                      disabled={isDescargandoGmailExcel}
-                    >
-                      <Download className="h-4 w-4 text-gray-600" />
-                      <span>
-                        {isDescargandoGmailExcel
-                          ? 'Descargando...'
-                          : 'Descargar Excel'}
-                      </span>
-                      <span className="ml-auto text-xs text-gray-500">
-                        Gmail
-                      </span>
-                    </button>
                     <button
                       type="button"
                       className="flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left text-sm text-red-700 hover:bg-red-50 disabled:opacity-50"
@@ -1240,10 +1214,142 @@ export function PagosList() {
         <TabsList className="mb-4">
           <TabsTrigger value="todos">Todos los Pagos</TabsTrigger>
           <TabsTrigger value="resumen">Detalle por Cliente</TabsTrigger>
+          <TabsTrigger value="revision">Pendientes de revisión</TabsTrigger>
         </TabsList>
         {/* Tab: Detalle por Cliente (resumen + ver pagos del cliente, más reciente a más antiguo) */}
         <TabsContent value="resumen">
           <PagosListResumen />
+        </TabsContent>
+        <TabsContent value="revision">
+          <Card>
+            <CardHeader>
+              <CardTitle>Pendientes de revisión</CardTitle>
+              <p className="text-sm text-muted-foreground">
+                Pagos no validados automáticamente. Aquí puede editar, guardar
+                observaciones del motivo de incumplimiento o eliminar registros.
+              </p>
+              <p className="text-xs font-medium text-amber-700">
+                Solo se listan pagos que no cumplen validadores.
+              </p>
+            </CardHeader>
+            <CardContent>
+              {isLoadingRevision ? (
+                <div className="py-8 text-center text-sm text-gray-500">
+                  Cargando pendientes de revisión...
+                </div>
+              ) : isRevisionError ? (
+                <div className="py-8 text-center text-sm text-red-600">
+                  Error cargando pendientes de revisión
+                </div>
+              ) : !revisionData?.pagos?.length ? (
+                <div className="py-8 text-center text-sm text-gray-500">
+                  No hay pagos pendientes de revisión.
+                </div>
+              ) : (
+                <>
+                  <div className="overflow-hidden rounded-lg border">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>ID</TableHead>
+                          <TableHead>Cédula</TableHead>
+                          <TableHead>Crédito</TableHead>
+                          <TableHead>Monto</TableHead>
+                          <TableHead>Fecha Pago</TableHead>
+                          <TableHead>Nº Documento</TableHead>
+                          <TableHead>Observación</TableHead>
+                          <TableHead className="text-right">Acciones</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {revisionData.pagos.map(pago => (
+                          <TableRow key={pago.id}>
+                            <TableCell>{pago.id}</TableCell>
+                            <TableCell>{pago.cedula_cliente}</TableCell>
+                            <TableCell>
+                              {pago.prestamo_id ? `#${pago.prestamo_id}` : '-'}
+                            </TableCell>
+                            <TableCell>${Number(pago.monto_pagado).toFixed(2)}</TableCell>
+                            <TableCell>{formatDate(pago.fecha_pago)}</TableCell>
+                            <TableCell>
+                              {textoDocumentoPagoParaListado(
+                                pago.numero_documento,
+                                pago.codigo_documento
+                              )}
+                            </TableCell>
+                            <TableCell className="min-w-[260px]">
+                              {editingRevisionId === pago.id ? (
+                                <Input
+                                  value={revisionObservacionDraft}
+                                  onChange={e =>
+                                    setRevisionObservacionDraft(e.target.value)
+                                  }
+                                  placeholder="Motivo por el que no cumple"
+                                />
+                              ) : (
+                                <span className="text-sm text-amber-700">
+                                  {(pago.observaciones ?? '').trim() ||
+                                    'No cumple validaciones automáticas'}
+                                </span>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <div className="inline-flex items-center gap-2">
+                                <Button
+                                  size="icon"
+                                  variant="outline"
+                                  title="Editar fila"
+                                  onClick={() => handleEditarRevision(pago)}
+                                >
+                                  <Edit className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  size="icon"
+                                  variant="outline"
+                                  title="Guardar observación"
+                                  disabled={
+                                    editingRevisionId !== pago.id ||
+                                    savingRevisionId === pago.id
+                                  }
+                                  onClick={() => void handleGuardarRevision(pago.id)}
+                                >
+                                  {savingRevisionId === pago.id ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                  ) : (
+                                    <Check className="h-4 w-4" />
+                                  )}
+                                </Button>
+                                <Button
+                                  size="icon"
+                                  variant="destructive"
+                                  title="Eliminar fila"
+                                  disabled={deletingRevisionId === pago.id}
+                                  onClick={() => void handleEliminarRevision(pago.id)}
+                                >
+                                  {deletingRevisionId === pago.id ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                  ) : (
+                                    <Trash2 className="h-4 w-4" />
+                                  )}
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                  <ListPaginationBar
+                    className="mt-4"
+                    page={revisionData.page}
+                    totalPages={Math.max(1, revisionData.total_pages)}
+                    onPageChange={p => setRevisionPage(p)}
+                    subtitle={`${revisionData.total} registros · ${revisionData.per_page} por página`}
+                  />
+                </>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
         {/* Tab: Todos los Pagos */}
         <TabsContent value="todos">
