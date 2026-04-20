@@ -4,372 +4,521 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Confirmación de Pago – RapiCredit</title>
-  <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800&family=Open+Sans:wght@400;500;600&display=swap" rel="stylesheet"/>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
-      background: #e2e8f0;
-      font-family: 'Source Sans 3', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-      color: #334155;
-      -webkit-font-smoothing: antialiased;
+      background: #f0f2f5;
+      font-family: 'Open Sans', sans-serif;
+      color: #333;
     }
     .wrapper {
-      max-width: 600px;
-      margin: 28px auto;
-      background: #ffffff;
-      border-radius: 8px;
+      max-width: 620px;
+      margin: 40px auto;
+      background: #fff;
+      border-radius: 12px;
       overflow: hidden;
-      border: 1px solid #cbd5e1;
-      box-shadow: 0 4px 24px rgba(15, 23, 42, 0.06);
-    }
-    .status-bar {
-      background: #f8fafc;
-      border-bottom: 1px solid #e2e8f0;
-      padding: 16px 28px;
-    }
-    .status-mark {
-      width: 32px;
-      height: 32px;
-      border-radius: 50%;
-      border: 2px solid #64748b;
-      color: #475569;
-      font-size: 15px;
-      font-weight: 700;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      flex-shrink: 0;
-      font-family: 'Source Sans 3', sans-serif;
-      line-height: 1;
-    }
-    .status-kicker {
-      font-size: 11px;
-      font-weight: 600;
-      letter-spacing: 0.14em;
-      text-transform: uppercase;
-      color: #64748b;
-      margin-bottom: 4px;
-    }
-    .status-title {
-      font-size: 17px;
-      font-weight: 600;
-      color: #0f172a;
-      letter-spacing: -0.01em;
-      line-height: 1.3;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.10);
     }
 
-    main.body {
-      padding: 28px 28px 26px;
+    /* ── HEADER ── */
+    .header {
+      background: #0d1b2a;
+      padding: 0;
+      position: relative;
+      overflow: hidden;
+      min-height: 110px;
+    }
+    .header-red-bar {
+      position: absolute;
+      top: 0; left: 0;
+      width: 7px;
+      height: 100%;
+      background: #e63946;
+    }
+    .header-accent-circle {
+      position: absolute;
+      top: -50px; right: -50px;
+      width: 220px; height: 220px;
+      border-radius: 50%;
+      border: 40px solid rgba(230,57,70,0.08);
+    }
+    .header-accent-circle2 {
+      position: absolute;
+      bottom: -30px; right: 120px;
+      width: 100px; height: 100px;
+      border-radius: 50%;
+      border: 20px solid rgba(255,255,255,0.04);
+    }
+    .header-inner {
+      position: relative;
+      z-index: 2;
+      padding: 26px 36px 26px 44px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+    }
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 18px;
+    }
+    .logo-icon {
+      width: 58px; height: 58px;
+      background: #e63946;
+      border-radius: 14px;
+      display: flex; align-items: center; justify-content: center;
+      font-family: 'Montserrat', sans-serif;
+      font-weight: 900;
+      font-size: 30px;
+      color: #fff;
+      letter-spacing: -1px;
+      flex-shrink: 0;
+      border: 2px solid rgba(255,255,255,0.15);
+    }
+    .header-tagline {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+    .header-tagline .tag-top {
+      font-size: 11px;
+      font-family: 'Montserrat', sans-serif;
+      font-weight: 600;
+      color: rgba(255,255,255,0.40);
+      letter-spacing: 3px;
+      text-transform: uppercase;
+    }
+    .header-tagline .tag-bottom {
+      font-size: 13px;
+      font-family: 'Montserrat', sans-serif;
+      font-weight: 500;
+      color: rgba(255,255,255,0.65);
+      letter-spacing: 0.3px;
+    }
+    .header-brand {
+      font-family: 'Montserrat', sans-serif;
+      font-weight: 900;
+      font-size: 28px;
+      color: #fff;
+      letter-spacing: -1px;
+      line-height: 1;
+    }
+    .header-brand .r-red { color: #e63946; }
+    .header-brand .brand-sub {
+      display: block;
+      font-size: 10px;
+      font-weight: 500;
+      color: rgba(255,255,255,0.35);
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      text-align: right;
+      margin-top: 2px;
+    }
+    .header-divider {
+      height: 3px;
+      background: linear-gradient(90deg, #e63946 0%, #e63946 30%, rgba(255,255,255,0.06) 100%);
+    }
+
+    /* ── SUCCESS BANNER ── */
+    .success-banner {
+      background: linear-gradient(90deg, #2ecc71, #27ae60);
+      padding: 14px 36px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .success-banner .check-icon {
+      width: 28px; height: 28px;
+      background: rgba(255,255,255,0.25);
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 14px;
+      flex-shrink: 0;
+    }
+    .success-banner p {
+      font-family: 'Montserrat', sans-serif;
+      font-weight: 700;
+      font-size: 13px;
+      color: #fff;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+    }
+
+    /* ── BODY ── */
+    .body {
+      padding: 36px 36px 28px;
     }
     .greeting {
-      font-size: 16px;
-      font-weight: 600;
-      color: #0f172a;
-      margin-bottom: 12px;
-    }
-    .lead {
+      font-family: 'Montserrat', sans-serif;
       font-size: 15px;
-      line-height: 1.7;
-      color: #475569;
+      font-weight: 600;
+      color: #1a1a2e;
+      margin-bottom: 14px;
+    }
+    .body p {
+      font-size: 14.5px;
+      line-height: 1.75;
+      color: #444;
       margin-bottom: 22px;
     }
 
-    /* Panel resumen: escaneo horizontal */
-    .summary-panel {
-      width: 100%;
-      border-collapse: collapse;
-      border: 1px solid #e2e8f0;
-      border-radius: 6px;
-      margin-bottom: 26px;
-      background: #fafafa;
-    }
-    .summary-panel caption {
-      text-align: left;
-      font-size: 11px;
+    /* ── CHECKLIST ── */
+    .section-title {
+      font-family: 'Montserrat', sans-serif;
+      font-size: 13px;
       font-weight: 700;
-      letter-spacing: 0.1em;
+      color: #1a1a2e;
+      letter-spacing: 1px;
       text-transform: uppercase;
-      color: #64748b;
-      padding: 10px 14px 8px;
-      background: #f1f5f9;
-      border-bottom: 1px solid #e2e8f0;
-      caption-side: top;
-    }
-    .summary-panel th {
-      text-align: left;
-      font-size: 12px;
-      font-weight: 600;
-      color: #64748b;
-      padding: 10px 14px;
-      width: 38%;
-      border-bottom: 1px solid #f1f5f9;
-      vertical-align: top;
-      background: #fafafa;
-    }
-    .summary-panel td {
-      font-size: 14px;
-      color: #0f172a;
-      font-weight: 500;
-      padding: 10px 14px;
-      border-bottom: 1px solid #f1f5f9;
-      vertical-align: top;
-      background: #ffffff;
-    }
-    .summary-panel tr:last-child th,
-    .summary-panel tr:last-child td {
-      border-bottom: none;
-    }
-
-    h2.section-title {
-      font-family: 'Source Sans 3', sans-serif;
-      font-size: 12px;
-      font-weight: 700;
-      color: #64748b;
-      letter-spacing: 0.12em;
-      text-transform: uppercase;
-      margin: 26px 0 12px 0;
+      margin-bottom: 14px;
       padding-bottom: 8px;
-      border-bottom: 1px solid #e2e8f0;
+      border-bottom: 2px solid #f0f2f5;
     }
     .checklist {
       list-style: none;
-      margin-bottom: 26px;
+      margin-bottom: 28px;
     }
     .checklist li {
       display: flex;
       align-items: flex-start;
       gap: 14px;
-      padding: 14px 16px;
-      border-radius: 6px;
-      background: #fafafa;
+      padding: 14px 18px;
+      border-radius: 10px;
+      background: #f8f9fb;
       margin-bottom: 10px;
-      border: 1px solid #f1f5f9;
-      border-left: 3px solid #64748b;
+      border-left: 4px solid #2ecc71;
+      transition: background 0.2s;
     }
-    .step-num {
-      min-width: 26px;
-      height: 26px;
-      border-radius: 4px;
-      background: #e2e8f0;
-      color: #475569;
-      font-size: 12px;
-      font-weight: 700;
-      display: flex;
-      align-items: center;
-      justify-content: center;
+    .checklist li .icon {
+      font-size: 20px;
+      line-height: 1;
       flex-shrink: 0;
-      font-family: 'Source Sans 3', sans-serif;
+      margin-top: 1px;
     }
     .checklist li .text strong {
-      font-size: 14px;
-      font-weight: 600;
-      color: #0f172a;
+      font-family: 'Montserrat', sans-serif;
+      font-size: 13.5px;
+      font-weight: 700;
+      color: #1a1a2e;
       display: block;
-      margin-bottom: 4px;
-      letter-spacing: -0.01em;
+      margin-bottom: 2px;
     }
     .checklist li .text span {
       font-size: 13px;
-      color: #64748b;
-      line-height: 1.55;
+      color: #666;
+      line-height: 1.5;
     }
 
-    .cta-label {
-      font-size: 11px;
+    /* ── WHATSAPP CTA ── */
+    .cta-box {
+      background: linear-gradient(135deg, #f8f9fb, #eef0f4);
+      border: 1px solid #e2e6ea;
+      border-radius: 12px;
+      padding: 20px 22px;
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      margin-bottom: 28px;
+    }
+    .wa-icon {
+      width: 48px; height: 48px;
+      background: #25D366;
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 24px;
+      flex-shrink: 0;
+      box-shadow: 0 4px 12px rgba(37,211,102,0.30);
+    }
+    .cta-box .cta-text p {
+      font-size: 13px;
+      color: #555;
+      margin-bottom: 4px;
+      line-height: 1.4;
+    }
+    .cta-box .cta-text a {
+      font-family: 'Montserrat', sans-serif;
       font-weight: 700;
-      letter-spacing: 0.1em;
-      text-transform: uppercase;
-      color: #64748b;
-      margin-bottom: 6px;
-    }
-    a.phone {
       font-size: 15px;
-      font-weight: 600;
-      color: #0f172a;
+      color: #0f3460;
       text-decoration: none;
-      border-bottom: 1px solid #cbd5e1;
+      letter-spacing: 0.5px;
     }
-    a.phone:hover {
-      color: #1e40af;
-      border-bottom-color: #1e40af;
-    }
-    a.ghost:hover {
-      background: #f1f5f9 !important;
-      border-color: #cbd5e1 !important;
-    }
+    .cta-box .cta-text a:hover { text-decoration: underline; }
 
-    .divider {
-      height: 1px;
-      background: #e2e8f0;
-      margin: 24px 0;
-    }
     .closing {
       font-size: 14px;
-      color: #475569;
-      line-height: 1.6;
+      color: #444;
+      line-height: 1.7;
+      margin-bottom: 0;
+    }
+    .closing strong {
+      color: #1a1a2e;
+      font-weight: 600;
     }
 
-    .signature-wrap {
+    /* ── DIVIDER ── */
+    .divider {
+      height: 1px;
+      background: linear-gradient(90deg, transparent, #dde1e7, transparent);
+      margin: 28px 0;
+    }
+
+    /* ── SIGNATURE / FOOTER ── */
+    .signature {
+      background: #0d1b2a;
       padding: 0;
-      background: #fff;
+      position: relative;
+      overflow: hidden;
     }
+    .sig-red-top {
+      height: 4px;
+      background: #e63946;
+    }
+    .sig-inner {
+      padding: 28px 36px 30px;
+      position: relative;
+      z-index: 2;
+    }
+    .sig-deco-circle {
+      position: absolute;
+      bottom: -60px; right: -60px;
+      width: 200px; height: 200px;
+      border-radius: 50%;
+      border: 40px solid rgba(230,57,70,0.07);
+      z-index: 1;
+    }
+    .sig-deco-circle2 {
+      position: absolute;
+      top: -20px; left: 200px;
+      width: 80px; height: 80px;
+      border-radius: 50%;
+      border: 16px solid rgba(255,255,255,0.03);
+      z-index: 1;
+    }
+    .sig-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 22px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid rgba(255,255,255,0.10);
+    }
+    .sig-brand-block {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .sig-logo {
+      width: 46px; height: 46px;
+      background: #e63946;
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-family: 'Montserrat', sans-serif;
+      font-weight: 900;
+      font-size: 24px;
+      color: #fff;
+      flex-shrink: 0;
+    }
+    .sig-brand-text .sig-name {
+      font-family: 'Montserrat', sans-serif;
+      font-weight: 900;
+      font-size: 20px;
+      color: #fff;
+      letter-spacing: -0.5px;
+      line-height: 1;
+    }
+    .sig-brand-text .sig-name span { color: #e63946; }
+    .sig-brand-text .sig-dept {
+      font-size: 11px;
+      color: rgba(255,255,255,0.38);
+      font-weight: 500;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      margin-top: 3px;
+    }
+    .sig-tagline {
+      font-family: 'Montserrat', sans-serif;
+      font-size: 11px;
+      font-weight: 600;
+      color: rgba(255,255,255,0.22);
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      text-align: right;
+      line-height: 1.5;
+    }
+    .sig-tagline strong {
+      display: block;
+      font-size: 12px;
+      color: rgba(255,255,255,0.35);
+    }
+    .sig-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0;
+    }
+    .sig-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 12px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    .sig-item:nth-child(odd) { padding-right: 20px; border-right: 1px solid rgba(255,255,255,0.06); }
+    .sig-item:nth-child(even) { padding-left: 20px; }
+    .sig-item:nth-last-child(-n+2) { border-bottom: none; }
+    .s-icon-box {
+      width: 32px; height: 32px;
+      background: rgba(230,57,70,0.15);
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 14px;
+      flex-shrink: 0;
+      border: 1px solid rgba(230,57,70,0.25);
+    }
+    .sig-item .s-label {
+      font-size: 10px;
+      color: rgba(255,255,255,0.35);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      display: block;
+      margin-bottom: 2px;
+    }
+    .sig-item .s-value {
+      font-size: 12.5px;
+      color: rgba(255,255,255,0.80);
+      font-weight: 500;
+      line-height: 1.4;
+    }
+    .sig-item a.s-value {
+      color: #ff6b7a;
+      text-decoration: none;
+    }
+    .sig-item a.s-value:hover { text-decoration: underline; }
 
+    /* ── LEGAL ── */
     .legal {
-      padding: 18px 28px 22px;
-      background: #f8fafc;
+      padding: 16px 36px;
+      background: #f8f9fb;
       text-align: center;
-      border-top: 1px solid #e2e8f0;
     }
     .legal p {
       font-size: 11px;
-      color: #94a3b8;
-      line-height: 1.65;
-      max-width: 520px;
-      margin: 0 auto;
+      color: #aaa;
+      line-height: 1.6;
     }
   </style>
 </head>
 <body>
 <div class="wrapper">
 
-  <!-- Franja de estado (lectura rápida; tabla para Outlook) -->
-  <div class="status-bar">
-    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;">
-      <tr>
-        <td width="46" valign="middle" style="padding-right:14px;">
-          <div class="status-mark" aria-hidden="true">&#10003;</div>
-        </td>
-        <td valign="middle">
-          <div class="status-kicker">Notificación de cobranza</div>
-          <p class="status-title">Pago recibido y registrado en el sistema</p>
-        </td>
-      </tr>
-    </table>
+  <!-- HEADER -->
+  <div class="header">
+    <div class="header-red-bar"></div>
+    <div class="header-accent-circle"></div>
+    <div class="header-accent-circle2"></div>
+    <div class="header-inner">
+      <div class="header-left">
+        <div class="header-tagline">
+          <span class="tag-bottom">Departamento de Cobranza</span>
+        </div>
+      </div>
+      <div class="header-brand">
+        <span class="r-red">R</span>APICREDIT
+        <span class="brand-sub">C.A. Venezuela</span>
+      </div>
+    </div>
+    <div class="header-divider"></div>
   </div>
 
-  <main class="body">
+  <!-- SUCCESS BANNER -->
+  <div class="success-banner">
+    <div class="check-icon">✔</div>
+    <p>Pago recibido exitosamente</p>
+  </div>
+
+  <!-- BODY -->
+  <div class="body">
     <p class="greeting">Estimado cliente,</p>
-    <p class="lead">
+    <p>
       Hemos recibido su pago con éxito. Adjunto a este correo encontrará su
-      <strong style="color:#0f172a;font-weight:600;">Estado de cuenta</strong>
-      actualizado en formato PDF para su revisión.
+      <strong>Estado de Cuenta</strong> actualizado para su revisión.
     </p>
 
-    <table class="summary-panel" aria-describedby="sum-caption">
-      <caption id="sum-caption">Resumen del mensaje</caption>
-      <tbody>
-        <tr>
-          <th scope="row">Documento</th>
-          <td>Estado de cuenta (archivo adjunto PDF)</td>
-        </tr>
-        <tr>
-          <th scope="row">Próximo paso</th>
-          <td>Compruebe la tabla de pagos y descargue los recibos que correspondan.</td>
-        </tr>
-      </tbody>
-    </table>
-
-    <h2 class="section-title" id="sec-revisar">Qué debe revisar</h2>
-    <ul class="checklist" role="list" aria-labelledby="sec-revisar">
-      <li role="listitem">
-        <div class="step-num" aria-hidden="true">1</div>
+    <div class="section-title">¿Qué debe revisar?</div>
+    <ul class="checklist">
+      <li>
+        <div class="icon">✅</div>
         <div class="text">
-          <strong>Tabla de pagos</strong>
-          <span>En el PDF podrá ver reflejados sus pagos más recientes y el estado de cada préstamo.</span>
+          <strong>Tabla de Pagos</strong>
+          <span>Allí podrá ver reflejados sus pagos más recientes.</span>
         </div>
       </li>
-      <li role="listitem">
-        <div class="step-num" aria-hidden="true">2</div>
+      <li>
+        <div class="icon">✅</div>
         <div class="text">
-          <strong>Recibos</strong>
-          <span>Cada pago aplicado dispone de su comprobante o recibo según corresponda en el documento adjunto.</span>
+          <strong>Sus Recibos</strong>
+          <span>Recuerde que cada pago realizado tiene su recibo correspondiente disponible para descarga.</span>
         </div>
       </li>
     </ul>
 
-    <h2 class="section-title" id="sec-ayuda">Contacto</h2>
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;margin-bottom:26px;border:1px solid #e2e8f0;border-radius:6px;background:#ffffff;" aria-labelledby="sec-ayuda">
-      <tr>
-        <td style="padding:18px 20px;">
-          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;">
-            <tr>
-              <td valign="top" style="font-family:'Source Sans 3',Arial,sans-serif;padding-right:16px;">
-                <div class="cta-label">Canal preferido</div>
-                <p style="font-size:13px;color:#475569;margin:0 0 10px 0;line-height:1.5;">Si necesita ayuda o una aclaración, puede escribir a nuestro equipo de cobranza por WhatsApp.</p>
-                <a class="phone" href="https://wa.me/584244579934">+58 424-4579934</a>
-              </td>
-              <td valign="top" width="88" align="center" style="border-left:1px solid #f1f5f9;padding-left:16px;">
-                <span style="display:block;font-size:10px;font-weight:700;letter-spacing:0.08em;color:#94a3b8;text-transform:uppercase;">Web</span>
-                <a class="ghost" href="https://www.rapicreditca.com" target="_blank" rel="noopener noreferrer" title="Sitio corporativo RapiCredit" style="display:inline-block;margin-top:6px;font-size:12px;font-weight:600;color:#475569;text-decoration:none;padding:6px 10px;border:1px solid #e2e8f0;border-radius:4px;background:#f8fafc;">Sitio</a>
-              </td>
-            </tr>
-          </table>
-        </td>
-      </tr>
-    </table>
+    <div class="section-title">¿Tiene alguna duda?</div>
+    <div class="cta-box">
+      <div class="wa-icon">📲</div>
+      <div class="cta-text">
+        <p>Si necesita ayuda o alguna aclaración, escríbanos a nuestro Call Center vía WhatsApp:</p>
+        <a href="https://wa.me/584244579934">+58 424-4579934</a>
+      </div>
+    </div>
 
-    <div class="divider" role="separator" aria-hidden="true"></div>
+    <div class="divider"></div>
 
-    <p class="closing">Atentamente,</p>
-  </main>
-
-  <!-- Firma: tablas + estilos inline para clientes de correo -->
-  <div class="signature-wrap">
-    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;mso-table-lspace:0;mso-table-rspace:0;background:#ffffff;">
-      <tr>
-        <td style="height:3px;background-color:#334155;background:#334155;font-size:0;line-height:0;mso-line-height-rule:exactly;">&nbsp;</td>
-      </tr>
-      <tr>
-        <td style="padding:20px 26px 18px 26px;border-left:1px solid #e2e8f0;border-right:1px solid #e2e8f0;background-color:#fafafa;">
-          <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;">
-            <tr>
-              <td valign="middle" style="font-family:'Source Sans 3',Arial,sans-serif;padding-right:14px;">
-                <div style="font-size:17px;font-weight:700;color:#0f172a;letter-spacing:-0.02em;line-height:1.25;">Equipo RapiCredit</div>
-                <div style="margin-top:5px;font-size:12px;font-weight:600;color:#64748b;letter-spacing:0.04em;">Cobranza &middot; RapiCredit C.A.</div>
-              </td>
-              <td align="right" valign="middle" style="font-family:'Source Sans 3',Arial,sans-serif;white-space:nowrap;">
-                <span style="font-size:18px;font-weight:800;color:#334155;">R</span><span style="font-size:14px;font-weight:700;color:#475569;letter-spacing:0.04em;">apiCredit</span>
-              </td>
-            </tr>
-          </table>
-        </td>
-      </tr>
-      <tr>
-        <td style="padding:18px 26px 22px 26px;border-left:1px solid #e2e8f0;border-right:1px solid #e2e8f0;border-bottom:1px solid #e2e8f0;background-color:#ffffff;">
-          <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;">
-            <tr>
-              <td valign="top" width="50%" style="font-family:'Source Sans 3',Arial,sans-serif;padding:0 10px 12px 0;">
-                <div style="font-size:10px;color:#94a3b8;text-transform:uppercase;letter-spacing:0.1em;font-weight:700;">Correo</div>
-                <a href="mailto:cobranza@rapicreditca.com" style="display:inline-block;margin-top:5px;font-size:14px;color:#0f172a;font-weight:600;text-decoration:none;border-bottom:1px solid #e2e8f0;">cobranza@rapicreditca.com</a>
-              </td>
-              <td valign="top" width="50%" style="font-family:'Source Sans 3',Arial,sans-serif;padding:0 0 12px 10px;border-left:1px solid #f1f5f9;">
-                <div style="font-size:10px;color:#94a3b8;text-transform:uppercase;letter-spacing:0.1em;font-weight:700;">Oficina</div>
-                <div style="margin-top:5px;font-size:13px;color:#475569;font-weight:500;line-height:1.45;">Guacara Plaza, Local PB-12<br/><span style="color:#64748b;">Guacara, Carabobo</span></div>
-              </td>
-            </tr>
-            <tr>
-              <td colspan="2" style="padding-top:12px;border-top:1px solid #f1f5f9;">
-                <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;">
-                  <tr>
-                    <td style="padding-right:12px;">
-                      <a href="https://wa.me/584244579934" style="display:inline-block;font-family:'Source Sans 3',Arial,sans-serif;font-size:13px;font-weight:600;color:#ffffff;text-decoration:none;background-color:#475569;border-radius:4px;padding:10px 18px;">WhatsApp</a>
-                    </td>
-                    <td>
-                      <a href="https://www.rapicreditca.com" target="_blank" rel="noopener noreferrer" style="display:inline-block;font-family:'Source Sans 3',Arial,sans-serif;font-size:13px;font-weight:600;color:#334155;text-decoration:none;border:1px solid #cbd5e1;border-radius:4px;padding:9px 17px;background-color:#ffffff;">www.rapicreditca.com</a>
-                    </td>
-                  </tr>
-                </table>
-              </td>
-            </tr>
-          </table>
-        </td>
-      </tr>
-    </table>
+    <p class="closing">
+      Atentamente,<br/><br/>
+    </p>
   </div>
 
-  <footer class="legal">
-    <p>Este correo y sus adjuntos son confidenciales y están dirigidos exclusivamente al destinatario. Si recibió este mensaje por error, por favor notifíquenos y elimínelo de inmediato. © 2026 RapiCredit C.A. Todos los derechos reservados.</p>
-  </footer>
+  <!-- SIGNATURE -->
+  <div class="signature">
+    <div class="sig-red-top"></div>
+    <div class="sig-deco-circle"></div>
+    <div class="sig-deco-circle2"></div>
+    <div class="sig-inner">
+      <div class="sig-header">
+        <div class="sig-brand-block">
+          <div class="sig-brand-text">
+            <div class="sig-name"><span>R</span>APICREDIT</div>
+            <div class="sig-dept">Departamento de Cobranza</div>
+          </div>
+        </div>
+
+      </div>
+      <div class="sig-grid">
+        <div class="sig-item">
+          <div class="s-icon-box">✉️</div>
+          <div>
+            <span class="s-label">Email</span>
+            <a class="s-value" href="mailto:cobranza@rapicreditca.com">cobranza@rapicreditca.com</a>
+          </div>
+        </div>
+        <div class="sig-item">
+          <div class="s-icon-box">📲</div>
+          <div>
+            <span class="s-label">WhatsApp</span>
+            <a class="s-value" href="https://wa.me/584244579934">+58 424-4579934</a>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- LEGAL -->
+  <div class="legal">
+    <p>Este correo y sus adjuntos son confidenciales y están dirigidos exclusivamente al destinatario. Si recibió este mensaje por error, por favor notifíquenos y elimínelo de inmediato. © 2025 RapiCredit C.A. Todos los derechos reservados.</p>
+  </div>
 
 </div>
 </body>
