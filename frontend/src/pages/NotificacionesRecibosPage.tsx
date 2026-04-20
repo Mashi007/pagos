@@ -672,14 +672,14 @@ export default function NotificacionesRecibosPage() {
                   type="button"
                   onClick={() => void ejecutar()}
                   disabled={
-                    isFetching ||
-                    (data !== undefined && totalPagosListado === 0) ||
-                    esFechaPasadaReal
+                    isFetching || (data !== undefined && totalPagosListado === 0)
                   }
                   title={
-                    esFechaPasadaReal
-                      ? 'Use «Enviar lote pasado (real)» para envío SMTP de una fecha anterior a hoy.'
-                      : undefined
+                    data !== undefined && totalPagosListado === 0
+                      ? 'No hay pagos pendientes en esta ventana para la fecha indicada.'
+                      : esFechaPasadaReal
+                        ? 'Para SMTP real con fecha anterior a hoy use «Enviar lote pasado (real)» (confirmación). Este botón solo envía el día de hoy (o fecha vacía = hoy).'
+                        : undefined
                   }
                 >
                   <Mail className="mr-2 h-4 w-4" />
@@ -702,6 +702,21 @@ export default function NotificacionesRecibosPage() {
                   Enviar lote pasado (real)
                 </Button>
               </div>
+
+              {esFechaPasadaReal && totalPagosListado > 0 ? (
+                <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">
+                  La fecha indicada es <strong>anterior a hoy</strong> (Caracas). Para enviar correos
+                  reales de ese día use <strong>«Enviar lote pasado (real)»</strong> (confirmación).{' '}
+                  «Envío manual» solo corresponde al día de hoy o fecha vacía.
+                </p>
+              ) : null}
+
+              {data !== undefined && totalPagosListado === 0 && !isFetching ? (
+                <p className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                  No hay pagos pendientes en la ventana para esta fecha: «Envío manual» permanece
+                  deshabilitado hasta que el listado muestre al menos un pago.
+                </p>
+              ) : null}
 
               {data ? (
                 <p className="text-sm text-muted-foreground">
