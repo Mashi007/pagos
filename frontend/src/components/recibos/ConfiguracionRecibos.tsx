@@ -6,6 +6,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 
 import {
   Clock,
+  Eye,
   Mail,
   RefreshCw,
   Save,
@@ -35,7 +36,10 @@ import {
   emailCuentasApi,
   type EmailCuentasResponse,
 } from '../../services/emailCuentasApi'
-import { emailConfigService } from '../../services/notificacionService'
+import {
+  emailConfigService,
+  notificacionService,
+} from '../../services/notificacionService'
 import { NOTIFICACIONES_QUERY_KEYS } from '../../queries/notificaciones'
 import { toast } from 'sonner'
 import { getErrorMessage } from '../../types/errors'
@@ -160,6 +164,28 @@ export function ConfiguracionRecibos({ emergencyResetSeq = 0 }: Props) {
   const [probando, setProbando] = useState(false)
   const [recibosBcc1, setRecibosBcc1] = useState('')
   const [recibosBcc2, setRecibosBcc2] = useState('')
+
+  const [plantillaHtml, setPlantillaHtml] = useState<string | null>(null)
+  const [plantillaCargando, setPlantillaCargando] = useState(false)
+  const [plantillaError, setPlantillaError] = useState<string | null>(null)
+
+  const cargarVistaPreviaPlantilla = useCallback(async () => {
+    setPlantillaCargando(true)
+    setPlantillaError(null)
+    try {
+      const html = await notificacionService.obtenerPlantillaHtmlRecibos()
+      setPlantillaHtml(html)
+    } catch (e) {
+      setPlantillaHtml(null)
+      setPlantillaError(getErrorMessage(e))
+    } finally {
+      setPlantillaCargando(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    void cargarVistaPreviaPlantilla()
+  }, [cargarVistaPreviaPlantilla])
 
   useEffect(() => {
     if (!data) return
@@ -484,6 +510,54 @@ export function ConfiguracionRecibos({ emergencyResetSeq = 0 }: Props) {
               {guardando ? 'Guardando…' : 'Guardar'}
             </Button>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card className="border-slate-200 bg-white">
+        <CardHeader className="pb-3">
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <div>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Eye className="h-4 w-4 text-slate-600" aria-hidden />
+                Vista previa del correo (HTML)
+              </CardTitle>
+              <CardDescription className="mt-1">
+                Mismo HTML que el envío Recibos: se obtiene del servidor al cargar y al pulsar
+                «Actualizar». Si editó la plantilla en el backend, use actualizar para ver el cambio sin
+                reiniciar.
+              </CardDescription>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="shrink-0"
+              disabled={plantillaCargando}
+              onClick={() => void cargarVistaPreviaPlantilla()}
+            >
+              <RefreshCw
+                className={`mr-2 h-4 w-4 ${plantillaCargando ? 'animate-spin' : ''}`}
+                aria-hidden
+              />
+              {plantillaCargando ? 'Cargando…' : 'Actualizar'}
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {plantillaError ? (
+            <p className="text-sm text-red-700">{plantillaError}</p>
+          ) : plantillaHtml ? (
+            <iframe
+              title="Vista previa correo Recibos"
+              sandbox="allow-same-origin allow-popups"
+              className="h-[min(720px,80vh)] w-full max-w-full rounded-md border border-slate-200 bg-slate-100"
+              srcDoc={plantillaHtml}
+            />
+          ) : (
+            <p className="text-sm text-gray-500">
+              {plantillaCargando ? 'Cargando plantilla…' : 'Sin datos.'}
+            </p>
+          )}
         </CardContent>
       </Card>
 

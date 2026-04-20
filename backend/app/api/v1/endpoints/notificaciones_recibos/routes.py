@@ -3,6 +3,7 @@
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -11,11 +12,24 @@ from app.core.deps import require_admin
 from app.services.cuota_estado import hoy_negocio, parse_fecha_referencia_negocio
 from app.services.recibos_conciliacion_email_job import (
     RECIBOS_VENTANA_SLOT,
+    _cuerpo_html_recibos_confirmacion,
     ejecutar_recibos_envio_slot,
 )
 from app.services.recibos_conciliacion_listado_ui import listar_recibos_ventana_con_ui
 
 router = APIRouter(dependencies=[Depends(require_admin)])
+
+
+@router.get("/plantilla-correo-html", response_class=HTMLResponse)
+def get_recibos_plantilla_correo_html():
+    """
+    Devuelve el HTML exacto del correo Recibos (archivo en disco).
+    Sirve de vista previa en la pantalla de configuración Recibos del frontend.
+    """
+    return HTMLResponse(
+        content=_cuerpo_html_recibos_confirmacion(),
+        media_type="text/html; charset=utf-8",
+    )
 
 
 class RecibosEjecutarBody(BaseModel):

@@ -25,7 +25,6 @@ sin enlaces «Ver recibo».
 from __future__ import annotations
 
 import logging
-from functools import lru_cache
 from datetime import date, datetime, time, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -77,9 +76,12 @@ def _recibo_token_para_pdf_recibos(cedula_lookup_norm: str) -> Optional[str]:
     return create_recibo_token(ced, expire_hours=168)
 
 
-@lru_cache(maxsize=1)
 def _cuerpo_html_recibos_confirmacion() -> str:
-    """Plantilla HTML fija del correo Recibos (confirmación de pago + estado de cuenta adjunto)."""
+    """Plantilla HTML fija del correo Recibos (confirmación de pago + estado de cuenta adjunto).
+
+    Sin caché en memoria: cada envío y la vista previa en admin leen el archivo en disco para que
+    los cambios en ``recibos_confirmacion_pago_email.html`` se reflejen sin reiniciar el servidor.
+    """
     path = Path(__file__).resolve().with_name("recibos_confirmacion_pago_email.html")
     return path.read_text(encoding="utf-8")
 

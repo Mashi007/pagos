@@ -1326,6 +1326,14 @@ class NotificacionService {
       { timeout: TIMEOUT_MS_ENVIO_NOTIFICACIONES_MANUAL }
     )
   }
+
+  /** HTML de la plantilla fija del correo Recibos (mismo archivo que el backend al enviar SMTP). */
+  async obtenerPlantillaHtmlRecibos(): Promise<string> {
+    return await apiClient.get<string>(
+      `${API_V1}/notificaciones/recibos/plantilla-correo-html`,
+      { responseType: 'text' }
+    )
+  }
 }
 
 class EmailConfigService {
