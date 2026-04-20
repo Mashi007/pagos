@@ -581,6 +581,21 @@ def _regularizar_reportados_gemini_ok_sin_falla_manual(db: Session, max_ids: int
             pr = db.get(PagoReportado, pid)
             if pr is None:
                 continue
+            # Si ya existe un Pago con este comprobante, no ejecutar validadores de listado (muy costosos)
+            # ni intentar_importar en cada GET: marca cierre y evita decenas de segundos por request.
+            if getattr(pr, "estado", None) in ("en_revision", "aprobado") and pago_reportado_colisiona_tabla_pagos(
+                db, pr
+            ):
+                pr.estado = "importado"
+                db.add(pr)
+                db.commit()
+                logger.info(
+                    "[COBROS_COLA_REGULARIZA] Reportado id=%s ref=%s marcado importado: "
+                    "ya existe pago con el mismo comprobante (omitido en listados posteriores).",
+                    pr.id,
+                    (pr.referencia_interna or "").strip() or str(pr.id),
+                )
+                continue
             if reportado_falla_validadores_cobros(db, pr):
                 continue
             ref = (pr.referencia_interna or "").strip() or str(pr.id)

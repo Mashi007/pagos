@@ -127,9 +127,23 @@ def intentar_importar_reportado_automatico(
     try:
         from app.models.pago import Pago
         from app.api.v1.endpoints.pagos import importar_un_pago_reportado_a_pagos, _aplicar_pago_a_cuotas_interno
-        from app.services.cobros.pago_reportado_documento import claves_documento_pago_para_reportado
+        from app.services.cobros.pago_reportado_documento import (
+            claves_documento_pago_para_reportado,
+            pago_reportado_colisiona_tabla_pagos,
+        )
 
         db.refresh(pr)
+        if pago_reportado_colisiona_tabla_pagos(db, pr):
+            pr.estado = "importado"
+            db.add(pr)
+            db.commit()
+            logger.info(
+                "[%s] Reportado marcado importado ref=%s: ya existe un pago con el mismo comprobante "
+                "(no se duplica fila en pagos).",
+                log_tag,
+                referencia,
+            )
+            return
         claves_pr = claves_documento_pago_para_reportado(pr)
         docs_bd: set[str] = set()
         if claves_pr:
