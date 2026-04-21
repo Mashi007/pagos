@@ -224,6 +224,18 @@ def _referencia_display(referencia_interna: str) -> str:
     return ref if ref.startswith("#") else f"#{ref}"
 
 
+def _columna_observacion_gemini_ignora_cola_cobros(nombre: str) -> bool:
+    """
+    Nombres de columna (desde comentario Gemini o lista corta) que no deben
+    contar como «falla validadores» ni aparecer en la observación de cola para
+    bloquear aprobación automática. La fecha del comprobante sigue editable en
+    Cobros; no se usa como criterio de cola frente a divergencias de imagen.
+    """
+    t = " ".join((nombre or "").strip().lower().split())
+    t = t.replace("ó", "o")
+    return t in ("fecha pago", "fecha de pago")
+
+
 def _observacion_solo_columnas(raw: Optional[str]) -> Optional[str]:
     """Devuelve la observación mostrando solo nombres de columnas (formato estándar: separador único ' / '). Si raw ya es lista corta, normaliza separadores; si es texto largo, extrae columnas por palabras clave."""
     if not raw or not (raw := raw.strip()):
@@ -231,7 +243,10 @@ def _observacion_solo_columnas(raw: Optional[str]) -> Optional[str]:
     # Si ya parece lista de columnas (corta, sin frases largas): normalizar a " / "
     if len(raw) <= 80 and not any(x in raw for x in ("en la imagen", "en el formulario", "mientras que", "incluye el", "no coincide")):
         parts = [p.strip() for p in raw.replace(",", " / ").split(" / ") if p.strip()]
-        return " / ".join(parts) if parts else raw[:80]
+        parts = [p for p in parts if not _columna_observacion_gemini_ignora_cola_cobros(p)]
+        if not parts:
+            return None
+        return " / ".join(parts)
     # Extraer columnas por palabras clave (registros antiguos con texto largo)
     lower = raw.lower()
     columnas = []
@@ -239,14 +254,13 @@ def _observacion_solo_columnas(raw: Optional[str]) -> Optional[str]:
         columnas.append("Cédula")
     if "banco" in lower or "institución" in lower or "institucion" in lower or "financiera" in lower:
         columnas.append("Banco")
-    if "fecha" in lower and ("pago" in lower or "operación" not in lower):
-        columnas.append("Fecha pago")
     if "operación" in lower or "operacion" in lower or "referencia" in lower or "serial" in lower:
         columnas.append("Nº operación")
     if "monto" in lower or "cantidad" in lower:
         columnas.append("Monto")
     if "moneda" in lower:
         columnas.append("Moneda")
+    columnas = [c for c in columnas if not _columna_observacion_gemini_ignora_cola_cobros(c)]
     return " / ".join(columnas) if columnas else raw[:100]
 
 
