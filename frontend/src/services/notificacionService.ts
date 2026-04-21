@@ -221,8 +221,14 @@ export interface CompararFechaEntregaQvsAprobacionResponse {
   /** Misma clave que ABONOS: true si misma fecha calendario (tolerancia días en tolerancia_dias). */
   coincide_aproximado?: boolean
 
-  /** True si fecha Q es estrictamente posterior a fecha_aprobacion (análogo a «hoja > sistema» en ABONOS). */
+  /**
+   * True si se puede POST aplicar-fecha-entrega-q: Q posterior a la aprobación en BD, o
+   * Q anterior pero >= fecha_requerimiento (corrección de aprobación errónea vs columna Q).
+   */
   puede_aplicar?: boolean
+
+  /** True si el caso aplicable es «Q antes que la aprobación en BD» (corrección hacia atrás). */
+  correccion_desde_q_anterior_bd?: boolean
 
   indicador?: 'si' | 'no' | string
 

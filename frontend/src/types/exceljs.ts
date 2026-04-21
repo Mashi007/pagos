@@ -76,6 +76,41 @@ export async function importExcelJS(): Promise<ExcelJSModule> {
   }
 }
 
+/**
+ * numFmt de Excel típico de fecha/hora (excluye General/@).
+ * Así un entero como 45991 en formato General (p. ej. Nº operación) no se interpreta como serial de fecha.
+ */
+function excelNumFmtLooksLikeDate(numFmt: unknown): boolean {
+  const raw = String(numFmt ?? '').trim()
+  if (!raw) return false
+  const s = raw.replace(/\[\$[^\]]+\]/gi, '').toLowerCase()
+  if (s === 'general' || s === '@') return false
+  return (
+    /\by{2,4}\b/.test(s) ||
+    /\bd{1,4}\b/.test(s) ||
+    /\bm{1,5}\b/.test(s) ||
+    /\bh{1,2}\b/.test(s) ||
+    /\bs{1,2}\b/.test(s)
+  )
+}
+
+/** Serial de fecha Excel (epoch 1900 con offset -2) → DD/MM/AAAA si el año es plausible. */
+function excelSerialToDdMmYyyy(n: number): string | null {
+  if (!Number.isFinite(n)) return null
+  const k = Math.trunc(n)
+  if (k <= 200 || k >= 1e10) return null
+  try {
+    const d = new Date(1900, 0, 1)
+    d.setDate(d.getDate() + k - 2)
+    if (Number.isNaN(d.getTime())) return null
+    const y = d.getFullYear()
+    if (y < 1990 || y > 2040) return null
+    return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${y}`
+  } catch {
+    return null
+  }
+}
+
 // Helper para leer un archivo Excel y convertirlo a JSON
 
 export async function readExcelToJSON(
@@ -114,6 +149,17 @@ export async function readExcelToJSON(
       row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
         let val = cell.value
 
+        // Fórmula: usar resultado calculado (fecha/monto serial) como valor atómico
+        if (
+          val != null &&
+          typeof val === 'object' &&
+          'result' in (val as object) &&
+          (val as { result?: unknown }).result != null &&
+          typeof (val as { result?: unknown }).result !== 'object'
+        ) {
+          val = (val as { result: unknown }).result
+        }
+
         if (
           val != null &&
           typeof val === 'object' &&
@@ -149,6 +195,34 @@ export async function readExcelToJSON(
                 Math.abs(val) >= 1e15
                   ? BigInt(Math.round(val)).toString()
                   : String(Math.round(val))
+            }
+          }
+        }
+
+        // Serial de fecha en Excel vs "número que parece serial" (p. ej. Nº operación 45991):
+        // fuera de columnas A–H no se forzaba `cell.text`; si Excel muestra DD/MM/AAAA, preferir ese texto
+        // para que la carga masiva de préstamos no convierta un ID en 30/11/2025.
+        if (typeof val === 'number' && !Number.isNaN(val)) {
+          const absv = Math.abs(val)
+          if (absv > 200 && absv < 1e10) {
+            const rawText = (cell as any).text
+            const tStr =
+              rawText != null
+                ? String(rawText)
+                    .replace(/[\u200B-\u200D\uFEFF\r\n\t]/g, '')
+                    .trim()
+                : ''
+            if (/\d{1,2}[\/.\-]\d{1,2}[\/.\-]\d{2,4}/.test(tStr)) {
+              val = tStr
+            } else {
+              const nf =
+                (cell as any).numFmt ??
+                (cell as any).style?.numFmt ??
+                (cell as any).model?.numFmt
+              if (excelNumFmtLooksLikeDate(nf)) {
+                const asDdMm = excelSerialToDdMmYyyy(val)
+                if (asDdMm) val = asDdMm
+              }
             }
           }
         } else if (

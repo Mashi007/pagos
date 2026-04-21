@@ -2254,9 +2254,11 @@ def post_aplicar_fecha_entrega_q_como_fecha_aprobacion(
     leída en la columna Q de CONCILIACIÓN para la fila alineada al préstamo, y recalcula fechas de
     vencimiento de cuotas cuando aplica la misma regla que `PUT /prestamos/{id}`.
 
-    Requisitos (misma lectura en vivo que GET comparar-fecha-entrega-q-aprobacion):
-    - La fecha Q debe ser estrictamente posterior a la fecha de aprobación actual en BD.
-    - La fecha Q debe ser igual o posterior a `fecha_requerimiento` del préstamo.
+    Requisitos (misma lectura en vivo que GET comparar-fecha-entrega-q-aprobacion; `puede_aplicar`):
+    - Caso extendido: Q distinta de la aprobación en BD y, si Q es anterior a esa aprobación,
+      Q debe ser >= `fecha_requerimiento` (corrige aprobación errónea; p. ej. serial mal leído).
+    - Si Q es posterior a la aprobación en BD, aplica como antes (alarga la base).
+    - La fecha Q debe seguir siendo >= `fecha_requerimiento` cuando esta existe (validación en POST).
     - No opera sobre préstamos en desistimiento (bloqueo del PUT estándar).
 
     Tras el PUT, intenta refrescar `prestamos.fecha_entrega_q_aprobacion_cache` con la comparación
@@ -2300,8 +2302,9 @@ def post_aplicar_fecha_entrega_q_como_fecha_aprobacion(
         raise HTTPException(
             status_code=400,
             detail=(
-                "Solo se puede confirmar cuando la fecha de la columna Q es estrictamente "
-                "posterior a la fecha de aprobación actual en el sistema."
+                "No se puede confirmar: la columna Q debe ser distinta de la aprobación en BD y, "
+                "si Q es anterior a esa aprobación, debe ser >= fecha de requerimiento del préstamo. "
+                "Revise la hoja, el lote o use revisión manual."
             ),
         )
 

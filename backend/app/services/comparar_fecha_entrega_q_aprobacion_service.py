@@ -136,6 +136,17 @@ def _fecha_aprobacion_sistema_date(prestamo: Prestamo) -> Optional[date]:
     return None
 
 
+def _fecha_requerimiento_prestamo_date(prestamo: Prestamo) -> Optional[date]:
+    fr = getattr(prestamo, "fecha_requerimiento", None)
+    if fr is None:
+        return None
+    if isinstance(fr, datetime):
+        return fr.date()
+    if isinstance(fr, date):
+        return fr
+    return None
+
+
 def comparar_fecha_entrega_column_q_vs_aprobacion(
     db: Session,
     *,
@@ -292,6 +303,8 @@ def comparar_fecha_entrega_column_q_vs_aprobacion(
     if fecha_ap is None:
         advertencias.append("El préstamo no tiene fecha_aprobacion en el sistema.")
 
+    fecha_req = _fecha_requerimiento_prestamo_date(prestamo)
+
     diferencia_dias: Optional[int] = None
     if fecha_q is not None and fecha_ap is not None:
         diferencia_dias = int((fecha_q - fecha_ap).days)
@@ -300,10 +313,20 @@ def comparar_fecha_entrega_column_q_vs_aprobacion(
         fecha_q is not None and fecha_ap is not None and fecha_q == fecha_ap
     )
 
-    # Paralelo al modal de ABONOS: «Sí» solo si valor hoja > valor sistema (estricto), aquí en fechas.
-    puede_aplicar = bool(
-        fecha_q is not None and fecha_ap is not None and fecha_q > fecha_ap
-    )
+    # «Sí» en UI / POST aplicar (misma validación que POST: Q >= fecha_requerimiento si existe):
+    # - Q posterior a la aprobación en BD, o
+    # - Q anterior a la aprobación en BD pero >= requerimiento: corrige aprobación errónea vs hoja
+    #   (p. ej. serial Excel / carga masiva → fecha de aprobación incorrecta en BD).
+    puede_aplicar = False
+    if fecha_q is not None and fecha_ap is not None and fecha_q != fecha_ap:
+        bloqueado_por_requerimiento = fecha_req is not None and fecha_q < fecha_req
+        if bloqueado_por_requerimiento:
+            advertencias.append(
+                "La fecha Q es anterior a la fecha de requerimiento del préstamo; no se puede usar "
+                "como fecha de aprobación desde aquí (use revisión manual)."
+            )
+        else:
+            puede_aplicar = True
     indicador = "si" if puede_aplicar else "no"
     tolerancia_dias = 0
 
@@ -336,6 +359,12 @@ def comparar_fecha_entrega_column_q_vs_aprobacion(
         "coincide_aproximado": coincide_calendario,
         "puede_aplicar": puede_aplicar,
         "indicador": indicador,
+        "correccion_desde_q_anterior_bd": bool(
+            puede_aplicar
+            and fecha_q is not None
+            and fecha_ap is not None
+            and fecha_q < fecha_ap
+        ),
         "tolerancia_dias": tolerancia_dias,
         "hoja_synced_at": synced_at,
         "hoja_sync_antigua": hoja_sync_antigua,

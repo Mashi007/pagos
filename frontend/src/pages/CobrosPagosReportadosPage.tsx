@@ -21,7 +21,7 @@
 
  */
 
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
 
 import { useNavigate } from 'react-router-dom'
 
@@ -101,6 +101,8 @@ import {
 } from 'recharts'
 
 import { PUBLIC_REPORTE_PAGO_PATH } from '../config/env'
+
+import { cn } from '../utils'
 
 import {
   Dialog,
@@ -216,6 +218,57 @@ const normalizeEstadoValue = (value: string) =>
 
     .toLowerCase()
 
+/** Anchos por defecto (px) para la tabla de pagos reportados; el usuario puede redimensionar. */
+const COBROS_REPORTADOS_COL_WIDTHS_KEY =
+  'rapicredit:cobrosPagosReportados:colWidthsV1'
+
+const COBROS_REPORTADOS_COL_COUNT = 10
+
+const COBROS_REPORTADOS_DEFAULT_COL_WIDTHS: readonly number[] = [
+  96, 168, 88, 110, 150, 110, 100, 260, 108, 132,
+]
+
+function readCobrosReportadosColWidths(): number[] {
+  if (typeof window === 'undefined') {
+    return [...COBROS_REPORTADOS_DEFAULT_COL_WIDTHS]
+  }
+  try {
+    const raw = window.localStorage.getItem(COBROS_REPORTADOS_COL_WIDTHS_KEY)
+    if (!raw) return [...COBROS_REPORTADOS_DEFAULT_COL_WIDTHS]
+    const parsed = JSON.parse(raw) as unknown
+    if (!Array.isArray(parsed) || parsed.length !== COBROS_REPORTADOS_COL_COUNT) {
+      return [...COBROS_REPORTADOS_DEFAULT_COL_WIDTHS]
+    }
+    const nums = parsed.map(x => Number(x))
+    if (
+      !nums.every(
+        n => Number.isFinite(n) && n >= 48 && n <= 640
+      )
+    ) {
+      return [...COBROS_REPORTADOS_DEFAULT_COL_WIDTHS]
+    }
+    return nums
+  } catch {
+    return [...COBROS_REPORTADOS_DEFAULT_COL_WIDTHS]
+  }
+}
+
+const COBROS_REPORTADOS_TABLE_HEAD: ReadonlyArray<{
+  label: string
+  align: 'left' | 'right' | 'center'
+}> = [
+  { label: 'Cédula', align: 'left' },
+  { label: 'Banco', align: 'left' },
+  { label: 'Monto', align: 'right' },
+  { label: 'Fecha pago', align: 'left' },
+  { label: 'Nº operación', align: 'left' },
+  { label: 'Fecha reporte', align: 'left' },
+  { label: 'Comprobante', align: 'center' },
+  { label: 'Observación', align: 'left' },
+  { label: 'Estado', align: 'left' },
+  { label: 'Acciones', align: 'right' },
+]
+
 export default function CobrosPagosReportadosPage() {
   const navigate = useNavigate()
 
@@ -270,6 +323,57 @@ export default function CobrosPagosReportadosPage() {
   const [tendenciaLoading, setTendenciaLoading] = useState(true)
   const [searchNonce, setSearchNonce] = useState(0)
   const loadSeqRef = useRef(0)
+
+  const [colWidths, setColWidths] = useState<number[]>(readCobrosReportadosColWidths)
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(
+        COBROS_REPORTADOS_COL_WIDTHS_KEY,
+        JSON.stringify(colWidths)
+      )
+    } catch {
+      /* ignore quota / private mode */
+    }
+  }, [colWidths])
+
+  const handleColResizeStart = useCallback((colIndex: number, e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    const startX = e.clientX
+    const startW = colWidths[colIndex] ?? 96
+    const onMove = (ev: MouseEvent) => {
+      const next = Math.max(
+        48,
+        Math.min(640, Math.round(startW + (ev.clientX - startX)))
+      )
+      setColWidths(prev => {
+        if (prev[colIndex] === next) return prev
+        const copy = [...prev]
+        copy[colIndex] = next
+        return copy
+      })
+    }
+    const onUp = () => {
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+    }
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+  }, [colWidths])
+
+  const resetColWidths = useCallback(() => {
+    try {
+      window.localStorage.removeItem(COBROS_REPORTADOS_COL_WIDTHS_KEY)
+    } catch {
+      /* ignore */
+    }
+    setColWidths([...COBROS_REPORTADOS_DEFAULT_COL_WIDTHS])
+  }, [])
 
   const load = async () => {
     const requestSeq = ++loadSeqRef.current
@@ -936,7 +1040,23 @@ export default function CobrosPagosReportadosPage() {
           ) : !data?.items?.length ? (
             <p className="text-gray-500">No hay registros.</p>
           ) : (
-            <div className="relative w-full max-w-full min-w-0 overflow-x-hidden rounded-lg border">
+            <>
+              <div className="mb-2 flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-xs text-muted-foreground">
+                  Arrastre el borde derecho del encabezado de cada columna para ajustar el ancho. Se guarda en este
+                  navegador.
+                </p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-8 shrink-0 self-start text-xs sm:self-auto"
+                  onClick={resetColWidths}
+                >
+                  Restaurar anchos
+                </Button>
+              </div>
+              <div className="relative w-full max-w-full min-w-0 overflow-x-auto rounded-lg border">
               {refreshing ? (
                 <div
                   className="absolute inset-0 z-10 flex items-start justify-center bg-background/70 pt-10 backdrop-blur-[1px]"
@@ -949,61 +1069,46 @@ export default function CobrosPagosReportadosPage() {
                   </span>
                 </div>
               ) : null}
-              <table className="w-full min-w-0 table-fixed text-sm">
+              <table className="w-max min-w-full table-fixed border-collapse text-sm">
                 <colgroup>
-                  <col style={{ width: '8%' }} />
-                  <col style={{ width: '14%' }} />
-                  <col style={{ width: '8%' }} />
-                  <col style={{ width: '9%' }} />
-                  <col style={{ width: '12%' }} />
-                  <col style={{ width: '9%' }} />
-                  <col style={{ width: '8%' }} />
-                  <col style={{ width: '17%' }} />
-                  <col style={{ width: '7%' }} />
-                  <col style={{ width: '8%' }} />
+                  {colWidths.map((w, i) => (
+                    <col key={`col-${i}`} style={{ width: w }} />
+                  ))}
                 </colgroup>
 
                 <thead>
                   <tr className="border-b bg-muted/50">
-                    <th className="whitespace-nowrap border-r border-border/60 px-2 py-2 text-left text-xs font-semibold sm:text-sm">
-                      <span className="block overflow-hidden text-ellipsis">Cédula</span>
-                    </th>
-
-                    <th className="whitespace-nowrap border-r border-border/60 px-2 py-2 text-left text-xs font-semibold sm:text-sm">
-                      <span className="block overflow-hidden text-ellipsis">Banco</span>
-                    </th>
-
-                    <th className="whitespace-nowrap border-r border-border/60 px-2 py-2 text-right text-xs font-semibold sm:text-sm">
-                      <span className="block overflow-hidden text-ellipsis">Monto</span>
-                    </th>
-
-                    <th className="whitespace-nowrap border-r border-border/60 px-2 py-2 text-left text-xs font-semibold sm:text-sm">
-                      <span className="block overflow-hidden text-ellipsis">Fecha pago</span>
-                    </th>
-
-                    <th className="whitespace-nowrap border-r border-border/60 px-2 py-2 text-left text-xs font-semibold sm:text-sm">
-                      <span className="block overflow-hidden text-ellipsis">Nº operación</span>
-                    </th>
-
-                    <th className="whitespace-nowrap border-r border-border/60 px-2 py-2 text-left text-xs font-semibold sm:text-sm">
-                      <span className="block overflow-hidden text-ellipsis">Fecha reporte</span>
-                    </th>
-
-                    <th className="whitespace-nowrap border-r border-border/60 px-2 py-2 text-center text-xs font-semibold sm:text-sm">
-                      <span className="block overflow-hidden text-ellipsis">Comprobante</span>
-                    </th>
-
-                    <th className="whitespace-nowrap border-r border-border/60 px-2 py-2 text-left text-xs font-semibold sm:text-sm">
-                      <span className="block overflow-hidden text-ellipsis">Observación</span>
-                    </th>
-
-                    <th className="whitespace-nowrap border-r border-border/60 px-2 py-2 text-left text-xs font-semibold sm:text-sm">
-                      <span className="block overflow-hidden text-ellipsis">Estado</span>
-                    </th>
-
-                    <th className="whitespace-nowrap px-2 py-2 text-right text-xs font-semibold sm:text-sm">
-                      <span className="block overflow-hidden text-ellipsis">Acciones</span>
-                    </th>
+                    {COBROS_REPORTADOS_TABLE_HEAD.map((h, i) => (
+                      <th
+                        key={h.label}
+                        className={cn(
+                          'relative whitespace-nowrap py-2 pl-2 pr-3 text-xs font-semibold sm:text-sm',
+                          i < COBROS_REPORTADOS_TABLE_HEAD.length - 1 &&
+                            'border-r border-border/60',
+                          h.align === 'left' && 'text-left',
+                          h.align === 'right' && 'text-right',
+                          h.align === 'center' && 'text-center'
+                        )}
+                        style={{ width: colWidths[i], minWidth: colWidths[i] }}
+                      >
+                        <span
+                          className={cn(
+                            'block min-w-0 overflow-hidden text-ellipsis pr-2',
+                            h.align === 'right' && 'pr-3',
+                            h.align === 'center' && 'px-1'
+                          )}
+                        >
+                          {h.label}
+                        </span>
+                        <button
+                          type="button"
+                          className="absolute right-0 top-0 z-20 h-full w-2 cursor-col-resize touch-none border-0 bg-transparent p-0 hover:bg-primary/15 active:bg-primary/25"
+                          aria-label={`Redimensionar columna ${h.label}`}
+                          title="Arrastrar para cambiar ancho"
+                          onMouseDown={e => handleColResizeStart(i, e)}
+                        />
+                      </th>
+                    ))}
                   </tr>
                 </thead>
 
@@ -1351,6 +1456,7 @@ export default function CobrosPagosReportadosPage() {
                 </tbody>
               </table>
             </div>
+            </>
           )}
 
           {data && data.total > data.per_page && (

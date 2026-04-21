@@ -222,6 +222,10 @@ export function mapaColumnasPrestamoDesdeFilaEncabezado(
   ] as const
   if (required.some(k => m[k] === undefined)) return null
 
+  // Misma columna para requerimiento y aprobación (p. ej. encabezado ambiguo): el mapa es inválido;
+  // forzar layout legacy + detección evita duplicar una fecha en ambos campos.
+  if (m.fecha_requerimiento === m.fecha_aprobacion) return null
+
   return m
 }
 
@@ -255,6 +259,9 @@ export function convertirFechaExcelPrestamo(val: unknown): string {
     return `${String(val.getDate()).padStart(2, '0')}/${String(val.getMonth() + 1).padStart(2, '0')}/${val.getFullYear()}`
   }
 
+  // Los seriales Excel (p. ej. 45991 → 30/11/2025) se normalizan en readExcelToJSON solo si numFmt es de fecha.
+  // Aquí no interpretamos enteros/cadenas solo-dígitos como fecha: evita confundir Nº operación 45991 con una fecha.
+
   const s = String(val).trim()
 
   if (!s) return ''
@@ -270,20 +277,6 @@ export function convertirFechaExcelPrestamo(val: unknown): string {
     }
   }
 
-  if (/^\d{4,}$/.test(s)) {
-    try {
-      const d = new Date(1900, 0, 1)
-
-      d.setDate(d.getDate() + parseInt(s, 10) - 2)
-
-      return Number.isNaN(d.getTime())
-        ? s
-        : `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`
-    } catch {
-      return s
-    }
-  }
-
   if (/^\d{2}\/\d{2}\/\d{4}$/.test(s)) return s
 
   if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
@@ -291,6 +284,9 @@ export function convertirFechaExcelPrestamo(val: unknown): string {
 
     return `${d}/${m}/${y}`
   }
+
+  // Solo dígitos (p. ej. "45991"): no usar new Date(s) ni serial; deja que la validación marque error si no es DD/MM/AAAA.
+  if (/^\d+$/.test(s)) return s
 
   const p = new Date(s)
 

@@ -1810,17 +1810,20 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                       )
                     }
                     disabled={isLoadingLista}
-                    title="Igual a 0 = misma fecha calendario (Q y aprobación; tolerancia como en el modal). Mayor que cero = Q estrictamente posterior (indicador Sí). Menor que cero = Q anterior a la aprobación (días negativos)."
+                    title="Filtros por diferencia en días (Q − aprobación en BD), usando la caché por préstamo. «Q anterior corregible» = días negativos pero se puede aplicar columna Q (p. ej. aprobación errónea en BD)."
                   >
                     <option value="todas">Todas</option>
                     <option value="cero">
                       Igual a 0 (misma fecha calendario; tolerancia como en el modal)
                     </option>
                     <option value="mayor_cero">
-                      Mayor que cero (Q posterior a la fecha de aprobación; indicador Sí)
+                      Mayor que cero (Q posterior a la aprobación en BD)
+                    </option>
+                    <option value="q_anterior_corregible">
+                      Q anterior corregible (días &lt; 0 e indicador Sí: alinear BD con Q)
                     </option>
                     <option value="menor_cero">
-                      Menor que cero (Q anterior a la fecha de aprobación; días negativos)
+                      Q anterior sin acción (días &lt; 0 y no se puede aplicar desde aquí)
                     </option>
                   </select>
                 </div>

@@ -170,7 +170,13 @@ export function fmtDiferenciaAbonoCelda(n: number | null | undefined): string {
 }
 
 /** Filtro columna «Diferencia fecha» (submódulo Fecha): días = Q (hoja) − fecha_aprobacion (BD). */
-export type FiltroDiferenciaFechaGeneral = 'todas' | 'cero' | 'mayor_cero' | 'menor_cero'
+export type FiltroDiferenciaFechaGeneral =
+  | 'todas'
+  | 'cero'
+  | 'mayor_cero'
+  | 'menor_cero'
+  /** Q anterior a la aprobación en BD pero se puede sincronizar (p. ej. serial mal → fecha falsa en BD). */
+  | 'q_anterior_corregible'
 
 export function filaCumpleFiltroDiferenciaFechaGeneral(
   filtro: FiltroDiferenciaFechaGeneral,
@@ -183,7 +189,11 @@ export function filaCumpleFiltroDiferenciaFechaGeneral(
   if (filtro === 'cero') {
     return cmp.coincide_calendario === true || cmp.coincide_aproximado === true
   }
-  if (filtro === 'mayor_cero') return puede
+  if (filtro === 'mayor_cero') {
+    const d = cmp.diferencia_dias
+    if (d == null || Number.isNaN(Number(d))) return false
+    return Number(d) > 0
+  }
   if (filtro === 'menor_cero') {
     const d = cmp.diferencia_dias
     if (d == null || Number.isNaN(Number(d))) return false
@@ -193,6 +203,11 @@ export function filaCumpleFiltroDiferenciaFechaGeneral(
       !puede &&
       Number(d) < 0
     )
+  }
+  if (filtro === 'q_anterior_corregible') {
+    const d = cmp.diferencia_dias
+    if (d == null || Number.isNaN(Number(d))) return false
+    return Number(d) < 0 && puede
   }
   return true
 }
@@ -1185,10 +1200,18 @@ export function CompararFechaEntregaQAprobacionCell({ row }: { row: ClienteRetra
               {!puedeOperar ? (
                 <p className="rounded-md border border-slate-200 bg-muted/40 p-2 text-xs text-slate-800">
                   <span className="font-medium">Regla: </span>
-                  el indicador «Sí» solo aplica si la fecha de la columna Q es{' '}
-                  <strong>estrictamente posterior</strong> a la fecha de aprobación del préstamo en el
-                  sistema. Si la fecha Q es igual o anterior, el flujo queda en «No»: use revisión
-                  manual o la conciliación habitual.
+                  el indicador «Sí» aplica si la fecha Q es <strong>posterior</strong> a la aprobación
+                  en BD, o si Q es <strong>anterior</strong> pero sigue siendo ≥ la fecha de requerimiento
+                  (corrección cuando la BD tiene una aprobación errónea, p. ej. por serial Excel mal
+                  interpretado). Si Q es anterior al requerimiento, use revisión manual.
+                </p>
+              ) : null}
+
+              {puedeOperar && data?.correccion_desde_q_anterior_bd ? (
+                <p className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-950">
+                  La columna Q es <strong>anterior</strong> a la fecha de aprobación en el sistema: al
+                  confirmar se <strong>adelantará</strong> la aprobación en BD a la fecha Q y se
+                  recalcularán vencimientos de cuotas si corresponde. Pulse «No» si no desea cambiar.
                 </p>
               ) : null}
 
@@ -1204,7 +1227,7 @@ export function CompararFechaEntregaQAprobacionCell({ row }: { row: ClienteRetra
                         ? 'Elija primero el lote de la hoja que corresponde a este préstamo.'
                         : puedeOperar
                           ? 'Pulse Sí para confirmar en el siguiente paso el guardado en BD (fecha Q → fecha de aprobación).'
-                          : 'La fecha Q no es posterior a la aprobación: no hay indicador Sí.'
+                          : 'No hay indicador Sí (Q debe diferir de la BD y, si Q es anterior, ser ≥ fecha de requerimiento).'
                   }
                   onClick={() => {
                     if (!puedeOperar || !esAdmin || loading) return
