@@ -16,7 +16,7 @@ from datetime import date, datetime, timedelta, time
 
 from decimal import Decimal
 
-from typing import Any, List, Optional
+from typing import Any, List, Literal, Optional
 
 
 
@@ -40,7 +40,7 @@ from app.core.config import settings
 
 from app.core.database import get_db
 
-from app.core.deps import get_current_user
+from app.core.deps import get_current_user, require_admin
 
 from app.schemas.auth import UserResponse
 
@@ -540,7 +540,74 @@ def _numero_cuotas_listado_safe(cuotas_por_prestamo: dict, prestamo_id: int, fal
         return None
 
 
+_TIPO_FECHAS_2 = Literal["fecha_registro", "fecha_aprobacion", "fecha_requerimiento", "fecha_base_calculo"]
 
+
+@router.get(
+    "/actualizaciones-fechas-2",
+    response_model=dict,
+    summary="Listado mínimo por día calendario (Actualizaciones Fechas 2)",
+)
+def listar_prestamos_actualizaciones_fechas_2(
+    tipo: _TIPO_FECHAS_2 = Query(
+        ...,
+        description="Campo del préstamo cuyo día calendario debe coincidir con `fecha`.",
+    ),
+    fecha: date = Query(..., description="Día calendario (YYYY-MM-DD)."),
+    limit: int = Query(500, ge=1, le=2000),
+    db: Session = Depends(get_db),
+    current_user: UserResponse = Depends(require_admin),
+):
+    """
+    Préstamos donde el día indicado coincide con el campo elegido (join cliente para cédula).
+    Respuesta mínima: id, cédula, estado, fecha_requerimiento, fecha_aprobacion, fecha_base_calculo.
+    """
+    vis = filtro_prestamo_visible_listado(current_user)
+    if tipo == "fecha_registro":
+        cond = cast(Prestamo.fecha_registro, Date) == fecha
+    elif tipo == "fecha_aprobacion":
+        cond = cast(Prestamo.fecha_aprobacion, Date) == fecha
+    elif tipo == "fecha_requerimiento":
+        cond = Prestamo.fecha_requerimiento == fecha
+    else:
+        cond = Prestamo.fecha_base_calculo == fecha
+
+    stmt = (
+        select(Prestamo, Cliente.cedula)
+        .join(Cliente, Prestamo.cliente_id == Cliente.id)
+        .where(vis, cond)
+        .order_by(Prestamo.id.asc())
+        .limit(limit)
+    )
+    rows = db.execute(stmt).all()
+    items: List[dict] = []
+    for p, ced in rows:
+        fa = getattr(p, "fecha_aprobacion", None)
+        fa_iso = None
+        if fa is not None:
+            if hasattr(fa, "isoformat"):
+                fa_iso = fa.isoformat()
+        items.append(
+            {
+                "id": int(p.id),
+                "cedula": (ced or "") or (p.cedula or "") or "",
+                "estado": (p.estado or "") or "",
+                "fecha_requerimiento": p.fecha_requerimiento.isoformat()
+                if getattr(p, "fecha_requerimiento", None)
+                else None,
+                "fecha_aprobacion": fa_iso,
+                "fecha_base_calculo": p.fecha_base_calculo.isoformat()
+                if getattr(p, "fecha_base_calculo", None)
+                else None,
+            }
+        )
+    return {
+        "items": items,
+        "total": len(items),
+        "tipo": tipo,
+        "fecha": fecha.isoformat(),
+        "limit": limit,
+    }
 
 
 @router.get("", response_model=dict)
