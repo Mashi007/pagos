@@ -491,6 +491,24 @@ export function PagosList() {
   }, [searchParams, setSearchParams])
 
   const esRevisarPagos = filters.sin_prestamo === 'si'
+  const filtrosPagosApi: Parameters<typeof pagoService.getAllPagos>[2] = {
+    cedula: filters.cedula || undefined,
+    estado: filters.estado || undefined,
+    fechaDesde: filters.fechaDesde || undefined,
+    fechaHasta: filters.fechaHasta || undefined,
+    analista: filters.analista || undefined,
+    conciliado: filters.conciliado || undefined,
+    sin_prestamo: filters.sin_prestamo || undefined,
+    prestamo_id:
+      filters.prestamo_id && Number.isFinite(Number(filters.prestamo_id))
+        ? Math.trunc(Number(filters.prestamo_id))
+        : undefined,
+    prestamo_cartera:
+      filters.prestamo_cartera === 'activa' ||
+      filters.prestamo_cartera === 'todos'
+        ? filters.prestamo_cartera
+        : undefined,
+  }
   const { data, isLoading, error, isError } = useQuery({
     queryKey: esRevisarPagos
       ? ['pagos-con-errores', page, perPage, filters, includeRevisionExportados]
@@ -506,7 +524,7 @@ export function PagosList() {
               filters.conciliado === 'all' ? undefined : filters.conciliado,
             includeExportados: includeRevisionExportados,
           })
-        : pagoService.getAllPagos(page, perPage, filters),
+        : pagoService.getAllPagos(page, perPage, filtrosPagosApi),
     staleTime: 15_000, // 15 s - evita múltiples refetch por re-renders y cambios de foco durante batch
     refetchOnMount: true,
     refetchOnWindowFocus: false, // Desactivado para no interrumpir batch con GETs innecesarios

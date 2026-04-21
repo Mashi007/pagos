@@ -895,6 +895,12 @@ export interface PagoReportadoDetalleResponse {
   prestamo_existente_id?: number | null
 
   pago_existente_estado?: string | null
+
+  prestamo_objetivo_id?: number | null
+
+  prestamo_objetivo_multiple?: boolean | null
+
+  prestamo_duplicado_es_objetivo?: boolean | null
 }
 
 export async function getPagoReportadoDetalle(
