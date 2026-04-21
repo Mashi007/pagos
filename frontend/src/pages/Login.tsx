@@ -48,10 +48,17 @@ export function Login() {
       sessionStorage.removeItem(PUBLIC_FLOW_SESSION_KEY)
       sessionStorage.removeItem(PUBLIC_FLOW_SESSION_KEY + '_path')
     }
-    navigate('/login', { replace: true })
-  }, [staffIntent, navigate])
+  }, [staffIntent])
 
-  if (!staffIntent) {
+  if (staffIntent) {
+    return <LoginForm />
+  }
+
+  const fromPublicFlow =
+    typeof sessionStorage !== 'undefined' &&
+    sessionStorage.getItem(PUBLIC_FLOW_SESSION_KEY) === '1'
+
+  if (fromPublicFlow) {
     const returnPath =
       (typeof sessionStorage !== 'undefined' &&
         sessionStorage.getItem(PUBLIC_FLOW_SESSION_KEY + '_path')) ||
@@ -100,5 +107,28 @@ export function Login() {
     )
   }
 
-  return <LoginForm />
+  return (
+    <div className="flex min-h-screen flex-col items-center justify-center bg-slate-900 p-6 text-white">
+      <div className="w-full max-w-md space-y-8 text-center">
+        <h1 className="text-4xl font-bold tracking-tight text-red-500 md:text-5xl">
+          Acceso no autorizado
+        </h1>
+
+        <p className="text-lg text-slate-300">
+          Para acceder al sistema como personal, use el enlace de acceso
+          personal o contacte a su administrador.
+        </p>
+
+        <Button
+          size="lg"
+          className="mx-auto w-full max-w-xs bg-emerald-600 py-6 text-lg font-semibold text-white hover:bg-emerald-700"
+          onClick={() => {
+            navigate(`/login${STAFF_LOGIN_SEARCH}`, { replace: true })
+          }}
+        >
+          Acceso personal del sistema
+        </Button>
+      </div>
+    </div>
+  )
 }
