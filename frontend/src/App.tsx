@@ -304,8 +304,6 @@ function App() {
               element={
                 isAuthenticated ? (
                   <Navigate to={defaultHomePathForRol(user?.rol)} replace />
-                ) : !staffLoginIntent ? (
-                  <Navigate to="/rapicredit-cobros" replace />
                 ) : (
                   <motion.div
                     key="login"

@@ -51,12 +51,7 @@ export function Login() {
     navigate('/login', { replace: true })
   }, [staffIntent, navigate])
 
-  const fromPublicFlow =
-    !staffIntent &&
-    typeof sessionStorage !== 'undefined' &&
-    sessionStorage.getItem(PUBLIC_FLOW_SESSION_KEY) === '1'
-
-  if (fromPublicFlow) {
+  if (!staffIntent) {
     const returnPath =
       (typeof sessionStorage !== 'undefined' &&
         sessionStorage.getItem(PUBLIC_FLOW_SESSION_KEY + '_path')) ||
@@ -66,13 +61,12 @@ export function Login() {
       <div className="flex min-h-screen flex-col items-center justify-center bg-slate-900 p-6 text-white">
         <div className="w-full max-w-md space-y-8 text-center">
           <h1 className="text-4xl font-bold tracking-tight text-red-500 md:text-5xl">
-            Acceso limitado
+            Acceso no autorizado
           </h1>
 
           <p className="text-lg text-slate-300">
-            Esta pantalla es para el personal del sistema. Si desea reportar un
-            pago o consultar su estado de cuenta, use el botón Continuar para
-            volver.
+            Esta pantalla es exclusiva para personal autorizado. Para reportar
+            pagos o consultar estado de cuenta, use el botón Continuar.
           </p>
 
           <Button
