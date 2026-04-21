@@ -494,17 +494,13 @@ function App() {
               path="notificaciones/fecha"
               element={
                 <SimpleProtectedRoute requireAdmin={true}>
-                  <Notificaciones modulo="fecha" />
+                  <FechaQAuditoriaTotalPage />
                 </SimpleProtectedRoute>
               }
             />
             <Route
               path="notificaciones/fecha-auditoria-total"
-              element={
-                <SimpleProtectedRoute requireAdmin={true}>
-                  <FechaQAuditoriaTotalPage />
-                </SimpleProtectedRoute>
-              }
+              element={<Navigate to="/notificaciones/fecha" replace />}
             />
 
             <Route
@@ -534,7 +530,7 @@ function App() {
               }
             />
 
-            {/* Compatibilidad: «Fechas 2» vive en Notificaciones → Fechas (mismo requireAdmin en destino). */}
+            {/* Compatibilidad: «Fechas 2» redirige al módulo Fechas (Q vs BD + panel por día). */}
             <Route
               path="actualizaciones/fechas-2"
               element={<Navigate to="/notificaciones/fecha" replace />}

@@ -210,7 +210,8 @@ def get_fecha_q_auditoria_total(
     ),
 ):
     """
-    Auditoría total de columna Q vs fecha_aprobacion en TODO el universo de préstamos (no solo listas de mora).
+    Auditoría total de columna Q vs fecha_aprobacion en TODO el universo de préstamos (sin filtrar por estado
+    del préstamo ni por mora; orden por id descendente).
     Lee la caché `prestamos.fecha_entrega_q_aprobacion_cache` y devuelve trazabilidad por préstamo.
     `diferencia_dias`, `puede_aplicar` y `correccion_desde_q_anterior_bd` se recalculan en cada lectura
     con la **fecha_aprobacion** actual en BD (la Q de la hoja manda si difiere; `fecha_requerimiento` no bloquea el apply).
@@ -2330,8 +2331,9 @@ def _run_refresh_fecha_entrega_q_cache_bg() -> None:
 def post_refresh_fecha_entrega_q_cache(background_tasks: BackgroundTasks):
     """
     Programa en segundo plano el recálculo de `prestamos.fecha_entrega_q_aprobacion_cache`
-    (submódulo Notificaciones «Fecha»: columna Q de la hoja vs `fecha_aprobacion` en BD).
+    (Notificaciones · Fechas: columna Q de la hoja vs `fecha_aprobacion` en BD).
     Misma lógica que el job programado (lunes y jueves 04:00 Caracas) y que tras cada sync exitoso de la hoja Drive.
+    Incluye todos los estados de préstamo (sin excluir liquidados ni desistimientos).
     """
     background_tasks.add_task(_run_refresh_fecha_entrega_q_cache_bg)
     return {

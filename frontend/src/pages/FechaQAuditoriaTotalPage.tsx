@@ -22,6 +22,7 @@ import {
 import { getErrorMessage } from '../types/errors'
 import { useSimpleAuth } from '../store/simpleAuthStore'
 import { NOTIFICACIONES_MAX_CLIENTES_POR_PAGINA } from './notificaciones/notificacionesPage.constants'
+import { Fechas2BusquedaPanel } from './notificaciones/Fechas2BusquedaPanel'
 
 const QK = ['notificaciones', 'fecha-q-auditoria-total'] as const
 
@@ -51,7 +52,8 @@ export default function FechaQAuditoriaTotalPage() {
 
   const [cedula, setCedula] = useState('')
   const [appliedCedula, setAppliedCedula] = useState('')
-  const [soloConDiferencia, setSoloConDiferencia] = useState(true)
+  /** Por defecto en false: lista todo el universo paginado; activar para acotar a filas donde Q ≠ fecha BD. */
+  const [soloConDiferencia, setSoloConDiferencia] = useState(false)
   /** Si true, el GET envía `excluir_marcados_no: false` y vuelven a listarse los marcados «No». */
   const [incluirMarcadosNo, setIncluirMarcadosNo] = useState(false)
   const [offset, setOffset] = useState(0)
@@ -167,8 +169,8 @@ export default function FechaQAuditoriaTotalPage() {
   return (
     <div className="mx-auto max-w-7xl space-y-6 p-4 md:p-6">
       <ModulePageHeader
-        title="Auditoría Total Q vs Sistema"
-        description="Columna Q (caché) vs fecha de aprobación en BD. El caché se recalcula en bloque cada vez que la hoja CONCILIACIÓN se sincroniza desde Drive, y también por job los lunes y jueves a las 04:00 (Caracas). Marque casos y use «Ejecutar Sí/No en lote» con confirmación. Selección por página (10 filas)."
+        title="Notificaciones · Fechas (Q vs BD)"
+        description="Comparación por préstamo, independiente del estado operativo (mora, liquidado, etc.): cédula, fecha de la columna Q de la hoja CONCILIACIÓN (caché en BD) y fecha de aprobación en base de datos. Si la Q es la referencia y difiere, use Sí para alinear la aprobación en BD (o No para descartar en auditoría). El caché se actualiza al sincronizar la hoja y con el job programado (lunes y jueves 04:00 Caracas). Paginación por página."
         icon={Database}
       />
 
@@ -228,7 +230,7 @@ export default function FechaQAuditoriaTotalPage() {
             Refrescar
           </Button>
           <Button asChild type="button" variant="outline">
-            <Link to="/notificaciones/fecha">Ir a Notificaciones · Fechas</Link>
+            <Link to="/notificaciones/general">Ir a listados de mora (General)</Link>
           </Button>
         </CardContent>
       </Card>
@@ -313,11 +315,11 @@ export default function FechaQAuditoriaTotalPage() {
                   </th>
                   <th className="py-2 pr-2 font-medium">Préstamo</th>
                   <th className="py-2 pr-2 font-medium">Cédula</th>
-                  <th className="py-2 pr-2 font-medium">Estado</th>
-                  <th className="py-2 pr-2 font-medium">Aprobación BD</th>
-                  <th className="py-2 pr-2 font-medium">Q (ISO caché)</th>
-                  <th className="py-2 pr-2 font-medium">Q (texto hoja)</th>
-                  <th className="py-2 pr-2 font-medium">Dif. días</th>
+                  <th className="py-2 pr-2 font-medium">Fecha Q (hoja)</th>
+                  <th className="py-2 pr-2 font-medium">Fecha BD (aprobación)</th>
+                  <th className="py-2 pr-2 font-medium">Dif. días (Q − BD)</th>
+                  <th className="py-2 pr-2 font-medium">Estado préstamo</th>
+                  <th className="py-2 pr-2 font-medium">Q celda bruta</th>
                   <th className="py-2 pr-2 font-medium">Puede aplicar</th>
                   <th className="py-2 pr-2 font-medium">Q anterior corrige</th>
                   <th className="py-2 pr-2 font-medium">Req. BD</th>
@@ -353,15 +355,15 @@ export default function FechaQAuditoriaTotalPage() {
                     </td>
                     <td className="py-2 pr-2 font-mono">{row.prestamo_id}</td>
                     <td className="py-2 pr-2">{row.cedula || '—'}</td>
-                    <td className="py-2 pr-2">{row.estado || '—'}</td>
-                    <td className="py-2 pr-2">{fmtIso(row.fecha_aprobacion)}</td>
                     <td className="py-2 pr-2">{fmtIso(row.q_fecha_iso)}</td>
+                    <td className="py-2 pr-2">{fmtIso(row.fecha_aprobacion)}</td>
+                    <td className="py-2 pr-2">{row.diferencia_dias ?? '—'}</td>
+                    <td className="py-2 pr-2">{row.estado || '—'}</td>
                     <td className="py-2 pr-2 max-w-[200px] break-all font-mono text-xs">
                       {row.q_fecha_raw != null && String(row.q_fecha_raw).trim() !== ''
                         ? String(row.q_fecha_raw)
                         : '—'}
                     </td>
-                    <td className="py-2 pr-2">{row.diferencia_dias ?? '—'}</td>
                     <td className="py-2 pr-2">
                       {row.puede_aplicar == null ? '—' : row.puede_aplicar ? 'Sí' : 'No'}
                     </td>
@@ -494,6 +496,15 @@ export default function FechaQAuditoriaTotalPage() {
           </div>
         </CardContent>
       </Card>
+
+      <div className="space-y-2">
+        <h2 className="text-sm font-semibold text-slate-800">Ajuste manual por día de aprobación</h2>
+        <p className="text-xs text-muted-foreground">
+          Búsqueda y edición puntual de fechas (sin depender de la columna Q). Misma herramienta que antes bajo
+          Notificaciones · Fechas.
+        </p>
+        <Fechas2BusquedaPanel embedded />
+      </div>
 
       <Dialog open={confirmLote === 'si'} onOpenChange={open => !open && setConfirmLote(null)}>
         <DialogContent className="max-w-md">

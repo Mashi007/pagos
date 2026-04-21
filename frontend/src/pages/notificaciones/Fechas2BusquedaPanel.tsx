@@ -206,7 +206,7 @@ export function Fechas2BusquedaPanel({ embedded = false }: Props) {
           </Button>
           {!embedded ? (
             <Button asChild type="button" variant="outline" className="shrink-0">
-              <Link to="/notificaciones/fecha-auditoria-total">Investigación profunda Q vs sistema</Link>
+              <Link to="/notificaciones/fecha">Comparar columna Q vs fecha en BD</Link>
             </Button>
           ) : null}
         </CardContent>
