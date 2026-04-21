@@ -2959,8 +2959,18 @@ async def escaner_extraer_comprobante_infopagos(
     numero = (numero_cedula or "").strip()
     ctx_ced = f"{tipo}{numero}".replace("-", "")
 
+    t_gemini0 = time.perf_counter()
     gem = extract_infopagos_campos_desde_comprobante(ctx_ced, content, filename)
+    gemini_ms = int((time.perf_counter() - t_gemini0) * 1000)
     if not gem.get("ok"):
+        logger.info(
+            "[ESCANER_TIMING] ok=False gemini_ms=%s bytes=%s filename=%r cedula_ctx=%s err=%s",
+            gemini_ms,
+            len(content) if content else 0,
+            filename[:80] if filename else "",
+            ctx_ced[:20],
+            (str(gem.get("error") or "")[:120]),
+        )
         return {
             "ok": False,
             "error": gem.get("error") or "No se pudo leer el comprobante.",
@@ -3026,6 +3036,7 @@ async def escaner_extraer_comprobante_infopagos(
     prestamo_objetivo_id: Optional[int] = None
     if len(prestamos_aprob) == 1:
         prestamo_objetivo_id = int(prestamos_aprob[0])
+    t_post0 = time.perf_counter()
     num_op_trim = (num_op or "").strip()
     if num_op_trim:
         pr_scan = SimpleNamespace(
@@ -3039,6 +3050,16 @@ async def escaner_extraer_comprobante_infopagos(
                 p_exist = db.execute(select(Pago).where(Pago.id == pago_existente_id)).scalars().first()
                 if p_exist is not None:
                     prestamo_existente_id = getattr(p_exist, "prestamo_id", None)
+    post_gemini_ms = int((time.perf_counter() - t_post0) * 1000)
+
+    logger.info(
+        "[ESCANER_TIMING] ok=True gemini_ms=%s post_gemini_ms=%s bytes=%s filename=%r dup=%s",
+        gemini_ms,
+        post_gemini_ms,
+        len(content) if content else 0,
+        filename[:80] if filename else "",
+        duplicado_en_pagos,
+    )
 
     return {
         "ok": True,

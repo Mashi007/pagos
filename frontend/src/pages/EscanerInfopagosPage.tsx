@@ -196,7 +196,6 @@ export default function EscanerInfopagosPage() {
   const [escaneando, setEscaneando] = useState(false)
   const [validacionCampos, setValidacionCampos] = useState<string | null>(null)
   const [validacionReglas, setValidacionReglas] = useState<string | null>(null)
-  const [notasModelo, setNotasModelo] = useState('')
   const [cedulaPagadorImg, setCedulaPagadorImg] = useState('')
 
   const [fechaPago, setFechaPago] = useState('')
@@ -334,7 +333,6 @@ export default function EscanerInfopagosPage() {
       } else {
         setMontoStr('')
       }
-      setNotasModelo(s.notas_modelo || '')
       setCedulaPagadorImg(s.cedula_pagador_en_comprobante || '')
       setValidacionCampos(res.validacion_campos ?? null)
       setValidacionReglas(res.validacion_reglas ?? null)
@@ -386,16 +384,7 @@ export default function EscanerInfopagosPage() {
       fechaPago.trim() !== fechaDetectada.trim()
     ) {
       toast.error(
-        'Marcó «Sí» a la fecha del comprobante: el campo debe coincidir con la fecha detectada en la imagen, o elija «No» y justifique el cambio.'
-      )
-      return
-    }
-    const requiereJustifFecha =
-      (hayFechaDetectada && confirmaFechaDetectada === 'no') ||
-      (hayFechaDetectada && fechaPago.trim() !== fechaDetectada.trim())
-    if (requiereJustifFecha && justificacionFecha.trim().length < 12) {
-      toast.error(
-        'Indique una justificación de al menos 12 caracteres cuando corrige la fecha del comprobante o respondió «No».'
+        'Marcó «Sí» a la fecha del comprobante: el campo debe coincidir con la fecha detectada en la imagen, o elija «No» si corrige la fecha.'
       )
       return
     }
@@ -441,11 +430,12 @@ export default function EscanerInfopagosPage() {
     form.append('monto', montoParaApi(vM.valor))
     form.append('moneda', moneda)
     form.append('comprobante', archivo!)
-    if (justificacionFecha.trim().length >= 12) {
+    const justif = justificacionFecha.trim()
+    if (justif) {
       const motivoFecha =
         hayFechaDetectada && fechaPago.trim() !== fechaDetectada.trim()
-          ? `Ajuste manual de fecha (comprobante): ${fechaDetectada} → ${fechaPago}. ${justificacionFecha.trim()}`
-          : `Aclaración de fecha de comprobante: ${justificacionFecha.trim()}`
+          ? `Ajuste manual de fecha (comprobante): ${fechaDetectada} → ${fechaPago}. ${justif}`
+          : `Nota sobre fecha de comprobante: ${justif}`
       form.append('observacion', motivoFecha)
     }
     setEnviando(true)
@@ -526,7 +516,6 @@ export default function EscanerInfopagosPage() {
     setMoneda('USD')
     setValidacionCampos(null)
     setValidacionReglas(null)
-    setNotasModelo('')
     setCedulaPagadorImg('')
     setReferencia('')
     setReciboToken(null)
@@ -660,11 +649,6 @@ export default function EscanerInfopagosPage() {
                 </div>
               </div>
             )}
-            {notasModelo ? (
-              <p className="text-xs text-slate-500">
-                <span className="font-medium text-slate-700">Notas del modelo:</span> {notasModelo}
-              </p>
-            ) : null}
             {cedulaPagadorImg ? (
               <p className="text-xs text-slate-500">
                 <span className="font-medium text-slate-700">Cédula en comprobante (pagador):</span>{' '}
@@ -681,8 +665,7 @@ export default function EscanerInfopagosPage() {
                     <span className="font-mono font-semibold text-slate-900">
                       {fechaDetectada}
                     </span>
-                    . Puede ajustar el campo de fecha manualmente; si no coincide con la
-                    detectada, deberá justificar el cambio.
+                    . Puede ajustar el campo de fecha manualmente si la lectura de la IA no coincide con el comprobante.
                   </p>
                 ) : (
                   <p className="text-xs text-amber-800">
@@ -749,18 +732,18 @@ export default function EscanerInfopagosPage() {
                   role="note"
                 >
                   El valor inicial proviene solo de la imagen escaneada (no se reutiliza la fecha del
-                  correo ni metadatos del archivo). Si corrige la fecha respecto a la detectada, o
-                  responde «No», indique la justificación abajo (mín. 12 caracteres).
+                  correo ni metadatos del archivo). Puede añadir una nota opcional abajo si ayuda al
+                  revisor (no es obligatoria).
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="justificacion-fecha">
-                    Justificación (obligatoria si corrige la fecha o respondió «No»)
+                    Nota opcional (fecha / comprobante)
                   </Label>
                   <Input
                     id="justificacion-fecha"
                     value={justificacionFecha}
                     onChange={e => setJustificacionFecha(e.target.value)}
-                    placeholder="Ej. el comprobante tenía sello borroso y la fecha legible era del bloque inferior."
+                    placeholder="Opcional. Ej.: sello borroso; fecha legible en el bloque inferior."
                     maxLength={300}
                   />
                 </div>

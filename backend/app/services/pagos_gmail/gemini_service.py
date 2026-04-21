@@ -1400,6 +1400,9 @@ GEMINI_ESCANER_INFOPAGOS_PROMPT = """Eres un asistente de lectura de comprobante
 CONTEXTO (cédula del DEUDOR en el sistema — el cliente al que se le registra el pago; NO la confundas con la del depositante en el papel):
   "{cedula_deudor}"
 
+REFERENCIA DE CALENDARIO (solo coherencia; no inventes fechas que no estén en el comprobante):
+  - Fecha de hoy en Venezuela (America/Caracas), para comprobar que la operación no quede en el futuro: **{fecha_hoy_iso}**
+
 TAREA: Lee la imagen o PDF adjunto y extrae SOLO lo que aparezca con claridad en el comprobante para rellenar un formulario de "Infopagos" con estos campos:
   - fecha_pago: fecha de la operación en el comprobante. Devuélvela como cadena en formato **YYYY-MM-DD** si puedes inferir año/mes/día; si solo hay día/mes sin año razonable, deja fecha_pago vacía "".
   - institucion_financiera: nombre corto del banco o entidad (ej. BNC, Mercantil, Banesco, BDV, BINANCE, Pago Móvil). Máximo 100 caracteres.
@@ -1415,6 +1418,8 @@ REGLAS:
   - FECHA OBLIGATORIA DESDE IMAGEN/PDF: `fecha_pago` debe salir del propio comprobante (línea Fecha, Fecha/Hora, fecha del bloque de transacción).
   - Prohibido usar fecha del correo, asunto, metadata del archivo, nombre del archivo o contexto externo para `fecha_pago`.
   - Si hay dos fechas en el comprobante (ej. sello y fecha transacción), prioriza la fecha del bloque principal de la operación/transferencia.
+  - FORMATO VENEZOLANO / AMBIGÜEDAD: en boletos y apps locales casi siempre verás **día/mes/año** (o día-mes-año). Si ves **6 dígitos seguidos sin separadores** (ej. 191226), no asumas YYMMDD si con ello la operación quedaría **años incoherentes** respecto a otras fechas visibles del mismo boleto (sello, vigencia, año impreso, texto “202x”) o **en el futuro** respecto a {fecha_hoy_iso}. En ese caso prefiere la lectura **DDMMYY** (día/mes/año de dos dígitos) cuando encaje con el resto del comprobante; si sigue habiendo duda razonable, devuelve `fecha_pago` "" y explica en `notas`.
+  - La fecha de operación inferida **no puede ser posterior** a {fecha_hoy_iso}; si una lectura lleva a futuro, corrige interpretación o deja "".
   - Si la fecha no es legible con suficiente certeza, deja `fecha_pago` como "" y explícitalo en `notas`.
   - Responde ÚNICAMENTE con un objeto JSON válido, sin markdown ni texto extra, con exactamente estas claves:
   fecha_pago, institucion_financiera, numero_operacion, monto, moneda, cedula_pagador_en_comprobante, notas
@@ -1458,18 +1463,31 @@ def _parse_fecha_escaner(val: Any) -> Optional[date]:
     s = str(val).strip()
     if not s or s.lower() in ("na", "n/a", "-", ""):
         return None
+    # ISO 8601 con hora: 2026-04-21T15:01:44 o ...Z
+    if "T" in s[:29] and re.match(r"^\d{4}-\d{2}-\d{2}T", s):
+        s = s.split("T", 1)[0].strip()
+    # YYYY-MM-DD o YYYY/MM/DD (primeros 10 caracteres)
     s10 = s[:10]
     try:
-        if len(s10) >= 10 and s10[4] == "-" and s10[7] == "-":
+        if len(s10) >= 10 and s10[4] in "-/" and s10[7] in "-/" and s10[4] == s10[7]:
             y, m, d = int(s10[0:4]), int(s10[5:7]), int(s10[8:10])
             return date(y, m, d)
     except (ValueError, TypeError):
         pass
-    # dd/mm/yyyy o dd-mm-yyyy
+    # dd/mm/yyyy o dd-mm-yyyy (año 4 cifras al final)
     m = re.match(r"^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$", s)
     if m:
         try:
             d, mo, y = int(m.group(1)), int(m.group(2)), int(m.group(3))
+            return date(y, mo, d)
+        except ValueError:
+            return None
+    # dd.mm.yy o dd/mm/yy (año 2 cifras): heurística 20xx si yy < 70, si no 19xx
+    m2 = re.match(r"^(\d{1,2})[/.-](\d{1,2})[/.-](\d{2})$", s)
+    if m2:
+        try:
+            d, mo, yy = int(m2.group(1)), int(m2.group(2)), int(m2.group(3))
+            y = 2000 + yy if yy < 70 else 1900 + yy
             return date(y, mo, d)
         except ValueError:
             return None
@@ -1504,7 +1522,13 @@ def extract_infopagos_campos_desde_comprobante(
         return out_err
 
     ctx = (cedula_deudor_contexto or "").strip() or "(no indicada)"
-    prompt = GEMINI_ESCANER_INFOPAGOS_PROMPT.replace("{cedula_deudor}", ctx)
+    from app.services.tasa_cambio_service import fecha_hoy_caracas
+
+    hoy_iso = fecha_hoy_caracas().isoformat()
+    prompt = (
+        GEMINI_ESCANER_INFOPAGOS_PROMPT.replace("{cedula_deudor}", ctx)
+        .replace("{fecha_hoy_iso}", hoy_iso)
+    )
 
     model_name = getattr(settings, "GEMINI_MODEL", "gemini-2.5-flash")
     mime = get_mime_type(filename)
