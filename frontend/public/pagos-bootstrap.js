@@ -251,4 +251,44 @@
     var root = document.getElementById('root')
     if (root) root.classList.add('styles-loaded')
   }, 2000)
+
+  // Fallback anti-pantalla-infinita: si el shell sigue igual tras el timeout,
+  // mostramos UI de recuperación en vez de dejar "Cargando..." permanente.
+  setTimeout(function () {
+    var root = document.getElementById('root')
+    if (!root) return
+
+    var appReady = window.__RAPICREDIT_APP_READY__ === true || root.getAttribute('data-app-ready') === 'true'
+    var loadingNode = root.querySelector('.app-loading-placeholder')
+    if (appReady || !loadingNode) return
+
+    originalError.call(
+      console,
+      '[bootstrap] Arranque excedió el tiempo esperado. Mostrando fallback de recuperación.'
+    )
+
+    root.innerHTML =
+      '<div class="app-boot-fallback" role="alert" aria-live="assertive">' +
+      '<h2>No se pudo cargar el módulo</h2>' +
+      '<p>La página tardó demasiado en iniciar. Puede ser caché desactualizado o conexión inestable.</p>' +
+      '<div class="app-boot-fallback-actions">' +
+      '<button type="button" class="app-boot-fallback-primary" id="app-boot-retry">Reintentar</button>' +
+      '<button type="button" class="app-boot-fallback-secondary" id="app-boot-reload">Recargar</button>' +
+      '</div>' +
+      '</div>'
+
+    var retryBtn = document.getElementById('app-boot-retry')
+    if (retryBtn) {
+      retryBtn.addEventListener('click', function () {
+        reloadPage()
+      })
+    }
+
+    var reloadBtn = document.getElementById('app-boot-reload')
+    if (reloadBtn) {
+      reloadBtn.addEventListener('click', function () {
+        window.location.reload()
+      })
+    }
+  }, 15000)
 })()

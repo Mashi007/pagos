@@ -189,8 +189,9 @@ function filaCandidatoDriveTono(p: PrestamoCandidatoDriveFila['payload']): FilaC
   const redInvalida = !formatoOk
   const redVeDosOMasCreditos = esVe && Number.isFinite(nPrest) && nPrest >= 2
   const redFechaAntigua = aprobacionQMasDe30Dias(qRaw)
+  const redHuellaNoComparable = p.huella_no_comparable === true
 
-  if (redInvalida || redVeDosOMasCreditos || redFechaAntigua) return 'red'
+  if (redInvalida || redVeDosOMasCreditos || redFechaAntigua || redHuellaNoComparable) return 'red'
   if (formatoOk && dup) return 'amber'
   if (formatoOk && tablaVOk && hojaOk) return 'green'
   return 'plain'
@@ -390,6 +391,7 @@ export default function ActualizacionesPrestamosDrivePage() {
   const [cedulaInput, setCedulaInput] = useState('')
   const [cedulaDebounced, setCedulaDebounced] = useState('')
   const [forzarVacio, setForzarVacio] = useState(false)
+  const [soloHuellaNoComparable, setSoloHuellaNoComparable] = useState(false)
   const [manualUpdating, setManualUpdating] = useState(false)
   const [guardarValidosSaving, setGuardarValidosSaving] = useState(false)
   const [guardandoFilaSheet, setGuardandoFilaSheet] = useState<number | null>(null)
@@ -402,15 +404,16 @@ export default function ActualizacionesPrestamosDrivePage() {
 
   useEffect(() => {
     setPage(1)
-  }, [cedulaDebounced])
+  }, [cedulaDebounced, soloHuellaNoComparable])
 
   const snapshotQuery = useQuery({
-    queryKey: [...QK_BASE, cedulaDebounced, page],
+    queryKey: [...QK_BASE, cedulaDebounced, soloHuellaNoComparable, page],
     queryFn: () =>
       getPrestamosCandidatosDriveSnapshot(
         PAGE_SIZE,
         (page - 1) * PAGE_SIZE,
-        cedulaDebounced || undefined
+        cedulaDebounced || undefined,
+        soloHuellaNoComparable
       ),
   })
 
@@ -447,13 +450,13 @@ export default function ActualizacionesPrestamosDrivePage() {
           )
         }
       }
-      await qc.resetQueries({ queryKey: [...QK_BASE, cedulaDebounced] })
+      await qc.resetQueries({ queryKey: [...QK_BASE] })
     } catch (e) {
       toast.error(getErrorMessage(e) || 'No se pudo recalcular')
     } finally {
       setManualUpdating(false)
     }
-  }, [qc, forzarVacio, cedulaDebounced])
+  }, [qc, forzarVacio, cedulaDebounced, page])
 
   const refetchLista = snapshotQuery.refetch
 
@@ -475,14 +478,14 @@ export default function ActualizacionesPrestamosDrivePage() {
           return
         }
         toast.success(res.mensaje || `Fila ${sheetRowNumber} guardada.`)
-        await qc.resetQueries({ queryKey: [...QK_BASE, cedulaDebounced] })
+        await qc.resetQueries({ queryKey: [...QK_BASE] })
       } catch (e) {
         toast.error(getErrorMessage(e) || 'No se pudo guardar la fila')
       } finally {
         setGuardandoFilaSheet(null)
       }
     },
-    [qc, cedulaDebounced, rows]
+    [qc, cedulaDebounced, page, rows]
   )
 
   const onGuardarValidos100 = useCallback(async () => {
@@ -505,13 +508,13 @@ export default function ActualizacionesPrestamosDrivePage() {
             'Ninguna fila cumplió la validación; no se guardó nada. Todas siguen en la lista para revisarlas y corregir.'
         )
       }
-      await qc.resetQueries({ queryKey: [...QK_BASE, cedulaDebounced] })
+      await qc.resetQueries({ queryKey: [...QK_BASE] })
     } catch (e) {
       toast.error(getErrorMessage(e) || 'No se pudo guardar')
     } finally {
       setGuardarValidosSaving(false)
     }
-  }, [qc, cedulaDebounced])
+  }, [qc, cedulaDebounced, page])
 
   const onRefrescarLista = useCallback(async () => {
     try {
@@ -546,6 +549,13 @@ export default function ActualizacionesPrestamosDrivePage() {
       return (
         <span className="text-red-600">
           (Q) Fecha ambigua en Q (dd/mm). Use YYYY-MM-DD para evitar inversión día/mes.
+        </span>
+      )
+    }
+    if (p.huella_no_comparable === true) {
+      return (
+        <span className="text-red-600">
+          Huella no comparable: revise y normalice N/R/S/Q (monto, cuotas, modalidad y fecha).
         </span>
       )
     }
@@ -584,6 +594,8 @@ export default function ActualizacionesPrestamosDrivePage() {
     manualUpdating || guardarValidosSaving || guardandoFilaSheet !== null || isBusy
   const guardables =
     typeof data?.kpis_aprueban === 'number' ? data.kpis_aprueban : null
+  const huellaNoComparableTotal =
+    typeof data?.kpis_huella_no_comparable === 'number' ? data.kpis_huella_no_comparable : null
   const guardarMasivoDeshabilitado =
     accionesGlobalesDeshabilitadas ||
     total === 0 ||
@@ -636,6 +648,33 @@ export default function ActualizacionesPrestamosDrivePage() {
                   }`}
                 >
                   No guardables
+                </p>
+              </div>
+              <div
+                className={`min-w-[6.25rem] rounded-lg border px-3 py-2 text-center shadow-sm ${
+                  typeof huellaNoComparableTotal === 'number' && huellaNoComparableTotal > 0
+                    ? 'border-orange-200/90 bg-orange-50/80'
+                    : 'border-border bg-muted/50'
+                }`}
+                title="Casos que no tienen huella comparable completa (N/R/S/Q). Revisión operativa."
+              >
+                <p
+                  className={`text-lg font-semibold tabular-nums ${
+                    typeof huellaNoComparableTotal === 'number' && huellaNoComparableTotal > 0
+                      ? 'text-orange-900'
+                      : 'text-foreground'
+                  }`}
+                >
+                  {huellaNoComparableTotal ?? '—'}
+                </p>
+                <p
+                  className={`text-[11px] font-medium uppercase tracking-wide ${
+                    typeof huellaNoComparableTotal === 'number' && huellaNoComparableTotal > 0
+                      ? 'text-orange-800/95'
+                      : 'text-muted-foreground'
+                  }`}
+                >
+                  Huella no comparable
                 </p>
               </div>
             </div>
@@ -733,6 +772,15 @@ export default function ActualizacionesPrestamosDrivePage() {
                 autoComplete="off"
               />
             </div>
+            <label className="flex cursor-pointer items-center gap-2 text-sm text-muted-foreground">
+              <input
+                type="checkbox"
+                className="h-4 w-4 rounded border-input accent-primary"
+                checked={soloHuellaNoComparable}
+                onChange={e => setSoloHuellaNoComparable(e.target.checked)}
+              />
+              Módulo revisión: solo huella no comparable
+            </label>
             <label className="flex cursor-pointer items-center gap-2 text-sm text-muted-foreground">
               <input
                 type="checkbox"

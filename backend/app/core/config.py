@@ -241,10 +241,6 @@ class Settings(BaseSettings):
         description="Email(s) para notificar cuando se crea o actualiza un ticket (separados por coma). Por defecto itmaster@rapicreditca.com."
     )
     # URL pública del frontend (para enlaces y logo en emails de cobranza). Ej: https://rapicredit.onrender.com/pagos
-    FRONTEND_PUBLIC_URL: Optional[str] = Field(
-        default="https://rapicredit.onrender.com/pagos",
-        description="URL base del frontend para imágenes en emails (logo RapiCredit).",
-    )
     # Ruta al logo PNG para generar el PDF de carta de cobranza (adjunto al email). Opcional; si no existe se omite el logo en el PDF.
     LOGO_PDF_COBRANZA_PATH: Optional[str] = Field(
         None,
@@ -328,7 +324,11 @@ class Settings(BaseSettings):
     )
     FRONTEND_PUBLIC_URL: Optional[str] = Field(
         None,
-        description="URL pública del frontend (SPA). Tras OAuth Google se redirige aquí/pagos/configuracion?tab=informe-pagos. Si no se define, se usa BACKEND_PUBLIC_URL (mismo origen)."
+        description=(
+            "URL pública única del frontend (SPA). Se usa para redirección OAuth Google "
+            "y para construir recursos públicos en correos/reportes. "
+            "Si no se define, se usa BACKEND_PUBLIC_URL (mismo origen)."
+        ),
     )
 
     # ============================================

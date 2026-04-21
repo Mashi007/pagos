@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 import re
 from datetime import date
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import HTTPException
@@ -25,11 +25,14 @@ from app.services.prestamo_candidatos_drive_validadores import (
     cedula_cmp_es_tipo_v_o_e,
     conteo_prestamos_por_cedula_norm,
 )
+from app.services.prestamo_candidatos_drive_normalizacion import (
+    normalizar_modalidad_drive,
+    parse_decimal_monto_drive,
+    parse_numero_cuotas_drive,
+)
 from app.schemas.prestamo import PrestamoCreate
 
 logger = logging.getLogger(__name__)
-
-_MODALIDADES = frozenset({"MENSUAL", "QUINCENAL", "SEMANAL"})
 
 # Valor antiguo mal escrito en snapshots previos al refresh.
 _LEGACY_PRODUCTO_DRIVE_TYPOS = frozenset({"FINCAMIRETO"})
@@ -49,44 +52,11 @@ def _cell_str(v: Any) -> str:
 
 
 def _parse_decimal_monto(s: str) -> Optional[Decimal]:
-    """
-    Monto desde celda tipo hoja VE/EU: miles con punto y decimal con coma (ej. 1.575,00).
-    El reemplazo ingenuo coma→punto deja '1.575.00' y Decimal falla; por eso se normaliza antes.
-    """
-    t = (s or "").strip().replace(" ", "")
-    for sym in ("$", "€", "Bs.", "Bs", "USD", "VES"):
-        t = re.sub(re.escape(sym), "", t, flags=re.I).strip()
-    if not t:
-        return None
-    last_comma = t.rfind(",")
-    last_dot = t.rfind(".")
-    if "," in t and "." in t:
-        if last_comma > last_dot:
-            t = t.replace(".", "").replace(",", ".")
-        else:
-            t = t.replace(",", "")
-    elif "," in t:
-        t = t.replace(",", ".")
-    try:
-        d = Decimal(t)
-        if d <= 0:
-            return None
-        return d
-    except (InvalidOperation, ValueError):
-        return None
+    return parse_decimal_monto_drive(s)
 
 
 def _parse_numero_cuotas(s: str) -> Optional[int]:
-    t = re.sub(r"\D", "", s or "")
-    if not t:
-        return None
-    try:
-        n = int(t)
-        if 1 <= n <= 50:
-            return n
-    except ValueError:
-        pass
-    return None
+    return parse_numero_cuotas_drive(s)
 
 
 def _parse_fecha_a_date(s: str) -> Optional[date]:
@@ -164,19 +134,7 @@ def _fechas_desde_col_q(q_val: str) -> Optional[Tuple[date, date]]:
 
 
 def _normalizar_modalidad(s: str) -> Optional[str]:
-    t = _cell_str(s).upper()
-    if not t:
-        return None
-    for m in _MODALIDADES:
-        if m in t or t == m:
-            return m
-    if "QUINCENA" in t:
-        return "QUINCENAL"
-    if "SEMANA" in t:
-        return "SEMANAL"
-    if "MENS" in t or "MES" in t:
-        return "MENSUAL"
-    return None
+    return normalizar_modalidad_drive(s)
 
 
 def _cliente_id_por_cedula_normalizada(db: Session, cedula_cmp: str) -> Optional[int]:
@@ -237,6 +195,10 @@ def _motivos_no_100(
         motivos.append("número de cuotas (R) inválido (1-50)")
 
     q_s = _cell_str(payload.get("col_q_fecha"))
+    if payload.get("huella_no_comparable") is True:
+        motivos.append(
+            "huella no comparable: faltan o son inválidos monto/cuotas/modalidad/fecha en la fila."
+        )
     if _q_contiene_fecha_ambigua_dd_mm(q_s):
         motivos.append(
             "fecha (Q) ambigua: use formato ISO YYYY-MM-DD para evitar confusión día/mes "

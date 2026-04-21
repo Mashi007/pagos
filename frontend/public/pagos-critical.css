@@ -27,3 +27,54 @@ body {
   color: #1e40af;
   font-size: 1.125rem;
 }
+
+.app-boot-fallback {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 1.5rem;
+  color: #0f172a;
+  background: #f8fafc;
+}
+
+.app-boot-fallback h2 {
+  margin: 0 0 0.75rem;
+  color: #991b1b;
+  font-size: 1.25rem;
+}
+
+.app-boot-fallback p {
+  margin: 0 0 1rem;
+  max-width: 36rem;
+  color: #334155;
+}
+
+.app-boot-fallback-actions {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.app-boot-fallback-primary,
+.app-boot-fallback-secondary {
+  border-radius: 0.5rem;
+  border: 1px solid #cbd5e1;
+  padding: 0.55rem 0.9rem;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.app-boot-fallback-primary {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #fff;
+}
+
+.app-boot-fallback-secondary {
+  background: #fff;
+  color: #0f172a;
+}

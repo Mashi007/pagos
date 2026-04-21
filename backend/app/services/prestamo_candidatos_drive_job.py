@@ -27,6 +27,13 @@ from app.models.conciliacion_sheet import ConciliacionSheetMeta
 from app.models.drive import DriveRow
 from app.models.prestamo_candidato_drive import PrestamoCandidatoDrive
 from app.services.prestamo_candidatos_drive_kpis import conteos_listo_guardar_y_map_por_id
+from app.services.prestamo_candidatos_drive_normalizacion import (
+    normalizar_cedula_cmp_drive,
+    normalizar_modalidad_drive,
+    parse_decimal_monto_drive,
+    parse_fecha_q_iso_y_ambigua,
+    parse_numero_cuotas_drive,
+)
 from app.services.prestamo_candidatos_drive_validadores import (
     cedula_cmp_es_tipo_j,
     cedula_cmp_es_tipo_v_o_e,
@@ -109,7 +116,7 @@ def ejecutar_refresh_prestamo_candidatos_drive(
     tmp: List[tuple[DriveRow, str]] = []
     for r in drive_rows:
         raw_e = _cell(getattr(r, "col_e", None))
-        cmp_e = _normalizar_cedula_carga_masiva(raw_e)
+        cmp_e = normalizar_cedula_cmp_drive(raw_e) or _normalizar_cedula_carga_masiva(raw_e)
         if not cmp_e:
             continue
         conteos[cmp_e] = conteos.get(cmp_e, 0) + 1
@@ -137,17 +144,32 @@ def ejecutar_refresh_prestamo_candidatos_drive(
         validador_ve_max_un_prestamo_ok = not (es_ve and n_prest >= 2)
         validador_v_max_un_prestamo_ok = validador_ve_max_un_prestamo_ok
 
+        q_raw = _cell(getattr(r, "col_q", None)) or None
+        q_date, q_ambigua = parse_fecha_q_iso_y_ambigua(q_raw or "")
+        monto_norm = parse_decimal_monto_drive(_cell(getattr(r, "col_n", None)))
+        cuotas_norm = parse_numero_cuotas_drive(_cell(getattr(r, "col_r", None)))
+        modalidad_norm = normalizar_modalidad_drive(_cell(getattr(r, "col_s", None)))
+        huella_no_comparable = (
+            monto_norm is None or cuotas_norm is None or modalidad_norm is None or q_date is None
+        )
+
         payload: Dict[str, Any] = {
             "col_e_cedula": raw_e or None,
             "col_i_modelo_vehiculo": _cell(getattr(r, "col_i", None)) or None,
             "col_j_analista": _cell(getattr(r, "col_j", None)) or None,
             "col_k_concesionario": _cell(getattr(r, "col_k", None)) or None,
             "col_n_total_financiamiento": _cell(getattr(r, "col_n", None)) or None,
-            "col_q_fecha": _cell(getattr(r, "col_q", None)) or None,
+            "col_q_fecha": q_raw,
             "col_r_numero_cuotas": _cell(getattr(r, "col_r", None)) or None,
             "col_s_modalidad_pago": _cell(getattr(r, "col_s", None)) or None,
             "producto": PRODUCTO_PROPUESTO_DRIVE,
             "cedula_cmp": cmp_e,
+            "col_n_total_financiamiento_norm": str(monto_norm) if monto_norm is not None else None,
+            "col_r_numero_cuotas_norm": cuotas_norm,
+            "col_s_modalidad_pago_norm": modalidad_norm,
+            "col_q_fecha_iso": q_date.isoformat() if q_date is not None else None,
+            "col_q_fecha_ambigua": q_ambigua,
+            "huella_no_comparable": huella_no_comparable,
             "cedula_valida": cedula_valida,
             "cedula_error": cedula_error,
             "duplicada_en_hoja": dup_sheet,
@@ -203,6 +225,7 @@ def listar_prestamo_candidatos_drive_snapshot(
     limit: int = 500,
     offset: int = 0,
     cedula_q: str | None = None,
+    solo_huella_no_comparable: bool = False,
 ) -> Dict[str, Any]:
     """Último snapshot ordenado por fila de hoja; paginado y filtro opcional por cédula (normalizada)."""
     from app.api.v1.endpoints.clientes import _normalizar_cedula_carga_masiva
@@ -217,6 +240,8 @@ def listar_prestamo_candidatos_drive_snapshot(
     base_filter = []
     if filt_norm:
         base_filter.append(PrestamoCandidatoDrive.cedula_cmp.contains(filt_norm))
+    if solo_huella_no_comparable:
+        base_filter.append(PrestamoCandidatoDrive.payload["huella_no_comparable"].astext == "true")
 
     cnt_stmt = select(func.count(PrestamoCandidatoDrive.id))
     if base_filter:
@@ -249,6 +274,14 @@ def listar_prestamo_candidatos_drive_snapshot(
         "computed_at": computed_at,
         "kpis_aprueban": aprueban,
         "kpis_no_aprueban": no_aprueban,
+        "kpis_huella_no_comparable": int(
+            db.scalar(
+                select(func.count(PrestamoCandidatoDrive.id)).where(
+                    PrestamoCandidatoDrive.payload["huella_no_comparable"].astext == "true"
+                )
+            )
+            or 0
+        ),
         "total": total,
         "total_sin_filtro": (
             int(db.scalar(select(func.count(PrestamoCandidatoDrive.id))) or 0)

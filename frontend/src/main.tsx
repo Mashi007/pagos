@@ -18,6 +18,12 @@ import './index.css'
 
 import { BASE_PATH } from './config/env'
 
+declare global {
+  interface Window {
+    __RAPICREDIT_APP_READY__?: boolean
+  }
+}
+
 // Constantes de configuración
 
 const STALE_TIME_MINUTES = 5
@@ -71,6 +77,8 @@ const queryClient = new QueryClient({
 })
 
 const rootElement = document.getElementById('root')
+
+window.__RAPICREDIT_APP_READY__ = false
 
 // ✅ Verificar que el elemento root existe antes de renderizar
 
@@ -179,6 +187,12 @@ if (!rootElement) {
         </QueryClientProvider>
       </React.StrictMode>
     )
+
+    // Señal explícita de arranque correcto para el bootstrap estático.
+    requestAnimationFrame(() => {
+      window.__RAPICREDIT_APP_READY__ = true
+      rootElement.setAttribute('data-app-ready', 'true')
+    })
   } catch (error) {
     console.error('❌ Error al renderizar la aplicación:', error)
 

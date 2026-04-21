@@ -1,7 +1,8 @@
 """
 Snapshot de candidatos a préstamo nuevo desde tabla `drive` (CONCILIACIÓN).
 
-Solo administradores. El refresco automático corre domingo y miércoles ~04:05 (tras sync 04:00).
+Solo administradores. El refresco automático corre todos los días 04:45 (America/Caracas),
+tras el refresco de caché de clientes Drive de las 04:05.
 """
 from typing import Optional
 
@@ -30,6 +31,10 @@ def get_prestamos_candidatos_drive_snapshot(
     _: UserResponse = Depends(require_admin),
     limit: int = Query(500, ge=1, le=2000, description="Máximo de filas por página"),
     offset: int = Query(0, ge=0, description="Desplazamiento para paginación"),
+    solo_huella_no_comparable: bool = Query(
+        False,
+        description="Si true, solo devuelve filas con huella_no_comparable=true para revisión operativa.",
+    ),
     cedula_q: Optional[str] = Query(
         None,
         max_length=64,
@@ -37,7 +42,11 @@ def get_prestamos_candidatos_drive_snapshot(
     ),
 ):
     return listar_prestamo_candidatos_drive_snapshot(
-        db, limit=limit, offset=offset, cedula_q=cedula_q
+        db,
+        limit=limit,
+        offset=offset,
+        cedula_q=cedula_q,
+        solo_huella_no_comparable=solo_huella_no_comparable,
     )
 
 

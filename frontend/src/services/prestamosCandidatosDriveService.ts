@@ -22,6 +22,8 @@ export type PrestamoCandidatosDriveSnapshot = {
   kpis_aprueban?: number
   /** Resto del snapshot (no pasan esa validación). */
   kpis_no_aprueban?: number
+  /** Casos que requieren revisión operativa por huella incompleta/no comparable. */
+  kpis_huella_no_comparable?: number
   total_sin_filtro?: number
   filtro_cedula?: string | null
   limit: number
@@ -32,11 +34,13 @@ export type PrestamoCandidatosDriveSnapshot = {
 export async function getPrestamosCandidatosDriveSnapshot(
   limit = 500,
   offset = 0,
-  cedulaQ?: string
+  cedulaQ?: string,
+  soloHuellaNoComparable = false
 ): Promise<PrestamoCandidatosDriveSnapshot> {
-  const params: Record<string, string | number> = { limit, offset }
+  const params: Record<string, string | number | boolean> = { limit, offset }
   const q = (cedulaQ ?? '').trim()
   if (q) params.cedula_q = q
+  if (soloHuellaNoComparable) params.solo_huella_no_comparable = true
   const url = buildUrl(`${BASE}/snapshot`, params)
   return apiClient.get<PrestamoCandidatosDriveSnapshot>(url)
 }

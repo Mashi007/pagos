@@ -26,7 +26,7 @@ Cada vez que se añada o modifique un job programado:
 ## Colisiones a revisar siempre
 
 1. **Mismo `hora` + `minuto` + día** para dos funciones distintas → desfasar uno (p. ej. `:15`, `:30`, `:40`, `:45`).
-2. **Miércoles/domingo 02:00:** sync CONCILIACIÓN; no programar otro job pesado que lea `drive` a las **02:00** exactas.
+2. **Miércoles/domingo 01:20:** sync CONCILIACIÓN; no programar otro job pesado que lea `drive` a las **01:20** exactas.
 3. **03:00 diario:** auditoría cartera; no poner otro job pesado a **03:00** en lun–sáb.
 4. **04:00 diario:** limpieza de códigos; separar cachés masivos de domingo si hacían cluster (p. ej. `:35` y hora siguiente).
 5. **Gmail `:30` entre 06:30 y 19:30:** no coincidir en el mismo minuto con finiquito u otro job crítico si ambos saturan CPU/BD (hoy finiquito es `:00`).
@@ -43,13 +43,12 @@ Cada vez que se añada o modifique un job programado:
 Registrar jobs en **orden cronológico del flujo nocturno** (facilita revisiones):
 
 1. Finiquito / tareas tempranas lun–sáb si aplica  
-2. Sync CONCILIACIÓN (dom/mié)  
-3. Cachés o snapshots que dependen de `drive`  
-4. Auditoría cartera  
-5. Snapshots posteriores a auditoría si deben evitar contención  
-6. Limpieza ligera  
-7. Cachés masivos dominicales (separados entre sí)  
-8. Segunda ventana finiquito / Gmail  
+2. Sync CONCILIACIÓN (dom/mié 01:20)  
+3. Auditoría cartera (03:00)  
+4. Limpieza ligera (04:00)  
+5. Cachés o snapshots que dependen de `drive` (04:05 clientes, 04:45 préstamos)  
+6. Cachés masivos dominicales (04:35 y 05:10, separados entre sí)  
+7. Segunda ventana finiquito / Gmail  
 
 (El orden de registro no cambia la hora de ejecución de APScheduler, pero evita errores al leer el código.)
 
