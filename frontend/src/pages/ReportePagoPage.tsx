@@ -45,8 +45,6 @@ import {
   enviarReportePublico,
   enviarReporteInfopagos,
   getReciboInfopagos,
-  solicitarCodigoReportePublico,
-  verificarCodigoReportePublico,
 } from '../services/cobrosService'
 
 import { PUBLIC_FLOW_SESSION_KEY } from '../config/env'
@@ -617,8 +615,6 @@ const INSTITUCIONES = [
 const WHATSAPP_LINK = 'https://wa.me/584244579934'
 
 const NOTIFICATION_DURATION_MS = 10000
-const MENSAJE_VALIDACION_GENERICO =
-  'No fue posible validar los datos. Verifique e intente nuevamente.'
 
 type NotificationType = 'error' | 'success'
 
@@ -729,9 +725,6 @@ export default function ReportePagoPage({
   const [nombre, setNombre] = useState('')
 
   const [emailParaVerificacion, setEmailParaVerificacion] = useState('')
-  const [accessTokenPublico, setAccessTokenPublico] = useState<string | null>(
-    null
-  )
 
   const [institucion, setInstitucion] = useState('')
 
@@ -831,7 +824,6 @@ export default function ReportePagoPage({
     setNombre('')
 
     setEmailParaVerificacion('')
-    setAccessTokenPublico(null)
 
     setInstitucion('')
 
@@ -876,69 +868,17 @@ export default function ReportePagoPage({
     }
 
     const cedulaEnviar = v.valorParaEnviar!
-    setAccessTokenPublico(null)
 
     setLoading(true)
 
     try {
-      let accessToken = ''
-      let emailMaskOtp: string | null = null
-
-      if (!isInfopagos) {
-        const emailInput = (
-          window.prompt(
-            'Ingrese el correo registrado para recibir su código de verificación:'
-          ) || ''
-        )
-          .trim()
-          .toLowerCase()
-        if (!emailInput || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(emailInput)) {
-          showNotification('error', 'Ingrese un correo electrónico válido.')
-          return
-        }
-
-        const reqCodigo = await solicitarCodigoReportePublico({
-          cedula: cedulaEnviar,
-          email: emailInput,
-        })
-        if (!reqCodigo.ok) {
-          showNotification('error', reqCodigo.error || MENSAJE_VALIDACION_GENERICO)
-          return
-        }
-
-        const codigo = (
-          window.prompt(
-            'Ingrese el código de 6 dígitos enviado al correo registrado:'
-          ) || ''
-        ).trim()
-        if (!/^\d{6}$/.test(codigo)) {
-          showNotification('error', 'Código inválido. Debe contener 6 dígitos.')
-          return
-        }
-
-        const verif = await verificarCodigoReportePublico({
-          cedula: cedulaEnviar,
-          email: emailInput,
-          codigo,
-        })
-        if (!verif.ok || !verif.access_token) {
-          showNotification('error', verif.error || MENSAJE_VALIDACION_GENERICO)
-          return
-        }
-        accessToken = verif.access_token
-        emailMaskOtp = verif.email_enmascarado ?? null
-        setAccessTokenPublico(accessToken)
-      }
-
       const res = await validarCedulaPublico(
         cedulaEnviar,
-        isInfopagos
-          ? { origen: 'infopagos' }
-          : { accessToken }
+        isInfopagos ? { origen: 'infopagos' } : undefined
       )
 
       if (!res.ok) {
-        showNotification('error', res.error || MENSAJE_VALIDACION_GENERICO)
+        showNotification('error', res.error || 'Cédula no válida.')
 
         return
       }
@@ -954,7 +894,7 @@ export default function ReportePagoPage({
 
       setNombre(res.nombre || '')
 
-      setEmailParaVerificacion(emailMaskOtp || res.email_enmascarado || '')
+      setEmailParaVerificacion(res.email_enmascarado ?? '')
 
       setStep(isInfopagos ? 2 : 3)
     } catch (e: any) {
@@ -1100,17 +1040,7 @@ export default function ReportePagoPage({
 
         setStep(8)
       } else {
-        if (!accessTokenPublico) {
-          showNotification(
-            'error',
-            'Su verificación expiró. Vuelva a validar la cédula para continuar.'
-          )
-          return
-        }
-
-        const res = await enviarReportePublico(form, {
-          accessToken: accessTokenPublico,
-        })
+        const res = await enviarReportePublico(form)
 
         if (!res.ok) {
           showNotification('error', res.error || 'Error al enviar.')

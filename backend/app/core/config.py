@@ -132,8 +132,11 @@ class Settings(BaseSettings):
     )
     # False = exige JWT cobros_public (OTP por correo) en validar-cedula y enviar-reporte publicos.
     COBROS_PUBLICO_OTP_DISABLED: bool = Field(
-        default=False,
-        description="Por defecto False: exige OTP en rapicredit-cobros. Poner True solo para contingencia controlada.",
+        default=True,
+        description=(
+            "Por defecto True: reporte de pago rapicredit-cobros sin OTP (estado de cuenta usa su propio flujo). "
+            "Poner False para exigir OTP tambien en cobros publico."
+        ),
     )
     
     @validator('SECRET_KEY')

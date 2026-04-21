@@ -4,6 +4,7 @@ Endpoints PÚBLICOS del módulo Cobros (formulario de reporte de pago).
 SEGURIDAD: Sin login de panel. Por defecto (COBROS_PUBLICO_OTP_DISABLED=True) rapicredit-cobros
 solo exige cedula valida + rate limit + honeypot; opcionalmente COBROS_PUBLICO_OTP_DISABLED=False
 activa OTP por correo y JWT cobros_public en validar-cedula y enviar-reporte (origen=infopagos sin OTP).
+Estado de cuenta publico usa endpoints propios con OTP (no este flag).
 """
 
 import logging
@@ -44,6 +45,7 @@ from app.services.cobros import cobros_publico_reporte_service as cpr
 from app.core.email import cobros_recibo_attachments_or_oversize_note, send_email
 from app.services.notificaciones_exclusion_desistimiento import cliente_bloqueado_por_desistimiento
 from app.core.security import decode_token, create_recibo_infopagos_token, create_cobros_public_token
+from app.core.config import settings
 from app.core.email_config_holder import get_email_activo_servicio
 from app.utils.cliente_emails import emails_destino_desde_objeto, unir_destinatarios_log
 from app.api.v1.endpoints.cobros.routes import reportado_falla_validadores_cobros
@@ -120,6 +122,9 @@ class VerificarCodigoReporteResponse(BaseModel):
 
 
 def _cobros_public_otp_required(origen: Optional[str]) -> bool:
+    """OTP cobros publico: desactivado por settings o si origen=infopagos."""
+    if settings.COBROS_PUBLICO_OTP_DISABLED:
+        return False
     if (origen or "").strip().lower() == "infopagos":
         return False
     return True
