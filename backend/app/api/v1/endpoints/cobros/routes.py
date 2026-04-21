@@ -404,18 +404,6 @@ def _rechazar_aprobacion_si_documento_ya_en_pagos(db: Session, pr: PagoReportado
         )
 
 
-def _pago_canon_existe_en_tabla_pagos(db: Session, n_norm: str) -> bool:
-    """True si el canónico aparece en `pagos` (numero o referencia indexados)."""
-    if not n_norm:
-        return False
-    row = db.execute(
-        select(Pago.id).where(
-            or_(Pago.doc_canon_numero == n_norm, Pago.doc_canon_referencia == n_norm)
-        ).limit(1)
-    ).first()
-    return row is not None
-
-
 def _numero_operacion_canonico(raw: Optional[str]) -> str:
     """Normaliza solo `numero_operacion` para regla estricta de duplicado."""
     op = (raw or "").strip()
@@ -2320,15 +2308,12 @@ class EditarPagoReportadoBody(BaseModel):
     observacion: Optional[str] = None
 
 
-def _rechazar_si_numero_operacion_duplicado(db: Session, numero_operacion: str) -> None:
-    """Si el comprobante/ref. ya existe en pagos (numero_documento o referencia_pago, clave canónica), 400. Sin caché."""
-    num_op = (numero_operacion or "").strip()
-    if not num_op:
-        return
-    n_norm = normalize_documento(num_op)
-    if not n_norm:
-        return
-    if _pago_canon_existe_en_tabla_pagos(db, n_norm):
+def _rechazar_si_documento_reportado_duplicado_en_pagos(db: Session, pr: PagoReportado) -> None:
+    """
+    Misma colisión que aprobar/importar: `pago_reportado_colisiona_tabla_pagos`
+    (doc_canon_* + respaldo legacy en numero_documento / referencia_pago y claves del reporte).
+    """
+    if pago_reportado_colisiona_tabla_pagos(db, pr):
         raise HTTPException(
             status_code=400,
             detail="DUPLICADO: ese número de operación / documento / serial ya está registrado en la tabla de pagos (no se permite duplicar).",
@@ -2444,8 +2429,8 @@ def editar_pago_reportado(
         if body.observacion is not None:
             pr.observacion = (body.observacion or "").strip()[:500] or None
 
-        # Número de operación: nunca permitir duplicado en tabla pagos
-        _rechazar_si_numero_operacion_duplicado(db, pr.numero_operacion)
+        # Documento del reporte (operación ± sufijo / ref.): no duplicar frente a cartera `pagos`
+        _rechazar_si_documento_reportado_duplicado_en_pagos(db, pr)
 
         # Si la moneda queda en BS, la cédula debe estar en la lista de autorizadas para Bolívares (misma normalización que en listado)
         moneda_final = (pr.moneda or "").strip().upper()

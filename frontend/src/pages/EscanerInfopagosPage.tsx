@@ -4,7 +4,7 @@
  */
 import { useCallback, useMemo, useRef, useState } from 'react'
 
-import { Brain, Loader2, CheckCircle2, AlertTriangle } from 'lucide-react'
+import { Brain, Loader2, CheckCircle2, AlertTriangle, Lock } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 import { Button } from '../components/ui/button'
@@ -186,6 +186,9 @@ export default function EscanerInfopagosPage() {
   const [cedulaPagadorImg, setCedulaPagadorImg] = useState('')
 
   const [fechaPago, setFechaPago] = useState('')
+  const [fechaDetectada, setFechaDetectada] = useState('')
+  const [habilitarEdicionFecha, setHabilitarEdicionFecha] = useState(false)
+  const [justificacionFecha, setJustificacionFecha] = useState('')
   const [institucion, setInstitucion] = useState('')
   const [numeroOperacion, setNumeroOperacion] = useState('')
   const [montoStr, setMontoStr] = useState('')
@@ -257,7 +260,11 @@ export default function EscanerInfopagosPage() {
         toast.error('Sin sugerencias del modelo.')
         return
       }
-      setFechaPago(s.fecha_pago || '')
+      const fechaExtraida = s.fecha_pago || ''
+      setFechaPago(fechaExtraida)
+      setFechaDetectada(fechaExtraida)
+      setHabilitarEdicionFecha(!fechaExtraida)
+      setJustificacionFecha('')
       setInstitucion(s.institucion_financiera || '')
       setNumeroOperacion(s.numero_operacion || '')
       setMoneda(s.moneda === 'BS' ? 'BS' : 'USD')
@@ -287,6 +294,18 @@ export default function EscanerInfopagosPage() {
     const vF = validarFechaPago(fechaPago)
     if (!vF.valido) {
       toast.error(vF.error || 'Fecha inválida.')
+      return
+    }
+    const fechaCambioManual =
+      Boolean(fechaDetectada) &&
+      Boolean(habilitarEdicionFecha) &&
+      fechaPago.trim() !== fechaDetectada.trim()
+    if (habilitarEdicionFecha && justificacionFecha.trim().length < 12) {
+      toast.error('Indique una justificación mínima de 12 caracteres para corregir la fecha.')
+      return
+    }
+    if (fechaCambioManual && !justificacionFecha.trim()) {
+      toast.error('Debe justificar por qué corrige la fecha detectada en el comprobante.')
       return
     }
     if (!institucion.trim()) {
@@ -331,6 +350,12 @@ export default function EscanerInfopagosPage() {
     form.append('monto', montoParaApi(vM.valor))
     form.append('moneda', moneda)
     form.append('comprobante', archivo!)
+    if (habilitarEdicionFecha && justificacionFecha.trim()) {
+      const motivoFecha = fechaCambioManual
+        ? `Ajuste manual de fecha: ${fechaDetectada || 'sin fecha detectada'} -> ${fechaPago}. ${justificacionFecha.trim()}`
+        : `Fecha ingresada manualmente por baja legibilidad en comprobante: ${justificacionFecha.trim()}`
+      form.append('observacion', motivoFecha)
+    }
     setEnviando(true)
     try {
       const res = await enviarReporteInfopagos(form)
@@ -394,6 +419,9 @@ export default function EscanerInfopagosPage() {
     setNombreCliente('')
     setArchivo(null)
     setFechaPago('')
+    setFechaDetectada('')
+    setHabilitarEdicionFecha(false)
+    setJustificacionFecha('')
     setInstitucion('')
     setNumeroOperacion('')
     setMontoStr('')
@@ -547,8 +575,66 @@ export default function EscanerInfopagosPage() {
                   id="fecha"
                   type="date"
                   value={fechaPago}
+                  disabled={!habilitarEdicionFecha}
                   onChange={e => setFechaPago(e.target.value)}
                 />
+                {!habilitarEdicionFecha ? (
+                  <div
+                    className="flex gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950 shadow-sm"
+                    role="status"
+                  >
+                    <Lock
+                      className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-800"
+                      aria-hidden
+                    />
+                    <div>
+                      <p className="font-semibold text-amber-950">
+                        Fecha bloqueada (lectura del comprobante)
+                      </p>
+                      <p className="mt-0.5 text-xs leading-snug text-amber-900">
+                        El valor mostrado sale solo de la imagen escaneada. No se reutiliza la fecha del
+                        correo ni metadatos del archivo. Si la lectura fue incorrecta, use{' '}
+                        <span className="font-medium">Corregir fecha</span> y deje la justificación
+                        obligatoria.
+                      </p>
+                    </div>
+                  </div>
+                ) : null}
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      setHabilitarEdicionFecha(v => {
+                        const next = !v
+                        if (!next && fechaDetectada) {
+                          setFechaPago(fechaDetectada)
+                          setJustificacionFecha('')
+                        }
+                        return next
+                      })
+                    }
+                  >
+                    {habilitarEdicionFecha
+                      ? 'Usar fecha detectada'
+                      : 'Corregir fecha (con justificación)'}
+                  </Button>
+                </div>
+                {habilitarEdicionFecha && (
+                  <div className="space-y-2">
+                    <Label htmlFor="justificacion-fecha">
+                      Justificación de corrección de fecha
+                    </Label>
+                    <Input
+                      id="justificacion-fecha"
+                      value={justificacionFecha}
+                      onChange={e => setJustificacionFecha(e.target.value)}
+                      placeholder="Ej. el comprobante tenía sello borroso y la fecha legible era del bloque inferior."
+                      maxLength={300}
+                    />
+                  </div>
+                )}
               </div>
               <div className="space-y-2 sm:col-span-2">
                 <Label htmlFor="inst">Institución financiera</Label>
@@ -591,14 +677,9 @@ export default function EscanerInfopagosPage() {
               </div>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="archivo2">Comprobante (mismo archivo)</Label>
-              <Input
-                id="archivo2"
-                type="file"
-                accept=".pdf,.jpg,.jpeg,.png,.webp,.heic,.heif"
-                onChange={e => setArchivo(e.target.files?.[0] ?? null)}
-              />
+            <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
+              Se reutiliza automáticamente el comprobante escaneado al inicio para guardar y para procesos
+              siguientes (por ejemplo, recibo). No es necesario volver a cargarlo.
             </div>
 
             <div className="flex flex-wrap gap-2">

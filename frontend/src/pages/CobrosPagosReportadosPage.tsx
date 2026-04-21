@@ -298,6 +298,10 @@ export default function CobrosPagosReportadosPage() {
 
   const [incluirExportados, setIncluirExportados] = useState(false)
   const [soloCedulasDuplicadas, setSoloCedulasDuplicadas] = useState(false)
+  /** Cliente: filas cuya observación incluye falla de lista autorizada para pagos en Bs. */
+  const [soloFallaListaBs, setSoloFallaListaBs] = useState(false)
+  /** Cliente: filas marcadas DUPLICADO (misma regla que el listado / validadores). */
+  const [soloDuplicadoDocumento, setSoloDuplicadoDocumento] = useState(false)
   const [ordenCedula, setOrdenCedula] = useState<'asc' | 'desc'>('asc')
 
   const [changingEstadoId, setChangingEstadoId] = useState<number | null>(null)
@@ -634,12 +638,23 @@ export default function CobrosPagosReportadosPage() {
       frecuencia.set(key, (frecuencia.get(key) ?? 0) + 1)
     })
 
-    const filtrados = soloCedulasDuplicadas
+    let filtrados = soloCedulasDuplicadas
       ? base.filter(row => {
           const key = normalizarCedula(row.cedula_display)
           return !!key && (frecuencia.get(key) ?? 0) > 1
         })
       : base
+
+    if (soloFallaListaBs) {
+      filtrados = filtrados.filter(row =>
+        /No pag Bs\.?/i.test(String(row.observacion ?? ''))
+      )
+    }
+    if (soloDuplicadoDocumento) {
+      filtrados = filtrados.filter(row =>
+        /DUPLICADO/i.test(String(row.observacion ?? ''))
+      )
+    }
 
     filtrados.sort((a, b) => {
       const aa = normalizarCedula(a.cedula_display)
@@ -649,7 +664,13 @@ export default function CobrosPagosReportadosPage() {
     })
 
     return filtrados
-  }, [data?.items, soloCedulasDuplicadas, ordenCedula])
+  }, [
+    data?.items,
+    soloCedulasDuplicadas,
+    soloFallaListaBs,
+    soloDuplicadoDocumento,
+    ordenCedula,
+  ])
 
   return (
     <div className="space-y-6 p-6">
@@ -775,6 +796,40 @@ export default function CobrosPagosReportadosPage() {
             />
             <span>
               Mostrar solo cédulas duplicadas en esta página.
+            </span>
+          </label>
+
+          <label
+            htmlFor="cobros-solo-falla-lista-bs"
+            className="flex max-w-xs cursor-pointer items-start gap-2 text-xs text-muted-foreground"
+          >
+            <input
+              id="cobros-solo-falla-lista-bs"
+              type="checkbox"
+              className="mt-0.5 shrink-0 rounded border-input"
+              checked={soloFallaListaBs}
+              onChange={e => setSoloFallaListaBs(e.target.checked)}
+            />
+            <span>
+              Solo filas con falla de lista para pago en Bs. (texto «No pag Bs.» en
+              observación; moneda Bs. y cédula no autorizada).
+            </span>
+          </label>
+
+          <label
+            htmlFor="cobros-solo-duplicado-documento"
+            className="flex max-w-xs cursor-pointer items-start gap-2 text-xs text-muted-foreground"
+          >
+            <input
+              id="cobros-solo-duplicado-documento"
+              type="checkbox"
+              className="mt-0.5 shrink-0 rounded border-input"
+              checked={soloDuplicadoDocumento}
+              onChange={e => setSoloDuplicadoDocumento(e.target.checked)}
+            />
+            <span>
+              Solo filas con DUPLICADO en observación (documento ya en cartera o
+              repetido entre reportados en la página).
             </span>
           </label>
 

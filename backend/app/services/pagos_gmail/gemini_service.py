@@ -1412,6 +1412,10 @@ TAREA: Lee la imagen o PDF adjunto y extrae SOLO lo que aparezca con claridad en
 REGLAS:
   - No inventes datos: si un campo no está legible, usa "" o null según el tipo.
   - No copies el correo ni datos que no estén en el comprobante.
+  - FECHA OBLIGATORIA DESDE IMAGEN/PDF: `fecha_pago` debe salir del propio comprobante (línea Fecha, Fecha/Hora, fecha del bloque de transacción).
+  - Prohibido usar fecha del correo, asunto, metadata del archivo, nombre del archivo o contexto externo para `fecha_pago`.
+  - Si hay dos fechas en el comprobante (ej. sello y fecha transacción), prioriza la fecha del bloque principal de la operación/transferencia.
+  - Si la fecha no es legible con suficiente certeza, deja `fecha_pago` como "" y explícitalo en `notas`.
   - Responde ÚNICAMENTE con un objeto JSON válido, sin markdown ni texto extra, con exactamente estas claves:
   fecha_pago, institucion_financiera, numero_operacion, monto, moneda, cedula_pagador_en_comprobante, notas
 """
