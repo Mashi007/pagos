@@ -2126,7 +2126,7 @@ def aprobar_pago_reportado(
             pr.referencia_interna,
         )
         to_emails = []
-    if not pr.correo_enviado_a and to_emails and settings.COBROS_APROBACION_ENVIAR_RECIBO_POR_CORREO:
+    if not pr.correo_enviado_a and to_emails:
         pr.correo_enviado_a = unir_destinatarios_log(to_emails)
     dest_log = unir_destinatarios_log(to_emails)
     mensaje_final = (
@@ -2135,7 +2135,7 @@ def aprobar_pago_reportado(
         else "Pago aprobado y recibo enviado por correo."
     )
     cobros_correo_activo = get_email_activo_servicio("cobros")
-    if to_emails and cobros_correo_activo and settings.COBROS_APROBACION_ENVIAR_RECIBO_POR_CORREO:
+    if to_emails and cobros_correo_activo:
         fase_smtp_t0 = time.perf_counter()
         att, size_note = cobros_recibo_attachments_or_oversize_note(
             f"recibo_{pr.referencia_interna}.pdf", pdf_bytes
@@ -2179,14 +2179,6 @@ def aprobar_pago_reportado(
                 pr.referencia_interna, dest_log, err_mail or "desconocido",
             )
             mensaje_final = "Pago aprobado. El recibo no pudo enviarse por correo; use 'Enviar recibo por correo' desde el detalle."
-    elif to_emails and not settings.COBROS_APROBACION_ENVIAR_RECIBO_POR_CORREO:
-        logger.info(
-            "[COBROS] Aprobar ref=%s: omitiendo SMTP recibo (COBROS_APROBACION_ENVIAR_RECIBO_POR_CORREO=false).",
-            pr.referencia_interna,
-        )
-        mensaje_final = (
-            "Pago aprobado. No se envió recibo por correo (COBROS_APROBACION_ENVIAR_RECIBO_POR_CORREO=false en servidor)."
-        )
     elif to_emails and not cobros_correo_activo:
         logger.warning(
             "[COBROS] Aprobar ref=%s: servicio correo Cobros desactivado, no se envió recibo a %s.",

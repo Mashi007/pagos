@@ -175,12 +175,13 @@ class Settings(BaseSettings):
             "Poner False para exigir OTP tambien en cobros publico."
         ),
     )
-    # False = al aprobar (POST /aprobar o PATCH estado→aprobado) no se llama SMTP con el recibo; el PDF sigue generándose y guardándose.
+    # False = en el listado (PATCH .../pagos-reportados/{id}/estado → aprobado) no se llama SMTP con el recibo.
+    # POST .../aprobar (detalle, aprobación final) siempre intenta enviar recibo si Cobros email está activo.
     COBROS_APROBACION_ENVIAR_RECIBO_POR_CORREO: bool = Field(
         default=True,
         description=(
-            "Si False: omite el envío por correo del recibo PDF al aprobar un pago reportado (solo esos endpoints). "
-            "Útil para medir latencia de generación PDF/BD sin SMTP. POST enviar-recibo y correos de rechazo no cambian."
+            "Si False: omite solo el envío por correo del recibo al aprobar vía PATCH /pagos-reportados/{id}/estado "
+            "(UI listado). El PDF se genera y guarda igual. POST /aprobar, enviar-recibo y rechazos no usan este flag."
         ),
     )
 
