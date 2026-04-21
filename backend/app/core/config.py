@@ -175,7 +175,15 @@ class Settings(BaseSettings):
             "Poner False para exigir OTP tambien en cobros publico."
         ),
     )
-    
+    # False = al aprobar (POST /aprobar o PATCH estado→aprobado) no se llama SMTP con el recibo; el PDF sigue generándose y guardándose.
+    COBROS_APROBACION_ENVIAR_RECIBO_POR_CORREO: bool = Field(
+        default=True,
+        description=(
+            "Si False: omite el envío por correo del recibo PDF al aprobar un pago reportado (solo esos endpoints). "
+            "Útil para medir latencia de generación PDF/BD sin SMTP. POST enviar-recibo y correos de rechazo no cambian."
+        ),
+    )
+
     @validator('SECRET_KEY')
     def validate_secret_key(cls, v):
         """Validar que SECRET_KEY tenga longitud y complejidad adecuadas"""
