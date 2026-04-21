@@ -228,6 +228,9 @@ function App() {
   const location = useLocation()
 
   const { isAuthenticated, isLoading, initializeAuth, user } = useSimpleAuth()
+  const loginSearch = new URLSearchParams(location.search || '')
+  const staffLoginIntent =
+    loginSearch.get('personal') === '1' || loginSearch.get('staff') === '1'
 
   useEffect(() => {
     if (_authInitDone) return
@@ -301,6 +304,8 @@ function App() {
               element={
                 isAuthenticated ? (
                   <Navigate to={defaultHomePathForRol(user?.rol)} replace />
+                ) : !staffLoginIntent ? (
+                  <Navigate to="/rapicredit-cobros" replace />
                 ) : (
                   <motion.div
                     key="login"
