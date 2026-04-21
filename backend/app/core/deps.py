@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 import logging
 from typing import Optional
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
@@ -88,6 +88,7 @@ def staff_user_from_access_token_payload(db: Session, payload: dict) -> UserResp
 
 
 def get_current_user(
+    request: Request,
     credentials: HTTPAuthorizationCredentials = Depends(security),
     db: Session = Depends(get_db),
 ) -> UserResponse:
@@ -110,7 +111,12 @@ def get_current_user(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Use el token solo en el portal Finiquito",
         )
-    return staff_user_from_access_token_payload(db, payload)
+    current = staff_user_from_access_token_payload(db, payload)
+    try:
+        request.state.user = current
+    except Exception:
+        logger.debug("No se pudo adjuntar user a request.state", exc_info=True)
+    return current
 
 
 def require_admin(

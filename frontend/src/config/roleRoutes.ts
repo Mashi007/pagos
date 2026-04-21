@@ -48,8 +48,7 @@ function matchesDelegatedPath(pathname: string, prefixes: string[]): boolean {
   return prefixes.some(
     prefix =>
       p === prefix ||
-      p.startsWith(prefix + '/') ||
-      (prefix !== '/' && p.startsWith(prefix))
+      p.startsWith(prefix + '/')
   )
 }
 

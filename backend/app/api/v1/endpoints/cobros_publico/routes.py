@@ -44,7 +44,6 @@ from app.services.cobros import cobros_publico_reporte_service as cpr
 from app.core.email import cobros_recibo_attachments_or_oversize_note, send_email
 from app.services.notificaciones_exclusion_desistimiento import cliente_bloqueado_por_desistimiento
 from app.core.security import decode_token, create_recibo_infopagos_token, create_cobros_public_token
-from app.core.config import settings
 from app.core.email_config_holder import get_email_activo_servicio
 from app.utils.cliente_emails import emails_destino_desde_objeto, unir_destinatarios_log
 from app.api.v1.endpoints.cobros.routes import reportado_falla_validadores_cobros
@@ -57,8 +56,7 @@ router = APIRouter(dependencies=[])
 class ValidarCedulaResponse(BaseModel):
     ok: bool
     nombre: Optional[str] = None
-    """Correo completo para que el cliente lo compruebe en pantalla (no enmascarado)."""
-    email: Optional[str] = None
+    """Correo enmascarado para validación visual sin exponer PII completa."""
     email_enmascarado: Optional[str] = None
     error: Optional[str] = None
     """True si esta cédula puede reportar pagos en Bolívares (Bs) en cobros/infopagos."""
@@ -122,11 +120,17 @@ class VerificarCodigoReporteResponse(BaseModel):
 
 
 def _cobros_public_otp_required(origen: Optional[str]) -> bool:
-    if settings.COBROS_PUBLICO_OTP_DISABLED:
-        return False
     if (origen or "").strip().lower() == "infopagos":
         return False
     return True
+
+
+def _token_bearer_only(request: Request) -> Optional[str]:
+    auth = (request.headers.get("Authorization") or "").strip()
+    if not auth.lower().startswith("bearer "):
+        return None
+    tok = auth[7:].strip()
+    return tok or None
 
 
 def _validar_bearer_cobros_public(request: Request, cedula_lookup: str) -> Optional[str]:
@@ -352,7 +356,10 @@ def cobros_public_verificar_codigo_reporte(
         )
     ).scalars().first()
     if not fila:
-        return VerificarCodigoReporteResponse(ok=False, error="Codigo invalido o expirado. Solicite uno nuevo.")
+        return VerificarCodigoReporteResponse(
+            ok=False,
+            error="No fue posible validar los datos. Verifique e intente nuevamente.",
+        )
 
     fila.usado = True
     db.commit()
@@ -361,12 +368,18 @@ def cobros_public_verificar_codigo_reporte(
         select(Cliente).where(expr_cedula_normalizada_para_comparar(Cliente.cedula) == cedula_lookup)
     ).scalars().first()
     if not cliente:
-        return VerificarCodigoReporteResponse(ok=False, error="Cliente no encontrado.")
+        return VerificarCodigoReporteResponse(
+            ok=False,
+            error="No fue posible validar los datos. Verifique e intente nuevamente.",
+        )
 
     prestamos_aprob = cpr.prestamos_aprobados_del_cliente(db, cliente.id)
     err_pres = cpr.error_si_no_puede_reportar_en_web(prestamos_aprob)
     if err_pres:
-        return VerificarCodigoReporteResponse(ok=False, error=err_pres)
+        return VerificarCodigoReporteResponse(
+            ok=False,
+            error="No fue posible validar los datos. Verifique e intente nuevamente.",
+        )
 
     nombre = (cliente.nombres or "").strip()
     email_raw = ((fila.email or "").strip() or (cliente.email or "").strip())
@@ -424,14 +437,12 @@ def validar_cedula_publico(
         select(Cliente).where(expr_cedula_normalizada_para_comparar(Cliente.cedula) == cedula_lookup)
     ).scalars().first()
     if not cliente:
-        return ValidarCedulaResponse(
-            ok=False, error="La cédula ingresada no se encuentra registrada en nuestro sistema."
-        )
+        return ValidarCedulaResponse(ok=False, error="No fue posible validar los datos. Verifique e intente nuevamente.")
 
     prestamos_aprob = cpr.prestamos_aprobados_del_cliente(db, cliente.id)
     err_pres = cpr.error_si_no_puede_reportar_en_web(prestamos_aprob)
     if err_pres:
-        return ValidarCedulaResponse(ok=False, error=err_pres)
+        return ValidarCedulaResponse(ok=False, error="No fue posible validar los datos. Verifique e intente nuevamente.")
 
     puede_bs = cedula_autorizada_para_bs(db, cedula_lookup)
     nombre = (cliente.nombres or "").strip()
@@ -439,7 +450,6 @@ def validar_cedula_publico(
     return ValidarCedulaResponse(
         ok=True,
         nombre=nombre,
-        email=email or None,
         email_enmascarado=_mask_email(email),
         puede_reportar_bs=puede_bs,
     )
@@ -663,7 +673,6 @@ async def enviar_reporte_publico(
 def get_recibo_publico(
     request: Request,
     pago_id: int = Query(..., description="ID del pago reportado"),
-    token: Optional[str] = Query(None, description="Token en query (deprecated: usar Authorization header)"),
     db: Session = Depends(get_db),
 ):
     """
@@ -671,15 +680,14 @@ def get_recibo_publico(
 
     Publico, sin auth; la seguridad es el token (cedula + expiracion).
 
-    Token puede venir en:
+    Token debe venir en:
     - Header: Authorization: Bearer <token>
-    - Query param: ?token=<token> (deprecated; aún soportado por compatibilidad)
     """
-    token_to_use = cpr.token_bearer_o_query(request, token)
+    token_to_use = _token_bearer_only(request)
     if not token_to_use:
         raise HTTPException(
             status_code=401,
-            detail="Token requerido (Authorization header o query param ?token=...).",
+            detail="Token requerido en Authorization header.",
         )
 
     payload = decode_token(token_to_use)
@@ -939,22 +947,20 @@ async def enviar_reporte_infopagos(
 def get_recibo_infopagos(
     request: Request,
     pago_id: int = Query(..., description="ID del pago reportado"),
-    token: Optional[str] = Query(None, description="Token de descarga (deprecated: usar Authorization header)"),
     db: Session = Depends(get_db),
 ):
     """
     Devuelve el PDF del recibo del pago registrado por Infopagos. Requiere el token devuelto
     en la respuesta de enviar-reporte (válido 2 horas) para que el colaborador descargue el recibo.
 
-    Token puede venir en:
+    Token debe venir en:
     - Header: Authorization: Bearer <token>
-    - Query param: ?token=<token> (deprecated; aún soportado por compatibilidad)
     """
-    token_to_use = cpr.token_bearer_o_query(request, token)
+    token_to_use = _token_bearer_only(request)
     if not token_to_use:
         raise HTTPException(
             status_code=401,
-            detail="Token requerido (Authorization header o query param ?token=...).",
+            detail="Token requerido en Authorization header.",
         )
 
     payload = decode_token(token_to_use)

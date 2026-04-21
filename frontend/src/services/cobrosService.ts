@@ -110,10 +110,7 @@ export interface ValidarCedulaResponse {
 
   nombre?: string
 
-  /** Correo completo para que el cliente lo compruebe (no enmascarado). */
-
-  email?: string
-
+  /** Correo enmascarado para comprobación visual sin exponer PII completa. */
   email_enmascarado?: string
 
   error?: string
@@ -373,11 +370,8 @@ export async function enviarReportePublico(
     } catch {
       return {
         ok: false,
-
-        error: (
-          text ||
-          `Error ${res.status}. Intente más tarde o contacte por WhatsApp 424-4579934.`
-        ).slice(0, 200),
+        error:
+          'No se pudo procesar la respuesta del servidor. Intente nuevamente en unos minutos.',
       }
     }
 
@@ -446,11 +440,8 @@ export async function enviarReporteInfopagos(
     } catch {
       return {
         ok: false,
-
-        error: (text || `Error ${res.status}. Intente más tarde.`).slice(
-          0,
-          200
-        ),
+        error:
+          'No se pudo procesar la respuesta del servidor. Intente nuevamente en unos minutos.',
       }
     }
 
@@ -515,10 +506,13 @@ export async function getReciboInfopagos(
   token: string,
   pagoId: number
 ): Promise<Blob> {
-  const url = `${BASE_PUBLIC}/infopagos/recibo?token=${encodeURIComponent(token)}&pago_id=${pagoId}`
+  const url = `${BASE_PUBLIC}/infopagos/recibo?pago_id=${pagoId}`
 
   try {
-    const res = await fetchWithTimeout(url, { credentials: 'same-origin' })
+    const res = await fetchWithTimeout(url, {
+      credentials: 'same-origin',
+      headers: { Authorization: `Bearer ${token}` },
+    })
 
     if (!res.ok)
       throw new Error(

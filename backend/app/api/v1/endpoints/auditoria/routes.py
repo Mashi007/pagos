@@ -163,6 +163,7 @@ def listar_auditoria(
     ordenar_por: str = Query("fecha"),
     orden: str = Query("desc"),
     db: Session = Depends(get_db),
+    _admin: UserResponse = Depends(require_admin),
 ):
     """Lista registros de auditoría con filtros y paginación. Datos desde BD."""
     q = select(Auditoria)
@@ -205,7 +206,10 @@ def listar_auditoria(
 
 
 @router.get("/stats", response_model=AuditoriaStats)
-def obtener_estadisticas(db: Session = Depends(get_db)):
+def obtener_estadisticas(
+    db: Session = Depends(get_db),
+    _admin: UserResponse = Depends(require_admin),
+):
     """Estadísticas de auditoría desde BD (totales, por módulo, por usuario, hoy/semana/mes)."""
     hoy = datetime.now(timezone.utc).replace(tzinfo=None)
     inicio_semana = hoy - timedelta(days=hoy.weekday())
@@ -244,6 +248,7 @@ def exportar_auditoria(
     fecha_desde: Optional[str] = Query(None),
     fecha_hasta: Optional[str] = Query(None),
     db: Session = Depends(get_db),
+    _admin: UserResponse = Depends(require_admin),
 ):
     """Exporta auditoría a Excel. Datos desde BD."""
     try:
@@ -1263,7 +1268,11 @@ def listar_control15_pagos_sin_aplicacion_cuotas_por_prestamo(
 
 
 @router.get("/{auditoria_id}", response_model=AuditoriaItem)
-def obtener_auditoria(auditoria_id: int, db: Session = Depends(get_db)):
+def obtener_auditoria(
+    auditoria_id: int,
+    db: Session = Depends(get_db),
+    _admin: UserResponse = Depends(require_admin),
+):
     """Obtiene un registro de auditoría por ID desde BD."""
     row = db.get(Auditoria, auditoria_id)
     if not row:
@@ -1275,7 +1284,7 @@ def obtener_auditoria(auditoria_id: int, db: Session = Depends(get_db)):
 def registrar_evento(
     body: RegistrarAuditoriaBody,
     db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
+    current_user: UserResponse = Depends(require_admin),
 ):
     """Registra un evento de auditoría en BD. usuario_id se toma del usuario autenticado."""
     now = datetime.now(timezone.utc)

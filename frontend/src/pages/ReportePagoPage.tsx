@@ -45,6 +45,8 @@ import {
   enviarReportePublico,
   enviarReporteInfopagos,
   getReciboInfopagos,
+  solicitarCodigoReportePublico,
+  verificarCodigoReportePublico,
 } from '../services/cobrosService'
 
 import { PUBLIC_FLOW_SESSION_KEY } from '../config/env'
@@ -244,21 +246,28 @@ function validarFechaPago(fecha: string): { valido: boolean; error?: string } {
     }
   }
 
-  const hoy = new Date()
-
-  hoy.setHours(0, 0, 0, 0)
-
-  const d = new Date(fecha)
-
-  if (Number.isNaN(d.getTime()))
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(fecha.trim())
+  if (!m)
     return {
       valido: false,
       error: 'Fecha no válida. Use el calendario para elegir la fecha.',
     }
 
-  d.setHours(0, 0, 0, 0)
+  const y = Number(m[1])
+  const mo = Number(m[2])
+  const d = Number(m[3])
+  if (!fechaYmdCalendarioValida(y, mo, d)) {
+    return {
+      valido: false,
+      error: 'Fecha no válida. Use el calendario para elegir la fecha.',
+    }
+  }
 
-  if (d > hoy)
+  const hoyCaracas = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Caracas',
+  }).format(new Date())
+
+  if (fecha > hoyCaracas)
     return { valido: false, error: 'La fecha de pago no puede ser futura.' }
 
   return { valido: true }
@@ -608,6 +617,8 @@ const INSTITUCIONES = [
 const WHATSAPP_LINK = 'https://wa.me/584244579934'
 
 const NOTIFICATION_DURATION_MS = 10000
+const MENSAJE_VALIDACION_GENERICO =
+  'No fue posible validar los datos. Verifique e intente nuevamente.'
 
 type NotificationType = 'error' | 'success'
 
@@ -718,6 +729,9 @@ export default function ReportePagoPage({
   const [nombre, setNombre] = useState('')
 
   const [emailParaVerificacion, setEmailParaVerificacion] = useState('')
+  const [accessTokenPublico, setAccessTokenPublico] = useState<string | null>(
+    null
+  )
 
   const [institucion, setInstitucion] = useState('')
 
@@ -817,6 +831,7 @@ export default function ReportePagoPage({
     setNombre('')
 
     setEmailParaVerificacion('')
+    setAccessTokenPublico(null)
 
     setInstitucion('')
 
@@ -861,18 +876,69 @@ export default function ReportePagoPage({
     }
 
     const cedulaEnviar = v.valorParaEnviar!
+    setAccessTokenPublico(null)
 
     setLoading(true)
 
     try {
+      let accessToken = ''
+      let emailMaskOtp: string | null = null
+
+      if (!isInfopagos) {
+        const emailInput = (
+          window.prompt(
+            'Ingrese el correo registrado para recibir su código de verificación:'
+          ) || ''
+        )
+          .trim()
+          .toLowerCase()
+        if (!emailInput || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(emailInput)) {
+          showNotification('error', 'Ingrese un correo electrónico válido.')
+          return
+        }
+
+        const reqCodigo = await solicitarCodigoReportePublico({
+          cedula: cedulaEnviar,
+          email: emailInput,
+        })
+        if (!reqCodigo.ok) {
+          showNotification('error', reqCodigo.error || MENSAJE_VALIDACION_GENERICO)
+          return
+        }
+
+        const codigo = (
+          window.prompt(
+            'Ingrese el código de 6 dígitos enviado al correo registrado:'
+          ) || ''
+        ).trim()
+        if (!/^\d{6}$/.test(codigo)) {
+          showNotification('error', 'Código inválido. Debe contener 6 dígitos.')
+          return
+        }
+
+        const verif = await verificarCodigoReportePublico({
+          cedula: cedulaEnviar,
+          email: emailInput,
+          codigo,
+        })
+        if (!verif.ok || !verif.access_token) {
+          showNotification('error', verif.error || MENSAJE_VALIDACION_GENERICO)
+          return
+        }
+        accessToken = verif.access_token
+        emailMaskOtp = verif.email_enmascarado ?? null
+        setAccessTokenPublico(accessToken)
+      }
+
       const res = await validarCedulaPublico(
         cedulaEnviar,
-
-        isInfopagos ? { origen: 'infopagos' } : undefined
+        isInfopagos
+          ? { origen: 'infopagos' }
+          : { accessToken }
       )
 
       if (!res.ok) {
-        showNotification('error', res.error || 'Cédula no válida.')
+        showNotification('error', res.error || MENSAJE_VALIDACION_GENERICO)
 
         return
       }
@@ -888,7 +954,7 @@ export default function ReportePagoPage({
 
       setNombre(res.nombre || '')
 
-      setEmailParaVerificacion(res.email ?? res.email_enmascarado ?? '')
+      setEmailParaVerificacion(emailMaskOtp || res.email_enmascarado || '')
 
       setStep(isInfopagos ? 2 : 3)
     } catch (e: any) {
@@ -1034,7 +1100,17 @@ export default function ReportePagoPage({
 
         setStep(8)
       } else {
-        const res = await enviarReportePublico(form)
+        if (!accessTokenPublico) {
+          showNotification(
+            'error',
+            'Su verificación expiró. Vuelva a validar la cédula para continuar.'
+          )
+          return
+        }
+
+        const res = await enviarReportePublico(form, {
+          accessToken: accessTokenPublico,
+        })
 
         if (!res.ok) {
           showNotification('error', res.error || 'Error al enviar.')

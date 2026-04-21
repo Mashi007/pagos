@@ -16,6 +16,8 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
 
 from app.core.database import SessionLocal
+from app.core.security import decode_token
+from app.models.user import User
 from app.models.auditoria import Auditoria
 from app.middleware.audit_helpers import (
     audit_entity_from_path,
@@ -26,29 +28,22 @@ from app.middleware.audit_helpers import (
 
 logger = logging.getLogger(__name__)
 
-_CACHED_FALLBACK_UID: Optional[int] = None
-
-
-def _get_fallback_usuario_id(db) -> int:
-    """
-    Devuelve un usuario_id valido que exista en la tabla usuarios.
-    Cachea el resultado en memoria para no consultar en cada request.
-    """
-    global _CACHED_FALLBACK_UID
-    if _CACHED_FALLBACK_UID is not None:
-        return _CACHED_FALLBACK_UID
-
-    from sqlalchemy import text
-
-    row = db.execute(
-        text(
-            "SELECT id FROM public.usuarios "
-            "WHERE is_active = true ORDER BY id LIMIT 1"
-        )
-    ).first()
-    uid = row[0] if row else 1
-    _CACHED_FALLBACK_UID = uid
-    return uid
+def _usuario_id_desde_bearer(request: Request, db) -> Optional[int]:
+    auth = (request.headers.get("authorization") or "").strip()
+    if not auth.lower().startswith("bearer "):
+        return None
+    token = auth[7:].strip()
+    payload = decode_token(token)
+    if not payload or payload.get("type") != "access" or payload.get("scope") == "finiquito":
+        return None
+    sub = payload.get("sub") or payload.get("email")
+    if not sub:
+        return None
+    email = str(sub).strip().lower()
+    if "@" not in email:
+        email = f"{email}@admin.local"
+    u = db.query(User).filter(User.email == email, User.is_active.is_(True)).first()
+    return int(u.id) if u else None
 
 
 def _resolve_usuario_id(request: Request, db) -> int:
@@ -60,7 +55,10 @@ def _resolve_usuario_id(request: Request, db) -> int:
     except Exception:
         pass
     if not usuario_id:
-        usuario_id = _get_fallback_usuario_id(db)
+        usuario_id = _usuario_id_desde_bearer(request, db)
+    if not usuario_id:
+        # Usuario de sistema para eventos sin sesión de personal (p.ej. endpoints públicos).
+        usuario_id = 1
     return usuario_id
 
 

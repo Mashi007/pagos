@@ -63,6 +63,7 @@ from app.core.deps import (
     ComprobanteImagenReader,
     get_comprobante_imagen_reader,
     get_current_user,
+    require_admin,
 )
 
 from app.core.documento import (
@@ -6322,8 +6323,11 @@ def diagnostico_pago(pago_id: int, db: Session = Depends(get_db)):
 
 @router.delete("/forzar-eliminar/{pago_id}", response_model=dict)
 @router.post("/forzar-eliminar/{pago_id}", response_model=dict)
-@router.get("/forzar-eliminar/{pago_id}", response_model=dict)
-def forzar_eliminar_pago(pago_id: int, db: Session = Depends(get_db)):
+def forzar_eliminar_pago(
+    pago_id: int,
+    db: Session = Depends(get_db),
+    _: UserResponse = Depends(require_admin),
+):
     """Eliminacion forzada: limpia TODAS las dependencias y borra el pago con SQL directo.
 
     Si el pago tenia `prestamo_id`, tras borrarlo se reaplica la cascada del credito
@@ -6401,7 +6405,10 @@ def forzar_eliminar_pago(pago_id: int, db: Session = Depends(get_db)):
     except Exception as e:
         db.rollback()
         log.error("Error forzar-eliminar pago %s: %s", pago_id, e)
-        raise HTTPException(status_code=500, detail=f"Error: {str(e)[:300]}") from e
+        raise HTTPException(
+            status_code=500,
+            detail="Error interno al eliminar el pago. Intente nuevamente o contacte soporte.",
+        ) from e
 
 
 
