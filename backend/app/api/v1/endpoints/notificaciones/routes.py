@@ -79,23 +79,73 @@ def _solo_fecha_iso(val) -> Optional[str]:
     return None
 
 
-def _where_cache_diferencia_distinta_de_cero(dialect_name: str):
+def _parse_fecha_q_desde_cache_iso(raw: object) -> Optional[date]:
+    """Interpreta `fecha_entrega_column_q` del JSON de caché (prefijo ISO YYYY-MM-DD)."""
+    if raw is None:
+        return None
+    s = str(raw).strip()
+    if len(s) < 10:
+        return None
+    head = s[:10]
+    if head[4:5] != "-" or head[7:8] != "-":
+        return None
+    try:
+        return date.fromisoformat(head)
+    except ValueError:
+        return None
+
+
+def _fecha_aprobacion_como_date(val: object) -> Optional[date]:
+    if val is None:
+        return None
+    if isinstance(val, datetime):
+        return val.date()
+    if isinstance(val, date):
+        return val
+    return None
+
+
+def _diferencia_dias_viva(cache: Optional[dict], fecha_aprobacion_val: object) -> Optional[int]:
     """
-    Filtro SQL portable: el acceso ORM cache['diferencia_dias'].astext puede fallar en runtime
-    según dialecto/columna JSON; usamos SQL explícito en PostgreSQL y SQLite.
+    Días calendario (Q − aprobación BD) con la **fecha de aprobación actual** en BD
+    y la Q leída del caché; evita mostrar un `diferencia_dias` obsoleto respecto a las columnas de fecha.
+    """
+    if not isinstance(cache, dict):
+        return None
+    fq = _parse_fecha_q_desde_cache_iso(cache.get("fecha_entrega_column_q"))
+    fa = _fecha_aprobacion_como_date(fecha_aprobacion_val)
+    if fq is None or fa is None:
+        return None
+    return int((fq - fa).days)
+
+
+def _where_q_cache_vs_aprobacion_distinta_de_cero(dialect_name: str):
+    """
+    Filtro alineado al cálculo vivo: diferencia de días entre la Q en caché (ISO) y fecha_aprobacion en BD.
     """
     if dialect_name == "postgresql":
         return text(
             "prestamos.fecha_entrega_q_aprobacion_cache IS NOT NULL "
-            "AND (prestamos.fecha_entrega_q_aprobacion_cache->>'diferencia_dias') IS NOT NULL "
-            "AND (prestamos.fecha_entrega_q_aprobacion_cache->>'diferencia_dias') <> '0'"
+            "AND prestamos.fecha_aprobacion IS NOT NULL "
+            "AND (prestamos.fecha_entrega_q_aprobacion_cache->>'fecha_entrega_column_q') IS NOT NULL "
+            "AND length(trim((prestamos.fecha_entrega_q_aprobacion_cache->>'fecha_entrega_column_q'))) >= 10 "
+            "AND ("
+            "  substr(trim((prestamos.fecha_entrega_q_aprobacion_cache->>'fecha_entrega_column_q')), 1, 10)::date "
+            "  - CAST(prestamos.fecha_aprobacion AS date)"
+            ") <> 0"
         )
     return text(
         "prestamos.fecha_entrega_q_aprobacion_cache IS NOT NULL "
-        "AND COALESCE("
-        "CAST(json_extract(prestamos.fecha_entrega_q_aprobacion_cache, '$.diferencia_dias') AS INTEGER), "
-        "0"
-        ") <> 0"
+        "AND prestamos.fecha_aprobacion IS NOT NULL "
+        "AND json_extract(prestamos.fecha_entrega_q_aprobacion_cache, '$.fecha_entrega_column_q') IS NOT NULL "
+        "AND length(trim(json_extract(prestamos.fecha_entrega_q_aprobacion_cache, '$.fecha_entrega_column_q'))) >= 10 "
+        "AND ("
+        "  cast("
+        "    ("
+        "      julianday(date(substr(trim(json_extract(prestamos.fecha_entrega_q_aprobacion_cache, '$.fecha_entrega_column_q')), 1, 10))) "
+        "      - julianday(date(prestamos.fecha_aprobacion))"
+        "    ) as integer"
+        "  ) <> 0"
     )
 
 
@@ -107,12 +157,15 @@ def get_fecha_q_auditoria_total(
     cedula_q: Optional[str] = Query(None, max_length=64),
     solo_con_diferencia: bool = Query(
         False,
-        description="Si true, devuelve solo filas con diferencia_dias != 0 en caché Q vs aprobación.",
+        description=(
+            "Si true, solo préstamos donde la fecha Q en caché (ISO) difiere en días de la fecha_aprobacion **actual** en BD."
+        ),
     ),
 ):
     """
     Auditoría total de columna Q vs fecha_aprobacion en TODO el universo de préstamos (no solo listas de mora).
     Lee la caché `prestamos.fecha_entrega_q_aprobacion_cache` y devuelve trazabilidad por préstamo.
+    `diferencia_dias` se recalcula en cada lectura (Q en caché vs aprobación en BD), no se reutiliza el valor congelado del JSON.
     """
     stmt = select(Prestamo).order_by(Prestamo.id.desc())
     count_stmt = select(func.count(Prestamo.id))
@@ -124,7 +177,7 @@ def get_fecha_q_auditoria_total(
 
     if solo_con_diferencia:
         dialect = (db.get_bind().dialect.name or "").lower()
-        diff_clause = _where_cache_diferencia_distinta_de_cero(dialect)
+        diff_clause = _where_q_cache_vs_aprobacion_distinta_de_cero(dialect)
         stmt = stmt.where(diff_clause)
         count_stmt = count_stmt.where(diff_clause)
 
@@ -150,7 +203,8 @@ def get_fecha_q_auditoria_total(
                 "q_cache": cache,
                 "q_fecha_iso": _cache_field(cache, "fecha_entrega_column_q"),
                 "q_fecha_raw": _cache_field(cache, "fecha_entrega_column_q_raw"),
-                "diferencia_dias": _cache_field(cache, "diferencia_dias"),
+                "diferencia_dias": _diferencia_dias_viva(cache, getattr(p, "fecha_aprobacion", None)),
+                "diferencia_dias_snapshot_cache": _cache_field(cache, "diferencia_dias"),
                 "puede_aplicar": _cache_field(cache, "puede_aplicar"),
                 "correccion_desde_q_anterior_bd": _cache_field(cache, "correccion_desde_q_anterior_bd"),
                 "q_cache_at": p.fecha_entrega_q_aprobacion_cache_at.isoformat()

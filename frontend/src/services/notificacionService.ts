@@ -266,7 +266,10 @@ export interface FechaQAuditoriaTotalItem {
   q_cache?: Record<string, unknown> | null
   q_fecha_iso?: string | null
   q_fecha_raw?: unknown
+  /** Q (caché) − aprobación BD al momento de la respuesta (recalculado). */
   diferencia_dias?: number | null
+  /** Valor guardado en JSON al cerrar caché (solo auditoría; puede desfasarse si se corrigió BD después). */
+  diferencia_dias_snapshot_cache?: number | null
   puede_aplicar?: boolean | null
   correccion_desde_q_anterior_bd?: boolean | null
   q_cache_at?: string | null
