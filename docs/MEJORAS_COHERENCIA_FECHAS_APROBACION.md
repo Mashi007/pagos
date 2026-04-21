@@ -1,32 +1,33 @@
-# Mejoras de coherencia: fecha de aprobación y fecha de requerimiento
+# Mejoras de coherencia: fechas en préstamos
 
-## Regla
+## Regla única vigente
 
-- **Fecha de aprobación** debe ser **igual o posterior** a la **fecha de requerimiento**.
-- La **tabla de amortización** se calcula **únicamente con la fecha de aprobación** (no con `fecha_base_calculo` ni `fecha_requerimiento`).
+- `fecha_aprobacion` es la fecha fuente para aprobación/desembolso.
+- `fecha_base_calculo` se copia automáticamente desde `date(fecha_aprobacion)`.
+- `fecha_requerimiento` se calcula automáticamente como `date(fecha_aprobacion) - 1 día`.
+- No se permite edición manual aislada de `fecha_base_calculo` ni de `fecha_requerimiento`.
 
-## Cambios realizados
+## Aplicación en backend
 
-### 1. Revisión Manual (`revision_manual.py`)
+- `PUT /prestamos/{id}`:
+  - bloquea `fecha_base_calculo` sin `fecha_aprobacion` (400).
+  - bloquea edición manual de `fecha_requerimiento` (400).
+  - al recibir `fecha_aprobacion`, deriva `fecha_base_calculo` y `fecha_requerimiento`.
+- `revision_manual`:
+  - ignora `fecha_requerimiento` manual.
+  - al cambiar `fecha_aprobacion`, recalcula `fecha_base_calculo` y `fecha_requerimiento`.
+- Carga masiva (Drive/Excel):
+  - usa `fecha_aprobacion` como dato clave.
+  - deriva automáticamente `fecha_requerimiento`.
 
-- Tras aplicar los cambios de `update_data` (incluidos `fecha_requerimiento` y `fecha_aprobacion`), se valida la coherencia antes de hacer `commit`.
-- Si `fecha_aprobacion < fecha_requerimiento` se devuelve **400** con mensaje claro.
+## Aplicación en frontend
 
-### 2. PUT préstamo (`prestamos.py`)
+- Formularios y servicios de préstamos no dependen de validaciones `aprobación >= requerimiento`.
+- `fecha_requerimiento` se muestra como derivada y no como dato manual en los flujos principales.
+- Validación de Excel prioriza `fecha_aprobacion`; `fecha_requerimiento` se autocompleta desde esa fecha.
 
-- El endpoint `PUT /prestamos/{id}` aplica `payload.fecha_requerimiento` cuando viene en el body.
-- Antes de `commit`, si el préstamo tiene `fecha_aprobacion` y `fecha_requerimiento`, se comprueba que la fecha de requerimiento no sea **posterior** a la fecha de aprobación.
-- Si no se cumple, se devuelve **400**.
+## Nota operativa de verificación
 
-### 3. Modales de fecha de aprobación (frontend)
-
-- **AsignarFechaAprobacionModal**: valor por defecto de la fecha de aprobación:
-  - Si ya existe `fecha_aprobacion` → se usa.
-  - Si no, y existe `fecha_requerimiento` → se usa (coherente por defecto).
-  - Si no → hoy.
-- **AprobarPrestamoManualModal**: valor por defecto = `fecha_requerimiento` si existe, si no hoy.
-
-## Mejoras opcionales (futuras)
-
-- **Script para datos legacy**: si en BD existieran préstamos con `fecha_aprobacion < fecha_requerimiento`, un script (o job) podría corregirlos (por ejemplo igualando `fecha_aprobacion` a `fecha_requerimiento` o avisando para corrección manual). En la verificación actual todos los préstamos tenían `fecha_aprobacion` coherente.
-- **Tests**: añadir tests unitarios/integración para la validación de coherencia en Revisión Manual y en PUT préstamo.
+- Consulta de control recomendada:
+  - `date(fecha_aprobacion) = fecha_base_calculo`
+  - `fecha_requerimiento = date(fecha_aprobacion) - 1 día`

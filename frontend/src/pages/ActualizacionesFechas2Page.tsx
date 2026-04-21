@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Calendar, Edit2, Loader2, Save, Search, Trash2, X } from 'lucide-react'
@@ -33,7 +34,7 @@ function isoDateOnly(s: string | null | undefined): string {
 
 export default function ActualizacionesFechas2Page() {
   const qc = useQueryClient()
-  const [tipo, setTipo] = useState<TipoFiltroFechas2>('fecha_requerimiento')
+  const [tipo, setTipo] = useState<TipoFiltroFechas2>('fecha_aprobacion')
   const [fechaInput, setFechaInput] = useState('')
   const [appliedTipo, setAppliedTipo] = useState<TipoFiltroFechas2 | null>(null)
   const [appliedFecha, setAppliedFecha] = useState<string | null>(null)
@@ -52,9 +53,7 @@ export default function ActualizacionesFechas2Page() {
 
   const [editingId, setEditingId] = useState<number | null>(null)
   const [draft, setDraft] = useState<{
-    fecha_requerimiento: string
     fecha_aprobacion: string
-    fecha_base_calculo: string
   } | null>(null)
   const [savingId, setSavingId] = useState<number | null>(null)
 
@@ -75,9 +74,7 @@ export default function ActualizacionesFechas2Page() {
   const startEdit = useCallback((row: PrestamoFechas2Item) => {
     setEditingId(row.id)
     setDraft({
-      fecha_requerimiento: isoDateOnly(row.fecha_requerimiento),
       fecha_aprobacion: isoDateOnly(row.fecha_aprobacion),
-      fecha_base_calculo: isoDateOnly(row.fecha_base_calculo),
     })
   }, [])
 
@@ -92,16 +89,9 @@ export default function ActualizacionesFechas2Page() {
       setSavingId(row.id)
       try {
         const body: Record<string, unknown> = {}
-        const reqPrev = isoDateOnly(row.fecha_requerimiento)
-        if (draft.fecha_requerimiento && draft.fecha_requerimiento !== reqPrev) {
-          body.fecha_requerimiento = draft.fecha_requerimiento
-        }
         const prevApDay =
           isoDateOnly(row.fecha_aprobacion) || isoDateOnly(row.fecha_base_calculo) || ''
         let approvalDay = (draft.fecha_aprobacion || '').trim()
-        if (!approvalDay && (draft.fecha_base_calculo || '').trim()) {
-          approvalDay = (draft.fecha_base_calculo || '').trim()
-        }
         if (approvalDay && approvalDay !== prevApDay) {
           body.fecha_aprobacion = `${approvalDay}T00:00:00`
         }
@@ -169,11 +159,16 @@ export default function ActualizacionesFechas2Page() {
     [],
   )
 
+  const tiposPermitidos = useMemo<TipoFiltroFechas2[]>(
+    () => ['fecha_aprobacion'],
+    [],
+  )
+
   return (
     <div className="mx-auto max-w-6xl space-y-6 p-4 md:p-6">
       <ModulePageHeader
-        title="Fechas 2"
-        description="Filtro por día calendario sobre registro, aprobación, requerimiento o base de cálculo. Listado mínimo (cédula, ID y fechas). Al guardar se usa el mismo PUT que revisión manual y, si aplica, recálculo de vencimientos de cuotas."
+        title="Actualización Fecha de Aprobación"
+        description="Módulo operativo para desfase de fecha de aprobación en préstamos. Requerimiento y base de cálculo son automáticas en servidor (derivadas desde aprobación). Para investigación profunda Drive (columna Q vs sistema), use Notificaciones/Fecha."
         icon={Calendar}
       />
 
@@ -193,7 +188,7 @@ export default function ActualizacionesFechas2Page() {
                   <SelectValue placeholder="Campo" />
                 </SelectTrigger>
                 <SelectContent>
-                  {(Object.keys(tipoLabel) as TipoFiltroFechas2[]).map(k => (
+                  {tiposPermitidos.map(k => (
                     <SelectItem key={k} value={k}>
                       {tipoLabel[k]}
                     </SelectItem>
@@ -213,6 +208,11 @@ export default function ActualizacionesFechas2Page() {
           <Button type="button" onClick={() => void buscar()} className="shrink-0 gap-2">
             <Search className="h-4 w-4" aria-hidden />
             Buscar
+          </Button>
+          <Button asChild type="button" variant="outline" className="shrink-0">
+            <Link to="/pagos/notificaciones/fecha-auditoria-total">
+              Investigación profunda Q vs sistema
+            </Link>
           </Button>
         </CardContent>
       </Card>
@@ -245,9 +245,9 @@ export default function ActualizacionesFechas2Page() {
                 <tr className="border-b text-left text-muted-foreground">
                   <th className="py-2 pr-2 font-medium">ID</th>
                   <th className="py-2 pr-2 font-medium">Cédula</th>
-                  <th className="py-2 pr-2 font-medium">Req.</th>
                   <th className="py-2 pr-2 font-medium">Aprob.</th>
-                  <th className="py-2 pr-2 font-medium">Base cálculo</th>
+                  <th className="py-2 pr-2 font-medium">Req. (auto)</th>
+                  <th className="py-2 pr-2 font-medium">Base cálculo (auto)</th>
                   <th className="py-2 pr-2 font-medium text-right">Acciones</th>
                 </tr>
               </thead>
@@ -258,20 +258,6 @@ export default function ActualizacionesFechas2Page() {
                     <tr key={row.id} className="border-b border-border/60">
                       <td className="py-2 pr-2 font-mono tabular-nums">{row.id}</td>
                       <td className="py-2 pr-2 font-medium">{row.cedula}</td>
-                      <td className="py-2 pr-2">
-                        {isEditing && draft ? (
-                          <Input
-                            type="date"
-                            value={draft.fecha_requerimiento}
-                            onChange={e =>
-                              setDraft(d => (d ? { ...d, fecha_requerimiento: e.target.value } : d))
-                            }
-                            className="h-8"
-                          />
-                        ) : (
-                          isoDateOnly(row.fecha_requerimiento) || '—'
-                        )}
-                      </td>
                       <td className="py-2 pr-2">
                         {isEditing && draft ? (
                           <Input
@@ -287,18 +273,10 @@ export default function ActualizacionesFechas2Page() {
                         )}
                       </td>
                       <td className="py-2 pr-2">
-                        {isEditing && draft ? (
-                          <Input
-                            type="date"
-                            value={draft.fecha_base_calculo}
-                            onChange={e =>
-                              setDraft(d => (d ? { ...d, fecha_base_calculo: e.target.value } : d))
-                            }
-                            className="h-8"
-                          />
-                        ) : (
-                          isoDateOnly(row.fecha_base_calculo) || '—'
-                        )}
+                        {isoDateOnly(row.fecha_requerimiento) || '—'}
+                      </td>
+                      <td className="py-2 pr-2">
+                        {isoDateOnly(row.fecha_base_calculo) || '—'}
                       </td>
                       <td className="py-2 pl-2 text-right">
                         <div className="flex flex-wrap justify-end gap-1">

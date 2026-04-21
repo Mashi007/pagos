@@ -591,6 +591,14 @@ export interface PagoReportadoItem {
   /** infopagos | cobros_publico | ausente (historico) */
 
   canal_ingreso?: string | null
+
+  duplicado_en_pagos?: boolean
+
+  pago_existente_id?: number | null
+
+  prestamo_existente_id?: number | null
+
+  pago_existente_estado?: string | null
 }
 
 /** Etiqueta legible para columna Origen en Pagos reportados. */
@@ -879,6 +887,14 @@ export interface PagoReportadoDetalleResponse {
   }>
 
   canal_ingreso?: string | null
+
+  duplicado_en_pagos?: boolean
+
+  pago_existente_id?: number | null
+
+  prestamo_existente_id?: number | null
+
+  pago_existente_estado?: string | null
 }
 
 export async function getPagoReportadoDetalle(

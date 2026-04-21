@@ -172,6 +172,10 @@ class PagoReportadoDetalle(BaseModel):
         None,
         description="infopagos | cobros_publico | null (historico).",
     )
+    duplicado_en_pagos: bool = False
+    pago_existente_id: Optional[int] = None
+    prestamo_existente_id: Optional[int] = None
+    pago_existente_estado: Optional[str] = None
 
 
 class AprobarRechazarBody(BaseModel):
@@ -1516,6 +1520,14 @@ def get_pago_reportado_detalle(pago_id: int, db: Session = Depends(get_db)):
     tasa_x, eq_usd = tasa_y_equivalente_usd_excel(
         db, pr.fecha_pago, float(pr.monto), pr.moneda or "BS"
     )
+    pago_existente_id: Optional[int] = primer_pago_id_si_existe_para_claves_reportado(db, pr)
+    prestamo_existente_id: Optional[int] = None
+    pago_existente_estado: Optional[str] = None
+    if pago_existente_id is not None:
+        p_exist = db.execute(select(Pago).where(Pago.id == pago_existente_id)).scalars().first()
+        if p_exist:
+            prestamo_existente_id = getattr(p_exist, "prestamo_id", None)
+            pago_existente_estado = getattr(p_exist, "estado", None)
     return PagoReportadoDetalle(
         id=pr.id,
         referencia_interna=pr.referencia_interna,
@@ -1543,6 +1555,10 @@ def get_pago_reportado_detalle(pago_id: int, db: Session = Depends(get_db)):
         updated_at=pr.updated_at,
         historial=historial,
         canal_ingreso=getattr(pr, "canal_ingreso", None),
+        duplicado_en_pagos=bool(pago_existente_id is not None),
+        pago_existente_id=pago_existente_id,
+        prestamo_existente_id=prestamo_existente_id,
+        pago_existente_estado=pago_existente_estado,
     )
 
 

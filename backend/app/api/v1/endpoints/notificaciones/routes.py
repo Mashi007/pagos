@@ -68,6 +68,88 @@ from app.services.notificaciones_exclusion_desistimiento import (
 router = APIRouter(dependencies=[Depends(require_admin)])
 
 
+@router.get("/fecha-q-auditoria-total")
+def get_fecha_q_auditoria_total(
+    db: Session = Depends(get_db),
+    limit: int = Query(200, ge=1, le=2000),
+    offset: int = Query(0, ge=0),
+    cedula_q: Optional[str] = Query(None, max_length=64),
+    solo_con_diferencia: bool = Query(
+        False,
+        description="Si true, devuelve solo filas con diferencia_dias != 0 en caché Q vs aprobación.",
+    ),
+):
+    """
+    Auditoría total de columna Q vs fecha_aprobacion en TODO el universo de préstamos (no solo listas de mora).
+    Lee la caché `prestamos.fecha_entrega_q_aprobacion_cache` y devuelve trazabilidad por préstamo.
+    """
+    stmt = select(Prestamo).order_by(Prestamo.id.desc())
+    count_stmt = select(func.count(Prestamo.id))
+
+    if cedula_q and str(cedula_q).strip():
+        cq = str(cedula_q).strip()
+        stmt = stmt.where(Prestamo.cedula.ilike(f"%{cq}%"))
+        count_stmt = count_stmt.where(Prestamo.cedula.ilike(f"%{cq}%"))
+
+    if solo_con_diferencia:
+        stmt = stmt.where(
+            Prestamo.fecha_entrega_q_aprobacion_cache.isnot(None),
+            Prestamo.fecha_entrega_q_aprobacion_cache["diferencia_dias"].astext.isnot(None),
+            Prestamo.fecha_entrega_q_aprobacion_cache["diferencia_dias"].astext != "0",
+        )
+        count_stmt = count_stmt.where(
+            Prestamo.fecha_entrega_q_aprobacion_cache.isnot(None),
+            Prestamo.fecha_entrega_q_aprobacion_cache["diferencia_dias"].astext.isnot(None),
+            Prestamo.fecha_entrega_q_aprobacion_cache["diferencia_dias"].astext != "0",
+        )
+
+    total = int(db.scalar(count_stmt) or 0)
+    rows = list(db.execute(stmt.offset(offset).limit(limit)).scalars().all() or [])
+
+    def _cache_field(cache: dict | None, key: str):
+        if not isinstance(cache, dict):
+            return None
+        return cache.get(key)
+
+    items = []
+    for p in rows:
+        cache = p.fecha_entrega_q_aprobacion_cache if isinstance(p.fecha_entrega_q_aprobacion_cache, dict) else None
+        items.append(
+            {
+                "prestamo_id": int(p.id),
+                "cedula": (p.cedula or "").strip(),
+                "estado": (p.estado or "").strip(),
+                "fecha_aprobacion": p.fecha_aprobacion.date().isoformat()
+                if getattr(p, "fecha_aprobacion", None)
+                else None,
+                "fecha_requerimiento": p.fecha_requerimiento.isoformat()
+                if getattr(p, "fecha_requerimiento", None)
+                else None,
+                "fecha_base_calculo": p.fecha_base_calculo.isoformat()
+                if getattr(p, "fecha_base_calculo", None)
+                else None,
+                "q_cache": cache,
+                "q_fecha_iso": _cache_field(cache, "fecha_entrega_column_q"),
+                "q_fecha_raw": _cache_field(cache, "fecha_entrega_column_q_raw"),
+                "diferencia_dias": _cache_field(cache, "diferencia_dias"),
+                "puede_aplicar": _cache_field(cache, "puede_aplicar"),
+                "correccion_desde_q_anterior_bd": _cache_field(cache, "correccion_desde_q_anterior_bd"),
+                "q_cache_at": p.fecha_entrega_q_aprobacion_cache_at.isoformat()
+                if getattr(p, "fecha_entrega_q_aprobacion_cache_at", None)
+                else None,
+            }
+        )
+
+    return {
+        "total": total,
+        "limit": int(limit),
+        "offset": int(offset),
+        "filtro_cedula": cedula_q.strip() if cedula_q and cedula_q.strip() else None,
+        "solo_con_diferencia": bool(solo_con_diferencia),
+        "items": items,
+    }
+
+
 def get_notificaciones_envios_config(db: Session) -> dict:
     """Carga la configuracion de envios por tipo (habilitado, cco, plantilla_id, programador) desde BD."""
     return get_notificaciones_envios_dict(db)

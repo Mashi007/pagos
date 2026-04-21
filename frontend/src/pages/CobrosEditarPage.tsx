@@ -404,6 +404,46 @@ export default function CobrosEditarPage() {
         </p>
       )}
 
+      {detalle.duplicado_en_pagos && (
+        <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-900">
+          <p>
+            Este reporte ya tiene un pago en cartera.
+            {typeof detalle.prestamo_existente_id === 'number' && (
+              <>
+                {' '}
+                Préstamo aplicado: <strong>#{detalle.prestamo_existente_id}</strong>.
+              </>
+            )}
+            {typeof detalle.pago_existente_id === 'number' && (
+              <>
+                {' '}
+                Pago existente: <strong>#{detalle.pago_existente_id}</strong>
+                {detalle.pago_existente_estado
+                  ? ` (${detalle.pago_existente_estado})`
+                  : ''}
+                .
+              </>
+            )}
+          </p>
+          {typeof detalle.prestamo_existente_id === 'number' && (
+            <div className="mt-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  navigate(
+                    `/prestamos?filtro_prestamo_id=${detalle.prestamo_existente_id}`
+                  )
+                }
+              >
+                Abrir préstamo #{detalle.prestamo_existente_id}
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
+
       <Card>
         <CardHeader>
           <CardTitle>

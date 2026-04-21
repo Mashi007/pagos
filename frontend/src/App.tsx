@@ -164,6 +164,7 @@ import {
   FiniquitoRootPage,
   InfopagosPage,
   EscanerInfopagosPage,
+  FechaQAuditoriaTotalPage,
   ModelosVehiculos,
   Notificaciones,
   NotificacionesClientesDrive,
@@ -476,6 +477,14 @@ function App() {
               element={
                 <SimpleProtectedRoute requireAdmin={true}>
                   <Notificaciones modulo="fecha" />
+                </SimpleProtectedRoute>
+              }
+            />
+            <Route
+              path="notificaciones/fecha-auditoria-total"
+              element={
+                <SimpleProtectedRoute requireAdmin={true}>
+                  <FechaQAuditoriaTotalPage />
                 </SimpleProtectedRoute>
               }
             />

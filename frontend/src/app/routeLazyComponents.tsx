@@ -90,6 +90,10 @@ export const ActualizacionesFechas2Page = lazy(
   () => import('../pages/ActualizacionesFechas2Page')
 )
 
+export const FechaQAuditoriaTotalPage = lazy(
+  () => import('../pages/FechaQAuditoriaTotalPage')
+)
+
 export const ComunicacionesPage = lazy(() => import('../pages/Comunicaciones'))
 
 export const ConversacionesWhatsAppPage = lazy(

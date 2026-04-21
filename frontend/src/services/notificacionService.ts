@@ -256,6 +256,31 @@ export interface CompararFechaEntregaQvsAprobacionResponse {
   advertencias?: string[]
 }
 
+export interface FechaQAuditoriaTotalItem {
+  prestamo_id: number
+  cedula: string
+  estado: string
+  fecha_aprobacion?: string | null
+  fecha_requerimiento?: string | null
+  fecha_base_calculo?: string | null
+  q_cache?: Record<string, unknown> | null
+  q_fecha_iso?: string | null
+  q_fecha_raw?: unknown
+  diferencia_dias?: number | null
+  puede_aplicar?: boolean | null
+  correccion_desde_q_anterior_bd?: boolean | null
+  q_cache_at?: string | null
+}
+
+export interface FechaQAuditoriaTotalResponse {
+  total: number
+  limit: number
+  offset: number
+  filtro_cedula?: string | null
+  solo_con_diferencia: boolean
+  items: FechaQAuditoriaTotalItem[]
+}
+
 /** Respuesta de POST /notificaciones/aplicar-abonos-drive-a-cuotas (solo admin). */
 
 export interface AplicarAbonosDriveCuotasResponse {
@@ -1298,6 +1323,27 @@ class NotificacionService {
     if (lote) q.set('lote', lote)
     return await apiClient.get<CompararFechaEntregaQvsAprobacionResponse>(
       `${this.baseUrl}/comparar-fecha-entrega-q-aprobacion?${q.toString()}`
+    )
+  }
+
+  /** Auditoría total Q vs aprobación para TODO préstamos (no solo listas de mora). */
+  async getFechaQAuditoriaTotal(params?: {
+    limit?: number
+    offset?: number
+    cedula_q?: string
+    solo_con_diferencia?: boolean
+  }): Promise<FechaQAuditoriaTotalResponse> {
+    const q = new URLSearchParams()
+    if (params?.limit != null) q.set('limit', String(params.limit))
+    if (params?.offset != null) q.set('offset', String(params.offset))
+    if (params?.cedula_q && params.cedula_q.trim()) {
+      q.set('cedula_q', params.cedula_q.trim())
+    }
+    if (params?.solo_con_diferencia != null) {
+      q.set('solo_con_diferencia', String(Boolean(params.solo_con_diferencia)))
+    }
+    return await apiClient.get<FechaQAuditoriaTotalResponse>(
+      `${this.baseUrl}/fecha-q-auditoria-total?${q.toString()}`
     )
   }
 

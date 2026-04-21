@@ -160,7 +160,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
 
   const descripcionModulo = useMemo(() => {
     if (modulo === 'fecha') {
-      return 'Solo consulta: mismas listas combinadas que General (día siguiente, prejudicial 5+ cuotas, 2 días antes). La columna «Diferencia fecha» compara la columna Q de la hoja CONCILIACIÓN (entrega) con fecha_aprobacion del préstamo en BD; caché en servidor (cada domingo 04:00 Caracas o Recalcular; luego Actualización manual). Sin envío de correos desde esta pantalla.'
+      return 'Módulo principal de investigación Drive vs sistema para fechas: compara columna Q (hoja CONCILIACIÓN) contra fecha_aprobacion en BD y permite profundizar por fila (incluyendo casos con Q anterior corregible). Requerimiento y base de cálculo se derivan automáticamente desde aprobación.'
     }
     if (modulo === 'general') {
       return 'Solo consulta: listas unificadas (día siguiente al vencimiento, prejudicial 5+ cuotas, 2 días antes) con columna de caso. La columna «Diferencia abono» usa caché en BD (cada domingo 02:00 Caracas o botón Recalcular; tras el job, use Actualización manual). Sin envío de correos ni ajustes de comunicación desde esta pantalla.'
@@ -1568,7 +1568,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                 </span>
               ) : null}
               {modulo === 'fecha'
-                ? 'Se concatenan las mismas filas que en General. «Diferencia fecha» = días (columna Q de la hoja CONCILIACIÓN, posición Excel dentro del rango configurado, p. ej. A:S − fecha_aprobacion del préstamo en BD). Caché domingo 04:00 Caracas o Recalcular arriba.'
+                ? 'Lista operativa para auditoría de fecha de aprobación: «Diferencia fecha» = días (Q de CONCILIACIÓN − fecha_aprobacion en BD), con análisis por fila y acción de aplicar Q cuando corresponde. Requerimiento y base son automáticas; no se editan manualmente.'
                 : modulo === 'general'
                   ? 'Se concatenan las mismas filas que en los submenús «Día siguiente al vencimiento», «Prejudicial (5+ cuotas)» y «2 días antes». El listado por «10 días de atraso» (calendario) es otro submenú y no entra aquí. La columna «Caso» indica el criterio. Un mismo cliente puede aparecer más de una vez si cumple varios criterios. «Diferencia abono» lee caché en BD (02:00 Caracas o Recalcular arriba; también se actualiza al aplicar ABONOS desde la balanza).'
                   : modulo === 'a3cuotas'
@@ -1648,6 +1648,13 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                     }`}
                   />
                   Recalcular Diferencia fecha
+                </Button>
+              ) : null}
+              {modulo === 'fecha' ? (
+                <Button asChild type="button" size="sm" variant="outline">
+                  <Link to="/pagos/notificaciones/fecha-auditoria-total">
+                    Auditoría total Q
+                  </Link>
                 </Button>
               ) : null}
 
