@@ -345,7 +345,7 @@ export function Logo({
 
     let controller: AbortController | null = null
 
-    let timeoutId: NodeJS.Timeout | null = null
+    let timeoutId: ReturnType<typeof setTimeout> | null = null
 
     // Intentar cargar el logo personalizado desde el API
 
