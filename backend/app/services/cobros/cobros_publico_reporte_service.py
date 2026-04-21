@@ -10,13 +10,14 @@ import logging
 import os
 import re
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime, timedelta
 from typing import Optional, Tuple
 
-from sqlalchemy import select, text
+from sqlalchemy import select, text, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.core.documento import normalize_documento
 from app.models.pago_reportado import PagoReportado
 from app.models.prestamo import Prestamo
 from app.services.tasa_cambio_service import fecha_hoy_caracas, obtener_tasa_por_fecha
@@ -36,6 +37,11 @@ ALLOWED_COMPROBANTE_TYPES = frozenset(
     }
 )
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
+DUPLICADO_NUMERO_OP_VENTANA_MIN = 10
+
+
+def _es_banco_mercantil(nombre_banco: Optional[str]) -> bool:
+    return "mercantil" in (nombre_banco or "").strip().lower()
 
 MAGIC_JPEG = bytes([0xFF, 0xD8, 0xFF])
 MAGIC_PNG = bytes([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A])
@@ -429,6 +435,64 @@ def crear_pago_reportado_con_referencia_o_retry(
 
     pr: Optional[PagoReportado] = None
     referencia: Optional[str] = None
+    num_key = normalize_documento((numero_operacion or "").strip()) or (numero_operacion or "").strip()
+    now_local = datetime.now()
+    ventana_desde = now_local - timedelta(minutes=DUPLICADO_NUMERO_OP_VENTANA_MIN)
+
+    def _eliminar_duplicados_rapidos_conservar_primero() -> Tuple[Optional[int], Optional[str], int]:
+        """
+        Ventana anti-doble-click: mismo numero_operacion en pocos minutos.
+        Conserva el primer reporte (created_at/id) y elimina hermanos nuevos en estados no terminales.
+        """
+        if not num_key:
+            return None, None, 0
+        rows = db.execute(
+            select(
+                PagoReportado.id,
+                PagoReportado.referencia_interna,
+                PagoReportado.estado,
+                PagoReportado.numero_operacion,
+                PagoReportado.created_at,
+            )
+            .where(PagoReportado.created_at >= ventana_desde)
+            .order_by(PagoReportado.created_at.asc(), PagoReportado.id.asc())
+        ).all()
+        same: list[tuple[int, str, str]] = []
+        for rid, rref, rstate, rop, _rc in rows:
+            k = normalize_documento((rop or "").strip()) or (rop or "").strip()
+            if k == num_key:
+                same.append((int(rid), str(rref or ""), str(rstate or "")))
+        if not same:
+            return None, None, 0
+        keep_id, keep_ref, _keep_state = same[0]
+        to_mark = [rid for rid, _rref, st in same[1:] if st in ("pendiente", "en_revision", "rechazado")]
+        if to_mark:
+            # Excepción confirmada: Mercantil no se auto-elimina; pasa a revisión manual.
+            if _es_banco_mercantil(institucion_financiera):
+                db.execute(
+                    update(PagoReportado)
+                    .where(PagoReportado.id.in_(to_mark))
+                    .values(
+                        estado="en_revision",
+                        motivo_rechazo=(
+                            "Duplicado por número de operación en banco Mercantil: "
+                            "excepción activa, requiere revisión manual."
+                        )[:2000],
+                    )
+                )
+                return keep_id, keep_ref, 0
+            db.execute(
+                update(PagoReportado)
+                .where(PagoReportado.id.in_(to_mark))
+                .values(
+                    estado="eliminado_duplicado",
+                    motivo_rechazo=(
+                        "Eliminado automáticamente por duplicado de número de operación "
+                        f"(mismo número que reporte {keep_ref or keep_id})."
+                    )[:2000],
+                )
+            )
+        return keep_id, keep_ref, len(to_mark)
     # Colisiones RPC-…-00001 bajo concurrencia: el bloqueo debe ser fiable; nunca continuar sin lock en PostgreSQL.
     for attempt in range(4):
         try:
@@ -438,6 +502,27 @@ def crear_pago_reportado_con_referencia_o_retry(
                 db.execute(
                     text("SELECT pg_advisory_xact_lock(887766551, :k)"),
                     {"k": hoy_int},
+                )
+                if num_key:
+                    db.execute(
+                        text("SELECT pg_advisory_xact_lock(887766554, hashtext(:k))"),
+                        {"k": num_key},
+                    )
+            keep_id, keep_ref, removed = _eliminar_duplicados_rapidos_conservar_primero()
+            if keep_id is not None:
+                if removed > 0:
+                    logger.info(
+                        "[%s] numero_operacion duplicado=%s: eliminados %s reportes rápidos; se conserva id=%s ref=%s",
+                        log_tag_duplicate,
+                        num_key,
+                        removed,
+                        keep_id,
+                        keep_ref,
+                    )
+                return (
+                    None,
+                    None,
+                    "Ya recibimos este número de operación recientemente. Se conserva el primer reporte y se eliminaron duplicados enviados en segundos.",
                 )
             referencia = generar_referencia_interna(db)
             nombres, apellidos = nombres_y_apellidos_desde_cliente_nombres(cliente_nombres)

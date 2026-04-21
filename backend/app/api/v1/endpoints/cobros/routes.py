@@ -367,6 +367,112 @@ def _pago_canon_existe_en_tabla_pagos(db: Session, n_norm: str) -> bool:
     return row is not None
 
 
+def _numero_operacion_canonico(raw: Optional[str]) -> str:
+    """Normaliza solo `numero_operacion` para regla estricta de duplicado."""
+    op = (raw or "").strip()
+    if not op:
+        return ""
+    return normalize_documento(op) or op
+
+
+def _primer_id_por_numero_operacion_para_where(db: Session, wh: List[Any]) -> Dict[str, int]:
+    """
+    Mapa numero_operacion_canonico -> primer id por created_at/id dentro del WHERE dado.
+    Regla estricta: duplicado solo por numero_operacion (no por referencia interna).
+    """
+    if not wh:
+        return {}
+    first: Dict[str, int] = {}
+    stmt = (
+        select(PagoReportado.id, PagoReportado.numero_operacion)
+        .where(*wh)
+        .order_by(PagoReportado.created_at.asc(), PagoReportado.id.asc())
+    )
+    res = db.execute(stmt)
+    while True:
+        block = res.fetchmany(3000)
+        if not block:
+            break
+        for pid, numero_operacion in block:
+            k = _numero_operacion_canonico(numero_operacion)
+            if not k or k in first:
+                continue
+            first[k] = int(pid)
+    return first
+
+
+def _numeros_operacion_presentes_en_pagos(db: Session, keys: Set[str]) -> Set[str]:
+    """Subconjunto de `keys` que ya existe en `pagos.doc_canon_numero`."""
+    if not keys:
+        return set()
+    out: Set[str] = set()
+    lst = [k for k in keys if k]
+    for i in range(0, len(lst), 450):
+        part = lst[i : i + 450]
+        if not part:
+            continue
+        vals = db.execute(
+            select(Pago.doc_canon_numero).where(Pago.doc_canon_numero.in_(part))
+        ).scalars().all()
+        for v in vals:
+            if v:
+                out.add(v)
+    return out
+
+
+def _duplicados_reportados_por_numero_operacion(
+    db: Session,
+    *,
+    numero_key: str,
+    excluir_id: Optional[int] = None,
+) -> List[Tuple[int, str, str]]:
+    """
+    Devuelve reportados (id, referencia, estado) que comparten el mismo numero_operacion canonico.
+    Regla estricta basada solo en numero_operacion.
+    """
+    if not numero_key:
+        return []
+    stmt = (
+        select(
+            PagoReportado.id,
+            PagoReportado.referencia_interna,
+            PagoReportado.estado,
+            PagoReportado.numero_operacion,
+        )
+        .where(PagoReportado.estado.in_(("pendiente", "en_revision", "aprobado", "rechazado")))
+        .order_by(PagoReportado.created_at.asc(), PagoReportado.id.asc())
+    )
+    rows = db.execute(stmt).all()
+    out: List[Tuple[int, str, str]] = []
+    for rid, rref, rstate, rnum in rows:
+        if excluir_id is not None and int(rid) == int(excluir_id):
+            continue
+        if _numero_operacion_canonico(rnum) != numero_key:
+            continue
+        out.append((int(rid), str(rref or ""), str(rstate or "")))
+    return out
+
+
+def _lock_numero_operacion_canonico(db: Session, numero_key: str) -> None:
+    """
+    Bloquea por transacción una clave de número de operación (PostgreSQL) para
+    evitar carreras al aprobar dos reportes iguales al mismo tiempo.
+    """
+    if not numero_key:
+        return
+    bind = db.get_bind()
+    if bind is None or bind.dialect.name != "postgresql":
+        return
+    db.execute(
+        text("SELECT pg_advisory_xact_lock(887766553, hashtext(:k))"),
+        {"k": numero_key},
+    )
+
+
+def _es_banco_mercantil(nombre_banco: Optional[str]) -> bool:
+    return "mercantil" in (nombre_banco or "").strip().lower()
+
+
 def _observacion_reglas_carga(
     db: Session,
     rows: list,
@@ -894,6 +1000,10 @@ def _list_pagos_reportados_payload(
     # Cumplen 100% (reglas OK; Gemini true o false sin observación) → no entran aquí; flujo automático fuera de la cola.
     wh = _where_clauses_cola_reportados(estado, incluir_exportados, exportados_subq, filtros)
     primer_precalc = _primer_id_por_norm_global_para_where(db, wh)
+    primer_num_op = _primer_id_por_numero_operacion_para_where(db, wh)
+    numeros_en_pagos = _numeros_operacion_presentes_en_pagos(
+        db, set(primer_num_op.keys())
+    )
     q = select(PagoReportado).where(*wh).order_by(
         case((PagoReportado.estado == "rechazado", 1), else_=0),
         PagoReportado.created_at.asc(),
@@ -915,6 +1025,15 @@ def _list_pagos_reportados_payload(
         for it in _pago_reportado_list_items_from_rows(
             db, rows, primer_id_por_norm_precalc=primer_precalc
         ):
+            # Regla innegociable: duplicado = mismo numero_operacion exacto/canonico.
+            # En cola operativa se muestra solo el primer reporte; reenvíos no se listan.
+            num_key = _numero_operacion_canonico(getattr(it, "numero_operacion", None))
+            if num_key:
+                first_id = primer_num_op.get(num_key)
+                if first_id is not None and int(it.id) != int(first_id):
+                    continue
+                if num_key in numeros_en_pagos:
+                    continue
             if not _item_falla_validadores_cobros_excel(it):
                 continue
             total += 1
@@ -1118,6 +1237,42 @@ def list_pagos_reportados_y_kpis(
         manual_queue_counts=manual_queue,
     )
     return {**lista, "kpis": kpis}
+
+
+@router.get("/pagos-reportados/duplicados-eliminados", response_model=dict)
+def list_duplicados_eliminados(
+    db: Session = Depends(get_db),
+    page: int = Query(1, ge=1),
+    per_page: int = Query(50, ge=1, le=300),
+):
+    """Bitácora operativa de reportes auto-eliminados por duplicado de número de operación."""
+    total = int(
+        db.execute(
+            select(func.count(PagoReportado.id)).where(
+                PagoReportado.estado == "eliminado_duplicado"
+            )
+        ).scalar()
+        or 0
+    )
+    rows = db.execute(
+        select(PagoReportado)
+        .where(PagoReportado.estado == "eliminado_duplicado")
+        .order_by(PagoReportado.updated_at.desc(), PagoReportado.id.desc())
+        .offset((page - 1) * per_page)
+        .limit(per_page)
+    ).scalars().all()
+    items = [
+        {
+            "id": r.id,
+            "referencia_interna": r.referencia_interna,
+            "numero_operacion": r.numero_operacion,
+            "estado": r.estado,
+            "motivo_rechazo": r.motivo_rechazo,
+            "updated_at": r.updated_at.isoformat() if r.updated_at else None,
+        }
+        for r in rows
+    ]
+    return {"items": items, "total": total, "page": page, "per_page": per_page}
 
 
 @router.get(
@@ -1395,6 +1550,69 @@ def _registrar_historial(db: Session, pago_id: int, estado_anterior: str, estado
     db.add(h)
 
 
+def _marcar_reportados_como_eliminado_duplicado(
+    db: Session,
+    *,
+    dup_rows: List[Tuple[int, str, str]],
+    master_id: int,
+    master_ref: str,
+    num_key: str,
+    usuario_email: Optional[str],
+    via: str,
+) -> Tuple[int, List[str]]:
+    """
+    Eliminación lógica por duplicado de número de operación:
+    marca estado `eliminado_duplicado` y registra historial operativo.
+    """
+    dup_ids = [rid for rid, _rref, st in dup_rows if st in ("pendiente", "en_revision", "rechazado")]
+    dup_refs = [rref for _rid, rref, st in dup_rows if st in ("pendiente", "en_revision", "rechazado")]
+    if not dup_ids:
+        return 0, []
+    # Excepción confirmada: Mercantil en duplicado por numero_operacion -> revisión manual.
+    if _es_banco_mercantil(master_ref):
+        db.execute(
+            update(PagoReportado)
+            .where(PagoReportado.id.in_(dup_ids))
+            .values(
+                estado="en_revision",
+                motivo_rechazo=(
+                    f"Duplicado por numero_operacion={num_key} con banco Mercantil; "
+                    "excepción activa, requiere revisión manual."
+                )[:2000],
+            )
+        )
+        for rid in dup_ids:
+            _registrar_historial(
+                db,
+                rid,
+                "pendiente",
+                "en_revision",
+                usuario_email,
+                "Excepción Mercantil aplicada por duplicado de número de operación.",
+            )
+        return 0, dup_refs
+    motivo = (
+        f"Auto-eliminado por duplicado de numero_operacion={num_key}. "
+        f"Se conserva reporte maestro id={master_id} ref={master_ref or master_id} via={via}."
+    )[:2000]
+    db.execute(
+        update(PagoReportado)
+        .where(PagoReportado.id.in_(dup_ids))
+        .values(estado="eliminado_duplicado", motivo_rechazo=motivo)
+    )
+    prev_states = {rid: st for rid, _rref, st in dup_rows}
+    for rid in dup_ids:
+        _registrar_historial(
+            db,
+            rid,
+            prev_states.get(rid, "pendiente"),
+            "eliminado_duplicado",
+            usuario_email,
+            motivo,
+        )
+    return len(dup_ids), dup_refs
+
+
 
 def _crear_pago_desde_reportado_y_aplicar_cuotas(db: Session, pr: PagoReportado, usuario_email: Optional[str]) -> None:
     """Tras aprobar un pago reportado: crea registro en tabla pagos y aplica a cuotas (cascada) para que prestamos y estado de cuenta se actualicen. Debe llamarse ANTES de commit; si falla lanza HTTPException."""
@@ -1534,6 +1752,22 @@ def aprobar_pago_reportado(
         raise HTTPException(status_code=400, detail="No se puede aprobar un pago rechazado.")
     if pr.estado in ("pendiente", "en_revision"):
         _rechazar_aprobacion_si_documento_ya_en_pagos(db, pr)
+    num_key = _numero_operacion_canonico(getattr(pr, "numero_operacion", None))
+    if num_key:
+        _lock_numero_operacion_canonico(db, num_key)
+        hermanos = _duplicados_reportados_por_numero_operacion(
+            db, numero_key=num_key, excluir_id=pr.id
+        )
+        if hermanos:
+            first_id = min([pr.id] + [rid for rid, _rref, _st in hermanos])
+            if int(first_id) != int(pr.id):
+                raise HTTPException(
+                    status_code=409,
+                    detail=(
+                        "Duplicado por número de operación: este reporte no es el primero registrado. "
+                        f"Gestione primero el reporte ID {first_id}."
+                    ),
+                )
     estado_anterior = pr.estado
     pr.estado = "aprobado"
     pr.motivo_rechazo = None
@@ -1541,6 +1775,30 @@ def aprobar_pago_reportado(
 
     try:
         _crear_pago_desde_reportado_y_aplicar_cuotas(db, pr, usuario_email)
+        # Doble envío del mismo comprobante (segundos): tras aprobar el primero, eliminar hermanos.
+        num_key = _numero_operacion_canonico(getattr(pr, "numero_operacion", None))
+        if num_key:
+            dup_rows = _duplicados_reportados_por_numero_operacion(
+                db, numero_key=num_key, excluir_id=pr.id
+            )
+            n_dup, dup_refs = _marcar_reportados_como_eliminado_duplicado(
+                db,
+                dup_rows=dup_rows,
+                master_id=pr.id,
+                master_ref=str(pr.institucion_financiera or ""),
+                num_key=num_key,
+                usuario_email=usuario_email,
+                via="aprobar_directo",
+            )
+            if n_dup > 0:
+                logger.info(
+                    "[COBROS] Aprobado id=%s ref=%s: marcados %s duplicados por numero_operacion=%s refs=%s",
+                    pr.id,
+                    pr.referencia_interna,
+                    n_dup,
+                    num_key,
+                    ", ".join([x for x in dup_refs if x])[:300],
+                )
         db.commit()
     except HTTPException:
         db.rollback()
@@ -2129,6 +2387,22 @@ def cambiar_estado_pago(
         )
     if body.estado == "aprobado" and pr.estado in ("pendiente", "en_revision"):
         _rechazar_aprobacion_si_documento_ya_en_pagos(db, pr)
+        num_key = _numero_operacion_canonico(getattr(pr, "numero_operacion", None))
+        if num_key:
+            _lock_numero_operacion_canonico(db, num_key)
+            hermanos = _duplicados_reportados_por_numero_operacion(
+                db, numero_key=num_key, excluir_id=pr.id
+            )
+            if hermanos:
+                first_id = min([pr.id] + [rid for rid, _rref, _st in hermanos])
+                if int(first_id) != int(pr.id):
+                    raise HTTPException(
+                        status_code=409,
+                        detail=(
+                            "Duplicado por número de operación: este reporte no es el primero registrado. "
+                            f"Gestione primero el reporte ID {first_id}."
+                        ),
+                    )
     estado_anterior = pr.estado
     pr.estado = body.estado
     pr.motivo_rechazo = (body.motivo or "").strip()[:2000] if body.estado == "rechazado" else None
@@ -2141,6 +2415,29 @@ def cambiar_estado_pago(
     if body.estado == "aprobado":
         try:
             _crear_pago_desde_reportado_y_aplicar_cuotas(db, pr, usuario_email)
+            num_key = _numero_operacion_canonico(getattr(pr, "numero_operacion", None))
+            if num_key:
+                dup_rows = _duplicados_reportados_por_numero_operacion(
+                    db, numero_key=num_key, excluir_id=pr.id
+                )
+                n_dup, dup_refs = _marcar_reportados_como_eliminado_duplicado(
+                    db,
+                    dup_rows=dup_rows,
+                    master_id=pr.id,
+                master_ref=str(pr.institucion_financiera or ""),
+                    num_key=num_key,
+                    usuario_email=usuario_email,
+                    via="aprobar_patch_estado",
+                )
+                if n_dup > 0:
+                    logger.info(
+                        "[COBROS] PATCH aprobado id=%s ref=%s: marcados %s duplicados por numero_operacion=%s refs=%s",
+                        pr.id,
+                        pr.referencia_interna,
+                        n_dup,
+                        num_key,
+                        ", ".join([x for x in dup_refs if x])[:300],
+                    )
             db.commit()
         except HTTPException as exc:
             detail_txt = exc.detail if isinstance(exc.detail, str) else repr(exc.detail)

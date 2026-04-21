@@ -20,6 +20,7 @@ import {
 } from '../../components/ui/card'
 
 import { prestamoService } from '../../services/prestamoService'
+import { formatDate } from '../../utils'
 
 interface AsignarFechaAprobacionModalProps {
   prestamo: any
@@ -57,14 +58,14 @@ export function AsignarFechaAprobacionModal({
 
     if (fechaRequerimientoStr && fechaAprobacion < fechaRequerimientoStr) {
       toast.error(
-        `La fecha de aprobación debe ser igual o posterior a la fecha de requerimiento (${new Date(fechaRequerimientoStr).toLocaleDateString()})`
+        `La fecha de aprobación debe ser igual o posterior a la fecha de requerimiento (${formatDate(fechaRequerimientoStr)})`
       )
 
       return
     }
 
     const mensajeConfirmacion =
-      `¿Desea desembolsar el préstamo con fecha ${new Date(fechaAprobacion).toLocaleDateString()}?\n\n` +
+      `¿Desea desembolsar el préstamo con fecha ${formatDate(fechaAprobacion)}?\n\n` +
       `Esta acción:\n` +
       `• Mantendrá el estado en APROBADO (con fecha de aprobación)\n` +
       `• Generará la tabla de amortización\n` +

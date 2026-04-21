@@ -218,6 +218,9 @@ const normalizeEstadoValue = (value: string) =>
 
     .toLowerCase()
 
+const isMercantilBank = (value: string) =>
+  String(value ?? '').trim().toLowerCase().includes('mercantil')
+
 /** Anchos por defecto (px) para la tabla de pagos reportados; el usuario puede redimensionar. */
 const COBROS_REPORTADOS_COL_WIDTHS_KEY =
   'rapicredit:cobrosPagosReportados:colWidthsV1'
@@ -1208,12 +1211,32 @@ export default function CobrosPagosReportadosPage() {
                       </td>
 
                       <td className="min-w-0 px-2 py-2 align-middle">
+                        {(() => {
+                          const hasDuplicado = /DUPLICADO/i.test(
+                            row.observacion || ''
+                          )
+                          const showMercantilExceptionTag =
+                            hasDuplicado &&
+                            isMercantilBank(row.institucion_financiera)
+                          return (
+                            <>
                         <span
                           className="block truncate text-xs sm:text-sm"
                           title={row.institucion_financiera}
                         >
                           {row.institucion_financiera}
                         </span>
+                              {showMercantilExceptionTag ? (
+                                <span
+                                  className="mt-1 inline-flex rounded border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700"
+                                  title="Duplicado por número de operación en Mercantil: excepción activa (revisión manual)."
+                                >
+                                  Excepción Mercantil
+                                </span>
+                              ) : null}
+                            </>
+                          )
+                        })()}
                       </td>
 
                       <td className="whitespace-nowrap px-2 py-2 text-right align-middle text-xs sm:text-sm">

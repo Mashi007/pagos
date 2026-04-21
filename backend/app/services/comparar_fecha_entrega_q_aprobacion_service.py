@@ -101,6 +101,13 @@ def _parse_fecha_celda_hoja(val: Any) -> Optional[date]:
     if not s:
         return None
     s2 = s.strip()
+    m_amb = re.match(r"^(\d{1,2})/(\d{1,2})/(\d{4})\b", s2)
+    if m_amb:
+        d0, m0 = int(m_amb.group(1)), int(m_amb.group(2))
+        if 1 <= d0 <= 12 and 1 <= m0 <= 12:
+            # Bloqueo defensivo: fecha textual ambigua (dd/mm vs mm/dd).
+            # Exigir ISO en origen evita cruces visuales y errores operativos.
+            return None
     if len(s2) >= 10 and s2[4:5] == "-" and s2[7:8] == "-":
         try:
             return date.fromisoformat(s2[:10])

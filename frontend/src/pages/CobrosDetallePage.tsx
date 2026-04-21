@@ -74,6 +74,9 @@ const ESTADO_BADGE: Record<string, string> = {
   importado: 'Importado a Pagos 🟢',
 }
 
+const isMercantilBank = (value: string) =>
+  String(value ?? '').trim().toLowerCase().includes('mercantil')
+
 const MENSAJE_RECHAZO_POR_DEFECTO = `Buenas tardes
 
 
@@ -233,6 +236,10 @@ export default function CobrosDetallePage() {
     return <div className="p-6">Cargando...</div>
   }
 
+  const hasDuplicado = /DUPLICADO/i.test(detalle.observacion || '')
+  const showMercantilExceptionTag =
+    hasDuplicado && isMercantilBank(detalle.institucion_financiera)
+
   return (
     <div className="max-w-4xl space-y-6 p-6">
       <div className="flex items-center justify-between">
@@ -282,6 +289,14 @@ export default function CobrosDetallePage() {
 
           <p>
             <strong>Institución:</strong> {detalle.institucion_financiera}
+            {showMercantilExceptionTag ? (
+              <span
+                className="ml-2 inline-flex rounded border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700"
+                title="Duplicado por número de operación en Mercantil: excepción activa (revisión manual)."
+              >
+                Excepción Mercantil
+              </span>
+            ) : null}
           </p>
 
           <p>

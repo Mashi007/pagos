@@ -22,6 +22,7 @@ import {
 import { useAplicarCondicionesAprobacion } from '../../hooks/usePrestamos'
 
 import { prestamoService } from '../../services/prestamoService'
+import { formatDate } from '../../utils'
 
 interface FormularioAprobacionCondicionesProps {
   prestamo: any
@@ -98,7 +99,7 @@ export function FormularioAprobacionCondiciones({
       condicionesAprobacion.fecha_aprobacion < fechaRequerimientoYmd
     ) {
       toast.error(
-        `La fecha de aprobacion debe ser igual o posterior a la fecha de requerimiento (${new Date(fechaRequerimientoYmd).toLocaleDateString()})`
+        `La fecha de aprobacion debe ser igual o posterior a la fecha de requerimiento (${formatDate(fechaRequerimientoYmd)})`
       )
 
       return
@@ -135,7 +136,7 @@ export function FormularioAprobacionCondiciones({
       `¿Desea aprobar este préstamo con las siguientes condiciones?\n\n` +
       `• Tasa de Interés: ${condicionesAprobacion.tasa_interes}%\n` +
       `• Plazo Máximo: ${condicionesAprobacion.plazo_maximo} meses\n` +
-      `• Fecha de Aprobacion / Desembolso: ${new Date(condicionesAprobacion.fecha_aprobacion).toLocaleDateString()}`
+      `• Fecha de Aprobacion / Desembolso: ${formatDate(condicionesAprobacion.fecha_aprobacion)}`
 
     if (!window.confirm(mensajeConfirmacion)) {
       console.log('âŒ Usuario canceló la confirmación')

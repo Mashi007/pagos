@@ -30,6 +30,7 @@ import {
 } from '../../components/ui/select'
 
 import { prestamoService } from '../../services/prestamoService'
+import { formatDate } from '../../utils'
 
 const DECLARACION_FIJA =
   'Al aprobar, usted asegura que el cliente cumple las políticas de RapiCredit y que su riesgo está dentro de parámetros normales.'
@@ -170,7 +171,7 @@ export function AprobarPrestamoManualModal({
 
     if (fechaRequerimientoStr && fechaAprobacion < fechaRequerimientoStr) {
       toast.error(
-        `La fecha de aprobación debe ser igual o posterior a la fecha de requerimiento (${new Date(fechaRequerimientoStr).toLocaleDateString()})`
+        `La fecha de aprobación debe ser igual o posterior a la fecha de requerimiento (${formatDate(fechaRequerimientoStr)})`
       )
 
       return

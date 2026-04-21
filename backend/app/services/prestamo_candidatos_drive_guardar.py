@@ -115,6 +115,31 @@ def _parse_fecha_a_date(s: str) -> Optional[date]:
         return None
 
 
+def _fecha_texto_es_ambigua_dd_mm(s: str) -> bool:
+    """
+    Detecta fechas con slash potencialmente ambiguas para humanos (d/m y m/d válidos),
+    por ejemplo 04/07/2026. Para evitar inversión de día/mes, estas se bloquean y se
+    exige ISO (YYYY-MM-DD) o día > 12.
+    """
+    raw = (s or "").strip()
+    m = re.match(r"^(\d{1,2})/(\d{1,2})/(\d{4})$", raw)
+    if not m:
+        return False
+    d, mo = int(m.group(1)), int(m.group(2))
+    return 1 <= d <= 12 and 1 <= mo <= 12
+
+
+def _q_contiene_fecha_ambigua_dd_mm(q_val: str) -> bool:
+    raw = (q_val or "").strip()
+    if not raw:
+        return False
+    for sep in ("|", ";", "  ", "\n"):
+        if sep in raw:
+            parts = [p.strip() for p in raw.split(sep, 1) if p.strip()]
+            return any(_fecha_texto_es_ambigua_dd_mm(p) for p in parts)
+    return _fecha_texto_es_ambigua_dd_mm(raw)
+
+
 def _fechas_desde_col_q(q_val: str) -> Optional[Tuple[date, date]]:
     """
     Una celda Q: misma fecha para requerimiento y aprobación.
@@ -212,6 +237,11 @@ def _motivos_no_100(
         motivos.append("número de cuotas (R) inválido (1-50)")
 
     q_s = _cell_str(payload.get("col_q_fecha"))
+    if _q_contiene_fecha_ambigua_dd_mm(q_s):
+        motivos.append(
+            "fecha (Q) ambigua: use formato ISO YYYY-MM-DD para evitar confusión día/mes "
+            "(ejemplo ambiguo: 04/07/2026)."
+        )
     fechas = _fechas_desde_col_q(q_s)
     if fechas is None:
         motivos.append("fecha (Q) inválida o vacía (DD/MM/YYYY o YYYY-MM-DD)")

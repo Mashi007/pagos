@@ -112,6 +112,8 @@ function parseFechaFlexible(s: string): Date | null {
     const day = Number(m[1])
     const month = Number(m[2])
     const year = Number(m[3])
+    // Evita invertir día/mes por interpretación humana ambigua.
+    if (day >= 1 && day <= 12 && month >= 1 && month <= 12) return null
     if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
       const d = new Date(year, month - 1, day, 12, 0, 0)
       if (d.getFullYear() === year && d.getMonth() === month - 1 && d.getDate() === day) return d
@@ -157,6 +159,20 @@ function aprobacionQMasDe30Dias(qVal: string): boolean {
   ap0.setHours(0, 0, 0, 0)
   const diffDays = Math.floor((today.getTime() - ap0.getTime()) / 86400000)
   return diffDays > 30
+}
+
+function qTieneFechaAmbigua(qVal: string): boolean {
+  const raw = (qVal || '').trim()
+  if (!raw) return false
+  const tokens = raw.split(/[|;\n]|\s{2,}/).map(x => x.trim()).filter(Boolean)
+  const list = tokens.length > 0 ? tokens : [raw]
+  return list.some(t => {
+    const m = t.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
+    if (!m) return false
+    const d = Number(m[1])
+    const mo = Number(m[2])
+    return d >= 1 && d <= 12 && mo >= 1 && mo <= 12
+  })
 }
 
 type FilaCandidatoDriveTono = 'red' | 'amber' | 'green' | 'plain'
@@ -523,6 +539,13 @@ export default function ActualizacionesPrestamosDrivePage() {
       return (
         <span className="text-red-600">
           (1) Formato: {String(p.cedula_error ?? 'cédula inválida')}
+        </span>
+      )
+    }
+    if (qTieneFechaAmbigua(qRaw)) {
+      return (
+        <span className="text-red-600">
+          (Q) Fecha ambigua en Q (dd/mm). Use YYYY-MM-DD para evitar inversión día/mes.
         </span>
       )
     }
