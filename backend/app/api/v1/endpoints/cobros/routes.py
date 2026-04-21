@@ -318,6 +318,14 @@ _CEDULAS_CLIENTES_CACHE_TTL_SEC = 120.0
 _cedulas_clientes_cache: Optional[Tuple[float, frozenset]] = None
 _autorizados_bs_cache: Optional[Tuple[float, frozenset]] = None
 _cobros_list_aux_lock = threading.Lock()
+
+# Mapas de precálculo duplicados (norm global, nº operación, presencia en pagos): costosos en GET listado/KPIs.
+# Cache en proceso con token de revisión barato + TTL para no servir datos obsoletos si cambia cola/exportados/pagos.
+_PRIMER_MAPS_CACHE_TTL_SEC = 30.0
+_PRIMER_MAPS_CACHE_MAX_ENTRIES = 24
+_primer_maps_triple_cache_lock = threading.Lock()
+# scope_key -> (revision_token, monotonic_ts, primer_precalc, primer_num_op, numeros_en_pagos_frozen)
+_primer_maps_triple_cache: Dict[str, Tuple[tuple, float, Dict[str, int], Dict[str, int], frozenset]] = {}
 _REGULARIZA_MIN_INTERVAL_SEC = 90.0
 _REGULARIZA_TIME_BUDGET_MS = 350.0
 _REGULARIZA_MAX_IDS_PER_RUN = 8
@@ -1002,6 +1010,115 @@ def _primer_id_por_norm_global_para_where(db: Session, wh: List[Any]) -> Dict[st
     return primer_reportado_id_por_norm_peer_first_map(db, all_norms)
 
 
+def _primer_maps_scope_key(
+    *,
+    incluir_exportados: bool,
+    fecha_desde: Optional[date],
+    fecha_hasta: Optional[date],
+    cedula: Optional[str],
+    institucion: Optional[str],
+) -> str:
+    """Clave estable para mapas de duplicados: mismo criterio que `wh_primer_scope` (cola completa + filtros)."""
+    c = (cedula or "").strip().upper()
+    i = (institucion or "").strip().lower()
+    return f"{int(bool(incluir_exportados))}|{fecha_desde!s}|{fecha_hasta!s}|{c}|{i}"
+
+
+def _cobros_primer_maps_revision_token(db: Session) -> tuple:
+    """
+    Token barato para invalidar cache al cambiar cola, exportados o cartera (nuevo pago / doc).
+
+    Incluye `max(Pago.id)` (índice PK, lectura O(1) típica) para que nuevos `pagos` invaliden
+    `_numeros_operacion_presentes_en_pagos` sin full scan.
+    """
+    row = db.execute(
+        select(
+            func.count(PagoReportado.id),
+            func.max(PagoReportado.updated_at),
+        ).where(PagoReportado.estado.in_(("pendiente", "en_revision", "aprobado")))
+    ).one()
+    n_exp = int(db.execute(select(func.count()).select_from(PagoReportadoExportado)).scalar_one())
+    max_pago_id = db.execute(select(func.max(Pago.id))).scalar()
+    return (
+        int(row[0] or 0),
+        row[1],
+        int(n_exp),
+        int(max_pago_id or 0),
+    )
+
+
+def _prune_primer_maps_triple_cache_unlocked() -> None:
+    """Mantiene acotado el dict; caller debe tener `_primer_maps_triple_cache_lock`."""
+    global _primer_maps_triple_cache
+    if len(_primer_maps_triple_cache) <= _PRIMER_MAPS_CACHE_MAX_ENTRIES:
+        return
+    # Eliminar entradas más antiguas por `monotonic_ts`.
+    items = sorted(
+        _primer_maps_triple_cache.items(),
+        key=lambda kv: kv[1][1],
+    )
+    drop = len(items) - _PRIMER_MAPS_CACHE_MAX_ENTRIES
+    for k, _ in items[:drop]:
+        _primer_maps_triple_cache.pop(k, None)
+
+
+def _compute_primer_triple_for_where(
+    db: Session, wh: List[Any]
+) -> Tuple[Dict[str, int], Dict[str, int], Set[str]]:
+    """Precalcula mapas duplicados / nº operación / presencia en pagos para un WHERE de cola."""
+    primer_precalc = _primer_id_por_norm_global_para_where(db, wh)
+    primer_num_op = _primer_id_por_numero_operacion_para_where(db, wh)
+    numeros_en_pagos = _numeros_operacion_presentes_en_pagos(
+        db, set(primer_num_op.keys())
+    )
+    return primer_precalc, primer_num_op, numeros_en_pagos
+
+
+def _get_primer_triple_cached(
+    db: Session,
+    wh: List[Any],
+    scope_key: str,
+) -> Tuple[Dict[str, int], Dict[str, int], Set[str]]:
+    """
+    Devuelve (primer_precalc, primer_num_op, numeros_en_pagos) reusando cache si la revisión no cambió.
+
+    Thread-safe en el dict de cache; el cálculo pesado ocurre fuera del lock para no serializar requests.
+    """
+    rev = _cobros_primer_maps_revision_token(db)
+    now = time.monotonic()
+    with _primer_maps_triple_cache_lock:
+        ent = _primer_maps_triple_cache.get(scope_key)
+        if ent is not None:
+            stored_rev, ts, a, b, c_f = ent
+            if stored_rev == rev and (now - ts) < _PRIMER_MAPS_CACHE_TTL_SEC:
+                logger.debug(
+                    "[COBROS_CACHE] primer_triple hit scope=%s rev=%s age_s=%.2f",
+                    scope_key,
+                    rev,
+                    now - ts,
+                )
+                return a, b, set(c_f)
+
+    primer_precalc, primer_num_op, numeros_en_pagos = _compute_primer_triple_for_where(db, wh)
+    rev_after = _cobros_primer_maps_revision_token(db)
+    now_store = time.monotonic()
+    with _primer_maps_triple_cache_lock:
+        _primer_maps_triple_cache[scope_key] = (
+            rev_after,
+            now_store,
+            primer_precalc,
+            primer_num_op,
+            frozenset(numeros_en_pagos),
+        )
+        _prune_primer_maps_triple_cache_unlocked()
+    logger.debug(
+        "[COBROS_CACHE] primer_triple miss store scope=%s rev=%s",
+        scope_key,
+        rev_after,
+    )
+    return primer_precalc, primer_num_op, numeros_en_pagos
+
+
 def _list_pagos_reportados_payload(
     db: Session,
     *,
@@ -1058,10 +1175,15 @@ def _list_pagos_reportados_payload(
         if estado in ("pendiente", "en_revision", "aprobado")
         else wh
     )
-    primer_precalc = _primer_id_por_norm_global_para_where(db, wh_primer_scope)
-    primer_num_op = _primer_id_por_numero_operacion_para_where(db, wh_primer_scope)
-    numeros_en_pagos = _numeros_operacion_presentes_en_pagos(
-        db, set(primer_num_op.keys())
+    primer_scope_key = _primer_maps_scope_key(
+        incluir_exportados=incluir_exportados,
+        fecha_desde=fecha_desde,
+        fecha_hasta=fecha_hasta,
+        cedula=cedula,
+        institucion=institucion,
+    )
+    primer_precalc, primer_num_op, numeros_en_pagos = _get_primer_triple_cached(
+        db, wh_primer_scope, primer_scope_key
     )
     q = select(PagoReportado).where(*wh).order_by(
         case((PagoReportado.estado == "rechazado", 1), else_=0),
@@ -1161,7 +1283,14 @@ def _kpis_pagos_reportados_payload(
     else:
         exportados_subq = select(PagoReportadoExportado.pago_reportado_id)
         wh_kpi = _where_clauses_cola_reportados(None, incluir_exportados, exportados_subq, filtros)
-        primer_kpi = _primer_id_por_norm_global_para_where(db, wh_kpi)
+        kpi_scope_key = _primer_maps_scope_key(
+            incluir_exportados=incluir_exportados,
+            fecha_desde=fecha_desde,
+            fecha_hasta=fecha_hasta,
+            cedula=cedula,
+            institucion=institucion,
+        )
+        primer_kpi, _, _ = _get_primer_triple_cached(db, wh_kpi, kpi_scope_key)
         q_scan = select(PagoReportado).where(*wh_kpi).order_by(PagoReportado.created_at.asc())
 
         batch = 400
