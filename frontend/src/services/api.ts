@@ -574,10 +574,11 @@ class ApiClient {
     try {
       return await task()
     } finally {
-      if (!group) return
-      group.active = Math.max(0, group.active - 1)
-      const next = group.queue.shift()
-      if (next) next()
+      if (group) {
+        group.active = Math.max(0, group.active - 1)
+        const next = group.queue.shift()
+        if (next) next()
+      }
     }
   }
 

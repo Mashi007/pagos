@@ -294,6 +294,8 @@ export default function CobrosPagosReportadosPage() {
   const [institucion, setInstitucion] = useState('')
 
   const [incluirExportados, setIncluirExportados] = useState(false)
+  const [soloCedulasDuplicadas, setSoloCedulasDuplicadas] = useState(false)
+  const [ordenCedula, setOrdenCedula] = useState<'asc' | 'desc'>('asc')
 
   const [changingEstadoId, setChangingEstadoId] = useState<number | null>(null)
 
@@ -612,6 +614,40 @@ export default function CobrosPagosReportadosPage() {
     }
   }
 
+  const itemsTabla = React.useMemo(() => {
+    const base = [...(data?.items ?? [])]
+    if (!base.length) return base
+
+    const normalizarCedula = (value: string) =>
+      String(value ?? '')
+        .replace(/[^0-9A-Za-z]/g, '')
+        .toUpperCase()
+        .trim()
+
+    const frecuencia = new Map<string, number>()
+    base.forEach(row => {
+      const key = normalizarCedula(row.cedula_display)
+      if (!key) return
+      frecuencia.set(key, (frecuencia.get(key) ?? 0) + 1)
+    })
+
+    const filtrados = soloCedulasDuplicadas
+      ? base.filter(row => {
+          const key = normalizarCedula(row.cedula_display)
+          return !!key && (frecuencia.get(key) ?? 0) > 1
+        })
+      : base
+
+    filtrados.sort((a, b) => {
+      const aa = normalizarCedula(a.cedula_display)
+      const bb = normalizarCedula(b.cedula_display)
+      const cmp = aa.localeCompare(bb, 'es', { numeric: true, sensitivity: 'base' })
+      return ordenCedula === 'asc' ? cmp : -cmp
+    })
+
+    return filtrados
+  }, [data?.items, soloCedulasDuplicadas, ordenCedula])
+
   return (
     <div className="space-y-6 p-6">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
@@ -720,6 +756,22 @@ export default function CobrosPagosReportadosPage() {
               Incluir ya exportados a Excel: tras descargar, esas filas salen de
               la vista normal; aquí las vuelve a mostrar para aprobar, editar o
               rechazar.
+            </span>
+          </label>
+
+          <label
+            htmlFor="cobros-solo-cedulas-duplicadas"
+            className="flex max-w-xs cursor-pointer items-start gap-2 text-xs text-muted-foreground"
+          >
+            <input
+              id="cobros-solo-cedulas-duplicadas"
+              type="checkbox"
+              className="mt-0.5 shrink-0 rounded border-input"
+              checked={soloCedulasDuplicadas}
+              onChange={e => setSoloCedulasDuplicadas(e.target.checked)}
+            />
+            <span>
+              Mostrar solo cédulas duplicadas en esta página.
             </span>
           </label>
 
@@ -1037,7 +1089,7 @@ export default function CobrosPagosReportadosPage() {
                 más rápido.
               </p>
             </div>
-          ) : !data?.items?.length ? (
+          ) : !itemsTabla.length ? (
             <p className="text-gray-500">No hay registros.</p>
           ) : (
             <>
@@ -1099,6 +1151,20 @@ export default function CobrosPagosReportadosPage() {
                           )}
                         >
                           {h.label}
+                          {h.label === 'Cédula' ? (
+                            <button
+                              type="button"
+                              className="ml-1 inline-flex rounded px-1 py-0.5 text-[10px] text-muted-foreground hover:bg-muted"
+                              onClick={e => {
+                                e.preventDefault()
+                                e.stopPropagation()
+                                setOrdenCedula(prev => (prev === 'asc' ? 'desc' : 'asc'))
+                              }}
+                              title={`Ordenar cédula ${ordenCedula === 'asc' ? 'descendente' : 'ascendente'}`}
+                            >
+                              {ordenCedula === 'asc' ? '↑' : '↓'}
+                            </button>
+                          ) : null}
                         </span>
                         <button
                           type="button"
@@ -1113,7 +1179,7 @@ export default function CobrosPagosReportadosPage() {
                 </thead>
 
                 <tbody>
-                  {data.items.map((row: PagoReportadoItem) => (
+                  {itemsTabla.map((row: PagoReportadoItem) => (
                     <tr
                       key={row.id}
                       className="border-b transition-colors hover:bg-muted/20"
