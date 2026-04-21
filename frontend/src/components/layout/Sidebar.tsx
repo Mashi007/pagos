@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 
@@ -45,6 +45,7 @@ import { cn } from '../../utils'
 
 import { isAdminRole, isOperatorRole } from '../../utils/rol'
 import { isHrefDelegatedForRol } from '../../config/roleRoutes'
+import { BASE_PATH } from '../../config/env'
 
 import { useSimpleAuth } from '../../store/simpleAuthStore'
 
@@ -85,12 +86,33 @@ interface MenuItem {
   exactHref?: boolean
 }
 
+/** Pathname relativo al basename de la app (por si la URL incluye /pagos/...). */
+function pathnameParaMenu(pathname: string): string {
+  const base = (BASE_PATH || '/').replace(/\/$/, '') || '/'
+  if (base !== '/' && (pathname === base || pathname.startsWith(`${base}/`))) {
+    const rest = pathname.slice(base.length) || '/'
+    return rest.startsWith('/') ? rest : `/${rest}`
+  }
+  return pathname
+}
+
+/** Evita que /escaner coincida con /escaner-lote (startsWith demasiado amplio). */
+function rutaActivaCoincideConHref(pathname: string, childHref: string, exact?: boolean): boolean {
+  const pathOnly = childHref.split('?')[0] || childHref
+  if (exact) return pathname === pathOnly
+  if (pathname === pathOnly) return true
+  if (pathOnly === '/' || pathOnly === '') return false
+  return pathname.startsWith(`${pathOnly}/`)
+}
+
 export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
   const location = useLocation()
 
   const navigate = useNavigate()
 
   const { user, logout, refreshUser } = useSimpleAuth()
+
+  const pathnameMenu = pathnameParaMenu(location.pathname || '/')
 
   const [openSubmenus, setOpenSubmenus] = useState<string[]>([])
 
@@ -170,18 +192,11 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
       if (!child.href) return false
 
       if (child.href.includes('?')) {
-        return `${location.pathname}${location.search}` === child.href
+        return `${pathnameMenu}${location.search}` === child.href
       }
 
       const pathOnly = child.href.split('?')[0] || child.href
-      if (child.exactHref) {
-        return location.pathname === pathOnly
-      }
-
-      return (
-        location.pathname === child.href ||
-        (location.pathname.startsWith(child.href) && child.href !== '/')
-      )
+      return rutaActivaCoincideConHref(pathnameMenu, pathOnly, child.exactHref)
     })
   }
 
@@ -325,12 +340,14 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
           title: 'Escáner',
           href: '/escaner',
           icon: Brain,
+          exactHref: true,
         },
 
         {
           title: 'Escáner (lote)',
           href: '/escaner-lote',
           icon: FileStack,
+          exactHref: true,
         },
       ],
     },
@@ -444,43 +461,46 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
   ]
 
   // Menú según rutas delegadas (lista blanca en config/roleRoutes.ts)
-  const filteredMenuItems: MenuItem[] = menuItems
-    .map(item => {
-      const isAdmin = isAdminRole(user?.rol)
+  const filteredMenuItems: MenuItem[] = useMemo(
+    () =>
+      menuItems
+        .map(item => {
+          const isAdmin = isAdminRole(user?.rol)
 
-      if (item.isSubmenu && item.children) {
-        let children = item.children.filter(child => {
-          if (!child.href) return false
-          if (child.adminOnly) {
-            if (isAdmin) return isHrefDelegatedForRol(user?.rol, child.href)
-            if (
-              isOperatorRole(user?.rol) &&
-              child.href.split('?')[0] === '/finiquitos/gestion'
-            ) {
+          if (item.isSubmenu && item.children) {
+            const children = item.children.filter(child => {
+              if (!child.href) return false
+              if (child.adminOnly) {
+                if (isAdmin) return isHrefDelegatedForRol(user?.rol, child.href)
+                if (
+                  isOperatorRole(user?.rol) &&
+                  child.href.split('?')[0] === '/finiquitos/gestion'
+                ) {
+                  return isHrefDelegatedForRol(user?.rol, child.href)
+                }
+                return false
+              }
               return isHrefDelegatedForRol(user?.rol, child.href)
-            }
-            return false
+            })
+
+            if (children.length === 0) return null
+            return { ...item, children }
           }
-          return isHrefDelegatedForRol(user?.rol, child.href)
+
+          if (item.href) {
+            if (!isHrefDelegatedForRol(user?.rol, item.href)) return null
+            return item
+          }
+
+          return null
         })
-
-        if (children.length === 0) return null
-        return { ...item, children }
-      }
-
-      if (item.href) {
-        if (!isHrefDelegatedForRol(user?.rol, item.href)) return null
-        return item
-      }
-
-      return null
-    })
-    .filter((x): x is MenuItem => x !== null)
+        .filter((x): x is MenuItem => x !== null),
+    [user?.rol]
+  )
 
   // Sincronizar submenús con la ruta: solo el (los) que contienen la ruta activa; al cambiar de sección se repliegan el resto.
 
   useEffect(() => {
-    const pathname = location.pathname
     const search = location.search
 
     const titlesWithActiveChild: string[] = []
@@ -494,18 +514,11 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
         if (!child.href) return false
 
         if (child.href.includes('?')) {
-          return `${pathname}${search}` === child.href
+          return `${pathnameMenu}${search}` === child.href
         }
 
         const pathOnly = child.href.split('?')[0] || child.href
-        if (child.exactHref) {
-          return pathname === pathOnly
-        }
-
-        return (
-          pathname === child.href ||
-          (pathname.startsWith(child.href) && child.href !== '/')
-        )
+        return rutaActivaCoincideConHref(pathnameMenu, pathOnly, child.exactHref)
       })
 
       if (hasActiveChild) {
@@ -514,7 +527,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
     })
 
     setOpenSubmenus(titlesWithActiveChild)
-  }, [location.pathname, location.search, user?.rol])
+  }, [pathnameMenu, location.search, filteredMenuItems])
 
   // Cerrar drawer en móvil con Escape (no afecta desktop ni rutas)
   useEffect(() => {
@@ -537,25 +550,25 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
 
   const isActiveRoute = (href: string, exactHref?: boolean) => {
     if (href === '/dashboard') {
-      return location.pathname === '/' || location.pathname === '/dashboard'
+      return pathnameMenu === '/' || pathnameMenu === '/dashboard'
     }
 
     if (href.includes('?')) {
-      const currentUrl = `${location.pathname}${location.search}`
+      const currentUrl = `${pathnameMenu}${location.search}`
 
       return currentUrl === href
     }
 
     const pathOnly = href.split('?')[0] || href
     if (exactHref) {
-      return location.pathname === pathOnly
+      return pathnameMenu === pathOnly
     }
 
     if (location.search) {
       return false
     }
 
-    return location.pathname === href
+    return pathnameMenu === pathOnly
   }
 
   const sidebarSpring = {
