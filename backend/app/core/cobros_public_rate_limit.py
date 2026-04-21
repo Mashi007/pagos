@@ -69,14 +69,14 @@ COBROS_PUBLIC_VERIFICAR_MAX = 15
 def check_rate_limit_estado_cuenta_verificar(ip: str) -> None:
     if check_rate_limit_redis is not None:
         try:
-            check_rate_limit_redis(
+            if check_rate_limit_redis(
                 "ec_verificar",
                 ip,
                 ESTADO_CUENTA_VERIFICAR_WINDOW_SEC,
                 ESTADO_CUENTA_VERIFICAR_MAX,
                 "Demasiados intentos. Espere 15 minutos e intente de nuevo.",
-            )
-            return
+            ):
+                return
         except HTTPException:
             raise
         except Exception:
@@ -131,14 +131,14 @@ def check_rate_limit_estado_cuenta_validar(ip: str) -> None:
     """Lanza 429 si se supera el límite de validar cédula (estado de cuenta) por IP."""
     if check_rate_limit_redis is not None:
         try:
-            check_rate_limit_redis(
+            if check_rate_limit_redis(
                 "ec_validar",
                 ip,
                 ESTADO_CUENTA_VALIDAR_WINDOW_SEC,
                 ESTADO_CUENTA_VALIDAR_MAX,
                 "Demasiadas consultas. Espere un minuto e intente de nuevo.",
-            )
-            return
+            ):
+                return
         except HTTPException:
             raise
         except Exception:
@@ -159,14 +159,14 @@ def check_rate_limit_estado_cuenta_solicitar(ip: str) -> None:
     """Lanza 429 si se supera el límite de solicitar estado de cuenta (PDF) por IP."""
     if check_rate_limit_redis is not None:
         try:
-            check_rate_limit_redis(
+            if check_rate_limit_redis(
                 "ec_solicitar",
                 ip,
                 ESTADO_CUENTA_SOLICITAR_WINDOW_SEC,
                 ESTADO_CUENTA_SOLICITAR_MAX,
                 "Ha alcanzado el límite de consultas por hora. Intente más tarde.",
-            )
-            return
+            ):
+                return
         except HTTPException:
             raise
         except Exception:
@@ -187,14 +187,14 @@ def check_rate_limit_cobros_public_solicitar(ip: str) -> None:
     """Limite solicitudes de codigo OTP reporte publico por IP."""
     if check_rate_limit_redis is not None:
         try:
-            check_rate_limit_redis(
+            if check_rate_limit_redis(
                 "cobros_pub_solicitar",
                 ip,
                 COBROS_PUBLIC_SOLICITAR_WINDOW_SEC,
                 COBROS_PUBLIC_SOLICITAR_MAX,
                 "Demasiadas solicitudes de codigo. Intente de nuevo en una hora.",
-            )
-            return
+            ):
+                return
         except HTTPException:
             raise
         except Exception:
@@ -217,14 +217,14 @@ def check_rate_limit_cobros_public_verificar(ip: str) -> None:
     """Limite intentos de verificacion OTP reporte publico por IP."""
     if check_rate_limit_redis is not None:
         try:
-            check_rate_limit_redis(
+            if check_rate_limit_redis(
                 "cobros_pub_verificar",
                 ip,
                 COBROS_PUBLIC_VERIFICAR_WINDOW_SEC,
                 COBROS_PUBLIC_VERIFICAR_MAX,
                 "Demasiados intentos. Espere 15 minutos e intente de nuevo.",
-            )
-            return
+            ):
+                return
         except HTTPException:
             raise
         except Exception:
@@ -247,14 +247,14 @@ def check_rate_limit_finiquito_solicitar_codigo(ip: str) -> None:
     """Lanza 429 si se supera el límite de solicitudes de código OTP Finiquito por IP."""
     if check_rate_limit_redis is not None:
         try:
-            check_rate_limit_redis(
+            if check_rate_limit_redis(
                 "finiquito_otp",
                 ip,
                 FINIQUITO_SOLICITAR_CODIGO_WINDOW_SEC,
                 FINIQUITO_SOLICITAR_CODIGO_MAX,
                 "Demasiadas solicitudes de codigo. Intente de nuevo en una hora.",
-            )
-            return
+            ):
+                return
         except HTTPException:
             raise
         except Exception:
@@ -277,14 +277,14 @@ def check_rate_limit_finiquito_verificar_codigo(ip: str) -> None:
     """Límite de intentos de verificación OTP Finiquito por IP (mitiga fuerza bruta del código de 6 cifras)."""
     if check_rate_limit_redis is not None:
         try:
-            check_rate_limit_redis(
+            if check_rate_limit_redis(
                 "finiquito_verificar",
                 ip,
                 FINIQUITO_VERIFICAR_CODIGO_WINDOW_SEC,
                 FINIQUITO_VERIFICAR_CODIGO_MAX,
                 "Demasiados intentos de verificacion. Espere 15 minutos e intente de nuevo.",
-            )
-            return
+            ):
+                return
         except HTTPException:
             raise
         except Exception:
@@ -307,14 +307,14 @@ def check_rate_limit_finiquito_registro(ip: str) -> None:
     """Límite de altas nuevas en portal Finiquito por IP y hora."""
     if check_rate_limit_redis is not None:
         try:
-            check_rate_limit_redis(
+            if check_rate_limit_redis(
                 "finiquito_registro",
                 ip,
                 FINIQUITO_REGISTRO_WINDOW_SEC,
                 FINIQUITO_REGISTRO_MAX,
                 "Demasiados registros desde su red. Intente de nuevo en una hora.",
-            )
-            return
+            ):
+                return
         except HTTPException:
             raise
         except Exception:

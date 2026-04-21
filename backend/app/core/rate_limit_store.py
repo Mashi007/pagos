@@ -39,15 +39,18 @@ def check_rate_limit_redis(
     window_sec: int,
     max_count: int,
     detail_429: str,
-) -> None:
+) -> bool:
     """
     Comprueba límite con ventana fija en Redis. Lanza HTTPException 429 si se supera.
     key_prefix: ej. "ec_solicitar", "ec_verificar"
+
+    Retorna True si el límite se aplicó vía Redis (petición contada).
+    Retorna False si no hay cliente Redis (el caller debe usar fallback en memoria).
     """
     from fastapi import HTTPException
     client = get_redis_client()
     if not client:
-        return
+        return False
     key = f"rate_limit:{key_prefix}:{ip}"
     try:
         pipe = client.pipeline()
@@ -58,8 +61,10 @@ def check_rate_limit_redis(
             client.expire(key, window_sec)
         if incr_result > max_count:
             raise HTTPException(status_code=429, detail=detail_429)
+        return True
     except HTTPException:
         raise
     except Exception as e:
         logger.warning("Rate limit Redis error: %s", e)
         # En fallo de Redis no bloqueamos; el caller usará fallback en memoria
+        return False

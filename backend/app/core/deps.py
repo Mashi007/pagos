@@ -2,6 +2,7 @@
 Dependencias reutilizables para la API (autenticación, BD).
 get_current_user: exige Bearer token válido; se usa en routers protegidos.
 """
+from dataclasses import dataclass
 from datetime import datetime, timezone
 import logging
 from typing import Optional
@@ -52,28 +53,14 @@ def _fake_user_response(email: str) -> UserResponse:
     )
 
 
-def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
-    db: Session = Depends(get_db),
-) -> UserResponse:
+def staff_user_from_access_token_payload(db: Session, payload: dict) -> UserResponse:
     """
-    Obtiene el usuario actual a partir del Bearer token (desde BD o admin env).
+    Resuelve UserResponse desde un JWT de acceso de personal (no scope finiquito).
     """
-    if not credentials or not credentials.credentials:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="No se proporcionó token",
-        )
-    payload = decode_token(credentials.credentials)
-    if not payload or payload.get("type") != "access":
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token inválido o expirado",
-        )
     if payload.get("scope") == "finiquito":
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Use el token solo en el portal Finiquito",
+            detail="Token no valido para sesion de personal",
         )
     sub = payload.get("sub") or payload.get("email")
     if not sub:
@@ -98,6 +85,32 @@ def get_current_user(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Usuario no encontrado o inactivo",
     )
+
+
+def get_current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db),
+) -> UserResponse:
+    """
+    Obtiene el usuario actual a partir del Bearer token (desde BD o admin env).
+    """
+    if not credentials or not credentials.credentials:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="No se proporcionó token",
+        )
+    payload = decode_token(credentials.credentials)
+    if not payload or payload.get("type") != "access":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token inválido o expirado",
+        )
+    if payload.get("scope") == "finiquito":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Use el token solo en el portal Finiquito",
+        )
+    return staff_user_from_access_token_payload(db, payload)
 
 
 def require_admin(
@@ -265,3 +278,61 @@ def get_current_user_optional(
     if u and u.is_active:
         return user_to_response(u)
     return _fake_user_response(email)
+
+
+@dataclass
+class ComprobanteImagenReader:
+    """Quién solicita GET /pagos/comprobante-imagen/{id}: personal o portal Finiquito."""
+
+    staff: Optional[UserResponse] = None
+    finiquito: Optional[FiniquitoUsuarioAcceso] = None
+
+
+def get_comprobante_imagen_reader(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security_optional_bearer),
+    db: Session = Depends(get_db),
+) -> ComprobanteImagenReader:
+    """
+    Bearer de personal (tabla users) o JWT portal Finiquito (misma ruta de comprobante).
+    """
+    if not credentials or not credentials.credentials:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="No se proporcionó token",
+        )
+    payload = decode_token(credentials.credentials)
+    if not payload or payload.get("type") != "access":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token inválido o expirado",
+        )
+    if payload.get("scope") == "finiquito":
+        sub = payload.get("sub")
+        if sub is None or str(sub).strip() == "":
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Token inválido",
+            )
+        try:
+            uid = int(sub)
+        except (TypeError, ValueError):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Token inválido",
+            )
+        u = (
+            db.query(FiniquitoUsuarioAcceso)
+            .filter(
+                FiniquitoUsuarioAcceso.id == uid,
+                FiniquitoUsuarioAcceso.is_active.is_(True),
+            )
+            .first()
+        )
+        if not u:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Usuario Finiquito inactivo o inexistente",
+            )
+        return ComprobanteImagenReader(finiquito=u)
+    staff = staff_user_from_access_token_payload(db, payload)
+    return ComprobanteImagenReader(staff=staff)

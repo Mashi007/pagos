@@ -49,6 +49,7 @@ import { toast } from 'sonner'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
 
 import { AuditoriaCarteraTab } from '../components/auditoria/AuditoriaCarteraTab'
+import { AuditoriaLiquidadosIntensivaTab } from '../components/auditoria/AuditoriaLiquidadosIntensivaTab'
 
 export function Auditoria() {
   const [auditorias, setAuditorias] = useState<AuditoriaType[]>([])
@@ -318,14 +319,20 @@ export function Auditoria() {
         onValueChange={setTabAuditoria}
         className="w-full"
       >
-        <TabsList className="grid w-full max-w-lg grid-cols-2">
+        <TabsList className="grid w-full max-w-3xl grid-cols-3">
           <TabsTrigger value="cartera">Revision de cartera</TabsTrigger>
+
+          <TabsTrigger value="liquidados">Liquidados (intensiva)</TabsTrigger>
 
           <TabsTrigger value="sistema">Registro del sistema</TabsTrigger>
         </TabsList>
 
         <TabsContent value="cartera" className="mt-4" forceMount>
           <AuditoriaCarteraTab />
+        </TabsContent>
+
+        <TabsContent value="liquidados" className="mt-4" forceMount>
+          <AuditoriaLiquidadosIntensivaTab />
         </TabsContent>
 
         <TabsContent value="sistema" className="mt-4 space-y-6">

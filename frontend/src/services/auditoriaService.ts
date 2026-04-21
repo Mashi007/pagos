@@ -120,6 +120,33 @@ export interface PrestamoCarteraChequeoResponse {
   } | null
 }
 
+/** GET /auditoria/prestamos/liquidados/auditoria-intensiva */
+export interface LiquidadosCierreChequeoResponse {
+  items: PrestamoCarteraChequeo[]
+
+  resumen: Record<string, unknown>
+}
+
+export interface AuditoriaLiquidadosIntensivaResponse {
+  cartera: PrestamoCarteraChequeoResponse
+
+  cierre: LiquidadosCierreChequeoResponse
+}
+
+export interface AuditoriaLiquidadosIntensivaQuery {
+  skip?: number
+
+  limit?: number
+
+  prestamo_id?: number
+
+  cedula?: string
+
+  excluir_marcar_ok?: boolean
+
+  codigo_control?: string
+}
+
 export interface CarteraCorreccionResponse extends PrestamoCarteraChequeoResponse {
   reaplicar_cascada?: Array<Record<string, unknown>>
 }
@@ -343,6 +370,16 @@ class AuditoriaService {
   ): Promise<PrestamoCarteraChequeoResponse> {
     return apiClient.get<PrestamoCarteraChequeoResponse>(
       `${this.baseUrl}/prestamos/cartera/chequeos`,
+      { params: query }
+    )
+  }
+
+  /** Solo prestamos LIQUIDADO: cartera + hallazgos de cierre (finiquito, fecha, documentos). */
+  async obtenerAuditoriaLiquidadosIntensiva(
+    query?: AuditoriaLiquidadosIntensivaQuery
+  ): Promise<AuditoriaLiquidadosIntensivaResponse> {
+    return apiClient.get<AuditoriaLiquidadosIntensivaResponse>(
+      `${this.baseUrl}/prestamos/liquidados/auditoria-intensiva`,
       { params: query }
     )
   }

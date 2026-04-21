@@ -59,7 +59,11 @@ from app.core.database import get_db
 
 from app.core.config import settings
 
-from app.core.deps import get_current_user
+from app.core.deps import (
+    ComprobanteImagenReader,
+    get_comprobante_imagen_reader,
+    get_current_user,
+)
 
 from app.core.documento import (
     compose_numero_documento_almacenado,
@@ -113,6 +117,9 @@ from app.services.cobros.pago_reportado_documento import (
 from app.services.pagos.comprobante_link_desde_gmail import (
     enriquecer_items_link_comprobante_desde_gmail,
     enriquecer_items_link_comprobante_desde_pago_reportado,
+)
+from app.services.pagos.comprobante_imagen_finiquito_access import (
+    comprobante_imagen_accesible_finiquito_portal,
 )
 from app.services.cuota_pago_integridad import (
     pago_tiene_aplicaciones_cuotas,
@@ -279,9 +286,9 @@ async def upload_pago_comprobante_imagen(
 def get_pago_comprobante_imagen(
     comprobante_id: str,
     db: Session = Depends(get_db),
-    current_user: UserResponse = Depends(get_current_user),
+    reader: ComprobanteImagenReader = Depends(get_comprobante_imagen_reader),
 ):
-    """Sirve la imagen subida (requiere sesion; el enlace en link_comprobante es para personal autenticado)."""
+    """Sirve la imagen o PDF del comprobante (personal o portal Finiquito con titularidad verificada)."""
     cid = _normalizar_id_comprobante_imagen(comprobante_id)
     if not cid:
         raise HTTPException(
@@ -291,6 +298,12 @@ def get_pago_comprobante_imagen(
     row = db.get(PagoComprobanteImagen, cid)
     if row is None:
         raise HTTPException(status_code=404, detail="Comprobante no encontrado.")
+    if reader.finiquito is not None:
+        if not comprobante_imagen_accesible_finiquito_portal(db, cid, reader.finiquito):
+            raise HTTPException(
+                status_code=403,
+                detail="No tiene permiso para este comprobante.",
+            )
     return Response(
         content=row.imagen_data,
         media_type=(row.content_type or "application/octet-stream"),
