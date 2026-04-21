@@ -675,7 +675,7 @@ export async function getPagosReportadosKpis(
 
   if (params.incluir_exportados) q.set('incluir_exportados', 'true')
 
-  q.set('_rq', String(Date.now()))
+  // Sin `_rq`: permite deduplicar GET concurrentes a `/kpis` (mismos filtros) en apiClient.
 
   const data = await apiClient.get<PagosReportadosKpis>(
     `${BASE_COBROS}/pagos-reportados/kpis?${q}`
