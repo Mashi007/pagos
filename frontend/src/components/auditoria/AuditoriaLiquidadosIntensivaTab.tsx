@@ -37,6 +37,8 @@ import {
   type PrestamoCarteraChequeo,
 } from '../../services/auditoriaService'
 
+import { limpiarReturnRevisionSesion } from '../../constants/revisionNavigation'
+
 const PAGE_SIZE = 25
 
 const MEJORES_PRACTICAS_LIQUIDADOS: readonly string[] = [
@@ -469,12 +471,23 @@ export function AuditoriaLiquidadosIntensivaTab() {
                           </Button>
                           <Button asChild type="button" variant="secondary" size="sm" className="h-8 gap-1">
                             <Link
+                              to={`/revision-manual/editar/${row.prestamo_id}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              title="Misma pantalla que Revisión manual: «Pagos registrados en cartera» (editar / eliminar / cascada)"
+                              onClick={() => limpiarReturnRevisionSesion()}
+                            >
+                              Ir a Pagos
+                            </Link>
+                          </Button>
+                          <Button asChild type="button" variant="ghost" size="sm" className="h-8 gap-1">
+                            <Link
                               to={`/pagos?prestamo_id=${row.prestamo_id}`}
                               target="_blank"
                               rel="noopener noreferrer"
-                              title="Abrir Pagos filtrado por préstamo en una pestaña nueva"
+                              title="Listado del módulo Pagos filtrado por este préstamo (vista conciliación)"
                             >
-                              Ir a Pagos
+                              Listado Pagos
                             </Link>
                           </Button>
                         </div>
@@ -536,12 +549,23 @@ export function AuditoriaLiquidadosIntensivaTab() {
                           </Button>
                           <Button asChild type="button" variant="secondary" size="sm" className="h-8 gap-1">
                             <Link
+                              to={`/revision-manual/editar/${row.prestamo_id}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              title="Misma pantalla que Revisión manual: «Pagos registrados en cartera» (editar / eliminar / cascada)"
+                              onClick={() => limpiarReturnRevisionSesion()}
+                            >
+                              Ir a Pagos
+                            </Link>
+                          </Button>
+                          <Button asChild type="button" variant="ghost" size="sm" className="h-8 gap-1">
+                            <Link
                               to={`/pagos?prestamo_id=${row.prestamo_id}`}
                               target="_blank"
                               rel="noopener noreferrer"
-                              title="Abrir Pagos filtrado por préstamo en una pestaña nueva"
+                              title="Listado del módulo Pagos filtrado por este préstamo (vista conciliación)"
                             >
-                              Ir a Pagos
+                              Listado Pagos
                             </Link>
                           </Button>
                         </div>
