@@ -100,7 +100,7 @@ export default function FechaQAuditoriaTotalPage() {
             Refrescar
           </Button>
           <Button asChild type="button" variant="outline">
-            <Link to="/pagos/notificaciones/fecha">Ir a Notificaciones/Fecha</Link>
+            <Link to="/notificaciones/fecha">Ir a Notificaciones/Fecha</Link>
           </Button>
         </CardContent>
       </Card>

@@ -210,7 +210,7 @@ export default function ActualizacionesFechas2Page() {
             Buscar
           </Button>
           <Button asChild type="button" variant="outline" className="shrink-0">
-            <Link to="/pagos/notificaciones/fecha-auditoria-total">
+            <Link to="/notificaciones/fecha-auditoria-total">
               Investigación profunda Q vs sistema
             </Link>
           </Button>

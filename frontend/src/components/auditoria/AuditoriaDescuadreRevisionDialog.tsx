@@ -362,7 +362,7 @@ export function AuditoriaDescuadreRevisionDialog({
                 Abrir ficha del prestamo
               </Link>
               {' · '}
-              <Link className="text-blue-600 underline" to="/pagos/pagos">
+              <Link className="text-blue-600 underline" to="/pagos">
                 Ir a modulo Pagos
               </Link>
             </p>

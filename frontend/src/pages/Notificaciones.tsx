@@ -1652,7 +1652,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
               ) : null}
               {modulo === 'fecha' ? (
                 <Button asChild type="button" size="sm" variant="outline">
-                  <Link to="/pagos/notificaciones/fecha-auditoria-total">
+                  <Link to="/notificaciones/fecha-auditoria-total">
                     Auditoría total Q
                   </Link>
                 </Button>

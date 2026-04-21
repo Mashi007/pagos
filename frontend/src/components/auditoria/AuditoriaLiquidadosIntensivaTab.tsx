@@ -469,7 +469,7 @@ export function AuditoriaLiquidadosIntensivaTab() {
                           </Button>
                           <Button asChild type="button" variant="secondary" size="sm" className="h-8 gap-1">
                             <Link
-                              to={`/pagos/pagos?prestamo_id=${row.prestamo_id}`}
+                              to={`/pagos?prestamo_id=${row.prestamo_id}`}
                               target="_blank"
                               rel="noopener noreferrer"
                               title="Abrir Pagos filtrado por préstamo en una pestaña nueva"
@@ -536,7 +536,7 @@ export function AuditoriaLiquidadosIntensivaTab() {
                           </Button>
                           <Button asChild type="button" variant="secondary" size="sm" className="h-8 gap-1">
                             <Link
-                              to={`/pagos/pagos?prestamo_id=${row.prestamo_id}`}
+                              to={`/pagos?prestamo_id=${row.prestamo_id}`}
                               target="_blank"
                               rel="noopener noreferrer"
                               title="Abrir Pagos filtrado por préstamo en una pestaña nueva"
