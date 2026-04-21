@@ -29,7 +29,10 @@
     /* Type checking */
     "allowSyntheticDefaultImports": true,
     "esModuleInterop": true,
-    "forceConsistentCasingInFileNames": true
+    "forceConsistentCasingInFileNames": true,
+
+    /* Ambiente: Vite (import.meta) + globals de Node (p. ej. process.env) en tsc/CI */
+    "types": ["vite/client", "node"]
   },
   "include": ["src", "src/**/*", "src/types/**/*"],
   "exclude": ["node_modules", "dist"],
