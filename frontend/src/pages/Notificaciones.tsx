@@ -121,6 +121,8 @@ import {
   type NotificacionesCuotasSortCol,
 } from './notificaciones/notificacionesPageCells'
 
+import { Fechas2BusquedaPanel } from './notificaciones/Fechas2BusquedaPanel'
+
 import {
   tabListadoDefault,
   tabsParaModulo,
@@ -160,10 +162,10 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
 
   const descripcionModulo = useMemo(() => {
     if (modulo === 'fecha') {
-      return 'Módulo principal de investigación Drive vs sistema para fechas: compara columna Q (hoja CONCILIACIÓN) contra fecha_aprobacion en BD y permite profundizar por fila (incluyendo casos con Q anterior corregible). Requerimiento y base de cálculo se derivan automáticamente desde aprobación.'
+      return 'Solo fechas: listas de mora como contexto, columna Q (hoja) vs fecha de aprobación en BD, revisión y aplicación por fila; búsqueda por día de aprobación y edición puntual abajo. Sin columnas de cuotas ni montos en dólares. Auditoría total Q sigue en su enlace.'
     }
     if (modulo === 'general') {
-      return 'Solo consulta: listas unificadas (día siguiente al vencimiento, prejudicial 5+ cuotas, 2 días antes) con columna de caso. La columna «Diferencia abono» usa caché en BD (cada domingo 02:00 Caracas o botón Recalcular; tras el job, use Actualización manual). Sin envío de correos ni ajustes de comunicación desde esta pantalla.'
+      return 'Solo consulta: listas unificadas (día siguiente al vencimiento, prejudicial 5+ cuotas, 2 días antes) con columna de caso. La columna «Diferencia abono» usa caché en BD (cada domingo 04:35 Caracas o botón Recalcular; tras el job, use Actualización manual). Sin envío de correos ni ajustes de comunicación desde esta pantalla.'
     }
     if (modulo === 'a3cuotas') {
       return 'Clientes con al menos cinco cuotas en estado VENCIDO o MORA (morosidad según reglas del sistema en BD). Al regularizar, pueden dejar de aparecer. Use Actualizar o vuelva a entrar; también se refresca al guardar pagos en el módulo Pagos.'
@@ -473,6 +475,10 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
 
   /** Obligatorio si la lista visible tiene 0 filas y aun así se quiere disparar el POST al servidor. */
   const [ackEnvioConListaVacia, setAckEnvioConListaVacia] = useState(false)
+
+  /** Confirmación antes de programar el refresh masivo de caché ABONOS vs cuotas (solo General). */
+  const [confirmAbonosMasivoOpen, setConfirmAbonosMasivoOpen] =
+    useState(false)
 
   useEffect(() => {
     if (confirmEnvio == null) return
@@ -1033,16 +1039,18 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
     return out
   }, [list, sortCol, sortDir])
 
-  const mostrarTablaCuotas = list.some(
-    row =>
-      row.numero_cuota != null ||
-      row.fecha_vencimiento != null ||
-      row.dias_atraso != null ||
-      row.cuotas_atrasadas != null ||
-      row.total_cuotas_atrasadas != null ||
-      row.monto != null ||
-      row.total_pendiente_pagar != null
-  )
+  const mostrarTablaCuotas =
+    modulo !== 'fecha' &&
+    list.some(
+      row =>
+        row.numero_cuota != null ||
+        row.fecha_vencimiento != null ||
+        row.dias_atraso != null ||
+        row.cuotas_atrasadas != null ||
+        row.total_cuotas_atrasadas != null ||
+        row.monto != null ||
+        row.total_pendiente_pagar != null
+    )
 
   /** Siempre partir de `sortedList`: con `sortCol` null es idéntico a `list`; en tabla compacta permite ordenar por diferencia abono. */
   const listaBasePaginacion = sortedList
@@ -1398,11 +1406,11 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => void handleRefreshAbonosDriveCache()}
+                  onClick={() => setConfirmAbonosMasivoOpen(true)}
                   disabled={
                     programandoRefreshAbonosDrive || actualizandoListas
                   }
-                  title="Misma lógica que el job cada domingo 02:00 (America/Caracas): persiste comparación ABONOS (hoja) vs cuotas para préstamos activos. Corre en segundo plano; luego use Actualización manual."
+                  title="Misma lógica que el job cada domingo 04:35 (America/Caracas): persiste comparación ABONOS (hoja) vs cuotas para préstamos activos. Corre en segundo plano; luego use Actualización manual."
                 >
                   <Database
                     className={`mr-2 h-4 w-4 ${
@@ -1419,7 +1427,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                   variant="outline"
                   onClick={() => void handleRefreshFechaEntregaQCache()}
                   disabled={programandoRefreshFechaQ || actualizandoListas}
-                  title="Misma lógica que el job cada domingo 04:00 (America/Caracas): columna Q vs fecha_aprobacion. Segundo plano; luego use Actualización manual."
+                  title="Misma lógica que el job lunes y jueves 04:00 (America/Caracas) y que tras cada sync Drive de CONCILIACIÓN: columna Q vs fecha_aprobacion. Segundo plano; luego use Actualización manual."
                 >
                   <Calendar
                     className={`mr-2 h-4 w-4 ${
@@ -1548,7 +1556,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                 return TabIcon ? <TabIcon className="h-5 w-5" /> : null
               })()}
               {modulo === 'fecha'
-                ? 'Fecha - mismos casos de mora (listas combinadas)'
+                ? 'Fechas — listas de mora (contexto) y Q vs aprobación'
                 : modulo === 'general'
                   ? 'General'
                   : modulo === 'a3cuotas'
@@ -1568,9 +1576,9 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                 </span>
               ) : null}
               {modulo === 'fecha'
-                ? 'Lista operativa para auditoría de fecha de aprobación: «Diferencia fecha» = días (Q de CONCILIACIÓN − fecha_aprobacion en BD), con análisis por fila y acción de aplicar Q cuando corresponde. Requerimiento y base son automáticas; no se editan manualmente.'
+                ? 'Tabla reducida a fechas: sin Nº cuota, vencimiento, mora numérica ni montos. «Diferencia fecha» = días (Q − aprobación en BD). Abajo: búsqueda por día de aprobación (antes «Fechas 2»).'
                 : modulo === 'general'
-                  ? 'Se concatenan las mismas filas que en los submenús «Día siguiente al vencimiento», «Prejudicial (5+ cuotas)» y «2 días antes». El listado por «10 días de atraso» (calendario) es otro submenú y no entra aquí. La columna «Caso» indica el criterio. Un mismo cliente puede aparecer más de una vez si cumple varios criterios. «Diferencia abono» lee caché en BD (02:00 Caracas o Recalcular arriba; también se actualiza al aplicar ABONOS desde la balanza).'
+                  ? 'Se concatenan las mismas filas que en los submenús «Día siguiente al vencimiento», «Prejudicial (5+ cuotas)» y «2 días antes». El listado por «10 días de atraso» (calendario) es otro submenú y no entra aquí. La columna «Caso» indica el criterio. Un mismo cliente puede aparecer más de una vez si cumple varios criterios. «Diferencia abono» lee caché en BD (domingo 04:35 Caracas o Recalcular arriba; también se actualiza al aplicar ABONOS desde la balanza).'
                   : modulo === 'a3cuotas'
                     ? 'Una fila por cliente con al menos cinco cuotas en estado VENCIDO o MORA (columna cuotas.estado). La cuota y fecha mostradas son referencia; «Cuotas atrasadas» es el número de esas cuotas que cumplen el criterio.'
                     : modulo === 'd2antes'
@@ -1582,6 +1590,45 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
           </CardHeader>
 
           <CardContent>
+            {modulo === 'general' ? (
+              <div className="mb-4 rounded-lg border border-sky-200 bg-sky-50/90 px-4 py-3 text-sm text-sky-950">
+                <p className="mb-1 font-semibold text-sky-950">
+                  Actualización masiva (solo dólares)
+                </p>
+                <p className="mb-3 text-xs leading-relaxed text-sky-900/95">
+                  Programa en el servidor el mismo recálculo masivo que el job
+                  semanal (domingo 04:35 America/Caracas): persiste la comparación
+                  ABONOS (hoja CONCILIACIÓN) frente al total pagado en cuotas en{' '}
+                  <code className="rounded bg-white/80 px-1 py-0.5 text-[11px]">
+                    prestamos.abonos_drive_cuotas_cache
+                  </code>{' '}
+                  para préstamos elegibles. No modifica fechas ni el caché de
+                  columna Q.
+                </p>
+                <Button
+                  type="button"
+                  size="sm"
+                  className="bg-sky-700 text-white hover:bg-sky-800"
+                  onClick={() => setConfirmAbonosMasivoOpen(true)}
+                  disabled={
+                    programandoRefreshAbonosDrive ||
+                    actualizandoListas ||
+                    enviandoPrejudicial ||
+                    enviandoD2Antes ||
+                    enviandoPago1Dia ||
+                    enviandoPago10Dias
+                  }
+                >
+                  <Database
+                    className={`mr-2 h-4 w-4 ${
+                      programandoRefreshAbonosDrive ? 'animate-pulse' : ''
+                    }`}
+                  />
+                  Ejecutar actualización masiva (ABONOS / USD)
+                </Button>
+              </div>
+            ) : null}
+
             <div className="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-2">
               <Button
                 variant="secondary"
@@ -1606,7 +1653,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                   type="button"
                   variant="secondary"
                   size="sm"
-                  onClick={() => void handleRefreshAbonosDriveCache()}
+                  onClick={() => setConfirmAbonosMasivoOpen(true)}
                   disabled={
                     programandoRefreshAbonosDrive ||
                     actualizandoListas ||
@@ -1615,7 +1662,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                     enviandoPago1Dia ||
                     enviandoPago10Dias
                   }
-                  title="Job en servidor (segundo plano), igual que 02:00 Caracas. Luego pulse Actualización manual."
+                  title="Job en servidor (segundo plano), igual que domingo 04:35 Caracas. Luego pulse Actualización manual."
                 >
                   <Database
                     className={`mr-2 h-4 w-4 ${
@@ -1640,7 +1687,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                     enviandoPago1Dia ||
                     enviandoPago10Dias
                   }
-                  title="Job en servidor (segundo plano), igual que domingo 04:00 Caracas. Luego pulse Actualización manual."
+                  title="Job en servidor (segundo plano), igual que lunes/jueves 04:00 Caracas y tras sync Drive. Luego pulse Actualización manual."
                 >
                   <Calendar
                     className={`mr-2 h-4 w-4 ${
@@ -1858,7 +1905,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                       Q anterior corregible (días &lt; 0 e indicador Sí: alinear BD con Q)
                     </option>
                     <option value="menor_cero">
-                      Q anterior sin acción (días &lt; 0 y no se puede aplicar desde aquí)
+                      Q anterior sin indicador «Sí» (p. ej. sin caché o Q no interpretable)
                     </option>
                   </select>
                 </div>
@@ -2061,7 +2108,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                           <th className="whitespace-nowrap px-3 py-2 text-right text-xs font-semibold leading-tight">
                             <div className="inline-flex w-full items-center justify-end gap-1">
                               <span
-                                title="Valor del listado desde caché en BD: domingo 02:00 Caracas o Recalcular; también al aplicar ABONOS desde la balanza."
+                                title="Valor del listado desde caché en BD: domingo 04:35 Caracas o Recalcular; también al aplicar ABONOS desde la balanza."
                               >
                                 Diferencia Abono
                               </span>
@@ -2082,7 +2129,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                         {modulo === 'fecha' ? (
                           <th
                             className="whitespace-nowrap px-3 py-2 text-right text-xs font-semibold leading-tight"
-                            title="Días = fecha columna Q (hoja) − fecha_aprobacion (BD). Caché cada domingo 04:00 Caracas o Recalcular."
+                            title="Días = fecha columna Q (hoja) − fecha_aprobacion (BD). Caché: lunes y jueves 04:00 Caracas, tras cada sync Drive, o Recalcular."
                           >
                             Diferencia fecha (días)
                           </th>
@@ -2364,7 +2411,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                           <th className="whitespace-nowrap px-3 py-2 text-right text-xs font-semibold leading-tight">
                             <div className="inline-flex w-full items-center justify-end gap-1">
                               <span
-                                title="Valor del listado desde caché en BD: domingo 02:00 Caracas o Recalcular; también al aplicar ABONOS desde la balanza."
+                                title="Valor del listado desde caché en BD: domingo 04:35 Caracas o Recalcular; también al aplicar ABONOS desde la balanza."
                               >
                                 Diferencia Abono
                               </span>
@@ -2385,7 +2432,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                         {modulo === 'fecha' ? (
                           <th
                             className="whitespace-nowrap px-3 py-2 text-right text-xs font-semibold leading-tight"
-                            title="Días = fecha columna Q (hoja) − fecha_aprobacion (BD). Caché cada domingo 04:00 Caracas o Recalcular."
+                            title="Días = fecha columna Q (hoja) − fecha_aprobacion (BD). Caché: lunes y jueves 04:00 Caracas, tras cada sync Drive, o Recalcular."
                           >
                             Diferencia fecha (días)
                           </th>
@@ -2405,11 +2452,13 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                           manual
                         </th>
 
-                        <th className="w-14 px-2 py-2 text-center font-semibold">
-                          <span title="Descargar PDF de estado de cuenta">
-                            Estado de cuenta
-                          </span>
-                        </th>
+                        {modulo === 'fecha' ? null : (
+                          <th className="w-14 px-2 py-2 text-center font-semibold">
+                            <span title="Descargar PDF de estado de cuenta">
+                              Estado de cuenta
+                            </span>
+                          </th>
+                        )}
                       </tr>
                     </thead>
 
@@ -2417,7 +2466,13 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                       {listaFiltradaCedula.length === 0 ? (
                         <tr>
                           <td
-                            colSpan={esListaCombinadaMoras ? 6 : 5}
+                            colSpan={
+                              esListaCombinadaMoras
+                                ? modulo === 'fecha'
+                                  ? 5
+                                  : 6
+                                : 5
+                            }
                             className="py-8 text-center text-gray-500"
                           >
                             <span className="block font-medium text-gray-600">
@@ -2537,9 +2592,11 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                               </div>
                             </td>
 
-                            <td className="px-2 py-2 text-center align-middle">
-                              {estadoCuentaPdfCell(row.prestamo_id)}
-                            </td>
+                            {modulo === 'fecha' ? null : (
+                              <td className="px-2 py-2 text-center align-middle">
+                                {estadoCuentaPdfCell(row.prestamo_id)}
+                              </td>
+                            )}
                           </tr>
                         ))
                       )}
@@ -2619,6 +2676,19 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
             </Fragment>
           </CardContent>
         </Card>
+
+        {modulo === 'fecha' ? (
+          <div className="mt-6 space-y-2">
+            <h2 className="text-sm font-semibold text-slate-800">
+              Ajuste por día de aprobación
+            </h2>
+            <p className="text-xs text-muted-foreground">
+              Listado de préstamos cuya fecha de aprobación coincide con el día elegido; edición directa
+              de aprobación (requerimiento y base siguen la regla del servidor).
+            </p>
+            <Fechas2BusquedaPanel embedded />
+          </div>
+        ) : null}
         </motion.div>
       </div>
 
@@ -2710,6 +2780,62 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
               onClick={confirmarEnvioManualYEnviar}
             >
               Enviar correos
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={confirmAbonosMasivoOpen}
+        onOpenChange={open => {
+          if (!open) setConfirmAbonosMasivoOpen(false)
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              Confirmar actualización masiva (ABONOS / USD)
+            </DialogTitle>
+
+            <div className="space-y-3 text-sm text-gray-600">
+              <p>
+                Se llamará al mismo endpoint que «Recalcular Diferencia abono»:
+                el servidor programa en segundo plano el recálculo y persistencia
+                de{' '}
+                <code className="rounded bg-slate-100 px-1 py-0.5 text-xs">
+                  prestamos.abonos_drive_cuotas_cache
+                </code>{' '}
+                (ABONOS en CONCILIACIÓN vs cuotas). No afecta fechas ni caché Q.
+              </p>
+
+              <p className="font-medium text-gray-900">
+                Pulse «Programar recálculo» para enviar la petición. «Cancelar»
+                cierra sin cambios.
+              </p>
+            </div>
+          </DialogHeader>
+
+          <DialogFooter className="gap-2 sm:justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setConfirmAbonosMasivoOpen(false)}
+            >
+              Cancelar
+            </Button>
+
+            <Button
+              type="button"
+              className="bg-sky-700 text-white hover:bg-sky-800"
+              disabled={
+                programandoRefreshAbonosDrive || actualizandoListas
+              }
+              onClick={() => {
+                setConfirmAbonosMasivoOpen(false)
+                void handleRefreshAbonosDriveCache()
+              }}
+            >
+              Programar recálculo
             </Button>
           </DialogFooter>
         </DialogContent>

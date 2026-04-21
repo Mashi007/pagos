@@ -5,6 +5,8 @@ Sincronización de la hoja CONCILIACIÓN (Google Sheets) → BD.
   Horario recomendado alineado al job interno: domingo y miércoles 01:20 America/Caracas (≈ 05:20 UTC, sin DST).
   Si ENABLE_AUTOMATIC_SCHEDULED_JOBS=true, el APScheduler del backend ya ejecuta el mismo sync esos días a esa hora:
   puede omitir el cron externo o dejarlo como respaldo (evite disparos redundantes minuto a minuto).
+  Tras cada sync exitoso, el backend recalcula en bloque `prestamos.fecha_entrega_q_aprobacion_cache` (columna Q vs
+  `fecha_aprobacion`) para alinear listados y auditoría con el snapshot nuevo.
   Tras ese snapshot, el backend (si ENABLE_AUTOMATIC_SCHEDULED_JOBS=true) refresca cada día a las 04:05 la lista de
   candidatos «Clientes (Drive)» en BD; cron externo no es necesario para esa lista (ver POST /clientes/drive-import/refresh-cache).
 - POST /conciliacion-sheet/sync-now — mismo trabajo que /sync, pero con sesión staff (admin / operador / gerente).
@@ -41,6 +43,27 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+def _run_sync_to_db_y_refrescar_cache_q(db: Session) -> Dict[str, Any]:
+    """Sync CONCILIACIÓN → BD y, si va bien, mismo recálculo masivo que el job / POST refresh (Q vs aprobación)."""
+    res = run_sync_to_db(db)
+    try:
+        from app.services.fecha_entrega_q_aprobacion_cache_job import (
+            ejecutar_refresh_fecha_entrega_q_cache_tras_sync_conciliacion,
+        )
+
+        qres = ejecutar_refresh_fecha_entrega_q_cache_tras_sync_conciliacion(db)
+        res["fecha_entrega_q_aprobacion_cache_refresh"] = qres
+    except Exception as e:
+        logger.exception(
+            "[conciliacion_sheet] Sync OK pero falló refresco masivo fecha_entrega_q_aprobacion_cache: %s",
+            e,
+        )
+        res["fecha_entrega_q_aprobacion_cache_refresh"] = {
+            "error": (str(e) or "error")[:500],
+        }
+    return res
+
+
 def _require_sync_secret(x_secret: Optional[str]) -> None:
     expected = (getattr(settings, "CONCILIACION_SHEET_SYNC_SECRET", None) or "").strip()
     if not expected:
@@ -61,7 +84,7 @@ def post_sync_conciliacion_sheet(
     logger.info("[conciliacion_sheet] POST /sync (cron / secreto)")
     _require_sync_secret(x_conciliacion_sheet_sync_secret)
     try:
-        return run_sync_to_db(db)
+        return _run_sync_to_db_y_refrescar_cache_q(db)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
     except Exception as e:
@@ -87,7 +110,7 @@ def post_sync_conciliacion_sheet_now(
         getattr(_staff, "rol", None),
     )
     try:
-        return run_sync_to_db(db)
+        return _run_sync_to_db_y_refrescar_cache_q(db)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
     except Exception as e:

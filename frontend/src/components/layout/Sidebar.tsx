@@ -38,6 +38,7 @@ import {
   TrendingUp,
   LayoutList,
   Calendar,
+  FileStack,
 } from 'lucide-react'
 
 import { cn } from '../../utils'
@@ -262,7 +263,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
           icon: LayoutList,
         },
         {
-          title: 'Fecha',
+          title: 'Fechas',
           href: '/notificaciones/fecha',
           icon: Calendar,
         },
@@ -276,12 +277,6 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
           title: 'Préstamos',
           href: '/actualizaciones/prestamos',
           icon: CreditCard,
-          adminOnly: true,
-        },
-        {
-          title: 'Fechas 2',
-          href: '/actualizaciones/fechas-2',
-          icon: Calendar,
           adminOnly: true,
         },
       ],
@@ -330,6 +325,12 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
           title: 'Escáner',
           href: '/escaner',
           icon: Brain,
+        },
+
+        {
+          title: 'Escáner (lote)',
+          href: '/escaner-lote',
+          icon: FileStack,
         },
       ],
     },

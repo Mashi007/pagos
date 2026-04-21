@@ -1,7 +1,10 @@
 """
 Persiste en `prestamos.fecha_entrega_q_aprobacion_cache` la comparación columna Q (hoja) vs fecha_aprobacion.
 
-Job programado (cada domingo 05:10 America/Caracas, tras caché abonos 04:35) y POST manual de refresco en notificaciones.
+- Tras cada sync exitoso de la hoja CONCILIACIÓN (Drive → `conciliacion_sheet_*`), el API dispara la misma pasada
+  masiva para que listados y auditoría vuelvan a leer la Q frente a la BD con el snapshot nuevo.
+- Job programado: lunes y jueves 04:00 America/Caracas (si `ENABLE_FECHA_ENTREGA_Q_CACHE_NIGHTLY` y scheduler activo).
+- POST manual `/notificaciones/refresh-fecha-entrega-q-cache` (misma función `ejecutar_refresh_fecha_entrega_q_aprobacion_cache_nightly`).
 """
 from __future__ import annotations
 
@@ -78,3 +81,14 @@ def ejecutar_refresh_fecha_entrega_q_aprobacion_cache_nightly(db: Session) -> Di
         "errores": err,
         "omitidos_sin_cedula": skipped,
     }
+
+
+def ejecutar_refresh_fecha_entrega_q_cache_tras_sync_conciliacion(db: Session) -> Dict[str, Any]:
+    """
+    Invocado inmediatamente después de un sync exitoso CONCILIACIÓN (Google Sheets → BD).
+    Misma pasada que el job programado / el POST de refresco manual.
+    """
+    logger.info(
+        "[fecha_q_cache] Refresco masivo por sincronización Drive (conciliacion_sheet → comparación Q vs BD)"
+    )
+    return ejecutar_refresh_fecha_entrega_q_aprobacion_cache_nightly(db)

@@ -675,6 +675,8 @@ export async function getPagosReportadosKpis(
 
   if (params.incluir_exportados) q.set('incluir_exportados', 'true')
 
+  q.set('_rq', String(Date.now()))
+
   const data = await apiClient.get<PagosReportadosKpis>(
     `${BASE_COBROS}/pagos-reportados/kpis?${q}`
   )
@@ -755,6 +757,9 @@ export async function listPagosReportados(params: {
 
   if (params.incluir_exportados) q.set('incluir_exportados', 'true')
 
+  // Evita respuestas cacheadas por intermediarios desalineadas respecto a KPIs u otra pestaña.
+  q.set('_rq', String(Date.now()))
+
   const data = await apiClient.get<ListPagosReportadosResponse>(
     `${BASE_COBROS}/pagos-reportados?${q}`
   )
@@ -796,6 +801,8 @@ export async function listPagosReportadosConKpis(params: {
   if (params.per_page != null) q.set('per_page', String(params.per_page))
 
   if (params.incluir_exportados) q.set('incluir_exportados', 'true')
+
+  q.set('_rq', String(Date.now()))
 
   const url = `${BASE_COBROS}/pagos-reportados/listado-y-kpis?${q}`
 

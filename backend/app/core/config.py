@@ -86,8 +86,10 @@ class Settings(BaseSettings):
     ENABLE_FECHA_ENTREGA_Q_CACHE_NIGHTLY: bool = Field(
         default=True,
         description=(
-            "Si True y ENABLE_AUTOMATIC_SCHEDULED_JOBS=True, cada domingo a las 05:10 America/Caracas se recalcula "
-            "prestamos.fecha_entrega_q_aprobacion_cache (columna Q dentro de CONCILIACION_SHEET_COLUMNS_RANGE)."
+            "Si True y ENABLE_AUTOMATIC_SCHEDULED_JOBS=True, cada lunes y jueves a las 04:00 America/Caracas se recalcula "
+            "prestamos.fecha_entrega_q_aprobacion_cache (columna Q dentro de CONCILIACION_SHEET_COLUMNS_RANGE). "
+            "Además, tras cada POST exitoso de sincronización Drive (conciliacion-sheet/sync o sync-now), el servidor "
+            "vuelve a ejecutar ese mismo recálculo masivo para alinear listados con el snapshot nuevo."
         ),
     )
     # Snapshot candidatos préstamo nuevo desde tabla `drive` (tras sync CONCILIACIÓN).

@@ -12,7 +12,8 @@ Cuando esta activo:
 - todos los dias 04:05  Caché lista «Clientes (Drive)»: drive_clientes_candidatos_cache (tras auditoría y limpieza; lee `drive` actualizado en el último sync dom/mié; domingo incluido para UI Actualizaciones el mismo día del sync).
 - todos los dias 04:45  Snapshot candidatos préstamo desde `drive` -> prestamo_candidatos_drive (UI /actualizaciones/prestamos), si ENABLE_PRESTAMO_CANDIDATOS_DRIVE_NIGHTLY (tras caché clientes).
 - domingo 04:35  Notificaciones: caché «Diferencia abono» (masivo préstamos), si ENABLE_ABONOS_DRIVE_CACHE_NIGHTLY (separado de limpieza 04:00 y del job fecha).
-- domingo 05:10  Notificaciones: caché columna Q vs fecha_aprobacion (masivo), si ENABLE_FECHA_ENTREGA_Q_CACHE_NIGHTLY.
+- lunes y jueves 04:00  Notificaciones: caché columna Q vs fecha_aprobacion (masivo), si ENABLE_FECHA_ENTREGA_Q_CACHE_NIGHTLY
+  (misma hora que limpieza códigos: un hilo; orden de registro en scheduler; además se recalcula tras cada sync Drive exitoso).
 - todos los dias cada hora a :30 entre 06:30 y 19:30  Gmail pendientes (si PAGOS_GMAIL_SCHEDULED_SCAN_ENABLED=true).
 - Recibos (correo estado de cuenta tras pagos conciliados): manual (POST /notificaciones/recibos/ejecutar) y,
   si ENABLE_RECIBOS_CONCILIACION_EMAIL_JOBS, cron diario RECIBOS_CRON_HOUR:RECIBOS_CRON_MINUTE Caracas
@@ -45,7 +46,7 @@ SCHEDULER_TZ = "America/Caracas"
 #   Muy pesado: sync CONCILIACIÓN (Sheets + bulk), auditoría cartera, caché abonos masivo, caché fecha Q masivo.
 #   Medio: snapshot prestamo_candidatos_drive, caché clientes Drive.
 #   Ligero: limpieza estado_cuenta_codigos.
-# Dependencia: sync dom/mié 01:20 alimenta `drive`; jobs que leen `drive` (clientes 04:05, candidatos 04:45, todos los días)
+# Dependencia: sync dom/mié 01:20 alimenta `drive` y dispara recálculo masivo Q vs BD en la respuesta del sync; jobs que leen `drive` (clientes 04:05, candidatos 04:45, todos los días)
 # corren tras auditoría 03:00 y limpieza 04:00 para no competir con la carga de la BD en el mismo tramo que el sync.
 # El pool del scheduler usa 1 hilo: ningún job se solapa con otro (evita colisiones DB/API).
 
@@ -114,8 +115,8 @@ def _job_abonos_drive_cuotas_cache_dom_0435() -> None:
         db.close()
 
 
-def _job_fecha_entrega_q_aprobacion_cache_dom_0510() -> None:
-    """Domingo 05:10 Caracas (tras caché abonos 04:35). Columna Q vs fecha_aprobacion en prestamos (Notificaciones Fecha)."""
+def _job_fecha_entrega_q_aprobacion_cache_lun_jue_0400() -> None:
+    """Lunes y jueves 04:00 Caracas. Columna Q vs fecha_aprobacion en prestamos (Notificaciones Fecha)."""
     if not getattr(settings, "ENABLE_FECHA_ENTREGA_Q_CACHE_NIGHTLY", True):
         return
     db = SessionLocal()
@@ -126,14 +127,14 @@ def _job_fecha_entrega_q_aprobacion_cache_dom_0510() -> None:
 
         res = ejecutar_refresh_fecha_entrega_q_aprobacion_cache_nightly(db)
         logger.info(
-            "[fecha_q_cache] nightly prestamos=%s ok=%s err=%s skip=%s",
+            "[fecha_q_cache] programado lun/jue prestamos=%s ok=%s err=%s skip=%s",
             res.get("prestamos_considerados"),
             res.get("actualizados_ok"),
             res.get("errores"),
             res.get("omitidos_sin_cedula"),
         )
     except Exception as e:
-        logger.exception("Error en job fecha_entrega_q_aprobacion_cache_dom_0510: %s", e)
+        logger.exception("Error en job fecha_entrega_q_aprobacion_cache_lun_jue_0400: %s", e)
     finally:
         db.close()
 
@@ -458,13 +459,25 @@ def start_scheduler() -> None:
             name="Prestamos: snapshot candidatos desde Drive 04:45 (todos los días)",
         )
 
-    # 05:10 domingo — caché columna Q vs aprobación (Notificaciones Fecha)
+    # 04:00 lunes y jueves — caché columna Q vs aprobación (Notificaciones Fecha)
     if getattr(settings, "ENABLE_FECHA_ENTREGA_Q_CACHE_NIGHTLY", True):
         _scheduler.add_job(
-            _wrap_job_with_timing("fecha_entrega_q_aprobacion_cache_dom_0510", _job_fecha_entrega_q_aprobacion_cache_dom_0510),
-            CronTrigger(day_of_week="sun", hour=5, minute=10, timezone=SCHEDULER_TZ),
-            id="fecha_entrega_q_aprobacion_cache_dom_0510",
-            name="Notificaciones: caché columna Q vs fecha_aprobacion domingo 05:10",
+            _wrap_job_with_timing(
+                "fecha_entrega_q_aprobacion_cache_lun_0400",
+                _job_fecha_entrega_q_aprobacion_cache_lun_jue_0400,
+            ),
+            CronTrigger(day_of_week="mon", hour=4, minute=0, timezone=SCHEDULER_TZ),
+            id="fecha_entrega_q_aprobacion_cache_lun_0400",
+            name="Notificaciones: caché Q vs fecha_aprobacion lunes 04:00",
+        )
+        _scheduler.add_job(
+            _wrap_job_with_timing(
+                "fecha_entrega_q_aprobacion_cache_jue_0400",
+                _job_fecha_entrega_q_aprobacion_cache_lun_jue_0400,
+            ),
+            CronTrigger(day_of_week="thu", hour=4, minute=0, timezone=SCHEDULER_TZ),
+            id="fecha_entrega_q_aprobacion_cache_jue_0400",
+            name="Notificaciones: caché Q vs fecha_aprobacion jueves 04:00",
         )
 
     # 13:00 lun-sab — finiquito (segunda pasada)
@@ -533,7 +546,7 @@ def start_scheduler() -> None:
     if getattr(settings, "ENABLE_ABONOS_DRIVE_CACHE_NIGHTLY", True):
         _caches_notif_log += "; caché Diferencia abono domingo 04:35"
     if getattr(settings, "ENABLE_FECHA_ENTREGA_Q_CACHE_NIGHTLY", True):
-        _caches_notif_log += "; caché Q vs aprobación domingo 05:10"
+        _caches_notif_log += "; caché Q vs aprobación lunes y jueves 04:00"
     _prest_cand_log = ""
     if getattr(settings, "ENABLE_PRESTAMO_CANDIDATOS_DRIVE_NIGHTLY", True):
         _prest_cand_log = "; candidatos prestamo Drive diario 04:45"

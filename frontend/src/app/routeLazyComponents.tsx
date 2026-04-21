@@ -52,6 +52,8 @@ export const InfopagosPage = lazy(() => import('../pages/InfopagosPage'))
 
 export const EscanerInfopagosPage = lazy(() => import('../pages/EscanerInfopagosPage'))
 
+export const EscanerInfopagosLotePage = lazy(() => import('../pages/EscanerInfopagosLotePage'))
+
 export const AmortizacionPage = lazy(() => import('../pages/AmortizacionPage'))
 
 export const CobrosPagosReportadosPage = lazy(

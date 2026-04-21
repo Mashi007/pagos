@@ -192,7 +192,6 @@ export function filaCumpleFiltroDiferenciaFechaGeneral(
   if (filtro === 'mayor_cero') {
     const d = cmp.diferencia_dias
     if (d == null || Number.isNaN(Number(d))) return false
-    // Solo filas donde realmente se puede «Sí» (p. ej. Q > BD pero Q < requerimiento → diff>0 y puede=false).
     return Number(d) > 0 && puede
   }
   if (filtro === 'menor_cero') {
@@ -248,7 +247,7 @@ export function DiferenciaFechaGeneralCell({
     return (
       <span
         className="text-xs text-muted-foreground"
-        title="Dato del caché semanal (04:00 Caracas, domingo). Si está vacío, aún no hay caché en BD para este préstamo."
+        title="Dato del caché (lunes y jueves 04:00 Caracas, y tras cada sync Drive de CONCILIACIÓN). Si está vacío, aún no hay caché en BD para este préstamo."
       >
         -
       </span>
@@ -963,7 +962,14 @@ export function CompararAbonosDriveCuotasCell({ row }: { row: ClienteRetrasadoIt
 export function fmtFechaNotifIso(iso?: string | null): string {
   if (iso == null || String(iso).trim() === '') return '-'
   const s = String(iso).trim()
-  const t = Date.parse(s.length >= 10 ? s.slice(0, 10) : s)
+  const head = s.length >= 10 ? s.slice(0, 10) : s
+  // Solo fecha calendario YYYY-MM-DD: no usar Date.parse (interpretación UTC) para no desplazar el día.
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(head)
+  if (m) {
+    const [, y, mo, d] = m
+    return `${d} / ${mo} / ${y}`
+  }
+  const t = Date.parse(s)
   if (Number.isNaN(t)) return s
   return new Date(t).toLocaleDateString('es-VE', { timeZone: 'America/Caracas' })
 }
@@ -978,9 +984,8 @@ export function fmtDiferenciaDiasNotif(n: number | null | undefined): string {
 
 /**
  * Misma estructura visual que ABONOS vs cuotas: huella, aviso de sync, regla, indicador Sí/No,
- * tabla de comparación y pie. «Sí» cuando la comparación en vivo permite aplicar (Q distinta de la
- * BD y Q ≥ requerimiento si aplica). Si Q es anterior a la aprobación en BD, el paso de confirmación
- * exige escribir CONFIRMO antes de guardar. El POST llama a `PUT /prestamos/{id}` (recálculo de cuotas).
+ * tabla de comparación y pie. «Sí» cuando Q interpretable difiere de `fecha_aprobacion` en BD; el POST
+ * usa `PUT /prestamos/{id}` (requerimiento = día anterior a la nueva aprobación, recálculo de cuotas si aplica).
  */
 export function CompararFechaEntregaQAprobacionCell({ row }: { row: ClienteRetrasadoItem }) {
   const queryClient = useQueryClient()
@@ -995,7 +1000,6 @@ export function CompararFechaEntregaQAprobacionCell({ row }: { row: ClienteRetra
   const [loading, setLoading] = useState(false)
   const [applying, setApplying] = useState(false)
   const [data, setData] = useState<CompararFechaEntregaQvsAprobacionResponse | null>(null)
-  const [confirmacionCorreccionAtras, setConfirmacionCorreccionAtras] = useState('')
 
   const onDialogFechaOpenChange = useCallback((v: boolean) => {
     setOpen(v)
@@ -1003,7 +1007,6 @@ export function CompararFechaEntregaQAprobacionCell({ row }: { row: ClienteRetra
       setPaso('resumen')
       setData(null)
       setApplying(false)
-      setConfirmacionCorreccionAtras('')
     }
   }, [])
 
@@ -1021,7 +1024,6 @@ export function CompararFechaEntregaQAprobacionCell({ row }: { row: ClienteRetra
   const abrir = async (loteExplicito?: string | null) => {
     setOpen(true)
     setPaso('resumen')
-    setConfirmacionCorreccionAtras('')
     setLoading(true)
     setData(null)
     try {
@@ -1049,12 +1051,9 @@ export function CompararFechaEntregaQAprobacionCell({ row }: { row: ClienteRetra
         cedula: ced,
         prestamoId: pid,
         ...(loteA ? { lote: loteA } : {}),
-        ...(data.correccion_desde_q_anterior_bd
-          ? { confirmacionCorreccionFechaQAtras: confirmacionCorreccionAtras }
-          : {}),
       })
       toast.success(
-        'Fecha de aprobación guardada en BD con la fecha de la columna Q. Si había cuotas en APROBADO/LIQUIDADO y cambió la base, se recalcularon vencimientos (misma regla que al editar en revisión manual).'
+        'Fecha de aprobación guardada con la Q; fecha de requerimiento y vencimientos según reglas del servidor (como en revisión manual).'
       )
       onDialogFechaOpenChange(false)
       await invalidatePagosPrestamosRevisionYCuotas(queryClient, {
@@ -1088,12 +1087,6 @@ export function CompararFechaEntregaQAprobacionCell({ row }: { row: ClienteRetra
             : ''
         }`
       : 'Q'
-
-  const requiereConfirmaEscritaAtras =
-    paso === 'confirmar' && data?.correccion_desde_q_anterior_bd === true
-  const confirmaEscritaOk =
-    !requiereConfirmaEscritaAtras ||
-    confirmacionCorreccionAtras.trim().toUpperCase() === 'CONFIRMO'
 
   return (
     <>
@@ -1132,10 +1125,9 @@ export function CompararFechaEntregaQAprobacionCell({ row }: { row: ClienteRetra
                 con la misma lógica que al guardar desde revisión manual.
               </p>
               <p className="text-xs text-slate-600">
-                <strong>Fecha Q</strong> es el valor de la hoja CONCILIACIÓN (fecha de entrega / columna Q), no la{' '}
-                <strong>fecha de requerimiento</strong> del expediente (<code className="text-[11px]">prestamos.fecha_requerimiento</code>
-                ). Este flujo no cambia la fecha de requerimiento; solo puede actualizar aprobación y base de cálculo
-                si Q cumple las reglas (p. ej. Q no anterior al requerimiento).
+                La <strong>fecha de requerimiento</strong> en BD (<code className="text-[11px]">prestamos.fecha_requerimiento</code>) no se
+                edita a mano: al guardar la nueva aprobación el servidor la recalcula como el <strong>día calendario anterior</strong> a esa
+                fecha de aprobación (misma regla que al editar el préstamo en revisión manual).
               </p>
               <ul className="list-none space-y-1 rounded-md border border-slate-200 bg-muted/30 p-3 text-xs tabular-nums">
                 <li>
@@ -1155,7 +1147,7 @@ export function CompararFechaEntregaQAprobacionCell({ row }: { row: ClienteRetra
                   </span>
                 </li>
                 <li>
-                  Fecha requerimiento (BD, no se modifica aquí):{' '}
+                  Fecha requerimiento (BD actual; al guardar pasa a ser el día anterior a la nueva aprobación):{' '}
                   <span className="font-medium">
                     {fmtFechaNotifIso(data.fecha_requerimiento_prestamo)}
                   </span>
@@ -1169,26 +1161,6 @@ export function CompararFechaEntregaQAprobacionCell({ row }: { row: ClienteRetra
                 Pulse «Confirmar y guardar» solo si la fecha Q es la fuente de verdad que desea en el
                 sistema.
               </p>
-              {requiereConfirmaEscritaAtras ? (
-                <div className="space-y-2 rounded-md border border-amber-300 bg-amber-50/90 p-3">
-                  <label
-                    htmlFor="confirma-correccion-fecha-q-atras"
-                    className="text-xs font-medium text-amber-950"
-                  >
-                    Confirmación obligatoria: escriba <span className="font-mono">CONFIRMO</span> para
-                    adelantar la fecha de aprobación en BD a la fecha Q (anterior a la fecha actual en
-                    sistema).
-                  </label>
-                  <Input
-                    id="confirma-correccion-fecha-q-atras"
-                    autoComplete="off"
-                    className="font-mono text-sm"
-                    value={confirmacionCorreccionAtras}
-                    onChange={e => setConfirmacionCorreccionAtras(e.target.value)}
-                    placeholder="CONFIRMO"
-                  />
-                </div>
-              ) : null}
             </div>
           ) : data ? (
             <div className="space-y-3 text-sm">
@@ -1244,10 +1216,8 @@ export function CompararFechaEntregaQAprobacionCell({ row }: { row: ClienteRetra
               {!puedeOperar ? (
                 <p className="rounded-md border border-slate-200 bg-muted/40 p-2 text-xs text-slate-800">
                   <span className="font-medium">Regla: </span>
-                  el indicador «Sí» aplica si la fecha Q es <strong>posterior</strong> a la aprobación
-                  en BD, o si Q es <strong>anterior</strong> pero sigue siendo ≥ la fecha de requerimiento
-                  (corrección cuando la BD tiene una aprobación errónea, p. ej. por serial Excel mal
-                  interpretado). Si Q es anterior al requerimiento, use revisión manual.
+                  el indicador «Sí» aplica cuando la fecha Q es interpretable y es <strong>distinta</strong> de la
+                  fecha de aprobación en BD (adelante o atrás). Si no hay Q interpretada, use revisión manual o la hoja.
                 </p>
               ) : null}
 
@@ -1271,11 +1241,10 @@ export function CompararFechaEntregaQAprobacionCell({ row }: { row: ClienteRetra
                         ? 'Elija primero el lote de la hoja que corresponde a este préstamo.'
                         : puedeOperar
                           ? 'Pulse Sí para confirmar en el siguiente paso el guardado en BD (fecha Q → fecha de aprobación).'
-                          : 'No hay indicador Sí (Q debe diferir de la BD y, si Q es anterior, ser ≥ fecha de requerimiento).'
+                          : 'No hay indicador Sí (Q debe diferir de la fecha de aprobación en BD y ser interpretable).'
                   }
                   onClick={() => {
                     if (!puedeOperar || !esAdmin || loading) return
-                    setConfirmacionCorreccionAtras('')
                     setPaso('confirmar')
                   }}
                   className={`${pillBase} ${
@@ -1285,7 +1254,7 @@ export function CompararFechaEntregaQAprobacionCell({ row }: { row: ClienteRetra
                   }`}
                   aria-label={
                     puedeOperar
-                      ? 'Sí: fecha Q posterior a fecha de aprobación; siguiente paso para guardar en BD'
+                      ? 'Sí: Q distinta de la aprobación en BD; siguiente paso para guardar en BD'
                       : 'Sí: no aplica'
                   }
                 >
@@ -1351,12 +1320,36 @@ export function CompararFechaEntregaQAprobacionCell({ row }: { row: ClienteRetra
               ) : null}
 
               <dl className="grid grid-cols-1 gap-2 rounded-md border bg-muted/30 p-3">
+                {data.fecha_entrega_column_q == null &&
+                data.fecha_entrega_column_q_raw != null &&
+                String(data.fecha_entrega_column_q_raw).trim() !== '' ? (
+                  <div className="col-span-1 rounded-md border border-amber-200 bg-amber-50/80 px-2 py-2 text-xs text-amber-950">
+                    <span className="font-semibold">Celda Q (valor en hoja, sin interpretar): </span>
+                    <span className="font-mono break-all">
+                      {String(data.fecha_entrega_column_q_raw)}
+                    </span>
+                    <p className="mt-1 text-[11px] text-amber-900/90">
+                      No hay fecha Q interpretada; use revisión manual para corregir la fecha de aprobación
+                      o normalice el formato en la hoja (ideal: celda con formato «fecha» o ISO AAAA-MM-DD).
+                    </p>
+                  </div>
+                ) : null}
                 <div className="flex justify-between gap-2">
                   <dt className="text-muted-foreground">Fecha entrega (columna Q)</dt>
                   <dd className="font-medium tabular-nums">
                     {fmtFechaNotifIso(data.fecha_entrega_column_q)}
                   </dd>
                 </div>
+                {data.fecha_entrega_column_q != null &&
+                data.fecha_entrega_column_q_raw != null &&
+                String(data.fecha_entrega_column_q_raw).trim() !== '' ? (
+                  <div className="flex justify-between gap-2 border-t border-border/60 pt-2">
+                    <dt className="text-muted-foreground">Q en hoja (crudo)</dt>
+                    <dd className="max-w-[min(280px,55vw)] break-all text-right font-mono text-[11px] text-foreground">
+                      {String(data.fecha_entrega_column_q_raw)}
+                    </dd>
+                  </div>
+                ) : null}
                 <div className="flex justify-between gap-2">
                   <dt className="text-muted-foreground">Fecha aprobación (sistema)</dt>
                   <dd className="font-medium tabular-nums">
@@ -1461,7 +1454,6 @@ export function CompararFechaEntregaQAprobacionCell({ row }: { row: ClienteRetra
                   variant="outline"
                   disabled={applying}
                   onClick={() => {
-                    setConfirmacionCorreccionAtras('')
                     setPaso('resumen')
                   }}
                 >
@@ -1469,12 +1461,7 @@ export function CompararFechaEntregaQAprobacionCell({ row }: { row: ClienteRetra
                 </Button>
                 <Button
                   type="button"
-                  disabled={applying || !esAdmin || !confirmaEscritaOk}
-                  title={
-                    !confirmaEscritaOk
-                      ? 'Escriba CONFIRMO en el campo de confirmación (corrección con Q anterior a la BD).'
-                      : undefined
-                  }
+                  disabled={applying || !esAdmin}
                   onClick={() => {
                     void aplicarFechaQComoAprobacion()
                   }}

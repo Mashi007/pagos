@@ -302,7 +302,10 @@ def fetch_sheet_values(
             spreadsheetId=spreadsheet_id,
             range=rng,
             majorDimension="ROWS",
-            valueRenderOption="FORMATTED_VALUE",
+            # UNFORMATTED_VALUE: las fechas con formato de celda vienen como número-serial (Excel),
+            # sin depender del locale de la hoja. FORMATTED_VALUE devolvía M/D en US y el backend
+            # interpretaba como D/M, invirtiendo día y mes frente a la lectura venezolana.
+            valueRenderOption="UNFORMATTED_VALUE",
         )
     )
     values = resp.get("values") or []

@@ -16,7 +16,7 @@ export function tituloEncabezadoNotificaciones(
     case 'general':
       return 'Notificaciones: vista general'
     case 'fecha':
-      return 'Notificaciones: diferencia fecha (consulta)'
+      return 'Notificaciones: fechas (Q vs aprobación)'
     default:
       return 'Notificaciones'
   }

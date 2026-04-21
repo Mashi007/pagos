@@ -224,10 +224,7 @@ export interface CompararFechaEntregaQvsAprobacionResponse {
   /** Misma clave que ABONOS: true si misma fecha calendario (tolerancia días en tolerancia_dias). */
   coincide_aproximado?: boolean
 
-  /**
-   * True si se puede POST aplicar-fecha-entrega-q: Q posterior a la aprobación en BD, o
-   * Q anterior pero >= fecha_requerimiento (corrección de aprobación errónea vs columna Q).
-   */
+  /** True si hay fecha Q interpretable y difiere en calendario de `fecha_aprobacion` en BD (no bloquea por requerimiento). */
   puede_aplicar?: boolean
 
   /** True si el caso aplicable es «Q antes que la aprobación en BD» (corrección hacia atrás). */
@@ -271,7 +268,10 @@ export interface FechaQAuditoriaTotalItem {
   /** Valor guardado en JSON al cerrar caché (solo auditoría; puede desfasarse si se corrigió BD después). */
   diferencia_dias_snapshot_cache?: number | null
   puede_aplicar?: boolean | null
+  /** Valor congelado en JSON de caché (solo contraste; `puede_aplicar` en vivo usa BD actual). */
+  puede_aplicar_snapshot_cache?: boolean | null
   correccion_desde_q_anterior_bd?: boolean | null
+  correccion_desde_q_anterior_bd_snapshot_cache?: boolean | null
   q_cache_at?: string | null
 }
 
@@ -281,6 +281,8 @@ export interface FechaQAuditoriaTotalResponse {
   offset: number
   filtro_cedula?: string | null
   solo_con_diferencia: boolean
+  /** Si true, el listado excluye préstamos marcados «No aplicar Q» en caché. */
+  excluir_marcados_no?: boolean
   items: FechaQAuditoriaTotalItem[]
 }
 
@@ -1415,6 +1417,8 @@ class NotificacionService {
     offset?: number
     cedula_q?: string
     solo_con_diferencia?: boolean
+    /** Por defecto true en servidor: oculta filas marcadas «No aplicar Q». */
+    excluir_marcados_no?: boolean
   }): Promise<FechaQAuditoriaTotalResponse> {
     const q = new URLSearchParams()
     if (params?.limit != null) q.set('limit', String(params.limit))
@@ -1425,22 +1429,35 @@ class NotificacionService {
     if (params?.solo_con_diferencia != null) {
       q.set('solo_con_diferencia', String(Boolean(params.solo_con_diferencia)))
     }
+    if (params?.excluir_marcados_no != null) {
+      q.set('excluir_marcados_no', String(Boolean(params.excluir_marcados_no)))
+    }
     return await apiClient.get<FechaQAuditoriaTotalResponse>(
       `${this.baseUrl}/fecha-q-auditoria-total?${q.toString()}`
     )
   }
 
   /**
+   * Marca en caché «No aplicar Q» para que la fila no salga en auditoría (con `excluir_marcados_no` por defecto).
+   * No modifica `fecha_aprobacion` en BD.
+   */
+  async postFechaQAuditoriaMarcaNoAplicar(params: {
+    prestamoId: number
+  }): Promise<{ ok: boolean; prestamo_id: number }> {
+    return await apiClient.post(`${this.baseUrl}/fecha-q-auditoria-marca-no-aplicar`, {
+      prestamo_id: params.prestamoId,
+    })
+  }
+
+  /**
    * Persiste la fecha de la columna Q como `prestamos.fecha_aprobacion` (y alinea base de cálculo);
-   * recalcula vencimientos de cuotas con la misma lógica que `PUT /prestamos/{id}`.
-   * Solo si la fecha Q es estrictamente posterior a la fecha de aprobación actual; requiere admin.
+   * `fecha_requerimiento` sigue la regla del servidor (día calendario anterior a la nueva aprobación);
+   * recalcula vencimientos de cuotas con la misma lógica que `PUT /prestamos/{id}`. Requiere admin.
    */
   async postAplicarFechaEntregaQComoFechaAprobacion(params: {
     cedula: string
     prestamoId: number
     lote?: string | null
-    /** Obligatorio cuando el backend indica corrección con Q anterior a la BD: texto exacto CONFIRMO. */
-    confirmacionCorreccionFechaQAtras?: string | null
   }): Promise<{ ok: boolean; prestamo?: Record<string, unknown> }> {
     const body: Record<string, unknown> = {
       cedula: params.cedula.trim(),
@@ -1448,8 +1465,6 @@ class NotificacionService {
     }
     const lote = params.lote?.trim()
     if (lote) body.lote = lote
-    const conf = params.confirmacionCorreccionFechaQAtras?.trim()
-    if (conf) body.confirmacion_correccion_fecha_q_atras = conf
     return await apiClient.post(`${this.baseUrl}/aplicar-fecha-entrega-q-como-fecha-aprobacion`, body)
   }
 

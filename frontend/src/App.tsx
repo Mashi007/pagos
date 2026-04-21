@@ -165,6 +165,7 @@ import {
   FiniquitoRootPage,
   InfopagosPage,
   EscanerInfopagosPage,
+  EscanerInfopagosLotePage,
   FechaQAuditoriaTotalPage,
   ModelosVehiculos,
   Notificaciones,
@@ -392,6 +393,8 @@ function App() {
             <Route path="infopagos" element={<InfopagosPage />} />
 
             <Route path="escaner" element={<EscanerInfopagosPage />} />
+
+            <Route path="escaner-lote" element={<EscanerInfopagosLotePage />} />
 
             {/* Amortizacin */}
 

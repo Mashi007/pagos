@@ -24,7 +24,7 @@ export function tabsParaModulo(
   modulo: NotificacionesModulo
 ): { id: TabId; label: string; icon: TabIcon }[] {
   if (modulo === 'fecha') {
-    return [{ id: 'general_todos', label: 'Fecha', icon: Calendar }]
+    return [{ id: 'general_todos', label: 'Fechas', icon: Calendar }]
   }
   if (modulo === 'general') {
     return [{ id: 'general_todos', label: 'General', icon: LayoutList }]

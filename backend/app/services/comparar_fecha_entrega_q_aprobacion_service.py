@@ -50,8 +50,22 @@ def _persist_prestamo_fecha_entrega_q_cache(
     row = db.get(Prestamo, prestamo_id)
     if row is None:
         return
+    prev = row.fecha_entrega_q_aprobacion_cache if isinstance(row.fecha_entrega_q_aprobacion_cache, dict) else {}
+    merged: Dict[str, Any] = dict(payload) if isinstance(payload, dict) else {}
+    new_q = merged.get("fecha_entrega_column_q")
+    old_q = prev.get("fecha_entrega_column_q") if isinstance(prev, dict) else None
+    # Si el usuario marcó «No» en auditoría, conservar el descarte mientras la Q interpretada no cambie.
+    if (
+        isinstance(prev, dict)
+        and prev.get("revision_q_bd_omitir") is True
+        and new_q is not None
+        and old_q is not None
+        and str(new_q).strip()[:10] == str(old_q).strip()[:10]
+    ):
+        merged["revision_q_bd_omitir"] = True
+        merged["revision_q_bd_omitir_at"] = prev.get("revision_q_bd_omitir_at")
     try:
-        row.fecha_entrega_q_aprobacion_cache = json.loads(json.dumps(payload, default=str))
+        row.fecha_entrega_q_aprobacion_cache = json.loads(json.dumps(merged, default=str))
     except (TypeError, ValueError):
         row.fecha_entrega_q_aprobacion_cache = None
     row.fecha_entrega_q_aprobacion_cache_at = datetime.utcnow()
@@ -100,14 +114,32 @@ def _parse_fecha_celda_hoja(val: Any) -> Optional[date]:
     s = _as_text(val)
     if not s:
         return None
-    s2 = s.strip()
-    m_amb = re.match(r"^(\d{1,2})/(\d{1,2})/(\d{4})\b", s2)
-    if m_amb:
-        d0, m0 = int(m_amb.group(1)), int(m_amb.group(2))
-        if 1 <= d0 <= 12 and 1 <= m0 <= 12:
-            # Bloqueo defensivo: fecha textual ambigua (dd/mm vs mm/dd).
-            # Exigir ISO en origen evita cruces visuales y errores operativos.
-            return None
+    # Colapsar espacios alrededor de separadores ("04 / 06 / 2026" -> "04/06/2026").
+    s2 = re.sub(r"\s*([/.-])\s*", r"\1", s.strip())
+    m_slash = re.match(r"^(\d{1,2})[/.](\d{1,2})[/.](\d{4})\b", s2)
+    if m_slash:
+        a, b, y_full = int(m_slash.group(1)), int(m_slash.group(2)), int(m_slash.group(3))
+        if y_full < 100:
+            y_full += 2000
+        # CONCILIACIÓN (VE): por defecto día/mes/año. Si un componente > 12, solo cabe una lectura.
+        if a > 12:
+            try:
+                return date(y_full, b, a)
+            except ValueError:
+                pass
+        elif b > 12:
+            try:
+                return date(y_full, a, b)
+            except ValueError:
+                pass
+        else:
+            # Ambas partes 1..12: solo una convención cabe sin metadatos de locale. CONCILIACIÓN se opera
+            # en día/mes/año (VE). Celdas con formato «fecha» en Sheets deben llegar como serial (sync
+            # UNFORMATTED_VALUE) y no usar esta rama.
+            try:
+                return date(y_full, b, a)
+            except ValueError:
+                pass
     if len(s2) >= 10 and s2[4:5] == "-" and s2[7:8] == "-":
         try:
             return date.fromisoformat(s2[:10])
@@ -120,15 +152,6 @@ def _parse_fecha_celda_hoja(val: Any) -> Optional[date]:
                     return datetime.strptime(s2[:lim], fmt).date()
                 except ValueError:
                     continue
-    m = re.match(r"^(\d{1,2})[/.](\d{1,2})[/.](\d{2,4})\b", s2)
-    if m:
-        d, mo, y = int(m.group(1)), int(m.group(2)), int(m.group(3))
-        if y < 100:
-            y += 2000
-        try:
-            return date(y, mo, d)
-        except ValueError:
-            return None
     return None
 
 
@@ -320,20 +343,12 @@ def comparar_fecha_entrega_column_q_vs_aprobacion(
         fecha_q is not None and fecha_ap is not None and fecha_q == fecha_ap
     )
 
-    # «Sí» en UI / POST aplicar (misma validación que POST: Q >= fecha_requerimiento si existe):
-    # - Q posterior a la aprobación en BD, o
-    # - Q anterior a la aprobación en BD pero >= requerimiento: corrige aprobación errónea vs hoja
-    #   (p. ej. serial Excel / carga masiva → fecha de aprobación incorrecta en BD).
+    # «Sí» en UI / POST aplicar: la hoja (Q) manda frente a fecha_aprobacion en BD si difieren.
+    # La fecha de requerimiento no bloquea el apply; al guardar, `PUT /prestamos` recalcula
+    # fecha_requerimiento = fecha_aprobacion − 1 día (regla de negocio operativa).
     puede_aplicar = False
     if fecha_q is not None and fecha_ap is not None and fecha_q != fecha_ap:
-        bloqueado_por_requerimiento = fecha_req is not None and fecha_q < fecha_req
-        if bloqueado_por_requerimiento:
-            advertencias.append(
-                "La fecha Q es anterior a la fecha de requerimiento del préstamo; no se puede usar "
-                "como fecha de aprobación desde aquí (use revisión manual)."
-            )
-        else:
-            puede_aplicar = True
+        puede_aplicar = True
     indicador = "si" if puede_aplicar else "no"
     tolerancia_dias = 0
 
@@ -360,7 +375,7 @@ def comparar_fecha_entrega_column_q_vs_aprobacion(
         "cedula": cedula_in,
         "prestamo_id": prestamo_id,
         "prestamo_huella": _prestamo_huella_dict(prestamo),
-        # Expediente (formulario préstamo); no es la columna Q. Solo se usa como piso al aplicar Q.
+        # Expediente (formulario préstamo); no es la columna Q. Informativo; no bloquea aplicar Q.
         "fecha_requerimiento_prestamo": fecha_req.isoformat() if fecha_req else None,
         "filas_hoja_coincidentes": filas_coincidentes,
         "filas_misma_cedula_hoja": len(filas_por_cedula),

@@ -119,6 +119,49 @@ def _diferencia_dias_viva(cache: Optional[dict], fecha_aprobacion_val: object) -
     return int((fq - fa).days)
 
 
+def _puede_aplicar_viva(cache: Optional[dict], fecha_aprobacion_val: object) -> Optional[bool]:
+    """
+    Política operativa: la columna Q manda frente a `fecha_aprobacion` en BD.
+    True si hay Q interpretable, hay aprobación en BD, y son distintas (no se usa fecha_requerimiento como bloqueo).
+    """
+    if not isinstance(cache, dict):
+        return None
+    fq = _parse_fecha_q_desde_cache_iso(cache.get("fecha_entrega_column_q"))
+    fa = _fecha_aprobacion_como_date(fecha_aprobacion_val)
+    if fq is None or fa is None:
+        return None
+    if fq == fa:
+        return False
+    return True
+
+
+def _correccion_desde_q_anterior_bd_viva(cache: Optional[dict], fecha_aprobacion_val: object) -> Optional[bool]:
+    """True si se puede aplicar Q y Q es estrictamente anterior a la aprobación en BD."""
+    if not isinstance(cache, dict):
+        return None
+    fq = _parse_fecha_q_desde_cache_iso(cache.get("fecha_entrega_column_q"))
+    fa = _fecha_aprobacion_como_date(fecha_aprobacion_val)
+    if fq is None or fa is None:
+        return None
+    if not _puede_aplicar_viva(cache, fecha_aprobacion_val):
+        return False
+    return fq < fa
+
+
+def _where_revision_q_no_descartada(dialect_name: str):
+    """Excluye filas marcadas con «No» en auditoría (JSON en caché). PostgreSQL nativo; SQLite sin filtro SQL."""
+    if (dialect_name or "").lower() == "postgresql":
+        return text(
+            "("
+            " prestamos.fecha_entrega_q_aprobacion_cache IS NULL "
+            " OR (prestamos.fecha_entrega_q_aprobacion_cache->>'revision_q_bd_omitir') IS NULL "
+            " OR lower(trim(coalesce(prestamos.fecha_entrega_q_aprobacion_cache->>'revision_q_bd_omitir',''))) "
+            " NOT IN ('true','1','t')"
+            ")"
+        )
+    return text("1=1")
+
+
 def _where_q_cache_vs_aprobacion_distinta_de_cero(dialect_name: str):
     """
     Filtro alineado al cálculo vivo: diferencia de días entre la Q en caché (ISO) y fecha_aprobacion en BD.
@@ -161,22 +204,32 @@ def get_fecha_q_auditoria_total(
             "Si true, solo préstamos donde la fecha Q en caché (ISO) difiere en días de la fecha_aprobacion **actual** en BD."
         ),
     ),
+    excluir_marcados_no: bool = Query(
+        True,
+        description="Si true, no listar préstamos marcados con «No» en auditoría (revision_q_bd_omitir en caché).",
+    ),
 ):
     """
     Auditoría total de columna Q vs fecha_aprobacion en TODO el universo de préstamos (no solo listas de mora).
     Lee la caché `prestamos.fecha_entrega_q_aprobacion_cache` y devuelve trazabilidad por préstamo.
-    `diferencia_dias` se recalcula en cada lectura (Q en caché vs aprobación en BD), no se reutiliza el valor congelado del JSON.
+    `diferencia_dias`, `puede_aplicar` y `correccion_desde_q_anterior_bd` se recalculan en cada lectura
+    con la **fecha_aprobacion** actual en BD (la Q de la hoja manda si difiere; `fecha_requerimiento` no bloquea el apply).
     """
     stmt = select(Prestamo).order_by(Prestamo.id.desc())
     count_stmt = select(func.count(Prestamo.id))
+    dialect = (db.get_bind().dialect.name or "").lower()
 
     if cedula_q and str(cedula_q).strip():
         cq = str(cedula_q).strip()
         stmt = stmt.where(Prestamo.cedula.ilike(f"%{cq}%"))
         count_stmt = count_stmt.where(Prestamo.cedula.ilike(f"%{cq}%"))
 
+    if excluir_marcados_no:
+        omit_clause = _where_revision_q_no_descartada(dialect)
+        stmt = stmt.where(omit_clause)
+        count_stmt = count_stmt.where(omit_clause)
+
     if solo_con_diferencia:
-        dialect = (db.get_bind().dialect.name or "").lower()
         diff_clause = _where_q_cache_vs_aprobacion_distinta_de_cero(dialect)
         stmt = stmt.where(diff_clause)
         count_stmt = count_stmt.where(diff_clause)
@@ -205,8 +258,14 @@ def get_fecha_q_auditoria_total(
                 "q_fecha_raw": _cache_field(cache, "fecha_entrega_column_q_raw"),
                 "diferencia_dias": _diferencia_dias_viva(cache, getattr(p, "fecha_aprobacion", None)),
                 "diferencia_dias_snapshot_cache": _cache_field(cache, "diferencia_dias"),
-                "puede_aplicar": _cache_field(cache, "puede_aplicar"),
-                "correccion_desde_q_anterior_bd": _cache_field(cache, "correccion_desde_q_anterior_bd"),
+                "puede_aplicar": _puede_aplicar_viva(cache, getattr(p, "fecha_aprobacion", None)),
+                "puede_aplicar_snapshot_cache": _cache_field(cache, "puede_aplicar"),
+                "correccion_desde_q_anterior_bd": _correccion_desde_q_anterior_bd_viva(
+                    cache, getattr(p, "fecha_aprobacion", None)
+                ),
+                "correccion_desde_q_anterior_bd_snapshot_cache": _cache_field(
+                    cache, "correccion_desde_q_anterior_bd"
+                ),
                 "q_cache_at": p.fecha_entrega_q_aprobacion_cache_at.isoformat()
                 if getattr(p, "fecha_entrega_q_aprobacion_cache_at", None)
                 else None,
@@ -219,8 +278,41 @@ def get_fecha_q_auditoria_total(
         "offset": int(offset),
         "filtro_cedula": cedula_q.strip() if cedula_q and cedula_q.strip() else None,
         "solo_con_diferencia": bool(solo_con_diferencia),
+        "excluir_marcados_no": bool(excluir_marcados_no),
         "items": items,
     }
+
+
+@router.post("/fecha-q-auditoria-marca-no-aplicar")
+def post_fecha_q_auditoria_marca_no_aplicar(
+    payload: dict = Body(...),
+    db: Session = Depends(get_db),
+):
+    """
+    Marca el préstamo como «No aplicar Q» en la auditoría: no se listará (excluir_marcados_no=true)
+    hasta que cambie la Q interpretada en caché. Persiste en `fecha_entrega_q_aprobacion_cache` JSON.
+    """
+    try:
+        prestamo_id = int(payload.get("prestamo_id") or 0)
+    except (TypeError, ValueError):
+        prestamo_id = 0
+    if prestamo_id <= 0:
+        raise HTTPException(status_code=400, detail="Indique prestamo_id válido.")
+    row = db.get(Prestamo, prestamo_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Préstamo no encontrado.")
+    prev = row.fecha_entrega_q_aprobacion_cache if isinstance(row.fecha_entrega_q_aprobacion_cache, dict) else {}
+    merged = dict(prev)
+    merged["revision_q_bd_omitir"] = True
+    merged["revision_q_bd_omitir_at"] = datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
+    try:
+        row.fecha_entrega_q_aprobacion_cache = json.loads(json.dumps(merged, default=str))
+    except (TypeError, ValueError):
+        row.fecha_entrega_q_aprobacion_cache = merged
+    row.fecha_entrega_q_aprobacion_cache_at = datetime.utcnow()
+    db.add(row)
+    db.commit()
+    return {"ok": True, "prestamo_id": prestamo_id}
 
 
 def get_notificaciones_envios_config(db: Session) -> dict:
@@ -2239,7 +2331,7 @@ def post_refresh_fecha_entrega_q_cache(background_tasks: BackgroundTasks):
     """
     Programa en segundo plano el recálculo de `prestamos.fecha_entrega_q_aprobacion_cache`
     (submódulo Notificaciones «Fecha»: columna Q de la hoja vs `fecha_aprobacion` en BD).
-    Misma lógica que el job domingo 04:00 Caracas.
+    Misma lógica que el job programado (lunes y jueves 04:00 Caracas) y que tras cada sync exitoso de la hoja Drive.
     """
     background_tasks.add_task(_run_refresh_fecha_entrega_q_cache_bg)
     return {
@@ -2490,21 +2582,15 @@ def post_aplicar_fecha_entrega_q_como_fecha_aprobacion(
     admin: UserResponse = Depends(require_admin),
 ):
     """
-    Persiste en `prestamos.fecha_aprobacion` (y alinea `fecha_base_calculo`) la fecha de entrega
-    leída en la columna Q de CONCILIACIÓN para la fila alineada al préstamo, y recalcula fechas de
-    vencimiento de cuotas cuando aplica la misma regla que `PUT /prestamos/{id}`.
+    Persiste en `prestamos.fecha_aprobacion` (y alinea `fecha_base_calculo`) la fecha de la columna Q
+    para la fila alineada al préstamo, y recalcula fechas de vencimiento de cuotas cuando aplica la misma
+    regla que `PUT /prestamos/{id}` (incluye `fecha_requerimiento` = día calendario anterior a la nueva
+    aprobación).
 
-    Requisitos (misma lectura en vivo que GET comparar-fecha-entrega-q-aprobacion; `puede_aplicar`):
-    - Caso extendido: Q distinta de la aprobación en BD y, si Q es anterior a esa aprobación,
-      Q debe ser >= `fecha_requerimiento` (corrige aprobación errónea; p. ej. serial mal leído).
-    - Si Q es posterior a la aprobación en BD, aplica como antes (alarga la base).
-    - La fecha Q debe seguir siendo >= `fecha_requerimiento` cuando esta existe (validación en POST).
-    - No opera sobre préstamos en desistimiento (bloqueo del PUT estándar).
-    - Si la comparación indica corrección hacia atrás (Q anterior a la aprobación en BD), el cuerpo
-      debe incluir `confirmacion_correccion_fecha_q_atras` con el texto exacto **CONFIRMO**.
+    Requisitos: Q interpretable y distinta de `fecha_aprobacion` en BD (`puede_aplicar` en vivo).
+    No se valida la fecha de requerimiento previa como bloqueo. Desistimiento: bloqueo del PUT estándar.
 
-    Tras el PUT, intenta refrescar `prestamos.fecha_entrega_q_aprobacion_cache` con la comparación
-    actualizada (fallo del caché no revierte el préstamo ya confirmado).
+    Tras el PUT, intenta refrescar `prestamos.fecha_entrega_q_aprobacion_cache` (fallo del caché no revierte el préstamo).
     """
     from datetime import time as time_cls
 
@@ -2544,24 +2630,8 @@ def post_aplicar_fecha_entrega_q_como_fecha_aprobacion(
         raise HTTPException(
             status_code=400,
             detail=(
-                "No se puede confirmar: la columna Q debe ser distinta de la aprobación en BD y, "
-                "si Q es anterior a esa aprobación, debe ser >= fecha de requerimiento del préstamo. "
-                "Revise la hoja, el lote o use revisión manual."
-            ),
-        )
-
-    correccion_atras = bool(cmp.get("correccion_desde_q_anterior_bd"))
-    conf_atras = str(
-        payload.get("confirmacion_correccion_fecha_q_atras")
-        or payload.get("confirmacionCorreccionFechaQAtras")
-        or ""
-    ).strip().upper()
-    if correccion_atras and conf_atras != "CONFIRMO":
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                "La fecha Q es anterior a la aprobación en BD: para aplicar debe enviar "
-                "confirmacion_correccion_fecha_q_atras con el valor exacto CONFIRMO (doble confirmación)."
+                "No se puede aplicar: la columna Q debe ser distinta de la fecha de aprobación en BD "
+                "y estar interpretable para este préstamo. Revise la hoja, el lote o la sincronización."
             ),
         )
 
@@ -2583,17 +2653,6 @@ def post_aplicar_fecha_entrega_q_como_fecha_aprobacion(
     row = db.get(Prestamo, prestamo_id)
     if row is None:
         raise HTTPException(status_code=404, detail="Préstamo no encontrado.")
-
-    req = getattr(row, "fecha_requerimiento", None)
-    if isinstance(req, datetime):
-        req_d = req.date()
-    else:
-        req_d = req
-    if req_d is not None and fecha_q < req_d:
-        raise HTTPException(
-            status_code=400,
-            detail="La fecha Q es anterior a la fecha de requerimiento del préstamo; no se aplica.",
-        )
 
     fa_dt = datetime.combine(fecha_q, time_cls.min)
     try:

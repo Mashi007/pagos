@@ -1,7 +1,7 @@
 """
 Recalcula y persiste en `prestamos.abonos_drive_cuotas_cache` la comparación ABONOS (hoja) vs cuotas.
 
-Ejecución prevista: cada domingo a las 04:35 America/Caracas (APScheduler, tras limpieza 04:00 y separado del job fecha Q), para la columna
+Ejecución prevista: cada domingo a las 04:35 America/Caracas (APScheduler, tras limpieza 04:00 y separado del job caché Q lun/jue), para la columna
 «Diferencia abono» en Notificaciones > General (dato estático en listado hasta el siguiente cierre).
 También se persiste al aplicar ABONOS desde la UI (ese préstamo).
 """

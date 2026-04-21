@@ -1050,8 +1050,16 @@ def _list_pagos_reportados_payload(
     # Cola manual: pendiente / en_revision / aprobado que NO cumplen validadores (misma regla que Excel Cobros).
     # Cumplen 100% (reglas OK; Gemini true o false sin observación) → no entran aquí; flujo automático fuera de la cola.
     wh = _where_clauses_cola_reportados(estado, incluir_exportados, exportados_subq, filtros)
-    primer_precalc = _primer_id_por_norm_global_para_where(db, wh)
-    primer_num_op = _primer_id_por_numero_operacion_para_where(db, wh)
+    # Con pestaña por estado, el listado filtra filas con `wh`, pero la resolución de duplicados
+    # (primer reporte por documento / nº operación) debe usar la MISMA cola completa que KPIs
+    # (pendiente+en_revision+aprobado); si no, totales y tarjetas divergen entre vistas.
+    wh_primer_scope = (
+        _where_clauses_cola_reportados(None, incluir_exportados, exportados_subq, filtros)
+        if estado in ("pendiente", "en_revision", "aprobado")
+        else wh
+    )
+    primer_precalc = _primer_id_por_norm_global_para_where(db, wh_primer_scope)
+    primer_num_op = _primer_id_por_numero_operacion_para_where(db, wh_primer_scope)
     numeros_en_pagos = _numeros_operacion_presentes_en_pagos(
         db, set(primer_num_op.keys())
     )
