@@ -162,6 +162,8 @@ export function PagosList() {
   const [revisionPage, setRevisionPage] = useState(1)
   const [revisionCedulaInput, setRevisionCedulaInput] = useState('')
   const [revisionCedulaFiltro, setRevisionCedulaFiltro] = useState('')
+  const [includeRevisionExportados, setIncludeRevisionExportados] =
+    useState(false)
   const [editingRevisionId, setEditingRevisionId] = useState<number | null>(null)
   const [revisionObservacionDraft, setRevisionObservacionDraft] = useState('')
   const [savingRevisionId, setSavingRevisionId] = useState<number | null>(null)
@@ -364,9 +366,9 @@ export function PagosList() {
       const nombre = `Revision_Pagos_${new Date().toISOString().slice(0, 10)}.xlsx`
       await createAndDownloadExcel(datos, 'Revisión pagos', nombre)
       const ids = pagos.map(p => p.id)
-      await pagoConErrorService.eliminarPorDescarga(ids)
+      await pagoConErrorService.archivarPorDescarga(ids)
       await invalidatePagosPrestamosRevisionYCuotas(queryClient)
-      toast.success(`${pagos.length} pagos exportados y eliminados de la lista`)
+      toast.success(`${pagos.length} pagos exportados y archivados para trazabilidad`)
     } catch (err) {
       if (import.meta.env.DEV) console.error('Error al descargar Excel', err)
       toast.error('Error al descargar Excel')
@@ -452,9 +454,9 @@ export function PagosList() {
       await createAndDownloadExcel(datos, 'Revisar Pagos', nombre)
       // Tras guardar el Excel en PC, mover a revisar_pagos para que desaparezcan de la vista
       const ids = pagos.map(p => p.id)
-      await pagoConErrorService.eliminarPorDescarga(ids)
+      await pagoConErrorService.archivarPorDescarga(ids)
       void invalidatePagosPrestamosRevisionYCuotas(queryClient)
-      toast.success(`${pagos.length} pagos exportados y eliminados de la lista`)
+      toast.success(`${pagos.length} pagos exportados y archivados para trazabilidad`)
     } catch (err) {
       if (import.meta.env.DEV) console.error('Error al exportar', err)
       toast.error('Error al exportar. Intenta de nuevo.')
@@ -475,7 +477,7 @@ export function PagosList() {
   const esRevisarPagos = filters.sin_prestamo === 'si'
   const { data, isLoading, error, isError } = useQuery({
     queryKey: esRevisarPagos
-      ? ['pagos-con-errores', page, perPage, filters]
+      ? ['pagos-con-errores', page, perPage, filters, includeRevisionExportados]
       : ['pagos', page, perPage, filters],
     queryFn: () =>
       esRevisarPagos
@@ -486,6 +488,7 @@ export function PagosList() {
             fechaHasta: filters.fechaHasta || undefined,
             conciliado:
               filters.conciliado === 'all' ? undefined : filters.conciliado,
+            includeExportados: includeRevisionExportados,
           })
         : pagoService.getAllPagos(page, perPage, filters),
     staleTime: 15_000, // 15 s - evita múltiples refetch por re-renders y cambios de foco durante batch
@@ -497,10 +500,17 @@ export function PagosList() {
     isLoading: isLoadingRevision,
     isError: isRevisionError,
   } = useQuery({
-    queryKey: ['pagos-con-errores-tab', revisionPage, perPage, revisionCedulaFiltro],
+    queryKey: [
+      'pagos-con-errores-tab',
+      revisionPage,
+      perPage,
+      revisionCedulaFiltro,
+      includeRevisionExportados,
+    ],
     queryFn: () =>
       pagoConErrorService.getAll(revisionPage, perPage, {
         cedula: revisionCedulaFiltro || undefined,
+        includeExportados: includeRevisionExportados,
       }),
     staleTime: 15_000,
     refetchOnWindowFocus: false,
@@ -1309,6 +1319,17 @@ export function PagosList() {
                     </Button>
                   )}
                 </div>
+                <label className="flex items-center gap-2 text-sm text-gray-700">
+                  <input
+                    type="checkbox"
+                    checked={includeRevisionExportados}
+                    onChange={e => {
+                      setIncludeRevisionExportados(e.target.checked)
+                      setRevisionPage(1)
+                    }}
+                  />
+                  Incluir exportados/archivados
+                </label>
               </div>
               {isLoadingRevision ? (
                 <div className="py-8 text-center text-sm text-gray-500">
@@ -1438,6 +1459,15 @@ export function PagosList() {
         </TabsContent>
         {/* Tab: Todos los Pagos */}
         <TabsContent value="todos">
+          {filters.conciliado === 'si' && (
+            <Card className="mb-4 border-amber-200 bg-amber-50">
+              <CardContent className="py-3 text-sm text-amber-800">
+                Filtro activo: mostrando solo pagos conciliados. Para auditoría
+                completa cambie conciliación a <strong>Todos</strong> o{' '}
+                <strong>No</strong>.
+              </CardContent>
+            </Card>
+          )}
           {/* Búsqueda y filtro Conciliación siempre visible */}
           <Card className="mb-4">
             <CardContent className="pt-6">

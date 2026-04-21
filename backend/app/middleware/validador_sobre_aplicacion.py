@@ -26,8 +26,15 @@ class ValidadorSobreAplicacionMiddleware(BaseHTTPMiddleware):
     """
     
     async def dispatch(self, request: Request, call_next):
-        # Solo validar requests POST/PUT a endpoints de aplicación de pagos
-        if request.method in ['POST', 'PUT'] and '/aplicar-cuota' in request.url.path:
+        # Solo validar requests POST/PUT a endpoints de aplicación de pagos.
+        # Soporta variantes históricas y la ruta vigente "/aplicar-cuotas".
+        path = (request.url.path or "").lower()
+        es_endpoint_aplicacion = (
+            '/aplicar-cuota' in path
+            or '/aplicar-cuotas' in path
+            or '/aplicar-pagos-cuotas' in path
+        )
+        if request.method in ['POST', 'PUT'] and es_endpoint_aplicacion:
             db = SessionLocal()
             try:
                 body = await request.body()

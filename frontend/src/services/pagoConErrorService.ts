@@ -93,6 +93,8 @@ class PagoConErrorService {
       fechaHasta?: string
 
       conciliado?: string
+
+      includeExportados?: boolean
     }
   ): Promise<{
     pagos: PagoConError[]
@@ -120,6 +122,7 @@ class PagoConErrorService {
 
       ...(filters?.conciliado &&
         filters.conciliado !== 'all' && { conciliado: filters.conciliado }),
+      ...(filters?.includeExportados ? { include_exportados: 'true' } : {}),
     })
 
     return await apiClient.get(`${this.baseUrl}?${params.toString()}`)
@@ -185,13 +188,12 @@ class PagoConErrorService {
     return await apiClient.post(`${this.baseUrl}/mover-a-pagos`, { ids })
   }
 
-  /** Elimina de pagos_con_errores tras descargar Excel. La lista se vacía y se rellena al enviar desde Carga Masiva. */
-
-  async eliminarPorDescarga(
+  /** Archiva pagos exportados para mantener trazabilidad operativa. */
+  async archivarPorDescarga(
     ids: number[]
-  ): Promise<{ eliminados: number; mensaje: string }> {
+  ): Promise<{ archivados: number; mensaje: string }> {
     return await apiClient.post(
-      `${this.baseUrl}/eliminar-por-descarga`,
+      `${this.baseUrl}/archivar-por-descarga`,
       { ids },
       { timeout: 120000 }
     )

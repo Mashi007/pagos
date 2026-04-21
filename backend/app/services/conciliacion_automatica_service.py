@@ -187,9 +187,16 @@ class ConciliacionAutomaticaService:
                     })
                 
                 if saldo_pago > Decimal('0.01'):
+                    # Evitar pagos en limbo: dejar explícitamente no conciliado y pendiente de revisión manual.
+                    pago.conciliado = False
+                    pago.verificado_concordancia = 'NO'
+                    pago.estado = 'PENDIENTE'
+                    nota_limbo = f'Remanente sin asignar en conciliación automática: {saldo_pago}'
+                    pago.notas = f'{(pago.notas or "").strip()} | {nota_limbo}'.strip(' |')
                     resultado['errores'].append(
                         f'Pago {pago.id}: Sobra {saldo_pago} sin asignar.'
                     )
+                    resultado['fallidas'] += 1
             
             db.commit()
             logger.info(

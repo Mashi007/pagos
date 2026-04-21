@@ -232,12 +232,13 @@ def listar_pagos_con_errores(
     fecha_hasta: Optional[str] = Query(None),
 
     conciliado: Optional[str] = Query(None),
+    include_exportados: bool = Query(False),
 
     db: Session = Depends(get_db),
 
 ):
 
-    """Listado paginado de pagos con errores (Revisar Pagos). Se vacía al descargar Excel."""
+    """Listado paginado de pagos con errores (Revisar Pagos). Por defecto oculta exportados/archivados."""
 
     try:
 
@@ -256,6 +257,11 @@ def listar_pagos_con_errores(
             q = q.where(or_(PagoConError.conciliado == False, PagoConError.conciliado.is_(None)))
 
             count_q = count_q.where(or_(PagoConError.conciliado == False, PagoConError.conciliado.is_(None)))
+
+        # Por defecto ocultar pagos ya exportados/archivados para no mezclar backlog operativo con histórico.
+        if not include_exportados:
+            q = q.where(or_(PagoConError.estado.is_(None), PagoConError.estado != "EXPORTADO_REVISION"))
+            count_q = count_q.where(or_(PagoConError.estado.is_(None), PagoConError.estado != "EXPORTADO_REVISION"))
 
         if cedula and cedula.strip():
 
@@ -574,6 +580,30 @@ def eliminar_por_descarga(payload: EliminarPorDescargaBody = Body(...), db: Sess
     return {"eliminados": eliminados, "mensaje": f"{eliminados} eliminados de pagos_con_errores"}
 
 
+@router.post("/archivar-por-descarga", response_model=dict)
+def archivar_por_descarga(
+    payload: EliminarPorDescargaBody = Body(...),
+    db: Session = Depends(get_db),
+    current_user: UserResponse = Depends(get_current_user),
+):
+    """Marca como EXPORTADO_REVISION en vez de borrar, para trazabilidad y auditoría."""
+    valid_ids = [p for p in payload.ids if isinstance(p, int) and p > 0]
+    if not valid_ids:
+        return {"archivados": 0, "mensaje": "No hay IDs"}
+
+    usuario = _usuario_registro_desde_current_user(current_user)
+    marca = datetime.now(ZoneInfo("America/Caracas")).isoformat(timespec="seconds")
+    rows = db.execute(select(PagoConError).where(PagoConError.id.in_(valid_ids))).scalars().all()
+    archivados = 0
+    for row in rows:
+        row.estado = "EXPORTADO_REVISION"
+        nota = f"Exportado a revisión ({marca}) por {usuario}"
+        row.observaciones = f'{(row.observaciones or "").strip()} | {nota}'.strip(" |")
+        archivados += 1
+    db.commit()
+    return {"archivados": archivados, "mensaje": f"{archivados} pago(s) archivado(s) para revisión"}
+
+
 
 
 
@@ -591,7 +621,7 @@ def exportar_pagos_con_errores(
 
 ):
 
-    """Exporta todos los pagos con errores para Excel (100% de datos). Tras descargar se eliminan de la tabla."""
+    """Exporta todos los pagos con errores para Excel (100% de datos). El archivado se realiza aparte."""
 
     q = select(PagoConError).order_by(
 
