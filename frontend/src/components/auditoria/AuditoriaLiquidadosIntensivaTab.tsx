@@ -37,6 +37,7 @@ import {
 const PAGE_SIZE = 25
 
 const MEJORES_PRACTICAS_LIQUIDADOS: readonly string[] = [
+  'Verifique siempre la tarjeta «Cobertura de pagos»: el motor usa solo pagos **operativos cartera**; las filas excluidas por estado (anulado, reversado, duplicado declarado, etc.) no entran al cuadre ni a heurísticas de documento, pero siguen en BD y pueden ocultar dinero si el estado está mal.',
   'Antes de aceptar un cierre (LIQUIDADO), cuadrar en USD la suma de pagos operativos frente a la suma aplicada en cuota_pagos (tolerancia operativa 0,02 USD), excluyendo anulados, reversados y duplicados declarados.',
   'Mantener fecha_liquidado poblada cuando el estado sea LIQUIDADO: es el ancla contable del cierre en cartera y evita listados ambiguos frente a finiquito.',
   'Respetar la regla de materialización de finiquito_casos (suma exacta de total_pagado en cuotas = total_financiamiento): si no aparece el caso, revisar redondeos por cuota y ejecutar el refresco puntual o el job programado.',
@@ -222,6 +223,8 @@ export function AuditoriaLiquidadosIntensivaTab() {
 
   const maxPagosPairwise = numOr0(rSim.max_pagos_analizados_por_prestamo) || 100
 
+  const cov = data?.cobertura_pagos
+
   return (
     <div className="space-y-6">
       <Card>
@@ -301,6 +304,58 @@ export function AuditoriaLiquidadosIntensivaTab() {
             <AlertWithIcon variant="destructive">
               <AlertDescription>{error}</AlertDescription>
             </AlertWithIcon>
+          ) : null}
+
+          {cov ? (
+            <div className="rounded-md border border-slate-200 bg-slate-50/80 p-4 text-sm">
+              <p className="font-semibold text-slate-900">Cobertura de pagos (completitud, mismo filtro)</p>
+              <p className="mt-2 grid gap-1 text-muted-foreground sm:grid-cols-2 lg:grid-cols-3">
+                <span>
+                  Préstamos con ≥1 fila de pago:{' '}
+                  <span className="font-mono tabular-nums text-slate-900">
+                    {numOr0(cov.n_prestamos_distintos_con_algun_pago)}
+                  </span>
+                </span>
+                <span>
+                  Filas de pago (todas):{' '}
+                  <span className="font-mono tabular-nums text-slate-900">{numOr0(cov.n_pagos_total_filas)}</span>
+                </span>
+                <span>
+                  Operativos cartera:{' '}
+                  <span className="font-mono tabular-nums text-emerald-800">
+                    {numOr0(cov.n_pagos_operativos_cartera)}
+                  </span>
+                </span>
+                <span>
+                  Excluidos del motor:{' '}
+                  <span className="font-mono tabular-nums text-amber-900">
+                    {numOr0(cov.n_pagos_excluidos_cartera)}
+                  </span>
+                </span>
+                <span>
+                  Operativos sin N° documento:{' '}
+                  <span className="font-mono tabular-nums text-orange-900">
+                    {numOr0(cov.n_pagos_operativos_sin_numero_documento)}
+                  </span>
+                </span>
+                <span>
+                  LIQUIDADO sin ningún pago:{' '}
+                  <span className="font-mono tabular-nums text-red-800">
+                    {numOr0(cov.n_prestamos_liquidados_sin_ningun_pago)}
+                  </span>
+                </span>
+                <span className="sm:col-span-2 lg:col-span-3">
+                  Préstamos donde todos los pagos están excluidos:{' '}
+                  <span className="font-mono tabular-nums text-red-800">
+                    {numOr0(cov.n_prestamos_con_pagos_todos_excluidos_cartera)}
+                  </span>
+                </span>
+              </p>
+              <p className="mt-3 text-xs leading-relaxed text-slate-600">
+                <span className="font-medium text-slate-800">Regla operativo:</span> {cov.regla_exclusion_operativo_resumen}
+              </p>
+              <p className="mt-2 text-xs leading-relaxed text-slate-600">{cov.nota_completitud_auditoria}</p>
+            </div>
           ) : null}
 
           <div className="grid gap-3 text-sm md:grid-cols-3">

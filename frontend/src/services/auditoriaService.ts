@@ -164,12 +164,35 @@ export interface LiquidadosDocumentosSimilaresResponse {
   resumen: Record<string, unknown>
 }
 
+/** Conteos de completitud (pagos totales vs operativos cartera) en el mismo filtro de la petición. */
+export interface LiquidadosCoberturaPagosResponse {
+  n_prestamos_distintos_con_algun_pago: number
+
+  n_pagos_total_filas: number
+
+  n_pagos_operativos_cartera: number
+
+  n_pagos_excluidos_cartera: number
+
+  n_pagos_operativos_sin_numero_documento: number
+
+  n_prestamos_liquidados_sin_ningun_pago: number
+
+  n_prestamos_con_pagos_todos_excluidos_cartera: number
+
+  regla_exclusion_operativo_resumen: string
+
+  nota_completitud_auditoria: string
+}
+
 export interface AuditoriaLiquidadosIntensivaResponse {
   cartera: PrestamoCarteraChequeoResponse
 
   cierre: LiquidadosCierreChequeoResponse
 
   documentos_similares: LiquidadosDocumentosSimilaresResponse
+
+  cobertura_pagos: LiquidadosCoberturaPagosResponse
 }
 
 export interface AuditoriaLiquidadosIntensivaQuery {

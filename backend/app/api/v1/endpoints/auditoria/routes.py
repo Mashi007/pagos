@@ -48,6 +48,7 @@ from app.services.auditoria_liquidados_docs_similares import (
     documentos_similares_liquidados,
 )
 from app.services.auditoria_liquidados_intensiva import (
+    cobertura_pagos_prestamos_liquidados,
     filtrar_filas_cierre,
     hallazgos_cierre_prestamos_liquidados,
     paginar_filas,
@@ -372,10 +373,25 @@ class LiquidadosDocumentosSimilaresResponse(BaseModel):
     )
 
 
+class LiquidadosCoberturaPagosResponse(BaseModel):
+    """Conteos de completitud: universo de pagos LIQUIDADO vs subconjunto operativo cartera (misma exclusion SQL)."""
+
+    n_prestamos_distintos_con_algun_pago: int = 0
+    n_pagos_total_filas: int = 0
+    n_pagos_operativos_cartera: int = 0
+    n_pagos_excluidos_cartera: int = 0
+    n_pagos_operativos_sin_numero_documento: int = 0
+    n_prestamos_liquidados_sin_ningun_pago: int = 0
+    n_prestamos_con_pagos_todos_excluidos_cartera: int = 0
+    regla_exclusion_operativo_resumen: str = ""
+    nota_completitud_auditoria: str = ""
+
+
 class LiquidadosIntensivaResponse(BaseModel):
     cartera: PrestamoCarteraChequeoResponse
     cierre: LiquidadosCierreChequeoResponse
     documentos_similares: LiquidadosDocumentosSimilaresResponse
+    cobertura_pagos: LiquidadosCoberturaPagosResponse
 
 
 class RevisionDescuadrePagoItem(BaseModel):
@@ -705,6 +721,8 @@ def auditoria_intensiva_prestamos_liquidados(
     - **cartera**: misma logica que `/prestamos/cartera/chequeos`, pero el universo evaluado es solo LIQUIDADO.
     - **cierre**: hallazgos adicionales (fecha_liquidado, finiquito_casos, documentos duplicados, riesgo doc en otro prestamo).
     - **documentos_similares**: pares de pagos operativos con `numero_documento` similar (difflib >= umbral) por prestamo.
+    - **cobertura_pagos**: conteos de filas de pago (total vs operativo cartera vs excluidos) y riesgos de hueco
+      (prestamo sin pagos, solo pagos excluidos), con texto de regla para trazabilidad de auditoria.
 
     La seccion `cierre` no usa bitacora MARCAR_OK (motor objetivo sobre tablas reales).
     """
@@ -767,10 +785,17 @@ def auditoria_intensiva_prestamos_liquidados(
         items=sim_items,
         resumen=sim_res,
     )
+    cov_raw = cobertura_pagos_prestamos_liquidados(
+        db,
+        prestamo_id=prestamo_id,
+        cedula_contiene=cedula,
+    )
+    cobertura_pagos = LiquidadosCoberturaPagosResponse(**cov_raw)
     return LiquidadosIntensivaResponse(
         cartera=cartera,
         cierre=cierre,
         documentos_similares=documentos_similares,
+        cobertura_pagos=cobertura_pagos,
     )
 
 
