@@ -174,6 +174,7 @@ export default function ActualizacionesFechas2Page() {
       <ModulePageHeader
         title="Fechas 2"
         description="Filtro por día calendario sobre registro, aprobación, requerimiento o base de cálculo. Listado mínimo (cédula, ID y fechas). Al guardar se usa el mismo PUT que revisión manual y, si aplica, recálculo de vencimientos de cuotas."
+        icon={Calendar}
       />
 
       <Card>

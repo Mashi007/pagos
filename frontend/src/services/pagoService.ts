@@ -344,7 +344,13 @@ class PagoService {
 
   async updatePago(
     id: number,
-    data: Partial<PagoCreate & { verificado_concordancia?: string | null }>
+    data: Partial<
+      PagoCreate & {
+        verificado_concordancia?: string | null
+        /** Texto operativo en BD (p. ej. auditoría / corrección manual). */
+        estado?: string
+      }
+    >
   ): Promise<Pago> {
     return await apiClient.put(`${this.baseUrl}/${id}`, data)
   }
