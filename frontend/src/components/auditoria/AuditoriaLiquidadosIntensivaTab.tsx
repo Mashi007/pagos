@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
-import { Copy, Loader2, RefreshCw, Search, Shield } from 'lucide-react'
+import { Copy, Loader2, RefreshCw, Search, Shield, Wrench } from 'lucide-react'
 
 import { Link } from 'react-router-dom'
 
 import { toast } from 'sonner'
+import { useSimpleAuth } from '../../store/simpleAuthStore'
+import { isAdminRole } from '../../utils/rol'
+import { AuditoriaDescuadreRevisionDialog } from './AuditoriaDescuadreRevisionDialog'
 
 import { AlertDescription, AlertWithIcon } from '../ui/alert'
 
@@ -139,6 +142,8 @@ function ControlesCelda({ row }: { row: PrestamoCarteraChequeo }) {
 }
 
 export function AuditoriaLiquidadosIntensivaTab() {
+  const { user } = useSimpleAuth()
+  const esAdmin = isAdminRole(user?.rol)
   const [loading, setLoading] = useState(false)
 
   const [error, setError] = useState<string | null>(null)
@@ -152,6 +157,8 @@ export function AuditoriaLiquidadosIntensivaTab() {
   const [page, setPage] = useState(1)
 
   const [umbralSimDoc, setUmbralSimDoc] = useState('0.7')
+  const [descRevisionOpen, setDescRevisionOpen] = useState(false)
+  const [descRevisionPid, setDescRevisionPid] = useState<number | null>(null)
 
   const umbralSimNum = useMemo(() => {
     const n = Number(String(umbralSimDoc).replace(',', '.'))
@@ -444,6 +451,34 @@ export function AuditoriaLiquidadosIntensivaTab() {
                         #{row.prestamo_id}
                       </Link>
                       <div className="text-xs text-muted-foreground">{row.estado_prestamo}</div>
+                      <div className="mt-2">
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-8 gap-1"
+                            title="Abrir interfaz rápida para revisar, editar o eliminar pagos del préstamo"
+                            onClick={() => {
+                              setDescRevisionPid(row.prestamo_id)
+                              setDescRevisionOpen(true)
+                            }}
+                          >
+                            <Wrench className="h-3.5 w-3.5" />
+                            Resolver rapido
+                          </Button>
+                          <Button asChild type="button" variant="secondary" size="sm" className="h-8 gap-1">
+                            <Link
+                              to={`/pagos/pagos?prestamo_id=${row.prestamo_id}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              title="Abrir Pagos filtrado por préstamo en una pestaña nueva"
+                            >
+                              Ir a Pagos
+                            </Link>
+                          </Button>
+                        </div>
+                      </div>
                     </TableCell>
                     <TableCell className="align-top text-sm">
                       <div className="font-medium">{row.nombres}</div>
@@ -483,6 +518,34 @@ export function AuditoriaLiquidadosIntensivaTab() {
                       <Link className="font-mono text-blue-700 underline" to={`/prestamos?prestamo_id=${row.prestamo_id}`}>
                         #{row.prestamo_id}
                       </Link>
+                      <div className="mt-2">
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-8 gap-1"
+                            title="Abrir interfaz rápida para corregir inconformidades de este préstamo"
+                            onClick={() => {
+                              setDescRevisionPid(row.prestamo_id)
+                              setDescRevisionOpen(true)
+                            }}
+                          >
+                            <Wrench className="h-3.5 w-3.5" />
+                            Resolver rapido
+                          </Button>
+                          <Button asChild type="button" variant="secondary" size="sm" className="h-8 gap-1">
+                            <Link
+                              to={`/pagos/pagos?prestamo_id=${row.prestamo_id}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              title="Abrir Pagos filtrado por préstamo en una pestaña nueva"
+                            >
+                              Ir a Pagos
+                            </Link>
+                          </Button>
+                        </div>
+                      </div>
                     </TableCell>
                     <TableCell className="align-top text-sm">
                       <div className="font-medium">{row.nombres}</div>
@@ -543,6 +606,19 @@ export function AuditoriaLiquidadosIntensivaTab() {
           </ul>
         </CardContent>
       </Card>
+
+      <AuditoriaDescuadreRevisionDialog
+        open={descRevisionOpen}
+        onOpenChange={(open) => {
+          setDescRevisionOpen(open)
+          if (!open) setDescRevisionPid(null)
+        }}
+        prestamoId={descRevisionPid}
+        esAdmin={esAdmin}
+        onRefreshLista={() => {
+          void cargar()
+        }}
+      />
     </div>
   )
 }

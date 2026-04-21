@@ -352,12 +352,17 @@ def listar_pagos(
             "cruzado con filtro cédula si viene en la misma petición. No altera el listado paginado."
         ),
     ),
+    prestamo_id: Optional[int] = Query(
+        None,
+        ge=1,
+        description="Si se indica, filtra el listado principal por este prestamo_id exacto.",
+    ),
 
     db: Session = Depends(get_db),
 
 ):
 
-    """Listado paginado desde la tabla pagos. Filtros: cedula, estado, fecha_desde, fecha_hasta, analista, conciliado, sin_prestamo, prestamo_cartera."""
+    """Listado paginado desde la tabla pagos. Filtros: cedula, estado, fecha_desde, fecha_hasta, analista, conciliado, sin_prestamo, prestamo_cartera, prestamo_id."""
 
     try:
 
@@ -396,6 +401,9 @@ def listar_pagos(
         _pc = (prestamo_cartera or "activa").strip().lower()
 
         _solo_prestamos_aprobados = _pc not in ("todos", "all", "t")
+        if prestamo_id is not None:
+            # Filtro puntual por credito: no aplicar recorte de cartera activa para no ocultar LIQUIDADO.
+            _solo_prestamos_aprobados = False
 
         def _estado_prestamo_aprobado_sql():
             return func.upper(
@@ -435,6 +443,16 @@ def listar_pagos(
             count_q = count_q.where(or_(Pago.conciliado == False, Pago.conciliado.is_(None)))
 
             sum_q = sum_q.where(or_(Pago.conciliado == False, Pago.conciliado.is_(None)))
+
+        if prestamo_id is not None:
+
+            pid = int(prestamo_id)
+
+            q = q.where(Pago.prestamo_id == pid)
+
+            count_q = count_q.where(Pago.prestamo_id == pid)
+
+            sum_q = sum_q.where(Pago.prestamo_id == pid)
 
         if cedula and cedula.strip():
 

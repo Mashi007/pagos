@@ -113,6 +113,8 @@ export function PagosList() {
     analista: '',
     conciliado: 'si', // Por defecto: solo conciliados = SI
     sin_prestamo: '', // si = solo pagos sin crédito asignado
+    prestamo_id: '',
+    prestamo_cartera: '',
   })
   const [showRegistrarPago, setShowRegistrarPago] = useState(false)
   const [showCargaMasivaPagos, setShowCargaMasivaPagos] = useState(false)
@@ -386,6 +388,7 @@ export function PagosList() {
     filters.analista,
     filters.conciliado !== 'si' ? filters.conciliado : null,
     filters.sin_prestamo === 'si' ? 'sin_prestamo' : null,
+    filters.prestamo_id,
   ].filter(Boolean).length
   const handleClearFilters = () => {
     setFilters({
@@ -396,6 +399,8 @@ export function PagosList() {
       analista: '',
       conciliado: 'si',
       sin_prestamo: '',
+      prestamo_id: '',
+      prestamo_cartera: '',
     })
     setPage(1)
   }
@@ -466,6 +471,17 @@ export function PagosList() {
   }
 
   useEffect(() => {
+    const pidRaw = (searchParams.get('prestamo_id') || '').trim()
+    const pidNum = Number(pidRaw)
+    if (pidRaw && Number.isFinite(pidNum) && pidNum >= 1) {
+      setFilters(prev => ({
+        ...prev,
+        prestamo_id: String(Math.trunc(pidNum)),
+        prestamo_cartera: 'todos',
+      }))
+      setActiveTab('todos')
+      setPage(1)
+    }
     if (searchParams.get('revisar') === '1') {
       setFilters(prev => ({ ...prev, sin_prestamo: 'si', conciliado: 'all' }))
       setActiveTab('todos')
@@ -1533,6 +1549,28 @@ export function PagosList() {
                     </Button>
                   </div>
                 )}
+                {filters.prestamo_id && (
+                  <div className="flex items-end">
+                    <Badge className="bg-blue-600 px-3 py-1.5 text-white">
+                      Filtro rápido activo: Préstamo #{filters.prestamo_id}
+                    </Badge>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() =>
+                        setFilters(prev => ({
+                          ...prev,
+                          prestamo_id: '',
+                          prestamo_cartera: '',
+                        }))
+                      }
+                      className="ml-2"
+                    >
+                      <X className="mr-1 h-4 w-4" />
+                      Quitar
+                    </Button>
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -1725,6 +1763,7 @@ export function PagosList() {
                     filters.fechaDesde ||
                     filters.fechaHasta ||
                     filters.analista ||
+                    filters.prestamo_id ||
                     (filters.conciliado && filters.conciliado !== 'si') ||
                     filters.sin_prestamo === 'si') && (
                     <Button

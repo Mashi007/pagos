@@ -121,6 +121,9 @@ class PagoService {
       /** activa (defecto en API): solo préstamo APROBADO o sin crédito. todos: incluye LIQUIDADO etc. */
       prestamo_cartera?: 'activa' | 'todos'
 
+      /** Filtro exacto del listado principal por crédito. */
+      prestamo_id?: number
+
       /** Agregados de pagos de este crédito (todas las páginas); no filtra el listado principal. */
       resumen_prestamo_id?: number
     }
@@ -166,6 +169,12 @@ class PagoService {
       ...(filters?.prestamo_cartera === 'todos' && {
         prestamo_cartera: 'todos',
       }),
+
+      ...(filters?.prestamo_id != null &&
+        Number.isFinite(Number(filters.prestamo_id)) &&
+        Number(filters.prestamo_id) > 0 && {
+          prestamo_id: String(Math.trunc(Number(filters.prestamo_id))),
+        }),
 
       ...(filters?.resumen_prestamo_id != null &&
         Number.isFinite(Number(filters.resumen_prestamo_id)) &&
