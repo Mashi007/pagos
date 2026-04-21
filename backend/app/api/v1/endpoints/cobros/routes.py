@@ -13,7 +13,7 @@ from decimal import Decimal
 from types import SimpleNamespace
 from typing import Optional, List, Tuple, Any, Dict, Set
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
@@ -58,7 +58,12 @@ from app.services.tasa_cambio_service import (
     obtener_tasas_por_fechas,
     tasa_y_equivalente_usd_excel,
 )
-from app.services.pagos_gmail.gemini_service import compare_form_with_image
+from app.services.pagos_gmail.gemini_service import (
+    compare_form_with_image,
+    extract_infopagos_campos_desde_comprobante,
+)
+from app.services.cobros import cobros_publico_reporte_service as cpr
+from app.utils.cedula_almacenamiento import expr_cedula_normalizada_para_comparar
 from app.services.pagos_gmail.comprobante_bd import url_comprobante_imagen_absoluta
 from app.services.cobros.pago_reportado_comprobante_unico import (
     comprobante_bytes_y_content_type_desde_reportado,
@@ -2447,4 +2452,120 @@ def reanalizar_pago_con_gemini(
         "gemini_coincide_exacto": pr.gemini_coincide_exacto,
         "gemini_comentario": pr.gemini_comentario,
         "mensaje": "Comprobante re-analizado. Verifica la observación antes de aprobar o rechazar.",
+    }
+
+
+@router.post("/escaner/extraer-comprobante")
+async def escaner_extraer_comprobante_infopagos(
+    db: Session = Depends(get_db),
+    tipo_cedula: str = Form(...),
+    numero_cedula: str = Form(...),
+    comprobante: UploadFile = File(...),
+):
+    """
+    Personal autenticado: sugiere campos del formulario Infopagos leyendo el comprobante con Gemini.
+    Orden de uso: cédula del deudor + archivo. No guarda el reporte; el front aplica validadores y envía con /cobros/public/infopagos/enviar-reporte.
+    """
+    cedula_input = f"{(tipo_cedula or '').strip()}{(numero_cedula or '').strip()}"
+    val = validate_cedula(cedula_input)
+    if not val.get("valido"):
+        raise HTTPException(status_code=400, detail=val.get("error", "Cédula inválida."))
+
+    cedula_lookup = (val.get("valor_formateado") or "").replace("-", "")
+    if not cedula_lookup:
+        raise HTTPException(status_code=400, detail="Formato de cédula no reconocido.")
+
+    cliente = db.execute(
+        select(Cliente).where(expr_cedula_normalizada_para_comparar(Cliente.cedula) == cedula_lookup)
+    ).scalars().first()
+    if not cliente:
+        raise HTTPException(status_code=400, detail="La cédula no está registrada.")
+
+    prestamos_aprob = cpr.prestamos_aprobados_del_cliente(db, cliente.id)
+    err_pres = cpr.error_si_no_puede_reportar_en_web(prestamos_aprob)
+    if err_pres:
+        raise HTTPException(status_code=400, detail=err_pres)
+
+    content = await comprobante.read()
+    fn_comp = comprobante.filename or "comprobante"
+    ctype = cpr.mime_efectivo_comprobante_web(comprobante.content_type or "", fn_comp)
+    err_file, filename = cpr.validar_adjunto_comprobante_bytes(
+        content,
+        ctype,
+        fn_comp,
+        mensaje_excel_largo=False,
+    )
+    if err_file:
+        raise HTTPException(status_code=400, detail=err_file)
+
+    tipo = (tipo_cedula or "").strip().upper()[:2]
+    numero = (numero_cedula or "").strip()
+    ctx_ced = f"{tipo}{numero}".replace("-", "")
+
+    gem = extract_infopagos_campos_desde_comprobante(ctx_ced, content, filename)
+    if not gem.get("ok"):
+        return {
+            "ok": False,
+            "error": gem.get("error") or "No se pudo leer el comprobante.",
+            "sugerencia": None,
+            "validacion_campos": None,
+            "validacion_reglas": None,
+        }
+
+    fecha_d = gem.get("fecha_pago")
+    fecha_iso = fecha_d.isoformat() if isinstance(fecha_d, date) else None
+    monto = gem.get("monto")
+    inst = gem.get("institucion_financiera") or ""
+    num_op = gem.get("numero_operacion") or ""
+    moneda = gem.get("moneda") or "BS"
+
+    validacion_campos = None
+    validacion_reglas = None
+    mon_norm = None
+
+    if monto is not None and inst.strip() and num_op.strip():
+        err_campos, mon_norm = cpr.normalizar_y_validar_campos_formulario(
+            tipo_cedula=tipo,
+            numero_cedula=numero,
+            institucion_financiera=inst,
+            numero_operacion=num_op,
+            monto=float(monto),
+            moneda=moneda,
+            observacion=None,
+        )
+        validacion_campos = err_campos
+        if not err_campos and isinstance(fecha_d, date):
+            err_reglas = cpr.validar_reglas_bs_tasa_monto_fecha(
+                db,
+                cedula_lookup=cedula_lookup,
+                fecha_pago=fecha_d,
+                monto=float(monto),
+                mon=mon_norm,
+            )
+            validacion_reglas = err_reglas
+        elif not err_campos and not isinstance(fecha_d, date):
+            validacion_reglas = "Indique la fecha de pago (no se detectó con claridad en la imagen)."
+    elif monto is None:
+        validacion_reglas = "Complete el monto (no se detectó con claridad en la imagen)."
+    elif not inst.strip():
+        validacion_reglas = "Complete la institución financiera."
+    elif not num_op.strip():
+        validacion_reglas = "Complete el número de operación o referencia."
+
+    sugerencia = {
+        "fecha_pago": fecha_iso,
+        "institucion_financiera": inst,
+        "numero_operacion": num_op,
+        "monto": monto,
+        "moneda": moneda if moneda in ("BS", "USD") else "BS",
+        "cedula_pagador_en_comprobante": gem.get("cedula_pagador_en_comprobante") or "",
+        "notas_modelo": gem.get("notas") or "",
+    }
+
+    return {
+        "ok": True,
+        "error": None,
+        "sugerencia": sugerencia,
+        "validacion_campos": validacion_campos,
+        "validacion_reglas": validacion_reglas,
     }

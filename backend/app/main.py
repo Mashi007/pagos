@@ -121,6 +121,7 @@ class RequestLogMiddleware(BaseHTTPMiddleware):
             "gmail/run-now" in path
             or "cobros/public/enviar-reporte" in path
             or "cobros/public/infopagos/enviar-reporte" in path
+            or "cobros/escaner/extraer-comprobante" in path
             or "estado-cuenta/public/verificar-codigo" in path
             or "estado-cuenta/public/solicitar-codigo" in path
             or "dashboard/pagos-inicial" in path

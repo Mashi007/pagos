@@ -50,6 +50,8 @@ export const TasaCambioPage = lazy(() => import('../pages/TasaCambioPage'))
 
 export const InfopagosPage = lazy(() => import('../pages/InfopagosPage'))
 
+export const EscanerInfopagosPage = lazy(() => import('../pages/EscanerInfopagosPage'))
+
 export const AmortizacionPage = lazy(() => import('../pages/AmortizacionPage'))
 
 export const CobrosPagosReportadosPage = lazy(

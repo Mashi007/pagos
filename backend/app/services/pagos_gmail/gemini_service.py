@@ -6,6 +6,7 @@ Configuración única para todo el sistema: GEMINI_API_KEY y GEMINI_MODEL (app.c
 - Pagos (Gmail): fecha_pago, cedula, monto, numero_referencia (extract_payment_data).
 - Cobranza (papeleta/informe): fecha_deposito, nombre_banco, etc. (extract_cobranza_from_image).
 - Cobros (reporte público): comparar datos del formulario vs imagen del comprobante (compare_form_with_image).
+- Cobros (escáner Infopagos, personal autenticado): extraer sugerencia de campos desde solo la imagen (extract_infopagos_campos_desde_comprobante).
   Cobros usa la misma API key y modelo que el resto del sistema; sin clave, los reportes van a en_revision.
 """
 import io
@@ -13,6 +14,7 @@ import json
 import logging
 import re
 import time
+from datetime import date
 from typing import Any, Dict, Literal, Optional, Tuple
 
 GEMINI_RATE_LIMIT_RETRY_DELAY = 45
@@ -1389,4 +1391,210 @@ def compare_form_with_image(
             logger.exception("Gemini compare_form_with_image: %s", e)
         default_result["comentario"] = str(e)[:500]
         return default_result
+
+
+# ── Cobros / Infopagos: escáner (solo imagen → sugerencia de campos del formulario) ──
+
+GEMINI_ESCANER_INFOPAGOS_PROMPT = """Eres un asistente de lectura de comprobantes de pago (Venezuela: bancos, Pago Móvil, Zelle, Binance Pay, recibos de ventanilla, etc.).
+
+CONTEXTO (cédula del DEUDOR en el sistema — el cliente al que se le registra el pago; NO la confundas con la del depositante en el papel):
+  "{cedula_deudor}"
+
+TAREA: Lee la imagen o PDF adjunto y extrae SOLO lo que aparezca con claridad en el comprobante para rellenar un formulario de "Infopagos" con estos campos:
+  - fecha_pago: fecha de la operación en el comprobante. Devuélvela como cadena en formato **YYYY-MM-DD** si puedes inferir año/mes/día; si solo hay día/mes sin año razonable, deja fecha_pago vacía "".
+  - institucion_financiera: nombre corto del banco o entidad (ej. BNC, Mercantil, Banesco, BDV, BINANCE, Pago Móvil). Máximo 100 caracteres.
+  - numero_operacion: número o código que identifica la transacción (Serial, Ref, Nº operación, referencia, código, ID de orden en Binance, etc.). Sin etiquetas largas: solo el valor. Máximo 100 caracteres.
+  - monto: número decimal con punto como separador decimal (ej. 150.25). Si hay varios montos, el del pago principal al beneficiario. Si no es legible, usa null.
+  - moneda: exactamente **BS** o **USD** (USDT, $ en contexto divisa fuerte, "Dólares", Binance Pay en USDT → USD).
+  - cedula_pagador_en_comprobante: si en el comprobante aparece claramente la cédula del depositante (DP:, CI, RIF, etc.), devuélvela normalizada como una sola cadena tipo V12345678 (una letra V/E/J/G y dígitos sin ceros de más a la izquierda después de la letra). Si no aparece o hay duda, cadena vacía "".
+  - notas: una frase corta opcional sobre calidad de lectura o ambigüedades (máx 300 caracteres); puede ser "".
+
+REGLAS:
+  - No inventes datos: si un campo no está legible, usa "" o null según el tipo.
+  - No copies el correo ni datos que no estén en el comprobante.
+  - Responde ÚNICAMENTE con un objeto JSON válido, sin markdown ni texto extra, con exactamente estas claves:
+  fecha_pago, institucion_financiera, numero_operacion, monto, moneda, cedula_pagador_en_comprobante, notas
+"""
+
+
+def _parse_monto_escaner(val: Any) -> Optional[float]:
+    if val is None:
+        return None
+    if isinstance(val, (int, float)):
+        if isinstance(val, float) and (val != val or val == float("inf")):  # NaN / inf
+            return None
+        return float(val)
+    s = str(val).strip().replace(" ", "").replace("Bs.", "").replace("Bs", "").replace("USD", "").replace("US$", "").replace("$", "")
+    if not s or s.lower() in ("na", "n/a", "-"):
+        return None
+    # Formato latino 1.234,56
+    if "," in s and "." in s:
+        if s.rfind(",") > s.rfind("."):
+            s = s.replace(".", "").replace(",", ".")
+        else:
+            s = s.replace(",", "")
+    elif "," in s:
+        parts = s.split(",")
+        if len(parts) == 2 and len(parts[1]) <= 2:
+            s = parts[0].replace(".", "") + "." + parts[1]
+        else:
+            s = s.replace(",", ".")
+    try:
+        n = float(s)
+        if n != n or n == float("inf"):
+            return None
+        return round(n, 2)
+    except (TypeError, ValueError):
+        return None
+
+
+def _parse_fecha_escaner(val: Any) -> Optional[date]:
+    if val is None:
+        return None
+    s = str(val).strip()
+    if not s or s.lower() in ("na", "n/a", "-", ""):
+        return None
+    s10 = s[:10]
+    try:
+        if len(s10) >= 10 and s10[4] == "-" and s10[7] == "-":
+            y, m, d = int(s10[0:4]), int(s10[5:7]), int(s10[8:10])
+            return date(y, m, d)
+    except (ValueError, TypeError):
+        pass
+    # dd/mm/yyyy o dd-mm-yyyy
+    m = re.match(r"^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$", s)
+    if m:
+        try:
+            d, mo, y = int(m.group(1)), int(m.group(2)), int(m.group(3))
+            return date(y, mo, d)
+        except ValueError:
+            return None
+    return None
+
+
+def extract_infopagos_campos_desde_comprobante(
+    cedula_deudor_contexto: str,
+    image_bytes: bytes,
+    filename: str = "comprobante.jpg",
+    api_key: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    Solo lectura OCR/visión: sugiere campos del formulario Infopagos a partir del comprobante.
+    No persiste nada. Requiere GEMINI_API_KEY.
+    Retorna dict con ok, y campos sugeridos o error.
+    """
+    key = api_key or getattr(settings, "GEMINI_API_KEY", None)
+    out_err: Dict[str, Any] = {
+        "ok": False,
+        "error": "Gemini no configurado o clave vacía.",
+        "fecha_pago": None,
+        "institucion_financiera": "",
+        "numero_operacion": "",
+        "monto": None,
+        "moneda": "BS",
+        "cedula_pagador_en_comprobante": "",
+        "notas": "",
+    }
+    if not key or not str(key).strip():
+        logger.warning("[ESCANER] GEMINI_API_KEY no configurado.")
+        return out_err
+
+    ctx = (cedula_deudor_contexto or "").strip() or "(no indicada)"
+    prompt = GEMINI_ESCANER_INFOPAGOS_PROMPT.replace("{cedula_deudor}", ctx)
+
+    model_name = getattr(settings, "GEMINI_MODEL", "gemini-2.5-flash")
+    mime = get_mime_type(filename)
+    try:
+        from google import genai
+        from google.genai import types
+
+        client = _gemini_client(key)
+        image_part = _build_image_part(image_bytes, filename, mime)
+        _max_gemini_attempts = max(GEMINI_RATE_LIMIT_MAX_RETRIES, GEMINI_SERVER_ERROR_MAX_RETRIES) + 1
+        last_error: Optional[Exception] = None
+        for attempt in range(_max_gemini_attempts):
+            try:
+                response = client.models.generate_content(
+                    model=model_name,
+                    contents=[prompt, image_part],
+                    config=types.GenerateContentConfig(temperature=0.1),
+                )
+                text = (response.text or "").strip()
+                json_str = _find_json_object(text)
+                if not json_str:
+                    m = re.search(r"\{[^{}]*\}", text, re.DOTALL)
+                    json_str = m.group(0) if m else None
+                if not json_str:
+                    return {
+                        "ok": False,
+                        "error": "No se pudo interpretar la respuesta del modelo.",
+                        "fecha_pago": None,
+                        "institucion_financiera": "",
+                        "numero_operacion": "",
+                        "monto": None,
+                        "moneda": "BS",
+                        "cedula_pagador_en_comprobante": "",
+                        "notas": (text or "")[:300],
+                    }
+                data = json.loads(json_str)
+                mon_raw = (data.get("moneda") or "BS").strip().upper()
+                if mon_raw in ("USD", "USDT", "$", "DOLARES", "DÓLARES", "DIVISA") or "BINANCE" in mon_raw:
+                    mon_norm = "USD"
+                else:
+                    mon_norm = "BS"
+
+                inst = str(data.get("institucion_financiera") or "").strip()[:100]
+                num_op = str(data.get("numero_operacion") or "").strip()[:100]
+                fecha = _parse_fecha_escaner(data.get("fecha_pago"))
+                monto = _parse_monto_escaner(data.get("monto"))
+                ced_pag = str(data.get("cedula_pagador_en_comprobante") or "").strip()[:30]
+                notas = str(data.get("notas") or "").strip()[:300]
+
+                return {
+                    "ok": True,
+                    "error": None,
+                    "fecha_pago": fecha,
+                    "institucion_financiera": inst,
+                    "numero_operacion": num_op,
+                    "monto": monto,
+                    "moneda": mon_norm,
+                    "cedula_pagador_en_comprobante": ced_pag,
+                    "notas": notas,
+                }
+            except Exception as e:
+                last_error = e
+                if _is_rate_limit_error(e) and attempt < GEMINI_RATE_LIMIT_MAX_RETRIES:
+                    delay = _extract_retry_seconds(e)
+                    logger.warning("[ESCANER] Gemini 429, reintento %d en %ds", attempt + 1, delay)
+                    time.sleep(delay)
+                elif _is_server_error_503(e) and attempt < GEMINI_SERVER_ERROR_MAX_RETRIES:
+                    delay = GEMINI_SERVER_ERROR_RETRY_DELAY + (attempt * 5)
+                    logger.warning("[ESCANER] Gemini 503, reintento %d en %ds", attempt + 1, delay)
+                    time.sleep(delay)
+                else:
+                    raise
+        return {
+            "ok": False,
+            "error": str(last_error)[:500] if last_error else "Error desconocido.",
+            "fecha_pago": None,
+            "institucion_financiera": "",
+            "numero_operacion": "",
+            "monto": None,
+            "moneda": "BS",
+            "cedula_pagador_en_comprobante": "",
+            "notas": "",
+        }
+    except Exception as e:
+        logger.exception("[ESCANER] extract_infopagos_campos_desde_comprobante: %s", e)
+        return {
+            "ok": False,
+            "error": str(e)[:500],
+            "fecha_pago": None,
+            "institucion_financiera": "",
+            "numero_operacion": "",
+            "monto": None,
+            "moneda": "BS",
+            "cedula_pagador_en_comprobante": "",
+            "notas": "",
+        }
 

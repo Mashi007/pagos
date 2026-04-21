@@ -319,6 +319,12 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
           href: '/infopagos',
           icon: Building2,
         },
+
+        {
+          title: 'Escáner',
+          href: '/escaner',
+          icon: Brain,
+        },
       ],
     },
 

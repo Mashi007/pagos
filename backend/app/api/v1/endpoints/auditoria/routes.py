@@ -50,6 +50,9 @@ from app.services.auditoria_liquidados_intensiva import (
     paginar_filas,
     resumen_cierre_desde_filas,
 )
+from app.services.auditoria_revision_descuadre_service import (
+    revision_descuadre_pagos_cuotas_prestamo,
+)
 from app.services.prestamo_cartera_auditoria import (
     ejecutar_auditoria_cartera,
     leer_meta_ejecucion,
@@ -342,6 +345,42 @@ class LiquidadosCierreChequeoResponse(BaseModel):
 class LiquidadosIntensivaResponse(BaseModel):
     cartera: PrestamoCarteraChequeoResponse
     cierre: LiquidadosCierreChequeoResponse
+
+
+class RevisionDescuadrePagoItem(BaseModel):
+    pago_id: int
+    fecha_pago: Optional[str] = None
+    monto_pagado: str
+    estado: str
+    numero_documento: str
+    referencia_pago: str
+    moneda_registro: str
+    conciliado: bool
+    cuenta_operativo_cartera: bool
+    sum_aplicado_cuotas: str
+    saldo_sin_aplicar_usd: str
+
+
+class RevisionDescuadreCuotaItem(BaseModel):
+    cuota_id: int
+    numero_cuota: int
+    monto_cuota: str
+    total_pagado: str
+    estado: str
+
+
+class RevisionDescuadrePagosCuotasResponse(BaseModel):
+    prestamo_id: int
+    estado_prestamo: str
+    fecha_liquidado: Optional[str] = None
+    sum_pagos_operativos_usd: str
+    sum_aplicado_cuotas_usd: str
+    diff_usd: str
+    tolerancia_usd: str
+    semaforo_cuadre: str
+    tiene_pago_operativo_sin_aplicar_fuera_tol: bool
+    pagos: List[RevisionDescuadrePagoItem]
+    cuotas: List[RevisionDescuadreCuotaItem]
 
 
 class CarteraCorregirBody(BaseModel):
@@ -655,6 +694,25 @@ def auditoria_intensiva_prestamos_liquidados(
         resumen=cierre_resumen,
     )
     return LiquidadosIntensivaResponse(cartera=cartera, cierre=cierre)
+
+
+@router.get(
+    "/prestamos/{prestamo_id}/revision-descuadre-pagos-cuotas",
+    response_model=RevisionDescuadrePagosCuotasResponse,
+)
+def obtener_revision_descuadre_pagos_cuotas(
+    prestamo_id: int,
+    db: Session = Depends(get_db),
+    _aud: UserResponse = Depends(require_auditoria_cartera_access),
+):
+    """
+    Detalle para la UI de auditoria: totales (pagos operativos vs cuota_pagos), listado de pagos del prestamo
+    con saldo sin aplicar, cuotas, y semaforo de cuadre (verde / amarillo si falta fecha_liquidado en LIQUIDADO / rojo).
+    """
+    raw = revision_descuadre_pagos_cuotas_prestamo(db, prestamo_id)
+    if raw.get("error") == "prestamo_no_encontrado":
+        raise HTTPException(status_code=404, detail="Prestamo no encontrado")
+    return RevisionDescuadrePagosCuotasResponse(**raw)
 
 
 @router.post("/prestamos/cartera/ejecutar", response_model=PrestamoCarteraChequeoResponse)

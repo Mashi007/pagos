@@ -985,6 +985,9 @@ class ApiClient {
   ): Promise<T> {
     try {
       // Cobros: aprobar/rechazar/enviar recibo/re-analizar generan PDF, SMTP, import a pagos — en Render suele >30s.
+      const isCobrosEscanerGemini =
+        url.includes('/cobros/escaner/extraer-comprobante')
+
       const isCobrosPagosReportadosHeavyPost =
         (url.includes('/cobros/pagos-reportados/') &&
           (url.includes('/aprobar') ||
@@ -1027,7 +1030,9 @@ class ApiClient {
       )
 
       let defaultTimeout = DEFAULT_TIMEOUT_MS
-      if (isCobrosPagosReportadosHeavyPost) {
+      if (isCobrosEscanerGemini) {
+        defaultTimeout = 120000 // Gemini + lectura comprobante
+      } else if (isCobrosPagosReportadosHeavyPost) {
         defaultTimeout = 180000 // 3 min: PDF + SMTP + import; PATCH detalle ya visto ~35s en producción
       } else if (isAuditoriaCarteraCorregir) {
         defaultTimeout = 300000 // 5 min

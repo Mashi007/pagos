@@ -162,6 +162,7 @@ import {
   FiniquitoGestionGatePage,
   FiniquitoRootPage,
   InfopagosPage,
+  EscanerInfopagosPage,
   ModelosVehiculos,
   Notificaciones,
   NotificacionesClientesDrive,
@@ -371,6 +372,8 @@ function App() {
             {/* Infopagos: dentro del layout con sidebar (requiere login) */}
 
             <Route path="infopagos" element={<InfopagosPage />} />
+
+            <Route path="escaner" element={<EscanerInfopagosPage />} />
 
             {/* Amortizacin */}
 

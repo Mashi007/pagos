@@ -473,6 +473,44 @@ export async function enviarReporteInfopagos(
 
 /** Infopagos: descargar recibo PDF con el token devuelto tras registrar el pago. */
 
+export interface EscanerInfopagosSugerencia {
+  fecha_pago: string | null
+
+  institucion_financiera: string
+
+  numero_operacion: string
+
+  monto: number | null
+
+  moneda: 'BS' | 'USD'
+
+  cedula_pagador_en_comprobante: string
+
+  notas_modelo: string
+}
+
+export interface EscanerInfopagosExtraerResponse {
+  ok: boolean
+
+  error?: string | null
+
+  sugerencia: EscanerInfopagosSugerencia | null
+
+  validacion_campos?: string | null
+
+  validacion_reglas?: string | null
+}
+
+/** Escáner Infopagos (auth): Gemini sugiere campos desde el comprobante; no guarda el reporte. */
+export async function escanerInfopagosExtraerComprobante(
+  formData: FormData
+): Promise<EscanerInfopagosExtraerResponse> {
+  return apiClient.post<EscanerInfopagosExtraerResponse>(
+    `${BASE_COBROS}/escaner/extraer-comprobante`,
+    formData
+  )
+}
+
 export async function getReciboInfopagos(
   token: string,
   pagoId: number

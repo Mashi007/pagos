@@ -147,6 +147,67 @@ export interface AuditoriaLiquidadosIntensivaQuery {
   codigo_control?: string
 }
 
+/** GET /auditoria/prestamos/{id}/revision-descuadre-pagos-cuotas */
+export interface RevisionDescuadrePagoItem {
+  pago_id: number
+
+  fecha_pago: string | null
+
+  monto_pagado: string
+
+  estado: string
+
+  numero_documento: string
+
+  referencia_pago: string
+
+  moneda_registro: string
+
+  conciliado: boolean
+
+  cuenta_operativo_cartera: boolean
+
+  sum_aplicado_cuotas: string
+
+  saldo_sin_aplicar_usd: string
+}
+
+export interface RevisionDescuadreCuotaItem {
+  cuota_id: number
+
+  numero_cuota: number
+
+  monto_cuota: string
+
+  total_pagado: string
+
+  estado: string
+}
+
+export interface RevisionDescuadrePagosCuotasResponse {
+  prestamo_id: number
+
+  estado_prestamo: string
+
+  fecha_liquidado?: string | null
+
+  sum_pagos_operativos_usd: string
+
+  sum_aplicado_cuotas_usd: string
+
+  diff_usd: string
+
+  tolerancia_usd: string
+
+  semaforo_cuadre: 'verde' | 'amarillo' | 'rojo' | string
+
+  tiene_pago_operativo_sin_aplicar_fuera_tol: boolean
+
+  pagos: RevisionDescuadrePagoItem[]
+
+  cuotas: RevisionDescuadreCuotaItem[]
+}
+
 export interface CarteraCorreccionResponse extends PrestamoCarteraChequeoResponse {
   reaplicar_cascada?: Array<Record<string, unknown>>
 }
@@ -381,6 +442,15 @@ class AuditoriaService {
     return apiClient.get<AuditoriaLiquidadosIntensivaResponse>(
       `${this.baseUrl}/prestamos/liquidados/auditoria-intensiva`,
       { params: query }
+    )
+  }
+
+  /** Detalle pagos vs aplicado cuotas (revision UI auditoria). */
+  async obtenerRevisionDescuadrePagosCuotas(
+    prestamoId: number
+  ): Promise<RevisionDescuadrePagosCuotasResponse> {
+    return apiClient.get<RevisionDescuadrePagosCuotasResponse>(
+      `${this.baseUrl}/prestamos/${prestamoId}/revision-descuadre-pagos-cuotas`
     )
   }
 
