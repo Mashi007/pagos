@@ -1,10 +1,9 @@
-import { Link, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 
 import { FileText, Wallet } from 'lucide-react'
 
 import { Button } from '../components/ui/button'
 import { Logo } from '../components/ui/Logo'
-import { STAFF_LOGIN_SEARCH } from '../config/env'
 
 /**
  * Entrada pública en la raíz del basename (p. ej. /pagos).
@@ -74,14 +73,6 @@ export function PublicBasenameIndexPage() {
         </ul>
       </main>
 
-      <footer className="border-t border-slate-800 px-4 py-6 text-center">
-        <Link
-          to={`/login${STAFF_LOGIN_SEARCH}`}
-          className="text-xs text-slate-500 underline-offset-4 hover:text-slate-300 hover:underline"
-        >
-          Acceso personal del sistema
-        </Link>
-      </footer>
     </div>
   )
 }
