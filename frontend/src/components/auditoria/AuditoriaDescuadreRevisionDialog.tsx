@@ -16,8 +16,6 @@ import { Badge } from '../ui/badge'
 
 import { Button } from '../ui/button'
 
-import { Checkbox } from '../ui/checkbox'
-
 import {
   Dialog,
   DialogContent,
@@ -60,14 +58,14 @@ function SemaforoCuadre({ semaforo }: { semaforo: string }) {
   const s = (semaforo || '').toLowerCase()
   const verde = s === 'verde'
   const amarillo = s === 'amarillo'
-  const rojo = s === 'rojo' || !verde
+  const rojo = s === 'rojo' || (!verde && !amarillo)
   return (
     <div className="flex flex-wrap items-center gap-3 rounded-lg border border-slate-200 bg-slate-50/80 px-4 py-3">
       <span className="text-sm font-medium text-slate-700">Cuadre motor</span>
       <div className="flex items-center gap-2" title="Semaforo de cuadre contable">
         <span
           className={`h-4 w-4 rounded-full border-2 shadow-sm ${
-            rojo && !verde && !amarillo ? 'border-red-700 bg-red-500' : 'border-slate-300 bg-slate-200'
+            rojo ? 'border-red-700 bg-red-500' : 'border-slate-300 bg-slate-200'
           }`}
           aria-label="Rojo: descuadre o aplicaciones pendientes"
         />
@@ -563,10 +561,12 @@ export function AuditoriaDescuadreRevisionDialog({
               <Input id="aud-desc-doc" value={editDoc} onChange={e => setEditDoc(e.target.value)} />
             </div>
             <div className="flex items-center gap-2">
-              <Checkbox
+              <input
                 id="aud-desc-conc"
+                type="checkbox"
+                className="h-4 w-4 rounded border-slate-300"
                 checked={editConciliado}
-                onCheckedChange={v => setEditConciliado(v === true)}
+                onChange={e => setEditConciliado(e.target.checked)}
               />
               <Label htmlFor="aud-desc-conc" className="cursor-pointer text-sm font-normal">
                 Conciliado
