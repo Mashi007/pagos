@@ -29,9 +29,9 @@ class Settings(BaseSettings):
         default=False,
         description=(
             "Si True, el proceso lider puede iniciar APScheduler (finiquito, auditoria cartera, limpieza codigos, "
-            "hoja CONCILIACION a drive/conciliacion_sheet domingo y miércoles 02:00 Caracas, "
-            "caché lista Clientes (Drive) dom/mié 03:00, "
-            "snapshot candidatos préstamo desde drive dom/mié 04:05 si aplica, "
+            "hoja CONCILIACION a drive/conciliacion_sheet domingo y miércoles 01:20 Caracas, "
+            "caché lista Clientes (Drive) diario 04:05 Caracas, "
+            "snapshot candidatos préstamo desde drive diario 04:45 si aplica, "
             "Gmail programado si aplica), liquidado diario 21:00 Caracas, refresco programado de cache del dashboard, "
             "watcher de lider y, al arrancar, marcar syncs Gmail 'running' como error (desbloqueo tras deploy). "
             "Los envíos masivos por pestaña de Notificaciones son manuales (POST desde la UI); el único cron de correo "
@@ -59,7 +59,7 @@ class Settings(BaseSettings):
     ENABLE_PRESTAMO_CANDIDATOS_DRIVE_NIGHTLY: bool = Field(
         default=True,
         description=(
-            "Si True y ENABLE_AUTOMATIC_SCHEDULED_JOBS=True, cada lunes a sábado a las 03:40 America/Caracas "
+            "Si True y ENABLE_AUTOMATIC_SCHEDULED_JOBS=True, cada día a las 04:45 America/Caracas "
             "se recalcula la tabla prestamo_candidatos_drive (cédula columna E; ver servicio y scheduler)."
         ),
     )
@@ -105,6 +105,13 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(
         default=240,
         description="Minutos hasta que expire el access token (default 4h). El refresh token sigue 7 días."
+    )
+    # Portal Finiquito (scope=finiquito): JWT más corto que el de personal; configurable por .env.
+    FINIQUITO_ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(
+        default=180,
+        ge=15,
+        le=1440,
+        description="Minutos de validez del access token solo para portal Finiquito (OTP). Default 3h.",
     )
     # Refresh token: duración en días (solo para renovar access token; no obliga a login hasta que expire).
     REFRESH_TOKEN_EXPIRE_DAYS: int = Field(default=7, description="Días hasta que expire el refresh token")
@@ -361,7 +368,7 @@ class Settings(BaseSettings):
         ),
     )
 
-    # Google Sheet CONCILIACIÓN → BD (snapshot dom/mié 02:00; caché lista Clientes Drive dom/mié 03:00 si ENABLE_AUTOMATIC_SCHEDULED_JOBS)
+    # Google Sheet CONCILIACIÓN → BD (snapshot dom/mié 01:20; caché Clientes Drive lun-sab 04:05 si jobs automáticos)
     CONCILIACION_SHEET_SPREADSHEET_ID: Optional[str] = Field(
         default=None,
         description="ID del documento (segmento entre /d/ e /edit en la URL de Google Sheets).",
@@ -381,8 +388,8 @@ class Settings(BaseSettings):
         default=None,
         description=(
             "Secreto para POST /api/v1/conciliacion-sheet/sync (header X-Conciliacion-Sheet-Sync-Secret). "
-            "Cron externo (Render, etc.): alinear a domingo y miércoles 02:00 America/Caracas (antes del job 03:00 que "
-            "materializa la lista Clientes Drive), o omitir si ENABLE_AUTOMATIC_SCHEDULED_JOBS=true."
+            "Cron externo (Render, etc.): alinear a domingo y miércoles 01:20 America/Caracas (coherente con el job interno), "
+            "o omitir si ENABLE_AUTOMATIC_SCHEDULED_JOBS=true."
         ),
     )
     CONCILIACION_SHEET_COLUMNS_RANGE: str = Field(
@@ -393,11 +400,12 @@ class Settings(BaseSettings):
         ),
     )
     CONCILIACION_SHEET_GOOGLE_HTTP_TIMEOUT_SECONDS: int = Field(
-        default=120,
+        default=300,
         ge=10,
         le=600,
         description=(
             "Timeout de socket (segundos) para llamadas a Google Sheets API en sync/diagnóstico de conciliación. "
+            "Hojas grandes (muchas filas A:S en una sola values.get) pueden superar 120 s; subir con env si aún corta. "
             "Evita workers colgados si Google no responde; si faltan httplib2/google_auth_httplib2, se usa el cliente por defecto."
         ),
     )

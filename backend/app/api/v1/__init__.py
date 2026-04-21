@@ -106,7 +106,7 @@ api_router.include_router(
 
 )
 
-# Finiquito (portal OTP + admin; materializado job 02:00)
+# Finiquito (portal OTP + admin; materializado jobs lun-sab 01:00 y 13:00 Caracas)
 
 api_router.include_router(
 

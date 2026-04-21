@@ -1,12 +1,10 @@
 """
-Refresco de finiquito_casos: solo prestamos en estado LIQUIDADO donde
-sum(cuotas.total_pagado) = total_financiamiento (comparacion exacta en SQL).
-Nota: el marcado LIQUIDADO en pagos usa tolerancia 0.01 por cuota; si por redondeo
-la suma de total_pagado no iguala exactamente total_financiamiento, no habra fila
-finiquito hasta corregir cuotas o ejecutar criterio manual / ajuste futuro de tolerancia.
+Refresco de finiquito_casos: solo préstamos en estado LIQUIDADO donde la suma de
+cuotas.total_pagado cuadra con total_financiamiento con tolerancia 0.02 (alineado
+con redondeos y cuadre pagos/cuotas en cartera).
 
-- Job diario 02:00 America/Caracas (si ENABLE_AUTOMATIC_SCHEDULED_JOBS).
-- Tras marcar LIQUIDADO en cascada de pagos/cuotas: refrescar un solo prestamo
+- Jobs lun-sab 01:00 y 13:00 America/Caracas (si ENABLE_AUTOMATIC_SCHEDULED_JOBS).
+- Tras marcar LIQUIDADO en cascada de pagos/cuotas: refrescar un solo préstamo
   (refrescar_finiquito_caso_prestamo_si_aplica), sin depender del cron.
 """
 import logging
@@ -78,8 +76,9 @@ def refrescar_finiquito_caso_prestamo_si_aplica(db: Session, prestamo_id: int) -
     Alinea finiquito_casos para un solo prestamo con la misma regla que el refresco masivo.
 
     No hace commit: el llamador controla la transaccion (p. ej. aplicar pago a cuotas).
-    Si el prestamo no califica (no LIQUIDADO o suma distinta de total_financiamiento),
-    elimina filas finiquito de ese prestamo y limpia estado_gestion_finiquito en prestamos.
+    Si el préstamo no califica (no LIQUIDADO o suma fuera de tolerancia respecto a
+    total_financiamiento), elimina filas finiquito de ese préstamo y limpia
+    estado_gestion_finiquito en préstamos.
     """
     pid = int(prestamo_id)
     # Misma sesion que marco LIQUIDADO en ORM: asegurar que el SELECT raw ve el estado persistido.
@@ -97,7 +96,9 @@ def refrescar_finiquito_caso_prestamo_si_aplica(db: Session, prestamo_id: int) -
         WHERE p.id = :pid
           AND UPPER(TRIM(COALESCE(p.estado, ''))) = 'LIQUIDADO'
         GROUP BY p.id, p.cliente_id, p.cedula, p.total_financiamiento
-        HAVING COALESCE(SUM(COALESCE(c.total_pagado, 0)), 0) = p.total_financiamiento
+        HAVING ABS(
+            COALESCE(SUM(COALESCE(c.total_pagado, 0)), 0) - COALESCE(p.total_financiamiento, 0)
+        ) <= 0.02
         """
     )
     row = db.execute(sql, {"pid": pid}).fetchone()
@@ -168,7 +169,9 @@ def ejecutar_refresh_finiquito_casos(db: Session) -> dict[str, Any]:
         INNER JOIN cuotas c ON c.prestamo_id = p.id
         WHERE UPPER(TRIM(COALESCE(p.estado, ''))) = 'LIQUIDADO'
         GROUP BY p.id, p.cliente_id, p.cedula, p.total_financiamiento
-        HAVING COALESCE(SUM(COALESCE(c.total_pagado, 0)), 0) = p.total_financiamiento
+        HAVING ABS(
+            COALESCE(SUM(COALESCE(c.total_pagado, 0)), 0) - COALESCE(p.total_financiamiento, 0)
+        ) <= 0.02
         """
     )
     rows = db.execute(sql).fetchall()

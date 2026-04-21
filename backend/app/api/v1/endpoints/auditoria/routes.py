@@ -43,6 +43,12 @@ from app.services.pago_control5_visto_service import (
     aplicar_visto_control5_duplicado_fecha_monto,
     listar_pagos_duplicados_fecha_monto_por_prestamo,
 )
+from app.services.auditoria_liquidados_intensiva import (
+    filtrar_filas_cierre,
+    hallazgos_cierre_prestamos_liquidados,
+    paginar_filas,
+    resumen_cierre_desde_filas,
+)
 from app.services.prestamo_cartera_auditoria import (
     ejecutar_auditoria_cartera,
     leer_meta_ejecucion,
@@ -321,6 +327,22 @@ class PrestamoCarteraChequeoResponse(BaseModel):
     )
 
 
+class LiquidadosCierreChequeoResponse(BaseModel):
+    items: List[PrestamoCarteraChequeoItem]
+    resumen: dict = Field(
+        ...,
+        description=(
+            "Hallazgos de cierre solo para prestamos LIQUIDADO (fecha_liquidado, finiquito_casos, documentos). "
+            "Totales reflejan el filtro (cedula/prestamo_id) antes de paginar; prestamos_listados es la pagina."
+        ),
+    )
+
+
+class LiquidadosIntensivaResponse(BaseModel):
+    cartera: PrestamoCarteraChequeoResponse
+    cierre: LiquidadosCierreChequeoResponse
+
+
 class CarteraCorregirBody(BaseModel):
     """Correcciones de datos orientadas por la auditoria de cartera (solo administrador)."""
 
@@ -562,6 +584,76 @@ def listar_chequeos_cartera(
         resumen=resumen,
         meta_ultima_corrida=meta,
     )
+
+
+@router.get(
+    "/prestamos/liquidados/auditoria-intensiva",
+    response_model=LiquidadosIntensivaResponse,
+)
+def auditoria_intensiva_prestamos_liquidados(
+    skip: int = Query(0, ge=0, description="Offset compartido para cartera y cierre (listas independientes)."),
+    limit: int = Query(50, ge=1, le=5000, description="Tamano de pagina compartido para cartera y cierre."),
+    prestamo_id: Optional[int] = Query(None, ge=1, description="Filtra ambas listas al mismo prestamo."),
+    cedula: Optional[str] = Query(
+        None,
+        description="Fragmento de cedula del prestamo (misma regla que cartera; aplica a ambas listas).",
+    ),
+    excluir_marcar_ok: bool = Query(
+        False,
+        description="Solo aplica a la seccion cartera (misma semantica que GET /prestamos/cartera/chequeos).",
+    ),
+    codigo_control: Optional[str] = Query(
+        None,
+        description="Solo aplica a la seccion cartera (misma semantica que GET /prestamos/cartera/chequeos).",
+    ),
+    db: Session = Depends(get_db),
+    _aud: UserResponse = Depends(require_auditoria_cartera_access),
+):
+    """
+    Auditoria intensiva para prestamos **LIQUIDADO**:
+    - **cartera**: misma logica que `/prestamos/cartera/chequeos`, pero el universo evaluado es solo LIQUIDADO.
+    - **cierre**: hallazgos adicionales (fecha_liquidado, finiquito_casos, documentos duplicados, riesgo doc en otro prestamo).
+
+    La seccion `cierre` no usa bitacora MARCAR_OK (motor objetivo sobre tablas reales).
+    """
+    cod_cc = _codigo_control_cartera_opcional(codigo_control)
+    rows, resumen = ejecutar_auditoria_cartera(
+        db,
+        solo_con_alerta=True,
+        prestamo_id=prestamo_id,
+        cedula_contiene=cedula,
+        skip=skip,
+        limit=limit,
+        excluir_marcar_ok=excluir_marcar_ok,
+        codigo_control=cod_cc,
+        estados_filas_prestamo=("LIQUIDADO",),
+    )
+    meta = leer_meta_ejecucion(db)
+    cartera = PrestamoCarteraChequeoResponse(
+        items=_prestamos_cartera_dicts_a_items(rows),
+        resumen=resumen,
+        meta_ultima_corrida=meta,
+    )
+
+    hall_full, _ = hallazgos_cierre_prestamos_liquidados(db)
+    hall_filtrado = filtrar_filas_cierre(
+        hall_full,
+        prestamo_id=prestamo_id,
+        cedula_contiene=cedula,
+    )
+    res_global = resumen_cierre_desde_filas(hall_filtrado)
+    hall_page = paginar_filas(hall_filtrado, skip=skip, limit=limit)
+    cierre_resumen = {
+        **res_global,
+        "pagina_skip": int(skip),
+        "pagina_limit": int(limit),
+        "prestamos_listados": len(hall_page),
+    }
+    cierre = LiquidadosCierreChequeoResponse(
+        items=_prestamos_cartera_dicts_a_items(hall_page),
+        resumen=cierre_resumen,
+    )
+    return LiquidadosIntensivaResponse(cartera=cartera, cierre=cierre)
 
 
 @router.post("/prestamos/cartera/ejecutar", response_model=PrestamoCarteraChequeoResponse)

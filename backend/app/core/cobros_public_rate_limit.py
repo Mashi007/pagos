@@ -1,5 +1,5 @@
 """
-Rate limiting para endpoints públicos del módulo Cobros (formulario reporte de pago).
+Rate limiting para endpoints públicos (Cobros, Estado de cuenta, Finiquito).
 Evita abuso por IP sin requerir autenticación.
 Si REDIS_URL está configurada, usa Redis para límites distribuidos entre instancias;
 si no, usa memoria por proceso.
@@ -36,12 +36,22 @@ ESTADO_CUENTA_VERIFICAR_MAX = 15
 FINIQUITO_SOLICITAR_CODIGO_WINDOW_SEC = 3600
 FINIQUITO_SOLICITAR_CODIGO_MAX = 15
 
+# Finiquito: verificar código OTP (fuerza bruta por IP)
+FINIQUITO_VERIFICAR_CODIGO_WINDOW_SEC = 900
+FINIQUITO_VERIFICAR_CODIGO_MAX = 15
+
+# Finiquito: registro público cédula+correo (spam / enumeración)
+FINIQUITO_REGISTRO_WINDOW_SEC = 3600
+FINIQUITO_REGISTRO_MAX = 40
+
 _validar_attempts: dict[str, list[float]] = defaultdict(list)
 _enviar_attempts: dict[str, list[float]] = defaultdict(list)
 _estado_cuenta_validar_attempts: dict[str, list[float]] = defaultdict(list)
 _estado_cuenta_solicitar_attempts: dict[str, list[float]] = defaultdict(list)
 _estado_cuenta_verificar_attempts: dict[str, list[float]] = defaultdict(list)
 _finiquito_solicitar_codigo_attempts: dict[str, list[float]] = defaultdict(list)
+_finiquito_verificar_codigo_attempts: dict[str, list[float]] = defaultdict(list)
+_finiquito_registro_attempts: dict[str, list[float]] = defaultdict(list)
 _cobros_public_solicitar_attempts: dict[str, list[float]] = defaultdict(list)
 _cobros_public_verificar_attempts: dict[str, list[float]] = defaultdict(list)
 _lock = Lock()
@@ -259,5 +269,63 @@ def check_rate_limit_finiquito_solicitar_codigo(ip: str) -> None:
             raise HTTPException(
                 status_code=429,
                 detail="Demasiadas solicitudes de codigo. Intente de nuevo en una hora.",
+            )
+        attempts.append(now)
+
+
+def check_rate_limit_finiquito_verificar_codigo(ip: str) -> None:
+    """Límite de intentos de verificación OTP Finiquito por IP (mitiga fuerza bruta del código de 6 cifras)."""
+    if check_rate_limit_redis is not None:
+        try:
+            check_rate_limit_redis(
+                "finiquito_verificar",
+                ip,
+                FINIQUITO_VERIFICAR_CODIGO_WINDOW_SEC,
+                FINIQUITO_VERIFICAR_CODIGO_MAX,
+                "Demasiados intentos de verificacion. Espere 15 minutos e intente de nuevo.",
+            )
+            return
+        except HTTPException:
+            raise
+        except Exception:
+            pass
+    with _lock:
+        now = time.time()
+        attempts = _finiquito_verificar_codigo_attempts[ip]
+        attempts[:] = [
+            t for t in attempts if now - t < FINIQUITO_VERIFICAR_CODIGO_WINDOW_SEC
+        ]
+        if len(attempts) >= FINIQUITO_VERIFICAR_CODIGO_MAX:
+            raise HTTPException(
+                status_code=429,
+                detail="Demasiados intentos de verificacion. Espere 15 minutos e intente de nuevo.",
+            )
+        attempts.append(now)
+
+
+def check_rate_limit_finiquito_registro(ip: str) -> None:
+    """Límite de altas nuevas en portal Finiquito por IP y hora."""
+    if check_rate_limit_redis is not None:
+        try:
+            check_rate_limit_redis(
+                "finiquito_registro",
+                ip,
+                FINIQUITO_REGISTRO_WINDOW_SEC,
+                FINIQUITO_REGISTRO_MAX,
+                "Demasiados registros desde su red. Intente de nuevo en una hora.",
+            )
+            return
+        except HTTPException:
+            raise
+        except Exception:
+            pass
+    with _lock:
+        now = time.time()
+        attempts = _finiquito_registro_attempts[ip]
+        attempts[:] = [t for t in attempts if now - t < FINIQUITO_REGISTRO_WINDOW_SEC]
+        if len(attempts) >= FINIQUITO_REGISTRO_MAX:
+            raise HTTPException(
+                status_code=429,
+                detail="Demasiados registros desde su red. Intente de nuevo en una hora.",
             )
         attempts.append(now)

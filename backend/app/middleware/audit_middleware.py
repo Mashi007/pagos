@@ -1,10 +1,13 @@
 """
 Middleware de auditoria automatico.
 Intercepta todos los POST/PUT/DELETE/PATCH y registra en tabla auditoria.
+
+- Exito (2xx-3xx): exito=True, detalles con cuerpo enmascarado (sin passwords/tokens).
+- Fallo (4xx-5xx): exito=False, mensaje_error con codigo HTTP y request_id si existe;
+  mismo detalle enmascarado. Omitido en POST bajo /api/v1/pagos* con 409 (duplicados masivos).
 """
 import json
 import logging
-import re
 from datetime import datetime
 from typing import Callable, Optional
 
@@ -14,6 +17,12 @@ from starlette.responses import Response
 
 from app.core.database import SessionLocal
 from app.models.auditoria import Auditoria
+from app.middleware.audit_helpers import (
+    audit_entity_from_path,
+    format_http_error_message,
+    redact_body_for_audit,
+    skip_failed_audit_persist,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -42,21 +51,63 @@ def _get_fallback_usuario_id(db) -> int:
     return uid
 
 
-def _extract_entidad_id(path: str) -> Optional[int]:
-    """Extrae el ID numerico del path (ej. /api/v1/prestamos/123 -> 123)."""
-    m = re.search(r"/(\d+)(?:/|$)", path)
-    if m:
-        try:
-            return int(m.group(1))
-        except (ValueError, OverflowError):
-            pass
-    return None
+def _resolve_usuario_id(request: Request, db) -> int:
+    usuario_id = None
+    try:
+        usuario_info = getattr(request.state, "user", None)
+        if usuario_info and hasattr(usuario_info, "id"):
+            usuario_id = usuario_info.id
+    except Exception:
+        pass
+    if not usuario_id:
+        usuario_id = _get_fallback_usuario_id(db)
+    return usuario_id
+
+
+def _persist_auditoria_row(
+    *,
+    request: Request,
+    path: str,
+    method: str,
+    body_data: dict,
+    exito: bool,
+    mensaje_error: Optional[str],
+) -> None:
+    entidad, entidad_id = audit_entity_from_path(path)
+    safe_body = redact_body_for_audit(path, body_data)
+    detalles = json.dumps(safe_body, default=str)[:500]
+    client_ip = request.client.host if request.client else None
+    ua = (request.headers.get("user-agent") or "")[:2000] or None
+
+    db = SessionLocal()
+    try:
+        usuario_id = _resolve_usuario_id(request, db)
+        db.add(
+            Auditoria(
+                usuario_id=usuario_id,
+                accion=method,
+                entidad=entidad,
+                entidad_id=entidad_id,
+                detalles=detalles,
+                ip_address=client_ip,
+                user_agent=ua,
+                exito=exito,
+                mensaje_error=(mensaje_error[:2000] if mensaje_error else None),
+                fecha=datetime.now(),
+            )
+        )
+        db.commit()
+    except Exception as e:
+        logger.warning("Error al registrar auditoria: %s", e)
+        db.rollback()
+    finally:
+        db.close()
 
 
 class AuditMiddleware(BaseHTTPMiddleware):
     """
     Middleware que audita automaticamente todos los cambios (POST/PUT/DELETE/PATCH).
-    Registra en tabla auditoria: usuario, accion, entidad, detalles, fecha.
+    Registra en tabla auditoria: usuario, accion, entidad, detalles, fecha, exito, mensaje_error.
     """
 
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
@@ -65,10 +116,12 @@ class AuditMiddleware(BaseHTTPMiddleware):
 
         body_bytes = await request.body()
         content_type = (request.headers.get("content-type") or "").lower()
-        body_data = {}
+        body_data: dict = {}
         if body_bytes and "application/json" in content_type:
             try:
                 body_data = json.loads(body_bytes.decode("utf-8", errors="replace"))
+                if not isinstance(body_data, dict):
+                    body_data = {"_body": body_data}
             except (json.JSONDecodeError, ValueError):
                 body_data = {}
         elif body_bytes and (
@@ -83,43 +136,33 @@ class AuditMiddleware(BaseHTTPMiddleware):
 
         response: Response = await call_next(request)
 
-        if 200 <= response.status_code < 400:
-            try:
-                usuario_id = None
-                try:
-                    usuario_info = getattr(request.state, "user", None)
-                    if usuario_info and hasattr(usuario_info, "id"):
-                        usuario_id = usuario_info.id
-                except Exception:
-                    pass
+        path = request.url.path
+        method = request.method
+        status = response.status_code
 
-                path = request.url.path
-                method = request.method
-                segments = [s for s in path.split("/") if s]
-                entidad = segments[-2] if len(segments) >= 2 else (segments[-1] if segments else path)
-                entidad_id = _extract_entidad_id(path)
-
-                db = SessionLocal()
-                try:
-                    if not usuario_id:
-                        usuario_id = _get_fallback_usuario_id(db)
-
-                    audit_entry = Auditoria(
-                        usuario_id=usuario_id,
-                        accion=method,
-                        entidad=entidad,
-                        entidad_id=entidad_id,
-                        detalles=json.dumps(body_data, default=str)[:500],
-                        fecha=datetime.now(),
-                    )
-                    db.add(audit_entry)
-                    db.commit()
-                except Exception as e:
-                    logger.warning("Error al registrar auditoria: %s", e)
-                    db.rollback()
-                finally:
-                    db.close()
-            except Exception as e:
-                logger.exception("Error en AuditMiddleware: %s", e)
+        try:
+            if 200 <= status < 400:
+                _persist_auditoria_row(
+                    request=request,
+                    path=path,
+                    method=method,
+                    body_data=body_data,
+                    exito=True,
+                    mensaje_error=None,
+                )
+            elif status >= 400:
+                if skip_failed_audit_persist(path, method, status):
+                    return response
+                msg = format_http_error_message(status, response.headers)
+                _persist_auditoria_row(
+                    request=request,
+                    path=path,
+                    method=method,
+                    body_data=body_data,
+                    exito=False,
+                    mensaje_error=msg,
+                )
+        except Exception as e:
+            logger.exception("Error en AuditMiddleware: %s", e)
 
         return response

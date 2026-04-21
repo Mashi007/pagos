@@ -133,97 +133,53 @@ function RootLayoutWrapper() {
 
 const ANIMATION_DURATION = 0.3
 
-// Pages - Welcome y Login import directo para evitar React #321 (Invalid hook call) en chunks lazy con framer-motion/context.
-
-import { Welcome } from './pages/Welcome'
+// Login import estático (envuelto en motion.div aquí); el resto de páginas en chunks lazy para menos JS inicial.
 
 import { Login } from './pages/Login'
 
-import DashboardMenu from './pages/DashboardMenu'
-
-import Configuracion from './pages/Configuracion'
-
-import Programador from './pages/Programador'
-
-import Clientes from './pages/Clientes'
-
-import Prestamos from './pages/Prestamos'
-
-import Reportes from './pages/Reportes'
-
-import ChatAI from './pages/ChatAI'
-
-import Notificaciones from './pages/Notificaciones'
-
-import NotificacionesClientesDrive from './pages/NotificacionesClientesDrive'
-
-import NotificacionesRecibosPage from './pages/NotificacionesRecibosPage'
-
-import ActualizacionesPrestamosDrivePage from './pages/ActualizacionesPrestamosDrivePage'
-
-import Analistas from './pages/Analistas'
-
-import PagosPage from './pages/PagosPage'
-
-import PagoBsPage from './pages/PagoBsPage'
-
-import TasaCambioPage from './pages/TasaCambioPage'
-
-import AmortizacionPage from './pages/AmortizacionPage'
-
-import Validadores from './pages/Validadores'
-
-import Concesionarios from './pages/Concesionarios'
-
-import ModelosVehiculos from './pages/ModelosVehiculos'
-
-import Usuarios from './pages/Usuarios'
-
-import Solicitudes from './pages/Solicitudes'
-
-import EmbudoClientes from './pages/EmbudoClientes'
-
-import EmbudoConcesionarios from './pages/EmbudoConcesionarios'
-
-import RevisionManual from './pages/RevisionManual'
-
-import Auditoria from './pages/Auditoria.tsx'
-
-import EditarRevisionManual from './pages/EditarRevisionManual'
-
-// Ventas: en pausa (ruta redirige a /pagos)
-
-import ConversacionesWhatsAppPage from './pages/ConversacionesWhatsApp'
-
-import ComunicacionesPage from './pages/Comunicaciones'
-
-import ReportePagoPage from './pages/ReportePagoPage'
-
-import InfopagosPage from './pages/InfopagosPage'
-
-import EstadoCuentaPublicoPage from './pages/EstadoCuentaPublicoPage'
-
-import { FiniquitoRootPage } from './pages/FiniquitoRootPage'
-
-import { FiniquitoAccesoPage } from './pages/FiniquitoAccesoPage'
-
-import { FiniquitoGestionGatePage } from './pages/FiniquitoGestionGatePage'
-
-import CobrosPagosReportadosPage from './pages/CobrosPagosReportadosPage'
-
-import CobrosDetallePage from './pages/CobrosDetallePage'
-
-import CobrosEditarPage from './pages/CobrosEditarPage'
-
-import CobrosHistoricoPage from './pages/CobrosHistoricoPage'
-
-import { AdminTasaCambioPage } from './pages/AdminTasaCambioPage'
-
-import AccesoLimitadoPage from './pages/AccesoLimitadoPage'
-
-import { PublicBasenameIndexPage } from './pages/PublicBasenameIndexPage'
-
-// Todas las pginas ahora estn importadas desde archivos reales
+import {
+  AccesoLimitadoPage,
+  ActualizacionesPrestamosDrivePage,
+  AdminTasaCambioPage,
+  AmortizacionPage,
+  Analistas,
+  Auditoria,
+  ChatAI,
+  Clientes,
+  CobrosDetallePage,
+  CobrosEditarPage,
+  CobrosHistoricoPage,
+  CobrosPagosReportadosPage,
+  ComunicacionesPage,
+  Configuracion,
+  Concesionarios,
+  ConversacionesWhatsAppPage,
+  DashboardMenu,
+  EditarRevisionManual,
+  EmbudoClientes,
+  EmbudoConcesionarios,
+  EstadoCuentaPublicoPage,
+  FiniquitoAccesoPage,
+  FiniquitoGestionGatePage,
+  FiniquitoRootPage,
+  InfopagosPage,
+  ModelosVehiculos,
+  Notificaciones,
+  NotificacionesClientesDrive,
+  NotificacionesRecibosPage,
+  PagoBsPage,
+  PagosPage,
+  Prestamos,
+  Programador,
+  PublicBasenameIndexPage,
+  ReportePagoPage,
+  Reportes,
+  RevisionManual,
+  Solicitudes,
+  TasaCambioPage,
+  Usuarios,
+  Validadores,
+} from './app/routeLazyComponents'
 
 const NotFound = () => (
   <div className="flex min-h-screen items-center justify-center">

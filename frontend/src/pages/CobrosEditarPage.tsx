@@ -34,14 +34,27 @@ import { Input } from '../components/ui/input'
 
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '../components/ui/dialog'
+
 import toast from 'react-hot-toast'
 
 import { Loader2, Eye } from 'lucide-react'
 import {
   aplicarSufijoVistoADocumento,
   collectTokensSufijoVistoArchivoDesdeFilas,
+  letterSufijoVistoDesdeMensajeDuplicado,
+  mensajeEdicionManualSufijoVistoProhibida,
   SUFIJO_VISTO_ARCHIVO_RE,
+  TOKEN_SUFIJO_VISTO_ARCHIVO_RE,
 } from '../utils/documentoSufijoVisto'
+
+import { normalizarNumeroDocumento } from '../utils/pagoExcelValidation'
 
 const INSTITUCIONES_FINANCIERAS = [
   'BINANCE',
@@ -55,6 +68,32 @@ const INSTITUCIONES_FINANCIERAS = [
   'Recibos',
 ]
 
+function baseYTokenNumeroOperacion(raw: string): { base: string; token: string } {
+  const s = (raw || '').trim()
+  const m = s.match(TOKEN_SUFIJO_VISTO_ARCHIVO_RE)
+  if (m) {
+    return {
+      base: s.replace(SUFIJO_VISTO_ARCHIVO_RE, '').trim(),
+      token: m[1].toUpperCase(),
+    }
+  }
+  return { base: s, token: '' }
+}
+
+function detalleErrorApi(e: unknown): string {
+  const any = e as { message?: string; response?: { data?: { detail?: unknown } } }
+  const d = any?.response?.data?.detail
+  if (typeof d === 'string') return d
+  if (Array.isArray(d)) {
+    try {
+      return JSON.stringify(d)
+    } catch {
+      return 'Error al guardar.'
+    }
+  }
+  return any?.message || 'Error al guardar.'
+}
+
 export default function CobrosEditarPage() {
   const { id } = useParams<{ id: string }>()
 
@@ -67,6 +106,12 @@ export default function CobrosEditarPage() {
   const [loading, setLoading] = useState(true)
 
   const [saving, setSaving] = useState(false)
+
+  const [vistoSaving, setVistoSaving] = useState(false)
+
+  const [vistoAyudaOpen, setVistoAyudaOpen] = useState(false)
+
+  const ultimoErrorVistoRef = useRef('')
 
   const [otroInstitucion, setOtroInstitucion] = useState('')
   const tokensSufijoUsadosRef = useRef<Set<string>>(new Set())
@@ -176,6 +221,65 @@ export default function CobrosEditarPage() {
     toast.success(`Sufijo _${letter}#### aplicado al número de operación.`)
   }
 
+  const handleVistoRellenarSufijoYGuardar = async () => {
+    if (!id || vistoSaving || saving) return
+
+    const trimmed = form.numero_operacion.trim()
+    const { base } = baseYTokenNumeroOperacion(trimmed)
+    if (!base) {
+      toast.error('Primero indique el número de operación / referencia bancaria.')
+      return
+    }
+
+    const montoNum = form.monto ? parseFloat(form.monto) : undefined
+    if (montoNum !== undefined && (isNaN(montoNum) || montoNum < 0)) {
+      toast.error('Monto debe ser un número mayor o igual a 0.')
+      return
+    }
+
+    setVistoSaving(true)
+    try {
+      const letter = letterSufijoVistoDesdeMensajeDuplicado(
+        ultimoErrorVistoRef.current
+      )
+      const hadSuffix = SUFIJO_VISTO_ARCHIVO_RE.test(trimmed)
+      const nuevo = aplicarSufijoVistoADocumento(
+        base,
+        letter,
+        tokensSufijoUsadosRef.current,
+        { reemplazarSufijoAdmin: hadSuffix }
+      )
+      if (!nuevo || nuevo === trimmed) {
+        toast.error('No se pudo asignar sufijo. Revise el número de operación.')
+        return
+      }
+
+      const res = await updatePagoReportado(Number(id), {
+        nombres: form.nombres.trim() || undefined,
+        apellidos: form.apellidos.trim() || undefined,
+        tipo_cedula: form.tipo_cedula.trim() || undefined,
+        numero_cedula: form.numero_cedula.trim() || undefined,
+        fecha_pago: form.fecha_pago || undefined,
+        institucion_financiera: form.institucion_financiera.trim() || undefined,
+        numero_operacion: nuevo,
+        monto: montoNum,
+        moneda: form.moneda.trim() || undefined,
+        correo_enviado_a: form.correo_enviado_a.trim() || undefined,
+        observacion: form.observacion.trim() || undefined,
+      })
+
+      ultimoErrorVistoRef.current = ''
+      toast.success(res.mensaje || 'Código asignado y datos guardados.')
+      await load()
+    } catch (e: unknown) {
+      const msg = detalleErrorApi(e)
+      ultimoErrorVistoRef.current = msg
+      toast.error(msg)
+    } finally {
+      setVistoSaving(false)
+    }
+  }
+
   useEffect(() => {
     load()
   }, [id])
@@ -222,13 +326,16 @@ export default function CobrosEditarPage() {
         observacion: form.observacion.trim() || undefined,
       })
 
+      ultimoErrorVistoRef.current = ''
       toast.success(res.mensaje || 'Cambios guardados.')
 
       navigate(`/cobros/pagos-reportados/${id}`)
-    } catch (e: any) {
-      toast.error(
-        e?.message || e?.response?.data?.detail || 'Error al guardar.'
-      )
+    } catch (e: unknown) {
+      const msg = detalleErrorApi(e)
+      if (/duplicad|DUPLICADO|ya est[aá]/i.test(msg)) {
+        ultimoErrorVistoRef.current = msg
+      }
+      toast.error(msg)
     } finally {
       setSaving(false)
     }
@@ -274,7 +381,7 @@ export default function CobrosEditarPage() {
           <Button
             type="button"
             variant="secondary"
-            disabled={loading || saving}
+            disabled={loading || saving || vistoSaving}
             onClick={() => load()}
           >
             Recargar datos
@@ -460,40 +567,135 @@ export default function CobrosEditarPage() {
               )}
             </div>
 
-            <div>
-              <label className="mb-1 block text-sm font-medium">
-                Número de operación
-              </label>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <label className="mb-1 block text-sm font-medium">
+                  Número de operación{' '}
+                  <span className="text-red-500">*</span>
+                </label>
+
+                <Input
+                  value={baseYTokenNumeroOperacion(form.numero_operacion).base}
+                  onChange={e => {
+                    const v = e.target.value
+                    const prevBase = baseYTokenNumeroOperacion(
+                      form.numero_operacion
+                    ).base
+                    const msg = mensajeEdicionManualSufijoVistoProhibida(
+                      prevBase,
+                      v
+                    )
+                    if (msg) {
+                      toast.error(msg)
+                      return
+                    }
+                    const token = baseYTokenNumeroOperacion(
+                      form.numero_operacion
+                    ).token
+                    const compuesto = token ? `${v.trim()}_${token}` : v
+                    setForm(f => ({ ...f, numero_operacion: compuesto }))
+                  }}
+                  onBlur={() => {
+                    setForm(prev => {
+                      const { base, token } = baseYTokenNumeroOperacion(
+                        prev.numero_operacion
+                      )
+                      const raw = base.trim()
+                      const n =
+                        normalizarNumeroDocumento(raw) || raw
+                      const msg = mensajeEdicionManualSufijoVistoProhibida(
+                        raw,
+                        n
+                      )
+                      if (msg) {
+                        toast.error(msg)
+                        return prev
+                      }
+                      const nextOp = token ? `${n}_${token}` : n
+                      if (nextOp === prev.numero_operacion) return prev
+                      return { ...prev, numero_operacion: nextOp }
+                    })
+                  }}
+                  placeholder="Referencia / serial del banco"
+                />
+                <p className="text-xs text-muted-foreground">
+                  No escriba manualmente el sufijo <code className="rounded bg-muted px-1">_A####</code> ni{' '}
+                  <code className="rounded bg-muted px-1">_P####</code>: use{' '}
+                  <strong>Visto</strong> o los botones de sufijo (borrador) y luego Guardar.
+                </p>
+              </div>
 
               <div className="space-y-2">
+                <label className="mb-1 block text-sm font-medium">
+                  Código{' '}
+                  <span className="text-xs font-normal text-muted-foreground">
+                    (solo lectura; lo asigna Visto)
+                  </span>
+                </label>
+
                 <Input
-                  value={form.numero_operacion}
-                  onChange={e =>
-                    setForm(f => ({ ...f, numero_operacion: e.target.value }))
-                  }
-                  placeholder="Referencia / serial"
+                  readOnly
+                  aria-readonly="true"
+                  title="Este campo no se escribe a mano. Se rellena con el botón Visto (revisión manual / Cobros)."
+                  value={baseYTokenNumeroOperacion(form.numero_operacion).token}
+                  placeholder="Pendiente: use Visto"
+                  className="cursor-default bg-slate-50 text-slate-800"
                 />
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => handleAplicarSufijoOperacion('A')}
-                    title="Asignar sufijo único _A#### (mismo crédito/carga)"
-                  >
-                    <Eye className="mr-2 h-4 w-4" />
-                    Agregar sufijo A
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => handleAplicarSufijoOperacion('P')}
-                    title="Asignar sufijo único _P#### (otro préstamo)"
-                  >
-                    <Eye className="mr-2 h-4 w-4" />
-                    Agregar sufijo P
-                  </Button>
-                </div>
+                <p className="text-xs text-muted-foreground">
+                  Token <strong>A####</strong> / <strong>P####</strong> al final del número de operación (mismo criterio
+                  que en revisión manual y carga masiva).
+                </p>
               </div>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-violet-200/70 bg-violet-50 px-3 py-2">
+              <p className="min-w-0 flex-1 text-xs text-violet-900">
+                <span className="font-medium">Revisión manual:</span> Visto asigna el código
+                (_A#### / _P####) y guarda en el servidor de inmediato.
+              </p>
+              <div className="flex shrink-0 items-center gap-2">
+                <button
+                  type="button"
+                  className="text-[11px] font-medium text-violet-700 underline underline-offset-2 hover:text-violet-950"
+                  onClick={() => setVistoAyudaOpen(true)}
+                >
+                  Sin cambiar doc.
+                </button>
+                <Button
+                  type="button"
+                  size="sm"
+                  disabled={saving || vistoSaving}
+                  className="h-8 min-w-[4.5rem] bg-violet-600 px-3 text-xs font-medium text-white hover:bg-violet-700 disabled:opacity-50"
+                  onClick={() => void handleVistoRellenarSufijoYGuardar()}
+                >
+                  {vistoSaving ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    'Visto'
+                  )}
+                </Button>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => handleAplicarSufijoOperacion('A')}
+                title="Sufijo en borrador: _A#### (luego Guardar y continuar)"
+              >
+                <Eye className="mr-2 h-4 w-4" />
+                Agregar sufijo A
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => handleAplicarSufijoOperacion('P')}
+                title="Sufijo en borrador: _P#### (luego Guardar y continuar)"
+              >
+                <Eye className="mr-2 h-4 w-4" />
+                Agregar sufijo P
+              </Button>
             </div>
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -570,7 +772,7 @@ export default function CobrosEditarPage() {
             </div>
 
             <div className="flex flex-wrap gap-2 pt-4">
-              <Button type="submit" disabled={saving}>
+              <Button type="submit" disabled={saving || vistoSaving}>
                 {saving ? (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 ) : null}
@@ -596,6 +798,49 @@ export default function CobrosEditarPage() {
           </form>
         </CardContent>
       </Card>
+
+      <Dialog open={vistoAyudaOpen} onOpenChange={setVistoAyudaOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Duplicado u observación (Cobros)</DialogTitle>
+            <div className="space-y-2 text-sm text-gray-600">
+              <p>
+                El botón <strong>Visto</strong> añade un token <strong>_A####</strong> /{' '}
+                <strong>_P####</strong> al <strong>número de operación</strong> y{' '}
+                <strong>guarda de inmediato</strong> en el servidor. Así puede desambiguar la misma
+                referencia bancaria sin reescribir el comprobante a mano.
+              </p>
+              <p className="text-xs">
+                No está permitido pegar manualmente <code className="rounded bg-gray-100 px-1">_A####</code> ni{' '}
+                <code className="rounded bg-gray-100 px-1">_P####</code> en el número de operación: use{' '}
+                <strong>Visto</strong> o los botones de sufijo en borrador y luego Guardar.
+              </p>
+            </div>
+          </DialogHeader>
+          <DialogFooter className="flex flex-col gap-2 sm:flex-col sm:justify-stretch">
+            <button
+              type="button"
+              className="w-full rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50"
+              onClick={() => {
+                ultimoErrorVistoRef.current = ''
+                toast.success(
+                  'Listo. Si al guardar persiste aviso de duplicado en pagos, pulse Visto para asignar código automáticamente.'
+                )
+                setVistoAyudaOpen(false)
+              }}
+            >
+              Entendido: continuar sin cambiar el documento
+            </button>
+            <button
+              type="button"
+              className="w-full rounded-md px-4 py-2 text-sm text-gray-600 hover:bg-gray-100"
+              onClick={() => setVistoAyudaOpen(false)}
+            >
+              Cerrar
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

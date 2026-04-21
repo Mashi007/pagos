@@ -1,6 +1,6 @@
 """
 Finiquito: casos materializados solo para prestamos LIQUIDADO con cuotas = financiamiento
-(job 02:00), portal publico OTP, bandejas, admin.
+(jobs lun-sab 01:00 y 13:00 Caracas), portal publico OTP, bandejas, admin.
 """
 from __future__ import annotations
 
@@ -21,7 +21,9 @@ from sqlalchemy.sql.expression import false as sql_false
 from app.core.config import settings
 from app.core.cobros_public_rate_limit import (
     FINIQUITO_SOLICITAR_CODIGO_MAX,
+    check_rate_limit_finiquito_registro,
     check_rate_limit_finiquito_solicitar_codigo,
+    check_rate_limit_finiquito_verificar_codigo,
     get_client_ip,
 )
 from app.core.database import get_db
@@ -529,7 +531,11 @@ def _build_revision_datos_payload(db: Session, caso: FiniquitoCaso) -> dict[str,
 
 
 @router.post("/public/registro", response_model=FiniquitoRegistroResponse)
-def finiquito_public_registro(body: FiniquitoRegistroRequest, db: Session = Depends(get_db)):
+def finiquito_public_registro(
+    request: Request,
+    body: FiniquitoRegistroRequest,
+    db: Session = Depends(get_db),
+):
     """Primera vez: cedula + email unicos en el modulo Finiquito."""
     cedula = normalizar_cedula_almacenamiento(body.cedula)
     email = (body.email or "").lower().strip()
@@ -551,6 +557,14 @@ def finiquito_public_registro(body: FiniquitoRegistroRequest, db: Session = Depe
         )
     if por_cedula:
         return FiniquitoRegistroResponse(ok=True, message="Ya estaba registrado. Solicite codigo para ingresar.")
+
+    ip = get_client_ip(request)
+    try:
+        check_rate_limit_finiquito_registro(ip)
+    except HTTPException as e:
+        if e.status_code == 429:
+            finiquito_otp_bump("registro_rate_limit_429")
+        raise
 
     db.add(FiniquitoUsuarioAcceso(cedula=cedula, email=email, is_active=True))
     db.commit()
@@ -716,7 +730,7 @@ def finiquito_admin_otp_email_metricas(
     _: UserResponse = Depends(require_admin),
 ):
     """
-    Contadores en memoria desde el arranque del proceso (solicitudes OTP Finiquito).
+    Contadores en memoria desde el arranque del proceso (OTP y límites Finiquito).
     Se reinician al reiniciar el servidor; con varios workers cada uno tiene su propio contador.
     """
     return finiquito_otp_snapshot()
@@ -724,6 +738,7 @@ def finiquito_admin_otp_email_metricas(
 
 @router.post("/public/verificar-codigo", response_model=FiniquitoVerificarCodigoResponse)
 def finiquito_public_verificar_codigo(
+    request: Request,
     body: FiniquitoVerificarCodigoRequest,
     db: Session = Depends(get_db),
 ):
@@ -732,6 +747,14 @@ def finiquito_public_verificar_codigo(
     codigo = (body.codigo or "").strip()
     if not cedula or not email or not codigo:
         return FiniquitoVerificarCodigoResponse(ok=False, error="Cedula, correo y codigo son obligatorios.")
+
+    ip = get_client_ip(request)
+    try:
+        check_rate_limit_finiquito_verificar_codigo(ip)
+    except HTTPException as e:
+        if e.status_code == 429:
+            finiquito_otp_bump("verificar_rate_limit_429")
+        raise
 
     u = (
         db.query(FiniquitoUsuarioAcceso)
@@ -763,16 +786,17 @@ def finiquito_public_verificar_codigo(
     row.usado = True
     db.commit()
 
+    fini_min = int(settings.FINIQUITO_ACCESS_TOKEN_EXPIRE_MINUTES)
     access = create_access_token(
         subject=u.id,
         extra={"scope": "finiquito", "cedula": u.cedula, "email": u.email},
-        expire_minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES,
+        expire_minutes=fini_min,
     )
     return FiniquitoVerificarCodigoResponse(
         ok=True,
         access_token=access,
         token_type="bearer",
-        expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        expires_in=fini_min * 60,
     )
 
 
@@ -1219,7 +1243,7 @@ def finiquito_admin_refresh_manual(
     db: Session = Depends(get_db),
     _: UserResponse = Depends(require_admin_or_operator),
 ):
-    """Uso operativo: ejecutar el mismo refresco que el job 02:00 (sin esperar al cron)."""
+    """Uso operativo: ejecutar el mismo refresco que los jobs programados de finiquito (sin esperar al cron)."""
     from app.services.finiquito_refresh import ejecutar_refresh_finiquito_casos
 
     return ejecutar_refresh_finiquito_casos(db)

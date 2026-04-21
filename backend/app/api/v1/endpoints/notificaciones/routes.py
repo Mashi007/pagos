@@ -1920,7 +1920,7 @@ def ejecutar_actualizacion_notificaciones(db: Session) -> dict:
 
     Los listados (clientes-retrasados, cuotas-pendiente-2-dias-antes, etc.) se leen en vivo desde la BD.
     La columna «Diferencia abono» (submódulo General) usa la caché `prestamos.abonos_drive_cuotas_cache`,
-    recalculada en servidor una vez al día a las 02:00 America/Caracas (y al aplicar ABONOS desde la UI);
+    recalculada en servidor por el job semanal domingo 04:35 America/Caracas (y al aplicar ABONOS desde la UI);
     este botón no fuerza ese recálculo. Este endpoint devuelve 200 para que el cliente invalide React Query
     y vuelva a cargar listados.
 
@@ -1940,7 +1940,7 @@ def actualizar_notificaciones(db: Session = Depends(get_db)):
 
 
 def _run_refresh_abonos_drive_cache_bg() -> None:
-    """Misma lógica que el job domingo 02:00 Caracas; sesión propia para no mezclar con el request HTTP."""
+    """Misma lógica que el job domingo 04:35 Caracas; sesión propia para no mezclar con el request HTTP."""
     db = SessionLocal()
     try:
         from app.services.abonos_drive_cuotas_cache_job import (
@@ -1962,7 +1962,7 @@ def _run_refresh_abonos_drive_cache_bg() -> None:
 def post_refresh_abonos_drive_cache(background_tasks: BackgroundTasks):
     """
     Programa en segundo plano el recálculo de `prestamos.abonos_drive_cuotas_cache`
-    (columna «Diferencia abono» en General). Igual criterio que el cron domingo 02:00 Caracas;
+    (columna «Diferencia abono» en General). Igual criterio que el cron domingo 04:35 Caracas;
     en carteras grandes puede tardar varios minutos. Tras terminar, el cliente debe volver a
     cargar listados (p. ej. «Actualización manual»).
     """

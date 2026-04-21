@@ -2074,12 +2074,13 @@ def editar_pago_reportado(
                 "Datos guardados. El reporte pasó a pendiente: ya puede aprobarlo o rechazarlo de nuevo desde el detalle."
             )
 
-        # PDF de recibo: regenerar solo si cambian datos que afectan el documento (comprobante, monto, cédula, etc.).
-        # Evita ~30s+ en PATCH cuando solo se ajusta observacion/correo_enviado_a.
+        # PDF de recibo: si cambian datos que afectan el documento, invalidar cache (no regenerar aquí).
+        # generar_recibo_pdf_desde_pago_reportado con comprobante embebido puede tardar decenas de segundos y bloquea el PATCH.
+        # GET .../recibo.pdf, POST aprobar y POST enviar-recibo vuelven a generar y persistir cuando haga falta.
         key_recibo_despues = _snapshot_recibo_pdf_inputs(pr)
         _img_id = (getattr(pr, "comprobante_imagen_id", None) or "").strip()
-        if (pr.recibo_pdf or _img_id) and key_recibo_antes != key_recibo_despues:
-            pr.recibo_pdf = generar_recibo_pdf_desde_pago_reportado(db, pr)
+        if key_recibo_antes != key_recibo_despues and (pr.recibo_pdf is not None or _img_id):
+            pr.recibo_pdf = None
         db.commit()
         logger.info("[COBROS] Pago reportado editado: id=%s ref=%s", pago_id, pr.referencia_interna)
         return {"ok": True, "mensaje": mensaje}

@@ -14,6 +14,8 @@ _counts: dict[str, int] = {
     "envio_smtp_ok": 0,
     "envio_smtp_fallo": 0,
     "rate_limit_429": 0,
+    "verificar_rate_limit_429": 0,
+    "registro_rate_limit_429": 0,
 }
 
 

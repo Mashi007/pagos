@@ -60,9 +60,17 @@ export function FiniquitoAccesoPage() {
         description: 'Ahora pulse «Enviar código» y revise su bandeja.',
       })
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Error al registrar'
+      if (e instanceof FiniquitoHttpError && e.status === 429) {
+        toast.error(e.message, {
+          duration: 12000,
+          description:
+            'Límite de registros por hora desde su red. Intente más tarde.',
+        })
+      } else {
+        const msg = e instanceof Error ? e.message : 'Error al registrar'
 
-      toast.error(msg)
+        toast.error(msg)
+      }
     } finally {
       setLoading(null)
     }
@@ -129,9 +137,17 @@ export function FiniquitoAccesoPage() {
 
       navigate('/finiquitos/gestion', { replace: true })
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Error al verificar'
+      if (e instanceof FiniquitoHttpError && e.status === 429) {
+        toast.error(e.message, {
+          duration: 12000,
+          description:
+            'Demasiados intentos de código. Espere unos minutos e intente de nuevo.',
+        })
+      } else {
+        const msg = e instanceof Error ? e.message : 'Error al verificar'
 
-      toast.error(msg)
+        toast.error(msg)
+      }
     } finally {
       setLoading(null)
     }

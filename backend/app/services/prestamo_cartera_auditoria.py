@@ -50,6 +50,29 @@ CFG_RESUMEN = "auditoria_cartera_ultima_resumen"
 # Subir solo cuando se agregue, quite o renombre un control en la auditoria de cartera.
 AUDITORIA_CARTERA_REGLAS_VERSION = "23-control5-excluir-sufijo-ap-2026-04-09"
 
+_ESTADOS_FILAS_PRESTAMO_PERMITIDOS = frozenset({"APROBADO", "LIQUIDADO"})
+
+
+def normalizar_estados_filas_prestamo(
+    estados_filas_prestamo: Optional[tuple[str, ...]],
+) -> tuple[str, ...]:
+    """
+    Estados permitidos para acotar el universo de filas de prestamo en auditoria de cartera.
+    None = ('APROBADO','LIQUIDADO') (comportamiento historico).
+    """
+    if estados_filas_prestamo is None:
+        return ("APROBADO", "LIQUIDADO")
+    out: list[str] = []
+    for raw in estados_filas_prestamo:
+        e = (raw or "").strip().upper()
+        if e in _ESTADOS_FILAS_PRESTAMO_PERMITIDOS and e not in out:
+            out.append(e)
+    if not out:
+        raise ValueError(
+            "estados_filas_prestamo vacio o invalido: use APROBADO y/o LIQUIDADO"
+        )
+    return tuple(out)
+
 
 def _sql_fragment_pago_excluido_cartera(alias: str) -> str:
     """
@@ -261,6 +284,7 @@ def ejecutar_auditoria_cartera(
     incluir_mapa_ids_por_control: bool = False,
     excluir_marcar_ok: bool = False,
     codigo_control: Optional[str] = None,
+    estados_filas_prestamo: Optional[tuple[str, ...]] = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """
     Evalua prestamos en estados operativos. Retorna (filas, resumen).
@@ -276,10 +300,12 @@ def ejecutar_auditoria_cartera(
         desaparecen del listado unicamente cuando el motor deja de marcar SI. Job 03:00 y persistencia usan False.
     codigo_control: si se indica, solo entran prestamos con ese control en SI; la paginacion skip/limit aplica a esa lista.
         Los conteos por control en meta siguen siendo globales (para el desplegable de filtros).
+    estados_filas_prestamo: acota el SELECT inicial de prestamos (p.ej. solo LIQUIDADO). None = APROBADO+LIQUIDADO.
     """
     _ = solo_con_alerta
 
     hoy = hoy_negocio()
+    estados_univ = normalizar_estados_filas_prestamo(estados_filas_prestamo)
 
     rows_p = db.execute(
         text(
@@ -288,10 +314,11 @@ def ejecutar_auditoria_cartera(
                    c.email AS cliente_email, c.cedula AS cliente_cedula
             FROM prestamos p
             JOIN clientes c ON c.id = p.cliente_id
-            WHERE p.estado IN ('APROBADO', 'LIQUIDADO')
+            WHERE p.estado IN :ests
             ORDER BY p.id
             """
-        )
+        ).bindparams(bindparam("ests", expanding=True)),
+        {"ests": list(estados_univ)},
     ).fetchall()
 
     if prestamo_id is not None:
@@ -313,6 +340,7 @@ def ejecutar_auditoria_cartera(
             "reglas_version": AUDITORIA_CARTERA_REGLAS_VERSION,
             "excluye_marcar_ok": excluir_marcar_ok,
             "filtrado_por_codigo_control": (codigo_control or "").strip() or None,
+            "universo_estados_prestamo": list(estados_univ),
         }
         return [], meta
 
@@ -924,6 +952,7 @@ def ejecutar_auditoria_cartera(
             "reglas_version": AUDITORIA_CARTERA_REGLAS_VERSION,
             "excluye_marcar_ok": excluir_marcar_ok,
             "filtrado_por_codigo_control": codigo_f,
+            "universo_estados_prestamo": list(estados_univ),
         }
         if mapa_ids_por_control is not None:
             meta["prestamo_ids_alerta_por_control"] = mapa_ids_por_control
@@ -946,6 +975,7 @@ def ejecutar_auditoria_cartera(
         "reglas_version": AUDITORIA_CARTERA_REGLAS_VERSION,
         "excluye_marcar_ok": excluir_marcar_ok,
         "filtrado_por_codigo_control": codigo_f,
+        "universo_estados_prestamo": list(estados_univ),
     }
     if mapa_ids_por_control is not None:
         meta["prestamo_ids_alerta_por_control"] = mapa_ids_por_control

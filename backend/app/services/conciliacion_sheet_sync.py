@@ -389,6 +389,15 @@ def run_sync_to_db(db: Session) -> Dict[str, Any]:
             "[conciliacion_sheet] filas_datos_tras_trim_final=%s",
             len(data_rows),
         )
+        if data_rows:
+            _first_sr = h_idx + 2
+            _last_sr = h_idx + 1 + len(data_rows)
+            logger.info(
+                "[conciliacion_sheet] escaneo_orden_hoja sheet_row_number=%s..%s (cabecera en fila %s)",
+                _first_sr,
+                _last_sr,
+                h_idx + 1,
+            )
 
         now = datetime.now(timezone.utc)
         meta = db.get(ConciliacionSheetMeta, 1)

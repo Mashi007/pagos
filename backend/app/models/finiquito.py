@@ -53,7 +53,7 @@ class FiniquitoCaso(Base):
     """
     Caso listo para proceso de finiquito: prestamo en estado LIQUIDADO y
     total_financiamiento = sum(cuotas.total_pagado) (comparacion exacta).
-    Rellenado por job 02:00 America/Caracas.
+    Rellenado por jobs lun-sab 01:00 y 13:00 America/Caracas.
     """
 
     __tablename__ = "finiquito_casos"

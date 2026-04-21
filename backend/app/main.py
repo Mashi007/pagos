@@ -116,13 +116,24 @@ class RequestLogMiddleware(BaseHTTPMiddleware):
         request_id = response.headers.get("X-Request-ID") or request_id
         msg = "request method=%s path=%s status=%s elapsed_ms=%s request_id=%s client_ip=%s"
 
-        # Jobs que suelen superar 5 s (Gemini, PDF, SMTP); no marcar como slow
+        # Jobs que suelen superar 5 s (Gemini, PDF, SMTP, agregados dashboard); no marcar como slow
         is_long_job_path = (
             "gmail/run-now" in path
             or "cobros/public/enviar-reporte" in path
             or "cobros/public/infopagos/enviar-reporte" in path
             or "estado-cuenta/public/verificar-codigo" in path
             or "estado-cuenta/public/solicitar-codigo" in path
+            or "dashboard/pagos-inicial" in path
+            or (
+                "pagos-reportados" in path
+                and (
+                    "comprobante" in path
+                    or "recibo.pdf" in path
+                    or "enviar-recibo" in path
+                    or "aprobar" in path
+                    or "rechazar" in path
+                )
+            )
         )
         if status >= 500:
             logger.warning(msg + " (error)", request.method, path_for_log, status, elapsed_ms, request_id, client_ip)

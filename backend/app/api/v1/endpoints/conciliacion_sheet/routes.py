@@ -2,10 +2,10 @@
 Sincronización de la hoja CONCILIACIÓN (Google Sheets) → BD.
 
 - POST /conciliacion-sheet/sync — cron externo (p. ej. Render Cron Jobs) con header X-Conciliacion-Sheet-Sync-Secret.
-  Horario recomendado alineado al job interno: domingo y miércoles 02:00 America/Caracas (≈ 06:00 UTC, sin DST).
+  Horario recomendado alineado al job interno: domingo y miércoles 01:20 America/Caracas (≈ 05:20 UTC, sin DST).
   Si ENABLE_AUTOMATIC_SCHEDULED_JOBS=true, el APScheduler del backend ya ejecuta el mismo sync esos días a esa hora:
   puede omitir el cron externo o dejarlo como respaldo (evite disparos redundantes minuto a minuto).
-  Tras ese snapshot, el backend (si ENABLE_AUTOMATIC_SCHEDULED_JOBS=true) materializa a las 03:00 la lista de
+  Tras ese snapshot, el backend (si ENABLE_AUTOMATIC_SCHEDULED_JOBS=true) refresca cada día a las 04:05 la lista de
   candidatos «Clientes (Drive)» en BD; cron externo no es necesario para esa lista (ver POST /clientes/drive-import/refresh-cache).
 - POST /conciliacion-sheet/sync-now — mismo trabajo que /sync, pero con sesión staff (admin / operador / gerente).
 - GET /conciliacion-sheet/status — metadatos, última corrida y si el snapshot alcanza para GET …/exportar/fecha-drive.
