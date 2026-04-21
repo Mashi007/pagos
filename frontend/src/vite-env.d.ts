@@ -211,6 +211,13 @@ declare module 'lucide-react' {
 
   /** Comparar / equilibrar valores (p. ej. ABONOS hoja vs cuotas en notificaciones). */
   export const Scale: any
+
+  /** Lote Infopagos / sidebar (pila de archivos). */
+  export const FileStack: any
+
+  export const Pencil: any
+
+  export const StickyNote: any
 }
 
 declare module '@tanstack/react-query' {

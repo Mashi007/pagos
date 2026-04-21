@@ -2126,15 +2126,6 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                           </th>
                         ) : null}
 
-                        {modulo === 'fecha' ? (
-                          <th
-                            className="whitespace-nowrap px-3 py-2 text-right text-xs font-semibold leading-tight"
-                            title="Días = fecha columna Q (hoja) − fecha_aprobacion (BD). Caché: lunes y jueves 04:00 Caracas, tras cada sync Drive, o Recalcular."
-                          >
-                            Diferencia fecha (días)
-                          </th>
-                        ) : null}
-
                         <th className="whitespace-nowrap px-3 py-2 text-left font-semibold">
                           <div className="inline-flex items-center gap-1">
                             <span>Nº cuota</span>
@@ -2205,11 +2196,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                         <th
                           className="min-w-[5.5rem] px-1 py-2 text-center text-xs font-semibold leading-tight"
                           scope="col"
-                          title={
-                            modulo === 'fecha'
-                              ? 'Revisión manual (triángulo) y comparar columna Q (hoja) vs fecha de aprobación en BD (icono calendario).'
-                              : 'Revisión manual (triángulo) y comparar ABONOS hoja vs total pagado en cuotas (icono azul).'
-                          }
+                          title="Revisión manual (triángulo) y comparar ABONOS hoja vs total pagado en cuotas (icono azul)."
                         >
                           Revisión
                           <br />
@@ -2240,15 +2227,11 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                                       filtroDiferenciaAbonoGeneral !== 'todas' &&
                                       listaTrasFiltroCedula.length > 0
                                     ? 'Ninguna fila cumple el filtro de diferencia de abono.'
-                                    : modulo === 'fecha' &&
-                                        filtroDiferenciaFechaGeneral !== 'todas' &&
-                                        listaTrasFiltroCedula.length > 0
-                                      ? 'Ninguna fila cumple el filtro de diferencia de fecha.'
-                                      : 'Ningún registro en este criterio.'}
+                                    : 'Ningún registro en este criterio.'}
                             </span>
                             {listaCargadaSinFilas ? (
                               <span className="mx-auto mt-2 block max-w-lg text-xs text-gray-500">
-                                {modulo === 'general' || modulo === 'fecha'
+                                {modulo === 'general'
                                   ? 'Listas ya cargadas: no hay filas en ninguno de los tres criterios (día siguiente, prejudicial, 2 días antes) para la fecha de referencia.'
                                   : modulo === 'a3cuotas'
                                     ? 'Lista ya cargada: se requieren 5+ cuotas en estado VENCIDO o MORA en BD. Si hay mora pero no aparece nadie, sincronice estados de cuotas (auditoría / job) para alinear la columna estado.'
@@ -2275,15 +2258,6 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                                 −tolerancia (más pagado en cuotas que en la hoja).
                                 El listado refleja caché: si difiere del modal, actualice
                                 datos o espere el recálculo programado.
-                              </span>
-                            ) : modulo === 'fecha' &&
-                              filtroDiferenciaFechaGeneral !== 'todas' &&
-                              listaTrasFiltroCedula.length > 0 ? (
-                              <span className="mx-auto mt-2 block max-w-md text-xs text-gray-500">
-                                Elija «Todas» u otro criterio. «Igual a 0» = misma fecha
-                                (calendario; tolerancia como en el modal); «Mayor que
-                                cero» = columna Q posterior a la aprobación (indicador
-                                Sí); «Menor que cero» = Q anterior (días negativos).
                               </span>
                             ) : null}
                           </td>
@@ -2325,20 +2299,6 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                               </td>
                             ) : null}
 
-                            {modulo === 'fecha' ? (
-                              <td className="px-3 py-2 text-right align-middle">
-                                <DiferenciaFechaGeneralCell
-                                  row={row}
-                                  data={
-                                    row.comparar_fecha_entrega_q_aprobacion ??
-                                    undefined
-                                  }
-                                  isLoading={false}
-                                  isError={false}
-                                />
-                              </td>
-                            ) : null}
-
                             <td className="px-3 py-2">
                               {row.numero_cuota ?? '-'}
                             </td>
@@ -2360,11 +2320,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                             <td className="px-1 py-2 text-center align-middle">
                               <div className="flex flex-wrap items-center justify-center gap-1">
                                 <RevisionManualNotifCell row={row} />
-                                {modulo === 'fecha' ? (
-                                  <CompararFechaEntregaQAprobacionCell row={row} />
-                                ) : (
-                                  <CompararAbonosDriveCuotasCell row={row} />
-                                )}
+                                <CompararAbonosDriveCuotasCell row={row} />
                               </div>
                             </td>
 

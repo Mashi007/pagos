@@ -565,10 +565,10 @@ export default function EscanerInfopagosLotePage() {
   }, [])
 
   const volverArchivos = useCallback(() => {
+    cancelDigitacionLote()
     setFase('archivos')
     filasRef.current = []
     setFilas([])
-    setIdxDigitalizando(null)
   }, [])
 
   const listoParaDigitalizar = filas.some(f => f.extract !== 'listo')
