@@ -140,7 +140,6 @@ import { Login } from './pages/Login'
 import {
   AccesoLimitadoPage,
   ActualizacionesPrestamosDrivePage,
-  ActualizacionesFechas2Page,
   AdminTasaCambioPage,
   AmortizacionPage,
   Analistas,
@@ -535,13 +534,10 @@ function App() {
               }
             />
 
+            {/* Compatibilidad: «Fechas 2» vive en Notificaciones → Fechas (mismo requireAdmin en destino). */}
             <Route
               path="actualizaciones/fechas-2"
-              element={
-                <SimpleProtectedRoute requireAdmin={true}>
-                  <ActualizacionesFechas2Page />
-                </SimpleProtectedRoute>
-              }
+              element={<Navigate to="/notificaciones/fecha" replace />}
             />
 
             {/* Redirect de compatibilidad: la URL anterior d-1-dia era confusa (el módulo es «2 días antes»). */}
