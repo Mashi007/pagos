@@ -71,11 +71,10 @@ function RootLayoutWrapper() {
 
   if (isPublic) return <Outlet />
 
-  // Si no está autenticado y NO está en una ruta pública: mostrar "Acceso limitado"
-  // Esto previene que intenten acceder al dashboard quitando /infopagos de la URL
+  // Si no está autenticado y NO está en una ruta pública: login conservando destino (p. ej. /infopagos).
 
   if (!isLoading && !isAuthenticated) {
-    return <Navigate to="/login" replace />
+    return <Navigate to="/login" state={{ from: location }} replace />
   }
 
   // Lista blanca por rol (admin: sin filtro). Fuera de rutas delegadas → inicio del rol.
@@ -284,7 +283,7 @@ function App() {
               element={<EstadoCuentaPublicoPage />}
             />
 
-            {/* Acceso limitado: se muestra cuando alguien intenta acceder a /pagos desde /infopagos */}
+            {/* Acceso limitado: ruta pública (p. ej. historial); "Volver a Infopagos" exige login y redirige con state.from */}
 
             <Route path="acceso-limitado" element={<AccesoLimitadoPage />} />
 

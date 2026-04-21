@@ -56,6 +56,8 @@
       'index-',
       'webkit-text-size-adjust',
       'moz-text-size-adjust',
+      'moz-column-gap',
+      'column-gap',
       'text-size-adjust',
       '-moz-osx-font-smoothing',
       'css parsing error',
@@ -139,20 +141,42 @@
     window.location.replace(base + '?nocache=' + Date.now())
   }
 
+  function isAssetChunkUrl(url) {
+    if (!url || typeof url !== 'string') return false
+    var u = url.toLowerCase()
+    return (u.indexOf('/assets/') !== -1 || u.indexOf('/pagos/assets/') !== -1) && u.indexOf('.js') !== -1
+  }
+
+  function isDynamicChunkLoadFailure(msg, sourceUrl) {
+    if (!msg || typeof msg !== 'string') return false
+    var m = msg.toLowerCase()
+    var mimeHtml =
+      (m.indexOf('text/html') !== -1 || m.indexOf('tipo mime') !== -1 || m.indexOf('mime no permitido') !== -1) &&
+      (m.indexOf('módulo') !== -1 ||
+        m.indexOf('modulo') !== -1 ||
+        m.indexOf('module') !== -1 ||
+        m.indexOf('.js') !== -1 ||
+        isAssetChunkUrl(sourceUrl))
+    return (
+      m.indexOf('failed to fetch dynamically imported module') !== -1 ||
+      m.indexOf('error loading dynamically imported module') !== -1 ||
+      m.indexOf('failed to load module') !== -1 ||
+      m.indexOf('ha fallado la carga del módulo') !== -1 ||
+      m.indexOf('se bloqueó la carga de un módulo') !== -1 ||
+      m.indexOf('failed to load module script') !== -1 ||
+      mimeHtml ||
+      (isAssetChunkUrl(sourceUrl) &&
+        (m.indexOf('fetch') !== -1 || m.indexOf('load') !== -1 || m.indexOf('carga') !== -1 || m.indexOf('mime') !== -1))
+    )
+  }
+
   window.addEventListener(
     'error',
     function (event) {
       if (event.target && event.target.tagName === 'SCRIPT' && event.target.type === 'module') {
-        var errorMessage = (event.message || '').toLowerCase()
-        var errorSource = (event.filename || event.target.src || '').toLowerCase()
-        if (
-          errorMessage.includes('failed to fetch dynamically imported module') ||
-          errorMessage.includes('error loading dynamically imported module') ||
-          errorMessage.includes('failed to load module') ||
-          errorMessage.includes('ha fallado la carga del módulo') ||
-          errorMessage.includes('failed to load module script') ||
-          (errorSource.includes('/assets/') && errorSource.includes('.js'))
-        ) {
+        var errorMessage = event.message || ''
+        var errorSource = (event.filename || (event.target && event.target.src) || '') || ''
+        if (isDynamicChunkLoadFailure(errorMessage, errorSource)) {
           reloadPage()
         }
       }
@@ -170,14 +194,28 @@
       var namedChunk =
         (msg.indexOf('comunicaciones-') !== -1 ||
           msg.indexOf('notificaciones-') !== -1 ||
-          msg.indexOf('clientes-') !== -1) &&
+          msg.indexOf('clientes-') !== -1 ||
+          msg.indexOf('infopagos') !== -1 ||
+          msg.indexOf('cobroshistorico') !== -1 ||
+          msg.indexOf('pagosreportados') !== -1) &&
         msg.indexOf('.js') !== -1
+      var mimeBlocked =
+        (msg.indexOf('text/html') !== -1 || msg.indexOf('tipo mime') !== -1 || msg.indexOf('mime no permitido') !== -1) &&
+        (msg.indexOf('módulo') !== -1 ||
+          msg.indexOf('modulo') !== -1 ||
+          msg.indexOf('module') !== -1 ||
+          msg.indexOf('/assets/') !== -1 ||
+          msg.indexOf('/pagos/assets/') !== -1 ||
+          msg.indexOf('.js') !== -1)
       var isChunk =
         msg.indexOf('dynamically imported module') !== -1 ||
         (msg.indexOf('failed to fetch') !== -1 && msg.indexOf('module') !== -1) ||
         (msg.indexOf('error loading') !== -1 && msg.indexOf('module') !== -1) ||
         msg.indexOf('failed to load module') !== -1 ||
+        msg.indexOf('se bloqueó la carga de un módulo') !== -1 ||
         (msg.indexOf('/assets/') !== -1 && msg.indexOf('.js') !== -1) ||
+        (msg.indexOf('/pagos/assets/') !== -1 && msg.indexOf('.js') !== -1) ||
+        mimeBlocked ||
         namedChunk
       if (isChunk) {
         event.preventDefault()

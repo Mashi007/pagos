@@ -63,6 +63,47 @@ if (!jsFiles.includes(entryJs)) {
   process.exit(1)
 }
 
+/** BFS sobre import("./chunk.js") desde el entry: detecta referencias a chunks ausentes (deploy incompleto → MIME text/html). */
+const jsFilesSet = new Set(jsFiles)
+const dynamicImportRe = /import\s*\(\s*["'](\.\/[^"']+\.js)["']\s*\)/g
+function collectMissingDynamicChunks(startFile) {
+  const queue = [startFile]
+  const visited = new Set()
+  const missing = []
+  while (queue.length) {
+    const f = queue.shift()
+    if (visited.has(f)) continue
+    visited.add(f)
+    if (!jsFilesSet.has(f)) {
+      missing.push(f)
+      continue
+    }
+    let content
+    try {
+      content = readFileSync(path.join(assetsPath, f), 'utf8')
+    } catch {
+      missing.push(f)
+      continue
+    }
+    dynamicImportRe.lastIndex = 0
+    let m
+    while ((m = dynamicImportRe.exec(content)) !== null) {
+      const child = m[1].replace(/^\.\//, '')
+      if (!visited.has(child)) queue.push(child)
+    }
+  }
+  return missing
+}
+
+const missingDynamic = collectMissingDynamicChunks(entryJs)
+if (missingDynamic.length) {
+  console.error(
+    `âŒ verify-build: chunks dinámicos referenciados pero no presentes en dist/assets/: ${missingDynamic.slice(0, 40).join(', ')}${missingDynamic.length > 40 ? ' ...' : ''}`
+  )
+  process.exit(1)
+}
+
 console.log(`âœ… verify-build: dist/assets/ tiene ${jsFiles.length} .js y ${cssFiles.length} .css`)
 console.log(`âœ… verify-build: entry ${entryJs} existe`)
+console.log(`âœ… verify-build: cadena import() dinámica desde entry OK (${jsFilesSet.size} archivos .js indexados)`)
 process.exit(0)
