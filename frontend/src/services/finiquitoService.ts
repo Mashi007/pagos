@@ -33,6 +33,48 @@ function createFiniquitoClient(): AxiosInstance {
 
 const finiquitoAxios = createFiniquitoClient()
 
+const COMPROBANTE_BLOB_TIMEOUT_MS = 120000
+
+/**
+ * GET binario (p. ej. /api/v1/pagos/comprobante-imagen/{id}) con Bearer del portal Finiquito.
+ */
+export async function finiquitoGetBlob(apiPath: string): Promise<Blob> {
+  const path = (apiPath || '').trim()
+  if (!path.startsWith('/')) {
+    throw new Error('Ruta de API invalida')
+  }
+  const response = await finiquitoAxios.get(path, {
+    responseType: 'blob',
+    timeout: path.includes('comprobante-imagen')
+      ? COMPROBANTE_BLOB_TIMEOUT_MS
+      : 30000,
+  })
+  const { data, status } = response
+  if (status === 401) {
+    throw new Error('Sesión expirada. Ingrese de nuevo.')
+  }
+  if (status === 403) {
+    throw new Error('No tiene permiso para ver este comprobante.')
+  }
+  if (status >= 400) {
+    let msg = `Error ${status}`
+    const blobErr = data as Blob
+    if (blobErr && typeof blobErr.text === 'function') {
+      try {
+        const txt = await blobErr.text()
+        const j = JSON.parse(txt) as { detail?: string }
+        if (typeof j?.detail === 'string' && j.detail.trim()) {
+          msg = j.detail
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+    throw new Error(msg)
+  }
+  return data as Blob
+}
+
 function detailToString(detail: unknown): string {
   if (typeof detail === 'string' && detail.trim()) return detail
   if (Array.isArray(detail)) {

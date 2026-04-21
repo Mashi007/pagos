@@ -8,6 +8,7 @@ import {
   CreditCard,
   DollarSign,
   Download,
+  Eye,
   FileText,
   Key,
   Loader2,
@@ -56,6 +57,10 @@ import {
   descargarRevisionCuotasExcel,
   descargarRevisionPagosExcel,
 } from '../../utils/finiquitoRevisionExcelExport'
+import {
+  abrirComprobanteDesdeHref,
+  esUrlComprobanteImagenConAuth,
+} from '../../utils/comprobanteImagenAuth'
 
 /** Contenedor del área de datos bajo pestañas (flex consume alto del modal). */
 const PANEL_SCROLL =
@@ -925,13 +930,16 @@ export function FiniquitoRevisionDialog({
                           <TableHead className={thFin}>Fecha</TableHead>
                           <TableHead className={thFin}>Doc.</TableHead>
                           <TableHead className={thFin}>Conc.</TableHead>
+                          <TableHead className={cn(thFin, 'text-center')}>
+                            Comp.
+                          </TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {pagosItems.length === 0 ? (
                           <TableRow>
                             <TableCell
-                              colSpan={9}
+                              colSpan={10}
                               className={cn(
                                 tdFin,
                                 'text-center text-slate-500'
@@ -991,6 +999,61 @@ export function FiniquitoRevisionDialog({
                               </TableCell>
                               <TableCell className={tdFin}>
                                 {p.conciliado ? 'Sí' : 'No'}
+                              </TableCell>
+                              <TableCell
+                                className={cn(tdFin, 'text-center whitespace-nowrap')}
+                              >
+                                {(() => {
+                                  const u =
+                                    String(
+                                      (p as { link_comprobante?: string })
+                                        .link_comprobante ?? ''
+                                    ).trim() ||
+                                    String(
+                                      (p as { documento_ruta?: string })
+                                        .documento_ruta ?? ''
+                                    ).trim()
+                                  if (!u) {
+                                    return (
+                                      <span className="text-slate-400">-</span>
+                                    )
+                                  }
+                                  const interno =
+                                    esUrlComprobanteImagenConAuth(u)
+                                  return (
+                                    <button
+                                      type="button"
+                                      className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-semibold text-violet-700 hover:bg-violet-50 hover:text-violet-900"
+                                      title={
+                                        interno
+                                          ? 'Comprobante en el sistema (abre con su sesión)'
+                                          : 'Abrir enlace externo (p. ej. Drive)'
+                                      }
+                                      onClick={() =>
+                                        void (async () => {
+                                          try {
+                                            await abrirComprobanteDesdeHref(
+                                              u,
+                                              mode === 'admin'
+                                                ? 'staff'
+                                                : 'finiquito'
+                                            )
+                                          } catch {
+                                            toast.error(
+                                              'No se pudo abrir el comprobante.'
+                                            )
+                                          }
+                                        })()
+                                      }
+                                    >
+                                      <Eye
+                                        className="h-3.5 w-3.5 shrink-0"
+                                        aria-hidden
+                                      />
+                                      {interno ? 'Ver' : 'Enlace'}
+                                    </button>
+                                  )
+                                })()}
                               </TableCell>
                             </TableRow>
                           ))
