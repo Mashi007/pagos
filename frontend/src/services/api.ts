@@ -92,6 +92,11 @@ class ApiClient {
   }> = []
 
   private requestCancellers: Map<string, AbortController> = new Map() // ? Para cancelar requests pendientes
+  private inFlightGetRequests: Map<string, Promise<unknown>> = new Map()
+  private putQueueByGroup: Map<
+    string,
+    { active: number; queue: Array<() => void>; limit: number }
+  > = new Map()
 
   constructor() {
     this.client = axios.create({
@@ -519,6 +524,63 @@ class ApiClient {
     )
   }
 
+  private shouldDeduplicateHeavyGet(url: string): boolean {
+    return (
+      url.includes('/api/v1/notificaciones/clientes-retrasados') ||
+      url.includes('/api/v1/notificaciones/cuotas-pendiente-2-dias-antes') ||
+      url.includes('/api/v1/notificaciones-prejudicial')
+    )
+  }
+
+  private buildGetDedupKey(url: string, config?: AxiosRequestConfig): string {
+    const params =
+      config?.params && typeof config.params === 'object'
+        ? JSON.stringify(config.params)
+        : String(config?.params ?? '')
+    return `${url}::${params}`
+  }
+
+  private getPutConcurrencyGroup(url: string): { key: string; limit: number } | null {
+    if (url.includes('/api/v1/revision-manual/clientes/')) {
+      return { key: 'revision-manual-clientes', limit: 4 }
+    }
+    return null
+  }
+
+  private async runWithPutLimit<T>(
+    groupKey: string,
+    limit: number,
+    task: () => Promise<T>
+  ): Promise<T> {
+    let group = this.putQueueByGroup.get(groupKey)
+    if (!group) {
+      group = { active: 0, queue: [], limit }
+      this.putQueueByGroup.set(groupKey, group)
+    }
+    group.limit = limit
+
+    await new Promise<void>(resolve => {
+      const startOrQueue = () => {
+        if (group && group.active < group.limit) {
+          group.active += 1
+          resolve()
+          return
+        }
+        group?.queue.push(startOrQueue)
+      }
+      startOrQueue()
+    })
+
+    try {
+      return await task()
+    } finally {
+      if (!group) return
+      group.active = Math.max(0, group.active - 1)
+      const next = group.queue.shift()
+      if (next) next()
+    }
+  }
+
   private processQueue(error: any, token: string | null) {
     this.failedQueue.forEach(prom => {
       if (error) {
@@ -899,26 +961,44 @@ class ApiClient {
       timeout,
     }
 
-    const response: AxiosResponse<T> = await this.client.get(url, finalConfig)
-
-    if (response.status >= 400 && response.status < 500) {
-      const backendMessage =
-        (response.data as any)?.detail ||
-        (response.data as any)?.message ||
-        `Request failed with status ${response.status}`
-
-      const error = new Error(backendMessage) as any
-
-      error.response = response
-
-      error.isAxiosError = true
-
-      error.code = `ERR_HTTP_${response.status}`
-
-      throw error
+    const dedupKey = this.shouldDeduplicateHeavyGet(url)
+      ? this.buildGetDedupKey(url, finalConfig)
+      : null
+    if (dedupKey) {
+      const pending = this.inFlightGetRequests.get(dedupKey) as Promise<T> | undefined
+      if (pending) {
+        return await pending
+      }
     }
 
-    return response.data
+    const requestPromise = this.client
+      .get<T>(url, finalConfig)
+      .then((response: AxiosResponse<T>) => {
+        if (response.status >= 400 && response.status < 500) {
+          const backendMessage =
+            (response.data as any)?.detail ||
+            (response.data as any)?.message ||
+            `Request failed with status ${response.status}`
+
+          const error = new Error(backendMessage) as any
+
+          error.response = response
+
+          error.isAxiosError = true
+
+          error.code = `ERR_HTTP_${response.status}`
+
+          throw error
+        }
+        return response.data
+      })
+      .finally(() => {
+        if (dedupKey) this.inFlightGetRequests.delete(dedupKey)
+      })
+
+    if (dedupKey) this.inFlightGetRequests.set(dedupKey, requestPromise)
+
+    return await requestPromise
   }
 
   /**
@@ -1156,10 +1236,15 @@ class ApiClient {
         ? Math.max(config?.timeout ?? 0, 60000)
         : (config?.timeout ?? DEFAULT_TIMEOUT_MS)
 
-      const response: AxiosResponse<T> = await this.client.put(url, data, {
-        ...config,
-        timeout: putTimeoutMs,
-      })
+      const executePut = async () =>
+        await this.client.put<T>(url, data, {
+          ...config,
+          timeout: putTimeoutMs,
+        })
+      const putGroup = this.getPutConcurrencyGroup(url)
+      const response: AxiosResponse<T> = putGroup
+        ? await this.runWithPutLimit(putGroup.key, putGroup.limit, executePut)
+        : await executePut()
 
       console.log('? [ApiClient] PUT response:', {
         url,

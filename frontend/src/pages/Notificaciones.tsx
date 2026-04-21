@@ -305,6 +305,8 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
       return next
     })
   }
+  const [pausarAutoRefetchNotificaciones, setPausarAutoRefetchNotificaciones] =
+    useState(false)
 
   const { data, isPending, isFetched, isError, error, refetch, isFetching } =
     useQuery({
@@ -315,17 +317,18 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
 
       queryFn: () => notificacionService.getClientesRetrasados(fechaCaracasApi),
 
-      // Siempre considerar obsoleto: al volver a la pestaña o tras invalidar por pagos, se refetch al instante.
-      staleTime: 0,
+      // Evita tormenta de GET al recuperar foco; se refresca por invalidaciones explícitas.
+      staleTime: 20_000,
 
-      refetchOnWindowFocus: true,
+      refetchOnWindowFocus: false,
 
       // Sin placeholderData: con v5, placeholder hace isPending=false y la tabla se ve vacía mientras carga (Render frío).
       /** En Configuración no se listan cuotas: evita GET pesado y errores 500 por carga/BD innecesaria. */
 
       enabled:
         (modulo === 'a1dia' || modulo === 'a10dias' || esListaCombinadaMoras) &&
-        activeTab !== 'configuracion',
+        activeTab !== 'configuracion' &&
+        !pausarAutoRefetchNotificaciones,
     })
 
   const {
@@ -342,15 +345,15 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
     queryFn: () =>
       notificacionService.getCuotasPendiente2DiasAntes(fechaCaracasApi),
 
-    // El criterio d2antes (vencimiento exactamente hoy+2) cambia muy poco intradía;
-    // 30 s de gracia evitan GETs en cada foco de ventana sin sacrificar frescura operativa.
-    staleTime: 30_000,
+    // El criterio d2antes cambia poco intradía; mantener ventana corta evita sobrecarga.
+    staleTime: 45_000,
 
-    refetchOnWindowFocus: true,
+    refetchOnWindowFocus: false,
 
     enabled:
       (modulo === 'd2antes' || esListaCombinadaMoras) &&
-      activeTab !== 'configuracion',
+      activeTab !== 'configuracion' &&
+      !pausarAutoRefetchNotificaciones,
   })
 
   const {
@@ -373,13 +376,14 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
         fechaCaracasApi
       ),
 
-    staleTime: 0,
+    staleTime: 20_000,
 
-    refetchOnWindowFocus: true,
+    refetchOnWindowFocus: false,
 
     enabled:
       (modulo === 'a3cuotas' || esListaCombinadaMoras) &&
-      activeTab !== 'configuracion',
+      activeTab !== 'configuracion' &&
+      !pausarAutoRefetchNotificaciones,
   })
 
   const { data: estadisticasPorTab } = useQuery({
@@ -389,7 +393,10 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
 
     staleTime: 0,
 
-    enabled: activeTab !== 'configuracion' && !esListaCombinadaMoras,
+    enabled:
+      activeTab !== 'configuracion' &&
+      !esListaCombinadaMoras &&
+      !pausarAutoRefetchNotificaciones,
 
     placeholderData: {
       dias_5: { enviados: 0, rebotados: 0 },
@@ -500,6 +507,21 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
     enviandoD2Antes ||
     enviandoPago1Dia ||
     enviandoPago10Dias
+
+  useEffect(() => {
+    const pausado =
+      hayOperacionListaEnCurso ||
+      programandoRefreshAbonosDrive ||
+      programandoRefreshFechaQ
+    if (pausarAutoRefetchNotificaciones !== pausado) {
+      setPausarAutoRefetchNotificaciones(pausado)
+    }
+  }, [
+    hayOperacionListaEnCurso,
+    programandoRefreshAbonosDrive,
+    programandoRefreshFechaQ,
+    pausarAutoRefetchNotificaciones,
+  ])
 
   const handleDescargarEstadoCuentaPdf = async (prestamoId: number) => {
     setDescargandoEstadoCuentaId(prestamoId)
@@ -1730,6 +1752,12 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                 Cancelar
               </Button>
             </div>
+
+            {pausarAutoRefetchNotificaciones ? (
+              <div className="mb-4 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                Refresco automático pausado por operación en curso. Se reanuda al finalizar.
+              </div>
+            ) : null}
 
             <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end">
               <div className="flex min-w-[12rem] max-w-md flex-1 flex-col gap-1">
