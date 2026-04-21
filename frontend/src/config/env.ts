@@ -11,7 +11,7 @@ const DEFAULT_APP_VERSION = '1.0.0'
  * - Aqui: BASE_PATH = '/pagos' (sin barra final)
  * - main.tsx: <BrowserRouter basename={BASE_PATH || '/'}>
  * - server.js: FRONTEND_BASE = '/pagos'
- * - App.tsx: rutas publicas por pathname relativo al basename: '/', cobros, estado cuenta, '/login'
+ * - App.tsx: rutas publicas por pathname relativo al basename: '/', cobros, estado cuenta, '/login', '/acceso-personal'
  */
 function getBasePath(): string {
   const fromVite = (import.meta.env.BASE_URL || '/').replace(/\/$/, '') || ''
@@ -40,6 +40,12 @@ export const PUBLIC_FLOW_SESSION_KEY = 'public_flow_active'
 
 /** Sufijo de URL para mostrar siempre el formulario de personal (evita pantalla Acceso limitado). */
 export const STAFF_LOGIN_SEARCH = '?personal=1'
+
+/**
+ * Ruta publica dedicada al personal: redirige a /login?personal=1.
+ * URL real con basename /pagos: https://.../pagos/acceso-personal
+ */
+export const PUBLIC_STAFF_ENTRY_PATH = 'acceso-personal'
 
 /** Sesion del formulario publico rapicredit-cobros tras verificar codigo por correo. */
 export const COBROS_PUBLIC_TOKEN_KEY = 'cobros_public_jwt'

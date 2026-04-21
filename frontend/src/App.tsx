@@ -16,7 +16,7 @@ import { useSimpleAuth } from './store/simpleAuthStore'
 
 import { getFiniquitoAccessToken } from './services/finiquitoService'
 
-import { BASE_PATH } from './config/env'
+import { BASE_PATH, STAFF_LOGIN_SEARCH } from './config/env'
 
 import { RUTAS_REPORTE_PAGO_PUBLICO } from './constants/rutasIngresoPago'
 
@@ -30,14 +30,15 @@ import {
  * Acceso publico SIN login de personal: estas URLs siguen abiertas (formulario cobros, etc.).
  * No se impide entrar a /rapicredit-cobros ni a rapicredit-estadocuenta por URL directa.
  *
- * La raiz pathname '/' (URL real: /pagos o /pagos/) muestra solo enlaces de cliente; el login
- * de personal queda en /login?personal=1 para no exponer credenciales en la misma entrada publica.
+ * La raiz pathname '/' (URL real: /pagos o /pagos/) muestra solo enlaces de cliente; el acceso
+ * de personal usa la ruta dedicada /acceso-personal (redirige a /login?personal=1).
  *
  * Un usuario en rapicredit-cobros no puede abrir dashboard, clientes, etc. sin autenticarse.
  */
 const PUBLIC_PATHS = [
   '/',
   '/login',
+  '/acceso-personal',
   '/acceso-limitado',
   ...RUTAS_REPORTE_PAGO_PUBLICO,
   '/rapicredit-estadocuenta',
@@ -292,6 +293,18 @@ function App() {
             {/* Acceso limitado: ruta pública (p. ej. historial); "Volver a Infopagos" exige login y redirige con state.from */}
 
             <Route path="acceso-limitado" element={<AccesoLimitadoPage />} />
+
+            {/* Entrada dedicada para personal (evita confusion con /login solo). */}
+            <Route
+              path="acceso-personal"
+              element={
+                isAuthenticated ? (
+                  <Navigate to={defaultHomePathForRol(user?.rol)} replace />
+                ) : (
+                  <Navigate to={`/login${STAFF_LOGIN_SEARCH}`} replace />
+                )
+              }
+            />
 
             {/* Finiquito: portal OTP y gestion comparten URL /finiquitos/gestion (gate); panel redirige */}
 

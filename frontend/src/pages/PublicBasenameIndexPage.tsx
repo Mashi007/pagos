@@ -1,14 +1,16 @@
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 
 import { FileText, Wallet } from 'lucide-react'
 
 import { Button } from '../components/ui/button'
 import { Logo } from '../components/ui/Logo'
 
+import { PUBLIC_STAFF_ENTRY_PATH } from '../config/env'
+
 /**
  * Entrada pública en la raíz del basename (p. ej. /pagos).
  * Evita exponer el formulario de login de personal a quien solo quita el último segmento de la URL.
- * El personal debe usar /login?personal=1 (STAFF_LOGIN_SEARCH).
+ * El personal usa la ruta dedicada /acceso-personal (redirige a login con ?personal=1).
  */
 export function PublicBasenameIndexPage() {
   const navigate = useNavigate()
@@ -72,6 +74,15 @@ export function PublicBasenameIndexPage() {
           </li>
         </ul>
       </main>
+
+      <footer className="border-t border-slate-800 px-4 py-6 text-center">
+        <Link
+          to={`/${PUBLIC_STAFF_ENTRY_PATH}`}
+          className="text-xs text-slate-500 underline-offset-4 hover:text-slate-300 hover:underline"
+        >
+          Acceso personal del sistema
+        </Link>
+      </footer>
 
     </div>
   )
