@@ -16,6 +16,22 @@ const DEFAULT_PER_PAGE = 10
 
 // Tipo para el resumen de préstamos
 
+export type TipoFiltroFechas2 =
+  | 'fecha_registro'
+  | 'fecha_aprobacion'
+  | 'fecha_requerimiento'
+  | 'fecha_base_calculo'
+
+/** Fila mínima de GET /prestamos/actualizaciones-fechas-2 (módulo Actualizaciones Fechas 2). */
+export interface PrestamoFechas2Item {
+  id: number
+  cedula: string
+  estado: string
+  fecha_requerimiento: string | null
+  fecha_aprobacion: string | null
+  fecha_base_calculo: string | null
+}
+
 type ResumenPrestamos = {
   tiene_prestamos: boolean
 
@@ -1041,6 +1057,26 @@ class PrestamoService {
       { prestamo_ids: prestamoIds },
       { timeout: 300000 }
     )
+  }
+
+  /**
+   * Admin. Listado mínimo de préstamos cuyo día calendario coincide con `fecha` en el campo `tipo`.
+   * GET /api/v1/prestamos/actualizaciones-fechas-2
+   */
+  async getPrestamosActualizacionesFechas2(params: {
+    tipo: TipoFiltroFechas2
+    fecha: string
+    limit?: number
+  }): Promise<{
+    items: PrestamoFechas2Item[]
+    total: number
+    tipo: string
+    fecha: string
+    limit: number
+  }> {
+    const qs = new URLSearchParams({ tipo: params.tipo, fecha: params.fecha })
+    if (params.limit != null) qs.set('limit', String(params.limit))
+    return await apiClient.get(`${this.baseUrl}/actualizaciones-fechas-2?${qs}`)
   }
 }
 

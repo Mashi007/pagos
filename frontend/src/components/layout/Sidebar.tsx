@@ -278,6 +278,12 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
           icon: CreditCard,
           adminOnly: true,
         },
+        {
+          title: 'Fechas 2',
+          href: '/actualizaciones/fechas-2',
+          icon: Calendar,
+          adminOnly: true,
+        },
       ],
     },
 

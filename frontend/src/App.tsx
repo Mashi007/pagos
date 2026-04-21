@@ -139,6 +139,7 @@ import { Login } from './pages/Login'
 import {
   AccesoLimitadoPage,
   ActualizacionesPrestamosDrivePage,
+  ActualizacionesFechas2Page,
   AdminTasaCambioPage,
   AmortizacionPage,
   Analistas,
@@ -502,6 +503,15 @@ function App() {
               element={
                 <SimpleProtectedRoute requireAdmin={true}>
                   <ActualizacionesPrestamosDrivePage />
+                </SimpleProtectedRoute>
+              }
+            />
+
+            <Route
+              path="actualizaciones/fechas-2"
+              element={
+                <SimpleProtectedRoute requireAdmin={true}>
+                  <ActualizacionesFechas2Page />
                 </SimpleProtectedRoute>
               }
             />

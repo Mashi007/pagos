@@ -92,17 +92,32 @@ export default function ActualizacionesFechas2Page() {
       setSavingId(row.id)
       try {
         const body: Record<string, unknown> = {}
-        if (draft.fecha_requerimiento) body.fecha_requerimiento = draft.fecha_requerimiento
-        if (draft.fecha_aprobacion) {
-          body.fecha_aprobacion = `${draft.fecha_aprobacion}T00:00:00`
+        const reqPrev = isoDateOnly(row.fecha_requerimiento)
+        if (draft.fecha_requerimiento && draft.fecha_requerimiento !== reqPrev) {
+          body.fecha_requerimiento = draft.fecha_requerimiento
         }
-        if (draft.fecha_base_calculo) body.fecha_base_calculo = draft.fecha_base_calculo
+        const prevApDay =
+          isoDateOnly(row.fecha_aprobacion) || isoDateOnly(row.fecha_base_calculo) || ''
+        let approvalDay = (draft.fecha_aprobacion || '').trim()
+        if (!approvalDay && (draft.fecha_base_calculo || '').trim()) {
+          approvalDay = (draft.fecha_base_calculo || '').trim()
+        }
+        if (approvalDay && approvalDay !== prevApDay) {
+          body.fecha_aprobacion = `${approvalDay}T00:00:00`
+        }
 
-        const hadApbOrBase = Boolean(draft.fecha_aprobacion || draft.fecha_base_calculo)
+        if (Object.keys(body).length === 0) {
+          toast.message('Sin cambios que guardar.')
+          cancelEdit()
+          setSavingId(null)
+          return
+        }
+
+        const hadAprobacionCambio = body.fecha_aprobacion != null
 
         const res = await prestamoService.updatePrestamo(row.id, body)
         const est = String(res.estado || '').toUpperCase()
-        if (hadApbOrBase && (est === 'APROBADO' || est === 'LIQUIDADO')) {
+        if (hadAprobacionCambio && (est === 'APROBADO' || est === 'LIQUIDADO')) {
           try {
             await prestamoService.recalcularFechasAmortizacion(row.id)
           } catch (e) {

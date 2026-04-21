@@ -86,6 +86,10 @@ export const ActualizacionesPrestamosDrivePage = lazy(
   () => import('../pages/ActualizacionesPrestamosDrivePage')
 )
 
+export const ActualizacionesFechas2Page = lazy(
+  () => import('../pages/ActualizacionesFechas2Page')
+)
+
 export const ComunicacionesPage = lazy(() => import('../pages/Comunicaciones'))
 
 export const ConversacionesWhatsAppPage = lazy(
