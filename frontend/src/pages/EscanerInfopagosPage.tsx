@@ -186,6 +186,9 @@ type Fase = 'cedula' | 'imagen' | 'formulario' | 'exito'
 export default function EscanerInfopagosPage() {
   const honeypotRef = useRef<HTMLInputElement>(null)
   const tokensSufijoUsadosRef = useRef<Set<string>>(new Set())
+  /** Evita doble envío antes de que React actualice `escaneando` / `enviando`. */
+  const escanearActivoRef = useRef(false)
+  const enviarActivoRef = useRef(false)
 
   const [fase, setFase] = useState<Fase>('cedula')
   const [cedulaRaw, setCedulaRaw] = useState('')
@@ -287,11 +290,13 @@ export default function EscanerInfopagosPage() {
       toast.error('Cédula inválida.')
       return
     }
+    if (escanearActivoRef.current) return
     const vA = validarArchivo(archivo)
     if (!vA.valido) {
       toast.error(vA.error || 'Archivo inválido.')
       return
     }
+    escanearActivoRef.current = true
     const tipo = cedulaNormalizada.valorParaEnviar.charAt(0).toUpperCase()
     const numero = cedulaNormalizada.valorParaEnviar.slice(1).replace(/\D/g, '')
     const fd = new FormData()
@@ -357,11 +362,13 @@ export default function EscanerInfopagosPage() {
     } catch {
       /* apiClient ya muestra toast en errores HTTP */
     } finally {
+      escanearActivoRef.current = false
       setEscaneando(false)
     }
   }, [archivo, cedulaNormalizada])
 
   const handleGuardar = useCallback(async () => {
+    if (enviarActivoRef.current) return
     if (!cedulaNormalizada.valido || !cedulaNormalizada.valorParaEnviar) {
       toast.error('Cédula inválida.')
       return
@@ -438,6 +445,7 @@ export default function EscanerInfopagosPage() {
           : `Nota sobre fecha de comprobante: ${justif}`
       form.append('observacion', motivoFecha)
     }
+    enviarActivoRef.current = true
     setEnviando(true)
     try {
       const res = await enviarReporteInfopagos(form)
@@ -463,6 +471,7 @@ export default function EscanerInfopagosPage() {
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : 'Error al guardar.')
     } finally {
+      enviarActivoRef.current = false
       setEnviando(false)
     }
   }, [
@@ -621,6 +630,10 @@ export default function EscanerInfopagosPage() {
                 )}
               </Button>
             </div>
+            <p className="text-xs text-slate-500">
+              La lectura con IA suele tardar <strong>10–30 s</strong> según tamaño del archivo y la red;
+              no cierre la pestaña. Un segundo clic no repetirá el envío.
+            </p>
           </CardContent>
         </Card>
       )}

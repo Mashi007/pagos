@@ -15,6 +15,7 @@ import logging
 import re
 import time
 from datetime import date
+from functools import lru_cache
 from typing import Any, Dict, Literal, Optional, Tuple
 
 GEMINI_RATE_LIMIT_RETRY_DELAY = 45
@@ -509,10 +510,18 @@ def _pil_image_to_rgb_for_jpeg(img):
     return img
 
 
-def _build_image_part(file_content: bytes, filename: str, mime: str):
+def _build_image_part(
+    file_content: bytes,
+    filename: str,
+    mime: str,
+    max_long_edge: Optional[int] = None,
+):
     """
     Convierte bytes en un Part de google.genai.
     Para imágenes: pasa por PIL para normalizar (JPEG). Para PDFs: bytes directos.
+
+    max_long_edge: si se indica (p. ej. escáner Infopagos), reduce la imagen manteniendo
+    proporción para acortar tiempo de red/API sin tocar PDFs.
     """
     from google.genai import types as _gtypes
     is_pdf = mime == "application/pdf" or filename.lower().endswith(".pdf")
@@ -529,6 +538,26 @@ def _build_image_part(file_content: bytes, filename: str, mime: str):
         except Exception:
             pass
         img = _pil_image_to_rgb_for_jpeg(img)
+        if max_long_edge and max_long_edge > 0:
+            w, h = img.size
+            longest = max(w, h)
+            if longest > max_long_edge:
+                scale = max_long_edge / float(longest)
+                nw = max(1, int(round(w * scale)))
+                nh = max(1, int(round(h * scale)))
+                try:
+                    resample = _PIL.Resampling.LANCZOS  # type: ignore[attr-defined]
+                except AttributeError:
+                    resample = _PIL.LANCZOS  # type: ignore[attr-defined]
+                img = img.resize((nw, nh), resample)
+                logger.debug(
+                    "[PAGOS_GMAIL] Gemini imagen reescalada para envío: %s %sx%s -> %sx%s",
+                    filename,
+                    w,
+                    h,
+                    nw,
+                    nh,
+                )
         buf = io.BytesIO()
         img.save(buf, format="JPEG", quality=92, optimize=True)
         logger.debug("[PAGOS_GMAIL] Gemini PIL→JPEG OK: %s", filename)
@@ -538,9 +567,21 @@ def _build_image_part(file_content: bytes, filename: str, mime: str):
         return _gtypes.Part.from_bytes(data=file_content, mime_type=mime)
 
 
-def _gemini_client(key: str):
+@lru_cache(maxsize=8)
+def _gemini_client_cached(api_key: str):
+    """Reutiliza Client por clave API (HTTP keep-alive / menos handshake TLS)."""
     from google import genai
-    return genai.Client(api_key=key)
+
+    return genai.Client(api_key=api_key)
+
+
+def _gemini_client(key: str):
+    k = (key or "").strip()
+    if not k:
+        from google import genai
+
+        return genai.Client(api_key="")
+    return _gemini_client_cached(k)
 
 
 def extract_payment_data(
@@ -1537,7 +1578,8 @@ def extract_infopagos_campos_desde_comprobante(
         from google.genai import types
 
         client = _gemini_client(key)
-        image_part = _build_image_part(image_bytes, filename, mime)
+        # Lado más largo acotado (solo escáner): menos bytes hacia Gemini; PDF sin cambios.
+        image_part = _build_image_part(image_bytes, filename, mime, max_long_edge=2400)
         _max_gemini_attempts = max(GEMINI_RATE_LIMIT_MAX_RETRIES, GEMINI_SERVER_ERROR_MAX_RETRIES) + 1
         last_error: Optional[Exception] = None
         for attempt in range(_max_gemini_attempts):
@@ -1545,7 +1587,11 @@ def extract_infopagos_campos_desde_comprobante(
                 response = client.models.generate_content(
                     model=model_name,
                     contents=[prompt, image_part],
-                    config=types.GenerateContentConfig(temperature=0.1),
+                    config=types.GenerateContentConfig(
+                        temperature=0.1,
+                        # Respuesta corta (JSON); evita respuestas largas innecesarias del modelo.
+                        max_output_tokens=2048,
+                    ),
                 )
                 text = (response.text or "").strip()
                 json_str = _find_json_object(text)

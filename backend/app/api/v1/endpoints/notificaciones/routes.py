@@ -21,7 +21,7 @@ from starlette.requests import Request
 
 from app.core.deps import require_admin
 from app.schemas.auth import UserResponse
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
 from app.core.database import SessionLocal, get_db
@@ -68,6 +68,37 @@ from app.services.notificaciones_exclusion_desistimiento import (
 router = APIRouter(dependencies=[Depends(require_admin)])
 
 
+def _solo_fecha_iso(val) -> Optional[str]:
+    """Serializa fecha_aprobacion u otras columnas fecha/datetime sin asumir tipo concreto del driver."""
+    if val is None:
+        return None
+    if isinstance(val, datetime):
+        return val.date().isoformat()
+    if isinstance(val, date):
+        return val.isoformat()
+    return None
+
+
+def _where_cache_diferencia_distinta_de_cero(dialect_name: str):
+    """
+    Filtro SQL portable: el acceso ORM cache['diferencia_dias'].astext puede fallar en runtime
+    según dialecto/columna JSON; usamos SQL explícito en PostgreSQL y SQLite.
+    """
+    if dialect_name == "postgresql":
+        return text(
+            "prestamos.fecha_entrega_q_aprobacion_cache IS NOT NULL "
+            "AND (prestamos.fecha_entrega_q_aprobacion_cache->>'diferencia_dias') IS NOT NULL "
+            "AND (prestamos.fecha_entrega_q_aprobacion_cache->>'diferencia_dias') <> '0'"
+        )
+    return text(
+        "prestamos.fecha_entrega_q_aprobacion_cache IS NOT NULL "
+        "AND COALESCE("
+        "CAST(json_extract(prestamos.fecha_entrega_q_aprobacion_cache, '$.diferencia_dias') AS INTEGER), "
+        "0"
+        ") <> 0"
+    )
+
+
 @router.get("/fecha-q-auditoria-total")
 def get_fecha_q_auditoria_total(
     db: Session = Depends(get_db),
@@ -92,16 +123,10 @@ def get_fecha_q_auditoria_total(
         count_stmt = count_stmt.where(Prestamo.cedula.ilike(f"%{cq}%"))
 
     if solo_con_diferencia:
-        stmt = stmt.where(
-            Prestamo.fecha_entrega_q_aprobacion_cache.isnot(None),
-            Prestamo.fecha_entrega_q_aprobacion_cache["diferencia_dias"].astext.isnot(None),
-            Prestamo.fecha_entrega_q_aprobacion_cache["diferencia_dias"].astext != "0",
-        )
-        count_stmt = count_stmt.where(
-            Prestamo.fecha_entrega_q_aprobacion_cache.isnot(None),
-            Prestamo.fecha_entrega_q_aprobacion_cache["diferencia_dias"].astext.isnot(None),
-            Prestamo.fecha_entrega_q_aprobacion_cache["diferencia_dias"].astext != "0",
-        )
+        dialect = (db.get_bind().dialect.name or "").lower()
+        diff_clause = _where_cache_diferencia_distinta_de_cero(dialect)
+        stmt = stmt.where(diff_clause)
+        count_stmt = count_stmt.where(diff_clause)
 
     total = int(db.scalar(count_stmt) or 0)
     rows = list(db.execute(stmt.offset(offset).limit(limit)).scalars().all() or [])
@@ -119,15 +144,9 @@ def get_fecha_q_auditoria_total(
                 "prestamo_id": int(p.id),
                 "cedula": (p.cedula or "").strip(),
                 "estado": (p.estado or "").strip(),
-                "fecha_aprobacion": p.fecha_aprobacion.date().isoformat()
-                if getattr(p, "fecha_aprobacion", None)
-                else None,
-                "fecha_requerimiento": p.fecha_requerimiento.isoformat()
-                if getattr(p, "fecha_requerimiento", None)
-                else None,
-                "fecha_base_calculo": p.fecha_base_calculo.isoformat()
-                if getattr(p, "fecha_base_calculo", None)
-                else None,
+                "fecha_aprobacion": _solo_fecha_iso(getattr(p, "fecha_aprobacion", None)),
+                "fecha_requerimiento": _solo_fecha_iso(getattr(p, "fecha_requerimiento", None)),
+                "fecha_base_calculo": _solo_fecha_iso(getattr(p, "fecha_base_calculo", None)),
                 "q_cache": cache,
                 "q_fecha_iso": _cache_field(cache, "fecha_entrega_column_q"),
                 "q_fecha_raw": _cache_field(cache, "fecha_entrega_column_q_raw"),
