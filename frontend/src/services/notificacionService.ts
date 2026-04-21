@@ -1307,6 +1307,8 @@ class NotificacionService {
     cedula: string
     prestamoId: number
     lote?: string | null
+    /** Obligatorio cuando el backend indica corrección con Q anterior a la BD: texto exacto CONFIRMO. */
+    confirmacionCorreccionFechaQAtras?: string | null
   }): Promise<{ ok: boolean; prestamo?: Record<string, unknown> }> {
     const body: Record<string, unknown> = {
       cedula: params.cedula.trim(),
@@ -1314,6 +1316,8 @@ class NotificacionService {
     }
     const lote = params.lote?.trim()
     if (lote) body.lote = lote
+    const conf = params.confirmacionCorreccionFechaQAtras?.trim()
+    if (conf) body.confirmacion_correccion_fecha_q_atras = conf
     return await apiClient.post(`${this.baseUrl}/aplicar-fecha-entrega-q-como-fecha-aprobacion`, body)
   }
 

@@ -1817,7 +1817,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                       Igual a 0 (misma fecha calendario; tolerancia como en el modal)
                     </option>
                     <option value="mayor_cero">
-                      Mayor que cero (Q posterior a la aprobación en BD)
+                      Mayor que cero (Q posterior a la BD e indicador Sí: se puede aplicar)
                     </option>
                     <option value="q_anterior_corregible">
                       Q anterior corregible (días &lt; 0 e indicador Sí: alinear BD con Q)

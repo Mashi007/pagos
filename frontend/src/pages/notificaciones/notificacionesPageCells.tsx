@@ -192,7 +192,8 @@ export function filaCumpleFiltroDiferenciaFechaGeneral(
   if (filtro === 'mayor_cero') {
     const d = cmp.diferencia_dias
     if (d == null || Number.isNaN(Number(d))) return false
-    return Number(d) > 0
+    // Solo filas donde realmente se puede «Sí» (p. ej. Q > BD pero Q < requerimiento → diff>0 y puede=false).
+    return Number(d) > 0 && puede
   }
   if (filtro === 'menor_cero') {
     const d = cmp.diferencia_dias
@@ -977,10 +978,9 @@ export function fmtDiferenciaDiasNotif(n: number | null | undefined): string {
 
 /**
  * Misma estructura visual que ABONOS vs cuotas: huella, aviso de sync, regla, indicador Sí/No,
- * tabla de comparación y pie. La fecha Q debe ser estrictamente posterior a fecha_aprobación
- * para «Sí» (paralelo a hoja &gt; sistema en ABONOS). El paso de confirmación llama al backend:
- * `PUT /prestamos/{id}` vía endpoint de notificaciones (misma persistencia y recálculo de
- * vencimientos que revisión manual al cambiar la fecha de aprobación).
+ * tabla de comparación y pie. «Sí» cuando la comparación en vivo permite aplicar (Q distinta de la
+ * BD y Q ≥ requerimiento si aplica). Si Q es anterior a la aprobación en BD, el paso de confirmación
+ * exige escribir CONFIRMO antes de guardar. El POST llama a `PUT /prestamos/{id}` (recálculo de cuotas).
  */
 export function CompararFechaEntregaQAprobacionCell({ row }: { row: ClienteRetrasadoItem }) {
   const queryClient = useQueryClient()
@@ -995,6 +995,7 @@ export function CompararFechaEntregaQAprobacionCell({ row }: { row: ClienteRetra
   const [loading, setLoading] = useState(false)
   const [applying, setApplying] = useState(false)
   const [data, setData] = useState<CompararFechaEntregaQvsAprobacionResponse | null>(null)
+  const [confirmacionCorreccionAtras, setConfirmacionCorreccionAtras] = useState('')
 
   const onDialogFechaOpenChange = useCallback((v: boolean) => {
     setOpen(v)
@@ -1002,6 +1003,7 @@ export function CompararFechaEntregaQAprobacionCell({ row }: { row: ClienteRetra
       setPaso('resumen')
       setData(null)
       setApplying(false)
+      setConfirmacionCorreccionAtras('')
     }
   }, [])
 
@@ -1019,6 +1021,7 @@ export function CompararFechaEntregaQAprobacionCell({ row }: { row: ClienteRetra
   const abrir = async (loteExplicito?: string | null) => {
     setOpen(true)
     setPaso('resumen')
+    setConfirmacionCorreccionAtras('')
     setLoading(true)
     setData(null)
     try {
@@ -1046,6 +1049,9 @@ export function CompararFechaEntregaQAprobacionCell({ row }: { row: ClienteRetra
         cedula: ced,
         prestamoId: pid,
         ...(loteA ? { lote: loteA } : {}),
+        ...(data.correccion_desde_q_anterior_bd
+          ? { confirmacionCorreccionFechaQAtras: confirmacionCorreccionAtras }
+          : {}),
       })
       toast.success(
         'Fecha de aprobación guardada en BD con la fecha de la columna Q. Si había cuotas en APROBADO/LIQUIDADO y cambió la base, se recalcularon vencimientos (misma regla que al editar en revisión manual).'
@@ -1082,6 +1088,12 @@ export function CompararFechaEntregaQAprobacionCell({ row }: { row: ClienteRetra
             : ''
         }`
       : 'Q'
+
+  const requiereConfirmaEscritaAtras =
+    paso === 'confirmar' && data?.correccion_desde_q_anterior_bd === true
+  const confirmaEscritaOk =
+    !requiereConfirmaEscritaAtras ||
+    confirmacionCorreccionAtras.trim().toUpperCase() === 'CONFIRMO'
 
   return (
     <>
@@ -1145,6 +1157,26 @@ export function CompararFechaEntregaQAprobacionCell({ row }: { row: ClienteRetra
                 Pulse «Confirmar y guardar» solo si la fecha Q es la fuente de verdad que desea en el
                 sistema.
               </p>
+              {requiereConfirmaEscritaAtras ? (
+                <div className="space-y-2 rounded-md border border-amber-300 bg-amber-50/90 p-3">
+                  <label
+                    htmlFor="confirma-correccion-fecha-q-atras"
+                    className="text-xs font-medium text-amber-950"
+                  >
+                    Confirmación obligatoria: escriba <span className="font-mono">CONFIRMO</span> para
+                    adelantar la fecha de aprobación en BD a la fecha Q (anterior a la fecha actual en
+                    sistema).
+                  </label>
+                  <Input
+                    id="confirma-correccion-fecha-q-atras"
+                    autoComplete="off"
+                    className="font-mono text-sm"
+                    value={confirmacionCorreccionAtras}
+                    onChange={e => setConfirmacionCorreccionAtras(e.target.value)}
+                    placeholder="CONFIRMO"
+                  />
+                </div>
+              ) : null}
             </div>
           ) : data ? (
             <div className="space-y-3 text-sm">
@@ -1231,6 +1263,7 @@ export function CompararFechaEntregaQAprobacionCell({ row }: { row: ClienteRetra
                   }
                   onClick={() => {
                     if (!puedeOperar || !esAdmin || loading) return
+                    setConfirmacionCorreccionAtras('')
                     setPaso('confirmar')
                   }}
                   className={`${pillBase} ${
@@ -1410,6 +1443,7 @@ export function CompararFechaEntregaQAprobacionCell({ row }: { row: ClienteRetra
                   variant="outline"
                   disabled={applying}
                   onClick={() => {
+                    setConfirmacionCorreccionAtras('')
                     setPaso('resumen')
                   }}
                 >
@@ -1417,7 +1451,12 @@ export function CompararFechaEntregaQAprobacionCell({ row }: { row: ClienteRetra
                 </Button>
                 <Button
                   type="button"
-                  disabled={applying || !esAdmin}
+                  disabled={applying || !esAdmin || !confirmaEscritaOk}
+                  title={
+                    !confirmaEscritaOk
+                      ? 'Escriba CONFIRMO en el campo de confirmación (corrección con Q anterior a la BD).'
+                      : undefined
+                  }
                   onClick={() => {
                     void aplicarFechaQComoAprobacion()
                   }}

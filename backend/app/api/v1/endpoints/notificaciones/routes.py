@@ -2260,6 +2260,8 @@ def post_aplicar_fecha_entrega_q_como_fecha_aprobacion(
     - Si Q es posterior a la aprobación en BD, aplica como antes (alarga la base).
     - La fecha Q debe seguir siendo >= `fecha_requerimiento` cuando esta existe (validación en POST).
     - No opera sobre préstamos en desistimiento (bloqueo del PUT estándar).
+    - Si la comparación indica corrección hacia atrás (Q anterior a la aprobación en BD), el cuerpo
+      debe incluir `confirmacion_correccion_fecha_q_atras` con el texto exacto **CONFIRMO**.
 
     Tras el PUT, intenta refrescar `prestamos.fecha_entrega_q_aprobacion_cache` con la comparación
     actualizada (fallo del caché no revierte el préstamo ya confirmado).
@@ -2305,6 +2307,21 @@ def post_aplicar_fecha_entrega_q_como_fecha_aprobacion(
                 "No se puede confirmar: la columna Q debe ser distinta de la aprobación en BD y, "
                 "si Q es anterior a esa aprobación, debe ser >= fecha de requerimiento del préstamo. "
                 "Revise la hoja, el lote o use revisión manual."
+            ),
+        )
+
+    correccion_atras = bool(cmp.get("correccion_desde_q_anterior_bd"))
+    conf_atras = str(
+        payload.get("confirmacion_correccion_fecha_q_atras")
+        or payload.get("confirmacionCorreccionFechaQAtras")
+        or ""
+    ).strip().upper()
+    if correccion_atras and conf_atras != "CONFIRMO":
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "La fecha Q es anterior a la aprobación en BD: para aplicar debe enviar "
+                "confirmacion_correccion_fecha_q_atras con el valor exacto CONFIRMO (doble confirmación)."
             ),
         )
 

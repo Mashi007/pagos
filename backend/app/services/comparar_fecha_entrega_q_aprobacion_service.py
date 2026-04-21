@@ -331,7 +331,8 @@ def comparar_fecha_entrega_column_q_vs_aprobacion(
     tolerancia_dias = 0
 
     logger.info(
-        "[comparar_fecha_q] cedula=%s prestamo_id=%s lote=%s filas=%s fecha_q=%s fecha_ap=%s diff_dias=%s",
+        "[comparar_fecha_q] cedula=%s prestamo_id=%s lote=%s filas=%s fecha_q=%s fecha_ap=%s "
+        "diff_dias=%s puede_aplicar=%s correccion_q_anterior_bd=%s",
         cedula_in,
         prestamo_id,
         lote_filtro,
@@ -339,6 +340,13 @@ def comparar_fecha_entrega_column_q_vs_aprobacion(
         fecha_q,
         fecha_ap,
         diferencia_dias,
+        puede_aplicar,
+        bool(
+            puede_aplicar
+            and fecha_q is not None
+            and fecha_ap is not None
+            and fecha_q < fecha_ap
+        ),
     )
 
     out: Dict[str, Any] = {
