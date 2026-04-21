@@ -1865,91 +1865,112 @@ def aprobar_pago_reportado(
     usuario_email = current_user.get("email") if isinstance(current_user, dict) else getattr(current_user, "email", None)
     if pr.estado == "importado":
         return {"ok": True, "mensaje": "Ya importado a la tabla de pagos."}
+
+    completar_solo_recibo = False
+    registrar_historial_aprobacion = True
     if pr.estado == "aprobado":
         try:
             _crear_pago_desde_reportado_y_aplicar_cuotas(db, pr, usuario_email)
             db.commit()
         except HTTPException:
             pass
-        return {"ok": True, "mensaje": "Ya estaba aprobado."}
+        db.refresh(pr)
+        if getattr(pr, "recibo_pdf", None):
+            return {"ok": True, "mensaje": "Ya estaba aprobado."}
+        if primer_pago_id_si_existe_para_claves_reportado(db, pr) is None:
+            return {"ok": True, "mensaje": "Ya estaba aprobado."}
+        logger.info(
+            "[COBROS] Aprobar id=%s ref=%s: aprobado y pago en cartera, sin PDF persistido; completando recibo/correo.",
+            pr.id,
+            pr.referencia_interna,
+        )
+        completar_solo_recibo = True
+        registrar_historial_aprobacion = False
+
     if pr.estado == "rechazado":
         raise HTTPException(status_code=400, detail="No se puede aprobar un pago rechazado.")
-    if pr.estado in ("pendiente", "en_revision"):
-        _rechazar_aprobacion_si_documento_ya_en_pagos(db, pr)
-    num_key = _numero_operacion_canonico(getattr(pr, "numero_operacion", None))
-    if num_key:
-        _lock_numero_operacion_canonico(db, num_key)
-        hermanos = _duplicados_reportados_por_numero_operacion(
-            db, numero_key=num_key, excluir_id=pr.id
-        )
-        if hermanos:
-            first_id = min([pr.id] + [rid for rid, _rref, _st in hermanos])
-            if int(first_id) != int(pr.id):
-                raise HTTPException(
-                    status_code=409,
-                    detail=(
-                        "Duplicado por número de operación: este reporte no es el primero registrado. "
-                        f"Gestione primero el reporte ID {first_id}."
-                    ),
-                )
-    estado_anterior = pr.estado
-    pr.estado = "aprobado"
-    pr.motivo_rechazo = None
-    pr.usuario_gestion_id = current_user.get("id") if isinstance(current_user, dict) else getattr(current_user, "id", None)
 
-    try:
-        fase_db_t0 = time.perf_counter()
-        _crear_pago_desde_reportado_y_aplicar_cuotas(db, pr, usuario_email)
-        # Doble envío del mismo comprobante (segundos): tras aprobar el primero, eliminar hermanos.
+    estado_anterior: Optional[str] = None
+    if not completar_solo_recibo:
+        if pr.estado in ("pendiente", "en_revision"):
+            _rechazar_aprobacion_si_documento_ya_en_pagos(db, pr)
         num_key = _numero_operacion_canonico(getattr(pr, "numero_operacion", None))
         if num_key:
-            dup_rows = _duplicados_reportados_por_numero_operacion(
+            _lock_numero_operacion_canonico(db, num_key)
+            hermanos = _duplicados_reportados_por_numero_operacion(
                 db, numero_key=num_key, excluir_id=pr.id
             )
-            n_dup, dup_refs = _marcar_reportados_como_eliminado_duplicado(
-                db,
-                dup_rows=dup_rows,
-                master_id=pr.id,
-                master_ref=str(pr.institucion_financiera or ""),
-                num_key=num_key,
-                usuario_email=usuario_email,
-                via="aprobar_directo",
-            )
-            if n_dup > 0:
-                logger.info(
-                    "[COBROS] Aprobado id=%s ref=%s: marcados %s duplicados por numero_operacion=%s refs=%s",
-                    pr.id,
-                    pr.referencia_interna,
-                    n_dup,
-                    num_key,
-                    ", ".join([x for x in dup_refs if x])[:300],
+            if hermanos:
+                first_id = min([pr.id] + [rid for rid, _rref, _st in hermanos])
+                if int(first_id) != int(pr.id):
+                    raise HTTPException(
+                        status_code=409,
+                        detail=(
+                            "Duplicado por número de operación: este reporte no es el primero registrado. "
+                            f"Gestione primero el reporte ID {first_id}."
+                        ),
+                    )
+        estado_anterior = pr.estado
+        pr.estado = "aprobado"
+        pr.motivo_rechazo = None
+        pr.usuario_gestion_id = current_user.get("id") if isinstance(current_user, dict) else getattr(current_user, "id", None)
+
+        try:
+            fase_db_t0 = time.perf_counter()
+            _crear_pago_desde_reportado_y_aplicar_cuotas(db, pr, usuario_email)
+            # Doble envío del mismo comprobante (segundos): tras aprobar el primero, eliminar hermanos.
+            num_key = _numero_operacion_canonico(getattr(pr, "numero_operacion", None))
+            if num_key:
+                dup_rows = _duplicados_reportados_por_numero_operacion(
+                    db, numero_key=num_key, excluir_id=pr.id
                 )
-        db.commit()
-        _log_fase_aprobacion(
-            flujo="aprobar_directo",
-            fase="db_aprobacion_commit",
-            pago_id=pago_id,
-            referencia=str(pr.referencia_interna or ""),
-            start_ts=fase_db_t0,
-        )
-    except HTTPException:
-        db.rollback()
-        raise
-    except (ProgrammingError, OperationalError) as e:
-        db.rollback()
-        logger.exception("[COBROS] Aprobar ref=%s: error de BD (¿migración pendiente?): %s", pr.referencia_interna, e)
-        raise HTTPException(
-            status_code=503,
-            detail=(
-                "No se pudo guardar la aprobación. Suele deberse a una migración pendiente en el servidor "
-                "(migración o esquema de BD pendiente). Ejecute: alembic upgrade head"
-            ),
-        )
-    except Exception as e:
-        db.rollback()
-        logger.exception("[COBROS] Aprobar ref=%s: error al crear pago o aplicar a cuotas: %s", pr.referencia_interna, e)
-        raise HTTPException(status_code=500, detail=f"Error al aprobar: {e!s}")
-    db.refresh(pr)
+                n_dup, dup_refs = _marcar_reportados_como_eliminado_duplicado(
+                    db,
+                    dup_rows=dup_rows,
+                    master_id=pr.id,
+                    master_ref=str(pr.institucion_financiera or ""),
+                    num_key=num_key,
+                    usuario_email=usuario_email,
+                    via="aprobar_directo",
+                )
+                if n_dup > 0:
+                    logger.info(
+                        "[COBROS] Aprobado id=%s ref=%s: marcados %s duplicados por numero_operacion=%s refs=%s",
+                        pr.id,
+                        pr.referencia_interna,
+                        n_dup,
+                        num_key,
+                        ", ".join([x for x in dup_refs if x])[:300],
+                    )
+            db.commit()
+            _log_fase_aprobacion(
+                flujo="aprobar_directo",
+                fase="db_aprobacion_commit",
+                pago_id=pago_id,
+                referencia=str(pr.referencia_interna or ""),
+                start_ts=fase_db_t0,
+            )
+        except HTTPException:
+            db.rollback()
+            raise
+        except (ProgrammingError, OperationalError) as e:
+            db.rollback()
+            logger.exception("[COBROS] Aprobar ref=%s: error de BD (¿migración pendiente?): %s", pr.referencia_interna, e)
+            raise HTTPException(
+                status_code=503,
+                detail=(
+                    "No se pudo guardar la aprobación. Suele deberse a una migración pendiente en el servidor "
+                    "(migración o esquema de BD pendiente). Ejecute: alembic upgrade head"
+                ),
+            )
+        except Exception as e:
+            db.rollback()
+            logger.exception("[COBROS] Aprobar ref=%s: error al crear pago o aplicar a cuotas: %s", pr.referencia_interna, e)
+            raise HTTPException(status_code=500, detail=f"Error al aprobar: {e!s}")
+        db.refresh(pr)
+    else:
+        estado_anterior = "aprobado"
+        db.refresh(pr)
     try:
         fase_pdf_t0 = time.perf_counter()
         pdf_bytes = generar_recibo_pdf_desde_pago_reportado(db, pr)
@@ -2038,7 +2059,8 @@ def aprobar_pago_reportado(
             "Pago aprobado. El envío de correo para Cobros está desactivado en Configuración > Email; "
             "no se envió el recibo. Actívelo o use 'Enviar recibo por correo' cuando lo active."
         )
-    _registrar_historial(db, pago_id, estado_anterior, "aprobado", usuario_email, None)
+    if registrar_historial_aprobacion and estado_anterior is not None:
+        _registrar_historial(db, pago_id, estado_anterior, "aprobado", usuario_email, None)
     db.commit()
     _log_fase_aprobacion(
         flujo="aprobar_directo",

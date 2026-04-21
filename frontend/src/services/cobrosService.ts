@@ -802,7 +802,8 @@ export async function listPagosReportadosConKpis(params: {
 
   if (params.incluir_exportados) q.set('incluir_exportados', 'true')
 
-  q.set('_rq', String(Date.now()))
+  // Sin `_rq`: el listado va con Bearer y no debe cachearse en CDN; `_rq` impedía deduplicar
+  // peticiones GET concurrentes idénticas en apiClient (misma pantalla / doble montaje).
 
   const url = `${BASE_COBROS}/pagos-reportados/listado-y-kpis?${q}`
 

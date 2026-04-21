@@ -528,7 +528,8 @@ class ApiClient {
     return (
       url.includes('/api/v1/notificaciones/clientes-retrasados') ||
       url.includes('/api/v1/notificaciones/cuotas-pendiente-2-dias-antes') ||
-      url.includes('/api/v1/notificaciones-prejudicial')
+      url.includes('/api/v1/notificaciones-prejudicial') ||
+      url.includes('/api/v1/cobros/pagos-reportados/listado-y-kpis')
     )
   }
 
@@ -923,7 +924,7 @@ class ApiClient {
     // Cobros listado+KPIs: muchas filas + validadores por lote pueden superar 60s en Render frío.
     const isListadoKpisPagosReportados = url.includes('listado-y-kpis')
 
-    const listadoKpisPagosReportadosTimeout = 120000
+    const listadoKpisPagosReportadosTimeout = 180000
 
     // Sesión al arranque: Render frío + CORS preflight puede dejar el GET por detrás de un timeout corto.
     const isAuthMe = url.includes('/auth/me')
