@@ -4,7 +4,7 @@ Lista de préstamos con detalles completos, edición de cliente/préstamo/pagos,
 Incluye validaciones y logging para garantizar integridad de datos.
 """
 import logging
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Any, List, Optional
 from fastapi import APIRouter, Depends, Query, HTTPException, Body
 from sqlalchemy import select, func, and_, case, literal_column, text
@@ -778,13 +778,8 @@ def _mutar_prestamo_desde_update_data_revision(
         cambios_dict["nombres"] = (prestamo.nombres, update_data.nombres.strip())
         prestamo.nombres = update_data.nombres.strip()
 
-    if update_data.fecha_requerimiento is not None:
-        try:
-            fecha_req = datetime.strptime(update_data.fecha_requerimiento, "%Y-%m-%d").date()
-            cambios_dict["fecha_requerimiento"] = (str(prestamo.fecha_requerimiento), str(fecha_req))
-            prestamo.fecha_requerimiento = fecha_req
-        except ValueError:
-            pass
+    # Bloqueado cálculo manual: fecha_requerimiento se deriva siempre desde fecha_aprobacion.
+    # Si viene en el body, se ignora de forma explícita en revisión manual.
 
     if update_data.modalidad_pago is not None and update_data.modalidad_pago.strip():
         cambios_dict["modalidad_pago"] = (
@@ -822,6 +817,12 @@ def _mutar_prestamo_desde_update_data_revision(
             fecha_base_nueva = fecha_ap.date()
             cambios_dict["fecha_base_calculo"] = (str(prestamo.fecha_base_calculo), str(fecha_base_nueva))
             prestamo.fecha_base_calculo = fecha_base_nueva
+            fecha_req_nueva = fecha_base_nueva - timedelta(days=1)
+            cambios_dict["fecha_requerimiento"] = (
+                str(prestamo.fecha_requerimiento),
+                str(fecha_req_nueva),
+            )
+            prestamo.fecha_requerimiento = fecha_req_nueva
         except ValueError as exc:
             raise HTTPException(
                 status_code=400,

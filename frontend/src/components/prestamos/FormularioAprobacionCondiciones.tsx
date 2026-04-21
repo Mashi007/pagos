@@ -55,10 +55,6 @@ export function FormularioAprobacionCondiciones({
 
   const [sugerencias, setSugerencias] = useState<any>(null)
 
-  const fechaRequerimientoYmd = prestamo.fecha_requerimiento
-    ? new Date(prestamo.fecha_requerimiento).toISOString().split('T')[0]
-    : undefined
-
   const aplicarCondiciones = useAplicarCondicionesAprobacion()
 
   // Obtener sugerencias desde la última evaluación de riesgo
@@ -90,17 +86,6 @@ export function FormularioAprobacionCondiciones({
       console.error('Validacion fallida: fecha_aprobacion vacia')
 
       toast.error('Debe seleccionar una fecha de desembolso')
-
-      return
-    }
-
-    if (
-      fechaRequerimientoYmd &&
-      condicionesAprobacion.fecha_aprobacion < fechaRequerimientoYmd
-    ) {
-      toast.error(
-        `La fecha de aprobacion debe ser igual o posterior a la fecha de requerimiento (${formatDate(fechaRequerimientoYmd)})`
-      )
 
       return
     }
@@ -326,14 +311,12 @@ export function FormularioAprobacionCondiciones({
                             })
                           }
                           className="pl-10"
-                          min={fechaRequerimientoYmd}
                         />
                       </div>
 
                       <p className="text-xs text-gray-500">
                         Misma fecha se guarda como base de cálculo de la
-                        amortización. El minimo permitido es la fecha de
-                        requerimiento del préstamo (no la fecha del sistema).
+                        amortización.
                       </p>
                     </div>
                   </div>

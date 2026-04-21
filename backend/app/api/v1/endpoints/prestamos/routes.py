@@ -2161,31 +2161,33 @@ def _ajustar_req_si_mayor_que_aprobacion(
     usuario_id: int,
 ) -> None:
     """
-    Si fecha_requerimiento > dia de fecha_aprobacion, iguala requerimiento a ese dia.
-    Deja rastro en observaciones y en tabla auditoria.
+    Regla única del sistema:
+    fecha_requerimiento se calcula automáticamente como (fecha_aprobacion - 1 día).
+    Deja rastro en observaciones y auditoría si hubo cambio.
     """
-    if not row.fecha_aprobacion or not row.fecha_requerimiento:
+    if not row.fecha_aprobacion:
         return
     ap_date = (
         row.fecha_aprobacion.date()
         if hasattr(row.fecha_aprobacion, "date")
         else row.fecha_aprobacion
     )
+    req_new = ap_date - timedelta(days=1)
     req_date = row.fecha_requerimiento
-    if req_date <= ap_date:
+    if req_date == req_new:
         return
     req_old = req_date
-    row.fecha_requerimiento = ap_date
+    row.fecha_requerimiento = req_new
     logger.info(
-        "[%s] Auto-ajuste fecha_requerimiento %s -> %s (fecha_aprobacion %s)",
+        "[%s] Auto-ajuste fecha_requerimiento %s -> %s (fecha_aprobacion %s, regla -1 día)",
         origen,
         req_old,
-        ap_date,
+        req_new,
         ap_date,
     )
     note = (
-        f"\n[AUTO {origen}] fecha_requerimiento ajustada de {req_old} a {ap_date} "
-        f"(alineada con fecha_aprobacion)."
+        f"\n[AUTO {origen}] fecha_requerimiento ajustada de {req_old} a {req_new} "
+        f"(regla: fecha_aprobacion - 1 día)."
     )
     prev_obs = (row.observaciones or "").strip()
     row.observaciones = (prev_obs + note).strip() if prev_obs else note.strip()
@@ -2196,8 +2198,8 @@ def _ajustar_req_si_mayor_que_aprobacion(
             entidad="prestamos",
             entidad_id=getattr(row, "id", None),
             detalles=(
-                f"{origen}: fecha_requerimiento {req_old} -> {ap_date} "
-                f"(coherencia con fecha_aprobacion)."
+                f"{origen}: fecha_requerimiento {req_old} -> {req_new} "
+                f"(regla fecha_aprobacion - 1 día)."
             ),
             exito=True,
         )
@@ -3478,26 +3480,16 @@ def aplicar_condiciones_aprobacion(
 
     p.estado = "APROBADO"
 
-    # fecha_aprobacion: solo payload explicito o la ya guardada; nunca base, requerimiento, registro ni hoy.
+    # fecha_aprobacion: solo payload explicito o la ya guardada; nunca base, registro ni hoy.
+    # Regla fija: fecha_requerimiento = fecha_aprobacion - 1 día (sin cálculo manual).
     if payload.fecha_aprobacion is not None:
 
         fecha_calendario = payload.fecha_aprobacion
 
-        fecha_req = _fecha_requerimiento_date(p)
-
-        if fecha_req and fecha_calendario < fecha_req:
-
-            raise HTTPException(
-
-                status_code=400,
-
-                detail=f"La fecha de aprobación ({fecha_calendario}) debe ser igual o posterior a la fecha de requerimiento ({fecha_req}).",
-
-            )
-
         p.fecha_base_calculo = fecha_calendario
 
         p.fecha_aprobacion = datetime.combine(fecha_calendario, datetime.min.time())
+        p.fecha_requerimiento = fecha_calendario - timedelta(days=1)
 
         p.fecha_registro = fecha_registro_naive_un_dia_antes_aprobacion(fecha_calendario)
 
@@ -3674,23 +3666,12 @@ def asignar_fecha_aprobacion(prestamo_id: int, payload: AsignarFechaAprobacionBo
 
         )
 
-    # Coherencia: la fecha de aprobación debe ser >= fecha de requerimiento
-
     fecha_ap_date = payload.fecha_aprobacion if isinstance(payload.fecha_aprobacion, date) else (payload.fecha_aprobacion.date() if hasattr(payload.fecha_aprobacion, "date") and callable(getattr(payload.fecha_aprobacion, "date", None)) else None)
-
-    fecha_req = _fecha_requerimiento_date(p)
-
-    if fecha_req and fecha_ap_date and fecha_ap_date < fecha_req:
-
-        raise HTTPException(
-
-            status_code=400,
-
-            detail=f"La fecha de aprobación ({fecha_ap_date}) debe ser igual o posterior a la fecha de requerimiento ({fecha_req}).",
-
-        )
+    req_auto = (fecha_ap_date - timedelta(days=1)) if fecha_ap_date else None
 
     p.fecha_aprobacion = datetime.combine(payload.fecha_aprobacion, datetime.min.time()) if isinstance(payload.fecha_aprobacion, date) else payload.fecha_aprobacion
+    if req_auto is not None:
+        p.fecha_requerimiento = req_auto
 
     # fecha_base_calculo siempre igual a fecha_aprobacion
     p.fecha_base_calculo = fecha_ap_date
@@ -3802,23 +3783,6 @@ def aprobar_manual(
         fecha_ap = fecha_ap.date() if callable(getattr(fecha_ap, "date", None)) else fecha_ap
 
 
-
-    # Coherencia: la fecha de aprobación debe ser >= fecha de requerimiento
-
-    fecha_req = _fecha_requerimiento_date(p)
-
-    if fecha_req and fecha_ap and fecha_ap < fecha_req:
-
-        raise HTTPException(
-
-            status_code=400,
-
-            detail=f"La fecha de aprobación ({fecha_ap}) debe ser igual o posterior a la fecha de requerimiento ({fecha_req}).",
-
-        )
-
-
-
     try:
 
         if payload.total_financiamiento is not None:
@@ -3850,6 +3814,7 @@ def aprobar_manual(
         p.fecha_aprobacion = datetime.combine(fecha_ap, datetime.min.time())
 
         p.fecha_base_calculo = fecha_ap
+        p.fecha_requerimiento = fecha_ap - timedelta(days=1)
 
         p.fecha_registro = fecha_registro_naive_un_dia_antes_aprobacion(fecha_ap)
 
@@ -4575,14 +4540,12 @@ def crear_prestamo_servicio_interno(
 
     estado_inicial = "APROBADO"
 
-    # fecha_registro: día calendario anterior a fecha_aprobacion (regla de negocio; ver fechas_prestamo_coherencia).
+    # Reglas de negocio:
+    # - fecha_aprobacion manda.
+    # - fecha_requerimiento se fuerza automáticamente a (fecha_aprobacion - 1 día).
+    # - fecha_registro = (fecha_aprobacion - 1 día) a medianoche naive.
     fa_d = payload.fecha_aprobacion
-    req_d = payload.fecha_requerimiento
-    if req_d and fa_d < req_d:
-        raise HTTPException(
-            status_code=400,
-            detail=f"La fecha de aprobación ({fa_d}) debe ser igual o posterior a la fecha de requerimiento ({req_d}).",
-        )
+    req_d = fa_d - timedelta(days=1)
     fecha_aprob = datetime.combine(fa_d, time.min)
 
     analista_nombre, analista_row_id = _resolver_analista_para_prestamo(
@@ -4599,7 +4562,7 @@ def crear_prestamo_servicio_interno(
 
         total_financiamiento=payload.total_financiamiento,
 
-        fecha_requerimiento=payload.fecha_requerimiento,
+        fecha_requerimiento=req_d,
 
         modalidad_pago=payload.modalidad_pago or "MENSUAL",
 
@@ -4831,8 +4794,13 @@ def update_prestamo(
         row.numero_cuotas = payload.numero_cuotas
 
     if payload.fecha_requerimiento is not None:
-
-        row.fecha_requerimiento = payload.fecha_requerimiento
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "fecha_requerimiento no se edita manualmente: el sistema la calcula "
+                "automáticamente como fecha_aprobacion - 1 día."
+            ),
+        )
 
     if payload.fecha_aprobacion is not None:
 
@@ -4847,6 +4815,7 @@ def update_prestamo(
 
         row.fecha_base_calculo = fa_date
         row.fecha_registro = fecha_registro_naive_un_dia_antes_aprobacion(fa_date)
+        row.fecha_requerimiento = fa_date - timedelta(days=1)
 
     if payload.cuota_periodo is not None:
 
@@ -5453,29 +5422,16 @@ async def upload_prestamos_excel(
 
                 concesionario = str(concesionario_raw or "").strip() if concesionario_raw else None
 
-                fecha_requerimiento_x = _excel_cell_a_date_bulk(fecha_req_raw)
-
                 fecha_aprobacion_x = _excel_cell_a_date_bulk(fecha_aprob_raw)
-
-                if fecha_requerimiento_x is None:
-
-                    errores.append("Fecha requerimiento es requerida (columna H, formato fecha)")
 
                 if fecha_aprobacion_x is None:
 
                     errores.append("Fecha aprobacion/desembolso es requerida (columna I, formato fecha)")
-
-                if (
-
-                    fecha_requerimiento_x is not None
-
-                    and fecha_aprobacion_x is not None
-
-                    and fecha_aprobacion_x < fecha_requerimiento_x
-
-                ):
-
-                    errores.append("Fecha aprobacion debe ser >= fecha requerimiento")
+                fecha_requerimiento_x = (
+                    fecha_aprobacion_x - timedelta(days=1)
+                    if fecha_aprobacion_x is not None
+                    else None
+                )
 
                 
 

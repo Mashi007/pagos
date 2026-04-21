@@ -161,6 +161,14 @@ function normalizarFechaInput(valor: string): string {
   return s
 }
 
+function restarUnDiaYmd(ymd: string): string {
+  const [y, m, d] = ymd.split('-').map(Number)
+  if (!y || !m || !d) return ''
+  const dt = new Date(Date.UTC(y, m - 1, d))
+  dt.setUTCDate(dt.getUTCDate() - 1)
+  return dt.toISOString().slice(0, 10)
+}
+
 /** Colapsa espacios para comparar modelo guardado vs catalogo. */
 function normalizarTextoModelo(s: string): string {
   return String(s || '')
@@ -634,30 +642,13 @@ export function CrearPrestamoForm({
       errors.push('La modalidad de pago es requerida')
     }
 
-    // Validar Fecha de Requerimiento
-
-    if (
-      !formData.fecha_requerimiento ||
-      formData.fecha_requerimiento.trim() === ''
-    ) {
-      errors.push('La fecha de requerimiento es requerida')
-    }
-
-    const fechaReqTrim = String(formData.fecha_requerimiento ?? '').trim()
+    // Validar Fecha de Aprobación / Desembolso
     const fechaAprobTrim = String(formData.fecha_aprobacion ?? '').trim()
 
     if (!prestamo) {
       if (!fechaAprobTrim) {
         errors.push(
-          'La fecha de aprobación / desembolso es obligatoria (puede coincidir con la fecha de requerimiento)'
-        )
-      } else if (
-        fechaReqTrim !== '' &&
-        fechaAprobTrim !== '' &&
-        fechaAprobTrim < fechaReqTrim
-      ) {
-        errors.push(
-          'La fecha de aprobación debe ser igual o posterior a la fecha de requerimiento'
+          'La fecha de aprobación / desembolso es obligatoria'
         )
       }
     }
@@ -767,17 +758,6 @@ export function CrearPrestamoForm({
         ? String(formData.fecha_aprobacion).trim()
         : ''
 
-      const fechaReq = formData.fecha_requerimiento
-        ? String(formData.fecha_requerimiento).trim()
-        : ''
-
-      // Fallback importante: si estamos editando y fecha_requerimiento está vacía en formData,
-      // usar el valor del prestamo anterior para evitar que el backend use una valor inconsistente
-      const fechaReqFinal =
-        !fechaReq && prestamo?.fecha_requerimiento
-          ? fechaInputYmd(prestamo.fecha_requerimiento)
-          : fechaReq
-
       const prestamoData: Record<string, unknown> = {
         ...formData,
 
@@ -824,26 +804,15 @@ export function CrearPrestamoForm({
         delete prestamoData.estado
       }
 
-      // Formatear fechas como ISO completo (datetime)
-      // fecha_requerimiento: solo date (YYYY-MM-DD) porque en BD es Date
-      // IMPORTANTE: Para ediciones, SIEMPRE enviar fecha_requerimiento para evitar
-      // que el backend use un valor antiguo incompatible con la nueva fecha_aprobacion
-      if (fechaReqFinal !== '') {
-        prestamoData.fecha_requerimiento = fechaReqFinal // Sin hora, solo YYYY-MM-DD
-      } else if (!prestamo) {
-        // Solo para nuevos préstamos, permitir omitir si está vacía
-        delete prestamoData.fecha_requerimiento
-      }
-      // Si es edición (prestamo existe) y fechaReqFinal sigue vacío, NO incluir
-      // (pero esto no debería pasar con el fallback anterior)
-
       // fecha_aprobacion: datetime completo porque en BD es DateTime
       // fecha_base_calculo siempre igual a fecha_aprobacion
       if (fechaApr !== '') {
         prestamoData.fecha_aprobacion = `${fechaApr}T00:00:00`
         prestamoData.fecha_base_calculo = fechaApr
+        prestamoData.fecha_requerimiento = restarUnDiaYmd(fechaApr)
       } else {
         delete prestamoData.fecha_aprobacion
+        delete prestamoData.fecha_requerimiento
       }
 
       if (import.meta.env.DEV) {
@@ -852,8 +821,6 @@ export function CrearPrestamoForm({
           'formData.fecha_aprobacion': formData.fecha_aprobacion,
         })
         console.log('[CrearPrestamoForm] Fechas procesadas:', {
-          fechaReq,
-          fechaReqFinal,
           fechaApr,
           fecha_requerimiento: prestamoData.fecha_requerimiento,
           fecha_aprobacion: prestamoData.fecha_aprobacion,
@@ -863,20 +830,6 @@ export function CrearPrestamoForm({
           'prestamo?.fecha_requerimiento': prestamo?.fecha_requerimiento,
           'prestamo?.fecha_aprobacion': prestamo?.fecha_aprobacion,
         })
-      }
-
-      // Validación importante: si editamos y no incluimos fecha_requerimiento, el backend usará el valor antiguo
-      // que podría ser incompatible con la nueva fecha_aprobacion
-      if (
-        prestamo &&
-        prestamoData.fecha_aprobacion &&
-        !prestamoData.fecha_requerimiento &&
-        prestamo.fecha_requerimiento
-      ) {
-        console.warn(
-          '[CrearPrestamoForm] ADVERTENCIA: Se cambia fecha_aprobacion sin enviar fecha_requerimiento. El backend validará contra el valor antiguo:',
-          prestamo.fecha_requerimiento
-        )
       }
 
       if (prestamo) {
@@ -1555,18 +1508,17 @@ export function CrearPrestamoForm({
 
                     <Input
                       type="date"
-                      value={formData.fecha_requerimiento}
-                      onChange={e => {
-                        // Normalizar fecha al formato YYYY-MM-DD
-                        const valor = e.target.value
-                        const fechaNormalizada = normalizarFechaInput(valor)
-                        setFormData({
-                          ...formData,
-                          fecha_requerimiento: fechaNormalizada,
-                        })
-                      }}
-                      disabled={isReadOnly}
+                      value={
+                        formData.fecha_aprobacion
+                          ? restarUnDiaYmd(String(formData.fecha_aprobacion))
+                          : formData.fecha_requerimiento
+                      }
+                      disabled
                     />
+                    <p className="mt-1 text-xs text-gray-500">
+                      Se calcula automáticamente como 1 día antes de la fecha de
+                      aprobación.
+                    </p>
                   </div>
 
                   <div>
@@ -1581,12 +1533,6 @@ export function CrearPrestamoForm({
                       <Input
                         type="date"
                         value={formData.fecha_aprobacion || ''}
-                        min={
-                          formData.fecha_requerimiento &&
-                          String(formData.fecha_requerimiento).trim() !== ''
-                            ? formData.fecha_requerimiento
-                            : undefined
-                        }
                         onChange={e => {
                           const valor = e.target.value
                           const fechaNormalizada = normalizarFechaInput(valor)
@@ -1594,6 +1540,9 @@ export function CrearPrestamoForm({
                             ...formData,
                             fecha_aprobacion: fechaNormalizada || undefined,
                             fecha_base_calculo: fechaNormalizada || undefined,
+                            fecha_requerimiento: fechaNormalizada
+                              ? restarUnDiaYmd(fechaNormalizada)
+                              : '',
                           })
                         }}
                         disabled={isReadOnly}

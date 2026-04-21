@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 import re
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -112,8 +112,8 @@ def _q_contiene_fecha_ambigua_dd_mm(q_val: str) -> bool:
 
 def _fechas_desde_col_q(q_val: str) -> Optional[Tuple[date, date]]:
     """
-    Una celda Q: misma fecha para requerimiento y aprobación.
-    Dos fechas separadas por '|', ';' o espacio doble: primera = requerimiento, segunda = aprobación.
+    Parser histórico de Q (mantiene compatibilidad de formatos).
+    Regla vigente de negocio se aplica después: requerimiento = aprobación - 1 día.
     """
     raw = (q_val or "").strip()
     if not raw:
@@ -131,6 +131,14 @@ def _fechas_desde_col_q(q_val: str) -> Optional[Tuple[date, date]]:
     if d:
         return (d, d)
     return None
+
+
+def _fecha_requerimiento_desde_aprobacion(ap_d: date) -> date:
+    """
+    Regla operativa para candidatos Drive:
+    fecha_requerimiento se calcula automáticamente como 1 día antes de aprobación.
+    """
+    return ap_d - timedelta(days=1)
 
 
 def _normalizar_modalidad(s: str) -> Optional[str]:
@@ -208,9 +216,8 @@ def _motivos_no_100(
     if fechas is None:
         motivos.append("fecha (Q) inválida o vacía (DD/MM/YYYY o YYYY-MM-DD)")
     else:
-        req_d, ap_d = fechas
-        if ap_d < req_d:
-            motivos.append("fecha aprobación anterior a fecha requerimiento")
+        _req_entrada, ap_d = fechas
+        req_d = _fecha_requerimiento_desde_aprobacion(ap_d)
         # Innegociable (alineado a UI): aprobación (Q) no puede ser anterior a hoy en más de 30 días.
         if (date.today() - ap_d).days > 30:
             motivos.append(
@@ -235,7 +242,8 @@ def _motivos_no_100(
 
     if fechas is None or monto is None or ncu is None or mod is None or cliente_id is None:
         return False, ["validación interna incompleta"], None
-    req_d, ap_d = fechas
+    _req_entrada, ap_d = fechas
+    req_d = _fecha_requerimiento_desde_aprobacion(ap_d)
 
     try:
         pc = PrestamoCreate(

@@ -30,7 +30,6 @@ import {
 } from '../../components/ui/select'
 
 import { prestamoService } from '../../services/prestamoService'
-import { formatDate } from '../../utils'
 
 const DECLARACION_FIJA =
   'Al aprobar, usted asegura que el cliente cumple las políticas de RapiCredit y que su riesgo está dentro de parámetros normales.'
@@ -155,10 +154,6 @@ export function AprobarPrestamoManualModal({
     setCuotaPeriodo(cuotaCalculada)
   }, [cuotaCalculada])
 
-  const fechaRequerimientoStr = prestamo.fecha_requerimiento
-    ? new Date(prestamo.fecha_requerimiento).toISOString().split('T')[0]
-    : null
-
   const canSubmit =
     fechaAprobacion &&
     documentosAnalizados &&
@@ -168,14 +163,6 @@ export function AprobarPrestamoManualModal({
 
   const handleAprobar = async () => {
     if (!canSubmit) return
-
-    if (fechaRequerimientoStr && fechaAprobacion < fechaRequerimientoStr) {
-      toast.error(
-        `La fecha de aprobación debe ser igual o posterior a la fecha de requerimiento (${formatDate(fechaRequerimientoStr)})`
-      )
-
-      return
-    }
 
     setIsLoading(true)
 
@@ -378,7 +365,6 @@ export function AprobarPrestamoManualModal({
                     value={fechaAprobacion}
                     onChange={e => setFechaAprobacion(e.target.value)}
                     className="pl-10"
-                    min={fechaRequerimientoStr || undefined}
                   />
                 </div>
 

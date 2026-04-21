@@ -45,21 +45,9 @@ export function AsignarFechaAprobacionModal({
 
   const [isLoading, setIsLoading] = useState(false)
 
-  const fechaRequerimientoStr = prestamo.fecha_requerimiento
-    ? new Date(prestamo.fecha_requerimiento).toISOString().split('T')[0]
-    : null
-
   const handleAsignarFecha = async () => {
     if (!fechaAprobacion) {
       toast.error('Debe seleccionar una fecha de aprobación')
-
-      return
-    }
-
-    if (fechaRequerimientoStr && fechaAprobacion < fechaRequerimientoStr) {
-      toast.error(
-        `La fecha de aprobación debe ser igual o posterior a la fecha de requerimiento (${formatDate(fechaRequerimientoStr)})`
-      )
 
       return
     }
@@ -193,7 +181,6 @@ export function AsignarFechaAprobacionModal({
                       value={fechaAprobacion}
                       onChange={e => setFechaAprobacion(e.target.value)}
                       className="pl-10"
-                      min={fechaRequerimientoStr || undefined}
                     />
                   </div>
 

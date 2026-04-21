@@ -74,6 +74,27 @@ logger = logging.getLogger(__name__)
 router = APIRouter(dependencies=[Depends(get_current_user)])
 
 
+def _log_fase_aprobacion(
+    *,
+    flujo: str,
+    fase: str,
+    pago_id: int,
+    referencia: str,
+    start_ts: float,
+    extra: str = "",
+) -> None:
+    elapsed_ms = (time.perf_counter() - start_ts) * 1000.0
+    logger.info(
+        "[COBROS_TIMING] flujo=%s fase=%s pago_id=%s ref=%s elapsed_ms=%.2f %s",
+        flujo,
+        fase,
+        pago_id,
+        referencia,
+        elapsed_ms,
+        extra,
+    )
+
+
 
 class PagoReportadoHistorialItem(BaseModel):
     estado_anterior: Optional[str] = None
@@ -1735,6 +1756,7 @@ def aprobar_pago_reportado(
     current_user: dict = Depends(get_current_user),
 ):
     """Aprueba el pago reportado: genera recibo PDF, envía por correo, guarda en recibos/."""
+    total_t0 = time.perf_counter()
     pr = db.execute(select(PagoReportado).where(PagoReportado.id == pago_id)).scalars().first()
     if not pr:
         raise HTTPException(status_code=404, detail="Pago reportado no encontrado.")
@@ -1774,6 +1796,7 @@ def aprobar_pago_reportado(
     pr.usuario_gestion_id = current_user.get("id") if isinstance(current_user, dict) else getattr(current_user, "id", None)
 
     try:
+        fase_db_t0 = time.perf_counter()
         _crear_pago_desde_reportado_y_aplicar_cuotas(db, pr, usuario_email)
         # Doble envío del mismo comprobante (segundos): tras aprobar el primero, eliminar hermanos.
         num_key = _numero_operacion_canonico(getattr(pr, "numero_operacion", None))
@@ -1800,6 +1823,13 @@ def aprobar_pago_reportado(
                     ", ".join([x for x in dup_refs if x])[:300],
                 )
         db.commit()
+        _log_fase_aprobacion(
+            flujo="aprobar_directo",
+            fase="db_aprobacion_commit",
+            pago_id=pago_id,
+            referencia=str(pr.referencia_interna or ""),
+            start_ts=fase_db_t0,
+        )
     except HTTPException:
         db.rollback()
         raise
@@ -1819,7 +1849,16 @@ def aprobar_pago_reportado(
         raise HTTPException(status_code=500, detail=f"Error al aprobar: {e!s}")
     db.refresh(pr)
     try:
+        fase_pdf_t0 = time.perf_counter()
         pdf_bytes = generar_recibo_pdf_desde_pago_reportado(db, pr)
+        _log_fase_aprobacion(
+            flujo="aprobar_directo",
+            fase="generar_pdf",
+            pago_id=pago_id,
+            referencia=str(pr.referencia_interna or ""),
+            start_ts=fase_pdf_t0,
+            extra=f"bytes={len(pdf_bytes) if pdf_bytes else 0}",
+        )
     except Exception as e:
         logger.exception("[COBROS] Aprobar ref=%s: error generando recibo PDF: %s", pr.referencia_interna, e)
         raise HTTPException(status_code=500, detail=f"Error al generar el recibo PDF: {e!s}")
@@ -1844,6 +1883,7 @@ def aprobar_pago_reportado(
     )
     cobros_correo_activo = get_email_activo_servicio("cobros")
     if to_emails and cobros_correo_activo:
+        fase_smtp_t0 = time.perf_counter()
         att, size_note = cobros_recibo_attachments_or_oversize_note(
             f"recibo_{pr.referencia_interna}.pdf", pdf_bytes
         )
@@ -1864,6 +1904,14 @@ def aprobar_pago_reportado(
             attachments=att,
             servicio="cobros",
             respetar_destinos_manuales=True,
+        )
+        _log_fase_aprobacion(
+            flujo="aprobar_directo",
+            fase="smtp_envio",
+            pago_id=pago_id,
+            referencia=str(pr.referencia_interna or ""),
+            start_ts=fase_smtp_t0,
+            extra=f"destinos={len(to_emails)} adjuntos={len(att)} ok={bool(ok_mail)}",
         )
         if ok_mail:
             logger.info("[COBROS] Aprobar ref=%s: recibo enviado por correo a %s.", pr.referencia_interna, dest_log)
@@ -1890,6 +1938,13 @@ def aprobar_pago_reportado(
         )
     _registrar_historial(db, pago_id, estado_anterior, "aprobado", usuario_email, None)
     db.commit()
+    _log_fase_aprobacion(
+        flujo="aprobar_directo",
+        fase="total",
+        pago_id=pago_id,
+        referencia=str(pr.referencia_interna or ""),
+        start_ts=total_t0,
+    )
     return {"ok": True, "mensaje": mensaje_final}
 
 
@@ -2410,10 +2465,12 @@ def cambiar_estado_pago(
     usuario_email = current_user.get("email") if isinstance(current_user, dict) else getattr(current_user, "email", None)
 
     mensaje = f"Estado actualizado a {body.estado}."
+    total_t0 = time.perf_counter() if body.estado == "aprobado" else 0.0
     rechazo_correo_enviado: Optional[bool] = None
     rechazo_correo_error: Optional[str] = None
     if body.estado == "aprobado":
         try:
+            fase_db_t0 = time.perf_counter()
             _crear_pago_desde_reportado_y_aplicar_cuotas(db, pr, usuario_email)
             num_key = _numero_operacion_canonico(getattr(pr, "numero_operacion", None))
             if num_key:
@@ -2439,6 +2496,13 @@ def cambiar_estado_pago(
                         ", ".join([x for x in dup_refs if x])[:300],
                     )
             db.commit()
+            _log_fase_aprobacion(
+                flujo="aprobar_patch_estado",
+                fase="db_aprobacion_commit",
+                pago_id=pago_id,
+                referencia=str(pr.referencia_interna or ""),
+                start_ts=fase_db_t0,
+            )
         except HTTPException as exc:
             detail_txt = exc.detail if isinstance(exc.detail, str) else repr(exc.detail)
             logger.warning(
@@ -2484,7 +2548,16 @@ def cambiar_estado_pago(
             )
 
         db.refresh(pr)
+        fase_pdf_t0 = time.perf_counter()
         pdf_bytes = generar_recibo_pdf_desde_pago_reportado(db, pr)
+        _log_fase_aprobacion(
+            flujo="aprobar_patch_estado",
+            fase="generar_pdf",
+            pago_id=pago_id,
+            referencia=str(pr.referencia_interna or ""),
+            start_ts=fase_pdf_t0,
+            extra=f"bytes={len(pdf_bytes) if pdf_bytes else 0}",
+        )
         pr.recibo_pdf = pdf_bytes
         to_emails = _emails_cliente_pago_reportado(db, pr)
         cedula_cli = f"{pr.tipo_cedula or ''}{pr.numero_cedula or ''}"
@@ -2501,6 +2574,7 @@ def cambiar_estado_pago(
         dest_log_ap = unir_destinatarios_log(to_emails)
         cobros_correo_activo = get_email_activo_servicio("cobros")
         if to_emails and cobros_correo_activo:
+            fase_smtp_t0 = time.perf_counter()
             att, size_note = cobros_recibo_attachments_or_oversize_note(
                 f"recibo_{pr.referencia_interna}.pdf", pdf_bytes
             )
@@ -2521,6 +2595,14 @@ def cambiar_estado_pago(
                 attachments=att,
                 servicio="cobros",
                 respetar_destinos_manuales=True,
+            )
+            _log_fase_aprobacion(
+                flujo="aprobar_patch_estado",
+                fase="smtp_envio",
+                pago_id=pago_id,
+                referencia=str(pr.referencia_interna or ""),
+                start_ts=fase_smtp_t0,
+                extra=f"destinos={len(to_emails)} adjuntos={len(att)} ok={bool(ok_mail)}",
             )
             if ok_mail:
                 logger.info(
@@ -2628,6 +2710,14 @@ def cambiar_estado_pago(
 
     _registrar_historial(db, pago_id, estado_anterior, body.estado, usuario_email, body.motivo)
     db.commit()
+    if body.estado == "aprobado":
+        _log_fase_aprobacion(
+            flujo="aprobar_patch_estado",
+            fase="total",
+            pago_id=pago_id,
+            referencia=str(pr.referencia_interna or ""),
+            start_ts=total_t0,
+        )
     resp: dict = {"ok": True, "mensaje": mensaje}
     if body.estado == "rechazado":
         resp["rechazo_correo_enviado"] = rechazo_correo_enviado

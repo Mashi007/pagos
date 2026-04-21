@@ -360,7 +360,6 @@ class PrestamoService {
       'analista',
       'modalidad_pago',
       'numero_cuotas',
-      'fecha_requerimiento',
       'fecha_aprobacion',
       'cuota_periodo',
       'producto',
@@ -371,7 +370,6 @@ class PrestamoService {
     ] as const
 
     const dateKeys = new Set<string>([
-      'fecha_requerimiento',
       'fecha_aprobacion',
       'fecha_base_calculo',
     ])
