@@ -714,7 +714,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
       const ac = beginOperacionListaAbortable()
       setEnviandoD2Antes(true)
       const loadingId = toast.loading(
-        'Enviando correos… con muchas filas puede tardar más de 10 minutos. No cierre esta pestaña.'
+        'Enviando correos en el servidor… puede tardar varios minutos. Puede minimizar esta pestaña; el avance se consulta automáticamente.'
       )
 
       try {
@@ -762,7 +762,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
       const ac = beginOperacionListaAbortable()
       setEnviandoPago10Dias(true)
       const loadingId = toast.loading(
-        'Enviando correos… con muchas filas puede tardar más de 10 minutos. No cierre esta pestaña.'
+        'Enviando correos en el servidor… puede tardar varios minutos. Puede minimizar esta pestaña; el avance se consulta automáticamente.'
       )
 
       try {
@@ -809,7 +809,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
     const ac = beginOperacionListaAbortable()
     setEnviandoPago1Dia(true)
     const loadingId = toast.loading(
-      'Enviando correos… con muchas filas puede tardar más de 10 minutos. No cierre esta pestaña.'
+      'Enviando correos en el servidor… puede tardar varios minutos. Puede minimizar esta pestaña; el avance se consulta automáticamente.'
     )
 
     try {

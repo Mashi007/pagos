@@ -906,6 +906,9 @@ export interface PagoReportadoDetalleResponse {
 
   pago_existente_estado?: string | null
 
+  /** Fecha del pago ya en cartera (YYYY-MM-DD). */
+  pago_existente_fecha_pago?: string | null
+
   prestamo_objetivo_id?: number | null
 
   prestamo_objetivo_multiple?: boolean | null

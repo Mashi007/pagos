@@ -222,6 +222,18 @@ app.all(/^\/pagos\/api(\/.*)?$/i, (req, res) => {
   res.redirect(307, target);
 });
 
+// Enlaces o marcadores que duplican el base path (/pagos/pagos/...) rompen express.static
+// (busca dist/pagos/...). Colapsar a una sola /pagos/... antes de estáticos y SPA.
+app.all(/^\/pagos\/pagos(\/|$|\?)/i, (req, res) => {
+  const raw = req.originalUrl || req.url || '/';
+  const qs = raw.includes('?') ? `?${raw.split('?').slice(1).join('?')}` : '';
+  let pathOnly = raw.split('?')[0] || '/';
+  while (pathOnly.startsWith('/pagos/pagos')) {
+    pathOnly = `/pagos${pathOnly.slice('/pagos/pagos'.length)}`;
+  }
+  res.redirect(307, pathOnly + qs);
+});
+
 // ============================================
 // PROXY /api -> Backend (Render o local)
 // ============================================

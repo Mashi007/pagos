@@ -172,17 +172,17 @@ class PagoReportadoDetalle(BaseModel):
         None,
         description="infopagos | cobros_publico | null (historico).",
     )
-    duplicado_en_pagos: Optional[bool] = None
-    pago_existente_id: Optional[int] = None
-    prestamo_existente_id: Optional[int] = None
-    pago_existente_estado: Optional[str] = None
-    prestamo_objetivo_id: Optional[int] = None
-    prestamo_objetivo_multiple: Optional[bool] = None
-    prestamo_duplicado_es_objetivo: Optional[bool] = None
     duplicado_en_pagos: bool = False
     pago_existente_id: Optional[int] = None
     prestamo_existente_id: Optional[int] = None
     pago_existente_estado: Optional[str] = None
+    pago_existente_fecha_pago: Optional[date] = Field(
+        None,
+        description="Fecha del pago ya registrado en cartera (tabla pagos), para comparar con este reporte.",
+    )
+    prestamo_objetivo_id: Optional[int] = None
+    prestamo_objetivo_multiple: Optional[bool] = None
+    prestamo_duplicado_es_objetivo: Optional[bool] = None
 
 
 class AprobarRechazarBody(BaseModel):
@@ -1518,6 +1518,7 @@ def get_pago_reportado_detalle(pago_id: int, db: Session = Depends(get_db)):
     pago_existente_id: Optional[int] = primer_pago_id_si_existe_para_claves_reportado(db, pr)
     prestamo_existente_id: Optional[int] = None
     pago_existente_estado: Optional[str] = None
+    pago_existente_fecha_pago: Optional[date] = None
     prestamo_objetivo_id: Optional[int] = None
     prestamo_objetivo_multiple: Optional[bool] = None
     prestamo_duplicado_es_objetivo: Optional[bool] = None
@@ -1526,6 +1527,11 @@ def get_pago_reportado_detalle(pago_id: int, db: Session = Depends(get_db)):
         if p_exist:
             prestamo_existente_id = getattr(p_exist, "prestamo_id", None)
             pago_existente_estado = getattr(p_exist, "estado", None)
+            fp = getattr(p_exist, "fecha_pago", None)
+            if fp is not None:
+                pago_existente_fecha_pago = (
+                    fp.date() if isinstance(fp, datetime) else fp
+                )
     try:
         cedula_norm = _normalize_cedula_for_client_lookup(
             ((pr.tipo_cedula or "") + (pr.numero_cedula or ""))
@@ -1596,6 +1602,7 @@ def get_pago_reportado_detalle(pago_id: int, db: Session = Depends(get_db)):
         pago_existente_id=pago_existente_id,
         prestamo_existente_id=prestamo_existente_id,
         pago_existente_estado=pago_existente_estado,
+        pago_existente_fecha_pago=pago_existente_fecha_pago,
         prestamo_objetivo_id=prestamo_objetivo_id,
         prestamo_objetivo_multiple=prestamo_objetivo_multiple,
         prestamo_duplicado_es_objetivo=prestamo_duplicado_es_objetivo,

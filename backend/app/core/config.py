@@ -34,10 +34,44 @@ class Settings(BaseSettings):
             "snapshot candidatos préstamo desde drive diario 04:45 si aplica, "
             "Gmail programado si aplica), liquidado diario 21:00 Caracas, refresco programado de cache del dashboard, "
             "watcher de lider y, al arrancar, marcar syncs Gmail 'running' como error (desbloqueo tras deploy). "
-            "Los envíos masivos por pestaña de Notificaciones son manuales (POST desde la UI); el único cron de correo "
-            "opcional es Recibos (ENABLE_RECIBOS_CONCILIACION_EMAIL_JOBS). "
+            "Los envíos masivos por pestaña de Notificaciones son manuales salvo el cron opcional "
+            "«2 días antes» (ENABLE_CRON_NOTIFICACIONES_2_DIAS_ANTES) y Recibos (ENABLE_RECIBOS_CONCILIACION_EMAIL_JOBS). "
             "Por defecto False: ejecucion manual desde la aplicacion; sin limpieza automatica de Gmail al startup."
         ),
+    )
+    # Cron diario solo PAGO_2_DIAS_ANTES_PENDIENTE (America/Caracas). Requiere ENABLE_AUTOMATIC_SCHEDULED_JOBS=True
+    # y proceso líder de scheduler; idempotencia en BD (configuracion notificaciones_cron_2_dias_antes_estado).
+    ENABLE_CRON_NOTIFICACIONES_2_DIAS_ANTES: bool = Field(
+        default=False,
+        description=(
+            "Si True y ENABLE_AUTOMATIC_SCHEDULED_JOBS=True (líder), dispara envío automático «2 días antes» "
+            "a la hora CRON_2_DIAS_ANTES_HOUR:CRON_2_DIAS_ANTES_MINUTE Caracas. Respeta habilitado=false en "
+            "Configuración > Notificaciones > Envíos para PAGO_2_DIAS_ANTES_PENDIENTE."
+        ),
+    )
+    CRON_2_DIAS_ANTES_HOUR: int = Field(
+        default=7,
+        ge=0,
+        le=23,
+        description="Hora Caracas (0-23) del cron «2 días antes».",
+    )
+    CRON_2_DIAS_ANTES_MINUTE: int = Field(
+        default=0,
+        ge=0,
+        le=59,
+        description="Minuto del cron «2 días antes» (Caracas).",
+    )
+    CRON_2_DIAS_ANTES_INTENTOS_JOB: int = Field(
+        default=3,
+        ge=1,
+        le=10,
+        description="Reintentos ante excepción (p. ej. BD) antes de marcar error del día.",
+    )
+    CRON_2_DIAS_ANTES_SLEEP_ENTRE_INTENTOS_SEG: int = Field(
+        default=60,
+        ge=5,
+        le=600,
+        description="Segundos de espera entre reintentos del cron «2 días antes».",
     )
     # Columna «Diferencia abono» (Notificaciones > General): caché en BD, recalculada domingo (horario en scheduler).
     ENABLE_ABONOS_DRIVE_CACHE_NIGHTLY: bool = Field(

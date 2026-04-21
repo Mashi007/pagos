@@ -1299,6 +1299,89 @@ def _tarea_envio_todas_notificaciones():
         db.close()
 
 
+def _tarea_enviar_caso_manual(
+    tipo: str,
+    fecha_caracas_raw: Optional[str],
+    inicio_utc: str,
+    token_seguimiento: str,
+) -> None:
+    """
+    Ejecuta POST /enviar-caso-manual en segundo plano (misma lógica que antes síncrono).
+    Evita timeouts de proxy (p. ej. Render) cuando hay cientos de envíos SMTP seguidos.
+    """
+    from datetime import timezone
+
+    from app.core.database import SessionLocal
+    from app.api.v1.endpoints import notificaciones_tabs
+    from app.services.cuota_estado import parse_fecha_referencia_negocio
+    from app.services.notificaciones_envio_batch_resumen import persist_ultimo_envio_batch
+
+    db = SessionLocal()
+    try:
+        try:
+            fecha_ref = parse_fecha_referencia_negocio(fecha_caracas_raw)
+        except ValueError as e:
+            persist_ultimo_envio_batch(
+                db,
+                resultado={
+                    "tipo_caso": tipo,
+                    "detalles": {
+                        "tipo_caso": tipo,
+                        "token_seguimiento": token_seguimiento,
+                    },
+                },
+                origen="api_enviar_caso_manual",
+                error=str(e)[:5000],
+                inicio_utc=inicio_utc,
+            )
+            db.commit()
+            return
+        res = notificaciones_tabs.ejecutar_envio_caso_manual(
+            db, tipo, fecha_referencia=fecha_ref
+        )
+        para_persist = {k: v for k, v in res.items() if k != "mensaje"}
+        det = dict(para_persist["detalles"]) if isinstance(para_persist.get("detalles"), dict) else {}
+        det["token_seguimiento"] = token_seguimiento
+        det["tipo_caso"] = tipo
+        para_persist["detalles"] = det
+        persist_ultimo_envio_batch(
+            db,
+            resultado=para_persist,
+            origen="api_enviar_caso_manual",
+            inicio_utc=inicio_utc,
+        )
+        db.commit()
+        logger.info(
+            "[notif] enviar_caso_manual BG fin tipo=%s token=%s enviados=%s total_lista=%s",
+            tipo,
+            token_seguimiento[:12],
+            res.get("enviados"),
+            res.get("total_en_lista"),
+        )
+    except Exception as e:
+        logger.exception("enviar_caso_manual BG: %s", e)
+        try:
+            db.rollback()
+            persist_ultimo_envio_batch(
+                db,
+                resultado={
+                    "tipo_caso": tipo,
+                    "detalles": {
+                        "tipo_caso": tipo,
+                        "token_seguimiento": token_seguimiento,
+                    },
+                },
+                origen="api_enviar_caso_manual",
+                error=str(e)[:5000],
+                inicio_utc=inicio_utc,
+            )
+            db.commit()
+        except Exception:
+            db.rollback()
+    finally:
+        db.close()
+
+
 @router.get("/envio-batch/ultimo")
 def get_ultimo_envio_batch_notificaciones(db: Session = Depends(get_db)):
     """Ultimo resultado de ejecutar envio masivo (POST manual / BackgroundTasks). Null si nunca hubo ejecucion."""
@@ -1330,21 +1413,23 @@ def enviar_todas_notificaciones(background_tasks: BackgroundTasks):
 
 
 @router.post("/enviar-caso-manual")
-def enviar_caso_manual(payload: dict = Body(...), db: Session = Depends(get_db)):
+def enviar_caso_manual(
+    background_tasks: BackgroundTasks,
+    payload: dict = Body(...),
+):
     """
-    Envio sincrono para un solo criterio por peticion (una fila: PAGO_1_DIA_ANTES, PAGO_1_DIA_ATRASADO, etc.).
+    Inicia el envío de un solo criterio por petición (una fila: PAGO_1_DIA_ANTES, PAGO_2_DIAS_ANTES_PENDIENTE, etc.).
 
-    No encola otros casos ni programa envios: solo el tipo indicado en el JSON. Cada destinatario usa la
-    plantilla/CCO/PDF de esa fila (no se infiere otro tipo por fila). En produccion: un correo por cliente
-    en la lista de ese caso; en modo pruebas: destinos de prueba. Ignora el toggle Envio apagado en esa fila.
+    Responde 202 de inmediato y procesa en segundo plano (mismo criterio que POST /enviar-todas): listas de
+    ~150+ correos SMTP superan con frecuencia el tiempo útil de conexión HTTP en hosting (p. ej. Render),
+    lo que cortaba el envío a mitad de lote. El resultado queda en GET /envio-batch/ultimo; el cliente
+    puede sondear hasta ver ``detalles.token_seguimiento`` e ``inicio_utc`` coincidentes con la respuesta 202.
 
-    Opcional en JSON: fecha_caracas (YYYY-MM-DD) = fecha de referencia America/Caracas para armar la lista
-    y la carta PDF (mismo criterio que GET listados con ?fecha_caracas=).
+    Opcional en JSON: fecha_caracas (YYYY-MM-DD) = fecha de referencia America/Caracas (igual que GET listados).
     """
     from datetime import timezone
 
     from app.api.v1.endpoints import notificaciones_tabs
-    from app.services.notificaciones_envio_batch_resumen import persist_ultimo_envio_batch
 
     tipo = (payload.get("tipo") or "").strip()
     if tipo not in notificaciones_tabs.TIPOS_CASO_MANUAL:
@@ -1357,38 +1442,38 @@ def enviar_caso_manual(payload: dict = Body(...), db: Session = Depends(get_db))
     if raw_fc is not None and not isinstance(raw_fc, str):
         raw_fc = str(raw_fc)
     try:
-        fecha_ref = parse_fecha_referencia_negocio(raw_fc)
+        parse_fecha_referencia_negocio(raw_fc)
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e)) from e
     inicio = datetime.now(timezone.utc).isoformat()
-    try:
-        res = notificaciones_tabs.ejecutar_envio_caso_manual(
-            db, tipo, fecha_referencia=fecha_ref
-        )
-        para_persist = {k: v for k, v in res.items() if k != "mensaje"}
-        para_persist["detalles"] = {"tipo_caso": tipo}
-        persist_ultimo_envio_batch(
-            db,
-            resultado=para_persist,
-            origen="api_enviar_caso_manual",
-            inicio_utc=inicio,
-        )
-        return res
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.exception("enviar_caso_manual: %s", e)
-        try:
-            persist_ultimo_envio_batch(
-                db,
-                resultado={},
-                origen="api_enviar_caso_manual",
-                error=str(e)[:5000],
-                inicio_utc=inicio,
-            )
-        except Exception:
-            logger.warning("enviar_caso_manual: no se pudo persistir resumen de error", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e)[:800]) from e
+    token = str(uuid.uuid4())
+    background_tasks.add_task(
+        _tarea_enviar_caso_manual,
+        tipo,
+        raw_fc,
+        inicio,
+        token,
+    )
+    logger.info(
+        "[notif] enviar_caso_manual aceptado en BG tipo=%s inicio=%s token=%s",
+        tipo,
+        inicio,
+        token[:12],
+    )
+    return JSONResponse(
+        status_code=202,
+        content={
+            "mensaje": (
+                "Envío iniciado en segundo plano. Con muchas filas puede tardar varios minutos; "
+                "puede cerrar esta pestaña. Use GET /notificaciones/envio-batch/ultimo para el resumen "
+                "(detalles.token_seguimiento coincide con el de esta respuesta)."
+            ),
+            "en_proceso": True,
+            "inicio_utc": inicio,
+            "token_seguimiento": token,
+            "tipo_caso": tipo,
+        },
+    )
 
 
 @router.get("/estadisticas/resumen")

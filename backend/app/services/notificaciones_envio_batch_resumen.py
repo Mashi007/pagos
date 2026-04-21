@@ -45,6 +45,25 @@ def persist_ultimo_envio_batch(
         "fallidos_whatsapp": int(resultado.get("fallidos_whatsapp", 0) or 0),
         "detalles": resultado.get("detalles"),
     }
+    # Campos opcionales (envío manual por caso: total en lista, tipo, exclusiones)
+    if resultado.get("total_en_lista") is not None:
+        try:
+            body["total_en_lista"] = int(resultado.get("total_en_lista") or 0)
+        except (TypeError, ValueError):
+            pass
+    raw_tc = resultado.get("tipo_caso")
+    if raw_tc is not None:
+        try:
+            s = str(raw_tc).strip()
+            if s:
+                body["tipo_caso"] = s
+        except (TypeError, ValueError):
+            pass
+    if resultado.get("omitidos_desistimiento") is not None:
+        try:
+            body["omitidos_desistimiento"] = int(resultado.get("omitidos_desistimiento") or 0)
+        except (TypeError, ValueError):
+            pass
     try:
         valor = json.dumps(body, ensure_ascii=False)
     except (TypeError, ValueError) as e:

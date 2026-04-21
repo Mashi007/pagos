@@ -15,7 +15,9 @@ Cuando esta activo:
 - domingo 05:10  Notificaciones: caché columna Q vs fecha_aprobacion (masivo), si ENABLE_FECHA_ENTREGA_Q_CACHE_NIGHTLY.
 - todos los dias cada hora a :30 entre 06:30 y 19:30  Gmail pendientes (si PAGOS_GMAIL_SCHEDULED_SCAN_ENABLED=true).
 - Recibos (correo estado de cuenta tras pagos conciliados): **solo envío manual** desde Notificaciones → Recibos
-  (POST /notificaciones/recibos/ejecutar). No hay cron en este scheduler.
+  (POST /notificaciones/recibos/ejecutar), salvo ENABLE_RECIBOS_CONCILIACION_EMAIL_JOBS si aplica.
+- Opcional: envío automático solo «2 días antes» (PAGO_2_DIAS_ANTES_PENDIENTE) si ENABLE_CRON_NOTIFICACIONES_2_DIAS_ANTES
+  (hora CRON_2_DIAS_ANTES_HOUR:CRON_2_DIAS_ANTES_MINUTE Caracas; idempotencia en configuracion).
 
 Reportes cobranzas, informe de pagos por email y campanas CRM: manual o bajo demanda.
 
@@ -328,6 +330,15 @@ def _job_pagos_gmail_pending_scan() -> None:
         db.close()
 
 
+def _job_notificaciones_pago_2_dias_antes_cron() -> None:
+    """Diario (Caracas): envío automático solo «2 días antes» si ENABLE_CRON_NOTIFICACIONES_2_DIAS_ANTES."""
+    if not getattr(settings, "ENABLE_CRON_NOTIFICACIONES_2_DIAS_ANTES", False):
+        return
+    from app.services.notificaciones_cron_2_dias_antes_job import job_cron_pago_2_dias_antes_scheduler
+
+    job_cron_pago_2_dias_antes_scheduler()
+
+
 def start_scheduler() -> None:
     """Registra jobs en orden de flujo nocturno; horas espaciadas por carga (ver comentarios SCHEDULER_TZ).
 
@@ -467,8 +478,23 @@ def start_scheduler() -> None:
         _gmail_log = (
             "; Gmail pagos pendientes todos los dias cada hora :30 entre 06:30 y 19:30"
         )
-    # Envío de correos a clientes (Notificaciones por pestaña, Recibos, etc.): **solo manual**
-    # (POST desde la UI). No hay ningún job programado aquí que llame a send_email / lotes de notificación.
+    _cron_2d_log = ""
+    if getattr(settings, "ENABLE_CRON_NOTIFICACIONES_2_DIAS_ANTES", False):
+        _h = int(getattr(settings, "CRON_2_DIAS_ANTES_HOUR", 7) or 7)
+        _m = int(getattr(settings, "CRON_2_DIAS_ANTES_MINUTE", 0) or 0)
+        _h = max(0, min(_h, 23))
+        _m = max(0, min(_m, 59))
+        _scheduler.add_job(
+            _wrap_job_with_timing(
+                "notificaciones_pago_2_dias_antes_diario",
+                _job_notificaciones_pago_2_dias_antes_cron,
+            ),
+            CronTrigger(hour=_h, minute=_m, timezone=SCHEDULER_TZ),
+            id="notificaciones_pago_2_dias_antes_diario",
+            name=f"Notificaciones: PAGO_2_DIAS_ANTES diario {_h:02d}:{_m:02d} Caracas",
+        )
+        _cron_2d_log = f"; notificaciones 2 dias antes diario {_h:02d}:{_m:02d} Caracas"
+    # Otros envíos por pestaña (previas, mora, prejudicial, masivos): manual desde la UI (POST).
     _scheduler.start()
     _caches_notif_log = ""
     if getattr(settings, "ENABLE_ABONOS_DRIVE_CACHE_NIGHTLY", True):
@@ -484,7 +510,7 @@ def start_scheduler() -> None:
         "limpieza estado_cuenta_codigos 4:00%s (%s).",
         _caches_notif_log,
         _prest_cand_log,
-        _gmail_log,
+        _gmail_log + _cron_2d_log,
         SCHEDULER_TZ,
     )
     if getattr(settings, "PAGOS_GMAIL_SCHEDULED_SCAN_ENABLED", False):

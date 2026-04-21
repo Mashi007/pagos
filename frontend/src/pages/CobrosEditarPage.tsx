@@ -57,6 +57,8 @@ import {
 
 import { normalizarNumeroDocumento } from '../utils/pagoExcelValidation'
 
+import { DuplicadoPrestamosComparacion } from '../components/cobros/DuplicadoPrestamosComparacion'
+
 const INSTITUCIONES_FINANCIERAS = [
   'BINANCE',
 
@@ -118,7 +120,6 @@ export default function CobrosEditarPage() {
 
   const [otroInstitucion, setOtroInstitucion] = useState('')
   const tokensSufijoUsadosRef = useRef<Set<string>>(new Set())
-  const autoSufijoAbiertoRef = useRef(false)
 
   const [form, setForm] = useState({
     nombres: '',
@@ -243,9 +244,14 @@ export default function CobrosEditarPage() {
 
     setVistoSaving(true)
     try {
-      const letter = letterSufijoVistoDesdeMensajeDuplicado(
-        ultimoErrorVistoRef.current
-      )
+      const letter =
+        detalle &&
+        detalle.duplicado_en_pagos &&
+        typeof detalle.prestamo_duplicado_es_objetivo === 'boolean'
+          ? detalle.prestamo_duplicado_es_objetivo
+            ? 'A'
+            : 'P'
+          : letterSufijoVistoDesdeMensajeDuplicado(ultimoErrorVistoRef.current)
       const hadSuffix = SUFIJO_VISTO_ARCHIVO_RE.test(trimmed)
       const nuevo = aplicarSufijoVistoADocumento(
         base,
@@ -287,19 +293,6 @@ export default function CobrosEditarPage() {
   useEffect(() => {
     load()
   }, [id])
-
-  useEffect(() => {
-    if (!detalle) return
-    if (!detalle.duplicado_en_pagos) return
-    if (autoSufijoAbiertoRef.current) return
-    // Evitar reabrir si ya quedó token asignado por Visto/sufijo.
-    if (SUFIJO_VISTO_ARCHIVO_RE.test((detalle.numero_operacion || '').trim())) return
-
-    autoSufijoAbiertoRef.current = true
-    ultimoErrorVistoRef.current =
-      'DUPLICADO_EN_PAGOS: abrir flujo de sufijo para desambiguar el número de operación.'
-    setVistoAyudaOpen(true)
-  }, [detalle])
 
   const handleEliminarReporteDuplicado = async () => {
     if (!id) return
@@ -444,52 +437,20 @@ export default function CobrosEditarPage() {
 
       {detalle.duplicado_en_pagos && (
         <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-900">
-          <p>
-            Este reporte ya tiene un pago en cartera.
-            {typeof detalle.prestamo_existente_id === 'number' && (
-              <>
-                {' '}
-                Préstamo aplicado: <strong>#{detalle.prestamo_existente_id}</strong>.
-              </>
-            )}
-            {typeof detalle.pago_existente_id === 'number' && (
-              <>
-                {' '}
-                Pago existente: <strong>#{detalle.pago_existente_id}</strong>
-                {detalle.pago_existente_estado
-                  ? ` (${detalle.pago_existente_estado})`
-                  : ''}
-                .
-              </>
-            )}
+          <p className="font-medium text-rose-950">
+            Hay un pago en cartera que coincide con esta referencia u operación.
+            Revise la tabla y los préstamos antes de usar sufijos o «Visto».
           </p>
-          {typeof detalle.prestamo_objetivo_id === 'number' && (
-            <p className="mt-1">
-              Préstamo objetivo del caso (actual):{' '}
-              <strong>#{detalle.prestamo_objetivo_id}</strong>
-              {detalle.prestamo_objetivo_multiple ? (
-                <span className="ml-1 text-amber-700">
-                  (hay más de un préstamo APROBADO para la cédula)
-                </span>
-              ) : null}
-              .
-            </p>
-          )}
-          {typeof detalle.prestamo_existente_id === 'number' &&
-          typeof detalle.prestamo_objetivo_id === 'number' ? (
-            <p className="mt-1">
-              Diagnóstico:{' '}
-              {detalle.prestamo_duplicado_es_objetivo ? (
-                <strong className="text-emerald-700">
-                  ya fue cargado al préstamo actual.
-                </strong>
-              ) : (
-                <strong className="text-amber-700">
-                  fue cargado a otro préstamo (distinto al actual).
-                </strong>
-              )}
-            </p>
-          ) : null}
+          <DuplicadoPrestamosComparacion
+            prestamoExistenteId={detalle.prestamo_existente_id}
+            pagoExistenteId={detalle.pago_existente_id}
+            pagoExistenteEstado={detalle.pago_existente_estado}
+            pagoExistenteFechaPago={detalle.pago_existente_fecha_pago}
+            prestamoObjetivoId={detalle.prestamo_objetivo_id}
+            fechaPagoReporteIso={detalle.fecha_pago}
+            prestamoDuplicadoEsObjetivo={detalle.prestamo_duplicado_es_objetivo}
+            prestamoObjetivoMultiple={detalle.prestamo_objetivo_multiple}
+          />
           <div className="mt-2 flex flex-wrap gap-2">
             {typeof detalle.prestamo_existente_id === 'number' ? (
               <Button
@@ -792,17 +753,23 @@ export default function CobrosEditarPage() {
                 <span className="font-medium">Revisión manual:</span> Visto asigna el código
                 (_A#### / _P####) y guarda en el servidor de inmediato.
               </p>
-              <div className="flex shrink-0 items-center gap-2">
-                <button
-                  type="button"
-                  className="text-[11px] font-medium text-violet-700 underline underline-offset-2 hover:text-violet-950"
-                  onClick={() => setVistoAyudaOpen(true)}
-                >
-                  Sin cambiar doc.
-                </button>
-                <Button
-                  type="button"
-                  size="sm"
+            <div className="flex shrink-0 items-center gap-2">
+              <button
+                type="button"
+                className="text-[11px] font-medium text-violet-700 underline underline-offset-2 hover:text-violet-950"
+                onClick={() => {
+                  if (!ultimoErrorVistoRef.current.trim()) {
+                    ultimoErrorVistoRef.current =
+                      'AYUDA_SUFIJO: usuario abrió ayuda tras revisar duplicado / préstamo.'
+                  }
+                  setVistoAyudaOpen(true)
+                }}
+              >
+                Ayuda sufijo
+              </button>
+              <Button
+                type="button"
+                size="sm"
                   disabled={saving || vistoSaving}
                   className="h-8 min-w-[4.5rem] bg-violet-600 px-3 text-xs font-medium text-white hover:bg-violet-700 disabled:opacity-50"
                   onClick={() => void handleVistoRellenarSufijoYGuardar()}

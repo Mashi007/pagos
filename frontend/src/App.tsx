@@ -189,18 +189,18 @@ const NotFound = () => (
       <h1 className="mb-4 text-6xl font-bold text-gray-300">404</h1>
 
       <h2 className="mb-4 text-2xl font-semibold text-gray-700">
-        Pgina no encontrada
+        Página no encontrada
       </h2>
 
       <p className="mb-6 text-gray-500">
-        La pgina que buscas no existe o ha sido movida.
+        La página que buscas no existe o ha sido movida.
       </p>
 
       <button
         onClick={() => window.history.back()}
         className="rounded-lg bg-primary px-6 py-2 text-primary-foreground transition-colors hover:bg-primary/90"
       >
-        Volver atrs
+        Volver atrás
       </button>
     </div>
   </div>
@@ -213,7 +213,7 @@ const PageLoader = () => (
     <div className="text-center">
       <div className="mx-auto mb-4 h-12 w-12 animate-spin rounded-full border-b-2 border-blue-600"></div>
 
-      <p className="text-gray-600">Cargando pgina...</p>
+      <p className="text-gray-600">Cargando página...</p>
     </div>
   </div>
 )

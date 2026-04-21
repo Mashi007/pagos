@@ -1214,6 +1214,7 @@ class NotificacionService {
     fallidos: number
     omitidos_config?: number
     omitidos_paquete_incompleto?: number
+    omitidos_desistimiento?: number
     enviados_whatsapp?: number
     fallidos_whatsapp?: number
   }> {
@@ -1221,20 +1222,99 @@ class NotificacionService {
       opts?.fechaCaracas && String(opts.fechaCaracas).trim()
         ? String(opts.fechaCaracas).trim()
         : undefined
-    return await apiClient.post(
+    const deadline = Date.now() + TIMEOUT_MS_ENVIO_NOTIFICACIONES_MANUAL
+    const accepted = await apiClient.post<Record<string, unknown>>(
       `${this.baseUrl}/enviar-caso-manual`,
       { tipo, ...(fc ? { fecha_caracas: fc } : {}) },
-      { timeout: TIMEOUT_MS_ENVIO_NOTIFICACIONES_MANUAL, signal: opts?.signal }
+      {
+        timeout: Math.min(120000, TIMEOUT_MS_ENVIO_NOTIFICACIONES_MANUAL),
+        signal: opts?.signal,
+      }
+    )
+    if (!accepted || typeof accepted !== 'object') {
+      throw new Error('Respuesta de envío inválida.')
+    }
+    if (!accepted.en_proceso) {
+      return accepted as {
+        mensaje: string
+        tipo_caso: string
+        total_en_lista: number
+        enviados: number
+        sin_email: number
+        fallidos: number
+        omitidos_config?: number
+        omitidos_paquete_incompleto?: number
+        omitidos_desistimiento?: number
+        enviados_whatsapp?: number
+        fallidos_whatsapp?: number
+      }
+    }
+    const token = String(accepted.token_seguimiento || '').trim()
+    const inicioUtc = String(accepted.inicio_utc || '').trim()
+    if (!token || !inicioUtc) {
+      throw new Error(
+        'El servidor no devolvió token de seguimiento del envío. Revise «Último envío por lote» en Configuración.'
+      )
+    }
+    const pollMs = 2000
+    while (Date.now() < deadline) {
+      if (opts?.signal?.aborted) {
+        const e = new Error('Canceled') as Error & { code?: string }
+        e.code = 'ERR_CANCELED'
+        throw e
+      }
+      const { ultimo } = await this.obtenerUltimoEnvioBatch({
+        signal: opts?.signal,
+      })
+      const det = ultimo?.detalles
+      const detRec = typeof det === 'object' && det !== null ? det : null
+      const tokenUltimo =
+        detRec && 'token_seguimiento' in detRec
+          ? String((detRec as Record<string, unknown>).token_seguimiento || '').trim()
+          : ''
+      if (
+        ultimo &&
+        String(ultimo.inicio_utc || '').trim() === inicioUtc &&
+        ultimo.origen === 'api_enviar_caso_manual' &&
+        tokenUltimo === token
+      ) {
+        const err = ultimo.error
+        if (err != null && String(err).trim()) {
+          throw new Error(String(err).trim())
+        }
+        return {
+          mensaje: `Envío manual del caso ${tipo} finalizado.`,
+          tipo_caso: tipo,
+          total_en_lista: Number(ultimo.total_en_lista ?? 0),
+          enviados: Number(ultimo.enviados ?? 0),
+          sin_email: Number(ultimo.sin_email ?? 0),
+          fallidos: Number(ultimo.fallidos ?? 0),
+          omitidos_config: Number(ultimo.omitidos_config ?? 0),
+          omitidos_paquete_incompleto: Number(ultimo.omitidos_paquete_incompleto ?? 0),
+          omitidos_desistimiento: Number(ultimo.omitidos_desistimiento ?? 0),
+          enviados_whatsapp: Number(ultimo.enviados_whatsapp ?? 0),
+          fallidos_whatsapp: Number(ultimo.fallidos_whatsapp ?? 0),
+        }
+      }
+      await new Promise<void>(resolve => {
+        window.setTimeout(resolve, pollMs)
+      })
+    }
+    throw new Error(
+      'Tiempo máximo de espera del envío agotado. Revise «Último envío por lote» en Configuración > Notificaciones o reintente.'
     )
   }
 
   /** Ultimo resumen persistido tras enviar-todas o enviar-caso-manual (sin depender solo de logs). */
 
-  async obtenerUltimoEnvioBatch(): Promise<{
+  async obtenerUltimoEnvioBatch(opts?: {
+    signal?: AbortSignal
+  }): Promise<{
     ultimo: Record<string, unknown> | null
   }> {
     return await apiClient.get<{ ultimo: Record<string, unknown> | null }>(
-      `${this.baseUrl}/envio-batch/ultimo`
+      `${this.baseUrl}/envio-batch/ultimo`,
+      { signal: opts?.signal, timeout: 60000 }
     )
   }
 

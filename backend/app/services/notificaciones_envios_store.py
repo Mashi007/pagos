@@ -34,7 +34,8 @@ def merge_notificaciones_envios(existing: Any, incoming: Dict[str, Any]) -> Dict
     masivos_campanas: si la clave viene en incoming, sustituye el array completo; si se omite,
     se conserva el array ya persistido (permite guardar solo mora/prejudicial sin tocar masivos).
 
-    cron_envio_pago_2_dias_antes: clave legacy opcional en JSON (ignorada: ya no existe job de servidor).
+    cron_envio_pago_2_dias_antes: clave legacy opcional en JSON (metadato; el cron real del servidor se activa con
+    ENABLE_CRON_NOTIFICACIONES_2_DIAS_ANTES en .env y estado en configuracion notificaciones_cron_2_dias_antes_estado).
     """
     base: Dict[str, Any] = {}
     if isinstance(existing, dict):
