@@ -1176,10 +1176,6 @@ export default function ReportePagoPage({
     }
   }
 
-  // Pantalla de bienvenida con instrucciones generales (logo y colores RapiCredit: azul oscuro, naranja/marrón)
-
-  const LOGO_PUBLIC_SRC = `${(import.meta.env.BASE_URL || '/').replace(/\/?$/, '')}/logos/rapicredit-public.png`
-
   if (step === 0) {
     const steps = isInfopagos
       ? [
@@ -1264,24 +1260,6 @@ export default function ReportePagoPage({
                   : 'flex flex-col justify-center space-y-6 px-2 sm:px-0'
               }
             >
-              <div className="space-y-3">
-                <div className="flex items-center gap-3">
-                  <img
-                    src={LOGO_PUBLIC_SRC}
-                    alt="RapiCredit"
-                    className="h-12 object-contain sm:h-14"
-                  />
-                  <div>
-                    <p className="text-2xl font-bold text-white sm:text-3xl">
-                      RapiCredit
-                    </p>
-                    <p className="text-xs text-slate-400 sm:text-sm">
-                      Sistema de Cobranza
-                    </p>
-                  </div>
-                </div>
-              </div>
-
               <div className="space-y-2">
                 <h1 className="text-3xl font-bold text-white sm:text-4xl">
                   {isInfopagos ? 'Registra pagos' : 'Reporta tu pago'}
