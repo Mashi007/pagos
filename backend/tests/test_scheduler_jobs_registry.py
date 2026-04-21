@@ -56,6 +56,7 @@ def test_scheduler_registers_core_jobs(monkeypatch):
         assert jid in ids, (jid, sorted(ids))
     assert PAGOS_GMAIL_PENDING_SCAN_JOB_ID not in ids
     assert "notificaciones_pago_2_dias_antes_diario" not in ids
+    assert "recibos_conciliacion_email_diario" not in ids
 
     stop_scheduler()
     assert not scheduler_is_running()
@@ -79,6 +80,29 @@ def test_scheduler_registers_cron_2_dias_antes_when_enabled(monkeypatch):
     j = sch.get_job("notificaciones_pago_2_dias_antes_diario")
     assert j is not None
     assert "08:15" in (j.name or "")
+
+    stop_scheduler()
+
+
+def test_scheduler_registers_recibos_cron_when_enabled(monkeypatch):
+    monkeypatch.setattr(settings, "PAGOS_GMAIL_SCHEDULED_SCAN_ENABLED", False, raising=False)
+    monkeypatch.setattr(settings, "ENABLE_ABONOS_DRIVE_CACHE_NIGHTLY", False, raising=False)
+    monkeypatch.setattr(settings, "ENABLE_FECHA_ENTREGA_Q_CACHE_NIGHTLY", False, raising=False)
+    monkeypatch.setattr(settings, "ENABLE_PRESTAMO_CANDIDATOS_DRIVE_NIGHTLY", False, raising=False)
+    monkeypatch.setattr(settings, "ENABLE_CRON_NOTIFICACIONES_2_DIAS_ANTES", False, raising=False)
+    monkeypatch.setattr(settings, "ENABLE_RECIBOS_CONCILIACION_EMAIL_JOBS", True, raising=False)
+    monkeypatch.setattr(settings, "RECIBOS_CRON_HOUR", 11, raising=False)
+    monkeypatch.setattr(settings, "RECIBOS_CRON_MINUTE", 50, raising=False)
+
+    assert not scheduler_is_running()
+    start_scheduler()
+    sch = sched_mod._scheduler
+    assert sch is not None
+    ids = {j.id for j in sch.get_jobs()}
+    assert "recibos_conciliacion_email_diario" in ids
+    j = sch.get_job("recibos_conciliacion_email_diario")
+    assert j is not None
+    assert "11:50" in (j.name or "")
 
     stop_scheduler()
 

@@ -34,8 +34,9 @@ class Settings(BaseSettings):
             "snapshot candidatos préstamo desde drive diario 04:45 si aplica, "
             "Gmail programado si aplica), liquidado diario 21:00 Caracas, refresco programado de cache del dashboard, "
             "watcher de lider y, al arrancar, marcar syncs Gmail 'running' como error (desbloqueo tras deploy). "
-            "Los envíos masivos por pestaña de Notificaciones son manuales salvo el cron opcional "
-            "«2 días antes» (ENABLE_CRON_NOTIFICACIONES_2_DIAS_ANTES) y Recibos (ENABLE_RECIBOS_CONCILIACION_EMAIL_JOBS). "
+            "Los envíos masivos por pestaña de Notificaciones son manuales salvo crons opcionales "
+            "«2 días antes» (ENABLE_CRON_NOTIFICACIONES_2_DIAS_ANTES) y Recibos conciliación "
+            "(ENABLE_RECIBOS_CONCILIACION_EMAIL_JOBS + RECIBOS_CRON_HOUR/MINUTE). "
             "Por defecto False: ejecucion manual desde la aplicacion; sin limpieza automatica de Gmail al startup."
         ),
     )
@@ -260,13 +261,26 @@ class Settings(BaseSettings):
             "Valor vacío en .env se sustituye por recuerda@rapicreditca.com en el holder SMTP."
         ),
     )
-    # Submódulo Recibos: reservado; el envío masivo es manual (Notificaciones → Recibos, POST ejecutar).
+    # Submódulo Recibos: envío manual (UI / POST) y, si se activa, cron diario en servidor (misma lógica que ejecutar).
     ENABLE_RECIBOS_CONCILIACION_EMAIL_JOBS: bool = Field(
         default=False,
         description=(
-            "Reservado. No registra cron en APScheduler: los correos Recibos se envían solo de forma manual "
-            "desde la UI (o POST /notificaciones/recibos/ejecutar). Dejar False. Por defecto False."
+            "Si True y ENABLE_AUTOMATIC_SCHEDULED_JOBS=True (proceso líder), registra un job APScheduler diario "
+            "a RECIBOS_CRON_HOUR:RECIBOS_CRON_MINUTE (America/Caracas) que ejecuta el mismo envío que "
+            "POST /notificaciones/recibos/ejecutar para hoy (ventana 00:00–23:45). Por defecto False: solo manual."
         ),
+    )
+    RECIBOS_CRON_HOUR: int = Field(
+        default=11,
+        ge=0,
+        le=23,
+        description="Hora Caracas del envío automático diario Recibos (si ENABLE_RECIBOS_CONCILIACION_EMAIL_JOBS).",
+    )
+    RECIBOS_CRON_MINUTE: int = Field(
+        default=50,
+        ge=0,
+        le=59,
+        description="Minuto Caracas del envío automático diario Recibos.",
     )
     RECIBOS_FROM_EMAIL: str = Field(
         default="notificacion@rapicreditca.com",

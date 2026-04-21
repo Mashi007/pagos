@@ -8,9 +8,9 @@ Criterio de negocio (alineado a BD real):
 
 Ventana (por día de referencia ``fecha_dia`` en America/Caracas): **``fecha_registro`` del mismo día
 calendario desde 00:00 hasta 23:45 inclusive**. El envío masivo Recibos es **manual** (UI admin o POST
-``/notificaciones/recibos/ejecutar``); no hay cron en APScheduler. Los registros con hora de recepción
-**después de 23:45** ese día quedan fuera de la ventana de ese ``fecha_dia`` (no se reinterpretan al día
-siguiente en esta lógica).
+``/notificaciones/recibos/ejecutar``) y, si ``ENABLE_RECIBOS_CONCILIACION_EMAIL_JOBS`` y el scheduler
+líder están activos, también **automático** a la hora configurada (por defecto 11:50 Caracas). Los registros
+con hora de recepción **después de 23:45** ese día quedan fuera de la ventana de ese ``fecha_dia``.
 
 Regla: el **envío real** (no simulación) solo corre si ``fecha_dia`` es **hoy** ``hoy_negocio()``,
 salvo reenvío admin con ``permite_envio_real_fecha_no_hoy``.
