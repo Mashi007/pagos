@@ -342,8 +342,12 @@ def _collect_candidatos_canon_desde_reportados(rows: List[PagoReportado]) -> Set
 
 def _pagos_canonicos_presentes_para_claves(db: Session, claves: Set[str]) -> frozenset:
     """
-    Subconjunto de `claves` que existen en cartera (`pagos.doc_canon_*`), vía consultas acotadas.
-    Requiere columnas doc_canon_* pobladas (migración 041 + backfill).
+    Subconjunto de `claves` que existen en cartera.
+
+    Prioridad:
+    1) `pagos.doc_canon_*` (rápido con índices cuando están pobladas)
+    2) fallback legacy por `pagos.numero_documento` / `pagos.referencia_pago`
+       para filas antiguas sin backfill canónico.
     """
     if not claves:
         return frozenset()
@@ -364,6 +368,19 @@ def _pagos_canonicos_presentes_para_claves(db: Session, claves: Set[str]) -> fro
         ).scalars().all():
             if v:
                 found.add(v)
+        # Fallback legacy: si hay pagos sin doc_canon_* poblado, igual marcar DUPLICADO.
+        for v in db.execute(
+            select(Pago.numero_documento).where(Pago.numero_documento.in_(part))
+        ).scalars().all():
+            c = normalize_documento(v) if v else None
+            if c:
+                found.add(c)
+        for v in db.execute(
+            select(Pago.referencia_pago).where(Pago.referencia_pago.in_(part))
+        ).scalars().all():
+            c = normalize_documento(v) if v else None
+            if c:
+                found.add(c)
     return frozenset(found)
 
 

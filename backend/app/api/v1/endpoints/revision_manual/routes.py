@@ -901,7 +901,7 @@ def editar_prestamo_revision(
             detail="Falta la fecha de aprobación. Los préstamos aprobados, desembolsados o liquidados deben tener fecha de aprobación.",
         )
 
-    # No se exige orden fecha_aprobacion vs fecha_requerimiento: revisión manual puede ajustar ambas en pantalla.
+    # fecha_requerimiento no se compara manualmente: se deriva automáticamente desde fecha_aprobacion (-1 día).
 
     try:
         asegurar_prestamo_alineado_con_cliente(db, prestamo)
@@ -1030,7 +1030,7 @@ def guardar_prestamo_y_reconstruir_cuotas(
                 detail="Falta la fecha de aprobación. Los préstamos aprobados, desembolsados o liquidados deben tener fecha de aprobación.",
             )
 
-        # No se exige orden fecha_aprobacion vs fecha_requerimiento (mismo criterio que PUT /prestamos en revisión manual).
+        # fecha_requerimiento queda derivada automáticamente desde fecha_aprobacion (-1 día).
 
         try:
             asegurar_prestamo_alineado_con_cliente(db, prestamo)

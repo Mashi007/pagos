@@ -6,7 +6,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, field_validator
 
 PRESTAMO_ESTADOS_VALIDOS = frozenset(
     {"APROBADO", "DRAFT", "EN_REVISION", "EVALUADO", "RECHAZADO", "LIQUIDADO", "DESISTIMIENTO"}
@@ -43,7 +43,9 @@ class PrestamoBase(BaseModel):
     def estado_normalizado(cls, v: Optional[str]) -> str:
         return _normalizar_estado_prestamo(v or "DRAFT")
 
-    fecha_requerimiento: date
+    # Regla de sistema: se deriva automáticamente desde fecha_aprobacion (aprobacion - 1 día).
+    # Se mantiene opcional solo por compatibilidad de payloads legacy.
+    fecha_requerimiento: Optional[date] = None
     cuota_periodo: Optional[Decimal] = None
     producto: Optional[str] = None
 
@@ -73,15 +75,6 @@ class PrestamoCreate(PrestamoBase):
                 s = s.split(" ", 1)[0]
             return s
         return v
-
-    @model_validator(mode="after")
-    def aprobacion_no_antes_requerimiento(self):
-        if self.fecha_aprobacion < self.fecha_requerimiento:
-            raise ValueError(
-                "La fecha de aprobacion debe ser igual o posterior a la fecha de requerimiento"
-            )
-        return self
-
 
 class PrestamoUpdate(BaseModel):
     """Campos opcionales para actualizar."""

@@ -214,7 +214,6 @@ export function mapaColumnasPrestamoDesdeFilaEncabezado(
     'cedula',
     'total_financiamiento',
     'modalidad_pago',
-    'fecha_requerimiento',
     'fecha_aprobacion',
     'producto',
     'analista',
@@ -455,19 +454,7 @@ export function validarFilaPrestamoExcelParaGuardar(row: PrestamoExcelRow): {
     }
   }
 
-  const reqB = convertirFechaParaBackendPrestamo(
-    String(row.fecha_requerimiento ?? '')
-  )
   const apB = convertirFechaParaBackendPrestamo(String(row.fecha_aprobacion ?? ''))
-
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(reqB)) {
-    validation.fecha_requerimiento = {
-      isValid: false,
-      message: 'fecha_requerimiento inválida o vacía',
-    }
-    hasErrors = true
-    messages.push('fecha_requerimiento: inválida o vacía')
-  }
 
   if (!/^\d{4}-\d{2}-\d{2}$/.test(apB)) {
     validation.fecha_aprobacion = {
@@ -476,15 +463,6 @@ export function validarFilaPrestamoExcelParaGuardar(row: PrestamoExcelRow): {
     }
     hasErrors = true
     messages.push('fecha_aprobacion: inválida o vacía')
-  }
-
-  if (!hasErrors && apB < reqB) {
-    validation.fecha_aprobacion = {
-      isValid: false,
-      message: 'fecha_aprobacion debe ser >= fecha_requerimiento',
-    }
-    hasErrors = true
-    messages.push('fecha_aprobacion debe ser >= fecha_requerimiento')
   }
 
   validation.cuota_periodo = validatePrestamoField(

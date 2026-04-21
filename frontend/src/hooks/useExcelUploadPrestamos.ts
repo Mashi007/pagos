@@ -44,6 +44,14 @@ import {
   parseMontoPrestamoExcel,
 } from '../utils/prestamoExcelValidation'
 
+function restarUnDiaYmd(ymd: string): string {
+  const [y, m, d] = ymd.split('-').map(Number)
+  if (!y || !m || !d) return ''
+  const dt = new Date(Date.UTC(y, m - 1, d))
+  dt.setUTCDate(dt.getUTCDate() - 1)
+  return dt.toISOString().slice(0, 10)
+}
+
 export interface ExcelUploaderPrestamosProps {
   onClose: () => void
 
@@ -480,44 +488,6 @@ export function useExcelUploadPrestamos({
           return false
         }
 
-        const fechaRequerimientoBackend = convertirFechaParaBackendPrestamo(
-          row.fecha_requerimiento
-        )
-
-        const fechaValida = /^\d{4}-\d{2}-\d{2}$/.test(
-          fechaRequerimientoBackend
-        )
-
-        if (!fechaValida) {
-          setExcelData(prev =>
-            prev.map(r =>
-              r._rowIndex === row._rowIndex
-                ? {
-                    ...r,
-
-                    _hasErrors: true,
-
-                    _validation: {
-                      ...r._validation,
-
-                      fecha_requerimiento: {
-                        isValid: false,
-                        message: 'fecha_requerimiento inválida o vacía',
-                      },
-                    },
-                  }
-                : r
-            )
-          )
-
-          addToast(
-            'error',
-            `Fila ${row._rowIndex}: fecha_requerimiento inválida o vacía`
-          )
-
-          return false
-        }
-
         const fechaAprobacionBackend = convertirFechaParaBackendPrestamo(
           row.fecha_aprobacion
         )
@@ -535,14 +505,7 @@ export function useExcelUploadPrestamos({
           return false
         }
 
-        if (fechaAprobacionBackend < fechaRequerimientoBackend) {
-          addToast(
-            'error',
-            `Fila ${row._rowIndex}: fecha de aprobación debe ser >= fecha de requerimiento`
-          )
-
-          return false
-        }
+        const fechaRequerimientoBackend = restarUnDiaYmd(fechaAprobacionBackend)
 
         const total = Number(row.total_financiamiento) || 0
 
@@ -566,6 +529,7 @@ export function useExcelUploadPrestamos({
             | 'QUINCENAL'
             | 'SEMANAL',
 
+          // Regla única: fecha_requerimiento se deriva desde fecha_aprobacion.
           fecha_requerimiento: fechaRequerimientoBackend,
 
           fecha_aprobacion: fechaAprobacionBackend,
@@ -722,7 +686,6 @@ export function useExcelUploadPrestamos({
           'cedula',
           'total_financiamiento',
           'modalidad_pago',
-          'fecha_requerimiento',
           'fecha_aprobacion',
           'producto',
           'analista',
@@ -823,20 +786,6 @@ export function useExcelUploadPrestamos({
             if (!validation.isValid) hasErrors = true
           }
 
-          const fechaBackend = convertirFechaParaBackendPrestamo(
-            rowData.fecha_requerimiento
-          )
-
-          if (!/^\d{4}-\d{2}-\d{2}$/.test(fechaBackend)) {
-            rowData._validation.fecha_requerimiento = {
-              isValid: false,
-
-              message: 'fecha_requerimiento inválida o vacía',
-            }
-
-            hasErrors = true
-          }
-
           const fechaAprobBackend = convertirFechaParaBackendPrestamo(
             rowData.fecha_aprobacion
           )
@@ -850,15 +799,10 @@ export function useExcelUploadPrestamos({
             }
 
             hasErrors = true
-          } else if (fechaAprobBackend < fechaBackend) {
-            rowData._validation.fecha_aprobacion = {
-              isValid: false,
-
-              message: 'fecha_aprobacion debe ser >= fecha_requerimiento',
-            }
-
-            hasErrors = true
           }
+          rowData.fecha_requerimiento = /^\d{4}-\d{2}-\d{2}$/.test(fechaAprobBackend)
+            ? restarUnDiaYmd(fechaAprobBackend)
+            : ''
 
           rowData._validation.concesionario = { isValid: true }
 
@@ -1039,42 +983,18 @@ export function useExcelUploadPrestamos({
             'cedula',
             'total_financiamiento',
             'modalidad_pago',
-            'fecha_requerimiento',
             'fecha_aprobacion',
             'producto',
             'analista',
             'numero_cuotas',
           ]
 
-          const reqBackend = convertirFechaParaBackendPrestamo(
-            String(updated.fecha_requerimiento ?? '')
-          )
-
-          const apBackend = convertirFechaParaBackendPrestamo(
-            String(updated.fecha_aprobacion ?? '')
-          )
-
-          let valAp = updated._validation.fecha_aprobacion
-
-          if (
-            /^\d{4}-\d{2}-\d{2}$/.test(reqBackend) &&
-            /^\d{4}-\d{2}-\d{2}$/.test(apBackend) &&
-            apBackend < reqBackend
-          ) {
-            valAp = {
-              isValid: false,
-              message: 'fecha_aprobacion debe ser >= fecha_requerimiento',
-            }
-          } else {
-            valAp = validatePrestamoField(
-              'fecha_aprobacion',
-              updated.fecha_aprobacion as string | number
-            )
-          }
-
           updated._validation = {
             ...updated._validation,
-            fecha_aprobacion: valAp,
+            fecha_aprobacion: validatePrestamoField(
+              'fecha_aprobacion',
+              updated.fecha_aprobacion as string | number
+            ),
           }
 
           updated._hasErrors = required.some(
