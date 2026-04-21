@@ -40,6 +40,10 @@ function getAuthHeaders(): Record<string, string> {
   return {}
 }
 
+function hasStaffAccessToken(): boolean {
+  return Object.keys(getAuthHeaders()).length > 0
+}
+
 const isDev =
   typeof import.meta !== 'undefined' &&
   (import.meta as { env?: { DEV?: boolean } }).env?.DEV
@@ -351,6 +355,33 @@ export function Logo({
       timeoutId = setTimeout(() => controller?.abort(), 5000) // Timeout de 5 segundos
 
       try {
+        // Sin sesión: `/configuracion/general` responde 401 (endpoint staff). Evitar request huérfano en login/públicas.
+        if (!hasStaffAccessToken()) {
+          devDebug(
+            'Logo: sin access_token; se omite GET /api/v1/configuracion/general (evita 401 en pantallas públicas)'
+          )
+
+          if (timeoutId) clearTimeout(timeoutId)
+
+          logoCache.lastCheckTime = Date.now()
+          logoCache.isChecking = false
+
+          // Mantener logo cacheado si existe; si no, dejar default.
+          if (logoCache.logoUrl) {
+            if (isMounted()) {
+              setCustomLogoUrl(logoCache.logoUrl)
+              setHasChecked(true)
+            }
+          } else {
+            if (isMounted()) {
+              setCustomLogoUrl(null)
+              setHasChecked(true)
+            }
+          }
+
+          return
+        }
+
         // PRIMERO: Intentar obtener el nombre del logo desde la configuración general (apiClient = base URL correcta)
 
         try {
@@ -752,267 +783,215 @@ export function Logo({
 
         const base = getApiBase()
 
-        apiClient
-          .get<{ logo_filename?: string }>('/api/v1/configuracion/general')
+        const reloadFromConfigOrEvent = async () => {
+          let newLogoUrl: string | null = null
+          let config: { logo_filename?: string } | null = null
 
-          .then(async config => {
-            let newLogoUrl: string | null = null
-
-            if (config.logo_filename) {
-              const logoPath = `${base}/api/v1/configuracion/logo/${config.logo_filename}`
-
-              try {
-                const headResponse = await fetch(logoPath, {
-                  method: 'HEAD',
-                  headers: getAuthHeaders(),
-                })
-
-                if (headResponse.ok) {
-                  newLogoUrl = `${logoPath}?t=${Date.now()}`
-
-                  devDebug(
-                    'Logo recargado desde configuración (BD):',
-                    config.logo_filename
-                  )
-                } else {
-                  devWarn(
-                    'Logo no encontrado al recargar desde configuración:',
-                    config.logo_filename
-                  )
-
-                  logoCache.logoNotFound = true
-
-                  logoCache.logoUrl = null
-
-                  logoCache.logoFilename = null // âœ… Limpiar nombre del archivo
-
-                  logoCache.hasChecked = true
-
-                  logoCache.version += 1
-
-                  saveLogoMetadata(null) // âœ… Limpiar metadatos guardados
-
-                  notifyLogoListeners(null, logoCache.version)
-
-                  return
-                }
-              } catch (headError) {
-                devWarn('Error verificando logo al recargar:', headError)
-
-                logoCache.logoNotFound = true
-
-                logoCache.logoUrl = null
-
-                logoCache.hasChecked = true
-
-                logoCache.version += 1
-
-                notifyLogoListeners(null, logoCache.version)
-
-                return
-              }
-            } else if (filename) {
-              // Fallback: usar filename del evento si no está en BD aún
-
-              const logoPath = `${base}/api/v1/configuracion/logo/${filename}`
-
-              try {
-                const headResponse = await fetch(logoPath, {
-                  method: 'HEAD',
-                  headers: getAuthHeaders(),
-                })
-
-                if (headResponse.ok) {
-                  newLogoUrl = `${logoPath}?t=${Date.now()}`
-
-                  devDebug(
-                    'Logo actualizado desde evento (fallback):',
-                    filename
-                  )
-                } else {
-                  devWarn('Logo no encontrado en fallback:', filename)
-
-                  logoCache.logoNotFound = true
-
-                  logoCache.logoUrl = null
-
-                  logoCache.logoFilename = null // âœ… Limpiar nombre del archivo
-
-                  logoCache.hasChecked = true
-
-                  logoCache.version += 1
-
-                  saveLogoMetadata(null) // âœ… Limpiar metadatos guardados
-
-                  notifyLogoListeners(null, logoCache.version)
-
-                  return
-                }
-              } catch (headError) {
-                devWarn('Error verificando logo en fallback:', headError)
-
-                logoCache.logoNotFound = true
-
-                logoCache.logoUrl = null
-
-                logoCache.hasChecked = true
-
-                logoCache.version += 1
-
-                notifyLogoListeners(null, logoCache.version)
-
-                return
-              }
+          if (hasStaffAccessToken()) {
+            try {
+              config = await apiClient.get<{ logo_filename?: string }>(
+                '/api/v1/configuracion/general'
+              )
+            } catch (err) {
+              devWarn('Error recargando logo desde configuración:', err)
+              config = null
             }
+          } else {
+            devDebug(
+              'LogoUpdated: sin access_token; se omite GET /api/v1/configuracion/general (usa filename/url del evento)'
+            )
+          }
 
-            if (newLogoUrl) {
-              // Actualizar caché y notificar a todos los listeners
+          if (config?.logo_filename) {
+            const logoPath = `${base}/api/v1/configuracion/logo/${config.logo_filename}`
 
-              const logoFilename = config?.logo_filename || filename || null
+            try {
+              const headResponse = await fetch(logoPath, {
+                method: 'HEAD',
+                headers: getAuthHeaders(),
+              })
 
-              logoCache.logoUrl = newLogoUrl
+              if (headResponse.ok) {
+                newLogoUrl = `${logoPath}?t=${Date.now()}`
 
-              logoCache.logoFilename = logoFilename // âœ… Guardar nombre del archivo
+                devDebug('Logo recargado desde configuración (BD):', config.logo_filename)
+              } else {
+                devWarn(
+                  'Logo no encontrado al recargar desde configuración:',
+                  config.logo_filename
+                )
 
-              logoCache.logoNotFound = false // âœ… Resetear flag cuando se actualiza el logo
+                logoCache.logoNotFound = true
+
+                logoCache.logoUrl = null
+
+                logoCache.logoFilename = null // âœ… Limpiar nombre del archivo
+
+                logoCache.hasChecked = true
+
+                logoCache.version += 1
+
+                saveLogoMetadata(null) // âœ… Limpiar metadatos guardados
+
+                notifyLogoListeners(null, logoCache.version)
+
+                return
+              }
+            } catch (headError) {
+              devWarn('Error verificando logo al recargar:', headError)
+
+              logoCache.logoNotFound = true
+
+              logoCache.logoUrl = null
 
               logoCache.hasChecked = true
 
               logoCache.version += 1
 
-              // âœ… Guardar metadatos en localStorage
+              notifyLogoListeners(null, logoCache.version)
 
-              if (logoFilename) {
-                saveLogoMetadata(logoFilename)
+              return
+            }
+          } else if (filename) {
+            // Fallback: usar filename del evento si no está en BD aún
+
+            const logoPath = `${base}/api/v1/configuracion/logo/${filename}`
+
+            try {
+              const headResponse = await fetch(logoPath, {
+                method: 'HEAD',
+                headers: getAuthHeaders(),
+              })
+
+              if (headResponse.ok) {
+                newLogoUrl = `${logoPath}?t=${Date.now()}`
+
+                devDebug('Logo actualizado desde evento (fallback):', filename)
+              } else {
+                devWarn('Logo no encontrado en fallback:', filename)
+
+                logoCache.logoNotFound = true
+
+                logoCache.logoUrl = null
+
+                logoCache.logoFilename = null // âœ… Limpiar nombre del archivo
+
+                logoCache.hasChecked = true
+
+                logoCache.version += 1
+
+                saveLogoMetadata(null) // âœ… Limpiar metadatos guardados
+
+                notifyLogoListeners(null, logoCache.version)
+
+                return
+              }
+            } catch (headError) {
+              devWarn('Error verificando logo en fallback:', headError)
+
+              logoCache.logoNotFound = true
+
+              logoCache.logoUrl = null
+
+              logoCache.hasChecked = true
+
+              logoCache.version += 1
+
+              notifyLogoListeners(null, logoCache.version)
+
+              return
+            }
+          }
+
+          if (newLogoUrl) {
+            // Actualizar caché y notificar a todos los listeners
+
+            const logoFilename = config?.logo_filename || filename || null
+
+            logoCache.logoUrl = newLogoUrl
+
+            logoCache.logoFilename = logoFilename // âœ… Guardar nombre del archivo
+
+            logoCache.logoNotFound = false // âœ… Resetear flag cuando se actualiza el logo
+
+            logoCache.hasChecked = true
+
+            logoCache.version += 1
+
+            // âœ… Guardar metadatos en localStorage
+
+            if (logoFilename) {
+              saveLogoMetadata(logoFilename)
+            }
+
+            // âœ… Actualizar estado local para mostrar logo directamente
+
+            if (isMounted()) {
+              setCustomLogoUrl(newLogoUrl)
+
+              setLogoVersion(logoCache.version)
+
+              // âœ… Precargar el logo y mostrarlo directamente cuando esté listo
+
+              const img = new Image()
+
+              img.onload = () => {
+                if (isMounted()) {
+                  setImageLoaded(true) // âœ… Mostrar logo personalizado directamente
+                }
               }
 
-              // âœ… Actualizar estado local para mostrar logo directamente
-
-              if (isMounted()) {
-                setCustomLogoUrl(newLogoUrl)
-
-                setLogoVersion(logoCache.version)
-
-                // âœ… Precargar el logo y mostrarlo directamente cuando esté listo
-
-                const img = new Image()
-
-                img.onload = () => {
-                  if (isMounted()) {
-                    setImageLoaded(true) // âœ… Mostrar logo personalizado directamente
-                  }
-                }
-
-                img.onerror = () => {
-                  if (isMounted()) {
-                    setImageLoaded(false)
-                  }
-                }
-
-                img.src = newLogoUrl
-
-                // âœ… Si hay logo anterior, mantenerlo visible hasta que el nuevo esté listo
-
-                if (customLogoUrl) {
-                  setImageLoaded(true)
+              img.onerror = () => {
+                if (isMounted()) {
+                  setImageLoaded(false)
                 }
               }
 
-              notifyLogoListeners(newLogoUrl, logoCache.version)
+              img.src = newLogoUrl
+
+              // âœ… Si hay logo anterior, mantenerlo visible hasta que el nuevo esté listo
+
+              if (customLogoUrl) {
+                setImageLoaded(true)
+              }
             }
-          })
 
-          .catch(err => {
-            devWarn('Error recargando logo desde configuración:', err)
+            notifyLogoListeners(newLogoUrl, logoCache.version)
+            return
+          }
 
-            // Fallback: usar valores del evento directamente, pero verificar primero
-
-            let newLogoUrl: string | null = null
-
-            if (url) {
-              fetch(url, { method: 'HEAD', headers: getAuthHeaders() })
-                .then(headRes => {
-                  if (headRes.ok) {
-                    newLogoUrl = `${url}?t=${Date.now()}`
-
-                    logoCache.logoUrl = newLogoUrl
-
-                    logoCache.logoNotFound = false
-
-                    logoCache.hasChecked = true
-
-                    logoCache.version += 1
-
-                    notifyLogoListeners(newLogoUrl, logoCache.version)
-                  } else {
-                    logoCache.logoNotFound = true
-
-                    logoCache.logoUrl = null
-
-                    logoCache.hasChecked = true
-
-                    logoCache.version += 1
-
-                    notifyLogoListeners(null, logoCache.version)
-                  }
-                })
-
-                .catch(() => {
-                  logoCache.logoNotFound = true
-
-                  logoCache.logoUrl = null
-
-                  logoCache.hasChecked = true
-
-                  logoCache.version += 1
-
-                  notifyLogoListeners(null, logoCache.version)
-                })
-            } else if (filename) {
-              const baseUrl = getApiBase()
-
-              const logoPath = `${baseUrl}/api/v1/configuracion/logo/${filename}`
-
-              fetch(logoPath, { method: 'HEAD', headers: getAuthHeaders() })
-                .then(headRes => {
-                  if (headRes.ok) {
-                    newLogoUrl = `${logoPath}?t=${Date.now()}`
-
-                    logoCache.logoUrl = newLogoUrl
-
-                    logoCache.logoNotFound = false
-
-                    logoCache.hasChecked = true
-
-                    logoCache.version += 1
-
-                    notifyLogoListeners(newLogoUrl, logoCache.version)
-                  } else {
-                    logoCache.logoNotFound = true
-
-                    logoCache.logoUrl = null
-
-                    logoCache.hasChecked = true
-
-                    logoCache.version += 1
-
-                    notifyLogoListeners(null, logoCache.version)
-                  }
-                })
-
-                .catch(() => {
-                  logoCache.logoNotFound = true
-
-                  logoCache.logoUrl = null
-
-                  logoCache.hasChecked = true
-
-                  logoCache.version += 1
-
-                  notifyLogoListeners(null, logoCache.version)
-                })
+          // Si no pudimos resolver por BD/filename, intentar URL directa del evento (misma lógica que el catch previo)
+          if (url) {
+            try {
+              const headRes = await fetch(url, {
+                method: 'HEAD',
+                headers: getAuthHeaders(),
+              })
+              if (headRes.ok) {
+                const resolved = `${url}?t=${Date.now()}`
+                logoCache.logoUrl = resolved
+                logoCache.logoNotFound = false
+                logoCache.hasChecked = true
+                logoCache.version += 1
+                notifyLogoListeners(resolved, logoCache.version)
+              } else {
+                logoCache.logoNotFound = true
+                logoCache.logoUrl = null
+                logoCache.hasChecked = true
+                logoCache.version += 1
+                notifyLogoListeners(null, logoCache.version)
+              }
+            } catch {
+              logoCache.logoNotFound = true
+              logoCache.logoUrl = null
+              logoCache.hasChecked = true
+              logoCache.version += 1
+              notifyLogoListeners(null, logoCache.version)
             }
-          })
+          }
+        }
+
+        void reloadFromConfigOrEvent()
 
         return
       }

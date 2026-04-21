@@ -33,6 +33,7 @@ import {
   enviarReciboManual,
   openComprobanteInNewTab,
   openReciboPdfInNewTab,
+  eliminarPagoReportado,
   type PagoReportadoDetalleResponse,
   type CambiarEstadoPagoResponse,
   etiquetaCanalReportado,
@@ -134,6 +135,8 @@ export default function CobrosDetallePage() {
 
   const [sendingRecibo, setSendingRecibo] = useState(false)
 
+  const [eliminandoReporte, setEliminandoReporte] = useState(false)
+
   const load = async () => {
     if (!id) return
 
@@ -203,6 +206,31 @@ export default function CobrosDetallePage() {
       toast.error(e?.message || 'Error al enviar.')
     } finally {
       setSendingRecibo(false)
+    }
+  }
+
+  const handleEliminarReporteDuplicado = async () => {
+    if (!id) return
+    if (
+      !window.confirm(
+        '¿Eliminar este pago reportado? La acción no se puede deshacer. Volverá al listado de pagos reportados.'
+      )
+    ) {
+      return
+    }
+    setEliminandoReporte(true)
+    try {
+      const res = await eliminarPagoReportado(Number(id))
+      toast.success(res?.mensaje || 'Pago reportado eliminado.')
+      navigate('/cobros/pagos-reportados')
+    } catch (e: unknown) {
+      const any = e as { response?: { data?: { detail?: unknown } }; message?: string }
+      const d = any?.response?.data?.detail
+      const msg =
+        typeof d === 'string' ? d : any?.message || 'No se pudo eliminar el reporte.'
+      toast.error(msg)
+    } finally {
+      setEliminandoReporte(false)
     }
   }
 
@@ -386,6 +414,60 @@ export default function CobrosDetallePage() {
                   )}
                 </p>
               ) : null}
+              <div className="mt-2 flex flex-wrap gap-2">
+                {typeof detalle.prestamo_existente_id === 'number' ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={eliminandoReporte}
+                    onClick={() =>
+                      navigate(
+                        `/prestamos?filtro_prestamo_id=${detalle.prestamo_existente_id}`
+                      )
+                    }
+                  >
+                    Abrir préstamo #{detalle.prestamo_existente_id}
+                  </Button>
+                ) : null}
+                {typeof detalle.prestamo_objetivo_id === 'number' &&
+                typeof detalle.prestamo_existente_id === 'number' &&
+                detalle.prestamo_objetivo_id !== detalle.prestamo_existente_id ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={eliminandoReporte}
+                    onClick={() =>
+                      navigate(
+                        `/prestamos?filtro_prestamo_id=${detalle.prestamo_objetivo_id}`
+                      )
+                    }
+                  >
+                    Abrir préstamo actual #{detalle.prestamo_objetivo_id}
+                  </Button>
+                ) : null}
+                <Button
+                  type="button"
+                  variant="destructive"
+                  size="sm"
+                  disabled={
+                    eliminandoReporte ||
+                    accion !== 'idle' ||
+                    detalle.estado === 'importado'
+                  }
+                  onClick={() => void handleEliminarReporteDuplicado()}
+                >
+                  {eliminandoReporte ? (
+                    <>
+                      <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+                      Eliminando…
+                    </>
+                  ) : (
+                    'Eliminar'
+                  )}
+                </Button>
+              </div>
             </div>
           )}
 

@@ -3019,10 +3019,35 @@ async def escaner_extraer_comprobante_infopagos(
         "notas_modelo": gem.get("notas") or "",
     }
 
+    # Misma colisión que detalle Cobros: documento ya en cartera + préstamo del pago existente / objetivo.
+    duplicado_en_pagos = False
+    pago_existente_id: Optional[int] = None
+    prestamo_existente_id: Optional[int] = None
+    prestamo_objetivo_id: Optional[int] = None
+    if len(prestamos_aprob) == 1:
+        prestamo_objetivo_id = int(prestamos_aprob[0])
+    num_op_trim = (num_op or "").strip()
+    if num_op_trim:
+        pr_scan = SimpleNamespace(
+            numero_operacion=num_op_trim[:100],
+            referencia_interna="",
+        )
+        duplicado_en_pagos = pago_reportado_colisiona_tabla_pagos(db, pr_scan)
+        if duplicado_en_pagos:
+            pago_existente_id = primer_pago_id_si_existe_para_claves_reportado(db, pr_scan)
+            if pago_existente_id is not None:
+                p_exist = db.execute(select(Pago).where(Pago.id == pago_existente_id)).scalars().first()
+                if p_exist is not None:
+                    prestamo_existente_id = getattr(p_exist, "prestamo_id", None)
+
     return {
         "ok": True,
         "error": None,
         "sugerencia": sugerencia,
         "validacion_campos": validacion_campos,
         "validacion_reglas": validacion_reglas,
+        "duplicado_en_pagos": duplicado_en_pagos,
+        "pago_existente_id": pago_existente_id,
+        "prestamo_existente_id": prestamo_existente_id,
+        "prestamo_objetivo_id": prestamo_objetivo_id,
     }

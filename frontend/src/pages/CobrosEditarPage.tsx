@@ -25,6 +25,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import {
   getPagoReportadoDetalle,
   updatePagoReportado,
+  eliminarPagoReportado,
   type PagoReportadoDetalleResponse,
 } from '../services/cobrosService'
 
@@ -109,12 +110,15 @@ export default function CobrosEditarPage() {
 
   const [vistoSaving, setVistoSaving] = useState(false)
 
+  const [eliminandoReporte, setEliminandoReporte] = useState(false)
+
   const [vistoAyudaOpen, setVistoAyudaOpen] = useState(false)
 
   const ultimoErrorVistoRef = useRef('')
 
   const [otroInstitucion, setOtroInstitucion] = useState('')
   const tokensSufijoUsadosRef = useRef<Set<string>>(new Set())
+  const autoSufijoAbiertoRef = useRef(false)
 
   const [form, setForm] = useState({
     nombres: '',
@@ -284,6 +288,40 @@ export default function CobrosEditarPage() {
     load()
   }, [id])
 
+  useEffect(() => {
+    if (!detalle) return
+    if (!detalle.duplicado_en_pagos) return
+    if (autoSufijoAbiertoRef.current) return
+    // Evitar reabrir si ya quedó token asignado por Visto/sufijo.
+    if (SUFIJO_VISTO_ARCHIVO_RE.test((detalle.numero_operacion || '').trim())) return
+
+    autoSufijoAbiertoRef.current = true
+    ultimoErrorVistoRef.current =
+      'DUPLICADO_EN_PAGOS: abrir flujo de sufijo para desambiguar el número de operación.'
+    setVistoAyudaOpen(true)
+  }, [detalle])
+
+  const handleEliminarReporteDuplicado = async () => {
+    if (!id) return
+    if (
+      !window.confirm(
+        '¿Eliminar este pago reportado? La acción no se puede deshacer. Volverá al listado de pagos reportados.'
+      )
+    ) {
+      return
+    }
+    setEliminandoReporte(true)
+    try {
+      const res = await eliminarPagoReportado(Number(id))
+      toast.success(res?.mensaje || 'Pago reportado eliminado.')
+      navigate('/cobros/pagos-reportados')
+    } catch (e: unknown) {
+      toast.error(detalleErrorApi(e))
+    } finally {
+      setEliminandoReporte(false)
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
@@ -381,7 +419,7 @@ export default function CobrosEditarPage() {
           <Button
             type="button"
             variant="secondary"
-            disabled={loading || saving || vistoSaving}
+            disabled={loading || saving || vistoSaving || eliminandoReporte}
             onClick={() => load()}
           >
             Recargar datos
@@ -452,12 +490,13 @@ export default function CobrosEditarPage() {
               )}
             </p>
           ) : null}
-          {typeof detalle.prestamo_existente_id === 'number' && (
-            <div className="mt-2 flex flex-wrap gap-2">
+          <div className="mt-2 flex flex-wrap gap-2">
+            {typeof detalle.prestamo_existente_id === 'number' ? (
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
+                disabled={eliminandoReporte}
                 onClick={() =>
                   navigate(
                     `/prestamos?filtro_prestamo_id=${detalle.prestamo_existente_id}`
@@ -466,23 +505,41 @@ export default function CobrosEditarPage() {
               >
                 Abrir préstamo #{detalle.prestamo_existente_id}
               </Button>
-              {typeof detalle.prestamo_objetivo_id === 'number' &&
-              detalle.prestamo_objetivo_id !== detalle.prestamo_existente_id ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() =>
-                    navigate(
-                      `/prestamos?filtro_prestamo_id=${detalle.prestamo_objetivo_id}`
-                    )
-                  }
-                >
-                  Abrir préstamo actual #{detalle.prestamo_objetivo_id}
-                </Button>
-              ) : null}
-            </div>
-          )}
+            ) : null}
+            {typeof detalle.prestamo_objetivo_id === 'number' &&
+            typeof detalle.prestamo_existente_id === 'number' &&
+            detalle.prestamo_objetivo_id !== detalle.prestamo_existente_id ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={eliminandoReporte}
+                onClick={() =>
+                  navigate(
+                    `/prestamos?filtro_prestamo_id=${detalle.prestamo_objetivo_id}`
+                  )
+                }
+              >
+                Abrir préstamo actual #{detalle.prestamo_objetivo_id}
+              </Button>
+            ) : null}
+            <Button
+              type="button"
+              variant="destructive"
+              size="sm"
+              disabled={eliminandoReporte || saving || vistoSaving}
+              onClick={() => void handleEliminarReporteDuplicado()}
+            >
+              {eliminandoReporte ? (
+                <>
+                  <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+                  Eliminando…
+                </>
+              ) : (
+                'Eliminar'
+              )}
+            </Button>
+          </div>
         </div>
       )}
 

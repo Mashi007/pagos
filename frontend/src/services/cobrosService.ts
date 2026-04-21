@@ -490,6 +490,16 @@ export interface EscanerInfopagosExtraerResponse {
   validacion_campos?: string | null
 
   validacion_reglas?: string | null
+
+  /** Colisión con `pagos` (misma lógica que detalle Cobros). */
+  duplicado_en_pagos?: boolean
+
+  pago_existente_id?: number | null
+
+  prestamo_existente_id?: number | null
+
+  /** Préstamo APROBADO único al que se aplicará el reporte (si aplica). */
+  prestamo_objetivo_id?: number | null
 }
 
 /** Escáner Infopagos (auth): Gemini sugiere campos desde el comprobante; no guarda el reporte. */

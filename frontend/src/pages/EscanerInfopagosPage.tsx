@@ -4,7 +4,7 @@
  */
 import { useCallback, useMemo, useRef, useState } from 'react'
 
-import { Brain, Loader2, CheckCircle2, AlertTriangle, Lock } from 'lucide-react'
+import { Brain, Loader2, CheckCircle2, AlertTriangle } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 import { Button } from '../components/ui/button'
@@ -22,8 +22,21 @@ import {
   extraerCaracteresCedulaPublica,
   normalizarCedulaParaProcesar,
 } from '../utils/cedulaConsultaPublica'
+import {
+  aplicarSufijoVistoADocumento,
+  collectTokensSufijoVistoArchivoDesdeFilas,
+  SUFIJO_VISTO_ARCHIVO_RE,
+} from '../utils/documentoSufijoVisto'
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024
+
+const INSTITUCIONES_FINANCIERAS = [
+  'BINANCE',
+  'BNC',
+  'Banco de Venezuela',
+  'Mercantil',
+  'Recibos',
+] as const
 
 const ALLOWED_FILE_TYPES = [
   'image/jpeg',
@@ -172,6 +185,7 @@ type Fase = 'cedula' | 'imagen' | 'formulario' | 'exito'
 
 export default function EscanerInfopagosPage() {
   const honeypotRef = useRef<HTMLInputElement>(null)
+  const tokensSufijoUsadosRef = useRef<Set<string>>(new Set())
 
   const [fase, setFase] = useState<Fase>('cedula')
   const [cedulaRaw, setCedulaRaw] = useState('')
@@ -187,9 +201,19 @@ export default function EscanerInfopagosPage() {
 
   const [fechaPago, setFechaPago] = useState('')
   const [fechaDetectada, setFechaDetectada] = useState('')
-  const [habilitarEdicionFecha, setHabilitarEdicionFecha] = useState(false)
+  /** Si hay fecha en imagen: el usuario debe confirmar o rechazar explícitamente. */
+  const [confirmaFechaDetectada, setConfirmaFechaDetectada] = useState<
+    null | 'si' | 'no'
+  >(null)
   const [justificacionFecha, setJustificacionFecha] = useState('')
   const [institucion, setInstitucion] = useState('')
+  const [otroInstitucion, setOtroInstitucion] = useState('')
+  const [escanerColision, setEscanerColision] = useState<{
+    duplicado_en_pagos: boolean
+    pago_existente_id: number | null
+    prestamo_existente_id: number | null
+    prestamo_objetivo_id: number | null
+  } | null>(null)
   const [numeroOperacion, setNumeroOperacion] = useState('')
   const [montoStr, setMontoStr] = useState('')
   const [moneda, setMoneda] = useState<'BS' | 'USD'>('USD')
@@ -205,6 +229,35 @@ export default function EscanerInfopagosPage() {
     () => normalizarCedulaParaProcesar(extraerCaracteresCedulaPublica(cedulaRaw)),
     [cedulaRaw]
   )
+
+  const hayDuplicadoOperacion = useMemo(() => {
+    const v = `${validacionCampos ?? ''} ${validacionReglas ?? ''}`
+    if (/DUPLICADO/i.test(v)) return true
+    return Boolean(escanerColision?.duplicado_en_pagos)
+  }, [escanerColision, validacionCampos, validacionReglas])
+
+  const handleAplicarSufijoOperacion = useCallback((letter: 'A' | 'P') => {
+    const actual = numeroOperacion.trim()
+    if (!actual) {
+      toast.error('Primero escriba un número de operación.')
+      return
+    }
+    if (SUFIJO_VISTO_ARCHIVO_RE.test(actual)) {
+      toast.error('Este número ya tiene sufijo admin (_A#### / _P####).')
+      return
+    }
+    const nuevo = aplicarSufijoVistoADocumento(
+      actual,
+      letter,
+      tokensSufijoUsadosRef.current
+    )
+    if (!nuevo || nuevo === actual) {
+      toast.error('No se pudo asignar sufijo.')
+      return
+    }
+    setNumeroOperacion(nuevo)
+    toast.success(`Sufijo _${letter}#### aplicado al número de operación.`)
+  }, [numeroOperacion])
 
   const handleValidarCedula = useCallback(async () => {
     if (!cedulaNormalizada.valido) {
@@ -249,6 +302,7 @@ export default function EscanerInfopagosPage() {
     setEscaneando(true)
     setValidacionCampos(null)
     setValidacionReglas(null)
+    setEscanerColision(null)
     try {
       const res = await escanerInfopagosExtraerComprobante(fd)
       if (!res.ok) {
@@ -263,9 +317,16 @@ export default function EscanerInfopagosPage() {
       const fechaExtraida = s.fecha_pago || ''
       setFechaPago(fechaExtraida)
       setFechaDetectada(fechaExtraida)
-      setHabilitarEdicionFecha(!fechaExtraida)
+      setConfirmaFechaDetectada(null)
       setJustificacionFecha('')
-      setInstitucion(s.institucion_financiera || '')
+      const inst = (s.institucion_financiera || '').trim()
+      if (INSTITUCIONES_FINANCIERAS.includes(inst as (typeof INSTITUCIONES_FINANCIERAS)[number])) {
+        setInstitucion(inst)
+        setOtroInstitucion('')
+      } else {
+        setInstitucion(inst)
+        setOtroInstitucion(inst)
+      }
       setNumeroOperacion(s.numero_operacion || '')
       setMoneda(s.moneda === 'BS' ? 'BS' : 'USD')
       if (s.monto != null && Number.isFinite(s.monto)) {
@@ -277,6 +338,22 @@ export default function EscanerInfopagosPage() {
       setCedulaPagadorImg(s.cedula_pagador_en_comprobante || '')
       setValidacionCampos(res.validacion_campos ?? null)
       setValidacionReglas(res.validacion_reglas ?? null)
+      setEscanerColision({
+        duplicado_en_pagos: Boolean(res.duplicado_en_pagos),
+        pago_existente_id:
+          typeof res.pago_existente_id === 'number' ? res.pago_existente_id : null,
+        prestamo_existente_id:
+          typeof res.prestamo_existente_id === 'number'
+            ? res.prestamo_existente_id
+            : null,
+        prestamo_objetivo_id:
+          typeof res.prestamo_objetivo_id === 'number'
+            ? res.prestamo_objetivo_id
+            : null,
+      })
+      tokensSufijoUsadosRef.current = collectTokensSufijoVistoArchivoDesdeFilas([
+        { numero_documento: s.numero_operacion || '' },
+      ])
       setFase('formulario')
       toast.success('Datos sugeridos. Revise y corrija si hace falta antes de guardar.')
     } catch {
@@ -296,16 +373,30 @@ export default function EscanerInfopagosPage() {
       toast.error(vF.error || 'Fecha inválida.')
       return
     }
-    const fechaCambioManual =
-      Boolean(fechaDetectada) &&
-      Boolean(habilitarEdicionFecha) &&
-      fechaPago.trim() !== fechaDetectada.trim()
-    if (habilitarEdicionFecha && justificacionFecha.trim().length < 12) {
-      toast.error('Indique una justificación mínima de 12 caracteres para corregir la fecha.')
+    const hayFechaDetectada = Boolean(fechaDetectada.trim())
+    if (hayFechaDetectada && confirmaFechaDetectada == null) {
+      toast.error(
+        'Indique si la fecha leída del comprobante es correcta (Sí) o si la corregirá (No).'
+      )
       return
     }
-    if (fechaCambioManual && !justificacionFecha.trim()) {
-      toast.error('Debe justificar por qué corrige la fecha detectada en el comprobante.')
+    if (
+      hayFechaDetectada &&
+      confirmaFechaDetectada === 'si' &&
+      fechaPago.trim() !== fechaDetectada.trim()
+    ) {
+      toast.error(
+        'Marcó «Sí» a la fecha del comprobante: el campo debe coincidir con la fecha detectada en la imagen, o elija «No» y justifique el cambio.'
+      )
+      return
+    }
+    const requiereJustifFecha =
+      (hayFechaDetectada && confirmaFechaDetectada === 'no') ||
+      (hayFechaDetectada && fechaPago.trim() !== fechaDetectada.trim())
+    if (requiereJustifFecha && justificacionFecha.trim().length < 12) {
+      toast.error(
+        'Indique una justificación de al menos 12 caracteres cuando corrige la fecha del comprobante o respondió «No».'
+      )
       return
     }
     if (!institucion.trim()) {
@@ -350,10 +441,11 @@ export default function EscanerInfopagosPage() {
     form.append('monto', montoParaApi(vM.valor))
     form.append('moneda', moneda)
     form.append('comprobante', archivo!)
-    if (habilitarEdicionFecha && justificacionFecha.trim()) {
-      const motivoFecha = fechaCambioManual
-        ? `Ajuste manual de fecha: ${fechaDetectada || 'sin fecha detectada'} -> ${fechaPago}. ${justificacionFecha.trim()}`
-        : `Fecha ingresada manualmente por baja legibilidad en comprobante: ${justificacionFecha.trim()}`
+    if (justificacionFecha.trim().length >= 12) {
+      const motivoFecha =
+        hayFechaDetectada && fechaPago.trim() !== fechaDetectada.trim()
+          ? `Ajuste manual de fecha (comprobante): ${fechaDetectada} → ${fechaPago}. ${justificacionFecha.trim()}`
+          : `Aclaración de fecha de comprobante: ${justificacionFecha.trim()}`
       form.append('observacion', motivoFecha)
     }
     setEnviando(true)
@@ -386,8 +478,11 @@ export default function EscanerInfopagosPage() {
   }, [
     archivo,
     cedulaNormalizada,
+    confirmaFechaDetectada,
+    fechaDetectada,
     fechaPago,
     institucion,
+    justificacionFecha,
     moneda,
     montoStr,
     numeroOperacion,
@@ -420,9 +515,12 @@ export default function EscanerInfopagosPage() {
     setArchivo(null)
     setFechaPago('')
     setFechaDetectada('')
-    setHabilitarEdicionFecha(false)
+    setConfirmaFechaDetectada(null)
     setJustificacionFecha('')
     setInstitucion('')
+    setOtroInstitucion('')
+    setEscanerColision(null)
+    tokensSufijoUsadosRef.current = new Set()
     setNumeroOperacion('')
     setMontoStr('')
     setMoneda('USD')
@@ -542,6 +640,12 @@ export default function EscanerInfopagosPage() {
         <Card>
           <CardHeader>
             <CardTitle>3. Formulario (editable)</CardTitle>
+            {escanerColision?.prestamo_objetivo_id != null ? (
+              <p className="rounded-md border border-indigo-200 bg-indigo-50 px-3 py-2 text-sm font-medium text-indigo-950">
+                Este pago se está cargando al{' '}
+                <strong>préstamo N° {escanerColision.prestamo_objetivo_id}</strong>.
+              </p>
+            ) : null}
           </CardHeader>
           <CardContent className="space-y-4">
             {(validacionCampos || validacionReglas) && (
@@ -571,79 +675,140 @@ export default function EscanerInfopagosPage() {
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2 sm:col-span-2">
                 <Label htmlFor="fecha">Fecha de pago</Label>
-                <Input
-                  id="fecha"
-                  type="date"
-                  value={fechaPago}
-                  disabled={!habilitarEdicionFecha}
-                  onChange={e => setFechaPago(e.target.value)}
-                />
-                {!habilitarEdicionFecha ? (
-                  <div
-                    className="flex gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950 shadow-sm"
-                    role="status"
-                  >
-                    <Lock
-                      className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-800"
-                      aria-hidden
-                    />
-                    <div>
-                      <p className="font-semibold text-amber-950">
-                        Fecha bloqueada (lectura del comprobante)
-                      </p>
-                      <p className="mt-0.5 text-xs leading-snug text-amber-900">
-                        El valor mostrado sale solo de la imagen escaneada. No se reutiliza la fecha del
-                        correo ni metadatos del archivo. Si la lectura fue incorrecta, use{' '}
-                        <span className="font-medium">Corregir fecha</span> y deje la justificación
-                        obligatoria.
-                      </p>
-                    </div>
-                  </div>
-                ) : null}
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() =>
-                      setHabilitarEdicionFecha(v => {
-                        const next = !v
-                        if (!next && fechaDetectada) {
-                          setFechaPago(fechaDetectada)
-                          setJustificacionFecha('')
-                        }
-                        return next
-                      })
-                    }
-                  >
-                    {habilitarEdicionFecha
-                      ? 'Usar fecha detectada'
-                      : 'Corregir fecha (con justificación)'}
-                  </Button>
-                </div>
-                {habilitarEdicionFecha && (
-                  <div className="space-y-2">
-                    <Label htmlFor="justificacion-fecha">
-                      Justificación de corrección de fecha
-                    </Label>
-                    <Input
-                      id="justificacion-fecha"
-                      value={justificacionFecha}
-                      onChange={e => setJustificacionFecha(e.target.value)}
-                      placeholder="Ej. el comprobante tenía sello borroso y la fecha legible era del bloque inferior."
-                      maxLength={300}
-                    />
-                  </div>
+                {fechaDetectada.trim() ? (
+                  <p className="text-xs text-slate-600">
+                    Fecha detectada en la imagen (IA):{' '}
+                    <span className="font-mono font-semibold text-slate-900">
+                      {fechaDetectada}
+                    </span>
+                    . Puede ajustar el campo de fecha manualmente; si no coincide con la
+                    detectada, deberá justificar el cambio.
+                  </p>
+                ) : (
+                  <p className="text-xs text-amber-800">
+                    No se detectó fecha clara en la imagen: indique la fecha de pago manualmente.
+                  </p>
                 )}
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+                  <div className="min-w-0 flex-1">
+                    <Input
+                      id="fecha"
+                      type="date"
+                      value={fechaPago}
+                      onChange={e => {
+                        const v = e.target.value
+                        setFechaPago(v)
+                        if (fechaDetectada.trim() && v.trim() !== fechaDetectada.trim()) {
+                          setConfirmaFechaDetectada('no')
+                        }
+                      }}
+                    />
+                  </div>
+                  {fechaDetectada.trim() ? (
+                    <div className="flex shrink-0 flex-col gap-1">
+                      <span className="text-xs font-medium text-slate-700">
+                        ¿La fecha leída del comprobante es correcta?
+                      </span>
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant={confirmaFechaDetectada === 'si' ? 'default' : 'outline'}
+                          className={
+                            confirmaFechaDetectada === 'si'
+                              ? 'bg-emerald-600 hover:bg-emerald-700'
+                              : ''
+                          }
+                          onClick={() => {
+                            setConfirmaFechaDetectada('si')
+                            setFechaPago(fechaDetectada)
+                            setJustificacionFecha('')
+                          }}
+                        >
+                          Sí
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant={confirmaFechaDetectada === 'no' ? 'default' : 'outline'}
+                          className={
+                            confirmaFechaDetectada === 'no'
+                              ? 'bg-amber-600 hover:bg-amber-700'
+                              : ''
+                          }
+                          onClick={() => setConfirmaFechaDetectada('no')}
+                        >
+                          No
+                        </Button>
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+                <div
+                  className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700"
+                  role="note"
+                >
+                  El valor inicial proviene solo de la imagen escaneada (no se reutiliza la fecha del
+                  correo ni metadatos del archivo). Si corrige la fecha respecto a la detectada, o
+                  responde «No», indique la justificación abajo (mín. 12 caracteres).
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="justificacion-fecha">
+                    Justificación (obligatoria si corrige la fecha o respondió «No»)
+                  </Label>
+                  <Input
+                    id="justificacion-fecha"
+                    value={justificacionFecha}
+                    onChange={e => setJustificacionFecha(e.target.value)}
+                    placeholder="Ej. el comprobante tenía sello borroso y la fecha legible era del bloque inferior."
+                    maxLength={300}
+                  />
+                </div>
               </div>
               <div className="space-y-2 sm:col-span-2">
                 <Label htmlFor="inst">Institución financiera</Label>
-                <Input
+                <select
                   id="inst"
-                  value={institucion}
-                  onChange={e => setInstitucion(e.target.value)}
-                  maxLength={MAX_LENGTH_INSTITUCION}
-                />
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  value={
+                    INSTITUCIONES_FINANCIERAS.includes(
+                      institucion as (typeof INSTITUCIONES_FINANCIERAS)[number]
+                    )
+                      ? institucion
+                      : 'Otros'
+                  }
+                  onChange={e => {
+                    const v = e.target.value
+                    if (v === 'Otros') {
+                      setInstitucion(otroInstitucion.trim() || '')
+                    } else {
+                      setInstitucion(v)
+                      setOtroInstitucion('')
+                    }
+                  }}
+                >
+                  <option value="">Seleccione banco…</option>
+                  {INSTITUCIONES_FINANCIERAS.map(opt => (
+                    <option key={opt} value={opt}>
+                      {opt}
+                    </option>
+                  ))}
+                  <option value="Otros">Otro</option>
+                </select>
+                {!INSTITUCIONES_FINANCIERAS.includes(
+                  institucion as (typeof INSTITUCIONES_FINANCIERAS)[number]
+                ) && (
+                  <Input
+                    value={otroInstitucion}
+                    onChange={e => {
+                      const val = e.target.value
+                      setOtroInstitucion(val)
+                      setInstitucion(val.trim())
+                    }}
+                    placeholder="Nombre del banco o entidad"
+                    maxLength={MAX_LENGTH_INSTITUCION}
+                  />
+                )}
               </div>
               <div className="space-y-2 sm:col-span-2">
                 <Label htmlFor="nrop">Nº operación / referencia / serial</Label>
@@ -653,6 +818,49 @@ export default function EscanerInfopagosPage() {
                   onChange={e => setNumeroOperacion(e.target.value)}
                   maxLength={MAX_LENGTH_NUMERO_OPERACION}
                 />
+                {escanerColision?.duplicado_en_pagos &&
+                typeof escanerColision.prestamo_existente_id === 'number' ? (
+                  <p className="text-sm font-medium text-rose-800">
+                    Este número ya está cargado en cartera, aplicado al{' '}
+                    <strong>préstamo N° {escanerColision.prestamo_existente_id}</strong>.
+                    {typeof escanerColision.pago_existente_id === 'number'
+                      ? ` (pago #${escanerColision.pago_existente_id})`
+                      : ''}
+                  </p>
+                ) : hayDuplicadoOperacion ? (
+                  <p className="text-sm font-medium text-rose-800">
+                    Validación: posible duplicado de número de operación / documento. Use un sufijo
+                    distinto si corresponde el mismo comprobante para otro caso.
+                  </p>
+                ) : null}
+                {hayDuplicadoOperacion ? (
+                  <div className="rounded-md border border-violet-200 bg-violet-50 px-3 py-2 text-sm text-violet-950">
+                    <p className="font-medium">Sufijo admin (misma lógica que carga masiva)</p>
+                    <p className="mt-1 text-xs leading-snug">
+                      Añade <code className="rounded bg-white/80 px-1">_A####</code> o{' '}
+                      <code className="rounded bg-white/80 px-1">_P####</code> al final del número
+                      para que el documento sea único en cartera.
+                    </p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => handleAplicarSufijoOperacion('A')}
+                      >
+                        Aplicar sufijo _A…
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => handleAplicarSufijoOperacion('P')}
+                      >
+                        Aplicar sufijo _P…
+                      </Button>
+                    </div>
+                  </div>
+                ) : null}
               </div>
               <div className="space-y-2">
                 <Label>Moneda</Label>
