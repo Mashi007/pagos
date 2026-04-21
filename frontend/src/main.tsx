@@ -24,6 +24,25 @@ declare global {
   }
 }
 
+/** Si la URL duplica el base path (/pagos/pagos/...), colapsar antes del router (evita 404 en SPA). */
+function normalizeDuplicateBasePathInUrl(): void {
+  const base = (BASE_PATH || '/').replace(/\/$/, '') || '/'
+  if (base === '/' || typeof window === 'undefined') return
+  const dupPrefix = `${base}${base}`
+  let p = window.location.pathname
+  let guard = 0
+  while (p.startsWith(dupPrefix) && guard < 16) {
+    p = base + p.slice(dupPrefix.length)
+    guard += 1
+  }
+  if (p !== window.location.pathname) {
+    const next = `${p}${window.location.search}${window.location.hash}`
+    window.history.replaceState(window.history.state, '', next)
+  }
+}
+
+normalizeDuplicateBasePathInUrl()
+
 // Constantes de configuración
 
 const STALE_TIME_MINUTES = 5
