@@ -155,6 +155,28 @@ def _parse_fecha_celda_hoja(val: Any) -> Optional[date]:
     return None
 
 
+def parse_fecha_entrega_column_q_valor(val: Any) -> Optional[date]:
+    """
+    Interpreta el valor de fecha de columna Q para comparar con BD.
+
+    Orden:
+    1) Prefijo ISO ``YYYY-MM-DD`` (como se persiste en caché tras un sync normal).
+    2) Mismas reglas que ``_parse_fecha_celda_hoja`` (número serial Sheets, ``dd/mm/yyyy``, etc.).
+
+    Así la comparación «viva» y el enriquecimiento de listados usan la misma semántica que al leer la hoja
+    (CONCILIACIÓN en convención VE: día/mes/año cuando ambos componentes son ≤ 12).
+    """
+    if val is None:
+        return None
+    s = str(val).strip()
+    if len(s) >= 10 and s[4:5] == "-" and s[7:8] == "-":
+        try:
+            return date.fromisoformat(s[:10])
+        except ValueError:
+            pass
+    return _parse_fecha_celda_hoja(val)
+
+
 def _fecha_aprobacion_sistema_date(prestamo: Prestamo) -> Optional[date]:
     fa = getattr(prestamo, "fecha_aprobacion", None)
     if fa is None:

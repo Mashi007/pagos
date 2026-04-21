@@ -80,19 +80,14 @@ def _solo_fecha_iso(val) -> Optional[str]:
 
 
 def _parse_fecha_q_desde_cache_iso(raw: object) -> Optional[date]:
-    """Interpreta `fecha_entrega_column_q` del JSON de caché (prefijo ISO YYYY-MM-DD)."""
-    if raw is None:
-        return None
-    s = str(raw).strip()
-    if len(s) < 10:
-        return None
-    head = s[:10]
-    if head[4:5] != "-" or head[7:8] != "-":
-        return None
-    try:
-        return date.fromisoformat(head)
-    except ValueError:
-        return None
+    """
+    Interpreta `fecha_entrega_column_q` del JSON de caché para comparar con ``fecha_aprobacion``.
+
+    Usa el mismo parseo que al leer la celda de la hoja (ISO guardado por el job, o texto legado d/m/y).
+    """
+    from app.services.comparar_fecha_entrega_q_aprobacion_service import parse_fecha_entrega_column_q_valor
+
+    return parse_fecha_entrega_column_q_valor(raw)
 
 
 def _fecha_aprobacion_como_date(val: object) -> Optional[date]:

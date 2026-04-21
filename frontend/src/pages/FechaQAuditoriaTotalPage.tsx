@@ -284,7 +284,7 @@ export default function FechaQAuditoriaTotalPage() {
                   </Button>
                 </div>
               ) : null}
-              <table className="w-full min-w-[1380px] border-collapse text-sm">
+              <table className="w-full min-w-[800px] border-collapse text-sm">
               <thead>
                 <tr className="border-b text-left text-muted-foreground">
                   <th className="w-10 py-2 pr-1 text-center font-medium">
@@ -318,14 +318,9 @@ export default function FechaQAuditoriaTotalPage() {
                   <th className="py-2 pr-2 font-medium">Fecha Q (hoja)</th>
                   <th className="py-2 pr-2 font-medium">Fecha BD (aprobación)</th>
                   <th className="py-2 pr-2 font-medium">Dif. días (Q − BD)</th>
-                  <th className="py-2 pr-2 font-medium">Estado préstamo</th>
-                  <th className="py-2 pr-2 font-medium">Q celda bruta</th>
                   <th className="py-2 pr-2 font-medium">Puede aplicar</th>
                   <th className="py-2 pr-2 font-medium">Q anterior corrige</th>
-                  <th className="py-2 pr-2 font-medium">Req. BD</th>
-                  <th className="py-2 pr-2 font-medium">Base BD</th>
                   <th className="py-2 pr-2 font-medium">Sí / No</th>
-                  <th className="py-2 pr-2 font-medium">Corrección</th>
                 </tr>
               </thead>
               <tbody>
@@ -358,12 +353,6 @@ export default function FechaQAuditoriaTotalPage() {
                     <td className="py-2 pr-2">{fmtIso(row.q_fecha_iso)}</td>
                     <td className="py-2 pr-2">{fmtIso(row.fecha_aprobacion)}</td>
                     <td className="py-2 pr-2">{row.diferencia_dias ?? '—'}</td>
-                    <td className="py-2 pr-2">{row.estado || '—'}</td>
-                    <td className="py-2 pr-2 max-w-[200px] break-all font-mono text-xs">
-                      {row.q_fecha_raw != null && String(row.q_fecha_raw).trim() !== ''
-                        ? String(row.q_fecha_raw)
-                        : '—'}
-                    </td>
                     <td className="py-2 pr-2">
                       {row.puede_aplicar == null ? '—' : row.puede_aplicar ? 'Sí' : 'No'}
                     </td>
@@ -374,8 +363,6 @@ export default function FechaQAuditoriaTotalPage() {
                           ? 'Sí'
                           : 'No'}
                     </td>
-                    <td className="py-2 pr-2">{fmtIso(row.fecha_requerimiento)}</td>
-                    <td className="py-2 pr-2">{fmtIso(row.fecha_base_calculo)}</td>
                     <td className="py-2 pr-2">
                       {row.puede_aplicar === true && (row.cedula || '').trim() ? (
                         <span className="inline-flex flex-wrap gap-1">
@@ -459,14 +446,6 @@ export default function FechaQAuditoriaTotalPage() {
                       ) : (
                         <span className="text-xs text-muted-foreground">—</span>
                       )}
-                    </td>
-                    <td className="py-2 pr-2 whitespace-nowrap">
-                      <Link
-                        className="text-xs text-blue-700 underline"
-                        to={`/revision-manual/editar/${row.prestamo_id}`}
-                      >
-                        Revisión manual
-                      </Link>
                     </td>
                   </tr>
                   )
