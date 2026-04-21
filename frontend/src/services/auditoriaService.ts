@@ -127,10 +127,49 @@ export interface LiquidadosCierreChequeoResponse {
   resumen: Record<string, unknown>
 }
 
+/** Pares de pagos con numero_documento similar (difflib) en un mismo préstamo LIQUIDADO. */
+export interface DocSimilarParLiquidadosItem {
+  pago_id_a: number
+
+  pago_id_b: number
+
+  numero_documento_a: string
+
+  numero_documento_b: string
+
+  similitud: number
+
+  doc_canon_numero_a?: string | null
+
+  doc_canon_numero_b?: string | null
+}
+
+export interface DocSimilarPrestamoTarjetaItem {
+  prestamo_id: number
+
+  cedula: string
+
+  nombres: string
+
+  pares: DocSimilarParLiquidadosItem[]
+
+  pares_truncados?: boolean
+
+  n_pagos_con_documento?: number
+}
+
+export interface LiquidadosDocumentosSimilaresResponse {
+  items: DocSimilarPrestamoTarjetaItem[]
+
+  resumen: Record<string, unknown>
+}
+
 export interface AuditoriaLiquidadosIntensivaResponse {
   cartera: PrestamoCarteraChequeoResponse
 
   cierre: LiquidadosCierreChequeoResponse
+
+  documentos_similares: LiquidadosDocumentosSimilaresResponse
 }
 
 export interface AuditoriaLiquidadosIntensivaQuery {
@@ -145,6 +184,9 @@ export interface AuditoriaLiquidadosIntensivaQuery {
   excluir_marcar_ok?: boolean
 
   codigo_control?: string
+
+  /** Ratio mínimo 0.5–1.0 (backend); defecto 0.7 = 70 % similares. */
+  umbral_similitud_documento?: number
 }
 
 /** GET /auditoria/prestamos/{id}/revision-descuadre-pagos-cuotas */
@@ -186,6 +228,28 @@ export interface RevisionDescuadreCuotaItem {
 
 export interface RevisionDescuadrePagosCuotasResponse {
   prestamo_id: number
+
+  cliente_id?: number | null
+
+  prestamo_cedula?: string
+
+  prestamo_nombres?: string
+
+  total_financiamiento_usd?: string
+
+  numero_cuotas_config?: number
+
+  sum_monto_cuotas_usd?: string
+
+  sum_total_pagado_column_cuotas_usd?: string
+
+  n_pagos_en_bd?: number
+
+  n_pagos_operativos_cartera?: number
+
+  n_pagos_operativos_saldo_fuera_tol?: number
+
+  n_cuotas_en_bd?: number
 
   estado_prestamo: string
 

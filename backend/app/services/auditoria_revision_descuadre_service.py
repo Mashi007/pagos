@@ -123,8 +123,32 @@ def revision_descuadre_pagos_cuotas_prestamo(db: Session, prestamo_id: int) -> d
 
     fecha_liq = row_p.fecha_liquidado.isoformat() if row_p.fecha_liquidado else None
 
+    sum_monto_cuotas = sum(_dec(c["monto_cuota"]) for c in cuotas_out)
+    sum_total_pagado_column = sum(_dec(c["total_pagado"]) for c in cuotas_out)
+    n_pagos_bd = len(pagos_out)
+    n_pagos_op = sum(1 for p in pagos_out if p.get("cuenta_operativo_cartera"))
+    n_cuotas_bd = len(cuotas_out)
+    n_pagos_saldo_fuera_tol = sum(
+        1
+        for p in pagos_out
+        if p.get("cuenta_operativo_cartera")
+        and _dec(p.get("monto_pagado")) > 0
+        and _dec(p.get("saldo_sin_aplicar_usd")) > _TOL
+    )
+
     return {
         "prestamo_id": pid,
+        "cliente_id": int(row_p.cliente_id) if row_p.cliente_id is not None else None,
+        "prestamo_cedula": (row_p.cedula or "").strip(),
+        "prestamo_nombres": (row_p.nombres or "").strip(),
+        "total_financiamiento_usd": str(_dec(row_p.total_financiamiento)),
+        "numero_cuotas_config": int(row_p.numero_cuotas or 0),
+        "sum_monto_cuotas_usd": str(sum_monto_cuotas),
+        "sum_total_pagado_column_cuotas_usd": str(sum_total_pagado_column),
+        "n_pagos_en_bd": n_pagos_bd,
+        "n_pagos_operativos_cartera": n_pagos_op,
+        "n_pagos_operativos_saldo_fuera_tol": n_pagos_saldo_fuera_tol,
+        "n_cuotas_en_bd": n_cuotas_bd,
         "estado_prestamo": (row_p.estado or "").strip(),
         "fecha_liquidado": fecha_liq,
         "sum_pagos_operativos_usd": str(sp),

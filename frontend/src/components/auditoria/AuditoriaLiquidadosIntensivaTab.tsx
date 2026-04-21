@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
-import { Loader2, RefreshCw, Search, Shield } from 'lucide-react'
+import { Copy, Loader2, RefreshCw, Search, Shield } from 'lucide-react'
 
 import { Link } from 'react-router-dom'
 
@@ -30,6 +30,7 @@ import {
 import {
   auditoriaService,
   type AuditoriaLiquidadosIntensivaResponse,
+  type DocSimilarPrestamoTarjetaItem,
   type PrestamoCarteraChequeo,
 } from '../../services/auditoriaService'
 
@@ -39,13 +40,81 @@ const MEJORES_PRACTICAS_LIQUIDADOS: readonly string[] = [
   'Antes de aceptar un cierre (LIQUIDADO), cuadrar en USD la suma de pagos operativos frente a la suma aplicada en cuota_pagos (tolerancia operativa 0,02 USD), excluyendo anulados, reversados y duplicados declarados.',
   'Mantener fecha_liquidado poblada cuando el estado sea LIQUIDADO: es el ancla contable del cierre en cartera y evita listados ambiguos frente a finiquito.',
   'Respetar la regla de materialización de finiquito_casos (suma exacta de total_pagado en cuotas = total_financiamiento): si no aparece el caso, revisar redondeos por cuota y ejecutar el refresco puntual o el job programado.',
-  'Exigir comprobantes con huella y documento canónico (doc_canon_numero) consistente: duplicados en el mismo préstamo suelen ser doble captura; si es recibo partido, usar la convención operativa de sufijos y el flujo de “visto” donde aplique.',
+  'Exigir comprobantes con huella y documento canónico (doc_canon_numero) consistente: duplicados en el mismo préstamo suelen ser doble captura; la sección de similitud (≥70 %) ayuda a detectar variantes tipográficas — no sustituye el control de duplicado exacto por canon.',
   'Si existe saldo sin aplicar a cuotas en un préstamo liquidado, tratarlo como incidente prioritario: bloquea la reconciliación del capital y puede generar colisiones de documento con otros préstamos.',
   'Registrar excepciones en la bitácora de cartera solo cuando el motor marque un falso positivo documentado; en LIQUIDADO los descuadres de totales no son “ruido”, son riesgo de estado financiero incorrecto.',
 ]
 
 function numOr0(v: unknown): number {
   return typeof v === 'number' && Number.isFinite(v) ? v : 0
+}
+
+function pctSimilitud(ratio: number): string {
+  if (typeof ratio !== 'number' || !Number.isFinite(ratio)) return '—'
+  return `${(ratio * 100).toFixed(1)} %`
+}
+
+function TarjetaDocSimilaresPrestamo({
+  item,
+  maxPagosPairwise,
+}: {
+  item: DocSimilarPrestamoTarjetaItem
+
+  maxPagosPairwise: number
+}) {
+  return (
+    <Card className="border-amber-200/80 bg-amber-50/30">
+      <CardHeader className="py-3">
+        <CardTitle className="text-sm font-medium">
+          <Link className="font-mono text-blue-700 underline" to={`/prestamos?prestamo_id=${item.prestamo_id}`}>
+            Préstamo #{item.prestamo_id}
+          </Link>
+          <span className="ml-2 font-normal text-muted-foreground">
+            — {item.nombres} <span className="text-xs">({item.cedula})</span>
+          </span>
+        </CardTitle>
+        {item.pares_truncados ? (
+          <p className="text-xs text-amber-900">
+            Comparación pareja limitada a los primeros{' '}
+            <span className="font-mono tabular-nums">{maxPagosPairwise}</span> pagos con documento; este préstamo
+            tiene <span className="font-mono tabular-nums">{item.n_pagos_con_documento ?? '—'}</span> en total.
+          </p>
+        ) : null}
+      </CardHeader>
+      <CardContent className="overflow-x-auto pt-0">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="w-[88px]">Similitud</TableHead>
+              <TableHead>Pago A</TableHead>
+              <TableHead>Documento A</TableHead>
+              <TableHead>Canon A</TableHead>
+              <TableHead>Pago B</TableHead>
+              <TableHead>Documento B</TableHead>
+              <TableHead>Canon B</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {item.pares.map((p, idx) => (
+              <TableRow key={`${p.pago_id_a}-${p.pago_id_b}-${idx}`}>
+                <TableCell className="font-mono text-xs tabular-nums">{pctSimilitud(p.similitud)}</TableCell>
+                <TableCell className="font-mono text-xs">#{p.pago_id_a}</TableCell>
+                <TableCell className="max-w-[200px] font-mono text-xs break-all">{p.numero_documento_a}</TableCell>
+                <TableCell className="max-w-[120px] font-mono text-[11px] text-muted-foreground break-all">
+                  {p.doc_canon_numero_a || '—'}
+                </TableCell>
+                <TableCell className="font-mono text-xs">#{p.pago_id_b}</TableCell>
+                <TableCell className="max-w-[200px] font-mono text-xs break-all">{p.numero_documento_b}</TableCell>
+                <TableCell className="max-w-[120px] font-mono text-[11px] text-muted-foreground break-all">
+                  {p.doc_canon_numero_b || '—'}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </CardContent>
+    </Card>
+  )
 }
 
 function ControlesCelda({ row }: { row: PrestamoCarteraChequeo }) {
@@ -81,6 +150,14 @@ export function AuditoriaLiquidadosIntensivaTab() {
 
   const [page, setPage] = useState(1)
 
+  const [umbralSimDoc, setUmbralSimDoc] = useState('0.7')
+
+  const umbralSimNum = useMemo(() => {
+    const n = Number(String(umbralSimDoc).replace(',', '.'))
+    if (!Number.isFinite(n)) return 0.7
+    return Math.min(1, Math.max(0.5, n))
+  }, [umbralSimDoc])
+
   const prestamoId = useMemo(() => {
     const t = prestamoIdRaw.trim()
     if (!t) return undefined
@@ -106,6 +183,8 @@ export function AuditoriaLiquidadosIntensivaTab() {
         prestamo_id: prestamoId,
 
         excluir_marcar_ok: false,
+
+        umbral_similitud_documento: umbralSimNum,
       })
 
       setData(res)
@@ -121,7 +200,7 @@ export function AuditoriaLiquidadosIntensivaTab() {
     } finally {
       setLoading(false)
     }
-  }, [cedula, page, prestamoId])
+  }, [cedula, page, prestamoId, umbralSimNum])
 
   useEffect(() => {
     void cargar()
@@ -134,6 +213,14 @@ export function AuditoriaLiquidadosIntensivaTab() {
   const rCar = data?.cartera.resumen ?? {}
 
   const rCie = data?.cierre.resumen ?? {}
+
+  const docSim = data?.documentos_similares
+
+  const rSim = docSim?.resumen ?? {}
+
+  const docSimItems = docSim?.items ?? []
+
+  const maxPagosPairwise = numOr0(rSim.max_pagos_analizados_por_prestamo) || 100
 
   return (
     <div className="space-y-6">
@@ -148,11 +235,13 @@ export function AuditoriaLiquidadosIntensivaTab() {
           <p className="text-sm text-muted-foreground">
             Cruza el motor de cartera (solo universo LIQUIDADO) con hallazgos de cierre: fecha de liquidación,
             fila en finiquito_casos, alineación de snapshot y riesgos de documento duplicado o pendiente de
-            aplicación frente a otro préstamo.
+            aplicación frente a otro préstamo. Además lista pares de pagos con{' '}
+            <span className="font-medium">numero_documento</span> muy parecido (similitud configurable) dentro del
+            mismo préstamo, como pista de posible doble captura.
           </p>
 
           <div className="flex flex-col gap-3 md:flex-row md:items-end">
-            <div className="grid flex-1 gap-2 md:grid-cols-2">
+            <div className="grid flex-1 gap-2 md:grid-cols-3">
               <div>
                 <Label htmlFor="liq-cedula">Cedula (fragmento)</Label>
                 <Input
@@ -180,6 +269,21 @@ export function AuditoriaLiquidadosIntensivaTab() {
                   inputMode="numeric"
                 />
               </div>
+              <div>
+                <Label htmlFor="liq-sim">Umbral similitud documento</Label>
+                <Input
+                  id="liq-sim"
+                  value={umbralSimDoc}
+                  onChange={(e) => {
+                    setUmbralSimDoc(e.target.value)
+
+                    setPage(1)
+                  }}
+                  placeholder="0.7 = 70%"
+                  inputMode="decimal"
+                />
+                <p className="mt-1 text-[11px] text-muted-foreground">Rango en servidor: 0,5 a 1,0 (difflib).</p>
+              </div>
             </div>
             <div className="flex flex-wrap gap-2">
               <Button type="button" variant="secondary" onClick={() => void cargar()} disabled={loading}>
@@ -199,7 +303,7 @@ export function AuditoriaLiquidadosIntensivaTab() {
             </AlertWithIcon>
           ) : null}
 
-          <div className="grid gap-3 text-sm md:grid-cols-2">
+          <div className="grid gap-3 text-sm md:grid-cols-3">
             <div className="rounded-md border bg-muted/30 p-3">
               <p className="font-medium text-gray-800">Cartera (LIQUIDADO)</p>
               <p className="mt-1 text-muted-foreground">
@@ -226,6 +330,19 @@ export function AuditoriaLiquidadosIntensivaTab() {
                 </span>{' '}
                 — En esta pagina:{' '}
                 <span className="font-mono tabular-nums">{cierreItems.length}</span>
+              </p>
+            </div>
+            <div className="rounded-md border bg-muted/30 p-3">
+              <p className="font-medium text-gray-800">Documentos similares (mismo préstamo)</p>
+              <p className="mt-1 text-muted-foreground">
+                Umbral aplicado:{' '}
+                <span className="font-mono tabular-nums">{pctSimilitud(Number(rSim.umbral_similitud) || umbralSimNum)}</span>{' '}
+                — Préstamos con pares:{' '}
+                <span className="font-mono tabular-nums text-amber-800">
+                  {numOr0(rSim.prestamos_con_pares_similares)}
+                </span>{' '}
+                — Pares listados:{' '}
+                <span className="font-mono tabular-nums">{numOr0(rSim.total_pares_listados)}</span>
               </p>
             </div>
           </div>
@@ -323,6 +440,38 @@ export function AuditoriaLiquidadosIntensivaTab() {
                 ))}
               </TableBody>
             </Table>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Copy className="h-4 w-4 text-amber-700" />
+            3) Documentos similares (posible duplicado / variante)
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Pagos operativos del mismo préstamo LIQUIDADO cuyo <span className="font-medium">numero_documento</span>{' '}
+            alcanza al menos el umbral de similitud (secuencia normalizada). Revise montos, fechas y canon antes de
+            concluir: alta similitud sugiere la misma operación capturada dos veces, pero no lo prueba.
+          </p>
+          {typeof rSim.metodo === 'string' ? (
+            <p className="text-xs text-muted-foreground">
+              <span className="font-medium">Método:</span> {rSim.metodo}
+            </p>
+          ) : null}
+          {!loading && docSimItems.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              Sin pares por encima del umbral en el filtro actual (cédula / préstamo / universo consultado).
+            </p>
+          ) : (
+            <div className="space-y-3">
+              {docSimItems.map((it) => (
+                <TarjetaDocSimilaresPrestamo key={it.prestamo_id} item={it} maxPagosPairwise={maxPagosPairwise} />
+              ))}
+            </div>
           )}
         </CardContent>
       </Card>

@@ -1131,6 +1131,12 @@ export function CompararFechaEntregaQAprobacionCell({ row }: { row: ClienteRetra
                 <strong>recalcula fechas de vencimiento</strong> en <span className="font-semibold">cuotas</span>{' '}
                 con la misma lógica que al guardar desde revisión manual.
               </p>
+              <p className="text-xs text-slate-600">
+                <strong>Fecha Q</strong> es el valor de la hoja CONCILIACIÓN (fecha de entrega / columna Q), no la{' '}
+                <strong>fecha de requerimiento</strong> del expediente (<code className="text-[11px]">prestamos.fecha_requerimiento</code>
+                ). Este flujo no cambia la fecha de requerimiento; solo puede actualizar aprobación y base de cálculo
+                si Q cumple las reglas (p. ej. Q no anterior al requerimiento).
+              </p>
               <ul className="list-none space-y-1 rounded-md border border-slate-200 bg-muted/30 p-3 text-xs tabular-nums">
                 <li>
                   Cédula: <span className="font-medium">{data.cedula}</span>
@@ -1146,6 +1152,12 @@ export function CompararFechaEntregaQAprobacionCell({ row }: { row: ClienteRetra
                   Fecha aprobación (BD):{' '}
                   <span className="font-medium">
                     {fmtFechaNotifIso(data.fecha_aprobacion_sistema)}
+                  </span>
+                </li>
+                <li>
+                  Fecha requerimiento (BD, no se modifica aquí):{' '}
+                  <span className="font-medium">
+                    {fmtFechaNotifIso(data.fecha_requerimiento_prestamo)}
                   </span>
                 </li>
                 <li>
@@ -1349,6 +1361,12 @@ export function CompararFechaEntregaQAprobacionCell({ row }: { row: ClienteRetra
                   <dt className="text-muted-foreground">Fecha aprobación (sistema)</dt>
                   <dd className="font-medium tabular-nums">
                     {fmtFechaNotifIso(data.fecha_aprobacion_sistema)}
+                  </dd>
+                </div>
+                <div className="flex justify-between gap-2">
+                  <dt className="text-muted-foreground">Fecha requerimiento (BD)</dt>
+                  <dd className="font-medium tabular-nums">
+                    {fmtFechaNotifIso(data.fecha_requerimiento_prestamo)}
                   </dd>
                 </div>
                 <div className="flex justify-between gap-2">

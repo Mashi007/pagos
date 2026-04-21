@@ -44,6 +44,9 @@ from app.services.pago_control5_visto_service import (
     aplicar_visto_control5_duplicado_fecha_monto,
     listar_pagos_duplicados_fecha_monto_por_prestamo,
 )
+from app.services.auditoria_liquidados_docs_similares import (
+    documentos_similares_liquidados,
+)
 from app.services.auditoria_liquidados_intensiva import (
     filtrar_filas_cierre,
     hallazgos_cierre_prestamos_liquidados,
@@ -342,9 +345,37 @@ class LiquidadosCierreChequeoResponse(BaseModel):
     )
 
 
+class DocSimilarParLiquidadosItem(BaseModel):
+    pago_id_a: int
+    pago_id_b: int
+    numero_documento_a: str
+    numero_documento_b: str
+    similitud: float = Field(..., description="Ratio difflib 0..1; >= umbral configurado.")
+    doc_canon_numero_a: Optional[str] = None
+    doc_canon_numero_b: Optional[str] = None
+
+
+class DocSimilarPrestamoTarjetaItem(BaseModel):
+    prestamo_id: int
+    cedula: str
+    nombres: str
+    pares: List[DocSimilarParLiquidadosItem]
+    pares_truncados: bool = False
+    n_pagos_con_documento: int = 0
+
+
+class LiquidadosDocumentosSimilaresResponse(BaseModel):
+    items: List[DocSimilarPrestamoTarjetaItem]
+    resumen: dict = Field(
+        ...,
+        description="Umbral, totales y metodo (SequenceMatcher sobre numero_documento normalizado).",
+    )
+
+
 class LiquidadosIntensivaResponse(BaseModel):
     cartera: PrestamoCarteraChequeoResponse
     cierre: LiquidadosCierreChequeoResponse
+    documentos_similares: LiquidadosDocumentosSimilaresResponse
 
 
 class RevisionDescuadrePagoItem(BaseModel):
@@ -371,6 +402,17 @@ class RevisionDescuadreCuotaItem(BaseModel):
 
 class RevisionDescuadrePagosCuotasResponse(BaseModel):
     prestamo_id: int
+    cliente_id: Optional[int] = None
+    prestamo_cedula: str = ""
+    prestamo_nombres: str = ""
+    total_financiamiento_usd: str = "0"
+    numero_cuotas_config: int = 0
+    sum_monto_cuotas_usd: str = "0"
+    sum_total_pagado_column_cuotas_usd: str = "0"
+    n_pagos_en_bd: int = 0
+    n_pagos_operativos_cartera: int = 0
+    n_pagos_operativos_saldo_fuera_tol: int = 0
+    n_cuotas_en_bd: int = 0
     estado_prestamo: str
     fecha_liquidado: Optional[str] = None
     sum_pagos_operativos_usd: str
@@ -646,6 +688,15 @@ def auditoria_intensiva_prestamos_liquidados(
         None,
         description="Solo aplica a la seccion cartera (misma semantica que GET /prestamos/cartera/chequeos).",
     ),
+    umbral_similitud_documento: float = Query(
+        0.7,
+        ge=0.5,
+        le=1.0,
+        description=(
+            "Para documentos_similares: ratio minimo difflib entre numero_documento (trim + mayusculas). "
+            "Defecto 0,70 (70 por ciento similares)."
+        ),
+    ),
     db: Session = Depends(get_db),
     _aud: UserResponse = Depends(require_auditoria_cartera_access),
 ):
@@ -653,6 +704,7 @@ def auditoria_intensiva_prestamos_liquidados(
     Auditoria intensiva para prestamos **LIQUIDADO**:
     - **cartera**: misma logica que `/prestamos/cartera/chequeos`, pero el universo evaluado es solo LIQUIDADO.
     - **cierre**: hallazgos adicionales (fecha_liquidado, finiquito_casos, documentos duplicados, riesgo doc en otro prestamo).
+    - **documentos_similares**: pares de pagos operativos con `numero_documento` similar (difflib >= umbral) por prestamo.
 
     La seccion `cierre` no usa bitacora MARCAR_OK (motor objetivo sobre tablas reales).
     """
@@ -693,7 +745,33 @@ def auditoria_intensiva_prestamos_liquidados(
         items=_prestamos_cartera_dicts_a_items(hall_page),
         resumen=cierre_resumen,
     )
-    return LiquidadosIntensivaResponse(cartera=cartera, cierre=cierre)
+
+    sim_raw, sim_res = documentos_similares_liquidados(
+        db,
+        min_ratio=float(umbral_similitud_documento),
+        prestamo_id=prestamo_id,
+        cedula_contiene=cedula,
+    )
+    sim_items = [
+        DocSimilarPrestamoTarjetaItem(
+            prestamo_id=int(t["prestamo_id"]),
+            cedula=str(t.get("cedula") or ""),
+            nombres=str(t.get("nombres") or ""),
+            pares=[DocSimilarParLiquidadosItem(**p) for p in t.get("pares", [])],
+            pares_truncados=bool(t.get("pares_truncados")),
+            n_pagos_con_documento=int(t.get("n_pagos_con_documento") or 0),
+        )
+        for t in sim_raw
+    ]
+    documentos_similares = LiquidadosDocumentosSimilaresResponse(
+        items=sim_items,
+        resumen=sim_res,
+    )
+    return LiquidadosIntensivaResponse(
+        cartera=cartera,
+        cierre=cierre,
+        documentos_similares=documentos_similares,
+    )
 
 
 @router.get(

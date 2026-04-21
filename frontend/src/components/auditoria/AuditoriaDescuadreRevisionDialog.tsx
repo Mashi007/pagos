@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState, type ReactNode } from 'react'
 
-import { Loader2, Pencil, RefreshCw, Trash2, Wrench } from 'lucide-react'
+import { ChevronRight, Edit, Loader2, RefreshCw, Trash2, Wrench } from 'lucide-react'
 
 import { toast } from 'sonner'
 
@@ -15,6 +15,8 @@ import { prestamoService } from '../../services/prestamoService'
 import { Badge } from '../ui/badge'
 
 import { Button } from '../ui/button'
+
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card'
 
 import {
   Dialog,
@@ -60,8 +62,8 @@ function SemaforoCuadre({ semaforo }: { semaforo: string }) {
   const amarillo = s === 'amarillo'
   const rojo = s === 'rojo' || (!verde && !amarillo)
   return (
-    <div className="flex flex-wrap items-center gap-3 rounded-lg border border-slate-200 bg-slate-50/80 px-4 py-3">
-      <span className="text-sm font-medium text-slate-700">Cuadre motor</span>
+    <div className="flex flex-wrap items-center gap-3">
+      <span className="text-xs font-medium uppercase tracking-wide text-slate-500">Semaforo</span>
       <div className="flex items-center gap-2" title="Semaforo de cuadre contable">
         <span
           className={`h-4 w-4 rounded-full border-2 shadow-sm ${
@@ -82,20 +84,72 @@ function SemaforoCuadre({ semaforo }: { semaforo: string }) {
           aria-label="Verde: cuadre y aplicaciones dentro de tolerancia"
         />
       </div>
-      <div className="text-sm text-slate-600">
+      <div className="text-sm text-slate-700">
         {verde ? (
-          <span className="font-medium text-emerald-800">Verde — auditado en cuadre (motor)</span>
+          <span className="font-medium text-emerald-800">Verde — cuadre motor OK</span>
         ) : amarillo ? (
           <span className="font-medium text-amber-900">
-            Amarillo — totales dentro de tolerancia; revise fecha de liquidacion u otros controles
+            Amarillo — numeros OK; falta fecha liquidacion u otro cierre admin
           </span>
         ) : (
           <span className="font-medium text-red-800">
-            Rojo — descuadre o pagos operativos con saldo sin aplicar (&gt; 0,02 USD)
+            Rojo — descuadre o saldo sin aplicar &gt; 0,02 USD en pago operativo
           </span>
         )}
       </div>
     </div>
+  )
+}
+
+type SeccionId = 'pagos' | 'cuotas'
+
+function TarjetaExpandibleBd({
+  id,
+  titulo,
+  descripcion,
+  resumenColapsado,
+  expandido,
+  onToggle,
+  ninos,
+}: {
+  id: SeccionId
+  titulo: string
+  descripcion: string
+  resumenColapsado: ReactNode
+  expandido: boolean
+  onToggle: () => void
+  ninos: ReactNode
+}) {
+  return (
+    <Card className="overflow-hidden border-slate-200 shadow-sm">
+      <button
+        type="button"
+        className="flex w-full items-start gap-3 p-4 text-left transition-colors hover:bg-slate-50/90"
+        onClick={onToggle}
+        aria-expanded={expandido}
+        aria-controls={`bd-seccion-${id}`}
+      >
+        <ChevronRight
+          className={`mt-0.5 h-5 w-5 shrink-0 text-slate-500 transition-transform ${
+            expandido ? 'rotate-90' : ''
+          }`}
+        />
+        <div className="min-w-0 flex-1 space-y-1">
+          <CardTitle className="text-base leading-snug">{titulo}</CardTitle>
+          <CardDescription className="text-xs leading-relaxed">{descripcion}</CardDescription>
+          {!expandido ? (
+            <div className="rounded-md border border-dashed border-slate-200 bg-white/80 px-3 py-2 text-sm text-slate-800">
+              {resumenColapsado}
+            </div>
+          ) : null}
+        </div>
+      </button>
+      {expandido ? (
+        <CardContent id={`bd-seccion-${id}`} className="border-t border-slate-100 px-4 pb-4 pt-0">
+          {ninos}
+        </CardContent>
+      ) : null}
+    </Card>
   )
 }
 
@@ -122,8 +176,6 @@ export function AuditoriaDescuadreRevisionDialog({
 
   const [editMonto, setEditMonto] = useState('')
 
-  const [editEstado, setEditEstado] = useState('')
-
   const [editDoc, setEditDoc] = useState('')
 
   const [editConciliado, setEditConciliado] = useState(false)
@@ -131,6 +183,10 @@ export function AuditoriaDescuadreRevisionDialog({
   const [editGuardando, setEditGuardando] = useState(false)
 
   const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null)
+
+  const [expPagos, setExpPagos] = useState(false)
+
+  const [expCuotas, setExpCuotas] = useState(false)
 
   const cargar = useCallback(async () => {
     if (prestamoId == null || !open) return
@@ -234,8 +290,6 @@ export function AuditoriaDescuadreRevisionDialog({
 
       setEditMonto(String(parseUsd(row.monto_pagado)))
 
-      setEditEstado(row.estado || '')
-
       setEditDoc(row.numero_documento || '')
 
       setEditConciliado(!!row.conciliado)
@@ -256,7 +310,6 @@ export function AuditoriaDescuadreRevisionDialog({
     try {
       await pagoService.updatePago(editPagoId, {
         monto_pagado: m,
-        estado: editEstado || undefined,
         numero_documento: editDoc,
         conciliado: editConciliado,
       })
@@ -281,7 +334,6 @@ export function AuditoriaDescuadreRevisionDialog({
     esAdmin,
     editPagoId,
     editMonto,
-    editEstado,
     editDoc,
     editConciliado,
     onRefreshLista,
@@ -296,7 +348,7 @@ export function AuditoriaDescuadreRevisionDialog({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-h-[min(92vh,900px)] max-w-5xl overflow-hidden overflow-y-auto">
+        <DialogContent className="max-h-[min(94vh,920px)] max-w-6xl overflow-hidden overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex flex-wrap items-center gap-2">
               <Wrench className="h-5 w-5 text-slate-600" />
@@ -323,31 +375,138 @@ export function AuditoriaDescuadreRevisionDialog({
             </div>
           ) : data ? (
             <div className="space-y-4">
-              <SemaforoCuadre semaforo={data.semaforo_cuadre} />
+              <div className="grid gap-4 lg:grid-cols-3">
+                <Card className="border-slate-200 shadow-sm">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base">Prestamo (BD)</CardTitle>
+                    <CardDescription>Identidad y estructura del credito en base de datos</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-3 text-sm">
+                    <div>
+                      <span className="text-xs text-slate-500">Titular</span>
+                      <p className="font-medium text-slate-900">{data.prestamo_nombres || '—'}</p>
+                      <p className="font-mono text-xs text-slate-600">{data.prestamo_cedula || '—'}</p>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="rounded-md bg-slate-50 p-2">
+                        <div className="text-[10px] uppercase text-slate-500">Financiamiento</div>
+                        <div className="font-mono text-sm tabular-nums">
+                          {data.total_financiamiento_usd ?? '—'} USD
+                        </div>
+                      </div>
+                      <div className="rounded-md bg-slate-50 p-2">
+                        <div className="text-[10px] uppercase text-slate-500">Cuotas config.</div>
+                        <div className="font-mono text-sm tabular-nums">{data.numero_cuotas_config ?? '—'}</div>
+                      </div>
+                      <div className="rounded-md bg-slate-50 p-2">
+                        <div className="text-[10px] uppercase text-slate-500">Suma monto cuotas</div>
+                        <div className="font-mono text-sm tabular-nums">{data.sum_monto_cuotas_usd ?? '—'}</div>
+                      </div>
+                      <div className="rounded-md bg-slate-50 p-2">
+                        <div className="text-[10px] uppercase text-slate-500">Suma total_pagado (col.)</div>
+                        <div className="font-mono text-sm tabular-nums">
+                          {data.sum_total_pagado_column_cuotas_usd ?? '—'}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 pt-2">
+                      <Badge variant="secondary">{data.estado_prestamo}</Badge>
+                      <span className="text-xs text-slate-600">
+                        Liquidado:{' '}
+                        <span className="font-mono">{data.fecha_liquidado || 'sin fecha'}</span>
+                      </span>
+                    </div>
+                  </CardContent>
+                </Card>
 
-              <div className="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
-                <div className="rounded-md border bg-white p-3 shadow-sm">
-                  <div className="text-xs text-slate-500">Suma pagos operativos (USD)</div>
-                  <div className="font-mono text-lg tabular-nums">{data.sum_pagos_operativos_usd}</div>
-                </div>
-                <div className="rounded-md border bg-white p-3 shadow-sm">
-                  <div className="text-xs text-slate-500">Aplicado a cuotas (USD)</div>
-                  <div className="font-mono text-lg tabular-nums">{data.sum_aplicado_cuotas_usd}</div>
-                </div>
-                <div className="rounded-md border bg-white p-3 shadow-sm">
-                  <div className="text-xs text-slate-500">Diferencia (USD)</div>
-                  <div className="font-mono text-lg tabular-nums text-orange-700">{data.diff_usd}</div>
-                </div>
-                <div className="rounded-md border bg-white p-3 shadow-sm">
-                  <div className="text-xs text-slate-500">Estado / fecha liquidacion</div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Badge variant="secondary">{data.estado_prestamo}</Badge>
-                    <span className="font-mono text-xs text-slate-600">
-                      {data.fecha_liquidado || '—'}
-                    </span>
-                  </div>
-                </div>
+                <Card className="border-slate-200 shadow-sm lg:col-span-2">
+                  <CardHeader className="space-y-3 pb-2">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <CardTitle className="text-base">Cuadre motor (BD)</CardTitle>
+                        <CardDescription>
+                          Pagos operativos (excl. anulados/reversados/duplicados declarados) frente a suma de{' '}
+                          <code className="rounded bg-slate-100 px-1 text-[10px]">cuota_pagos</code> vía pagos
+                          operativos
+                        </CardDescription>
+                      </div>
+                      <SemaforoCuadre semaforo={data.semaforo_cuadre} />
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                      <div className="rounded-lg border border-slate-200 bg-gradient-to-br from-white to-slate-50/80 p-3">
+                        <div className="text-[10px] font-medium uppercase tracking-wide text-slate-500">
+                          Pagos operativos
+                        </div>
+                        <div className="font-mono text-xl tabular-nums text-slate-900">
+                          {data.sum_pagos_operativos_usd}
+                        </div>
+                        <div className="mt-1 text-[11px] text-slate-500">USD · misma regla que auditoria cartera</div>
+                      </div>
+                      <div className="rounded-lg border border-slate-200 bg-gradient-to-br from-white to-slate-50/80 p-3">
+                        <div className="text-[10px] font-medium uppercase tracking-wide text-slate-500">
+                          Aplicado cuotas
+                        </div>
+                        <div className="font-mono text-xl tabular-nums text-slate-900">
+                          {data.sum_aplicado_cuotas_usd}
+                        </div>
+                        <div className="mt-1 text-[11px] text-slate-500">USD · desde cuota_pagos</div>
+                      </div>
+                      <div className="rounded-lg border border-orange-200 bg-orange-50/60 p-3">
+                        <div className="text-[10px] font-medium uppercase tracking-wide text-orange-900">
+                          Diferencia
+                        </div>
+                        <div className="font-mono text-xl tabular-nums text-orange-900">{data.diff_usd}</div>
+                        <div className="mt-1 text-[11px] text-orange-800/90">
+                          Tol. {data.tolerancia_usd} USD · si mayor, revisar BS/USD, duplicados o aplicacion
+                        </div>
+                      </div>
+                      <div className="rounded-lg border border-slate-200 bg-white p-3">
+                        <div className="text-[10px] font-medium uppercase tracking-wide text-slate-500">
+                          Conteos BD
+                        </div>
+                        <ul className="mt-1 space-y-1 text-[11px] leading-snug text-slate-700">
+                          <li>
+                            Pagos en prestamo: <strong>{data.n_pagos_en_bd ?? data.pagos.length}</strong>
+                          </li>
+                          <li>
+                            Operativos cartera: <strong>{data.n_pagos_operativos_cartera ?? '—'}</strong>
+                          </li>
+                          <li>
+                            Operativos saldo &gt; tol:{' '}
+                            <strong className="text-orange-800">
+                              {data.n_pagos_operativos_saldo_fuera_tol ?? '—'}
+                            </strong>
+                          </li>
+                          <li>
+                            Cuotas en BD: <strong>{data.n_cuotas_en_bd ?? data.cuotas.length}</strong>
+                          </li>
+                        </ul>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
               </div>
+
+              <Card className="border-slate-200 shadow-sm">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base">Criterios para decidir</CardTitle>
+                  <CardDescription>Resumen calculado con los mismos datos que la tabla expandible</CardDescription>
+                </CardHeader>
+                <CardContent className="grid gap-2 text-sm text-slate-700 sm:grid-cols-2">
+                  <p className="rounded-md border border-slate-100 bg-slate-50/80 p-3">
+                    Si <strong>diferencia</strong> es alta y <strong>suma total_pagado en cuotas</strong> se aleja del
+                    aplicado vía <code className="text-xs">cuota_pagos</code>, priorice revisar filas de pago (BS mal
+                    como USD, duplicados, estados no excluidos).
+                  </p>
+                  <p className="rounded-md border border-slate-100 bg-slate-50/80 p-3">
+                    Si <strong>financiamiento</strong> y <strong>suma monto cuotas</strong> no alinean, el problema
+                    puede estar en la tabla <code className="text-xs">cuotas</code> o en configuracion del prestamo,
+                    no solo en pagos.
+                  </p>
+                </CardContent>
+              </Card>
 
               {!esAdmin ? (
                 <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">
@@ -356,25 +515,50 @@ export function AuditoriaDescuadreRevisionDialog({
                 </p>
               ) : null}
 
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  type="button"
-                  variant="secondary"
-                  disabled={!esAdmin || cascadaBusy || prestamoId == null}
-                  onClick={() => void reaplicarCascada()}
-                >
-                  {cascadaBusy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
-                  Reaplicar cascada (todo el prestamo)
-                </Button>
-                <Button type="button" variant="outline" disabled={cargando} onClick={() => void cargar()}>
-                  Recargar datos
-                </Button>
-              </div>
+              <Card className="border-slate-200 shadow-sm">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base">Herramientas</CardTitle>
+                  <CardDescription>Acciones sobre el prestamo completo o recarga desde BD</CardDescription>
+                </CardHeader>
+                <CardContent className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    disabled={!esAdmin || cascadaBusy || prestamoId == null}
+                    onClick={() => void reaplicarCascada()}
+                  >
+                    {cascadaBusy ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <RefreshCw className="mr-2 h-4 w-4" />
+                    )}
+                    Reaplicar cascada (todo el prestamo)
+                  </Button>
+                  <Button type="button" variant="outline" disabled={cargando} onClick={() => void cargar()}>
+                    Recargar desde BD
+                  </Button>
+                </CardContent>
+              </Card>
 
-              <div>
-                <h3 className="mb-2 text-sm font-semibold text-slate-800">Pagos del prestamo</h3>
-                <div className="max-h-[38vh] overflow-auto rounded-md border">
-                  <Table>
+              <TarjetaExpandibleBd
+                id="pagos"
+                titulo="Pagos del prestamo (tabla completa)"
+                descripcion="Cada fila es un registro en pagos; montos y aplicacion vienen de la BD. Pulse la tarjeta para ampliar."
+                expandido={expPagos}
+                onToggle={() => setExpPagos(v => !v)}
+                resumenColapsado={
+                  <span>
+                    <strong>{data.pagos.length}</strong> filas en BD ·{' '}
+                    <strong>{data.n_pagos_operativos_cartera ?? '—'}</strong> cuentan como operativos cartera ·{' '}
+                    <strong className="text-orange-800">
+                      {data.n_pagos_operativos_saldo_fuera_tol ?? '—'}
+                    </strong>{' '}
+                    con saldo sin aplicar &gt; tolerancia
+                  </span>
+                }
+                ninos={
+                  <div className="max-h-[min(52vh,520px)] overflow-auto rounded-md border border-slate-200">
+                    <Table>
                     <TableHeader>
                       <TableRow>
                         <TableHead className="w-[72px]">ID</TableHead>
@@ -420,7 +604,7 @@ export function AuditoriaDescuadreRevisionDialog({
                                     className="h-7 gap-1 px-2"
                                     onClick={() => abrirEditar(p)}
                                   >
-                                    <Pencil className="h-3 w-3" />
+                                    <Edit className="h-3 w-3" />
                                     Editar
                                   </Button>
                                   <Button
@@ -489,36 +673,50 @@ export function AuditoriaDescuadreRevisionDialog({
                       ))}
                     </TableBody>
                   </Table>
-                </div>
-              </div>
+                  </div>
+                }
+              />
 
-              <div>
-                <h3 className="mb-2 text-sm font-semibold text-slate-800">Cuotas</h3>
-                <div className="max-h-[28vh] overflow-auto rounded-md border">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="w-[72px]">Cuota</TableHead>
-                        <TableHead className="w-[72px]">Nº</TableHead>
-                        <TableHead className="text-right">Monto</TableHead>
-                        <TableHead className="text-right">Total pagado</TableHead>
-                        <TableHead>Estado</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {data.cuotas.map(c => (
-                        <TableRow key={c.cuota_id}>
-                          <TableCell className="font-mono text-xs">{c.cuota_id}</TableCell>
-                          <TableCell className="text-xs">{c.numero_cuota}</TableCell>
-                          <TableCell className="text-right font-mono text-xs">{c.monto_cuota}</TableCell>
-                          <TableCell className="text-right font-mono text-xs">{c.total_pagado}</TableCell>
-                          <TableCell className="text-xs">{c.estado}</TableCell>
+              <TarjetaExpandibleBd
+                id="cuotas"
+                titulo="Cuotas del prestamo (tabla completa)"
+                descripcion="Filas de cuotas en BD: monto_cuota, total_pagado acumulado en columna y estado. Ampliar para revisar contra pagos."
+                expandido={expCuotas}
+                onToggle={() => setExpCuotas(v => !v)}
+                resumenColapsado={
+                  <span>
+                    <strong>{data.cuotas.length}</strong> cuotas en BD · suma montos{' '}
+                    <span className="font-mono">{data.sum_monto_cuotas_usd ?? '—'}</span> · suma total_pagado (col.){' '}
+                    <span className="font-mono">{data.sum_total_pagado_column_cuotas_usd ?? '—'}</span>
+                  </span>
+                }
+                ninos={
+                  <div className="max-h-[min(44vh,440px)] overflow-auto rounded-md border border-slate-200">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="w-[72px]">Cuota</TableHead>
+                          <TableHead className="w-[72px]">Nº</TableHead>
+                          <TableHead className="text-right">Monto</TableHead>
+                          <TableHead className="text-right">Total pagado</TableHead>
+                          <TableHead>Estado</TableHead>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              </div>
+                      </TableHeader>
+                      <TableBody>
+                        {data.cuotas.map(c => (
+                          <TableRow key={c.cuota_id}>
+                            <TableCell className="font-mono text-xs">{c.cuota_id}</TableCell>
+                            <TableCell className="text-xs">{c.numero_cuota}</TableCell>
+                            <TableCell className="text-right font-mono text-xs">{c.monto_cuota}</TableCell>
+                            <TableCell className="text-right font-mono text-xs">{c.total_pagado}</TableCell>
+                            <TableCell className="text-xs">{c.estado}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                }
+              />
             </div>
           ) : (
             <p className="py-6 text-sm text-slate-600">Sin datos.</p>
@@ -545,15 +743,6 @@ export function AuditoriaDescuadreRevisionDialog({
                 value={editMonto}
                 onChange={e => setEditMonto(e.target.value)}
                 inputMode="decimal"
-              />
-            </div>
-            <div>
-              <Label htmlFor="aud-desc-estado">Estado (texto en BD)</Label>
-              <Input
-                id="aud-desc-estado"
-                value={editEstado}
-                onChange={e => setEditEstado(e.target.value)}
-                placeholder="Ej. ACTIVO, ANULADO_IMPORT..."
               />
             </div>
             <div>

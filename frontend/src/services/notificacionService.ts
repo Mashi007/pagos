@@ -213,6 +213,9 @@ export interface CompararFechaEntregaQvsAprobacionResponse {
   /** ISO YYYY-MM-DD (solo fecha) desde prestamos.fecha_aprobacion. */
   fecha_aprobacion_sistema?: string | null
 
+  /** ISO YYYY-MM-DD desde prestamos.fecha_requerimiento (expediente); no cambia al aplicar Q. */
+  fecha_requerimiento_prestamo?: string | null
+
   /** Días calendario: fecha Q (entrega hoja) − fecha_aprobacion (sistema). */
   diferencia_dias?: number | null
 

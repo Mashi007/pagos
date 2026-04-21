@@ -353,6 +353,8 @@ def comparar_fecha_entrega_column_q_vs_aprobacion(
         "cedula": cedula_in,
         "prestamo_id": prestamo_id,
         "prestamo_huella": _prestamo_huella_dict(prestamo),
+        # Expediente (formulario préstamo); no es la columna Q. Solo se usa como piso al aplicar Q.
+        "fecha_requerimiento_prestamo": fecha_req.isoformat() if fecha_req else None,
         "filas_hoja_coincidentes": filas_coincidentes,
         "filas_misma_cedula_hoja": len(filas_por_cedula),
         "columna_q_letra": _COL_Q_LETTER,
