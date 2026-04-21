@@ -207,7 +207,6 @@ export default function EscanerInfopagosPage() {
   const [confirmaFechaDetectada, setConfirmaFechaDetectada] = useState<
     null | 'si' | 'no'
   >(null)
-  const [justificacionFecha, setJustificacionFecha] = useState('')
   const [institucion, setInstitucion] = useState('')
   const [otroInstitucion, setOtroInstitucion] = useState('')
   const [escanerColision, setEscanerColision] = useState<{
@@ -322,7 +321,6 @@ export default function EscanerInfopagosPage() {
       setFechaPago(fechaExtraida)
       setFechaDetectada(fechaExtraida)
       setConfirmaFechaDetectada(null)
-      setJustificacionFecha('')
       const inst = (s.institucion_financiera || '').trim()
       if (INSTITUCIONES_FINANCIERAS.includes(inst as (typeof INSTITUCIONES_FINANCIERAS)[number])) {
         setInstitucion(inst)
@@ -437,14 +435,6 @@ export default function EscanerInfopagosPage() {
     form.append('monto', montoParaApi(vM.valor))
     form.append('moneda', moneda)
     form.append('comprobante', archivo!)
-    const justif = justificacionFecha.trim()
-    if (justif) {
-      const motivoFecha =
-        hayFechaDetectada && fechaPago.trim() !== fechaDetectada.trim()
-          ? `Ajuste manual de fecha (comprobante): ${fechaDetectada} → ${fechaPago}. ${justif}`
-          : `Nota sobre fecha de comprobante: ${justif}`
-      form.append('observacion', motivoFecha)
-    }
     enviarActivoRef.current = true
     setEnviando(true)
     try {
@@ -481,7 +471,6 @@ export default function EscanerInfopagosPage() {
     fechaDetectada,
     fechaPago,
     institucion,
-    justificacionFecha,
     moneda,
     montoStr,
     numeroOperacion,
@@ -515,7 +504,6 @@ export default function EscanerInfopagosPage() {
     setFechaPago('')
     setFechaDetectada('')
     setConfirmaFechaDetectada(null)
-    setJustificacionFecha('')
     setInstitucion('')
     setOtroInstitucion('')
     setEscanerColision(null)
@@ -718,7 +706,6 @@ export default function EscanerInfopagosPage() {
                           onClick={() => {
                             setConfirmaFechaDetectada('si')
                             setFechaPago(fechaDetectada)
-                            setJustificacionFecha('')
                           }}
                         >
                           Sí
@@ -739,26 +726,6 @@ export default function EscanerInfopagosPage() {
                       </div>
                     </div>
                   ) : null}
-                </div>
-                <div
-                  className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700"
-                  role="note"
-                >
-                  El valor inicial proviene solo de la imagen escaneada (no se reutiliza la fecha del
-                  correo ni metadatos del archivo). Puede añadir una nota opcional abajo si ayuda al
-                  revisor (no es obligatoria).
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="justificacion-fecha">
-                    Nota opcional (fecha / comprobante)
-                  </Label>
-                  <Input
-                    id="justificacion-fecha"
-                    value={justificacionFecha}
-                    onChange={e => setJustificacionFecha(e.target.value)}
-                    placeholder="Opcional. Ej.: sello borroso; fecha legible en el bloque inferior."
-                    maxLength={300}
-                  />
                 </div>
               </div>
               <div className="space-y-2 sm:col-span-2">

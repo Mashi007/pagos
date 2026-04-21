@@ -6,7 +6,7 @@ export default function removeTextSizeAdjust() {
   return {
     postcssPlugin: 'postcss-remove-text-size-adjust',
     Declaration(decl) {
-      const p = decl.prop
+      const p = (decl.prop || '').trim()
       // Eliminar propiedades text-size-adjust problemáticas
       if (
         p === '-webkit-text-size-adjust' ||
@@ -21,6 +21,16 @@ export default function removeTextSizeAdjust() {
       if (p === '-moz-column-gap' || p === '-moz-row-gap') {
         decl.remove()
       }
+    },
+    // Autoprefixer puede añadir -moz-column-gap después del paso Declaration inicial;
+    // un barrido final del árbol garantiza que no quede en el bundle (p. ej. .gap-x-*).
+    OnceExit(root) {
+      root.walkDecls(decl => {
+        const p = (decl.prop || '').trim()
+        if (p === '-moz-column-gap' || p === '-moz-row-gap') {
+          decl.remove()
+        }
+      })
     },
     Rule(rule) {
       // Detectar y corregir selectores mal formados

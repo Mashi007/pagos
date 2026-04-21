@@ -126,6 +126,8 @@ class RequestLogMiddleware(BaseHTTPMiddleware):
             or "estado-cuenta/public/verificar-codigo" in path
             or "estado-cuenta/public/solicitar-codigo" in path
             or "dashboard/pagos-inicial" in path
+            or "listado-y-kpis" in path
+            or "notificaciones-prejudicial" in path
             or (
                 "pagos-reportados" in path
                 and (

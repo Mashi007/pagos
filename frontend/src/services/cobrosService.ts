@@ -52,8 +52,17 @@ const BASE_PUBLIC = `${API}/api/v1/cobros/public`
 
 const BASE_COBROS = `${API}/api/v1/cobros`
 
-/** Timeout (ms) para peticiones públicas. Sin timeout pueden quedar colgadas. */
+/** Timeout (ms) para peticiones públicas ligeras. Sin timeout pueden quedar colgadas. */
 const FETCH_TIMEOUT_MS = 30000
+
+/**
+ * POST multipart de reporte (público / Infopagos): en Render puede superar 30s
+ * (validación, persistencia, PDF/recibo). Firefox muestra el abort como NS_BINDING_ABORTED.
+ */
+const FETCH_TIMEOUT_ENVIAR_REPORTE_MS = 180000
+
+/** Descarga de recibo PDF tras guardar (puede ser lenta si el API está frío). */
+const FETCH_TIMEOUT_RECIBO_INFOPAGOS_MS = 120000
 
 /**
  * Traduce fallos de red del navegador (no vienen del JSON del API).
@@ -61,7 +70,10 @@ const FETCH_TIMEOUT_MS = 30000
  */
 function mensajeErrorRedPublico(msg: string): string {
   const m = (msg || '').trim()
-  if (/timeout|abort/i.test(m) || /30\s*s/i.test(m)) {
+  if (
+    /timeout|abort|ns_binding_aborted|aborted a request/i.test(m) ||
+    /despu[eé]s de \d+s/i.test(m)
+  ) {
     return 'El servidor tardó demasiado. Intente de nuevo en unos segundos.'
   }
   if (/failed to fetch|load failed|networkerror/i.test(m)) {
@@ -82,10 +94,11 @@ function mensajeErrorRedPublico(msg: string): string {
 /** Helper: fetch con timeout y mejor manejo de errores */
 async function fetchWithTimeout(
   url: string,
-  options?: RequestInit
+  options?: RequestInit,
+  timeoutMs: number = FETCH_TIMEOUT_MS
 ): Promise<Response> {
   const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
+  const timeout = setTimeout(() => controller.abort(), timeoutMs)
 
   try {
     const res = await fetch(url, {
@@ -96,7 +109,7 @@ async function fetchWithTimeout(
   } catch (err: unknown) {
     if (err instanceof Error && err.name === 'AbortError') {
       throw new Error(
-        `Timeout después de ${FETCH_TIMEOUT_MS / 1000}s. El servidor no responde.`
+        `Timeout después de ${timeoutMs / 1000}s. El servidor no responde.`
       )
     }
     throw err
@@ -331,17 +344,21 @@ export async function enviarReportePublico(
   if (tok) headers.Authorization = `Bearer ${tok}`
 
   try {
-    const res = await fetchWithTimeout(url, {
-      method: 'POST',
+    const res = await fetchWithTimeout(
+      url,
+      {
+        method: 'POST',
 
-      body: formData,
+        body: formData,
 
-      credentials: 'same-origin',
+        credentials: 'same-origin',
 
-      headers,
+        headers,
 
-      // No Content-Type: el navegador fija multipart boundary
-    })
+        // No Content-Type: el navegador fija multipart boundary
+      },
+      FETCH_TIMEOUT_ENVIAR_REPORTE_MS
+    )
 
     if (res.status === 429) {
       return {
@@ -400,13 +417,17 @@ export async function enviarReporteInfopagos(
   const url = `${BASE_PUBLIC}/infopagos/enviar-reporte`
 
   try {
-    const res = await fetchWithTimeout(url, {
-      method: 'POST',
+    const res = await fetchWithTimeout(
+      url,
+      {
+        method: 'POST',
 
-      body: formData,
+        body: formData,
 
-      credentials: 'same-origin',
-    })
+        credentials: 'same-origin',
+      },
+      FETCH_TIMEOUT_ENVIAR_REPORTE_MS
+    )
 
     if (res.status === 429) {
       return {
@@ -519,10 +540,14 @@ export async function getReciboInfopagos(
   const url = `${BASE_PUBLIC}/infopagos/recibo?pago_id=${pagoId}`
 
   try {
-    const res = await fetchWithTimeout(url, {
-      credentials: 'same-origin',
-      headers: { Authorization: `Bearer ${token}` },
-    })
+    const res = await fetchWithTimeout(
+      url,
+      {
+        credentials: 'same-origin',
+        headers: { Authorization: `Bearer ${token}` },
+      },
+      FETCH_TIMEOUT_RECIBO_INFOPAGOS_MS
+    )
 
     if (!res.ok)
       throw new Error(
@@ -650,6 +675,58 @@ export interface ListPagosReportadosConKpisResponse extends ListPagosReportadosR
   kpis: PagosReportadosKpis
 }
 
+/** TTL compartido con el intervalo de refresco en CobrosPagosReportadosPage. */
+export const COBROS_LISTADO_KPIS_CACHE_TTL_MS = 15 * 60 * 1000
+
+type CobrosListadoKpisParams = {
+  estado?: string
+  fecha_desde?: string
+  fecha_hasta?: string
+  cedula?: string
+  institucion?: string
+  page?: number
+  per_page?: number
+  incluir_exportados?: boolean
+}
+
+type CobrosListadoKpisCacheEntry = {
+  storedAt: number
+  payload: ListPagosReportadosConKpisResponse
+}
+
+const cobrosListadoKpisCache = new Map<string, CobrosListadoKpisCacheEntry>()
+
+function cobrosListadoKpisCacheKey(params: CobrosListadoKpisParams): string {
+  return JSON.stringify({
+    e: params.estado ?? '',
+    fd: params.fecha_desde ?? '',
+    fh: params.fecha_hasta ?? '',
+    c: params.cedula ?? '',
+    i: params.institucion ?? '',
+    p: params.page ?? 1,
+    pp: params.per_page ?? 20,
+    x: params.incluir_exportados ? 1 : 0,
+  })
+}
+
+function cloneListadoConKpis(
+  data: ListPagosReportadosConKpisResponse
+): ListPagosReportadosConKpisResponse {
+  if (typeof structuredClone === 'function') {
+    try {
+      return structuredClone(data)
+    } catch {
+      /* JSON fallback */
+    }
+  }
+  return JSON.parse(JSON.stringify(data)) as ListPagosReportadosConKpisResponse
+}
+
+/** Tras aprobar/rechazar/eliminar/exportar Excel: forzar datos frescos en la siguiente carga. */
+export function invalidateCobrosListadoKpisCache(): void {
+  cobrosListadoKpisCache.clear()
+}
+
 export async function getPagosReportadosKpis(
   params: {
     fecha_desde?: string
@@ -767,23 +844,10 @@ export async function listPagosReportados(params: {
   return data
 }
 
-export async function listPagosReportadosConKpis(params: {
-  estado?: string
-
-  fecha_desde?: string
-
-  fecha_hasta?: string
-
-  cedula?: string
-
-  institucion?: string
-
-  page?: number
-
-  per_page?: number
-
-  incluir_exportados?: boolean
-}): Promise<ListPagosReportadosConKpisResponse> {
+export async function listPagosReportadosConKpis(
+  params: CobrosListadoKpisParams,
+  opts?: { bypassCache?: boolean }
+): Promise<ListPagosReportadosConKpisResponse> {
   const q = new URLSearchParams()
 
   if (params.estado) q.set('estado', params.estado)
@@ -807,8 +871,29 @@ export async function listPagosReportadosConKpis(params: {
 
   const url = `${BASE_COBROS}/pagos-reportados/listado-y-kpis?${q}`
 
+  const cacheKey = cobrosListadoKpisCacheKey(params)
+
+  const persist = (payload: ListPagosReportadosConKpisResponse) => {
+    cobrosListadoKpisCache.set(cacheKey, {
+      storedAt: Date.now(),
+      payload: cloneListadoConKpis(payload),
+    })
+    return payload
+  }
+
+  if (!opts?.bypassCache) {
+    const hit = cobrosListadoKpisCache.get(cacheKey)
+    if (
+      hit &&
+      Date.now() - hit.storedAt < COBROS_LISTADO_KPIS_CACHE_TTL_MS
+    ) {
+      return cloneListadoConKpis(hit.payload)
+    }
+  }
+
   try {
-    return await apiClient.get<ListPagosReportadosConKpisResponse>(url)
+    const data = await apiClient.get<ListPagosReportadosConKpisResponse>(url)
+    return persist(data)
   } catch (e: unknown) {
     const st = (e as { response?: { status?: number } })?.response?.status
     if (st === 404 || st === 405) {
@@ -838,7 +923,7 @@ export async function listPagosReportadosConKpis(params: {
         getPagosReportadosKpis(filterParams),
       ])
 
-      return { ...lista, kpis }
+      return persist({ ...lista, kpis })
     }
 
     throw e

@@ -36,6 +36,8 @@ import {
   eliminarPagoReportado,
   exportarPagosReportadosAprobadosExcel,
   getTendenciaFallosGemini,
+  invalidateCobrosListadoKpisCache,
+  COBROS_LISTADO_KPIS_CACHE_TTL_MS,
   type PagoReportadoItem,
   type ListPagosReportadosResponse,
   type PagosReportadosKpis,
@@ -332,6 +334,8 @@ export default function CobrosPagosReportadosPage() {
   const [tendenciaLoading, setTendenciaLoading] = useState(true)
   const [searchNonce, setSearchNonce] = useState(0)
   const loadSeqRef = useRef(0)
+  const dataRef = useRef<ListPagosReportadosResponse | null>(null)
+  dataRef.current = data
 
   const [colWidths, setColWidths] = useState<number[]>(readCobrosReportadosColWidths)
 
@@ -384,53 +388,73 @@ export default function CobrosPagosReportadosPage() {
     setColWidths([...COBROS_REPORTADOS_DEFAULT_COL_WIDTHS])
   }, [])
 
-  const load = async () => {
-    const requestSeq = ++loadSeqRef.current
-    const initialLoad = data === null
-    setLoading(initialLoad)
-    setRefreshing(!initialLoad)
+  const fetchListado = useCallback(
+    async (opts?: { bypassCache?: boolean }) => {
+      const requestSeq = ++loadSeqRef.current
+      const initialLoad = dataRef.current === null
+      setLoading(initialLoad)
+      setRefreshing(!initialLoad)
 
-    try {
-      const filterParams = {
-        fecha_desde: fechaDesde || undefined,
+      try {
+        const filterParams = {
+          fecha_desde: fechaDesde || undefined,
 
-        fecha_hasta: fechaHasta || undefined,
+          fecha_hasta: fechaHasta || undefined,
 
-        cedula: cedula.trim() || undefined,
+          cedula: cedula.trim() || undefined,
 
-        institucion: institucion.trim() || undefined,
+          institucion: institucion.trim() || undefined,
+        }
+
+        const res = await listPagosReportadosConKpis(
+          {
+            page,
+
+            per_page: 20,
+
+            estado: estado || undefined,
+
+            incluir_exportados: incluirExportados,
+
+            ...filterParams,
+          },
+          { bypassCache: opts?.bypassCache }
+        )
+        if (requestSeq !== loadSeqRef.current) return
+
+        setData(res)
+
+        setKpis(res.kpis)
+      } catch (e: any) {
+        toast.error(e?.message || 'Error al cargar.')
+      } finally {
+        if (requestSeq === loadSeqRef.current) {
+          setLoading(false)
+          setRefreshing(false)
+        }
       }
-
-      const res = await listPagosReportadosConKpis({
-        page,
-
-        per_page: 20,
-
-        estado: estado || undefined,
-
-        incluir_exportados: incluirExportados,
-
-        ...filterParams,
-      })
-      if (requestSeq !== loadSeqRef.current) return
-
-      setData(res)
-
-      setKpis(res.kpis)
-    } catch (e: any) {
-      toast.error(e?.message || 'Error al cargar.')
-    } finally {
-      if (requestSeq === loadSeqRef.current) {
-        setLoading(false)
-        setRefreshing(false)
-      }
-    }
-  }
+    },
+    [
+      page,
+      estado,
+      fechaDesde,
+      fechaHasta,
+      cedula,
+      institucion,
+      incluirExportados,
+    ]
+  )
 
   useEffect(() => {
-    load()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, incluirExportados, estado, searchNonce])
+    void fetchListado()
+  }, [fetchListado, searchNonce])
+
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      void fetchListado({ bypassCache: true })
+    }, COBROS_LISTADO_KPIS_CACHE_TTL_MS)
+    return () => window.clearInterval(id)
+  }, [fetchListado])
 
   useEffect(() => {
     let cancelled = false
@@ -505,6 +529,7 @@ export default function CobrosPagosReportadosPage() {
         })
       }
 
+      invalidateCobrosListadoKpisCache()
       setSearchNonce(prev => prev + 1)
 
       if (nuevoEstado === 'rechazado') {
@@ -562,6 +587,7 @@ export default function CobrosPagosReportadosPage() {
         return
       }
       toast.success(res?.mensaje || 'Pago reportado eliminado.')
+      invalidateCobrosListadoKpisCache()
       setSearchNonce(prev => prev + 1)
     } catch (e: unknown) {
       const detail = (e as { response?: { data?: { detail?: string } } })
@@ -613,6 +639,7 @@ export default function CobrosPagosReportadosPage() {
       )
 
       setPage(1)
+      invalidateCobrosListadoKpisCache()
       setSearchNonce(prev => prev + 1)
     } catch (e: any) {
       toast.error(e?.message || 'No se pudo exportar el Excel de corrección.')
@@ -836,6 +863,7 @@ export default function CobrosPagosReportadosPage() {
           <Button
             onClick={() => {
               setPage(1)
+              invalidateCobrosListadoKpisCache()
               setSearchNonce(prev => prev + 1)
             }}
           >

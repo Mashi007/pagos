@@ -1084,7 +1084,10 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
         const pid = row.prestamo_id
         if (!ced || pid == null) return false
         const d = row.comparar_fecha_entrega_q_aprobacion
-        if (!d) return false
+        if (!d) {
+          // Coincide con el texto del select «menor_cero»: incluye sin caché / Q no interpretable en listado.
+          return filtroDiferenciaFechaGeneral === 'menor_cero'
+        }
         return filaCumpleFiltroDiferenciaFechaGeneral(
           filtroDiferenciaFechaGeneral,
           d

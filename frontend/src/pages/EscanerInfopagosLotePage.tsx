@@ -21,7 +21,6 @@ import {
   Loader2,
   Pencil,
   Save,
-  StickyNote,
   Trash2,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -489,14 +488,6 @@ export default function EscanerInfopagosLotePage() {
       form.append('monto', montoParaApi(vM.valor))
       form.append('moneda', fila.moneda)
       form.append('comprobante', fila.archivo)
-      const justif = fila.justificacionFecha.trim()
-      if (justif) {
-        const motivoFecha =
-          hayFechaDetectada && fila.fechaPago.trim() !== fila.fechaDetectada.trim()
-            ? `Ajuste manual de fecha (comprobante): ${fila.fechaDetectada} → ${fila.fechaPago}. ${justif}`
-            : `Nota sobre fecha de comprobante: ${justif}`
-        form.append('observacion', motivoFecha)
-      }
       guardarActivoRef.current.add(clientId)
       actualizarFila(clientId, { guardando: true, guardadoError: undefined })
       try {
@@ -817,19 +808,6 @@ export default function EscanerInfopagosLotePage() {
                         <Button
                           type="button"
                           size="sm"
-                          variant={fila.panelNotaAbierto ? 'default' : 'outline'}
-                          onClick={() =>
-                            actualizarFila(fila.clientId, {
-                              panelNotaAbierto: !fila.panelNotaAbierto,
-                            })
-                          }
-                        >
-                          <StickyNote className="mr-1 h-3.5 w-3.5" />
-                          Nota
-                        </Button>
-                        <Button
-                          type="button"
-                          size="sm"
                           variant="outline"
                           disabled={fila.guardando}
                           onClick={() => handleEliminarFila(fila.clientId)}
@@ -854,24 +832,6 @@ export default function EscanerInfopagosLotePage() {
                     </div>
                   </CardHeader>
                   <CardContent className="space-y-3">
-                    {fila.panelNotaAbierto && (
-                      <div className="rounded-md border border-amber-200 bg-amber-50/60 p-3">
-                        <Label htmlFor={`nota-${fila.clientId}`} className="text-xs">
-                          Nota opcional (fecha / comprobante)
-                        </Label>
-                        <Input
-                          id={`nota-${fila.clientId}`}
-                          className="mt-1"
-                          value={fila.justificacionFecha}
-                          onChange={e =>
-                            actualizarFila(fila.clientId, { justificacionFecha: e.target.value })
-                          }
-                          placeholder="Opcional. Ej.: sello borroso."
-                          maxLength={300}
-                        />
-                      </div>
-                    )}
-
                     {!fila.editando && fila.extract === 'listo' && (
                       <p className="text-sm text-slate-700">
                         {fila.fechaPago || '—'} · {fila.institucion || '—'} · Nº{' '}
@@ -956,7 +916,6 @@ export default function EscanerInfopagosLotePage() {
                                         actualizarFila(fila.clientId, {
                                           confirmaFechaDetectada: 'si',
                                           fechaPago: fila.fechaDetectada,
-                                          justificacionFecha: '',
                                         })
                                       }
                                     >
@@ -981,21 +940,6 @@ export default function EscanerInfopagosLotePage() {
                                 </div>
                               ) : null}
                             </div>
-                            {!fila.panelNotaAbierto ? (
-                              <div className="space-y-2">
-                                <Label className="text-xs">Nota opcional</Label>
-                                <Input
-                                  value={fila.justificacionFecha}
-                                  onChange={e =>
-                                    actualizarFila(fila.clientId, {
-                                      justificacionFecha: e.target.value,
-                                    })
-                                  }
-                                  maxLength={300}
-                                  placeholder="Opcional"
-                                />
-                              </div>
-                            ) : null}
                           </div>
                           <div className="space-y-2 sm:col-span-2">
                             <Label>Institución financiera</Label>
