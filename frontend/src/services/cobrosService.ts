@@ -593,6 +593,12 @@ export interface PagoReportadoItem {
   prestamo_existente_id?: number | null
 
   pago_existente_estado?: string | null
+
+  prestamo_objetivo_id?: number | null
+
+  prestamo_objetivo_multiple?: boolean | null
+
+  prestamo_duplicado_es_objetivo?: boolean | null
 }
 
 /** Etiqueta legible para columna Origen en Pagos reportados. */

@@ -425,8 +425,35 @@ export default function CobrosEditarPage() {
               </>
             )}
           </p>
+          {typeof detalle.prestamo_objetivo_id === 'number' && (
+            <p className="mt-1">
+              Préstamo objetivo del caso (actual):{' '}
+              <strong>#{detalle.prestamo_objetivo_id}</strong>
+              {detalle.prestamo_objetivo_multiple ? (
+                <span className="ml-1 text-amber-700">
+                  (hay más de un préstamo APROBADO para la cédula)
+                </span>
+              ) : null}
+              .
+            </p>
+          )}
+          {typeof detalle.prestamo_existente_id === 'number' &&
+          typeof detalle.prestamo_objetivo_id === 'number' ? (
+            <p className="mt-1">
+              Diagnóstico:{' '}
+              {detalle.prestamo_duplicado_es_objetivo ? (
+                <strong className="text-emerald-700">
+                  ya fue cargado al préstamo actual.
+                </strong>
+              ) : (
+                <strong className="text-amber-700">
+                  fue cargado a otro préstamo (distinto al actual).
+                </strong>
+              )}
+            </p>
+          ) : null}
           {typeof detalle.prestamo_existente_id === 'number' && (
-            <div className="mt-2">
+            <div className="mt-2 flex flex-wrap gap-2">
               <Button
                 type="button"
                 variant="outline"
@@ -439,6 +466,21 @@ export default function CobrosEditarPage() {
               >
                 Abrir préstamo #{detalle.prestamo_existente_id}
               </Button>
+              {typeof detalle.prestamo_objetivo_id === 'number' &&
+              detalle.prestamo_objetivo_id !== detalle.prestamo_existente_id ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    navigate(
+                      `/prestamos?filtro_prestamo_id=${detalle.prestamo_objetivo_id}`
+                    )
+                  }
+                >
+                  Abrir préstamo actual #{detalle.prestamo_objetivo_id}
+                </Button>
+              ) : null}
             </div>
           )}
         </div>
