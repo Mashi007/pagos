@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Database, Search, RefreshCw } from 'lucide-react'
+import { CheckCircle2, Database, Search, RefreshCw } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
 
@@ -106,13 +106,23 @@ export default function FechaQAuditoriaTotalPage() {
     return ids
   }, [items, selected])
 
+  /** Solo filas con checkbox (Puede aplicar = Sí y cédula); el lote ignora cualquier otro id. */
+  const seleccionadosElegiblesParaSi = useMemo(() => {
+    const out: number[] = []
+    for (const pid of idsSeleccionadosOrdenados) {
+      const row = items.find(r => r.prestamo_id === pid)
+      if (row && filaElegibleAcciones(row)) out.push(pid)
+    }
+    return out
+  }, [idsSeleccionadosOrdenados, items])
+
   const ejecutarLoteSi = async () => {
-    if (!esAdmin || batchRunning || idsSeleccionadosOrdenados.length === 0) return
+    if (!esAdmin || batchRunning || seleccionadosElegiblesParaSi.length === 0) return
     setBatchRunning(true)
     setConfirmLote(null)
     let ok = 0
     const errores: string[] = []
-    for (const pid of idsSeleccionadosOrdenados) {
+    for (const pid of seleccionadosElegiblesParaSi) {
       const row = items.find(r => r.prestamo_id === pid)
       if (!row || !filaElegibleAcciones(row)) continue
       const ced = (row.cedula || '').trim()
@@ -140,12 +150,12 @@ export default function FechaQAuditoriaTotalPage() {
   }
 
   const ejecutarLoteNo = async () => {
-    if (!esAdmin || batchRunning || idsSeleccionadosOrdenados.length === 0) return
+    if (!esAdmin || batchRunning || seleccionadosElegiblesParaSi.length === 0) return
     setBatchRunning(true)
     setConfirmLote(null)
     let ok = 0
     const errores: string[] = []
-    for (const pid of idsSeleccionadosOrdenados) {
+    for (const pid of seleccionadosElegiblesParaSi) {
       const row = items.find(r => r.prestamo_id === pid)
       if (!row || !filaElegibleAcciones(row)) continue
       try {
@@ -248,40 +258,61 @@ export default function FechaQAuditoriaTotalPage() {
             <p className="text-sm text-muted-foreground">Sin filas para este filtro.</p>
           ) : (
             <>
-              {elegiblesPagina.length > 0 ? (
-                <div className="mb-3 flex flex-wrap items-center gap-2 border-b border-border/60 pb-3">
-                  <span className="text-sm text-muted-foreground">
-                    Seleccionados:{' '}
-                    <span className="font-semibold text-foreground">{idsSeleccionadosOrdenados.length}</span>
-                    {' · '}
-                    Elegibles en página: {elegiblesPagina.length}
-                  </span>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    disabled={selected.size === 0 || batchRunning}
-                    onClick={() => setSelected(new Set())}
-                  >
-                    Limpiar selección
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    disabled={!esAdmin || idsSeleccionadosOrdenados.length === 0 || batchRunning}
-                    onClick={() => setConfirmLote('si')}
-                  >
-                    Ejecutar «Sí» en lote…
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="secondary"
-                    disabled={!esAdmin || idsSeleccionadosOrdenados.length === 0 || batchRunning}
-                    onClick={() => setConfirmLote('no')}
-                  >
-                    Ejecutar «No» en lote…
-                  </Button>
+              {items.length > 0 ? (
+                <div className="mb-3 space-y-2 border-b border-border/60 pb-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-sm text-muted-foreground">
+                      Con casilla marcada:{' '}
+                      <span className="font-semibold text-foreground">{idsSeleccionadosOrdenados.length}</span>
+                      {' · '}
+                      Listos para <strong>Sí</strong> (aplicar Q):{' '}
+                      <span className="font-semibold text-foreground">
+                        {seleccionadosElegiblesParaSi.length}
+                      </span>
+                      {' · '}
+                      Elegibles en esta página: {elegiblesPagina.length}
+                    </span>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={selected.size === 0 || batchRunning}
+                      onClick={() => setSelected(new Set())}
+                    >
+                      Limpiar selección
+                    </Button>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="gap-1.5 bg-blue-600 text-white hover:bg-blue-700"
+                      disabled={
+                        !esAdmin || seleccionadosElegiblesParaSi.length === 0 || batchRunning
+                      }
+                      onClick={() => setConfirmLote('si')}
+                    >
+                      <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden />
+                      Aprobar masivamente (Sí)
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      disabled={
+                        !esAdmin || seleccionadosElegiblesParaSi.length === 0 || batchRunning
+                      }
+                      onClick={() => setConfirmLote('no')}
+                    >
+                      Marcar «No» en lote…
+                    </Button>
+                  </div>
+                  {elegiblesPagina.length === 0 ? (
+                    <p className="text-xs text-amber-900">
+                      En esta página no hay filas con <strong>Puede aplicar = Sí</strong> (no hay casillas). Active
+                      «Solo con diferencia de fecha», cambie de página o recalcule la caché Q.
+                    </p>
+                  ) : null}
                 </div>
               ) : null}
               <table className="w-full min-w-[800px] border-collapse text-sm">
@@ -488,13 +519,14 @@ export default function FechaQAuditoriaTotalPage() {
       <Dialog open={confirmLote === 'si'} onOpenChange={open => !open && setConfirmLote(null)}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Aplicar «Sí» en lote</DialogTitle>
+            <DialogTitle>Aprobar masivamente (fecha Q)</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
-            Se aplicará la misma acción que el botón <strong>Sí</strong> fila a fila: guardar la fecha Q como{' '}
+            Se aplicará la misma acción que el botón <strong>Sí</strong> en cada fila: guardar la fecha Q como{' '}
             <strong>fecha de aprobación</strong> en BD (requerimiento = día anterior, recálculo de vencimientos si el
-            servidor lo aplica) en <span className="font-semibold tabular-nums">{idsSeleccionadosOrdenados.length}</span>{' '}
-            préstamo(s) seleccionado(s). Los que fallen se pueden revisar uno a uno.
+            servidor lo aplica) en{' '}
+            <span className="font-semibold tabular-nums">{seleccionadosElegiblesParaSi.length}</span> préstamo(s){' '}
+            con casilla marcada y <strong>Puede aplicar = Sí</strong>. Los que fallen se pueden revisar uno a uno.
           </p>
           <DialogFooter className="gap-2 sm:gap-0">
             <Button type="button" variant="outline" onClick={() => setConfirmLote(null)} disabled={batchRunning}>
@@ -515,7 +547,8 @@ export default function FechaQAuditoriaTotalPage() {
           <p className="text-sm text-muted-foreground">
             Se aplicará la misma acción que el botón <strong>No</strong>: marcar en caché «no aplicar Q» en auditoría
             (sin cambiar aprobación en BD) en{' '}
-            <span className="font-semibold tabular-nums">{idsSeleccionadosOrdenados.length}</span> préstamo(s).
+            <span className="font-semibold tabular-nums">{seleccionadosElegiblesParaSi.length}</span> préstamo(s){' '}
+            con casilla marcada.
           </p>
           <DialogFooter className="gap-2 sm:gap-0">
             <Button type="button" variant="outline" onClick={() => setConfirmLote(null)} disabled={batchRunning}>

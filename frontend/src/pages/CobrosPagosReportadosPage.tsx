@@ -21,7 +21,13 @@
 
  */
 
-import React, { useState, useEffect, useRef, useCallback } from 'react'
+import React, {
+  useState,
+  useEffect,
+  useRef,
+  useCallback,
+  useMemo,
+} from 'react'
 
 import { useNavigate } from 'react-router-dom'
 
@@ -223,14 +229,19 @@ const normalizeEstadoValue = (value: string) =>
 const isMercantilBank = (value: string) =>
   String(value ?? '').trim().toLowerCase().includes('mercantil')
 
+/** Filas que pueden aprobarse desde el listado (misma regla que el selector «Aprobar» por fila). */
+function puedeAprobarMasivoRow(row: PagoReportadoItem): boolean {
+  return row.estado === 'pendiente' || row.estado === 'en_revision'
+}
+
 /** Anchos por defecto (px) para la tabla de pagos reportados; el usuario puede redimensionar. */
 const COBROS_REPORTADOS_COL_WIDTHS_KEY =
   'rapicredit:cobrosPagosReportados:colWidthsV1'
 
-const COBROS_REPORTADOS_COL_COUNT = 10
+const COBROS_REPORTADOS_COL_COUNT = 11
 
 const COBROS_REPORTADOS_DEFAULT_COL_WIDTHS: readonly number[] = [
-  96, 168, 88, 110, 150, 110, 100, 260, 108, 132,
+  44, 96, 168, 88, 110, 150, 110, 100, 260, 108, 132,
 ]
 
 function readCobrosReportadosColWidths(): number[] {
@@ -262,6 +273,7 @@ const COBROS_REPORTADOS_TABLE_HEAD: ReadonlyArray<{
   label: string
   align: 'left' | 'right' | 'center'
 }> = [
+  { label: 'Sel.', align: 'center' },
   { label: 'Cédula', align: 'left' },
   { label: 'Banco', align: 'left' },
   { label: 'Monto', align: 'right' },
@@ -307,6 +319,13 @@ export default function CobrosPagosReportadosPage() {
   const [ordenCedula, setOrdenCedula] = useState<'asc' | 'desc'>('asc')
 
   const [changingEstadoId, setChangingEstadoId] = useState<number | null>(null)
+
+  /** IDs seleccionados en la página actual para aprobación masiva (solo pendiente / en revisión). */
+  const [selectedIds, setSelectedIds] = useState<number[]>([])
+
+  const [bulkApproving, setBulkApproving] = useState(false)
+
+  const headerCheckboxRef = useRef<HTMLInputElement>(null)
 
   const [viewingComprobanteId, setViewingComprobanteId] = useState<
     number | null
@@ -448,6 +467,21 @@ export default function CobrosPagosReportadosPage() {
   useEffect(() => {
     void fetchListado()
   }, [fetchListado, searchNonce])
+
+  useEffect(() => {
+    setSelectedIds([])
+  }, [
+    page,
+    estado,
+    fechaDesde,
+    fechaHasta,
+    cedula,
+    institucion,
+    incluirExportados,
+    soloCedulasDuplicadas,
+    soloFallaListaBs,
+    soloDuplicadoDocumento,
+  ])
 
   useEffect(() => {
     const id = window.setInterval(() => {
@@ -698,6 +732,130 @@ export default function CobrosPagosReportadosPage() {
     soloDuplicadoDocumento,
     ordenCedula,
   ])
+
+  const seleccionablesEnPagina = useMemo(
+    () => itemsTabla.filter(puedeAprobarMasivoRow).map(r => r.id),
+    [itemsTabla]
+  )
+
+  const allSeleccionadosEnPagina = useMemo(
+    () =>
+      seleccionablesEnPagina.length > 0 &&
+      seleccionablesEnPagina.every(id => selectedIds.includes(id)),
+    [seleccionablesEnPagina, selectedIds]
+  )
+
+  useEffect(() => {
+    const el = headerCheckboxRef.current
+    if (!el) return
+    const algunos =
+      seleccionablesEnPagina.some(id => selectedIds.includes(id)) &&
+      !allSeleccionadosEnPagina
+    el.indeterminate = algunos
+  }, [seleccionablesEnPagina, selectedIds, allSeleccionadosEnPagina])
+
+  const toggleSeleccionarTodosPagina = useCallback(() => {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      const todosMarcados =
+        seleccionablesEnPagina.length > 0 &&
+        seleccionablesEnPagina.every(id => next.has(id))
+      if (todosMarcados) {
+        seleccionablesEnPagina.forEach(id => next.delete(id))
+      } else {
+        seleccionablesEnPagina.forEach(id => next.add(id))
+      }
+      return Array.from(next)
+    })
+  }, [seleccionablesEnPagina])
+
+  const toggleRowSelected = useCallback((id: number, checked: boolean) => {
+    setSelectedIds(prev => {
+      if (checked) return prev.includes(id) ? prev : [...prev, id]
+      return prev.filter(x => x !== id)
+    })
+  }, [])
+
+  const handleAprobarMasivo = async () => {
+    const ids = [...selectedIds]
+    if (!ids.length) return
+    if (
+      !window.confirm(
+        '¿Aprobar ' +
+          String(ids.length) +
+          ' pago(s) reportado(s) seleccionado(s)? Se creará el pago en cartera y se aplicará a cuotas por cada uno. ' +
+          'Los que fallen (duplicado, sin tasa Bs., etc.) se mostrarán en un resumen.'
+      )
+    ) {
+      return
+    }
+    setBulkApproving(true)
+    let ok = 0
+    let fail = 0
+    let primerError = ''
+    const okIds: number[] = []
+    for (const id of ids) {
+      try {
+        const data = await cambiarEstadoPago(id, 'aprobado')
+        ok += 1
+        okIds.push(id)
+        if (data?.mensaje) {
+          /* un toast por fila sería ruidoso; solo contar */
+        }
+      } catch (e: unknown) {
+        fail += 1
+        if (!primerError) {
+          const d = (e as { response?: { data?: { detail?: string } } })?.response
+            ?.data?.detail
+          primerError =
+            typeof d === 'string'
+              ? d
+              : (e as Error)?.message || 'Error desconocido'
+        }
+      }
+    }
+    if (ok > 0) {
+      queryClient.invalidateQueries({ queryKey: ['pagos'] })
+      queryClient.invalidateQueries({ queryKey: ['cuotas-prestamo'] })
+      queryClient.invalidateQueries({ queryKey: ['prestamos'] })
+      void invalidateListasNotificacionesMora(queryClient)
+      if (estado !== 'aprobado') {
+        const quit = new Set(okIds)
+        setData(prev => {
+          if (!prev) return prev
+          return {
+            ...prev,
+            items: prev.items.filter(r => !quit.has(r.id)),
+            total: Math.max(0, prev.total - okIds.length),
+          }
+        })
+      }
+      invalidateCobrosListadoKpisCache()
+      setSearchNonce(prev => prev + 1)
+    }
+    setSelectedIds([])
+    setBulkApproving(false)
+    if (fail === 0 && ok > 0) {
+      toast.success('Aprobación masiva: ' + String(ok) + ' correcto(s).')
+    } else if (ok > 0 && fail > 0) {
+      toast(
+        'Aprobados: ' +
+          String(ok) +
+          '. Fallidos: ' +
+          String(fail) +
+          '.' +
+          (primerError ? ' Ejemplo: ' + primerError.slice(0, 200) : ''),
+        { duration: 9000 }
+      )
+    } else if (fail > 0) {
+      toast.error(
+        'Ninguna aprobación masiva exitosa (' +
+          String(fail) +
+          ' error(es)). ' +
+          (primerError ? primerError.slice(0, 220) : '')
+      )
+    }
+  }
 
   return (
     <div className="space-y-6 p-6">
@@ -1194,6 +1352,41 @@ export default function CobrosPagosReportadosPage() {
                   Restaurar anchos
                 </Button>
               </div>
+              {(selectedIds.length > 0 || bulkApproving) && (
+                <div className="mb-2 flex flex-wrap items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50/90 px-3 py-2 text-sm text-emerald-950 dark:bg-emerald-950/30 dark:text-emerald-50">
+                  <span className="font-medium">
+                    {bulkApproving
+                      ? 'Aprobando…'
+                      : String(selectedIds.length) + ' seleccionado(s)'}
+                  </span>
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="h-8 bg-emerald-600 text-white hover:bg-emerald-700"
+                    disabled={bulkApproving || selectedIds.length === 0}
+                    onClick={() => void handleAprobarMasivo()}
+                  >
+                    {bulkApproving ? (
+                      <>
+                        <Loader2 className="mr-1.5 inline h-3.5 w-3.5 animate-spin" />
+                        Procesando
+                      </>
+                    ) : (
+                      'Aprobar seleccionados'
+                    )}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-8"
+                    disabled={bulkApproving}
+                    onClick={() => setSelectedIds([])}
+                  >
+                    Quitar selección
+                  </Button>
+                </div>
+              )}
               <div className="relative w-full max-w-full min-w-0 overflow-x-auto rounded-lg border">
               {refreshing ? (
                 <div
@@ -1236,21 +1429,43 @@ export default function CobrosPagosReportadosPage() {
                             h.align === 'center' && 'px-1'
                           )}
                         >
-                          {h.label}
-                          {h.label === 'Cédula' ? (
-                            <button
-                              type="button"
-                              className="ml-1 inline-flex rounded px-1 py-0.5 text-[10px] text-muted-foreground hover:bg-muted"
-                              onClick={e => {
-                                e.preventDefault()
-                                e.stopPropagation()
-                                setOrdenCedula(prev => (prev === 'asc' ? 'desc' : 'asc'))
-                              }}
-                              title={`Ordenar cédula ${ordenCedula === 'asc' ? 'descendente' : 'ascendente'}`}
-                            >
-                              {ordenCedula === 'asc' ? '↑' : '↓'}
-                            </button>
-                          ) : null}
+                          {h.label === 'Sel.' ? (
+                            <span className="flex justify-center py-0.5">
+                              <input
+                                ref={headerCheckboxRef}
+                                type="checkbox"
+                                className="h-4 w-4 cursor-pointer accent-primary"
+                                checked={allSeleccionadosEnPagina}
+                                onChange={toggleSeleccionarTodosPagina}
+                                disabled={
+                                  bulkApproving ||
+                                  seleccionablesEnPagina.length === 0
+                                }
+                                aria-label="Seleccionar en esta página pendientes y en revisión"
+                                title="Solo pendiente o en revisión en esta página"
+                              />
+                            </span>
+                          ) : (
+                            <>
+                              {h.label}
+                              {h.label === 'Cédula' ? (
+                                <button
+                                  type="button"
+                                  className="ml-1 inline-flex rounded px-1 py-0.5 text-[10px] text-muted-foreground hover:bg-muted"
+                                  onClick={e => {
+                                    e.preventDefault()
+                                    e.stopPropagation()
+                                    setOrdenCedula(prev =>
+                                      prev === 'asc' ? 'desc' : 'asc'
+                                    )
+                                  }}
+                                  title={`Ordenar cédula ${ordenCedula === 'asc' ? 'descendente' : 'ascendente'}`}
+                                >
+                                  {ordenCedula === 'asc' ? '↑' : '↓'}
+                                </button>
+                              ) : null}
+                            </>
+                          )}
                         </span>
                         <button
                           type="button"
@@ -1270,6 +1485,32 @@ export default function CobrosPagosReportadosPage() {
                       key={row.id}
                       className="border-b transition-colors hover:bg-muted/20"
                     >
+                      <td className="px-1 py-2 text-center align-middle">
+                        {puedeAprobarMasivoRow(row) ? (
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4 cursor-pointer accent-primary"
+                            checked={selectedIds.includes(row.id)}
+                            onChange={e =>
+                              toggleRowSelected(row.id, e.target.checked)
+                            }
+                            disabled={
+                              bulkApproving || changingEstadoId === row.id
+                            }
+                            aria-label={
+                              'Seleccionar reporte ' +
+                              String(row.referencia_interna || row.id)
+                            }
+                          />
+                        ) : (
+                          <span
+                            className="text-muted-foreground"
+                            title="Solo se puede marcar pendiente o en revisión"
+                          >
+                            —
+                          </span>
+                        )}
+                      </td>
                       <td
                         className={
                           'whitespace-nowrap px-2 py-2 align-middle text-xs sm:text-sm ' +

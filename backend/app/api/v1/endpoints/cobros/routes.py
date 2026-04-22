@@ -20,7 +20,6 @@ from sqlalchemy.orm import Session
 from sqlalchemy import select, func, or_, and_, case, delete, text, update
 from sqlalchemy.exc import ProgrammingError, OperationalError, IntegrityError
 
-from app.core.config import settings
 from app.core.database import get_db
 from app.core.documento import normalize_documento
 from app.core.deps import get_current_user
@@ -322,7 +321,10 @@ _cobros_list_aux_lock = threading.Lock()
 
 # Mapas de precálculo duplicados (norm global, nº operación, presencia en pagos): costosos en GET listado/KPIs.
 # Cache en proceso con token de revisión barato + TTL para no servir datos obsoletos si cambia cola/exportados/pagos.
-_PRIMER_MAPS_CACHE_TTL_SEC = 30.0
+_PRIMER_MAPS_CACHE_TTL_SEC = 90.0
+
+# Filas SQL por iteración al barrer la cola manual (validadores en Python). Subir reduce round-trips a BD por lote.
+_COBROS_LISTADO_SCAN_BATCH = 1200
 _PRIMER_MAPS_CACHE_MAX_ENTRIES = 24
 _primer_maps_triple_cache_lock = threading.Lock()
 # scope_key -> (revision_token, monotonic_ts, primer_precalc, primer_num_op, numeros_en_pagos_frozen)
@@ -591,8 +593,13 @@ def _pago_reportado_list_items_from_rows(
     rows: List[PagoReportado],
     *,
     primer_id_por_norm_precalc: Optional[Dict[str, int]] = None,
+    include_financial_fields: bool = True,
 ) -> List[PagoReportadoListItem]:
-    """Misma lógica de observaciones / tasa que el listado paginado."""
+    """Misma lógica de observaciones / tasa que el listado paginado.
+
+    Si ``include_financial_fields`` es False, no calcula tasa Bs/USD ni equivalente (ahorra trabajo
+    en barridos masivos donde solo se usa ``observacion`` + Gemini para ``_item_falla_validadores_cobros_excel``).
+    """
     if not rows:
         return []
     cedula_norms = [
@@ -610,7 +617,9 @@ def _pago_reportado_list_items_from_rows(
     cedulas_bolivares = _autorizados_bs_claves_cached(db)
 
     fechas_tasa = list({r.fecha_pago for r in rows if r.fecha_pago is not None})
-    tasas_por_fecha = obtener_tasas_por_fechas(db, fechas_tasa)
+    tasas_por_fecha = (
+        obtener_tasas_por_fechas(db, fechas_tasa) if include_financial_fields else {}
+    )
 
     candidatos = _collect_candidatos_canon_desde_reportados(rows)
     claves_doc_en_pagos = _pagos_canonicos_presentes_para_claves(db, candidatos)
@@ -656,9 +665,12 @@ def _pago_reportado_list_items_from_rows(
         partes_reglas = partes_por_fila[i] if i < len(partes_por_fila) else []
         partes_final = partes_reglas + ([obs_gemini] if obs_gemini else [])
         observacion = " / ".join(partes_final) if partes_final else None
-        tasa_x, eq_usd = tasa_y_equivalente_usd_excel(
-            db, r.fecha_pago, float(r.monto), r.moneda, tasas_por_fecha=tasas_por_fecha
-        )
+        if include_financial_fields:
+            tasa_x, eq_usd = tasa_y_equivalente_usd_excel(
+                db, r.fecha_pago, float(r.monto), r.moneda, tasas_por_fecha=tasas_por_fecha
+            )
+        else:
+            tasa_x, eq_usd = None, None
         items.append(PagoReportadoListItem(
             id=r.id,
             referencia_interna=r.referencia_interna,
@@ -1194,18 +1206,21 @@ def _list_pagos_reportados_payload(
     emit_counts = bool(emit_manual_estado_counts_for_kpis and estado is None)
     by_estado_manual: Dict[str, int] = {"pendiente": 0, "en_revision": 0, "aprobado": 0}
 
-    batch = 400
+    batch = _COBROS_LISTADO_SCAN_BATCH
     offset_scan = 0
     skip_need = (page - 1) * per_page
     take_need = per_page
-    page_items: List[PagoReportadoListItem] = []
+    page_ids_ordered: List[int] = []
     total = 0
     while True:
         rows = db.execute(q.offset(offset_scan).limit(batch)).scalars().all()
         if not rows:
             break
         for it in _pago_reportado_list_items_from_rows(
-            db, rows, primer_id_por_norm_precalc=primer_precalc
+            db,
+            rows,
+            primer_id_por_norm_precalc=primer_precalc,
+            include_financial_fields=False,
         ):
             # Regla innegociable: duplicado = mismo numero_operacion exacto/canonico.
             # En cola operativa se muestra solo el primer reporte; reenvíos no se listan.
@@ -1227,9 +1242,29 @@ def _list_pagos_reportados_payload(
                 skip_need -= 1
                 continue
             if take_need > 0:
-                page_items.append(it)
+                page_ids_ordered.append(int(it.id))
                 take_need -= 1
         offset_scan += len(rows)
+
+    page_items: List[PagoReportadoListItem] = []
+    if page_ids_ordered:
+        seen: Set[int] = set()
+        uniq_ids: List[int] = []
+        for pid in page_ids_ordered:
+            if pid in seen:
+                continue
+            seen.add(pid)
+            uniq_ids.append(pid)
+        rows_page = db.execute(select(PagoReportado).where(PagoReportado.id.in_(uniq_ids))).scalars().all()
+        by_id = {int(r.id): r for r in rows_page}
+        ordered_pr = [by_id[i] for i in uniq_ids if i in by_id]
+        if ordered_pr:
+            page_items = _pago_reportado_list_items_from_rows(
+                db,
+                ordered_pr,
+                primer_id_por_norm_precalc=primer_precalc,
+                include_financial_fields=True,
+            )
 
     out: Dict[str, Any] = {"items": page_items, "total": total, "page": page, "per_page": per_page}
     if emit_counts:
@@ -1294,14 +1329,17 @@ def _kpis_pagos_reportados_payload(
         primer_kpi, _, _ = _get_primer_triple_cached(db, wh_kpi, kpi_scope_key)
         q_scan = select(PagoReportado).where(*wh_kpi).order_by(PagoReportado.created_at.asc())
 
-        batch = 400
+        batch = _COBROS_LISTADO_SCAN_BATCH
         offset_scan = 0
         while True:
             rows_b = db.execute(q_scan.offset(offset_scan).limit(batch)).scalars().all()
             if not rows_b:
                 break
             for it in _pago_reportado_list_items_from_rows(
-                db, rows_b, primer_id_por_norm_precalc=primer_kpi
+                db,
+                rows_b,
+                primer_id_por_norm_precalc=primer_kpi,
+                include_financial_fields=False,
             ):
                 if not _item_falla_validadores_cobros_excel(it):
                     continue
@@ -2676,7 +2714,7 @@ def cambiar_estado_pago(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
-    """Cambia el estado del pago reportado (pendiente, en_revision, aprobado, rechazado). Si pasa a aprobado, genera recibo PDF y envía por correo al email del cliente (cédula)."""
+    """Cambia el estado del pago reportado (pendiente, en_revision, aprobado, rechazado). Si pasa a aprobado, genera y guarda el recibo PDF; no envía correo desde este endpoint (listado). POST …/aprobar o enviar-recibo envían el recibo."""
     if body.estado not in ("pendiente", "en_revision", "aprobado", "rechazado"):
         raise HTTPException(status_code=400, detail="Estado no válido.")
     pr = db.execute(select(PagoReportado).where(PagoReportado.id == pago_id)).scalars().first()
@@ -2810,94 +2848,15 @@ def cambiar_estado_pago(
             extra=f"bytes={len(pdf_bytes) if pdf_bytes else 0}",
         )
         pr.recibo_pdf = pdf_bytes
-        to_emails = _emails_cliente_pago_reportado(db, pr)
-        cedula_cli = f"{pr.tipo_cedula or ''}{pr.numero_cedula or ''}"
-        if cliente_bloqueado_por_desistimiento(
-            db, cedula=cedula_cli, email=(to_emails[0] if to_emails else "")
-        ):
-            logger.info(
-                "[COBROS] Bloqueo PATCH aprobado ref=%s: cliente con prestamo DESISTIMIENTO",
-                pr.referencia_interna,
-            )
-            to_emails = []
-        if not pr.correo_enviado_a and to_emails and settings.COBROS_APROBACION_ENVIAR_RECIBO_POR_CORREO:
-            pr.correo_enviado_a = unir_destinatarios_log(to_emails)
-        dest_log_ap = unir_destinatarios_log(to_emails)
-        cobros_correo_activo = get_email_activo_servicio("cobros")
-        if to_emails and cobros_correo_activo and settings.COBROS_APROBACION_ENVIAR_RECIBO_POR_CORREO:
-            fase_smtp_t0 = time.perf_counter()
-            att, size_note = cobros_recibo_attachments_or_oversize_note(
-                f"recibo_{pr.referencia_interna}.pdf", pdf_bytes
-            )
-            body_mail = (
-                f"Su reporte de pago ha sido aprobado. Número de referencia: {_referencia_display(pr.referencia_interna)}.\n\n"
-                + (
-                    "Adjunto encontrará el recibo en PDF.\n\n"
-                    if att
-                    else "No se adjunta el recibo en este correo (archivo demasiado grande para el servidor de correo).\n\n"
-                )
-                + size_note
-                + "RapiCredit C.A."
-            )
-            ok_mail, err_mail = send_email(
-                to_emails,
-                f"Recibo de reporte de pago {_referencia_display(pr.referencia_interna)}",
-                body_mail,
-                attachments=att,
-                servicio="cobros",
-                respetar_destinos_manuales=True,
-            )
-            _log_fase_aprobacion(
-                flujo="aprobar_patch_estado",
-                fase="smtp_envio",
-                pago_id=pago_id,
-                referencia=str(pr.referencia_interna or ""),
-                start_ts=fase_smtp_t0,
-                extra=f"destinos={len(to_emails)} adjuntos={len(att)} ok={bool(ok_mail)}",
-            )
-            if ok_mail:
-                logger.info(
-                    "[COBROS] Cambiar a aprobado ref=%s: recibo enviado por correo a %s.",
-                    pr.referencia_interna,
-                    dest_log_ap,
-                )
-                mensaje = (
-                    "Estado actualizado a aprobado. Recibo enviado por correo."
-                    if att
-                    else (
-                        "Estado actualizado a aprobado. Se envió correo sin adjunto: el PDF supera el límite del "
-                        "proveedor de correo."
-                    )
-                )
-            else:
-                logger.error(
-                    "[COBROS] Cambiar a aprobado ref=%s: correo NO enviado a %s. Error: %s.",
-                    pr.referencia_interna,
-                    dest_log_ap,
-                    err_mail or "desconocido",
-                )
-                mensaje = "Estado actualizado a aprobado. El recibo no pudo enviarse por correo."
-        elif to_emails and not settings.COBROS_APROBACION_ENVIAR_RECIBO_POR_CORREO:
-            logger.info(
-                "[COBROS] PATCH estado=aprobado ref=%s: omitiendo SMTP recibo (COBROS_APROBACION_ENVIAR_RECIBO_POR_CORREO=false).",
-                pr.referencia_interna,
-            )
-            mensaje = (
-                "Estado actualizado a aprobado. No se envió recibo por correo "
-                "(COBROS_APROBACION_ENVIAR_RECIBO_POR_CORREO=false en servidor)."
-            )
-        elif to_emails and not cobros_correo_activo:
-            logger.warning(
-                "[COBROS] PATCH estado=aprobado ref=%s: servicio correo Cobros desactivado, no se envió recibo a %s.",
-                pr.referencia_interna,
-                dest_log_ap,
-            )
-            mensaje = (
-                "Estado actualizado a aprobado. El envío de correo para Cobros está desactivado en Configuración > Email; "
-                "no se envió el recibo."
-            )
-        else:
-            mensaje = "Estado actualizado a aprobado. No hay correo registrado para este pago (no se envió recibo)."
+        logger.info(
+            "[COBROS] PATCH estado=aprobado ref=%s: recibo PDF guardado; no se envía correo desde el listado "
+            "(detalle: POST …/aprobar o enviar-recibo).",
+            pr.referencia_interna,
+        )
+        mensaje = (
+            "Estado actualizado a aprobado. El recibo quedó generado; no se envía correo desde el listado. "
+            "Para notificar al cliente, use la vista de detalle (Aprobar o Enviar recibo por correo)."
+        )
 
     elif body.estado == "rechazado":
         to_emails = _emails_cliente_pago_reportado(db, pr)

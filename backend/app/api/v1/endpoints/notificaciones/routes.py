@@ -27,6 +27,7 @@ from sqlalchemy.orm import Session
 from app.core.database import SessionLocal, get_db
 from app.core.serializers import to_finite_float_or_zero
 from app.services.cuota_estado import hoy_negocio, parse_fecha_referencia_negocio
+from app.services.comparar_fecha_entrega_q_aprobacion_service import merged_fecha_q_cache_aplicar_norm_iso
 from app.services.notificacion_service import (
     CUOTA_ESTADO_NO_PAGADA_PARA_NOTIF,
     ESTADOS_CUOTA_VENCIDO_Y_MORA,
@@ -159,31 +160,60 @@ def _where_revision_q_no_descartada(dialect_name: str):
 
 def _where_q_cache_vs_aprobacion_distinta_de_cero(dialect_name: str):
     """
-    Filtro alineado al cálculo vivo: diferencia de días entre la Q en caché (ISO) y fecha_aprobacion en BD.
+    Filtro alineado al cálculo vivo: misma fecha canónica que ``parse_fecha_entrega_column_q_valor``.
+
+    Usa ``fecha_entrega_column_q_norm_iso`` (rellenada al persistir caché). Si falta (JSON legado),
+    solo acepta prefijo ISO estricto ``YYYY-MM-DD`` en ``fecha_entrega_column_q`` — nunca hace
+    ``::date`` sobre texto ``dd/mm/yyyy`` (evita interpretación ambigua en PostgreSQL).
     """
     if dialect_name == "postgresql":
         return text(
             "prestamos.fecha_entrega_q_aprobacion_cache IS NOT NULL "
             "AND prestamos.fecha_aprobacion IS NOT NULL "
-            "AND (prestamos.fecha_entrega_q_aprobacion_cache->>'fecha_entrega_column_q') IS NOT NULL "
-            "AND length(trim((prestamos.fecha_entrega_q_aprobacion_cache->>'fecha_entrega_column_q'))) >= 10 "
             "AND ("
-            "  substr(trim((prestamos.fecha_entrega_q_aprobacion_cache->>'fecha_entrega_column_q')), 1, 10)::date "
-            "  - CAST(prestamos.fecha_aprobacion AS date)"
+            " COALESCE("
+            "  NULLIF(TRIM(prestamos.fecha_entrega_q_aprobacion_cache->>'fecha_entrega_column_q_norm_iso'), ''),"
+            "  CASE WHEN TRIM(COALESCE(prestamos.fecha_entrega_q_aprobacion_cache->>'fecha_entrega_column_q','')) "
+            "   ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}' "
+            "  THEN SUBSTRING(TRIM(prestamos.fecha_entrega_q_aprobacion_cache->>'fecha_entrega_column_q') FROM 1 FOR 10) "
+            "  ELSE NULL END"
+            " ) IS NOT NULL "
+            "AND ("
+            " COALESCE("
+            "  NULLIF(TRIM(prestamos.fecha_entrega_q_aprobacion_cache->>'fecha_entrega_column_q_norm_iso'), ''),"
+            "  CASE WHEN TRIM(COALESCE(prestamos.fecha_entrega_q_aprobacion_cache->>'fecha_entrega_column_q','')) "
+            "   ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}' "
+            "  THEN SUBSTRING(TRIM(prestamos.fecha_entrega_q_aprobacion_cache->>'fecha_entrega_column_q') FROM 1 FOR 10) "
+            "  ELSE NULL END"
+            " )::date - CAST(prestamos.fecha_aprobacion AS date)"
             ") <> 0"
         )
     return text(
         "prestamos.fecha_entrega_q_aprobacion_cache IS NOT NULL "
         "AND prestamos.fecha_aprobacion IS NOT NULL "
-        "AND json_extract(prestamos.fecha_entrega_q_aprobacion_cache, '$.fecha_entrega_column_q') IS NOT NULL "
-        "AND length(trim(json_extract(prestamos.fecha_entrega_q_aprobacion_cache, '$.fecha_entrega_column_q'))) >= 10 "
         "AND ("
-        "  cast("
-        "    ("
-        "      julianday(date(substr(trim(json_extract(prestamos.fecha_entrega_q_aprobacion_cache, '$.fecha_entrega_column_q')), 1, 10))) "
-        "      - julianday(date(prestamos.fecha_aprobacion))"
-        "    ) as integer"
-        "  ) <> 0"
+        " COALESCE("
+        "  nullif(trim(json_extract(prestamos.fecha_entrega_q_aprobacion_cache, '$.fecha_entrega_column_q_norm_iso')), ''),"
+        "  CASE WHEN substr(trim(json_extract(prestamos.fecha_entrega_q_aprobacion_cache, '$.fecha_entrega_column_q')), 1, 10) "
+        "    GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]' "
+        "   THEN substr(trim(json_extract(prestamos.fecha_entrega_q_aprobacion_cache, '$.fecha_entrega_column_q')), 1, 10) "
+        "   ELSE NULL END"
+        " ) IS NOT NULL "
+        "AND ("
+        " cast("
+        "  ("
+        "   julianday(date("
+        "    COALESCE("
+        "     nullif(trim(json_extract(prestamos.fecha_entrega_q_aprobacion_cache, '$.fecha_entrega_column_q_norm_iso')), ''),"
+        "     CASE WHEN substr(trim(json_extract(prestamos.fecha_entrega_q_aprobacion_cache, '$.fecha_entrega_column_q')), 1, 10) "
+        "       GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]' "
+        "      THEN substr(trim(json_extract(prestamos.fecha_entrega_q_aprobacion_cache, '$.fecha_entrega_column_q')), 1, 10) "
+        "      ELSE NULL END"
+        "    )"
+        "   ))"
+        "   - julianday(date(prestamos.fecha_aprobacion))"
+        "  ) as integer"
+        " ) <> 0"
     )
 
 
@@ -196,7 +226,10 @@ def get_fecha_q_auditoria_total(
     solo_con_diferencia: bool = Query(
         False,
         description=(
-            "Si true, solo préstamos donde la fecha Q en caché (ISO) difiere en días de la fecha_aprobacion **actual** en BD."
+            "Si true, solo préstamos donde la fecha Q canónica en caché (``fecha_entrega_column_q_norm_iso``, "
+            "mismo criterio que el parseo vivo) difiere en días de la fecha_aprobacion **actual** en BD. "
+            "JSON sin ``norm_iso`` solo cuenta si ``fecha_entrega_column_q`` empieza por YYYY-MM-DD; en otro caso "
+            "ejecute refresco de caché Q."
         ),
     ),
     excluir_marcados_no: bool = Query(
@@ -301,6 +334,7 @@ def post_fecha_q_auditoria_marca_no_aplicar(
     merged = dict(prev)
     merged["revision_q_bd_omitir"] = True
     merged["revision_q_bd_omitir_at"] = datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
+    merged_fecha_q_cache_aplicar_norm_iso(merged)
     try:
         row.fecha_entrega_q_aprobacion_cache = json.loads(json.dumps(merged, default=str))
     except (TypeError, ValueError):

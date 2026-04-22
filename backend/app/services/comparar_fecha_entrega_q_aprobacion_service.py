@@ -64,6 +64,7 @@ def _persist_prestamo_fecha_entrega_q_cache(
     ):
         merged["revision_q_bd_omitir"] = True
         merged["revision_q_bd_omitir_at"] = prev.get("revision_q_bd_omitir_at")
+    merged_fecha_q_cache_aplicar_norm_iso(merged)
     try:
         row.fecha_entrega_q_aprobacion_cache = json.loads(json.dumps(merged, default=str))
     except (TypeError, ValueError):
@@ -175,6 +176,17 @@ def parse_fecha_entrega_column_q_valor(val: Any) -> Optional[date]:
         except ValueError:
             pass
     return _parse_fecha_celda_hoja(val)
+
+
+def merged_fecha_q_cache_aplicar_norm_iso(merged: Dict[str, Any]) -> None:
+    """
+    Actualiza in-place ``fecha_entrega_column_q_norm_iso`` (``YYYY-MM-DD``) con el mismo parser
+    que la auditoría viva y los filtros SQL de ``solo_con_diferencia``.
+    """
+    dq = parse_fecha_entrega_column_q_valor(merged.get("fecha_entrega_column_q"))
+    if dq is None:
+        dq = parse_fecha_entrega_column_q_valor(merged.get("fecha_entrega_column_q_raw"))
+    merged["fecha_entrega_column_q_norm_iso"] = dq.isoformat() if dq else None
 
 
 def _fecha_aprobacion_sistema_date(prestamo: Prestamo) -> Optional[date]:
