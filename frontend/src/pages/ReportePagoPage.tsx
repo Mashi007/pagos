@@ -1589,7 +1589,7 @@ export default function ReportePagoPage({
                     disabled={loading}
                   >
                     {loading
-                      ? 'Digitalizando con Gemini...'
+                      ? 'Procesando'
                       : 'Cargar pago'}
                   </Button>
                 </div>
@@ -2342,13 +2342,22 @@ export default function ReportePagoPage({
                   href={WHATSAPP_LINK}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex min-h-[48px] min-w-[100px] flex-1 touch-manipulation items-center justify-center rounded-md border border-emerald-600 bg-white px-4 py-2 font-semibold text-emerald-700 transition-colors hover:bg-emerald-50"
+                  className="inline-flex min-h-[52px] min-w-[120px] flex-1 touch-manipulation items-center justify-center gap-2 rounded-lg border-2 border-emerald-500 bg-emerald-50 px-4 py-2.5 text-center font-semibold text-emerald-800 shadow-sm transition-all hover:bg-emerald-100 hover:shadow-md"
                 >
+                  <svg
+                    className="h-5 w-5 flex-shrink-0"
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                    aria-hidden
+                  >
+                    <path d="M16.75 13.96c-.25-.13-1.47-.72-1.7-.8-.23-.08-.4-.13-.57.13-.17.25-.65.8-.8.96-.15.17-.3.19-.55.06-.25-.13-1.06-.39-2.01-1.25-.74-.66-1.25-1.48-1.4-1.73-.15-.25-.02-.38.11-.51.11-.11.25-.3.38-.44.13-.15.17-.25.25-.42.08-.17.04-.32-.02-.44-.06-.13-.57-1.38-.78-1.89-.2-.49-.41-.42-.56-.42h-.48c-.17 0-.44.06-.67.32-.23.25-.88.86-.88 2.1 0 1.24.9 2.44 1.03 2.6.13.17 1.77 2.7 4.3 3.78.6.26 1.08.42 1.45.53.61.19 1.17.16 1.61.1.49-.07 1.47-.6 1.68-1.19.21-.58.21-1.09.15-1.19-.07-.1-.23-.17-.48-.3Z" />
+                    <path d="M12.04 2C6.58 2 2.14 6.43 2.14 11.9c0 1.75.46 3.46 1.33 4.97L2 22l5.23-1.37a9.86 9.86 0 0 0 4.86 1.24h.01c5.46 0 9.9-4.43 9.9-9.9A9.84 9.84 0 0 0 12.04 2Zm.06 18.07h-.01a8.2 8.2 0 0 1-4.18-1.14l-.3-.17-3.09.81.82-3.01-.2-.31a8.24 8.24 0 0 1 1.26-10.44 8.18 8.18 0 0 1 5.68-2.29c4.54 0 8.24 3.7 8.24 8.24 0 4.55-3.7 8.25-8.22 8.25Z" />
+                  </svg>
                   Asistencia por WhatsApp
                 </a>
 
                 <Button
-                  className="min-h-[48px] min-w-0 flex-1 touch-manipulation bg-emerald-600 font-semibold text-white hover:bg-emerald-700"
+                  className="min-h-[52px] min-w-0 flex-1 touch-manipulation rounded-lg bg-emerald-600 px-4 py-2.5 text-base font-bold text-white shadow-sm transition-all hover:bg-emerald-700 hover:shadow-md"
                   onClick={handleEnviar}
                   disabled={loading}
                 >
