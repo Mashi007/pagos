@@ -419,6 +419,21 @@ class Settings(BaseSettings):
             "Se conserva por compatibilidad en .env; el codigo no lo usa."
         ),
     )
+    PAGOS_GMAIL_METADATA_BATCH_CHUNK: int = Field(
+        default=8,
+        ge=1,
+        le=50,
+        description=(
+            "Cantidad de messages.get (metadata) por BatchHttpRequest al listar Gmail. "
+            "Valores altos (p. ej. 50) provocan 429 «Too many concurrent requests for user»."
+        ),
+    )
+    PAGOS_GMAIL_METADATA_INTER_CHUNK_SLEEP_SEC: float = Field(
+        default=0.12,
+        ge=0.0,
+        le=2.0,
+        description="Pausa en segundos entre lotes consecutivos de metadata Gmail (amortigua concurrencia).",
+    )
 
     # Google Sheet CONCILIACIÓN → BD (snapshot dom/mié 01:20; caché Clientes Drive lun-sab 04:05 si jobs automáticos)
     CONCILIACION_SHEET_SPREADSHEET_ID: Optional[str] = Field(

@@ -49,8 +49,30 @@ def _fetch_gmail_labels_list_raw(service: Any) -> Optional[List[dict]]:
         return None
 
 
-# Gmail admite hasta 100 peticiones por batch; margen por timeouts parciales.
-_GMAIL_BATCH_METADATA_CHUNK = 50
+# Gmail admite hasta 100 sub-peticiones por batch HTTP; el límite que suele romper el flujo es la
+# **concurrencia efectiva por usuario** ("Too many concurrent requests for user"). El tamaño de lote
+# real lo fija settings.PAGOS_GMAIL_METADATA_BATCH_CHUNK (por defecto 8).
+_GMAIL_BATCH_METADATA_MAX_CHUNK = 50
+
+
+def _gmail_metadata_batch_chunk_size() -> int:
+    """Tamaño de lote para metadata; acotado para no superar el máximo del batch API."""
+    try:
+        from app.core.config import settings
+
+        n = int(getattr(settings, "PAGOS_GMAIL_METADATA_BATCH_CHUNK", 8) or 8)
+    except Exception:
+        n = 8
+    return max(1, min(n, _GMAIL_BATCH_METADATA_MAX_CHUNK))
+
+
+def _gmail_metadata_inter_chunk_sleep_sec() -> float:
+    try:
+        from app.core.config import settings
+
+        return float(getattr(settings, "PAGOS_GMAIL_METADATA_INTER_CHUNK_SLEEP_SEC", 0.12) or 0.0)
+    except Exception:
+        return 0.12
 
 
 def batch_get_messages_metadata(
@@ -61,7 +83,9 @@ def batch_get_messages_metadata(
     """
     Obtiene ``messages.get`` en formato metadata por lotes (BatchHttpRequest).
     Reintenta con GET individual si una entrada del batch falla o falta respuesta.
+    Ante 429 (concurrencia / rate limit) en el GET individual aplica backoff breve.
     """
+    from googleapiclient.errors import HttpError
     from googleapiclient.http import BatchHttpRequest
 
     headers = metadata_headers or ["From", "Date", "Subject"]
@@ -70,16 +94,29 @@ def batch_get_messages_metadata(
         return out
 
     def _single_get(mid: str) -> None:
-        try:
-            meta = service.users().messages().get(
-                userId="me",
-                id=mid,
-                format="metadata",
-                metadataHeaders=headers,
-            ).execute()
-            out[mid] = meta
-        except Exception as ex:
-            logger.warning("batch_get_messages_metadata get individual msg=%s: %s", mid, ex)
+        max_attempts = 6
+        for attempt in range(max_attempts):
+            try:
+                meta = service.users().messages().get(
+                    userId="me",
+                    id=mid,
+                    format="metadata",
+                    metadataHeaders=headers,
+                ).execute()
+                out[mid] = meta
+                return
+            except HttpError as ex:
+                if ex.resp.status == 429 and attempt < max_attempts - 1:
+                    wait = _parse_gmail_retry_after_seconds(ex)
+                    if wait is None or wait <= 0 or wait > _GMAIL_429_MAX_WAIT_SECONDS:
+                        wait = min(8.0, 0.35 * (2**attempt))
+                    time.sleep(min(float(wait), 12.0))
+                    continue
+                logger.warning("batch_get_messages_metadata get individual msg=%s: %s", mid, ex)
+                return
+            except Exception as ex:
+                logger.warning("batch_get_messages_metadata get individual msg=%s: %s", mid, ex)
+                return
 
     def _batch_callback(mid: str):
         def _cb(request_id: str, response: Optional[dict], exception: Optional[BaseException]) -> None:
@@ -96,8 +133,10 @@ def batch_get_messages_metadata(
 
         return _cb
 
-    for i in range(0, len(message_ids), _GMAIL_BATCH_METADATA_CHUNK):
-        chunk = message_ids[i : i + _GMAIL_BATCH_METADATA_CHUNK]
+    chunk_sz = _gmail_metadata_batch_chunk_size()
+    sleep_between = _gmail_metadata_inter_chunk_sleep_sec()
+    for i in range(0, len(message_ids), chunk_sz):
+        chunk = message_ids[i : i + chunk_sz]
         batch = service.new_batch_http_request()
         for mid in chunk:
             req = service.users().messages().get(
@@ -114,6 +153,8 @@ def batch_get_messages_metadata(
         for mid in chunk:
             if mid not in out:
                 _single_get(mid)
+        if sleep_between > 0.0 and (i + chunk_sz) < len(message_ids):
+            time.sleep(sleep_between)
     return out
 
 
@@ -316,7 +357,7 @@ def list_messages_by_filter(service: Any, filter_type: str = "all") -> List[dict
     **unread** / **read**: mismo criterio + ``is:unread`` / ``is:read`` en la consulta Gmail.
     **error_email_rescan**: inbox con etiqueta ERROR EMAIL + media; el pipeline puede procesar si **solo** esa etiqueta de usuario (ver omision por etiquetas en ``pipeline.py``).
     Pagina con **maxResults** 500 hasta que no haya **nextPageToken** (todos los mensajes que cumplen **q**).
-    Metadata de mensajes: **batch** ``messages.get`` (chunks de 50) para reducir llamadas HTTP frente a un get por id.
+    Metadata de mensajes: **batch** ``messages.get`` (tamaño de lote configurable, por defecto 8) para reducir 429 por concurrencia.
     Cada elemento incluye **internal_date_ms** (epoch ms de Gmail) y **label_ids** (incluye UNREAD si aplica);
     el pipeline ordena y procesa del primero al ultimo de la bandeja (mas reciente primero) y marca **leido** si entraba no leido.
     """

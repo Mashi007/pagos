@@ -954,6 +954,15 @@ def run_pipeline(
                             default_c=PAGOS_GMAIL_BANCO_IMAGEN_3,
                             default_d=PAGOS_GMAIL_BANCO_IMAGEN_4,
                         )
+                        # Re-escaneo A/B (solo_error / redig / error_email_rescan): cédula ilegible -> literal "ERROR".
+                        # _campos_completos acepta "ERROR" como texto no vacío; sin esto, fully_digitized_email=True
+                        # y se quita ERROR EMAIL o se añade PROCESADO en redig aunque la cédula no sea válida.
+                        if (
+                            modo_ab_cedula_desde_imagen
+                            and fmt in ("A", "B")
+                            and c == PAGOS_GMAIL_ERROR_CEDULA_IMAGEN
+                        ):
+                            any_incomplete_or_skipped = True
                         pending.append(
                             {
                                 "fmt": fmt,

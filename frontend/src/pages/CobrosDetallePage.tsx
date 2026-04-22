@@ -34,6 +34,7 @@ import {
   openComprobanteInNewTab,
   openReciboPdfInNewTab,
   eliminarPagoReportado,
+  invalidateCobrosListadoKpisCache,
   type PagoReportadoDetalleResponse,
   type CambiarEstadoPagoResponse,
   etiquetaCanalReportado,
@@ -173,14 +174,23 @@ export default function CobrosDetallePage() {
 
       setAccion('idle')
 
-      load()
-
       // El backend crea el pago en pagos, lo concilia y aplica a cuotas en cascada.
       // Invalidar para que prestamos, cuotas y notificaciones de mora se actualicen.
       queryClient.invalidateQueries({ queryKey: ['pagos'] })
       queryClient.invalidateQueries({ queryKey: ['cuotas-prestamo'] })
       queryClient.invalidateQueries({ queryKey: ['prestamos'] })
       void invalidateListasNotificacionesMora(queryClient)
+
+      invalidateCobrosListadoKpisCache()
+      navigate('/cobros/pagos-reportados')
+      // El layout usa <main overflow-auto>; volver arriba (cabecera del listado).
+      window.setTimeout(() => {
+        document.getElementById('app-main-scroll')?.scrollTo({
+          top: 0,
+          left: 0,
+          behavior: 'auto',
+        })
+      }, 0)
     } catch (e: any) {
       const detail =
         e?.response?.data?.detail ||

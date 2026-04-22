@@ -69,7 +69,7 @@ export function Layout() {
         <div className="flex min-w-0 flex-1 flex-col">
           {/* Page content */}
 
-          <main className="flex-1 overflow-auto">
+          <main id="app-main-scroll" className="flex-1 overflow-auto">
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
