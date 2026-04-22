@@ -9,6 +9,7 @@ Configuración única para todo el sistema: GEMINI_API_KEY y GEMINI_MODEL (app.c
 - Cobros (escáner Infopagos, personal autenticado): extraer sugerencia de campos desde solo la imagen (extract_infopagos_campos_desde_comprobante).
   Cobros usa la misma API key y modelo que el resto del sistema; sin clave, los reportes van a en_revision.
 """
+import hashlib
 import io
 import json
 import logging
@@ -591,6 +592,32 @@ def _pagos_gmail_img_heuristic_long_edges() -> tuple[int, int]:
     return min_l, max_l
 
 
+def _pagos_gmail_gemini_jpeg_quality() -> int:
+    """Calidad JPEG al serializar para Gemini; acotada para evitar valores absurdos en .env."""
+    q = int(getattr(settings, "PAGOS_GMAIL_GEMINI_JPEG_QUALITY", 92))
+    return max(75, min(98, q))
+
+
+def _dedupe_pagos_gmail_jpeg_variants_ordered(
+    items: list[tuple[str, bytes]],
+) -> list[tuple[str, bytes]]:
+    """
+    Elimina variantes con payload JPEG idéntico (misma imagen tras distintos filtros).
+    Mantiene el primer nombre en orden estable: menos llamadas Gemini redundantes sin cambiar semántica.
+    """
+    seen: set[str] = set()
+    out: list[tuple[str, bytes]] = []
+    for name, blob in items:
+        if not blob:
+            continue
+        h = hashlib.sha256(blob).hexdigest()
+        if h in seen:
+            continue
+        seen.add(h)
+        out.append((name, blob))
+    return out
+
+
 def _pagos_gmail_trim_soft_margins_pil(img: Any, filename: str) -> Any:
     """
     Recorta márgenes muy claros (mesa, marco Gmail) cuando el contenido ocupa claramente el centro.
@@ -749,7 +776,12 @@ def _build_image_part(
                     nh,
                 )
         buf = io.BytesIO()
-        img.save(buf, format="JPEG", quality=92, optimize=True)
+        img.save(
+            buf,
+            format="JPEG",
+            quality=_pagos_gmail_gemini_jpeg_quality(),
+            optimize=True,
+        )
         logger.debug("[PAGOS_GMAIL] Gemini PIL→JPEG OK: %s", filename)
         return _gtypes.Part.from_bytes(data=buf.getvalue(), mime_type="image/jpeg")
     except Exception as pil_err:
@@ -788,42 +820,57 @@ def _build_image_part_variants(
         base = _pagos_gmail_trim_soft_margins_pil(base, filename)
         base = _pagos_gmail_normalize_long_edge_pil(base, filename)
 
-        variants: list[tuple[str, object]] = []
+        jpeg_q = _pagos_gmail_gemini_jpeg_quality()
+        raw_jpegs: list[tuple[str, bytes]] = []
 
-        def _to_part(img_obj, name: str):
+        def _append_jpeg(img_obj: Any, name: str) -> None:
             buf = io.BytesIO()
-            img_obj.save(buf, format="JPEG", quality=92, optimize=True)
-            variants.append(
-                (name, _gtypes.Part.from_bytes(data=buf.getvalue(), mime_type="image/jpeg"))
-            )
+            img_obj.save(buf, format="JPEG", quality=jpeg_q, optimize=True)
+            raw_jpegs.append((name, buf.getvalue()))
 
-        _to_part(base, "orig")
+        _append_jpeg(base, "orig")
         try:
-            _to_part(ImageOps.autocontrast(base, cutoff=1), "autocontrast")
+            _append_jpeg(ImageOps.autocontrast(base, cutoff=1), "autocontrast")
         except Exception:
             pass
         try:
             sharp = ImageEnhance.Sharpness(base).enhance(1.35)
-            _to_part(sharp, "sharpen")
+            _append_jpeg(sharp, "sharpen")
         except Exception:
             pass
         try:
             um = base.filter(ImageFilter.UnsharpMask(radius=2, percent=150, threshold=3))
-            _to_part(um, "unsharp")
+            _append_jpeg(um, "unsharp")
         except Exception:
             pass
-        try:
-            denoise = base.filter(ImageFilter.MedianFilter(size=3))
-            _to_part(denoise, "denoise")
-        except Exception:
-            pass
-        # Evitar duplicados por nombre accidental.
+        # MedianFilter aporta poco en recortes muy pequeños y puede borrar trazos finos de referencia/monto.
+        bw, bh = base.size
+        if min(bw, bh) >= 32:
+            try:
+                denoise = base.filter(ImageFilter.MedianFilter(size=3))
+                _append_jpeg(denoise, "denoise")
+            except Exception:
+                pass
+        before = len(raw_jpegs)
+        raw_deduped = _dedupe_pagos_gmail_jpeg_variants_ordered(raw_jpegs)
+        if len(raw_deduped) < before:
+            logger.debug(
+                "[PAGOS_GMAIL] Variantes JPEG deduplicadas por contenido: %s %d -> %d",
+                filename,
+                before,
+                len(raw_deduped),
+            )
+        variants: list[tuple[str, object]] = [
+            (n, _gtypes.Part.from_bytes(data=b, mime_type="image/jpeg"))
+            for n, b in raw_deduped
+        ]
+        # Evitar duplicados por nombre accidental (defensivo si se reutilizan nombres).
         dedup: list[tuple[str, object]] = []
-        seen = set()
+        seen_names = set()
         for n, p in variants:
-            if n in seen:
+            if n in seen_names:
                 continue
-            seen.add(n)
+            seen_names.add(n)
             dedup.append((n, p))
         return dedup or [("orig", _build_image_part(file_content, filename, mime))]
     except Exception:

@@ -442,6 +442,15 @@ class Settings(BaseSettings):
             "Si MIN_LONG_EDGE > MAX_LONG_EDGE en runtime, el código intercambia valores de forma defensiva."
         ),
     )
+    PAGOS_GMAIL_GEMINI_JPEG_QUALITY: int = Field(
+        default=92,
+        ge=75,
+        le=98,
+        description=(
+            "Calidad JPEG al normalizar imágenes antes de Gemini (pipeline Gmail y rutas que usan el mismo helper). "
+            "Valores más bajos reducen bytes y latencia; valores altos preservan detalle OCR. El código acota al rango 75–98."
+        ),
+    )
     PAGOS_GMAIL_DOWNLOAD_EXCEL_MAX_ITEMS: int = Field(
         default=0,
         description="Máximo de filas al descargar Excel sin fecha (evita memoria/timeout). Con ?fecha= no aplica límite por día.",
