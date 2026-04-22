@@ -26,6 +26,10 @@ from app.models.prestamo import Prestamo
 from app.services.pago_numero_documento import numero_documento_ya_registrado
 from app.services.pago_registro_moneda import resolver_monto_registro_pago
 from app.services.pagos_gmail.helpers import format_monto_excel_pagos_gmail, normalizar_fecha_pago
+from app.services.cuota_pago_integridad import (
+    pago_tiene_aplicaciones_cuotas,
+    validar_suma_aplicada_vs_monto_pago,
+)
 from app.utils.cedula_almacenamiento import normalizar_cedula_almacenamiento
 
 logger = logging.getLogger(__name__)
@@ -244,6 +248,20 @@ def crear_pago_conciliado_y_aplicar_cuotas_gmail_plantilla_nr(
             return _fail("aplicar_cuotas", str(e)[:500])
 
     pagos_ep._estado_conciliacion_post_cascada(pago, cc, cp)
+    try:
+        validar_suma_aplicada_vs_monto_pago(db, int(pago.id), pago.monto_pagado)
+    except Exception as e:
+        logger.warning("[PAGOS_GMAIL] [NR_PAGO] validacion suma aplicada: %s", e)
+        db.rollback()
+        return _fail("validacion_suma_aplicada", str(e)[:500])
+
+    if not pago_tiene_aplicaciones_cuotas(db, int(pago.id)) or (cc <= 0 and cp <= 0):
+        db.rollback()
+        return _fail("sin_cuotas_aplicadas")
+
+    if not bool(pago.conciliado):
+        db.rollback()
+        return _fail("autoconciliacion_no_lograda")
 
     etapa_traza = "CUOTAS_OK" if (cc > 0 or cp > 0) else "PAGO_SIN_CUOTAS"
     cid_hex = (comprobante_imagen_id or "").strip()[:32] or None

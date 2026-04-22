@@ -287,6 +287,11 @@ const COBROS_REPORTADOS_TABLE_HEAD: ReadonlyArray<{
 
 export default function CobrosPagosReportadosPage() {
   const navigate = useNavigate()
+  const diagnosticoNoEmail = useMemo(() => {
+    if (typeof window === 'undefined') return false
+    const q = new URLSearchParams(window.location.search)
+    return q.get('diag') === '1' || q.get('no_email') === '1'
+  }, [])
 
   const queryClient = useQueryClient()
 
@@ -342,6 +347,8 @@ export default function CobrosPagosReportadosPage() {
   const [kpis, setKpis] = useState<PagosReportadosKpis | null>(null)
 
   const [diasTendencia, setDiasTendencia] = useState(90)
+  const [tendenciaEnabled, setTendenciaEnabled] = useState(false)
+  const [ultimaCargaMs, setUltimaCargaMs] = useState<number | null>(null)
 
   const [tendencia, setTendencia] =
     useState<TendenciaFallosGeminiResponse | null>(null)
@@ -405,6 +412,7 @@ export default function CobrosPagosReportadosPage() {
 
   const fetchListado = useCallback(
     async (opts?: { bypassCache?: boolean; silent?: boolean; page?: number }) => {
+      const startedAt = performance.now()
       const requestSeq = ++loadSeqRef.current
       const initialLoad = dataRef.current === null
       const silent = Boolean(opts?.silent) && dataRef.current !== null
@@ -443,6 +451,7 @@ export default function CobrosPagosReportadosPage() {
         setData(res)
 
         setKpis(res.kpis)
+        setUltimaCargaMs(Math.round(performance.now() - startedAt))
       } catch (e: any) {
         toast.error(e?.message || 'Error al cargar.')
       } finally {
@@ -491,6 +500,10 @@ export default function CobrosPagosReportadosPage() {
 
   useEffect(() => {
     let cancelled = false
+    if (!tendenciaEnabled) {
+      setTendenciaLoading(false)
+      return
+    }
 
     ;(async () => {
       setTendenciaLoading(true)
@@ -518,6 +531,28 @@ export default function CobrosPagosReportadosPage() {
       cancelled = true
     }
   }, [diasTendencia])
+  useEffect(() => {
+    if (data == null || tendenciaEnabled) return
+    const enqueue =
+      typeof window !== 'undefined' && 'requestIdleCallback' in window
+        ? (cb: () => void) =>
+            (window as Window & { requestIdleCallback: (fn: () => void) => number }).requestIdleCallback(
+              cb
+            )
+        : (cb: () => void) => window.setTimeout(cb, 250)
+    const id = enqueue(() => setTendenciaEnabled(true))
+    return () => {
+      if (
+        typeof window !== 'undefined' &&
+        'cancelIdleCallback' in window &&
+        typeof id === 'number'
+      ) {
+        ;(window as Window & { cancelIdleCallback: (rid: number) => void }).cancelIdleCallback(id)
+      } else if (typeof id === 'number') {
+        window.clearTimeout(id)
+      }
+    }
+  }, [data, tendenciaEnabled])
 
   const handleKpiClick = (estadoKey: string) => {
     setEstado(estadoKey)
@@ -529,6 +564,12 @@ export default function CobrosPagosReportadosPage() {
     nuevoEstado: string,
     motivo?: string
   ) => {
+    if (diagnosticoNoEmail && nuevoEstado === 'rechazado') {
+      toast.error(
+        'Modo diagnóstico activo: rechazo bloqueado para evitar envío de correo.'
+      )
+      return
+    }
     setChangingEstadoId(id)
 
     try {
@@ -827,6 +868,16 @@ export default function CobrosPagosReportadosPage() {
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <h1 className="text-2xl font-semibold">Pagos Reportados</h1>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {ultimaCargaMs != null
+              ? `Última carga del listado: ${ultimaCargaMs} ms`
+              : 'Preparando diagnóstico de carga...'}
+          </p>
+          {diagnosticoNoEmail ? (
+            <p className="mt-1 text-xs font-medium text-amber-700">
+              Modo diagnóstico activo: no se permite rechazar desde esta pantalla para evitar correos.
+            </p>
+          ) : null}
         </div>
 
         <a
@@ -1098,13 +1149,28 @@ export default function CobrosPagosReportadosPage() {
         </CardHeader>
 
         <CardContent className="p-4 pt-5 sm:p-6">
+          {!tendenciaEnabled ? (
+            <div className="flex h-[180px] flex-col items-center justify-center gap-3 text-slate-600">
+              <p className="text-sm">
+                La tendencia se difiere para acelerar la carga inicial del listado.
+              </p>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setTendenciaEnabled(true)}
+              >
+                Cargar tendencia ahora
+              </Button>
+            </div>
+          ) : null}
           {tendenciaLoading ? (
             <div className="flex h-[320px] items-center justify-center gap-2 text-slate-500">
               <Loader2 className="h-8 w-8 animate-spin" />
 
               <span>Cargando serie...</span>
             </div>
-          ) : tendencia?.puntos?.length ? (
+          ) : tendenciaEnabled && tendencia?.puntos?.length ? (
             <ResponsiveContainer width="100%" height={360}>
               <ComposedChart
                 data={tendencia.puntos}
@@ -1258,11 +1324,11 @@ export default function CobrosPagosReportadosPage() {
                 />
               </ComposedChart>
             </ResponsiveContainer>
-          ) : (
+          ) : tendenciaEnabled ? (
             <div className="flex h-[200px] items-center justify-center text-slate-500">
               Sin datos de tendencia.
             </div>
-          )}
+          ) : null}
         </CardContent>
       </Card>
 
@@ -1781,7 +1847,9 @@ export default function CobrosPagosReportadosPage() {
 
                               <option value="aprobado">Aprobar</option>
 
-                              <option value="rechazado">Rechazar</option>
+                              {!diagnosticoNoEmail ? (
+                                <option value="rechazado">Rechazar</option>
+                              ) : null}
                             </select>
 
                             <span
@@ -1921,6 +1989,7 @@ export default function CobrosPagosReportadosPage() {
               variant="destructive"
               onClick={handleConfirmarRechazo}
               disabled={
+                diagnosticoNoEmail ||
                 !motivoRechazo.trim() ||
                 changingEstadoId === rechazarModal.row?.id
               }
@@ -1930,7 +1999,9 @@ export default function CobrosPagosReportadosPage() {
               ) : (
                 <Mail className="mr-2 h-4 w-4" />
               )}
-              Rechazar y enviar correo
+              {diagnosticoNoEmail
+                ? 'Bloqueado en diagnóstico (sin correo)'
+                : 'Rechazar y enviar correo'}
             </Button>
           </DialogFooter>
         </DialogContent>

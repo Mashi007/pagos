@@ -39,7 +39,7 @@ export function ModulePageHeader({
         className
       )}
     >
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
         <div className="flex min-w-0 flex-1 flex-wrap items-center gap-3">
           <Icon
             className="h-8 w-8 shrink-0 text-[#1e67eb]"
@@ -53,7 +53,7 @@ export function ModulePageHeader({
         </div>
 
         {actions ? (
-          <div className="flex shrink-0 flex-wrap items-center gap-2">
+          <div className="flex w-full flex-wrap items-start gap-2 xl:w-auto xl:shrink-0 xl:items-center xl:justify-end">
             {actions}
           </div>
         ) : null}

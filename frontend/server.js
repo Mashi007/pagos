@@ -24,6 +24,24 @@ app.head('/health', (_req, res) => res.status(200).end());
 app.get('/healthz', (_req, res) => sendHealthJson(res));
 app.head('/healthz', (_req, res) => res.status(200).end());
 
+function collectBootAssetsFromIndex(indexHtml) {
+  const assets = new Set();
+  if (!indexHtml || typeof indexHtml !== 'string') return [];
+  const regex = /(?:src|href)=["']([^"']+)["']/g;
+  let match;
+  while ((match = regex.exec(indexHtml)) !== null) {
+    const candidate = (match[1] || '').trim();
+    if (
+      candidate.startsWith('/pagos/assets/') ||
+      candidate.startsWith('/pagos/pagos-bootstrap.js') ||
+      candidate.startsWith('/pagos/pagos-critical.css')
+    ) {
+      assets.add(candidate);
+    }
+  }
+  return Array.from(assets);
+}
+
 /**
  * URL base del backend para el proxy Express (/api/* -> backend).
  * En Render, si no hay ninguna variable de entorno, Node caía en localhost:8000 (no existe en el dyno)
@@ -422,6 +440,69 @@ if (!existsSync(indexPath)) {
   console.error('   Asegúrate de que el build se completó correctamente.');
   process.exit(1);
 }
+
+app.get('/health/escaner', (_req, res) => {
+  const checks = [];
+  const escanerRoute = '/pagos/escaner';
+  try {
+    const indexHtml = readFileSync(indexPath, 'utf8');
+    const assetRefs = collectBootAssetsFromIndex(indexHtml);
+    const missingAssets = [];
+    for (const ref of assetRefs) {
+      const rel = ref.startsWith('/pagos/') ? ref.slice('/pagos/'.length) : ref;
+      const localPath = path.join(distPath, rel);
+      if (!existsSync(localPath)) {
+        missingAssets.push(ref);
+      }
+    }
+
+    checks.push({
+      name: 'spa_index_readable',
+      ok: true,
+      details: 'index.html cargado correctamente',
+    });
+    checks.push({
+      name: 'escaner_route_configured',
+      ok: true,
+      details: escanerRoute,
+    });
+    checks.push({
+      name: 'bootstrap_assets_present',
+      ok: missingAssets.length === 0,
+      details:
+        missingAssets.length === 0
+          ? `assets verificados: ${assetRefs.length}`
+          : `faltantes: ${missingAssets.join(', ')}`,
+    });
+
+    const healthy = checks.every((c) => c.ok);
+    const body = {
+      status: healthy ? 'healthy' : 'degraded',
+      service: 'rapicredit-frontend',
+      check: 'escaner',
+      route: escanerRoute,
+      checked_at: new Date().toISOString(),
+      checks,
+    };
+    res.status(healthy ? 200 : 503).json(body);
+  } catch (err) {
+    res.status(503).json({
+      status: 'down',
+      service: 'rapicredit-frontend',
+      check: 'escaner',
+      route: escanerRoute,
+      checked_at: new Date().toISOString(),
+      checks: [
+        {
+          name: 'spa_index_readable',
+          ok: false,
+          details: err?.message || 'error leyendo index.html',
+        },
+      ],
+    });
+  }
+});
+app.head('/health/escaner', (_req, res) => res.status(200).end());
 
 console.log(`📁 Directorio de archivos estáticos: ${distPath}`);
 console.log(`✅ Validaciones previas completadas`);

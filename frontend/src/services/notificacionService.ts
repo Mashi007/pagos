@@ -875,6 +875,13 @@ class NotificacionService {
     )
   }
 
+  async syncConciliacionSheetNow(): Promise<Record<string, unknown>> {
+    return await apiClient.post<Record<string, unknown>>(
+      `/api/v1/conciliacion-sheet/sync-now`,
+      {}
+    )
+  }
+
   /** Plantilla editable del PDF de carta de cobranza (adjunto al email). */
 
   async getPlantillaPdfCobranza(): Promise<{

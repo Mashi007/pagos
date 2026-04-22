@@ -452,6 +452,8 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
 
   const [programandoRefreshAbonosDrive, setProgramandoRefreshAbonosDrive] =
     useState(false)
+  const [sincronizandoHojaDriveAhora, setSincronizandoHojaDriveAhora] =
+    useState(false)
   const [sincronizandoAbonosDriveAuto, setSincronizandoAbonosDriveAuto] =
     useState(false)
 
@@ -526,7 +528,8 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
       hayOperacionListaEnCurso ||
       programandoRefreshAbonosDrive ||
       programandoRefreshFechaQ ||
-      sincronizandoAbonosDriveAuto
+      sincronizandoAbonosDriveAuto ||
+      sincronizandoHojaDriveAhora
     if (pausarAutoRefetchNotificaciones !== pausado) {
       setPausarAutoRefetchNotificaciones(pausado)
     }
@@ -535,6 +538,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
     programandoRefreshAbonosDrive,
     programandoRefreshFechaQ,
     sincronizandoAbonosDriveAuto,
+    sincronizandoHojaDriveAhora,
     pausarAutoRefetchNotificaciones,
   ])
 
@@ -689,6 +693,26 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
       )
     } finally {
       setSincronizandoAbonosDriveAuto(false)
+    }
+  }
+
+  const handleTraerHojaDesdeDriveAhora = async () => {
+    setSincronizandoHojaDriveAhora(true)
+    try {
+      await notificacionService.syncConciliacionSheetNow()
+      toast.success(
+        'Hoja CONCILIACIÓN actualizada desde Drive. Programando recálculo de «Diferencia abono»...'
+      )
+      await handleRefreshAbonosDriveCache()
+      await handleRefresh()
+    } catch (e) {
+      console.error(e)
+      toast.error(
+        getErrorMessage(e) ||
+          'No se pudo traer la hoja desde Drive en este momento.'
+      )
+    } finally {
+      setSincronizandoHojaDriveAhora(false)
     }
   }
 
@@ -1305,7 +1329,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
     <div className="flex max-w-full flex-col gap-1 rounded-md border border-gray-200 bg-gray-50/90 px-2 py-1.5 sm:flex-row sm:items-center sm:gap-2">
       <label
         htmlFor="fc-notificaciones-caracas"
-        className="whitespace-nowrap text-xs font-medium text-gray-600"
+        className="text-xs font-medium text-gray-600 sm:whitespace-nowrap"
       >
         Fecha referencia (Caracas)
       </label>
@@ -1459,6 +1483,26 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                 Actualización manual
               </Button>
 
+              {modulo === 'general' ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => void handleTraerHojaDesdeDriveAhora()}
+                  disabled={
+                    sincronizandoHojaDriveAhora ||
+                    programandoRefreshAbonosDrive ||
+                    actualizandoListas
+                  }
+                  title="Descarga snapshot CONCILIACIÓN desde Drive al servidor (sync-now), luego programa recálculo de diferencia abono."
+                >
+                  <Download
+                    className={`mr-2 h-4 w-4 ${
+                      sincronizandoHojaDriveAhora ? 'animate-pulse' : ''
+                    }`}
+                  />
+                  Traer hoja desde Drive ahora
+                </Button>
+              ) : null}
               {modulo === 'general' ? (
                 <Button
                   type="button"
@@ -1725,6 +1769,31 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                 Actualización manual
               </Button>
 
+              {modulo === 'general' ? (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => void handleTraerHojaDesdeDriveAhora()}
+                  disabled={
+                    sincronizandoHojaDriveAhora ||
+                    programandoRefreshAbonosDrive ||
+                    actualizandoListas ||
+                    enviandoPrejudicial ||
+                    enviandoD2Antes ||
+                    enviandoPago1Dia ||
+                    enviandoPago10Dias
+                  }
+                  title="Trae snapshot CONCILIACIÓN desde Drive y luego programa recálculo de diferencia abono."
+                >
+                  <Download
+                    className={`mr-2 h-4 w-4 ${
+                      sincronizandoHojaDriveAhora ? 'animate-pulse' : ''
+                    }`}
+                  />
+                  Traer hoja desde Drive ahora
+                </Button>
+              ) : null}
               {modulo === 'general' ? (
                 <Button
                   type="button"

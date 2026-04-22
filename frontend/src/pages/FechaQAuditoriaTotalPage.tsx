@@ -19,6 +19,7 @@ import {
   notificacionService,
   type FechaQAuditoriaTotalItem,
 } from '../services/notificacionService'
+import { reporteService } from '../services/reporteService'
 import { getErrorMessage } from '../types/errors'
 import { useSimpleAuth } from '../store/simpleAuthStore'
 import { NOTIFICACIONES_MAX_CLIENTES_POR_PAGINA } from './notificaciones/notificacionesPage.constants'
@@ -58,6 +59,7 @@ export default function FechaQAuditoriaTotalPage() {
   const [incluirMarcadosNo, setIncluirMarcadosNo] = useState(false)
   const [offset, setOffset] = useState(0)
   const [busyId, setBusyId] = useState<number | null>(null)
+  const [syncingDrive, setSyncingDrive] = useState(false)
   const [selected, setSelected] = useState<Set<number>>(() => new Set())
   const [batchRunning, setBatchRunning] = useState(false)
   const [confirmLote, setConfirmLote] = useState<'si' | 'no' | null>(null)
@@ -235,9 +237,44 @@ export default function FechaQAuditoriaTotalPage() {
             variant="outline"
             onClick={() => void q.refetch()}
             className="gap-2"
+            disabled={q.isFetching || syncingDrive}
           >
             <RefreshCw className="h-4 w-4" />
             Refrescar
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            className="gap-2"
+            disabled={q.isFetching || syncingDrive}
+            onClick={() => {
+              if (syncingDrive) return
+              setSyncingDrive(true)
+              void (async () => {
+                try {
+                  const res = await reporteService.syncConciliacionSheetDesdeDrive()
+                  await queryClient.invalidateQueries({ queryKey: [...QK] })
+                  await q.refetch()
+                  const rowCountRaw = (res as { row_count?: unknown } | null)?.row_count
+                  const rowCount =
+                    typeof rowCountRaw === 'number' && Number.isFinite(rowCountRaw)
+                      ? rowCountRaw
+                      : null
+                  toast.success(
+                    rowCount != null
+                      ? `Drive sincronizado (${rowCount} fila(s)). Listado actualizado.`
+                      : 'Drive sincronizado. Listado actualizado.'
+                  )
+                } catch (e) {
+                  toast.error(getErrorMessage(e) || 'No se pudo recargar desde Drive.')
+                } finally {
+                  setSyncingDrive(false)
+                }
+              })()
+            }}
+          >
+            <RefreshCw className={`h-4 w-4 ${syncingDrive ? 'animate-spin' : ''}`} />
+            {syncingDrive ? 'Recargando…' : 'Recargar desde Drive'}
           </Button>
           <Button asChild type="button" variant="outline">
             <Link to="/notificaciones/general">Ir a listados de mora (General)</Link>
