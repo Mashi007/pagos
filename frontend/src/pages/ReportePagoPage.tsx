@@ -241,7 +241,7 @@ function validarFechaPago(fecha: string): { valido: boolean; error?: string } {
   if (!fecha || !fecha.trim()) {
     return {
       valido: false,
-      error: 'Ingrese o seleccione la fecha de pago.',
+      error: 'Seleccione la fecha de pago en el calendario.',
     }
   }
 
@@ -249,7 +249,7 @@ function validarFechaPago(fecha: string): { valido: boolean; error?: string } {
   if (!m)
     return {
       valido: false,
-      error: 'Fecha no válida. Puede escribirla o elegirla en el calendario.',
+      error: 'Fecha no válida. Use el ícono de calendario.',
     }
 
   const y = Number(m[1])
@@ -258,7 +258,7 @@ function validarFechaPago(fecha: string): { valido: boolean; error?: string } {
   if (!fechaYmdCalendarioValida(y, mo, d)) {
     return {
       valido: false,
-      error: 'Fecha no válida. Puede escribirla o elegirla en el calendario.',
+      error: 'Fecha no válida. Use el ícono de calendario.',
     }
   }
 
@@ -514,7 +514,9 @@ function FechaPagoTecladoRapido({
           aria-label="Día"
           className="w-9 flex-shrink-0 border-0 bg-transparent p-2 text-center font-medium text-slate-900 outline-none placeholder:text-slate-400"
           value={dia}
-          onChange={onDiaChange}
+          readOnly
+          tabIndex={-1}
+          onFocus={e => e.currentTarget.blur()}
         />
         <span className="text-slate-400" aria-hidden>
           |
@@ -522,21 +524,15 @@ function FechaPagoTecladoRapido({
         <input
           ref={mesRef}
           type="text"
-          inputMode={mesCommitted != null ? 'text' : 'numeric'}
+          inputMode="text"
           autoComplete="off"
           placeholder="mm"
           aria-label="Mes (número o nombre)"
           className="min-w-0 flex-1 border-0 bg-transparent p-2 font-medium text-slate-900 outline-none placeholder:text-slate-400"
           value={mesMostrado}
-          onChange={onMesChange}
-          onKeyDown={onMesKeyDown}
-          onFocus={() => {
-            if (mesCommitted != null) {
-              setMesCommitted(null)
-              setMesDigits('')
-              emitYmd(dia, null, anio)
-            }
-          }}
+          readOnly
+          tabIndex={-1}
+          onFocus={e => e.currentTarget.blur()}
         />
         <span className="text-slate-400" aria-hidden>
           |
@@ -551,7 +547,9 @@ function FechaPagoTecladoRapido({
           aria-label="Año"
           className="w-14 flex-shrink-0 border-0 bg-transparent p-2 text-center font-medium text-slate-900 outline-none placeholder:text-slate-400"
           value={anio}
-          onChange={onAnioChange}
+          readOnly
+          tabIndex={-1}
+          onFocus={e => e.currentTarget.blur()}
         />
         <button
           type="button"
@@ -1794,23 +1792,6 @@ export default function ReportePagoPage({
             </CardHeader>
 
             <CardContent className="space-y-4 px-5 sm:px-6">
-              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-                <p className="text-xs font-medium text-slate-700">
-                  {moneda === 'BS' ? (
-                    <>
-                      Ingresa el monto en <strong>bolivares</strong>. El recibo
-                      mostrará la <strong>tasa oficial del día</strong> de la
-                      fecha de pago.
-                    </>
-                  ) : (
-                    <>
-                      Ingresa el monto en <strong>USD</strong>. El recibo y la
-                      verificación serán en dólares.
-                    </>
-                  )}
-                </p>
-              </div>
-
               <div>
                 <label className="mb-2 block text-sm font-semibold text-slate-900">
                   Fecha de pago
@@ -1821,7 +1802,7 @@ export default function ReportePagoPage({
                   maxYmd={new Date().toISOString().slice(0, 10)}
                 />
                 <p className="mt-1 text-xs text-slate-500">
-                  No puede ser una fecha futura
+                  Toque el ícono de calendario para seleccionar la fecha
                 </p>
               </div>
 
@@ -2130,7 +2111,9 @@ export default function ReportePagoPage({
                   onClick={handleDigitalizarComprobante}
                   disabled={loading}
                 >
-                  {loading ? 'Digitalizando...' : 'Siguiente'}
+                  {loading
+                    ? 'Digitalizando con Gemini...'
+                    : 'Digitalizar con Gemini y continuar'}
                 </Button>
               </div>
             </CardContent>
