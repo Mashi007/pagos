@@ -11,13 +11,13 @@ Orquestacion: Gmail -> Gemini/BD por **cada adjunto elegible** (remitente en cli
 **Regla de decisión actual (sin ambigüedad):**
 - Paso 1: si en el correo hay digitalización OK de plantilla A/B, etiqueta final = MERCANTIL o BNC.
 - Paso 2: si no hubo A/B y el remitente está en `clientes`, se admite C/D y etiqueta final = BINANCE o BNV.
-- Paso 3 (fallback): TEXTO -> MASTER -> ERROR EMAIL -> MANUAL.
+- Paso 3 (fallback): si no aplica ninguna regla bancaria previa, usar orden MASTER -> TEXTO -> ERROR EMAIL -> MANUAL.
 - Solo se aplica **una** etiqueta final por correo (set permitido arriba), sin etiquetas auxiliares.
 
 **Remitente y Plan B:**
 - Remitente en `clientes`: se evalúan plantillas según prompts/reglas de negocio.
 - Remitente fuera de `clientes` (Plan B): solo A/B con cédula desde imagen; C/D/NR no aplican.
-- `master@rapicreditca.com` sin digitalización válida cae en fallback MASTER; sin fila en clientes fuera de ese caso, fallback ERROR EMAIL.
+- `master@rapicreditca.com` aplica fallback MASTER solo cuando no haya etiqueta bancaria final (MERCANTIL/BNC/BINANCE/BNV); fuera de ese caso, si no hay fila en clientes, fallback ERROR EMAIL.
 
 Excel de revisión y negocio:
 - `pagos_gmail_sync_item` / `gmail_temporal` guardan cada comprobante válido de extracción.
@@ -348,7 +348,7 @@ def run_pipeline(
     Flujo de clasificación (etiqueta final única):
     1) Paso 1: detectar A/B desde el inicio (sin importar número de adjuntos) -> etiqueta MERCANTIL o BNC.
     2) Paso 2: si no hubo A/B, validar remitente en `clientes`; con cliente, clasificar C/D y etiquetar BINANCE o BNV.
-    3) Fallback: si no aplica 1/2, usar orden TEXTO -> MASTER -> ERROR EMAIL -> MANUAL.
+    3) Fallback: si no aplica 1/2 (sin etiqueta bancaria final), usar orden MASTER -> TEXTO -> ERROR EMAIL -> MANUAL.
     Regla innegociable: solo puede quedar **una** etiqueta final por correo, y si el mensaje ya trae cualquier etiqueta de usuario se omite sin reescanear.
     scan_filter: "unread" | "read" | "all" | "pending_identification" | "error_email_rescan" (por defecto API/UI: all).
       Por defecto (**all** / **pending_identification**): inbox con imagen/PDF — leidos y no leidos (el pipeline no modifica estrellas Gmail),
@@ -1576,12 +1576,14 @@ def run_pipeline(
                         final_label_reason = "paso_2_d"
 
                 if not final_label_name:
-                    if not candidatos and multipage_pdf_omitidos == 0:
-                        final_label_name = PAGOS_GMAIL_LABEL_TEXTO
-                        final_label_reason = "fallback_texto"
-                    elif remitente_solo_master and not fully_digitized_email:
+                    # MASTER solo aplica como fallback cuando no hubo etiqueta bancaria final
+                    # (MERCANTIL/BNC/BINANCE/BNV) tras evaluar reglas previas.
+                    if remitente_solo_master and not fully_digitized_email:
                         final_label_name = PAGOS_GMAIL_LABEL_MASTER
                         final_label_reason = "fallback_master"
+                    elif not candidatos and multipage_pdf_omitidos == 0:
+                        final_label_name = PAGOS_GMAIL_LABEL_TEXTO
+                        final_label_reason = "fallback_texto"
                     elif not remitente_en_clientes:
                         final_label_name = PAGOS_GMAIL_LABEL_ERROR_EMAIL
                         final_label_reason = "fallback_error_email"

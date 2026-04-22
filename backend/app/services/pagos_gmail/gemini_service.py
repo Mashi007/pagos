@@ -178,6 +178,9 @@ PASO 2a - D (imagen 4 / Banco de Venezuela BDV) si PASO 2 NO aplico (no es recib
   Regla anti-falso-negativo BDV/BNV (fotos reales): si el comprobante horizontal o vertical muestra marca BDV/Banco de Venezuela,
     cuenta 0102-..., titular corporativo (ej. RAPI CREDIT C.A.) y bloque transaccional con monto/referencia/fecha parcialmente legibles,
     clasifica D aunque haya sello azul atravesado, manuscritos encima, contraste bajo, reflejo o OCR incompleto en lineas secundarias.
+  Caso adicional BDV tenue/arrugado: si el papel llega con pliegues, sombras o foco desigual y aun se reconocen
+    cuenta 0102, titular empresa y al menos dos de estos tres datos operativos (secuencial, monto total, fecha/hora),
+    mantiene D; no forzar ninguno por deterioro visual del soporte.
   REGLA OBLIGATORIA — **depositante vacio NO invalida D**: Muchos comprobantes BDV traen **DATOS DEL DEPOSITANTE** / **Nombre del depositante** / **CI o RIF del depositante** **en blanco** (sin imprimir ni manuscrito). Eso es **normal**. Si hay BDV + **0102** + titular cuenta + **Total Efectivo** o **Total Deposito** o **Monto Total** + **fecha** y **hora** + un **secuencial** o numero de operacion legible -> **formato D** con JSON completo (fecha_pago, monto, numero_referencia). **Prohibido** devolver **ninguno** solo porque falte cedula o nombre del depositante en el papel.
   numero_referencia: preferir linea **SECUENCIAL NRO** / **Secuencial Nro** (a menudo **13 digitos con ceros a la izquierda**, ej. 0000091316488, 0000000356323). Si **no** ves la etiqueta literal pero en la cabecera hay **dos** numeros de operacion (uno **largo con ceros** y otro en **rojo** mas corto), usa el **largo completo** como numero_referencia; si solo uno es legible, usa ese. Si ademas hay el **mismo** numero en **rojo** sin ceros o mas corto, prioriza la cadena **completa** con ceros que corresponda al secuencial; no uses solo el monto ni la cuenta 0102.
   fecha_pago: fecha y hora impresas en el comprobante (DD-MM-YYYY o formato legible).
@@ -191,6 +194,8 @@ PASO 2a - D (imagen 4 / Banco de Venezuela BDV) si PASO 2 NO aplico (no es recib
     - **Titular**: **RAPI CREDIT C.A** / **RAPI CREDIT** / **SOFT CREDIT C.A.** en linea **TITULAR DE LA CUENTA** (espacios OCR variables).
     - **Secuencial**: bloque **SECUENCIAL NRO** / **Secuencial Nro** con cadena larga (muchos **ceros a la izquierda**); a veces **duplicado** con numero en **tinta roja** mas corto en cabecera — sigue reglas de **numero_referencia** ya definidas arriba (prioriza secuencial completo etiquetado).
     - **Monto**: lineas **TOTAL EFECTIVO**, **TOTAL DEPOSITO**, **MONTO TOTAL**; decimales con **coma** venezolana (ej. 100,00) o punto segun impresion; puede haber **monto en letras** (CIEN CON 00/100) y **anotacion manuscrita** ("110 $") — **prioriza cifra impresa del comprobante** del bloque TOTAL; no inventes monto desde notas al margen si la cifra impresa es ilegible.
+      Regla de prioridad de monto en BDV: si por bajo contraste solo una de estas lineas queda legible (**MONTO TOTAL** o **TOTAL EFECTIVO** o **TOTAL DEPOSITO**),
+      usa esa como monto oficial de la transaccion; no exigir que las otras dos tambien sean legibles.
     - **Sello de oficina** (rectangulo azul/morado, oficina, **CAJA N°**, fecha de sello): refuerza D; **no** sustituye **0102** + titular + secuencial + total. Si la **fecha del sello** difiere de la linea impresa **FECHA:** junto al secuencial y ambas son legibles, usa para **fecha_pago** la pareja **FECHA** + **HORA** del **bloque de transaccion impreso** (cabecera cerca de SECUENCIAL NRO), no mezcles dia de sello con hora del cuerpo salvo que una de las dos sea ilegible y la otra complete inequivocamente la misma operacion.
     - **Sello cruzado sobre el comprobante** (como "Banco de Venezuela ..."): si tapa parte del centro, sigue siendo D cuando el resto conserva
       cuenta 0102, titular y al menos una referencia operativa legible (secuencial o numero de operacion). No bajes a ninguno solo por superposicion del sello.
@@ -222,12 +227,20 @@ PASO 2a - D (imagen 4 / Banco de Venezuela BDV) si PASO 2 NO aplico (no es recib
     En esta variante horizontal pueden aparecer: (a) manuscrito grande en el centro, (b) sello rectangular oblicuo encima de fecha/caja, (c) foto con perspectiva.
     Si aun existe trazabilidad clara del bloque transaccional impreso, clasifica D y extrae desde el texto impreso visible.
     Variante frecuente adicional: comprobante girado con **numero rojo vertical en borde derecho** y texto central tenue; ese patron sigue siendo D si coincide con marca BDV y layout de transaccion.
+    Variante frecuente adicional 2: foto panoramica/recortada donde el logo BDV puede no verse completo pero si aparecen encabezados
+    tipo "COMPROBANTE DE TRANSACCION / DEPOSITO EN CUENTA Y PAGO", bloque "DATOS DE LA CUENTA" con 0102-... y bloque de totales.
+    En ese caso, mantener D si monto y referencia salen del mismo bloque operativo.
     **Total Efectivo** / **Total Deposito** / **Monto Total** en bloque inferior; pie **Original: Cliente** en rojo en algunos ejemplos; codigo de forma **CN. 030** u similar en pie — refuerzo BDV, no obligatorio.
     Sello azul cuadrado/rectangular (caja, oficina, CAJA N°); puede haber firma boligrafo sobre el sello — sigue siendo D.
     Misma regla **0102** + BDV + titular + secuencial + monto; **depositante en blanco** OK; no confundir con BNC (0191) ni Mercantil (0105).
 
 PASO 2b - C (imagen 3 / Binance Pay) si PASO 2 y 2a no aplicaron (no es recibo BNC ni comprobante BDV imagen 4):
   Nucleo C = evidencia de app o web Binance / Binance Pay **y** datos minimos **en esta pieza**: **monto** (USDT o USD del pago) **y** **numero_referencia** (Id. de orden u otro id largo de la pantalla). Sin ambos -> **ninguno** (no completes con asunto del correo, cuerpo del mensaje ni nombre de archivo).
+  Regla anti-falso-negativo Binance (capturas reales): si aparece pantalla de confirmacion con **Pago exitoso** + monto grande en **USDT** + bloque **ID de orden** numerico,
+    clasifica **C** aunque cambie el tema (oscuro/claro), haya barra superior del telefono, recorte parcial del borde o banner promocional en la parte inferior.
+  Regla de tolerancia por truncado: si la captura viene recortada y no se ve alias/destinatario, pero en la misma pieza se identifica
+    (1) indicador de exito (check verde o texto equivalente), (2) monto en USDT/USD y (3) **ID de orden** legible (>=10 digitos),
+    mantén **C**; el alias no es obligatorio para formato C.
   **Logo o marca Binance visible = indicio confirmado** de que la plataforma es Binance (formato C), no otra wallet:
     - Isotipo rombo/diamante amarillo-dorado, logo amarillo sobre fondo oscuro, texto **Binance** o **Binance Pay** en cabecera o pie, iconografia oficial de la app.
     - Si ves ese logo/marca con claridad **y** ademas monto + id en la misma captura, trata la pieza como Binance Pay; no la clasifiques A ni B.
@@ -241,12 +254,16 @@ PASO 2b - C (imagen 3 / Binance Pay) si PASO 2 y 2a no aplicaron (no es recibo B
   VARIANTE C — **patrones visuales tipicos Binance Pay (imagen 3)** (combinar senales; no inventes):
     - **Chrome movil**: barra superior (hora, bateria, wifi); flecha **atras** arriba a la izquierda; botones inferiores tipo **Listo**, **Enviar otro** — refuerzan app, no sustituyen monto/id.
     - **Bloque central**: circulo verde grande + texto **Pago exitoso** / equivalente; debajo cifra **NN USDT** (o USD) en tipografia grande.
+    - **Campos de detalle comunes en Binance**: **ID de orden**, **Método de pago**, **Pagado con**, y alias del beneficiario (ej. **Alias: Rapicredit**). Si esos campos coexisten con monto USDT y exito, es C fuerte.
+    - **Variantes de accion final**: boton **Listo**, **Enviar otro**, o **Enviar otra transacción**; no afectan la clasificacion (sigue siendo C).
     - **Destinatario**: linea **A** / **To** con alias (ej. **Rapicredit**) y a veces correo **operaciones@rapicreditca.com** u otro de empresa; ese correo en pantalla es del **beneficiario**: para JSON **email_cliente** sigue la regla abajo (NA si solo corporativo).
     - **Metodo / detalle**: "Cuenta Spot y de Fondos", "Ver detalles", "Metodo de pago" — refuerzo C, no obligatorio para clasificar si ya hay logo Binance + monto + id.
     - **Correo Gmail / bandeja digitalizada**: si la pieza incluye **marco de Gmail** (cabecera De/Asunto, botones Responder/Reenviar/Compartir) y debajo o al costado sigue viendose **la captura Binance** con monto + Id de orden, ignora el marco del correo para **clasificar C** y extrae **solo** de la zona de la app (no uses fecha del asunto como fecha_pago: en C va **NA**).
     - **Combinacion de imagenes en un correo**: el backend procesa **esta** pieza sola; otra adjunta no esta en pantalla. Si aqui solo ves **una** confirmacion Binance completa aunque el borde recorte botones o banner promo, aplica MEZCLA (excepcion dominante) y VARIANTE C.
   Si la captura esta recortada: basta senal clara de app (barra de estado movil, flecha atras, tema oscuro/claro tipo wallet) + monto **USDT** o USD + check/exitoso + **cualquier** ristra numerica larga visible (>=10 digitos) como numero_referencia; no devuelvas "ninguno" solo porque falte la etiqueta literal "Order ID".
     - numero_referencia: copia el Id. completo; si hay varios numeros largos, el que acompane a "orden" / "Order" / "ID"; si no hay etiqueta, el bloque de **10+** digitos mas largo o mas centrado en la zona de detalle del pago (no numeros de hora/fecha sueltos de 6-8 digitos si hay otro bloque mas largo).
+    - En capturas como las reales del flujo (Rapicredit): si se ve **ID de orden** con 13-18 digitos y monto en USDT consistente en la misma pantalla, prioriza ese ID como `numero_referencia` aunque haya otros numeros cortos de hora/notificacion.
+    - Ausencia de alias por recorte: no penalizar si `Alias` / destinatario no aparece completo, siempre que la triada check + monto USDT/USD + ID de orden sea inequívoca.
     - email_cliente: debe ser el correo del PAGADOR (cliente persona) si aparece en pantalla. Si solo ves correo corporativo del BENEFICIARIO (ej. operaciones@..., pagos@..., cuenta de la empresa receptora), NO lo uses como email_cliente: pon "NA" o usa CONTEXTO_REMITE (From del correo), que es quien envia el comprobante.
   NO es C: otra exchange (Bybit, OKX, ...) con marca clara distinta, solo historial sin confirmacion, transferencia bancaria tradicional en PDF de banco, captura **sin** monto **y sin** ningun bloque numerico largo de orden.
   Si nucleo C: formato C (no A, B ni D). Extraccion: monto, numero_referencia; fecha_pago=NA; cedula=NA; email_cliente NA en JSON (backend usa remitente).
@@ -413,11 +430,13 @@ Prioriza la plantilla BNC anterior (horizontal, vertical, con o sin sello azul d
   **Depositante en blanco**: si **Nombre del depositante** y **CI/RIF del depositante** estan vacios, **sigue siendo D**; rellena fecha_pago, monto y numero_referencia desde el comprobante.
   banco en JSON: "BDV" o "Banco de Venezuela" si se lee; si no, "NA" (el Excel usara BDV por defecto).
   monto: **Monto Total** / **Total Efectivo** / **Total Deposito** / monto en dolares segun linea impresa (coma decimal tipica); ignora linea en letras salvo para validar coherencia; si hay monto manuscrito y otro impreso, prioriza **impreso**.
+    Si solo una etiqueta de total es claramente legible por contraste (p. ej. solo "TOTAL EFECTIVO"), acepta ese valor como `monto` y no bajes a ninguno por falta de las otras lineas de total.
   numero_referencia: valor junto a **SECUENCIAL NRO** / **Secuencial Nro** (conserva **ceros a la izquierda**, ej. 0000091316488). Si no hay etiqueta clara pero hay **par** numero largo+ceros / numero rojo en cabecera BDV, el **largo** es la referencia operativa.
     Si hay **segundo** numero en rojo mas corto, prioriza igualmente la forma **completa con ceros** del secuencial cuando sea legible; si solo uno es claro, usa ese.
     Si el secuencial esta parcialmente tapado por sello/manuscrito, permite usar el otro numero de operacion impreso mas legible del mismo bloque BDV (sin inventar ni mezclar cifras de campos distintos).
     En comprobantes rotados donde el **numero rojo** es el dato mas legible del bloque operativo, puede usarse como `numero_referencia` si pertenece claramente a la misma transaccion.
     Regla quirurgica prioritaria BDV: si **SECUENCIAL NRO** esta oculto/ilegible por sello o firma y el **numero rojo** de operacion (normalmente en cabecera/borde) es nitido y unico en el comprobante, usa ese numero rojo como `numero_referencia` antes de devolver `ninguno`.
+    Si la cabecera esta parcialmente recortada pero se lee una cadena larga de operacion junto a "SECUENCIAL"/"NRO" o en su misma posicion habitual, usarla como referencia sin exigir la etiqueta completa.
     No usar: numero de cuenta 0102-..., montos, ni anotaciones manuscritas tipo "R.F-..." como unica referencia.
   fecha_pago: **Fecha** y **Hora** del comprobante (combinar en un solo texto legible DD/MM/YYYY si hay fecha; si hay hora, puede ir en el mismo campo o despues de espacio).
   cedula: siempre "NA" (incluso si **DATOS DEL DEPOSITANTE** o anotaciones manuscritas muestran CI/RIF — REGLA CEDULA).
@@ -438,6 +457,8 @@ Unificado: **ningun** formato (A/B/C/D) debe poner numero de cedula/RIF en "cedu
     formato D BDV -> "BDV" o "Banco de Venezuela";
     ticket RECAUDACION RAPI si ves nombre de banco en el ticket usalo; si solo dice RAPI sin banco legible -> "NA".
 C: monto y numero_referencia desde la imagen; fecha_pago="NA"; cedula="NA"; email_cliente="NA".
+  Normalizacion practica OCR Binance: acepta "Pago exitoso", "Pagó ... exitosamente", "ID de orden", "ID de la orden", "Order ID", "Método de pago", "Pagado con"
+  y variaciones menores de acentos/espacios. Si el nucleo visual Binance + USDT + ID es claro, no bajes a ninguno por OCR parcial de etiquetas.
 
 FORMATO NR — comprobante bancario o de cajero **reconocible** (papel, tira, deposito, recaudacion, etc.) pero el **beneficiario / titular de la cuenta / empresa destino NO es RapiCredit** (ni RAPI-CREDIT, RAPI CREDIT, RAPICREDIT ni variantes OCR del Grupo 1) y **no** es nucleo C (Binance Pay):
   Usalo solo cuando en los pixeles se vea claramente un **deposito o recibo bancario** con monto o datos de operacion, pero el dinero va a **otra razon social** distinta de RapiCredit.
