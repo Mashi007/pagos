@@ -1588,22 +1588,13 @@ export default function ReportePagoPage({
                   {badgePasoFormulario(3, isInfopagos)}
                 </div>
                 <CardTitle className="m-0 text-lg sm:text-xl">
-                  Institución financiera
+                  {!isInfopagos && nombre ? `Hola, ${nombre}` : 'Institución financiera'}
                 </CardTitle>
               </div>
-              {!isInfopagos && (
-                <div className="mb-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3">
-                  <p className="text-sm font-semibold text-emerald-900">
-                    Hola, {nombre || 'cliente'}.
-                  </p>
-                  <p className="mt-1 text-xs text-emerald-800">
-                    Cédula validada: <strong>{cedula}</strong>. Coincide con el
-                    nombre registrado en nuestra base de datos.
-                  </p>
-                </div>
-              )}
               <p className="mt-2 text-sm text-slate-600">
-                Selecciona el banco o plataforma donde se realizó el pago
+                {!isInfopagos && nombre
+                  ? `Cédula validada (${cedula}). Selecciona el banco o plataforma donde realizaste el pago.`
+                  : 'Selecciona el banco o plataforma donde se realizó el pago'}
               </p>
             </CardHeader>
 
@@ -2177,7 +2168,7 @@ export default function ReportePagoPage({
               <div className="rounded-lg border border-blue-200 bg-blue-50 p-3">
                 <p className="text-xs leading-snug text-blue-900">
                   Este pago se acreditará a{' '}
-                  <strong>{nombre || 'cliente registrado'}</strong>.
+                  <strong>{nombre || 'nombre no disponible'}</strong>.
                 </p>
                 <p className="mt-1 text-xs leading-snug text-blue-900">
                   {isInfopagos ? (
@@ -2215,6 +2206,11 @@ export default function ReportePagoPage({
                   {loading ? 'Enviando...' : 'Confirmar y enviar'}
                 </Button>
               </div>
+              {loading && (
+                <p className="text-center text-xs font-medium text-slate-600">
+                  Estamos procesando su pago, un momento por favor...
+                </p>
+              )}
             </CardContent>
           </Card>
         </div>

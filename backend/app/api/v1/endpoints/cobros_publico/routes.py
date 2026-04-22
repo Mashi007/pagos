@@ -480,12 +480,11 @@ def validar_cedula_publico(
     puede_bs = cedula_autorizada_para_bs(db, cedula_lookup)
     nombre = (cliente.nombres or "").strip()
     email = (cliente.email or "").strip()
-    otp_required = _cobros_public_otp_required(origen, request)
     return ValidarCedulaResponse(
         ok=True,
-        # Con OTP desactivado minimizamos exposición de PII en endpoint público.
-        nombre=nombre if otp_required else None,
-        email_enmascarado=_mask_email(email) if otp_required else None,
+        # Flujo público de cobros: mostrar nombre nominal validado por cédula.
+        nombre=nombre,
+        email_enmascarado=_mask_email(email),
         puede_reportar_bs=puede_bs,
     )
 
