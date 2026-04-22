@@ -175,6 +175,22 @@ export interface EnviarReporteResponse {
   recibo_enviado?: boolean | null
 }
 
+export interface DigitalizarComprobanteSugerencia {
+  fecha_pago: string | null
+  institucion_financiera: string
+  numero_operacion: string
+  monto: number | null
+  moneda: 'BS' | 'USD'
+  cedula_pagador_en_comprobante: string
+  notas_modelo: string
+}
+
+export interface DigitalizarComprobanteResponse {
+  ok: boolean
+  error?: string
+  sugerencia?: DigitalizarComprobanteSugerencia | null
+}
+
 /** Respuesta de Infopagos: incluye token para descargar recibo en la misma pantalla. */
 
 export interface EnviarReporteInfopagosResponse {
@@ -399,6 +415,44 @@ export async function enviarReportePublico(
       }
     }
 
+    return data
+  } catch (e: unknown) {
+    const raw =
+      e instanceof Error ? e.message : 'Error de conexión con el servidor.'
+    return { ok: false, error: mensajeErrorRedPublico(raw) }
+  }
+}
+
+export async function digitalizarComprobantePublico(
+  formData: FormData
+): Promise<DigitalizarComprobanteResponse> {
+  const url = `${BASE_PUBLIC}/digitalizar-comprobante`
+
+  try {
+    const res = await fetchWithTimeout(
+      url,
+      {
+        method: 'POST',
+        body: formData,
+        credentials: 'same-origin',
+      },
+      FETCH_TIMEOUT_ENVIAR_REPORTE_MS
+    )
+
+    if (res.status === 429) {
+      return {
+        ok: false,
+        error: 'Demasiadas solicitudes. Espere un momento e intente de nuevo.',
+      }
+    }
+
+    const text = await res.text()
+    let data: DigitalizarComprobanteResponse
+    try {
+      data = text ? JSON.parse(text) : { ok: false, error: 'Respuesta vacía del servidor.' }
+    } catch {
+      return { ok: false, error: 'No se pudo procesar la respuesta del servidor.' }
+    }
     return data
   } catch (e: unknown) {
     const raw =

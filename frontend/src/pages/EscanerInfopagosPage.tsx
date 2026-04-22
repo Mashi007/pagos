@@ -630,6 +630,20 @@ export default function EscanerInfopagosPage() {
         <Card>
           <CardHeader>
             <CardTitle>3. Formulario (editable)</CardTitle>
+            <p className="rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-sm font-medium text-sky-950">
+              Usted está ingresando un pago para{' '}
+              <strong>
+                {nombreCliente?.trim() || cedulaNormalizada.valorParaEnviar || 'cliente seleccionado'}
+              </strong>
+              {escanerColision?.prestamo_objetivo_id != null ? (
+                <>
+                  {' '}
+                  y préstamo N° <strong>{escanerColision.prestamo_objetivo_id}</strong>.
+                </>
+              ) : (
+                '.'
+              )}
+            </p>
             {escanerColision?.prestamo_objetivo_id != null ? (
               <p className="rounded-md border border-indigo-200 bg-indigo-50 px-3 py-2 text-sm font-medium text-indigo-950">
                 Este pago se está cargando al{' '}

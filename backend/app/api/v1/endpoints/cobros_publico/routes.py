@@ -35,7 +35,10 @@ from app.models.cobros_publico_codigo import CobrosPublicoCodigo
 from app.api.v1.endpoints.validadores import validate_cedula
 from app.utils.cedula_almacenamiento import expr_cedula_normalizada_para_comparar
 from app.services.cobros.cedula_reportar_bs_service import cedula_autorizada_para_bs
-from app.services.pagos_gmail.gemini_service import compare_form_with_image
+from app.services.pagos_gmail.gemini_service import (
+    compare_form_with_image,
+    extract_infopagos_campos_desde_comprobante,
+)
 from app.services.cobros.recibo_pdf import (
     RECIBO_TEXTO_CUOTA_EN_REVISION_CLIENTE,
     WHATSAPP_LINK,
@@ -86,6 +89,22 @@ class EnviarReporteInfopagosResponse(BaseModel):
     pago_id: Optional[int] = None
     estado_reportado: Optional[str] = None
     aplicado_a_cuotas: Optional[str] = None
+
+
+class DigitalizarComprobanteSugerencia(BaseModel):
+    fecha_pago: Optional[str] = None
+    institucion_financiera: str = ""
+    numero_operacion: str = ""
+    monto: Optional[float] = None
+    moneda: str = "BS"
+    cedula_pagador_en_comprobante: str = ""
+    notas_modelo: str = ""
+
+
+class DigitalizarComprobanteResponse(BaseModel):
+    ok: bool
+    error: Optional[str] = None
+    sugerencia: Optional[DigitalizarComprobanteSugerencia] = None
 
 
 MAX_CEDULA_LENGTH = 20
@@ -490,6 +509,79 @@ def validar_cedula_publico(
 
 
 HONEYPOT_FIELD = "contact_website"
+
+
+@router.post("/digitalizar-comprobante", response_model=DigitalizarComprobanteResponse)
+async def digitalizar_comprobante_publico(
+    request: Request,
+    db: Session = Depends(get_db),
+    tipo_cedula: str = Form(...),
+    numero_cedula: str = Form(...),
+    comprobante: UploadFile = File(...),
+):
+    """
+    Digitaliza el comprobante con Gemini para sugerir datos antes de confirmar el envío.
+    No guarda reporte; solo devuelve sugerencias editables por el cliente.
+    """
+    ip = get_client_ip(request)
+    check_rate_limit_validar_cedula(ip)
+
+    cedula_input = f"{(tipo_cedula or '').strip()}{(numero_cedula or '').strip()}"
+    val = validate_cedula(cedula_input)
+    if not val.get("valido"):
+        return DigitalizarComprobanteResponse(ok=False, error=val.get("error", "Cédula inválida."))
+
+    cedula_lookup = (val.get("valor_formateado", "") or "").replace("-", "")
+    if not cedula_lookup:
+        return DigitalizarComprobanteResponse(ok=False, error="Formato de cédula no reconocido.")
+
+    cliente = db.execute(
+        select(Cliente).where(expr_cedula_normalizada_para_comparar(Cliente.cedula) == cedula_lookup)
+    ).scalars().first()
+    if not cliente:
+        return DigitalizarComprobanteResponse(ok=False, error="La cédula no está registrada.")
+
+    prestamos_aprob = cpr.prestamos_aprobados_del_cliente(db, cliente.id)
+    err_pres = cpr.error_si_no_puede_reportar_en_web(prestamos_aprob)
+    if err_pres:
+        return DigitalizarComprobanteResponse(ok=False, error=err_pres)
+
+    content = await comprobante.read()
+    fn_comp = comprobante.filename or "comprobante"
+    ctype = cpr.mime_efectivo_comprobante_web(comprobante.content_type or "", fn_comp)
+    err_file, filename = cpr.validar_adjunto_comprobante_bytes(
+        content,
+        ctype,
+        fn_comp,
+        mensaje_excel_largo=False,
+    )
+    if err_file:
+        return DigitalizarComprobanteResponse(ok=False, error=err_file)
+
+    tipo = (tipo_cedula or "").strip().upper()[:2]
+    numero = (numero_cedula or "").strip()
+    ctx_ced = f"{tipo}{numero}".replace("-", "")
+
+    gem = extract_infopagos_campos_desde_comprobante(ctx_ced, content, filename)
+    if not gem.get("ok"):
+        return DigitalizarComprobanteResponse(
+            ok=False,
+            error=gem.get("error") or "No se pudo digitalizar el comprobante.",
+            sugerencia=None,
+        )
+
+    fecha_d = gem.get("fecha_pago")
+    fecha_iso = fecha_d.isoformat() if isinstance(fecha_d, date) else None
+    sugerencia = DigitalizarComprobanteSugerencia(
+        fecha_pago=fecha_iso,
+        institucion_financiera=str(gem.get("institucion_financiera") or "").strip()[:100],
+        numero_operacion=str(gem.get("numero_operacion") or "").strip()[:100],
+        monto=gem.get("monto"),
+        moneda=(gem.get("moneda") or "BS") if (gem.get("moneda") or "BS") in ("BS", "USD") else "BS",
+        cedula_pagador_en_comprobante=str(gem.get("cedula_pagador_en_comprobante") or "").strip()[:30],
+        notas_modelo=str(gem.get("notas") or "").strip()[:300],
+    )
+    return DigitalizarComprobanteResponse(ok=True, error=None, sugerencia=sugerencia)
 
 
 @router.post("/enviar-reporte", response_model=EnviarReporteResponse)

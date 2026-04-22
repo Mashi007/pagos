@@ -42,6 +42,7 @@ import { Calendar } from 'lucide-react'
 
 import {
   validarCedulaPublico,
+  digitalizarComprobantePublico,
   enviarReportePublico,
   enviarReporteInfopagos,
   getReciboInfopagos,
@@ -1077,6 +1078,82 @@ export default function ReportePagoPage({
     }
   }
 
+  const handleDigitalizarComprobante = async () => {
+    const vCedula = normalizarCedulaParaProcesar(cedula)
+    if (!vCedula.valido) {
+      showNotification('error', vCedula.error ?? 'Cédula inválida.')
+      return
+    }
+
+    const vArchivo = validarArchivo(archivo)
+    if (!vArchivo.valido) {
+      showNotification('error', vArchivo.error ?? 'Archivo inválido.')
+      return
+    }
+
+    const cedulaEnviar = vCedula.valorParaEnviar!
+    const tipoCedula = cedulaEnviar.charAt(0).toUpperCase()
+    const numeroCedula = cedulaEnviar.slice(1).replace(/\D/g, '')
+
+    const form = new FormData()
+    form.append('tipo_cedula', tipoCedula)
+    form.append('numero_cedula', numeroCedula)
+    if (archivo) form.append('comprobante', archivo)
+
+    setLoading(true)
+    try {
+      const res = await digitalizarComprobantePublico(form)
+      if (res.ok && res.sugerencia) {
+        const s = res.sugerencia
+
+        const instRaw = (s.institucion_financiera || '').trim()
+        if (instRaw) {
+          const match = INSTITUCIONES.find(
+            opt => opt.toLowerCase() === instRaw.toLowerCase()
+          )
+          if (match) {
+            setInstitucion(match)
+            setInstitucionOtros('')
+          } else {
+            setInstitucion('Otros')
+            setInstitucionOtros(instRaw.slice(0, MAX_LENGTH_INSTITUCION))
+          }
+        }
+
+        if (s.fecha_pago) setFechaPago(s.fecha_pago)
+
+        if (s.moneda === 'BS' || s.moneda === 'USD') setMoneda(s.moneda)
+
+        if (typeof s.monto === 'number' && Number.isFinite(s.monto)) {
+          setMonto(formatoMontoParaMostrar(s.monto, s.moneda === 'USD' ? 'USD' : 'BS'))
+        }
+
+        if ((s.numero_operacion || '').trim()) {
+          setNumeroDocumento(s.numero_operacion.trim().slice(0, MAX_LENGTH_NUMERO_OPERACION))
+        }
+
+        showNotification(
+          'success',
+          'Comprobante digitalizado con Gemini. Verifique los datos antes de enviar.'
+        )
+      } else {
+        showNotification(
+          'error',
+          res.error || 'No se pudo digitalizar el comprobante. Continúe con carga manual.'
+        )
+      }
+      setStep(7)
+    } catch (e: any) {
+      showNotification(
+        'error',
+        e?.message || 'No se pudo digitalizar el comprobante. Continúe con carga manual.'
+      )
+      setStep(7)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const handleDescargarRecibo = async () => {
     if (!reciboToken || pagoId == null) return
 
@@ -2050,18 +2127,10 @@ export default function ReportePagoPage({
 
                 <Button
                   className="min-h-[48px] min-w-0 flex-1 touch-manipulation bg-slate-900 font-semibold text-white hover:bg-slate-800"
-                  onClick={() => {
-                    const v = validarArchivo(archivo)
-
-                    if (!v.valido) {
-                      showNotification('error', v.error ?? 'Archivo inválido.')
-                      return
-                    }
-
-                    setStep(7)
-                  }}
+                  onClick={handleDigitalizarComprobante}
+                  disabled={loading}
                 >
-                  Siguiente
+                  {loading ? 'Digitalizando...' : 'Siguiente'}
                 </Button>
               </div>
             </CardContent>
