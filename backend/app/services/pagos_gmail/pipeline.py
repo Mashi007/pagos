@@ -803,32 +803,36 @@ def run_pipeline(
                         )
 
                         if redig_manual_error_pass and fmt not in ("A", "B"):
+                            _none_reason = (data.get("_diag_none_reason") or "sin_detalle").strip()
                             any_incomplete_or_skipped = True
                             any_skipped_not_plantilla_o_campos = True
                             logger.info(
-                                "[PAGOS_GMAIL] redig MANUAL+ERROR: Gemini no clasifica Mercantil/BNC (formato=%r) — "
+                                "[PAGOS_GMAIL] redig MANUAL+ERROR: Gemini no clasifica Mercantil/BNC (formato=%r motivo=%s) — "
                                 "sin digitalizar %s",
                                 fmt,
+                                _none_reason,
                                 filename,
                             )
                             _pipeline_evt(
                                 EVT_NO_PLANTILLA_GEMINI,
                                 filename=filename,
-                                detalle=(f"redig_solo_ab:{fmt!s}")[:500],
+                                detalle=(f"redig_solo_ab:{fmt!s}:{_none_reason}")[:500],
                             )
                             continue
 
                         if fmt not in PAGOS_GMAIL_FORMATOS_PLANTILLA:
+                            _none_reason = (data.get("_diag_none_reason") or "sin_detalle").strip()
                             any_incomplete_or_skipped = True
                             any_skipped_not_plantilla_o_campos = True
                             logger.warning(
-                                "[PAGOS_GMAIL]   No es plantilla A/B/C/D - no BD: %s",
+                                "[PAGOS_GMAIL]   No es plantilla A/B/C/D - no BD: %s (motivo=%s)",
                                 filename,
+                                _none_reason,
                             )
                             _pipeline_evt(
                                 EVT_NO_PLANTILLA_GEMINI,
                                 filename=filename,
-                                detalle=(fmt or "?")[:500],
+                                detalle=(f"{fmt or '?'}:{_none_reason}")[:500],
                             )
                             continue
 

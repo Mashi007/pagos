@@ -131,6 +131,8 @@ PASO 1 - DESCARTE (ninguno al instante):
     y tampoco aplica **FORMATO NR** (comprobante bancario claro a otro beneficiario distinto de RapiCredit) -> ninguno.
   Es captura de app generica, Pago Movil no Binance Pay, Zelle, otro banco distinto (salvo Mercantil con RAPI+RECAUDACION), selfie, publicidad, borroso sin datos -> ninguno.
   Excepcion: NO descartes como "solo app" si cumple nucleo C (PASO 2b): Binance/Binance Pay + pago exitoso + USDT o USD + identificador de orden; el email en pantalla no es obligatorio si hay CONTEXTO_REMITE en el mensaje del sistema.
+  Regla de atajo temprano A1 (Mercantil): si detectas **DEPOSITO DIVISAS** + marca **Mercantil** + cuenta **0105** y un **bloque termico lateral izquierdo**
+    con lineas tipo **Cedula Dep. / Serial / Monto / Fondos / RAPI-CREDIT**, NO descartes por manuscritos, giro o fondo oscuro; enruta directamente a evaluacion de formato **A**.
 
 PASO 2 - Prioridad B (imagen 2) si el nucleo B se cumple; entonces B, no A ni C:
   Nucleo B = (BNC logo o texto) + cuenta con barras ####/####/##/######## (ej. 0191/0127/...) + RAPI-CREDIT como titular o beneficiario de esa cuenta
@@ -316,6 +318,7 @@ Palabras secundarias A (refuerzo, no bastan solas): FONDOS, CANT BILLETES, COMIS
 
 VARIANTE A — MERCANTIL (dos caras tipicas; ambas son formato A / imagen 1, banco Mercantil):
   (A1) **Formulario papel DEPOSITO DIVISAS**: logo o nombre **Mercantil**; titulo "DEPOSITO DIVISAS" o "DEPÓSITO DIVISAS" (a menudo en **franja o texto vertical** en el margen izquierdo del formulario); formulario **horizontal** con cabecera azul/blanca y casillas para **Código Cuenta Cliente** (0105...), **Fecha**, **Monto**, **Titular de la cuenta** (Rapi-Credit C.A.), **Depositante**, **Nro. de Cédula del Depositante** (manuscrito), **Causa o motivo del depósito**, **Origen de los fondos**, firma.
+    Pista explicita de layout (prioridad alta): **foto horizontal de formulario Mercantil con tira vertical a la izquierda** (bloque termico gris con lineas Cedula Dep./Serial/Monto/Fondos y pie tipo PDP.056). Este layout coincide con A1 aunque la foto llegue girada o con perspectiva.
     Tira o sello del validador **superpuesto a la izquierda** (termico o gris): linea superior puede ser codigo **alfanumerico con guiones** (ej. `9238-20260408-083811-DCME-5421-A`: 2do bloque fecha YYYYMMDD); **Cta. / cuenta** 0105-....; **Serial:** ristra larga solo digitos (7400...); **Monto** `***********NN,00` USD; **Fondos: RECAUDACIÓN**; beneficiario **RAPI-CREDIT**; etiquetas tipo **Cédula Dep.**, nombre depositante abreviado. Pie de formulario frecuente **PDP. 056** u OCR sucio del mismo codigo — refuerza A1, no obligatorio.
     Verificacion **sin inventar** (A1 / papel + tira): en **esta** imagen deben leerse **Mercantil** (logo o nombre) + **DEPOSITO DIVISAS** + cuenta **0105** + **RAPI-CREDIT** como titular + **USD**. La palabra **RECAUDACION** en tira/sello es un refuerzo fuerte, pero en fotos movidas/rotadas puede estar parcialmente tapada o borrosa: si el resto del nucleo A1 es claro y puedes extraer **fecha_pago**, **monto** y **numero_referencia** de forma consistente, mantiene **A** (no fuerces "ninguno" solo por OCR incompleto de RECAUDACION).
     Patrones de campo frecuentes en A1 real: (i) casillas superiores con fecha/monto manuscritos, (ii) bloque termico lateral con lineas **Cedula Dep. / Serial / Monto / Fondos**, (iii) leyenda inferior tipo **PDP. 056**.
@@ -414,6 +417,7 @@ Prioriza la plantilla BNC anterior (horizontal, vertical, con o sin sello azul d
     Si hay **segundo** numero en rojo mas corto, prioriza igualmente la forma **completa con ceros** del secuencial cuando sea legible; si solo uno es claro, usa ese.
     Si el secuencial esta parcialmente tapado por sello/manuscrito, permite usar el otro numero de operacion impreso mas legible del mismo bloque BDV (sin inventar ni mezclar cifras de campos distintos).
     En comprobantes rotados donde el **numero rojo** es el dato mas legible del bloque operativo, puede usarse como `numero_referencia` si pertenece claramente a la misma transaccion.
+    Regla quirurgica prioritaria BDV: si **SECUENCIAL NRO** esta oculto/ilegible por sello o firma y el **numero rojo** de operacion (normalmente en cabecera/borde) es nitido y unico en el comprobante, usa ese numero rojo como `numero_referencia` antes de devolver `ninguno`.
     No usar: numero de cuenta 0102-..., montos, ni anotaciones manuscritas tipo "R.F-..." como unica referencia.
   fecha_pago: **Fecha** y **Hora** del comprobante (combinar en un solo texto legible DD/MM/YYYY si hay fecha; si hay hora, puede ir en el mismo campo o despues de espacio).
   cedula: siempre "NA" (incluso si **DATOS DEL DEPOSITANTE** o anotaciones manuscritas muestran CI/RIF — REGLA CEDULA).
@@ -784,6 +788,62 @@ def _pagos_gmail_nr_campos_completos(fields: Dict[str, str]) -> bool:
     return m == "NR"
 
 
+def _is_na_pagos(v: Optional[str]) -> bool:
+    s = (v or "").strip().upper()
+    return (not s) or s == PAGOS_NA
+
+
+def _diag_none_reason_pagos(
+    fmt_raw: str,
+    fields: Dict[str, str],
+    raw_text: str,
+) -> str:
+    fmt_u = (fmt_raw or "").strip().upper()
+    raw_lc = (raw_text or "").lower()
+    if fmt_u in ("A", "B", "D"):
+        miss = []
+        if _is_na_pagos(fields.get("fecha_pago")):
+            miss.append("fecha")
+        if _is_na_pagos(fields.get("monto")):
+            miss.append("monto")
+        if _is_na_pagos(fields.get("numero_referencia")):
+            miss.append("ref")
+        if miss:
+            if miss == ["ref"]:
+                return "falto_ref"
+            if miss == ["monto"]:
+                return "falto_monto"
+            if miss == ["fecha"]:
+                return "falto_fecha"
+            return "campos_incompletos_abd"
+    if fmt_u == "C":
+        miss = []
+        if _is_na_pagos(fields.get("monto")):
+            miss.append("monto")
+        if _is_na_pagos(fields.get("numero_referencia")):
+            miss.append("ref")
+        if miss == ["ref"]:
+            return "falto_ref"
+        if miss == ["monto"]:
+            return "falto_monto"
+        if miss:
+            return "campos_incompletos_c"
+    if fmt_u == "NR":
+        if (fields.get("monto") or "").strip().upper() != "NR":
+            return "nr_monto_invalido"
+    if any(k in raw_lc for k in ("borros", "ilegib", "desenfo", "bajo contraste", "contraste")):
+        return "bajo_contraste_ilegible"
+    if "refer" in raw_lc or " ref" in raw_lc:
+        return "falto_ref"
+    if "monto" in raw_lc:
+        return "falto_monto"
+    if "fecha" in raw_lc:
+        return "falto_fecha"
+    if fmt_u in ("A", "B", "C", "D", "NR"):
+        return f"fmt_{fmt_u.lower()}_invalido"
+    return "sin_plantilla"
+
+
 def _parse_formato_y_pagos_json(
     text: str,
     remitente_from_header: Optional[str] = None,
@@ -791,6 +851,7 @@ def _parse_formato_y_pagos_json(
     modo_error_email_ab: bool = False,
 ) -> Tuple[PagosGmailFormato, Dict[str, str]]:
     empty = _empty_result()
+    empty["_diag_none_reason"] = "json_invalido"
     try:
         json_str = _find_json_object(text)
         if not json_str:
@@ -831,13 +892,18 @@ def _parse_formato_y_pagos_json(
             "numero_referencia": PAGOS_NA,
             "email_cliente": PAGOS_NA,
             "banco": PAGOS_NA,
+            "_diag_none_reason": "sin_plantilla",
         }
         if fmt == "ninguno":
-            return fmt, na_fields.copy()
+            _out = na_fields.copy()
+            _out["_diag_none_reason"] = _diag_none_reason_pagos(fmt_raw, fields, text)
+            return fmt, _out
         if fmt == "C":
             fields["email_cliente"] = PAGOS_NA
             if not _pagos_gmail_format_c_complete(fields):
-                return "ninguno", na_fields.copy()
+                _out = na_fields.copy()
+                _out["_diag_none_reason"] = _diag_none_reason_pagos(fmt_raw, fields, text)
+                return "ninguno", _out
             fields["banco"] = PAGOS_NA
             return fmt, fields
         if fmt == "NR":
@@ -846,7 +912,9 @@ def _parse_formato_y_pagos_json(
             fields["monto"] = "NR"
             fields["monto_operacion"] = _normalize_to_na(data.get("monto_operacion", PAGOS_NA))
             if not _pagos_gmail_nr_campos_completos(fields):
-                return "ninguno", na_fields.copy()
+                _out = na_fields.copy()
+                _out["_diag_none_reason"] = _diag_none_reason_pagos(fmt_raw, fields, text)
+                return "ninguno", _out
             return fmt, fields
         if fmt in ("A", "B") and modo_error_email_ab:
             ce = (fields.get("cedula") or "").strip()
@@ -855,13 +923,17 @@ def _parse_formato_y_pagos_json(
             elif ce.upper() == "ERROR":
                 fields["cedula"] = "ERROR"
             if not _pagos_gmail_ab_campos_imagen_completos_error_email_ab(fields):
-                return "ninguno", na_fields.copy()
+                _out = na_fields.copy()
+                _out["_diag_none_reason"] = _diag_none_reason_pagos(fmt_raw, fields, text)
+                return "ninguno", _out
             fields["email_cliente"] = PAGOS_NA
             return fmt, fields
         # A, B o D: ignorar cedula del modelo; solo fecha/monto/ref desde imagen
         fields["cedula"] = PAGOS_NA
         if not _pagos_gmail_ab_campos_imagen_completos(fields):
-            return "ninguno", na_fields.copy()
+            _out = na_fields.copy()
+            _out["_diag_none_reason"] = _diag_none_reason_pagos(fmt_raw, fields, text)
+            return "ninguno", _out
         fields["email_cliente"] = PAGOS_NA
         return fmt, fields
     except (json.JSONDecodeError, TypeError):
@@ -930,6 +1002,7 @@ def classify_and_extract_pagos_gmail_attachment(
                     modo_error_email_ab=modo_error_email_ab,
                 )
                 if fmt not in PAGOS_GMAIL_FORMATOS_PLANTILLA:
+                    _none_reason = (fields.get("_diag_none_reason") or "sin_plantilla").strip()
                     fmt = "ninguno"
                     fields = {
                         "fecha_pago": PAGOS_NA,
@@ -938,9 +1011,10 @@ def classify_and_extract_pagos_gmail_attachment(
                         "numero_referencia": PAGOS_NA,
                         "email_cliente": PAGOS_NA,
                         "banco": PAGOS_NA,
+                        "_diag_none_reason": _none_reason,
                     }
                 logger.info(
-                    "[PAGOS_GMAIL] Gemini formato=%s fecha=%s cedula=%s monto=%s ref=%s email=%s banco=%s",
+                    "[PAGOS_GMAIL] Gemini formato=%s fecha=%s cedula=%s monto=%s ref=%s email=%s banco=%s none_reason=%s",
                     fmt,
                     fields.get("fecha_pago"),
                     fields.get("cedula"),
@@ -948,6 +1022,7 @@ def classify_and_extract_pagos_gmail_attachment(
                     fields.get("numero_referencia"),
                     fields.get("email_cliente"),
                     fields.get("banco"),
+                    fields.get("_diag_none_reason", ""),
                 )
                 return fmt, fields
             except Exception as e:
