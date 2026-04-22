@@ -106,19 +106,14 @@ def count_pending(
     Cuenta cuantos correos se procesarian sin iniciar el pipeline.
     El frontend puede mostrar "Se procesaran N correos. Iniciar? Si / No" y solo llamar
     POST /run-now si el usuario confirma (Si = inicia, No = no hace nada).
-    scan_filter: "unread" | "read" | "all" | "pending_identification" | "error_email_rescan" (mismo que run-now; por defecto all).
-    **all** / **pending_identification**: inbox + imagen/PDF, leídos y no leídos, cualquier etiqueta (incluye ERROR EMAIL).
-    **unread** / **read**: mismo criterio base + solo no leídos / solo leídos en Gmail.
+    Escaneo normal: siempre **all** (inbox + imagen/PDF, leídos y no leídos).
+    Solo se conservan filtros especiales explícitos: error_email_rescan / manual_error_email_redigitaliza.
     """
     creds = get_pagos_gmail_credentials()
     if not creds:
         return {"count": 0, "scan_filter": scan_filter, "error": "no_credentials"}
     from app.services.pagos_gmail.gmail_service import build_gmail_service, count_messages_by_filter
     if scan_filter not in (
-        "unread",
-        "read",
-        "all",
-        "pending_identification",
         "error_email_rescan",
         "manual_error_email_redigitaliza",
     ):
@@ -142,10 +137,9 @@ def run_now(
     """
     Inicia el pipeline en segundo plano (Gmail -> Gemini -> BD; comprobante en BD) y devuelve inmediatamente.
     Solo correos con adjuntos; candidatos imagen/PDF: incrustados, adjuntos y reenvios rfc822.
-    scan_filter: "unread" | "read" | "all" | "pending_identification" | "error_email_rescan" (por defecto all).
-    Listado: por defecto inbox con imagen/PDF. Si el mensaje ya tiene cualquier etiqueta de usuario Gmail, se omite (skip total).
-    **unread** / **read**: añade is:unread / is:read a la búsqueda.
-    **error_email_rescan**: mantiene mismo listado, pero la regla de skip por etiqueta de usuario sigue aplicando.
+    Escaneo normal: siempre **all** (inbox + imagen/PDF, leídos y no leídos).
+    Si el mensaje ya tiene cualquier etiqueta de usuario Gmail, se omite (skip total).
+    Filtros especiales permitidos: **error_email_rescan** y **manual_error_email_redigitaliza**.
     Listado completo por paginacion Gmail; procesamiento en orden bandeja (mas reciente primero, mas antiguo al final).
     Los mensajes no leidos quedan leidos al procesarlos en la corrida.
     El frontend debe hacer polling a GET /status hasta que last_status sea 'success' o 'error'.
@@ -181,12 +175,8 @@ def run_now(
     db.commit()
     db.refresh(sync)
     sync_id = sync.id
-    # Validar scan_filter
+    # Escaneo normal siempre en "all"; solo conservar filtros especiales explícitos.
     if scan_filter not in (
-        "unread",
-        "read",
-        "all",
-        "pending_identification",
         "error_email_rescan",
         "manual_error_email_redigitaliza",
     ):

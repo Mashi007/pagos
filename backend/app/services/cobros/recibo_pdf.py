@@ -5,6 +5,7 @@ Diseno profesional con encabezado, resumen estructurado y bloque narrativo.
 import html
 import io
 import logging
+import os
 from datetime import date
 from pathlib import Path
 from typing import Any, List, Optional
@@ -38,6 +39,22 @@ CONTACTO_COBRANZA = "cobranza@rapicreditca.com"
 RECIBO_TEXTO_CUOTA_EN_REVISION_CLIENTE = "Revisando Pago"
 
 _LOGO_PATH = Path(__file__).resolve().parent.parent.parent.parent / "static" / "logo.png"
+
+
+def _env_int(name: str, default: int, min_value: int) -> int:
+    raw = (os.getenv(name) or "").strip()
+    if not raw:
+        return default
+    try:
+        val = int(raw)
+        return val if val >= min_value else default
+    except (TypeError, ValueError):
+        return default
+
+
+_RECIBO_COMPROBANTE_MAX_LADO_PX = _env_int("RECIBO_COMPROBANTE_MAX_LADO_PX", 2200, 800)
+_RECIBO_COMPROBANTE_JPEG_QUALITY = _env_int("RECIBO_COMPROBANTE_JPEG_QUALITY", 72, 45)
+_RECIBO_COMPROBANTE_MAX_BYTES = _env_int("RECIBO_COMPROBANTE_MAX_BYTES", 4_500_000, 300_000)
 
 
 def _referencia_display(referencia_interna: str) -> str:
@@ -294,17 +311,57 @@ def _append_comprobante_adjunto_recibo(
 
     try:
         from PIL import Image as PILImage
+        from PIL import ImageOps
 
+        resample_lanczos = getattr(getattr(PILImage, "Resampling", PILImage), "LANCZOS")
         pil = PILImage.open(BytesIO(bytes_para_imagen))
         pil.load()
-        if pil.mode in ("RGBA", "P", "PA"):
+        pil = ImageOps.exif_transpose(pil)
+        if pil.mode != "RGB":
             pil = pil.convert("RGB")
-        elif pil.mode != "RGB" and pil.mode != "L":
-            pil = pil.convert("RGB")
-        normalized = BytesIO()
-        pil.save(normalized, format="PNG", optimize=True)
-        normalized.seek(0)
-        im = RLImage(normalized)
+
+        max_lado = int(_RECIBO_COMPROBANTE_MAX_LADO_PX)
+        if pil.width > max_lado or pil.height > max_lado:
+            pil.thumbnail((max_lado, max_lado), resample_lanczos)
+
+        quality = int(_RECIBO_COMPROBANTE_JPEG_QUALITY)
+        max_bytes = int(_RECIBO_COMPROBANTE_MAX_BYTES)
+
+        def _encode_jpeg(img: Any, q: int) -> bytes:
+            out = BytesIO()
+            img.save(
+                out,
+                format="JPEG",
+                quality=max(45, min(95, int(q))),
+                optimize=True,
+                progressive=True,
+            )
+            return out.getvalue()
+
+        normalized_bytes = _encode_jpeg(pil, quality)
+        while len(normalized_bytes) > max_bytes and quality > 50:
+            quality -= 7
+            normalized_bytes = _encode_jpeg(pil, quality)
+        # Si aun excede, reducir resolucion gradualmente para acotar PDFs pesados.
+        reduce_steps = 0
+        while len(normalized_bytes) > max_bytes and reduce_steps < 3:
+            nuevo_w = max(900, int(pil.width * 0.82))
+            nuevo_h = max(900, int(pil.height * 0.82))
+            if nuevo_w == pil.width and nuevo_h == pil.height:
+                break
+            pil = pil.resize((nuevo_w, nuevo_h), resample_lanczos)
+            normalized_bytes = _encode_jpeg(pil, quality)
+            reduce_steps += 1
+
+        if len(normalized_bytes) > max_bytes:
+            logger.warning(
+                "Recibo Cobros: comprobante permanece pesado tras normalizar (bytes=%s, limite=%s, quality=%s).",
+                len(normalized_bytes),
+                max_bytes,
+                quality,
+            )
+
+        im = RLImage(BytesIO(normalized_bytes))
         im._restrictSize(_content_w * 0.92, 4.8 * inch)
         story.append(Spacer(1, 4))
         wrap = Table([[im]], colWidths=[_content_w])

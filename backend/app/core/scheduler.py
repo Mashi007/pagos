@@ -339,9 +339,9 @@ def _job_pagos_gmail_pending_scan() -> None:
         if row is not None:
             logger.info("[PAGOS_GMAIL] Escaneo programado omitido: sync en curso")
             return
-        logger.info("[PAGOS_GMAIL] Escaneo programado: pending_identification")
+        logger.info("[PAGOS_GMAIL] Escaneo programado: all (leídos + no leídos)")
         sync_done_id, pipe_status = run_pipeline(
-            db, existing_sync_id=None, scan_filter="pending_identification"
+            db, existing_sync_id=None, scan_filter="all"
         )
         if sync_done_id:
             db.expire_all()

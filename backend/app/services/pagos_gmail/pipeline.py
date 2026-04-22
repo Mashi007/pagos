@@ -664,6 +664,8 @@ def run_pipeline(
                 label_ids_for_message: list[str] = []
                 # Formatos A/B/C/D/NR digitalizados OK (comprobante en BD) en este mensaje (para detectar mezcla -> MANUAL).
                 bank_fmts_digitized: list[str] = []
+                # Formatos con resultado de negocio CUOTAS_OK (único criterio para etiqueta bancaria final).
+                bank_fmts_cuotas_ok: list[str] = []
                 if not candidatos:
                     any_incomplete_or_skipped = True
                     if multipage_pdf_omitidos > 0:
@@ -1185,6 +1187,7 @@ def run_pipeline(
                                                             str(res_abcd.get("etapa_final") or "")
                                                             == "CUOTAS_OK"
                                                         ):
+                                                            bank_fmts_cuotas_ok.append(fmt_row)
                                                             _gt_del_id = None
                                                             for _sii, _gt, _pp in rows_pairs:
                                                                 if (
@@ -1368,6 +1371,7 @@ def run_pipeline(
                                                                 str(res_nr.get("etapa_final") or "")
                                                                 == "CUOTAS_OK"
                                                             ):
+                                                                bank_fmts_cuotas_ok.append("NR")
                                                                 _gt_del_id = None
                                                                 for _sii, _gt, _pp in rows_pairs:
                                                                     if (
@@ -1530,7 +1534,7 @@ def run_pipeline(
                 final_label_name: Optional[str] = None
                 final_label_reason = "none"
                 label_prioridad_paso_1 = next(
-                    (f for f in bank_fmts_digitized if f in ("A", "B")),
+                    (f for f in bank_fmts_cuotas_ok if f in ("A", "B")),
                     None,
                 )
                 if label_prioridad_paso_1:
@@ -1542,7 +1546,7 @@ def run_pipeline(
                     final_label_reason = f"paso_1_{label_prioridad_paso_1.lower()}"
                 elif remitente_en_clientes:
                     label_prioridad_paso_2 = next(
-                        (f for f in bank_fmts_digitized if f in ("C", "D")),
+                        (f for f in bank_fmts_cuotas_ok if f in ("C", "D")),
                         None,
                     )
                     if label_prioridad_paso_2 == "C":
