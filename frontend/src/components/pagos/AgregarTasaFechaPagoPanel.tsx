@@ -18,6 +18,8 @@ export function AgregarTasaFechaPagoPanel() {
   const queryClient = useQueryClient()
   const [fechaTasaForm, setFechaTasaForm] = useState('')
   const [tasaForm, setTasaForm] = useState('')
+  const [tasaBcvForm, setTasaBcvForm] = useState('')
+  const [tasaBinanceForm, setTasaBinanceForm] = useState('')
   const [isGuardandoTasa, setIsGuardandoTasa] = useState(false)
   const [tasaExistenteDialogo, setTasaExistenteDialogo] = useState<{
     fecha: string
@@ -45,9 +47,22 @@ export function AgregarTasaFechaPagoPanel() {
     }
     const tasaNum = parseFloat(tasaForm)
     if (isNaN(tasaNum) || tasaNum <= 0) {
-      toast.error('Ingrese una tasa válida mayor a 0')
+      toast.error('Ingrese una tasa Euro válida mayor a 0')
       return
     }
+    const bcvOpt = tasaBcvForm.trim() ? parseFloat(tasaBcvForm) : NaN
+    const binOpt = tasaBinanceForm.trim() ? parseFloat(tasaBinanceForm) : NaN
+    if (tasaBcvForm.trim() && (isNaN(bcvOpt) || bcvOpt <= 0)) {
+      toast.error('Tasa BCV inválida (deje vacío si no aplica)')
+      return
+    }
+    if (tasaBinanceForm.trim() && (isNaN(binOpt) || binOpt <= 0)) {
+      toast.error('Tasa Binance inválida (deje vacío si no aplica)')
+      return
+    }
+    const opts: { tasa_bcv?: number; tasa_binance?: number } = {}
+    if (tasaBcvForm.trim() && !isNaN(bcvOpt) && bcvOpt > 0) opts.tasa_bcv = bcvOpt
+    if (tasaBinanceForm.trim() && !isNaN(binOpt) && binOpt > 0) opts.tasa_binance = binOpt
 
     setIsGuardandoTasa(true)
     try {
@@ -63,12 +78,18 @@ export function AgregarTasaFechaPagoPanel() {
         return
       }
 
-      await guardarTasaPorFecha(fechaTasaForm, tasaNum)
+      await guardarTasaPorFecha(
+        fechaTasaForm,
+        tasaNum,
+        Object.keys(opts).length ? opts : undefined
+      )
 
       const accion = tasaExistente ? 'Tasa actualizada' : 'Tasa guardada'
       toast.success(`${accion} para ${fechaTasaForm}`)
       setFechaTasaForm('')
       setTasaForm('')
+      setTasaBcvForm('')
+      setTasaBinanceForm('')
 
       await queryClient.invalidateQueries({
         queryKey: ['tasa-hoy-banner-pagos'],
@@ -85,9 +106,15 @@ export function AgregarTasaFechaPagoPanel() {
 
     setIsGuardandoTasa(true)
     try {
+      const bcvOpt = tasaBcvForm.trim() ? parseFloat(tasaBcvForm) : NaN
+      const binOpt = tasaBinanceForm.trim() ? parseFloat(tasaBinanceForm) : NaN
+      const opts: { tasa_bcv?: number; tasa_binance?: number } = {}
+      if (tasaBcvForm.trim() && !isNaN(bcvOpt) && bcvOpt > 0) opts.tasa_bcv = bcvOpt
+      if (tasaBinanceForm.trim() && !isNaN(binOpt) && binOpt > 0) opts.tasa_binance = binOpt
       await guardarTasaPorFecha(
         tasaExistenteDialogo.fecha,
-        tasaExistenteDialogo.tasaNueva
+        tasaExistenteDialogo.tasaNueva,
+        Object.keys(opts).length ? opts : undefined
       )
 
       toast.success(
@@ -95,6 +122,8 @@ export function AgregarTasaFechaPagoPanel() {
       )
       setFechaTasaForm('')
       setTasaForm('')
+      setTasaBcvForm('')
+      setTasaBinanceForm('')
       setTasaExistenteDialogo(null)
 
       await queryClient.invalidateQueries({
@@ -119,10 +148,9 @@ export function AgregarTasaFechaPagoPanel() {
               </h3>
             </div>
             <p className="text-sm text-gray-700">
-              Use la <strong>fecha de pago</strong> del reporte o comprobante.
-              Es la tasa oficial Bs./USD para convertir bolívares a dólares.
-              Ideal para días pasados o faltantes que no cuentan con tasa
-              registrada.
+              Use la <strong>fecha de pago</strong> del reporte. <strong>Euro</strong> es la tasa por
+              defecto del sistema; opcionalmente cargue <strong>BCV</strong> y <strong>Binance</strong>{' '}
+              para que el cliente elija la fuente al reportar en bolívares.
             </p>
           </div>
 
@@ -139,7 +167,7 @@ export function AgregarTasaFechaPagoPanel() {
                   Tasa Vigente Hoy
                 </p>
                 <p className="text-base font-semibold text-amber-900">
-                  {(tasaHoyBanner.fecha || '').slice(0, 10)}: Bs.{' '}
+                  {(tasaHoyBanner.fecha || '').slice(0, 10)} — Euro: Bs.{' '}
                   {new Intl.NumberFormat('es-VE', {
                     minimumFractionDigits: 2,
                     maximumFractionDigits: 2,
@@ -159,7 +187,7 @@ export function AgregarTasaFechaPagoPanel() {
           )}
 
           <div className="rounded-lg bg-white p-5 shadow-sm">
-            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
               <div className="flex flex-col gap-2">
                 <label className="text-sm font-medium text-gray-700">
                   Fecha de Pago
@@ -177,7 +205,7 @@ export function AgregarTasaFechaPagoPanel() {
 
               <div className="flex flex-col gap-2">
                 <label className="text-sm font-medium text-gray-700">
-                  Tasa Oficial (Bs. por 1 USD)
+                  Tasa Euro (Bs. por 1 USD)
                 </label>
                 <input
                   type="number"
@@ -189,10 +217,40 @@ export function AgregarTasaFechaPagoPanel() {
                   className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-gray-900 shadow-sm transition focus:border-amber-400 focus:ring-2 focus:ring-amber-100"
                   placeholder="ej. 3105.75"
                 />
-                <p className="text-xs text-gray-500">2 decimales máximo</p>
+                <p className="text-xs text-gray-500">Obligatoria; referencia por defecto</p>
               </div>
 
-              <div className="flex flex-col justify-end gap-2">
+              <div className="flex flex-col gap-2">
+                <label className="text-sm font-medium text-gray-700">
+                  Tasa BCV (opcional)
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={tasaBcvForm}
+                  onChange={e => setTasaBcvForm(e.target.value)}
+                  className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-gray-900 shadow-sm transition focus:border-amber-400 focus:ring-2 focus:ring-amber-100"
+                  placeholder="Vacío = no actualizar"
+                />
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <label className="text-sm font-medium text-gray-700">
+                  Tasa Binance (opcional)
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={tasaBinanceForm}
+                  onChange={e => setTasaBinanceForm(e.target.value)}
+                  className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-gray-900 shadow-sm transition focus:border-amber-400 focus:ring-2 focus:ring-amber-100"
+                  placeholder="Vacío = no actualizar"
+                />
+              </div>
+
+              <div className="flex flex-col justify-end gap-2 xl:col-span-1">
                 <button
                   type="button"
                   onClick={() => void handleGuardarTasa()}

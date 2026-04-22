@@ -9,7 +9,7 @@ export default function TasaCambioPage() {
       <ModulePageHeader
         icon={TrendingUp}
         title="Tasa de cambio"
-        description="Tasa oficial Bs./USD por fecha de pago (historial y conversión en pagos en bolívares)"
+        description="Euro (por defecto), BCV y Binance en Bs./USD por fecha de pago; el cliente elige la fuente al reportar en bolívares"
       />
 
       <AgregarTasaFechaPagoPanel />

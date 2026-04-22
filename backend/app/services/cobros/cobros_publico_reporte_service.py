@@ -20,7 +20,13 @@ from sqlalchemy.orm import Session
 from app.core.documento import normalize_documento
 from app.models.pago_reportado import PagoReportado
 from app.models.prestamo import Prestamo
-from app.services.tasa_cambio_service import fecha_hoy_caracas, obtener_tasa_por_fecha
+from app.services.tasa_cambio_service import (
+    fecha_hoy_caracas,
+    mensaje_sin_tasa_para_fuente,
+    normalizar_fuente_tasa,
+    obtener_tasa_por_fecha,
+    valor_tasa_para_fuente,
+)
 from app.services.cobros.cedula_reportar_bs_service import cedula_autorizada_para_bs
 
 logger = logging.getLogger(__name__)
@@ -49,9 +55,8 @@ MAGIC_PDF = bytes([0x25, 0x50, 0x44, 0x46])  # %PDF
 MAGIC_WEBP = bytes([0x52, 0x49, 0x46, 0x46])  # RIFF....WEBP
 
 ERROR_TASA_BS_NO_REGISTRADA = (
-    "No hay tasa de cambio oficial para la fecha de pago {fp}. "
-    "Un administrador debe registrarla en Administracion > Tasas de cambio para esa fecha "
-    "antes de reportar en bolivares."
+    "No hay tasa de cambio para la fecha de pago {fp} y la fuente elegida (BCV, Euro o Binance). "
+    "Un administrador debe registrarla en Tasas de cambio para esa fecha antes de reportar en bolívares."
 )
 ERROR_BS_NO_AUTORIZADO = (
     "Observación: Bolívares. No puede enviar pago en Bolívares; su cédula no está autorizada. Use USD."
@@ -380,13 +385,20 @@ def validar_reglas_bs_tasa_monto_fecha(
     fecha_pago: date,
     monto: float,
     mon: MonedaObservacionNormalizados,
+    fuente_tasa_cambio: Optional[str] = None,
 ) -> Optional[str]:
     """Reglas que requieren BD o fecha de hoy (Caracas)."""
     if mon.moneda_upper == "BS":
         if not cedula_autorizada_para_bs(db, cedula_lookup):
             return ERROR_BS_NO_AUTORIZADO
-        if obtener_tasa_por_fecha(db, fecha_pago) is None:
+        fuente = normalizar_fuente_tasa(fuente_tasa_cambio)
+        row = obtener_tasa_por_fecha(db, fecha_pago)
+        if row is None:
             return ERROR_TASA_BS_NO_REGISTRADA.format(fp=fecha_pago.strftime("%d/%m/%Y"))
+        t_val = valor_tasa_para_fuente(row, fuente)
+        if t_val is None or not float(t_val) > 0:
+            fp = fecha_pago.strftime("%d/%m/%Y")
+            return mensaje_sin_tasa_para_fuente(fuente, fp)
     err_monto = validar_monto_reporte_publico(monto, mon.moneda_upper)
     if err_monto:
         return err_monto
@@ -424,6 +436,7 @@ def crear_pago_reportado_con_referencia_o_retry(
     correo_enviado_a: str,
     canal_ingreso: str,
     log_tag_duplicate: str,
+    fuente_tasa_cambio: Optional[str] = None,
 ) -> Tuple[Optional[PagoReportado], Optional[str], Optional[str]]:
     """
     Intenta hasta 2 veces ante colisión de referencia_interna.
@@ -552,6 +565,7 @@ def crear_pago_reportado_con_referencia_o_retry(
                 correo_enviado_a=correo_enviado_a,
                 estado="pendiente",
                 canal_ingreso=canal_ingreso,
+                fuente_tasa_cambio=normalizar_fuente_tasa(fuente_tasa_cambio),
             )
             db.add(pr)
             db.commit()

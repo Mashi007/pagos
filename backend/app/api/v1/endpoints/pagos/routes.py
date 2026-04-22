@@ -137,11 +137,10 @@ from app.services.pagos_cascada_aplicacion import (
 
 
 from app.services.tasa_cambio_service import (
-
     convertir_bs_a_usd,
-
+    normalizar_fuente_tasa,
     obtener_tasa_por_fecha,
-
+    valor_tasa_para_fuente,
 )
 
 from app.services.pago_registro_moneda import (
@@ -2430,7 +2429,16 @@ def importar_un_pago_reportado_a_pagos(
 
             )
 
-        tasa_aplicada = float(tasa_obj.tasa_oficial)
+        fuente = normalizar_fuente_tasa(getattr(pr, "fuente_tasa_cambio", None))
+        tasa_res = valor_tasa_para_fuente(tasa_obj, fuente)
+        if tasa_res is None or float(tasa_res) <= 0:
+            return _err_con_pce(
+                f"No hay tasa {fuente.upper()} para la fecha de pago {pr.fecha_pago.isoformat()}; "
+                "no se puede importar en bolívares",
+                cedula_cliente=cedula_raw,
+                prestamo_id=prestamo_id,
+            )
+        tasa_aplicada = float(tasa_res)
 
         monto_bs_original = monto
 

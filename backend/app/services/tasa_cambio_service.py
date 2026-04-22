@@ -3,7 +3,7 @@ Servicios para gestionar tasas de cambio oficiales.
 """
 from datetime import date, datetime, time
 from decimal import Decimal
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Literal, Optional, Sequence, Tuple, Union
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import or_, select
@@ -20,6 +20,62 @@ _TASA_PLACEHOLDER_EJEMPLO_MAX = Decimal("100000.01")
 
 # Fecha contable y hora de negocio en America/Caracas (tasas diarias, validaciones).
 CARACAS_TZ = ZoneInfo("America/Caracas")
+
+FuenteTasaCambio = Literal["bcv", "euro", "binance"]
+
+
+def normalizar_fuente_tasa(raw: Optional[str]) -> FuenteTasaCambio:
+    """bcv | euro | binance — defecto euro (comportamiento histórico con `tasa_oficial`)."""
+    s = (raw or "").strip().lower()
+    if s in ("bcv", "euro", "binance"):
+        return s  # type: ignore[return-value]
+    return "euro"
+
+
+def valor_tasa_para_fuente(row: TasaCambioDiaria, fuente: Union[str, FuenteTasaCambio]) -> Optional[float]:
+    """
+    Devuelve Bs/USD según la fuente elegida en el reporte.
+    - euro: columna `tasa_oficial` (Euro / referencia actual del sistema).
+    - bcv / binance: columnas dedicadas; None si no hay valor en BD.
+    """
+    f = normalizar_fuente_tasa(str(fuente))
+    if f == "euro":
+        try:
+            return float(row.tasa_oficial)
+        except Exception:
+            return None
+    if f == "bcv":
+        v = getattr(row, "tasa_bcv", None)
+        if v is None:
+            return None
+        try:
+            return float(v)
+        except Exception:
+            return None
+    v = getattr(row, "tasa_binance", None)
+    if v is None:
+        return None
+    try:
+        return float(v)
+    except Exception:
+        return None
+
+
+def mensaje_sin_tasa_para_fuente(fuente: FuenteTasaCambio, fecha_iso: str) -> str:
+    if fuente == "bcv":
+        return (
+            f"No hay tasa BCV registrada para la fecha de pago {fecha_iso}. "
+            "Un administrador debe cargarla en Tasas de cambio (BCV) para esa fecha."
+        )
+    if fuente == "binance":
+        return (
+            f"No hay tasa Binance registrada para la fecha de pago {fecha_iso}. "
+            "Un administrador debe cargarla en Tasas de cambio (Binance) para esa fecha."
+        )
+    return (
+        f"No hay tasa Euro registrada para la fecha de pago {fecha_iso}. "
+        "Un administrador debe registrarla en Tasas de cambio para esa fecha."
+    )
 
 
 def fecha_hoy_caracas() -> date:
@@ -219,12 +275,22 @@ def guardar_tasa_para_fecha(
     tasa_oficial: float,
     usuario_id: Optional[int] = None,
     usuario_email: Optional[str] = None,
+    *,
+    tasa_bcv: Optional[float] = None,
+    tasa_binance: Optional[float] = None,
 ) -> TasaCambioDiaria:
     """
     Inserta o actualiza la tasa oficial para una fecha calendario concreta.
     Usada para backfill (pagos BS con fecha_pago pasada) sin regla de hora 01:00.
+
+    `tasa_oficial` es la tasa **Euro** (Bs/USD). `tasa_bcv` y `tasa_binance` son opcionales;
+    si vienen en None no se modifican las columnas existentes (solo upsert de euro en fila nueva).
     """
     validar_tasa_oficial_antes_de_guardar(tasa_oficial)
+    if tasa_bcv is not None:
+        validar_tasa_oficial_antes_de_guardar(float(tasa_bcv))
+    if tasa_binance is not None:
+        validar_tasa_oficial_antes_de_guardar(float(tasa_binance))
 
     existente = db.execute(
         select(TasaCambioDiaria).where(TasaCambioDiaria.fecha == fecha)
@@ -232,6 +298,10 @@ def guardar_tasa_para_fecha(
 
     if existente:
         existente.tasa_oficial = tasa_oficial
+        if tasa_bcv is not None:
+            existente.tasa_bcv = tasa_bcv
+        if tasa_binance is not None:
+            existente.tasa_binance = tasa_binance
         existente.usuario_id = usuario_id
         existente.usuario_email = usuario_email
         existente.updated_at = datetime.now()
@@ -239,6 +309,8 @@ def guardar_tasa_para_fecha(
         existente = TasaCambioDiaria(
             fecha=fecha,
             tasa_oficial=tasa_oficial,
+            tasa_bcv=tasa_bcv,
+            tasa_binance=tasa_binance,
             usuario_id=usuario_id,
             usuario_email=usuario_email,
         )

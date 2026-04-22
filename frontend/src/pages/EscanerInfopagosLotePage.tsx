@@ -69,6 +69,11 @@ import {
   hayDuplicadoFila,
   type FilaLote,
 } from './escanerInfopagosLoteModel'
+import {
+  FUENTE_TASA_DEFAULT,
+  FUENTE_TASA_OPCIONES,
+  type FuenteTasaCambio,
+} from '../constants/fuenteTasaCambio'
 
 const MAX_ARCHIVOS = 15
 const MAX_FILE_SIZE = 10 * 1024 * 1024
@@ -226,7 +231,7 @@ function validarMonto(
   return { valido: true, valor: num }
 }
 
-type Fase = 'cedula' | 'archivos' | 'revision'
+type Fase = 'cedula' | 'fuente_tasa' | 'archivos' | 'revision'
 
 export default function EscanerInfopagosLotePage() {
   const honeypotRef = useRef<HTMLInputElement>(null)
@@ -237,6 +242,7 @@ export default function EscanerInfopagosLotePage() {
   const [cedulaRaw, setCedulaRaw] = useState('')
   const [nombreCliente, setNombreCliente] = useState('')
   const [validandoCedula, setValidandoCedula] = useState(false)
+  const [fuenteTasa, setFuenteTasa] = useState<FuenteTasaCambio>(FUENTE_TASA_DEFAULT)
 
   const [archivos, setArchivos] = useState<File[]>([])
   const [driveFolder, setDriveFolder] = useState(DEFAULT_DRIVE_FOLDER)
@@ -299,8 +305,9 @@ export default function EscanerInfopagosLotePage() {
         return
       }
       setNombreCliente((res.nombre || '').trim())
-      setFase('archivos')
-      toast.success('Cédula verificada. Adjunte hasta 15 comprobantes.')
+      setFuenteTasa(FUENTE_TASA_DEFAULT)
+      setFase('fuente_tasa')
+      toast.success('Cédula verificada. Elija la tasa Bs. → USD y continúe.')
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : 'Error al validar la cédula.')
     } finally {
@@ -382,6 +389,7 @@ export default function EscanerInfopagosLotePage() {
       fd.append('numero_cedula', numero)
       fd.append('drive_folder', folder)
       fd.append('max_archivos', String(MAX_ARCHIVOS))
+      fd.append('fuente_tasa_cambio', fuenteTasa)
       const res = await escanerInfopagosLoteDesdeDrive(fd)
       if (!res.ok) {
         toast.error(res.mensaje || 'No se pudo cargar desde Drive.')
@@ -429,7 +437,7 @@ export default function EscanerInfopagosLotePage() {
     } finally {
       setCargandoDrive(false)
     }
-  }, [cedulaNormalizada, driveFolder, fileDesdeBase64])
+  }, [cedulaNormalizada, driveFolder, fileDesdeBase64, fuenteTasa])
 
   const handleDigitalizarTodos = useCallback(() => {
     if (!cedulaNormalizada.valido || !cedulaNormalizada.valorParaEnviar) {
@@ -447,9 +455,10 @@ export default function EscanerInfopagosLotePage() {
           tokensSufijoUsadosRef.current.add(t)
         }
       },
-      { cedulaRaw, nombreCliente }
+      { cedulaRaw, nombreCliente },
+      fuenteTasa
     )
-  }, [cedulaNormalizada, cedulaRaw, nombreCliente])
+  }, [cedulaNormalizada, cedulaRaw, nombreCliente, fuenteTasa])
 
   const actualizarFila = useCallback((clientId: string, patch: Partial<FilaLote>) => {
     setFilas(prev => {
@@ -624,6 +633,7 @@ export default function EscanerInfopagosLotePage() {
       form.append('numero_operacion', fila.numeroOperacion.trim())
       form.append('monto', montoParaApi(vM.valor))
       form.append('moneda', fila.moneda)
+      form.append('fuente_tasa_cambio', fuenteTasa)
       form.append('comprobante', fila.archivo)
       guardarActivoRef.current.add(clientId)
       actualizarFila(clientId, { guardando: true, guardadoError: undefined })
@@ -654,7 +664,7 @@ export default function EscanerInfopagosLotePage() {
         guardarActivoRef.current.delete(clientId)
       }
     },
-    [actualizarFila, cedulaNormalizada]
+    [actualizarFila, cedulaNormalizada, fuenteTasa]
   )
 
   const handleDescargarRecibo = useCallback(
@@ -690,6 +700,7 @@ export default function EscanerInfopagosLotePage() {
     filasRef.current = []
     setFilas([])
     tokensSufijoUsadosRef.current = new Set()
+    setFuenteTasa(FUENTE_TASA_DEFAULT)
   }, [])
 
   const volverArchivos = useCallback(() => {
@@ -766,10 +777,57 @@ export default function EscanerInfopagosLotePage() {
         </Card>
       )}
 
+      {fase === 'fuente_tasa' && (
+        <Card>
+          <CardHeader>
+            <CardTitle>2. Tasa de cambio (Bs. → USD)</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {nombreCliente ? (
+              <p className="text-sm text-slate-700">
+                Cliente: <span className="font-semibold">{nombreCliente}</span>
+              </p>
+            ) : null}
+            <p className="text-sm text-slate-600">
+              Aplica a la validación en bolívares y al guardar cada fila. Por defecto: Euro.
+            </p>
+            <div className="grid gap-2 sm:grid-cols-3">
+              {FUENTE_TASA_OPCIONES.map(opt => (
+                <label
+                  key={opt.value}
+                  className={`flex cursor-pointer items-center gap-2 rounded-lg border-2 p-3 text-sm ${
+                    fuenteTasa === opt.value
+                      ? 'border-violet-500 bg-violet-50'
+                      : 'border-slate-200'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="fuente-tasa-lote"
+                    checked={fuenteTasa === opt.value}
+                    onChange={() => setFuenteTasa(opt.value)}
+                    className="accent-violet-600"
+                  />
+                  {opt.label}
+                </label>
+              ))}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" type="button" onClick={() => setFase('cedula')}>
+                Volver
+              </Button>
+              <Button type="button" onClick={() => setFase('archivos')}>
+                Continuar
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {fase === 'archivos' && (
         <Card>
           <CardHeader>
-            <CardTitle>2. Comprobantes (máx. {String(MAX_ARCHIVOS)})</CardTitle>
+            <CardTitle>3. Comprobantes (máx. {String(MAX_ARCHIVOS)})</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             {nombreCliente ? (
@@ -843,7 +901,7 @@ export default function EscanerInfopagosLotePage() {
               </ul>
             )}
             <div className="flex flex-wrap gap-2">
-              <Button variant="outline" type="button" onClick={() => setFase('cedula')}>
+              <Button variant="outline" type="button" onClick={() => setFase('fuente_tasa')}>
                 Volver
               </Button>
               <Button type="button" onClick={irARevision} disabled={!archivos.length}>
@@ -858,7 +916,7 @@ export default function EscanerInfopagosLotePage() {
         <>
           <Card>
             <CardHeader>
-              <CardTitle>3. Digitalizar y completar cada pago</CardTitle>
+              <CardTitle>4. Digitalizar y completar cada pago</CardTitle>
               {nombreCliente ? (
                 <p className="text-sm text-slate-600">
                   Cliente: <span className="font-semibold text-slate-900">{nombreCliente}</span> —{' '}

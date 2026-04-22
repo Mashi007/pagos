@@ -96,7 +96,8 @@ export async function runDigitacionLoteEnSegundoPlano(
   tipo: string,
   numero: string,
   onTokens: (tokens: Iterable<string>) => void,
-  contexto: { cedulaRaw: string; nombreCliente: string }
+  contexto: { cedulaRaw: string; nombreCliente: string },
+  fuenteTasaCambio: string = 'euro'
 ): Promise<void> {
   if (uiSnapshot.running) {
     toast.error('Ya hay una digitalización en curso.')
@@ -146,6 +147,7 @@ export async function runDigitacionLoteEnSegundoPlano(
       const fd = new FormData()
       fd.append('tipo_cedula', tipo)
       fd.append('numero_cedula', numero)
+      fd.append('fuente_tasa_cambio', fuenteTasaCambio)
       fd.append('comprobante', filaActual.archivo)
 
       try {

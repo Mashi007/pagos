@@ -8,7 +8,7 @@ Reportes de pago web (misma tabla para todo canal de entrada).
   `comprobante_nombre` conserva el nombre original del archivo.
 """
 from sqlalchemy import Column, Integer, String, Numeric, DateTime, ForeignKey, Text, Date, LargeBinary
-from sqlalchemy.sql import func
+from sqlalchemy.sql import func, text
 
 from app.core.database import Base
 
@@ -49,6 +49,8 @@ class PagoReportado(Base):
     gemini_comentario = Column(Text, nullable=True)
     # infopagos | cobros_publico | NULL (historico u otros)
     canal_ingreso = Column(String(32), nullable=True, index=True)
+    # bcv | euro | binance — tasa Bs→USD elegida al validar cédula en cobros/infopagos (defecto euro).
+    fuente_tasa_cambio = Column(String(16), nullable=True, server_default=text("'euro'"))
     created_at = Column(DateTime(timezone=False), nullable=False, server_default=func.now())
     updated_at = Column(DateTime(timezone=False), nullable=False, server_default=func.now(), onupdate=func.now())
 

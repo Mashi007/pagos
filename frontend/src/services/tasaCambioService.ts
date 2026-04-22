@@ -5,6 +5,8 @@ export interface TasaCambioResponse {
   id: number
   fecha: string
   tasa_oficial: number
+  tasa_bcv?: number | null
+  tasa_binance?: number | null
   usuario_email?: string
   created_at: string
   updated_at: string
@@ -21,6 +23,8 @@ export interface TasaCambioHistorial {
   id: number
   fecha: string
   tasa_oficial: number
+  tasa_bcv?: number | null
+  tasa_binance?: number | null
   usuario_email?: string
   updated_at?: string
 }
@@ -99,12 +103,20 @@ export async function guardarTasa(
 /** Tasa para una fecha concreta (ej. fecha de pago de reporte en Bs.). Solo admin. */
 export async function guardarTasaPorFecha(
   fecha: string,
-  tasa_oficial: number
+  tasa_oficial: number,
+  opts?: { tasa_bcv?: number; tasa_binance?: number }
 ): Promise<TasaCambioResponse> {
   try {
+    const body: Record<string, unknown> = { fecha, tasa_oficial }
+    if (opts?.tasa_bcv != null && Number.isFinite(opts.tasa_bcv)) {
+      body.tasa_bcv = opts.tasa_bcv
+    }
+    if (opts?.tasa_binance != null && Number.isFinite(opts.tasa_binance)) {
+      body.tasa_binance = opts.tasa_binance
+    }
     return await apiClient.post<TasaCambioResponse>(
       ADMIN_TASAS + '/guardar-por-fecha',
-      { fecha, tasa_oficial }
+      body
     )
   } catch (e) {
     console.error('Error guardando tasa por fecha:', e)

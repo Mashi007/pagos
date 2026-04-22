@@ -51,6 +51,11 @@ import {
 import { PUBLIC_FLOW_SESSION_KEY } from '../config/env'
 
 import { TEXTO_AVISO_NUMERO_OPERACION_FORMULARIO } from '../constants/reporteCobrosDocumento'
+import {
+  FUENTE_TASA_DEFAULT,
+  FUENTE_TASA_OPCIONES,
+  type FuenteTasaCambio,
+} from '../constants/fuenteTasaCambio'
 
 import { Button } from '../components/ui/button'
 
@@ -161,6 +166,7 @@ function montoParaApi(num: number): string {
 
 /** En cobros público no existe el paso interno 2 (moneda); badges van 1..6 en lugar de 1..7. */
 function badgePasoFormulario(step: number, isInfopagos: boolean): number {
+  if (step === 15) return 2
   if (!isInfopagos) {
     if (step === 7) return 6
     return step
@@ -173,6 +179,7 @@ function getStepAnnouncement(step: number, isInfopagos: boolean): string {
     const m: Record<number, string> = {
       0: 'Pantalla de bienvenida: reporte de pago',
       1: 'Paso 1: Ingrese su número de cédula',
+      15: 'Elija la tasa de cambio BCV, Euro o Binance para pagos en bolívares',
       2: 'Paso 2: Adjuntar comprobante',
       3: 'Paso 3: Institución financiera',
       4: 'Paso 4: Fecha y monto del pago',
@@ -185,6 +192,7 @@ function getStepAnnouncement(step: number, isInfopagos: boolean): string {
   const m: Record<number, string> = {
     0: 'Pantalla de bienvenida: reporte de pago',
     1: 'Paso 1: Ingrese su número de cédula',
+    15: 'Elija la tasa de cambio BCV, Euro o Binance para pagos en bolívares',
     2: 'Paso 2: Camino de moneda y datos del pago',
     3: 'Paso 3: Institución financiera',
     4: 'Paso 4: Fecha y monto segun camino Bs. o USD',
@@ -741,6 +749,8 @@ export default function ReportePagoPage({
 
   const [puedeReportarBs, setPuedeReportarBs] = useState(true)
 
+  const [fuenteTasa, setFuenteTasa] = useState<FuenteTasaCambio>(FUENTE_TASA_DEFAULT)
+
   const [numeroDocumento, setNumeroDocumento] = useState('')
 
   const [archivo, setArchivo] = useState<File | null>(null)
@@ -852,6 +862,8 @@ export default function ReportePagoPage({
 
     setMontoAltoConfirmado(false)
 
+    setFuenteTasa(FUENTE_TASA_DEFAULT)
+
     setStep(irAStep)
   }
 
@@ -895,7 +907,9 @@ export default function ReportePagoPage({
 
       setEmailParaVerificacion(res.email_enmascarado ?? '')
 
-      setStep(2)
+      setFuenteTasa(FUENTE_TASA_DEFAULT)
+
+      setStep(15)
     } catch (e: any) {
       showNotification('error', e?.message || 'Error al validar cédula.')
     } finally {
@@ -1003,6 +1017,8 @@ export default function ReportePagoPage({
 
     form.append('moneda', moneda)
 
+    form.append('fuente_tasa_cambio', fuenteTasa)
+
     if (archivo) form.append('comprobante', archivo)
 
     setLoading(true)
@@ -1095,6 +1111,7 @@ export default function ReportePagoPage({
     const form = new FormData()
     form.append('tipo_cedula', tipoCedula)
     form.append('numero_cedula', numeroCedula)
+    form.append('fuente_tasa_cambio', fuenteTasa)
     if (archivo) form.append('comprobante', archivo)
 
     setLoading(true)
@@ -1502,6 +1519,101 @@ export default function ReportePagoPage({
     )
   }
 
+  if (step === 15) {
+    return (
+      <div
+        className={
+          embedded
+            ? 'flex flex-col items-center justify-center overflow-x-hidden p-3 sm:p-4'
+            : 'flex min-h-[100dvh] min-h-screen flex-col items-center justify-center overflow-x-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-3 sm:p-4'
+        }
+      >
+        <div
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+          className="sr-only"
+        >
+          {messageForScreenReader || stepAnnouncement}
+        </div>
+
+        <div className="flex w-full min-w-0 max-w-md flex-col items-center gap-4 px-1 sm:px-0">
+          <NotificationBanner
+            notification={notification}
+            onDismiss={dismissNotification}
+          />
+
+          <Card
+            className={
+              embedded
+                ? 'w-full min-w-0 max-w-md border border-slate-200 bg-white shadow-sm'
+                : 'w-full min-w-0 max-w-md border-0 bg-white shadow-xl'
+            }
+          >
+            <CardHeader className="border-b border-slate-100 px-5 pb-4 sm:px-6">
+              <div className="mb-2 flex items-center gap-3">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-900 text-sm font-semibold text-white">
+                  {badgePasoFormulario(15, isInfopagos)}
+                </div>
+                <CardTitle className="m-0 text-lg sm:text-xl">
+                  Tasa de cambio (Bs. → USD)
+                </CardTitle>
+              </div>
+              <p className="mt-2 text-sm text-slate-600">
+                Seleccione la tasa que aplicará si reporta en bolívares. Por defecto se usa la tasa{' '}
+                <strong>Euro</strong> (igual que hasta ahora). BCV y Binance solo aplican si están
+                cargadas en el sistema para la fecha de pago.
+              </p>
+            </CardHeader>
+
+            <CardContent className="space-y-4 px-5 sm:px-6">
+              <div className="grid gap-3">
+                {FUENTE_TASA_OPCIONES.map(opt => (
+                  <label
+                    key={opt.value}
+                    className={`flex cursor-pointer items-center gap-3 rounded-lg border-2 p-4 transition-colors ${
+                      fuenteTasa === opt.value
+                        ? 'border-emerald-500 bg-emerald-50'
+                        : 'border-slate-200 hover:border-slate-300'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="fuente-tasa"
+                      value={opt.value}
+                      checked={fuenteTasa === opt.value}
+                      onChange={() => setFuenteTasa(opt.value)}
+                      className="h-4 w-4 accent-emerald-600"
+                    />
+                    <span className="font-medium text-slate-900">{opt.label}</span>
+                  </label>
+                ))}
+              </div>
+
+              <div className="flex flex-wrap gap-2 pt-2">
+                <Button
+                  variant="outline"
+                  type="button"
+                  className="min-h-[48px] flex-1 border-slate-300"
+                  onClick={() => setStep(1)}
+                >
+                  Atrás
+                </Button>
+                <Button
+                  type="button"
+                  className="min-h-[48px] flex-1 bg-slate-900 font-semibold text-white hover:bg-slate-800"
+                  onClick={() => setStep(2)}
+                >
+                  Continuar
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    )
+  }
+
   if (step === 2) {
     if (!isInfopagos) {
       return (
@@ -1577,7 +1689,7 @@ export default function ReportePagoPage({
                     className="min-h-[48px] min-w-[100px] flex-1 touch-manipulation border-slate-300 text-slate-900 hover:bg-slate-50"
                     onClick={() => {
                       setArchivo(null)
-                      setStep(1)
+                      setStep(15)
                     }}
                   >
                     Atrás
@@ -1660,7 +1772,7 @@ export default function ReportePagoPage({
                   <p className="font-semibold text-slate-900">Bolivares</p>
                   <p className="mt-1 text-xs text-slate-600">Bs.</p>
                   <p className="mt-2 text-xs leading-snug text-slate-500">
-                    Monto: 1 a 10M Bs. Tasa oficial del día.
+                    Monto: 1 a 10M Bs. Según la tasa elegida (BCV, Euro o Binance) para la fecha de pago.
                   </p>
                   {moneda === 'BS' && (
                     <div className="absolute right-3 top-3 flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500">
@@ -1709,12 +1821,22 @@ export default function ReportePagoPage({
                 </button>
               </div>
 
-              <Button
-                className="min-h-[48px] w-full touch-manipulation bg-slate-900 font-semibold text-white hover:bg-slate-800"
-                onClick={() => setStep(3)}
-              >
-                Continuar
-              </Button>
+              <div className="flex flex-col gap-2">
+                <Button
+                  variant="outline"
+                  type="button"
+                  className="min-h-[44px] w-full touch-manipulation border-slate-300 text-slate-700"
+                  onClick={() => setStep(15)}
+                >
+                  Cambiar tasa Bs. → USD
+                </Button>
+                <Button
+                  className="min-h-[48px] w-full touch-manipulation bg-slate-900 font-semibold text-white hover:bg-slate-800"
+                  onClick={() => setStep(3)}
+                >
+                  Continuar
+                </Button>
+              </div>
             </CardContent>
           </Card>
         </div>

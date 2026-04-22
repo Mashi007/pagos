@@ -578,6 +578,128 @@ def _pil_image_to_rgb_for_jpeg(img):
     return img
 
 
+def _pagos_gmail_img_heuristic_trim_threshold() -> int:
+    return int(getattr(settings, "PAGOS_GMAIL_GEMINI_IMG_TRIM_WHITE", 245))
+
+
+def _pagos_gmail_img_heuristic_long_edges() -> tuple[int, int]:
+    """(min_long_edge, max_long_edge) con min <= max."""
+    min_l = int(getattr(settings, "PAGOS_GMAIL_GEMINI_IMG_MIN_LONG_EDGE", 1600))
+    max_l = int(getattr(settings, "PAGOS_GMAIL_GEMINI_IMG_MAX_LONG_EDGE", 3072))
+    if min_l > max_l:
+        return max_l, min_l
+    return min_l, max_l
+
+
+def _pagos_gmail_trim_soft_margins_pil(img: Any, filename: str) -> Any:
+    """
+    Recorta márgenes muy claros (mesa, marco Gmail) cuando el contenido ocupa claramente el centro.
+    Conservador: si el bbox es casi todo el lienzo o demasiado pequeño, no recorta.
+    """
+    from PIL import Image as _PIL
+
+    gray = img.convert("L")
+    thr = _pagos_gmail_img_heuristic_trim_threshold()
+    mask = gray.point(lambda p: 255 if p < thr else 0)
+    bbox = mask.getbbox()
+    if not bbox:
+        return img
+    w, h = img.size
+    area_full = float(w * h)
+    l, u, r, d = bbox
+    area_new = float((r - l) * (d - u))
+    if area_new > area_full * 0.96:
+        return img
+    if area_new < area_full * 0.12:
+        return img
+    pad = max(4, int(round(min(w, h) * 0.012)))
+    l2 = max(0, l - pad)
+    u2 = max(0, u - pad)
+    r2 = min(w, r + pad)
+    d2 = min(h, d + pad)
+    logger.debug(
+        "[PAGOS_GMAIL] Heurística recorte márgenes: %s %sx%s -> %sx%s",
+        filename,
+        w,
+        h,
+        r2 - l2,
+        d2 - u2,
+    )
+    return img.crop((l2, u2, r2, d2))
+
+
+def _pagos_gmail_normalize_long_edge_pil(img: Any, filename: str) -> Any:
+    """Escala manteniendo ratio: sube comprobantes pequeños (mejor OCR mini); limita los enormes."""
+    from PIL import Image as _PIL
+
+    w, h = img.size
+    long = max(w, h)
+    if long <= 0:
+        return img
+    min_edge, max_edge = _pagos_gmail_img_heuristic_long_edges()
+    target: Optional[float] = None
+    if long < min_edge:
+        target = float(min_edge)
+    elif long > max_edge:
+        target = float(max_edge)
+    else:
+        return img
+    scale = target / float(long)
+    nw = max(1, int(round(w * scale)))
+    nh = max(1, int(round(h * scale)))
+    try:
+        resample = _PIL.Resampling.LANCZOS  # type: ignore[attr-defined]
+    except AttributeError:
+        resample = _PIL.LANCZOS  # type: ignore[attr-defined]
+    out = img.resize((nw, nh), resample)
+    logger.debug(
+        "[PAGOS_GMAIL] Heurística escala borde largo: %s %sx%s -> %sx%s (objetivo borde %s)",
+        filename,
+        w,
+        h,
+        nw,
+        nh,
+        int(target),
+    )
+    return out
+
+
+def _pick_rescue_image_part(
+    image_parts: list[tuple[str, object]],
+    bank_hint: Optional[str],
+    none_reason: str,
+) -> tuple[str, object]:
+    """
+    Segunda pasada: elige JPEG ya generado según pista banco y motivo de fallo (sin trabajo manual).
+    """
+    if not image_parts:
+        raise ValueError("image_parts vacío")
+    by_name = {n: p for n, p in image_parts}
+    r = (none_reason or "").strip().lower()
+    if r in ("bajo_contraste_ilegible",) or "contraste" in r:
+        pref = ["autocontrast", "unsharp", "sharpen", "orig", "denoise"]
+    elif r == "falto_ref":
+        pref = ["sharpen", "unsharp", "autocontrast", "orig", "denoise"]
+    elif r == "falto_monto":
+        pref = ["autocontrast", "sharpen", "unsharp", "orig", "denoise"]
+    elif r == "falto_fecha":
+        pref = ["autocontrast", "sharpen", "unsharp", "orig", "denoise"]
+    elif bank_hint == "C":
+        pref = ["sharpen", "unsharp", "orig", "autocontrast", "denoise"]
+    elif bank_hint == "B":
+        pref = ["sharpen", "unsharp", "autocontrast", "orig", "denoise"]
+    elif bank_hint in ("A", "D"):
+        pref = ["autocontrast", "sharpen", "unsharp", "orig", "denoise"]
+    elif bank_hint == "NR":
+        pref = ["autocontrast", "orig", "sharpen", "unsharp", "denoise"]
+    else:
+        pref = ["orig", "autocontrast", "sharpen", "unsharp", "denoise"]
+    for name in pref:
+        if name in by_name:
+            return name, by_name[name]
+    return image_parts[0]
+
+
 def _build_image_part(
     file_content: bytes,
     filename: str,
@@ -663,6 +785,8 @@ def _build_image_part_variants(
         except Exception:
             pass
         base = _pil_image_to_rgb_for_jpeg(base)
+        base = _pagos_gmail_trim_soft_margins_pil(base, filename)
+        base = _pagos_gmail_normalize_long_edge_pil(base, filename)
 
         variants: list[tuple[str, object]] = []
 
@@ -681,6 +805,11 @@ def _build_image_part_variants(
         try:
             sharp = ImageEnhance.Sharpness(base).enhance(1.35)
             _to_part(sharp, "sharpen")
+        except Exception:
+            pass
+        try:
+            um = base.filter(ImageFilter.UnsharpMask(radius=2, percent=150, threshold=3))
+            _to_part(um, "unsharp")
         except Exception:
             pass
         try:
@@ -952,21 +1081,27 @@ def _rescue_prompt_suffix(bank_hint: Optional[str]) -> str:
     if bank_hint == "A":
         return (
             "\n\nMODO RESCATE A (Mercantil): prioriza layout Deposito Divisas + cuenta 0105 + RAPI-CREDIT + serial/monto USD."
+            "\nAnclas léxicas (flexibles, no coordenadas fijas): busca bloques con "
+            "**DEPOSITO DIVISAS**, **Mercantil**, **0105**, **RECAUDACION**, **Serial**/**Ref**/**Referencia**, **Monto**/**USD**, **DCME** si aparece."
         )
     if bank_hint == "B":
         return (
             "\n\nMODO RESCATE B (BNC): prioriza recibo BNC + cuenta 0191/... + Deposito Us$ + Ref/Serial."
+            "\nAnclas léxicas: **BNC**, **0191/**, **Deposito Us$**/**U.S$**, **Serial:**, **Ref:**/**Ref.**, **Agencia**/**Terminal**/**Cajero**, asteriscos antes del monto."
         )
     if bank_hint == "C":
         return (
             "\n\nMODO RESCATE C (Binance): prioriza Pago exitoso + USDT/USD + ID de orden; alias no obligatorio."
+            "\nAnclas léxicas: **Pago exitoso**/**Payment successful**, **USDT**/**USD**, **ID de orden**/**Order ID**, tilde verde/check."
         )
     if bank_hint == "D":
         return (
             "\n\nMODO RESCATE D (BDV/BNV): prioriza 0102 + titular empresa + secuencial/monto total."
+            "\nAnclas léxicas: **Banco de Venezuela**/**BDV**, **0102-**, **SECUENCIAL NRO**/**Secuencial**, **TOTAL EFECTIVO**/**TOTAL DEPOSITO**/**MONTO TOTAL**, **FECHA**/**HORA**."
         )
     return (
         "\n\nMODO RESCATE GENERAL: imagen difícil; no inventar datos, pero intenta recuperar campos visibles con máxima tolerancia OCR."
+        "\nAnclas genéricas: líneas con **Ref**/**Serial**/**Operacion**/**Monto**/**Total**/**Fecha** cerca del bloque de comprobante (no del chrome del correo)."
     )
 
 
@@ -1187,7 +1322,9 @@ def classify_and_extract_pagos_gmail_attachment(
         # Pass 2 (rescate): solo una pasada extra si todo quedó en ninguno.
         if image_parts:
             rescue_pass_prompt = rescue_pass_prompt + _rescue_prompt_suffix(bank_hint)
-            rescue_variant_name, rescue_part = image_parts[0]
+            rescue_variant_name, rescue_part = _pick_rescue_image_part(
+                image_parts, bank_hint, best_none_reason
+            )
             fmt2, fields2, raw_text2 = _run_call(rescue_pass_prompt, rescue_part)
             if fmt2 in PAGOS_GMAIL_FORMATOS_PLANTILLA:
                 fields2["_scan_pass"] = "pass_2"

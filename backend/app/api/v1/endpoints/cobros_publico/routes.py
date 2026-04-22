@@ -737,6 +737,7 @@ async def enviar_reporte_publico(
     comprobante: UploadFile = File(...),
     observacion: Optional[str] = Form(None),
     contact_website: Optional[str] = Form(None),
+    fuente_tasa_cambio: str = Form("euro"),
 ):
     """
     Recibe el reporte de pago del formulario público.
@@ -790,6 +791,7 @@ async def enviar_reporte_publico(
         fecha_pago=fecha_pago,
         monto=monto,
         mon=mon_norm,
+        fuente_tasa_cambio=fuente_tasa_cambio,
     )
     if err_neg:
         return EnviarReporteResponse(ok=False, error=err_neg)
@@ -824,6 +826,7 @@ async def enviar_reporte_publico(
             correo_enviado_a=unir_destinatarios_log(emails_destino_desde_objeto(cliente)),
             canal_ingreso="cobros_publico",
             log_tag_duplicate="COBROS_PUBLIC",
+            fuente_tasa_cambio=fuente_tasa_cambio,
         )
         if err_crear or pr is None or referencia is None:
             return EnviarReporteResponse(ok=False, error=err_crear or "No se pudo registrar el reporte.")
@@ -958,6 +961,7 @@ async def enviar_reporte_infopagos(
     comprobante: UploadFile = File(...),
     observacion: Optional[str] = Form(None),
     contact_website: Optional[str] = Form(None),
+    fuente_tasa_cambio: str = Form("euro"),
 ):
     """
     Registro de pago a nombre del deudor (uso interno / personal). Misma política que enviar-reporte
@@ -1011,6 +1015,7 @@ async def enviar_reporte_infopagos(
         fecha_pago=fecha_pago,
         monto=monto,
         mon=mon_norm,
+        fuente_tasa_cambio=fuente_tasa_cambio,
     )
     if err_neg:
         return EnviarReporteInfopagosResponse(ok=False, error=err_neg)
@@ -1045,6 +1050,7 @@ async def enviar_reporte_infopagos(
             correo_enviado_a=unir_destinatarios_log(emails_destino_desde_objeto(cliente)),
             canal_ingreso="infopagos",
             log_tag_duplicate="INFOPAGOS",
+            fuente_tasa_cambio=fuente_tasa_cambio,
         )
         if err_crear or pr is None or referencia is None:
             return EnviarReporteInfopagosResponse(ok=False, error=err_crear or "No se pudo registrar el reporte.")

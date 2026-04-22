@@ -414,6 +414,34 @@ class Settings(BaseSettings):
         default="gemini-2.5-flash",
         description="Modelo Gemini para extracción de datos. gemini-2.5-flash es la versión estable recomendada. Ver https://ai.google.dev/gemini-api/docs/models",
     )
+    PAGOS_GMAIL_GEMINI_IMG_TRIM_WHITE: int = Field(
+        default=245,
+        ge=200,
+        le=254,
+        description=(
+            "Heurística PIL antes de Gemini (solo imágenes en pipeline Gmail): en escala de grises, píxeles con L "
+            "mayor o igual a este valor se tratan como 'margen claro' para el bbox de recorte suave. "
+            "Más alto = recorte más agresivo (riesgo de cortar papel tenue)."
+        ),
+    )
+    PAGOS_GMAIL_GEMINI_IMG_MIN_LONG_EDGE: int = Field(
+        default=1600,
+        ge=800,
+        le=4096,
+        description=(
+            "Si el lado largo del JPEG enviado a Gemini es menor, escala en subida (LANCZOS) hasta este borde largo "
+            "para mejorar OCR en modelos tipo flash/mini. Ajustar vía .env sin cambiar código."
+        ),
+    )
+    PAGOS_GMAIL_GEMINI_IMG_MAX_LONG_EDGE: int = Field(
+        default=3072,
+        ge=1024,
+        le=8192,
+        description=(
+            "Si el lado largo supera este valor, escala en bajada para limitar latencia y coste de API. "
+            "Si MIN_LONG_EDGE > MAX_LONG_EDGE en runtime, el código intercambia valores de forma defensiva."
+        ),
+    )
     PAGOS_GMAIL_DOWNLOAD_EXCEL_MAX_ITEMS: int = Field(
         default=0,
         description="Máximo de filas al descargar Excel sin fecha (evita memoria/timeout). Con ?fecha= no aplica límite por día.",

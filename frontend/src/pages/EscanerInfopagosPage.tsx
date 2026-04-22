@@ -28,6 +28,11 @@ import {
   collectTokensSufijoVistoArchivoDesdeFilas,
   SUFIJO_VISTO_ARCHIVO_RE,
 } from '../utils/documentoSufijoVisto'
+import {
+  FUENTE_TASA_DEFAULT,
+  FUENTE_TASA_OPCIONES,
+  type FuenteTasaCambio,
+} from '../constants/fuenteTasaCambio'
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024
 
@@ -182,7 +187,7 @@ function validarMonto(
   return { valido: true, valor: num }
 }
 
-type Fase = 'cedula' | 'imagen' | 'formulario' | 'exito'
+type Fase = 'cedula' | 'fuente_tasa' | 'imagen' | 'formulario' | 'exito'
 
 export default function EscanerInfopagosPage() {
   const honeypotRef = useRef<HTMLInputElement>(null)
@@ -195,6 +200,7 @@ export default function EscanerInfopagosPage() {
   const [cedulaRaw, setCedulaRaw] = useState('')
   const [nombreCliente, setNombreCliente] = useState('')
   const [validandoCedula, setValidandoCedula] = useState(false)
+  const [fuenteTasa, setFuenteTasa] = useState<FuenteTasaCambio>(FUENTE_TASA_DEFAULT)
 
   const [archivo, setArchivo] = useState<File | null>(null)
   const [escaneando, setEscaneando] = useState(false)
@@ -304,8 +310,9 @@ export default function EscanerInfopagosPage() {
         return
       }
       setNombreCliente((res.nombre || '').trim())
-      setFase('imagen')
-      toast.success('Cédula verificada. Adjunte el comprobante.')
+      setFuenteTasa(FUENTE_TASA_DEFAULT)
+      setFase('fuente_tasa')
+      toast.success('Cédula verificada. Elija la tasa Bs. → USD y continúe.')
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : 'Error al validar la cédula.')
     } finally {
@@ -330,6 +337,7 @@ export default function EscanerInfopagosPage() {
     const fd = new FormData()
     fd.append('tipo_cedula', tipo)
     fd.append('numero_cedula', numero)
+    fd.append('fuente_tasa_cambio', fuenteTasa)
     fd.append('comprobante', archivo!)
     setEscaneando(true)
     setValidacionCampos(null)
@@ -391,7 +399,7 @@ export default function EscanerInfopagosPage() {
       escanearActivoRef.current = false
       setEscaneando(false)
     }
-  }, [archivo, cedulaNormalizada])
+  }, [archivo, cedulaNormalizada, fuenteTasa])
 
   const handleGuardar = useCallback(async () => {
     if (enviarActivoRef.current) return
@@ -445,6 +453,7 @@ export default function EscanerInfopagosPage() {
     form.append('numero_operacion', numeroOperacion.trim())
     form.append('monto', montoParaApi(vM.valor))
     form.append('moneda', moneda)
+    form.append('fuente_tasa_cambio', fuenteTasa)
     form.append('comprobante', archivo!)
     enviarActivoRef.current = true
     setEnviando(true)
@@ -488,6 +497,7 @@ export default function EscanerInfopagosPage() {
     moneda,
     montoStr,
     numeroOperacion,
+    fuenteTasa,
   ])
 
   const handleDescargarRecibo = useCallback(async () => {
@@ -533,6 +543,7 @@ export default function EscanerInfopagosPage() {
     setReciboListo(null)
     setConsultandoRecibo(false)
     setEnRevision(false)
+    setFuenteTasa(FUENTE_TASA_DEFAULT)
   }
 
   return (
@@ -561,6 +572,53 @@ export default function EscanerInfopagosPage() {
         className="pointer-events-none absolute left-[-9999px] h-0 w-0 opacity-0"
         aria-hidden
       />
+
+      {fase === 'fuente_tasa' && (
+        <Card>
+          <CardHeader>
+            <CardTitle>2. Tasa de cambio (Bs. → USD)</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {nombreCliente ? (
+              <p className="text-sm text-slate-700">
+                Cliente: <span className="font-semibold">{nombreCliente}</span>
+              </p>
+            ) : null}
+            <p className="text-sm text-slate-600">
+              Seleccione la fuente que aplicará si el pago va en bolívares. Por defecto: Euro.
+            </p>
+            <div className="grid gap-2 sm:grid-cols-3">
+              {FUENTE_TASA_OPCIONES.map(opt => (
+                <label
+                  key={opt.value}
+                  className={`flex cursor-pointer items-center gap-2 rounded-lg border-2 p-3 text-sm ${
+                    fuenteTasa === opt.value
+                      ? 'border-indigo-500 bg-indigo-50'
+                      : 'border-slate-200'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="fuente-tasa-escaner"
+                    checked={fuenteTasa === opt.value}
+                    onChange={() => setFuenteTasa(opt.value)}
+                    className="accent-indigo-600"
+                  />
+                  {opt.label}
+                </label>
+              ))}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" type="button" onClick={() => setFase('cedula')}>
+                Volver
+              </Button>
+              <Button type="button" onClick={() => setFase('imagen')}>
+                Continuar
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {fase === 'cedula' && (
         <Card>
@@ -598,7 +656,7 @@ export default function EscanerInfopagosPage() {
       {fase === 'imagen' && (
         <Card>
           <CardHeader>
-            <CardTitle>2. Comprobante</CardTitle>
+            <CardTitle>3. Comprobante</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             {nombreCliente ? (
@@ -616,7 +674,7 @@ export default function EscanerInfopagosPage() {
               />
             </div>
             <div className="flex flex-wrap gap-2">
-              <Button variant="outline" type="button" onClick={() => setFase('cedula')}>
+              <Button variant="outline" type="button" onClick={() => setFase('fuente_tasa')}>
                 Volver
               </Button>
               <Button onClick={handleEscanear} disabled={escaneando || !archivo}>
@@ -644,7 +702,7 @@ export default function EscanerInfopagosPage() {
       {fase === 'formulario' && (
         <Card>
           <CardHeader>
-            <CardTitle>3. Formulario (editable)</CardTitle>
+            <CardTitle>4. Formulario (editable)</CardTitle>
             <p className="rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-sm font-medium text-sky-950">
               Usted está ingresando un pago para{' '}
               <strong>

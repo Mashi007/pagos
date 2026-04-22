@@ -55,10 +55,12 @@ from app.services.cobros.cedula_reportar_bs_service import (
     cedula_coincide_autorizados_bs,
 )
 from app.services.tasa_cambio_service import (
-    obtener_tasa_por_fecha,
     convertir_bs_a_usd,
+    normalizar_fuente_tasa,
+    obtener_tasa_por_fecha,
     obtener_tasas_por_fechas,
     tasa_y_equivalente_usd_excel,
+    valor_tasa_para_fuente,
 )
 from app.services.pagos_gmail.gemini_service import (
     compare_form_with_image,
@@ -1970,7 +1972,17 @@ def _crear_pago_desde_reportado_y_aplicar_cuotas(db: Session, pr: PagoReportado,
                     f"{pr.fecha_pago.isoformat()}. Registre la tasa antes de aprobar pagos en bolívares."
                 ),
             )
-        tasa_aplicada = float(tasa_obj.tasa_oficial)
+        fuente = normalizar_fuente_tasa(getattr(pr, "fuente_tasa_cambio", None))
+        tasa_res = valor_tasa_para_fuente(tasa_obj, fuente)
+        if tasa_res is None or float(tasa_res) <= 0:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"No hay tasa {fuente.upper()} registrada para la fecha de pago "
+                    f"{pr.fecha_pago.isoformat()}. Registre la tasa en Tasas de cambio antes de aprobar."
+                ),
+            )
+        tasa_aplicada = float(tasa_res)
         monto_bs_original = monto_float
         try:
             monto_float = convertir_bs_a_usd(monto_bs_original, tasa_aplicada)
@@ -3071,6 +3083,7 @@ async def escaner_extraer_comprobante_infopagos(
     tipo_cedula: str = Form(...),
     numero_cedula: str = Form(...),
     comprobante: UploadFile = File(...),
+    fuente_tasa_cambio: str = Form("euro"),
 ):
     """
     Personal autenticado: sugiere campos del formulario Infopagos leyendo el comprobante con Gemini.
@@ -3161,6 +3174,7 @@ async def escaner_extraer_comprobante_infopagos(
                 fecha_pago=fecha_d,
                 monto=float(monto),
                 mon=mon_norm,
+                fuente_tasa_cambio=fuente_tasa_cambio,
             )
             validacion_reglas = err_reglas
         elif not err_campos and not isinstance(fecha_d, date):
@@ -3246,6 +3260,7 @@ async def escaner_lote_drive_digitalizar(
     numero_cedula: str = Form(...),
     drive_folder: str = Form(...),
     max_archivos: int = Form(15),
+    fuente_tasa_cambio: str = Form("euro"),
 ):
     """
     Escáner lote desde carpeta compartida de Drive:
@@ -3427,6 +3442,7 @@ async def escaner_lote_drive_digitalizar(
                             fecha_pago=fecha_d,
                             monto=float(monto),
                             mon=mon_norm,
+                            fuente_tasa_cambio=fuente_tasa_cambio,
                         )
                     elif not err_campos and not isinstance(fecha_d, date):
                         validacion_reglas = (

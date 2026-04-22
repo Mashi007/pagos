@@ -35,6 +35,8 @@ class TasaCambioResponse(BaseModel):
     id: int
     fecha: date
     tasa_oficial: float
+    tasa_bcv: Optional[float] = None
+    tasa_binance: Optional[float] = None
     usuario_email: Optional[str] = None
     created_at: str
     updated_at: str
@@ -48,6 +50,13 @@ class TasaCambioResponse(BaseModel):
             return v
         raise ValueError("created_at/updated_at must be datetime or str")
 
+    @field_validator("tasa_bcv", "tasa_binance", mode="before")
+    @classmethod
+    def coerce_optional_numeric(cls, v: Any) -> Optional[float]:
+        if v is None or v == "":
+            return None
+        return float(v)
+
 
 class GuardarTasaRequest(BaseModel):
     tasa_oficial: float = Field(..., gt=0, description="Tasa oficial BS/USD, ej: 2850.50")
@@ -57,7 +66,9 @@ class GuardarTasaPorFechaRequest(BaseModel):
     """Backfill: tasa para una fecha de pago (no aplica ventana 01:00 de guardar/hoy)."""
 
     fecha: date = Field(..., description="Fecha calendario YYYY-MM-DD (fecha_pago del reporte)")
-    tasa_oficial: float = Field(..., gt=0, description="Bs. por 1 USD")
+    tasa_oficial: float = Field(..., gt=0, description="Euro: Bs. por 1 USD (valor por defecto del sistema)")
+    tasa_bcv: Optional[float] = Field(default=None, description="BCV: Bs. por 1 USD (opcional)")
+    tasa_binance: Optional[float] = Field(default=None, description="Binance P2P: Bs. por 1 USD (opcional)")
 
 
 class RellenarTasasDesdeVecinoBody(BaseModel):
@@ -159,6 +170,8 @@ def guardar_tasa_por_fecha_endpoint(
             tasa_oficial=req.tasa_oficial,
             usuario_id=usuario_id,
             usuario_email=usuario_email,
+            tasa_bcv=req.tasa_bcv,
+            tasa_binance=req.tasa_binance,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
@@ -250,6 +263,8 @@ def get_historial_tasas(
             "id": t.id,
             "fecha": t.fecha.isoformat(),
             "tasa_oficial": float(t.tasa_oficial),
+            "tasa_bcv": float(t.tasa_bcv) if getattr(t, "tasa_bcv", None) is not None else None,
+            "tasa_binance": float(t.tasa_binance) if getattr(t, "tasa_binance", None) is not None else None,
             "usuario_email": t.usuario_email,
             "updated_at": t.updated_at.isoformat() if t.updated_at else None,
         }

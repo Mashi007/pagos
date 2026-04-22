@@ -11,7 +11,10 @@ class TasaCambioDiaria(Base):
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     fecha = Column(Date, nullable=False, unique=True, index=True)
+    # Bs. por 1 USD — en operaciones «Euro» (valor por defecto del reporte web / legado).
     tasa_oficial = Column(Numeric(15, 6), nullable=False)  # Ej: 2850.50
+    tasa_bcv = Column(Numeric(15, 6), nullable=True)
+    tasa_binance = Column(Numeric(15, 6), nullable=True)
     usuario_id = Column(Integer, ForeignKey("usuarios.id", ondelete="SET NULL"), nullable=True)
     usuario_email = Column(String(255), nullable=True)
     created_at = Column(DateTime(timezone=False), nullable=False, server_default=func.now())
