@@ -61,6 +61,158 @@ export type GmailRunSummary = {
   none_reason_hint_counts?: Record<string, number>
 }
 
+/** Texto corto (1 línea) para mostrar en UI fija (barra superior), sin depender del toast. */
+export function gmailRunSummaryHeadline(rs: GmailRunSummary): string {
+  const partes: string[] = []
+
+  if (typeof rs.pagos_validos_alta_automatica === 'number') {
+    partes.push(`Altas OK: ${rs.pagos_validos_alta_automatica}`)
+  }
+  if (typeof rs.pagos_invalidos_pendientes_revision === 'number') {
+    partes.push(`Pendientes: ${rs.pagos_invalidos_pendientes_revision}`)
+  }
+  if (typeof rs.pagos_sin_aplicacion_cuotas === 'number' && rs.pagos_sin_aplicacion_cuotas > 0) {
+    partes.push(`Sin cuotas: ${rs.pagos_sin_aplicacion_cuotas}`)
+  }
+  if (typeof rs.comprobantes_digitados === 'number') {
+    partes.push(`Comprobantes: ${rs.comprobantes_digitados}`)
+  }
+
+  const pass2Total =
+    typeof rs.gemini_second_pass_total === 'number' ? rs.gemini_second_pass_total : null
+  const pass2Hits =
+    typeof rs.gemini_second_pass_hits === 'number' ? rs.gemini_second_pass_hits : null
+  if (pass2Total !== null && pass2Hits !== null && pass2Total > 0) {
+    partes.push(`2ª pasada: ${pass2Hits}/${pass2Total}`)
+  }
+
+  const reasons = rs.none_reason_counts
+  const top =
+    reasons != null
+      ? Object.entries(reasons)
+          .filter(([, v]) => Number.isFinite(Number(v)) && Number(v) > 0)
+          .sort((a, b) => Number(b[1]) - Number(a[1]))[0]
+      : undefined
+  if (top) {
+    partes.push(`Top falla: ${top[0]}=${top[1]}`)
+  }
+
+  return partes.join(' · ')
+}
+
+/** Líneas detalladas para un panel colapsable (popover / monitor). */
+export function gmailRunSummaryLines(rs: GmailRunSummary): string[] {
+  const lines: string[] = []
+
+  if (typeof rs.scan_filter === 'string' && rs.scan_filter.trim()) {
+    lines.push(`Filtro escaneo: ${rs.scan_filter}`)
+  }
+
+  const listed = Number(rs.gmail_messages_listed)
+  const skipS = Number(rs.messages_skipped_invalid_sender)
+  const skipD = Number(rs.messages_skipped_drive_folder)
+  if (Number.isFinite(listed) && listed >= 0) {
+    const sufijo =
+      Number.isFinite(skipS) && Number.isFinite(skipD)
+        ? ` (omitidos remitente: ${skipS}; Drive: ${skipD})`
+        : ''
+    lines.push(`Hilos listados en Gmail: ${listed}${sufijo}`)
+  }
+
+  if (rs.list_error === true) {
+    lines.push('Listado Gmail: error (no implica bandeja vacía).')
+  }
+  if (rs.pipeline_error === true) {
+    lines.push('Pipeline: error reportado en resumen de corrida.')
+
+  if (typeof rs.comprobantes_digitados === 'number') {
+    lines.push(`Comprobantes digitalizados (sync_item): ${rs.comprobantes_digitados}`)
+  }
+  if (typeof rs.pagos_validos_alta_automatica === 'number') {
+    lines.push(`Pagos válidos (alta automática / CUOTAS_OK): ${rs.pagos_validos_alta_automatica}`)
+  }
+  if (typeof rs.pagos_sin_aplicacion_cuotas === 'number') {
+    lines.push(`Pagos sin aplicación a cuotas: ${rs.pagos_sin_aplicacion_cuotas}`)
+  }
+  if (typeof rs.pagos_invalidos_pendientes_revision === 'number') {
+    lines.push(`Pagos no válidos / pendientes revisión: ${rs.pagos_invalidos_pendientes_revision}`)
+  }
+
+  if (typeof rs.gemini_model === 'string' && rs.gemini_model.trim()) {
+    lines.push(`Modelo Gemini: ${rs.gemini_model}`)
+  }
+  const calls = typeof rs.gemini_calls_total === 'number' ? rs.gemini_calls_total : null
+  const msTotal = typeof rs.gemini_ms_total === 'number' ? rs.gemini_ms_total : null
+  const msAvg = typeof rs.gemini_ms_avg === 'number' ? rs.gemini_ms_avg : null
+  const msMax = typeof rs.gemini_ms_max === 'number' ? rs.gemini_ms_max : null
+  if (calls !== null && msTotal !== null) {
+    const avgTxt = msAvg !== null ? `; avg ${Math.round(msAvg)} ms` : ''
+    const maxTxt = msMax !== null ? `; max ${Math.round(msMax)} ms` : ''
+    lines.push(`Gemini: ${calls} llamada(s), ${Math.round(msTotal)} ms total${avgTxt}${maxTxt}`)
+  }
+
+  const pass2Total =
+    typeof rs.gemini_second_pass_total === 'number' ? rs.gemini_second_pass_total : null
+  const pass2Hits =
+    typeof rs.gemini_second_pass_hits === 'number' ? rs.gemini_second_pass_hits : null
+  if (pass2Total !== null && pass2Hits !== null && pass2Total > 0) {
+    lines.push(`Rescate 2ª pasada: ${pass2Hits}/${pass2Total}`)
+  }
+
+  const reasons = rs.none_reason_counts
+  const reasonEntries = reasons
+    ? Object.entries(reasons)
+        .filter(([, v]) => Number.isFinite(Number(v)) && Number(v) > 0)
+        .sort((a, b) => Number(b[1]) - Number(a[1]))
+        .slice(0, 8)
+    : []
+  if (reasonEntries.length > 0) {
+    lines.push(
+      `Top fallas (ninguno): ${reasonEntries.map(([k, v]) => `${k}=${v}`).join(', ')}`
+    )
+  }
+
+  const hints = rs.none_reason_hint_counts
+  const hintEntries = hints
+    ? Object.entries(hints)
+        .filter(([, v]) => Number.isFinite(Number(v)) && Number(v) > 0)
+        .sort((a, b) => Number(b[1]) - Number(a[1]))
+        .slice(0, 8)
+    : []
+  if (hintEntries.length > 0) {
+    lines.push(`Top pistas (ninguno): ${hintEntries.map(([k, v]) => `${k}=${v}`).join(', ')}`)
+  }
+
+  return lines
+}
+
+export function diagnosticoIdentificacionDesdeRunSummary(rs: GmailRunSummary): string {
+  const pass2Total =
+    typeof rs.gemini_second_pass_total === 'number'
+      ? rs.gemini_second_pass_total
+      : null
+  const pass2Hits =
+    typeof rs.gemini_second_pass_hits === 'number' ? rs.gemini_second_pass_hits : null
+  const reasons = rs.none_reason_counts
+  const reasonEntries = reasons
+    ? Object.entries(reasons)
+        .filter(([, v]) => Number.isFinite(Number(v)) && Number(v) > 0)
+        .sort((a, b) => Number(b[1]) - Number(a[1]))
+        .slice(0, 3)
+    : []
+  const reasonTxt =
+    reasonEntries.length > 0
+      ? ` Top fallas: ${reasonEntries
+          .map(([k, v]) => `${k}=${v}`)
+          .join(', ')}.`
+      : ''
+  const passTxt =
+    pass2Total !== null && pass2Hits !== null
+      ? ` Rescate 2ª pasada: ${pass2Hits}/${pass2Total}.`
+      : ''
+  return `${passTxt}${reasonTxt}`
+}
+
 interface GmailStatus {
   last_run: string | null
 
@@ -163,30 +315,7 @@ function detalleCeroArchivosConCorreos(s: GmailStatus): string {
 function detalleDiagnosticoIdentificacion(s: GmailStatus): string {
   const rs = s.last_run_summary
   if (!rs || typeof rs !== 'object') return ''
-  const pass2Total =
-    typeof rs.gemini_second_pass_total === 'number'
-      ? rs.gemini_second_pass_total
-      : null
-  const pass2Hits =
-    typeof rs.gemini_second_pass_hits === 'number' ? rs.gemini_second_pass_hits : null
-  const reasons = rs.none_reason_counts
-  const reasonEntries = reasons
-    ? Object.entries(reasons)
-        .filter(([, v]) => Number.isFinite(Number(v)) && Number(v) > 0)
-        .sort((a, b) => Number(b[1]) - Number(a[1]))
-        .slice(0, 3)
-    : []
-  const reasonTxt =
-    reasonEntries.length > 0
-      ? ` Top fallas: ${reasonEntries
-          .map(([k, v]) => `${k}=${v}`)
-          .join(', ')}.`
-      : ''
-  const passTxt =
-    pass2Total !== null && pass2Hits !== null
-      ? ` Rescate 2ª pasada: ${pass2Hits}/${pass2Total}.`
-      : ''
-  return `${passTxt}${reasonTxt}`
+  return diagnosticoIdentificacionDesdeRunSummary(rs)
 }
 
 /** Notificación final con conteos válidos / pendientes (backend run_summary). */
