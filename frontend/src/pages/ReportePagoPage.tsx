@@ -1590,7 +1590,7 @@ export default function ReportePagoPage({
                   >
                     {loading
                       ? 'Digitalizando con Gemini...'
-                      : 'Continuar y digitalizar con Gemini'}
+                      : 'Cargar pago'}
                   </Button>
                 </div>
               </CardContent>
@@ -2338,13 +2338,14 @@ export default function ReportePagoPage({
               </div>
 
               <div className="flex flex-wrap gap-2 pt-2 sm:flex-nowrap">
-                <Button
-                  variant="outline"
-                  className="min-h-[48px] min-w-[100px] flex-1 touch-manipulation border-slate-300 text-slate-900 hover:bg-slate-50"
-                  onClick={() => setStep(isInfopagos ? 6 : 5)}
+                <a
+                  href={WHATSAPP_LINK}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex min-h-[48px] min-w-[100px] flex-1 touch-manipulation items-center justify-center rounded-md border border-emerald-600 bg-white px-4 py-2 font-semibold text-emerald-700 transition-colors hover:bg-emerald-50"
                 >
-                  Editar
-                </Button>
+                  Asistencia por WhatsApp
+                </a>
 
                 <Button
                   className="min-h-[48px] min-w-0 flex-1 touch-manipulation bg-emerald-600 font-semibold text-white hover:bg-emerald-700"
@@ -2356,7 +2357,7 @@ export default function ReportePagoPage({
               </div>
               {loading && (
                 <p className="text-center text-xs font-medium text-slate-600">
-                  Estamos procesando su pago, un momento por favor...
+                  Espere un momento, estamos procesando tu pago.
                 </p>
               )}
             </CardContent>
