@@ -124,6 +124,7 @@ export function gmailRunSummaryLines(rs: GmailRunSummary): string[] {
   }
   if (rs.pipeline_error === true) {
     lines.push('Pipeline: error reportado en resumen de corrida.')
+  }
 
   if (typeof rs.comprobantes_digitados === 'number') {
     lines.push(`Comprobantes digitalizados (sync_item): ${rs.comprobantes_digitados}`)

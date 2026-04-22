@@ -26,7 +26,7 @@ from fastapi.responses import Response
 
 from pydantic import BaseModel, field_validator
 
-from sqlalchemy import cast, delete, exists, func, or_, select, text, update
+from sqlalchemy import and_, cast, delete, exists, func, or_, select, text, update
 
 from sqlalchemy.exc import IntegrityError, OperationalError, ProgrammingError
 
@@ -607,6 +607,101 @@ def listar_prestamos_actualizaciones_fechas_2(
         "tipo": tipo,
         "fecha": fecha.isoformat(),
         "limit": limit,
+    }
+
+
+@router.get(
+    "/admin/cuotas-vs-fecha-base-desalineadas",
+    response_model=dict,
+    summary="Cuota 1 anterior a la fecha base de amortización (diagnóstico admin)",
+)
+def listar_cuotas_vs_fecha_base_desalineadas(
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    cedula_q: Optional[str] = Query(
+        None,
+        description="Filtrar por cédula (ILIKE, coincidencia parcial).",
+    ),
+    db: Session = Depends(get_db),
+    current_user: UserResponse = Depends(require_admin),
+):
+    """
+    Préstamos donde la primera cuota vence **antes** que la fecha base usada para amortización
+    (`fecha_base_calculo` o, si falta, el día calendario de `fecha_aprobacion`).
+
+    Suele indicar tabla `cuotas` no alineada tras mover la aprobación/base sin regenerar cuotas.
+    """
+    vis = filtro_prestamo_visible_listado(current_user)
+    fb_sql = func.coalesce(Prestamo.fecha_base_calculo, cast(Prestamo.fecha_aprobacion, Date))
+    join_cond = and_(Cuota.prestamo_id == Prestamo.id, Cuota.numero_cuota == 1)
+    filt: List[Any] = [vis, fb_sql.isnot(None), Cuota.fecha_vencimiento < fb_sql]
+    ced = (cedula_q or "").strip()
+    if ced:
+        filt.append(Prestamo.cedula.ilike(f"%{ced}%"))
+
+    total = int(
+        db.scalar(
+            select(func.count())
+            .select_from(Prestamo)
+            .join(Cuota, join_cond)
+            .where(*filt)
+        )
+        or 0
+    )
+
+    rows = db.execute(
+        select(
+            Prestamo.id.label("prestamo_id"),
+            Prestamo.cedula,
+            Prestamo.estado,
+            Prestamo.fecha_aprobacion,
+            Prestamo.fecha_base_calculo,
+            Prestamo.modalidad_pago,
+            Prestamo.numero_cuotas,
+            Cuota.fecha_vencimiento.label("vencimiento_cuota_1"),
+            fb_sql.label("fecha_base"),
+            (Cuota.fecha_vencimiento - fb_sql).label("dias_cuota1_menos_base"),
+        )
+        .join(Cuota, join_cond)
+        .where(*filt)
+        .order_by(Prestamo.id.asc())
+        .offset(offset)
+        .limit(limit)
+    ).all()
+
+    items: List[dict] = []
+    for r in rows:
+        fa = r.fecha_aprobacion
+        fa_iso = None
+        if fa is not None:
+            if hasattr(fa, "isoformat") and callable(getattr(fa, "isoformat", None)):
+                fa_iso = fa.isoformat()
+            elif isinstance(fa, date):
+                fa_iso = fa.isoformat()
+        fbc = getattr(r, "fecha_base_calculo", None)
+        fb = getattr(r, "fecha_base", None)
+        fv = getattr(r, "vencimiento_cuota_1", None)
+        dias = getattr(r, "dias_cuota1_menos_base", None)
+        items.append(
+            {
+                "prestamo_id": int(r.prestamo_id),
+                "cedula": (r.cedula or "") or "",
+                "estado": (r.estado or "") or "",
+                "fecha_aprobacion": fa_iso,
+                "fecha_base_calculo": fbc.isoformat() if fbc is not None else None,
+                "fecha_base": fb.isoformat() if fb is not None else None,
+                "modalidad_pago": (r.modalidad_pago or "") or "",
+                "numero_cuotas": int(r.numero_cuotas or 0),
+                "vencimiento_cuota_1": fv.isoformat() if fv is not None else None,
+                "dias_cuota1_menos_base": int(dias) if dias is not None else None,
+            }
+        )
+
+    return {
+        "items": items,
+        "total": total,
+        "limit": limit,
+        "offset": offset,
     }
 
 

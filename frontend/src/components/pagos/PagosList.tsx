@@ -84,7 +84,11 @@ import { getErrorMessage, isAxiosError } from '../../types/errors'
 import { Link, useSearchParams } from 'react-router-dom'
 import { SEGMENTO_INFOPAGOS } from '../../constants/rutasIngresoPago'
 import { BASE_PATH } from '../../config/env'
-import { useGmailPipeline } from '../../hooks/useGmailPipeline'
+import {
+  gmailRunSummaryHeadline,
+  gmailRunSummaryLines,
+  useGmailPipeline,
+} from '../../hooks/useGmailPipeline'
 
 import { invalidatePagosPrestamosRevisionYCuotas } from '../../constants/queryKeys'
 import {
@@ -1087,6 +1091,28 @@ export function PagosList() {
           Reemplazar pagos
         </Button>
       </div>
+      {gmailStatus?.last_run_summary ? (
+        <div className="rounded-lg border border-gray-200/80 bg-white px-4 py-3 text-sm text-gray-700 shadow-sm">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                Última corrida Gmail (métricas)
+              </div>
+              <div className="mt-1 break-words">
+                {gmailRunSummaryHeadline(gmailStatus.last_run_summary)}
+              </div>
+              {gmailStatus.last_run ? (
+                <div className="mt-1 text-xs text-gray-500">
+                  Sincronización: {formatLastSyncDate(gmailStatus.last_run)}
+                </div>
+              ) : null}
+            </div>
+            <div className="shrink-0 text-xs text-gray-500">
+              También en el toast al terminar; aquí queda fijo en pantalla.
+            </div>
+          </div>
+        </div>
+      ) : null}
       <Dialog
         open={reemplazarPagosOpen}
         onOpenChange={open => {
