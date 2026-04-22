@@ -200,6 +200,19 @@ def pagos_gmail_error_email_rescan_query() -> str:
     )
 
 
+def pagos_gmail_manual_error_email_redigitaliza_query() -> str:
+    """
+    Segunda pasada al final de una corrida: inbox + media con **MANUAL** y **ERROR EMAIL**.
+    El pipeline filtra de nuevo para que las etiquetas de usuario del mensaje sean **exactamente**
+    esas dos (sin PAGINAS/CALIDAD/etc.).
+    """
+    return (
+        f'in:inbox label:{PAGOS_GMAIL_LABEL_MANUAL} '
+        f'label:"{PAGOS_GMAIL_LABEL_ERROR_EMAIL}" '
+        f"{pagos_gmail_list_q_media_parts()}"
+    )
+
+
 def pagos_gmail_pending_identification_query() -> str:
     """
     Mismo criterio que **all**: inbox + media (leídos y no leídos). Nombre conservado para el scheduler y la API.
@@ -217,6 +230,8 @@ def pagos_gmail_list_query_for_scan_filter(filter_type: str) -> str:
     ft = (filter_type or "").strip().lower()
     if ft == "error_email_rescan":
         return pagos_gmail_error_email_rescan_query()
+    if ft == "manual_error_email_redigitaliza":
+        return pagos_gmail_manual_error_email_redigitaliza_query()
     base = pagos_gmail_inbox_media_query()
     if ft == "unread":
         return f"{base} is:unread"
@@ -291,7 +306,8 @@ def _parse_gmail_retry_after_seconds(exc: Exception) -> Optional[int]:
 def list_messages_by_filter(service: Any, filter_type: str = "all") -> List[dict]:
     """
     Lista mensajes segun el filtro; correos con adjunto o parte imagen/PDF nombrada (inline/cuerpo).
-    filter_type: "unread" | "read" | "all" | "pending_identification" | "error_email_rescan".
+    filter_type: "unread" | "read" | "all" | "pending_identification" | "error_email_rescan"
+    | "manual_error_email_redigitaliza".
     Por defecto (**all** / **pending_identification**): inbox + imagen/PDF, leidos y no leidos, con cualquier etiqueta
     (incluye **ERROR EMAIL**; no se excluye por -label:).
     **unread** / **read**: mismo criterio + ``is:unread`` / ``is:read`` en la consulta Gmail.
@@ -1238,6 +1254,31 @@ def add_message_user_labels_only(
         ).execute()
     except Exception as e:
         logger.warning("add_message_user_labels_only %s: %s", message_id, e)
+
+
+def modify_message_labels_add_remove(
+    service: Any,
+    message_id: str,
+    *,
+    add_label_ids: Optional[List[str]] = None,
+    remove_label_ids: Optional[List[str]] = None,
+) -> None:
+    """Una sola llamada messages.modify: quita y/o anade etiquetas por id."""
+    add_ids = [x for x in (add_label_ids or []) if x]
+    rem_ids = [x for x in (remove_label_ids or []) if x]
+    body: dict[str, Any] = {}
+    if add_ids:
+        body["addLabelIds"] = add_ids
+    if rem_ids:
+        body["removeLabelIds"] = rem_ids
+    if not body:
+        return
+    try:
+        service.users().messages().modify(
+            userId="me", id=message_id, body=body
+        ).execute()
+    except Exception as e:
+        logger.warning("modify_message_labels_add_remove %s: %s", message_id, e)
 
 
 def mark_as_read(service: Any, message_id: str) -> None:

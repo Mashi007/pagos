@@ -106,7 +106,14 @@ def count_pending(
     if not creds:
         return {"count": 0, "scan_filter": scan_filter, "error": "no_credentials"}
     from app.services.pagos_gmail.gmail_service import build_gmail_service, count_messages_by_filter
-    if scan_filter not in ("unread", "read", "all", "pending_identification", "error_email_rescan"):
+    if scan_filter not in (
+        "unread",
+        "read",
+        "all",
+        "pending_identification",
+        "error_email_rescan",
+        "manual_error_email_redigitaliza",
+    ):
         scan_filter = "all"
     try:
         gmail_svc = build_gmail_service(creds)
@@ -167,7 +174,14 @@ def run_now(
     db.refresh(sync)
     sync_id = sync.id
     # Validar scan_filter
-    if scan_filter not in ("unread", "read", "all", "pending_identification", "error_email_rescan"):
+    if scan_filter not in (
+        "unread",
+        "read",
+        "all",
+        "pending_identification",
+        "error_email_rescan",
+        "manual_error_email_redigitaliza",
+    ):
         scan_filter = "all"
     # Lanzar pipeline en segundo plano; el cliente hace polling a /status
     background_tasks.add_task(_run_pipeline_background, sync_id, scan_filter)

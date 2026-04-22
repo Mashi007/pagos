@@ -24,6 +24,7 @@ Si falla la consulta a clientes: mismo bloqueo que remitente sin match (sin digi
 Etiqueta Gmail **OTROS** (solo esa en su llamada a Gmail, salvo **PAGINAS**/**CALIDAD**/**TEXTO** aparte si aplica): unicamente si hay candidatos, remitente en clientes, **ningun** comprobante digitalizado OK como plantilla **A**/**B**/**C**/**D** (MERCANTIL/BNC/BINANCE/BNV) y ninguna otra etiqueta de clasificacion del pipeline se aplico ya en ese mensaje.
 Si en cualquier archivo falta requisito o no es plantilla valida: no etiquetas de plantilla segun reglas; el mensaje que **entraba no leido** queda **leido** tras procesarlo en el escaneo (no se modifican estrellas: las deja el usuario). No inventar datos: Gemini ya devuelve NA si no hay certeza.
 Excel: GET /pagos/gmail/download-excel (filtros `solo_duplicados_documento` / `excluir_duplicados_documento` para plantilla banco A–D vs `pagos.numero_documento`).
+**Redigitalización final (MANUAL + ERROR EMAIL):** tras el lote principal, se lista `in:inbox` + media + ambas etiquetas; solo se procesan mensajes cuyas etiquetas de usuario sean **exactamente** MANUAL y ERROR EMAIL; debe haber **un solo** candidato imagen/PDF (1 pág.); Gemini en modo A/B con cédula desde imagen (mismo prompt que re-escaneo ERROR EMAIL); solo formatos **A** o **B**; éxito: mismas filas BD/cuotas que el flujo normal y sustitución de etiquetas (quita MANUAL y ERROR EMAIL, añade MERCANTIL o BNC).
 Reglas de negocio A/B/C/D (autoconciliado, cascada cuotas, duplicados): ver `plantilla_abcd_proceso_negocio.py`.
 Cedula: en flujo normal solo desde tabla clientes por email del De (From): `email` y `email_secundario` (no desde la imagen).
 Re-lectura cédula en imagen (Mercantil/BNC, plantillas **A** y **B**): solo si **scan_filter=error_email_rescan**. Gemini en modo A/B con cédula
@@ -156,6 +157,7 @@ from app.services.pagos_gmail.gmail_service import (
     add_message_user_labels_only,
     build_gmail_service,
     ensure_user_label_id,
+    modify_message_labels_add_remove,
     get_pagos_gmail_image_pdf_files_for_pipeline,
     get_message_date,
     get_message_full_payload,
@@ -405,6 +407,8 @@ def run_pipeline(
         "messages_skipped_drive_folder": 0,
         "messages_skipped_clasificacion_etiqueta": 0,
         "gmail_labels_list_failed": 0,
+        "manual_error_redigitaliza_listed": 0,
+        "manual_error_redigitaliza_error": "",
     }
 
     try:
@@ -444,13 +448,19 @@ def run_pipeline(
                 )
             return ordered
 
-        def process_message_batch(batch: list[dict], label: str) -> None:
+        def process_message_batch(
+            batch: list[dict],
+            label: str,
+            *,
+            redig_manual_error_pass: bool = False,
+        ) -> None:
             nonlocal emails_ok, files_ok, correos_marcados_revision
             if batch:
-                    logger.info(
-                    "[PAGOS_GMAIL] Procesando lote %s: %d correos (imagen/PDF pipeline, formatos A/B/C/D)",
+                logger.info(
+                    "[PAGOS_GMAIL] Procesando lote %s: %d correos (imagen/PDF pipeline, formatos A/B/C/D)%s",
                     label,
                     len(batch),
+                    " [redig MANUAL+ERROR EMAIL]" if redig_manual_error_pass else "",
                 )
             # Etiquetas type=user: no re-escaneo, salvo solo ERROR EMAIL en error_email_rescan.
             (
@@ -498,7 +508,46 @@ def run_pipeline(
                 msg_lids_set = frozenset(label_ids_snapshot)
                 _user_on_msg = msg_lids_set & _gmail_user_label_ids
                 _skip_por_etiquetas_usuario = False
-                if _labels_catalog_ok and _user_on_msg:
+                if redig_manual_error_pass:
+                    k_man_lbl = PAGOS_GMAIL_LABEL_MANUAL
+                    k_err_lbl = PAGOS_GMAIL_LABEL_ERROR_EMAIL
+                    if k_man_lbl not in plantilla_label_cache:
+                        plantilla_label_cache[k_man_lbl] = ensure_user_label_id(
+                            gmail_svc, k_man_lbl
+                        )
+                    if k_err_lbl not in plantilla_label_cache:
+                        plantilla_label_cache[k_err_lbl] = ensure_user_label_id(
+                            gmail_svc, k_err_lbl
+                        )
+                    mid_man = plantilla_label_cache.get(k_man_lbl)
+                    mid_err = plantilla_label_cache.get(k_err_lbl)
+                    if (
+                        not _labels_catalog_ok
+                        or not mid_man
+                        or not mid_err
+                        or _user_on_msg != frozenset({mid_man, mid_err})
+                    ):
+                        if _user_on_msg != frozenset({mid_man, mid_err}) and mid_man and mid_err:
+                            logger.info(
+                                "[PAGOS_GMAIL] redig MANUAL+ERROR: omitido (etiquetas usuario deben ser "
+                                "exactamente MANUAL y ERROR EMAIL; actuales=%s msg=%s)",
+                                ", ".join(
+                                    sorted(
+                                        _gmail_user_label_names.get(lid, lid)
+                                        for lid in _user_on_msg
+                                    )
+                                ),
+                                msg_id,
+                            )
+                        else:
+                            logger.warning(
+                                "[PAGOS_GMAIL] redig MANUAL+ERROR: omitido (catalogo/ids MANUAL-ERROR EMAIL) msg=%s",
+                                msg_id,
+                            )
+                        if was_unread:
+                            mark_as_read(gmail_svc, msg_id)
+                        continue
+                elif _labels_catalog_ok and _user_on_msg:
                     if (
                         error_email_rescan
                         and _err_email_label_id
@@ -555,11 +604,14 @@ def run_pipeline(
                 msg_date = get_message_date(headers)
                 sheet_name = get_sheet_name_for_date(msg_date)
 
-                # Mercantil/BNC (A/B): cédula desde imagen solo con scan_filter **error_email_rescan**.
-                modo_ab_cedula_desde_imagen = error_email_rescan
+                # Mercantil/BNC (A/B): cédula desde imagen con error_email_rescan o redigitalización MANUAL+ERROR EMAIL.
+                modo_ab_cedula_desde_imagen = error_email_rescan or redig_manual_error_pass
                 if modo_ab_cedula_desde_imagen:
                     logger.info(
-                        "[PAGOS_GMAIL]   Modo cedula imagen A/B (scan_filter=error_email_rescan); msg=%s",
+                        "[PAGOS_GMAIL]   Modo cedula imagen A/B (%s); msg=%s",
+                        "error_email_rescan"
+                        if error_email_rescan
+                        else ("redig_manual_error" if redig_manual_error_pass else "?"),
                         msg_id,
                     )
 
@@ -589,6 +641,21 @@ def run_pipeline(
                     if candidatos
                     else "ninguno",
                 )
+
+                if redig_manual_error_pass and len(candidatos) != 1:
+                    logger.info(
+                        "[PAGOS_GMAIL] redig MANUAL+ERROR: omitido (se exige exactamente 1 archivo digitalizable; "
+                        "candidatos=%d) msg=%s",
+                        len(candidatos),
+                        msg_id,
+                    )
+                    if was_unread:
+                        mark_as_read(gmail_svc, msg_id)
+                    emails_ok += 1
+                    sync.emails_processed = emails_ok
+                    sync.files_processed = files_ok
+                    db.commit()
+                    continue
 
                 had_complete_digitalization = False
                 any_incomplete_or_skipped = False
@@ -690,9 +757,12 @@ def run_pipeline(
 
                 pending: list[dict] = []
                 committed_comprobante_rows = False
-                for filename, content, mime_type, origen_binario in (
-                    [] if not remitente_en_clientes else candidatos
-                ):
+                candidatos_loop = (
+                    candidatos
+                    if (remitente_en_clientes or redig_manual_error_pass)
+                    else []
+                )
+                for filename, content, mime_type, origen_binario in candidatos_loop:
                     try:
                         body_bin = (
                             content
@@ -722,6 +792,23 @@ def run_pipeline(
                             origen_binario=origen_binario,
                             modo_error_email_ab=modo_ab_cedula_desde_imagen,
                         )
+
+                        if redig_manual_error_pass and fmt not in ("A", "B"):
+                            any_incomplete_or_skipped = True
+                            any_skipped_not_plantilla_o_campos = True
+                            any_etiqueta_calidad_imagen = True
+                            logger.info(
+                                "[PAGOS_GMAIL] redig MANUAL+ERROR: Gemini no clasifica Mercantil/BNC (formato=%r) — "
+                                "sin digitalizar %s",
+                                fmt,
+                                filename,
+                            )
+                            _pipeline_evt(
+                                EVT_NO_PLANTILLA_GEMINI,
+                                filename=filename,
+                                detalle=(f"redig_solo_ab:{fmt!s}")[:500],
+                            )
+                            continue
 
                         if fmt not in PAGOS_GMAIL_FORMATOS_PLANTILLA:
                             any_incomplete_or_skipped = True
@@ -866,6 +953,20 @@ def run_pipeline(
                         any_incomplete_or_skipped = True
                         any_skipped_not_plantilla_o_campos = True
 
+                if redig_manual_error_pass and len(candidatos) == 1 and not pending:
+                    logger.info(
+                        "[PAGOS_GMAIL] redig MANUAL+ERROR: sin fila Mercantil/BNC valida tras Gemini "
+                        "(o dedupe/campos) msg=%s",
+                        msg_id,
+                    )
+                    if was_unread:
+                        mark_as_read(gmail_svc, msg_id)
+                    emails_ok += 1
+                    sync.emails_processed = emails_ok
+                    sync.files_processed = files_ok
+                    db.commit()
+                    continue
+
                 rows_pairs: list[tuple[PagosGmailSyncItem, GmailTemporal, dict]] = []
                 if pending:
                     for p in pending:
@@ -961,7 +1062,7 @@ def run_pipeline(
                                 if (
                                     label_id
                                     and not remitente_solo_master
-                                    and remitente_en_clientes
+                                    and (remitente_en_clientes or redig_manual_error_pass)
                                 ):
                                     label_ids_for_message.append(label_id)
                                 logger.info(
@@ -1400,7 +1501,8 @@ def run_pipeline(
                 # ERROR EMAIL: si aplica, en Gmail solo esa etiqueta (no combinar con plantillas ni MANUAL).
                 gmail_label_id_error_email: Optional[str] = None
                 if (
-                    (
+                    not redig_manual_error_pass
+                    and (
                         (not remitente_en_clientes)
                         or (
                             any_cedula_lookup_failed
@@ -1547,7 +1649,23 @@ def run_pipeline(
                             )
                         )
                     if batch_ok:
-                        add_message_user_labels_only(gmail_svc, msg_id, batch_ok)
+                        if (
+                            redig_manual_error_pass
+                            and plantilla_unique_ids
+                            and not mezcla_solo_manual_gmail
+                            and not gmail_label_id_error_email
+                        ):
+                            _rm_man = plantilla_label_cache.get(PAGOS_GMAIL_LABEL_MANUAL)
+                            _rm_err = plantilla_label_cache.get(PAGOS_GMAIL_LABEL_ERROR_EMAIL)
+                            _rm_ids = [x for x in (_rm_man, _rm_err) if x]
+                            modify_message_labels_add_remove(
+                                gmail_svc,
+                                msg_id,
+                                add_label_ids=batch_ok,
+                                remove_label_ids=_rm_ids,
+                            )
+                        else:
+                            add_message_user_labels_only(gmail_svc, msg_id, batch_ok)
                     gmail_etiqueta_clasificacion_aplicada = True
                     mark_as_read(gmail_svc, msg_id)
                     correos_marcados_revision += 1
@@ -1563,7 +1681,8 @@ def run_pipeline(
                         ),
                     )
                 elif (
-                    (committed_comprobante_rows or not remitente_en_clientes)
+                    not redig_manual_error_pass
+                    and (committed_comprobante_rows or not remitente_en_clientes)
                     and (not remitente_solo_master or not remitente_en_clientes)
                     and (
                         gmail_precursor_label_ids
@@ -1626,7 +1745,8 @@ def run_pipeline(
                     f in ("A", "B", "C", "D") for f in bank_fmts_digitized
                 )
                 if (
-                    candidatos
+                    not redig_manual_error_pass
+                    and candidatos
                     and remitente_en_clientes
                     and not gmail_label_id_error_email
                     and not gmail_etiqueta_clasificacion_aplicada
@@ -1674,7 +1794,9 @@ def run_pipeline(
                             k_pag,
                         )
 
-                if any_etiqueta_calidad_imagen and remitente_en_clientes:
+                if any_etiqueta_calidad_imagen and (
+                    remitente_en_clientes or redig_manual_error_pass
+                ):
                     k_cal = PAGOS_GMAIL_LABEL_CALIDAD
                     if k_cal not in plantilla_label_cache:
                         plantilla_label_cache[k_cal] = ensure_user_label_id(
@@ -1730,6 +1852,44 @@ def run_pipeline(
         else:
             process_message_batch(messages, "run")
 
+        try:
+            redig_raw = list_messages_by_filter(
+                gmail_svc, "manual_error_email_redigitaliza"
+            )
+            redig_messages = _sort_messages_inbox_primero_a_ultimo(
+                _dedupe_messages_pagos_gmail(redig_raw)
+            )
+            run_stats["manual_error_redigitaliza_listed"] = len(redig_messages)
+            if redig_messages:
+                logger.warning(
+                    "[PAGOS_GMAIL] Paso final redigitalizacion MANUAL+ERROR EMAIL: %d mensaje(s) listado(s)",
+                    len(redig_messages),
+                )
+                try:
+                    process_message_batch(
+                        redig_messages,
+                        "redig_manual_error_email",
+                        redig_manual_error_pass=True,
+                    )
+                except Exception as _redig_pb_err:
+                    logger.exception(
+                        "[PAGOS_GMAIL] Paso redig MANUAL+ERROR: fallo procesando lote: %s",
+                        _redig_pb_err,
+                    )
+                    run_stats["manual_error_redigitaliza_error"] = str(_redig_pb_err)[
+                        :500
+                    ]
+        except PagosGmailGmailListError as _redig_list_err:
+            logger.warning(
+                "[PAGOS_GMAIL] Paso redig MANUAL+ERROR: listado Gmail omitido: %s",
+                _redig_list_err,
+            )
+        except Exception as _redig_exc:
+            logger.exception(
+                "[PAGOS_GMAIL] Paso redig MANUAL+ERROR: error no esperado: %s",
+                _redig_exc,
+            )
+
         _pagos_metrics = _metricas_resumen_corrida_gmail_pagos(db, sync_id)
         _run_summary_ok = {
             "scan_filter": scan_filter,
@@ -1744,6 +1904,13 @@ def run_pipeline(
                 "messages_skipped_clasificacion_etiqueta"
             ],
             "gmail_labels_list_failed": run_stats["gmail_labels_list_failed"],
+            "manual_error_redigitaliza_listed": run_stats[
+                "manual_error_redigitaliza_listed"
+            ],
+            "manual_error_redigitaliza_error": run_stats.get(
+                "manual_error_redigitaliza_error"
+            )
+            or None,
             "gemini_model": _gemini_model_snapshot,
             **_pagos_metrics,
         }
@@ -1789,6 +1956,9 @@ def run_pipeline(
                 "messages_skipped_clasificacion_etiqueta"
             ],
             "gmail_labels_list_failed": run_stats["gmail_labels_list_failed"],
+            "manual_error_redigitaliza_listed": run_stats[
+                "manual_error_redigitaliza_listed"
+            ],
             "list_error": True,
             "gemini_model": _gemini_model_snapshot,
             **_pagos_metrics_err,
@@ -1821,6 +1991,9 @@ def run_pipeline(
                 "messages_skipped_clasificacion_etiqueta"
             ],
             "gmail_labels_list_failed": run_stats["gmail_labels_list_failed"],
+            "manual_error_redigitaliza_listed": run_stats[
+                "manual_error_redigitaliza_listed"
+            ],
             "pipeline_error": True,
             "gemini_model": _gemini_model_snapshot,
             **_pagos_metrics_pipe,
