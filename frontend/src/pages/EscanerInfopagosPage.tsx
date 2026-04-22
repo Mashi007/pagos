@@ -882,6 +882,11 @@ export default function EscanerInfopagosPage() {
                 )}
               </Button>
             </div>
+            {enviando ? (
+              <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-900">
+                Espere, estoy procesando su pago.
+              </p>
+            ) : null}
           </CardContent>
         </Card>
       )}

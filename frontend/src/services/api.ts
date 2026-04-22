@@ -327,10 +327,17 @@ class ApiClient {
 
         const maxRetries = 3
 
+        const st = error.response?.status
+        const reqUrl = String(requestConfigForRetry?.url || '')
+        const isScannerReadOnlyPost =
+          reqUrl.includes('/cobros/escaner/extraer-comprobante') ||
+          reqUrl.includes('/cobros/escaner/lote/drive-digitalizar')
+        const canRetryBecauseStatus =
+          st === 500 || st === 503 || (st === 502 && isScannerReadOnlyPost)
         if (
-          (error.response?.status === 500 || error.response?.status === 503) &&
+          canRetryBecauseStatus &&
           retryCount < maxRetries &&
-          requestConfigForRetry.method !== 'get' // No reintentar GET en teoría, pero POST sí es seguro para carga
+          requestConfigForRetry.method !== 'get' // No reintentar GET en teoría; para escáner (POST) sí es seguro.
         ) {
           ;(requestConfigForRetry as any)._retryCount = retryCount + 1
 
@@ -787,6 +794,12 @@ class ApiClient {
             )
           }
 
+          break
+
+        case 502:
+          toast.error(
+            'El servidor tardó en responder o está reiniciando. Reintente en unos segundos.'
+          )
           break
 
         default:

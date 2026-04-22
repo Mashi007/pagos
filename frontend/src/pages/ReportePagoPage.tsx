@@ -161,7 +161,10 @@ function montoParaApi(num: number): string {
 
 /** En cobros público no existe el paso interno 2 (moneda); badges van 1..6 en lugar de 1..7. */
 function badgePasoFormulario(step: number, isInfopagos: boolean): number {
-  if (step >= 3 && step <= 7 && !isInfopagos) return step - 1
+  if (!isInfopagos) {
+    if (step === 7) return 6
+    return step
+  }
   return step
 }
 
@@ -170,10 +173,10 @@ function getStepAnnouncement(step: number, isInfopagos: boolean): string {
     const m: Record<number, string> = {
       0: 'Pantalla de bienvenida: reporte de pago',
       1: 'Paso 1: Ingrese su número de cédula',
-      3: 'Paso 2: Institución financiera',
-      4: 'Paso 3: Fecha y monto del pago',
-      5: 'Paso 4: Número de documento u operación',
-      6: 'Paso 5: Adjuntar comprobante',
+      2: 'Paso 2: Adjuntar comprobante',
+      3: 'Paso 3: Institución financiera',
+      4: 'Paso 4: Fecha y monto del pago',
+      5: 'Paso 5: Número de documento u operación',
       7: 'Paso 6: Confirmar y enviar',
       8: 'Reporte enviado correctamente',
     }
@@ -794,10 +797,6 @@ export default function ReportePagoPage({
     []
   )
 
-  useEffect(() => {
-    if (!isInfopagos && step === 2) setStep(3)
-  }, [isInfopagos, step])
-
   // Resetear confirmación de monto alto cuando cambia el monto o moneda
   useEffect(() => {
     setMontoAltoConfirmado(false)
@@ -896,7 +895,7 @@ export default function ReportePagoPage({
 
       setEmailParaVerificacion(res.email_enmascarado ?? '')
 
-      setStep(isInfopagos ? 2 : 3)
+      setStep(2)
     } catch (e: any) {
       showNotification('error', e?.message || 'Error al validar cédula.')
     } finally {
@@ -1140,13 +1139,13 @@ export default function ReportePagoPage({
           res.error || 'No se pudo digitalizar el comprobante. Continúe con carga manual.'
         )
       }
-      setStep(7)
+      setStep(isInfopagos ? 7 : 3)
     } catch (e: any) {
       showNotification(
         'error',
         e?.message || 'No se pudo digitalizar el comprobante. Continúe con carga manual.'
       )
-      setStep(7)
+      setStep(isInfopagos ? 7 : 3)
     } finally {
       setLoading(false)
     }
@@ -1502,7 +1501,102 @@ export default function ReportePagoPage({
     )
   }
 
-  if (step === 2 && isInfopagos) {
+  if (step === 2) {
+    if (!isInfopagos) {
+      return (
+        <div
+          className={
+            embedded
+              ? 'flex flex-col items-center justify-center overflow-x-hidden p-3 sm:p-4'
+              : 'flex min-h-[100dvh] min-h-screen flex-col items-center justify-center overflow-x-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-3 sm:p-4'
+          }
+        >
+          <div
+            role="status"
+            aria-live="polite"
+            aria-atomic="true"
+            className="sr-only"
+          >
+            {messageForScreenReader || stepAnnouncement}
+          </div>
+
+          <div className="flex w-full min-w-0 max-w-md flex-col items-center gap-4 px-1 sm:px-0">
+            <NotificationBanner
+              notification={notification}
+              onDismiss={dismissNotification}
+            />
+
+            <Card
+              className={
+                embedded
+                  ? 'w-full min-w-0 max-w-md border border-slate-200 bg-white shadow-sm'
+                  : 'w-full min-w-0 max-w-md border-0 bg-white shadow-xl'
+              }
+            >
+              <CardHeader className="border-b border-slate-100 px-5 pb-4 sm:px-6">
+                <div className="mb-2 flex items-center gap-3">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-900 text-sm font-semibold text-white">
+                    2
+                  </div>
+                  <CardTitle className="m-0 text-lg sm:text-xl">
+                    {nombre ? `Hola, ${nombre}` : 'Cargar comprobante'}
+                  </CardTitle>
+                </div>
+                <p className="mt-2 text-sm text-slate-600">
+                  Cédula validada ({cedula}). Cargue el comprobante para digitalizar con Gemini.
+                </p>
+              </CardHeader>
+
+              <CardContent className="space-y-4 px-5 sm:px-6">
+                {archivo ? (
+                  <div className="rounded-lg border-2 border-emerald-300 bg-emerald-50 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1">
+                        <p className="font-semibold text-emerald-900">Archivo seleccionado</p>
+                        <p className="mt-1 break-all text-sm text-emerald-800">{archivo.name}</p>
+                        <p className="mt-1 text-xs text-emerald-700">
+                          {(archivo.size / 1024).toFixed(1)} KB
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <Input
+                    type="file"
+                    className="min-h-[48px] touch-manipulation file:mr-3 file:rounded-lg file:border-0 file:bg-slate-900 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-slate-800"
+                    accept=".pdf,.jpg,.jpeg,.png,.heic,.heif,.webp,.gif,application/pdf,image/jpeg,image/png,image/heic,image/heif,image/webp,image/gif"
+                    onChange={e => setArchivo(e.target.files?.[0] || null)}
+                  />
+                )}
+
+                <div className="flex flex-wrap gap-2 pt-2 sm:flex-nowrap">
+                  <Button
+                    variant="outline"
+                    className="min-h-[48px] min-w-[100px] flex-1 touch-manipulation border-slate-300 text-slate-900 hover:bg-slate-50"
+                    onClick={() => {
+                      setArchivo(null)
+                      setStep(1)
+                    }}
+                  >
+                    Atrás
+                  </Button>
+
+                  <Button
+                    className="min-h-[48px] min-w-0 flex-1 touch-manipulation bg-slate-900 font-semibold text-white hover:bg-slate-800"
+                    onClick={handleDigitalizarComprobante}
+                    disabled={loading}
+                  >
+                    {loading
+                      ? 'Digitalizando con Gemini...'
+                      : 'Digitalizar con Gemini y continuar'}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      )
+    }
     return (
       <div
         className={
@@ -1702,7 +1796,7 @@ export default function ReportePagoPage({
                 <Button
                   variant="outline"
                   className="min-h-[48px] min-w-[100px] flex-1 touch-manipulation border-slate-300 text-slate-900 hover:bg-slate-50"
-                  onClick={() => setStep(isInfopagos ? 2 : 1)}
+                  onClick={() => setStep(2)}
                 >
                   Atrás
                 </Button>
@@ -1992,7 +2086,7 @@ export default function ReportePagoPage({
                       return
                     }
 
-                    setStep(6)
+                    setStep(isInfopagos ? 6 : 7)
                   }}
                 >
                   Siguiente
@@ -2245,7 +2339,7 @@ export default function ReportePagoPage({
                 <Button
                   variant="outline"
                   className="min-h-[48px] min-w-[100px] flex-1 touch-manipulation border-slate-300 text-slate-900 hover:bg-slate-50"
-                  onClick={() => setStep(6)}
+                  onClick={() => setStep(isInfopagos ? 6 : 5)}
                 >
                   Editar
                 </Button>
