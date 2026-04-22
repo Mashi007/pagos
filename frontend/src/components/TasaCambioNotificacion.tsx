@@ -8,6 +8,7 @@ import {
   getEstadoTasa,
   getTasaHoy,
   guardarTasa,
+  type TasaCambioResponse,
 } from '../services/tasaCambioService'
 
 const STORAGE_PREFIX = 'rapicredit_tasa_vigente_toast_'
@@ -29,7 +30,7 @@ export const TasaCambioNotificacion: React.FC<TasaCambioNotificacionProps> = ({
 }) => {
   const [mostrarModal, setMostrarModal] = useState(false)
   const [debeIngresar, setDebeIngresar] = useState(false)
-  const [tasaActual, setTasaActual] = useState<number | null>(null)
+  const [tasaHoyRow, setTasaHoyRow] = useState<TasaCambioResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const ultimaFechaToastRef = useRef<string | null>(null)
 
@@ -44,7 +45,7 @@ export const TasaCambioNotificacion: React.FC<TasaCambioNotificacionProps> = ({
           const tasa = await getTasaHoy()
 
           if (tasa) {
-            setTasaActual(tasa.tasa_oficial)
+            setTasaHoyRow(tasa)
 
             if (onTasaCargada) onTasaCargada(tasa.tasa_oficial)
 
@@ -65,12 +66,18 @@ export const TasaCambioNotificacion: React.FC<TasaCambioNotificacionProps> = ({
               } catch {
                 /* ignore */
               }
+              const b = tasa.tasa_bcv != null ? formatTasaBsUsd(tasa.tasa_bcv) : '—'
+              const bn =
+                tasa.tasa_binance != null ? formatTasaBsUsd(tasa.tasa_binance) : '—'
               toast.info(
-                `Tasa vigente del dia (${fechaKey}): ${formatTasaBsUsd(tasa.tasa_oficial)} Bs. por 1 USD (oficial ingresada hoy).`,
-                { duration: 8000 }
+                `Tasas del día (${fechaKey}): Euro ${formatTasaBsUsd(tasa.tasa_oficial)} · BCV ${b} · Binance ${bn} Bs./USD.`,
+                { duration: 9000 }
               )
             }
           }
+        } else {
+          const parcial = await getTasaHoy()
+          setTasaHoyRow(parcial)
         }
 
         if (estado.debe_ingresar && !estado.tasa_ya_ingresada) {
@@ -95,10 +102,14 @@ export const TasaCambioNotificacion: React.FC<TasaCambioNotificacionProps> = ({
     return () => clearInterval(interval)
   }, [onTasaCargada])
 
-  const handleGuardarTasa = async (tasa: number) => {
-    const resultado = await guardarTasa(tasa)
+  const handleGuardarTasa = async (p: {
+    tasa_oficial: number
+    tasa_bcv: number
+    tasa_binance: number
+  }) => {
+    const resultado = await guardarTasa(p)
 
-    setTasaActual(resultado.tasa_oficial)
+    setTasaHoyRow(resultado)
 
     setDebeIngresar(false)
 
@@ -114,8 +125,8 @@ export const TasaCambioNotificacion: React.FC<TasaCambioNotificacionProps> = ({
       }
     }
     toast.success(
-      `Tasa del dia registrada: ${formatTasaBsUsd(resultado.tasa_oficial)} Bs. por 1 USD.`,
-      { duration: 7000 }
+      `Tasas del día registradas: Euro ${formatTasaBsUsd(resultado.tasa_oficial)} · BCV ${formatTasaBsUsd(resultado.tasa_bcv ?? 0)} · Binance ${formatTasaBsUsd(resultado.tasa_binance ?? 0)} Bs./USD.`,
+      { duration: 8000 }
     )
   }
 
@@ -132,13 +143,12 @@ export const TasaCambioNotificacion: React.FC<TasaCambioNotificacionProps> = ({
 
             <div className="flex-1">
               <p className="font-bold text-amber-900">
-                Ingreso obligatorio: tasa de cambio oficial
+                Ingreso obligatorio: tasas del día (Euro, BCV y Binance)
               </p>
 
               <p className="mt-1 text-sm text-amber-800">
-                Debe ingresar la tasa de cambio oficial del dia (Caracas) para
-                continuar. Se aplica a pagos en bolivares segun fecha de pago y
-                tasa registrada.
+                Desde las 01:00 (Caracas) debe registrar las tres tasas Bs./USD para
+                continuar. Misma regla que el módulo «Tasa de cambio».
               </p>
             </div>
 
@@ -147,7 +157,7 @@ export const TasaCambioNotificacion: React.FC<TasaCambioNotificacionProps> = ({
               onClick={() => setMostrarModal(true)}
               className="whitespace-nowrap rounded-lg bg-amber-600 px-4 py-2 font-semibold text-white transition hover:bg-amber-700"
             >
-              Ingresar tasa
+              Ingresar tasas
             </button>
           </div>
         </div>
@@ -161,7 +171,7 @@ export const TasaCambioNotificacion: React.FC<TasaCambioNotificacionProps> = ({
           setMostrarModal(false)
         }}
         onSave={handleGuardarTasa}
-        currentTasa={tasaActual}
+        tasaHoyRow={tasaHoyRow}
       />
     </>
   )

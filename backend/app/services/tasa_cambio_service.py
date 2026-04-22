@@ -242,9 +242,17 @@ def guardar_tasa_diaria(
     tasa_oficial: float,
     usuario_id: Optional[int] = None,
     usuario_email: Optional[str] = None,
+    *,
+    tasa_bcv: float,
+    tasa_binance: float,
 ) -> TasaCambioDiaria:
-    """Guarda o actualiza la tasa de cambio para hoy (calendario Caracas)."""
+    """
+    Guarda o actualiza las tasas del día (calendario Caracas): Euro (`tasa_oficial`), BCV y Binance.
+    Misma validación numérica para las tres columnas.
+    """
     validar_tasa_oficial_antes_de_guardar(tasa_oficial)
+    validar_tasa_oficial_antes_de_guardar(float(tasa_bcv))
+    validar_tasa_oficial_antes_de_guardar(float(tasa_binance))
     hoy = fecha_hoy_caracas()
     existente = db.execute(
         select(TasaCambioDiaria).where(TasaCambioDiaria.fecha == hoy)
@@ -252,6 +260,8 @@ def guardar_tasa_diaria(
 
     if existente:
         existente.tasa_oficial = tasa_oficial
+        existente.tasa_bcv = tasa_bcv
+        existente.tasa_binance = tasa_binance
         existente.usuario_id = usuario_id
         existente.usuario_email = usuario_email
         existente.updated_at = datetime.now()
@@ -259,6 +269,8 @@ def guardar_tasa_diaria(
         existente = TasaCambioDiaria(
             fecha=hoy,
             tasa_oficial=tasa_oficial,
+            tasa_bcv=tasa_bcv,
+            tasa_binance=tasa_binance,
             usuario_id=usuario_id,
             usuario_email=usuario_email,
         )
@@ -369,3 +381,30 @@ def debe_ingresar_tasa() -> bool:
     ahora = ahora_caracas().time()
     inicio = time(1, 0)
     return ahora >= inicio
+
+
+def _columna_tasa_presente_y_valida(val: Any) -> bool:
+    """True si hay valor numérico usable (no None, no problemático)."""
+    if val is None:
+        return False
+    return not es_tasa_problematica_para_operacion(val)
+
+
+def estado_multifuente_fila_hoy(row: Optional[TasaCambioDiaria]) -> dict[str, bool]:
+    """
+    Para la fila del día (hoy Caracas): qué columnas Euro / BCV / Binance están cargadas y válidas.
+    Misma validación numérica que `tasa_oficial` (positiva, no placeholder).
+    """
+    if row is None:
+        return {"euro_ok": False, "bcv_ok": False, "binance_ok": False}
+    return {
+        "euro_ok": _columna_tasa_presente_y_valida(row.tasa_oficial),
+        "bcv_ok": _columna_tasa_presente_y_valida(getattr(row, "tasa_bcv", None)),
+        "binance_ok": _columna_tasa_presente_y_valida(getattr(row, "tasa_binance", None)),
+    }
+
+
+def fila_tasa_multifuente_completa_hoy(row: Optional[TasaCambioDiaria]) -> bool:
+    """Día completo cuando las tres fuentes tienen tasa válida en la misma fila."""
+    st = estado_multifuente_fila_hoy(row)
+    return bool(st["euro_ok"] and st["bcv_ok"] and st["binance_ok"])

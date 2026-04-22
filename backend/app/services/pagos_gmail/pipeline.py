@@ -1,5 +1,5 @@
 """
-Orquestacion: Gmail -> Gemini/BD por **cada adjunto elegible** (remitente en clientes, o **Plan B** Mercantil/BNC si el De no está en BD), una fila Excel/BD por comprobante OK.
+Orquestacion: Gmail -> Gemini/BD por **cada adjunto elegible** (remitente en clientes, o **Plan B** si el De no está en BD: Mercantil/BNC A/B con cédula en imagen, o **Binance C** con columna Cedula ERROR EMAIL sin cuotas auto), una fila Excel/BD por comprobante OK.
   -> flush sync_item + temporal -> comprobante en pago_comprobante_imagen (reuso por SHA-256 en la misma corrida) + URL en drive_link -> un solo commit; si falla el binario, rollback de esas filas.
   No hay subidas a Google Drive: el comprobante queda en BD; no se archiva .eml en Drive (drive_email_link sin uso).
   Si no cumple plantillas 1/2/3/4 o faltan datos -> no fila ni comprobante en BD para ese adjunto.
@@ -11,12 +11,13 @@ Orquestacion: Gmail -> Gemini/BD por **cada adjunto elegible** (remitente en cli
 **Regla de decisión actual (sin ambigüedad):**
 - Paso 1: si en el correo hay digitalización OK de plantilla A/B, etiqueta final = MERCANTIL o BNC.
 - Paso 2: si no hubo A/B y el remitente está en `clientes`, se admite C/D y etiqueta final = BINANCE o BNV.
+- Paso 2b (Plan B, De no en clientes): si todo el correo digitalizó OK y hay plantilla **C**, etiqueta final = BINANCE (cédula columna ERROR EMAIL; sin CUOTAS_OK automático).
 - Paso 3 (fallback): si no aplica ninguna regla bancaria previa, usar orden MASTER -> TEXTO -> ERROR EMAIL -> MANUAL.
 - Solo se aplica **una** etiqueta final por correo (set permitido arriba), sin etiquetas auxiliares.
 
 **Remitente y Plan B:**
 - Remitente en `clientes`: se evalúan plantillas según prompts/reglas de negocio.
-- Remitente fuera de `clientes` (Plan B): solo A/B con cédula desde imagen; C/D/NR no aplican.
+- Remitente fuera de `clientes` (Plan B): A/B con cédula desde imagen; **C (Binance)** con monto+ref legibles se digitaliza con cédula **ERROR EMAIL** (sin auto CUOTAS hasta asociar cliente); D/NR no aplican.
 - `master@rapicreditca.com` aplica fallback MASTER solo cuando no haya etiqueta bancaria final (MERCANTIL/BNC/BINANCE/BNV); fuera de ese caso, si no hay fila en clientes, fallback ERROR EMAIL.
 
 Excel de revisión y negocio:
@@ -632,8 +633,8 @@ def run_pipeline(
                     )
                 elif plan_b_mercantil_bnc_fuera_bd:
                     logger.info(
-                        "[PAGOS_GMAIL]   Plan B (De no en clientes): solo Mercantil/BNC si Gemini aplica A o B "
-                        "(cédula desde imagen); si no, ERROR EMAIL; msg=%s",
+                        "[PAGOS_GMAIL]   Plan B (De no en clientes): Mercantil/BNC si Gemini A o B (cédula imagen); "
+                        "Binance C si monto+ref OK (cédula columna ERROR EMAIL, sin cuotas auto); si no, ERROR EMAIL; msg=%s",
                         msg_id,
                     )
 
@@ -871,19 +872,19 @@ def run_pipeline(
                         if (
                             plan_b_mercantil_bnc_fuera_bd
                             and fmt in PAGOS_GMAIL_FORMATOS_PLANTILLA
-                            and fmt not in ("A", "B")
+                            and fmt not in ("A", "B", "C")
                         ):
                             any_incomplete_or_skipped = True
                             any_skipped_not_plantilla_o_campos = True
                             logger.info(
-                                "[PAGOS_GMAIL]   Plan B: formato %s no Mercantil/BNC aplicable (solo A/B) — %s",
+                                "[PAGOS_GMAIL]   Plan B: formato %s no aplicable (solo A/B/C) — %s",
                                 fmt,
                                 filename,
                             )
                             _pipeline_evt(
                                 EVT_NO_PLANTILLA_GEMINI,
                                 filename=filename,
-                                detalle=(f"plan_b_solo_ab:{fmt!s}")[:500],
+                                detalle=(f"plan_b_solo_abc:{fmt!s}")[:500],
                             )
                             continue
 
@@ -893,14 +894,24 @@ def run_pipeline(
                             r = normalizar_referencia(_v(data.get("numero_referencia")))
                             c, c_ok = _cedula_columna_desde_remitente(db, sender_lc)
                             if not c_ok:
-                                any_incomplete_or_skipped = True
-                                any_cedula_lookup_failed = True
-                                logger.warning(
-                                    "[PAGOS_GMAIL]   BINANCE (C): columna Cedula=%s — De=%s archivo=%s",
-                                    c,
-                                    sender_lc[:72],
-                                    filename,
-                                )
+                                if plan_b_mercantil_bnc_fuera_bd and m and r:
+                                    c = PAGOS_GMAIL_ERROR_CEDULA_EMAIL
+                                    c_ok = True
+                                    logger.info(
+                                        "[PAGOS_GMAIL]   Plan B Binance (C): De sin fila en clientes; "
+                                        "columna Cedula=%s (digitalizar sin auto CUOTAS) archivo=%s",
+                                        c,
+                                        filename,
+                                    )
+                                else:
+                                    any_incomplete_or_skipped = True
+                                    any_cedula_lookup_failed = True
+                                    logger.warning(
+                                        "[PAGOS_GMAIL]   BINANCE (C): columna Cedula=%s — De=%s archivo=%s",
+                                        c,
+                                        sender_lc[:72],
+                                        filename,
+                                    )
                         elif fmt == "NR":
                             f = normalizar_fecha_pago(_v(data.get("fecha_pago")))
                             m = "NR"
@@ -1617,6 +1628,13 @@ def run_pipeline(
                     elif not candidatos and multipage_pdf_omitidos == 0:
                         final_label_name = PAGOS_GMAIL_LABEL_TEXTO
                         final_label_reason = "fallback_texto"
+                    elif (
+                        plan_b_mercantil_bnc_fuera_bd
+                        and fully_digitized_email
+                        and "C" in tipos_digitados_distintos
+                    ):
+                        final_label_name = PAGOS_GMAIL_LABEL_IMAGEN_3
+                        final_label_reason = "plan_b_binance_digitalizado"
                     elif not remitente_en_clientes:
                         final_label_name = PAGOS_GMAIL_LABEL_ERROR_EMAIL
                         final_label_reason = "fallback_error_email"

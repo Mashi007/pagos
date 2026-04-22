@@ -1320,11 +1320,13 @@ def classify_and_extract_pagos_gmail_attachment(
             )
 
         # Pass 2 (rescate): solo una pasada extra si todo quedó en ninguno.
+        rescue_variant_used: Optional[str] = None
         if image_parts:
             rescue_pass_prompt = rescue_pass_prompt + _rescue_prompt_suffix(bank_hint)
             rescue_variant_name, rescue_part = _pick_rescue_image_part(
                 image_parts, bank_hint, best_none_reason
             )
+            rescue_variant_used = rescue_variant_name
             fmt2, fields2, raw_text2 = _run_call(rescue_pass_prompt, rescue_part)
             if fmt2 in PAGOS_GMAIL_FORMATOS_PLANTILLA:
                 fields2["_scan_pass"] = "pass_2"
@@ -1355,7 +1357,8 @@ def classify_and_extract_pagos_gmail_attachment(
             "banco": PAGOS_NA,
             "_diag_none_reason": (best_none_reason or "sin_plantilla")[:120],
             "_scan_pass": "pass_2" if image_parts else "pass_1",
-            "_scan_variant": image_parts[0][0] if image_parts else "orig",
+            "_scan_variant": rescue_variant_used
+            or (image_parts[0][0] if image_parts else "orig"),
             "_scan_bank_hint": bank_hint or "",
         }
         logger.info(

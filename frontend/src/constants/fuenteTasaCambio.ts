@@ -11,3 +11,14 @@ export const FUENTE_TASA_OPCIONES: ReadonlyArray<{
   { value: 'euro', label: 'Euro' },
   { value: 'binance', label: 'Binance' },
 ]
+
+/** Alineado con backend `normalizar_fuente_tasa` (bcv | euro | binance; defecto euro). */
+export function normalizarFuenteTasaCambio(
+  raw: string | null | undefined
+): FuenteTasaCambio {
+  const s = String(raw ?? '')
+    .trim()
+    .toLowerCase()
+  if (s === 'bcv' || s === 'euro' || s === 'binance') return s
+  return FUENTE_TASA_DEFAULT
+}

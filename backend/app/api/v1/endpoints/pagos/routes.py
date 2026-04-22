@@ -173,7 +173,11 @@ from app.services.cobros.cedula_reportar_bs_service import (
 
     cedula_autorizada_para_bs,
 
+    obtener_fuente_tasa_lista_bs,
+
 )
+
+from app.services.tasa_cambio_service import normalizar_fuente_tasa
 
 from .payload_models import (
     AgregarCedulaReportarBsBody,
@@ -6672,6 +6676,10 @@ def get_cedulas_reportar_bs(
 
             "creado_en": r.creado_en.isoformat() if r.creado_en else None,
 
+            "fuente_tasa_cambio": normalizar_fuente_tasa(
+                getattr(r, "fuente_tasa_cambio", None)
+            ),
+
         }
 
         for r in rows
@@ -6715,6 +6723,12 @@ def consultar_cedula_reportar_bs(
 
     ced_norm = normalize_cedula_para_almacenar_lista_bs(raw)
 
+    fuente_lista = (
+        normalizar_fuente_tasa(obtener_fuente_tasa_lista_bs(db, raw))
+        if en_lista
+        else None
+    )
+
     return {
 
         "cedula_ingresada": raw,
@@ -6722,6 +6736,8 @@ def consultar_cedula_reportar_bs(
         "cedula_normalizada": ced_norm,
 
         "en_lista": en_lista,
+
+        "fuente_tasa_cambio_lista_bs": fuente_lista,
 
         "total_en_lista": int(total),
 
@@ -6763,6 +6779,12 @@ def consultar_cedulas_reportar_bs_batch(
 
         ced_norm = normalize_cedula_para_almacenar_lista_bs(raw)
 
+        fuente_lista = (
+            normalizar_fuente_tasa(obtener_fuente_tasa_lista_bs(db, raw))
+            if en_lista
+            else None
+        )
+
         por_cedula[raw] = {
 
             "cedula_ingresada": raw,
@@ -6770,6 +6792,8 @@ def consultar_cedulas_reportar_bs_batch(
             "cedula_normalizada": ced_norm,
 
             "en_lista": en_lista,
+
+            "fuente_tasa_cambio_lista_bs": fuente_lista,
 
             "total_en_lista": int(total),
 
@@ -6811,17 +6835,67 @@ def agregar_cedula_reportar_bs(
 
         )
 
+    fuente = normalizar_fuente_tasa(payload.fuente_tasa_cambio)
+
     claves_actuales = load_autorizados_bs_claves(db)
 
     if cedula_coincide_autorizados_bs(cedula_norm, claves_actuales):
 
         total = db.query(func.count(CedulaReportarBs.cedula)).scalar() or 0
 
+        existente = db.get(CedulaReportarBs, cedula_norm)
+
+        if existente is not None:
+
+            prev = normalizar_fuente_tasa(getattr(existente, "fuente_tasa_cambio", None))
+
+            if prev != fuente:
+
+                existente.fuente_tasa_cambio = fuente
+
+                db.commit()
+
+                return {
+
+                    "agregada": False,
+
+                    "cedula": cedula_norm,
+
+                    "fuente_tasa_cambio": fuente,
+
+                    "total": total,
+
+                    "mensaje": (
+
+                        f"La cédula {cedula_norm} ya estaba en la lista. "
+
+                        f"Se actualizó la fuente de tasa a «{fuente}»."
+
+                    ),
+
+                }
+
+            return {
+
+                "agregada": False,
+
+                "cedula": cedula_norm,
+
+                "fuente_tasa_cambio": prev,
+
+                "total": total,
+
+                "mensaje": f"La cédula {cedula_norm} ya estaba en la lista.",
+
+            }
+
         return {
 
             "agregada": False,
 
             "cedula": cedula_norm,
+
+            "fuente_tasa_cambio": fuente,
 
             "total": total,
 
@@ -6831,7 +6905,7 @@ def agregar_cedula_reportar_bs(
 
     try:
 
-        db.add(CedulaReportarBs(cedula=cedula_norm))
+        db.add(CedulaReportarBs(cedula=cedula_norm, fuente_tasa_cambio=fuente))
 
         db.commit()
 
@@ -6842,6 +6916,8 @@ def agregar_cedula_reportar_bs(
             "agregada": True,
 
             "cedula": cedula_norm,
+
+            "fuente_tasa_cambio": fuente,
 
             "total": total,
 
@@ -6929,7 +7005,17 @@ def upload_cedulas_reportar_bs(
 
         raise HTTPException(status_code=400, detail="El Excel debe tener una columna llamada 'cedula'.")
 
-    cedulas_unicas: set[str] = set()
+    col_fuente = None
+
+    for i, h in enumerate(header):
+
+        if h in ("fuente_tasa_cambio", "fuente"):
+
+            col_fuente = i
+
+            break
+
+    cedulas_por_fuente: dict[str, str] = {}
 
     for row in ws.iter_rows(min_row=2, values_only=True):
 
@@ -6941,9 +7027,23 @@ def upload_cedulas_reportar_bs(
 
         cedula_norm = normalize_cedula_para_almacenar_lista_bs(str(val).strip() if val is not None else "")
 
-        if cedula_norm:
+        if not cedula_norm:
 
-            cedulas_unicas.add(cedula_norm)
+            continue
+
+        raw_fuente = None
+
+        if col_fuente is not None and len(row) > col_fuente:
+
+            raw_fuente = row[col_fuente]
+
+        fuente_fila = normalizar_fuente_tasa(
+
+            str(raw_fuente).strip() if raw_fuente is not None and str(raw_fuente).strip() else None
+
+        )
+
+        cedulas_por_fuente[cedula_norm] = fuente_fila
 
     wb.close()
 
@@ -6953,9 +7053,9 @@ def upload_cedulas_reportar_bs(
 
         db.query(CedulaReportarBs).delete()
 
-        for c in cedulas_unicas:
+        for ced, fte in cedulas_por_fuente.items():
 
-            db.add(CedulaReportarBs(cedula=c))
+            db.add(CedulaReportarBs(cedula=ced, fuente_tasa_cambio=fte))
 
         db.commit()
 
@@ -6967,11 +7067,13 @@ def upload_cedulas_reportar_bs(
 
         raise HTTPException(status_code=500, detail="Error al guardar la lista de cédulas.") from e
 
+    n = len(cedulas_por_fuente)
+
     return {
 
-        "total": len(cedulas_unicas),
+        "total": n,
 
-        "mensaje": f"Se cargaron {len(cedulas_unicas)} cédula(s). Solo ellas pueden reportar pagos en Bs en RapiCredit Cobros e Infopagos.",
+        "mensaje": f"Se cargaron {n} cédula(s). Solo ellas pueden reportar pagos en Bs en RapiCredit Cobros e Infopagos.",
 
     }
 

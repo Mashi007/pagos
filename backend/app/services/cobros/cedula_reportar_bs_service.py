@@ -18,6 +18,8 @@ from sqlalchemy.orm import Session
 
 from app.models.cedula_reportar_bs import CedulaReportarBs
 
+from app.services.tasa_cambio_service import normalizar_fuente_tasa
+
 
 def normalize_cedula_lookup_key(cedula: str) -> str:
     """
@@ -89,6 +91,29 @@ def cedula_autorizada_para_bs(db: Session, cedula_sin_guion: str) -> bool:
         return False
     claves = load_autorizados_bs_claves(db)
     return cedula_coincide_autorizados_bs(norm, claves)
+
+
+def obtener_fuente_tasa_lista_bs(db: Session, cedula_sin_guion: str) -> Optional[str]:
+    """
+    Si la cédula está autorizada para Bs, devuelve fuente_tasa_cambio normalizada (bcv|euro|binance).
+    Si no está en lista, None. La tabla suele ser pequeña: cruza variantes V/dígitos en memoria.
+    """
+    raw = str(cedula_sin_guion or "").strip().upper().replace("-", "").replace(" ", "").replace(".", "")
+    if not raw:
+        return None
+    norm_in = normalize_cedula_lookup_key(raw)
+    if not norm_in:
+        return None
+    candidatos_in = {norm_in} | expand_cedula_variants_for_bs_list(norm_in)
+    rows = db.execute(select(CedulaReportarBs)).scalars().all()
+    for r in rows:
+        rk = normalize_cedula_lookup_key(str(r.cedula or ""))
+        if not rk:
+            continue
+        candidatos_row = {rk} | expand_cedula_variants_for_bs_list(rk)
+        if candidatos_in & candidatos_row:
+            return normalizar_fuente_tasa(getattr(r, "fuente_tasa_cambio", None))
+    return None
 
 
 def normalize_cedula_para_almacenar_lista_bs(cedula: str) -> Optional[str]:

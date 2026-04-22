@@ -16,3 +16,9 @@ class CedulaReportarBs(Base):
         nullable=False,
         server_default=func.now(),
     )
+    # bcv | euro | binance — alineado con PagoReportado / tasa_cambio_service.normalizar_fuente_tasa
+    fuente_tasa_cambio = Column(
+        String(16),
+        nullable=False,
+        server_default="euro",
+    )

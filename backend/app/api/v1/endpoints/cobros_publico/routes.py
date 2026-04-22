@@ -34,7 +34,11 @@ from app.models.pago_reportado import PagoReportado
 from app.models.cobros_publico_codigo import CobrosPublicoCodigo
 from app.api.v1.endpoints.validadores import validate_cedula
 from app.utils.cedula_almacenamiento import expr_cedula_normalizada_para_comparar
-from app.services.cobros.cedula_reportar_bs_service import cedula_autorizada_para_bs
+from app.services.cobros.cedula_reportar_bs_service import (
+    cedula_autorizada_para_bs,
+    obtener_fuente_tasa_lista_bs,
+)
+from app.services.tasa_cambio_service import normalizar_fuente_tasa
 from app.services.pagos_gmail.gemini_service import (
     compare_form_with_image,
     extract_infopagos_campos_desde_comprobante,
@@ -172,6 +176,8 @@ class ValidarCedulaResponse(BaseModel):
     error: Optional[str] = None
     """True si esta cédula puede reportar pagos en Bolívares (Bs) en cobros/infopagos."""
     puede_reportar_bs: Optional[bool] = None
+    """bcv|euro|binance según lista admin cedulas_reportar_bs; solo si puede_reportar_bs."""
+    fuente_tasa_cambio_lista_bs: Optional[str] = None
 
 
 class EnviarReporteResponse(BaseModel):
@@ -253,6 +259,7 @@ class VerificarCodigoReporteResponse(BaseModel):
     nombre: Optional[str] = None
     puede_reportar_bs: Optional[bool] = None
     email_enmascarado: Optional[str] = None
+    fuente_tasa_cambio_lista_bs: Optional[str] = None
 
 
 def _is_internal_staff_request(request: Request) -> bool:
@@ -571,6 +578,11 @@ def cobros_public_verificar_codigo_reporte(
     nombre = (cliente.nombres or "").strip()
     email_raw = ((fila.email or "").strip() or (cliente.email or "").strip())
     puede_bs = cedula_autorizada_para_bs(db, cedula_lookup)
+    fuente_lb = (
+        normalizar_fuente_tasa(obtener_fuente_tasa_lista_bs(db, cedula_lookup))
+        if puede_bs
+        else None
+    )
     token = create_cobros_public_token(cedula_lookup, expire_minutes=COBROS_CODIGO_EXPIRA_MINUTES)
 
     return VerificarCodigoReporteResponse(
@@ -580,6 +592,7 @@ def cobros_public_verificar_codigo_reporte(
         nombre=nombre,
         puede_reportar_bs=puede_bs,
         email_enmascarado=_mask_email(email_raw) if email_raw else None,
+        fuente_tasa_cambio_lista_bs=fuente_lb,
     )
 
 
@@ -635,6 +648,11 @@ def validar_cedula_publico(
         return ValidarCedulaResponse(ok=False, error="No fue posible validar los datos. Verifique e intente nuevamente.")
 
     puede_bs = cedula_autorizada_para_bs(db, cedula_lookup)
+    fuente_lb = (
+        normalizar_fuente_tasa(obtener_fuente_tasa_lista_bs(db, cedula_lookup))
+        if puede_bs
+        else None
+    )
     nombre = (cliente.nombres or "").strip()
     email = (cliente.email or "").strip()
     return ValidarCedulaResponse(
@@ -643,6 +661,7 @@ def validar_cedula_publico(
         nombre=nombre,
         email_enmascarado=_mask_email(email),
         puede_reportar_bs=puede_bs,
+        fuente_tasa_cambio_lista_bs=fuente_lb,
     )
 
 

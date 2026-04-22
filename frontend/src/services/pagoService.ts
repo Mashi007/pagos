@@ -614,7 +614,7 @@ class PagoService {
     total: number
     page: number
     page_size: number
-    items: { cedula: string; creado_en: string | null }[]
+    items: { cedula: string; creado_en: string | null; fuente_tasa_cambio: string }[]
   }> {
     const sp = new URLSearchParams()
     if (params?.page != null) sp.set('page', String(params.page))
@@ -629,6 +629,7 @@ class PagoService {
     cedula_ingresada: string
     cedula_normalizada: string | null
     en_lista: boolean
+    fuente_tasa_cambio_lista_bs?: string | null
     total_en_lista: number
   }> {
     const q = encodeURIComponent(cedula.trim())
@@ -646,6 +647,7 @@ class PagoService {
         cedula_ingresada: string
         cedula_normalizada: string | null
         en_lista: boolean
+        fuente_tasa_cambio_lista_bs?: string | null
         total_en_lista: number
       }
     >
@@ -658,14 +660,19 @@ class PagoService {
 
   /** Agrega una cédula a la lista (nuevo cliente que paga en bolívares). */
 
-  async addCedulaReportarBs(cedula: string): Promise<{
+  async addCedulaReportarBs(
+    cedula: string,
+    fuente_tasa_cambio?: string
+  ): Promise<{
     agregada: boolean
     cedula: string
+    fuente_tasa_cambio?: string
     total: number
     mensaje: string
   }> {
     return await apiClient.post(`${this.baseUrl}/cedulas-reportar-bs/agregar`, {
       cedula,
+      ...(fuente_tasa_cambio ? { fuente_tasa_cambio } : {}),
     })
   }
 

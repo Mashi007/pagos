@@ -72,6 +72,7 @@ import {
 import {
   FUENTE_TASA_DEFAULT,
   FUENTE_TASA_OPCIONES,
+  normalizarFuenteTasaCambio,
   type FuenteTasaCambio,
 } from '../constants/fuenteTasaCambio'
 
@@ -305,7 +306,7 @@ export default function EscanerInfopagosLotePage() {
         return
       }
       setNombreCliente((res.nombre || '').trim())
-      setFuenteTasa(FUENTE_TASA_DEFAULT)
+      setFuenteTasa(normalizarFuenteTasaCambio(res.fuente_tasa_cambio_lista_bs))
       setFase('fuente_tasa')
       toast.success('Cédula verificada. Elija la tasa Bs. → USD y continúe.')
     } catch (e: unknown) {

@@ -31,6 +31,11 @@ import { pagoService } from '../../services/pagoService'
 import { toast } from 'sonner'
 import { getErrorMessage } from '../../types/errors'
 import { cn } from '../../utils'
+import {
+  FUENTE_TASA_DEFAULT,
+  FUENTE_TASA_OPCIONES,
+  type FuenteTasaCambio,
+} from '../../constants/fuenteTasaCambio'
 
 const PAGE_SIZE = 10
 
@@ -69,18 +74,21 @@ export function CedulasReportarBsPanel({
   const [isAgregandoCedulaBs, setIsAgregandoCedulaBs] = useState(false)
   const [isEliminandoCedulaBs, setIsEliminandoCedulaBs] = useState(false)
   const [nuevaCedulaBs, setNuevaCedulaBs] = useState('')
+  const [fuenteAltaCedula, setFuenteAltaCedula] =
+    useState<FuenteTasaCambio>(FUENTE_TASA_DEFAULT)
   const [consultaCedulaBs, setConsultaCedulaBs] = useState('')
   const [consultaCedulaBsResultado, setConsultaCedulaBsResultado] = useState<{
     en_lista: boolean
     cedula_normalizada: string | null
     total_en_lista: number
+    fuente_tasa_cambio_lista_bs?: string | null
   } | null>(null)
   const [isConsultandoCedulaBs, setIsConsultandoCedulaBs] = useState(false)
   const fileInputCedulasBsRef = useRef<HTMLInputElement>(null)
 
   const [listaPage, setListaPage] = useState(1)
   const [listaItems, setListaItems] = useState<
-    { cedula: string; creado_en: string | null }[]
+    { cedula: string; creado_en: string | null; fuente_tasa_cambio: string }[]
   >([])
   const [listaLoading, setListaLoading] = useState(true)
   const [listaError, setListaError] = useState<string | null>(null)
@@ -191,7 +199,8 @@ export function CedulasReportarBsPanel({
           revise el registro paginado y, si aplica,{' '}
           {showExcelUpload ? (
             <>
-              cargue un Excel con columna <strong>cedula</strong> o agregue
+              cargue un Excel con columna <strong>cedula</strong> (opcional{' '}
+              <strong>fuente_tasa_cambio</strong>: bcv, euro o binance) o agregue
               manualmente
             </>
           ) : (
@@ -300,6 +309,19 @@ export function CedulasReportarBsPanel({
                   </span>
                 </p>
               ) : null}
+              {consultaCedulaBsResultado.en_lista &&
+              consultaCedulaBsResultado.fuente_tasa_cambio_lista_bs ? (
+                <p className="mt-2 text-xs text-slate-700">
+                  Tasa por defecto en reportes Bs.:{' '}
+                  <span className="font-semibold text-slate-900">
+                    {FUENTE_TASA_OPCIONES.find(
+                      o =>
+                        o.value ===
+                        consultaCedulaBsResultado.fuente_tasa_cambio_lista_bs
+                    )?.label ?? consultaCedulaBsResultado.fuente_tasa_cambio_lista_bs}
+                  </span>
+                </p>
+              ) : null}
             </div>
           ) : null}
         </section>
@@ -323,7 +345,8 @@ export function CedulasReportarBsPanel({
               <p className="text-xs font-semibold uppercase tracking-wide text-emerald-800/90">
                 Alta
               </p>
-              <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+              <div className="flex flex-col gap-3">
+                <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
                 <Input
                   placeholder="Ej: V12345678"
                   value={nuevaCedulaBs}
@@ -352,9 +375,13 @@ export function CedulasReportarBsPanel({
                     if (!ced) return
                     setIsAgregandoCedulaBs(true)
                     try {
-                      const res = await pagoService.addCedulaReportarBs(ced)
+                      const res = await pagoService.addCedulaReportarBs(
+                        ced,
+                        fuenteAltaCedula
+                      )
                       setCedulasReportarBsTotal(res.total)
                       setNuevaCedulaBs('')
+                      setFuenteAltaCedula(FUENTE_TASA_DEFAULT)
                       bumpLista({ resetToFirstPage: true })
                       toast.success(res.mensaje)
                     } catch (err) {
@@ -371,6 +398,34 @@ export function CedulasReportarBsPanel({
                   )}
                   Agregar cédula
                 </Button>
+                </div>
+                <div>
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-emerald-900/80">
+                    Tasa por defecto (si reporta en Bs.)
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {FUENTE_TASA_OPCIONES.map(opt => (
+                      <label
+                        key={opt.value}
+                        className={cn(
+                          'flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm',
+                          fuenteAltaCedula === opt.value
+                            ? 'border-emerald-500 bg-white shadow-sm'
+                            : 'border-emerald-200/80 bg-white/60 hover:bg-white'
+                        )}
+                      >
+                        <input
+                          type="radio"
+                          name="fuente-alta-cedula-bs"
+                          checked={fuenteAltaCedula === opt.value}
+                          onChange={() => setFuenteAltaCedula(opt.value)}
+                          className="h-3.5 w-3.5 accent-emerald-600"
+                        />
+                        <span className="font-medium text-slate-800">{opt.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
               </div>
             </div>
             <div
@@ -436,7 +491,9 @@ export function CedulasReportarBsPanel({
           {showExcelUpload ? (
             <div className="mt-4 flex flex-col gap-2 border-t border-slate-200/80 pt-4 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-sm text-slate-600">
-                Importación masiva reemplaza la lista completa.
+                Importación masiva reemplaza la lista completa. Columna opcional{' '}
+                <span className="font-mono text-slate-800">fuente_tasa_cambio</span>{' '}
+                (bcv, euro, binance).
               </p>
               <div className="flex shrink-0 items-center gap-2">
                 <input
@@ -547,8 +604,11 @@ export function CedulasReportarBsPanel({
                 <Table>
                   <TableHeader>
                     <TableRow className="border-slate-200 hover:bg-transparent">
-                      <TableHead className="h-11 w-[42%] bg-slate-50/95 text-xs font-semibold uppercase tracking-wide text-slate-600">
+                      <TableHead className="h-11 w-[34%] bg-slate-50/95 text-xs font-semibold uppercase tracking-wide text-slate-600">
                         Cédula
+                      </TableHead>
+                      <TableHead className="h-11 w-[22%] bg-slate-50/95 text-xs font-semibold uppercase tracking-wide text-slate-600">
+                        Tasa Bs.
                       </TableHead>
                       <TableHead className="h-11 bg-slate-50/95 text-xs font-semibold uppercase tracking-wide text-slate-600">
                         Fecha de alta
@@ -567,6 +627,11 @@ export function CedulasReportarBsPanel({
                       >
                         <TableCell className="py-3 font-mono text-sm font-semibold text-slate-900">
                           {row.cedula}
+                        </TableCell>
+                        <TableCell className="py-3 text-sm text-slate-700">
+                          {FUENTE_TASA_OPCIONES.find(
+                            o => o.value === row.fuente_tasa_cambio
+                          )?.label ?? row.fuente_tasa_cambio}
                         </TableCell>
                         <TableCell className="py-3 text-sm text-slate-600">
                           {formatCreadoEn(row.creado_en)}

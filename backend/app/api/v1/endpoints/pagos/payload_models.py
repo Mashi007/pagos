@@ -52,3 +52,5 @@ class ConsultarCedulasReportarBsBatchBody(BaseModel):
 
 class AgregarCedulaReportarBsBody(BaseModel):
     cedula: str
+    """bcv | euro | binance — si se omite, euro (misma convención que pagos reportados)."""
+    fuente_tasa_cambio: Optional[str] = None

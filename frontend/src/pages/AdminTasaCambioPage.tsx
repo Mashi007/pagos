@@ -24,11 +24,12 @@ import {
   type RellenarTasasDesdeVecinoResponse,
   type TasasProblematicasResponse,
   type TasaCambioHistorial,
+  type TasaCambioResponse,
 } from '../services/tasaCambioService'
 import { toast } from 'sonner'
 
 export const AdminTasaCambioPage: React.FC = () => {
-  const [tasaHoy, setTasaHoy] = useState<number | null>(null)
+  const [tasaHoyRow, setTasaHoyRow] = useState<TasaCambioResponse | null>(null)
 
   const [historial, setHistorial] = useState<TasaCambioHistorial[]>([])
 
@@ -70,9 +71,7 @@ export const AdminTasaCambioPage: React.FC = () => {
     try {
       const tasa = await getTasaHoy()
 
-      if (tasa) {
-        setTasaHoy(tasa.tasa_oficial)
-      }
+      setTasaHoyRow(tasa)
 
       const hist = await getHistorialTasas(60)
 
@@ -84,11 +83,15 @@ export const AdminTasaCambioPage: React.FC = () => {
     }
   }
 
-  const handleGuardarTasa = async (tasa: number) => {
+  const handleGuardarTasa = async (p: {
+    tasa_oficial: number
+    tasa_bcv: number
+    tasa_binance: number
+  }) => {
     try {
-      const resultado = await guardarTasa(tasa)
+      const resultado = await guardarTasa(p)
 
-      setTasaHoy(resultado.tasa_oficial)
+      setTasaHoyRow(resultado)
 
       // Recargar historial
 
@@ -217,12 +220,36 @@ export const AdminTasaCambioPage: React.FC = () => {
         {/* Card de Tasa Actual */}
 
         <div className="mb-6 rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-          <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-4">
             <div>
-              <p className="mb-1 text-sm text-gray-600">Tasa de Hoy</p>
+              <p className="mb-1 text-sm text-gray-600">Euro (hoy)</p>
 
-              <p className="text-3xl font-bold text-gray-900">
-                {tasaHoy ? `${tasaHoy.toFixed(2)}` : '-'}
+              <p className="text-2xl font-bold text-gray-900">
+                {tasaHoyRow?.tasa_oficial != null
+                  ? `${tasaHoyRow.tasa_oficial.toFixed(2)}`
+                  : '-'}
+              </p>
+
+              <p className="mt-2 text-xs text-gray-500">Bs./USD</p>
+            </div>
+
+            <div>
+              <p className="mb-1 text-sm text-gray-600">BCV (hoy)</p>
+
+              <p className="text-2xl font-bold text-gray-900">
+                {tasaHoyRow?.tasa_bcv != null ? `${tasaHoyRow.tasa_bcv.toFixed(2)}` : '-'}
+              </p>
+
+              <p className="mt-2 text-xs text-gray-500">Bs./USD</p>
+            </div>
+
+            <div>
+              <p className="mb-1 text-sm text-gray-600">Binance (hoy)</p>
+
+              <p className="text-2xl font-bold text-gray-900">
+                {tasaHoyRow?.tasa_binance != null
+                  ? `${tasaHoyRow.tasa_binance.toFixed(2)}`
+                  : '-'}
               </p>
 
               <p className="mt-2 text-xs text-gray-500">Bs./USD</p>
@@ -240,14 +267,13 @@ export const AdminTasaCambioPage: React.FC = () => {
                   day: 'numeric',
                 })}
               </p>
-            </div>
 
-            <div className="flex items-end">
               <button
+                type="button"
                 onClick={() => setMostrarModal(true)}
-                className="w-full rounded-lg bg-orange-600 px-4 py-2 font-semibold text-white transition hover:bg-orange-700"
+                className="mt-4 w-full rounded-lg bg-orange-600 px-4 py-2 font-semibold text-white transition hover:bg-orange-700"
               >
-                {tasaHoy ? 'Actualizar Tasa' : 'Ingresar Tasa'}
+                {tasaHoyRow?.tasa_oficial != null ? 'Actualizar tasas' : 'Ingresar tasas'}
               </button>
             </div>
           </div>
@@ -594,7 +620,7 @@ export const AdminTasaCambioPage: React.FC = () => {
         isOpen={mostrarModal}
         onClose={() => setMostrarModal(false)}
         onSave={handleGuardarTasa}
-        currentTasa={tasaHoy}
+        tasaHoyRow={tasaHoyRow}
       />
     </div>
   )

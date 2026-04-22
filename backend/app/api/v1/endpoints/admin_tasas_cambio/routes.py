@@ -16,6 +16,8 @@ from app.models.user import User
 from app.schemas.auth import UserResponse
 from app.services.tasa_cambio_service import (
     debe_ingresar_tasa,
+    estado_multifuente_fila_hoy,
+    fila_tasa_multifuente_completa_hoy,
     guardar_tasa_diaria,
     guardar_tasa_para_fecha,
     listar_tasas_problematicas,
@@ -59,7 +61,9 @@ class TasaCambioResponse(BaseModel):
 
 
 class GuardarTasaRequest(BaseModel):
-    tasa_oficial: float = Field(..., gt=0, description="Tasa oficial BS/USD, ej: 2850.50")
+    tasa_oficial: float = Field(..., gt=0, description="Euro: Bs. por 1 USD (columna tasa_oficial)")
+    tasa_bcv: float = Field(..., gt=0, description="BCV: Bs. por 1 USD")
+    tasa_binance: float = Field(..., gt=0, description="Binance P2P: Bs. por 1 USD")
 
 
 class GuardarTasaPorFechaRequest(BaseModel):
@@ -104,10 +108,16 @@ def get_estado_tasa(
 
     debe_ingresar = debe_ingresar_tasa()
     tasa_guardada = obtener_tasa_hoy(db)
+    mf = estado_multifuente_fila_hoy(tasa_guardada)
+    completa = fila_tasa_multifuente_completa_hoy(tasa_guardada)
 
     return {
         "debe_ingresar": debe_ingresar,
-        "tasa_ya_ingresada": tasa_guardada is not None,
+        # True solo si Euro, BCV y Binance están cargados y válidos para hoy (misma fila diaria).
+        "tasa_ya_ingresada": completa,
+        "euro_ok": mf["euro_ok"],
+        "bcv_ok": mf["bcv_ok"],
+        "binance_ok": mf["binance_ok"],
         "hora_obligatoria_desde": "01:00",
         "hora_obligatoria_hasta": "23:59",
     }
@@ -139,6 +149,8 @@ def guardar_tasa(
             tasa_oficial=req.tasa_oficial,
             usuario_id=usuario_id,
             usuario_email=usuario_email,
+            tasa_bcv=req.tasa_bcv,
+            tasa_binance=req.tasa_binance,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e

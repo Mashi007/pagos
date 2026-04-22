@@ -14,7 +14,11 @@ export interface TasaCambioResponse {
 
 export interface TasaCambioEstado {
   debe_ingresar: boolean
+  /** True si Euro, BCV y Binance están cargados y válidos para hoy (misma fila diaria). */
   tasa_ya_ingresada: boolean
+  euro_ok?: boolean
+  bcv_ok?: boolean
+  binance_ok?: boolean
   hora_obligatoria_desde: string
   hora_obligatoria_hasta: string
 }
@@ -54,7 +58,8 @@ export interface RellenarTasasDesdeVecinoResponse {
   cambios: RellenarTasasDesdeVecinoCambio[]
 }
 
-const ADMIN_TASAS = '/admin/tasas-cambio'
+/** Misma convención que el resto de servicios: prefijo explícito /api/v1 (baseURL vacío en prod same-origin). */
+const ADMIN_TASAS = '/api/v1/admin/tasas-cambio'
 
 function throwFromAxios(e: unknown, fallback: string): never {
   if (isAxiosError(e)) {
@@ -87,12 +92,16 @@ export async function getEstadoTasa(): Promise<TasaCambioEstado> {
   }
 }
 
-export async function guardarTasa(
+export async function guardarTasa(params: {
   tasa_oficial: number
-): Promise<TasaCambioResponse> {
+  tasa_bcv: number
+  tasa_binance: number
+}): Promise<TasaCambioResponse> {
   try {
     return await apiClient.post<TasaCambioResponse>(ADMIN_TASAS + '/guardar', {
-      tasa_oficial,
+      tasa_oficial: params.tasa_oficial,
+      tasa_bcv: params.tasa_bcv,
+      tasa_binance: params.tasa_binance,
     })
   } catch (e) {
     console.error('Error guardando tasa:', e)

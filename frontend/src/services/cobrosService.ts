@@ -129,6 +129,9 @@ export interface ValidarCedulaResponse {
   /** True si esta cedula puede reportar pagos en Bolivares (Bs) en cobros/infopagos. */
 
   puede_reportar_bs?: boolean
+
+  /** bcv | euro | binance según lista admin; solo si puede_reportar_bs. */
+  fuente_tasa_cambio_lista_bs?: string
 }
 
 export interface SolicitarCodigoReporteResponse {
@@ -155,6 +158,8 @@ export interface VerificarCodigoReporteResponse {
   puede_reportar_bs?: boolean
 
   email_enmascarado?: string
+
+  fuente_tasa_cambio_lista_bs?: string
 }
 
 export interface EnviarReporteResponse {

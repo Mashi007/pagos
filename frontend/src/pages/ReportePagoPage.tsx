@@ -54,6 +54,7 @@ import { TEXTO_AVISO_NUMERO_OPERACION_FORMULARIO } from '../constants/reporteCob
 import {
   FUENTE_TASA_DEFAULT,
   FUENTE_TASA_OPCIONES,
+  normalizarFuenteTasaCambio,
   type FuenteTasaCambio,
 } from '../constants/fuenteTasaCambio'
 
@@ -745,9 +746,10 @@ export default function ReportePagoPage({
 
   const [monto, setMonto] = useState('')
 
-  const [moneda, setMoneda] = useState<'BS' | 'USD'>('BS')
+  const [moneda, setMoneda] = useState<'BS' | 'USD'>('USD')
 
-  const [puedeReportarBs, setPuedeReportarBs] = useState(true)
+  /** Solo true tras validar cédula y si el backend confirma lista Bs. (cedulas_reportar_bs). */
+  const [puedeReportarBs, setPuedeReportarBs] = useState(false)
 
   const [fuenteTasa, setFuenteTasa] = useState<FuenteTasaCambio>(FUENTE_TASA_DEFAULT)
 
@@ -812,6 +814,10 @@ export default function ReportePagoPage({
     setMontoAltoConfirmado(false)
   }, [monto, moneda])
 
+  useEffect(() => {
+    if (!puedeReportarBs && moneda === 'BS') setMoneda('USD')
+  }, [puedeReportarBs, moneda])
+
   // Marcar flujo publico: si entran a /login ven "Acceso limitado" y pueden volver al formulario (no al panel).
   useEffect(() => {
     if (typeof sessionStorage === 'undefined') return
@@ -842,9 +848,9 @@ export default function ReportePagoPage({
 
     setMonto('')
 
-    setPuedeReportarBs(true)
+    setPuedeReportarBs(false)
 
-    setMoneda('BS')
+    setMoneda('USD')
 
     setNumeroDocumento('')
 
@@ -907,9 +913,14 @@ export default function ReportePagoPage({
 
       setEmailParaVerificacion(res.email_enmascarado ?? '')
 
-      setFuenteTasa(FUENTE_TASA_DEFAULT)
+      setFuenteTasa(
+        puedeBs
+          ? normalizarFuenteTasaCambio(res.fuente_tasa_cambio_lista_bs)
+          : FUENTE_TASA_DEFAULT
+      )
 
-      setStep(15)
+      // Lista Bs.: paso de fuente + moneda Bs/USD. Fuera de lista: solo USD, sin paso de fuente.
+      setStep(puedeBs ? 15 : 2)
     } catch (e: any) {
       showNotification('error', e?.message || 'Error al validar cédula.')
     } finally {
@@ -927,6 +938,15 @@ export default function ReportePagoPage({
     }
 
     const cedulaEnviar = vCedula.valorParaEnviar!
+
+    if (moneda === 'BS' && !puedeReportarBs) {
+      showNotification(
+        'error',
+        'Su cédula no está en la lista autorizada para pagos en bolívares. Solo puede reportar en USD.'
+      )
+      setMoneda('USD')
+      return
+    }
 
     if (!institucionFinal.trim()) {
       showNotification('error', 'Seleccione la institución financiera.')
@@ -1136,7 +1156,11 @@ export default function ReportePagoPage({
 
         if (s.fecha_pago) setFechaPago(s.fecha_pago)
 
-        if (s.moneda === 'BS' || s.moneda === 'USD') setMoneda(s.moneda)
+        if (s.moneda === 'BS' || s.moneda === 'USD') {
+          const m =
+            s.moneda === 'BS' && !puedeReportarBs ? 'USD' : (s.moneda as 'BS' | 'USD')
+          setMoneda(m)
+        }
 
         if (typeof s.monto === 'number' && Number.isFinite(s.monto)) {
           setMonto(formatoMontoParaMostrar(s.monto, s.moneda === 'USD' ? 'USD' : 'BS'))
@@ -1560,9 +1584,9 @@ export default function ReportePagoPage({
                 </CardTitle>
               </div>
               <p className="mt-2 text-sm text-slate-600">
-                Seleccione la tasa que aplicará si reporta en bolívares. Por defecto se usa la tasa{' '}
-                <strong>Euro</strong> (igual que hasta ahora). BCV y Binance solo aplican si están
-                cargadas en el sistema para la fecha de pago.
+                Si su cédula está en la lista Bs. del administrador, el sistema sugiere la tasa
+                configurada para usted; puede cambiarla antes de continuar. BCV y Binance solo
+                aplican si están cargadas en el sistema para la fecha de pago.
               </p>
             </CardHeader>
 
@@ -1689,7 +1713,7 @@ export default function ReportePagoPage({
                     className="min-h-[48px] min-w-[100px] flex-1 touch-manipulation border-slate-300 text-slate-900 hover:bg-slate-50"
                     onClick={() => {
                       setArchivo(null)
-                      setStep(15)
+                      setStep(puedeReportarBs ? 15 : 1)
                     }}
                   >
                     Atrás
@@ -1754,43 +1778,51 @@ export default function ReportePagoPage({
               </div>
               <p className="mt-2 text-sm text-slate-600">
                 {isInfopagos
-                  ? 'Verifica la moneda disponible para este deudor'
+                  ? puedeReportarBs
+                    ? 'Elija si reporta en bolívares o en dólares (solo lista autorizada Bs. puede usar Bs.).'
+                    : 'Esta cédula no está en la lista autorizada para bolívares; el reporte es solo en dólares (USD).'
                   : 'Selecciona la moneda en la que reportarás tu pago'}
               </p>
             </CardHeader>
 
             <CardContent className="space-y-4 px-5 sm:px-6">
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div
+                className={`grid gap-3 ${puedeReportarBs ? 'sm:grid-cols-2' : 'sm:grid-cols-1'}`}
+              >
+                {puedeReportarBs ? (
+                  <button
+                    type="button"
+                    onClick={() => setMoneda('BS')}
+                    className={`relative rounded-lg border-2 p-4 text-left transition-all ${
+                      moneda === 'BS'
+                        ? 'border-emerald-500 bg-emerald-50'
+                        : 'border-slate-200 bg-white hover:border-slate-300'
+                    }`}
+                  >
+                    <p className="font-semibold text-slate-900">Bolivares</p>
+                    <p className="mt-1 text-xs text-slate-600">Bs.</p>
+                    <p className="mt-2 text-xs leading-snug text-slate-500">
+                      Monto: 1 a 10M Bs. Según la tasa elegida (BCV, Euro o Binance) para la fecha de pago.
+                    </p>
+                    {moneda === 'BS' && (
+                      <div className="absolute right-3 top-3 flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500">
+                        <svg
+                          className="h-3 w-3 text-white"
+                          fill="currentColor"
+                          viewBox="0 0 20 20"
+                        >
+                          <path
+                            fillRule="evenodd"
+                            d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                            clipRule="evenodd"
+                          />
+                        </svg>
+                      </div>
+                    )}
+                  </button>
+                ) : null}
                 <button
-                  onClick={() => setMoneda('BS')}
-                  className={`relative rounded-lg border-2 p-4 text-left transition-all ${
-                    moneda === 'BS'
-                      ? 'border-emerald-500 bg-emerald-50'
-                      : 'border-slate-200 bg-white hover:border-slate-300'
-                  }`}
-                >
-                  <p className="font-semibold text-slate-900">Bolivares</p>
-                  <p className="mt-1 text-xs text-slate-600">Bs.</p>
-                  <p className="mt-2 text-xs leading-snug text-slate-500">
-                    Monto: 1 a 10M Bs. Según la tasa elegida (BCV, Euro o Binance) para la fecha de pago.
-                  </p>
-                  {moneda === 'BS' && (
-                    <div className="absolute right-3 top-3 flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500">
-                      <svg
-                        className="h-3 w-3 text-white"
-                        fill="currentColor"
-                        viewBox="0 0 20 20"
-                      >
-                        <path
-                          fillRule="evenodd"
-                          d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                          clipRule="evenodd"
-                        />
-                      </svg>
-                    </div>
-                  )}
-                </button>
-                <button
+                  type="button"
                   onClick={() => setMoneda('USD')}
                   className={`relative rounded-lg border-2 p-4 text-left transition-all ${
                     moneda === 'USD'
@@ -1822,14 +1854,25 @@ export default function ReportePagoPage({
               </div>
 
               <div className="flex flex-col gap-2">
-                <Button
-                  variant="outline"
-                  type="button"
-                  className="min-h-[44px] w-full touch-manipulation border-slate-300 text-slate-700"
-                  onClick={() => setStep(15)}
-                >
-                  Cambiar tasa Bs. → USD
-                </Button>
+                {puedeReportarBs ? (
+                  <Button
+                    variant="outline"
+                    type="button"
+                    className="min-h-[44px] w-full touch-manipulation border-slate-300 text-slate-700"
+                    onClick={() => setStep(15)}
+                  >
+                    Cambiar tasa Bs. → USD
+                  </Button>
+                ) : (
+                  <Button
+                    variant="outline"
+                    type="button"
+                    className="min-h-[44px] w-full touch-manipulation border-slate-300 text-slate-700"
+                    onClick={() => setStep(1)}
+                  >
+                    Atrás (cédula)
+                  </Button>
+                )}
                 <Button
                   className="min-h-[48px] w-full touch-manipulation bg-slate-900 font-semibold text-white hover:bg-slate-800"
                   onClick={() => setStep(3)}
