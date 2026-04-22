@@ -60,9 +60,16 @@ function getEffectiveApiBaseUrl(): string {
   if (!url) return ''
 
   try {
-    new URL(url)
-
-    return url
+    const parsed = new URL(url)
+    // Browser: forzar same-origin (/api) cuando la URL configurada apunta
+    // a otro origen. Evita CORS al saltarse el proxy del frontend.
+    if (parsed.origin !== window.location.origin) {
+      console.warn(
+        `[api] API_URL cross-origin detectada (${parsed.origin}); usando /api same-origin.`
+      )
+      return ''
+    }
+    return parsed.toString().replace(/\/$/, '')
   } catch {
     return ''
   }

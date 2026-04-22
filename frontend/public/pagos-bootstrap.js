@@ -170,6 +170,53 @@
     )
   }
 
+  function isRapiCreditHost() {
+    var h = (window.location && window.location.hostname) || ''
+    return h === 'rapicredit.onrender.com'
+  }
+
+  function isCrossApiFallbackUrl(rawUrl) {
+    if (!rawUrl || typeof rawUrl !== 'string') return false
+    return rawUrl.toLowerCase().indexOf('https://pagos-f2qf.onrender.com/') === 0
+  }
+
+  function maybeRecoverCrossOriginApi(targetUrl) {
+    if (!isRapiCreditHost()) return
+    if (!isCrossApiFallbackUrl(targetUrl)) return
+    originalWarn.call(
+      console,
+      '[bootstrap] Detectada API cross-origin (pagos-f2qf) desde rapicredit. Recargando para recuperar configuración same-origin.'
+    )
+    reloadPage()
+  }
+
+  ;(function patchFetchForCrossOriginRecovery() {
+    if (typeof window.fetch !== 'function') return
+    var originalFetch = window.fetch.bind(window)
+    window.fetch = function (input, init) {
+      var url = ''
+      if (typeof input === 'string') {
+        url = input
+      } else if (input && typeof input.url === 'string') {
+        url = input.url
+      }
+      maybeRecoverCrossOriginApi(url)
+      return originalFetch(input, init)
+    }
+  })()
+
+  ;(function patchXhrForCrossOriginRecovery() {
+    if (!window.XMLHttpRequest || !window.XMLHttpRequest.prototype) return
+    var xhrProto = window.XMLHttpRequest.prototype
+    var originalOpen = xhrProto.open
+    xhrProto.open = function (method, url) {
+      if (typeof url === 'string') {
+        maybeRecoverCrossOriginApi(url)
+      }
+      return originalOpen.apply(this, arguments)
+    }
+  })()
+
   window.addEventListener(
     'error',
     function (event) {
