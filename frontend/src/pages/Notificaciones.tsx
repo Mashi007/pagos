@@ -60,6 +60,7 @@ import {
   type CompararAbonosDriveCuotasResponse,
   type CompararFechaEntregaQvsAprobacionResponse,
   type EstadisticasPorTab,
+  type SincronizarAbonosDriveCuotasMasivoResponse,
 } from '../services/notificacionService'
 
 import { prestamoService } from '../services/prestamoService'
@@ -451,6 +452,8 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
 
   const [programandoRefreshAbonosDrive, setProgramandoRefreshAbonosDrive] =
     useState(false)
+  const [sincronizandoAbonosDriveAuto, setSincronizandoAbonosDriveAuto] =
+    useState(false)
 
   const [programandoRefreshFechaQ, setProgramandoRefreshFechaQ] =
     useState(false)
@@ -479,6 +482,10 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
   /** Confirmación antes de programar el refresh masivo de caché ABONOS vs cuotas (solo General). */
   const [confirmAbonosMasivoOpen, setConfirmAbonosMasivoOpen] =
     useState(false)
+  const [confirmSyncAbonosOpen, setConfirmSyncAbonosOpen] = useState(false)
+  const [syncPreviewLoading, setSyncPreviewLoading] = useState(false)
+  const [syncPreviewData, setSyncPreviewData] =
+    useState<SincronizarAbonosDriveCuotasMasivoResponse | null>(null)
 
   useEffect(() => {
     if (confirmEnvio == null) return
@@ -518,7 +525,8 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
     const pausado =
       hayOperacionListaEnCurso ||
       programandoRefreshAbonosDrive ||
-      programandoRefreshFechaQ
+      programandoRefreshFechaQ ||
+      sincronizandoAbonosDriveAuto
     if (pausarAutoRefetchNotificaciones !== pausado) {
       setPausarAutoRefetchNotificaciones(pausado)
     }
@@ -526,6 +534,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
     hayOperacionListaEnCurso,
     programandoRefreshAbonosDrive,
     programandoRefreshFechaQ,
+    sincronizandoAbonosDriveAuto,
     pausarAutoRefetchNotificaciones,
   ])
 
@@ -657,6 +666,51 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
       )
     } finally {
       setProgramandoRefreshFechaQ(false)
+    }
+  }
+
+  const handleSincronizarAbonosDriveAuto = async () => {
+    setSincronizandoAbonosDriveAuto(true)
+    try {
+      const res = await notificacionService.postSincronizarAbonosDriveCuotasMasivo({
+        dry_run: false,
+        aplicar_montos_altos: false,
+      })
+      const r = res.resumen
+      toast.success(
+        `Sincronización ABONOS completada. Evaluados: ${r.total_evaluados}. Aplicados: ${r.aplicados}. Omitidos por lote: ${r.omitidos_requiere_lote}. Omitidos por monto alto: ${r.omitidos_monto_alto}. Errores: ${r.errores}.`
+      )
+      await handleRefresh()
+    } catch (e) {
+      console.error(e)
+      toast.error(
+        getErrorMessage(e) ||
+          'No se pudo ejecutar la sincronización automática de ABONOS.'
+      )
+    } finally {
+      setSincronizandoAbonosDriveAuto(false)
+    }
+  }
+
+  const abrirConfirmSyncAbonos = async () => {
+    setConfirmSyncAbonosOpen(true)
+    setSyncPreviewLoading(true)
+    setSyncPreviewData(null)
+    try {
+      const res = await notificacionService.postSincronizarAbonosDriveCuotasMasivo(
+        {
+          dry_run: true,
+          aplicar_montos_altos: false,
+        }
+      )
+      setSyncPreviewData(res)
+    } catch (e) {
+      toast.error(
+        getErrorMessage(e) ||
+          'No se pudo generar la vista previa de sincronización ABONOS.'
+      )
+    } finally {
+      setSyncPreviewLoading(false)
     }
   }
 
@@ -1423,6 +1477,26 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                   Recalcular Diferencia abono
                 </Button>
               ) : null}
+              {modulo === 'general' ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => void abrirConfirmSyncAbonos()}
+                  disabled={
+                    sincronizandoAbonosDriveAuto ||
+                    programandoRefreshAbonosDrive ||
+                    actualizandoListas
+                  }
+                  title="Aplica en lote diferencias positivas ABONOS (hoja) vs cuotas en BD. Omite casos con lote ambiguo y montos altos."
+                >
+                  <Scale
+                    className={`mr-2 h-4 w-4 ${
+                      sincronizandoAbonosDriveAuto ? 'animate-pulse' : ''
+                    }`}
+                  />
+                  Sincronizar diferencias ABONOS
+                </Button>
+              ) : null}
 
               {modulo === 'fecha' ? (
                 <Button
@@ -1673,6 +1747,31 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                     }`}
                   />
                   Recalcular Diferencia abono
+                </Button>
+              ) : null}
+              {modulo === 'general' ? (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => void abrirConfirmSyncAbonos()}
+                  disabled={
+                    sincronizandoAbonosDriveAuto ||
+                    programandoRefreshAbonosDrive ||
+                    actualizandoListas ||
+                    enviandoPrejudicial ||
+                    enviandoD2Antes ||
+                    enviandoPago1Dia ||
+                    enviandoPago10Dias
+                  }
+                  title="Aplica en lote diferencias positivas ABONOS (hoja) vs cuotas en BD."
+                >
+                  <Scale
+                    className={`mr-2 h-4 w-4 ${
+                      sincronizandoAbonosDriveAuto ? 'animate-pulse' : ''
+                    }`}
+                  />
+                  Sincronizar diferencias ABONOS
                 </Button>
               ) : null}
 
@@ -2793,6 +2892,107 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
               }}
             >
               Programar recálculo
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={confirmSyncAbonosOpen}
+        onOpenChange={open => {
+          if (!open) {
+            setConfirmSyncAbonosOpen(false)
+            setSyncPreviewData(null)
+            setSyncPreviewLoading(false)
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Confirmar sincronización automática ABONOS</DialogTitle>
+            <div className="space-y-3 text-sm text-gray-600">
+              <p>
+                Este proceso aplica diferencias positivas de ABONOS (hoja) contra
+                cuotas en BD. Omite casos con lote ambiguo y montos altos.
+              </p>
+              {syncPreviewLoading ? (
+                <p className="text-xs text-muted-foreground">
+                  Generando vista previa (dry-run)...
+                </p>
+              ) : syncPreviewData ? (
+                <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-xs">
+                  <p>
+                    Evaluados:{' '}
+                    <span className="font-semibold">
+                      {syncPreviewData.resumen.total_evaluados}
+                    </span>
+                  </p>
+                  <p>
+                    Aplicables:{' '}
+                    <span className="font-semibold">
+                      {syncPreviewData.resumen.con_diferencia_aplicable}
+                    </span>
+                  </p>
+                  <p>
+                    Se aplicarán ahora:{' '}
+                    <span className="font-semibold text-green-700">
+                      {syncPreviewData.resumen.con_diferencia_aplicable -
+                        syncPreviewData.resumen.omitidos_requiere_lote -
+                        syncPreviewData.resumen.omitidos_monto_alto}
+                    </span>
+                  </p>
+                  <p>
+                    Omitidos por lote:{' '}
+                    <span className="font-semibold">
+                      {syncPreviewData.resumen.omitidos_requiere_lote}
+                    </span>
+                  </p>
+                  <p>
+                    Omitidos por monto alto:{' '}
+                    <span className="font-semibold">
+                      {syncPreviewData.resumen.omitidos_monto_alto}
+                    </span>
+                  </p>
+                  <p>
+                    Umbral monto alto (USD):{' '}
+                    <span className="font-semibold">
+                      {syncPreviewData.umbral_monto_alto_usd}
+                    </span>
+                  </p>
+                </div>
+              ) : (
+                <p className="text-xs text-amber-700">
+                  No se pudo obtener preview. Puede cancelar y reintentar.
+                </p>
+              )}
+              <p className="font-medium text-gray-900">
+                Pulse «Sincronizar ahora» para ejecutar cambios reales. «Cancelar»
+                cierra sin aplicar.
+              </p>
+            </div>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setConfirmSyncAbonosOpen(false)}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              className="bg-blue-600 text-white hover:bg-blue-700"
+              disabled={
+                syncPreviewLoading ||
+                sincronizandoAbonosDriveAuto ||
+                !syncPreviewData
+              }
+              onClick={() => {
+                setConfirmSyncAbonosOpen(false)
+                void handleSincronizarAbonosDriveAuto()
+              }}
+            >
+              Sincronizar ahora
             </Button>
           </DialogFooter>
         </DialogContent>

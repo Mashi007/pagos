@@ -142,6 +142,20 @@ def _parse_fecha_celda_hoja(val: Any) -> Optional[date]:
     return None
 
 
+def _texto_fecha_celda_hoja(val: Any) -> Optional[str]:
+    """
+    Texto fuente de la celda Q para trazabilidad/auditoría.
+    No reordena día/mes ni reformatea; conserva el valor como llegó de la hoja.
+    """
+    if val is None:
+        return None
+    if isinstance(val, str):
+        txt = val
+    else:
+        txt = str(val)
+    return txt if txt != "" else None
+
+
 def parse_fecha_entrega_column_q_valor(val: Any) -> Optional[date]:
     """
     Interpreta el valor de fecha de columna Q para comparar con BD.
@@ -403,7 +417,10 @@ def comparar_fecha_entrega_column_q_vs_aprobacion(
         "columna_q_header_detectado": q_header_key,
         "rango_columnas_hoja": range_raw,
         "columna_q_dentro_rango": q_ok,
-        "fecha_entrega_column_q": fecha_q.isoformat() if fecha_q else None,
+        # Texto literal de la hoja (Drive) para revisión humana y trazabilidad.
+        "fecha_entrega_column_q": _texto_fecha_celda_hoja(raw_q),
+        # Clave ordenable para comparación robusta con fecha_aprobacion en sistema.
+        "fecha_entrega_column_q_norm_iso": fecha_q.isoformat() if fecha_q else None,
         "fecha_entrega_column_q_raw": raw_q,
         "fecha_aprobacion_sistema": fecha_ap.isoformat() if fecha_ap else None,
         "diferencia_dias": diferencia_dias,

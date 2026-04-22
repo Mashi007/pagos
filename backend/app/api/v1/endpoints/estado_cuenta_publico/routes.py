@@ -170,7 +170,7 @@ class SolicitarEstadoCuentaRequest(BaseModel):
 
     cedula: str
 
-    origen: Optional[str] = None  # "informes" = links sin token
+    origen: Optional[str] = None  # "informes" solo aplica para staff autenticado
 
 
 
@@ -248,6 +248,45 @@ MAX_CODIGOS_ACTIVOS_POR_CEDULA = 3  # Máximo de códigos no usados y no expirad
 
 
 
+
+
+def _is_internal_staff_request(request: Request) -> bool:
+
+    """
+
+    Solo considera "interno" a quien trae Bearer token de personal válido.
+
+    Evita que terceros públicos salten controles forzando `origen=informes`.
+
+    """
+
+    auth = (request.headers.get("Authorization") or "").strip()
+
+    if not auth.lower().startswith("bearer "):
+
+        return False
+
+    token = auth[7:].strip()
+
+    if not token:
+
+        return False
+
+    payload = decode_token(token)
+
+    if not payload:
+
+        return False
+
+    if payload.get("type") != "access":
+
+        return False
+
+    if payload.get("scope") == "finiquito":
+
+        return False
+
+    return True
 
 
 def _cedula_lookup(cedula_input: str) -> str:
@@ -834,13 +873,16 @@ def validar_cedula_estado_cuenta(
 
     Público, sin auth. Rate limit: 30 req/min por IP. Retorna nombre y email si ok.
 
-    Sin límite cuando origen=informes (ruta /pagos/informes, uso interno).
+    Sin límite cuando origen=informes y la petición es interna autenticada (staff).
 
     """
 
     ip = get_client_ip(request)
 
-    if (origen or "").strip().lower() != "informes":
+    if not (
+        (origen or "").strip().lower() == "informes"
+        and _is_internal_staff_request(request)
+    ):
 
         check_rate_limit_estado_cuenta_validar(ip)
 
@@ -1439,9 +1481,9 @@ def solicitar_estado_cuenta(
 
     ip = get_client_ip(request)
 
-    # No aplicar rate limit si origen es 'informes' (ruta /informes, uso interno)
+    # Solo flujo interno autenticado (staff) puede omitir rate limit con origen='informes'.
     origen = (body.origen or "").strip().lower()
-    if origen != "informes":
+    if not (origen == "informes" and _is_internal_staff_request(request)):
 
         check_rate_limit_estado_cuenta_solicitar(ip)
 
@@ -1527,9 +1569,11 @@ def solicitar_estado_cuenta(
     bloquear_email = cliente_bloqueado_por_desistimiento(
         db, cedula=cedula_lookup, email=(emails_pdf[0] if emails_pdf else email)
     )
-    # No enviar email si origen es 'informes' (solo devolver PDF)
+    # En flujo interno autenticado no se envía email; solo se devuelve PDF.
     enviar_por_email = (
-        bool(emails_pdf) and not bloquear_email and origen != "informes"
+        bool(emails_pdf)
+        and not bloquear_email
+        and not (origen == "informes" and _is_internal_staff_request(request))
     )
 
     if enviar_por_email:

@@ -82,6 +82,14 @@ class Settings(BaseSettings):
             "prestamos.abonos_drive_cuotas_cache para préstamos no LIQUIDADO/DESISTIMIENTO (una pasada semanal)."
         ),
     )
+    ENABLE_ABONOS_DRIVE_AUTOSYNC_NIGHTLY: bool = Field(
+        default=False,
+        description=(
+            "Si True y ENABLE_AUTOMATIC_SCHEDULED_JOBS=True, ejecuta una sincronización masiva ABONOS(hoja) -> cuotas "
+            "cada domingo a las 05:10 America/Caracas (después de recálculo de caché). "
+            "Solo aplica casos con diferencia positiva y omite montos altos salvo confirmación explícita."
+        ),
+    )
     # Columna Q (hoja) vs fecha_aprobacion: caché en BD para Notificaciones > Fecha.
     ENABLE_FECHA_ENTREGA_Q_CACHE_NIGHTLY: bool = Field(
         default=True,
@@ -171,8 +179,16 @@ class Settings(BaseSettings):
     COBROS_PUBLICO_OTP_DISABLED: bool = Field(
         default=True,
         description=(
-            "Por defecto True: reporte de pago rapicredit-cobros sin OTP (estado de cuenta usa su propio flujo). "
+            "Por defecto True: reporte de pago rapicredit-cobros sin OTP "
+            "(estado de cuenta usa su propio flujo con verificacion). "
             "Poner False para exigir OTP tambien en cobros publico."
+        ),
+    )
+    RATE_LIMIT_TRUST_X_FORWARDED_FOR: bool = Field(
+        default=True,
+        description=(
+            "Si True, los endpoints publicos pueden usar la primera IP valida de X-Forwarded-For "
+            "para rate limit cuando la peticion llega detras de proxy confiable."
         ),
     )
     @validator('SECRET_KEY')

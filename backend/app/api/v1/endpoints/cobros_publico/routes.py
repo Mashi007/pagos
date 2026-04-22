@@ -3,7 +3,8 @@ Endpoints PÚBLICOS del módulo Cobros (formulario de reporte de pago).
 
 SEGURIDAD: Sin login de panel. Por defecto (COBROS_PUBLICO_OTP_DISABLED=True) rapicredit-cobros
 solo exige cedula valida + rate limit + honeypot; opcionalmente COBROS_PUBLICO_OTP_DISABLED=False
-activa OTP por correo y JWT cobros_public en validar-cedula y enviar-reporte (origen=infopagos sin OTP).
+activa OTP por correo y JWT cobros_public en validar-cedula y enviar-reporte.
+El bypass por origen=infopagos solo aplica cuando la petición trae Bearer válido de staff.
 Estado de cuenta publico usa endpoints propios con OTP (no este flag).
 """
 
@@ -121,11 +122,35 @@ class VerificarCodigoReporteResponse(BaseModel):
     email_enmascarado: Optional[str] = None
 
 
-def _cobros_public_otp_required(origen: Optional[str]) -> bool:
-    """OTP cobros publico: desactivado por settings o si origen=infopagos."""
+def _is_internal_staff_request(request: Request) -> bool:
+    """
+    Solo considera "interno" a quien trae Bearer token de personal válido.
+    Evita que un cliente público eleve privilegios forzando `origen=infopagos`.
+    """
+    auth = (request.headers.get("Authorization") or "").strip()
+    if not auth.lower().startswith("bearer "):
+        return False
+    token = auth[7:].strip()
+    if not token:
+        return False
+    payload = decode_token(token)
+    if not payload:
+        return False
+    if payload.get("type") != "access":
+        return False
+    if payload.get("scope") == "finiquito":
+        return False
+    return True
+
+
+def _cobros_public_otp_required(origen: Optional[str], request: Request) -> bool:
+    """OTP cobros público: solo se omite para flujo interno autenticado."""
     if settings.COBROS_PUBLICO_OTP_DISABLED:
         return False
-    if (origen or "").strip().lower() == "infopagos":
+    if (
+        (origen or "").strip().lower() == "infopagos"
+        and _is_internal_staff_request(request)
+    ):
         return False
     return True
 
@@ -413,10 +438,13 @@ def validar_cedula_publico(
     (misma regla que la importación a la tabla pagos).
 
     Público, sin auth. Rate limit: 30 req/min por IP. Retorna nombre y correo enmascarado si ok.
-    Sin límite cuando origen=infopagos (ruta /pagos/infopagos, uso interno).
+    Sin límite cuando origen=infopagos y la petición es interna autenticada (staff).
     """
     ip = get_client_ip(request)
-    if (origen or "").strip().lower() != "infopagos":
+    if not (
+        (origen or "").strip().lower() == "infopagos"
+        and _is_internal_staff_request(request)
+    ):
         check_rate_limit_validar_cedula(ip)
 
     if not cedula or not cedula.strip():
@@ -433,7 +461,7 @@ def validar_cedula_publico(
     if not cedula_lookup:
         return ValidarCedulaResponse(ok=False, error="Formato de cédula no reconocido.")
 
-    if _cobros_public_otp_required(origen):
+    if _cobros_public_otp_required(origen, request):
         token_err = _validar_bearer_cobros_public(request, cedula_lookup)
         if token_err:
             return ValidarCedulaResponse(ok=False, error=token_err)
@@ -452,10 +480,12 @@ def validar_cedula_publico(
     puede_bs = cedula_autorizada_para_bs(db, cedula_lookup)
     nombre = (cliente.nombres or "").strip()
     email = (cliente.email or "").strip()
+    otp_required = _cobros_public_otp_required(origen, request)
     return ValidarCedulaResponse(
         ok=True,
-        nombre=nombre,
-        email_enmascarado=_mask_email(email),
+        # Con OTP desactivado minimizamos exposición de PII en endpoint público.
+        nombre=nombre if otp_required else None,
+        email_enmascarado=_mask_email(email) if otp_required else None,
         puede_reportar_bs=puede_bs,
     )
 
@@ -496,7 +526,7 @@ async def enviar_reporte_publico(
         return EnviarReporteResponse(ok=False, error=val.get("error", "Cédula inválida."))
 
     cedula_lookup = val.get("valor_formateado", "").replace("-", "")
-    if _cobros_public_otp_required(None):
+    if _cobros_public_otp_required(None, request):
         token_err = _validar_bearer_cobros_public(request, cedula_lookup)
         if token_err:
             return EnviarReporteResponse(ok=False, error=token_err)
@@ -743,6 +773,11 @@ async def enviar_reporte_infopagos(
     cuando aplique, recibo al email del deudor y token de descarga para el colaborador; si no,
     estado en revisión manual en Pagos reportados — sin recibo ni correo hasta aprobación.
     """
+    if not _is_internal_staff_request(request):
+        raise HTTPException(
+            status_code=401,
+            detail="Acceso interno requerido para este endpoint.",
+        )
     ip = get_client_ip(request)
     if contact_website and str(contact_website).strip():
         logger.warning("[INFOPAGOS] Honeypot activado desde IP %s", ip)

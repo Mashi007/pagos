@@ -115,6 +115,39 @@ def _job_abonos_drive_cuotas_cache_dom_0435() -> None:
         db.close()
 
 
+def _job_abonos_drive_autosync_dom_0510() -> None:
+    """Domingo 05:10 Caracas: aplica automáticamente diferencias ABONOS->cuotas (modo real, seguro)."""
+    if not getattr(settings, "ENABLE_ABONOS_DRIVE_AUTOSYNC_NIGHTLY", False):
+        return
+    db = SessionLocal()
+    try:
+        from app.services.sincronizar_abonos_drive_cuotas_service import (
+            sincronizar_abonos_drive_a_cuotas_masivo,
+        )
+
+        res = sincronizar_abonos_drive_a_cuotas_masivo(
+            db,
+            dry_run=False,
+            limit=0,
+            prestamo_id=None,
+            aplicar_montos_altos=False,
+            usuario_registro="AUTO_CRON_ABONOS_DRIVE",
+        )
+        logger.info(
+            "[abonos_drive_autosync] programado total=%s aplicables=%s aplicados=%s omitidos_lote=%s omitidos_monto_alto=%s errores=%s",
+            (res.get("resumen") or {}).get("total_evaluados"),
+            (res.get("resumen") or {}).get("con_diferencia_aplicable"),
+            (res.get("resumen") or {}).get("aplicados"),
+            (res.get("resumen") or {}).get("omitidos_requiere_lote"),
+            (res.get("resumen") or {}).get("omitidos_monto_alto"),
+            (res.get("resumen") or {}).get("errores"),
+        )
+    except Exception as e:
+        logger.exception("Error en job abonos_drive_autosync_dom_0510: %s", e)
+    finally:
+        db.close()
+
+
 def _job_fecha_entrega_q_aprobacion_cache_lun_jue_0400() -> None:
     """Lunes y jueves 04:00 Caracas. Columna Q vs fecha_aprobacion en prestamos (Notificaciones Fecha)."""
     if not getattr(settings, "ENABLE_FECHA_ENTREGA_Q_CACHE_NIGHTLY", True):
@@ -444,6 +477,13 @@ def start_scheduler() -> None:
             id="abonos_drive_cuotas_cache_dom_0435",
             name="Notificaciones: caché Diferencia abono (hoja vs cuotas) domingo 04:35",
         )
+    if getattr(settings, "ENABLE_ABONOS_DRIVE_AUTOSYNC_NIGHTLY", False):
+        _scheduler.add_job(
+            _wrap_job_with_timing("abonos_drive_autosync_dom_0510", _job_abonos_drive_autosync_dom_0510),
+            CronTrigger(day_of_week="sun", hour=5, minute=10, timezone=SCHEDULER_TZ),
+            id="abonos_drive_autosync_dom_0510",
+            name="Notificaciones: autosync ABONOS->cuotas domingo 05:10",
+        )
 
     # 04:45 todos los días — snapshot préstamos Drive (medio; tras caché clientes)
     if getattr(settings, "ENABLE_PRESTAMO_CANDIDATOS_DRIVE_NIGHTLY", True):
@@ -545,6 +585,8 @@ def start_scheduler() -> None:
     _caches_notif_log = ""
     if getattr(settings, "ENABLE_ABONOS_DRIVE_CACHE_NIGHTLY", True):
         _caches_notif_log += "; caché Diferencia abono domingo 04:35"
+    if getattr(settings, "ENABLE_ABONOS_DRIVE_AUTOSYNC_NIGHTLY", False):
+        _caches_notif_log += "; autosync ABONOS->cuotas domingo 05:10"
     if getattr(settings, "ENABLE_FECHA_ENTREGA_Q_CACHE_NIGHTLY", True):
         _caches_notif_log += "; caché Q vs aprobación lunes y jueves 04:00"
     _prest_cand_log = ""

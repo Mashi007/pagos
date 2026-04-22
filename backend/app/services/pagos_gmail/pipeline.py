@@ -4,30 +4,25 @@ Orquestacion: Gmail -> Gemini/BD por **cada adjunto elegible** (remitente en cli
   No hay subidas a Google Drive: el comprobante queda en BD; no se archiva .eml en Drive (drive_email_link sin uso).
   Si no cumple plantillas 1/2/3/4 o faltan datos -> no fila ni comprobante en BD para ese adjunto.
 
-**Re-proceso innegociable:** si el mensaje tiene **cualquier etiqueta de usuario** Gmail (API ``type=user``), el pipeline **no** vuelve a escanear ni escribe filas Excel/BD, **salvo** (a) ``scan_filter=error_email_rescan`` con **solo** **ERROR EMAIL**; (b) corrida normal (**all** / **unread** / …) cuando las etiquetas de usuario del mensaje son **unicamente** combinaciones de **MANUAL** y/o **ERROR EMAIL** (subconjunto de esas dos; incluye solo MANUAL, solo ERROR EMAIL, o ambas); la re-lectura A/B con cédula en imagen **solo** si las etiquetas de usuario son **exactamente** **ERROR EMAIL**; (c) pasada final **MANUAL+ERROR** (redig, reglas propias). Cualquier otra etiqueta de usuario (MERCANTIL, OTROS, CALIDAD, etc.) implica pasar por alto. Sin etiquetas de usuario: solo sistema (INBOX, UNREAD, CATEGORY_*, etc.). Si falla el catalogo de etiquetas en la API, se registra metrica y **no** se omite por etiqueta (evitar falsos negativos).
+**Re-proceso innegociable:** si el mensaje tiene **cualquier etiqueta de usuario** Gmail (API ``type=user``), el pipeline **no** vuelve a escanear ni reetiqueta. Se hace *skip total* (sin nuevas filas Excel/BD), preservando la etiqueta existente.
 
 **Regla estricta (1 página por binario):** solo se digitaliza **una página** por archivo: imágenes tal cual; PDF solo si tiene **exactamente 1 página**. PDF con **2+ páginas** no se envía a Gemini; el hilo recibe etiqueta Gmail **PAGINAS** (puede convivir con otras etiquetas del mismo paso salvo la regla exclusiva de ERROR EMAIL abajo).
 
-**Primera regla (remitente vs tabla clientes):** se compara el correo del **De (From)** con `clientes.email` y, si no coincide, con `clientes.email_secundario` (trim, minúsculas).
-Si **coincide** (cédula resuelta): aplica digitalización por cada candidato (Gemini), filas Excel/BD y el resto de etiquetas (**MERCANTIL**/**BNC**/**BINANCE**/**BNV**, **MASTER**, **MANUAL**, **OTROS**, **PAGINAS**/**CALIDAD**/**TEXTO** si hubo PDF multipágina, imagen ilegible / no inventar, o **sin** imagen/PDF de comprobante (solo texto u adjuntos no imagen/PDF), etc., según corresponda).
-Si **no** coincide o falla la consulta a `clientes` (**Plan B**, salvo **master@** sin fila, re-escaneos y redig): se intenta **solo** Mercantil/BNC (Gemini con cédula en imagen, mismo apéndice que re-escaneo A/B). Si el binario **no** es plantilla **A** ni **B** (p. ej. C/D/NR o ninguno): **no** filas ni comprobante; Gmail **solo ERROR EMAIL** (sin inventar datos). Si es **A** o **B** con campos válidos y el correo queda 100% OK: filas/BD y en Gmail **plantilla MERCANTIL/BNC + PROCESADO** (quita ERROR EMAIL/MANUAL si existian). Salvo **PAGINAS** / **TEXTO** si aplica por PDF multipágina o sin captura.
-Si en un mensaje aplica **ERROR EMAIL** en Gmail: **solo ERROR EMAIL** en esa aplicación (salvo **PAGINAS**/**CALIDAD**/**TEXTO** añadidas aparte si aplica), nunca combinada con MERCANTIL/MANUAL/OTROS/etc.
-Si **sí** hay coincidencia de remitente en clientes: aplican el resto de reglas (plantillas, MASTER para **master@rapicreditca.com**, etc.). Re-lectura cédula A/B desde la imagen: con **scan_filter=error_email_rescan**, con **solo ERROR EMAIL** en corrida normal, o pasada final **MANUAL+ERROR** (redig); si la cédula en imagen sigue ilegible (**ERROR** en columna), se aplica etiqueta **CALIDAD** en Gmail.
-Remitente **master@rapicreditca.com** con fila en clientes: en Gmail solo etiqueta **MASTER** (sin MERCANTIL / BNC / BINANCE / BNV ni ERROR EMAIL).
-Remitente **master@rapicreditca.com** **sin** fila en clientes: aplica la primera regla (**solo ERROR EMAIL** en Gmail; no **MASTER**).
-Si en un mismo correo hay **varios** comprobantes digitalizados OK de tipos distintos (**A**/**B**/**C**/**D**/**NR**), en Gmail **solo** la etiqueta **MANUAL** (sin MERCANTIL/BNC/BINANCE/BNV, sin MASTER, sin ERROR EMAIL en esa aplicacion; **PAGINAS**/**CALIDAD**/**TEXTO** siguen aparte si aplica).
-Etiquetas Gmail MERCANTIL (A) / BNC (B) / BINANCE (C) / BNV (D) si el correo cumple al 100% en todos los candidatos procesados: cada candidato (1 pág.) debe ser
-plantilla A o B con fecha/monto/ref + cédula (remitente en clientes por lookup, o **Plan B** / re-escaneo A/B con cédula desde imagen), o plantilla C con monto/ref + cédula desde clientes;
-fecha de C = fecha del correo; cédula C/NR/D = lookup por email De salvo Plan B (C/D/NR no se aceptan sin cliente).
-Si hay remitente en clientes pero la columna cédula queda en **ERROR EMAIL** (sin resolver por lookup): en Gmail **solo ERROR EMAIL** (sin otras etiquetas en la misma aplicación); **no** fila en `pagos_gmail_sync_item` / `gmail_temporal` ni en Excel (la literal ERROR EMAIL no se exporta).
-Si falla la consulta a clientes: mismo tratamiento que remitente sin match salvo **Plan B** (Mercantil/BNC desde imagen).
-Etiqueta Gmail **OTROS** (solo esa en su llamada a Gmail, salvo **PAGINAS**/**CALIDAD**/**TEXTO** aparte si aplica): unicamente si hay candidatos, remitente en clientes, **ningun** comprobante digitalizado OK como plantilla **A**/**B**/**C**/**D** (MERCANTIL/BNC/BINANCE/BNV) y ninguna otra etiqueta de clasificacion del pipeline se aplico ya en ese mensaje.
-Si en cualquier archivo falta requisito o no es plantilla valida: no etiquetas de plantilla segun reglas; el mensaje que **entraba no leido** queda **leido** tras procesarlo en el escaneo (no se modifican estrellas: las deja el usuario). No inventar datos: Gemini ya devuelve NA si no hay certeza.
-Excel: GET /pagos/gmail/download-excel (filtros `solo_duplicados_documento` / `excluir_duplicados_documento` para plantilla banco A–D vs `pagos.numero_documento`).
-**Redigitalización final (MANUAL + ERROR EMAIL):** tras el lote principal, se lista `in:inbox` + media + ambas etiquetas; solo se procesan mensajes cuyas etiquetas de usuario sean **exactamente** MANUAL y ERROR EMAIL; **sin límite** en el número de candidatos imagen/PDF (cada binario sigue la regla global de 1 página por archivo); Gemini en modo A/B con cédula desde imagen por candidato; solo formatos **A** o **B** cuentan como digitalización válida en redig; éxito: mismas filas BD/cuotas que el flujo normal y sustitución de etiquetas (quita MANUAL y ERROR EMAIL, añade MERCANTIL o BNC y **PROCESADO**) cuando el correo queda 100% OK según las reglas ya existentes del pipeline.
-Reglas de negocio A/B/C/D (autoconciliado, cascada cuotas, duplicados): ver `plantilla_abcd_proceso_negocio.py`.
-Cédula: con remitente en clientes, por defecto desde `email` / `email_secundario` del De; con **Plan B** o re-escaneo A/B, Mercantil/BNC desde **imagen** (no inventar).
-Re-lectura cédula en imagen (Mercantil/BNC, plantillas **A** y **B**): si **scan_filter=error_email_rescan**, mensaje con **solo** etiqueta usuario **ERROR EMAIL** en corrida normal, o pasada final **MANUAL+ERROR** (redig). Gemini en modo A/B con cédula desde imagen; si sigue ilegible, etiqueta **CALIDAD**.
+**Regla de decisión actual (sin ambigüedad):**
+- Paso 1: si en el correo hay digitalización OK de plantilla A/B, etiqueta final = MERCANTIL o BNC.
+- Paso 2: si no hubo A/B y el remitente está en `clientes`, se admite C/D y etiqueta final = BINANCE o BNV.
+- Paso 3 (fallback): TEXTO -> MASTER -> ERROR EMAIL -> MANUAL.
+- Solo se aplica **una** etiqueta final por correo (set permitido arriba), sin etiquetas auxiliares.
+
+**Remitente y Plan B:**
+- Remitente en `clientes`: se evalúan plantillas según prompts/reglas de negocio.
+- Remitente fuera de `clientes` (Plan B): solo A/B con cédula desde imagen; C/D/NR no aplican.
+- `master@rapicreditca.com` sin digitalización válida cae en fallback MASTER; sin fila en clientes fuera de ese caso, fallback ERROR EMAIL.
+
+Excel de revisión y negocio:
+- `pagos_gmail_sync_item` / `gmail_temporal` guardan cada comprobante válido de extracción.
+- Alta automática (A-D/NR) y cascada de cuotas se evalúan en servicios de negocio.
+- Los casos no autoconciliados permanecen para revisión manual en exportes de Gmail.
 """
 import hashlib
 import logging
@@ -68,9 +63,19 @@ def _metricas_resumen_corrida_gmail_pagos(db: Session, sync_id: int) -> dict[str
             .select_from(PagosGmailAbcdCuotasTraza)
             .where(
                 PagosGmailAbcdCuotasTraza.sync_id == sync_id,
-                PagosGmailAbcdCuotasTraza.etapa_final.in_(
-                    ("CUOTAS_OK", "PAGO_SIN_CUOTAS")
-                ),
+                PagosGmailAbcdCuotasTraza.etapa_final == "CUOTAS_OK",
+                PagosGmailAbcdCuotasTraza.pago_id.isnot(None),
+            )
+        )
+        or 0
+    )
+    n_sin_cuotas = int(
+        db.scalar(
+            select(func.count())
+            .select_from(PagosGmailAbcdCuotasTraza)
+            .where(
+                PagosGmailAbcdCuotasTraza.sync_id == sync_id,
+                PagosGmailAbcdCuotasTraza.etapa_final == "PAGO_SIN_CUOTAS",
                 PagosGmailAbcdCuotasTraza.pago_id.isnot(None),
             )
         )
@@ -80,6 +85,7 @@ def _metricas_resumen_corrida_gmail_pagos(db: Session, sync_id: int) -> dict[str
     return {
         "comprobantes_digitados": n_items,
         "pagos_validos_alta_automatica": n_valid,
+        "pagos_sin_aplicacion_cuotas": n_sin_cuotas,
         "pagos_invalidos_pendientes_revision": n_invalid,
     }
 
@@ -130,7 +136,6 @@ from app.services.pagos_gmail.gmail_abcd_cuotas_traza import (
 )
 from app.services.pagos_gmail.gmail_pipeline_evento import (
     EVT_CAMPOS_INCOMPLETOS_PLANTILLA,
-    EVT_DEDUPE_SHA_CORRIDA,
     EVT_ERROR_PROCESAR_ADJUNTO,
     EVT_NO_PLANTILLA_GEMINI,
     EVT_OMISION_ETIQUETA_USUARIO,
@@ -157,28 +162,22 @@ from app.services.pagos_gmail.gmail_service import (
     build_gmail_service,
     ensure_user_label_id,
     invalidate_gmail_labels_list_cache,
-    modify_message_labels_add_remove,
     get_pagos_gmail_image_pdf_files_for_pipeline,
     get_message_date,
     get_message_full_payload,
-    get_existing_user_label_id,
     get_or_create_pagos_gmail_plantilla_label_ids,
     list_gmail_user_label_ids,
     list_messages_by_filter,
     mark_as_read,
     PagosGmailGmailListError,
     PAGOS_GMAIL_LABEL_ERROR_EMAIL,
-    PAGOS_GMAIL_LABEL_OTROS,
     PAGOS_GMAIL_LABEL_MANUAL,
     PAGOS_GMAIL_LABEL_MASTER,
     PAGOS_GMAIL_LABEL_IMAGEN_1,
     PAGOS_GMAIL_LABEL_IMAGEN_2,
     PAGOS_GMAIL_LABEL_IMAGEN_3,
     PAGOS_GMAIL_LABEL_IMAGEN_4,
-    PAGOS_GMAIL_LABEL_PAGINAS,
-    PAGOS_GMAIL_LABEL_CALIDAD,
     PAGOS_GMAIL_LABEL_TEXTO,
-    PAGOS_GMAIL_LABEL_PROCESADO,
 )
 from app.services.pagos_gmail.gemini_service import (
     classify_and_extract_pagos_gmail_attachment,
@@ -260,6 +259,18 @@ PAGOS_GMAIL_ERROR_CEDULA_IMAGEN = "ERROR"
 
 # De / From en minusculas: Gmail solo etiqueta MASTER (no plantilla 1-4 ni ERROR EMAIL).
 PAGOS_GMAIL_SENDER_MASTER = "master@rapicreditca.com"
+PAGOS_GMAIL_ETIQUETAS_FINALES_PERMITIDAS = frozenset(
+    {
+        PAGOS_GMAIL_LABEL_IMAGEN_1,
+        PAGOS_GMAIL_LABEL_IMAGEN_2,
+        PAGOS_GMAIL_LABEL_IMAGEN_3,
+        PAGOS_GMAIL_LABEL_IMAGEN_4,
+        PAGOS_GMAIL_LABEL_ERROR_EMAIL,
+        PAGOS_GMAIL_LABEL_MANUAL,
+        PAGOS_GMAIL_LABEL_MASTER,
+        PAGOS_GMAIL_LABEL_TEXTO,
+    }
+)
 
 
 def _cedula_por_email_cliente(db: Session, email_raw: str) -> tuple[Optional[str], Optional[str]]:
@@ -333,26 +344,25 @@ def run_pipeline(
 ) -> tuple[Optional[int], str]:
     """
     Ejecuta el pipeline Gmail -> Gemini -> BD (comprobante en pago_comprobante_imagen; sin subidas a Drive).
-    Solo se escanea (Gemini) si el **De** está en `clientes` (email o email_secundario); **cada** adjunto de una sola página (imagen o PDF de 1 pág.) es un candidato y puede generar una fila. PDF con 2+ páginas no se digitaliza; se aplica etiqueta **PAGINAS** en Gmail.     Imagen ilegible / no inventar (p. ej. Gemini sin plantilla o columnas de imagen incompletas con cédula de cliente OK): **CALIDAD**. Sin binario imagen/PDF de comprobante (solo texto u otros adjuntos): **TEXTO**.
-    Si no hay match en clientes (o fallo al consultar): **no** Gemini ni filas Excel/BD; Gmail **ERROR EMAIL** (y **PAGINAS** si hubo PDF multipágina; **TEXTO** si no hay imagen/PDF de pago).
-    Por adjunto OK con remitente en tabla clientes: etiqueta MERCANTIL (A), BNC (B), BINANCE (C) o BNV (D) si **todo** el correo es del mismo tipo (A/B/C/D/NR);
-    si hay **mas de un tipo** entre A, B, C, D y NR digitalizados OK: en Gmail **solo** etiqueta **MANUAL** (sin MERCANTIL/BNC/BINANCE/BNV ni MASTER ni ERROR EMAIL en esa llamada). Cierre: leido si hubo digitalizacion 100%% OK.
-    Primera regla: sin coincidencia en `clientes.email` / `email_secundario` (o fallo al consultar): solo **ERROR EMAIL** en Gmail y sin filas (salvo **PAGINAS**/**TEXTO** si aplica). Con coincidencia: plantillas/MANUAL/**OTROS** (solo si no hubo A/B/C/D digitalizado OK)/**PAGINAS**/**CALIDAD**/**TEXTO**/etc.
-    Cuando aplica **ERROR EMAIL** en Gmail: esa etiqueta en la llamada de error (no MERCANTIL, ni MANUAL, ni OTROS), salvo que prevalezca **solo MANUAL** por mezcla de tipos; **PAGINAS**/**CALIDAD**/**TEXTO** se añaden en paso aparte si aplica.
+    Flujo de clasificación (etiqueta final única):
+    1) Paso 1: detectar A/B desde el inicio (sin importar número de adjuntos) -> etiqueta MERCANTIL o BNC.
+    2) Paso 2: si no hubo A/B, validar remitente en `clientes`; con cliente, clasificar C/D y etiquetar BINANCE o BNV.
+    3) Fallback: si no aplica 1/2, usar orden TEXTO -> MASTER -> ERROR EMAIL -> MANUAL.
+    Regla innegociable: solo puede quedar **una** etiqueta final por correo, y si el mensaje ya trae cualquier etiqueta de usuario se omite sin reescanear.
     scan_filter: "unread" | "read" | "all" | "pending_identification" | "error_email_rescan" (por defecto API/UI: all).
       Por defecto (**all** / **pending_identification**): inbox con imagen/PDF — leidos y no leidos (el pipeline no modifica estrellas Gmail),
       con cualquier etiqueta de usuario (incluye **ERROR EMAIL**; la consulta Gmail no excluye esa etiqueta).
       **unread** / **read**: mismo criterio base + ``is:unread`` / ``is:read`` en la búsqueda Gmail; los que entran como no leidos se marcan **leidos** al procesarlos en la corrida.
       **error_email_rescan**: listado ERROR EMAIL + media; se procesan mensajes cuya **unica** etiqueta de usuario sea **ERROR EMAIL**; si hay mas etiquetas de usuario, se omiten.
       pending_identification es alias del listado base (nombre conservado para scheduler/API).
-    Orden comprobantes OK: insert sync_item + gmail_temporal -> flush -> persistir binario (o reuso SHA-256 en corrida) y URL en drive_link -> commit atomico.
+    Regla de volumen: una imagen candidata (adjunta o embebida) = una fila = un pago, si cumple prompts y reglas.
+    Orden comprobantes OK: insert sync_item + gmail_temporal -> flush -> persistir binario (con posible reuso del BLOB por SHA-256) y URL en drive_link -> commit atomico.
     Los mensajes de cada corrida se listan **todos** los que cumplen el criterio **q** (paginacion Gmail hasta agotar nextPageToken),
     se ordenan como bandeja tipica (**mas reciente primero**, mas antiguo al final) y se procesan en ese orden del primero al ultimo.
     Pasada principal de listado+proceso por ejecucion; al final, listado+proceso adicional **MANUAL+ERROR EMAIL** (redig).
     Cada mensaje que **entraba no leido** (labelIds al listar) se marca **leido** al terminar de procesarlo en esa corrida.
     Mensajes con etiquetas de usuario Gmail se omiten salvo que sean **solo** combinaciones de **MANUAL** y/o **ERROR EMAIL** (en **all** / **unread** / **read** / **pending_identification**; re-lectura A/B con cédula en imagen solo si es **exactamente** ERROR EMAIL), modo ``error_email_rescan``, o pasada redig **MANUAL+ERROR**. Fallo al listar catalogo de etiquetas: metrica ``gmail_labels_list_failed`` y no se aplica omision por etiqueta.
-    Dedupe en la misma corrida: mismo binario de adjunto (SHA-256) tras un commit BD previo en ese run omite Gemini/BD/enlace
-    (reenvios o mensajes duplicados con el mismo JPG/PDF).
+    No hay dedupe por contenido para saltar candidatos: cada imagen/PDF 1p se escanea y evalúa.
     Returns (sync_id, "success"|"error"|"no_credentials").
     """
     logger.info("[PAGOS_GMAIL] INICIO pipeline (existing_sync_id=%s, scan_filter=%s)", existing_sync_id, scan_filter)
@@ -400,16 +410,26 @@ def run_pipeline(
     correos_marcados_revision = 0
     plantilla_label_cache: Dict[str, Optional[str]] = {}
     error_email_rescan = (scan_filter or "").strip().lower() == "error_email_rescan"
-    # Mismo binario de comprobante en varios mensajes Gmail (reenvíos / hilos duplicados): una sola pasada Gemini+BD por corrida.
-    seen_attachment_sha256: set[str] = set()
     # Misma corrida: varias filas Excel apuntando al mismo BLOB (mismo SHA-256) sin duplicar pago_comprobante_imagen.
     comprobante_reuse_por_sha256: dict[str, tuple[str, str]] = {}
+    # IDs de gmail_temporal cuyo delete inmediato falló tras alta automática OK; se reintenta antes de cerrar cada mensaje.
+    pending_gmail_temporal_delete_ids: set[int] = set()
     # Métricas para GET /pagos/gmail/status → last_run_summary (diagnóstico en toast UI).
     run_stats: dict[str, int] = {
         "gmail_messages_listed": 0,
         "messages_skipped_invalid_sender": 0,
         "messages_skipped_drive_folder": 0,
         "messages_skipped_clasificacion_etiqueta": 0,
+        "messages_final_label_applied": 0,
+        "messages_no_final_label": 0,
+        "final_paso_1_a": 0,
+        "final_paso_1_b": 0,
+        "final_paso_2_c": 0,
+        "final_paso_2_d": 0,
+        "final_fallback_texto": 0,
+        "final_fallback_master": 0,
+        "final_fallback_error_email": 0,
+        "final_fallback_manual": 0,
         "gmail_labels_list_failed": 0,
         "manual_error_redigitaliza_listed": 0,
         "manual_error_redigitaliza_error": "",
@@ -506,74 +526,14 @@ def run_pipeline(
                 was_unread = "UNREAD" in label_ids_snapshot
                 msg_lids_set = frozenset(label_ids_snapshot)
                 _user_on_msg = msg_lids_set & _gmail_user_label_ids
-                k_man_shared = PAGOS_GMAIL_LABEL_MANUAL
                 k_err_shared = PAGOS_GMAIL_LABEL_ERROR_EMAIL
-                if k_man_shared not in plantilla_label_cache:
-                    plantilla_label_cache[k_man_shared] = ensure_user_label_id(
-                        gmail_svc, k_man_shared
-                    )
                 if k_err_shared not in plantilla_label_cache:
                     plantilla_label_cache[k_err_shared] = ensure_user_label_id(
                         gmail_svc, k_err_shared
                     )
-                mid_man_shared = plantilla_label_cache.get(k_man_shared)
                 mid_err_shared = plantilla_label_cache.get(k_err_shared)
-                _ids_manual_o_error = frozenset(
-                    x for x in (mid_man_shared, mid_err_shared) if x
-                )
-                labels_usuario_solo_manual_y_o_error = (
-                    _labels_catalog_ok
-                    and bool(_ids_manual_o_error)
-                    and bool(_user_on_msg)
-                    and _user_on_msg.issubset(_ids_manual_o_error)
-                )
-                _skip_por_etiquetas_usuario = False
-                if redig_manual_error_pass:
-                    if (
-                        not _labels_catalog_ok
-                        or not mid_man_shared
-                        or not mid_err_shared
-                        or _user_on_msg != frozenset({mid_man_shared, mid_err_shared})
-                    ):
-                        if (
-                            _user_on_msg != frozenset({mid_man_shared, mid_err_shared})
-                            and mid_man_shared
-                            and mid_err_shared
-                        ):
-                            logger.info(
-                                "[PAGOS_GMAIL] redig MANUAL+ERROR: omitido (etiquetas usuario deben ser "
-                                "exactamente MANUAL y ERROR EMAIL; actuales=%s msg=%s)",
-                                ", ".join(
-                                    sorted(
-                                        _gmail_user_label_names.get(lid, lid)
-                                        for lid in _user_on_msg
-                                    )
-                                ),
-                                msg_id,
-                            )
-                        else:
-                            logger.warning(
-                                "[PAGOS_GMAIL] redig MANUAL+ERROR: omitido (catalogo/ids MANUAL-ERROR EMAIL) msg=%s",
-                                msg_id,
-                            )
-                        if was_unread:
-                            mark_as_read(gmail_svc, msg_id)
-                        continue
-                elif _labels_catalog_ok and _user_on_msg:
-                    if error_email_rescan:
-                        if (
-                            mid_err_shared
-                            and _user_on_msg.issubset(frozenset({mid_err_shared}))
-                        ):
-                            _skip_por_etiquetas_usuario = False
-                        else:
-                            _skip_por_etiquetas_usuario = True
-                    elif not redig_manual_error_pass and labels_usuario_solo_manual_y_o_error:
-                        # Inbox normal: no omitir si las etiquetas de usuario son solo MANUAL y/o ERROR EMAIL.
-                        _skip_por_etiquetas_usuario = False
-                    else:
-                        _skip_por_etiquetas_usuario = True
-                if _skip_por_etiquetas_usuario:
+                if _labels_catalog_ok and _user_on_msg:
+                    _skip_por_etiquetas_usuario = True
                     _hit_names = sorted(
                         _gmail_user_label_names.get(lid, lid) for lid in _user_on_msg
                     )
@@ -704,8 +664,6 @@ def run_pipeline(
                 label_ids_for_message: list[str] = []
                 # Formatos A/B/C/D/NR digitalizados OK (comprobante en BD) en este mensaje (para detectar mezcla -> MANUAL).
                 bank_fmts_digitized: list[str] = []
-                gmail_etiqueta_clasificacion_aplicada = False
-                any_etiqueta_calidad_imagen = False
                 if not candidatos:
                     any_incomplete_or_skipped = True
                     if multipage_pdf_omitidos > 0:
@@ -715,8 +673,6 @@ def run_pipeline(
                         )
                     else:
                         _pipeline_evt(EVT_SIN_ADJUNTOS_DIGITABLES)
-                tiene_medio_pipeline = bool(candidatos) or multipage_pdf_omitidos > 0
-
                 if (
                     not remitente_en_clientes
                     and candidatos
@@ -820,20 +776,6 @@ def run_pipeline(
                             else bytes(content)
                         )
                         file_digest = hashlib.sha256(body_bin).hexdigest()
-                        if file_digest in seen_attachment_sha256:
-                            logger.info(
-                                "[PAGOS_GMAIL]   Dedupe: bytes identicos a comprobante ya digitalizado antes en esta corrida "
-                                "(sha256=%s…) — sin Gemini/BD: %s",
-                                file_digest[:16],
-                                filename,
-                            )
-                            _pipeline_evt(
-                                EVT_DEDUPE_SHA_CORRIDA,
-                                sha256_hex=file_digest,
-                                filename=filename,
-                            )
-                            any_incomplete_or_skipped = True
-                            continue
 
                         fmt, data = classify_and_extract_pagos_gmail_attachment(
                             content,
@@ -846,7 +788,6 @@ def run_pipeline(
                         if redig_manual_error_pass and fmt not in ("A", "B"):
                             any_incomplete_or_skipped = True
                             any_skipped_not_plantilla_o_campos = True
-                            any_etiqueta_calidad_imagen = True
                             logger.info(
                                 "[PAGOS_GMAIL] redig MANUAL+ERROR: Gemini no clasifica Mercantil/BNC (formato=%r) — "
                                 "sin digitalizar %s",
@@ -863,7 +804,6 @@ def run_pipeline(
                         if fmt not in PAGOS_GMAIL_FORMATOS_PLANTILLA:
                             any_incomplete_or_skipped = True
                             any_skipped_not_plantilla_o_campos = True
-                            any_etiqueta_calidad_imagen = True
                             logger.warning(
                                 "[PAGOS_GMAIL]   No es plantilla A/B/C/D - no BD: %s",
                                 filename,
@@ -928,8 +868,6 @@ def run_pipeline(
                             r = normalizar_referencia(_v(data.get("numero_referencia")))
                             c = _cedula_desde_imagen_rescan_error_email(data.get("cedula"))
                             c_ok = True
-                            if c == PAGOS_GMAIL_ERROR_CEDULA_IMAGEN:
-                                any_etiqueta_calidad_imagen = True
                             _log_ab = (
                                 "Plan B (sin De en clientes)"
                                 if plan_b_mercantil_bnc_fuera_bd
@@ -966,8 +904,6 @@ def run_pipeline(
                             if not _campos_completos_nr(c, m):
                                 any_incomplete_or_skipped = True
                                 any_skipped_not_plantilla_o_campos = True
-                                if c_ok:
-                                    any_etiqueta_calidad_imagen = True
                                 logger.warning(
                                     "[PAGOS_GMAIL]   Formato NR pero fila incompleta (monto!=NR o cedula vacia) - no BD: %s",
                                     filename,
@@ -981,8 +917,6 @@ def run_pipeline(
                         elif not _campos_completos(f, c, m, r):
                             any_incomplete_or_skipped = True
                             any_skipped_not_plantilla_o_campos = True
-                            if c_ok:
-                                any_etiqueta_calidad_imagen = True
                             logger.warning(
                                 "[PAGOS_GMAIL]   Plantilla %s pero columnas incompletas - no BD: %s",
                                 fmt,
@@ -1152,7 +1086,6 @@ def run_pipeline(
                                         or redig_manual_error_pass
                                         or solo_error_email_inbox
                                         or plan_b_mercantil_bnc_fuera_bd
-                                        or labels_usuario_solo_manual_y_o_error
                                     )
                                 ):
                                     label_ids_for_message.append(label_id)
@@ -1179,7 +1112,6 @@ def run_pipeline(
                                         if isinstance(sh_raw, str) and len(sh_raw.strip()) == 64:
                                             k = sh_raw.strip().lower()
                                             if all(c in "0123456789abcdef" for c in k):
-                                                seen_attachment_sha256.add(k)
                                                 comprobante_reuse_por_sha256[k] = (uid, link_url)
                                         files_ok += 1
                                         had_complete_digitalization = True
@@ -1249,45 +1181,62 @@ def run_pipeline(
                                                             "[PAGOS_GMAIL] [ABCD_PAGO] Alta pagos+cuotas OK: %s",
                                                             res_abcd,
                                                         )
-                                                        _gt_del_id = None
-                                                        for _sii, _gt, _pp in rows_pairs:
-                                                            if (
-                                                                getattr(_sii, "id", None)
-                                                                is not None
-                                                                and getattr(si, "id", None)
-                                                                is not None
-                                                                and int(_sii.id) == int(si.id)
-                                                            ):
-                                                                _gt_del_id = getattr(
-                                                                    _gt, "id", None
-                                                                )
-                                                                break
-                                                        if _gt_del_id is not None:
-                                                            try:
-                                                                db.execute(
-                                                                    delete(GmailTemporal).where(
-                                                                        GmailTemporal.id
-                                                                        == int(_gt_del_id)
+                                                        if (
+                                                            str(res_abcd.get("etapa_final") or "")
+                                                            == "CUOTAS_OK"
+                                                        ):
+                                                            _gt_del_id = None
+                                                            for _sii, _gt, _pp in rows_pairs:
+                                                                if (
+                                                                    getattr(_sii, "id", None)
+                                                                    is not None
+                                                                    and getattr(si, "id", None)
+                                                                    is not None
+                                                                    and int(_sii.id) == int(si.id)
+                                                                ):
+                                                                    _gt_del_id = getattr(
+                                                                        _gt, "id", None
                                                                     )
-                                                                )
-                                                                db.commit()
-                                                                logger.info(
-                                                                    "[PAGOS_GMAIL] [ABCD_PAGO] "
-                                                                    "gmail_temporal id=%s omitida de Excel "
-                                                                    "(validadores A-D OK, pago en BD)",
-                                                                    _gt_del_id,
-                                                                )
-                                                            except Exception as _gt_exc:
-                                                                logger.warning(
-                                                                    "[PAGOS_GMAIL] [ABCD_PAGO] "
-                                                                    "No se pudo eliminar gmail_temporal id=%s: %s",
-                                                                    _gt_del_id,
-                                                                    _gt_exc,
-                                                                )
+                                                                    break
+                                                            if _gt_del_id is not None:
                                                                 try:
-                                                                    db.rollback()
-                                                                except Exception:
-                                                                    pass
+                                                                    db.execute(
+                                                                        delete(GmailTemporal).where(
+                                                                            GmailTemporal.id
+                                                                            == int(_gt_del_id)
+                                                                        )
+                                                                    )
+                                                                    db.commit()
+                                                                    logger.info(
+                                                                        "[PAGOS_GMAIL] [ABCD_PAGO] "
+                                                                        "gmail_temporal id=%s omitida de Excel "
+                                                                        "(CUOTAS_OK, pago en BD)",
+                                                                        _gt_del_id,
+                                                                    )
+                                                                except Exception as _gt_exc:
+                                                                    logger.warning(
+                                                                        "[PAGOS_GMAIL] [ABCD_PAGO] "
+                                                                        "No se pudo eliminar gmail_temporal id=%s: %s",
+                                                                        _gt_del_id,
+                                                                        _gt_exc,
+                                                                    )
+                                                                    try:
+                                                                        pending_gmail_temporal_delete_ids.add(
+                                                                            int(_gt_del_id)
+                                                                        )
+                                                                    except Exception:
+                                                                        pass
+                                                                    try:
+                                                                        db.rollback()
+                                                                    except Exception:
+                                                                        pass
+                                                        else:
+                                                            logger.warning(
+                                                                "[PAGOS_GMAIL] [ABCD_PAGO] pago_id=%s sin aplicación a cuotas "
+                                                                "(etapa=%s): permanece en revisión manual",
+                                                                res_abcd.get("pago_id"),
+                                                                res_abcd.get("etapa_final"),
+                                                            )
                                                     else:
                                                         logger.warning(
                                                             "[PAGOS_GMAIL] [ABCD_PAGO] Sin alta automatica: "
@@ -1415,46 +1364,64 @@ def run_pipeline(
                                                                 "[PAGOS_GMAIL] [NR_PAGO] Alta pagos+cuotas OK: %s",
                                                                 res_nr,
                                                             )
-                                                            _gt_del_id = None
-                                                            for _sii, _gt, _pp in rows_pairs:
-                                                                if (
-                                                                    getattr(_sii, "id", None)
-                                                                    is not None
-                                                                    and getattr(si, "id", None)
-                                                                    is not None
-                                                                    and int(_sii.id) == int(si.id)
-                                                                ):
-                                                                    _gt_del_id = getattr(
-                                                                        _gt, "id", None
-                                                                    )
-                                                                    break
-                                                            if _gt_del_id is not None:
-                                                                try:
-                                                                    db.execute(
-                                                                        delete(
-                                                                            GmailTemporal
-                                                                        ).where(
-                                                                            GmailTemporal.id
-                                                                            == int(_gt_del_id)
+                                                            if (
+                                                                str(res_nr.get("etapa_final") or "")
+                                                                == "CUOTAS_OK"
+                                                            ):
+                                                                _gt_del_id = None
+                                                                for _sii, _gt, _pp in rows_pairs:
+                                                                    if (
+                                                                        getattr(_sii, "id", None)
+                                                                        is not None
+                                                                        and getattr(si, "id", None)
+                                                                        is not None
+                                                                        and int(_sii.id)
+                                                                        == int(si.id)
+                                                                    ):
+                                                                        _gt_del_id = getattr(
+                                                                            _gt, "id", None
                                                                         )
-                                                                    )
-                                                                    db.commit()
-                                                                    logger.info(
-                                                                        "[PAGOS_GMAIL] [NR_PAGO] "
-                                                                        "gmail_temporal id=%s omitida de Excel",
-                                                                        _gt_del_id,
-                                                                    )
-                                                                except Exception as _gt_exc:
-                                                                    logger.warning(
-                                                                        "[PAGOS_GMAIL] [NR_PAGO] "
-                                                                        "No se pudo eliminar gmail_temporal id=%s: %s",
-                                                                        _gt_del_id,
-                                                                        _gt_exc,
-                                                                    )
+                                                                        break
+                                                                if _gt_del_id is not None:
                                                                     try:
-                                                                        db.rollback()
-                                                                    except Exception:
-                                                                        pass
+                                                                        db.execute(
+                                                                            delete(
+                                                                                GmailTemporal
+                                                                            ).where(
+                                                                                GmailTemporal.id
+                                                                                == int(_gt_del_id)
+                                                                            )
+                                                                        )
+                                                                        db.commit()
+                                                                        logger.info(
+                                                                            "[PAGOS_GMAIL] [NR_PAGO] "
+                                                                            "gmail_temporal id=%s omitida de Excel (CUOTAS_OK)",
+                                                                            _gt_del_id,
+                                                                        )
+                                                                    except Exception as _gt_exc:
+                                                                        logger.warning(
+                                                                            "[PAGOS_GMAIL] [NR_PAGO] "
+                                                                            "No se pudo eliminar gmail_temporal id=%s: %s",
+                                                                            _gt_del_id,
+                                                                            _gt_exc,
+                                                                        )
+                                                                        try:
+                                                                            pending_gmail_temporal_delete_ids.add(
+                                                                                int(_gt_del_id)
+                                                                            )
+                                                                        except Exception:
+                                                                            pass
+                                                                        try:
+                                                                            db.rollback()
+                                                                        except Exception:
+                                                                            pass
+                                                            else:
+                                                                logger.warning(
+                                                                    "[PAGOS_GMAIL] [NR_PAGO] pago_id=%s sin aplicación a cuotas "
+                                                                    "(etapa=%s): permanece en revisión manual",
+                                                                    res_nr.get("pago_id"),
+                                                                    res_nr.get("etapa_final"),
+                                                                )
                                                         else:
                                                             logger.warning(
                                                                 "[PAGOS_GMAIL] [NR_PAGO] Sin alta automatica: "
@@ -1559,463 +1526,103 @@ def run_pipeline(
                 tipos_digitados_distintos = {
                     f for f in bank_fmts_digitized if f in ("A", "B", "C", "D", "NR")
                 }
-                mezcla_tipos_banco_mismo_correo = (
-                    remitente_en_clientes and len(tipos_digitados_distintos) > 1
-                )
-                if mezcla_tipos_banco_mismo_correo:
-                    label_ids_for_message.clear()
-                    logger.info(
-                        "[PAGOS_GMAIL]   Varios tipos de comprobante en un correo (%s) -> "
-                        "Gmail MANUAL (sin MERCANTIL/BNC/BINANCE/BNV conjuntos)",
-                        ", ".join(sorted(tipos_digitados_distintos)),
-                    )
-                plantilla_unique_ids = list(
-                    dict.fromkeys(x for x in label_ids_for_message if x)
-                )
-                gmail_label_id_manual_mezcla: Optional[str] = None
-                if mezcla_tipos_banco_mismo_correo:
-                    k_man_mz = PAGOS_GMAIL_LABEL_MANUAL
-                    if k_man_mz not in plantilla_label_cache:
-                        plantilla_label_cache[k_man_mz] = ensure_user_label_id(
-                            gmail_svc, k_man_mz
-                        )
-                    gmail_label_id_manual_mezcla = plantilla_label_cache.get(k_man_mz)
-                    if not gmail_label_id_manual_mezcla:
-                        logger.warning(
-                            "[PAGOS_GMAIL]   Gmail: no se pudo crear/obtener etiqueta %s (mezcla tipos)",
-                            k_man_mz,
-                        )
-                # Mezcla A/B/C/D/NR en un solo correo: en Gmail **solo** MANUAL (sin MERCANTIL/BNC/BINANCE/BNV ni MASTER ni ERROR EMAIL).
-                mezcla_solo_manual_gmail = bool(
-                    mezcla_tipos_banco_mismo_correo and gmail_label_id_manual_mezcla
-                )
-                # ERROR EMAIL: si aplica, en Gmail solo esa etiqueta (no combinar con plantillas ni MANUAL).
-                gmail_label_id_error_email: Optional[str] = None
-                if (
-                    not redig_manual_error_pass
-                    and not (solo_error_email_inbox and fully_digitized_email)
-                    and not (
-                        plan_b_mercantil_bnc_fuera_bd
-                        and fully_digitized_email
-                        and plantilla_unique_ids
-                    )
-                    and (
-                        (not remitente_en_clientes)
-                        or (
-                            any_cedula_lookup_failed
-                            and committed_comprobante_rows
-                        )
-                    )
-                    and not (remitente_solo_master and remitente_en_clientes)
-                    and not mezcla_solo_manual_gmail
-                ):
-                    k_err = PAGOS_GMAIL_LABEL_ERROR_EMAIL
-                    if k_err not in plantilla_label_cache:
-                        plantilla_label_cache[k_err] = ensure_user_label_id(
-                            gmail_svc, k_err
-                        )
-                    err_lid = plantilla_label_cache.get(k_err)
-                    if err_lid:
-                        gmail_label_id_error_email = err_lid
-                        gmail_etiqueta_clasificacion_aplicada = True
-                        logger.info(
-                            "[PAGOS_GMAIL]   Gmail: se aplicara etiqueta %s (remitente sin fila en clientes, "
-                            "o cedula no resuelta con filas comprobante confirmadas)",
-                            k_err,
-                        )
-                    else:
-                        logger.warning(
-                            "[PAGOS_GMAIL]   Gmail: no se pudo crear/obtener etiqueta %s — revisar permisos Gmail",
-                            k_err,
-                        )
 
-                gmail_precursor_label_ids = (
-                    [gmail_label_id_error_email] if gmail_label_id_error_email else []
+                final_label_name: Optional[str] = None
+                final_label_reason = "none"
+                label_prioridad_paso_1 = next(
+                    (f for f in bank_fmts_digitized if f in ("A", "B")),
+                    None,
                 )
+                if label_prioridad_paso_1:
+                    final_label_name = (
+                        PAGOS_GMAIL_LABEL_IMAGEN_1
+                        if label_prioridad_paso_1 == "A"
+                        else PAGOS_GMAIL_LABEL_IMAGEN_2
+                    )
+                    final_label_reason = f"paso_1_{label_prioridad_paso_1.lower()}"
+                elif remitente_en_clientes:
+                    label_prioridad_paso_2 = next(
+                        (f for f in bank_fmts_digitized if f in ("C", "D")),
+                        None,
+                    )
+                    if label_prioridad_paso_2 == "C":
+                        final_label_name = PAGOS_GMAIL_LABEL_IMAGEN_3
+                        final_label_reason = "paso_2_c"
+                    elif label_prioridad_paso_2 == "D":
+                        final_label_name = PAGOS_GMAIL_LABEL_IMAGEN_4
+                        final_label_reason = "paso_2_d"
 
-                if (
-                    remitente_solo_master
-                    and remitente_en_clientes
-                    and candidatos
-                ):
-                    k_master = PAGOS_GMAIL_LABEL_MASTER
-                    if k_master not in plantilla_label_cache:
-                        plantilla_label_cache[k_master] = ensure_user_label_id(
-                            gmail_svc, k_master
+                if not final_label_name:
+                    if not candidatos and multipage_pdf_omitidos == 0:
+                        final_label_name = PAGOS_GMAIL_LABEL_TEXTO
+                        final_label_reason = "fallback_texto"
+                    elif remitente_solo_master and not fully_digitized_email:
+                        final_label_name = PAGOS_GMAIL_LABEL_MASTER
+                        final_label_reason = "fallback_master"
+                    elif not remitente_en_clientes:
+                        final_label_name = PAGOS_GMAIL_LABEL_ERROR_EMAIL
+                        final_label_reason = "fallback_error_email"
+                    elif candidatos:
+                        final_label_name = PAGOS_GMAIL_LABEL_MANUAL
+                        final_label_reason = "fallback_manual"
+
+                if final_label_name and final_label_name in PAGOS_GMAIL_ETIQUETAS_FINALES_PERMITIDAS:
+                    if final_label_name not in plantilla_label_cache:
+                        plantilla_label_cache[final_label_name] = ensure_user_label_id(
+                            gmail_svc, final_label_name
                         )
-                    id_master = plantilla_label_cache.get(k_master)
-                    if id_master:
-                        if fully_digitized_email:
-                            if mezcla_solo_manual_gmail:
-                                batch_master = [gmail_label_id_manual_mezcla]
-                            else:
-                                batch_master = list(
-                                    dict.fromkeys(
-                                        [
-                                            *gmail_precursor_label_ids,
-                                            id_master,
-                                            *(
-                                                [gmail_label_id_manual_mezcla]
-                                                if gmail_label_id_manual_mezcla
-                                                else []
-                                            ),
-                                        ]
-                                    )
-                                )
-                            if batch_master:
-                                add_message_user_labels_only(
-                                    gmail_svc, msg_id, batch_master
-                                )
-                            gmail_etiqueta_clasificacion_aplicada = True
-                            mark_as_read(gmail_svc, msg_id)
-                            correos_marcados_revision += 1
-                            if mezcla_solo_manual_gmail:
-                                logger.info(
-                                    "[PAGOS_GMAIL]   Gmail: %s — solo etiqueta %s (mezcla tipos; sin MASTER ni otras)",
-                                    PAGOS_GMAIL_SENDER_MASTER,
-                                    PAGOS_GMAIL_LABEL_MANUAL,
-                                )
-                            else:
-                                logger.info(
-                                    "[PAGOS_GMAIL]   Gmail: %s — etiqueta %s aplicada; total etiquetas Gmail en hilo=%d (100%% OK)",
-                                    PAGOS_GMAIL_SENDER_MASTER,
-                                    k_master,
-                                    len(batch_master),
-                                )
-                        else:
-                            if mezcla_solo_manual_gmail:
-                                batch_master_partial = [gmail_label_id_manual_mezcla]
-                            else:
-                                batch_master_partial = list(
-                                    dict.fromkeys(
-                                        [
-                                            id_master,
-                                            *(
-                                                [gmail_label_id_manual_mezcla]
-                                                if gmail_label_id_manual_mezcla
-                                                else []
-                                            ),
-                                        ]
-                                    )
-                                )
-                            add_message_user_labels_only(
-                                gmail_svc, msg_id, batch_master_partial
-                            )
-                            gmail_etiqueta_clasificacion_aplicada = True
-                            if mezcla_solo_manual_gmail:
-                                logger.info(
-                                    "[PAGOS_GMAIL]   Gmail: %s — solo etiqueta %s (mezcla tipos)",
-                                    PAGOS_GMAIL_SENDER_MASTER,
-                                    PAGOS_GMAIL_LABEL_MANUAL,
-                                )
-                            else:
-                                logger.info(
-                                    "[PAGOS_GMAIL]   Gmail: %s — %s (sin MERCANTIL / BNC / BINANCE / BNV / ERROR EMAIL)",
-                                    PAGOS_GMAIL_SENDER_MASTER,
-                                    ", ".join(
-                                        [k_master]
-                                        + (
-                                            [PAGOS_GMAIL_LABEL_MANUAL]
-                                            if gmail_label_id_manual_mezcla
-                                            else []
-                                        )
-                                    ),
-                                )
+                    final_label_id = plantilla_label_cache.get(final_label_name)
+                    if final_label_id:
+                        add_message_user_labels_only(gmail_svc, msg_id, [final_label_id])
+                        run_stats["messages_final_label_applied"] += 1
+                        _k = f"final_{final_label_reason}"
+                        if _k in run_stats:
+                            run_stats[_k] += 1
+                        logger.info(
+                            "[PAGOS_GMAIL]   Gmail: etiqueta final=%s (%s) msg=%s",
+                            final_label_name,
+                            final_label_reason,
+                            msg_id,
+                        )
                     else:
                         logger.warning(
-                            "[PAGOS_GMAIL]   Gmail: no se pudo crear/obtener etiqueta %s",
-                            k_master,
-                        )
-                elif fully_digitized_email:
-                    if mezcla_solo_manual_gmail:
-                        batch_ok = [gmail_label_id_manual_mezcla]
-                    elif gmail_label_id_error_email:
-                        batch_ok = [gmail_label_id_error_email]
-                    else:
-                        batch_ok = list(
-                            dict.fromkeys(
-                                [
-                                    *gmail_precursor_label_ids,
-                                    *plantilla_unique_ids,
-                                    *(
-                                        [gmail_label_id_manual_mezcla]
-                                        if gmail_label_id_manual_mezcla
-                                        else []
-                                    ),
-                                ]
-                            )
-                        )
-                    if batch_ok:
-                        if (
-                            solo_error_email_inbox
-                            and plantilla_unique_ids
-                            and not mezcla_solo_manual_gmail
-                            and not gmail_label_id_error_email
-                            and mid_err_shared
-                        ):
-                            modify_message_labels_add_remove(
-                                gmail_svc,
-                                msg_id,
-                                add_label_ids=batch_ok,
-                                remove_label_ids=[mid_err_shared],
-                            )
-                            logger.info(
-                                "[PAGOS_GMAIL] solo ERROR EMAIL (inbox): quita etiqueta ERROR EMAIL; "
-                                "añade plantilla(s) tras digitalizacion OK msg=%s",
-                                msg_id,
-                            )
-                        elif (
-                            redig_manual_error_pass
-                            and plantilla_unique_ids
-                            and not mezcla_solo_manual_gmail
-                            and not gmail_label_id_error_email
-                        ):
-                            _k_pro = PAGOS_GMAIL_LABEL_PROCESADO
-                            if _k_pro not in plantilla_label_cache:
-                                plantilla_label_cache[_k_pro] = ensure_user_label_id(
-                                    gmail_svc, _k_pro
-                                )
-                            _id_pro = plantilla_label_cache.get(_k_pro)
-                            _batch_redig = list(
-                                dict.fromkeys([*(batch_ok or []), *([_id_pro] if _id_pro else [])])
-                            )
-                            _rm_man = plantilla_label_cache.get(PAGOS_GMAIL_LABEL_MANUAL)
-                            _rm_err = plantilla_label_cache.get(PAGOS_GMAIL_LABEL_ERROR_EMAIL)
-                            _rm_ids = [x for x in (_rm_man, _rm_err) if x]
-                            modify_message_labels_add_remove(
-                                gmail_svc,
-                                msg_id,
-                                add_label_ids=_batch_redig,
-                                remove_label_ids=_rm_ids,
-                            )
-                            batch_ok = _batch_redig
-                            if not _id_pro:
-                                logger.warning(
-                                    "[PAGOS_GMAIL] redig MANUAL+ERROR: no se pudo crear/obtener etiqueta %s",
-                                    _k_pro,
-                                )
-                            else:
-                                logger.info(
-                                    "[PAGOS_GMAIL] redig MANUAL+ERROR: Gmail actualizado "
-                                    "(quita MANUAL+ERROR EMAIL; añade plantilla A/B + %s)",
-                                    PAGOS_GMAIL_LABEL_PROCESADO,
-                                )
-                        elif (
-                            plan_b_mercantil_bnc_fuera_bd
-                            and plantilla_unique_ids
-                            and not mezcla_solo_manual_gmail
-                            and not gmail_label_id_error_email
-                        ):
-                            _k_pro_pb = PAGOS_GMAIL_LABEL_PROCESADO
-                            if _k_pro_pb not in plantilla_label_cache:
-                                plantilla_label_cache[_k_pro_pb] = ensure_user_label_id(
-                                    gmail_svc, _k_pro_pb
-                                )
-                            _id_pro_pb = plantilla_label_cache.get(_k_pro_pb)
-                            _batch_plan_b = list(
-                                dict.fromkeys(
-                                    [*(batch_ok or []), *([_id_pro_pb] if _id_pro_pb else [])]
-                                )
-                            )
-                            _rm_man_pb = plantilla_label_cache.get(PAGOS_GMAIL_LABEL_MANUAL)
-                            _rm_err_pb = plantilla_label_cache.get(PAGOS_GMAIL_LABEL_ERROR_EMAIL)
-                            _rm_ids_pb = [x for x in (_rm_man_pb, _rm_err_pb) if x]
-                            modify_message_labels_add_remove(
-                                gmail_svc,
-                                msg_id,
-                                add_label_ids=_batch_plan_b,
-                                remove_label_ids=_rm_ids_pb,
-                            )
-                            batch_ok = _batch_plan_b
-                            if not _id_pro_pb:
-                                logger.warning(
-                                    "[PAGOS_GMAIL] Plan B: no se pudo crear/obtener etiqueta %s",
-                                    _k_pro_pb,
-                                )
-                            else:
-                                logger.info(
-                                    "[PAGOS_GMAIL] Plan B: Gmail actualizado "
-                                    "(plantilla A/B + %s; quita MANUAL/ERROR EMAIL si existian)",
-                                    PAGOS_GMAIL_LABEL_PROCESADO,
-                                )
-                        else:
-                            add_message_user_labels_only(gmail_svc, msg_id, batch_ok)
-                    gmail_etiqueta_clasificacion_aplicada = True
-                    mark_as_read(gmail_svc, msg_id)
-                    correos_marcados_revision += 1
-                    logger.info(
-                        "[PAGOS_GMAIL]   Gmail: 100%% adjuntos OK — etiquetas usuario aplicadas: %d id(s)%s; leido",
-                        len(batch_ok),
-                        " (solo MANUAL por mezcla tipos)"
-                        if mezcla_solo_manual_gmail
-                        else (
-                            " (solo ERROR EMAIL)"
-                            if gmail_label_id_error_email
-                            else " (plantilla/MANUAL)"
-                        ),
-                    )
-                elif (
-                    not redig_manual_error_pass
-                    and (committed_comprobante_rows or not remitente_en_clientes)
-                    and (not remitente_solo_master or not remitente_en_clientes)
-                    and (
-                        gmail_precursor_label_ids
-                        or plantilla_unique_ids
-                        or gmail_label_id_manual_mezcla
-                    )
-                ):
-                    if mezcla_solo_manual_gmail:
-                        batch_partial = [gmail_label_id_manual_mezcla]
-                    elif gmail_label_id_error_email:
-                        batch_partial = [gmail_label_id_error_email]
-                    else:
-                        batch_partial = list(
-                            dict.fromkeys(
-                                [
-                                    *gmail_precursor_label_ids,
-                                    *plantilla_unique_ids,
-                                    *(
-                                        [gmail_label_id_manual_mezcla]
-                                        if gmail_label_id_manual_mezcla
-                                        else []
-                                    ),
-                                ]
-                            )
-                        )
-                    if batch_partial:
-                        add_message_user_labels_only(
-                            gmail_svc, msg_id, batch_partial
-                        )
-                        gmail_etiqueta_clasificacion_aplicada = True
-                        logger.info(
-                            "[PAGOS_GMAIL]   Gmail: etiquetas usuario aplicadas: %d id(s)%s",
-                            len(batch_partial),
-                            " (solo MANUAL por mezcla tipos)"
-                            if mezcla_solo_manual_gmail
-                            else (
-                                " (solo ERROR EMAIL)"
-                                if gmail_label_id_error_email
-                                else " (plantilla/MANUAL)"
-                            ),
-                        )
-                    if candidatos:
-                        logger.info(
-                            "[PAGOS_GMAIL]   Gmail: revision (no 100%% digitalizacion completa); "
-                            "no leido -> leido al cerrar mensaje si aplicaba; estrellas no se modifican"
+                            "[PAGOS_GMAIL]   Gmail: no se pudo crear/obtener etiqueta final %s",
+                            final_label_name,
                         )
                 elif candidatos:
+                    run_stats["messages_no_final_label"] += 1
                     logger.info(
-                        "[PAGOS_GMAIL]   Gmail: revision (no 100%% digitalizacion o sin adjuntos validos); "
-                        "no leido -> leido al cerrar mensaje si aplicaba; estrellas no se modifican"
+                        "[PAGOS_GMAIL]   Gmail: sin etiqueta final aplicable pese a candidatos (msg=%s)",
+                        msg_id,
                     )
-                else:
-                    logger.info(
-                        "[PAGOS_GMAIL]   Gmail: filtro=%s — sin candidatos imagen/PDF utiles; "
-                        "sin no-leido aqui (etiqueta TEXTO si aplica en paso final).",
-                        scan_filter,
-                    )
-
-                tiene_plantilla_banco_abcd_digitada = any(
-                    f in ("A", "B", "C", "D") for f in bank_fmts_digitized
-                )
-                if (
-                    not redig_manual_error_pass
-                    and candidatos
-                    and remitente_en_clientes
-                    and not gmail_label_id_error_email
-                    and not gmail_etiqueta_clasificacion_aplicada
-                    and not tiene_plantilla_banco_abcd_digitada
-                ):
-                    k_otros = PAGOS_GMAIL_LABEL_OTROS
-                    if k_otros not in plantilla_label_cache:
-                        plantilla_label_cache[k_otros] = ensure_user_label_id(
-                            gmail_svc, k_otros
-                        )
-                    otros_lid = plantilla_label_cache.get(k_otros)
-                    if otros_lid:
-                        add_message_user_labels_only(
-                            gmail_svc, msg_id, [otros_lid]
-                        )
-                        gmail_etiqueta_clasificacion_aplicada = True
-                        logger.info(
-                            "[PAGOS_GMAIL]   Gmail: solo etiqueta %s (sin plantilla A/B/C/D digitalizada; "
-                            "sin MERCANTIL/BNC/BINANCE/BNV/MASTER/ERROR EMAIL en esta llamada)",
-                            k_otros,
-                        )
-                    else:
-                        logger.warning(
-                            "[PAGOS_GMAIL]   Gmail: no se pudo crear/obtener etiqueta %s",
-                            k_otros,
-                        )
-
-                if multipage_pdf_omitidos > 0:
-                    k_pag = PAGOS_GMAIL_LABEL_PAGINAS
-                    if k_pag not in plantilla_label_cache:
-                        plantilla_label_cache[k_pag] = ensure_user_label_id(
-                            gmail_svc, k_pag
-                        )
-                    lid_pag = plantilla_label_cache.get(k_pag)
-                    if lid_pag:
-                        add_message_user_labels_only(gmail_svc, msg_id, [lid_pag])
-                        logger.info(
-                            "[PAGOS_GMAIL]   Gmail: etiqueta %s (%d PDF(s) con 2+ paginas; no digitalizados)",
-                            k_pag,
-                            multipage_pdf_omitidos,
-                        )
-                    else:
-                        logger.warning(
-                            "[PAGOS_GMAIL]   Gmail: no se pudo crear/obtener etiqueta %s",
-                            k_pag,
-                        )
-
-                if any_etiqueta_calidad_imagen and (
-                    remitente_en_clientes
-                    or redig_manual_error_pass
-                    or solo_error_email_inbox
-                    or plan_b_mercantil_bnc_fuera_bd
-                    or labels_usuario_solo_manual_y_o_error
-                ):
-                    k_cal = PAGOS_GMAIL_LABEL_CALIDAD
-                    if k_cal not in plantilla_label_cache:
-                        plantilla_label_cache[k_cal] = ensure_user_label_id(
-                            gmail_svc, k_cal
-                        )
-                    lid_cal = plantilla_label_cache.get(k_cal)
-                    if lid_cal:
-                        add_message_user_labels_only(gmail_svc, msg_id, [lid_cal])
-                        logger.info(
-                            "[PAGOS_GMAIL]   Gmail: etiqueta %s (imagen ilegible / no inventar; "
-                            "ninguno o datos incompletos desde pixeles)",
-                            k_cal,
-                        )
-                    else:
-                        logger.warning(
-                            "[PAGOS_GMAIL]   Gmail: no se pudo crear/obtener etiqueta %s",
-                            k_cal,
-                        )
-
-                if not candidatos and multipage_pdf_omitidos == 0:
-                    k_txt = PAGOS_GMAIL_LABEL_TEXTO
-                    if k_txt not in plantilla_label_cache:
-                        plantilla_label_cache[k_txt] = ensure_user_label_id(
-                            gmail_svc, k_txt
-                        )
-                    lid_txt = plantilla_label_cache.get(k_txt)
-                    if lid_txt:
-                        add_message_user_labels_only(gmail_svc, msg_id, [lid_txt])
-                        logger.info(
-                            "[PAGOS_GMAIL]   Gmail: etiqueta %s (sin imagen/PDF de comprobante; "
-                            "solo texto u adjuntos no extraibles como captura de pago)",
-                            k_txt,
-                        )
-                    else:
-                        logger.warning(
-                            "[PAGOS_GMAIL]   Gmail: no se pudo crear/obtener etiqueta %s",
-                            k_txt,
-                        )
 
                 if was_unread:
                     mark_as_read(gmail_svc, msg_id)
+
+                if pending_gmail_temporal_delete_ids:
+                    _ids_retry = sorted(pending_gmail_temporal_delete_ids)
+                    try:
+                        db.execute(
+                            delete(GmailTemporal).where(
+                                GmailTemporal.id.in_(_ids_retry)
+                            )
+                        )
+                        db.commit()
+                        logger.info(
+                            "[PAGOS_GMAIL] Reintento limpieza gmail_temporal OK: %d id(s)",
+                            len(_ids_retry),
+                        )
+                        pending_gmail_temporal_delete_ids.difference_update(_ids_retry)
+                    except Exception as _retry_del_exc:
+                        try:
+                            db.rollback()
+                        except Exception:
+                            pass
+                        logger.warning(
+                            "[PAGOS_GMAIL] Reintento limpieza gmail_temporal falló (%d id(s)): %s",
+                            len(_ids_retry),
+                            _retry_del_exc,
+                        )
 
                 emails_ok += 1
 
@@ -2081,6 +1688,16 @@ def run_pipeline(
             "messages_skipped_clasificacion_etiqueta": run_stats[
                 "messages_skipped_clasificacion_etiqueta"
             ],
+            "messages_final_label_applied": run_stats["messages_final_label_applied"],
+            "messages_no_final_label": run_stats["messages_no_final_label"],
+            "final_paso_1_a": run_stats["final_paso_1_a"],
+            "final_paso_1_b": run_stats["final_paso_1_b"],
+            "final_paso_2_c": run_stats["final_paso_2_c"],
+            "final_paso_2_d": run_stats["final_paso_2_d"],
+            "final_fallback_texto": run_stats["final_fallback_texto"],
+            "final_fallback_master": run_stats["final_fallback_master"],
+            "final_fallback_error_email": run_stats["final_fallback_error_email"],
+            "final_fallback_manual": run_stats["final_fallback_manual"],
             "gmail_labels_list_failed": run_stats["gmail_labels_list_failed"],
             "manual_error_redigitaliza_listed": run_stats[
                 "manual_error_redigitaliza_listed"
@@ -2133,6 +1750,16 @@ def run_pipeline(
             "messages_skipped_clasificacion_etiqueta": run_stats[
                 "messages_skipped_clasificacion_etiqueta"
             ],
+            "messages_final_label_applied": run_stats["messages_final_label_applied"],
+            "messages_no_final_label": run_stats["messages_no_final_label"],
+            "final_paso_1_a": run_stats["final_paso_1_a"],
+            "final_paso_1_b": run_stats["final_paso_1_b"],
+            "final_paso_2_c": run_stats["final_paso_2_c"],
+            "final_paso_2_d": run_stats["final_paso_2_d"],
+            "final_fallback_texto": run_stats["final_fallback_texto"],
+            "final_fallback_master": run_stats["final_fallback_master"],
+            "final_fallback_error_email": run_stats["final_fallback_error_email"],
+            "final_fallback_manual": run_stats["final_fallback_manual"],
             "gmail_labels_list_failed": run_stats["gmail_labels_list_failed"],
             "manual_error_redigitaliza_listed": run_stats[
                 "manual_error_redigitaliza_listed"
@@ -2168,6 +1795,16 @@ def run_pipeline(
             "messages_skipped_clasificacion_etiqueta": run_stats[
                 "messages_skipped_clasificacion_etiqueta"
             ],
+            "messages_final_label_applied": run_stats["messages_final_label_applied"],
+            "messages_no_final_label": run_stats["messages_no_final_label"],
+            "final_paso_1_a": run_stats["final_paso_1_a"],
+            "final_paso_1_b": run_stats["final_paso_1_b"],
+            "final_paso_2_c": run_stats["final_paso_2_c"],
+            "final_paso_2_d": run_stats["final_paso_2_d"],
+            "final_fallback_texto": run_stats["final_fallback_texto"],
+            "final_fallback_master": run_stats["final_fallback_master"],
+            "final_fallback_error_email": run_stats["final_fallback_error_email"],
+            "final_fallback_manual": run_stats["final_fallback_manual"],
             "gmail_labels_list_failed": run_stats["gmail_labels_list_failed"],
             "manual_error_redigitaliza_listed": run_stats[
                 "manual_error_redigitaliza_listed"

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   CreditCard,
@@ -172,7 +172,40 @@ export function PagosList() {
   const [deletingRevisionId, setDeletingRevisionId] = useState<number | null>(
     null
   )
+  const syncingRevisionRef = useRef(false)
   const queryClient = useQueryClient()
+
+  const sincronizarPendientesRevision = useCallback(
+    async (opts?: { silent?: boolean }) => {
+      if (syncingRevisionRef.current) return
+      syncingRevisionRef.current = true
+      try {
+        const mig = await pagoService.migrarPendientesGmailAConErrores()
+        if ((mig.migrados ?? 0) > 0 && !opts?.silent) {
+          toast.success(
+            `${mig.migrados} pago(s) no válido(s) enviados a Pendientes de revisión`
+          )
+        }
+        await queryClient.invalidateQueries({
+          queryKey: ['pagos-con-errores'],
+          exact: false,
+        })
+        await queryClient.invalidateQueries({
+          queryKey: ['pagos-con-errores-tab'],
+          exact: false,
+        })
+      } catch {
+        if (!opts?.silent) {
+          toast.error(
+            'No se pudo sincronizar pendientes de Gmail. Reintente en unos segundos.'
+          )
+        }
+      } finally {
+        syncingRevisionRef.current = false
+      }
+    },
+    [queryClient]
+  )
 
   const {
     loading: loadingGmail,
@@ -190,12 +223,7 @@ export function PagosList() {
             ? s.last_run_summary.pagos_invalidos_pendientes_revision
             : 0
         if (invalidos > 0) {
-          const mig = await pagoService.migrarPendientesGmailAConErrores()
-          if (mig.migrados > 0) {
-            toast.success(
-              `${mig.migrados} pago(s) no válido(s) enviados a Pendientes de revisión`
-            )
-          }
+          await sincronizarPendientesRevision()
         }
       } catch (e) {
         toast.error(
@@ -227,6 +255,11 @@ export function PagosList() {
       stopGmailPolling()
     }
   }, [stopGmailPolling])
+
+  useEffect(() => {
+    if (activeTab !== 'revision') return
+    void sincronizarPendientesRevision({ silent: true })
+  }, [activeTab, sincronizarPendientesRevision])
 
   const handleDetenerSeguimientoGmail = () => {
     stopGmailPolling()

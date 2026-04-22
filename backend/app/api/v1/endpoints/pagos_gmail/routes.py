@@ -4,16 +4,16 @@ Ejecucion manual: POST /pagos/gmail/run-now desde la UI (Pagos > Agregar pago > 
 Ejecucion automatica opcional: scheduler todos los dias cada hora :30 entre 06:30 y 19:30 (America/Caracas), filtro
 pending_identification, si ENABLE_AUTOMATIC_SCHEDULED_JOBS y PAGOS_GMAIL_SCHEDULED_SCAN_ENABLED en settings.
 Manual y automatico comparten la misma regla de exclusion: no se inicia otra corrida si hay sync en estado running (ventana 2 h).
-Criterio de listado Gmail: inbox + media (has:attachment o filename:imagen/PDF en cuerpo); adjuntos, incrustados o .eml rfc822 (deduplicado).
-Solo si el remitente coincide con `clientes.email` o `email_secundario`: digitalizacion (Gemini), filas Excel/BD y comprobante en `pago_comprobante_imagen`; etiquetas MERCANTIL/BNC/BINANCE/BNV segun plantilla. Sin match (o error BD al consultar clientes): solo etiqueta ERROR EMAIL en Gmail, sin filas ni comprobante. Sin subidas a Google Drive.
-Si ningun adjunto OK: no leido cuando hay candidatos imagen/PDF (estrellas no las toca el pipeline).
+Criterio de listado Gmail: inbox + media (has:attachment o filename:imagen/PDF en cuerpo); adjuntos, incrustados o .eml rfc822.
+Clasificación vigente: etiqueta final única por correo con precedencia Paso 1 (A/B), Paso 2 (C/D con remitente en clientes) y fallback TEXTO->MASTER->ERROR EMAIL->MANUAL.
+Si el mensaje ya tiene cualquier etiqueta de usuario Gmail, se omite (skip total) para evitar reetiquetar.
 - POST /pagos/gmail/run-now: ejecutar pipeline ahora
 - GET /pagos/gmail/download-excel y download-excel-temporal: descargar Excel (solo lectura; no borran BD); excluyen filas
-  ya autoconciliadas por plantilla A–D (traza CUOTAS_OK / PAGO_SIN_CUOTAS con pago_id). `gmail_temporal` solo conserva pendientes de revisión.
+  ya aplicadas a cuotas (traza CUOTAS_OK con pago_id). `gmail_temporal` conserva pendientes de revisión.
   Query opcional plantilla A–D vs duplicado `pagos.numero_documento`.
 - GET /pagos/gmail/status: ultima ejecucion; next_run_approx = proxima corrida programada Gmail si el scheduler tiene el job registrado
 - GET /pagos/gmail/abcd-cuotas-traza: historial plantilla A–D → pago → cuotas (post-Gemini)
-- GET /pagos/gmail/pipeline-eventos: eventos previos a fila sync (Gemini omitido, dedupe, etc.)
+- GET /pagos/gmail/pipeline-eventos: eventos previos a fila sync (Gemini omitido, remitente inválido, etc.)
 - POST /pagos/gmail/confirmar-dia: confirmacion si/no; si si, borrado de datos acumulados
 """
 import io
@@ -24,7 +24,7 @@ from typing import Optional
 from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from sqlalchemy import and_, delete, desc, select
+from sqlalchemy import and_, delete, desc, func, select
 from sqlalchemy.orm import Session
 
 from app.core.database import SessionLocal, get_db
@@ -72,7 +72,15 @@ def _run_pipeline_background(sync_id: int, scan_filter: str = "all") -> None:
     db = SessionLocal()
     logger.info("[PAGOS_GMAIL] [ETAPA] Inicio pipeline background sync_id=%s scan_filter=%s", sync_id, scan_filter)
     try:
-        run_pipeline(db, existing_sync_id=sync_id, scan_filter=scan_filter)
+        _, final_status = run_pipeline(db, existing_sync_id=sync_id, scan_filter=scan_filter)
+        if final_status == "success":
+            mig = _migrar_pendientes_gmail_a_con_errores_core(db)
+            if int(mig.get("migrados", 0) or 0) > 0:
+                logger.info(
+                    "[PAGOS_GMAIL] [ETAPA] Migración post-run Gmail -> pendientes revisión: migrados=%s omitidos=%s",
+                    mig.get("migrados"),
+                    mig.get("omitidos"),
+                )
     except Exception as e:
         logger.info("[PAGOS_GMAIL] [ETAPA] Pipeline finalizado sync_id=%s", sync_id)
         logger.exception("[PAGOS_GMAIL] [ETAPA] Error en background pipeline (sync_id=%s): %s", sync_id, e)
@@ -132,12 +140,12 @@ def run_now(
     db: Session = Depends(get_db),
 ):
     """
-    Inicia el pipeline en segundo plano (Gmail -> Gemini -> BD; comprobante en BD, .eml opcional en Drive) y devuelve inmediatamente.
+    Inicia el pipeline en segundo plano (Gmail -> Gemini -> BD; comprobante en BD) y devuelve inmediatamente.
     Solo correos con adjuntos; candidatos imagen/PDF: incrustados, adjuntos y reenvios rfc822.
     scan_filter: "unread" | "read" | "all" | "pending_identification" | "error_email_rescan" (por defecto all).
-    Listado: por defecto inbox con imagen/PDF. Solo se digitalizan mensajes **sin etiquetas de usuario** Gmail, salvo modo **error_email_rescan** con **solo** la etiqueta ERROR EMAIL.
+    Listado: por defecto inbox con imagen/PDF. Si el mensaje ya tiene cualquier etiqueta de usuario Gmail, se omite (skip total).
     **unread** / **read**: añade is:unread / is:read a la búsqueda.
-    **error_email_rescan**: re-escaneo A/B; procesa si la unica etiqueta de usuario es ERROR EMAIL; otras etiquetas de usuario implican omitir.
+    **error_email_rescan**: mantiene mismo listado, pero la regla de skip por etiqueta de usuario sigue aplicando.
     Listado completo por paginacion Gmail; procesamiento en orden bandeja (mas reciente primero, mas antiguo al final).
     Los mensajes no leidos quedan leidos al procesarlos en la corrida.
     El frontend debe hacer polling a GET /status hasta que last_status sea 'success' o 'error'.
@@ -388,6 +396,97 @@ def _parse_fecha_pago_gmail_temporal(raw_fecha: Optional[str], fallback_dt: date
     return fallback_dt.replace(hour=0, minute=0, second=0, microsecond=0)
 
 
+def _migrar_pendientes_gmail_a_con_errores_core(db: Session) -> dict:
+    """
+    Núcleo de migración de pendientes Gmail: mueve filas de gmail_temporal a pagos_con_errores.
+    Se reutiliza tanto en endpoint manual como post-proceso automático.
+    """
+    filas = db.execute(
+        select(GmailTemporal).order_by(GmailTemporal.id.asc())
+    ).scalars().all()
+    if not filas:
+        return {
+            "migrados": 0,
+            "omitidos": 0,
+            "eliminados_temporal": 0,
+            "mensaje": "Sin pendientes en gmail_temporal.",
+        }
+
+    migrados = 0
+    omitidos = 0
+    eliminados_temporal = 0
+
+    for row in filas:
+        try:
+            with db.begin_nested():
+                fallback_created = row.created_at or datetime.utcnow()
+                fecha_pago = _parse_fecha_pago_gmail_temporal(
+                    row.fecha_pago, fallback_created
+                )
+                cedula = formatear_cedula(row.cedula or "")
+                monto_txt = format_monto_excel_pagos_gmail(row.monto or "")
+                try:
+                    monto_num = float(monto_txt) if monto_txt else 0.0
+                except ValueError:
+                    monto_num = 0.0
+
+                numero_base = normalize_documento(row.numero_referencia)
+                numero_doc = compose_numero_documento_almacenado(
+                    numero_base or f"GMAILTMP-{row.id}", None
+                )
+
+                if numero_doc and numero_documento_ya_registrado(db, numero_doc):
+                    db.execute(
+                        delete(GmailTemporal).where(GmailTemporal.id == row.id)
+                    )
+                    eliminados_temporal += 1
+                    omitidos += 1
+                    continue
+
+                observaciones = "Pendiente desde Gmail (no autoconciliado)"
+                if monto_num <= 0:
+                    observaciones = (
+                        f"{observaciones}; monto no interpretable: {(row.monto or '').strip() or 'vacío'}"
+                    )[:255]
+
+                nuevo = PagoConError(
+                    prestamo_id=None,
+                    cedula_cliente=cedula or None,
+                    fecha_pago=fecha_pago,
+                    monto_pagado=monto_num,
+                    numero_documento=numero_doc,
+                    institucion_bancaria=(row.banco or None),
+                    estado="PENDIENTE",
+                    conciliado=False,
+                    usuario_registro="GMAIL_PIPELINE",
+                    notas=(
+                        f"Asunto: {(row.asunto or '').strip()} | "
+                        f"Correo: {(row.correo_origen or '').strip()}"
+                    )[:1000],
+                    referencia_pago=(numero_base or f"GMAILTMP-{row.id}")[:100],
+                    observaciones=observaciones,
+                )
+                db.add(nuevo)
+                db.flush()
+                db.execute(delete(GmailTemporal).where(GmailTemporal.id == row.id))
+                eliminados_temporal += 1
+                migrados += 1
+        except Exception:
+            omitidos += 1
+            continue
+
+    db.commit()
+    return {
+        "migrados": migrados,
+        "omitidos": omitidos,
+        "eliminados_temporal": eliminados_temporal,
+        "mensaje": (
+            f"Migración completada: {migrados} a pagos_con_errores, "
+            f"{omitidos} omitidos, {eliminados_temporal} removidos de gmail_temporal."
+        ),
+    }
+
+
 @router.post("/confirmar-dia", response_model=dict)
 def confirmar_dia(body: ConfirmarDiaBody = Body(...), db: Session = Depends(get_db)):
     """
@@ -452,90 +551,7 @@ def migrar_pendientes_a_con_errores(db: Session = Depends(get_db)):
     Garantiza que, tras "Procesar manualmente", todo quede en A (pagos) o B (pendientes de revisión).
     """
     try:
-        filas = db.execute(
-            select(GmailTemporal).order_by(GmailTemporal.id.asc())
-        ).scalars().all()
-        if not filas:
-            return {
-                "migrados": 0,
-                "omitidos": 0,
-                "eliminados_temporal": 0,
-                "mensaje": "Sin pendientes en gmail_temporal.",
-            }
-
-        migrados = 0
-        omitidos = 0
-        eliminados_temporal = 0
-
-        for row in filas:
-            try:
-                with db.begin_nested():
-                    fallback_created = row.created_at or datetime.utcnow()
-                    fecha_pago = _parse_fecha_pago_gmail_temporal(
-                        row.fecha_pago, fallback_created
-                    )
-                    cedula = formatear_cedula(row.cedula or "")
-                    monto_txt = format_monto_excel_pagos_gmail(row.monto or "")
-                    try:
-                        monto_num = float(monto_txt) if monto_txt else 0.0
-                    except ValueError:
-                        monto_num = 0.0
-
-                    numero_base = normalize_documento(row.numero_referencia)
-                    numero_doc = compose_numero_documento_almacenado(
-                        numero_base or f"GMAILTMP-{row.id}", None
-                    )
-
-                    if numero_doc and numero_documento_ya_registrado(db, numero_doc):
-                        db.execute(
-                            delete(GmailTemporal).where(GmailTemporal.id == row.id)
-                        )
-                        eliminados_temporal += 1
-                        omitidos += 1
-                        continue
-
-                    observaciones = "Pendiente desde Gmail (no autoconciliado)"
-                    if monto_num <= 0:
-                        observaciones = (
-                            f"{observaciones}; monto no interpretable: {(row.monto or '').strip() or 'vacío'}"
-                        )[:255]
-
-                    nuevo = PagoConError(
-                        prestamo_id=None,
-                        cedula_cliente=cedula or None,
-                        fecha_pago=fecha_pago,
-                        monto_pagado=monto_num,
-                        numero_documento=numero_doc,
-                        institucion_bancaria=(row.banco or None),
-                        estado="PENDIENTE",
-                        conciliado=False,
-                        usuario_registro="GMAIL_PIPELINE",
-                        notas=(
-                            f"Asunto: {(row.asunto or '').strip()} | "
-                            f"Correo: {(row.correo_origen or '').strip()}"
-                        )[:1000],
-                        referencia_pago=(numero_base or f"GMAILTMP-{row.id}")[:100],
-                        observaciones=observaciones,
-                    )
-                    db.add(nuevo)
-                    db.flush()
-                    db.execute(delete(GmailTemporal).where(GmailTemporal.id == row.id))
-                    eliminados_temporal += 1
-                    migrados += 1
-            except Exception:
-                omitidos += 1
-                continue
-
-        db.commit()
-        return {
-            "migrados": migrados,
-            "omitidos": omitidos,
-            "eliminados_temporal": eliminados_temporal,
-            "mensaje": (
-                f"Migración completada: {migrados} a pagos_con_errores, "
-                f"{omitidos} omitidos, {eliminados_temporal} removidos de gmail_temporal."
-            ),
-        }
+        return _migrar_pendientes_gmail_a_con_errores_core(db)
     except Exception as e:
         db.rollback()
         logger.exception("Error migrando gmail_temporal -> pagos_con_errores: %s", e)
@@ -591,8 +607,8 @@ def _excluir_filas_cedula_error_email(items: list) -> list:
 
 def _excluir_sync_items_alta_gmail_abcd_automatica_ok(db: Session, items: list) -> list:
     """
-    Ítems de sync cuyo comprobante A–D pasó validadores y generó `pago` (traza CUOTAS_OK o PAGO_SIN_CUOTAS):
-    no deben repetirse en Excel de revisión (el pago ya está en `pagos`).
+    Ítems de sync cuyo comprobante A–D/NR pasó validadores y además aplicó a cuotas (traza CUOTAS_OK):
+    no deben repetirse en Excel de revisión.
     """
     ids: list[int] = []
     for it in items:
@@ -609,7 +625,7 @@ def _excluir_sync_items_alta_gmail_abcd_automatica_ok(db: Session, items: list) 
         db.execute(
             select(PagosGmailAbcdCuotasTraza.sync_item_id).where(
                 PagosGmailAbcdCuotasTraza.sync_item_id.in_(ids),
-                PagosGmailAbcdCuotasTraza.etapa_final.in_(("CUOTAS_OK", "PAGO_SIN_CUOTAS")),
+                PagosGmailAbcdCuotasTraza.etapa_final == "CUOTAS_OK",
                 PagosGmailAbcdCuotasTraza.pago_id.isnot(None),
             )
         )
@@ -696,7 +712,7 @@ def download_excel(
     Si no hay datos devuelve 404 (no se genera Excel vacío).
     Columnas: Banco, Cedula, Fecha, Monto, Serial documento, Correo Pagador.
     No incluye filas cuya cédula sea la literal **ERROR EMAIL** (reservada para fallo de remitente en clientes).
-    No incluye comprobantes plantilla A–D ya dados de alta automáticamente (conciliados y con traza de éxito en BD).
+    No incluye comprobantes con traza CUOTAS_OK (alta + aplicación real a cuotas en BD).
     Filtros opcionales (plantilla banco A–D, columna Banco): `solo_duplicados_documento`, `excluir_duplicados_documento`
     (no usar ambos a la vez).
     Para vaciar tablas usar POST /pagos/gmail/confirmar-dia con confirmado=true.
@@ -735,7 +751,7 @@ def download_excel(
             status_code=404,
             detail=(
                 "Sin datos disponibles. "
-                "Si todo fue autoconciliado (plantilla A–D con validadores OK), no quedan filas para Excel. "
+                "Si todo quedó en CUOTAS_OK, no quedan filas para Excel. "
                 "Pulse «Generar Excel desde Gmail» para procesar correos no leídos con adjuntos (imagen/PDF) "
                 "y vuelva a descargar. Verifique que GEMINI_API_KEY esté configurado en el servidor."
                 + (f" (buscado: {fecha})" if fecha else "")
@@ -811,7 +827,7 @@ def download_excel_temporal(
 ):
     """
     Genera Excel desde la tabla temporal gmail_temporal: solo filas que siguieron en tabla tras el pipeline
-    (NR, duplicados, A–D que no pasaron validadores de negocio, etc.). Las filas A–D autoconciliadas se eliminan
+    (NR, duplicados, A–D sin aplicación real a cuotas, etc.). Las filas con traza CUOTAS_OK se eliminan
     de `gmail_temporal` al cerrar el alta en `pagos`.
     Excluye filas con cédula **ERROR EMAIL** (no deben exportarse).
     Filtros opcionales (misma semántica que download-excel): `solo_duplicados_documento`, `excluir_duplicados_documento`.
@@ -991,7 +1007,7 @@ def diagnostico(db: Session = Depends(get_db)):
         candidatos = expand_pipeline_pdf_tuples(attachments)
         result["paso_4_imagenes"] = {
             "ok": True,
-            "nota": "Cuerpo incrustado + adjuntos imagen/PDF + message/rfc822 (.eml), deduplicado por contenido; PDF multi-pagina expandido a N candidatos",
+            "nota": "Cuerpo incrustado + adjuntos imagen/PDF + message/rfc822 (.eml); cada candidato se evalúa según prompts/reglas",
             "total_imagenes": len(candidatos),
             "detalle": [
                 {"nombre": f, "bytes": len(c), "mime": m, "origen": o}
@@ -1044,3 +1060,129 @@ def diagnostico(db: Session = Depends(get_db)):
         }
 
     return result
+
+
+def _ids_temporal_autoconciliados_residuales(
+    db: Session, *, limit: int = 5000
+) -> list[int]:
+    """
+    Detecta filas residuales en gmail_temporal que ya tienen alta automática OK
+    con aplicación real a cuotas (CUOTAS_OK con pago_id) por trazabilidad de sync_item.
+    """
+    q = (
+        select(GmailTemporal.id)
+        .join(
+            PagosGmailSyncItem,
+            and_(
+                PagosGmailSyncItem.gmail_message_id == GmailTemporal.gmail_message_id,
+                PagosGmailSyncItem.gmail_thread_id == GmailTemporal.gmail_thread_id,
+                PagosGmailSyncItem.numero_referencia == GmailTemporal.numero_referencia,
+                PagosGmailSyncItem.cedula == GmailTemporal.cedula,
+            ),
+        )
+        .join(
+            PagosGmailAbcdCuotasTraza,
+            PagosGmailAbcdCuotasTraza.sync_item_id == PagosGmailSyncItem.id,
+        )
+        .where(
+            GmailTemporal.gmail_message_id.isnot(None),
+            GmailTemporal.gmail_thread_id.isnot(None),
+            GmailTemporal.numero_referencia.isnot(None),
+            GmailTemporal.cedula.isnot(None),
+            PagosGmailAbcdCuotasTraza.etapa_final == "CUOTAS_OK",
+            PagosGmailAbcdCuotasTraza.pago_id.isnot(None),
+        )
+        .limit(limit)
+    )
+    rows = db.execute(q).scalars().all()
+    return list(dict.fromkeys(int(x) for x in rows if x is not None))
+
+
+@router.get("/verificacion-proceso-conexiones")
+def verificacion_proceso_conexiones(db: Session = Depends(get_db)):
+    """
+    Auditoría operativa: estado de conexiones y consistencia post-escaneo.
+    """
+    from app.services.pagos_gmail.credentials import get_pagos_gmail_credentials
+    from app.services.pagos_gmail.gmail_service import build_gmail_service, count_messages_by_filter
+
+    creds_ok = False
+    gmail_ok = False
+    gmail_count_all = None
+    cred_error = None
+    gmail_error = None
+
+    try:
+        creds = get_pagos_gmail_credentials()
+        creds_ok = bool(creds)
+        if creds_ok:
+            try:
+                gmail_svc = build_gmail_service(creds)
+                gmail_count_all = int(count_messages_by_filter(gmail_svc, "all"))
+                gmail_ok = True
+            except Exception as e:
+                gmail_error = str(e)[:500]
+    except Exception as e:
+        cred_error = str(e)[:500]
+
+    sync_items_count = int(
+        db.scalar(select(func.count()).select_from(PagosGmailSyncItem)) or 0
+    )
+    temporal_count = int(
+        db.scalar(select(func.count()).select_from(GmailTemporal)) or 0
+    )
+    traza_ok_count = int(
+        db.scalar(
+            select(func.count())
+            .select_from(PagosGmailAbcdCuotasTraza)
+            .where(
+                PagosGmailAbcdCuotasTraza.etapa_final == "CUOTAS_OK",
+                PagosGmailAbcdCuotasTraza.pago_id.isnot(None),
+            )
+        )
+        or 0
+    )
+    residual_ids = _ids_temporal_autoconciliados_residuales(db)
+
+    return {
+        "conexiones": {
+            "credenciales_ok": creds_ok,
+            "gmail_ok": gmail_ok,
+            "gmail_count_all": gmail_count_all,
+            "credenciales_error": cred_error,
+            "gmail_error": gmail_error,
+        },
+        "proceso": {
+            "sync_items_total": sync_items_count,
+            "gmail_temporal_total": temporal_count,
+            "traza_autoconciliados_ok_total": traza_ok_count,
+            "gmail_temporal_residuales_autoconciliados": len(residual_ids),
+            "muestra_ids_residuales": residual_ids[:20],
+        },
+    }
+
+
+@router.post("/limpiar-temporal-autoconciliados")
+def limpiar_temporal_autoconciliados(db: Session = Depends(get_db)):
+    """
+    Limpia filas residuales de gmail_temporal que ya están autoconciliadas en pagos.
+    """
+    ids = _ids_temporal_autoconciliados_residuales(db, limit=20000)
+    if not ids:
+        return {"eliminados": 0, "mensaje": "Sin residuales autoconciliados en gmail_temporal."}
+
+    try:
+        db.execute(delete(GmailTemporal).where(GmailTemporal.id.in_(ids)))
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f"No se pudo limpiar gmail_temporal residual: {str(e)[:400]}",
+        ) from e
+
+    return {
+        "eliminados": len(ids),
+        "mensaje": "Limpieza de residuales autoconciliados completada.",
+        "ids_muestra": ids[:20],
+    }

@@ -72,10 +72,17 @@ function RootLayoutWrapper() {
 
   if (isPublic) return <Outlet />
 
-  // Si no está autenticado y NO está en una ruta pública: login conservando destino (p. ej. /infopagos).
+  // Si no está autenticado y NO está en una ruta pública:
+  // enviar al login de personal para mostrar el formulario directamente.
 
   if (!isLoading && !isAuthenticated) {
-    return <Navigate to="/login" state={{ from: location }} replace />
+    return (
+      <Navigate
+        to={`/login${STAFF_LOGIN_SEARCH}`}
+        state={{ from: location }}
+        replace
+      />
+    )
   }
 
   // Lista blanca por rol (admin: sin filtro). Fuera de rutas delegadas → inicio del rol.
@@ -393,7 +400,14 @@ function App() {
 
             <Route path="escaner" element={<EscanerInfopagosPage />} />
 
-            <Route path="escaner-lote" element={<EscanerInfopagosLotePage />} />
+            <Route
+              path="escaner-lote"
+              element={
+                <SimpleProtectedRoute requireAdmin={true}>
+                  <EscanerInfopagosLotePage />
+                </SimpleProtectedRoute>
+              }
+            />
 
             {/* Amortizacin */}
 

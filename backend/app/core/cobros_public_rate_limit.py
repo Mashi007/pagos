@@ -5,10 +5,12 @@ Si REDIS_URL está configurada, usa Redis para límites distribuidos entre insta
 si no, usa memoria por proceso.
 """
 import time
+import ipaddress
 from collections import defaultdict
 from threading import Lock
 
 from fastapi import Request, HTTPException
+from app.core.config import settings
 
 try:
     from app.core.rate_limit_store import get_redis_client, check_rate_limit_redis
@@ -90,10 +92,23 @@ def check_rate_limit_estado_cuenta_verificar(ip: str) -> None:
         attempts.append(now)
 
 def get_client_ip(request: Request) -> str:
-    """IP del cliente (respeta X-Forwarded-For si está detrás de proxy)."""
-    forwarded = request.headers.get("x-forwarded-for")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
+    """
+    IP del cliente para rate limit.
+    - Usa X-Forwarded-For solo si RATE_LIMIT_TRUST_X_FORWARDED_FOR=True.
+    - Toma la primera IP valida del header para evitar basura o formatos invalidos.
+    """
+    if getattr(settings, "RATE_LIMIT_TRUST_X_FORWARDED_FOR", True):
+        forwarded = request.headers.get("x-forwarded-for")
+        if forwarded:
+            for item in forwarded.split(","):
+                candidate = (item or "").strip()
+                if not candidate:
+                    continue
+                try:
+                    ipaddress.ip_address(candidate)
+                    return candidate
+                except ValueError:
+                    continue
     if request.client:
         return request.client.host
     return "unknown"

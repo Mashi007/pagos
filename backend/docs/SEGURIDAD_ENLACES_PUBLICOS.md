@@ -44,10 +44,13 @@ En `cobros_publico` y `estado_cuenta_publico` el router se crea con `APIRouter(d
 - **Cobros público**  
   - `GET /cobros/public/validar-cedula?cedula=...`: solo comprueba formato, existencia en `clientes` y que tenga préstamo; devuelve `nombre` y `email` (completo para verificación) de **ese** cliente.  
   - `POST /cobros/public/enviar-reporte`: crea un `PagoReportado` asociado a la cédula enviada; no permite operaciones sobre otros clientes.
+  - `GET /cobros/public/validar-cedula?origen=infopagos`: el bypass interno solo aplica con Bearer válido de staff; no se activa desde tráfico público sin token.
+  - `POST /cobros/public/infopagos/enviar-reporte`: exige Bearer válido de staff (uso interno autenticado).
 
 - **Estado de cuenta público**  
   - `GET /estado-cuenta/public/validar-cedula?cedula=...`: solo comprueba formato y existencia en `clientes`; devuelve `nombre` y `email` de **ese** cliente.  
   - `POST /estado-cuenta/public/solicitar-estado-cuenta`: genera el PDF de estado de cuenta **solo para la cédula enviada** y lo envía al email registrado de ese cliente. No expone datos de otros.
+  - `origen=informes`: el comportamiento interno (sin rate limit / sin envío de email) solo se habilita con Bearer válido de staff.
 
 En ambos módulos las consultas a BD filtran por la cédula recibida (normalizada); no hay listados globales ni acceso por ID de cliente/prestamo arbitrario.
 

@@ -2338,6 +2338,69 @@ def post_refresh_abonos_drive_cache(background_tasks: BackgroundTasks):
     }
 
 
+@router.post("/sincronizar-abonos-drive-cuotas")
+def post_sincronizar_abonos_drive_cuotas(
+    payload: dict = Body(...),
+    db: Session = Depends(get_db),
+):
+    """
+    Sincronización masiva ABONOS(hoja) -> cuotas/pagos (Notificaciones > General).
+
+    Parámetros de body (opcionales):
+    - dry_run: bool (default True) -> solo simula y no escribe.
+    - limit: int (default 0 = sin límite) -> máximo de préstamos a evaluar.
+    - prestamo_id: int -> ejecutar solo para ese préstamo.
+    - aplicar_montos_altos: bool (default False) -> incluir montos > umbral CONFIRMO.
+    """
+    from app.services.sincronizar_abonos_drive_cuotas_service import (
+        sincronizar_abonos_drive_a_cuotas_masivo,
+    )
+
+    dry_run = bool(payload.get("dry_run", True))
+    aplicar_montos_altos = bool(payload.get("aplicar_montos_altos", False))
+    try:
+        limit = int(payload.get("limit", 0) or 0)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="limit debe ser entero >= 0.")
+    if limit < 0:
+        raise HTTPException(status_code=400, detail="limit debe ser entero >= 0.")
+
+    prestamo_id_raw = payload.get("prestamo_id")
+    prestamo_id: Optional[int] = None
+    if prestamo_id_raw is not None and str(prestamo_id_raw).strip() != "":
+        try:
+            prestamo_id = int(prestamo_id_raw)
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=400, detail="prestamo_id debe ser entero.")
+        if prestamo_id <= 0:
+            raise HTTPException(status_code=400, detail="prestamo_id debe ser > 0.")
+
+    try:
+        out = sincronizar_abonos_drive_a_cuotas_masivo(
+            db,
+            dry_run=dry_run,
+            limit=limit,
+            prestamo_id=prestamo_id,
+            aplicar_montos_altos=aplicar_montos_altos,
+            usuario_registro="AUTO_NOTIF_ABONOS_DRIVE",
+        )
+        if not dry_run:
+            db.commit()
+        return out
+    except HTTPException:
+        raise
+    except ValueError as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception as e:
+        db.rollback()
+        logger.exception("[notificaciones] sincronizar-abonos-drive-cuotas: %s", e)
+        raise HTTPException(
+            status_code=500,
+            detail="Error en sincronización masiva ABONOS -> cuotas.",
+        ) from e
+
+
 def _run_refresh_fecha_entrega_q_cache_bg() -> None:
     db = SessionLocal()
     try:

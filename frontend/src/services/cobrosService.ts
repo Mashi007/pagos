@@ -531,6 +531,32 @@ export async function escanerInfopagosExtraerComprobante(
   )
 }
 
+export interface EscanerInfopagosLoteDriveItem
+  extends EscanerInfopagosExtraerResponse {
+  drive_file_id: string
+  nombre_archivo: string
+  mime_type: string
+  archivo_b64?: string | null
+}
+
+export interface EscanerInfopagosLoteDriveResponse {
+  ok: boolean
+  items: EscanerInfopagosLoteDriveItem[]
+  total_leidos: number
+  total_eliminados: number
+  mensaje?: string
+}
+
+/** Escáner lote (auth): toma hasta 15 comprobantes desde carpeta Drive, digitaliza y borra origen. */
+export async function escanerInfopagosLoteDesdeDrive(
+  formData: FormData
+): Promise<EscanerInfopagosLoteDriveResponse> {
+  return apiClient.post<EscanerInfopagosLoteDriveResponse>(
+    `${BASE_COBROS}/escaner/lote/drive-digitalizar`,
+    formData
+  )
+}
+
 export async function getReciboInfopagos(
   token: string,
   pagoId: number

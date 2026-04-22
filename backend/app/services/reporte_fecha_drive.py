@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import io
 import logging
-import re
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -23,23 +22,6 @@ logger = logging.getLogger(__name__)
 COL_SHEET_Q_INDEX = 16
 
 NE = "NE"
-
-# Meses abreviados en hoja tipo "14-oct-24"
-_MESES = {
-    "ene": 1,
-    "feb": 2,
-    "mar": 3,
-    "abr": 4,
-    "may": 5,
-    "jun": 6,
-    "jul": 7,
-    "ago": 8,
-    "sep": 9,
-    "oct": 10,
-    "nov": 11,
-    "dic": 12,
-}
-
 
 def _fmt_sistema_dt(v: Optional[datetime]) -> str:
     if v is None:
@@ -79,38 +61,11 @@ def _pick_cedula_header(headers: List[str]) -> Optional[str]:
 
 def _parse_drive_date(raw: str) -> str:
     """
-    Normaliza fecha de la columna Q a YYYY-MM-DD. Si no se reconoce, devuelve el texto no vacío o NE.
+    Exporta la fecha de Drive de forma textual (sin reinterpretar ni reordenar día/mes).
     """
     s = _as_text(raw)
     if not s:
         return NE
-
-    # YYYY-MM-DD o inicio ISO
-    if len(s) >= 10 and s[4] == "-" and s[7] == "-" and s[:10].replace("-", "").isdigit():
-        return s[:10]
-
-    # DD/MM/YYYY o D/M/YYYY
-    m = re.match(r"^(\d{1,2})/(\d{1,2})/(\d{4})$", s)
-    if m:
-        d, mo, y = int(m.group(1)), int(m.group(2)), int(m.group(3))
-        if 1 <= mo <= 12 and 1 <= d <= 31:
-            return f"{y:04d}-{mo:02d}-{d:02d}"
-
-    # DD-mon-YY o D-mon-YY (ej. 14-oct-24)
-    m2 = re.match(
-        r"^(\d{1,2})-([a-zA-Z]{3,})-(\d{2,4})$",
-        s.replace(" ", ""),
-    )
-    if m2:
-        d = int(m2.group(1))
-        mon = m2.group(2).lower()[:3]
-        yr = int(m2.group(3))
-        if yr < 100:
-            yr += 2000 if yr < 50 else 1900
-        mo = _MESES.get(mon)
-        if mo and 1 <= d <= 31:
-            return f"{yr:04d}-{mo:02d}-{d:02d}"
-
     return s
 
 

@@ -613,6 +613,7 @@ const INSTITUCIONES = [
 ]
 
 const WHATSAPP_LINK = 'https://wa.me/584244579934'
+const ESTADO_CUENTA_LINK = '/rapicredit-estadocuenta'
 
 const NOTIFICATION_DURATION_MS = 10000
 
@@ -2293,6 +2294,16 @@ export default function ReportePagoPage({
             <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-center">
               <p className="text-sm text-blue-900">
                 El recibo PDF será enviado a tu correo en los próximos minutos.
+              </p>
+              <p className="mt-2 text-sm text-blue-900">
+                Revise su estado de cuenta{' '}
+                <a
+                  href={ESTADO_CUENTA_LINK}
+                  className="font-semibold underline hover:text-blue-700"
+                >
+                  aquí
+                </a>
+                .
               </p>
             </div>
           )}

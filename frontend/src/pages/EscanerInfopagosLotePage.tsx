@@ -30,7 +30,15 @@ import { Input } from '../components/ui/input'
 import { Label } from '../components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '../components/ui/dialog'
+import {
   eliminarPagoReportado,
+  escanerInfopagosLoteDesdeDrive,
   enviarReporteInfopagos,
   getReciboInfopagos,
   validarCedulaPublico,
@@ -40,7 +48,12 @@ import {
   extraerCaracteresCedulaPublica,
   normalizarCedulaParaProcesar,
 } from '../utils/cedulaConsultaPublica'
-import { aplicarSufijoVistoADocumento, SUFIJO_VISTO_ARCHIVO_RE } from '../utils/documentoSufijoVisto'
+import {
+  aplicarSufijoVistoADocumento,
+  collectTokensSufijoVistoArchivoDesdeFilas,
+  SUFIJO_VISTO_ARCHIVO_RE,
+  TOKEN_SUFIJO_VISTO_ARCHIVO_RE,
+} from '../utils/documentoSufijoVisto'
 
 import {
   cancelDigitacionLote,
@@ -52,12 +65,15 @@ import {
 } from './escanerInfopagosLoteDigitacion'
 import {
   filaVaciaDesdeArchivo,
+  filaTrasExtraccion,
   hayDuplicadoFila,
   type FilaLote,
 } from './escanerInfopagosLoteModel'
 
 const MAX_ARCHIVOS = 15
 const MAX_FILE_SIZE = 10 * 1024 * 1024
+const DEFAULT_DRIVE_FOLDER =
+  'https://drive.google.com/drive/folders/1gQCgiT2In8BiVMnOkKyzZezWH6M_hzxh?usp=drive_link'
 
 const INSTITUCIONES_FINANCIERAS = [
   'BINANCE',
@@ -223,7 +239,11 @@ export default function EscanerInfopagosLotePage() {
   const [validandoCedula, setValidandoCedula] = useState(false)
 
   const [archivos, setArchivos] = useState<File[]>([])
+  const [driveFolder, setDriveFolder] = useState(DEFAULT_DRIVE_FOLDER)
+  const [cargandoDrive, setCargandoDrive] = useState(false)
   const [filas, setFilas] = useState<FilaLote[]>([])
+  const [editClientId, setEditClientId] = useState<string | null>(null)
+  const [editDraft, setEditDraft] = useState<Partial<FilaLote> | null>(null)
   const filasRef = useRef<FilaLote[]>([])
 
   const digitacionUi = useSyncExternalStore(
@@ -331,6 +351,86 @@ export default function EscanerInfopagosLotePage() {
     setFase('revision')
   }, [archivos])
 
+  const fileDesdeBase64 = useCallback(
+    (b64: string, fileName: string, mimeType: string): File => {
+      const bin = atob(b64)
+      const bytes = new Uint8Array(bin.length)
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
+      return new File([bytes], fileName || 'comprobante', {
+        type: mimeType || 'application/octet-stream',
+      })
+    },
+    []
+  )
+
+  const handleCargarDesdeDrive = useCallback(async () => {
+    if (!cedulaNormalizada.valido || !cedulaNormalizada.valorParaEnviar) {
+      toast.error('Primero valide una cédula correcta.')
+      return
+    }
+    const folder = driveFolder.trim()
+    if (!folder) {
+      toast.error('Indique la carpeta compartida de Drive.')
+      return
+    }
+    setCargandoDrive(true)
+    try {
+      const tipo = cedulaNormalizada.valorParaEnviar.charAt(0).toUpperCase()
+      const numero = cedulaNormalizada.valorParaEnviar.slice(1).replace(/\D/g, '')
+      const fd = new FormData()
+      fd.append('tipo_cedula', tipo)
+      fd.append('numero_cedula', numero)
+      fd.append('drive_folder', folder)
+      fd.append('max_archivos', String(MAX_ARCHIVOS))
+      const res = await escanerInfopagosLoteDesdeDrive(fd)
+      if (!res.ok) {
+        toast.error(res.mensaje || 'No se pudo cargar desde Drive.')
+        return
+      }
+      if (!Array.isArray(res.items) || !res.items.length) {
+        toast('No hay archivos en la carpeta compartida.')
+        return
+      }
+
+      const archivosDrive: File[] = []
+      const filasDrive: FilaLote[] = []
+      for (const item of res.items.slice(0, MAX_ARCHIVOS)) {
+        const b64 = (item.archivo_b64 || '').trim()
+        if (!b64) continue
+        const f = fileDesdeBase64(b64, item.nombre_archivo, item.mime_type)
+        archivosDrive.push(f)
+        const base = filaVaciaDesdeArchivo(f)
+        if (item.ok && item.sugerencia) {
+          filasDrive.push(filaTrasExtraccion(base, item))
+        } else {
+          filasDrive.push({
+            ...base,
+            extract: 'error',
+            errorExtraccion: item.error || 'No se pudo digitalizar el comprobante.',
+          })
+        }
+      }
+      if (!filasDrive.length) {
+        toast.error('No se pudieron cargar comprobantes válidos desde Drive.')
+        return
+      }
+      setArchivos(archivosDrive)
+      tokensSufijoUsadosRef.current = collectTokensSufijoVistoArchivoDesdeFilas(
+        filasDrive.map(f => ({ numero_documento: f.numeroOperacion }))
+      )
+      filasRef.current = filasDrive
+      setFilas(filasDrive)
+      setFase('revision')
+      toast.success(
+        `Drive: ${String(res.total_leidos)} leído(s), ${String(res.total_eliminados)} eliminado(s) de la carpeta.`
+      )
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'Error cargando imágenes desde Drive.')
+    } finally {
+      setCargandoDrive(false)
+    }
+  }, [cedulaNormalizada, driveFolder, fileDesdeBase64])
+
   const handleDigitalizarTodos = useCallback(() => {
     if (!cedulaNormalizada.valido || !cedulaNormalizada.valorParaEnviar) {
       toast.error('Cédula inválida.')
@@ -358,6 +458,43 @@ export default function EscanerInfopagosLotePage() {
       return next
     })
   }, [])
+
+  const abrirEditarFila = useCallback((clientId: string) => {
+    const fila = filasRef.current.find(f => f.clientId === clientId)
+    if (!fila) return
+    setEditClientId(clientId)
+    setEditDraft({
+      fechaPago: fila.fechaPago,
+      confirmaFechaDetectada: fila.confirmaFechaDetectada,
+      institucion: fila.institucion,
+      otroInstitucion: fila.otroInstitucion,
+      numeroOperacion: fila.numeroOperacion,
+      moneda: fila.moneda,
+      montoStr: fila.montoStr,
+    })
+  }, [])
+
+  const cerrarEditorFila = useCallback(() => {
+    setEditClientId(null)
+    setEditDraft(null)
+  }, [])
+
+  const aplicarEdicionFila = useCallback(() => {
+    if (!editClientId || !editDraft) return
+    actualizarFila(editClientId, {
+      fechaPago: String(editDraft.fechaPago || ''),
+      confirmaFechaDetectada:
+        editDraft.confirmaFechaDetectada === 'si' || editDraft.confirmaFechaDetectada === 'no'
+          ? editDraft.confirmaFechaDetectada
+          : null,
+      institucion: String(editDraft.institucion || ''),
+      otroInstitucion: String(editDraft.otroInstitucion || ''),
+      numeroOperacion: String(editDraft.numeroOperacion || ''),
+      moneda: editDraft.moneda === 'BS' ? 'BS' : 'USD',
+      montoStr: String(editDraft.montoStr || ''),
+    })
+    cerrarEditorFila()
+  }, [actualizarFila, cerrarEditorFila, editClientId, editDraft])
 
   const handleAplicarSufijo = useCallback((clientId: string, letter: 'A' | 'P') => {
     setFilas(prev => {
@@ -563,6 +700,10 @@ export default function EscanerInfopagosLotePage() {
   }, [])
 
   const listoParaDigitalizar = filas.some(f => f.extract !== 'listo')
+  const filaEditando = useMemo(
+    () => (editClientId ? filas.find(f => f.clientId === editClientId) || null : null),
+    [editClientId, filas]
+  )
 
   return (
     <div className="mx-auto max-w-4xl space-y-6 p-4 pb-16">
@@ -654,6 +795,30 @@ export default function EscanerInfopagosLotePage() {
                 Cada lectura con IA puede tardar <strong>10–30 s</strong>; en lote se procesan en
                 cola. Puede elegir archivos varias veces para ir sumando hasta el máximo.
               </p>
+            </div>
+            <div className="space-y-2 rounded-md border border-violet-200 bg-violet-50 p-3">
+              <Label htmlFor="drive-folder-lote">Carpeta compartida de Drive (escáner lote)</Label>
+              <Input
+                id="drive-folder-lote"
+                value={driveFolder}
+                onChange={e => setDriveFolder(e.target.value)}
+                placeholder="Pegue aquí el link de carpeta compartida o el folder ID"
+              />
+              <div className="flex flex-wrap items-center gap-2">
+                <Button type="button" variant="secondary" onClick={handleCargarDesdeDrive} disabled={cargandoDrive}>
+                  {cargandoDrive ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Cargando desde Drive…
+                    </>
+                  ) : (
+                    'Cargar imágenes desde Drive (máx. 15)'
+                  )}
+                </Button>
+                <p className="text-xs text-slate-600">
+                  Toma hasta 15 archivos, los digitaliza y luego los elimina de la carpeta origen.
+                </p>
+              </div>
             </div>
             {archivos.length > 0 && (
               <div className="flex justify-end">
@@ -797,10 +962,8 @@ export default function EscanerInfopagosLotePage() {
                         <Button
                           type="button"
                           size="sm"
-                          variant={fila.editando ? 'default' : 'outline'}
-                          onClick={() =>
-                            actualizarFila(fila.clientId, { editando: !fila.editando })
-                          }
+                          variant="outline"
+                          onClick={() => abrirEditarFila(fila.clientId)}
                         >
                           <Pencil className="mr-1 h-3.5 w-3.5" />
                           Editar
@@ -840,7 +1003,7 @@ export default function EscanerInfopagosLotePage() {
                       </p>
                     )}
 
-                    {(fila.editando || fila.extract !== 'listo') && (
+                    {fila.extract !== 'listo' && (
                       <div className="space-y-4">
                         {(fila.validacionCampos || fila.validacionReglas) && (
                           <div
@@ -1108,6 +1271,240 @@ export default function EscanerInfopagosLotePage() {
           </div>
         </>
       )}
+      <Dialog open={Boolean(filaEditando)} onOpenChange={open => (open ? undefined : cerrarEditorFila())}>
+        <DialogContent className="flex max-h-[90vh] w-full max-w-2xl flex-col gap-0 p-0 sm:max-w-2xl">
+          <DialogHeader className="flex-shrink-0 border-b px-6 py-4">
+            <DialogTitle className="text-xl font-bold">Editar Pago</DialogTitle>
+          </DialogHeader>
+          {filaEditando && editDraft ? (
+            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-6">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label>Cédula Cliente *</Label>
+                  <Input value={cedulaNormalizada.valorParaEnviar || cedulaRaw} readOnly />
+                  <p className="text-xs text-green-700">1 préstamo en la lista</p>
+                </div>
+                <div className="space-y-2">
+                  <Label>Crédito al que aplica el pago *</Label>
+                  <Input
+                    readOnly
+                    value={
+                      filaEditando.escanerColision?.prestamo_objetivo_id != null
+                        ? `Préstamo #${String(filaEditando.escanerColision.prestamo_objetivo_id)}`
+                        : 'Pendiente de detección'
+                    }
+                  />
+                  <p className="text-xs text-green-700">Cédulas coinciden</p>
+                </div>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label>Fecha de Pago *</Label>
+                  <Input
+                    type="date"
+                    value={String(editDraft.fechaPago || '')}
+                    onChange={e =>
+                      setEditDraft(prev =>
+                        prev
+                          ? {
+                              ...prev,
+                              fechaPago: e.target.value,
+                              confirmaFechaDetectada:
+                                filaEditando.fechaDetectada.trim() &&
+                                e.target.value !== filaEditando.fechaDetectada.trim()
+                                  ? 'no'
+                                  : prev.confirmaFechaDetectada,
+                            }
+                          : prev
+                      )
+                    }
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Monto pagado ({editDraft.moneda === 'BS' ? 'BS' : 'USD'}) *</Label>
+                  <Input
+                    value={String(editDraft.montoStr || '')}
+                    onChange={e =>
+                      setEditDraft(prev => (prev ? { ...prev, montoStr: e.target.value } : prev))
+                    }
+                  />
+                </div>
+              </div>
+              <div className="rounded border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800">
+                <p className="font-medium">Cómo se aplicará el pago:</p>
+                <ul className="ml-5 list-disc">
+                  <li>Se aplicará a las cuotas más antiguas primero (por fecha de vencimiento).</li>
+                  <li>Se distribuirá proporcionalmente entre capital e interés.</li>
+                </ul>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2 sm:col-span-2">
+                  <Label>Banco</Label>
+                  <select
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    value={
+                      !String(editDraft.institucion || '').trim()
+                        ? ''
+                        : INSTITUCIONES_FINANCIERAS.includes(
+                        String(editDraft.institucion || '') as (typeof INSTITUCIONES_FINANCIERAS)[number]
+                      )
+                          ? String(editDraft.institucion || '')
+                          : 'Otros'
+                    }
+                    onChange={e =>
+                      setEditDraft(prev =>
+                        prev
+                          ? {
+                              ...prev,
+                              institucion:
+                                e.target.value === 'Otros'
+                                  ? String(prev.otroInstitucion || '')
+                                  : e.target.value,
+                              otroInstitucion: e.target.value === 'Otros' ? String(prev.otroInstitucion || '') : '',
+                            }
+                          : prev
+                      )
+                    }
+                  >
+                    <option value="">Sin especificar</option>
+                    {INSTITUCIONES_FINANCIERAS.map(opt => (
+                      <option key={opt} value={opt}>
+                        {opt}
+                      </option>
+                    ))}
+                    <option value="Otros">Otro</option>
+                  </select>
+                  {!INSTITUCIONES_FINANCIERAS.includes(
+                    String(editDraft.institucion || '') as (typeof INSTITUCIONES_FINANCIERAS)[number]
+                  ) ? (
+                    <Input
+                      placeholder="Nombre del banco o entidad"
+                      maxLength={MAX_LENGTH_INSTITUCION}
+                      value={String(editDraft.otroInstitucion || '')}
+                      onChange={e =>
+                        setEditDraft(prev =>
+                          prev
+                            ? {
+                                ...prev,
+                                otroInstitucion: e.target.value,
+                                institucion: e.target.value.trim(),
+                              }
+                            : prev
+                        )
+                      }
+                    />
+                  ) : null}
+                </div>
+                <div className="space-y-2">
+                  <Label>Número de Documento *</Label>
+                  <Input
+                    maxLength={MAX_LENGTH_NUMERO_OPERACION}
+                    value={String(editDraft.numeroOperacion || '')}
+                    onChange={e =>
+                      setEditDraft(prev =>
+                        prev ? { ...prev, numeroOperacion: e.target.value } : prev
+                      )
+                    }
+                  />
+                  <p className="text-xs text-slate-600">
+                    Si detecta duplicado, use <strong>Visto _A…</strong> o <strong>Visto _P…</strong>.
+                  </p>
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => {
+                        const base = String(editDraft.numeroOperacion || '').trim()
+                        if (!base) {
+                          toast.error('Primero escriba un número de operación.')
+                          return
+                        }
+                        if (SUFIJO_VISTO_ARCHIVO_RE.test(base)) {
+                          toast.error('Este número ya tiene sufijo admin.')
+                          return
+                        }
+                        const nuevo = aplicarSufijoVistoADocumento(
+                          base,
+                          'A',
+                          tokensSufijoUsadosRef.current
+                        )
+                        setEditDraft(prev =>
+                          prev ? { ...prev, numeroOperacion: nuevo } : prev
+                        )
+                      }}
+                    >
+                      Visto _A…
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => {
+                        const base = String(editDraft.numeroOperacion || '').trim()
+                        if (!base) {
+                          toast.error('Primero escriba un número de operación.')
+                          return
+                        }
+                        if (SUFIJO_VISTO_ARCHIVO_RE.test(base)) {
+                          toast.error('Este número ya tiene sufijo admin.')
+                          return
+                        }
+                        const nuevo = aplicarSufijoVistoADocumento(
+                          base,
+                          'P',
+                          tokensSufijoUsadosRef.current
+                        )
+                        setEditDraft(prev =>
+                          prev ? { ...prev, numeroOperacion: nuevo } : prev
+                        )
+                      }}
+                    >
+                      Visto _P…
+                    </Button>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label>Código (solo lectura; lo asigna Visto)</Label>
+                  <Input
+                    readOnly
+                    value={
+                      String(editDraft.numeroOperacion || '').match(TOKEN_SUFIJO_VISTO_ARCHIVO_RE)?.[1]?.toUpperCase() ||
+                      'Pendiente: use Visto'
+                    }
+                  />
+                  <p className="text-xs text-slate-600">
+                    No se puede teclear aquí. El token (formato A#### / P####) lo genera y guarda el sistema al pulsar Visto.
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label>Moneda *</Label>
+                  <select
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    value={editDraft.moneda === 'BS' ? 'BS' : 'USD'}
+                    onChange={e =>
+                      setEditDraft(prev =>
+                        prev ? { ...prev, moneda: e.target.value === 'BS' ? 'BS' : 'USD' } : prev
+                      )
+                    }
+                  >
+                    <option value="USD">USD / divisas</option>
+                    <option value="BS">Bolívares (Bs.)</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          ) : null}
+          <DialogFooter className="flex-shrink-0 border-t px-6 py-4">
+            <Button type="button" variant="outline" onClick={cerrarEditorFila}>
+              Cancelar
+            </Button>
+            <Button type="button" onClick={aplicarEdicionFila}>
+              Guardar cambios de edición
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

@@ -138,9 +138,17 @@ def normalizar_fecha_pago(fecha: Optional[str]) -> str:
     if not v or v.upper() == "NA":
         return v
 
-    # Formatos numéricos directos
-    for fmt in ("%d/%m/%Y", "%Y/%m/%d", "%d-%m-%Y", "%Y-%m-%d",
-                "%d/%m/%y", "%d-%m-%y", "%m/%d/%Y"):
+    # Formatos numéricos directos.
+    # Regla de negocio: entradas numéricas ambiguas (ej. 04-07-2026) se tratan como DD/MM/YYYY.
+    # Nunca interpretar automáticamente en formato mes/día para evitar cruces 04/07 <-> 07/04.
+    for fmt in (
+        "%d/%m/%Y",
+        "%Y/%m/%d",
+        "%d-%m-%Y",
+        "%Y-%m-%d",
+        "%d/%m/%y",
+        "%d-%m-%y",
+    ):
         try:
             return _dt.strptime(v, fmt).strftime("%d/%m/%Y")
         except ValueError:
@@ -171,6 +179,38 @@ def normalizar_fecha_pago(fecha: Optional[str]) -> str:
                     pass
 
     return v  # no reconocido: devolver sin modificar
+
+
+def clave_orden_fecha_pago(fecha: Optional[str]) -> Optional[str]:
+    """
+    Devuelve clave de comparación YYYY-MM-DD a partir de un texto de fecha.
+    - Mantiene la misma lógica de interpretación que `normalizar_fecha_pago`.
+    - Si no se puede interpretar, devuelve None.
+    """
+    raw = (fecha or "").strip()
+    if not raw or raw.upper() == "NA":
+        return None
+    normalizada = normalizar_fecha_pago(raw)
+    if not normalizada or normalizada.upper() == "NA":
+        return None
+    try:
+        return datetime.strptime(normalizada, "%d/%m/%Y").strftime("%Y-%m-%d")
+    except ValueError:
+        return None
+
+
+def fecha_drive_texto_y_clave(raw_fecha_drive: Optional[str]) -> tuple[str, Optional[str]]:
+    """
+    Retorna:
+    - texto_drive: valor textual original para trazabilidad (sin reinterpretar ni re-formatear).
+    - clave_orden: YYYY-MM-DD para comparaciones seguras con fecha del sistema.
+
+    Uso esperado:
+    - Mostrar/exportar `texto_drive` tal como llegó del Drive.
+    - Comparar por `clave_orden` contra la fecha de aprobación del sistema.
+    """
+    texto_drive = raw_fecha_drive if raw_fecha_drive is not None else ""
+    return texto_drive, clave_orden_fecha_pago(raw_fecha_drive)
 
 
 def normalizar_referencia(ref: Optional[str]) -> str:

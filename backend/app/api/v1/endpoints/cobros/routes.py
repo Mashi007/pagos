@@ -2,7 +2,9 @@
 Endpoints de administración del módulo Cobros (requieren autenticación).
 Listado de pagos reportados, detalle, aprobar, rechazar, histórico por cédula.
 """
+import io
 import logging
+import base64
 import re
 import threading
 import time
@@ -65,6 +67,8 @@ from app.services.pagos_gmail.gemini_service import (
 from app.services.cobros import cobros_publico_reporte_service as cpr
 from app.utils.cedula_almacenamiento import expr_cedula_normalizada_para_comparar
 from app.services.pagos_gmail.comprobante_bd import url_comprobante_imagen_absoluta
+from app.services.pagos_gmail.credentials import get_pagos_gmail_credentials
+from app.services.pagos_gmail.drive_service import build_drive_service
 from app.services.cobros.pago_reportado_comprobante_unico import (
     comprobante_bytes_y_content_type_desde_reportado,
     nombre_adjunto_email_desde_reportado,
@@ -3220,4 +3224,280 @@ async def escaner_extraer_comprobante_infopagos(
         "pago_existente_id": pago_existente_id,
         "prestamo_existente_id": prestamo_existente_id,
         "prestamo_objetivo_id": prestamo_objetivo_id,
+    }
+
+
+def _extraer_folder_id_drive(raw: str) -> str:
+    txt = (raw or "").strip()
+    if not txt:
+        return ""
+    m = re.search(r"/folders/([a-zA-Z0-9_-]{10,})", txt)
+    if m:
+        return m.group(1)
+    if re.fullmatch(r"[a-zA-Z0-9_-]{10,}", txt):
+        return txt
+    return ""
+
+
+@router.post("/escaner/lote/drive-digitalizar")
+async def escaner_lote_drive_digitalizar(
+    db: Session = Depends(get_db),
+    tipo_cedula: str = Form(...),
+    numero_cedula: str = Form(...),
+    drive_folder: str = Form(...),
+    max_archivos: int = Form(15),
+):
+    """
+    Escáner lote desde carpeta compartida de Drive:
+    - toma hasta `max_archivos` (tope duro 15),
+    - digitaliza y valida cada comprobante como el escáner unitario,
+    - elimina de Drive los archivos leídos para dejar la carpeta lista.
+    """
+    max_items = max(1, min(int(max_archivos or 15), 15))
+    folder_id = _extraer_folder_id_drive(drive_folder)
+    if not folder_id:
+        raise HTTPException(status_code=400, detail="Carpeta de Drive inválida.")
+
+    cedula_input = f"{(tipo_cedula or '').strip()}{(numero_cedula or '').strip()}"
+    val = validate_cedula(cedula_input)
+    if not val.get("valido"):
+        raise HTTPException(status_code=400, detail=val.get("error", "Cédula inválida."))
+    cedula_lookup = (val.get("valor_formateado") or "").replace("-", "")
+    if not cedula_lookup:
+        raise HTTPException(status_code=400, detail="Formato de cédula no reconocido.")
+
+    cliente = db.execute(
+        select(Cliente).where(expr_cedula_normalizada_para_comparar(Cliente.cedula) == cedula_lookup)
+    ).scalars().first()
+    if not cliente:
+        raise HTTPException(status_code=400, detail="La cédula no está registrada.")
+    prestamos_aprob = cpr.prestamos_aprobados_del_cliente(db, cliente.id)
+    err_pres = cpr.error_si_no_puede_reportar_en_web(prestamos_aprob)
+    if err_pres:
+        raise HTTPException(status_code=400, detail=err_pres)
+
+    creds = get_pagos_gmail_credentials()
+    if not creds:
+        raise HTTPException(status_code=503, detail="Google Drive no está configurado.")
+    drive_svc, _ = build_drive_service(creds)
+
+    q = (
+        f"'{folder_id}' in parents and trashed=false "
+        "and mimeType!='application/vnd.google-apps.folder'"
+    )
+    try:
+        listed = (
+            drive_svc.files()
+            .list(
+                q=q,
+                spaces="drive",
+                fields="files(id,name,mimeType,size,createdTime)",
+                orderBy="createdTime asc",
+                pageSize=max_items,
+            )
+            .execute()
+        )
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"No se pudo leer la carpeta de Drive: {str(e)[:180]}") from e
+
+    files = listed.get("files", []) or []
+    if not files:
+        return {
+            "ok": True,
+            "items": [],
+            "total_leidos": 0,
+            "total_eliminados": 0,
+            "mensaje": "La carpeta de Drive no tiene imágenes para procesar.",
+        }
+
+    tipo = (tipo_cedula or "").strip().upper()[:2]
+    numero = (numero_cedula or "").strip()
+    ctx_ced = f"{tipo}{numero}".replace("-", "")
+    prestamo_objetivo_id: Optional[int] = int(prestamos_aprob[0]) if len(prestamos_aprob) == 1 else None
+
+    items = []
+    delete_ok = 0
+    for f in files:
+        fid = str(f.get("id") or "").strip()
+        fname = str(f.get("name") or "comprobante")
+        mime_drive = str(f.get("mimeType") or "")
+        if not fid:
+            continue
+        content = b""
+        try:
+            req = drive_svc.files().get_media(fileId=fid)
+            out = io.BytesIO()
+            from googleapiclient.http import MediaIoBaseDownload
+
+            dl = MediaIoBaseDownload(out, req)
+            done = False
+            while not done:
+                _, done = dl.next_chunk()
+            content = out.getvalue()
+        except Exception:
+            items.append(
+                {
+                    "drive_file_id": fid,
+                    "nombre_archivo": fname,
+                    "mime_type": mime_drive,
+                    "archivo_b64": None,
+                    "ok": False,
+                    "error": "No se pudo descargar desde Drive.",
+                    "sugerencia": None,
+                    "validacion_campos": None,
+                    "validacion_reglas": None,
+                    "duplicado_en_pagos": False,
+                    "pago_existente_id": None,
+                    "prestamo_existente_id": None,
+                    "prestamo_objetivo_id": prestamo_objetivo_id,
+                }
+            )
+            continue
+
+        ctype = cpr.mime_efectivo_comprobante_web(mime_drive, fname)
+        archivo_b64 = base64.b64encode(content).decode("ascii")
+        err_file, filename = cpr.validar_adjunto_comprobante_bytes(
+            content,
+            ctype,
+            fname,
+            mensaje_excel_largo=False,
+        )
+        if err_file:
+            items.append(
+                {
+                    "drive_file_id": fid,
+                    "nombre_archivo": fname,
+                    "mime_type": ctype,
+                    "archivo_b64": archivo_b64,
+                    "ok": False,
+                    "error": err_file,
+                    "sugerencia": None,
+                    "validacion_campos": None,
+                    "validacion_reglas": None,
+                    "duplicado_en_pagos": False,
+                    "pago_existente_id": None,
+                    "prestamo_existente_id": None,
+                    "prestamo_objetivo_id": prestamo_objetivo_id,
+                }
+            )
+        else:
+            gem = extract_infopagos_campos_desde_comprobante(ctx_ced, content, filename)
+            if not gem.get("ok"):
+                items.append(
+                    {
+                        "drive_file_id": fid,
+                        "nombre_archivo": fname,
+                        "mime_type": ctype,
+                        "archivo_b64": archivo_b64,
+                        "ok": False,
+                        "error": gem.get("error") or "No se pudo leer el comprobante.",
+                        "sugerencia": None,
+                        "validacion_campos": None,
+                        "validacion_reglas": None,
+                        "duplicado_en_pagos": False,
+                        "pago_existente_id": None,
+                        "prestamo_existente_id": None,
+                        "prestamo_objetivo_id": prestamo_objetivo_id,
+                    }
+                )
+            else:
+                fecha_d = gem.get("fecha_pago")
+                fecha_iso = fecha_d.isoformat() if isinstance(fecha_d, date) else None
+                monto = gem.get("monto")
+                inst = gem.get("institucion_financiera") or ""
+                num_op = gem.get("numero_operacion") or ""
+                moneda = gem.get("moneda") or "BS"
+                validacion_campos = None
+                validacion_reglas = None
+                if monto is not None and inst.strip() and num_op.strip():
+                    err_campos, mon_norm = cpr.normalizar_y_validar_campos_formulario(
+                        tipo_cedula=tipo,
+                        numero_cedula=numero,
+                        institucion_financiera=inst,
+                        numero_operacion=num_op,
+                        monto=float(monto),
+                        moneda=moneda,
+                        observacion=None,
+                    )
+                    validacion_campos = err_campos
+                    if not err_campos and isinstance(fecha_d, date):
+                        validacion_reglas = cpr.validar_reglas_bs_tasa_monto_fecha(
+                            db,
+                            cedula_lookup=cedula_lookup,
+                            fecha_pago=fecha_d,
+                            monto=float(monto),
+                            mon=mon_norm,
+                        )
+                    elif not err_campos and not isinstance(fecha_d, date):
+                        validacion_reglas = (
+                            "Indique la fecha de pago (no se detectó con claridad en la imagen)."
+                        )
+                elif monto is None:
+                    validacion_reglas = "Complete el monto (no se detectó con claridad en la imagen)."
+                elif not inst.strip():
+                    validacion_reglas = "Complete la institución financiera."
+                elif not num_op.strip():
+                    validacion_reglas = "Complete el número de operación o referencia."
+
+                duplicado_en_pagos = False
+                pago_existente_id: Optional[int] = None
+                prestamo_existente_id: Optional[int] = None
+                num_op_trim = (num_op or "").strip()
+                if num_op_trim:
+                    pr_scan = SimpleNamespace(
+                        numero_operacion=num_op_trim[:100],
+                        referencia_interna="",
+                    )
+                    duplicado_en_pagos = pago_reportado_colisiona_tabla_pagos(db, pr_scan)
+                    if duplicado_en_pagos:
+                        pago_existente_id = primer_pago_id_si_existe_para_claves_reportado(
+                            db, pr_scan
+                        )
+                        if pago_existente_id is not None:
+                            p_exist = (
+                                db.execute(select(Pago).where(Pago.id == pago_existente_id))
+                                .scalars()
+                                .first()
+                            )
+                            if p_exist is not None:
+                                prestamo_existente_id = getattr(p_exist, "prestamo_id", None)
+
+                items.append(
+                    {
+                        "drive_file_id": fid,
+                        "nombre_archivo": fname,
+                        "mime_type": ctype,
+                        "archivo_b64": archivo_b64,
+                        "ok": True,
+                        "error": None,
+                        "sugerencia": {
+                            "fecha_pago": fecha_iso,
+                            "institucion_financiera": inst,
+                            "numero_operacion": num_op,
+                            "monto": monto,
+                            "moneda": moneda if moneda in ("BS", "USD") else "BS",
+                            "cedula_pagador_en_comprobante": gem.get("cedula_pagador_en_comprobante") or "",
+                            "notas_modelo": gem.get("notas") or "",
+                        },
+                        "validacion_campos": validacion_campos,
+                        "validacion_reglas": validacion_reglas,
+                        "duplicado_en_pagos": duplicado_en_pagos,
+                        "pago_existente_id": pago_existente_id,
+                        "prestamo_existente_id": prestamo_existente_id,
+                        "prestamo_objetivo_id": prestamo_objetivo_id,
+                    }
+                )
+
+        try:
+            drive_svc.files().delete(fileId=fid).execute()
+            delete_ok += 1
+        except Exception:
+            logger.warning("[ESCANER_LOTE_DRIVE] No se pudo eliminar file_id=%s", fid)
+
+    return {
+        "ok": True,
+        "items": items,
+        "total_leidos": len(items),
+        "total_eliminados": delete_ok,
+        "mensaje": f"Se procesaron {len(items)} archivo(s) desde Drive.",
     }

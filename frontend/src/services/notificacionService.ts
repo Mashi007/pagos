@@ -308,6 +308,25 @@ export interface AplicarAbonosDriveCuotasResponse {
   referencia_pago: string
 }
 
+export interface SincronizarAbonosDriveCuotasMasivoResponse {
+  ok: boolean
+  dry_run: boolean
+  aplicar_montos_altos: boolean
+  umbral_monto_alto_usd: number
+  limit: number
+  prestamo_id?: number | null
+  resumen: {
+    total_evaluados: number
+    con_diferencia_aplicable: number
+    aplicados: number
+    omitidos_requiere_lote: number
+    omitidos_monto_alto: number
+    sin_diferencia_o_no_aplicable: number
+    errores: number
+  }
+  items: Array<Record<string, unknown>>
+}
+
 /** Préstamo con total financiamiento = total abonos (liquidado). */
 
 export interface LiquidadoItem {
@@ -841,6 +860,18 @@ class NotificacionService {
     return await apiClient.post<{ ok: boolean; mensaje: string }>(
       `${this.baseUrl}/refresh-fecha-entrega-q-cache`,
       {}
+    )
+  }
+
+  async postSincronizarAbonosDriveCuotasMasivo(payload?: {
+    dry_run?: boolean
+    limit?: number
+    prestamo_id?: number
+    aplicar_montos_altos?: boolean
+  }): Promise<SincronizarAbonosDriveCuotasMasivoResponse> {
+    return await apiClient.post<SincronizarAbonosDriveCuotasMasivoResponse>(
+      `${this.baseUrl}/sincronizar-abonos-drive-cuotas`,
+      payload ?? {}
     )
   }
 
