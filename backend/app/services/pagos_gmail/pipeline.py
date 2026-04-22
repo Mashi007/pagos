@@ -8,6 +8,8 @@ Orquestacion: Gmail -> Gemini/BD por **cada adjunto elegible** (remitente en cli
 
 **Regla estricta (1 página por binario):** solo se digitaliza **una página** por archivo: imágenes tal cual; PDF solo si tiene **exactamente 1 página**. PDF con **2+ páginas** no se envía a Gemini; el hilo recibe etiqueta Gmail **PAGINAS** (puede convivir con otras etiquetas del mismo paso salvo la regla exclusiva de ERROR EMAIL abajo).
 
+**Solo texto:** si el mensaje no aporta ningún binario imagen/PDF digitable por el extractor (`candidatos` vacío y sin omisión solo por PDF multipágina), la etiqueta final de Gmail es **TEXTO** (única y exclusivamente texto u adjuntos no comprobante imagen/PDF).
+
 **Regla de decisión actual (sin ambigüedad):**
 - Paso 1: si en el correo hay digitalización OK de plantilla A/B, etiqueta final = MERCANTIL o BNC.
 - Paso 2: si no hubo A/B y el remitente está en `clientes`, se admite C/D y etiqueta final = BINANCE o BNV.
@@ -1612,13 +1614,14 @@ def run_pipeline(
                         final_label_reason = "paso_2_d"
 
                 if not final_label_name:
-                    # Remitente master@: mismas reglas A/B/C/D/Plan B; sin etiqueta MASTER — a revisión humana.
-                    if remitente_solo_master and not fully_digitized_email:
-                        final_label_name = PAGOS_GMAIL_LABEL_MANUAL
-                        final_label_reason = "fallback_manual"
-                    elif not candidatos and multipage_pdf_omitidos == 0:
+                    # Solo texto (asunto/cuerpo) u otros adjuntos no imagen/PDF del pipeline: sin binarios digitable.
+                    if not candidatos and multipage_pdf_omitidos == 0:
                         final_label_name = PAGOS_GMAIL_LABEL_TEXTO
                         final_label_reason = "fallback_texto"
+                    # Remitente master@ con media pero sin digitalización completa: revisión humana.
+                    elif remitente_solo_master and not fully_digitized_email:
+                        final_label_name = PAGOS_GMAIL_LABEL_MANUAL
+                        final_label_reason = "fallback_manual"
                     elif (
                         plan_b_mercantil_bnc_fuera_bd
                         and fully_digitized_email
