@@ -48,9 +48,8 @@ const PUBLIC_PATHS = [
  * En rutas publicas solo muestra el Outlet (sin Layout). En el resto, si no hay token activo, redirige a /login
  * para pedir usuario y clave.
  *
- * Con basename="/pagos", useLocation().pathname ya viene sin el basename (p. ej. /pagos/pago-bs).
- * No quitar BASE_PATH de ese valor para RBAC: coincide con el string "/pagos" y rompería rutas como
- * /pagos/pago-bs → /pago-bs (lista blanca en roleRoutes usa /pagos/...).
+ * Con basename="/pagos", useLocation().pathname ya viene sin el basename del host (p. ej. /pagos/pago-bs
+ * para la URL real /pagos/pagos/pago-bs). No quitar BASE_PATH de ese valor para RBAC.
  * Solo normalizamos quitando BASE_PATH duplicado para detectar rutas públicas legacy.
  */
 

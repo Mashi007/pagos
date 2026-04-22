@@ -11,8 +11,8 @@ Orquestacion: Gmail -> Gemini/BD por **cada adjunto elegible** (remitente en cli
 **Solo texto:** si el mensaje no aporta ningún binario imagen/PDF digitable por el extractor (`candidatos` vacío y sin omisión solo por PDF multipágina), la etiqueta final de Gmail es **TEXTO** (única y exclusivamente texto u adjuntos no comprobante imagen/PDF).
 
 **Regla de decisión actual (sin ambigüedad):**
-- Paso 1: si en el correo hay digitalización OK de plantilla A/B, etiqueta final = MERCANTIL o BNC.
-- Paso 2: si no hubo A/B y el remitente está en `clientes`, se admite C/D y etiqueta final = BINANCE o BNV.
+- Paso 1: si en el correo hay plantilla A/B con **CUOTAS_OK**, etiqueta final = MERCANTIL o BNC; si no hubo CUOTAS_OK pero sí comprobante A/B digitalizado en BD (p. ej. duplicado), misma etiqueta MERCANTIL/BNC (prioridad A sobre B).
+- Paso 2: si no hubo A/B (ni por cuotas ni por digitalizado) y el remitente está en `clientes`, C/D con **CUOTAS_OK** → BINANCE/BNV; si solo hay C/D digitalizado sin cuotas, misma etiqueta (prioridad C sobre D).
 - Paso 2b (Plan B, De no en clientes): si todo el correo digitalizó OK y hay plantilla **C**, etiqueta final = BINANCE (cédula columna ERROR EMAIL; sin CUOTAS_OK automático).
 - Paso 3 (fallback): si no aplica ninguna regla bancaria previa, usar orden TEXTO -> ERROR EMAIL -> MANUAL (sin etiqueta MASTER).
 - Solo se aplica **una** etiqueta final por correo (set permitido arriba), sin etiquetas auxiliares.
@@ -347,8 +347,8 @@ def run_pipeline(
     """
     Ejecuta el pipeline Gmail -> Gemini -> BD (comprobante en pago_comprobante_imagen; sin subidas a Drive).
     Flujo de clasificación (etiqueta final única):
-    1) Paso 1: detectar A/B desde el inicio (sin importar número de adjuntos) -> etiqueta MERCANTIL o BNC.
-    2) Paso 2: si no hubo A/B, validar remitente en `clientes`; con cliente, clasificar C/D y etiquetar BINANCE o BNV.
+    1) Paso 1: A/B con CUOTAS_OK -> MERCANTIL/BNC; si no, A/B solo digitalizado en BD -> misma etiqueta (evita MANUAL por duplicado).
+    2) Paso 2: sin A/B; remitente en `clientes`; C/D con CUOTAS_OK -> BINANCE/BNV; si no, C/D solo digitalizado -> misma etiqueta.
     3) Fallback: si no aplica 1/2 (sin etiqueta bancaria final), usar orden TEXTO -> ERROR EMAIL -> MANUAL (sin MASTER).
     Regla innegociable: solo puede quedar **una** etiqueta final por correo, y si el mensaje ya trae cualquier etiqueta de usuario se omite sin reescanear.
     scan_filter: "unread" | "read" | "all" | "pending_identification" | "error_email_rescan" (por defecto API/UI: all).
@@ -668,8 +668,8 @@ def run_pipeline(
                 any_cedula_lookup_failed = False
                 # True solo si un adjunto se descarta por formato/parse (no por cedula del remitente).
                 any_skipped_not_plantilla_o_campos = False
-                # Evita sesgo a MANUAL por media no-comprobante (logos/firma/banner):
-                # solo activar MANUAL si hubo evidencia escaneada de caso revisable.
+                # MANUAL en Gmail solo si hay señal de revisión (Gemini/plantilla fallida con pista, o error al procesar adjunto);
+                # no marcar solo por tener filas sync: la etiqueta bancaria puede salir de comprobante digitalizado sin CUOTAS_OK.
                 manual_evidence_for_revision = False
                 label_ids_for_message: list[str] = []
                 # Formatos A/B/C/D/NR digitalizados OK (comprobante en BD) en este mensaje (para detectar mezcla -> MANUAL).
@@ -1023,7 +1023,6 @@ def run_pipeline(
                                 "sha256": file_digest,
                             }
                         )
-                        manual_evidence_for_revision = True
                     except Exception as e:
                         logger.warning("[PAGOS_GMAIL]   Error procesando %s: %s", filename, e)
                         _pipeline_evt(
@@ -1033,6 +1032,7 @@ def run_pipeline(
                         )
                         any_incomplete_or_skipped = True
                         any_skipped_not_plantilla_o_campos = True
+                        manual_evidence_for_revision = True
 
                 if redig_manual_error_pass and candidatos and not pending:
                     logger.info(
@@ -1590,10 +1590,17 @@ def run_pipeline(
 
                 final_label_name: Optional[str] = None
                 final_label_reason = "none"
+                # Paso 1 (A/B): prioridad filas con CUOTAS_OK; si ninguna, comprobante reconocido y en BD
+                # (p. ej. duplicado / sin aplicación cuotas) para no forzar MANUAL en Gmail cuando ya hay plantilla clara.
                 label_prioridad_paso_1 = next(
                     (f for f in bank_fmts_cuotas_ok if f in ("A", "B")),
                     None,
                 )
+                if not label_prioridad_paso_1:
+                    for _pref_ab in ("A", "B"):
+                        if any(f == _pref_ab for f in bank_fmts_digitized):
+                            label_prioridad_paso_1 = _pref_ab
+                            break
                 if label_prioridad_paso_1:
                     final_label_name = (
                         PAGOS_GMAIL_LABEL_IMAGEN_1
@@ -1606,6 +1613,11 @@ def run_pipeline(
                         (f for f in bank_fmts_cuotas_ok if f in ("C", "D")),
                         None,
                     )
+                    if not label_prioridad_paso_2:
+                        for _pref_cd in ("C", "D"):
+                            if any(f == _pref_cd for f in bank_fmts_digitized):
+                                label_prioridad_paso_2 = _pref_cd
+                                break
                     if label_prioridad_paso_2 == "C":
                         final_label_name = PAGOS_GMAIL_LABEL_IMAGEN_3
                         final_label_reason = "paso_2_c"

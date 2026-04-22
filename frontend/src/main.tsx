@@ -41,7 +41,20 @@ function normalizeDuplicateBasePathInUrl(): void {
   }
 }
 
+/** Ruta antigua / errónea: falta el segmento del módulo «pagos» (URL canónica /pagos/pagos/pago-bs). */
+function redirectLegacyPagoBsPath(): void {
+  const base = (BASE_PATH || '/').replace(/\/$/, '') || '/'
+  if (base === '/' || typeof window === 'undefined') return
+  const p = (window.location.pathname || '').replace(/\/$/, '') || '/'
+  const wrong = `${base}/pago-bs`
+  if (p !== wrong) return
+  const next = `${base}/pagos/pago-bs${window.location.search}${window.location.hash}`
+  window.history.replaceState(window.history.state, '', next)
+}
+
 normalizeDuplicateBasePathInUrl()
+
+redirectLegacyPagoBsPath()
 
 // Constantes de configuración
 
