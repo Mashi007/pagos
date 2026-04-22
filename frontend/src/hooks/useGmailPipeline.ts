@@ -16,7 +16,7 @@
 
 
 
- * hace polling a /status cada 5s hasta que last_status sea "success" o "error".
+ * hace polling a /status cada 10s hasta que last_status sea "success" o "error".
 
 
 
@@ -42,12 +42,19 @@ export type GmailRunSummary = {
   pipeline_error?: boolean
   /** Comprobantes con fila sync_item en esta corrida. */
   comprobantes_digitados?: number
-  /** Altas automáticas exitosas (traza CUOTAS_OK / PAGO_SIN_CUOTAS con pago). */
+  /** Altas automáticas exitosas (traza CUOTAS_OK con pago). */
   pagos_validos_alta_automatica?: number
+  /** Pagos creados sin aplicación de cuotas (requieren revisión). */
+  pagos_sin_aplicacion_cuotas?: number
   /** Comprobantes sin alta automática (revisión / Excel). */
   pagos_invalidos_pendientes_revision?: number
   /** Modelo Gemini usado en la corrida (settings GEMINI_MODEL). */
   gemini_model?: string
+  /** Métricas de latencia de Gemini por corrida. */
+  gemini_calls_total?: number
+  gemini_ms_total?: number
+  gemini_ms_max?: number
+  gemini_ms_avg?: number
 }
 
 interface GmailStatus {
@@ -76,9 +83,9 @@ interface UseGmailPipelineOptions {
   onStatusUpdate?: (status: GmailStatus) => void
 }
 
-const POLL_INTERVAL_MS = 5000
+const POLL_INTERVAL_MS = 10000
 
-const POLL_MAX_ATTEMPTS = 300 // 300 × 5s = 25 min máximo de espera (pipeline con muchos correos)
+const POLL_MAX_ATTEMPTS = 180 // 180 × 10s = 30 min máximo de espera (pipeline con muchos correos)
 
 /** Tras varios fallos de red / 5xx (p. ej. 502 Render), dejar de martillar el API. */
 const POLL_MAX_CONSECUTIVE_FETCH_ERRORS = 5

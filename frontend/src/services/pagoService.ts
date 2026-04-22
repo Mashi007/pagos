@@ -976,7 +976,12 @@ class PagoService {
       pipeline_error?: boolean
       comprobantes_digitados?: number
       pagos_validos_alta_automatica?: number
+      pagos_sin_aplicacion_cuotas?: number
       pagos_invalidos_pendientes_revision?: number
+      gemini_calls_total?: number
+      gemini_ms_total?: number
+      gemini_ms_max?: number
+      gemini_ms_avg?: number
       gemini_model?: string
     } | null
   }> {

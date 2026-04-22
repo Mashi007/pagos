@@ -28,6 +28,7 @@ import hashlib
 import logging
 import re
 from datetime import datetime, timezone
+from time import perf_counter
 from typing import Dict, Optional
 
 
@@ -415,7 +416,7 @@ def run_pipeline(
     # IDs de gmail_temporal cuyo delete inmediato falló tras alta automática OK; se reintenta antes de cerrar cada mensaje.
     pending_gmail_temporal_delete_ids: set[int] = set()
     # Métricas para GET /pagos/gmail/status → last_run_summary (diagnóstico en toast UI).
-    run_stats: dict[str, int] = {
+    run_stats: dict[str, int | str] = {
         "gmail_messages_listed": 0,
         "messages_skipped_invalid_sender": 0,
         "messages_skipped_drive_folder": 0,
@@ -430,6 +431,9 @@ def run_pipeline(
         "final_fallback_master": 0,
         "final_fallback_error_email": 0,
         "final_fallback_manual": 0,
+        "gemini_calls_total": 0,
+        "gemini_ms_total": 0,
+        "gemini_ms_max": 0,
         "gmail_labels_list_failed": 0,
         "manual_error_redigitaliza_listed": 0,
         "manual_error_redigitaliza_error": "",
@@ -779,12 +783,23 @@ def run_pipeline(
                         )
                         file_digest = hashlib.sha256(body_bin).hexdigest()
 
+                        _t0_gem = perf_counter()
                         fmt, data = classify_and_extract_pagos_gmail_attachment(
                             content,
                             filename,
                             remitente_correo_header=from_h,
                             origen_binario=origen_binario,
                             modo_error_email_ab=usar_extraccion_cedula_imagen_ab,
+                        )
+                        _gem_ms = int((perf_counter() - _t0_gem) * 1000)
+                        run_stats["gemini_calls_total"] = int(
+                            run_stats.get("gemini_calls_total", 0) or 0
+                        ) + 1
+                        run_stats["gemini_ms_total"] = int(
+                            run_stats.get("gemini_ms_total", 0) or 0
+                        ) + _gem_ms
+                        run_stats["gemini_ms_max"] = max(
+                            int(run_stats.get("gemini_ms_max", 0) or 0), _gem_ms
                         )
 
                         if redig_manual_error_pass and fmt not in ("A", "B"):
@@ -1680,6 +1695,10 @@ def run_pipeline(
             )
 
         _pagos_metrics = _metricas_resumen_corrida_gmail_pagos(db, sync_id)
+        _gem_calls = int(run_stats.get("gemini_calls_total", 0) or 0)
+        _gem_total = int(run_stats.get("gemini_ms_total", 0) or 0)
+        _gem_max = int(run_stats.get("gemini_ms_max", 0) or 0)
+        _gem_avg = round((_gem_total / _gem_calls), 2) if _gem_calls > 0 else 0.0
         _run_summary_ok = {
             "scan_filter": scan_filter,
             "gmail_messages_listed": run_stats["gmail_messages_listed"],
@@ -1702,6 +1721,10 @@ def run_pipeline(
             "final_fallback_master": run_stats["final_fallback_master"],
             "final_fallback_error_email": run_stats["final_fallback_error_email"],
             "final_fallback_manual": run_stats["final_fallback_manual"],
+            "gemini_calls_total": _gem_calls,
+            "gemini_ms_total": _gem_total,
+            "gemini_ms_max": _gem_max,
+            "gemini_ms_avg": _gem_avg,
             "gmail_labels_list_failed": run_stats["gmail_labels_list_failed"],
             "manual_error_redigitaliza_listed": run_stats[
                 "manual_error_redigitaliza_listed"
@@ -1742,6 +1765,10 @@ def run_pipeline(
             e,
         )
         _pagos_metrics_err = _metricas_resumen_corrida_gmail_pagos(db, sync_id)
+        _gem_calls = int(run_stats.get("gemini_calls_total", 0) or 0)
+        _gem_total = int(run_stats.get("gemini_ms_total", 0) or 0)
+        _gem_max = int(run_stats.get("gemini_ms_max", 0) or 0)
+        _gem_avg = round((_gem_total / _gem_calls), 2) if _gem_calls > 0 else 0.0
         _run_summary_list_err = {
             "scan_filter": scan_filter,
             "gmail_messages_listed": run_stats["gmail_messages_listed"],
@@ -1764,6 +1791,10 @@ def run_pipeline(
             "final_fallback_master": run_stats["final_fallback_master"],
             "final_fallback_error_email": run_stats["final_fallback_error_email"],
             "final_fallback_manual": run_stats["final_fallback_manual"],
+            "gemini_calls_total": _gem_calls,
+            "gemini_ms_total": _gem_total,
+            "gemini_ms_max": _gem_max,
+            "gemini_ms_avg": _gem_avg,
             "gmail_labels_list_failed": run_stats["gmail_labels_list_failed"],
             "manual_error_redigitaliza_listed": run_stats[
                 "manual_error_redigitaliza_listed"
@@ -1787,6 +1818,10 @@ def run_pipeline(
     except Exception as e:
         logger.exception("[PAGOS_GMAIL] Pipeline error inesperado: %s", e)
         _pagos_metrics_pipe = _metricas_resumen_corrida_gmail_pagos(db, sync_id)
+        _gem_calls = int(run_stats.get("gemini_calls_total", 0) or 0)
+        _gem_total = int(run_stats.get("gemini_ms_total", 0) or 0)
+        _gem_max = int(run_stats.get("gemini_ms_max", 0) or 0)
+        _gem_avg = round((_gem_total / _gem_calls), 2) if _gem_calls > 0 else 0.0
         _run_summary_pipe_err = {
             "scan_filter": scan_filter,
             "gmail_messages_listed": run_stats["gmail_messages_listed"],
@@ -1809,6 +1844,10 @@ def run_pipeline(
             "final_fallback_master": run_stats["final_fallback_master"],
             "final_fallback_error_email": run_stats["final_fallback_error_email"],
             "final_fallback_manual": run_stats["final_fallback_manual"],
+            "gemini_calls_total": _gem_calls,
+            "gemini_ms_total": _gem_total,
+            "gemini_ms_max": _gem_max,
+            "gemini_ms_avg": _gem_avg,
             "gmail_labels_list_failed": run_stats["gmail_labels_list_failed"],
             "manual_error_redigitaliza_listed": run_stats[
                 "manual_error_redigitaliza_listed"
