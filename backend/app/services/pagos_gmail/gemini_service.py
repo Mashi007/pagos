@@ -132,6 +132,9 @@ PASO 1 - DESCARTE (ninguno al instante):
 PASO 2 - Prioridad B (imagen 2) si el nucleo B se cumple; entonces B, no A ni C:
   Nucleo B = (BNC logo o texto) + cuenta con barras ####/####/##/######## (ej. 0191/0127/...) + RAPI-CREDIT como titular o beneficiario de esa cuenta
     + monto en dolares visible (Us$, US$, USD, o patron *...*NN.mm con decimales).
+  Regla anti-falso-negativo BNC (fotos reales): si el papel muestra patron de seguridad BNC (fondo repetido con emblema), texto BancoNacionaldeCrédito/BNC,
+    cuenta 0191/... de RAPI-CREDIT y linea Deposito Us$ con monto enmascarado por asteriscos, clasifica B aunque el contraste sea bajo,
+    haya sombra, desenfoque leve, sello azul, reflejo o parte del borde recortado.
   Si el nucleo B se cumple, elige B aunque tambien aparezca "RAPI-CREDIT" en otro contexto: aqui es recibo de cajero BNC, no ticket RECAUDACION.
   VARIANTE B — **patrones visuales tipicos del recibo BNC (imagen 2)** (combinar varias senales; no inventes si falta el nucleo):
     - **Marca BNC**: texto **BNC** destacado y/o icono sol/abanico; a veces **Rif. N° J...** en margen; agua/fondo repetitivo tipo seguridad.
@@ -140,6 +143,12 @@ PASO 2 - Prioridad B (imagen 2) si el nucleo B se cumple; entonces B, no A ni C:
     - **Deposito en divisas**: lineas **Deposito Us$**, **Deposito U.S$**, **Debito**/**Us$** en contexto de cajero; el importe suele ir como **asteriscos +** cifra con punto decimal (ej. **********142.00) — senal fuerte **B** frente a muchos tickets A.
     - **Metadatos de ventanilla**: **Agencia:** nombre sucursal; **Terminal:**; **Cajero:** (usuario); **fecha y hora** tipo DD/MM/YYYY HH:MM:SS; **Serial:** y **Ref:** (dos numeros, a veces cercanos pero distintos) — para **numero_referencia** sigue el discriminador "IMAGEN 2 / B" mas abajo.
     - **Depositante en papel**: linea **DP:V-** / **DP:E-** / **DP:J-** + digitos + nombre (misma linea o continua); **solo** para decidir A vs B: si hay **recibo BNC** + **0191** + agua/sello BNC -> **B**, no A, aunque el patron DP recuerde al ticket Mercantil.
+    - **Caso comun en fotos de telefono**: el valor de **Ref** puede verse dos veces (una impresion tenue y otra mas oscura/manuscrita encima). Para `numero_referencia`,
+      prioriza la cadena de digitos mas legible asociada a la etiqueta **Ref**; si hay conflicto visual, usa la que tenga mejor nitidez y longitud coherente (usualmente 7-9 digitos).
+    - **Serial visible sin Ref limpio**: si **Ref** esta borroso o parcialmente tapado pero **Serial** es legible en el mismo bloque de operacion BNC, acepta B y usa `Serial` como `numero_referencia`
+      (sin usar cuenta 0191/... ni monto como referencia).
+    - **BNC monocromo / bajo contraste**: no exijas tinta azul intensa ni logotipo perfecto; acepta OCR sucio de "BancoNacionaldeCredito", "Deposi to Us$", "Serial", "Agencia", "Terminal", "Cajero"
+      mientras el patron estructural BNC sea consistente.
     - **Sello azul** "Banco Nacional de Credito/Crédito", **RECIBIDO**, agencia, "Deposito Us$", cajero — refuerza **B**; no es comprobante BDV (D) ni Mercantil (0105).
     - **Correo digitalizado / captura con varias imagenes**: el backend puede enviar **esta** pieza sola (adjunto o recorte). Si aqui ves un recibo BNC **completo** aunque el borde muestre parte de otra foto o UI, aplica VARIANTE B y la regla de MEZCLA arriba: extrae **solo** del ticket BNC; no supongas datos de otra miniatura que no se vea en este binario.
   Refuerzos utiles de B (opcionales si el nucleo ya es claro): asteriscos antes del monto; Agencia / Terminal / Cajero; **Ref.** / **Ref:** / **Rif. N°** arriba o al costado; **Serial:** con cadena de digitos (a menudo **8-9 cifras**, no confundir con cuenta 0191/...); layout en **dos columnas** (izquierda agencia/cuenta/DP; derecha fecha/hora/serial/ref).
@@ -326,6 +335,10 @@ FORMATO B — comprobante BNC de deposito a favor de RAPI-CREDIT (segunda planti
     - Fondo con patron gris repetido (floral/hojas) y texto impreso tipo matriz de puntos; **sello azul** de agencia
       ("RECIBIDO CAJERO", fecha, "Deposito U.S$", nombre sucursal) — refuerza B; **no** confundir con formato D (BDV): aqui sigue habiendo **BNC + 0191/...**.
   VARIANTE B1 — **Sello azul grande** cubriendo parte del texto: si ves BNC + 0191 + RAPI + monto con asteriscos, sigue siendo **B** aunque el sello tape lineas; lee Ref/Serial/Fecha en zonas visibles.
+  VARIANTE B2 — **Fondo gris repetido BNC (marca de agua)**: el recibo puede verse "lavado", con letras tenues por sobreexposicion o compresion. Si aun se distinguen
+    BNC/BancoNacionaldeCredito + cuenta 0191/... + RAPI-CREDIT + Deposito Us$ + monto con asteriscos + bloque Ref/Serial/fecha, clasifica **B**.
+  VARIANTE B3 — **Foto sobre mesa o mano con perspectiva**: aunque el ticket este inclinado o con distorsion trapezoidal, clasifica **B** si el nucleo estructural existe.
+    No penalices por bordes negros, sombras de dedos o marco del telefono.
   Criterio B (minimo): BNC + cuenta con slashes tipo 0191/... + RAPI-CREDIT como beneficiario/titular
     + indicio claro de dolares (Us$, US$, USD, o monto con **... y decimales tipo deposito) + Agencia o Terminal/Cajero o Serial o Ref.
   NO es B si es otro banco, solo captura de app, o BNC sin RAPI-CREDIT en la zona de cuenta/beneficiario.
@@ -357,10 +370,13 @@ monto: en Mercantil con coma decimal (96,00) devuelve equivalente con punto para
 
 === DETALLE FORMATO B ===
 Prioriza la plantilla BNC anterior (horizontal, vertical, con o sin sello azul de ventanilla).
+  Normalizacion practica para OCR BNC: acepta variantes como "Deposi to Us$", "BancoNacionaldeCredito", "RAPI-CREDI", "RAPI-CREDIT C.A" y espacios/guiones inconsistentes
+  como equivalentes del mismo campo, sin bajar formato a ninguno cuando el contexto estructural sea claramente BNC.
   numero_referencia: (1) Si aparece **Ref:** / **Ref.** / **Referencia** con numero de control claro, usalo como primera opcion (ej. 141810437, 150927688).
   (2) Si no hay Ref legible, usa el valor junto a **Serial:** (ej. 141810434, 150927684 — suelen ser **8-9 digitos**).
   (3) Si hay **Ref: NF 000001327** u otro formato con prefijos, copia la cadena completa legible.
   (4) Solo si ninguno de los anteriores es usable y hay una ristra **muy larga** solo digitos (>12) en contexto BNC, usala.
+  Si hay doble lectura de Ref (impreso tenue + trazo mas oscuro), usa la lectura mas nítida; no combines digitos de ambas.
   No uses el numero de cuenta 0191/... como numero_referencia.
   cedula en JSON: siempre "NA" (REGLA CEDULA); lineas DP: o RIF: sirven solo para clasificar B vs A.
   monto: patron tipico imagen 2 = asteriscos seguidos de NN.mm o NN,mm; extrae NN.mm y devuelve ej. 122.00 USD (sin asteriscos en JSON).
