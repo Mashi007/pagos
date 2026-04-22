@@ -5,7 +5,7 @@ Ejecucion automatica opcional: scheduler todos los dias cada hora :30 entre 06:3
 pending_identification, si ENABLE_AUTOMATIC_SCHEDULED_JOBS y PAGOS_GMAIL_SCHEDULED_SCAN_ENABLED en settings.
 Manual y automatico comparten la misma regla de exclusion: no se inicia otra corrida si hay sync en estado running (ventana 2 h).
 Criterio de listado Gmail: inbox + media (has:attachment o filename:imagen/PDF en cuerpo); adjuntos, incrustados o .eml rfc822.
-Clasificación vigente: etiqueta final única por correo con precedencia Paso 1 (A/B), Paso 2 (C/D con remitente en clientes) y fallback TEXTO->MASTER->ERROR EMAIL->MANUAL.
+Clasificación vigente: etiqueta final única por correo con precedencia Paso 1 (A/B), Paso 2 (C/D con remitente en clientes), Plan B fuera de BD (A/B/C) y fallback TEXTO->ERROR EMAIL->MANUAL (sin etiqueta MASTER).
 Si el mensaje ya tiene cualquier etiqueta de usuario Gmail, se omite (skip total) para evitar reetiquetar.
 - POST /pagos/gmail/run-now: ejecutar pipeline ahora
 - GET /pagos/gmail/download-excel y download-excel-temporal: descargar Excel (solo lectura; no borran BD); excluyen filas

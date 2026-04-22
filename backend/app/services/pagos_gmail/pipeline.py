@@ -12,13 +12,13 @@ Orquestacion: Gmail -> Gemini/BD por **cada adjunto elegible** (remitente en cli
 - Paso 1: si en el correo hay digitalización OK de plantilla A/B, etiqueta final = MERCANTIL o BNC.
 - Paso 2: si no hubo A/B y el remitente está en `clientes`, se admite C/D y etiqueta final = BINANCE o BNV.
 - Paso 2b (Plan B, De no en clientes): si todo el correo digitalizó OK y hay plantilla **C**, etiqueta final = BINANCE (cédula columna ERROR EMAIL; sin CUOTAS_OK automático).
-- Paso 3 (fallback): si no aplica ninguna regla bancaria previa, usar orden MASTER -> TEXTO -> ERROR EMAIL -> MANUAL.
+- Paso 3 (fallback): si no aplica ninguna regla bancaria previa, usar orden TEXTO -> ERROR EMAIL -> MANUAL (sin etiqueta MASTER).
 - Solo se aplica **una** etiqueta final por correo (set permitido arriba), sin etiquetas auxiliares.
 
 **Remitente y Plan B:**
 - Remitente en `clientes`: se evalúan plantillas según prompts/reglas de negocio.
 - Remitente fuera de `clientes` (Plan B): A/B con cédula desde imagen; **C (Binance)** con monto+ref legibles se digitaliza con cédula **ERROR EMAIL** (sin auto CUOTAS hasta asociar cliente); D/NR no aplican.
-- `master@rapicreditca.com` aplica fallback MASTER solo cuando no haya etiqueta bancaria final (MERCANTIL/BNC/BINANCE/BNV); fuera de ese caso, si no hay fila en clientes, fallback ERROR EMAIL.
+- `master@rapicreditca.com` se escanea con las mismas reglas A/B/C/D (y Plan B si no está en `clientes`); si no hay etiqueta bancaria final, fallback MANUAL (no etiqueta MASTER).
 
 Excel de revisión y negocio:
 - `pagos_gmail_sync_item` / `gmail_temporal` guardan cada comprobante válido de extracción.
@@ -174,7 +174,6 @@ from app.services.pagos_gmail.gmail_service import (
     PagosGmailGmailListError,
     PAGOS_GMAIL_LABEL_ERROR_EMAIL,
     PAGOS_GMAIL_LABEL_MANUAL,
-    PAGOS_GMAIL_LABEL_MASTER,
     PAGOS_GMAIL_LABEL_IMAGEN_1,
     PAGOS_GMAIL_LABEL_IMAGEN_2,
     PAGOS_GMAIL_LABEL_IMAGEN_3,
@@ -259,7 +258,7 @@ PAGOS_GMAIL_ERROR_CEDULA_EMAIL = "ERROR EMAIL"  # sin fila en clientes o fallo a
 # Re-escaneo ERROR EMAIL (Mercantil/BNC): cédula ilegible en imagen — literal en Excel (no confundir con ERROR EMAIL).
 PAGOS_GMAIL_ERROR_CEDULA_IMAGEN = "ERROR"
 
-# De / From en minusculas: Gmail solo etiqueta MASTER (no plantilla 1-4 ni ERROR EMAIL).
+# Remitente sistema (master@): sin trato especial de etiqueta MASTER; ver plan_b y fallback MANUAL.
 PAGOS_GMAIL_SENDER_MASTER = "master@rapicreditca.com"
 PAGOS_GMAIL_ETIQUETAS_FINALES_PERMITIDAS = frozenset(
     {
@@ -269,7 +268,6 @@ PAGOS_GMAIL_ETIQUETAS_FINALES_PERMITIDAS = frozenset(
         PAGOS_GMAIL_LABEL_IMAGEN_4,
         PAGOS_GMAIL_LABEL_ERROR_EMAIL,
         PAGOS_GMAIL_LABEL_MANUAL,
-        PAGOS_GMAIL_LABEL_MASTER,
         PAGOS_GMAIL_LABEL_TEXTO,
     }
 )
@@ -349,7 +347,7 @@ def run_pipeline(
     Flujo de clasificación (etiqueta final única):
     1) Paso 1: detectar A/B desde el inicio (sin importar número de adjuntos) -> etiqueta MERCANTIL o BNC.
     2) Paso 2: si no hubo A/B, validar remitente en `clientes`; con cliente, clasificar C/D y etiquetar BINANCE o BNV.
-    3) Fallback: si no aplica 1/2 (sin etiqueta bancaria final), usar orden MASTER -> TEXTO -> ERROR EMAIL -> MANUAL.
+    3) Fallback: si no aplica 1/2 (sin etiqueta bancaria final), usar orden TEXTO -> ERROR EMAIL -> MANUAL (sin MASTER).
     Regla innegociable: solo puede quedar **una** etiqueta final por correo, y si el mensaje ya trae cualquier etiqueta de usuario se omite sin reescanear.
     scan_filter: "unread" | "read" | "all" | "pending_identification" | "error_email_rescan" (por defecto API/UI: all).
       Por defecto (**all** / **pending_identification**): inbox con imagen/PDF — leidos y no leidos (el pipeline no modifica estrellas Gmail),
@@ -429,7 +427,6 @@ def run_pipeline(
         "final_paso_2_c": 0,
         "final_paso_2_d": 0,
         "final_fallback_texto": 0,
-        "final_fallback_master": 0,
         "final_fallback_error_email": 0,
         "final_fallback_manual": 0,
         "gemini_calls_total": 0,
@@ -604,7 +601,6 @@ def run_pipeline(
                 # Sin fila en clientes (correo De no en BD): no inventar C/D/NR; solo intentar Mercantil/BNC (A/B) con cédula en imagen.
                 plan_b_mercantil_bnc_fuera_bd = (
                     not remitente_en_clientes
-                    and not remitente_solo_master
                     and not error_email_rescan
                     and not redig_manual_error_pass
                     and not solo_error_email_inbox
@@ -1143,15 +1139,11 @@ def run_pipeline(
                                 else:
                                     label_id = None
                                     etiqueta_nombre = fmt or "?"
-                                if (
-                                    label_id
-                                    and not remitente_solo_master
-                                    and (
-                                        remitente_en_clientes
-                                        or redig_manual_error_pass
-                                        or solo_error_email_inbox
-                                        or plan_b_mercantil_bnc_fuera_bd
-                                    )
+                                if label_id and (
+                                    remitente_en_clientes
+                                    or redig_manual_error_pass
+                                    or solo_error_email_inbox
+                                    or plan_b_mercantil_bnc_fuera_bd
                                 ):
                                     label_ids_for_message.append(label_id)
                                 logger.info(
@@ -1620,11 +1612,10 @@ def run_pipeline(
                         final_label_reason = "paso_2_d"
 
                 if not final_label_name:
-                    # MASTER solo aplica como fallback cuando no hubo etiqueta bancaria final
-                    # (MERCANTIL/BNC/BINANCE/BNV) tras evaluar reglas previas.
+                    # Remitente master@: mismas reglas A/B/C/D/Plan B; sin etiqueta MASTER — a revisión humana.
                     if remitente_solo_master and not fully_digitized_email:
-                        final_label_name = PAGOS_GMAIL_LABEL_MASTER
-                        final_label_reason = "fallback_master"
+                        final_label_name = PAGOS_GMAIL_LABEL_MANUAL
+                        final_label_reason = "fallback_manual"
                     elif not candidatos and multipage_pdf_omitidos == 0:
                         final_label_name = PAGOS_GMAIL_LABEL_TEXTO
                         final_label_reason = "fallback_texto"
@@ -1780,7 +1771,6 @@ def run_pipeline(
             "final_paso_2_c": run_stats["final_paso_2_c"],
             "final_paso_2_d": run_stats["final_paso_2_d"],
             "final_fallback_texto": run_stats["final_fallback_texto"],
-            "final_fallback_master": run_stats["final_fallback_master"],
             "final_fallback_error_email": run_stats["final_fallback_error_email"],
             "final_fallback_manual": run_stats["final_fallback_manual"],
             "gemini_calls_total": _gem_calls,
@@ -1858,7 +1848,6 @@ def run_pipeline(
             "final_paso_2_c": run_stats["final_paso_2_c"],
             "final_paso_2_d": run_stats["final_paso_2_d"],
             "final_fallback_texto": run_stats["final_fallback_texto"],
-            "final_fallback_master": run_stats["final_fallback_master"],
             "final_fallback_error_email": run_stats["final_fallback_error_email"],
             "final_fallback_manual": run_stats["final_fallback_manual"],
             "gemini_calls_total": _gem_calls,
@@ -1919,7 +1908,6 @@ def run_pipeline(
             "final_paso_2_c": run_stats["final_paso_2_c"],
             "final_paso_2_d": run_stats["final_paso_2_d"],
             "final_fallback_texto": run_stats["final_fallback_texto"],
-            "final_fallback_master": run_stats["final_fallback_master"],
             "final_fallback_error_email": run_stats["final_fallback_error_email"],
             "final_fallback_manual": run_stats["final_fallback_manual"],
             "gemini_calls_total": _gem_calls,

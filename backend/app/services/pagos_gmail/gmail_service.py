@@ -170,11 +170,11 @@ PAGOS_GMAIL_LABEL_IMAGEN_1 = "MERCANTIL"
 PAGOS_GMAIL_LABEL_IMAGEN_2 = "BNC"
 PAGOS_GMAIL_LABEL_IMAGEN_3 = "BINANCE"
 PAGOS_GMAIL_LABEL_IMAGEN_4 = "BNV"
-# Remitente fijo master@rapicreditca.com: solo etiqueta MASTER en Gmail (no MERCANTIL / BNC / BINANCE / BNV ni ERROR EMAIL). Ver pipeline.
+# Etiqueta legacy "MASTER": el pipeline ya no la aplica; se conserva el nombre solo para exclusiones en `pagos_gmail_label_exclusions_query` (hilos antiguos).
 PAGOS_GMAIL_LABEL_MASTER = "MASTER"
 # Nombre antiguo en Gmail; seguir excluyendo en busquedas para no reescanear hilos ya marcados antes del cambio.
 PAGOS_GMAIL_LABEL_IMAGEN_5_LEGACY = "IMAGEN 5"
-# Retrocompatible: mismo valor que MASTER (preferir PAGOS_GMAIL_LABEL_MASTER).
+# Alias histórico (mismo texto que MASTER) para consultas que aún referencian "imagen 5".
 PAGOS_GMAIL_LABEL_IMAGEN_5 = PAGOS_GMAIL_LABEL_MASTER
 # Remitente (De) sin fila en clientes.email (o fallo BD): misma leyenda que columna Cedula del Excel.
 PAGOS_GMAIL_LABEL_ERROR_EMAIL = "ERROR EMAIL"
