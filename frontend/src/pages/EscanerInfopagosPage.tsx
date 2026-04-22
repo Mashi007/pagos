@@ -793,7 +793,8 @@ export default function EscanerInfopagosPage() {
                       <Button
                         type="button"
                         size="sm"
-                        variant="secondary"
+                        variant="default"
+                        className="bg-indigo-600 font-semibold text-white shadow-sm hover:bg-indigo-700"
                         onClick={() => handleAplicarSufijoOperacion('A')}
                       >
                         Autirizacion documento
