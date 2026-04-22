@@ -1,5 +1,5 @@
 """
-Orquestacion: Gmail -> Gemini/BD por **cada adjunto elegible** (remitente en clientes), una fila Excel/BD por comprobante OK.
+Orquestacion: Gmail -> Gemini/BD por **cada adjunto elegible** (remitente en clientes, o **Plan B** Mercantil/BNC si el De no está en BD), una fila Excel/BD por comprobante OK.
   -> flush sync_item + temporal -> comprobante en pago_comprobante_imagen (reuso por SHA-256 en la misma corrida) + URL en drive_link -> un solo commit; si falla el binario, rollback de esas filas.
   No hay subidas a Google Drive: el comprobante queda en BD; no se archiva .eml en Drive (drive_email_link sin uso).
   Si no cumple plantillas 1/2/3/4 o faltan datos -> no fila ni comprobante en BD para ese adjunto.
@@ -10,23 +10,23 @@ Orquestacion: Gmail -> Gemini/BD por **cada adjunto elegible** (remitente en cli
 
 **Primera regla (remitente vs tabla clientes):** se compara el correo del **De (From)** con `clientes.email` y, si no coincide, con `clientes.email_secundario` (trim, minúsculas).
 Si **coincide** (cédula resuelta): aplica digitalización por cada candidato (Gemini), filas Excel/BD y el resto de etiquetas (**MERCANTIL**/**BNC**/**BINANCE**/**BNV**, **MASTER**, **MANUAL**, **OTROS**, **PAGINAS**/**CALIDAD**/**TEXTO** si hubo PDF multipágina, imagen ilegible / no inventar, o **sin** imagen/PDF de comprobante (solo texto u adjuntos no imagen/PDF), etc., según corresponda).
-Si **no** coincide o falla la consulta a `clientes`: **no** Gemini, **no** filas en `pagos_gmail_sync_item` / `gmail_temporal` ni comprobante en BD; en Gmail **únicamente** la etiqueta de usuario **ERROR EMAIL** (ninguna otra etiqueta de clasificación en ese paso), salvo **PAGINAS** si en el mensaje hubo PDF de 2+ páginas y **TEXTO** si no hay binario imagen/PDF de comprobante.
+Si **no** coincide o falla la consulta a `clientes` (**Plan B**, salvo **master@** sin fila, re-escaneos y redig): se intenta **solo** Mercantil/BNC (Gemini con cédula en imagen, mismo apéndice que re-escaneo A/B). Si el binario **no** es plantilla **A** ni **B** (p. ej. C/D/NR o ninguno): **no** filas ni comprobante; Gmail **solo ERROR EMAIL** (sin inventar datos). Si es **A** o **B** con campos válidos y el correo queda 100% OK: filas/BD y en Gmail **plantilla MERCANTIL/BNC + PROCESADO** (quita ERROR EMAIL/MANUAL si existian). Salvo **PAGINAS** / **TEXTO** si aplica por PDF multipágina o sin captura.
 Si en un mensaje aplica **ERROR EMAIL** en Gmail: **solo ERROR EMAIL** en esa aplicación (salvo **PAGINAS**/**CALIDAD**/**TEXTO** añadidas aparte si aplica), nunca combinada con MERCANTIL/MANUAL/OTROS/etc.
 Si **sí** hay coincidencia de remitente en clientes: aplican el resto de reglas (plantillas, MASTER para **master@rapicreditca.com**, etc.). Re-lectura cédula A/B desde la imagen: con **scan_filter=error_email_rescan**, con **solo ERROR EMAIL** en corrida normal, o pasada final **MANUAL+ERROR** (redig); si la cédula en imagen sigue ilegible (**ERROR** en columna), se aplica etiqueta **CALIDAD** en Gmail.
 Remitente **master@rapicreditca.com** con fila en clientes: en Gmail solo etiqueta **MASTER** (sin MERCANTIL / BNC / BINANCE / BNV ni ERROR EMAIL).
 Remitente **master@rapicreditca.com** **sin** fila en clientes: aplica la primera regla (**solo ERROR EMAIL** en Gmail; no **MASTER**).
 Si en un mismo correo hay **varios** comprobantes digitalizados OK de tipos distintos (**A**/**B**/**C**/**D**/**NR**), en Gmail **solo** la etiqueta **MANUAL** (sin MERCANTIL/BNC/BINANCE/BNV, sin MASTER, sin ERROR EMAIL en esa aplicacion; **PAGINAS**/**CALIDAD**/**TEXTO** siguen aparte si aplica).
-Etiquetas Gmail MERCANTIL (A) / BNC (B) / BINANCE (C) / BNV (D) solo con remitente en clientes y si el correo cumple al 100% en todos los candidatos procesados: cada candidato (1 pág.) debe ser
-plantilla A o B con fecha/monto/ref + cedula resuelta, o plantilla C con monto/ref + cedula resuelta;
-fecha de C = fecha del correo; cedula = lookup en tabla clientes por email De (From): primero `email`, luego `email_secundario`.
+Etiquetas Gmail MERCANTIL (A) / BNC (B) / BINANCE (C) / BNV (D) si el correo cumple al 100% en todos los candidatos procesados: cada candidato (1 pág.) debe ser
+plantilla A o B con fecha/monto/ref + cédula (remitente en clientes por lookup, o **Plan B** / re-escaneo A/B con cédula desde imagen), o plantilla C con monto/ref + cédula desde clientes;
+fecha de C = fecha del correo; cédula C/NR/D = lookup por email De salvo Plan B (C/D/NR no se aceptan sin cliente).
 Si hay remitente en clientes pero la columna cédula queda en **ERROR EMAIL** (sin resolver por lookup): en Gmail **solo ERROR EMAIL** (sin otras etiquetas en la misma aplicación); **no** fila en `pagos_gmail_sync_item` / `gmail_temporal` ni en Excel (la literal ERROR EMAIL no se exporta).
-Si falla la consulta a clientes: mismo bloqueo que remitente sin match (sin digitalizar ni Excel); Gmail **solo ERROR EMAIL**.
+Si falla la consulta a clientes: mismo tratamiento que remitente sin match salvo **Plan B** (Mercantil/BNC desde imagen).
 Etiqueta Gmail **OTROS** (solo esa en su llamada a Gmail, salvo **PAGINAS**/**CALIDAD**/**TEXTO** aparte si aplica): unicamente si hay candidatos, remitente en clientes, **ningun** comprobante digitalizado OK como plantilla **A**/**B**/**C**/**D** (MERCANTIL/BNC/BINANCE/BNV) y ninguna otra etiqueta de clasificacion del pipeline se aplico ya en ese mensaje.
 Si en cualquier archivo falta requisito o no es plantilla valida: no etiquetas de plantilla segun reglas; el mensaje que **entraba no leido** queda **leido** tras procesarlo en el escaneo (no se modifican estrellas: las deja el usuario). No inventar datos: Gemini ya devuelve NA si no hay certeza.
 Excel: GET /pagos/gmail/download-excel (filtros `solo_duplicados_documento` / `excluir_duplicados_documento` para plantilla banco A–D vs `pagos.numero_documento`).
 **Redigitalización final (MANUAL + ERROR EMAIL):** tras el lote principal, se lista `in:inbox` + media + ambas etiquetas; solo se procesan mensajes cuyas etiquetas de usuario sean **exactamente** MANUAL y ERROR EMAIL; **sin límite** en el número de candidatos imagen/PDF (cada binario sigue la regla global de 1 página por archivo); Gemini en modo A/B con cédula desde imagen por candidato; solo formatos **A** o **B** cuentan como digitalización válida en redig; éxito: mismas filas BD/cuotas que el flujo normal y sustitución de etiquetas (quita MANUAL y ERROR EMAIL, añade MERCANTIL o BNC y **PROCESADO**) cuando el correo queda 100% OK según las reglas ya existentes del pipeline.
 Reglas de negocio A/B/C/D (autoconciliado, cascada cuotas, duplicados): ver `plantilla_abcd_proceso_negocio.py`.
-Cedula: en flujo normal solo desde tabla clientes por email del De (From): `email` y `email_secundario` (no desde la imagen).
+Cédula: con remitente en clientes, por defecto desde `email` / `email_secundario` del De; con **Plan B** o re-escaneo A/B, Mercantil/BNC desde **imagen** (no inventar).
 Re-lectura cédula en imagen (Mercantil/BNC, plantillas **A** y **B**): si **scan_filter=error_email_rescan**, mensaje con **solo** etiqueta usuario **ERROR EMAIL** en corrida normal, o pasada final **MANUAL+ERROR** (redig). Gemini en modo A/B con cédula desde imagen; si sigue ilegible, etiqueta **CALIDAD**.
 """
 import hashlib
@@ -632,6 +632,17 @@ def run_pipeline(
                 modo_ab_cedula_desde_imagen = (
                     error_email_rescan or redig_manual_error_pass or solo_error_email_inbox
                 )
+                # Sin fila en clientes (correo De no en BD): no inventar C/D/NR; solo intentar Mercantil/BNC (A/B) con cédula en imagen.
+                plan_b_mercantil_bnc_fuera_bd = (
+                    not remitente_en_clientes
+                    and not remitente_solo_master
+                    and not error_email_rescan
+                    and not redig_manual_error_pass
+                    and not solo_error_email_inbox
+                )
+                usar_extraccion_cedula_imagen_ab = (
+                    modo_ab_cedula_desde_imagen or plan_b_mercantil_bnc_fuera_bd
+                )
                 if modo_ab_cedula_desde_imagen:
                     _modo_nom = (
                         "error_email_rescan"
@@ -649,6 +660,12 @@ def run_pipeline(
                     logger.info(
                         "[PAGOS_GMAIL]   Modo cedula imagen A/B (%s); msg=%s",
                         _modo_nom,
+                        msg_id,
+                    )
+                elif plan_b_mercantil_bnc_fuera_bd:
+                    logger.info(
+                        "[PAGOS_GMAIL]   Plan B (De no en clientes): solo Mercantil/BNC si Gemini aplica A o B "
+                        "(cédula desde imagen); si no, ERROR EMAIL; msg=%s",
                         msg_id,
                     )
 
@@ -700,7 +717,12 @@ def run_pipeline(
                         _pipeline_evt(EVT_SIN_ADJUNTOS_DIGITABLES)
                 tiene_medio_pipeline = bool(candidatos) or multipage_pdf_omitidos > 0
 
-                if not remitente_en_clientes and candidatos and not solo_error_email_inbox:
+                if (
+                    not remitente_en_clientes
+                    and candidatos
+                    and not solo_error_email_inbox
+                    and not plan_b_mercantil_bnc_fuera_bd
+                ):
                     logger.info(
                         "[PAGOS_GMAIL]   Remitente no en clientes.email/email_secundario (o fallo al consultar): "
                         "sin Gemini ni filas Excel/BD; Gmail solo ERROR EMAIL (msg_id=%s).",
@@ -785,6 +807,8 @@ def run_pipeline(
                         remitente_en_clientes
                         or redig_manual_error_pass
                         or solo_error_email_inbox
+                        or error_email_rescan
+                        or plan_b_mercantil_bnc_fuera_bd
                     )
                     else []
                 )
@@ -816,7 +840,7 @@ def run_pipeline(
                             filename,
                             remitente_correo_header=from_h,
                             origen_binario=origen_binario,
-                            modo_error_email_ab=modo_ab_cedula_desde_imagen,
+                            modo_error_email_ab=usar_extraccion_cedula_imagen_ab,
                         )
 
                         if redig_manual_error_pass and fmt not in ("A", "B"):
@@ -851,6 +875,25 @@ def run_pipeline(
                             )
                             continue
 
+                        if (
+                            plan_b_mercantil_bnc_fuera_bd
+                            and fmt in PAGOS_GMAIL_FORMATOS_PLANTILLA
+                            and fmt not in ("A", "B")
+                        ):
+                            any_incomplete_or_skipped = True
+                            any_skipped_not_plantilla_o_campos = True
+                            logger.info(
+                                "[PAGOS_GMAIL]   Plan B: formato %s no Mercantil/BNC aplicable (solo A/B) — %s",
+                                fmt,
+                                filename,
+                            )
+                            _pipeline_evt(
+                                EVT_NO_PLANTILLA_GEMINI,
+                                filename=filename,
+                                detalle=(f"plan_b_solo_ab:{fmt!s}")[:500],
+                            )
+                            continue
+
                         if fmt == "C":
                             f = normalizar_fecha_pago(msg_date.strftime("%d/%m/%Y"))
                             m = _v(data.get("monto"))
@@ -879,7 +922,7 @@ def run_pipeline(
                                     sender_lc[:72],
                                     filename,
                                 )
-                        elif modo_ab_cedula_desde_imagen and fmt in ("A", "B"):
+                        elif usar_extraccion_cedula_imagen_ab and fmt in ("A", "B"):
                             f = normalizar_fecha_pago(_v(data.get("fecha_pago")))
                             m = _v(data.get("monto"))
                             r = normalizar_referencia(_v(data.get("numero_referencia")))
@@ -887,8 +930,14 @@ def run_pipeline(
                             c_ok = True
                             if c == PAGOS_GMAIL_ERROR_CEDULA_IMAGEN:
                                 any_etiqueta_calidad_imagen = True
+                            _log_ab = (
+                                "Plan B (sin De en clientes)"
+                                if plan_b_mercantil_bnc_fuera_bd
+                                else "Re-scan ERROR EMAIL"
+                            )
                             logger.info(
-                                "[PAGOS_GMAIL]   Re-scan ERROR EMAIL (%s): columna Cedula desde imagen=%s archivo=%s",
+                                "[PAGOS_GMAIL]   %s (%s): columna Cedula desde imagen=%s archivo=%s",
+                                _log_ab,
                                 fmt,
                                 c[:24] if c else "",
                                 filename,
@@ -958,7 +1007,7 @@ def run_pipeline(
                         # _campos_completos acepta "ERROR" como texto no vacío; sin esto, fully_digitized_email=True
                         # y se quita ERROR EMAIL o se añade PROCESADO en redig aunque la cédula no sea válida.
                         if (
-                            modo_ab_cedula_desde_imagen
+                            usar_extraccion_cedula_imagen_ab
                             and fmt in ("A", "B")
                             and c == PAGOS_GMAIL_ERROR_CEDULA_IMAGEN
                         ):
@@ -1102,6 +1151,7 @@ def run_pipeline(
                                         remitente_en_clientes
                                         or redig_manual_error_pass
                                         or solo_error_email_inbox
+                                        or plan_b_mercantil_bnc_fuera_bd
                                         or labels_usuario_solo_manual_y_o_error
                                     )
                                 ):
@@ -1544,6 +1594,11 @@ def run_pipeline(
                 if (
                     not redig_manual_error_pass
                     and not (solo_error_email_inbox and fully_digitized_email)
+                    and not (
+                        plan_b_mercantil_bnc_fuera_bd
+                        and fully_digitized_email
+                        and plantilla_unique_ids
+                    )
                     and (
                         (not remitente_en_clientes)
                         or (
@@ -1745,6 +1800,44 @@ def run_pipeline(
                                     "(quita MANUAL+ERROR EMAIL; añade plantilla A/B + %s)",
                                     PAGOS_GMAIL_LABEL_PROCESADO,
                                 )
+                        elif (
+                            plan_b_mercantil_bnc_fuera_bd
+                            and plantilla_unique_ids
+                            and not mezcla_solo_manual_gmail
+                            and not gmail_label_id_error_email
+                        ):
+                            _k_pro_pb = PAGOS_GMAIL_LABEL_PROCESADO
+                            if _k_pro_pb not in plantilla_label_cache:
+                                plantilla_label_cache[_k_pro_pb] = ensure_user_label_id(
+                                    gmail_svc, _k_pro_pb
+                                )
+                            _id_pro_pb = plantilla_label_cache.get(_k_pro_pb)
+                            _batch_plan_b = list(
+                                dict.fromkeys(
+                                    [*(batch_ok or []), *([_id_pro_pb] if _id_pro_pb else [])]
+                                )
+                            )
+                            _rm_man_pb = plantilla_label_cache.get(PAGOS_GMAIL_LABEL_MANUAL)
+                            _rm_err_pb = plantilla_label_cache.get(PAGOS_GMAIL_LABEL_ERROR_EMAIL)
+                            _rm_ids_pb = [x for x in (_rm_man_pb, _rm_err_pb) if x]
+                            modify_message_labels_add_remove(
+                                gmail_svc,
+                                msg_id,
+                                add_label_ids=_batch_plan_b,
+                                remove_label_ids=_rm_ids_pb,
+                            )
+                            batch_ok = _batch_plan_b
+                            if not _id_pro_pb:
+                                logger.warning(
+                                    "[PAGOS_GMAIL] Plan B: no se pudo crear/obtener etiqueta %s",
+                                    _k_pro_pb,
+                                )
+                            else:
+                                logger.info(
+                                    "[PAGOS_GMAIL] Plan B: Gmail actualizado "
+                                    "(plantilla A/B + %s; quita MANUAL/ERROR EMAIL si existian)",
+                                    PAGOS_GMAIL_LABEL_PROCESADO,
+                                )
                         else:
                             add_message_user_labels_only(gmail_svc, msg_id, batch_ok)
                     gmail_etiqueta_clasificacion_aplicada = True
@@ -1879,6 +1972,7 @@ def run_pipeline(
                     remitente_en_clientes
                     or redig_manual_error_pass
                     or solo_error_email_inbox
+                    or plan_b_mercantil_bnc_fuera_bd
                     or labels_usuario_solo_manual_y_o_error
                 ):
                     k_cal = PAGOS_GMAIL_LABEL_CALIDAD

@@ -11,7 +11,7 @@ import logging
 import re
 import time
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from app.services.pagos_gmail.helpers import (
     extract_sender_email,
@@ -1283,14 +1283,34 @@ def add_message_star_and_user_labels(
         logger.warning("add_message_star_and_user_labels %s: %s", message_id, e)
 
 
+def _message_label_ids_set(service: Any, message_id: str) -> Optional[Set[str]]:
+    """labelIds actuales del mensaje (minimal); None si falla la API."""
+    try:
+        meta = service.users().messages().get(
+            userId="me", id=message_id, format="minimal"
+        ).execute()
+        return set(meta.get("labelIds") or [])
+    except Exception as e:
+        logger.warning("_message_label_ids_set msg=%s: %s", message_id, e)
+        return None
+
+
 def add_message_user_labels_only(
     service: Any, message_id: str, user_label_ids: List[str]
 ) -> None:
-    """Anade solo etiquetas de usuario (sin estrella). Ej. ERROR EMAIL u OTROS."""
+    """
+    Anade solo etiquetas de usuario (sin estrella). Ej. ERROR EMAIL u OTROS.
+    Omite ids que el mensaje ya tiene (re-escaneos / varias pasadas no acumulan el mismo id).
+    """
     add_ids = [x for x in user_label_ids if x]
     if not add_ids:
         return
     try:
+        existing = _message_label_ids_set(service, message_id)
+        if existing is not None:
+            add_ids = [lid for lid in add_ids if lid not in existing]
+        if not add_ids:
+            return
         service.users().messages().modify(
             userId="me",
             id=message_id,
@@ -1307,9 +1327,16 @@ def modify_message_labels_add_remove(
     add_label_ids: Optional[List[str]] = None,
     remove_label_ids: Optional[List[str]] = None,
 ) -> None:
-    """Una sola llamada messages.modify: quita y/o anade etiquetas por id."""
+    """
+    Una sola llamada messages.modify: quita y/o anade etiquetas por id.
+    Los ids en add solo se envian si aun no estan en el mensaje (misma razon que add_message_user_labels_only).
+    """
     add_ids = [x for x in (add_label_ids or []) if x]
     rem_ids = [x for x in (remove_label_ids or []) if x]
+    if add_ids:
+        existing = _message_label_ids_set(service, message_id)
+        if existing is not None:
+            add_ids = [lid for lid in add_ids if lid not in existing]
     body: dict[str, Any] = {}
     if add_ids:
         body["addLabelIds"] = add_ids
