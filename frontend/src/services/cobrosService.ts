@@ -28,7 +28,7 @@
 
 
 
- * - Admin: listado, detalle, aprobar, rechazar, exportar Excel (con auth).
+ * - Admin: listado, detalle, aprobar, rechazar (con auth).
 
 
 
@@ -39,8 +39,6 @@
 
 
  */
-
-import axios from 'axios'
 
 import { apiClient } from './api'
 
@@ -1199,139 +1197,5 @@ export async function markPagosReportadosExportados(
   )
 
   return data
-}
-
-/**
- * Excel de reportes que no cumplen validadores (pendiente/en revisión con observación o Gemini NO/error),
- * aún no exportados. Misma transacción: marca exportados y limpia cola temporal (atómico).
- */
-export async function exportarPagosReportadosAprobadosExcel(opts: {
-  cedula?: string
-
-  institucion?: string
-}): Promise<{
-  marcados: number
-
-  yaExportados: number
-
-  quitadosCola: number
-
-  totalFilas: number
-}> {
-  const q = new URLSearchParams()
-
-  if (opts.cedula?.trim()) q.set('cedula', opts.cedula.trim())
-
-  if (opts.institucion?.trim()) q.set('institucion', opts.institucion.trim())
-
-  const qs = q.toString()
-  const url =
-    `${BASE_COBROS}/pagos-reportados/exportar-aprobados-excel` +
-    (qs ? `?${qs}` : '')
-
-  try {
-    const response = await apiClient.getAxiosInstance().get<ArrayBuffer>(url, {
-      responseType: 'arraybuffer',
-      validateStatus: status => status === 200,
-    })
-
-    const raw = new Uint8Array(response.data)
-
-    if (!_esContenidoXlsxValido(raw)) {
-      const head = new TextDecoder().decode(raw.slice(0, 800))
-      let msg =
-        'El archivo no es un Excel válido. Revise VITE_API_URL y la sesión.'
-
-      try {
-        const j = JSON.parse(head) as { detail?: string; message?: string }
-
-        if (j.detail || j.message) msg = String(j.detail || j.message)
-      } catch {
-        /* mantener msg */
-      }
-
-      throw new Error(msg)
-    }
-
-    const hm = response.headers as Record<string, string | undefined>
-
-    const stats = {
-      marcados: Number(hm['x-export-marcados'] ?? 0),
-      yaExportados: Number(hm['x-export-ya-exportados'] ?? 0),
-      quitadosCola: Number(hm['x-export-quitados-cola'] ?? 0),
-      totalFilas: Number(hm['x-export-total-filas'] ?? 0),
-    }
-
-    const blob = new Blob([raw], {
-      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    })
-
-    const cd = hm['content-disposition']
-    let name = 'pagos_reportados_falla_validadores.xlsx'
-
-    if (cd) {
-      const m = /filename\*?=(?:UTF-8'')?["']?([^"';]+)/i.exec(cd)
-
-      if (m?.[1]) name = decodeURIComponent(m[1].trim())
-    }
-
-    const objectUrl = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = objectUrl
-    link.download = name
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    URL.revokeObjectURL(objectUrl)
-
-    return stats
-  } catch (err: unknown) {
-    if (axios.isAxiosError(err)) {
-      const st = err.response?.status
-      const data = err.response?.data as ArrayBuffer | undefined
-
-      if (st === 401 || st === 403) {
-        throw new Error(
-          'Sesión expirada o sin permiso. Vuelva a iniciar sesión.'
-        )
-      }
-
-      if (data instanceof ArrayBuffer && data.byteLength > 0) {
-        const text = new TextDecoder()
-          .decode(new Uint8Array(data).slice(0, 2000))
-          .trim()
-
-        if (text.startsWith('{')) {
-          try {
-            const j = JSON.parse(text) as { detail?: string }
-
-            if (typeof j.detail === 'string') throw new Error(j.detail)
-          } catch (e) {
-            if (!(e instanceof SyntaxError)) throw e
-          }
-        }
-      }
-
-      throw new Error(
-        err.response?.statusText || err.message || 'Error exportando Excel'
-      )
-    }
-
-    if (err instanceof Error) throw err
-
-    throw new Error('Error exportando Excel')
-  }
-}
-
-/** Los .xlsx son ZIP; deben empezar por PK (evita guardar HTML/JSON como .xlsx corrupto). */
-
-function _esContenidoXlsxValido(buf: Uint8Array): boolean {
-  return (
-    buf.length >= 4 &&
-    buf[0] === 0x50 &&
-    buf[1] === 0x4b &&
-    (buf[2] === 0x03 || buf[2] === 0x05 || buf[2] === 0x07) &&
-    (buf[3] === 0x04 || buf[3] === 0x06 || buf[3] === 0x08)
-  )
 }
 

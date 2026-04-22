@@ -24,7 +24,7 @@ Si falla la consulta a clientes: mismo bloqueo que remitente sin match (sin digi
 Etiqueta Gmail **OTROS** (solo esa en su llamada a Gmail, salvo **PAGINAS**/**CALIDAD**/**TEXTO** aparte si aplica): unicamente si hay candidatos, remitente en clientes, **ningun** comprobante digitalizado OK como plantilla **A**/**B**/**C**/**D** (MERCANTIL/BNC/BINANCE/BNV) y ninguna otra etiqueta de clasificacion del pipeline se aplico ya en ese mensaje.
 Si en cualquier archivo falta requisito o no es plantilla valida: no etiquetas de plantilla segun reglas; el mensaje que **entraba no leido** queda **leido** tras procesarlo en el escaneo (no se modifican estrellas: las deja el usuario). No inventar datos: Gemini ya devuelve NA si no hay certeza.
 Excel: GET /pagos/gmail/download-excel (filtros `solo_duplicados_documento` / `excluir_duplicados_documento` para plantilla banco A–D vs `pagos.numero_documento`).
-**Redigitalización final (MANUAL + ERROR EMAIL):** tras el lote principal, se lista `in:inbox` + media + ambas etiquetas; solo se procesan mensajes cuyas etiquetas de usuario sean **exactamente** MANUAL y ERROR EMAIL; debe haber **un solo** candidato imagen/PDF (1 pág.); Gemini en modo A/B con cédula desde imagen (mismo prompt que re-escaneo ERROR EMAIL); solo formatos **A** o **B**; éxito: mismas filas BD/cuotas que el flujo normal y sustitución de etiquetas (quita MANUAL y ERROR EMAIL, añade MERCANTIL o BNC).
+**Redigitalización final (MANUAL + ERROR EMAIL):** tras el lote principal, se lista `in:inbox` + media + ambas etiquetas; solo se procesan mensajes cuyas etiquetas de usuario sean **exactamente** MANUAL y ERROR EMAIL; debe haber **un solo** candidato imagen/PDF (1 pág.); Gemini en modo A/B con cédula desde imagen (mismo prompt que re-escaneo ERROR EMAIL); solo formatos **A** o **B**; éxito: mismas filas BD/cuotas que el flujo normal y sustitución de etiquetas (quita MANUAL y ERROR EMAIL, añade MERCANTIL o BNC y la etiqueta de usuario **PROCESADO**).
 Reglas de negocio A/B/C/D (autoconciliado, cascada cuotas, duplicados): ver `plantilla_abcd_proceso_negocio.py`.
 Cedula: en flujo normal solo desde tabla clientes por email del De (From): `email` y `email_secundario` (no desde la imagen).
 Re-lectura cédula en imagen (Mercantil/BNC, plantillas **A** y **B**): solo si **scan_filter=error_email_rescan**. Gemini en modo A/B con cédula
@@ -178,6 +178,7 @@ from app.services.pagos_gmail.gmail_service import (
     PAGOS_GMAIL_LABEL_PAGINAS,
     PAGOS_GMAIL_LABEL_CALIDAD,
     PAGOS_GMAIL_LABEL_TEXTO,
+    PAGOS_GMAIL_LABEL_PROCESADO,
 )
 from app.services.pagos_gmail.gemini_service import (
     classify_and_extract_pagos_gmail_attachment,
@@ -1655,15 +1656,36 @@ def run_pipeline(
                             and not mezcla_solo_manual_gmail
                             and not gmail_label_id_error_email
                         ):
+                            _k_pro = PAGOS_GMAIL_LABEL_PROCESADO
+                            if _k_pro not in plantilla_label_cache:
+                                plantilla_label_cache[_k_pro] = ensure_user_label_id(
+                                    gmail_svc, _k_pro
+                                )
+                            _id_pro = plantilla_label_cache.get(_k_pro)
+                            _batch_redig = list(
+                                dict.fromkeys([*(batch_ok or []), *([_id_pro] if _id_pro else [])])
+                            )
                             _rm_man = plantilla_label_cache.get(PAGOS_GMAIL_LABEL_MANUAL)
                             _rm_err = plantilla_label_cache.get(PAGOS_GMAIL_LABEL_ERROR_EMAIL)
                             _rm_ids = [x for x in (_rm_man, _rm_err) if x]
                             modify_message_labels_add_remove(
                                 gmail_svc,
                                 msg_id,
-                                add_label_ids=batch_ok,
+                                add_label_ids=_batch_redig,
                                 remove_label_ids=_rm_ids,
                             )
+                            batch_ok = _batch_redig
+                            if not _id_pro:
+                                logger.warning(
+                                    "[PAGOS_GMAIL] redig MANUAL+ERROR: no se pudo crear/obtener etiqueta %s",
+                                    _k_pro,
+                                )
+                            else:
+                                logger.info(
+                                    "[PAGOS_GMAIL] redig MANUAL+ERROR: Gmail actualizado "
+                                    "(quita MANUAL+ERROR EMAIL; añade plantilla A/B + %s)",
+                                    PAGOS_GMAIL_LABEL_PROCESADO,
+                                )
                         else:
                             add_message_user_labels_only(gmail_svc, msg_id, batch_ok)
                     gmail_etiqueta_clasificacion_aplicada = True

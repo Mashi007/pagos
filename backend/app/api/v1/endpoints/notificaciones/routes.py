@@ -178,7 +178,7 @@ def _where_q_cache_vs_aprobacion_distinta_de_cero(dialect_name: str):
             "  THEN SUBSTRING(TRIM(prestamos.fecha_entrega_q_aprobacion_cache->>'fecha_entrega_column_q') FROM 1 FOR 10) "
             "  ELSE NULL END"
             " ) IS NOT NULL)"
-            " AND ("
+            " AND (( "
             " COALESCE("
             "  NULLIF(TRIM(prestamos.fecha_entrega_q_aprobacion_cache->>'fecha_entrega_column_q_norm_iso'), ''),"
             "  CASE WHEN TRIM(COALESCE(prestamos.fecha_entrega_q_aprobacion_cache->>'fecha_entrega_column_q','')) "
@@ -186,7 +186,7 @@ def _where_q_cache_vs_aprobacion_distinta_de_cero(dialect_name: str):
             "  THEN SUBSTRING(TRIM(prestamos.fecha_entrega_q_aprobacion_cache->>'fecha_entrega_column_q') FROM 1 FOR 10) "
             "  ELSE NULL END"
             " )::date - CAST(prestamos.fecha_aprobacion AS date)"
-            ") <> 0"
+            ") <> 0)"
         )
     return text(
         "prestamos.fecha_entrega_q_aprobacion_cache IS NOT NULL "
@@ -199,7 +199,7 @@ def _where_q_cache_vs_aprobacion_distinta_de_cero(dialect_name: str):
         "   THEN substr(trim(json_extract(prestamos.fecha_entrega_q_aprobacion_cache, '$.fecha_entrega_column_q')), 1, 10) "
         "   ELSE NULL END"
         " ) IS NOT NULL)"
-        " AND ("
+        " AND (( "
         " cast("
         "  ("
         "   julianday(date("
@@ -213,7 +213,7 @@ def _where_q_cache_vs_aprobacion_distinta_de_cero(dialect_name: str):
         "   ))"
         "   - julianday(date(prestamos.fecha_aprobacion))"
         "  ) as integer"
-        " ) <> 0"
+        " ) <> 0)"
     )
 
 

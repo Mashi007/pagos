@@ -9,7 +9,7 @@
 
 
  * Listado de pagos reportados (módulo Cobros). Filtros, tabla, acciones Ver detalle / Aprobar / Rechazar.
- * No validan: sin descarga Excel siguen en lista; al descargar Excel salen (checkbox incluir exportados las trae de vuelta). El Excel solo incluye filas que fallan validación.
+ * Cola manual: filas que no cumplen validadores; «Incluir ya exportados» vuelve a mostrar las marcadas en corrección.
 
 
 
@@ -40,7 +40,6 @@ import {
   cambiarEstadoPago,
   openComprobanteInNewTab,
   eliminarPagoReportado,
-  exportarPagosReportadosAprobadosExcel,
   getTendenciaFallosGemini,
   invalidateCobrosListadoKpisCache,
   COBROS_LISTADO_KPIS_CACHE_TTL_MS,
@@ -340,9 +339,6 @@ export default function CobrosPagosReportadosPage() {
 
   const [motivoRechazo, setMotivoRechazo] = useState('')
 
-  const [descargandoExcelAprobados, setDescargandoExcelAprobados] =
-    useState(false)
-
   const [kpis, setKpis] = useState<PagosReportadosKpis | null>(null)
 
   const [diasTendencia, setDiasTendencia] = useState(90)
@@ -408,11 +404,14 @@ export default function CobrosPagosReportadosPage() {
   }, [])
 
   const fetchListado = useCallback(
-    async (opts?: { bypassCache?: boolean }) => {
+    async (opts?: { bypassCache?: boolean; silent?: boolean; page?: number }) => {
       const requestSeq = ++loadSeqRef.current
       const initialLoad = dataRef.current === null
+      const silent = Boolean(opts?.silent) && dataRef.current !== null
+      const pageToFetch = opts?.page != null ? opts.page : page
       setLoading(initialLoad)
-      setRefreshing(!initialLoad)
+      // Sin overlay "Actualizando listado…" en refrescos silenciosos (p. ej. tras aprobar o cron 15 min).
+      setRefreshing(!initialLoad && !silent)
 
       try {
         const filterParams = {
@@ -427,7 +426,7 @@ export default function CobrosPagosReportadosPage() {
 
         const res = await listPagosReportadosConKpis(
           {
-            page,
+            page: pageToFetch,
 
             per_page: 20,
 
@@ -485,7 +484,7 @@ export default function CobrosPagosReportadosPage() {
 
   useEffect(() => {
     const id = window.setInterval(() => {
-      void fetchListado({ bypassCache: true })
+      void fetchListado({ bypassCache: true, silent: true })
     }, COBROS_LISTADO_KPIS_CACHE_TTL_MS)
     return () => window.clearInterval(id)
   }, [fetchListado])
@@ -564,7 +563,7 @@ export default function CobrosPagosReportadosPage() {
       }
 
       invalidateCobrosListadoKpisCache()
-      setSearchNonce(prev => prev + 1)
+      void fetchListado({ bypassCache: true, silent: true })
 
       if (nuevoEstado === 'rechazado') {
         setRechazarModal({ open: false, row: null })
@@ -622,7 +621,7 @@ export default function CobrosPagosReportadosPage() {
       }
       toast.success(res?.mensaje || 'Pago reportado eliminado.')
       invalidateCobrosListadoKpisCache()
-      setSearchNonce(prev => prev + 1)
+      void fetchListado({ bypassCache: true, silent: true })
     } catch (e: unknown) {
       const detail = (e as { response?: { data?: { detail?: string } } })
         ?.response?.data?.detail
@@ -645,40 +644,6 @@ export default function CobrosPagosReportadosPage() {
       toast.error(e?.message || 'No se pudo abrir el comprobante.')
     } finally {
       setViewingComprobanteId(null)
-    }
-  }
-
-  const handleDescargarExcelAprobados = async () => {
-    // Servidor: pendiente/en revisión que no validan, no exportados; cédula/institución; sin fechas.
-    // El Excel y el marcado en BD son atómicos (un solo request).
-    setDescargandoExcelAprobados(true)
-
-    try {
-      const stats = await exportarPagosReportadosAprobadosExcel({
-        cedula: cedula.trim() || undefined,
-        institucion: institucion.trim() || undefined,
-      })
-
-      toast.success(
-        'Excel con ' +
-          String(stats.totalFilas) +
-          ' fila(s) sin validar. Nuevos exportados: ' +
-          String(stats.marcados) +
-          (stats.yaExportados > 0
-            ? ' (ya constaban ' + String(stats.yaExportados) + ')'
-            : '') +
-          '. Cola temporal: quitados ' +
-          String(stats.quitadosCola) +
-          ' registro(s).'
-      )
-
-      setPage(1)
-      invalidateCobrosListadoKpisCache()
-      setSearchNonce(prev => prev + 1)
-    } catch (e: any) {
-      toast.error(e?.message || 'No se pudo exportar el Excel de corrección.')
-    } finally {
-      setDescargandoExcelAprobados(false)
     }
   }
 
@@ -831,7 +796,7 @@ export default function CobrosPagosReportadosPage() {
         })
       }
       invalidateCobrosListadoKpisCache()
-      setSearchNonce(prev => prev + 1)
+      void fetchListado({ bypassCache: true, silent: true })
     }
     setSelectedIds([])
     setBulkApproving(false)
@@ -908,12 +873,11 @@ export default function CobrosPagosReportadosPage() {
             </select>
 
             <p className="text-xs text-muted-foreground">
-              <strong>No cumplen validadores:</strong> si aún no descargó el
-              Excel de corrección, siguen en pantalla; al descargarlo, dejan
-              esta lista (use &quot;Incluir ya exportados&quot; para mostrarlas
-              otra vez y seguir aprobando o editando). Vista por defecto sin
-              aprobados/importados/rechazados ni ya exportados. Los rechazados
-              solo con filtro o tarjeta.
+              <strong>No cumplen validadores:</strong> misma regla que la carga
+              masiva. Por defecto no se listan aprobados, importados ni
+              rechazados, ni filas ya marcadas como exportadas a corrección;
+              use &quot;Incluir ya exportados&quot; para volver a ver esas
+              últimas. Los rechazados solo con filtro o tarjeta.
             </p>
           </div>
 
@@ -962,9 +926,8 @@ export default function CobrosPagosReportadosPage() {
               }}
             />
             <span>
-              Incluir ya exportados a Excel: tras descargar, esas filas salen de
-              la vista normal; aquí las vuelve a mostrar para aprobar, editar o
-              rechazar.
+              Incluir filas ya marcadas como exportadas a corrección (ocultas
+              en la vista normal hasta activar esta opción).
             </span>
           </label>
 
@@ -1026,18 +989,6 @@ export default function CobrosPagosReportadosPage() {
             }}
           >
             Buscar
-          </Button>
-
-          <Button
-            variant="outline"
-            onClick={handleDescargarExcelAprobados}
-            disabled={descargandoExcelAprobados}
-            title="Solo no cumplen validadores. Sin descargar: siguen en pantalla. Al descargar: van al archivo y salen de la lista hasta marcar Incluir ya exportados. Sin fechas; sí cédula/institución."
-          >
-            {descargandoExcelAprobados ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : null}
-            Excel no validan (carga masiva)
           </Button>
         </CardContent>
       </Card>

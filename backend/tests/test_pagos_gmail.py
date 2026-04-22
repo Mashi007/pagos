@@ -537,6 +537,7 @@ def test_pagos_gmail_label_exclusions_query_incluye_etiquetas_clasificacion():
         PAGOS_GMAIL_LABEL_PAGINAS,
         PAGOS_GMAIL_LABEL_CALIDAD,
         PAGOS_GMAIL_LABEL_TEXTO,
+        PAGOS_GMAIL_LABEL_PROCESADO,
         pagos_gmail_label_exclusions_query,
     )
 
@@ -550,5 +551,6 @@ def test_pagos_gmail_label_exclusions_query_incluye_etiquetas_clasificacion():
     assert f'-label:"{PAGOS_GMAIL_LABEL_PAGINAS}"' in q
     assert f'-label:"{PAGOS_GMAIL_LABEL_CALIDAD}"' in q
     assert f'-label:"{PAGOS_GMAIL_LABEL_TEXTO}"' in q
+    assert f'-label:"{PAGOS_GMAIL_LABEL_PROCESADO}"' in q
 
 

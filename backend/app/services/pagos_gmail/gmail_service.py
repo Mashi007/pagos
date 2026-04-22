@@ -147,6 +147,8 @@ PAGOS_GMAIL_LABEL_PAGINAS = "PAGINAS"
 PAGOS_GMAIL_LABEL_CALIDAD = "CALIDAD"
 # Sin captura/PDF de comprobante: cuerpo u adjuntos no extraen imagen/PDF de pago (no hay columnas desde pixeles).
 PAGOS_GMAIL_LABEL_TEXTO = "TEXTO"
+# Tras redigitalizacion exitosa MANUAL+ERROR EMAIL (paso final pipeline): marca visible de procesado.
+PAGOS_GMAIL_LABEL_PROCESADO = "PROCESADO"
 
 
 def pagos_gmail_label_exclusions_query() -> str:
@@ -166,7 +168,8 @@ def pagos_gmail_label_exclusions_query() -> str:
         f'-label:"{PAGOS_GMAIL_LABEL_OTROS}" '
         f'-label:"{PAGOS_GMAIL_LABEL_PAGINAS}" '
         f'-label:"{PAGOS_GMAIL_LABEL_CALIDAD}" '
-        f'-label:"{PAGOS_GMAIL_LABEL_TEXTO}"'
+        f'-label:"{PAGOS_GMAIL_LABEL_TEXTO}" '
+        f'-label:"{PAGOS_GMAIL_LABEL_PROCESADO}"'
     )
 
 
