@@ -1126,6 +1126,20 @@ class PrestamoService {
       { timeout: 180000 }
     )
   }
+
+  /**
+   * Recalcula solo fechas de vencimiento de cuotas existentes según fecha base / aprobación del préstamo.
+   * POST /api/v1/prestamos/{id}/recalcular-fechas-amortizacion
+   */
+  async postRecalcularFechasAmortizacion(
+    prestamoId: number
+  ): Promise<Record<string, unknown>> {
+    return apiClient.post<Record<string, unknown>>(
+      `${this.baseUrl}/${prestamoId}/recalcular-fechas-amortizacion`,
+      undefined,
+      { timeout: 120000 }
+    )
+  }
 }
 
 export const prestamoService = new PrestamoService()
