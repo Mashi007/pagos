@@ -173,6 +173,7 @@ import {
   EscanerInfopagosPage,
   EscanerInfopagosLotePage,
   FechaQAuditoriaTotalPage,
+  CuotasVsFechaBaseAdminPage,
   ModelosVehiculos,
   Notificaciones,
   NotificacionesClientesDrive,
@@ -540,6 +541,15 @@ function App() {
               element={
                 <SimpleProtectedRoute requireAdmin={true}>
                   <ActualizacionesPrestamosDrivePage />
+                </SimpleProtectedRoute>
+              }
+            />
+
+            <Route
+              path="actualizaciones/cuotas-fecha-base"
+              element={
+                <SimpleProtectedRoute requireAdmin={true}>
+                  <CuotasVsFechaBaseAdminPage />
                 </SimpleProtectedRoute>
               }
             />

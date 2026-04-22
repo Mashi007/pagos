@@ -32,6 +32,20 @@ export interface PrestamoFechas2Item {
   fecha_base_calculo: string | null
 }
 
+/** Fila de GET /prestamos/admin/cuotas-vs-fecha-base-desalineadas */
+export interface CuotaVsFechaBaseItem {
+  prestamo_id: number
+  cedula: string
+  estado: string
+  fecha_aprobacion: string | null
+  fecha_base_calculo: string | null
+  fecha_base: string | null
+  modalidad_pago: string
+  numero_cuotas: number
+  vencimiento_cuota_1: string | null
+  dias_cuota1_menos_base: number | null
+}
+
 type ResumenPrestamos = {
   tiene_prestamos: boolean
 
@@ -1075,6 +1089,42 @@ class PrestamoService {
     const qs = new URLSearchParams({ tipo: params.tipo, fecha: params.fecha })
     if (params.limit != null) qs.set('limit', String(params.limit))
     return await apiClient.get(`${this.baseUrl}/actualizaciones-fechas-2?${qs}`)
+  }
+
+  /** Admin. Préstamos con cuota 1 antes que fecha base de amortización. */
+  async getCuotasVsFechaBaseDesalineadas(params: {
+    limit?: number
+    offset?: number
+    cedula_q?: string
+  }): Promise<{
+    items: CuotaVsFechaBaseItem[]
+    total: number
+    limit: number
+    offset: number
+  }> {
+    const qs = new URLSearchParams()
+    if (params.limit != null) qs.set('limit', String(params.limit))
+    if (params.offset != null) qs.set('offset', String(params.offset))
+    const c = (params.cedula_q || '').trim()
+    if (c) qs.set('cedula_q', c)
+    const suffix = qs.toString() ? `?${qs}` : ''
+    return await apiClient.get(
+      `${this.baseUrl}/admin/cuotas-vs-fecha-base-desalineadas${suffix}`
+    )
+  }
+
+  /**
+   * Regenera tabla de cuotas desde datos del préstamo y reaplica pagos pendientes de vínculo.
+   * POST /api/v1/prestamos/{id}/reconstruir-tabla-cuotas-desde-prestamo
+   */
+  async postReconstruirTablaCuotasDesdePrestamo(
+    prestamoId: number
+  ): Promise<Record<string, unknown>> {
+    return apiClient.post<Record<string, unknown>>(
+      `${this.baseUrl}/${prestamoId}/reconstruir-tabla-cuotas-desde-prestamo`,
+      undefined,
+      { timeout: 180000 }
+    )
   }
 }
 

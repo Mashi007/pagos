@@ -92,6 +92,10 @@ export const FechaQAuditoriaTotalPage = lazy(
   () => import('../pages/FechaQAuditoriaTotalPage')
 )
 
+export const CuotasVsFechaBaseAdminPage = lazy(
+  () => import('../pages/CuotasVsFechaBaseAdminPage')
+)
+
 export const ComunicacionesPage = lazy(() => import('../pages/Comunicaciones'))
 
 export const ConversacionesWhatsAppPage = lazy(

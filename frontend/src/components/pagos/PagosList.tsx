@@ -940,6 +940,22 @@ export function PagosList() {
                 )}
               </p>
             )}
+            {gmailStatus?.last_run_summary ? (
+              <details className="mb-2 rounded-md border border-gray-100 bg-gray-50/60 px-2 py-2 text-xs text-gray-700">
+                <summary className="cursor-pointer select-none font-medium text-gray-800">
+                  Métricas detalladas (última corrida)
+                </summary>
+                <ul className="mt-2 space-y-1 pl-1">
+                  {gmailRunSummaryLines(gmailStatus.last_run_summary).map(
+                    (line, idx) => (
+                      <li key={`${idx}-${line}`} className="break-words leading-snug">
+                        {line}
+                      </li>
+                    )
+                  )}
+                </ul>
+              </details>
+            ) : null}
             <div className="space-y-2">
               <a
                 href={`${BASE_PATH}/${SEGMENTO_INFOPAGOS}`.replace(/\/+/g, '/')}
