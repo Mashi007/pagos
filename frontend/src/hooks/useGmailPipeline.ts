@@ -55,6 +55,10 @@ export type GmailRunSummary = {
   gemini_ms_total?: number
   gemini_ms_max?: number
   gemini_ms_avg?: number
+  gemini_second_pass_total?: number
+  gemini_second_pass_hits?: number
+  none_reason_counts?: Record<string, number>
+  none_reason_hint_counts?: Record<string, number>
 }
 
 interface GmailStatus {
@@ -154,6 +158,35 @@ function detalleCeroArchivosConCorreos(s: GmailStatus): string {
   const files = s.last_files ?? 0
   if (files > 0 || emails === 0) return ''
   return ' Ningún comprobante generó fila final (plantilla incompleta, regla «una sola pieza», dedupe de binario, etc.).'
+}
+
+function detalleDiagnosticoIdentificacion(s: GmailStatus): string {
+  const rs = s.last_run_summary
+  if (!rs || typeof rs !== 'object') return ''
+  const pass2Total =
+    typeof rs.gemini_second_pass_total === 'number'
+      ? rs.gemini_second_pass_total
+      : null
+  const pass2Hits =
+    typeof rs.gemini_second_pass_hits === 'number' ? rs.gemini_second_pass_hits : null
+  const reasons = rs.none_reason_counts
+  const reasonEntries = reasons
+    ? Object.entries(reasons)
+        .filter(([, v]) => Number.isFinite(Number(v)) && Number(v) > 0)
+        .sort((a, b) => Number(b[1]) - Number(a[1]))
+        .slice(0, 3)
+    : []
+  const reasonTxt =
+    reasonEntries.length > 0
+      ? ` Top fallas: ${reasonEntries
+          .map(([k, v]) => `${k}=${v}`)
+          .join(', ')}.`
+      : ''
+  const passTxt =
+    pass2Total !== null && pass2Hits !== null
+      ? ` Rescate 2ª pasada: ${pass2Hits}/${pass2Total}.`
+      : ''
+  return `${passTxt}${reasonTxt}`
 }
 
 /** Notificación final con conteos válidos / pendientes (backend run_summary). */
@@ -272,8 +305,9 @@ export function useGmailPipeline({
                 ? ` (fecha correo: ${s.latest_data_date})`
                 : ''
               const resumenFin = textoNotificacionFinProcesamientoGmail(s)
+              const diagIdent = detalleDiagnosticoIdentificacion(s)
               const cuerpo = resumenFin
-                ? `${resumenFin}${dateHint}${detalleCeroArchivosConCorreos(s)}`
+                ? `${resumenFin}${diagIdent}${dateHint}${detalleCeroArchivosConCorreos(s)}`
                 : `Listo: se revisaron ${emails} correo(s) y ${files} archivo(s) procesados.${dateHint}${detalleCeroArchivosConCorreos(s)}`
 
               toast.success(cuerpo, { duration: resumenFin ? 14000 : 10000 })
@@ -293,8 +327,9 @@ export function useGmailPipeline({
 
             if (hasData) {
               const resumenTope = textoNotificacionFinProcesamientoGmail(s)
+              const diagIdent = detalleDiagnosticoIdentificacion(s)
               const msgTope = resumenTope
-                ? `${resumenTope} Tiempo de espera máximo alcanzado; si aún corre en servidor, consulte estado o descargue Excel.`
+                ? `${resumenTope}${diagIdent} Tiempo de espera máximo alcanzado; si aún corre en servidor, consulte estado o descargue Excel.`
                 : `Procesamiento en curso (${processed} correo(s) hasta ahora). Puede descargar ya los datos disponibles.`
               toast.success(msgTope, { duration: resumenTope ? 14000 : 8000 })
 

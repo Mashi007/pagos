@@ -669,6 +669,9 @@ def run_pipeline(
                 any_cedula_lookup_failed = False
                 # True solo si un adjunto se descarta por formato/parse (no por cedula del remitente).
                 any_skipped_not_plantilla_o_campos = False
+                # Evita sesgo a MANUAL por media no-comprobante (logos/firma/banner):
+                # solo activar MANUAL si hubo evidencia escaneada de caso revisable.
+                manual_evidence_for_revision = False
                 label_ids_for_message: list[str] = []
                 # Formatos A/B/C/D/NR digitalizados OK (comprobante en BD) en este mensaje (para detectar mezcla -> MANUAL).
                 bank_fmts_digitized: list[str] = []
@@ -840,6 +843,11 @@ def run_pipeline(
                                 none_reason_hint_counts[_hk] = (
                                     int(none_reason_hint_counts.get(_hk, 0)) + 1
                                 )
+                            if _hint or (
+                                _none_reason
+                                and _none_reason not in ("sin_plantilla", "json_invalido")
+                            ):
+                                manual_evidence_for_revision = True
                             any_incomplete_or_skipped = True
                             any_skipped_not_plantilla_o_campos = True
                             logger.warning(
@@ -1006,6 +1014,7 @@ def run_pipeline(
                                 "sha256": file_digest,
                             }
                         )
+                        manual_evidence_for_revision = True
                     except Exception as e:
                         logger.warning("[PAGOS_GMAIL]   Error procesando %s: %s", filename, e)
                         _pipeline_evt(
@@ -1612,8 +1621,13 @@ def run_pipeline(
                         final_label_name = PAGOS_GMAIL_LABEL_ERROR_EMAIL
                         final_label_reason = "fallback_error_email"
                     elif candidatos:
-                        final_label_name = PAGOS_GMAIL_LABEL_MANUAL
-                        final_label_reason = "fallback_manual"
+                        if manual_evidence_for_revision:
+                            final_label_name = PAGOS_GMAIL_LABEL_MANUAL
+                            final_label_reason = "fallback_manual"
+                        else:
+                            # Solo media sin señales útiles de comprobante -> TEXTO (evita sesgo a MANUAL).
+                            final_label_name = PAGOS_GMAIL_LABEL_TEXTO
+                            final_label_reason = "fallback_texto"
 
                 if final_label_name and final_label_name in PAGOS_GMAIL_ETIQUETAS_FINALES_PERMITIDAS:
                     if final_label_name not in plantilla_label_cache:

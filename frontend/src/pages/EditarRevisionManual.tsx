@@ -129,7 +129,9 @@ import {
   firmaSoloCliente,
   firmaSoloCuotas,
   firmaSoloPrestamo,
+  buildPrestamoPatchGuardarRevision,
   mensajeValidacionServidor,
+  mergeCuotasParaMostrar,
   opcionesSelectCuotaRevision,
   opcionesSelectEstadoPrestamoRevision,
   pagoCarteraRevisionBloquearToggleCerrado,
@@ -571,7 +573,12 @@ export function EditarRevisionManual() {
             : null
         )
 
-        setCuotasData(data.cuotas)
+        setCuotasData(
+          mergeCuotasParaMostrar(
+            data.cuotas,
+            data.prestamo?.numero_cuotas
+          )
+        )
       }
 
       return data
@@ -699,6 +706,36 @@ export function EditarRevisionManual() {
 
   const soloLectura = estadoRevision === 'revisado' && !revisionManualFullEdit
 
+  /**
+   * En cuotas marcadas como pagadas al 100 %, «Pagado» debe reflejar el mismo número que «Monto»
+   * de esa fila (no valores derivados de otros paneles). Útil tras cargas inconsistentes o al ajustar Monto.
+   */
+  const alinearPagadoAlMontoCuotasPagadas = useCallback(() => {
+    if (soloLectura) return
+    const estadosFull = new Set(['PAGADO', 'PAGO_ADELANTADO'])
+    let cambiadas = 0
+    const next = cuotasData.map(c => {
+      const code = codigoEstadoCuotaParaUi(c.estado)
+      if (!estadosFull.has(code)) return c
+      const montoNum = Number(c.monto) || 0
+      const cur = Number(c.total_pagado) || 0
+      if (Math.abs(cur - montoNum) <= 1e-9) return c
+      cambiadas += 1
+      return { ...c, total_pagado: montoNum }
+    })
+    if (cambiadas === 0) {
+      toast.message(
+        'Sin cambios: en filas Pagado / Pago adelantado el importe Pagado ya coincide con el Monto de la misma fila.'
+      )
+      return
+    }
+    setCuotasData(next)
+    setCambios(prev => ({ ...prev, cuotas: true }))
+    toast.success(
+      `Pagado igualado al Monto de la misma fila en ${cambiadas} cuota(s) (estados Pagado / Pago adelantado).`
+    )
+  }, [cuotasData, soloLectura])
+
   const refrescarTrasCambioPagosRevision = useCallback(async () => {
     // La invalidación de `revision-editar` en refrescarOrigen ya dispara un refetch (RQ v5).
     await refrescarOrigenDatosTrasRevisionManual()
@@ -707,10 +744,39 @@ export function EditarRevisionManual() {
 
   const aplicarCascadaPagosMutation = useMutation({
     mutationFn: async () => {
+      if (!validarFormulario()) {
+        throw new Error(
+          'Corrija los errores marcados en rojo antes de aplicar la cascada.'
+        )
+      }
       const pid = Number(prestamoData.prestamo_id)
       if (!Number.isFinite(pid) || pid <= 0) {
         throw new Error('No hay crédito válido para aplicar la cascada')
       }
+
+      const patch = buildPrestamoPatchGuardarRevision(
+        prestamoData,
+        formatDateForInput
+      )
+      const esperadas = Math.floor(Number(prestamoData.numero_cuotas) || 0)
+      const persistidas = cuotasData.filter(c => c.cuota_id != null).length
+      const necesitaReconstruir =
+        esperadas > 0 && (persistidas === 0 || persistidas < esperadas)
+
+      if (necesitaReconstruir) {
+        const fa =
+          formatDateForInput(prestamoData.fecha_aprobacion) ||
+          formatDateForInput(prestamoData.fecha_base_calculo)
+        if (!fa) {
+          throw new Error(
+            'Indique fecha de aprobación (o base de cálculo) para generar las cuotas faltantes antes de la cascada.'
+          )
+        }
+        await revisionManualService.guardarPrestamoYReconstruirCuotas(pid, patch)
+      } else if (Object.keys(patch).length > 0) {
+        await revisionManualService.editarPrestamo(pid, patch)
+      }
+
       return pagoService.aplicarPagosPendientesCuotasPorPrestamo(pid)
     },
     onSuccess: async data => {
@@ -727,24 +793,44 @@ export function EditarRevisionManual() {
       }
       await refrescarTrasCambioPagosRevision()
       /**
-       * La cascada actualiza cuotas en BD. El queryFn del detalle no llama a setCuotasData
-       * si hay cambios locales sin guardar (formDirtyRef), y la tabla de cuotas quedaría desactualizada.
-       * Tras cascada en servidor, alineamos siempre cuotas (y marcamos cuotas como no sucias).
+       * Persistimos préstamo en servidor antes/durante la cascada; el detalle en caché puede quedar
+       * desalineado con el formulario. Traemos detalle fresco y alineamos préstamo + cuotas (merge N).
        */
       if (prestamoId) {
-        const fresh = queryClient.getQueryData([
-          'revision-editar',
-          prestamoId,
-        ]) as { cuotas?: Partial<CuotaData>[] } | undefined
-        if (fresh != null && Array.isArray(fresh.cuotas)) {
-          setCuotasData(fresh.cuotas)
-          setCambios(prev => ({ ...prev, cuotas: false }))
-          const base = firmaCargaInicialRef.current
-          if (base) {
-            firmaCargaInicialRef.current = {
-              ...base,
-              cuotas: firmaSoloCuotas(fresh.cuotas),
+        const pidNum = parseInt(prestamoId, 10)
+        if (Number.isFinite(pidNum) && pidNum > 0) {
+          try {
+            const datos =
+              await revisionManualService.getDetallePrestamoRevision(pidNum)
+            if (datos?.prestamo) {
+              setPrestamoData(datos.prestamo)
+              const faG = formatDateForInput(datos.prestamo.fecha_aprobacion)
+              if (faG) setFechaAprobacionOriginal(faG)
             }
+            if (datos?.cuotas) {
+              const mergedCuotas = mergeCuotasParaMostrar(
+                datos.cuotas,
+                datos.prestamo?.numero_cuotas
+              )
+              setCuotasData(mergedCuotas)
+              setCambios(prev => ({
+                ...prev,
+                cuotas: false,
+                prestamo: false,
+              }))
+              const base = firmaCargaInicialRef.current
+              if (base) {
+                firmaCargaInicialRef.current = {
+                  ...base,
+                  ...(datos.prestamo
+                    ? { prestamo: firmaSoloPrestamo(datos.prestamo) }
+                    : {}),
+                  cuotas: firmaSoloCuotas(mergedCuotas),
+                }
+              }
+            }
+          } catch (e) {
+            console.error(e)
           }
         }
       }
@@ -1000,43 +1086,10 @@ export function EditarRevisionManual() {
 
     setRecalculandoFechasCuotas(true)
     try {
-      const prestamoPatch: Record<string, unknown> = {
-        fecha_aprobacion: fa,
-        fecha_base_calculo: fa,
-        observaciones: String(prestamoData.observaciones ?? ''),
-      }
-
-      if (
-        prestamoData.total_financiamiento !== undefined &&
-        prestamoData.total_financiamiento >= 0
-      ) {
-        prestamoPatch.total_financiamiento = prestamoData.total_financiamiento
-      }
-
-      if (
-        prestamoData.numero_cuotas !== undefined &&
-        prestamoData.numero_cuotas >= 1
-      ) {
-        prestamoPatch.numero_cuotas = prestamoData.numero_cuotas
-      }
-
-      if (
-        prestamoData.tasa_interes !== undefined &&
-        prestamoData.tasa_interes >= 0
-      ) {
-        prestamoPatch.tasa_interes = prestamoData.tasa_interes
-      }
-
-      if (prestamoData.modalidad_pago !== undefined) {
-        prestamoPatch.modalidad_pago = prestamoData.modalidad_pago
-      }
-
-      if (
-        prestamoData.cuota_periodo !== undefined &&
-        prestamoData.cuota_periodo >= 0
-      ) {
-        prestamoPatch.cuota_periodo = prestamoData.cuota_periodo
-      }
+      const prestamoPatch = buildPrestamoPatchGuardarRevision(
+        prestamoData,
+        formatDateForInput
+      )
 
       const res = await revisionManualService.guardarPrestamoYReconstruirCuotas(
         pid,
@@ -1061,7 +1114,12 @@ export function EditarRevisionManual() {
         setFechaAprobacionOriginal(fa)
       }
       if (datos?.cuotas) {
-        setCuotasData(datos.cuotas)
+        setCuotasData(
+          mergeCuotasParaMostrar(
+            datos.cuotas,
+            datos.prestamo?.numero_cuotas
+          )
+        )
       }
 
       toast.success(
@@ -1366,7 +1424,12 @@ export function EditarRevisionManual() {
                 const datosActualizados =
                   await revisionManualService.getDetallePrestamoRevision(pid2)
                 if (datosActualizados?.cuotas) {
-                  setCuotasData(datosActualizados.cuotas)
+                  setCuotasData(
+                    mergeCuotasParaMostrar(
+                      datosActualizados.cuotas,
+                      datosActualizados.prestamo?.numero_cuotas
+                    )
+                  )
                 }
               } catch (errRecalc: any) {
                 toast.warning(
@@ -2727,11 +2790,15 @@ export function EditarRevisionManual() {
                       step="1"
                       value={prestamoData.numero_cuotas || ''}
                       onChange={e => {
+                        const nextN = parseInt(e.target.value, 10) || 0
                         setPrestamoData({
                           ...prestamoData,
-                          numero_cuotas: parseInt(e.target.value) || 0,
+                          numero_cuotas: nextN,
                         })
-                        setCambios({ ...cambios, prestamo: true })
+                        setCuotasData(prev =>
+                          mergeCuotasParaMostrar(prev, nextN)
+                        )
+                        setCambios({ ...cambios, prestamo: true, cuotas: true })
                         if (errores['numero_cuotas'])
                           setErrores({ ...errores, numero_cuotas: '' })
                       }}
@@ -2882,7 +2949,7 @@ export function EditarRevisionManual() {
                       className="mt-3 w-full max-w-md shrink-0 sm:w-auto"
                       disabled={soloLectura || recalculandoFechasCuotas}
                       onClick={handleGuardarFechaYRecalcularVencimientos}
-                      title="Persiste la fecha (día anterior al selector) y reconstruye vencimientos según total, plazo, cuota por período y modalidad."
+                      title="Persiste en BD las condiciones del préstamo (formulario) y reconstruye la tabla de cuotas (plazo, montos y vencimientos); luego reaplica pagos pendientes a cuotas."
                     >
                       {recalculandoFechasCuotas ? (
                         <Loader2 className="mr-2 h-4 w-4 shrink-0 animate-spin" />
@@ -3142,7 +3209,7 @@ export function EditarRevisionManual() {
                         title={
                           soloLectura
                             ? 'Revisión cerrada: solo lectura'
-                            : 'Persiste en BD la aplicación de pagos elegibles a cuotas de este crédito'
+                            : 'Guarda primero las condiciones del préstamo en BD; si faltan cuotas respecto al plazo, reconstruye la tabla y aplica pagos en cascada.'
                         }
                       >
                         {aplicarCascadaPagosMutation.isPending ? (
@@ -3541,7 +3608,7 @@ export function EditarRevisionManual() {
                           title={
                             soloLectura
                               ? 'Revisión cerrada: solo lectura'
-                              : 'Aplicar pagos elegibles a cuotas de este crédito'
+                              : 'Guarda condiciones del préstamo; si faltan cuotas en BD respecto al plazo, reconstruye y aplica pagos en cascada.'
                           }
                         >
                           {aplicarCascadaPagosMutation.isPending ? (
@@ -3920,14 +3987,34 @@ export function EditarRevisionManual() {
             {/* Cuotas (después del reporte de pagos en cartera) */}
 
             <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  💳 Cuotas/Pagos
-                </CardTitle>
+              <CardHeader className="space-y-3">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <CardTitle className="flex items-center gap-2">
+                    💳 Cuotas/Pagos
+                  </CardTitle>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="shrink-0 gap-1.5 self-start sm:self-center"
+                    disabled={soloLectura || cuotasData.length === 0}
+                    onClick={alinearPagadoAlMontoCuotasPagadas}
+                    title={
+                      soloLectura
+                        ? 'Revisión cerrada: solo lectura'
+                        : 'En filas con estado Pagado o Pago adelantado, copia el Monto de esa misma fila a Pagado (sin calcular desde otros datos).'
+                    }
+                  >
+                    <CheckSquare className="h-4 w-4" />
+                    Verificar: Pagado = Monto
+                  </Button>
+                </div>
                 <p className="text-sm text-muted-foreground">
-                  La cantidad de cuotas y el calendario provienen del préstamo
-                  (número de cuotas, fechas de aprobación y reglas de
-                  amortización), no se agregan ni quitan filas desde aquí.
+                  La cantidad de filas sigue el campo «Número de cuotas» del
+                  préstamo (condiciones): si indica 12, se muestran las cuotas 1
+                  a 12; las que aún no existen en BD aparecen en blanco hasta
+                  guardar o reconstruir. El calendario depende de fechas de
+                  aprobación y reglas de amortización.
                 </p>
               </CardHeader>
 
@@ -3953,7 +4040,11 @@ export function EditarRevisionManual() {
                     <tbody className="divide-y">
                       {cuotasData.map((cuota, idx) => (
                         <tr
-                          key={cuota.cuota_id ?? `fila-${idx}`}
+                          key={
+                            cuota.cuota_id != null
+                              ? `id-${cuota.cuota_id}`
+                              : `n-${cuota.numero_cuota ?? idx}`
+                          }
                           className="hover:bg-gray-50"
                         >
                           <td className="px-4 py-2 font-medium">
@@ -3968,9 +4059,18 @@ export function EditarRevisionManual() {
                               onChange={e => {
                                 const newCuotas = [...cuotasData]
 
+                                const nuevoMonto =
+                                  parseFloat(e.target.value) || 0
+                                const est = codigoEstadoCuotaParaUi(cuota.estado)
+                                const syncPagado =
+                                  est === 'PAGADO' || est === 'PAGO_ADELANTADO'
+
                                 newCuotas[idx] = {
                                   ...cuota,
-                                  monto: parseFloat(e.target.value) || 0,
+                                  monto: nuevoMonto,
+                                  ...(syncPagado
+                                    ? { total_pagado: nuevoMonto }
+                                    : {}),
                                 }
 
                                 setCuotasData(newCuotas)
@@ -4061,9 +4161,22 @@ export function EditarRevisionManual() {
                               onChange={e => {
                                 const newCuotas = [...cuotasData]
 
+                                const nuevoEstado = e.target.value
+                                const code =
+                                  codigoEstadoCuotaParaUi(nuevoEstado)
+                                const syncPagado =
+                                  code === 'PAGADO' ||
+                                  code === 'PAGO_ADELANTADO'
+
                                 newCuotas[idx] = {
                                   ...cuota,
-                                  estado: e.target.value,
+                                  estado: nuevoEstado,
+                                  ...(syncPagado
+                                    ? {
+                                        total_pagado:
+                                          Number(cuota.monto) || 0,
+                                      }
+                                    : {}),
                                 }
 
                                 setCuotasData(newCuotas)

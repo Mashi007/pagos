@@ -982,6 +982,10 @@ class PagoService {
       gemini_ms_total?: number
       gemini_ms_max?: number
       gemini_ms_avg?: number
+      gemini_second_pass_total?: number
+      gemini_second_pass_hits?: number
+      none_reason_counts?: Record<string, number>
+      none_reason_hint_counts?: Record<string, number>
       gemini_model?: string
     } | null
   }> {

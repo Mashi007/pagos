@@ -210,6 +210,130 @@ export function firmaSoloCuotas(cuotas: Partial<CuotaData>[]): string {
   )
 }
 
+/**
+ * Alinea la tabla de cuotas al `numero_cuotas` del préstamo (condiciones): genera filas 1..N
+ * y rellena huecos con placeholders editables (sin `cuota_id`). Las cuotas con número > N
+ * o sin número válido se mantienen al final para no ocultar datos de BD.
+ */
+export function mergeCuotasParaMostrar(
+  cuotas: Partial<CuotaData>[] | undefined,
+  numeroCuotas: number | null | undefined
+): Partial<CuotaData>[] {
+  const lista = Array.isArray(cuotas) ? [...cuotas] : []
+  lista.sort(
+    (a, b) => (Number(a.numero_cuota) || 0) - (Number(b.numero_cuota) || 0)
+  )
+  const n = Math.floor(Number(numeroCuotas) || 0)
+  if (n < 1) return lista
+
+  const byNum = new Map<number, Partial<CuotaData>>()
+  for (const c of lista) {
+    const num = Math.floor(Number(c.numero_cuota) || 0)
+    if (num >= 1 && !byNum.has(num)) byNum.set(num, c)
+  }
+
+  const head: Partial<CuotaData>[] = []
+  for (let i = 1; i <= n; i++) {
+    const existing = byNum.get(i)
+    if (existing) {
+      head.push({ ...existing, numero_cuota: i })
+    } else {
+      head.push({
+        numero_cuota: i,
+        monto: 0,
+        fecha_vencimiento: null,
+        fecha_pago: null,
+        total_pagado: 0,
+        estado: 'PENDIENTE',
+        observaciones: '',
+      })
+    }
+  }
+
+  const extras = lista.filter(c => {
+    const num = Math.floor(Number(c.numero_cuota) || 0)
+    return num > n || num < 1
+  })
+
+  return [...head, ...extras]
+}
+
+/**
+ * Campos de préstamo para PUT revisión manual o POST guardar+reconstruir cuotas,
+ * alineado con el guardado parcial de `EditarRevisionManual` (condiciones + carátula).
+ */
+export function buildPrestamoPatchGuardarRevision(
+  p: Partial<PrestamoData>,
+  formatDateForInput: (iso: string | null | undefined) => string
+): Record<string, unknown> {
+  const prestamoUpdate: Record<string, unknown> = {}
+
+  const faNorm = formatDateForInput(p.fecha_aprobacion ?? null)
+  const fbNorm = formatDateForInput(p.fecha_base_calculo ?? null)
+  if (faNorm) {
+    prestamoUpdate.fecha_aprobacion = faNorm
+    prestamoUpdate.fecha_base_calculo = faNorm
+  } else if (fbNorm) {
+    prestamoUpdate.fecha_aprobacion = fbNorm
+    prestamoUpdate.fecha_base_calculo = fbNorm
+  }
+
+  if (p.total_financiamiento !== undefined && p.total_financiamiento >= 0) {
+    prestamoUpdate.total_financiamiento = p.total_financiamiento
+  }
+  if (p.numero_cuotas !== undefined && p.numero_cuotas >= 1) {
+    prestamoUpdate.numero_cuotas = p.numero_cuotas
+  }
+  if (p.tasa_interes !== undefined && p.tasa_interes >= 0) {
+    prestamoUpdate.tasa_interes = p.tasa_interes
+  }
+  if (p.producto !== undefined) {
+    prestamoUpdate.producto = p.producto
+  }
+  if (p.cedula !== undefined) {
+    prestamoUpdate.cedula = p.cedula
+  }
+  if (p.nombres !== undefined) {
+    prestamoUpdate.nombres = p.nombres
+  }
+  if (p.fecha_requerimiento !== undefined) {
+    prestamoUpdate.fecha_requerimiento = p.fecha_requerimiento || null
+  }
+  if (p.modalidad_pago !== undefined) {
+    prestamoUpdate.modalidad_pago = p.modalidad_pago
+  }
+  if (p.cuota_periodo !== undefined && p.cuota_periodo >= 0) {
+    prestamoUpdate.cuota_periodo = p.cuota_periodo
+  }
+
+  const estadoNorm = (p.estado ?? '').toString().trim().toUpperCase()
+  if (estadoNorm) {
+    prestamoUpdate.estado = estadoNorm
+  }
+  if (p.concesionario !== undefined) {
+    prestamoUpdate.concesionario = p.concesionario
+  }
+  if (p.analista !== undefined) {
+    prestamoUpdate.analista = p.analista
+  }
+  if (p.modelo_vehiculo !== undefined) {
+    prestamoUpdate.modelo_vehiculo = p.modelo_vehiculo
+  }
+  if (p.valor_activo !== undefined && p.valor_activo !== null) {
+    prestamoUpdate.valor_activo = p.valor_activo
+  }
+  if (p.usuario_proponente !== undefined) {
+    prestamoUpdate.usuario_proponente = p.usuario_proponente
+  }
+  if (p.usuario_aprobador !== undefined) {
+    prestamoUpdate.usuario_aprobador = p.usuario_aprobador
+  }
+
+  prestamoUpdate.observaciones = String(p.observaciones ?? '')
+
+  return prestamoUpdate
+}
+
 export type FirmaCargaRevision = { cliente: string; prestamo: string; cuotas: string }
 
 /** Lotes de PUT de cuotas en revisión manual (evita ~12 s en serie contra el mismo host). */

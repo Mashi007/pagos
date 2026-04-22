@@ -97,6 +97,9 @@ const getTodayDate = () => {
   return `${day}/${month}/${year}`
 }
 
+/** Texto por defecto para calle principal, parroquia, municipio, ciudad y estado (dirección). */
+const DEFAULT_DIRECCION_CAMPO = 'Venezuela'
+
 const blankIfNN = (value: string | null | undefined): string => {
   if (value == null) return ''
 
@@ -109,6 +112,58 @@ const isNN = (value: string | null | undefined): boolean => {
   if (value == null) return false
 
   return value.trim().toLowerCase() === 'nn'
+}
+
+function direccionConValoresPorDefecto(direccionData: {
+  callePrincipal: string
+  calleTransversal: string
+  descripcion: string
+  parroquia: string
+  municipio: string
+  ciudad: string
+  estadoDireccion: string
+}): Pick<
+  FormData,
+  | 'callePrincipal'
+  | 'calleTransversal'
+  | 'descripcion'
+  | 'parroquia'
+  | 'municipio'
+  | 'ciudad'
+  | 'estadoDireccion'
+> {
+  const conDef = (v: string) => (v.trim() ? v : DEFAULT_DIRECCION_CAMPO)
+
+  return {
+    calleTransversal: direccionData.calleTransversal,
+    descripcion: direccionData.descripcion,
+    callePrincipal: conDef(direccionData.callePrincipal),
+    parroquia: conDef(direccionData.parroquia),
+    municipio: conDef(direccionData.municipio),
+    ciudad: conDef(direccionData.ciudad),
+    estadoDireccion: conDef(direccionData.estadoDireccion),
+  }
+}
+
+function estadoInicialFormularioCliente(): FormData {
+  return {
+    cedula: '',
+    nombres: '',
+    telefono: '',
+    email: '',
+    emailSecundario: '',
+    callePrincipal: DEFAULT_DIRECCION_CAMPO,
+    calleTransversal: '',
+    descripcion: '',
+    parroquia: DEFAULT_DIRECCION_CAMPO,
+    municipio: DEFAULT_DIRECCION_CAMPO,
+    ciudad: DEFAULT_DIRECCION_CAMPO,
+    estadoDireccion: DEFAULT_DIRECCION_CAMPO,
+    fechaNacimiento: getTodayDate(),
+    ocupacion: '',
+    estado: 'ACTIVO',
+    notas: 'No hay observacion',
+  }
 }
 
 const convertirFechaAISO = (fechaDDMMYYYY: string): string => {
@@ -178,39 +233,9 @@ export function useCrearCliente({
 
   const usuarioRegistro = user?.email ?? 'formulario'
 
-  const [formData, setFormData] = useState<FormData>({
-    cedula: '',
-
-    nombres: '',
-
-    telefono: '',
-
-    email: '',
-
-    emailSecundario: '',
-
-    callePrincipal: '',
-
-    calleTransversal: '',
-
-    descripcion: '',
-
-    parroquia: '',
-
-    municipio: '',
-
-    ciudad: '',
-
-    estadoDireccion: '',
-
-    fechaNacimiento: getTodayDate(),
-
-    ocupacion: '',
-
-    estado: 'ACTIVO',
-
-    notas: 'No hay observacion',
-  })
+  const [formData, setFormData] = useState<FormData>(() =>
+    estadoInicialFormularioCliente()
+  )
 
   const [datosOriginales, setDatosOriginales] =
     useState<Partial<FormData> | null>(null)
@@ -1473,7 +1498,9 @@ export function useCrearCliente({
       const direccionRaw =
         typeof cliente.direccion === 'string' ? cliente.direccion : ''
 
-      const direccionData = parsearDireccion(direccionRaw)
+      const direccionData = direccionConValoresPorDefecto(
+        parsearDireccion(direccionRaw)
+      )
 
       const nombresValue = cliente.nombres || ''
 
@@ -1523,27 +1550,7 @@ export function useCrearCliente({
 
       setValidations([])
     } else {
-      setFormData({
-        cedula: '',
-        nombres: '',
-        telefono: '',
-        email: '',
-
-        emailSecundario: '',
-
-        callePrincipal: '',
-        calleTransversal: '',
-        descripcion: '',
-        parroquia: '',
-        municipio: '',
-        ciudad: '',
-        estadoDireccion: '',
-
-        fechaNacimiento: getTodayDate(),
-        ocupacion: '',
-        estado: 'ACTIVO',
-        notas: 'No hay observacion',
-      })
+      setFormData(estadoInicialFormularioCliente())
 
       setDatosOriginales(null)
     }
