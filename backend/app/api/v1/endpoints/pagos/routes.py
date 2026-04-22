@@ -47,7 +47,7 @@ from fastapi import APIRouter, Depends, Query, HTTPException, UploadFile, File, 
 
 from fastapi.responses import StreamingResponse, Response
 
-from sqlalchemy import and_, case, delete, desc, exists, func, not_, or_, select, text
+from sqlalchemy import and_, case, delete, desc, exists, func, inspect, not_, or_, select, text
 
 from sqlalchemy.orm import Session
 
@@ -6650,41 +6650,117 @@ def get_cedulas_reportar_bs(
 
     Total de cédulas en la lista y página ordenada del más reciente al más antiguo (creado_en DESC).
 
+    Si la BD aún no tiene `creado_en` o `fuente_tasa_cambio`, se consulta solo lo existente
+
+    (evita 500 hasta aplicar migraciones 052 / 068).
+
     """
+
+    bind = db.get_bind()
+
+    table_cols = {c["name"] for c in inspect(bind).get_columns("cedulas_reportar_bs")}
+
+    has_creado_en = "creado_en" in table_cols
+
+    has_fuente = "fuente_tasa_cambio" in table_cols
 
     total = db.query(func.count(CedulaReportarBs.cedula)).scalar() or 0
 
-    q = (
+    off = (page - 1) * page_size
 
-        db.query(CedulaReportarBs)
+    if has_creado_en and has_fuente:
 
-        .order_by(desc(CedulaReportarBs.creado_en), CedulaReportarBs.cedula.asc())
+        q = (
 
-        .offset((page - 1) * page_size)
+            db.query(CedulaReportarBs)
 
-        .limit(page_size)
+            .order_by(desc(CedulaReportarBs.creado_en), CedulaReportarBs.cedula.asc())
 
-    )
+            .offset(off)
 
-    rows = q.all()
+            .limit(page_size)
 
-    items = [
+        )
 
-        {
+        rows = q.all()
 
-            "cedula": r.cedula,
+        items = [
 
-            "creado_en": r.creado_en.isoformat() if r.creado_en else None,
+            {
 
-            "fuente_tasa_cambio": normalizar_fuente_tasa(
-                getattr(r, "fuente_tasa_cambio", None)
-            ),
+                "cedula": r.cedula,
 
-        }
+                "creado_en": r.creado_en.isoformat() if r.creado_en else None,
 
-        for r in rows
+                "fuente_tasa_cambio": normalizar_fuente_tasa(
+                    getattr(r, "fuente_tasa_cambio", None)
+                ),
 
-    ]
+            }
+
+            for r in rows
+
+        ]
+
+    else:
+
+        select_cols = ["cedula"]
+
+        if has_creado_en:
+
+            select_cols.append("creado_en")
+
+        if has_fuente:
+
+            select_cols.append("fuente_tasa_cambio")
+
+        col_sql = ", ".join(select_cols)
+
+        order_sql = (
+
+            "creado_en DESC, cedula ASC" if has_creado_en else "cedula ASC"
+
+        )
+
+        stmt = text(
+
+            f"SELECT {col_sql} FROM cedulas_reportar_bs ORDER BY {order_sql} "
+
+            "LIMIT :lim OFFSET :off"
+
+        )
+
+        raw_rows = db.execute(
+
+            stmt, {"lim": page_size, "off": off}
+
+        ).fetchall()
+
+        items = []
+
+        for tup in raw_rows:
+
+            m = dict(zip(select_cols, tup))
+
+            creado = m.get("creado_en")
+
+            items.append(
+
+                {
+
+                    "cedula": m.get("cedula"),
+
+                    "creado_en": creado.isoformat() if creado else None,
+
+                    "fuente_tasa_cambio": normalizar_fuente_tasa(
+
+                        m.get("fuente_tasa_cambio")
+
+                    ),
+
+                }
+
+            )
 
     return {
 
