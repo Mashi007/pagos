@@ -1233,11 +1233,14 @@ class ApiClient {
     data?: unknown,
     config?: AxiosRequestConfig
   ): Promise<T> {
-    console.log('? [ApiClient] PUT request:', {
-      url,
-      data: data ? '***' : '(vacío)',
-      config,
-    })
+    const logPut = process.env.NODE_ENV === 'development'
+    if (logPut) {
+      console.log('? [ApiClient] PUT request:', {
+        url,
+        data: data ? '***' : '(vacío)',
+        config,
+      })
+    }
 
     try {
       const aiConfigPut =
@@ -1258,20 +1261,24 @@ class ApiClient {
         ? await this.runWithPutLimit(putGroup.key, putGroup.limit, executePut)
         : await executePut()
 
-      console.log('? [ApiClient] PUT response:', {
-        url,
-        status: response.status,
-        data: response.data,
-      })
-
-      // Verificar si la respuesta es un error 4xx (validateStatus permite 4xx pero debemos manejarlos)
-
-      if (response.status >= 400 && response.status < 500) {
-        console.error('? [ApiClient] PUT recibió error 4xx:', {
+      if (logPut) {
+        console.log('? [ApiClient] PUT response:', {
           url,
           status: response.status,
           data: response.data,
         })
+      }
+
+      // Verificar si la respuesta es un error 4xx (validateStatus permite 4xx pero debemos manejarlos)
+
+      if (response.status >= 400 && response.status < 500) {
+        if (logPut) {
+          console.error('? [ApiClient] PUT recibió error 4xx:', {
+            url,
+            status: response.status,
+            data: response.data,
+          })
+        }
 
         const raw = response.data as any
         let backendMessage: string =
@@ -1302,7 +1309,9 @@ class ApiClient {
 
       return response.data
     } catch (error) {
-      console.error('? [ApiClient] PUT error:', { url, error })
+      if (logPut) {
+        console.error('? [ApiClient] PUT error:', { url, error })
+      }
 
       throw error
     }

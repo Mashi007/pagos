@@ -900,7 +900,8 @@ export default function EscanerInfopagosPage() {
             </p>
             {enRevision ? (
               <p>
-                Estado: <strong>en revisión manual</strong>. No hay recibo automático hasta aprobación.
+                Su pago está siendo revisado para asegurar coherencia con los datos de la imagen.
+                Cuando sea aprobado, el recibo quedará disponible para descarga.
               </p>
             ) : null}
             {reciboToken && pagoId != null ? (
@@ -912,6 +913,11 @@ export default function EscanerInfopagosPage() {
               >
                 {descargandoRecibo ? 'Descargando…' : 'Descargar recibo PDF'}
               </Button>
+            ) : !enRevision ? (
+              <p className="rounded-md border border-emerald-200 bg-emerald-100/60 px-3 py-2 text-xs text-emerald-900">
+                El pago fue aprobado. Si no ve el botón de descarga, actualice la página para
+                obtener el enlace del recibo.
+              </p>
             ) : null}
             <Button type="button" onClick={reiniciar}>
               Nuevo escaneo

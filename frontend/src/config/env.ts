@@ -75,9 +75,19 @@ function validateEnv(): EnvConfig {
 
     if (prodApiUrl) {
       try {
-        new URL(prodApiUrl)
-
-        API_URL = prodApiUrl.replace(/\/$/, '')
+        const parsed = new URL(prodApiUrl)
+        const absoluteApi = parsed.toString().replace(/\/$/, '')
+        const crossOriginInBrowser =
+          typeof window !== 'undefined' &&
+          parsed.origin !== window.location.origin
+        // En producción preferimos same-origin vía /api proxy para evitar CORS
+        // y unificar cookies/headers. Solo usamos absoluta si coincide el origen.
+        API_URL = crossOriginInBrowser ? '' : absoluteApi
+        if (crossOriginInBrowser) {
+          console.warn(
+            `[env] VITE_API_URL apunta a otro origen (${parsed.origin}). Se usará /api same-origin para evitar CORS.`
+          )
+        }
       } catch {
         API_URL = ''
       }
