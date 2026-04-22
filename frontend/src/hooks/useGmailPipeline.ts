@@ -80,6 +80,9 @@ const POLL_INTERVAL_MS = 5000
 
 const POLL_MAX_ATTEMPTS = 300 // 300 × 5s = 25 min máximo de espera (pipeline con muchos correos)
 
+/** Tras varios fallos de red / 5xx (p. ej. 502 Render), dejar de martillar el API. */
+const POLL_MAX_CONSECUTIVE_FETCH_ERRORS = 5
+
 type GmailScanFilter =
   | 'unread'
   | 'read'
@@ -181,6 +184,8 @@ export function useGmailPipeline({
 
   const abortedRef = useRef(false)
 
+  const fetchErrorStreakRef = useRef(0)
+
   /** Último scan_filter enviado a run-now (el status no lo devuelve). */
   const lastScanFilterRef = useRef<GmailScanFilter>('all')
 
@@ -196,6 +201,7 @@ export function useGmailPipeline({
     }
 
     abortedRef.current = true
+    fetchErrorStreakRef.current = 0
     setLoading(false)
   }, [])
 
@@ -206,6 +212,8 @@ export function useGmailPipeline({
       pollingRef.current = setTimeout(async () => {
         try {
           const s = await pagoService.getGmailStatus()
+
+          fetchErrorStreakRef.current = 0
 
           setGmailStatus(s)
 
@@ -297,6 +305,16 @@ export function useGmailPipeline({
 
           _pollStatus(attempt + 1)
         } catch {
+          fetchErrorStreakRef.current += 1
+          if (fetchErrorStreakRef.current >= POLL_MAX_CONSECUTIVE_FETCH_ERRORS) {
+            setLoading(false)
+            toast.error(
+              'No se pudo consultar el estado del pipeline Gmail (varios intentos fallidos). ' +
+                'Si el navegador muestra «CORS» o 502, suele ser el servidor o el proxy (p. ej. Render) no disponible o reiniciando; revise logs del backend.',
+              { duration: 12000 }
+            )
+            return
+          }
           if (attempt < POLL_MAX_ATTEMPTS) {
             _pollStatus(attempt + 1)
           } else {
@@ -321,6 +339,8 @@ export function useGmailPipeline({
       if (loading) return
 
       abortedRef.current = false
+
+      fetchErrorStreakRef.current = 0
 
       setLoading(true)
 

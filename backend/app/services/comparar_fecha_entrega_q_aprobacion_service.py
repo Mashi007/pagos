@@ -117,30 +117,16 @@ def _parse_fecha_celda_hoja(val: Any) -> Optional[date]:
         return None
     # Colapsar espacios alrededor de separadores ("04 / 06 / 2026" -> "04/06/2026").
     s2 = re.sub(r"\s*([/.-])\s*", r"\1", s.strip())
+    # Columna Q CONCILIACIÓN: orden textual fijo día / mes / año (no permutar tokens aunque ambos ≤ 12).
     m_slash = re.match(r"^(\d{1,2})[/.](\d{1,2})[/.](\d{4})\b", s2)
     if m_slash:
-        a, b, y_full = int(m_slash.group(1)), int(m_slash.group(2)), int(m_slash.group(3))
+        dia, mes, y_full = int(m_slash.group(1)), int(m_slash.group(2)), int(m_slash.group(3))
         if y_full < 100:
             y_full += 2000
-        # CONCILIACIÓN (VE): por defecto día/mes/año. Si un componente > 12, solo cabe una lectura.
-        if a > 12:
-            try:
-                return date(y_full, b, a)
-            except ValueError:
-                pass
-        elif b > 12:
-            try:
-                return date(y_full, a, b)
-            except ValueError:
-                pass
-        else:
-            # Ambas partes 1..12: solo una convención cabe sin metadatos de locale. CONCILIACIÓN se opera
-            # en día/mes/año (VE). Celdas con formato «fecha» en Sheets deben llegar como serial (sync
-            # UNFORMATTED_VALUE) y no usar esta rama.
-            try:
-                return date(y_full, b, a)
-            except ValueError:
-                pass
+        try:
+            return date(y_full, mes, dia)
+        except ValueError:
+            return None
     if len(s2) >= 10 and s2[4:5] == "-" and s2[7:8] == "-":
         try:
             return date.fromisoformat(s2[:10])
@@ -162,10 +148,10 @@ def parse_fecha_entrega_column_q_valor(val: Any) -> Optional[date]:
 
     Orden:
     1) Prefijo ISO ``YYYY-MM-DD`` (como se persiste en caché tras un sync normal).
-    2) Mismas reglas que ``_parse_fecha_celda_hoja`` (número serial Sheets, ``dd/mm/yyyy``, etc.).
+    2) Mismas reglas que ``_parse_fecha_celda_hoja`` (serial Sheets, texto ``d/m/y`` con dígitos en el orden
+       escrito: primer token = día, segundo = mes, tercero = año; sin invertir por “ambigüedad”).
 
-    Así la comparación «viva» y el enriquecimiento de listados usan la misma semántica que al leer la hoja
-    (CONCILIACIÓN en convención VE: día/mes/año cuando ambos componentes son ≤ 12).
+    Así la comparación «viva» y el enriquecimiento de listados respetan el texto de la celda Q.
     """
     if val is None:
         return None

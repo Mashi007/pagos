@@ -156,6 +156,7 @@ from app.services.pagos_gmail.gmail_service import (
     add_message_user_labels_only,
     build_gmail_service,
     ensure_user_label_id,
+    invalidate_gmail_labels_list_cache,
     modify_message_labels_add_remove,
     get_pagos_gmail_image_pdf_files_for_pipeline,
     get_message_date,
@@ -373,7 +374,10 @@ def run_pipeline(
 
     logger.info("[PAGOS_GMAIL] Credenciales OK; construyendo servicio Gmail")
     gmail_svc = build_gmail_service(creds)
-    logger.info("[PAGOS_GMAIL] Servicio Gmail construido (pipeline sin Google Drive)")
+    # Etiquetas nuevas en Gmail (UI u otra sesión) no aparecen en la caché por id(service);
+    # sin refrescar, list_gmail_user_label_ids / get_existing_user_label_id pueden ignorar reglas recientes.
+    invalidate_gmail_labels_list_cache(gmail_svc)
+    logger.info("[PAGOS_GMAIL] Servicio Gmail construido (pipeline sin Google Drive); catálogo de etiquetas se recarga en esta corrida")
 
     if existing_sync_id:
         from sqlalchemy import select as sa_select

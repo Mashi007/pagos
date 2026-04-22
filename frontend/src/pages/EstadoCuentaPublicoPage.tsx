@@ -222,9 +222,26 @@ function comprobantePuedeMostrarMiniatura(url: string): boolean {
   try {
     const u = new URL(url)
     if (/drive\.google\.com$/i.test(u.hostname)) return false
+    if (u.pathname.includes('/estado-cuenta/public/comprobante-imagen'))
+      return true
     return /\.(jpe?g|png|gif|webp)(\?|$)/i.test(u.pathname)
   } catch {
     return false
+  }
+}
+
+/** Anexa JWT recibo a URLs del endpoint público de comprobante (``<img src>`` no envía Authorization). */
+function urlComprobanteConToken(url: string, token: string | null): string {
+  const t = (token || '').trim()
+  if (!t) return url
+  try {
+    const u = new URL(url)
+    if (!u.pathname.includes('/estado-cuenta/public/comprobante-imagen'))
+      return url
+    u.searchParams.set('token', t)
+    return u.toString()
+  } catch {
+    return url
   }
 }
 
@@ -284,6 +301,9 @@ function EstadoCuentaPublicoPage() {
     ComprobantePagoItem[] | null
   >(null)
 
+  /** JWT ``type=recibo`` devuelto al verificar código; necesario para ver comprobantes internos. */
+  const [reciboToken, setReciboToken] = useState<string | null>(null)
+
   const notificationTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
     null
   )
@@ -329,6 +349,8 @@ function EstadoCuentaPublicoPage() {
     setRecibosCuotas(null)
 
     setComprobantesPagos(null)
+
+    setReciboToken(null)
 
     if (pdfBlobUrl) {
       URL.revokeObjectURL(pdfBlobUrl)
@@ -522,6 +544,12 @@ function EstadoCuentaPublicoPage() {
         setRecibosCuotas(res.recibos_cuotas ?? null)
 
         setComprobantesPagos(res.comprobantes_pagos ?? null)
+
+        setReciboToken(
+          typeof res.recibo_token === 'string' && res.recibo_token.trim()
+            ? res.recibo_token.trim()
+            : null
+        )
 
         try {
           setPdfBlobUrl(base64ToBlobUrl(res.pdf_base64))
@@ -1047,31 +1075,34 @@ function EstadoCuentaPublicoPage() {
                   Drive).
                 </p>
                 <ul className="space-y-4">
-                  {comprobantesPagos.map((c, i) => (
-                    <li
-                      key={`${c.pago_id ?? 'p'}-${i}`}
-                      className="rounded-xl border border-slate-200 bg-slate-50/80 p-3"
-                    >
-                      <p className="mb-1 text-xs text-slate-600">
-                        {[
-                          c.fecha_pago_display,
-                          c.monto_display,
-                          c.referencia_tabla,
-                        ]
-                          .filter(Boolean)
-                          .join(' · ')}
-                      </p>
-                      <ComprobanteMiniatura url={c.url} />
-                      <a
-                        href={c.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex text-sm font-medium text-emerald-700 underline underline-offset-2 hover:text-emerald-800"
+                  {comprobantesPagos.map((c, i) => {
+                    const urlComp = urlComprobanteConToken(c.url, reciboToken)
+                    return (
+                      <li
+                        key={`${c.pago_id ?? 'p'}-${i}`}
+                        className="rounded-xl border border-slate-200 bg-slate-50/80 p-3"
                       >
-                        Ver comprobante
-                      </a>
-                    </li>
-                  ))}
+                        <p className="mb-1 text-xs text-slate-600">
+                          {[
+                            c.fecha_pago_display,
+                            c.monto_display,
+                            c.referencia_tabla,
+                          ]
+                            .filter(Boolean)
+                            .join(' · ')}
+                        </p>
+                        <ComprobanteMiniatura url={urlComp} />
+                        <a
+                          href={urlComp}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex text-sm font-medium text-emerald-700 underline underline-offset-2 hover:text-emerald-800"
+                        >
+                          Ver comprobante
+                        </a>
+                      </li>
+                    )
+                  })}
                 </ul>
               </div>
             )}

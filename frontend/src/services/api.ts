@@ -259,6 +259,15 @@ class ApiClient {
           config.timeout = 180000 // 3 minutos
         }
 
+        // Cobros: listado+KPIs recorre la cola en servidor; con cola grande puede acercarse o superar 30s.
+        if (
+          config.method?.toLowerCase() === 'get' &&
+          config.url?.includes('/cobros/pagos-reportados/listado-y-kpis') &&
+          (config.timeout == null || config.timeout < SLOW_ENDPOINT_TIMEOUT_MS)
+        ) {
+          config.timeout = SLOW_ENDPOINT_TIMEOUT_MS
+        }
+
         // FormData: no fijar Content-Type aquí; axios/navegador añaden multipart + boundary.
         // Si queda 'application/json' por defecto o 'multipart/form-data' sin boundary, el backend puede no leer el archivo.
         if (

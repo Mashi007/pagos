@@ -50,6 +50,71 @@ def ids_comprobante_imagen_desde_texto(*textos: Optional[str]) -> list[str]:
     return out
 
 
+def ids_comprobante_imagen_vinculados_a_pago(db: "Session", pago) -> set[str]:
+    """
+    Conjunto de IDs en ``pago_comprobante_imagen`` asociados a este pago
+    (misma resolución que ``comprobante_blob_para_pdf_desde_pago``).
+    Usado por estado de cuenta público para autorizar GET del binario con JWT recibo.
+    """
+    out: set[str] = set()
+    link = (getattr(pago, "link_comprobante", None) or "").strip()
+    doc_r = (getattr(pago, "documento_ruta", None) or "").strip()
+    for x in ids_comprobante_imagen_desde_texto(link, doc_r):
+        out.add(x)
+    if link or doc_r:
+        return out
+    nd = (getattr(pago, "numero_documento", None) or "").strip()
+    if nd:
+        from app.services.pagos.comprobante_link_desde_gmail import (
+            enriquecer_items_link_comprobante_desde_gmail,
+        )
+
+        pseudo: dict = {
+            "link_comprobante": "",
+            "documento_ruta": "",
+            "numero_documento": nd,
+        }
+        enriquecer_items_link_comprobante_desde_gmail(db, [pseudo])
+        gl = (pseudo.get("link_comprobante") or "").strip()
+        for x in ids_comprobante_imagen_desde_texto(gl, ""):
+            out.add(x)
+    from sqlalchemy import or_, select
+
+    from app.core.documento import normalize_documento
+    from app.models.pago_reportado import PagoReportado
+
+    nd_raw = (getattr(pago, "numero_documento", None) or "").strip()
+    if not nd_raw:
+        return out
+    cands: list[str] = []
+    nd_norm = (normalize_documento(nd_raw) or "").strip()
+    for x in (nd_raw, nd_norm):
+        if x and x not in cands:
+            cands.append(x)
+    if nd_raw.upper().startswith("COB-"):
+        suf = nd_raw[4:].strip()
+        if suf and suf not in cands:
+            cands.append(suf)
+    ors = []
+    for c in cands:
+        ors.append(PagoReportado.numero_operacion == c)
+        ors.append(PagoReportado.referencia_interna == c)
+    pr = db.execute(
+        select(PagoReportado)
+        .where(
+            PagoReportado.comprobante_imagen_id.isnot(None),
+            or_(*ors),
+        )
+        .order_by(PagoReportado.id.desc())
+        .limit(1)
+    ).scalars().first()
+    if pr and pr.comprobante_imagen_id:
+        cid = _normalizar_id_comprobante_32(str(pr.comprobante_imagen_id))
+        if cid:
+            out.add(cid)
+    return out
+
+
 def _blob_primera_coincidencia(
     db: "Session",
     cids: list[str],

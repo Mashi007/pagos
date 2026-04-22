@@ -71,7 +71,13 @@ from app.models.estado_cuenta_codigo import EstadoCuentaCodigo
 
 from app.models.pago import Pago
 
+from app.models.pago_comprobante_imagen import PagoComprobanteImagen
+
 from app.api.v1.endpoints.validadores import validate_cedula
+
+from app.api.v1.endpoints.pagos.comprobante_imagen_helpers import (
+    _normalizar_id_comprobante_imagen,
+)
 
 from app.core.security import decode_token
 
@@ -99,7 +105,11 @@ from app.services.documentos_cliente_centro import (
     obtener_datos_estado_cuenta_cliente,
 )
 
-from app.services.pagos.comprobante_adjunto_pago import comprobante_blob_para_pdf_desde_pago
+from app.services.pagos.comprobante_adjunto_pago import (
+    comprobante_blob_para_pdf_desde_pago,
+    ids_comprobante_imagen_desde_texto,
+    ids_comprobante_imagen_vinculados_a_pago,
+)
 from app.services.pagos.comprobante_link_desde_gmail import (
     comprobante_url_para_enlace_publico,
 )
@@ -740,7 +750,68 @@ def get_recibo_pago_cartera_publico(
     )
 
 
+@router.get("/comprobante-imagen")
+def get_comprobante_imagen_estado_cuenta_publico(
+    request: Request,
+    pago_id: int = Query(..., ge=1),
+    comprobante_id: str = Query(..., description="ID 32 hex en pago_comprobante_imagen"),
+    token: Optional[str] = Query(None, description="JWT recibo (alternativa: header Authorization Bearer)"),
+    db: Session = Depends(get_db),
+):
+    """
+    Sirve imagen/PDF del comprobante de un pago de cartera para quien verificó el código de estado de cuenta.
 
+    Misma seguridad que ``GET .../recibo-pago``: JWT ``type=recibo`` (cédula en ``sub``) y titularidad del pago.
+    El comprobante debe estar vinculado al pago (link en ``pagos`` o resolución Gmail/reportado, misma regla que PDF).
+
+    Token: ``Authorization: Bearer <jwt>`` o ``?token=`` (deprecated; necesario para ``<img src>`` en móvil).
+    """
+    auth_header = (request.headers.get("Authorization") or "").strip()
+    token_from_header = None
+    if auth_header.lower().startswith("bearer "):
+        token_from_header = auth_header[7:].strip()
+    token_to_use = (token_from_header or (token or "").strip())
+    if not token_to_use:
+        raise HTTPException(
+            status_code=401,
+            detail="Token requerido (Authorization header o query param ?token=...).",
+        )
+    payload = decode_token(token_to_use)
+    if not payload or payload.get("type") != "recibo":
+        raise HTTPException(status_code=401, detail="Token invalido o expirado.")
+    cedula_token = (payload.get("sub") or "").strip().replace("-", "").replace(" ", "")
+    if not cedula_token:
+        raise HTTPException(status_code=401, detail="Token invalido.")
+    pago = db.get(Pago, pago_id)
+    if not pago:
+        raise HTTPException(status_code=404, detail="Pago no encontrado.")
+    if (getattr(pago, "estado", None) or "").strip().upper() != "PAGADO":
+        raise HTTPException(status_code=400, detail="El pago no esta en estado PAGADO.")
+    prestamo_id = getattr(pago, "prestamo_id", None)
+    if not prestamo_id:
+        raise HTTPException(status_code=400, detail="Pago sin prestamo asociado.")
+    prestamo = db.get(Prestamo, prestamo_id)
+    if not prestamo:
+        raise HTTPException(status_code=404, detail="Prestamo no encontrado.")
+    ced_prest = (getattr(prestamo, "cedula", None) or "").strip().replace("-", "").replace(" ", "").upper()
+    if ced_prest != cedula_token.upper():
+        raise HTTPException(status_code=403, detail="No tiene permiso para este comprobante.")
+    cid = _normalizar_id_comprobante_imagen(comprobante_id)
+    if not cid:
+        raise HTTPException(status_code=400, detail="Identificador de comprobante no valido.")
+    if cid not in ids_comprobante_imagen_vinculados_a_pago(db, pago):
+        raise HTTPException(status_code=403, detail="No tiene permiso para este comprobante.")
+    row = db.get(PagoComprobanteImagen, cid)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Comprobante no encontrado.")
+    return Response(
+        content=row.imagen_data,
+        media_type=(row.content_type or "application/octet-stream"),
+        headers={
+            "Cache-Control": "private, no-store",
+            "Pragma": "no-cache",
+        },
+    )
 
 
 @router.get("/validar-cedula", response_model=ValidarCedulaEstadoCuentaResponse)
@@ -1262,13 +1333,41 @@ def verificar_codigo_estado_cuenta(
 
             continue
 
+        url_lista = link_foto
+
+        pid = pr.get("pago_id")
+
+        if pid is not None:
+
+            try:
+
+                pid_int = int(pid)
+
+            except (TypeError, ValueError):
+
+                pid_int = None
+
+            if pid_int is not None:
+
+                ids_enlace = ids_comprobante_imagen_desde_texto(link_foto, "")
+
+                if len(ids_enlace) == 1:
+
+                    url_lista = (
+
+                        f"{base_url.rstrip('/')}/api/v1/estado-cuenta/public/comprobante-imagen"
+
+                        f"?pago_id={pid_int}&comprobante_id={ids_enlace[0]}"
+
+                    )
+
         comprobantes_pagos_list.append(
 
             {
 
                 "pago_id": pr.get("pago_id"),
 
-                "url": link_foto,
+                "url": url_lista,
 
                 "fecha_pago_display": pr.get("fecha_pago_display") or "",
 

@@ -477,25 +477,67 @@ class Settings(BaseSettings):
     # ============================================
     CORS_ORIGINS: Optional[str] = Field(
         default='["http://localhost:3000", "http://localhost:5173", "https://pagos-f2qf.onrender.com", "https://rapicredit.onrender.com"]',
-        description="Lista de orígenes permitidos para CORS (formato JSON o separado por comas). Incluye desarrollo y producción."
+        description=(
+            "Orígenes permitidos CORS: JSON array o lista separada por comas (sin barra final; sin path). "
+            "Si el SPA y la API están en hosts distintos (ej. rapicredit.onrender.com/pagos → API pagos-f2qf.onrender.com), "
+            "debe figurar el origen del SPA. Si FRONTEND_PUBLIC_URL / BACKEND_PUBLIC_URL están definidos, su scheme+host "
+            "se añaden automáticamente a esta lista para reducir olvidos en Render."
+        ),
     )
-    
+
     @property
     def cors_origins_list(self) -> List[str]:
-        """Retorna CORS_ORIGINS como lista"""
-        if not self.CORS_ORIGINS or self.CORS_ORIGINS.strip() == '':
-            return ["http://localhost:3000", "http://localhost:5173", "https://pagos-f2qf.onrender.com", "https://rapicredit.onrender.com"]
-        
-        # Intentar parsear como JSON
-        try:
-            parsed = json.loads(self.CORS_ORIGINS)
-            if isinstance(parsed, list):
-                return parsed
-        except json.JSONDecodeError:
-            pass
-        
-        # Si no es JSON válido, tratar como string separado por comas
-        return [origin.strip() for origin in self.CORS_ORIGINS.split(',') if origin.strip()]
+        """Retorna CORS_ORIGINS como lista; añade orígenes deducidos de FRONTEND_PUBLIC_URL y BACKEND_PUBLIC_URL."""
+        from urllib.parse import urlparse
+
+        if not self.CORS_ORIGINS or self.CORS_ORIGINS.strip() == "":
+            base = [
+                "http://localhost:3000",
+                "http://localhost:5173",
+                "https://pagos-f2qf.onrender.com",
+                "https://rapicredit.onrender.com",
+            ]
+        else:
+            try:
+                parsed = json.loads(self.CORS_ORIGINS)
+                if isinstance(parsed, list):
+                    base = [str(x).strip() for x in parsed if str(x).strip()]
+                else:
+                    base = []
+            except json.JSONDecodeError:
+                base = [
+                    origin.strip()
+                    for origin in self.CORS_ORIGINS.split(",")
+                    if origin.strip()
+                ]
+
+        def _origin_from_public_url(raw: Optional[str]) -> Optional[str]:
+            s = (raw or "").strip()
+            if not s or "://" not in s:
+                return None
+            try:
+                p = urlparse(s)
+                if p.scheme and p.netloc:
+                    return f"{p.scheme}://{p.netloc}".rstrip("/")
+            except Exception:
+                return None
+            return None
+
+        seen: set = set()
+        out: List[str] = []
+        for o in base:
+            o = o.rstrip("/")
+            if o and o not in seen:
+                seen.add(o)
+                out.append(o)
+        for extra in (
+            _origin_from_public_url(getattr(self, "FRONTEND_PUBLIC_URL", None)),
+            _origin_from_public_url(getattr(self, "BACKEND_PUBLIC_URL", None)),
+        ):
+            if extra and extra not in seen:
+                seen.add(extra)
+                out.append(extra)
+        return out
     
     class Config:
         env_file = ".env"
