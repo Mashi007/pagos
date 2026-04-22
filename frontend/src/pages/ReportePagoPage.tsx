@@ -240,7 +240,7 @@ function validarFechaPago(fecha: string): { valido: boolean; error?: string } {
   if (!fecha || !fecha.trim()) {
     return {
       valido: false,
-      error: 'Seleccione la fecha de pago en el calendario.',
+      error: 'Ingrese o seleccione la fecha de pago.',
     }
   }
 
@@ -248,7 +248,7 @@ function validarFechaPago(fecha: string): { valido: boolean; error?: string } {
   if (!m)
     return {
       valido: false,
-      error: 'Fecha no válida. Use el calendario para elegir la fecha.',
+      error: 'Fecha no válida. Puede escribirla o elegirla en el calendario.',
     }
 
   const y = Number(m[1])
@@ -257,7 +257,7 @@ function validarFechaPago(fecha: string): { valido: boolean; error?: string } {
   if (!fechaYmdCalendarioValida(y, mo, d)) {
     return {
       valido: false,
-      error: 'Fecha no válida. Use el calendario para elegir la fecha.',
+      error: 'Fecha no válida. Puede escribirla o elegirla en el calendario.',
     }
   }
 
@@ -1591,6 +1591,17 @@ export default function ReportePagoPage({
                   Institución financiera
                 </CardTitle>
               </div>
+              {!isInfopagos && (
+                <div className="mb-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3">
+                  <p className="text-sm font-semibold text-emerald-900">
+                    Hola, {nombre || 'cliente'}.
+                  </p>
+                  <p className="mt-1 text-xs text-emerald-800">
+                    Cédula validada: <strong>{cedula}</strong>. Coincide con el
+                    nombre registrado en nuestra base de datos.
+                  </p>
+                </div>
+              )}
               <p className="mt-2 text-sm text-slate-600">
                 Selecciona el banco o plataforma donde se realizó el pago
               </p>
@@ -2165,6 +2176,10 @@ export default function ReportePagoPage({
               {/* Info note */}
               <div className="rounded-lg border border-blue-200 bg-blue-50 p-3">
                 <p className="text-xs leading-snug text-blue-900">
+                  Este pago se acreditará a{' '}
+                  <strong>{nombre || 'cliente registrado'}</strong>.
+                </p>
+                <p className="mt-1 text-xs leading-snug text-blue-900">
                   {isInfopagos ? (
                     <>
                       El recibo se enviará a{' '}
@@ -2295,11 +2310,11 @@ export default function ReportePagoPage({
               <p className="text-sm text-blue-900">
                 El recibo PDF será enviado a tu correo en los próximos minutos.
               </p>
-              <p className="mt-2 text-sm text-blue-900">
+              <p className="mt-3 text-sm font-medium text-blue-900">
                 Revise su estado de cuenta{' '}
                 <a
                   href={ESTADO_CUENTA_LINK}
-                  className="font-semibold underline hover:text-blue-700"
+                  className="inline-flex items-center rounded-md bg-blue-700 px-2.5 py-1 font-bold uppercase tracking-wide text-white shadow-sm transition-all hover:bg-blue-800 hover:shadow"
                 >
                   aquí
                 </a>
@@ -2345,7 +2360,29 @@ export default function ReportePagoPage({
           {/* Support info */}
           <div className="border-t border-slate-100 pt-4 text-center">
             <p className="text-xs text-slate-600">
-              ¿Necesitas ayuda?{' '}
+              ¿Necesitas ayuda?
+            </p>
+            <a
+              href={WHATSAPP_LINK}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-2 inline-flex min-h-[44px] items-center gap-2 rounded-full bg-emerald-600 px-4 py-2 font-semibold text-white shadow-sm transition-all hover:bg-emerald-700 hover:shadow-md"
+            >
+              <svg
+                className="h-5 w-5"
+                viewBox="0 0 32 32"
+                fill="currentColor"
+                aria-hidden
+              >
+                <path d="M19.11 17.21c-.27-.14-1.6-.79-1.85-.88-.25-.09-.43-.14-.61.14-.18.27-.7.88-.86 1.06-.16.18-.32.2-.59.07-.27-.14-1.14-.42-2.17-1.34-.8-.72-1.34-1.61-1.5-1.88-.16-.27-.02-.42.12-.56.12-.12.27-.32.41-.48.14-.16.18-.27.27-.45.09-.18.05-.34-.02-.48-.07-.14-.61-1.47-.84-2.01-.22-.53-.45-.45-.61-.46-.16-.01-.34-.01-.52-.01-.18 0-.48.07-.73.34-.25.27-.95.93-.95 2.27s.97 2.63 1.11 2.81c.14.18 1.91 2.92 4.64 4.09.65.28 1.16.45 1.56.57.66.21 1.27.18 1.75.11.53-.08 1.6-.65 1.83-1.29.23-.63.23-1.17.16-1.29-.07-.11-.25-.18-.52-.32Z" />
+                <path d="M16.03 3.2c-7.04 0-12.76 5.72-12.76 12.76 0 2.24.58 4.43 1.68 6.35L3.2 28.8l6.65-1.74a12.7 12.7 0 0 0 6.18 1.58h.01c7.03 0 12.76-5.72 12.76-12.76 0-3.41-1.33-6.62-3.74-9.03A12.68 12.68 0 0 0 16.03 3.2Zm0 23.27h-.01a10.5 10.5 0 0 1-5.35-1.46l-.38-.22-3.95 1.03 1.05-3.85-.25-.39a10.56 10.56 0 0 1 1.61-13.36 10.48 10.48 0 0 1 7.29-2.94c5.82 0 10.56 4.74 10.56 10.56 0 5.82-4.74 10.56-10.57 10.56Z" />
+              </svg>
+              <span>Contacta por WhatsApp</span>
+            </a>
+            <p className="mt-2 text-xs text-slate-600">
+              También puedes escribirnos para seguimiento de tu referencia.
+            </p>
+            <p className="sr-only">
               <a
                 href={WHATSAPP_LINK}
                 target="_blank"

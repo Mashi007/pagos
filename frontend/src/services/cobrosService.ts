@@ -412,69 +412,55 @@ export async function enviarReportePublico(
 export async function enviarReporteInfopagos(
   formData: FormData
 ): Promise<EnviarReporteInfopagosResponse> {
-  const url = `${BASE_PUBLIC}/infopagos/enviar-reporte`
-
   try {
-    const res = await fetchWithTimeout(
-      url,
-      {
-        method: 'POST',
-
-        body: formData,
-
-        credentials: 'same-origin',
-      },
-      FETCH_TIMEOUT_ENVIAR_REPORTE_MS
+    return await apiClient.post<EnviarReporteInfopagosResponse>(
+      `${BASE_PUBLIC}/infopagos/enviar-reporte`,
+      formData,
+      { timeout: FETCH_TIMEOUT_ENVIAR_REPORTE_MS }
     )
+  } catch (e: unknown) {
+    const st = (e as { response?: { status?: number } })?.response?.status
+    const detailRaw = (
+      e as { response?: { data?: { detail?: unknown; message?: unknown } } }
+    )?.response?.data
+    const detail =
+      typeof detailRaw?.detail === 'string'
+        ? detailRaw.detail
+        : typeof detailRaw?.message === 'string'
+          ? detailRaw.message
+          : ''
 
-    if (res.status === 429) {
+    if (st === 401) {
+      return {
+        ok: false,
+        error:
+          'Sesión expirada o no autorizada. Inicie sesión de nuevo para guardar en Infopagos.',
+      }
+    }
+    if (st === 429) {
       return {
         ok: false,
         error: 'Ha alcanzado el límite de envíos por hora. Intente más tarde.',
       }
     }
-
-    if (res.status === 503) {
+    if (st === 503) {
       return {
         ok: false,
         error:
           'Servicio temporalmente no disponible. Intente más tarde o contacte por WhatsApp 424-4579934.',
       }
     }
-
-    if (res.status === 502) {
+    if (st === 502) {
       return {
         ok: false,
         error:
           'El servidor intermedio no pudo contactar al API. Intente de nuevo en un momento.',
       }
     }
-
-    const text = await res.text()
-
-    let data: EnviarReporteInfopagosResponse
-
-    try {
-      data = text ? JSON.parse(text) : {}
-    } catch {
-      return {
-        ok: false,
-        error:
-          'No se pudo procesar la respuesta del servidor. Intente nuevamente en unos minutos.',
-      }
+    if (detail) {
+      return { ok: false, error: detail }
     }
 
-    if (!res.ok && data && typeof data === 'object') {
-      return {
-        ok: false,
-        error:
-          (data as EnviarReporteInfopagosResponse).error ||
-          `Error ${res.status}.`,
-      }
-    }
-
-    return data
-  } catch (e: unknown) {
     const raw =
       e instanceof Error ? e.message : 'Error de conexión con el servidor.'
     return { ok: false, error: mensajeErrorRedPublico(raw) }
