@@ -635,6 +635,72 @@ def _build_image_part(
         return _gtypes.Part.from_bytes(data=file_content, mime_type=mime)
 
 
+def _build_image_part_variants(
+    file_content: bytes,
+    filename: str,
+    mime: str,
+) -> list[tuple[str, object]]:
+    """
+    Devuelve variantes de imagen para mejorar OCR en casos difíciles.
+    PDFs mantienen una sola variante (no se alteran páginas).
+    """
+    from google.genai import types as _gtypes
+
+    is_pdf = mime == "application/pdf" or filename.lower().endswith(".pdf")
+    if is_pdf:
+        return [("orig_pdf", _gtypes.Part.from_bytes(data=file_content, mime_type=mime))]
+
+    _ensure_pillow_heif_opener()
+    try:
+        from PIL import Image as _PIL
+        from PIL import ImageEnhance
+        from PIL import ImageFilter
+        from PIL import ImageOps
+
+        base = _PIL.open(io.BytesIO(file_content))
+        try:
+            base = ImageOps.exif_transpose(base)
+        except Exception:
+            pass
+        base = _pil_image_to_rgb_for_jpeg(base)
+
+        variants: list[tuple[str, object]] = []
+
+        def _to_part(img_obj, name: str):
+            buf = io.BytesIO()
+            img_obj.save(buf, format="JPEG", quality=92, optimize=True)
+            variants.append(
+                (name, _gtypes.Part.from_bytes(data=buf.getvalue(), mime_type="image/jpeg"))
+            )
+
+        _to_part(base, "orig")
+        try:
+            _to_part(ImageOps.autocontrast(base, cutoff=1), "autocontrast")
+        except Exception:
+            pass
+        try:
+            sharp = ImageEnhance.Sharpness(base).enhance(1.35)
+            _to_part(sharp, "sharpen")
+        except Exception:
+            pass
+        try:
+            denoise = base.filter(ImageFilter.MedianFilter(size=3))
+            _to_part(denoise, "denoise")
+        except Exception:
+            pass
+        # Evitar duplicados por nombre accidental.
+        dedup: list[tuple[str, object]] = []
+        seen = set()
+        for n, p in variants:
+            if n in seen:
+                continue
+            seen.add(n)
+            dedup.append((n, p))
+        return dedup or [("orig", _build_image_part(file_content, filename, mime))]
+    except Exception:
+        return [("orig_fallback", _build_image_part(file_content, filename, mime))]
+
+
 @lru_cache(maxsize=8)
 def _gemini_client_cached(api_key: str):
     """Reutiliza Client por clave API (HTTP keep-alive / menos handshake TLS)."""
@@ -865,6 +931,45 @@ def _diag_none_reason_pagos(
     return "sin_plantilla"
 
 
+def _guess_bank_hint_from_text(
+    raw_text: str,
+    filename: str,
+    reason: str,
+) -> Optional[str]:
+    s = f"{raw_text}\n{filename}\n{reason}".lower()
+    if any(k in s for k in ("binance", "usdt", "id de orden", "order id", "pago exitoso")):
+        return "C"
+    if any(k in s for k in ("banco nacional de credito", "bnc", "0191/", "deposito us$")):
+        return "B"
+    if any(k in s for k in ("banco de venezuela", "bdv", "0102-", "secuencial nro")):
+        return "D"
+    if any(k in s for k in ("mercantil", "deposito divisas", "0105-", "recaudacion", "dcme")):
+        return "A"
+    return None
+
+
+def _rescue_prompt_suffix(bank_hint: Optional[str]) -> str:
+    if bank_hint == "A":
+        return (
+            "\n\nMODO RESCATE A (Mercantil): prioriza layout Deposito Divisas + cuenta 0105 + RAPI-CREDIT + serial/monto USD."
+        )
+    if bank_hint == "B":
+        return (
+            "\n\nMODO RESCATE B (BNC): prioriza recibo BNC + cuenta 0191/... + Deposito Us$ + Ref/Serial."
+        )
+    if bank_hint == "C":
+        return (
+            "\n\nMODO RESCATE C (Binance): prioriza Pago exitoso + USDT/USD + ID de orden; alias no obligatorio."
+        )
+    if bank_hint == "D":
+        return (
+            "\n\nMODO RESCATE D (BDV/BNV): prioriza 0102 + titular empresa + secuencial/monto total."
+        )
+    return (
+        "\n\nMODO RESCATE GENERAL: imagen difícil; no inventar datos, pero intenta recuperar campos visibles con máxima tolerancia OCR."
+    )
+
+
 def _parse_formato_y_pagos_json(
     text: str,
     remitente_from_header: Optional[str] = None,
@@ -980,7 +1085,7 @@ def classify_and_extract_pagos_gmail_attachment(
         logger.warning("[PAGOS_GMAIL] GEMINI_API_KEY no configurado; formato=ninguno")
         return "ninguno", _empty_result(PAGOS_NA)
     mime = get_mime_type(filename)
-    image_part = _build_image_part(file_content, filename, mime)
+    image_parts = _build_image_part_variants(file_content, filename, mime)
     model_name = getattr(settings, "GEMINI_MODEL", "gemini-2.5-flash")
     prompt_text = GEMINI_PAGOS_GMAIL_FORMATO_Y_EXTRACCION
     if modo_error_email_ab:
@@ -996,75 +1101,134 @@ def classify_and_extract_pagos_gmail_attachment(
             "Si el adjunto era un PDF de varias paginas, el backend ya te envia UNA sola pagina por peticion.\n\n"
             + prompt_text
         )
-    contents: list = [prompt_text, image_part]
+    rescue_pass_prompt = prompt_text
     try:
         from google.genai import types
         client = _gemini_client(key)
         last_error = None
-        for attempt in range(GEMINI_RATE_LIMIT_MAX_RETRIES + 1):
-            try:
-                response = client.models.generate_content(
-                    model=model_name,
-                    contents=contents,
-                    config=types.GenerateContentConfig(temperature=0.1),
-                )
-                text = ""
+        best_none_fields: Optional[Dict[str, str]] = None
+        best_none_text = ""
+        best_none_reason = "sin_plantilla"
+        bank_hint: Optional[str] = None
+
+        def _run_call(_prompt: str, _part: object) -> tuple[PagosGmailFormato, Dict[str, str], str]:
+            nonlocal last_error
+            for attempt in range(GEMINI_RATE_LIMIT_MAX_RETRIES + 1):
                 try:
-                    text = (response.text or "").strip()
-                except Exception as text_err:
-                    logger.warning(
-                        "[PAGOS_GMAIL] Gemini formato+extraccion bloqueada/vacia: %s",
-                        text_err,
+                    response = client.models.generate_content(
+                        model=model_name,
+                        contents=[_prompt, _part],
+                        config=types.GenerateContentConfig(temperature=0.1),
                     )
-                    return "ninguno", _empty_result(f"blocked: {text_err}")
-                fmt, fields = _parse_formato_y_pagos_json(
-                    text,
-                    remitente_from_header=remitente_correo_header,
-                    modo_error_email_ab=modo_error_email_ab,
-                )
-                if fmt not in PAGOS_GMAIL_FORMATOS_PLANTILLA:
-                    _none_reason = (fields.get("_diag_none_reason") or "sin_plantilla").strip()
-                    fmt = "ninguno"
-                    fields = {
-                        "fecha_pago": PAGOS_NA,
-                        "cedula": PAGOS_NA,
-                        "monto": PAGOS_NA,
-                        "numero_referencia": PAGOS_NA,
-                        "email_cliente": PAGOS_NA,
-                        "banco": PAGOS_NA,
-                        "_diag_none_reason": _none_reason,
-                    }
+                    text = ""
+                    try:
+                        text = (response.text or "").strip()
+                    except Exception as text_err:
+                        logger.warning(
+                            "[PAGOS_GMAIL] Gemini formato+extraccion bloqueada/vacia: %s",
+                            text_err,
+                        )
+                        return "ninguno", _empty_result(f"blocked: {text_err}"), ""
+                    fmt, fields = _parse_formato_y_pagos_json(
+                        text,
+                        remitente_from_header=remitente_correo_header,
+                        modo_error_email_ab=modo_error_email_ab,
+                    )
+                    return fmt, fields, text
+                except Exception as e:
+                    last_error = e
+                    if _is_rate_limit_error(e) and attempt < GEMINI_RATE_LIMIT_MAX_RETRIES:
+                        delay = _extract_retry_seconds(e)
+                        logger.warning(
+                            "[PAGOS_GMAIL] Gemini 429 formato+extraccion, reintento en %ds",
+                            delay,
+                        )
+                        time.sleep(delay)
+                    elif _is_server_error_503(e) and attempt < GEMINI_SERVER_ERROR_MAX_RETRIES:
+                        delay = GEMINI_SERVER_ERROR_RETRY_DELAY + (attempt * 5)
+                        logger.warning(
+                            "[PAGOS_GMAIL] Gemini 503 formato+extraccion, reintento en %ds",
+                            delay,
+                        )
+                        time.sleep(delay)
+                    else:
+                        raise
+            return "ninguno", _empty_result(str(last_error)), ""
+
+        # Pass 1: variante por variante.
+        for variant_name, image_part in image_parts:
+            fmt, fields, raw_text = _run_call(prompt_text, image_part)
+            if fmt in PAGOS_GMAIL_FORMATOS_PLANTILLA:
+                fields["_scan_pass"] = "pass_1"
+                fields["_scan_variant"] = variant_name
+                fields["_scan_bank_hint"] = ""
                 logger.info(
-                    "[PAGOS_GMAIL] Gemini formato=%s fecha=%s cedula=%s monto=%s ref=%s email=%s banco=%s none_reason=%s",
+                    "[PAGOS_GMAIL] Gemini formato=%s pass=1 variant=%s fecha=%s monto=%s ref=%s",
                     fmt,
+                    variant_name,
                     fields.get("fecha_pago"),
-                    fields.get("cedula"),
                     fields.get("monto"),
                     fields.get("numero_referencia"),
-                    fields.get("email_cliente"),
-                    fields.get("banco"),
-                    fields.get("_diag_none_reason", ""),
                 )
                 return fmt, fields
-            except Exception as e:
-                last_error = e
-                if _is_rate_limit_error(e) and attempt < GEMINI_RATE_LIMIT_MAX_RETRIES:
-                    delay = _extract_retry_seconds(e)
-                    logger.warning(
-                        "[PAGOS_GMAIL] Gemini 429 formato+extraccion, reintento en %ds",
-                        delay,
-                    )
-                    time.sleep(delay)
-                elif _is_server_error_503(e) and attempt < GEMINI_SERVER_ERROR_MAX_RETRIES:
-                    delay = GEMINI_SERVER_ERROR_RETRY_DELAY + (attempt * 5)
-                    logger.warning(
-                        "[PAGOS_GMAIL] Gemini 503 formato+extraccion, reintento en %ds",
-                        delay,
-                    )
-                    time.sleep(delay)
-                else:
-                    raise
-        return "ninguno", _empty_result(str(last_error))
+
+            _none_reason = (fields.get("_diag_none_reason") or "sin_plantilla").strip()
+            best_none_fields = fields
+            best_none_text = raw_text
+            best_none_reason = _none_reason
+            bank_hint = _guess_bank_hint_from_text(best_none_text, filename, best_none_reason)
+            logger.info(
+                "[PAGOS_GMAIL] Gemini ninguno pass=1 variant=%s reason=%s hint=%s",
+                variant_name,
+                _none_reason,
+                bank_hint or "",
+            )
+
+        # Pass 2 (rescate): solo una pasada extra si todo quedó en ninguno.
+        if image_parts:
+            rescue_pass_prompt = rescue_pass_prompt + _rescue_prompt_suffix(bank_hint)
+            rescue_variant_name, rescue_part = image_parts[0]
+            fmt2, fields2, raw_text2 = _run_call(rescue_pass_prompt, rescue_part)
+            if fmt2 in PAGOS_GMAIL_FORMATOS_PLANTILLA:
+                fields2["_scan_pass"] = "pass_2"
+                fields2["_scan_variant"] = rescue_variant_name
+                fields2["_scan_bank_hint"] = bank_hint or ""
+                logger.info(
+                    "[PAGOS_GMAIL] Gemini formato=%s pass=2 variant=%s hint=%s fecha=%s monto=%s ref=%s",
+                    fmt2,
+                    rescue_variant_name,
+                    bank_hint or "",
+                    fields2.get("fecha_pago"),
+                    fields2.get("monto"),
+                    fields2.get("numero_referencia"),
+                )
+                return fmt2, fields2
+            best_none_fields = fields2 or best_none_fields or {}
+            best_none_text = raw_text2 or best_none_text
+            best_none_reason = (
+                best_none_fields.get("_diag_none_reason") if best_none_fields else None
+            ) or best_none_reason
+
+        final_fields = {
+            "fecha_pago": PAGOS_NA,
+            "cedula": PAGOS_NA,
+            "monto": PAGOS_NA,
+            "numero_referencia": PAGOS_NA,
+            "email_cliente": PAGOS_NA,
+            "banco": PAGOS_NA,
+            "_diag_none_reason": (best_none_reason or "sin_plantilla")[:120],
+            "_scan_pass": "pass_2" if image_parts else "pass_1",
+            "_scan_variant": image_parts[0][0] if image_parts else "orig",
+            "_scan_bank_hint": bank_hint or "",
+        }
+        logger.info(
+            "[PAGOS_GMAIL] Gemini formato=ninguno pass=%s variant=%s reason=%s hint=%s",
+            final_fields.get("_scan_pass"),
+            final_fields.get("_scan_variant"),
+            final_fields.get("_diag_none_reason"),
+            final_fields.get("_scan_bank_hint"),
+        )
+        return "ninguno", final_fields
     except Exception as e:
         logger.exception("Gemini classify_and_extract_pagos_gmail_attachment: %s", e)
         return "ninguno", _empty_result(str(e))

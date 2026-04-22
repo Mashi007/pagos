@@ -15,13 +15,13 @@ import string
 from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Request, Query
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Request, Query, BackgroundTasks
 from fastapi.responses import Response
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from sqlalchemy import select, and_
 
-from app.core.database import get_db
+from app.core.database import get_db, SessionLocal
 from app.core.cobros_public_rate_limit import (
     get_client_ip,
     check_rate_limit_validar_cedula,
@@ -59,6 +59,111 @@ logger = logging.getLogger(__name__)
 router = APIRouter(dependencies=[])
 
 
+def _procesar_recibo_y_correo_aprobado_background(
+    pago_reportado_id: int,
+    referencia: str,
+    cliente_id: int,
+    canal: str,
+) -> None:
+    """
+    Tareas no críticas (PDF + correo) en segundo plano para no bloquear el POST.
+    """
+    db_bg = SessionLocal()
+    try:
+        pr = db_bg.execute(
+            select(PagoReportado).where(PagoReportado.id == int(pago_reportado_id))
+        ).scalars().first()
+        cliente = db_bg.execute(
+            select(Cliente).where(Cliente.id == int(cliente_id))
+        ).scalars().first()
+        if not pr or not cliente:
+            logger.warning(
+                "[%s] Background recibo: pago/cliente no encontrado (pago_id=%s cliente_id=%s)",
+                canal,
+                pago_reportado_id,
+                cliente_id,
+            )
+            return
+
+        pdf_bytes = generar_recibo_pdf_desde_pago_reportado(db_bg, pr)
+        pr.recibo_pdf = pdf_bytes
+
+        to_emails = emails_destino_desde_objeto(cliente)
+        if cliente_bloqueado_por_desistimiento(
+            db_bg,
+            cliente_id=cliente.id,
+            cedula=cliente.cedula,
+            email=(to_emails[0] if to_emails else ""),
+        ):
+            logger.info(
+                "[%s] Bloqueo recibo ref=%s: cliente_id=%s con prestamo DESISTIMIENTO",
+                canal,
+                referencia,
+                cliente.id,
+            )
+            to_emails = []
+
+        if to_emails:
+            att, size_note = cobros_recibo_attachments_or_oversize_note(
+                f"recibo_{referencia}.pdf", pdf_bytes
+            )
+            if canal == "INFOPAGOS":
+                subject = f"Recibo de pago {cpr.referencia_display(referencia)}"
+                body_intro = "Se ha registrado un pago a su nombre."
+            else:
+                subject = (
+                    f"Recibo de reporte de pago {cpr.referencia_display(referencia)}"
+                )
+                body_intro = "Se ha recibido su reporte de pago."
+            body = (
+                f"{body_intro}\n\n"
+                f"Número de referencia: {cpr.referencia_display(referencia)}\n\n"
+                + (
+                    "El recibo se adjunta en PDF.\n\n"
+                    if att
+                    else "El recibo no se adjunta en este correo (archivo demasiado grande para el servidor de correo).\n\n"
+                )
+                + f"Si necesita información adicional, contáctenos por WhatsApp: {WHATSAPP_LINK}\n\n"
+                + size_note
+                + "RapiCredit C.A."
+            )
+            ok_mail, err_mail = send_email(
+                to_emails,
+                subject,
+                body,
+                attachments=att,
+                servicio="cobros",
+                respetar_destinos_manuales=True,
+            )
+            if not ok_mail:
+                logger.error(
+                    "[%s] Recibo ref=%s: correo NO enviado a %s. Error: %s.",
+                    canal,
+                    referencia,
+                    unir_destinatarios_log(to_emails),
+                    err_mail or "desconocido",
+                )
+            else:
+                logger.info(
+                    "[%s] Recibo ref=%s: correo enviado a %s.",
+                    canal,
+                    referencia,
+                    unir_destinatarios_log(to_emails),
+                )
+
+        db_bg.commit()
+    except Exception as e:
+        db_bg.rollback()
+        logger.exception(
+            "[%s] Background recibo/correo falló (pago_id=%s): %s",
+            canal,
+            pago_reportado_id,
+            e,
+        )
+    finally:
+        db_bg.close()
+
+
 class ValidarCedulaResponse(BaseModel):
     ok: bool
     nombre: Optional[str] = None
@@ -89,6 +194,15 @@ class EnviarReporteInfopagosResponse(BaseModel):
     pago_id: Optional[int] = None
     estado_reportado: Optional[str] = None
     aplicado_a_cuotas: Optional[str] = None
+    recibo_listo: Optional[bool] = None
+
+
+class ReciboInfopagosStatusResponse(BaseModel):
+    ok: bool
+    pago_id: int
+    recibo_listo: bool
+    estado_reportado: Optional[str] = None
+    mensaje: Optional[str] = None
 
 
 class DigitalizarComprobanteSugerencia(BaseModel):
@@ -180,6 +294,30 @@ def _token_bearer_only(request: Request) -> Optional[str]:
         return None
     tok = auth[7:].strip()
     return tok or None
+
+
+def _validar_token_recibo_infopagos(request: Request, pago_id: int) -> None:
+    token_to_use = _token_bearer_only(request)
+    if not token_to_use:
+        raise HTTPException(
+            status_code=401,
+            detail="Token requerido en Authorization header.",
+        )
+
+    payload = decode_token(token_to_use)
+    if not payload or payload.get("type") != "recibo_infopagos":
+        raise HTTPException(status_code=401, detail="Token inválido o expirado.")
+
+    token_pago_id = payload.get("pago_id") or payload.get("sub")
+    if token_pago_id is None:
+        raise HTTPException(status_code=401, detail="Token inválido.")
+    try:
+        token_pago_id = int(token_pago_id)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=401, detail="Token inválido.")
+
+    if token_pago_id != int(pago_id):
+        raise HTTPException(status_code=403, detail="No tiene permiso para este recibo.")
 
 
 def _validar_bearer_cobros_public(request: Request, cedula_lookup: str) -> Optional[str]:
@@ -587,6 +725,7 @@ async def digitalizar_comprobante_publico(
 @router.post("/enviar-reporte", response_model=EnviarReporteResponse)
 async def enviar_reporte_publico(
     request: Request,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     tipo_cedula: str = Form(...),
     numero_cedula: str = Form(...),
@@ -726,56 +865,17 @@ async def enviar_reporte_publico(
         pr.estado = "en_revision" if falla_validadores else "aprobado"
         db.commit()
 
-        recibo_enviado_val = False
+        recibo_enviado_val = None
         if not falla_validadores:
             cpr.intentar_importar_reportado_automatico(db, pr, referencia, "COBROS_PUBLIC")
             db.refresh(pr)
-            pdf_bytes = generar_recibo_pdf_desde_pago_reportado(db, pr)
-            pr.recibo_pdf = pdf_bytes
-
-            to_emails = emails_destino_desde_objeto(cliente)
-            if cliente_bloqueado_por_desistimiento(
-                db, cliente_id=cliente.id, cedula=cliente.cedula, email=(to_emails[0] if to_emails else "")
-            ):
-                logger.info(
-                    "[COBROS_PUBLIC] Bloqueo recibo ref=%s: cliente_id=%s con prestamo DESISTIMIENTO",
-                    referencia,
-                    cliente.id,
-                )
-                to_emails = []
-
-            if to_emails:
-                att, size_note = cobros_recibo_attachments_or_oversize_note(
-                    f"recibo_{referencia}.pdf", pdf_bytes
-                )
-                body = (
-                    f"Se ha recibido su reporte de pago.\n\n"
-                    f"Número de referencia: {cpr.referencia_display(referencia)}\n\n"
-                    + (
-                        "El recibo se adjunta en PDF.\n\n"
-                        if att
-                        else "El recibo no se adjunta en este correo (archivo demasiado grande para el servidor de correo).\n\n"
-                    )
-                    + f"Si necesita información adicional, contáctenos por WhatsApp: {WHATSAPP_LINK}\n\n"
-                    + size_note
-                    + "RapiCredit C.A."
-                )
-                ok_mail, err_mail = send_email(
-                    to_emails,
-                    f"Recibo de reporte de pago {cpr.referencia_display(referencia)}",
-                    body,
-                    attachments=att,
-                    servicio="cobros",
-                    respetar_destinos_manuales=True,
-                )
-                recibo_enviado_val = bool(ok_mail)
-                if not ok_mail:
-                    logger.error(
-                        "[COBROS_PUBLIC] Recibo aprobado ref=%s: correo NO enviado a %s. Error: %s.",
-                        referencia,
-                        unir_destinatarios_log(to_emails),
-                        err_mail or "desconocido",
-                    )
+            background_tasks.add_task(
+                _procesar_recibo_y_correo_aprobado_background,
+                int(pr.id),
+                str(referencia),
+                int(cliente.id),
+                "COBROS_PUBLIC",
+            )
             db.commit()
 
         db.refresh(pr)
@@ -846,6 +946,7 @@ def get_recibo_publico(
 @router.post("/infopagos/enviar-reporte", response_model=EnviarReporteInfopagosResponse)
 async def enviar_reporte_infopagos(
     request: Request,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     tipo_cedula: str = Form(...),
     numero_cedula: str = Form(...),
@@ -989,68 +1090,25 @@ async def enviar_reporte_infopagos(
             cpr.intentar_importar_reportado_automatico(db, pr, referencia, "INFOPAGOS")
             db.refresh(pr)
             cuotas_display = texto_cuotas_aplicadas_pago_reportado(db, pr)
-            pdf_bytes = generar_recibo_pdf_desde_pago_reportado(db, pr)
-            pr.recibo_pdf = pdf_bytes
-
-            to_emails = emails_destino_desde_objeto(cliente)
-            if cliente_bloqueado_por_desistimiento(
-                db, cliente_id=cliente.id, cedula=cliente.cedula, email=(to_emails[0] if to_emails else "")
-            ):
-                logger.info(
-                    "[INFOPAGOS] Bloqueo recibo ref=%s: cliente_id=%s con prestamo DESISTIMIENTO",
-                    referencia,
-                    cliente.id,
-                )
-                to_emails = []
-
-            if to_emails:
-                att, size_note = cobros_recibo_attachments_or_oversize_note(
-                    f"recibo_{referencia}.pdf", pdf_bytes
-                )
-                body = (
-                    f"Se ha registrado un pago a su nombre.\n\n"
-                    f"Número de referencia: {cpr.referencia_display(referencia)}\n\n"
-                    + (
-                        "El recibo se adjunta en PDF.\n\n"
-                        if att
-                        else "El recibo no se adjunta en este correo (archivo demasiado grande para el servidor de correo).\n\n"
-                    )
-                    + f"Si necesita información adicional, contáctenos por WhatsApp: {WHATSAPP_LINK}\n\n"
-                    + size_note
-                    + "RapiCredit C.A."
-                )
-                ok_mail, err_mail = send_email(
-                    to_emails,
-                    f"Recibo de pago {cpr.referencia_display(referencia)}",
-                    body,
-                    attachments=att,
-                    servicio="cobros",
-                    respetar_destinos_manuales=True,
-                )
-                if not ok_mail:
-                    logger.error(
-                        "[INFOPAGOS] Recibo ref=%s: correo NO enviado a %s. Error: %s.",
-                        referencia,
-                        unir_destinatarios_log(to_emails),
-                        err_mail or "desconocido",
-                    )
-                else:
-                    logger.info(
-                        "[INFOPAGOS] Recibo ref=%s: correo enviado a %s.",
-                        referencia,
-                        unir_destinatarios_log(to_emails),
-                    )
+            background_tasks.add_task(
+                _procesar_recibo_y_correo_aprobado_background,
+                int(pr.id),
+                str(referencia),
+                int(cliente.id),
+                "INFOPAGOS",
+            )
 
             recibo_token = create_recibo_infopagos_token(pr.id, expire_hours=2)
             db.commit()
             return EnviarReporteInfopagosResponse(
                 ok=True,
                 referencia_interna=referencia,
-                mensaje="Pago registrado. Se envió el recibo al correo del deudor. Puede descargar el recibo aquí.",
+                mensaje="Pago registrado. El recibo se está generando y enviando al correo del deudor. Puede descargarlo aquí cuando esté listo.",
                 recibo_descarga_token=recibo_token,
                 pago_id=pr.id,
                 aplicado_a_cuotas=(cuotas_display or "").strip() or RECIBO_TEXTO_CUOTA_EN_REVISION_CLIENTE,
                 estado_reportado="aprobado",
+                recibo_listo=False,
             )
 
         return EnviarReporteInfopagosResponse(
@@ -1064,6 +1122,7 @@ async def enviar_reporte_infopagos(
             pago_id=None,
             aplicado_a_cuotas=None,
             estado_reportado="en_revision",
+            recibo_listo=None,
         )
     except Exception as e:
         logger.exception("[INFOPAGOS] Error en enviar-reporte: %s", e)
@@ -1087,27 +1146,7 @@ def get_recibo_infopagos(
     Token debe venir en:
     - Header: Authorization: Bearer <token>
     """
-    token_to_use = _token_bearer_only(request)
-    if not token_to_use:
-        raise HTTPException(
-            status_code=401,
-            detail="Token requerido en Authorization header.",
-        )
-
-    payload = decode_token(token_to_use)
-    if not payload or payload.get("type") != "recibo_infopagos":
-        raise HTTPException(status_code=401, detail="Token inválido o expirado.")
-
-    token_pago_id = payload.get("pago_id") or payload.get("sub")
-    if token_pago_id is None:
-        raise HTTPException(status_code=401, detail="Token inválido.")
-    try:
-        token_pago_id = int(token_pago_id)
-    except (TypeError, ValueError):
-        raise HTTPException(status_code=401, detail="Token inválido.")
-
-    if token_pago_id != pago_id:
-        raise HTTPException(status_code=403, detail="No tiene permiso para este recibo.")
+    _validar_token_recibo_infopagos(request, pago_id)
 
     pr = db.execute(select(PagoReportado).where(PagoReportado.id == pago_id)).scalars().first()
     if not pr:
@@ -1121,4 +1160,32 @@ def get_recibo_infopagos(
         content=bytes(pdf_bytes),
         media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="recibo_{ref}.pdf"'},
+    )
+
+
+@router.get("/infopagos/recibo-status", response_model=ReciboInfopagosStatusResponse)
+def get_recibo_infopagos_status(
+    request: Request,
+    pago_id: int = Query(..., description="ID del pago reportado"),
+    db: Session = Depends(get_db),
+):
+    """
+    Estado liviano para polling de UI:
+    - `recibo_listo=true` cuando `recibo_pdf` ya está persistido.
+    """
+    _validar_token_recibo_infopagos(request, pago_id)
+
+    pr = db.execute(select(PagoReportado).where(PagoReportado.id == pago_id)).scalars().first()
+    if not pr:
+        raise HTTPException(status_code=404, detail="Pago no encontrado.")
+
+    listo = bool(getattr(pr, "recibo_pdf", None))
+    estado = (getattr(pr, "estado", "") or "").strip() or None
+    msg = "Recibo listo para descarga." if listo else "Procesando recibo en segundo plano."
+    return ReciboInfopagosStatusResponse(
+        ok=True,
+        pago_id=int(pago_id),
+        recibo_listo=listo,
+        estado_reportado=estado,
+        mensaje=msg,
     )

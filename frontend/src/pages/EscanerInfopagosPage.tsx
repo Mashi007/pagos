@@ -2,7 +2,7 @@
  * Escáner Infopagos: primero cédula del deudor, luego imagen del comprobante;
  * Gemini sugiere campos alineados con Infopagos; validadores backend + edición manual y guardado vía enviar-reporte público Infopagos.
  */
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { Brain, Loader2, CheckCircle2, AlertTriangle } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -15,6 +15,7 @@ import {
   escanerInfopagosExtraerComprobante,
   enviarReporteInfopagos,
   getReciboInfopagos,
+  getReciboInfopagosStatus,
   validarCedulaPublico,
 } from '../services/cobrosService'
 import { formatMontoBsVe, parseMontoLatam } from '../utils/montoLatam'
@@ -203,10 +204,6 @@ export default function EscanerInfopagosPage() {
 
   const [fechaPago, setFechaPago] = useState('')
   const [fechaDetectada, setFechaDetectada] = useState('')
-  /** Si hay fecha en imagen: el usuario debe confirmar o rechazar explícitamente. */
-  const [confirmaFechaDetectada, setConfirmaFechaDetectada] = useState<
-    null | 'si' | 'no'
-  >(null)
   const [institucion, setInstitucion] = useState('')
   const [otroInstitucion, setOtroInstitucion] = useState('')
   const [escanerColision, setEscanerColision] = useState<{
@@ -224,7 +221,39 @@ export default function EscanerInfopagosPage() {
   const [reciboToken, setReciboToken] = useState<string | null>(null)
   const [pagoId, setPagoId] = useState<number | null>(null)
   const [enRevision, setEnRevision] = useState(false)
+  const [reciboListo, setReciboListo] = useState<boolean | null>(null)
+  const [consultandoRecibo, setConsultandoRecibo] = useState(false)
   const [descargandoRecibo, setDescargandoRecibo] = useState(false)
+  useEffect(() => {
+    if (fase !== 'exito') return
+    if (enRevision) return
+    if (!reciboToken || pagoId == null) return
+    if (reciboListo === true) return
+
+    let cancelled = false
+    const run = async () => {
+      try {
+        if (!cancelled) setConsultandoRecibo(true)
+        const st = await getReciboInfopagosStatus(reciboToken, pagoId)
+        if (cancelled) return
+        setReciboListo(Boolean(st.recibo_listo))
+      } catch {
+        if (!cancelled) setReciboListo(false)
+      } finally {
+        if (!cancelled) setConsultandoRecibo(false)
+      }
+    }
+
+    void run()
+    const id = window.setInterval(() => {
+      void run()
+    }, 4000)
+    return () => {
+      cancelled = true
+      window.clearInterval(id)
+    }
+  }, [enRevision, fase, pagoId, reciboListo, reciboToken])
+
 
   const cedulaNormalizada = useMemo(
     () => normalizarCedulaParaProcesar(extraerCaracteresCedulaPublica(cedulaRaw)),
@@ -320,7 +349,6 @@ export default function EscanerInfopagosPage() {
       const fechaExtraida = s.fecha_pago || ''
       setFechaPago(fechaExtraida)
       setFechaDetectada(fechaExtraida)
-      setConfirmaFechaDetectada(null)
       const inst = (s.institucion_financiera || '').trim()
       if (INSTITUCIONES_FINANCIERAS.includes(inst as (typeof INSTITUCIONES_FINANCIERAS)[number])) {
         setInstitucion(inst)
@@ -374,23 +402,6 @@ export default function EscanerInfopagosPage() {
     const vF = validarFechaPago(fechaPago)
     if (!vF.valido) {
       toast.error(vF.error || 'Fecha inválida.')
-      return
-    }
-    const hayFechaDetectada = Boolean(fechaDetectada.trim())
-    if (hayFechaDetectada && confirmaFechaDetectada == null) {
-      toast.error(
-        'Indique si la fecha leída del comprobante es correcta (Sí) o si la corregirá (No).'
-      )
-      return
-    }
-    if (
-      hayFechaDetectada &&
-      confirmaFechaDetectada === 'si' &&
-      fechaPago.trim() !== fechaDetectada.trim()
-    ) {
-      toast.error(
-        'Marcó «Sí» a la fecha del comprobante: el campo debe coincidir con la fecha detectada en la imagen, o elija «No» si corrige la fecha.'
-      )
       return
     }
     if (!institucion.trim()) {
@@ -452,9 +463,13 @@ export default function EscanerInfopagosPage() {
       if (res.recibo_descarga_token) {
         setReciboToken(res.recibo_descarga_token)
         if (res.pago_id != null) setPagoId(res.pago_id)
+        setReciboListo(
+          typeof res.recibo_listo === 'boolean' ? Boolean(res.recibo_listo) : false
+        )
       } else {
         setReciboToken(null)
         setPagoId(null)
+        setReciboListo(null)
       }
       setFase('exito')
       toast.success(res.mensaje || 'Pago registrado.')
@@ -467,7 +482,6 @@ export default function EscanerInfopagosPage() {
   }, [
     archivo,
     cedulaNormalizada,
-    confirmaFechaDetectada,
     fechaDetectada,
     fechaPago,
     institucion,
@@ -503,7 +517,6 @@ export default function EscanerInfopagosPage() {
     setArchivo(null)
     setFechaPago('')
     setFechaDetectada('')
-    setConfirmaFechaDetectada(null)
     setInstitucion('')
     setOtroInstitucion('')
     setEscanerColision(null)
@@ -517,6 +530,8 @@ export default function EscanerInfopagosPage() {
     setReferencia('')
     setReciboToken(null)
     setPagoId(null)
+    setReciboListo(null)
+    setConsultandoRecibo(false)
     setEnRevision(false)
   }
 
@@ -693,53 +708,9 @@ export default function EscanerInfopagosPage() {
                       id="fecha"
                       type="date"
                       value={fechaPago}
-                      onChange={e => {
-                        const v = e.target.value
-                        setFechaPago(v)
-                        if (fechaDetectada.trim() && v.trim() !== fechaDetectada.trim()) {
-                          setConfirmaFechaDetectada('no')
-                        }
-                      }}
+                      onChange={e => setFechaPago(e.target.value)}
                     />
                   </div>
-                  {fechaDetectada.trim() ? (
-                    <div className="flex shrink-0 flex-col gap-1">
-                      <span className="text-xs font-medium text-slate-700">
-                        ¿La fecha leída del comprobante es correcta?
-                      </span>
-                      <div className="flex flex-wrap gap-2">
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant={confirmaFechaDetectada === 'si' ? 'default' : 'outline'}
-                          className={
-                            confirmaFechaDetectada === 'si'
-                              ? 'bg-emerald-600 hover:bg-emerald-700'
-                              : ''
-                          }
-                          onClick={() => {
-                            setConfirmaFechaDetectada('si')
-                            setFechaPago(fechaDetectada)
-                          }}
-                        >
-                          Sí
-                        </Button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant={confirmaFechaDetectada === 'no' ? 'default' : 'outline'}
-                          className={
-                            confirmaFechaDetectada === 'no'
-                              ? 'bg-amber-600 hover:bg-amber-700'
-                              : ''
-                          }
-                          onClick={() => setConfirmaFechaDetectada('no')}
-                        >
-                          No
-                        </Button>
-                      </div>
-                    </div>
-                  ) : null}
                 </div>
               </div>
               <div className="space-y-2 sm:col-span-2">
@@ -825,15 +796,7 @@ export default function EscanerInfopagosPage() {
                         variant="secondary"
                         onClick={() => handleAplicarSufijoOperacion('A')}
                       >
-                        Aplicar sufijo _A…
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="secondary"
-                        onClick={() => handleAplicarSufijoOperacion('P')}
-                      >
-                        Aplicar sufijo _P…
+                        Autirizacion documento
                       </Button>
                     </div>
                   </div>
@@ -909,7 +872,7 @@ export default function EscanerInfopagosPage() {
                 Cuando sea aprobado, el recibo quedará disponible para descarga.
               </p>
             ) : null}
-            {reciboToken && pagoId != null ? (
+            {reciboToken && pagoId != null && reciboListo ? (
               <Button
                 type="button"
                 variant="secondary"
@@ -918,6 +881,12 @@ export default function EscanerInfopagosPage() {
               >
                 {descargandoRecibo ? 'Descargando…' : 'Descargar recibo PDF'}
               </Button>
+            ) : !enRevision && reciboToken && pagoId != null ? (
+              <p className="rounded-md border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs text-indigo-950">
+                {consultandoRecibo
+                  ? 'Espere, estamos generando su recibo. Esta pantalla se actualizará automáticamente.'
+                  : 'Estamos terminando de generar su recibo. Actualizando estado...'}
+              </p>
             ) : !enRevision ? (
               <p className="rounded-md border border-emerald-200 bg-emerald-100/60 px-3 py-2 text-xs text-emerald-900">
                 El pago fue aprobado. Si no ve el botón de descarga, actualice la página para

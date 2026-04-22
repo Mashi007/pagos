@@ -213,6 +213,9 @@ export interface EnviarReporteInfopagosResponse {
   /** Alineado con cobros publico: sin token/recibo hasta aprobacion si en_revision. */
 
   estado_reportado?: string | null
+
+  /** `false` justo después de aprobar (cuando PDF/correo van en background). */
+  recibo_listo?: boolean | null
 }
 
 /** Publico: validar cedula. Con accessToken (JWT cobros_public) tras verificar codigo por correo. */
@@ -626,6 +629,50 @@ export async function getReciboInfopagos(
       e instanceof Error
         ? e.message
         : 'Error de conexión al descargar el recibo.'
+    throw new Error(mensajeErrorRedPublico(raw))
+  }
+}
+
+export interface ReciboInfopagosStatusResponse {
+  ok: boolean
+  pago_id: number
+  recibo_listo: boolean
+  estado_reportado?: string | null
+  mensaje?: string
+}
+
+export async function getReciboInfopagosStatus(
+  token: string,
+  pagoId: number
+): Promise<ReciboInfopagosStatusResponse> {
+  const url = `${BASE_PUBLIC}/infopagos/recibo-status?pago_id=${pagoId}`
+  try {
+    const res = await fetchWithTimeout(
+      url,
+      {
+        credentials: 'same-origin',
+        headers: { Authorization: `Bearer ${token}` },
+      },
+      FETCH_TIMEOUT_MS
+    )
+    const text = await res.text()
+    let data: ReciboInfopagosStatusResponse
+    try {
+      data = text ? JSON.parse(text) : ({} as ReciboInfopagosStatusResponse)
+    } catch {
+      throw new Error('Respuesta inválida del estado de recibo.')
+    }
+    if (!res.ok) {
+      throw new Error(
+        typeof (data as { mensaje?: unknown }).mensaje === 'string'
+          ? (data as { mensaje: string }).mensaje
+          : `Error ${res.status}`
+      )
+    }
+    return data
+  } catch (e: unknown) {
+    const raw =
+      e instanceof Error ? e.message : 'No se pudo consultar el estado del recibo.'
     throw new Error(mensajeErrorRedPublico(raw))
   }
 }

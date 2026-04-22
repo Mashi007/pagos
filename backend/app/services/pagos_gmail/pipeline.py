@@ -434,10 +434,14 @@ def run_pipeline(
         "gemini_calls_total": 0,
         "gemini_ms_total": 0,
         "gemini_ms_max": 0,
+        "gemini_second_pass_total": 0,
+        "gemini_second_pass_hits": 0,
         "gmail_labels_list_failed": 0,
         "manual_error_redigitaliza_listed": 0,
         "manual_error_redigitaliza_error": "",
     }
+    none_reason_counts: dict[str, int] = {}
+    none_reason_hint_counts: dict[str, int] = {}
 
     try:
         from app.core.config import settings as _settings_pipeline
@@ -801,6 +805,11 @@ def run_pipeline(
                         run_stats["gemini_ms_max"] = max(
                             int(run_stats.get("gemini_ms_max", 0) or 0), _gem_ms
                         )
+                        _scan_pass = str(data.get("_scan_pass") or "").strip().lower()
+                        if _scan_pass == "pass_2":
+                            run_stats["gemini_second_pass_total"] = int(
+                                run_stats.get("gemini_second_pass_total", 0) or 0
+                            ) + 1
 
                         if redig_manual_error_pass and fmt not in ("A", "B"):
                             _none_reason = (data.get("_diag_none_reason") or "sin_detalle").strip()
@@ -822,6 +831,15 @@ def run_pipeline(
 
                         if fmt not in PAGOS_GMAIL_FORMATOS_PLANTILLA:
                             _none_reason = (data.get("_diag_none_reason") or "sin_detalle").strip()
+                            _hint = (data.get("_scan_bank_hint") or "").strip().upper()
+                            none_reason_counts[_none_reason] = (
+                                int(none_reason_counts.get(_none_reason, 0)) + 1
+                            )
+                            if _hint:
+                                _hk = f"{_hint}:{_none_reason}"
+                                none_reason_hint_counts[_hk] = (
+                                    int(none_reason_hint_counts.get(_hk, 0)) + 1
+                                )
                             any_incomplete_or_skipped = True
                             any_skipped_not_plantilla_o_campos = True
                             logger.warning(
@@ -835,6 +853,12 @@ def run_pipeline(
                                 detalle=(f"{fmt or '?'}:{_none_reason}")[:500],
                             )
                             continue
+                        if (str(data.get("_scan_pass") or "").strip().lower() == "pass_2") and (
+                            fmt in PAGOS_GMAIL_FORMATOS_PLANTILLA
+                        ):
+                            run_stats["gemini_second_pass_hits"] = int(
+                                run_stats.get("gemini_second_pass_hits", 0) or 0
+                            ) + 1
 
                         if (
                             plan_b_mercantil_bnc_fuera_bd
@@ -1731,6 +1755,14 @@ def run_pipeline(
             "gemini_ms_total": _gem_total,
             "gemini_ms_max": _gem_max,
             "gemini_ms_avg": _gem_avg,
+            "gemini_second_pass_total": int(
+                run_stats.get("gemini_second_pass_total", 0) or 0
+            ),
+            "gemini_second_pass_hits": int(
+                run_stats.get("gemini_second_pass_hits", 0) or 0
+            ),
+            "none_reason_counts": dict(sorted(none_reason_counts.items())),
+            "none_reason_hint_counts": dict(sorted(none_reason_hint_counts.items())),
             "gmail_labels_list_failed": run_stats["gmail_labels_list_failed"],
             "manual_error_redigitaliza_listed": run_stats[
                 "manual_error_redigitaliza_listed"
@@ -1801,6 +1833,14 @@ def run_pipeline(
             "gemini_ms_total": _gem_total,
             "gemini_ms_max": _gem_max,
             "gemini_ms_avg": _gem_avg,
+            "gemini_second_pass_total": int(
+                run_stats.get("gemini_second_pass_total", 0) or 0
+            ),
+            "gemini_second_pass_hits": int(
+                run_stats.get("gemini_second_pass_hits", 0) or 0
+            ),
+            "none_reason_counts": dict(sorted(none_reason_counts.items())),
+            "none_reason_hint_counts": dict(sorted(none_reason_hint_counts.items())),
             "gmail_labels_list_failed": run_stats["gmail_labels_list_failed"],
             "manual_error_redigitaliza_listed": run_stats[
                 "manual_error_redigitaliza_listed"
@@ -1854,6 +1894,14 @@ def run_pipeline(
             "gemini_ms_total": _gem_total,
             "gemini_ms_max": _gem_max,
             "gemini_ms_avg": _gem_avg,
+            "gemini_second_pass_total": int(
+                run_stats.get("gemini_second_pass_total", 0) or 0
+            ),
+            "gemini_second_pass_hits": int(
+                run_stats.get("gemini_second_pass_hits", 0) or 0
+            ),
+            "none_reason_counts": dict(sorted(none_reason_counts.items())),
+            "none_reason_hint_counts": dict(sorted(none_reason_hint_counts.items())),
             "gmail_labels_list_failed": run_stats["gmail_labels_list_failed"],
             "manual_error_redigitaliza_listed": run_stats[
                 "manual_error_redigitaliza_listed"
