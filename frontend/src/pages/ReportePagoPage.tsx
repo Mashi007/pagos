@@ -1128,11 +1128,12 @@ export default function ReportePagoPage({
         if ((s.numero_operacion || '').trim()) {
           setNumeroDocumento(s.numero_operacion.trim().slice(0, MAX_LENGTH_NUMERO_OPERACION))
         }
-
-        showNotification(
-          'success',
-          'Comprobante digitalizado con Gemini. Verifique los datos antes de enviar.'
-        )
+        // Si Gemini digitaliza con éxito, llevar directo a confirmación
+        // para evitar pasos redundantes.
+        if (!isInfopagos) {
+          setStep(7)
+          return
+        }
       } else {
         showNotification(
           'error',
@@ -1543,7 +1544,8 @@ export default function ReportePagoPage({
                   </CardTitle>
                 </div>
                 <p className="mt-2 text-sm text-slate-600">
-                  Cédula validada ({cedula}). Cargue el comprobante para digitalizar con Gemini.
+                  Cédula validada ({cedula}). Cargue su comprobante de pago, por
+                  favor.
                 </p>
               </CardHeader>
 
@@ -1582,13 +1584,13 @@ export default function ReportePagoPage({
                   </Button>
 
                   <Button
-                    className="min-h-[48px] min-w-0 flex-1 touch-manipulation bg-slate-900 font-semibold text-white hover:bg-slate-800"
+                    className="min-h-[48px] min-w-0 flex-1 touch-manipulation whitespace-normal break-words px-3 text-center text-sm leading-tight bg-slate-900 font-semibold text-white hover:bg-slate-800 sm:text-base"
                     onClick={handleDigitalizarComprobante}
                     disabled={loading}
                   >
                     {loading
                       ? 'Digitalizando con Gemini...'
-                      : 'Digitalizar con Gemini y continuar'}
+                      : 'Continuar y digitalizar con Gemini'}
                   </Button>
                 </div>
               </CardContent>
