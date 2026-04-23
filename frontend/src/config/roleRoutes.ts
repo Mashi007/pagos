@@ -13,6 +13,7 @@ const MANAGER_PREFIXES = [
   '/pagos',
   '/infopagos',
   '/escaner',
+  '/escaner-lote',
   '/amortizacion',
   '/cobros',
   '/reportes',
@@ -32,6 +33,7 @@ const OPERATOR_PREFIXES = [
   '/revision-manual',
   '/infopagos',
   '/escaner',
+  '/escaner-lote',
   /** Listado y registro de pagos (misma vista que gerente/administrador). */
   '/pagos',
   '/finiquitos',

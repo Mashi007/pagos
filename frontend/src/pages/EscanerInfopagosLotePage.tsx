@@ -71,7 +71,6 @@ import {
 } from './escanerInfopagosLoteModel'
 import {
   FUENTE_TASA_DEFAULT,
-  FUENTE_TASA_OPCIONES,
   normalizarFuenteTasaCambio,
   type FuenteTasaCambio,
 } from '../constants/fuenteTasaCambio'
@@ -232,7 +231,7 @@ function validarMonto(
   return { valido: true, valor: num }
 }
 
-type Fase = 'cedula' | 'fuente_tasa' | 'archivos' | 'revision'
+type Fase = 'cedula' | 'archivos' | 'revision'
 
 export default function EscanerInfopagosLotePage() {
   const honeypotRef = useRef<HTMLInputElement>(null)
@@ -307,8 +306,8 @@ export default function EscanerInfopagosLotePage() {
       }
       setNombreCliente((res.nombre || '').trim())
       setFuenteTasa(normalizarFuenteTasaCambio(res.fuente_tasa_cambio_lista_bs))
-      setFase('fuente_tasa')
-      toast.success('Cédula verificada. Elija la tasa Bs. → USD y continúe.')
+      setFase('archivos')
+      toast.success('Cédula verificada. Se usará la tasa configurada en Pago Bs.')
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : 'Error al validar la cédula.')
     } finally {
@@ -778,57 +777,10 @@ export default function EscanerInfopagosLotePage() {
         </Card>
       )}
 
-      {fase === 'fuente_tasa' && (
-        <Card>
-          <CardHeader>
-            <CardTitle>2. Tasa de cambio (Bs. → USD)</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {nombreCliente ? (
-              <p className="text-sm text-slate-700">
-                Cliente: <span className="font-semibold">{nombreCliente}</span>
-              </p>
-            ) : null}
-            <p className="text-sm text-slate-600">
-              Aplica a la validación en bolívares y al guardar cada fila. Por defecto: Euro.
-            </p>
-            <div className="grid gap-2 sm:grid-cols-3">
-              {FUENTE_TASA_OPCIONES.map(opt => (
-                <label
-                  key={opt.value}
-                  className={`flex cursor-pointer items-center gap-2 rounded-lg border-2 p-3 text-sm ${
-                    fuenteTasa === opt.value
-                      ? 'border-violet-500 bg-violet-50'
-                      : 'border-slate-200'
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="fuente-tasa-lote"
-                    checked={fuenteTasa === opt.value}
-                    onChange={() => setFuenteTasa(opt.value)}
-                    className="accent-violet-600"
-                  />
-                  {opt.label}
-                </label>
-              ))}
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Button variant="outline" type="button" onClick={() => setFase('cedula')}>
-                Volver
-              </Button>
-              <Button type="button" onClick={() => setFase('archivos')}>
-                Continuar
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
       {fase === 'archivos' && (
         <Card>
           <CardHeader>
-            <CardTitle>3. Comprobantes (máx. {String(MAX_ARCHIVOS)})</CardTitle>
+            <CardTitle>2. Comprobantes (máx. {String(MAX_ARCHIVOS)})</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             {nombreCliente ? (
@@ -902,7 +854,7 @@ export default function EscanerInfopagosLotePage() {
               </ul>
             )}
             <div className="flex flex-wrap gap-2">
-              <Button variant="outline" type="button" onClick={() => setFase('fuente_tasa')}>
+              <Button variant="outline" type="button" onClick={() => setFase('cedula')}>
                 Volver
               </Button>
               <Button type="button" onClick={irARevision} disabled={!archivos.length}>
@@ -917,7 +869,7 @@ export default function EscanerInfopagosLotePage() {
         <>
           <Card>
             <CardHeader>
-              <CardTitle>4. Digitalizar y completar cada pago</CardTitle>
+              <CardTitle>3. Digitalizar y completar cada pago</CardTitle>
               {nombreCliente ? (
                 <p className="text-sm text-slate-600">
                   Cliente: <span className="font-semibold text-slate-900">{nombreCliente}</span> —{' '}

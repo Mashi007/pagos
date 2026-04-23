@@ -30,7 +30,6 @@ import {
 } from '../utils/documentoSufijoVisto'
 import {
   FUENTE_TASA_DEFAULT,
-  FUENTE_TASA_OPCIONES,
   normalizarFuenteTasaCambio,
   type FuenteTasaCambio,
 } from '../constants/fuenteTasaCambio'
@@ -188,7 +187,7 @@ function validarMonto(
   return { valido: true, valor: num }
 }
 
-type Fase = 'cedula' | 'fuente_tasa' | 'imagen' | 'formulario' | 'exito'
+type Fase = 'cedula' | 'imagen' | 'formulario' | 'exito'
 
 export default function EscanerInfopagosPage() {
   const honeypotRef = useRef<HTMLInputElement>(null)
@@ -312,8 +311,8 @@ export default function EscanerInfopagosPage() {
       }
       setNombreCliente((res.nombre || '').trim())
       setFuenteTasa(normalizarFuenteTasaCambio(res.fuente_tasa_cambio_lista_bs))
-      setFase('fuente_tasa')
-      toast.success('Cédula verificada. Elija la tasa Bs. → USD y continúe.')
+      setFase('imagen')
+      toast.success('Cédula verificada. Se usará la tasa configurada en Pago Bs.')
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : 'Error al validar la cédula.')
     } finally {
@@ -574,53 +573,6 @@ export default function EscanerInfopagosPage() {
         aria-hidden
       />
 
-      {fase === 'fuente_tasa' && (
-        <Card>
-          <CardHeader>
-            <CardTitle>2. Tasa de cambio (Bs. → USD)</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {nombreCliente ? (
-              <p className="text-sm text-slate-700">
-                Cliente: <span className="font-semibold">{nombreCliente}</span>
-              </p>
-            ) : null}
-            <p className="text-sm text-slate-600">
-              Seleccione la fuente que aplicará si el pago va en bolívares. Por defecto: Euro.
-            </p>
-            <div className="grid gap-2 sm:grid-cols-3">
-              {FUENTE_TASA_OPCIONES.map(opt => (
-                <label
-                  key={opt.value}
-                  className={`flex cursor-pointer items-center gap-2 rounded-lg border-2 p-3 text-sm ${
-                    fuenteTasa === opt.value
-                      ? 'border-indigo-500 bg-indigo-50'
-                      : 'border-slate-200'
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="fuente-tasa-escaner"
-                    checked={fuenteTasa === opt.value}
-                    onChange={() => setFuenteTasa(opt.value)}
-                    className="accent-indigo-600"
-                  />
-                  {opt.label}
-                </label>
-              ))}
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Button variant="outline" type="button" onClick={() => setFase('cedula')}>
-                Volver
-              </Button>
-              <Button type="button" onClick={() => setFase('imagen')}>
-                Continuar
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
       {fase === 'cedula' && (
         <Card>
           <CardHeader>
@@ -657,7 +609,7 @@ export default function EscanerInfopagosPage() {
       {fase === 'imagen' && (
         <Card>
           <CardHeader>
-            <CardTitle>3. Comprobante</CardTitle>
+            <CardTitle>2. Comprobante</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             {nombreCliente ? (
@@ -675,7 +627,7 @@ export default function EscanerInfopagosPage() {
               />
             </div>
             <div className="flex flex-wrap gap-2">
-              <Button variant="outline" type="button" onClick={() => setFase('fuente_tasa')}>
+              <Button variant="outline" type="button" onClick={() => setFase('cedula')}>
                 Volver
               </Button>
               <Button onClick={handleEscanear} disabled={escaneando || !archivo}>
@@ -703,7 +655,7 @@ export default function EscanerInfopagosPage() {
       {fase === 'formulario' && (
         <Card>
           <CardHeader>
-            <CardTitle>4. Formulario (editable)</CardTitle>
+            <CardTitle>3. Formulario (editable)</CardTitle>
             <p className="rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-sm font-medium text-sky-950">
               Usted está ingresando un pago para{' '}
               <strong>
@@ -863,7 +815,7 @@ export default function EscanerInfopagosPage() {
                 ) : null}
               </div>
               <div className="space-y-2">
-                <Label>Moneda</Label>
+                <Label>Moneda (detectada por escáner; editable)</Label>
                 <select
                   className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   value={moneda}

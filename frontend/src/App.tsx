@@ -403,7 +403,7 @@ function App() {
             <Route
               path="escaner-lote"
               element={
-                <SimpleProtectedRoute requireAdmin={true}>
+                <SimpleProtectedRoute>
                   <EscanerInfopagosLotePage />
                 </SimpleProtectedRoute>
               }
