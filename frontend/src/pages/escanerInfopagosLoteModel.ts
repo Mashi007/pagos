@@ -38,6 +38,7 @@ export type FilaLote = {
   fechaPago: string
   fechaDetectada: string
   confirmaFechaDetectada: null | 'si' | 'no'
+  confirmaFechaManual: boolean
   institucion: string
   otroInstitucion: string
   numeroOperacion: string
@@ -74,6 +75,7 @@ export function filaVaciaDesdeArchivo(archivo: File): FilaLote {
     fechaPago: '',
     fechaDetectada: '',
     confirmaFechaDetectada: null,
+    confirmaFechaManual: false,
     institucion: '',
     otroInstitucion: '',
     numeroOperacion: '',
@@ -131,6 +133,7 @@ export function filaTrasExtraccion(
     fechaPago: fechaExtraida,
     fechaDetectada: fechaExtraida,
     confirmaFechaDetectada: null,
+    confirmaFechaManual: false,
     institucion: enLista ? inst : inst,
     otroInstitucion: enLista ? '' : inst,
     numeroOperacion: s.numero_operacion || '',

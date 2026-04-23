@@ -323,7 +323,6 @@ export default function CobrosPagosReportadosPage() {
   const [soloFallaListaBs, setSoloFallaListaBs] = useState(false)
   /** Cliente: filas marcadas DUPLICADO (misma regla que el listado / validadores). */
   const [soloDuplicadoDocumento, setSoloDuplicadoDocumento] = useState(false)
-  const [ordenCedula, setOrdenCedula] = useState<'asc' | 'desc'>('asc')
 
   const [changingEstadoId, setChangingEstadoId] = useState<number | null>(null)
 
@@ -668,11 +667,21 @@ export default function CobrosPagosReportadosPage() {
       )
     }
 
+    // Cola operativa: primero la entrada más vieja.
     filtrados.sort((a, b) => {
+      const ta = Number(new Date(a.fecha_reporte).getTime())
+      const tb = Number(new Date(b.fecha_reporte).getTime())
+      if (ta !== tb) return ta - tb
+
       const aa = normalizarCedula(a.cedula_display)
       const bb = normalizarCedula(b.cedula_display)
-      const cmp = aa.localeCompare(bb, 'es', { numeric: true, sensitivity: 'base' })
-      return ordenCedula === 'asc' ? cmp : -cmp
+      const cmp = aa.localeCompare(bb, 'es', {
+        numeric: true,
+        sensitivity: 'base',
+      })
+      if (cmp !== 0) return cmp
+
+      return Number(a.id) - Number(b.id)
     })
 
     return filtrados
@@ -681,7 +690,6 @@ export default function CobrosPagosReportadosPage() {
     soloCedulasDuplicadas,
     soloFallaListaBs,
     soloDuplicadoDocumento,
-    ordenCedula,
   ])
 
   const seleccionablesEnPagina = useMemo(
@@ -1216,25 +1224,7 @@ export default function CobrosPagosReportadosPage() {
                               />
                             </span>
                           ) : (
-                            <>
-                              {h.label}
-                              {h.label === 'Cédula' ? (
-                                <button
-                                  type="button"
-                                  className="ml-1 inline-flex rounded px-1 py-0.5 text-[10px] text-muted-foreground hover:bg-muted"
-                                  onClick={e => {
-                                    e.preventDefault()
-                                    e.stopPropagation()
-                                    setOrdenCedula(prev =>
-                                      prev === 'asc' ? 'desc' : 'asc'
-                                    )
-                                  }}
-                                  title={`Ordenar cédula ${ordenCedula === 'asc' ? 'descendente' : 'ascendente'}`}
-                                >
-                                  {ordenCedula === 'asc' ? '↑' : '↓'}
-                                </button>
-                              ) : null}
-                            </>
+                            h.label
                           )}
                         </span>
                         <button

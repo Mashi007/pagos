@@ -895,7 +895,9 @@ async def enviar_reporte_publico(
             # La revisión humana del operador prevalece sobre falsos negativos de Gemini.
             pr.gemini_coincide_exacto = "true"
             pr.gemini_comentario = ""
-        falla_validadores = reportado_falla_validadores_cobros(db, pr)
+        # Si hubo confirmación humana explícita desde escáner/operador,
+        # no forzamos revisión manual por validadores automáticos.
+        falla_validadores = False if confirmo_humano else reportado_falla_validadores_cobros(db, pr)
         pr.estado = "en_revision" if falla_validadores else "aprobado"
         db.commit()
 
@@ -1125,7 +1127,9 @@ async def enviar_reporte_infopagos(
             # La revisión humana del operador prevalece sobre falsos negativos de Gemini.
             pr.gemini_coincide_exacto = "true"
             pr.gemini_comentario = ""
-        falla_validadores = reportado_falla_validadores_cobros(db, pr)
+        # Si hubo confirmación humana explícita desde escáner/operador,
+        # no forzamos revisión manual por validadores automáticos.
+        falla_validadores = False if confirmo_humano else reportado_falla_validadores_cobros(db, pr)
         pr.estado = "en_revision" if falla_validadores else "aprobado"
         db.commit()
 

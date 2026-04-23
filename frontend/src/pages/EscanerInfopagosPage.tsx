@@ -211,6 +211,7 @@ export default function EscanerInfopagosPage() {
   const [fechaPago, setFechaPago] = useState('')
   const [fechaDetectada, setFechaDetectada] = useState('')
   const [confirmaFechaDetectada, setConfirmaFechaDetectada] = useState<'si' | 'no' | null>(null)
+  const [confirmaFechaManual, setConfirmaFechaManual] = useState(false)
   const [institucion, setInstitucion] = useState('')
   const [otroInstitucion, setOtroInstitucion] = useState('')
   const [escanerColision, setEscanerColision] = useState<{
@@ -359,6 +360,7 @@ export default function EscanerInfopagosPage() {
       setFechaPago(fechaExtraida)
       setFechaDetectada(fechaExtraida)
       setConfirmaFechaDetectada(null)
+      setConfirmaFechaManual(false)
       const inst = (s.institucion_financiera || '').trim()
       if (INSTITUCIONES_FINANCIERAS.includes(inst as (typeof INSTITUCIONES_FINANCIERAS)[number])) {
         setInstitucion(inst)
@@ -414,6 +416,27 @@ export default function EscanerInfopagosPage() {
       toast.error(vF.error || 'Fecha inválida.')
       return
     }
+    const hayFechaDetectada = Boolean(fechaDetectada.trim())
+    if (hayFechaDetectada && confirmaFechaDetectada == null) {
+      toast.error(
+        'Indique si la fecha leída del comprobante es correcta (Sí) o si la corregirá (No).'
+      )
+      return
+    }
+    if (!hayFechaDetectada && !confirmaFechaManual) {
+      toast.error('Confirme manualmente la fecha ingresada para continuar.')
+      return
+    }
+    if (
+      hayFechaDetectada &&
+      confirmaFechaDetectada === 'si' &&
+      fechaPago.trim() !== fechaDetectada.trim()
+    ) {
+      toast.error(
+        'Marcó «Sí» a la fecha del comprobante: el campo debe coincidir con la fecha detectada, o elija «No» si corrige la fecha.'
+      )
+      return
+    }
     if (!institucion.trim()) {
       toast.error('Indique la institución financiera.')
       return
@@ -456,7 +479,10 @@ export default function EscanerInfopagosPage() {
     form.append('monto', montoParaApi(vM.valor))
     form.append('moneda', moneda)
     form.append('fuente_tasa_cambio', fuenteTasa)
-    form.append('confirmacion_humana', 'true')
+    const confirmacionHumana = hayFechaDetectada
+      ? confirmaFechaDetectada === 'si' || confirmaFechaDetectada === 'no'
+      : confirmaFechaManual
+    form.append('confirmacion_humana', confirmacionHumana ? 'true' : 'false')
     form.append('comprobante', archivo!)
     enviarActivoRef.current = true
     setEnviando(true)
@@ -530,6 +556,8 @@ export default function EscanerInfopagosPage() {
     setArchivo(null)
     setFechaPago('')
     setFechaDetectada('')
+    setConfirmaFechaDetectada(null)
+    setConfirmaFechaManual(false)
     setInstitucion('')
     setOtroInstitucion('')
     setEscanerColision(null)
@@ -716,15 +744,72 @@ export default function EscanerInfopagosPage() {
                     No se detectó fecha clara en la imagen: indique la fecha de pago manualmente.
                   </p>
                 )}
+                {!fechaDetectada.trim() ? (
+                  <label className="mt-1 flex items-center gap-2 text-xs text-slate-700">
+                    <input
+                      type="checkbox"
+                      checked={confirmaFechaManual}
+                      onChange={e => setConfirmaFechaManual(e.target.checked)}
+                      className="h-4 w-4 rounded border-slate-300"
+                    />
+                    Confirmo manualmente que la fecha ingresada coincide con el comprobante.
+                  </label>
+                ) : null}
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
                   <div className="min-w-0 flex-1">
                     <Input
                       id="fecha"
                       type="date"
                       value={fechaPago}
-                      onChange={e => setFechaPago(e.target.value)}
+                      onChange={e => {
+                        const v = e.target.value
+                        setFechaPago(v)
+                        if (fechaDetectada.trim() && v.trim() !== fechaDetectada.trim()) {
+                          setConfirmaFechaDetectada('no')
+                        } else if (!fechaDetectada.trim()) {
+                          setConfirmaFechaManual(false)
+                        }
+                      }}
                     />
                   </div>
+                  {fechaDetectada.trim() ? (
+                    <div className="flex shrink-0 flex-col gap-1">
+                      <span className="text-xs font-medium text-slate-700">
+                        ¿La fecha leída es correcta?
+                      </span>
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant={confirmaFechaDetectada === 'si' ? 'default' : 'outline'}
+                          className={
+                            confirmaFechaDetectada === 'si'
+                              ? 'bg-emerald-600 hover:bg-emerald-700'
+                              : ''
+                          }
+                          onClick={() => {
+                            setConfirmaFechaDetectada('si')
+                            setFechaPago(fechaDetectada)
+                          }}
+                        >
+                          Sí
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant={confirmaFechaDetectada === 'no' ? 'default' : 'outline'}
+                          className={
+                            confirmaFechaDetectada === 'no'
+                              ? 'bg-amber-600 hover:bg-amber-700'
+                              : ''
+                          }
+                          onClick={() => setConfirmaFechaDetectada('no')}
+                        >
+                          No
+                        </Button>
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
               </div>
               <div className="space-y-2 sm:col-span-2">

@@ -475,6 +475,7 @@ export default function EscanerInfopagosLotePage() {
     setEditDraft({
       fechaPago: fila.fechaPago,
       confirmaFechaDetectada: fila.confirmaFechaDetectada,
+      confirmaFechaManual: Boolean(fila.confirmaFechaManual),
       institucion: fila.institucion,
       otroInstitucion: fila.otroInstitucion,
       numeroOperacion: fila.numeroOperacion,
@@ -496,6 +497,7 @@ export default function EscanerInfopagosLotePage() {
         editDraft.confirmaFechaDetectada === 'si' || editDraft.confirmaFechaDetectada === 'no'
           ? editDraft.confirmaFechaDetectada
           : null,
+      confirmaFechaManual: Boolean(editDraft.confirmaFechaManual),
       institucion: String(editDraft.institucion || ''),
       otroInstitucion: String(editDraft.otroInstitucion || ''),
       numeroOperacion: String(editDraft.numeroOperacion || ''),
@@ -582,6 +584,10 @@ export default function EscanerInfopagosLotePage() {
         )
         return
       }
+      if (!hayFechaDetectada && !fila.confirmaFechaManual) {
+        toast.error('Confirme manualmente la fecha ingresada para continuar.')
+        return
+      }
       if (
         hayFechaDetectada &&
         fila.confirmaFechaDetectada === 'si' &&
@@ -634,7 +640,11 @@ export default function EscanerInfopagosLotePage() {
       form.append('monto', montoParaApi(vM.valor))
       form.append('moneda', fila.moneda)
       form.append('fuente_tasa_cambio', fuenteTasa)
-      form.append('confirmacion_humana', 'true')
+      const confirmacionHumana =
+        hayFechaDetectada
+          ? fila.confirmaFechaDetectada === 'si' || fila.confirmaFechaDetectada === 'no'
+          : Boolean(fila.confirmaFechaManual)
+      form.append('confirmacion_humana', confirmacionHumana ? 'true' : 'false')
       form.append('comprobante', fila.archivo)
       guardarActivoRef.current.add(clientId)
       actualizarFila(clientId, { guardando: true, guardadoError: undefined })
@@ -1054,6 +1064,21 @@ export default function EscanerInfopagosLotePage() {
                                 Sin fecha clara en imagen: indique la fecha manualmente.
                               </p>
                             )}
+                            {!fila.fechaDetectada.trim() ? (
+                              <label className="mt-1 flex items-center gap-2 text-xs text-slate-700">
+                                <input
+                                  type="checkbox"
+                                  checked={Boolean(fila.confirmaFechaManual)}
+                                  onChange={e =>
+                                    actualizarFila(fila.clientId, {
+                                      confirmaFechaManual: e.target.checked,
+                                    })
+                                  }
+                                  className="h-4 w-4 rounded border-slate-300"
+                                />
+                                Confirmo manualmente que la fecha ingresada coincide con el comprobante.
+                              </label>
+                            ) : null}
                             <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
                               <div className="min-w-0 flex-1">
                                 <Input
@@ -1067,6 +1092,8 @@ export default function EscanerInfopagosLotePage() {
                                       v.trim() !== fila.fechaDetectada.trim()
                                     ) {
                                       patch.confirmaFechaDetectada = 'no'
+                                    } else if (!fila.fechaDetectada.trim()) {
+                                      patch.confirmaFechaManual = false
                                     }
                                     actualizarFila(fila.clientId, patch)
                                   }}
