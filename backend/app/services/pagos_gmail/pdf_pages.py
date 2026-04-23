@@ -1,6 +1,6 @@
 """
 PDF en pipeline Pagos Gmail: **solo entra a Gemini el PDF de exactamente 1 página** (regla estricta por adjunto).
-Si el PDF tiene **2 o más páginas**, no se añade a candidatos; el pipeline aplica en Gmail la etiqueta de usuario **PAGINAS** en el hilo.
+Si el PDF tiene **2 o más páginas**, no se añade a candidatos; la etiqueta final de Gmail la resuelve el pipeline como en cualquier correo sin ese PDF digitable (ver reglas de fallback).
 Imágenes no-PDF no se parten por páginas. Requiere `pypdf` para contar páginas.
 """
 from __future__ import annotations
@@ -53,7 +53,7 @@ def expand_pipeline_pdf_tuples(
 ) -> Tuple[List[Tuple[str, bytes, str, str]], int]:
     """
     Para cada tupla (nombre, bytes, mime, origen): si es PDF con **una sola página**, deja un candidato.
-    Si el PDF tiene **2+ páginas**, **no** añade candidatos (no escaneo Gemini); el pipeline aplica etiqueta **PAGINAS** en Gmail.
+    Si el PDF tiene **2+ páginas**, **no** añade candidatos (no escaneo Gemini para ese archivo).
     Devuelve ``(lista_candidatos, pdf_multipagina_omitidos)``.
     """
     expanded: List[Tuple[str, bytes, str, str]] = []
@@ -69,7 +69,7 @@ def expand_pipeline_pdf_tuples(
         if len(pages) > 1:
             multipage_omitidos += 1
             logger.info(
-                "[PAGOS_GMAIL] PDF %s: %d paginas (>1) — sin escaneo; el pipeline etiquetara PAGINAS en Gmail",
+                "[PAGOS_GMAIL] PDF %s: %d paginas (>1) — sin escaneo Gemini (omitido como candidato)",
                 fname,
                 len(pages),
             )

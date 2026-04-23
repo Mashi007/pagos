@@ -6,21 +6,21 @@ Orquestacion: Gmail -> Gemini/BD por **cada adjunto elegible** (remitente en cli
 
 **Re-proceso innegociable:** si el mensaje tiene **cualquier etiqueta de usuario** Gmail (API ``type=user``), el pipeline **no** vuelve a escanear ni reetiqueta. Se hace *skip total* (sin nuevas filas Excel/BD), preservando la etiqueta existente.
 
-**Regla estricta (1 página por binario):** solo se digitaliza **una página** por archivo: imágenes tal cual; PDF solo si tiene **exactamente 1 página**. PDF con **2+ páginas** no se envía a Gemini; el hilo recibe etiqueta Gmail **PAGINAS** (puede convivir con otras etiquetas del mismo paso salvo la regla exclusiva de ERROR EMAIL abajo).
+**Regla estricta (1 página por binario):** solo se digitaliza **una página** por archivo: imágenes tal cual; PDF solo si tiene **exactamente 1 página**. PDF con **2+ páginas** no se envía a Gemini (ese adjunto no entra en candidatos); la **etiqueta final** del correo sigue las reglas de abajo (p. ej. TEXTO / ERROR EMAIL / MANUAL) como el resto de hilos sin comprobante digitable útil.
 
-**Solo texto:** si el mensaje no aporta ningún binario imagen/PDF digitable por el extractor (`candidatos` vacío y sin omisión solo por PDF multipágina), la etiqueta final de Gmail es **TEXTO** (única y exclusivamente texto u adjuntos no comprobante imagen/PDF).
+**Solo texto:** si no hay candidatos imagen/PDF de 1 pág. (`candidatos` vacío: solo cuerpo/otros adjuntos, o solo PDFs de 2+ páginas omitidos) y no aplica **MANUAL** por `master@`, la etiqueta final de Gmail es **TEXTO**.
 
 **Regla de decisión actual (sin ambigüedad):**
 - Paso 1: si en el correo hay plantilla A/B con **CUOTAS_OK**, etiqueta final = MERCANTIL o BNC; si no hubo CUOTAS_OK pero sí comprobante A/B digitalizado en BD (p. ej. duplicado), misma etiqueta MERCANTIL/BNC (prioridad A sobre B).
 - Paso 2: si no hubo A/B (ni por cuotas ni por digitalizado) y el remitente está en `clientes`, C/D con **CUOTAS_OK** → BINANCE/BNV; si solo hay C/D digitalizado sin cuotas, misma etiqueta (prioridad C sobre D).
 - Paso 2b (Plan B, De no en clientes): si todo el correo digitalizó OK y hay plantilla **C**, etiqueta final = BINANCE (cédula columna ERROR EMAIL; sin CUOTAS_OK automático).
-- Paso 3 (fallback): si no aplica ninguna regla bancaria previa, usar orden TEXTO -> ERROR EMAIL -> MANUAL (sin etiqueta MASTER).
-- Solo se aplica **una** etiqueta final por correo (set permitido arriba), sin etiquetas auxiliares.
+- Paso 3 (fallback): si no aplica ninguna regla bancaria previa, usar orden TEXTO -> ERROR EMAIL -> MANUAL.
+- Solo se aplica **una** etiqueta final por correo (set permitido arriba): al fijarla en Gmail se **quitan** las demás de ese mismo set si existen (re-etiquetado). No se usan etiquetas Gmail fuera de ese conjunto.
 
 **Remitente y Plan B:**
 - Remitente en `clientes`: se evalúan plantillas según prompts/reglas de negocio.
 - Remitente fuera de `clientes` (Plan B): A/B con cédula desde imagen; **C (Binance)** con monto+ref legibles se digitaliza con cédula **ERROR EMAIL** (sin auto CUOTAS hasta asociar cliente); D/NR no aplican.
-- `master@rapicreditca.com` se escanea con las mismas reglas A/B/C/D (y Plan B si no está en `clientes`); si no hay etiqueta bancaria final, fallback MANUAL (no etiqueta MASTER).
+- `master@rapicreditca.com` se escanea con las mismas reglas A/B/C/D (y Plan B si no está en `clientes`); si no hay etiqueta bancaria final, fallback MANUAL.
 
 Excel de revisión y negocio:
 - `pagos_gmail_sync_item` / `gmail_temporal` guardan cada comprobante válido de extracción.
@@ -162,9 +162,9 @@ from app.services.pagos_gmail.plantilla_abcd_proceso_negocio import (
     resumen_log_linea_plantilla_abcd,
 )
 from app.services.pagos_gmail.gmail_service import (
-    add_message_user_labels_only,
     build_gmail_service,
     ensure_user_label_id,
+    get_existing_user_label_id,
     invalidate_gmail_labels_list_cache,
     get_pagos_gmail_image_pdf_files_for_pipeline,
     get_message_date,
@@ -173,6 +173,7 @@ from app.services.pagos_gmail.gmail_service import (
     list_gmail_user_label_ids,
     list_messages_by_filter,
     mark_as_read,
+    modify_message_labels_add_remove,
     PagosGmailGmailListError,
     PAGOS_GMAIL_LABEL_ERROR_EMAIL,
     PAGOS_GMAIL_LABEL_MANUAL,
@@ -428,6 +429,7 @@ def run_pipeline(
         "final_paso_1_b": 0,
         "final_paso_2_c": 0,
         "final_paso_2_d": 0,
+        "final_plan_b_binance_digitalizado": 0,
         "final_fallback_texto": 0,
         "final_fallback_error_email": 0,
         "final_fallback_manual": 0,
@@ -1001,7 +1003,7 @@ def run_pipeline(
                         )
                         # Re-escaneo A/B (solo_error / redig / error_email_rescan): cédula ilegible -> literal "ERROR".
                         # _campos_completos acepta "ERROR" como texto no vacío; sin esto, fully_digitized_email=True
-                        # y se quita ERROR EMAIL o se añade PROCESADO en redig aunque la cédula no sea válida.
+                        # y se quita ERROR EMAIL en redig aunque la cédula no sea válida.
                         if (
                             usar_extraccion_cedula_imagen_ab
                             and fmt in ("A", "B")
@@ -1626,14 +1628,14 @@ def run_pipeline(
                         final_label_reason = "paso_2_d"
 
                 if not final_label_name:
-                    # Solo texto (asunto/cuerpo) u otros adjuntos no imagen/PDF del pipeline: sin binarios digitable.
-                    if not candidatos and multipage_pdf_omitidos == 0:
-                        final_label_name = PAGOS_GMAIL_LABEL_TEXTO
-                        final_label_reason = "fallback_texto"
-                    # Remitente master@ con media pero sin digitalización completa: revisión humana.
-                    elif remitente_solo_master and not fully_digitized_email:
+                    # master@: sin digitalización completa del correo (p. ej. solo PDF 2+ pág. o fallos) -> revisión humana.
+                    if remitente_solo_master and not fully_digitized_email:
                         final_label_name = PAGOS_GMAIL_LABEL_MANUAL
                         final_label_reason = "fallback_manual"
+                    # Sin candidatos imagen/PDF de 1 pág. (texto u otros adjuntos, o solo PDFs multipágina omitidos).
+                    elif not candidatos:
+                        final_label_name = PAGOS_GMAIL_LABEL_TEXTO
+                        final_label_reason = "fallback_texto"
                     elif (
                         plan_b_mercantil_bnc_fuera_bd
                         and fully_digitized_email
@@ -1660,7 +1662,20 @@ def run_pipeline(
                         )
                     final_label_id = plantilla_label_cache.get(final_label_name)
                     if final_label_id:
-                        add_message_user_labels_only(gmail_svc, msg_id, [final_label_id])
+                        # Una sola etiqueta final entre las permitidas: quitar otras si ya están en el mensaje.
+                        _remove_final_ids: list[str] = []
+                        for _other_name in PAGOS_GMAIL_ETIQUETAS_FINALES_PERMITIDAS:
+                            if _other_name == final_label_name:
+                                continue
+                            _oid = get_existing_user_label_id(gmail_svc, _other_name)
+                            if _oid:
+                                _remove_final_ids.append(_oid)
+                        modify_message_labels_add_remove(
+                            gmail_svc,
+                            msg_id,
+                            add_label_ids=[final_label_id],
+                            remove_label_ids=_remove_final_ids,
+                        )
                         run_stats["messages_final_label_applied"] += 1
                         _k = f"final_{final_label_reason}"
                         if _k in run_stats:
@@ -1785,6 +1800,9 @@ def run_pipeline(
             "final_paso_1_b": run_stats["final_paso_1_b"],
             "final_paso_2_c": run_stats["final_paso_2_c"],
             "final_paso_2_d": run_stats["final_paso_2_d"],
+            "final_plan_b_binance_digitalizado": run_stats[
+                "final_plan_b_binance_digitalizado"
+            ],
             "final_fallback_texto": run_stats["final_fallback_texto"],
             "final_fallback_error_email": run_stats["final_fallback_error_email"],
             "final_fallback_manual": run_stats["final_fallback_manual"],
@@ -1862,6 +1880,9 @@ def run_pipeline(
             "final_paso_1_b": run_stats["final_paso_1_b"],
             "final_paso_2_c": run_stats["final_paso_2_c"],
             "final_paso_2_d": run_stats["final_paso_2_d"],
+            "final_plan_b_binance_digitalizado": run_stats[
+                "final_plan_b_binance_digitalizado"
+            ],
             "final_fallback_texto": run_stats["final_fallback_texto"],
             "final_fallback_error_email": run_stats["final_fallback_error_email"],
             "final_fallback_manual": run_stats["final_fallback_manual"],
@@ -1922,6 +1943,9 @@ def run_pipeline(
             "final_paso_1_b": run_stats["final_paso_1_b"],
             "final_paso_2_c": run_stats["final_paso_2_c"],
             "final_paso_2_d": run_stats["final_paso_2_d"],
+            "final_plan_b_binance_digitalizado": run_stats[
+                "final_plan_b_binance_digitalizado"
+            ],
             "final_fallback_texto": run_stats["final_fallback_texto"],
             "final_fallback_error_email": run_stats["final_fallback_error_email"],
             "final_fallback_manual": run_stats["final_fallback_manual"],

@@ -530,27 +530,21 @@ def test_pagos_gmail_label_exclusions_query_incluye_etiquetas_clasificacion():
     from app.services.pagos_gmail.gmail_service import (
         PAGOS_GMAIL_LABEL_ERROR_EMAIL,
         PAGOS_GMAIL_LABEL_IMAGEN_1,
-        PAGOS_GMAIL_LABEL_IMAGEN_5_LEGACY,
+        PAGOS_GMAIL_LABEL_IMAGEN_2,
+        PAGOS_GMAIL_LABEL_IMAGEN_3,
+        PAGOS_GMAIL_LABEL_IMAGEN_4,
         PAGOS_GMAIL_LABEL_MANUAL,
-        PAGOS_GMAIL_LABEL_MASTER,
-        PAGOS_GMAIL_LABEL_OTROS,
-        PAGOS_GMAIL_LABEL_PAGINAS,
-        PAGOS_GMAIL_LABEL_CALIDAD,
         PAGOS_GMAIL_LABEL_TEXTO,
-        PAGOS_GMAIL_LABEL_PROCESADO,
         pagos_gmail_label_exclusions_query,
     )
 
     q = pagos_gmail_label_exclusions_query()
     assert f'-label:"{PAGOS_GMAIL_LABEL_IMAGEN_1}"' in q
-    assert f'-label:"{PAGOS_GMAIL_LABEL_MASTER}"' in q
-    assert f'-label:"{PAGOS_GMAIL_LABEL_IMAGEN_5_LEGACY}"' in q
+    assert f'-label:"{PAGOS_GMAIL_LABEL_IMAGEN_2}"' in q
+    assert f'-label:"{PAGOS_GMAIL_LABEL_IMAGEN_3}"' in q
+    assert f'-label:"{PAGOS_GMAIL_LABEL_IMAGEN_4}"' in q
     assert f'-label:"{PAGOS_GMAIL_LABEL_ERROR_EMAIL}"' in q
     assert f'-label:"{PAGOS_GMAIL_LABEL_MANUAL}"' in q
-    assert f'-label:"{PAGOS_GMAIL_LABEL_OTROS}"' in q
-    assert f'-label:"{PAGOS_GMAIL_LABEL_PAGINAS}"' in q
-    assert f'-label:"{PAGOS_GMAIL_LABEL_CALIDAD}"' in q
     assert f'-label:"{PAGOS_GMAIL_LABEL_TEXTO}"' in q
-    assert f'-label:"{PAGOS_GMAIL_LABEL_PROCESADO}"' in q
 
 

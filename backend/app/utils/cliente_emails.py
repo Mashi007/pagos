@@ -26,7 +26,7 @@ Escaneo Gmail / digitalización de pagos (plantillas Mercantil, BNC, Binance, BD
   con `clientes.email` (predeterminado); si no hay coincidencia, con `clientes.email_secundario` si no está vacío.
   Excepción: con **scan_filter=error_email_rescan**, plantillas **A/B** pueden llevar cédula leída de la imagen (Gemini); el resto igual por remitente.
   Si tampoco coincide: la columna **Cédula** del Excel queda **ERROR EMAIL** y en Gmail **únicamente** la etiqueta **ERROR EMAIL**
-  en ese paso (no inventar cédula; no combinar con MANUAL, OTROS, etc.). Si coincide el remitente, aplican plantillas y demás reglas. Ver `app.services.pagos_gmail.pipeline`.
+  en ese paso (no inventar cédula; no combinar con otras etiquetas de clasificación). Si coincide el remitente, aplican plantillas y demás reglas. Ver `app.services.pagos_gmail.pipeline`.
 """
 from __future__ import annotations
 

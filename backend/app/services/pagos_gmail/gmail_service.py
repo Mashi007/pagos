@@ -2,7 +2,7 @@
 Gmail: listar correos con adjunto o parte con nombre de imagen/PDF (has:attachment OR filename:png|jpg|...).
 Pipeline Pagos: extrae candidatos imagen/PDF (adjunto, cuerpo, .eml); **Gemini solo si el remitente está en tabla clientes**
 (email o email_secundario). Cada adjunto de **una sola página** (imagen o PDF de 1 pág.) es un candidato y puede generar **una fila**;
-los PDF con **2+ páginas** no se digitalizan y el hilo recibe etiqueta de usuario **PAGINAS**; si la imagen es ilegible o Gemini no inventa datos, **CALIDAD**; si no hay ningún binario imagen/PDF de comprobante (solo texto u otros adjuntos), **TEXTO** (ver pipeline).
+los PDF con **2+ páginas** no se digitalizan (sin candidato para ese archivo); la etiqueta final del hilo la decide el pipeline (p. ej. TEXTO / ERROR EMAIL / MANUAL según reglas).
 Plantilla A/B/C/D la decide Gemini por binario.
 """
 import base64
@@ -170,26 +170,12 @@ PAGOS_GMAIL_LABEL_IMAGEN_1 = "MERCANTIL"
 PAGOS_GMAIL_LABEL_IMAGEN_2 = "BNC"
 PAGOS_GMAIL_LABEL_IMAGEN_3 = "BINANCE"
 PAGOS_GMAIL_LABEL_IMAGEN_4 = "BNV"
-# Etiqueta legacy "MASTER": el pipeline ya no la aplica; se conserva el nombre solo para exclusiones en `pagos_gmail_label_exclusions_query` (hilos antiguos).
-PAGOS_GMAIL_LABEL_MASTER = "MASTER"
-# Nombre antiguo en Gmail; seguir excluyendo en busquedas para no reescanear hilos ya marcados antes del cambio.
-PAGOS_GMAIL_LABEL_IMAGEN_5_LEGACY = "IMAGEN 5"
-# Alias histórico (mismo texto que MASTER) para consultas que aún referencian "imagen 5".
-PAGOS_GMAIL_LABEL_IMAGEN_5 = PAGOS_GMAIL_LABEL_MASTER
 # Remitente (De) sin fila en clientes.email (o fallo BD): misma leyenda que columna Cedula del Excel.
 PAGOS_GMAIL_LABEL_ERROR_EMAIL = "ERROR EMAIL"
 # Ninguna plantilla A/B/C/D reconocida (o no se aplico otra etiqueta de clasificacion).
 PAGOS_GMAIL_LABEL_MANUAL = "MANUAL"
-# Correos con candidatos imagen/PDF pero sin plantilla A/B/C/D digitalizada (MERCANTIL/BNC/BINANCE/BNV) ni otra clasificacion previa.
-PAGOS_GMAIL_LABEL_OTROS = "OTROS"
-# PDF adjunto con 2+ paginas: no se digitaliza el PDF completo; el pipeline etiqueta el hilo para revision.
-PAGOS_GMAIL_LABEL_PAGINAS = "PAGINAS"
-# Imagen ilegible o no inventar: Gemini no clasifica o no lee bien cedula/referencia desde pixeles.
-PAGOS_GMAIL_LABEL_CALIDAD = "CALIDAD"
 # Sin captura/PDF de comprobante: cuerpo u adjuntos no extraen imagen/PDF de pago (no hay columnas desde pixeles).
 PAGOS_GMAIL_LABEL_TEXTO = "TEXTO"
-# Tras redigitalizacion exitosa MANUAL+ERROR EMAIL (paso final pipeline): marca visible de procesado.
-PAGOS_GMAIL_LABEL_PROCESADO = "PROCESADO"
 
 
 def pagos_gmail_label_exclusions_query() -> str:
@@ -202,15 +188,9 @@ def pagos_gmail_label_exclusions_query() -> str:
         f'-label:"{PAGOS_GMAIL_LABEL_IMAGEN_2}" '
         f'-label:"{PAGOS_GMAIL_LABEL_IMAGEN_3}" '
         f'-label:"{PAGOS_GMAIL_LABEL_IMAGEN_4}" '
-        f'-label:"{PAGOS_GMAIL_LABEL_MASTER}" '
-        f'-label:"{PAGOS_GMAIL_LABEL_IMAGEN_5_LEGACY}" '
         f'-label:"{PAGOS_GMAIL_LABEL_ERROR_EMAIL}" '
         f'-label:"{PAGOS_GMAIL_LABEL_MANUAL}" '
-        f'-label:"{PAGOS_GMAIL_LABEL_OTROS}" '
-        f'-label:"{PAGOS_GMAIL_LABEL_PAGINAS}" '
-        f'-label:"{PAGOS_GMAIL_LABEL_CALIDAD}" '
-        f'-label:"{PAGOS_GMAIL_LABEL_TEXTO}" '
-        f'-label:"{PAGOS_GMAIL_LABEL_PROCESADO}"'
+        f'-label:"{PAGOS_GMAIL_LABEL_TEXTO}"'
     )
 
 
@@ -247,8 +227,8 @@ def pagos_gmail_error_email_rescan_query() -> str:
 def pagos_gmail_manual_error_email_redigitaliza_query() -> str:
     """
     Segunda pasada al final de una corrida: inbox + media con **MANUAL** y **ERROR EMAIL**.
-    El pipeline filtra de nuevo para que las etiquetas de usuario del mensaje sean **exactamente**
-    esas dos (sin PAGINAS/CALIDAD/etc.).
+    El pipeline filtra de nuevo para correos con ambas etiquetas (puede haber otras etiquetas de usuario en el hilo;
+    la omisión por etiquetas del lote principal sigue las reglas de ``pipeline.py``).
     """
     return (
         f'in:inbox label:{PAGOS_GMAIL_LABEL_MANUAL} '
@@ -1299,7 +1279,7 @@ def add_message_user_labels_only(
     service: Any, message_id: str, user_label_ids: List[str]
 ) -> None:
     """
-    Anade solo etiquetas de usuario (sin estrella). Ej. ERROR EMAIL u OTROS.
+    Anade solo etiquetas de usuario (sin estrella). Ej. ERROR EMAIL.
     Omite ids que el mensaje ya tiene (re-escaneos / varias pasadas no acumulan el mismo id).
     """
     add_ids = [x for x in user_label_ids if x]
