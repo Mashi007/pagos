@@ -498,6 +498,33 @@ def test_pagos_gmail_inbox_media_query_incluye_todo_sin_filtrar_estrella_ni_etiq
     assert "-label:" not in q
 
 
+def test_attachment_pdf_octet_stream_se_acepta_por_extension_pdf():
+    from app.services.pagos_gmail.gmail_service import (
+        get_attachment_image_pdf_files_for_message,
+    )
+
+    service = MagicMock()
+    service.users.return_value.messages.return_value.attachments.return_value.get.return_value.execute.return_value = {
+        "data": "JVBERi0xLjQK"
+    }
+    payload = {
+        "parts": [
+            {
+                "mimeType": "application/octet-stream",
+                "filename": "deposito_rapimoto.pdf",
+                "body": {"attachmentId": "att_pdf_1"},
+            }
+        ]
+    }
+
+    out = get_attachment_image_pdf_files_for_message(service, "msg-1", payload)
+    assert len(out) == 1
+    filename, content, mime = out[0]
+    assert filename.endswith(".pdf")
+    assert mime == "application/octet-stream"
+    assert content.startswith(b"%PDF")
+
+
 def test_expand_pipeline_pdf_tuples_imagen_pasa_y_multipage_pdf_expande_por_pagina():
     from io import BytesIO
 

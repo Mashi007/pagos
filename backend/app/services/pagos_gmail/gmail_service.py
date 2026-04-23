@@ -302,6 +302,16 @@ def _message_has_extractable_content(payload: dict) -> bool:
     return False
 
 
+def _is_image_pdf_part_candidate(mime: str, filename: str) -> bool:
+    """
+    Permite candidatos por MIME o por extension de archivo.
+    Algunos proveedores adjuntan PDF con MIME generico `application/octet-stream`.
+    """
+    m = (mime or "").strip().lower()
+    fn = (filename or "").strip()
+    return (m in MIME_IMAGE_OR_PDF) or (bool(fn) and is_allowed_attachment(fn))
+
+
 # Máximo de segundos que esperamos en un reintento ante 429 (evita bloquear el worker ~15 min).
 _GMAIL_429_MAX_WAIT_SECONDS = 120
 
@@ -654,7 +664,7 @@ def get_attachment_image_pdf_files_for_message(
                 walk(nested)
                 continue
             mime = (part.get("mimeType") or "application/octet-stream").strip().lower()
-            if mime not in MIME_IMAGE_OR_PDF:
+            if not _is_image_pdf_part_candidate(mime, part.get("filename") or ""):
                 continue
             att_id = part.get("body", {}).get("attachmentId")
             if not att_id:
@@ -678,7 +688,7 @@ def get_attachment_image_pdf_files_for_message(
         mime = (payload.get("mimeType") or "").strip().lower()
         body = payload.get("body") or {}
         att_id = body.get("attachmentId")
-        if att_id and mime in MIME_IMAGE_OR_PDF:
+        if att_id and _is_image_pdf_part_candidate(mime, payload.get("filename") or ""):
             use_fn = _effective_filename(payload, mime, att_id)
             try:
                 att = service.users().messages().attachments().get(
@@ -790,7 +800,7 @@ def get_body_embedded_image_pdf_files_for_message(
     parts = payload.get("parts") or []
 
     def _append_leaf(part: dict, mime: str) -> None:
-        if mime not in MIME_IMAGE_OR_PDF:
+        if not _is_image_pdf_part_candidate(mime, part.get("filename") or ""):
             return
         raw = _download_gmail_leaf_part_bytes(service, message_id, part)
         if not raw:
@@ -802,7 +812,7 @@ def get_body_embedded_image_pdf_files_for_message(
 
     if not parts:
         root_mime = (payload.get("mimeType") or "").strip().lower()
-        if root_mime in MIME_IMAGE_OR_PDF:
+        if _is_image_pdf_part_candidate(root_mime, payload.get("filename") or ""):
             if _content_disposition_type(_header_value_from_part_headers(payload, "Content-Disposition")) != "attachment":
                 _append_leaf(payload, root_mime)
     else:
@@ -814,7 +824,7 @@ def get_body_embedded_image_pdf_files_for_message(
                 if nested:
                     walk(nested, mime)
                     continue
-                if mime not in MIME_IMAGE_OR_PDF:
+                if not _is_image_pdf_part_candidate(mime, part.get("filename") or ""):
                     continue
                 if not _is_body_embedded_image_pdf_leaf(part, parent_mime):
                     continue
@@ -841,7 +851,7 @@ def _get_inline_images_from_parts(
         if nested:
             out.extend(_get_inline_images_from_parts(service, message_id, nested, prefix=f"{prefix}{i}_"))
             continue
-        if mime not in MIME_IMAGE_OR_PDF:
+        if not _is_image_pdf_part_candidate(mime, part.get("filename") or ""):
             continue
         body = part.get("body") or {}
         att_id = body.get("attachmentId")
