@@ -68,7 +68,7 @@ def _is_pipeline_running(db: Session) -> bool:
 
 
 def _run_pipeline_background(sync_id: int, scan_filter: str = "all") -> None:
-    """Ejecuta el pipeline en background con su propia sesion de BD. ón de BD (evita el timeout de 30s de Render/Axios)."""
+    """Ejecuta el pipeline en background con su propia sesión de BD (evita el timeout de 30s de Render/Axios)."""
     db = SessionLocal()
     logger.info("[PAGOS_GMAIL] [ETAPA] Inicio pipeline background sync_id=%s scan_filter=%s", sync_id, scan_filter)
     try:
