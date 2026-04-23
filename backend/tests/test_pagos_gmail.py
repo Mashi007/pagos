@@ -407,6 +407,17 @@ def test_guess_bank_hint_e_solo_anclas_fuertes_bancamiga():
     assert _guess_bank_hint_from_text("01910123456789012345 ref", "x.png", "x") == "B"
 
 
+def test_guess_bank_hint_bnc_app_transferencia_con_cuentas_enmascaradas():
+    txt = (
+        "Su transferencia ha sido Ejecutada exitosamente\n"
+        "Cta. Ahorro BNC: ***4398\n"
+        "Cuenta abonada: Cta. Corriente BNC: ***7926 RAPI-CREDIT, C.A\n"
+        "Monto: Bs. 54.913,67\n"
+        "Referencia: 133454281"
+    )
+    assert _guess_bank_hint_from_text(txt, "bnc_app.png", "sin_plantilla") == "B"
+
+
 def test_parse_formato_c_binance_ok():
     """JSON C valido: monto, referencia; fecha, cedula y email_cliente NA (parser fuerza NA en C)."""
     j = (

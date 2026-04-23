@@ -152,15 +152,18 @@ PASO 1d - Prioridad **F (Banco del Tesoro / imagen 6)** antes de **B** cuando el
   Si el nucleo F se cumple -> **formato F**, **no B** (aunque el beneficiario sea cuenta BNC: el papel/pantalla es **Tesoro**, no recibo **BNC** emisor).
 
 PASO 2 - Prioridad B (imagen 2) si el nucleo B se cumple **y no** aplico el nucleo E de PASO 1c **ni** el nucleo F de PASO 1d; entonces B, no A ni C ni E ni F:
-  Nucleo B = (BNC logo o texto **o** interfaz app **BNC** reconocible) + cuenta destino **0191** en **cualquiera** de estos formatos:
+  Nucleo B = (BNC logo o texto **o** interfaz app **BNC** reconocible) + evidencia fuerte de operacion a favor de RapiCredit.
+  Evidencia fuerte aceptada:
+    - cuenta destino **0191** en **cualquiera** de estos formatos:
     (a) cajero ####/####/##/########## con barras (ej. 0191/0127/48/2300080639), **o**
     (b) **20 digitos** seguidos que **empiezan por 0191** en linea **Cuenta** / **PARA LA CUENTA NRO.** / **Cuenta abonada** (ej. 01910127452100307926 — mismo banco que 0191/01/27/45/2100307926),
+    - **o** app movil BNC con cuentas enmascaradas (**\***\*\*4398 / **\***\*\*7926, etc.) donde la linea **Cuenta abonada** muestra **RAPI-CREDIT** (o variante OCR razonable) + **Referencia** numerica + **Monto/Total Bs.**.
     + RAPI-CREDIT / RAPI CREDIT / RAPICREDIT / **Rapicredit** (beneficiario en app; OCR: Toro u otro nombre junto a cuenta Rapi) como titular o beneficiario de esa cuenta,
     + monto de la operacion visible: **dolares** (Us$, US$, USD, patron *...*NN.mm en papel cajero) **o bolivares / VEB** (**Bs.** / **VEB** con miles **.** y decimales **,** tipo 54.913,67 o 28.425,77, u OCR 87,952.00 en contexto VEB).
   Regla anti-falso-negativo BNC (fotos reales): si el papel muestra patron de seguridad BNC (fondo repetido con emblema), texto BancoNacionaldeCrédito/BNC,
     cuenta 0191/... de RAPI-CREDIT y linea Deposito Us$ con monto enmascarado por asteriscos, clasifica B aunque el contraste sea bajo,
     haya sombra, desenfoque leve, sello azul, reflejo o parte del borde recortado.
-  Regla anti-falso-negativo BNC **digital (app / PDF)**: si la captura muestra **BNC** + **Referencia**/**Ref**/**Ref.N°** con digitos + monto en **Bs.** o **VEB** + cuenta **0191** (barras o 20 digitos) y beneficiario/titular RapiCredit, clasifica **B** aunque **no** haya Deposito Us$ ni asteriscos (eso es tipico de **cajero**, no de transferencia en bolivares).
+  Regla anti-falso-negativo BNC **digital (app / PDF)**: si la captura muestra **BNC** + **Referencia**/**Ref**/**Ref.N°** con digitos + monto en **Bs.** o **VEB** + (cuenta **0191** en barras/20 digitos **o** cuentas enmascaradas con **Cuenta abonada: ... RAPI-CREDIT...**), clasifica **B** aunque **no** haya Deposito Us$ ni asteriscos (eso es tipico de **cajero**, no de transferencia en bolivares).
   Si el nucleo B se cumple, elige B aunque tambien aparezca "RAPI-CREDIT" en otro contexto: aqui es recibo de cajero BNC, no ticket RECAUDACION.
   VARIANTE B — **patrones visuales tipicos del recibo BNC (imagen 2)** (combinar varias senales; no inventes si falta el nucleo):
     - **Marca BNC**: texto **BNC** destacado y/o icono sol/abanico; a veces **Rif. N° J...** en margen; agua/fondo repetitivo tipo seguridad.
