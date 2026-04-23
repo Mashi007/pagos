@@ -195,6 +195,7 @@ export default function EscanerInfopagosPage() {
   /** Evita doble envío antes de que React actualice `escaneando` / `enviando`. */
   const escanearActivoRef = useRef(false)
   const enviarActivoRef = useRef(false)
+  const ultimoIntentoGuardarRef = useRef(0)
   const confirmaFechaDetectadaRef = useRef<null | 'si' | 'no'>(null)
   const confirmaFechaManualRef = useRef(false)
 
@@ -410,6 +411,9 @@ export default function EscanerInfopagosPage() {
   }, [archivo, cedulaNormalizada, fuenteTasa])
 
   const handleGuardar = useCallback(async () => {
+    const ahora = Date.now()
+    if (ahora - ultimoIntentoGuardarRef.current < 150) return
+    ultimoIntentoGuardarRef.current = ahora
     if (enviarActivoRef.current) return
     if (!cedulaNormalizada.valido || !cedulaNormalizada.valorParaEnviar) {
       toast.error('Cédula inválida.')

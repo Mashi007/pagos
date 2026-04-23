@@ -534,6 +534,13 @@ const staticOptions = {
       res.setHeader('Expires', '0');
       return;
     }
+    // Para chunks hash de /assets, usar cache corta + revalidación estricta:
+    // reduce errores "chunk missing" durante/tras deploy cuando cambia el hash.
+    if (filePath.includes(`${path.sep}assets${path.sep}`) && (filePath.endsWith('.js') || filePath.endsWith('.css'))) {
+      res.setHeader('Cache-Control', 'public, max-age=300, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      return;
+    }
     // No cachear chunks de exportación (exceljs, jspdf) - evita 404 tras deploy cuando el hash cambia
     if (basename.includes('exceljs') || basename.includes('jspdf') || basename.includes('pdf-export')) {
       res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
@@ -705,6 +712,20 @@ app.get(FRONTEND_BASE + '/*', (req, res, next) => {
       if (subPath.endsWith('.js')) res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
       else if (subPath.endsWith('.css')) res.setHeader('Content-Type', 'text/css');
       return res.sendFile(filePath);
+    }
+    if (subPath.endsWith('.js')) {
+      // No devolver HTML para módulos ausentes: Firefox/Chromium lo bloquean por MIME text/html.
+      // En su lugar, responder JS válido que fuerce una recarga única con cache-busting.
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.type('application/javascript');
+      return res.status(200).send(
+        `(function(){try{var k='rapicredit_missing_chunk_reload_v1';var n=Number(sessionStorage.getItem(k)||'0');if(n<1){sessionStorage.setItem(k,String(n+1));var u=new URL(window.location.href);u.searchParams.set('nocache',String(Date.now()));window.location.replace(u.pathname+u.search+u.hash);return;}}catch(e){}throw new Error('Missing JS chunk: ${subPath.replace(/'/g, "\\'")}');})();`
+      );
+    }
+    if (subPath.endsWith('.css')) {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.type('text/css');
+      return res.status(404).send('/* missing css chunk */');
     }
   }
   const staticFileExtensions = ['.js', '.css', '.svg', '.png', '.jpg', '.jpeg', '.gif', '.ico', '.woff', '.woff2', '.ttf', '.eot'];
