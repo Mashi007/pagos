@@ -773,6 +773,22 @@ export function PagosList() {
     setPagoEditando(pago)
     setShowRegistrarPago(true)
   }
+  const handleSiguienteAnomalia = () => {
+    const candidatos = revisionRowsAnalizadas.filter(r => r.score > 0)
+    if (candidatos.length === 0) {
+      toast.info('No hay anomalías priorizadas en esta página.')
+      return
+    }
+    const idxActual = candidatos.findIndex(r => r.pago.id === editingRevisionId)
+    const siguiente = candidatos[(idxActual + 1 + candidatos.length) % candidatos.length]
+    setEditingRevisionId(siguiente.pago.id)
+    setRevisionObservacionDraft((siguiente.pago.observaciones ?? '').trim())
+    setPagoEditando(siguiente.pago)
+    setShowRegistrarPago(true)
+    toast.success(
+      `Abriendo anomalía ${idxActual >= 0 ? idxActual + 2 : 1}/${candidatos.length} (ID ${siguiente.pago.id})`
+    )
+  }
   const handleBuscarRevisionPorCedula = () => {
     setRevisionCedulaFiltro(revisionCedulaInput.trim())
     setRevisionNumeroDocumentoFiltro(revisionNumeroDocumentoInput.trim())
@@ -1614,6 +1630,13 @@ export function PagosList() {
                     onClick={handleBuscarRevisionPorCedula}
                   >
                     Buscar
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={handleSiguienteAnomalia}
+                    title="Abrir la siguiente fila priorizada para edición"
+                  >
+                    Siguiente anomalía
                   </Button>
                   {(revisionCedulaFiltro ||
                     revisionNumeroDocumentoFiltro ||
