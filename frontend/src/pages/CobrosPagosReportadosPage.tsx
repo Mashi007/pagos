@@ -437,7 +437,7 @@ export default function CobrosPagosReportadosPage() {
       const silent = Boolean(opts?.silent) && dataRef.current !== null
       const pageToFetch = opts?.page != null ? opts.page : page
       setLoading(initialLoad)
-      // Sin overlay "Actualizando listado…" en refrescos silenciosos (p. ej. tras aprobar o cron 15 min).
+      // Sin overlay "Actualizando listado…" en refrescos silenciosos (p. ej. tras aprobar o intervalo automático).
       setRefreshing(!initialLoad && !silent)
 
       try {

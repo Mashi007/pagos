@@ -1,6 +1,6 @@
 -- Opcional: vaciar por completo la cola temporal de descargas (legacy).
 -- Útil si quedaron filas huérfanas tras migrar al flujo único
--- GET /pagos-reportados/exportar-aprobados-excel
+-- GET /pagos-reportados/exportar-aprobados-correccion (o /exportar-aprobados-excel compat)
 --
 -- Revisar antes:
 -- SELECT COUNT(*) FROM pagos_pendiente_descargar;

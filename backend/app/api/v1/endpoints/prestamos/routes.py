@@ -24,7 +24,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 
 from fastapi.responses import Response
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 from sqlalchemy import and_, cast, delete, exists, func, or_, select, text, update
 
@@ -2541,6 +2541,8 @@ def _recalcular_fechas_vencimiento_cuotas(db: Session, p: Prestamo, fecha_base: 
     
     Regla: fecha_base debe ser la nueva fecha_base_calculo del prestamo (alineada con fecha_aprobacion).
     
+    No hace commit: el llamador persiste la sesión (p. ej. junto con filas de auditoría).
+
     Returns: dict con estadísticas de actualización.
     """
     from app.services.cuota_estado import clasificar_estado_cuota, hoy_negocio
@@ -2584,9 +2586,7 @@ def _recalcular_fechas_vencimiento_cuotas(db: Session, p: Prestamo, fecha_base: 
         
         db.add(cuota)
         actualizadas += 1
-    
-    db.commit()
-    
+
     return {
         "message": "Fechas de vencimiento recalculadas exitosamente",
         "actualizadas": actualizadas
@@ -3283,10 +3283,17 @@ _RECALCULAR_FECHAS_LOTE_MAX = 80
 class RecalcularFechasAmortizacionLoteBody(BaseModel):
     """Ids de préstamos a recalcular (misma semántica que POST …/{id}/recalcular-fechas-amortizacion)."""
 
-    prestamo_ids: List[int]
+    prestamo_ids: List[int] = Field(
+        ...,
+        min_length=1,
+        max_length=_RECALCULAR_FECHAS_LOTE_MAX,
+        description="Ids de préstamos a recalcular (máximo por petición = límite del servidor).",
+    )
 
 
-def _ejecutar_recalculo_fechas_amortizacion_por_id(db: Session, prestamo_id: int) -> dict:
+def _ejecutar_recalculo_fechas_amortizacion_por_id(
+    db: Session, prestamo_id: int, current_user: UserResponse
+) -> dict:
     """
     Valida, recalcula fechas de cuotas, registra auditoría y hace commit.
     Misma lógica que el endpoint unitario; lanza HTTPException si no aplica.
@@ -3314,11 +3321,8 @@ def _ejecutar_recalculo_fechas_amortizacion_por_id(db: Session, prestamo_id: int
 
     resultado = _recalcular_fechas_vencimiento_cuotas(db, p, fecha_base)
 
-    _fallback_uid = db.execute(
-        text("SELECT id FROM public.usuarios ORDER BY id LIMIT 1")
-    ).scalar() or 1
     audit_recalc = Auditoria(
-        usuario_id=_fallback_uid,
+        usuario_id=_audit_user_id(db, current_user),
         accion="RECALCULO_FECHAS_AMORTIZACION",
         entidad="prestamos",
         entidad_id=prestamo_id,
@@ -3352,27 +3356,22 @@ def _http_detail_str(detail: Any) -> str:
 def recalcular_fechas_amortizacion_lote(
     body: RecalcularFechasAmortizacionLoteBody,
     db: Session = Depends(get_db),
-    _current_user: UserResponse = Depends(require_admin),
+    current_user: UserResponse = Depends(require_admin),
 ):
     """
     Misma operación que POST `/{prestamo_id}/recalcular-fechas-amortizacion` por cada id:
     un commit por préstamo (misma atomicidad que N llamadas sueltas desde el cliente).
     """
-    ids = sorted({int(x) for x in (body.prestamo_ids or []) if int(x) > 0})
+    ids = sorted({int(x) for x in body.prestamo_ids if int(x) > 0})
     if not ids:
         raise HTTPException(status_code=400, detail="prestamo_ids vacío o inválido.")
-    if len(ids) > _RECALCULAR_FECHAS_LOTE_MAX:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Máximo {_RECALCULAR_FECHAS_LOTE_MAX} préstamos por petición.",
-        )
 
     errores: List[dict] = []
     prestamo_ids_ok: List[int] = []
 
     for pid in ids:
         try:
-            _ejecutar_recalculo_fechas_amortizacion_por_id(db, pid)
+            _ejecutar_recalculo_fechas_amortizacion_por_id(db, pid, current_user)
             prestamo_ids_ok.append(pid)
         except HTTPException as exc:
             try:
@@ -3428,7 +3427,7 @@ def recalcular_fechas_amortizacion(
     
     Debe llamarse después de alinear fecha_aprobacion y fecha_base_calculo en el prestamo.
     """
-    return _ejecutar_recalculo_fechas_amortizacion_por_id(db, prestamo_id)
+    return _ejecutar_recalculo_fechas_amortizacion_por_id(db, prestamo_id, current_user)
 
 
 
@@ -5133,11 +5132,8 @@ def update_prestamo(
                 f"recalculando fechas de vencimiento de {existentes} cuota(s)"
             )
             resultado_recalc = _recalcular_fechas_vencimiento_cuotas(db, row, fecha_base)
-            _fallback_uid = db.execute(
-                text("SELECT id FROM public.usuarios ORDER BY id LIMIT 1")
-            ).scalar() or 1
             audit_recalc = Auditoria(
-                usuario_id=_fallback_uid,
+                usuario_id=_audit_user_id(db, current_user),
                 accion="RECALCULO_FECHAS_AMORTIZACION",
                 entidad="prestamos",
                 entidad_id=prestamo_id,

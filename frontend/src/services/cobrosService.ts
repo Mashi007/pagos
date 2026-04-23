@@ -838,7 +838,7 @@ function cloneListadoConKpis(
   return JSON.parse(JSON.stringify(data)) as ListPagosReportadosConKpisResponse
 }
 
-/** Tras aprobar/rechazar/eliminar/exportar Excel: forzar datos frescos en la siguiente carga. */
+/** Tras aprobar/rechazar/eliminar o exportar corrección masiva: forzar datos frescos en la siguiente carga. */
 export function invalidateCobrosListadoKpisCache(): void {
   cobrosListadoKpisCache.clear()
 }

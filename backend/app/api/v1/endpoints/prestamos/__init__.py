@@ -1,6 +1,7 @@
 """Préstamos: router FastAPI y símbolos reutilizados por otros módulos."""
 
 from .routes import (
+    _audit_user_id,
     _generar_cuotas_amortizacion,
     _listado_cuotas_prestamo_dicts,
     _recalcular_fechas_vencimiento_cuotas,
@@ -13,6 +14,7 @@ from .routes import (
 )
 
 __all__ = [
+    "_audit_user_id",
     "_generar_cuotas_amortizacion",
     "_listado_cuotas_prestamo_dicts",
     "_recalcular_fechas_vencimiento_cuotas",

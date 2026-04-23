@@ -1,5 +1,5 @@
 """
-Servicio para exportar pagos aprobados pendientes a Excel y vaciar la tabla temporal.
+Servicio para exportar pagos aprobados pendientes (filas para XLSX) y vaciar la tabla temporal.
 """
 from typing import List, Dict, Any
 from sqlalchemy.orm import Session
@@ -62,9 +62,9 @@ def vaciar_tabla_pendiente_descargar(db: Session) -> int:
     return cantidad
 
 
-def obtener_datos_excel(db: Session, pagos: List[PagoReportado]) -> List[Dict[str, Any]]:
+def obtener_filas_exportacion_xlsx(db: Session, pagos: List[PagoReportado]) -> List[Dict[str, Any]]:
     """
-    Convierte pagos a filas para exportar a Excel.
+    Convierte pagos a filas listas para generar un XLSX.
     Incluye tasa oficial Bs/USD (día fecha_pago) y equivalente en USD para pagos en Bs.
     """
     rows = []

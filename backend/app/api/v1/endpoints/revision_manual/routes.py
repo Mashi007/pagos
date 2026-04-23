@@ -937,7 +937,10 @@ def editar_prestamo_revision(
         )
         fecha_base = _fecha_para_amortizacion(prestamo)
         if existentes > 0 and fecha_base and fecha_base != fecha_base_amort_antes:
-            from app.api.v1.endpoints.prestamos import _recalcular_fechas_vencimiento_cuotas
+            from app.api.v1.endpoints.prestamos import (
+                _audit_user_id,
+                _recalcular_fechas_vencimiento_cuotas,
+            )
 
             logger.info(
                 "[revision_manual] editar_prestamo: fecha base amortización %s -> %s; recalculando %s cuota(s), prestamo_id=%s",
@@ -947,10 +950,9 @@ def editar_prestamo_revision(
                 prestamo_id,
             )
             resultado_recalc = _recalcular_fechas_vencimiento_cuotas(db, prestamo, fecha_base)
-            _fallback_uid = db.execute(text("SELECT id FROM public.usuarios ORDER BY id LIMIT 1")).scalar() or 1
             db.add(
                 Auditoria(
-                    usuario_id=_fallback_uid,
+                    usuario_id=_audit_user_id(db, current_user),
                     accion="RECALCULO_FECHAS_AMORTIZACION",
                     entidad="prestamos",
                     entidad_id=prestamo_id,

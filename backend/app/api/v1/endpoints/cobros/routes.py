@@ -604,7 +604,7 @@ def _pago_reportado_list_items_from_rows(
     """Misma lógica de observaciones / tasa que el listado paginado.
 
     Si ``include_financial_fields`` es False, no calcula tasa Bs/USD ni equivalente (ahorra trabajo
-    en barridos masivos donde solo se usa ``observacion`` + Gemini para ``_item_falla_validadores_cobros_excel``).
+    en barridos masivos donde solo se usa ``observacion`` + Gemini para ``_item_falla_validadores_cola_manual``).
     """
     if not rows:
         return []
@@ -707,7 +707,7 @@ def _query_reportados_falla_validadores_pendientes_exportar(
     cedula: Optional[str],
     institucion: Optional[str],
 ) -> List[PagoReportado]:
-    """Pendiente, en revisión o aprobado (legacy), aún no exportados a Excel; sin fechas (mismos filtros opcionales que el front)."""
+    """Pendiente, en revisión o aprobado (legacy), aún no marcados como exportados; sin fechas (mismos filtros opcionales que el front)."""
     exportados_subq = select(PagoReportadoExportado.pago_reportado_id)
     q = select(PagoReportado).where(PagoReportado.estado.in_(("pendiente", "en_revision", "aprobado")))
     q = q.where(~PagoReportado.id.in_(exportados_subq))
@@ -851,7 +851,7 @@ def _regularizar_reportados_guarded(db: Session) -> None:
         _regulariza_lock.release()
 
 
-def _estado_label_excel(estado: str) -> str:
+def _estado_label_estado_reportado(estado: str) -> str:
     m = {
         "pendiente": "Pendiente",
         "en_revision": "En revisión (manual)",
@@ -862,9 +862,9 @@ def _estado_label_excel(estado: str) -> str:
     return m.get((estado or "").strip(), estado or "")
 
 
-def _item_falla_validadores_cobros_excel(it: PagoReportadoListItem) -> bool:
+def _item_falla_validadores_cola_manual(it: PagoReportadoListItem) -> bool:
     """
-    True = requiere análisis manual (cola en pantalla / Excel "no validan").
+    True = requiere análisis manual (cola en pantalla: no cumplen validadores).
 
     Si Gemini marcó coincidencia exacta (`true`/`1`), solo falla si queda observación de **reglas**
     (DUPLICADO, NO CLIENTES, etc.); el texto residual de Gemini no cuenta en ese caso (se omite al armar la observación).
@@ -888,13 +888,13 @@ def _item_falla_validadores_cobros_excel(it: PagoReportadoListItem) -> bool:
 
 def reportado_falla_validadores_cobros(db: Session, pr: PagoReportado) -> bool:
     """
-    True si el reportado NO cumple los mismos validadores que el listado/Excel (Gemini + reglas de carga).
+    True si el reportado NO cumple los mismos validadores que el listado de cola manual (Gemini + reglas de carga).
     Usado al registrar desde formulario público / Infopagos para no mandar a revisión manual lo que ya cumple.
     """
     items = _pago_reportado_list_items_from_rows(db, [pr])
     if not items:
         return True
-    return _item_falla_validadores_cobros_excel(items[0])
+    return _item_falla_validadores_cola_manual(items[0])
 
 
 def _persist_marcar_exportados_y_cola(db: Session, ids: List[int]) -> dict:
@@ -1183,7 +1183,7 @@ def _list_pagos_reportados_payload(
         items = _pago_reportado_list_items_from_rows(db, rows)
         return {"items": items, "total": total, "page": page, "per_page": per_page}
 
-    # Cola manual: pendiente / en_revision / aprobado que NO cumplen validadores (misma regla que Excel Cobros).
+    # Cola manual: pendiente / en_revision / aprobado que NO cumplen validadores (misma regla que el listado/KPIs).
     # Cumplen 100% (reglas OK; Gemini true o false sin observación) → no entran aquí; flujo automático fuera de la cola.
     wh = _where_clauses_cola_reportados(estado, incluir_exportados, exportados_subq, filtros)
     # Con pestaña por estado, el listado filtra filas con `wh`, pero la resolución de duplicados
@@ -1237,7 +1237,7 @@ def _list_pagos_reportados_payload(
                     continue
                 if num_key in numeros_en_pagos:
                     continue
-            if not _item_falla_validadores_cobros_excel(it):
+            if not _item_falla_validadores_cola_manual(it):
                 continue
             total += 1
             if emit_counts:
@@ -1347,7 +1347,7 @@ def _kpis_pagos_reportados_payload(
                 primer_id_por_norm_precalc=primer_kpi,
                 include_financial_fields=False,
             ):
-                if not _item_falla_validadores_cobros_excel(it):
+                if not _item_falla_validadores_cola_manual(it):
                     continue
                 st = (it.estado or "").strip()
                 if st in ("pendiente", "en_revision", "aprobado"):
@@ -1370,19 +1370,19 @@ def list_pagos_reportados(
     per_page: int = Query(20, ge=1, le=300),
     incluir_exportados: bool = Query(
         False,
-        description="Si true, incluye filas ya exportadas al Excel de corrección (siguen gestionables en Cobranzas).",
+        description="Si true, incluye filas ya exportadas en la corrección masiva (siguen gestionables en Cobranzas).",
     ),
 ):
     """
     Lista paginada de pagos reportados con filtros.
 
     Sin `estado` o con `pendiente` / `en_revision` / `aprobado`: solo filas que **no cumplen validadores**
-    (Excel Cobros: Gemini false/error u observación de reglas; si Gemini es true y no hay observación, cumple 100%
+    (Gemini false/error u observación de reglas; si Gemini es true y no hay observación, cumple 100%
     y no se lista — sigue el proceso automático fuera de esta cola).
 
     `estado=importado` o `rechazado`: listado completo de ese estado (sin filtro de validadores).
 
-    `incluir_exportados=true`: incluye pendiente/en revisión/aprobado ya exportados al Excel de corrección.
+    `incluir_exportados=true`: incluye pendiente/en revisión/aprobado ya exportados en la corrección masiva.
 
     Incluye sin distincion reportes de Infopagos (`canal_ingreso=infopagos`) y del formulario publico del deudor
     (`cobros_publico`); mismas reglas de edicion, aprobacion, rechazo e import a `pagos`.
@@ -1409,7 +1409,7 @@ def kpis_pagos_reportados(
     institucion: Optional[str] = Query(None),
     incluir_exportados: bool = Query(
         False,
-        description="Alinear conteos con listado cuando se incluyen exportados al Excel.",
+        description="Alinear conteos con listado cuando se incluyen filas ya exportadas en corrección masiva.",
     ),
 ):
     """Conteos por estado; mismos filtros que el listado. pendiente/en_revision/aprobado solo cuentan fallas de validadores."""
@@ -1435,13 +1435,13 @@ def list_pagos_reportados_y_kpis(
     per_page: int = Query(20, ge=1, le=300),
     incluir_exportados: bool = Query(
         False,
-        description="Igual que GET /pagos-reportados: muestra filas ya exportadas al Excel para seguir gestionándolas.",
+        description="Igual que GET /pagos-reportados: muestra filas ya exportadas en corrección masiva para seguir gestionándolas.",
     ),
 ):
     """
     Listado paginado + KPIs en una sola petición (mismos query params que GET /pagos-reportados).
 
-    KPIs alineados con el listado (con o sin filas ya exportadas al Excel, según incluir_exportados).
+    KPIs alineados con el listado (con o sin filas ya exportadas en corrección masiva, según incluir_exportados).
 
     Sin filtro `estado`: un solo barrido de la cola manual alimenta listado + KPIs (mitad de trabajo BD vs antes).
     Con `estado` o pestaña filtrada: listado acotado + KPIs con barrido completo (misma semántica que antes).
@@ -1583,15 +1583,23 @@ def tendencia_fallos_gemini_por_dia(
     )
 
 
-@router.get("/pagos-reportados/exportar-aprobados-excel")
-def exportar_pagos_aprobados_excel(
+@router.get(
+    "/pagos-reportados/exportar-aprobados-correccion",
+    summary="Exportar filas que fallan validadores (XLSX) y marcarlas como exportadas",
+)
+@router.get(
+    "/pagos-reportados/exportar-aprobados-excel",
+    summary="[Compat] Igual que exportar-aprobados-correccion",
+    include_in_schema=False,
+)
+def exportar_pagos_aprobados_correccion(
     db: Session = Depends(get_db),
     cedula: Optional[str] = Query(None),
     institucion: Optional[str] = Query(None),
 ):
     """
     Solo filas que no cumplen validadores (Gemini NO/error u observación de reglas), pendiente, en revisión
-    o aprobado (legacy), aún no exportadas. Al descargar: van al Excel y se marcan en pagos_reportados_exportados; entonces dejan
+    o aprobado (legacy), aún no exportadas. Al descargar: se entrega un XLSX y se marcan en pagos_reportados_exportados; entonces dejan
     de mostrarse en listado (hasta incluir_exportados=true). Si el usuario no descarga, esas filas siguen en pantalla.
     Filtros opcionales: cédula, institución; sin fechas.
     """
@@ -1611,7 +1619,7 @@ def exportar_pagos_aprobados_excel(
         )
 
     items = _pago_reportado_list_items_from_rows(db, rows)
-    items = [it for it in items if _item_falla_validadores_cobros_excel(it)]
+    items = [it for it in items if _item_falla_validadores_cola_manual(it)]
     if not items:
         raise HTTPException(
             status_code=400,
@@ -1658,14 +1666,14 @@ def exportar_pagos_aprobados_excel(
                 it.numero_operacion or "",
                 fr.strftime("%d/%m/%Y %H:%M") if fr else "",
                 it.observacion or "",
-                _estado_label_excel(it.estado),
+                _estado_label_estado_reportado(it.estado),
                 round(eq_u, 2) if eq_u is not None else None,
             ]
         )
 
     buf = BytesIO()
     wb.save(buf)
-    excel_bytes = buf.getvalue()
+    archivo_xlsx_bytes = buf.getvalue()
 
     ids = [it.id for it in items]
     stats = _persist_marcar_exportados_y_cola(db, ids)
@@ -1674,11 +1682,11 @@ def exportar_pagos_aprobados_excel(
     filename = f"pagos_reportados_falla_validadores_{ts}.xlsx"
 
     return Response(
-        content=excel_bytes,
+        content=archivo_xlsx_bytes,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={
             "Content-Disposition": f'attachment; filename="{filename}"',
-            "Content-Length": str(len(excel_bytes)),
+            "Content-Length": str(len(archivo_xlsx_bytes)),
             "X-Export-Marcados": str(stats["marcados"]),
             "X-Export-Ya-Exportados": str(stats["ya_exportados"]),
             "X-Export-Quitados-Cola": str(stats["quitados_cola_temporal"]),

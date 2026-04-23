@@ -46,7 +46,7 @@ def monto_texto_pago_reportado(pr: PagoReportado) -> str:
 
 def tasa_bs_usd_para_recibo_pago_reportado(db: Session, pr: PagoReportado) -> Optional[float]:
     """
-    Misma tasa Bs/USD que listado y detalle (`tasa_y_equivalente_usd_excel`): dia fecha_pago;
+    Misma tasa Bs/USD que listado y detalle (servicio de tasas por fecha_pago);
     si no hay tasa en BD para esa fecha, None (sin inventar tasa de otro dia).
     """
     try:

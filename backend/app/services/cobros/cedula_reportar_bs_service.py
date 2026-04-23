@@ -4,7 +4,7 @@ Cédulas autorizadas para reportar pagos en Bolívares (tabla cedulas_reportar_b
 Punto único de articulación entre:
 - Formulario público / infopagos (cobros_publico)
 - Listado y edición admin (cobros)
-- Carga Excel y alta manual (pagos)
+- Carga masiva y alta manual (pagos)
 
 Incluye la misma normalización que clientes/pagos reportados (ceros a la izquierda en el número)
 y variantes V+E+J+G+número / solo número para que coincidan lista BD y datos del reporte.
