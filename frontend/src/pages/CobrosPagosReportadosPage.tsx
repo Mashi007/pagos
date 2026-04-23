@@ -534,8 +534,14 @@ export default function CobrosPagosReportadosPage() {
         void invalidateListasNotificacionesMora(queryClient)
       }
 
-      // Quitar la fila al instante si la vista actual no lista aprobados (coincide con el API por defecto).
-      if (nuevoEstado === 'aprobado' && estado !== 'aprobado') {
+      // Quitar la fila al instante si ya no pertenece al filtro actual.
+      // Vista por defecto ("") muestra solo por gestionar: pendiente/en_revision.
+      const quedaEnVistaActual =
+        estado === ''
+          ? nuevoEstado === 'pendiente' || nuevoEstado === 'en_revision'
+          : nuevoEstado === estado
+
+      if (!quedaEnVistaActual) {
         setData(prev => {
           if (!prev) return prev
 
