@@ -170,6 +170,22 @@
     )
   }
 
+  function isStaleBuildReactInvariant(msg, sourceUrl) {
+    if (!msg || typeof msg !== 'string') return false
+    var m = msg.toLowerCase()
+    // En producción, React minifica errores con códigos numéricos.
+    // Cuando hay mezcla de bundles viejos/nuevos tras deploy, puede dispararse al bootstrap.
+    var isKnownInvariant =
+      m.indexOf('minified react error #306') !== -1 ||
+      m.indexOf('invariant=306') !== -1
+    if (!isKnownInvariant) return false
+    return (
+      isAssetChunkUrl(sourceUrl) ||
+      m.indexOf('/assets/') !== -1 ||
+      m.indexOf('/pagos/assets/') !== -1
+    )
+  }
+
   function isRapiCreditHost() {
     var h = (window.location && window.location.hostname) || ''
     return h === 'rapicredit.onrender.com'
@@ -220,9 +236,13 @@
   window.addEventListener(
     'error',
     function (event) {
+      var errorMessage = event.message || ''
+      var errorSource = (event.filename || (event.target && event.target.src) || '') || ''
+      if (isStaleBuildReactInvariant(errorMessage, errorSource)) {
+        reloadPage()
+        return
+      }
       if (event.target && event.target.tagName === 'SCRIPT' && event.target.type === 'module') {
-        var errorMessage = event.message || ''
-        var errorSource = (event.filename || (event.target && event.target.src) || '') || ''
         if (isDynamicChunkLoadFailure(errorMessage, errorSource)) {
           reloadPage()
         }
@@ -264,6 +284,12 @@
         (msg.indexOf('/pagos/assets/') !== -1 && msg.indexOf('.js') !== -1) ||
         mimeBlocked ||
         namedChunk
+      if (isStaleBuildReactInvariant(msg, '')) {
+        event.preventDefault()
+        event.stopPropagation()
+        reloadPage()
+        return
+      }
       if (isChunk) {
         event.preventDefault()
         event.stopPropagation()

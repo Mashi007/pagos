@@ -88,6 +88,7 @@ import {
   gmailRunSummaryHeadline,
   gmailRunSummaryLines,
   useGmailPipeline,
+  type GmailRunSummary,
 } from '../../hooks/useGmailPipeline'
 
 import { invalidatePagosPrestamosRevisionYCuotas } from '../../constants/queryKeys'
@@ -102,6 +103,7 @@ import {
 
 /** Si false, la opción "Descargar Excel" (Gmail) no se muestra en el submenú Agregar pago. */
 const SHOW_DESCARGA_EXCEL_EN_SUBMENU = false
+const GMAIL_METRICS_SNAPSHOT_KEY = 'pagos:last_gmail_metrics_snapshot'
 
 export function PagosList() {
   const [searchParams, setSearchParams] = useSearchParams()
@@ -165,6 +167,25 @@ export function PagosList() {
   const [showVaciarTablaGmail, setShowVaciarTablaGmail] = useState(false)
   const [isVaciarTablaGmail, setIsVaciarTablaGmail] = useState(false)
   const [submenuGmailOpen, setSubmenuGmailOpen] = useState(false)
+  const [gmailMetricsSnapshot, setGmailMetricsSnapshot] = useState<{
+    lastRun: string | null
+    summary: GmailRunSummary | null
+  }>(() => {
+    try {
+      const raw = window.localStorage.getItem(GMAIL_METRICS_SNAPSHOT_KEY)
+      if (!raw) return { lastRun: null, summary: null }
+      const parsed = JSON.parse(raw) as {
+        lastRun?: string | null
+        summary?: GmailRunSummary | null
+      }
+      return {
+        lastRun: typeof parsed.lastRun === 'string' ? parsed.lastRun : null,
+        summary: parsed.summary ?? null,
+      }
+    } catch {
+      return { lastRun: null, summary: null }
+    }
+  })
   const [revisionPage, setRevisionPage] = useState(1)
   const [revisionCedulaInput, setRevisionCedulaInput] = useState('')
   const [revisionCedulaFiltro, setRevisionCedulaFiltro] = useState('')
@@ -259,6 +280,24 @@ export function PagosList() {
       stopGmailPolling()
     }
   }, [stopGmailPolling])
+
+  useEffect(() => {
+    const summary = gmailStatus?.last_run_summary ?? null
+    if (!summary) return
+    const next = {
+      lastRun: gmailStatus?.last_run ?? null,
+      summary,
+    }
+    setGmailMetricsSnapshot(next)
+    try {
+      window.localStorage.setItem(GMAIL_METRICS_SNAPSHOT_KEY, JSON.stringify(next))
+    } catch {
+      // storage puede estar restringido; el fallback en memoria igual mantiene sesión actual
+    }
+  }, [gmailStatus?.last_run, gmailStatus?.last_run_summary])
+
+  const bannerSummary = gmailStatus?.last_run_summary ?? gmailMetricsSnapshot.summary
+  const bannerLastRun = gmailStatus?.last_run ?? gmailMetricsSnapshot.lastRun
 
   useEffect(() => {
     if (activeTab !== 'revision') return
@@ -1107,28 +1146,28 @@ export function PagosList() {
           Reemplazar pagos
         </Button>
       </div>
-      {gmailStatus?.last_run_summary ? (
-        <div className="rounded-lg border border-gray-200/80 bg-white px-4 py-3 text-sm text-gray-700 shadow-sm">
+      <div className="sticky top-2 z-20 rounded-lg border border-gray-200/80 bg-white px-4 py-3 text-sm text-gray-700 shadow-sm">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0">
               <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
                 Última corrida Gmail (métricas)
               </div>
               <div className="mt-1 break-words">
-                {gmailRunSummaryHeadline(gmailStatus.last_run_summary)}
+                {bannerSummary
+                  ? gmailRunSummaryHeadline(bannerSummary)
+                  : 'Sin corrida manual reciente. Ejecute "Buscar nuevos pagos (Gmail)" para generar métricas.'}
               </div>
-              {gmailStatus.last_run ? (
+              {bannerLastRun ? (
                 <div className="mt-1 text-xs text-gray-500">
-                  Sincronización: {formatLastSyncDate(gmailStatus.last_run)}
+                  Sincronización: {formatLastSyncDate(bannerLastRun)}
                 </div>
               ) : null}
             </div>
             <div className="shrink-0 text-xs text-gray-500">
-              También en el toast al terminar; aquí queda fijo en pantalla.
+              Queda fija en pantalla y se actualiza en la próxima corrida manual.
             </div>
           </div>
-        </div>
-      ) : null}
+      </div>
       <Dialog
         open={reemplazarPagosOpen}
         onOpenChange={open => {
