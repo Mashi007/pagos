@@ -92,6 +92,12 @@ class PagoConErrorService {
 
       fechaHasta?: string
 
+      fechaPago?: string
+
+      numeroDocumento?: string
+
+      tipoRevision?: 'anomalo' | 'irreal' | 'duplicado'
+
       conciliado?: string
 
       includeExportados?: boolean
@@ -119,6 +125,14 @@ class PagoConErrorService {
       ...(filters?.fechaDesde && { fecha_desde: filters.fechaDesde }),
 
       ...(filters?.fechaHasta && { fecha_hasta: filters.fechaHasta }),
+
+      ...(filters?.fechaPago && { fecha_pago: filters.fechaPago }),
+
+      ...(filters?.numeroDocumento && {
+        numero_documento: filters.numeroDocumento,
+      }),
+
+      ...(filters?.tipoRevision && { tipo_revision: filters.tipoRevision }),
 
       ...(filters?.conciliado &&
         filters.conciliado !== 'all' && { conciliado: filters.conciliado }),

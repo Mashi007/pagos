@@ -189,6 +189,15 @@ export function PagosList() {
   const [revisionPage, setRevisionPage] = useState(1)
   const [revisionCedulaInput, setRevisionCedulaInput] = useState('')
   const [revisionCedulaFiltro, setRevisionCedulaFiltro] = useState('')
+  const [revisionNumeroDocumentoInput, setRevisionNumeroDocumentoInput] =
+    useState('')
+  const [revisionNumeroDocumentoFiltro, setRevisionNumeroDocumentoFiltro] =
+    useState('')
+  const [revisionFechaPagoInput, setRevisionFechaPagoInput] = useState('')
+  const [revisionFechaPagoFiltro, setRevisionFechaPagoFiltro] = useState('')
+  const [revisionTipoFiltro, setRevisionTipoFiltro] = useState<
+    '' | 'anomalo' | 'irreal' | 'duplicado'
+  >('')
   const [includeRevisionExportados, setIncludeRevisionExportados] =
     useState(false)
   const [editingRevisionId, setEditingRevisionId] = useState<number | null>(null)
@@ -615,11 +624,17 @@ export function PagosList() {
       revisionPage,
       perPage,
       revisionCedulaFiltro,
+      revisionNumeroDocumentoFiltro,
+      revisionFechaPagoFiltro,
+      revisionTipoFiltro,
       includeRevisionExportados,
     ],
     queryFn: () =>
       pagoConErrorService.getAll(revisionPage, perPage, {
         cedula: revisionCedulaFiltro || undefined,
+        numeroDocumento: revisionNumeroDocumentoFiltro || undefined,
+        fechaPago: revisionFechaPagoFiltro || undefined,
+        tipoRevision: revisionTipoFiltro || undefined,
         includeExportados: includeRevisionExportados,
       }),
     staleTime: 15_000,
@@ -679,11 +694,18 @@ export function PagosList() {
   }
   const handleBuscarRevisionPorCedula = () => {
     setRevisionCedulaFiltro(revisionCedulaInput.trim())
+    setRevisionNumeroDocumentoFiltro(revisionNumeroDocumentoInput.trim())
+    setRevisionFechaPagoFiltro(revisionFechaPagoInput)
     setRevisionPage(1)
   }
   const handleLimpiarRevisionCedula = () => {
     setRevisionCedulaInput('')
     setRevisionCedulaFiltro('')
+    setRevisionNumeroDocumentoInput('')
+    setRevisionNumeroDocumentoFiltro('')
+    setRevisionFechaPagoInput('')
+    setRevisionFechaPagoFiltro('')
+    setRevisionTipoFiltro('')
     setRevisionPage(1)
   }
   const handleGuardarRevision = async (id: number) => {
@@ -1411,7 +1433,7 @@ export function PagosList() {
         <TabsList className="mb-4">
           <TabsTrigger value="todos">Todos los Pagos</TabsTrigger>
           <TabsTrigger value="resumen">Detalle por Cliente</TabsTrigger>
-          <TabsTrigger value="revision">Pendientes de revisión</TabsTrigger>
+          <TabsTrigger value="revision">Revision</TabsTrigger>
         </TabsList>
         {/* Tab: Detalle por Cliente (resumen + ver pagos del cliente, más reciente a más antiguo) */}
         <TabsContent value="resumen">
@@ -1420,7 +1442,7 @@ export function PagosList() {
         <TabsContent value="revision">
           <Card>
             <CardHeader>
-              <CardTitle>Pendientes de revisión</CardTitle>
+              <CardTitle>Revision</CardTitle>
               <p className="text-sm text-muted-foreground">
                 Pagos no validados automáticamente. Aquí puede editar, guardar
                 observaciones del motivo de incumplimiento o eliminar registros.
@@ -1448,6 +1470,62 @@ export function PagosList() {
                     className="max-w-md"
                   />
                 </div>
+                <div className="flex-1">
+                  <label className="mb-1 block text-sm font-medium text-gray-700">
+                    Filtrar por N° documento
+                  </label>
+                  <Input
+                    placeholder="Ej: 00012345"
+                    value={revisionNumeroDocumentoInput}
+                    onChange={e => setRevisionNumeroDocumentoInput(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault()
+                        handleBuscarRevisionPorCedula()
+                      }
+                    }}
+                    className="max-w-md"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">
+                    Fecha pago
+                  </label>
+                  <Input
+                    type="date"
+                    value={revisionFechaPagoInput}
+                    onChange={e => setRevisionFechaPagoInput(e.target.value)}
+                    className="w-[180px]"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">
+                    Tipo
+                  </label>
+                  <Select
+                    value={revisionTipoFiltro || 'all'}
+                    onValueChange={value => {
+                      setRevisionTipoFiltro(
+                        value === 'all'
+                          ? ''
+                          : (value as 'anomalo' | 'irreal' | 'duplicado')
+                      )
+                      setRevisionPage(1)
+                    }}
+                  >
+                    <SelectTrigger className="w-[210px]">
+                      <SelectValue placeholder="Tipo de revision" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos</SelectItem>
+                      <SelectItem value="anomalo">Anomalos</SelectItem>
+                      <SelectItem value="irreal">Irreales</SelectItem>
+                      <SelectItem value="duplicado">
+                        Duplicados (fecha + numero)
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
                 <div className="flex gap-2">
                   <Button
                     type="button"
@@ -1456,7 +1534,10 @@ export function PagosList() {
                   >
                     Buscar
                   </Button>
-                  {revisionCedulaFiltro && (
+                  {(revisionCedulaFiltro ||
+                    revisionNumeroDocumentoFiltro ||
+                    revisionFechaPagoFiltro ||
+                    revisionTipoFiltro) && (
                     <Button
                       type="button"
                       variant="ghost"
@@ -1541,6 +1622,24 @@ export function PagosList() {
                             </TableCell>
                             <TableCell className="text-right">
                               <div className="inline-flex items-center gap-2">
+                                <Button
+                                  size="icon"
+                                  variant="outline"
+                                  title="Ver recibo"
+                                  onClick={() => {
+                                    if (!pago.documento_ruta) {
+                                      toast.error(
+                                        'Este pago no tiene recibo o comprobante asociado.'
+                                      )
+                                      return
+                                    }
+                                    void abrirStaffComprobanteDesdeHref(
+                                      pago.documento_ruta
+                                    )
+                                  }}
+                                >
+                                  <Eye className="h-4 w-4" />
+                                </Button>
                                 <Button
                                   size="icon"
                                   variant="outline"

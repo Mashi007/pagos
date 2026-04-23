@@ -20,7 +20,7 @@ from fastapi import APIRouter, Depends, Query, HTTPException, Body
 
 from pydantic import BaseModel, field_validator
 
-from sqlalchemy import delete, func, or_, select
+from sqlalchemy import and_, delete, exists, func, or_, select
 
 from sqlalchemy.orm import Session
 
@@ -31,6 +31,8 @@ from app.core.database import get_db
 from app.core.deps import get_current_user
 
 from app.models.pago_con_error import PagoConError
+from app.models.pago import Pago
+from app.models.prestamo import Prestamo
 
 from app.schemas.auth import UserResponse
 
@@ -230,6 +232,9 @@ def listar_pagos_con_errores(
     fecha_desde: Optional[str] = Query(None),
 
     fecha_hasta: Optional[str] = Query(None),
+    fecha_pago: Optional[str] = Query(None),
+    numero_documento: Optional[str] = Query(None),
+    tipo_revision: Optional[str] = Query(None),
 
     conciliado: Optional[str] = Query(None),
     include_exportados: bool = Query(False),
@@ -302,6 +307,85 @@ def listar_pagos_con_errores(
             except ValueError:
 
                 pass
+
+        if fecha_pago:
+            try:
+                fe = date.fromisoformat(fecha_pago)
+                q = q.where(PagoConError.fecha_pago >= datetime.combine(fe, dt_time.min))
+                q = q.where(PagoConError.fecha_pago <= datetime.combine(fe, dt_time.max))
+                count_q = count_q.where(PagoConError.fecha_pago >= datetime.combine(fe, dt_time.min))
+                count_q = count_q.where(PagoConError.fecha_pago <= datetime.combine(fe, dt_time.max))
+            except ValueError:
+                pass
+
+        if numero_documento and numero_documento.strip():
+            doc_raw = numero_documento.strip()
+            doc_norm = normalize_documento(doc_raw)
+            q_doc = or_(
+                PagoConError.numero_documento.ilike(f"%{doc_raw}%"),
+                func.upper(func.trim(func.coalesce(PagoConError.numero_documento, ""))).like(
+                    f"%{doc_norm}%"
+                ),
+            )
+            q = q.where(q_doc)
+            count_q = count_q.where(q_doc)
+
+        if tipo_revision and tipo_revision.strip():
+            tipo = tipo_revision.strip().lower()
+            hoy = date.today()
+            doc_key = func.upper(func.trim(func.coalesce(PagoConError.numero_documento, "")))
+            fecha_key = func.date(PagoConError.fecha_pago)
+            dup_subq = (
+                select(
+                    fecha_key.label("fecha_pago"),
+                    doc_key.label("doc_key"),
+                )
+                .where(doc_key != "")
+                .group_by(fecha_key, doc_key)
+                .having(func.count(PagoConError.id) > 1)
+                .subquery()
+            )
+
+            if tipo in {"duplicado", "duplicados", "duplicado_fecha_numero"}:
+                dup_cond = and_(
+                    func.date(PagoConError.fecha_pago) == dup_subq.c.fecha_pago,
+                    doc_key == dup_subq.c.doc_key,
+                )
+                q = q.join(dup_subq, dup_cond)
+                count_q = count_q.join(dup_subq, dup_cond)
+            elif tipo in {"irreal", "irreales"}:
+                total_pagos_prestamo = (
+                    select(func.coalesce(func.sum(Pago.monto_pagado), 0))
+                    .where(Pago.prestamo_id == PagoConError.prestamo_id)
+                    .scalar_subquery()
+                )
+                sobrepagado_cond = and_(
+                    PagoConError.prestamo_id.is_not(None),
+                    exists(
+                        select(1).where(
+                            Prestamo.id == PagoConError.prestamo_id,
+                            or_(
+                                total_pagos_prestamo > func.coalesce(Prestamo.total_financiamiento, 0),
+                                (total_pagos_prestamo + func.coalesce(PagoConError.monto_pagado, 0))
+                                > func.coalesce(Prestamo.total_financiamiento, 0),
+                            ),
+                        )
+                    ),
+                )
+                irreal_cond = or_(
+                    PagoConError.monto_pagado <= 0,
+                    func.date(PagoConError.fecha_pago) > hoy,
+                    sobrepagado_cond,
+                )
+                q = q.where(irreal_cond)
+                count_q = count_q.where(irreal_cond)
+            elif tipo in {"anomalo", "anomalos", "anómalo", "anómalos"}:
+                anomalo_cond = or_(
+                    func.coalesce(func.trim(PagoConError.observaciones), "") != "",
+                    PagoConError.errores_descripcion.is_not(None),
+                )
+                q = q.where(anomalo_cond)
+                count_q = count_q.where(anomalo_cond)
 
         total = db.scalar(count_q) or 0
 
