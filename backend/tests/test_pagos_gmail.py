@@ -30,6 +30,7 @@ from app.models.pagos_gmail_sync import PagosGmailSync, PagosGmailSyncItem
 from app.services.pagos_gmail.gemini_service import (
     _guess_bank_hint_from_text,
     _parse_formato_y_pagos_json,
+    _rescue_prompt_suffix,
 )
 from app.services.pagos.comprobante_link_desde_gmail import (
     comprobante_url_para_enlace_publico,
@@ -416,6 +417,31 @@ def test_guess_bank_hint_bnc_app_transferencia_con_cuentas_enmascaradas():
         "Referencia: 133454281"
     )
     assert _guess_bank_hint_from_text(txt, "bnc_app.png", "sin_plantilla") == "B"
+
+
+def test_guess_bank_hint_bnc_ticket_compacto_con_ref_y_serial():
+    txt = (
+        "BNC\n"
+        "Agencia: San Antonio de Los A\n"
+        "Cuenta 0191/0127/48/2300080639\n"
+        "RAPI-CREDIT, C.A\n"
+        "Ref: 113907169\n"
+        "Serial: 113907166\n"
+        "Deposito Us$ **********100.00"
+    )
+    assert _guess_bank_hint_from_text(txt, "bnc_ticket.jpg", "falto_ref") == "B"
+
+
+def test_rescue_prompt_suffix_b_refuerzo_falto_ref():
+    s = _rescue_prompt_suffix("B", "falto_ref")
+    assert "Refuerzo por `falto_ref`" in s
+    assert "Ejecutada exitosamente" in s
+    assert "Referencia:" in s
+
+
+def test_rescue_prompt_suffix_b_sin_refuerzo_si_no_falto_ref():
+    s = _rescue_prompt_suffix("B", "falto_monto")
+    assert "Refuerzo por `falto_ref`" not in s
 
 
 def test_parse_formato_c_binance_ok():

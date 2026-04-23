@@ -634,6 +634,7 @@ export default function EscanerInfopagosLotePage() {
       form.append('monto', montoParaApi(vM.valor))
       form.append('moneda', fila.moneda)
       form.append('fuente_tasa_cambio', fuenteTasa)
+      form.append('confirmacion_humana', 'true')
       form.append('comprobante', fila.archivo)
       guardarActivoRef.current.add(clientId)
       actualizarFila(clientId, { guardando: true, guardadoError: undefined })

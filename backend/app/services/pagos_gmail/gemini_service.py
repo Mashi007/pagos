@@ -182,6 +182,7 @@ PASO 2 - Prioridad B (imagen 2) si el nucleo B se cumple **y no** aplico el nucl
     - **Correo digitalizado / captura con varias imagenes**: el backend puede enviar **esta** pieza sola (adjunto o recorte). Si aqui ves un recibo BNC **completo** aunque el borde muestre parte de otra foto o UI, aplica VARIANTE B y la regla de MEZCLA arriba: extrae **solo** del ticket BNC; no supongas datos de otra miniatura que no se vea en este binario.
     - **RIF del banco en cabecera** (**Rif. Nº J309841327**, **RIF.: J-30984132-7**, variantes con guiones/espacios): identifica al **emisor BNC** del papel; **no** es `numero_referencia`, **no** es la cuenta **0191/...**; no lo confundas con **Ref** ni con **Serial**.
     - **Ref vs Serial (recibos reales)**: suelen aparecer **dos** numeros enteros **cercanos** (misma longitud tipica **8 a 9 digitos**, ej. Ref **113907169** y Serial **113907166**). **No** hay regla fija de cual es mayor; usa **siempre** la **etiqueta impresa**: valor junto a **Ref:** / **Ref.** / **Ref.** como **primera** opcion para `numero_referencia`; si **Ref** esta borroso o tapado por sello/firma pero **Serial:** es nitido, usa **Serial** (regla ya indicada abajo).
+    - **Ticket BNC compacto con sello en el centro** (foto de pared/mesa): logo **BNC** arriba izquierda, **Ref:** arriba derecha, **Serial:** debajo, bloque izquierdo con **Agencia/Terminal/Cuenta 0191/.../RAPI-CREDIT/DP:V-...** y monto de deposito en la parte baja (a veces **asteriscos + 100.00**). Aunque el sello azul/firma tape "Deposito Us$" o parte del centro, si **Ref** o **Serial** son legibles junto a ese nucleo, clasifica **B** y toma `numero_referencia` desde **Ref** (o **Serial** si Ref no se lee).
     - **Numero largo arriba a la derecha** sin la palabra Ref en la misma linea: si en la zona tipica de cabecera BNC hay un bloque de digitos y mas abajo existe **Serial: NNN** coherente con recibo cajero, el numero superior **puede** ser la **Ref** de control — usalo solo si encaja con layout BNC y **no** sustituyas por el RIF ni por trozos de **Cuenta 0191/...**.
     - **Fondo de seguridad** (conchas/abanico repetido), **franja vertical azul** en el borde izquierdo, papel **azul muy claro** o blanco con matriz: patrones **muy frecuentes** en BNC; manten **B** aunque el OCR mezcle letras con el patron de fondo (no bajes a ninguno solo por "ruido" del agua).
     - **Foto con pliegue / doblez** en el centro: tratalo como **un solo** recibo BNC; une mentalmente columna izquierda (Agencia, Terminal, Cuenta, RAPI, DP) con derecha (fecha/hora, Serial, Ref, monto).
@@ -189,7 +190,7 @@ PASO 2 - Prioridad B (imagen 2) si el nucleo B se cumple **y no** aplico el nucl
     - **Titular cortado o OCR roto** (ej. **...S-CREDIT, C.A**, **BAPI-CREDIT**, falta el inicio "RAPI"): si **Cuenta 0191/0127/48/2300080639** (o variante con barras) + marca BNC + **Deposito Us$** son claros, manten **B** y asume titular coherente **RAPI-CREDIT** para clasificacion.
     - **Linea de depositante truncada** (ej. **P-013850189 NOMBRE** sin prefijo **DP:** o sin **V-** visible): si va junto a cuenta **0191** y bloque cajero BNC, interpretala como **DP:** / cedula depositante **solo** para decidir **B vs A**; **no** uses esa cadena como `numero_referencia`.
     - **Pie del ticket** (**2.CLIENTE**, **Original: Cliente**, similares): texto logistico o copia cliente — **ignoralo** para clasificacion y para `numero_referencia`.
-    - **App movil BNC — transferencia ejecutada**: texto tipo **Su transferencia ha sido** / **Ejecutada exitosamente** (franja o recuadro verde); **Cuenta debitada** / **Cuenta abonada** con **Cta. Ahorro BNC** / **Cta. Corriente BNC** y mascaras ***4398**; en **Cuenta abonada** suele aparecer **RAPI-CREDIT, C.A**; **Monto** y **Total** en **Bs.** (miles con **.** decimales con **,**); **Comisión** Bs. 0,00 (a veces color distinto); **Referencia** con digitos (a veces tipografia **verde** o icono copiar) — es **B**; `numero_referencia` = digitos de **Referencia** (sin iconos); `monto` = cifra principal de la operacion (Monto o Total coherentes) con sufijo **Bs.** si asi se lee; `fecha_pago` = fecha impresa en el bloque del comprobante si hay linea **Fecha**/fecha en tarjeta; si no hay fecha en la pieza, **NA** (no inventes desde barra de estado del telefono si no se ve el dia).
+    - **App movil BNC — transferencia ejecutada**: texto tipo **Su transferencia ha sido** / **Ejecutada exitosamente** (franja o recuadro verde); **Cuenta debitada** / **Cuenta abonada** con **Cta. Ahorro BNC** / **Cta. Corriente BNC** y mascaras ***4398**; en **Cuenta abonada** suele aparecer **RAPI-CREDIT, C.A**; **Monto** y **Total** en **Bs.** (miles con **.** decimales con **,**); **Comisión** Bs. 0,00 (a veces color distinto); **Referencia** con digitos (a veces tipografia **verde** o icono copiar) — es **B**; `numero_referencia` = digitos de **Referencia** (sin iconos) y prioriza ese bloque aunque este abajo de la pantalla; ejemplo valido: **Referencia: 133454281** en verde. No confundas con **Comisión**, **Saldo actual** ni numeros enmascarados de cuenta (`***4398`, `***7926`). `monto` = cifra principal de la operacion (Monto o Total coherentes) con sufijo **Bs.** si asi se lee; `fecha_pago` = fecha impresa en el bloque del comprobante si hay linea **Fecha**/fecha en tarjeta; si no hay fecha en la pieza, **NA** (no inventes desde barra de estado del telefono si no se ve el dia).
     - **App / web BNC — "Transferencias a Terceros" + "Comprobante de Pago"**: cabecera oscura **Transferencias a Terceros**, titulo naranja **Comprobante de Pago**, tarjeta **Datos del Pago** con check verde, monto grande **Bs.**, pares etiqueta/valor **Referencia**, **Beneficiario**, **Banco** (**BANCO NACIONAL DE CREDITO**), **Cuenta** (20 digitos 0191...), **Fecha** (DD/MM/YYYY), **Concepto**, boton **Realizar otro pago** — es **B**; Referencia puede ser corta (**00548457**) o larga segun operacion; **no** confundas **Comisión** 0,00 con monto ni con referencia.
     - **Documento formal "NOTA DE OPERACIÓN EJECUTADA"** (BNC, blanco, tipografia institucional): titulo en caja, tabla **Nro. Cuenta** / **Titular**, bloque **Fecha de la Operación**, **Destinatario** (direccion larga), **Tipo de Operacion** (ej. NOTA DE CREDITO, Tranf. entre Ctas. Internet), texto **TRANSFERENCIA A FAVOR DE: RAPI-CREDIT, C.A**, **PARA LA CUENTA NRO.** 0191..., montos **VEB**/**Bs.** en descripcion y pie, linea **Ref.N°.** / **Ref.Nº** + digitos (a veces seguida de **Edo.Cta.**) — es **B**; `numero_referencia` = digitos del **Ref.N°**; no uses **Cliente**/**Usuario** del encabezado (persona ordenante) como beneficiario Rapi ni como referencia; no uses el RIF largo del banco como referencia.
     - **BDV / BNV app origen (Banco de Venezuela) — transferencia hacia otro banco (BNC)**: pantalla oficial con logo **triangulos/curvas amarillo-azul-rojo** (marca BDV), titulo **Comprobante de operacion** (tilde OCR opcional), subtitulo **Transferencias a otros bancos**, monto en caja clara **NNN.NNN,NN Bs** / **Bs** al final, lista **Fecha** (DD/MM/YYYY), **Operación** (referencia de la transferencia; icono copiar rojo/blanco/otro al lado), **Nombre**/**Beneficiario** Rapicredit (variantes OCR), opcional **Identificación**/**CI** del beneficiario (no copies a JSON **cedula** — REGLA CEDULA), **Origen** 0102****, **Destino** 0191****, linea **Banco** **0191 - BANCO NACIONAL DE CREDITO**, **Concepto**, **Estatus** (**Transaccion procesada con exito**, **En proceso**, etc.) — clasifica **B** (el destino operativo del dinero es BNC hacia Rapi); `numero_referencia` = valor **Operación** completo (digitos); `monto` = cifra **Bs** del recuadro principal; `fecha_pago` = **Fecha**; `banco` en JSON puede ser **Banco Nacional de Credito** / **BNC** por la linea destino. **Prohibido** clasificar **D** solo por ver logo BDV y **0102** aqui: **D** es deposito **en cuenta 0102 Rapi** en **papel**; esta pantalla es envio **desde** BDV **hacia** 0191.
@@ -1255,7 +1256,8 @@ def _guess_bank_hint_from_text(
     return None
 
 
-def _rescue_prompt_suffix(bank_hint: Optional[str]) -> str:
+def _rescue_prompt_suffix(bank_hint: Optional[str], none_reason: Optional[str] = None) -> str:
+    reason = (none_reason or "").strip().lower()
     if bank_hint == "A":
         return (
             "\n\nMODO RESCATE A (Mercantil): prioriza layout Deposito Divisas + cuenta 0105 + RAPI-CREDIT + tira termica (**Serial:** largo 7400..., **Monto** asteriscos+USD, codigo **DCME**)."
@@ -1264,10 +1266,19 @@ def _rescue_prompt_suffix(bank_hint: Optional[str]) -> str:
             "**DEPOSITO DIVISAS**, **Mercantil**, **0105**, **RECAUDACION**/**COMIS**, **Serial**/**Ref**/**Referencia**, **Monto**/**USD**, **DCME** si aparece."
         )
     if bank_hint == "B":
+        extra_falto_ref = (
+            "\nRefuerzo por `falto_ref`: en app BNC movil tipo **Ejecutada exitosamente**, prioriza el valor junto a **Referencia:** "
+            "(aunque sea corto, p. ej. 7-10 digitos y en color verde o con icono copiar). "
+            "Si hay **Monto** y **Total**, usa el bloque operativo principal; no descartes por cuentas enmascaradas `***` "
+            "si la **Cuenta abonada** indica **RAPI-CREDIT**."
+            if reason == "falto_ref"
+            else ""
+        )
         return (
             "\n\nMODO RESCATE B (BNC): prioriza (1) **cajero**: cuenta **0191/...** barras + **Deposito Us$** + **Ref:**/**Serial:** + monto con asteriscos; **o** (2) **app BNC**: **Comprobante de Pago**/**Datos del Pago**/**Transferencias a Terceros** + **Referencia** + **Cuenta** 0191... + **Bs.**; **o** (3) **NOTA DE OPERACIÓN EJECUTADA** + **Ref.N°.** + **VEB**/montos + **RAPI-CREDIT**; **o** (4) **app BDV/BNV** **Comprobante de operacion** + **Transferencias a otros bancos** + **Operación** larga + **Destino 0191** + Rapicredit."
             "\n**No** uses **Rif. Nº J309841327** (ni variantes con guiones del RIF del banco) como `numero_referencia`; no uses numero de cuenta 20 digitos como referencia."
             "\nAnclas léxicas: **BNC**, **0191/** o **019101...**, **Deposito Us$**/**U.S$**, **Bs.**/**VEB**, **Serial:**, **Ref:**/**Ref.**/**Referencia**/**Ref.N°**, **Operación**/**Operacion** (app BDV origen), **Agencia**/**Terminal**/**Cajero**, asteriscos (cajero), **Ejecutada exitosamente**, **Cuenta abonada**."
+            + extra_falto_ref
         )
     if bank_hint == "C":
         return (
@@ -1522,7 +1533,9 @@ def classify_and_extract_pagos_gmail_attachment(
         # Pass 2 (rescate): solo una pasada extra si todo quedó en ninguno.
         rescue_variant_used: Optional[str] = None
         if image_parts:
-            rescue_pass_prompt = rescue_pass_prompt + _rescue_prompt_suffix(bank_hint)
+            rescue_pass_prompt = rescue_pass_prompt + _rescue_prompt_suffix(
+                bank_hint, best_none_reason
+            )
             rescue_variant_name, rescue_part = _pick_rescue_image_part(
                 image_parts, bank_hint, best_none_reason
             )

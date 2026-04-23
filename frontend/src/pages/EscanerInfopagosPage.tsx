@@ -210,6 +210,7 @@ export default function EscanerInfopagosPage() {
 
   const [fechaPago, setFechaPago] = useState('')
   const [fechaDetectada, setFechaDetectada] = useState('')
+  const [confirmaFechaDetectada, setConfirmaFechaDetectada] = useState<'si' | 'no' | null>(null)
   const [institucion, setInstitucion] = useState('')
   const [otroInstitucion, setOtroInstitucion] = useState('')
   const [escanerColision, setEscanerColision] = useState<{
@@ -357,6 +358,7 @@ export default function EscanerInfopagosPage() {
       const fechaExtraida = s.fecha_pago || ''
       setFechaPago(fechaExtraida)
       setFechaDetectada(fechaExtraida)
+      setConfirmaFechaDetectada(null)
       const inst = (s.institucion_financiera || '').trim()
       if (INSTITUCIONES_FINANCIERAS.includes(inst as (typeof INSTITUCIONES_FINANCIERAS)[number])) {
         setInstitucion(inst)
@@ -454,6 +456,7 @@ export default function EscanerInfopagosPage() {
     form.append('monto', montoParaApi(vM.valor))
     form.append('moneda', moneda)
     form.append('fuente_tasa_cambio', fuenteTasa)
+    form.append('confirmacion_humana', 'true')
     form.append('comprobante', archivo!)
     enviarActivoRef.current = true
     setEnviando(true)

@@ -295,6 +295,12 @@ def _cobros_public_otp_required(origen: Optional[str], request: Request) -> bool
     return True
 
 
+def _bool_from_form(value: Optional[str]) -> bool:
+    """Normaliza flags de FormData (true/1/si/on) a bool."""
+    v = (value or "").strip().lower()
+    return v in ("1", "true", "t", "yes", "y", "si", "sí", "on")
+
+
 def _token_bearer_only(request: Request) -> Optional[str]:
     auth = (request.headers.get("Authorization") or "").strip()
     if not auth.lower().startswith("bearer "):
@@ -757,6 +763,7 @@ async def enviar_reporte_publico(
     observacion: Optional[str] = Form(None),
     contact_website: Optional[str] = Form(None),
     fuente_tasa_cambio: str = Form("euro"),
+    confirmacion_humana: Optional[str] = Form(None),
 ):
     """
     Recibe el reporte de pago del formulario público.
@@ -883,6 +890,11 @@ async def enviar_reporte_publico(
             pr.gemini_comentario = f"Error Gemini (reintentado): {str(gemini_err)[:200]}"
             coincide = False
 
+        confirmo_humano = _bool_from_form(confirmacion_humana)
+        if confirmo_humano:
+            # La revisión humana del operador prevalece sobre falsos negativos de Gemini.
+            pr.gemini_coincide_exacto = "true"
+            pr.gemini_comentario = ""
         falla_validadores = reportado_falla_validadores_cobros(db, pr)
         pr.estado = "en_revision" if falla_validadores else "aprobado"
         db.commit()
@@ -981,6 +993,7 @@ async def enviar_reporte_infopagos(
     observacion: Optional[str] = Form(None),
     contact_website: Optional[str] = Form(None),
     fuente_tasa_cambio: str = Form("euro"),
+    confirmacion_humana: Optional[str] = Form(None),
 ):
     """
     Registro de pago a nombre del deudor (uso interno / personal). Misma política que enviar-reporte
@@ -1107,6 +1120,11 @@ async def enviar_reporte_infopagos(
             pr.gemini_comentario = f"Error Gemini (reintentado): {str(gemini_err)[:200]}"
             coincide = False
 
+        confirmo_humano = _bool_from_form(confirmacion_humana)
+        if confirmo_humano:
+            # La revisión humana del operador prevalece sobre falsos negativos de Gemini.
+            pr.gemini_coincide_exacto = "true"
+            pr.gemini_comentario = ""
         falla_validadores = reportado_falla_validadores_cobros(db, pr)
         pr.estado = "en_revision" if falla_validadores else "aprobado"
         db.commit()
