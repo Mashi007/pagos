@@ -214,6 +214,24 @@ export function PagosList() {
   const [deletingRevisionId, setDeletingRevisionId] = useState<number | null>(
     null
   )
+  const [revisionGlobalPage, setRevisionGlobalPage] = useState(1)
+  const [revisionGlobalCedulaInput, setRevisionGlobalCedulaInput] = useState('')
+  const [revisionGlobalCedulaFiltro, setRevisionGlobalCedulaFiltro] = useState('')
+  const [revisionGlobalNumeroDocumentoInput, setRevisionGlobalNumeroDocumentoInput] =
+    useState('')
+  const [revisionGlobalNumeroDocumentoFiltro, setRevisionGlobalNumeroDocumentoFiltro] =
+    useState('')
+  const [revisionGlobalFechaPagoInput, setRevisionGlobalFechaPagoInput] =
+    useState('')
+  const [revisionGlobalFechaPagoFiltro, setRevisionGlobalFechaPagoFiltro] =
+    useState('')
+  const [revisionGlobalMotivoFiltro, setRevisionGlobalMotivoFiltro] = useState<
+    '' | 'sin_credito' | 'duplicado' | 'irreal' | 'sin_aplicacion' | 'con_notas'
+  >('')
+  const [editingGlobalId, setEditingGlobalId] = useState<number | null>(null)
+  const [globalNotaDraft, setGlobalNotaDraft] = useState('')
+  const [savingGlobalId, setSavingGlobalId] = useState<number | null>(null)
+  const [deletingGlobalId, setDeletingGlobalId] = useState<number | null>(null)
   const syncingRevisionRef = useRef(false)
   const queryClient = useQueryClient()
 
@@ -648,6 +666,30 @@ export function PagosList() {
     staleTime: 15_000,
     refetchOnWindowFocus: false,
   })
+  const {
+    data: revisionGlobalData,
+    isLoading: isLoadingRevisionGlobal,
+    isError: isRevisionGlobalError,
+  } = useQuery({
+    queryKey: [
+      'pagos-revision-global-tab',
+      revisionGlobalPage,
+      perPage,
+      revisionGlobalCedulaFiltro,
+      revisionGlobalNumeroDocumentoFiltro,
+      revisionGlobalFechaPagoFiltro,
+    ],
+    queryFn: () =>
+      pagoService.getAllPagos(revisionGlobalPage, perPage, {
+        cedula: revisionGlobalCedulaFiltro || undefined,
+        fechaDesde: revisionGlobalFechaPagoFiltro || undefined,
+        fechaHasta: revisionGlobalFechaPagoFiltro || undefined,
+        conciliado: 'all',
+        prestamo_cartera: 'todos',
+      }),
+    staleTime: 15_000,
+    refetchOnWindowFocus: false,
+  })
   const revisionRowsAnalizadas = useMemo(() => {
     const rows = revisionData?.pagos ?? []
     const dupMap = new Map<string, number>()
@@ -754,6 +796,110 @@ export function PagosList() {
     }
     return resumen
   }, [revisionRowsAnalizadas])
+  const revisionGlobalRowsAnalizadas = useMemo(() => {
+    const rows = revisionGlobalData?.pagos ?? []
+    const dupMap = new Map<string, number>()
+    for (const p of rows) {
+      const f =
+        typeof p.fecha_pago === 'string'
+          ? p.fecha_pago.slice(0, 10)
+          : new Date(p.fecha_pago).toISOString().slice(0, 10)
+      const docKey = claveDocumentoPagoListaNormalizada(
+        p.numero_documento,
+        p.codigo_documento ?? null
+      )
+      if (!docKey) continue
+      const key = `${f}::${docKey}`
+      dupMap.set(key, (dupMap.get(key) ?? 0) + 1)
+    }
+    const filtroDoc = revisionGlobalNumeroDocumentoFiltro.trim().toUpperCase()
+    return rows
+      .filter(p => {
+        if (!filtroDoc) return true
+        const txt = textoDocumentoPagoParaListado(
+          p.numero_documento,
+          p.codigo_documento
+        ).toUpperCase()
+        return txt.includes(filtroDoc)
+      })
+      .map(p => {
+        const motivos: string[] = []
+        const monto = Number(p.monto_pagado ?? 0)
+        const fechaPagoDate = new Date(p.fecha_pago as string)
+        const hoy = new Date()
+        hoy.setHours(0, 0, 0, 0)
+        const docKey = claveDocumentoPagoListaNormalizada(
+          p.numero_documento,
+          p.codigo_documento ?? null
+        )
+        const fechaKey = Number.isNaN(fechaPagoDate.getTime())
+          ? ''
+          : fechaPagoDate.toISOString().slice(0, 10)
+        const dupKey = docKey && fechaKey ? `${fechaKey}::${docKey}` : ''
+        const esDuplicadoFechaNumero = dupKey
+          ? (dupMap.get(dupKey) ?? 0) > 1
+          : false
+        if (monto <= 0) motivos.push('Monto no válido')
+        if (!Number.isNaN(fechaPagoDate.getTime()) && fechaPagoDate > hoy) {
+          motivos.push('Fecha futura')
+        }
+        if (esDuplicadoFechaNumero) motivos.push('Duplicado fecha + número')
+        if (!p.prestamo_id) motivos.push('Sin crédito asociado')
+        if (p.tiene_aplicacion_cuotas === false) motivos.push('Sin aplicación a cuotas')
+        if ((p.notas ?? '').trim()) motivos.push('Con notas')
+        return { pago: p, motivos, score: motivos.length, esDuplicadoFechaNumero }
+      })
+      .sort((a, b) => b.score - a.score || b.pago.id - a.pago.id)
+  }, [
+    revisionGlobalData?.pagos,
+    revisionGlobalNumeroDocumentoFiltro,
+  ])
+  const revisionGlobalRowsFiltradas = useMemo(() => {
+    if (!revisionGlobalMotivoFiltro) return revisionGlobalRowsAnalizadas
+    return revisionGlobalRowsAnalizadas.filter(row => {
+      if (revisionGlobalMotivoFiltro === 'sin_credito') {
+        return row.motivos.includes('Sin crédito asociado')
+      }
+      if (revisionGlobalMotivoFiltro === 'duplicado') {
+        return row.motivos.includes('Duplicado fecha + número')
+      }
+      if (revisionGlobalMotivoFiltro === 'irreal') {
+        return (
+          row.motivos.includes('Monto no válido') ||
+          row.motivos.includes('Fecha futura')
+        )
+      }
+      if (revisionGlobalMotivoFiltro === 'sin_aplicacion') {
+        return row.motivos.includes('Sin aplicación a cuotas')
+      }
+      if (revisionGlobalMotivoFiltro === 'con_notas') {
+        return row.motivos.includes('Con notas')
+      }
+      return true
+    })
+  }, [revisionGlobalRowsAnalizadas, revisionGlobalMotivoFiltro])
+  const resumenRevisionGlobal = useMemo(() => {
+    const resumen = {
+      duplicados: 0,
+      irreales: 0,
+      sinCredito: 0,
+      sinAplicacion: 0,
+      conNotas: 0,
+    }
+    for (const row of revisionGlobalRowsAnalizadas) {
+      if (row.esDuplicadoFechaNumero) resumen.duplicados += 1
+      if (
+        row.motivos.includes('Monto no válido') ||
+        row.motivos.includes('Fecha futura')
+      ) {
+        resumen.irreales += 1
+      }
+      if (row.motivos.includes('Sin crédito asociado')) resumen.sinCredito += 1
+      if (row.motivos.includes('Sin aplicación a cuotas')) resumen.sinAplicacion += 1
+      if (row.motivos.includes('Con notas')) resumen.conNotas += 1
+    }
+    return resumen
+  }, [revisionGlobalRowsAnalizadas])
 
   /** Solo lista normal + filtro cédula: API devuelve suma de montos de todos los pagos que coinciden. */
   const resumenTotalCedula = useMemo(() => {
@@ -816,6 +962,73 @@ export function PagosList() {
     const siguiente = candidatos[(idxActual + 1 + candidatos.length) % candidatos.length]
     setEditingRevisionId(siguiente.pago.id)
     setRevisionObservacionDraft((siguiente.pago.observaciones ?? '').trim())
+    setPagoEditando(siguiente.pago)
+    setShowRegistrarPago(true)
+    toast.success(
+      `Abriendo anomalía ${idxActual >= 0 ? idxActual + 2 : 1}/${candidatos.length} (ID ${siguiente.pago.id})`
+    )
+  }
+  const handleBuscarRevisionGlobal = () => {
+    setRevisionGlobalCedulaFiltro(revisionGlobalCedulaInput.trim())
+    setRevisionGlobalNumeroDocumentoFiltro(
+      revisionGlobalNumeroDocumentoInput.trim()
+    )
+    setRevisionGlobalFechaPagoFiltro(revisionGlobalFechaPagoInput)
+    setRevisionGlobalPage(1)
+  }
+  const handleLimpiarRevisionGlobal = () => {
+    setRevisionGlobalCedulaInput('')
+    setRevisionGlobalCedulaFiltro('')
+    setRevisionGlobalNumeroDocumentoInput('')
+    setRevisionGlobalNumeroDocumentoFiltro('')
+    setRevisionGlobalFechaPagoInput('')
+    setRevisionGlobalFechaPagoFiltro('')
+    setRevisionGlobalMotivoFiltro('')
+    setRevisionGlobalPage(1)
+  }
+  const handleGuardarNotaGlobal = async (id: number) => {
+    if (editingGlobalId !== id) return
+    setSavingGlobalId(id)
+    try {
+      await pagoService.updatePago(id, {
+        notas: globalNotaDraft.trim() || null,
+      })
+      toast.success('Nota guardada')
+      setEditingGlobalId(null)
+      setGlobalNotaDraft('')
+      await invalidatePagosPrestamosRevisionYCuotas(queryClient)
+    } catch (e) {
+      toast.error(getErrorMessage(e))
+    } finally {
+      setSavingGlobalId(null)
+    }
+  }
+  const handleEliminarRevisionGlobal = async (id: number) => {
+    if (!window.confirm(`¿Eliminar el pago ID ${id}?`)) return
+    setDeletingGlobalId(id)
+    try {
+      await pagoService.deletePago(id)
+      toast.success('Pago eliminado')
+      if ((revisionGlobalRowsFiltradas.length ?? 0) <= 1 && revisionGlobalPage > 1) {
+        setRevisionGlobalPage(prev => Math.max(1, prev - 1))
+      }
+      await invalidatePagosPrestamosRevisionYCuotas(queryClient)
+    } catch (e) {
+      toast.error(getErrorMessage(e))
+    } finally {
+      setDeletingGlobalId(null)
+    }
+  }
+  const handleSiguienteAnomaliaGlobal = () => {
+    const candidatos = revisionGlobalRowsFiltradas.filter(r => r.score > 0)
+    if (candidatos.length === 0) {
+      toast.info('No hay anomalías en esta página.')
+      return
+    }
+    const idxActual = candidatos.findIndex(r => r.pago.id === editingGlobalId)
+    const siguiente = candidatos[(idxActual + 1 + candidatos.length) % candidatos.length]
+    setEditingGlobalId(siguiente.pago.id)
+    setGlobalNotaDraft((siguiente.pago.notas ?? '').trim())
     setPagoEditando(siguiente.pago)
     setShowRegistrarPago(true)
     toast.success(
@@ -1565,6 +1778,7 @@ export function PagosList() {
           <TabsTrigger value="todos">Todos los Pagos</TabsTrigger>
           <TabsTrigger value="resumen">Detalle por Cliente</TabsTrigger>
           <TabsTrigger value="revision">Revision</TabsTrigger>
+          <TabsTrigger value="revision-global">Revision global</TabsTrigger>
         </TabsList>
         {/* Tab: Detalle por Cliente (resumen + ver pagos del cliente, más reciente a más antiguo) */}
         <TabsContent value="resumen">
@@ -1913,6 +2127,290 @@ export function PagosList() {
                     totalPages={Math.max(1, revisionData.total_pages)}
                     onPageChange={p => setRevisionPage(p)}
                     subtitle={`${revisionData.total} registros · ${revisionData.per_page} por página`}
+                  />
+                </>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+        <TabsContent value="revision-global">
+          <Card>
+            <CardHeader>
+              <CardTitle>Revision global de pagos</CardTitle>
+              <p className="text-sm text-muted-foreground">
+                Misma dinámica de revisión rápida, pero sobre todos los registros
+                de la tabla pagos.
+              </p>
+            </CardHeader>
+            <CardContent>
+              <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end">
+                <div className="flex-1">
+                  <label className="mb-1 block text-sm font-medium text-gray-700">
+                    Filtrar por cédula
+                  </label>
+                  <Input
+                    placeholder="Ej: V12345678"
+                    value={revisionGlobalCedulaInput}
+                    onChange={e => setRevisionGlobalCedulaInput(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault()
+                        handleBuscarRevisionGlobal()
+                      }
+                    }}
+                    className="max-w-md"
+                  />
+                </div>
+                <div className="flex-1">
+                  <label className="mb-1 block text-sm font-medium text-gray-700">
+                    Filtrar por N° documento
+                  </label>
+                  <Input
+                    placeholder="Ej: 00012345"
+                    value={revisionGlobalNumeroDocumentoInput}
+                    onChange={e =>
+                      setRevisionGlobalNumeroDocumentoInput(e.target.value)
+                    }
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault()
+                        handleBuscarRevisionGlobal()
+                      }
+                    }}
+                    className="max-w-md"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">
+                    Fecha pago
+                  </label>
+                  <Input
+                    type="date"
+                    value={revisionGlobalFechaPagoInput}
+                    onChange={e => setRevisionGlobalFechaPagoInput(e.target.value)}
+                    className="w-[180px]"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">
+                    Motivo
+                  </label>
+                  <Select
+                    value={revisionGlobalMotivoFiltro || 'all'}
+                    onValueChange={value => {
+                      setRevisionGlobalMotivoFiltro(
+                        value === 'all'
+                          ? ''
+                          : (value as
+                              | 'sin_credito'
+                              | 'duplicado'
+                              | 'irreal'
+                              | 'sin_aplicacion'
+                              | 'con_notas')
+                      )
+                      setRevisionGlobalPage(1)
+                    }}
+                  >
+                    <SelectTrigger className="w-[220px]">
+                      <SelectValue placeholder="Motivo de anomalía" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos</SelectItem>
+                      <SelectItem value="sin_credito">Sin crédito</SelectItem>
+                      <SelectItem value="duplicado">
+                        Duplicado fecha + número
+                      </SelectItem>
+                      <SelectItem value="irreal">Irreal</SelectItem>
+                      <SelectItem value="sin_aplicacion">
+                        Sin aplicación a cuotas
+                      </SelectItem>
+                      <SelectItem value="con_notas">Con notas</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex gap-2">
+                  <Button variant="outline" onClick={handleBuscarRevisionGlobal}>
+                    Buscar
+                  </Button>
+                  <Button onClick={handleSiguienteAnomaliaGlobal}>
+                    Siguiente anomalía
+                  </Button>
+                  {(revisionGlobalCedulaFiltro ||
+                    revisionGlobalNumeroDocumentoFiltro ||
+                    revisionGlobalFechaPagoFiltro ||
+                    revisionGlobalMotivoFiltro) && (
+                    <Button variant="ghost" onClick={handleLimpiarRevisionGlobal}>
+                      <X className="mr-1 h-4 w-4" />
+                      Limpiar
+                    </Button>
+                  )}
+                </div>
+              </div>
+              {isLoadingRevisionGlobal ? (
+                <div className="py-8 text-center text-sm text-gray-500">
+                  Cargando revisión global...
+                </div>
+              ) : isRevisionGlobalError ? (
+                <div className="py-8 text-center text-sm text-red-600">
+                  Error cargando pagos globales
+                </div>
+              ) : !revisionGlobalRowsFiltradas.length ? (
+                <div className="py-8 text-center text-sm text-gray-500">
+                  No hay pagos para esta búsqueda.
+                </div>
+              ) : (
+                <>
+                  <div className="mb-3 flex flex-wrap gap-2 text-xs">
+                    <Badge variant="outline">
+                      Duplicados: {resumenRevisionGlobal.duplicados}
+                    </Badge>
+                    <Badge variant="outline">
+                      Irreales: {resumenRevisionGlobal.irreales}
+                    </Badge>
+                    <Badge variant="outline">
+                      Sin crédito: {resumenRevisionGlobal.sinCredito}
+                    </Badge>
+                    <Badge variant="outline">
+                      Sin aplicación: {resumenRevisionGlobal.sinAplicacion}
+                    </Badge>
+                    <Badge variant="outline">
+                      Con notas: {resumenRevisionGlobal.conNotas}
+                    </Badge>
+                  </div>
+                  <div className="overflow-hidden rounded-lg border">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>ID</TableHead>
+                          <TableHead>Cédula</TableHead>
+                          <TableHead>Crédito</TableHead>
+                          <TableHead>Monto</TableHead>
+                          <TableHead>Fecha Pago</TableHead>
+                          <TableHead>Nº Documento</TableHead>
+                          <TableHead>Motivos</TableHead>
+                          <TableHead>Notas</TableHead>
+                          <TableHead className="text-right">Acciones</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {revisionGlobalRowsFiltradas.map(({ pago, motivos, score }) => (
+                          <TableRow
+                            key={pago.id}
+                            className={score >= 2 ? 'bg-amber-50/40' : undefined}
+                          >
+                            <TableCell>{pago.id}</TableCell>
+                            <TableCell>{pago.cedula_cliente}</TableCell>
+                            <TableCell>
+                              {pago.prestamo_id ? `#${pago.prestamo_id}` : '-'}
+                            </TableCell>
+                            <TableCell>${Number(pago.monto_pagado).toFixed(2)}</TableCell>
+                            <TableCell>{formatDate(pago.fecha_pago)}</TableCell>
+                            <TableCell>
+                              {textoDocumentoPagoParaListado(
+                                pago.numero_documento,
+                                pago.codigo_documento
+                              )}
+                            </TableCell>
+                            <TableCell className="max-w-[260px]">
+                              <div className="flex flex-wrap gap-1">
+                                {motivos.length === 0 ? (
+                                  <Badge variant="outline">Sin marca</Badge>
+                                ) : (
+                                  motivos.map(m => (
+                                    <Badge key={`${pago.id}-${m}`} variant="outline">
+                                      {m}
+                                    </Badge>
+                                  ))
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell className="min-w-[260px]">
+                              {editingGlobalId === pago.id ? (
+                                <Input
+                                  value={globalNotaDraft}
+                                  onChange={e => setGlobalNotaDraft(e.target.value)}
+                                  onKeyDown={e => {
+                                    if (e.key === 'Enter') {
+                                      e.preventDefault()
+                                      void handleGuardarNotaGlobal(pago.id)
+                                    }
+                                  }}
+                                  placeholder="Nota de revisión rápida"
+                                />
+                              ) : (
+                                <span className="text-sm text-amber-700">
+                                  {(pago.notas ?? '').trim() || '-'}
+                                </span>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <div className="inline-flex items-center gap-2">
+                                <Button
+                                  size="icon"
+                                  variant="outline"
+                                  title="Editar pago"
+                                  onClick={() => {
+                                    setPagoEditando(pago)
+                                    setShowRegistrarPago(true)
+                                  }}
+                                >
+                                  <Edit className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  size="icon"
+                                  variant="outline"
+                                  title="Editar nota"
+                                  onClick={() => {
+                                    setEditingGlobalId(pago.id)
+                                    setGlobalNotaDraft((pago.notas ?? '').trim())
+                                  }}
+                                >
+                                  <FileText className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  size="icon"
+                                  variant="outline"
+                                  title="Guardar nota"
+                                  disabled={
+                                    editingGlobalId !== pago.id ||
+                                    savingGlobalId === pago.id
+                                  }
+                                  onClick={() => void handleGuardarNotaGlobal(pago.id)}
+                                >
+                                  {savingGlobalId === pago.id ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                  ) : (
+                                    <Check className="h-4 w-4" />
+                                  )}
+                                </Button>
+                                <Button
+                                  size="icon"
+                                  variant="destructive"
+                                  title="Eliminar pago"
+                                  disabled={deletingGlobalId === pago.id}
+                                  onClick={() =>
+                                    void handleEliminarRevisionGlobal(pago.id)
+                                  }
+                                >
+                                  {deletingGlobalId === pago.id ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                  ) : (
+                                    <Trash2 className="h-4 w-4" />
+                                  )}
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                  <ListPaginationBar
+                    className="mt-4"
+                    page={revisionGlobalData?.page ?? 1}
+                    totalPages={Math.max(1, revisionGlobalData?.total_pages ?? 1)}
+                    onPageChange={p => setRevisionGlobalPage(p)}
+                    subtitle={`${revisionGlobalData?.total ?? 0} registros · ${revisionGlobalData?.per_page ?? perPage} por página`}
                   />
                 </>
               )}
