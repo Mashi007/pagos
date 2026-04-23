@@ -520,6 +520,8 @@ export default function EscanerInfopagosPage() {
   }, [
     archivo,
     cedulaNormalizada,
+    confirmaFechaDetectada,
+    confirmaFechaManual,
     fechaDetectada,
     fechaPago,
     institucion,
