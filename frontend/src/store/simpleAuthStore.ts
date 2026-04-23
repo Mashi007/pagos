@@ -83,15 +83,24 @@ const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms))
 /** Red fría / Render: reintentar una vez antes de borrar sesión local. */
 const isTransientAuthVerifyError = (error: unknown): boolean => {
   if (!error || typeof error !== 'object') return false
-  const e = error as { code?: string; message?: string }
+  const e = error as {
+    code?: string
+    message?: string
+    response?: { status?: number }
+  }
   const code = e.code
   const msg = String(e.message || '')
+  const status = Number(e.response?.status || 0)
   return (
+    status === 502 ||
+    status === 503 ||
+    status === 504 ||
     code === 'ECONNABORTED' ||
     code === 'ERR_NETWORK' ||
     msg.includes('Timeout') ||
     msg.toLowerCase().includes('timeout') ||
-    msg.includes('Network Error')
+    msg.includes('Network Error') ||
+    msg.toLowerCase().includes('bad gateway')
   )
 }
 
@@ -189,21 +198,29 @@ export const useSimpleAuthStore = create<SimpleAuthState>(set => {
               throw new Error('Usuario no encontrado en backend')
             }
           } catch (error) {
-            // Si hay error (incluyendo timeout), limpiar todo el almacenamiento y marcar como no autenticado
-
-            console.warn('Error al verificar autenticación:', error)
-
-            clearAuthStorage()
-
-            set({
-              user: null,
-
-              isAuthenticated: false,
-
-              isLoading: false,
-
-              error: null,
-            })
+            // Si el fallo es transitorio (p. ej. 502/timeout en arranque Render), conservar sesión local.
+            if (isTransientAuthVerifyError(error)) {
+              console.warn(
+                'Auth/me temporalmente no disponible; se conserva sesión local:',
+                error
+              )
+              set({
+                user,
+                isAuthenticated: true,
+                isLoading: false,
+                error: null,
+              })
+            } else {
+              // Error no transitorio: limpiar almacenamiento y forzar relogin.
+              console.warn('Error al verificar autenticación:', error)
+              clearAuthStorage()
+              set({
+                user: null,
+                isAuthenticated: false,
+                isLoading: false,
+                error: null,
+              })
+            }
           }
         } else {
           // No hay usuario almacenado - establecer estado inmediatamente
