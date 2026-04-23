@@ -195,6 +195,8 @@ export default function EscanerInfopagosPage() {
   /** Evita doble envío antes de que React actualice `escaneando` / `enviando`. */
   const escanearActivoRef = useRef(false)
   const enviarActivoRef = useRef(false)
+  const confirmaFechaDetectadaRef = useRef<null | 'si' | 'no'>(null)
+  const confirmaFechaManualRef = useRef(false)
 
   const [fase, setFase] = useState<Fase>('cedula')
   const [cedulaRaw, setCedulaRaw] = useState('')
@@ -360,7 +362,9 @@ export default function EscanerInfopagosPage() {
       setFechaPago(fechaExtraida)
       setFechaDetectada(fechaExtraida)
       setConfirmaFechaDetectada(null)
+      confirmaFechaDetectadaRef.current = null
       setConfirmaFechaManual(false)
+      confirmaFechaManualRef.current = false
       const inst = (s.institucion_financiera || '').trim()
       if (INSTITUCIONES_FINANCIERAS.includes(inst as (typeof INSTITUCIONES_FINANCIERAS)[number])) {
         setInstitucion(inst)
@@ -416,20 +420,22 @@ export default function EscanerInfopagosPage() {
       toast.error(vF.error || 'Fecha inválida.')
       return
     }
+    const confirmaFechaDetectadaActual = confirmaFechaDetectadaRef.current
+    const confirmaFechaManualActual = confirmaFechaManualRef.current
     const hayFechaDetectada = Boolean(fechaDetectada.trim())
-    if (hayFechaDetectada && confirmaFechaDetectada == null) {
+    if (hayFechaDetectada && confirmaFechaDetectadaActual == null) {
       toast.error(
         'Indique si la fecha leída del comprobante es correcta (Sí) o si la corregirá (No).'
       )
       return
     }
-    if (!hayFechaDetectada && !confirmaFechaManual) {
+    if (!hayFechaDetectada && !confirmaFechaManualActual) {
       toast.error('Confirme manualmente la fecha ingresada para continuar.')
       return
     }
     if (
       hayFechaDetectada &&
-      confirmaFechaDetectada === 'si' &&
+      confirmaFechaDetectadaActual === 'si' &&
       fechaPago.trim() !== fechaDetectada.trim()
     ) {
       toast.error(
@@ -480,8 +486,8 @@ export default function EscanerInfopagosPage() {
     form.append('moneda', moneda)
     form.append('fuente_tasa_cambio', fuenteTasa)
     const confirmacionHumana = hayFechaDetectada
-      ? confirmaFechaDetectada === 'si' || confirmaFechaDetectada === 'no'
-      : confirmaFechaManual
+      ? confirmaFechaDetectadaActual === 'si' || confirmaFechaDetectadaActual === 'no'
+      : confirmaFechaManualActual
     form.append('confirmacion_humana', confirmacionHumana ? 'true' : 'false')
     form.append('comprobante', archivo!)
     enviarActivoRef.current = true
@@ -559,7 +565,9 @@ export default function EscanerInfopagosPage() {
     setFechaPago('')
     setFechaDetectada('')
     setConfirmaFechaDetectada(null)
+    confirmaFechaDetectadaRef.current = null
     setConfirmaFechaManual(false)
+    confirmaFechaManualRef.current = false
     setInstitucion('')
     setOtroInstitucion('')
     setEscanerColision(null)
@@ -751,7 +759,10 @@ export default function EscanerInfopagosPage() {
                     <input
                       type="checkbox"
                       checked={confirmaFechaManual}
-                      onChange={e => setConfirmaFechaManual(e.target.checked)}
+                      onChange={e => {
+                        setConfirmaFechaManual(e.target.checked)
+                        confirmaFechaManualRef.current = e.target.checked
+                      }}
                       className="h-4 w-4 rounded border-slate-300"
                     />
                     Confirmo manualmente que la fecha ingresada coincide con el comprobante.
@@ -768,8 +779,10 @@ export default function EscanerInfopagosPage() {
                         setFechaPago(v)
                         if (fechaDetectada.trim() && v.trim() !== fechaDetectada.trim()) {
                           setConfirmaFechaDetectada('no')
+                          confirmaFechaDetectadaRef.current = 'no'
                         } else if (!fechaDetectada.trim()) {
                           setConfirmaFechaManual(false)
+                          confirmaFechaManualRef.current = false
                         }
                       }}
                     />
@@ -791,6 +804,7 @@ export default function EscanerInfopagosPage() {
                           }
                           onClick={() => {
                             setConfirmaFechaDetectada('si')
+                            confirmaFechaDetectadaRef.current = 'si'
                             setFechaPago(fechaDetectada)
                           }}
                         >
@@ -805,7 +819,10 @@ export default function EscanerInfopagosPage() {
                               ? 'bg-amber-600 hover:bg-amber-700'
                               : ''
                           }
-                          onClick={() => setConfirmaFechaDetectada('no')}
+                          onClick={() => {
+                            setConfirmaFechaDetectada('no')
+                            confirmaFechaDetectadaRef.current = 'no'
+                          }}
                         >
                           No
                         </Button>
