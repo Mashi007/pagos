@@ -48,6 +48,7 @@ import {
   RefreshCw,
   Plus,
   Edit,
+  Eye,
   Trash2,
   BarChart3,
   CheckSquare,
@@ -3321,7 +3322,7 @@ export function EditarRevisionManual() {
                                   Cartera
                                 </TableHead>
                                 <TableHead>Notas</TableHead>
-                                <TableHead className="min-w-[200px] whitespace-nowrap text-right">
+                                <TableHead className="min-w-[88px] whitespace-nowrap text-right">
                                   Acciones
                                 </TableHead>
                               </TableRow>
@@ -3359,7 +3360,7 @@ export function EditarRevisionManual() {
                                         : '-'}
                                     </TableCell>
                                     <TableCell
-                                      className={`max-w-[200px] font-mono text-xs ${
+                                      className={`max-w-[240px] font-mono text-xs ${
                                         documentoDuplicadoEnPagina
                                           ? 'bg-orange-100 text-orange-950'
                                           : ''
@@ -3370,10 +3371,42 @@ export function EditarRevisionManual() {
                                           : undefined
                                       }
                                     >
-                                      {textoDocumentoPagoParaListado(
-                                        pago.numero_documento,
-                                        pago.codigo_documento
-                                      )}
+                                      <div className="flex min-w-0 items-center gap-1">
+                                        <span className="min-w-0 truncate">
+                                          {textoDocumentoPagoParaListado(
+                                            pago.numero_documento,
+                                            pago.codigo_documento
+                                          )}
+                                        </span>
+                                        <Button
+                                          type="button"
+                                          variant="ghost"
+                                          size="sm"
+                                          className="h-7 w-7 shrink-0 p-0"
+                                          disabled={
+                                            !pago.link_comprobante?.trim()
+                                          }
+                                          title={
+                                            pago.link_comprobante?.trim()
+                                              ? 'Abrir URL del comprobante'
+                                              : 'Sin URL de comprobante'
+                                          }
+                                          aria-label="Abrir comprobante en nueva pestaña"
+                                          onClick={() => {
+                                            const u =
+                                              pago.link_comprobante?.trim()
+                                            if (u) {
+                                              window.open(
+                                                u,
+                                                '_blank',
+                                                'noopener,noreferrer'
+                                              )
+                                            }
+                                          }}
+                                        >
+                                          <Eye className="h-4 w-4" />
+                                        </Button>
+                                      </div>
                                     </TableCell>
                                     <TableCell className="whitespace-nowrap">
                                       {pago.prestamo_id != null
@@ -3440,7 +3473,7 @@ export function EditarRevisionManual() {
                                           type="button"
                                           variant="ghost"
                                           size="sm"
-                                          className="h-8 gap-1 px-2"
+                                          className="h-8 w-8 shrink-0 p-0"
                                           disabled={soloLectura}
                                           onClick={() =>
                                             abrirEditarPagoRevision(pago)
@@ -3450,15 +3483,15 @@ export function EditarRevisionManual() {
                                               ? 'Revision cerrada: solo lectura'
                                               : 'Editar pago'
                                           }
+                                          aria-label="Editar pago"
                                         >
                                           <Edit className="h-4 w-4" />
-                                          Editar
                                         </Button>
                                         <Button
                                           type="button"
                                           variant="ghost"
                                           size="sm"
-                                          className="h-8 gap-1 px-2 text-destructive hover:text-destructive"
+                                          className="h-8 w-8 shrink-0 p-0 text-destructive hover:text-destructive"
                                           disabled={
                                             soloLectura ||
                                             eliminandoPagoId === pago.id
@@ -3471,13 +3504,13 @@ export function EditarRevisionManual() {
                                               ? 'Revision cerrada: solo lectura'
                                               : 'Eliminar pago'
                                           }
+                                          aria-label="Eliminar pago"
                                         >
                                           {eliminandoPagoId === pago.id ? (
                                             <Loader2 className="h-4 w-4 animate-spin" />
                                           ) : (
                                             <Trash2 className="h-4 w-4" />
                                           )}
-                                          Eliminar
                                         </Button>
                                       </div>
                                     </TableCell>
