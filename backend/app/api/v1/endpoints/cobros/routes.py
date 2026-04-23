@@ -10,7 +10,6 @@ import threading
 import time
 from collections import Counter
 from datetime import date, datetime, time as dt_time, timedelta
-from zoneinfo import ZoneInfo
 from decimal import Decimal
 from types import SimpleNamespace
 from typing import Optional, List, Tuple, Any, Dict, Set
@@ -197,22 +196,6 @@ class AprobarRechazarBody(BaseModel):
 
 class MarcarExportadosBody(BaseModel):
     pago_reportado_ids: Optional[List[int]] = None
-
-
-class TendenciaFalloGeminiPunto(BaseModel):
-    fecha: str
-    fallos_no: int
-    verificados_gemini: int
-    pct_fallo: Optional[float] = None
-
-
-class TendenciaFallosGeminiResponse(BaseModel):
-    puntos: List[TendenciaFalloGeminiPunto]
-    fecha_desde: str
-    fecha_hasta: str
-    dias: int
-    zona: str = "America/Caracas"
-    nota: str
 
 
 # Mensaje genérico al rechazar: indicar que se comuniquen por WhatsApp (424-4579934)
@@ -426,6 +409,29 @@ def _pagos_canonicos_presentes_para_claves(db: Session, claves: Set[str]) -> fro
     return frozenset(found)
 
 
+def _pagos_canonicos_presentes_para_claves_reutilizando(
+    db: Session,
+    claves: Set[str],
+    acum: Dict[str, Set[str]],
+) -> frozenset:
+    """
+    Misma intersección (claves que ya están en cartera) que
+    ``_pagos_canonicos_presentes_para_claves(db, claves)``, pero solo consulta
+    claves aún no vistas en ``acum['queried']``. Reduce round-trips en el barrido
+    por lotes de pagos reportados (listado / KPIs).
+    """
+    if not claves:
+        return frozenset()
+    present = acum.setdefault("present", set())
+    queried = acum.setdefault("queried", set())
+    nuevas = {x for x in claves if x} - queried
+    if nuevas:
+        encontrados = _pagos_canonicos_presentes_para_claves(db, nuevas)
+        queried.update(nuevas)
+        present.update(encontrados)
+    return frozenset(present & claves)
+
+
 def _rechazar_aprobacion_si_documento_ya_en_pagos(db: Session, pr: PagoReportado) -> None:
     """Regla operativa: no aprobar si el comprobante ya existe en cartera (`pagos`)."""
     if pago_reportado_colisiona_tabla_pagos(db, pr):
@@ -600,11 +606,14 @@ def _pago_reportado_list_items_from_rows(
     *,
     primer_id_por_norm_precalc: Optional[Dict[str, int]] = None,
     include_financial_fields: bool = True,
+    pagos_canon_acum: Optional[Dict[str, Set[str]]] = None,
 ) -> List[PagoReportadoListItem]:
     """Misma lógica de observaciones / tasa que el listado paginado.
 
     Si ``include_financial_fields`` es False, no calcula tasa Bs/USD ni equivalente (ahorra trabajo
     en barridos masivos donde solo se usa ``observacion`` + Gemini para ``_item_falla_validadores_cola_manual``).
+
+    ``pagos_canon_acum``: opcional, mismo dict en todo un barrido por lotes; claves ``queried`` y ``present``.
     """
     if not rows:
         return []
@@ -628,7 +637,12 @@ def _pago_reportado_list_items_from_rows(
     )
 
     candidatos = _collect_candidatos_canon_desde_reportados(rows)
-    claves_doc_en_pagos = _pagos_canonicos_presentes_para_claves(db, candidatos)
+    if pagos_canon_acum is None:
+        claves_doc_en_pagos = _pagos_canonicos_presentes_para_claves(db, candidatos)
+    else:
+        claves_doc_en_pagos = _pagos_canonicos_presentes_para_claves_reutilizando(
+            db, candidatos, pagos_canon_acum
+        )
     norm_por_fila = []
     for r in rows:
         _, n_eff = documento_numero_desde_pago_reportado(r)
@@ -1218,6 +1232,7 @@ def _list_pagos_reportados_payload(
     take_need = per_page
     page_ids_ordered: List[int] = []
     total = 0
+    pagos_canon_acum: Dict[str, Set[str]] = {"queried": set(), "present": set()}
     while True:
         rows = db.execute(q.offset(offset_scan).limit(batch)).scalars().all()
         if not rows:
@@ -1227,6 +1242,7 @@ def _list_pagos_reportados_payload(
             rows,
             primer_id_por_norm_precalc=primer_precalc,
             include_financial_fields=False,
+            pagos_canon_acum=pagos_canon_acum,
         ):
             # Regla innegociable: duplicado = mismo numero_operacion exacto/canonico.
             # En cola operativa se muestra solo el primer reporte; reenvíos no se listan.
@@ -1270,6 +1286,7 @@ def _list_pagos_reportados_payload(
                 ordered_pr,
                 primer_id_por_norm_precalc=primer_precalc,
                 include_financial_fields=True,
+                pagos_canon_acum=pagos_canon_acum,
             )
 
     out: Dict[str, Any] = {"items": page_items, "total": total, "page": page, "per_page": per_page}
@@ -1337,6 +1354,7 @@ def _kpis_pagos_reportados_payload(
 
         batch = _COBROS_LISTADO_SCAN_BATCH
         offset_scan = 0
+        pagos_canon_acum_kpi: Dict[str, Set[str]] = {"queried": set(), "present": set()}
         while True:
             rows_b = db.execute(q_scan.offset(offset_scan).limit(batch)).scalars().all()
             if not rows_b:
@@ -1346,6 +1364,7 @@ def _kpis_pagos_reportados_payload(
                 rows_b,
                 primer_id_por_norm_precalc=primer_kpi,
                 include_financial_fields=False,
+                pagos_canon_acum=pagos_canon_acum_kpi,
             ):
                 if not _item_falla_validadores_cola_manual(it):
                     continue
@@ -1506,81 +1525,6 @@ def list_duplicados_eliminados(
         for r in rows
     ]
     return {"items": items, "total": total, "page": page, "per_page": per_page}
-
-
-@router.get(
-    "/pagos-reportados/tendencia-fallos-gemini",
-    response_model=TendenciaFallosGeminiResponse,
-)
-def tendencia_fallos_gemini_por_dia(
-    db: Session = Depends(get_db),
-    dias: int = Query(
-        90,
-        ge=7,
-        le=366,
-        description="Ventana hacia atras en dias calendario (zona Caracas).",
-    ),
-):
-    """
-    Serie diaria por fecha de creacion del reporte: fallos cuando la verificacion automatica
-    respondio NO (gemini_coincide_exacto = false), frente al total con respuesta true/false ese dia.
-    """
-    tz = ZoneInfo("America/Caracas")
-    hoy = datetime.now(tz).date()
-    desde = hoy - timedelta(days=dias - 1)
-
-    rows = db.execute(
-        text(
-            """
-            SELECT CAST(created_at AS date) AS dia,
-              COUNT(*) FILTER (
-                WHERE LOWER(TRIM(COALESCE(gemini_coincide_exacto, ''))) = 'false'
-              )::int AS fallos_no,
-              COUNT(*) FILTER (
-                WHERE LOWER(TRIM(COALESCE(gemini_coincide_exacto, ''))) IN ('true', 'false')
-              )::int AS verificados_gemini
-            FROM pagos_reportados
-            WHERE CAST(created_at AS date) >= :desde
-            GROUP BY 1
-            ORDER BY 1
-            """
-        ),
-        {"desde": desde},
-    ).mappings().all()
-
-    by_day: Dict[date, Tuple[int, int]] = {
-        r["dia"]: (int(r["fallos_no"]), int(r["verificados_gemini"])) for r in rows
-    }
-
-    puntos: List[TendenciaFalloGeminiPunto] = []
-    d = desde
-    while d <= hoy:
-        fallos_no, verif = by_day.get(d, (0, 0))
-        pct: Optional[float] = None
-        if verif > 0:
-            pct = round(100.0 * fallos_no / verif, 1)
-        puntos.append(
-            TendenciaFalloGeminiPunto(
-                fecha=d.isoformat(),
-                fallos_no=fallos_no,
-                verificados_gemini=verif,
-                pct_fallo=pct,
-            )
-        )
-        d += timedelta(days=1)
-
-    return TendenciaFallosGeminiResponse(
-        puntos=puntos,
-        fecha_desde=desde.isoformat(),
-        fecha_hasta=hoy.isoformat(),
-        dias=dias,
-        zona="America/Caracas",
-        nota=(
-            "Fallos (NO): gemini_coincide_exacto = false. "
-            "Verificados: respuesta true o false (sin null/vacio). "
-            "Agrupado por dia de creacion del reporte (BD)."
-        ),
-    )
 
 
 @router.get(

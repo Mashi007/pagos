@@ -41,15 +41,12 @@ import {
   cambiarEstadoPago,
   openComprobanteInNewTab,
   eliminarPagoReportado,
-  getTendenciaFallosGemini,
   invalidateCobrosListadoKpisCache,
   COBROS_LISTADO_KPIS_CACHE_TTL_MS,
   type PagoReportadoItem,
   type ListPagosReportadosResponse,
   type PagosReportadosKpis,
   type CambiarEstadoPagoResponse,
-  type TendenciaFalloGeminiPunto,
-  type TendenciaFallosGeminiResponse,
 } from '../services/cobrosService'
 
 import { Button } from '../components/ui/button'
@@ -109,20 +106,7 @@ import {
   Edit,
   Mail,
   Eye,
-  TrendingDown,
 } from 'lucide-react'
-
-import {
-  ResponsiveContainer,
-  ComposedChart,
-  Line,
-  Area,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-} from 'recharts'
 
 import { PUBLIC_REPORTE_PAGO_PATH } from '../config/env'
 
@@ -365,14 +349,8 @@ export default function CobrosPagosReportadosPage() {
 
   const [kpis, setKpis] = useState<PagosReportadosKpis | null>(null)
 
-  const [diasTendencia, setDiasTendencia] = useState(90)
-  const [tendenciaEnabled, setTendenciaEnabled] = useState(false)
   const [ultimaCargaMs, setUltimaCargaMs] = useState<number | null>(null)
 
-  const [tendencia, setTendencia] =
-    useState<TendenciaFallosGeminiResponse | null>(null)
-
-  const [tendenciaLoading, setTendenciaLoading] = useState(true)
   const [searchNonce, setSearchNonce] = useState(0)
   const loadSeqRef = useRef(0)
   const dataRef = useRef<ListPagosReportadosResponse | null>(null)
@@ -520,62 +498,6 @@ export default function CobrosPagosReportadosPage() {
     const id = window.setInterval(tick, COBROS_LISTADO_KPIS_CACHE_TTL_MS)
     return () => window.clearInterval(id)
   }, [fetchListado])
-
-  useEffect(() => {
-    let cancelled = false
-    if (!tendenciaEnabled) {
-      setTendenciaLoading(false)
-      return
-    }
-
-    ;(async () => {
-      setTendenciaLoading(true)
-
-      try {
-        const r = await getTendenciaFallosGemini(diasTendencia)
-
-        if (!cancelled) {
-          setTendencia(r)
-        }
-      } catch {
-        if (!cancelled) {
-          setTendencia(null)
-
-          toast.error('No se pudo cargar la tendencia de fallos (NO).')
-        }
-      } finally {
-        if (!cancelled) {
-          setTendenciaLoading(false)
-        }
-      }
-    })()
-
-    return () => {
-      cancelled = true
-    }
-  }, [diasTendencia])
-  useEffect(() => {
-    if (data == null || tendenciaEnabled) return
-    const enqueue =
-      typeof window !== 'undefined' && 'requestIdleCallback' in window
-        ? (cb: () => void) =>
-            (window as Window & { requestIdleCallback: (fn: () => void) => number }).requestIdleCallback(
-              cb
-            )
-        : (cb: () => void) => window.setTimeout(cb, 250)
-    const id = enqueue(() => setTendenciaEnabled(true))
-    return () => {
-      if (
-        typeof window !== 'undefined' &&
-        'cancelIdleCallback' in window &&
-        typeof id === 'number'
-      ) {
-        ;(window as Window & { cancelIdleCallback: (rid: number) => void }).cancelIdleCallback(id)
-      } else if (typeof id === 'number') {
-        window.clearTimeout(id)
-      }
-    }
-  }, [data, tendenciaEnabled])
 
   const handleKpiClick = (estadoKey: string) => {
     setEstado(estadoKey)
@@ -1162,238 +1084,6 @@ export default function CobrosPagosReportadosPage() {
           )}
         </div>
       )}
-
-      <Card className="overflow-hidden border-2 border-slate-200 shadow-lg">
-        <CardHeader className="border-b border-rose-100 bg-gradient-to-r from-rose-50 via-white to-slate-50 pb-4">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <CardTitle className="flex items-center gap-2 text-lg font-bold text-slate-800 sm:text-xl">
-              <TrendingDown className="h-6 w-6 shrink-0 text-rose-600" />
-              Tendencia: fallos verificacion (NO) por dia
-            </CardTitle>
-
-            <div className="flex flex-wrap items-center gap-2">
-              <label
-                htmlFor="cobros-tendencia-dias"
-                className="text-xs text-slate-600"
-              >
-                Periodo
-              </label>
-
-              <select
-                id="cobros-tendencia-dias"
-                className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm"
-                value={diasTendencia}
-                onChange={e => setDiasTendencia(Number(e.target.value))}
-                aria-label="Dias de la tendencia"
-              >
-                <option value={30}>Ultimos 30 dias</option>
-
-                <option value={60}>Ultimos 60 dias</option>
-
-                <option value={90}>Ultimos 90 dias</option>
-
-                <option value={180}>Ultimos 180 dias</option>
-              </select>
-            </div>
-          </div>
-
-          <p className="mt-2 text-xs leading-relaxed text-slate-600">
-            Cada punto es un dia calendario (
-            {tendencia?.zona ?? 'America/Caracas'}
-            ): cantidad de reportes donde la comprobacion automatica respondio{' '}
-            <strong>NO</strong> (
-            <code className="rounded bg-slate-100 px-1">
-              gemini_coincide_exacto
-            </code>{' '}
-            = false). La zona sombreada muestra cuantos reportes tuvieron
-            respuesta true/false ese dia (contexto). Si la linea baja, hay menos
-            fallos NO por dia.
-          </p>
-        </CardHeader>
-
-        <CardContent className="p-4 pt-5 sm:p-6">
-          {!tendenciaEnabled ? (
-            <div className="flex h-[180px] flex-col items-center justify-center gap-3 text-slate-600">
-              <p className="text-sm">
-                La tendencia se difiere para acelerar la carga inicial del listado.
-              </p>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setTendenciaEnabled(true)}
-              >
-                Cargar tendencia ahora
-              </Button>
-            </div>
-          ) : null}
-          {tendenciaLoading ? (
-            <div className="flex h-[320px] items-center justify-center gap-2 text-slate-500">
-              <Loader2 className="h-8 w-8 animate-spin" />
-
-              <span>Cargando serie...</span>
-            </div>
-          ) : tendenciaEnabled && tendencia?.puntos?.length ? (
-            <ResponsiveContainer width="100%" height={360}>
-              <ComposedChart
-                data={tendencia.puntos}
-                margin={{ top: 8, right: 12, left: 4, bottom: 8 }}
-              >
-                <defs>
-                  <linearGradient
-                    id="cobrosGeminiVerifFill"
-                    x1="0"
-                    y1="0"
-                    x2="0"
-                    y2="1"
-                  >
-                    <stop offset="0%" stopColor="#64748b" stopOpacity={0.22} />
-
-                    <stop
-                      offset="100%"
-                      stopColor="#64748b"
-                      stopOpacity={0.02}
-                    />
-                  </linearGradient>
-                </defs>
-
-                <CartesianGrid
-                  strokeDasharray="3 3"
-                  stroke="#e2e8f0"
-                  vertical={false}
-                />
-
-                <XAxis
-                  dataKey="fecha"
-                  tick={{ fontSize: 10, fill: '#64748b' }}
-                  tickLine={false}
-                  axisLine={{ stroke: '#cbd5e1' }}
-                  tickFormatter={(v: string) => {
-                    const [y, m, d] = v.split('-')
-
-                    return d && m ? `${d}/${m}` : v
-                  }}
-                  interval={
-                    tendencia.puntos.length > 20
-                      ? Math.floor(tendencia.puntos.length / 12)
-                      : 0
-                  }
-                />
-
-                <YAxis
-                  yAxisId="fallos"
-                  allowDecimals={false}
-                  tick={{ fontSize: 11, fill: '#be123c' }}
-                  tickLine={false}
-                  axisLine={{ stroke: '#fecdd3' }}
-                  width={40}
-                  label={{
-                    value: 'Fallos (NO)',
-                    angle: -90,
-                    position: 'insideLeft',
-                    style: { fill: '#9f1239', fontSize: 11 },
-                  }}
-                />
-
-                <YAxis
-                  yAxisId="vol"
-                  orientation="right"
-                  allowDecimals={false}
-                  tick={{ fontSize: 11, fill: '#475569' }}
-                  tickLine={false}
-                  axisLine={{ stroke: '#cbd5e1' }}
-                  width={44}
-                  label={{
-                    value: 'Verificados',
-                    angle: 90,
-                    position: 'insideRight',
-                    style: { fill: '#475569', fontSize: 11 },
-                  }}
-                />
-
-                <Tooltip
-                  content={({ active, payload }) => {
-                    if (!active || !payload?.length) {
-                      return null
-                    }
-
-                    const row = payload[0].payload as TendenciaFalloGeminiPunto
-
-                    const fechaFmt = new Date(
-                      `${row.fecha}T12:00:00`
-                    ).toLocaleDateString('es-VE', {
-                      weekday: 'short',
-                      day: 'numeric',
-                      month: 'short',
-                      year: 'numeric',
-                    })
-
-                    return (
-                      <div className="rounded-lg border border-slate-200 bg-white px-3 py-2.5 shadow-xl">
-                        <p className="text-xs font-medium text-slate-500">
-                          {fechaFmt}
-                        </p>
-
-                        <p className="mt-1.5 text-sm text-rose-600">
-                          Fallos (NO):{' '}
-                          <span className="font-bold tabular-nums">
-                            {row.fallos_no}
-                          </span>
-                        </p>
-
-                        <p className="text-sm text-slate-700">
-                          Verificados (Gemini):{' '}
-                          <span className="font-semibold tabular-nums">
-                            {row.verificados_gemini}
-                          </span>
-                        </p>
-
-                        {row.pct_fallo != null ? (
-                          <p className="mt-1 text-xs text-slate-500">
-                            % fallo del dia:{' '}
-                            <span className="font-medium tabular-nums">
-                              {row.pct_fallo}%
-                            </span>
-                          </p>
-                        ) : null}
-                      </div>
-                    )
-                  }}
-                />
-
-                <Legend wrapperStyle={{ paddingTop: 16 }} />
-
-                <Area
-                  yAxisId="vol"
-                  type="monotone"
-                  dataKey="verificados_gemini"
-                  name="Verificados (Gemini)"
-                  stroke="#64748b"
-                  strokeWidth={1}
-                  fill="url(#cobrosGeminiVerifFill)"
-                  dot={false}
-                  activeDot={{ r: 4 }}
-                />
-
-                <Line
-                  yAxisId="fallos"
-                  type="monotone"
-                  dataKey="fallos_no"
-                  name="Fallos (NO)"
-                  stroke="#be123c"
-                  strokeWidth={2.5}
-                  dot={{ r: 2, strokeWidth: 1, fill: '#fff' }}
-                  activeDot={{ r: 6, strokeWidth: 2 }}
-                />
-              </ComposedChart>
-            </ResponsiveContainer>
-          ) : tendenciaEnabled ? (
-            <div className="flex h-[200px] items-center justify-center text-slate-500">
-              Sin datos de tendencia.
-            </div>
-          ) : null}
-        </CardContent>
-      </Card>
 
       <Card>
         <CardContent className="pt-6">
