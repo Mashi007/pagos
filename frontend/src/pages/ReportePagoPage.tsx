@@ -16,7 +16,8 @@
 
 
 
- * fecha (obligatoria, no futura, desde calendario), institución y nº documento (longitud), archivo (PDF, JPEG, PNG, HEIC/HEIF, WebP; máx 10 MB).
+ * En rapicredit-cobros no se pide fecha al cliente (se envía hoy Caracas). En Infopagos sí se pide fecha en el paso correspondiente.
+ * institución y nº documento (longitud), archivo (PDF, JPEG, PNG, HEIC/HEIF, WebP; máx 10 MB).
 
 
 
@@ -69,6 +70,8 @@ import {
   extraerCaracteresCedulaPublica,
   normalizarCedulaParaProcesar,
 } from '../utils/cedulaConsultaPublica'
+
+import { hoyYmdCaracas } from '../utils/fechaZona'
 
 // Límites iguales al backend (cobros_publico)
 
@@ -183,7 +186,7 @@ function getStepAnnouncement(step: number, isInfopagos: boolean): string {
       15: 'Elija la tasa de cambio BCV, Euro o Binance para pagos en bolívares',
       2: 'Paso 2: Adjuntar comprobante',
       3: 'Paso 3: Institución financiera',
-      4: 'Paso 4: Fecha y monto del pago',
+      4: 'Paso 4: Monto del pago',
       5: 'Paso 5: Número de documento u operación',
       7: 'Paso 6: Confirmar y enviar',
       8: 'Reporte enviado correctamente',
@@ -249,6 +252,12 @@ function validarMonto(
 
   return { valido: true, valor: num }
 }
+/** YYYY-MM-DD elegido o hoy Caracas si el campo quedó vacío (coherente con backend TZ negocio). */
+function fechaReporteEfectivaYmd(fechaPago: string): string {
+  const t = (fechaPago || '').trim()
+  return t || hoyYmdCaracas()
+}
+
 function validarFechaPago(fecha: string): { valido: boolean; error?: string } {
   if (!fecha || !fecha.trim()) {
     return {
@@ -963,7 +972,9 @@ export default function ReportePagoPage({
       return
     }
 
-    const vFecha = validarFechaPago(fechaPago)
+    const fechaEfectivaParaApi = fechaReporteEfectivaYmd(fechaPago)
+
+    const vFecha = validarFechaPago(fechaEfectivaParaApi)
 
     if (!vFecha.valido) {
       showNotification('error', vFecha.error ?? 'Fecha inválida.')
@@ -1027,7 +1038,7 @@ export default function ReportePagoPage({
 
     form.append('contact_website', '') // honeypot: siempre vacío para usuarios reales
 
-    form.append('fecha_pago', fechaPago)
+    form.append('fecha_pago', fechaEfectivaParaApi)
 
     form.append('institucion_financiera', institucionFinal)
 
@@ -1261,7 +1272,7 @@ export default function ReportePagoPage({
           {
             icon: 'bank' as const,
             text: 'Datos del pago',
-            desc: 'Banco, fecha, monto y número',
+            desc: 'Banco, monto y número',
           },
           {
             icon: 'file' as const,
@@ -2037,7 +2048,7 @@ export default function ReportePagoPage({
                   {badgePasoFormulario(4, isInfopagos)}
                 </div>
                 <CardTitle className="m-0 text-lg sm:text-xl">
-                  Fecha y monto
+                  {isInfopagos ? 'Fecha y monto' : 'Monto'}
                 </CardTitle>
               </div>
               <p className="mt-2 text-sm text-slate-600">
@@ -2047,25 +2058,28 @@ export default function ReportePagoPage({
                     {moneda === 'BS' ? 'bolivares (Bs.)' : 'dólares (USD)'}
                   </>
                 ) : (
-                  'Ingresa la fecha y el monto del pago según corresponda a tu caso.'
+                  'Indique el monto del pago.'
                 )}
               </p>
             </CardHeader>
 
             <CardContent className="space-y-4 px-5 sm:px-6">
-              <div>
-                <label className="mb-2 block text-sm font-semibold text-slate-900">
-                  Fecha de pago
-                </label>
-                <FechaPagoTecladoRapido
-                  value={fechaPago}
-                  onChange={setFechaPago}
-                  maxYmd={new Date().toISOString().slice(0, 10)}
-                />
-                <p className="mt-1 text-xs text-slate-500">
-                  Toque el ícono de calendario para seleccionar la fecha
-                </p>
-              </div>
+              {isInfopagos ? (
+                <div>
+                  <label className="mb-2 block text-sm font-semibold text-slate-900">
+                    Fecha de pago
+                  </label>
+                  <FechaPagoTecladoRapido
+                    value={fechaPago}
+                    onChange={setFechaPago}
+                    maxYmd={hoyYmdCaracas()}
+                  />
+                  <p className="mt-1 text-xs text-slate-500">
+                    Toque el ícono de calendario para elegir otra. Si no indica fecha, se usará la de
+                    hoy (Caracas) en el registro.
+                  </p>
+                </div>
+              ) : null}
 
               <div>
                 <label className="mb-2 block text-sm font-semibold text-slate-900">
@@ -2130,7 +2144,7 @@ export default function ReportePagoPage({
                 <Button
                   className="min-h-[48px] min-w-0 flex-1 touch-manipulation bg-slate-900 font-semibold text-white hover:bg-slate-800"
                   onClick={() => {
-                    const vF = validarFechaPago(fechaPago)
+                    const vF = validarFechaPago(fechaReporteEfectivaYmd(fechaPago))
 
                     if (!vF.valido) {
                       showNotification('error', vF.error ?? 'Fecha inválida.')
@@ -2446,12 +2460,14 @@ export default function ReportePagoPage({
                     {institucionFinal}
                   </span>
                 </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-slate-600">Fecha:</span>
-                  <span className="font-semibold text-slate-900">
-                    {fechaPago}
-                  </span>
-                </div>
+                {isInfopagos ? (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-600">Fecha:</span>
+                    <span className="font-semibold text-slate-900">
+                      {fechaReporteEfectivaYmd(fechaPago)}
+                    </span>
+                  </div>
+                ) : null}
                 <div className="flex justify-between text-sm">
                   <span className="text-slate-600">Monto:</span>
                   <span className="font-semibold text-slate-900">
