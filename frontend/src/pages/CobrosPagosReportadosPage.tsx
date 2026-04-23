@@ -604,6 +604,18 @@ export default function CobrosPagosReportadosPage() {
         toast.error(res.mensaje || 'No se pudo eliminar.')
         return
       }
+      // Quitar la fila al instante aunque el refresh posterior falle (p. ej. 502 temporal).
+      setData(prev => {
+        if (!prev) return prev
+        const nextItems = prev.items.filter(r => r.id !== id)
+        if (nextItems.length === prev.items.length) return prev
+        return {
+          ...prev,
+          items: nextItems,
+          total: Math.max(0, prev.total - 1),
+        }
+      })
+      setSelectedIds(prev => prev.filter(x => x !== id))
       toast.success(res?.mensaje || 'Pago reportado eliminado.')
       invalidateCobrosListadoKpisCache()
       void fetchListado({ bypassCache: true, silent: true })
