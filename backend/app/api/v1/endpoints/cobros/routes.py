@@ -5,6 +5,8 @@ Listado de pagos reportados, detalle, aprobar, rechazar, histórico por cédula.
 import io
 import logging
 import base64
+import hashlib
+import json
 import re
 import threading
 import time
@@ -15,6 +17,7 @@ from types import SimpleNamespace
 from typing import Optional, List, Tuple, Any, Dict, Set
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
+from fastapi.encoders import jsonable_encoder
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
@@ -24,6 +27,7 @@ from sqlalchemy.exc import ProgrammingError, OperationalError, IntegrityError
 from app.core.database import get_db
 from app.core.documento import normalize_documento
 from app.core.deps import get_current_user
+from app.core.rate_limit_store import get_redis_client
 from app.models.pago_reportado import PagoReportado, PagoReportadoHistorial
 from app.models.pago_reportado_exportado import PagoReportadoExportado
 from app.models.pago_pendiente_descargar import PagoPendienteDescargar
@@ -77,6 +81,103 @@ from app.services.cobros.pago_reportado_comprobante_unico import (
 
 logger = logging.getLogger(__name__)
 router = APIRouter(dependencies=[Depends(get_current_user)])
+
+
+_COBROS_LISTADO_KPIS_CACHE_TTL_SEC = 900  # 15 minutos
+_COBROS_LISTADO_KPIS_CACHE_PREFIX = "cobros:listado_y_kpis:v1:"
+_cobros_listado_kpis_mem_cache: Dict[str, Tuple[float, dict]] = {}
+_cobros_listado_kpis_mem_lock = threading.Lock()
+
+
+def _cobros_listado_kpis_cache_key_payload(
+    *,
+    estado: Optional[str],
+    fecha_desde: Optional[date],
+    fecha_hasta: Optional[date],
+    cedula: Optional[str],
+    institucion: Optional[str],
+    page: int,
+    per_page: int,
+    incluir_exportados: bool,
+) -> str:
+    payload = {
+        "estado": (estado or "").strip().lower(),
+        "fecha_desde": fecha_desde.isoformat() if isinstance(fecha_desde, date) else "",
+        "fecha_hasta": fecha_hasta.isoformat() if isinstance(fecha_hasta, date) else "",
+        "cedula": (cedula or "").strip().upper(),
+        "institucion": (institucion or "").strip().upper(),
+        "page": int(page),
+        "per_page": int(per_page),
+        "incluir_exportados": bool(incluir_exportados),
+    }
+    return json.dumps(payload, sort_keys=True, ensure_ascii=False)
+
+
+def _cobros_listado_kpis_storage_key(cache_payload: str) -> str:
+    digest = hashlib.sha1(cache_payload.encode("utf-8")).hexdigest()
+    return f"{_COBROS_LISTADO_KPIS_CACHE_PREFIX}{digest}"
+
+
+def _cobros_listado_kpis_cache_get(cache_payload: str) -> Optional[dict]:
+    key = _cobros_listado_kpis_storage_key(cache_payload)
+    redis_client = get_redis_client()
+    if redis_client is not None:
+        try:
+            raw = redis_client.get(key)
+            if raw:
+                parsed = json.loads(raw)
+                if isinstance(parsed, dict):
+                    return parsed
+        except Exception as e:
+            logger.warning("[COBROS_CACHE] Redis get listado-y-kpis falló: %s", e)
+
+    now = time.time()
+    with _cobros_listado_kpis_mem_lock:
+        hit = _cobros_listado_kpis_mem_cache.get(key)
+        if not hit:
+            return None
+        exp_ts, payload = hit
+        if exp_ts > now:
+            return payload
+        _cobros_listado_kpis_mem_cache.pop(key, None)
+    return None
+
+
+def _cobros_listado_kpis_cache_set(cache_payload: str, data: dict) -> None:
+    key = _cobros_listado_kpis_storage_key(cache_payload)
+    encoded = jsonable_encoder(data)
+    redis_client = get_redis_client()
+    if redis_client is not None:
+        try:
+            redis_client.setex(
+                key,
+                _COBROS_LISTADO_KPIS_CACHE_TTL_SEC,
+                json.dumps(encoded, ensure_ascii=False, default=str),
+            )
+            return
+        except Exception as e:
+            logger.warning("[COBROS_CACHE] Redis set listado-y-kpis falló: %s", e)
+
+    with _cobros_listado_kpis_mem_lock:
+        _cobros_listado_kpis_mem_cache[key] = (
+            time.time() + _COBROS_LISTADO_KPIS_CACHE_TTL_SEC,
+            encoded,
+        )
+
+
+def _invalidate_cobros_listado_kpis_cache() -> None:
+    with _cobros_listado_kpis_mem_lock:
+        _cobros_listado_kpis_mem_cache.clear()
+
+    redis_client = get_redis_client()
+    if redis_client is None:
+        return
+    try:
+        keys = list(redis_client.scan_iter(match=f"{_COBROS_LISTADO_KPIS_CACHE_PREFIX}*"))
+        if keys:
+            redis_client.delete(*keys)
+    except Exception as e:
+        logger.warning("[COBROS_CACHE] Redis invalidate listado-y-kpis falló: %s", e)
 
 
 def _log_fase_aprobacion(
@@ -940,6 +1041,7 @@ def _persist_marcar_exportados_y_cola(db: Session, ids: List[int]) -> dict:
     quitados_cola_temporal = int(res_cola.rowcount or 0)
 
     db.commit()
+    _invalidate_cobros_listado_kpis_cache()
 
     return {
         "ok": True,
@@ -1465,6 +1567,20 @@ def list_pagos_reportados_y_kpis(
     Sin filtro `estado`: un solo barrido de la cola manual alimenta listado + KPIs (mitad de trabajo BD vs antes).
     Con `estado` o pestaña filtrada: listado acotado + KPIs con barrido completo (misma semántica que antes).
     """
+    cache_payload = _cobros_listado_kpis_cache_key_payload(
+        estado=estado,
+        fecha_desde=fecha_desde,
+        fecha_hasta=fecha_hasta,
+        cedula=cedula,
+        institucion=institucion,
+        page=page,
+        per_page=per_page,
+        incluir_exportados=incluir_exportados,
+    )
+    cached = _cobros_listado_kpis_cache_get(cache_payload)
+    if cached is not None:
+        return cached
+
     emit_kpi_from_list = estado is None
     lista = _list_pagos_reportados_payload(
         db,
@@ -1488,7 +1604,9 @@ def list_pagos_reportados_y_kpis(
         incluir_exportados=incluir_exportados,
         manual_queue_counts=manual_queue,
     )
-    return {**lista, "kpis": kpis}
+    payload = {**lista, "kpis": kpis}
+    _cobros_listado_kpis_cache_set(cache_payload, payload)
+    return payload
 
 
 @router.get("/pagos-reportados/duplicados-eliminados", response_model=dict)
@@ -2198,6 +2316,7 @@ def aprobar_pago_reportado(
     if registrar_historial_aprobacion and estado_anterior is not None:
         _registrar_historial(db, pago_id, estado_anterior, "aprobado", usuario_email, None)
     db.commit()
+    _invalidate_cobros_listado_kpis_cache()
     _log_fase_aprobacion(
         flujo="aprobar_directo",
         fase="total",
@@ -2302,6 +2421,7 @@ def rechazar_pago_reportado(
         mensaje_final = "Pago rechazado. No hay correo del cliente en el sistema; no se envió notificación."
     _registrar_historial(db, pago_id, estado_anterior, "rechazado", usuario_email, pr.motivo_rechazo)
     db.commit()
+    _invalidate_cobros_listado_kpis_cache()
     out = {
         "ok": True,
         "mensaje": mensaje_final,
@@ -2324,6 +2444,7 @@ def eliminar_pago_reportado(
     ref = pr.referencia_interna
     db.delete(pr)
     db.commit()
+    _invalidate_cobros_listado_kpis_cache()
     logger.info("[COBROS] Pago reportado eliminado: id=%s ref=%s", pago_id, ref)
     return {"ok": True, "mensaje": f"Pago reportado {ref} eliminado."}
 
@@ -2388,6 +2509,7 @@ def get_recibo_pdf(pago_id: int, db: Session = Depends(get_db)):
     pdf_bytes = generar_recibo_pdf_desde_pago_reportado(db, pr)
     pr.recibo_pdf = pdf_bytes
     db.commit()
+    _invalidate_cobros_listado_kpis_cache()
     return Response(
         content=bytes(pdf_bytes),
         media_type="application/pdf",
@@ -2427,6 +2549,7 @@ def enviar_recibo_manual(
     pdf_bytes = generar_recibo_pdf_desde_pago_reportado(db, pr)
     pr.recibo_pdf = pdf_bytes
     db.commit()
+    _invalidate_cobros_listado_kpis_cache()
     att, size_note = cobros_recibo_attachments_or_oversize_note(
         f"recibo_{pr.referencia_interna}.pdf", bytes(pdf_bytes)
     )
@@ -2657,6 +2780,7 @@ def editar_pago_reportado(
         if key_recibo_antes != key_recibo_despues and (pr.recibo_pdf is not None or _img_id):
             pr.recibo_pdf = None
         db.commit()
+        _invalidate_cobros_listado_kpis_cache()
         logger.info("[COBROS] Pago reportado editado: id=%s ref=%s", pago_id, pr.referencia_interna)
         return {"ok": True, "mensaje": mensaje}
     except HTTPException as exc:
@@ -2897,6 +3021,7 @@ def cambiar_estado_pago(
 
     _registrar_historial(db, pago_id, estado_anterior, body.estado, usuario_email, body.motivo)
     db.commit()
+    _invalidate_cobros_listado_kpis_cache()
     if body.estado == "aprobado":
         _log_fase_aprobacion(
             flujo="aprobar_patch_estado",
@@ -3017,6 +3142,7 @@ def reanalizar_pago_con_gemini(
         pr.gemini_comentario = f"Error Gemini en re-análisis (reintentado): {str(gemini_err)[:200]}"
     
     db.commit()
+    _invalidate_cobros_listado_kpis_cache()
     
     # Retornar el nuevo resultado
     return {
