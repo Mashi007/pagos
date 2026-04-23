@@ -640,6 +640,87 @@ export function PagosList() {
     staleTime: 15_000,
     refetchOnWindowFocus: false,
   })
+  const revisionRowsAnalizadas = useMemo(() => {
+    const rows = revisionData?.pagos ?? []
+    const dupMap = new Map<string, number>()
+    for (const p of rows) {
+      const f =
+        typeof p.fecha_pago === 'string'
+          ? p.fecha_pago.slice(0, 10)
+          : new Date(p.fecha_pago).toISOString().slice(0, 10)
+      const docKey = claveDocumentoPagoListaNormalizada(
+        p.numero_documento,
+        p.codigo_documento ?? null
+      )
+      if (!docKey) continue
+      const key = `${f}::${docKey}`
+      dupMap.set(key, (dupMap.get(key) ?? 0) + 1)
+    }
+    return rows
+      .map(p => {
+        const motivos: string[] = []
+        const monto = Number(p.monto_pagado ?? 0)
+        const fechaPagoDate = new Date(p.fecha_pago as string)
+        const hoy = new Date()
+        hoy.setHours(0, 0, 0, 0)
+        const docKey = claveDocumentoPagoListaNormalizada(
+          p.numero_documento,
+          p.codigo_documento ?? null
+        )
+        const fechaKey = Number.isNaN(fechaPagoDate.getTime())
+          ? ''
+          : fechaPagoDate.toISOString().slice(0, 10)
+        const dupKey = docKey && fechaKey ? `${fechaKey}::${docKey}` : ''
+        const esDuplicadoFechaNumero = dupKey
+          ? (dupMap.get(dupKey) ?? 0) > 1
+          : false
+        if (monto <= 0) motivos.push('Monto no válido')
+        if (!Number.isNaN(fechaPagoDate.getTime()) && fechaPagoDate > hoy) {
+          motivos.push('Fecha futura')
+        }
+        if (esDuplicadoFechaNumero) motivos.push('Duplicado fecha + número')
+        if (!p.prestamo_id) motivos.push('Sin crédito asociado')
+        if ((p.observaciones ?? '').trim()) motivos.push('Con observación')
+        if ((p.errores_descripcion ?? []).length > 0) {
+          motivos.push('Error de validación')
+        }
+        if (
+          revisionTipoFiltro === 'irreal' &&
+          !motivos.includes('Monto no válido') &&
+          !motivos.includes('Fecha futura')
+        ) {
+          motivos.push('Irreal detectado por regla de cartera')
+        }
+        return {
+          pago: p,
+          motivos,
+          score: motivos.length,
+          esDuplicadoFechaNumero,
+        }
+      })
+      .sort((a, b) => b.score - a.score || b.pago.id - a.pago.id)
+  }, [revisionData?.pagos, revisionTipoFiltro])
+  const resumenRevision = useMemo(() => {
+    const resumen = {
+      duplicados: 0,
+      irreales: 0,
+      sinCredito: 0,
+      conObservacion: 0,
+    }
+    for (const row of revisionRowsAnalizadas) {
+      if (row.esDuplicadoFechaNumero) resumen.duplicados += 1
+      if (
+        row.motivos.includes('Monto no válido') ||
+        row.motivos.includes('Fecha futura') ||
+        row.motivos.includes('Irreal detectado por regla de cartera')
+      ) {
+        resumen.irreales += 1
+      }
+      if (row.motivos.includes('Sin crédito asociado')) resumen.sinCredito += 1
+      if (row.motivos.includes('Con observación')) resumen.conObservacion += 1
+    }
+    return resumen
+  }, [revisionRowsAnalizadas])
 
   /** Solo lista normal + filtro cédula: API devuelve suma de montos de todos los pagos que coinciden. */
   const resumenTotalCedula = useMemo(() => {
@@ -1574,6 +1655,20 @@ export function PagosList() {
                 </div>
               ) : (
                 <>
+                  <div className="mb-3 flex flex-wrap gap-2 text-xs">
+                    <Badge variant="outline">
+                      Duplicados: {resumenRevision.duplicados}
+                    </Badge>
+                    <Badge variant="outline">
+                      Irreales: {resumenRevision.irreales}
+                    </Badge>
+                    <Badge variant="outline">
+                      Sin crédito: {resumenRevision.sinCredito}
+                    </Badge>
+                    <Badge variant="outline">
+                      Con observación: {resumenRevision.conObservacion}
+                    </Badge>
+                  </div>
                   <div className="overflow-hidden rounded-lg border">
                     <Table>
                       <TableHeader>
@@ -1584,13 +1679,17 @@ export function PagosList() {
                           <TableHead>Monto</TableHead>
                           <TableHead>Fecha Pago</TableHead>
                           <TableHead>Nº Documento</TableHead>
+                          <TableHead>Motivos</TableHead>
                           <TableHead>Observación</TableHead>
                           <TableHead className="text-right">Acciones</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {revisionData.pagos.map(pago => (
-                          <TableRow key={pago.id}>
+                        {revisionRowsAnalizadas.map(({ pago, motivos, score }) => (
+                          <TableRow
+                            key={pago.id}
+                            className={score >= 2 ? 'bg-amber-50/40' : undefined}
+                          >
                             <TableCell>{pago.id}</TableCell>
                             <TableCell>{pago.cedula_cliente}</TableCell>
                             <TableCell>
@@ -1604,6 +1703,19 @@ export function PagosList() {
                                 pago.codigo_documento
                               )}
                             </TableCell>
+                            <TableCell className="max-w-[260px]">
+                              <div className="flex flex-wrap gap-1">
+                                {motivos.length === 0 ? (
+                                  <Badge variant="outline">Sin marca</Badge>
+                                ) : (
+                                  motivos.map(m => (
+                                    <Badge key={`${pago.id}-${m}`} variant="outline">
+                                      {m}
+                                    </Badge>
+                                  ))
+                                )}
+                              </div>
+                            </TableCell>
                             <TableCell className="min-w-[260px]">
                               {editingRevisionId === pago.id ? (
                                 <Input
@@ -1611,6 +1723,12 @@ export function PagosList() {
                                   onChange={e =>
                                     setRevisionObservacionDraft(e.target.value)
                                   }
+                                  onKeyDown={e => {
+                                    if (e.key === 'Enter') {
+                                      e.preventDefault()
+                                      void handleGuardarRevision(pago.id)
+                                    }
+                                  }}
                                   placeholder="Motivo por el que no cumple"
                                 />
                               ) : (
