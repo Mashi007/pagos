@@ -49,7 +49,7 @@ from fastapi.responses import StreamingResponse, Response
 
 from sqlalchemy import and_, case, delete, desc, exists, func, inspect, not_, or_, select, text
 
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, aliased
 
 from sqlalchemy.exc import IntegrityError, OperationalError
 
@@ -330,6 +330,10 @@ def listar_pagos(
     cedula: Optional[str] = Query(None),
 
     estado: Optional[str] = Query(None),
+    tipo_revision: Optional[str] = Query(
+        None,
+        description="Filtro especial de auditoría. Soporta: rebasa_total (suma de pagos del préstamo > total_financiamiento).",
+    ),
 
     fecha_desde: Optional[str] = Query(None),
 
@@ -382,6 +386,7 @@ def listar_pagos(
         cedula = _solo_str_lp(cedula)
 
         estado = _solo_str_lp(estado)
+        tipo_revision = _solo_str_lp(tipo_revision)
 
         fecha_desde = _solo_str_lp(fecha_desde)
 
@@ -473,6 +478,32 @@ def listar_pagos(
 
             sum_q = sum_q.where(Pago.estado == estado.strip().upper())
 
+        if tipo_revision and tipo_revision.strip().lower() in (
+            "rebasa_total",
+            "sobrepagado",
+            "exceso_total",
+        ):
+            p2 = aliased(Pago)
+            total_pagos_prestamo = (
+                select(func.coalesce(func.sum(p2.monto_pagado), 0))
+                .where(p2.prestamo_id == Pago.prestamo_id)
+                .correlate(Pago)
+                .scalar_subquery()
+            )
+            rebasa_total_cond = and_(
+                Pago.prestamo_id.is_not(None),
+                exists(
+                    select(1).where(
+                        Prestamo.id == Pago.prestamo_id,
+                        total_pagos_prestamo
+                        > func.coalesce(Prestamo.total_financiamiento, 0),
+                    )
+                ),
+            )
+            q = q.where(rebasa_total_cond)
+            count_q = count_q.where(rebasa_total_cond)
+            sum_q = sum_q.where(rebasa_total_cond)
+
         if fecha_desde:
 
             try:
@@ -550,6 +581,42 @@ def listar_pagos(
         rows = db.execute(q).scalars().all()
 
         items = [_pago_to_response(r) for r in rows]
+
+        # Exceso por préstamo: suma(pagos.monto_pagado) - total_financiamiento.
+        # Se adjunta por fila para auditoría rápida en UI (Revision global).
+        prestamo_ids_page = sorted(
+            {
+                int(r.prestamo_id)
+                for r in rows
+                if getattr(r, "prestamo_id", None) is not None
+            }
+        )
+        exceso_por_prestamo: dict[int, float] = {}
+        if prestamo_ids_page:
+            exceso_rows = db.execute(
+                select(
+                    Pago.prestamo_id,
+                    (
+                        func.coalesce(func.sum(Pago.monto_pagado), 0)
+                        - func.coalesce(Prestamo.total_financiamiento, 0)
+                    ).label("exceso"),
+                )
+                .join(Prestamo, Prestamo.id == Pago.prestamo_id)
+                .where(Pago.prestamo_id.in_(prestamo_ids_page))
+                .group_by(Pago.prestamo_id, Prestamo.total_financiamiento)
+            ).all()
+            for pr_id, exceso in exceso_rows:
+                if pr_id is None:
+                    continue
+                val = float(exceso or 0)
+                if val > 0:
+                    exceso_por_prestamo[int(pr_id)] = val
+        for it in items:
+            pid = it.get("prestamo_id")
+            if isinstance(pid, int) and pid in exceso_por_prestamo:
+                it["exceso_sobre_total_usd"] = round(exceso_por_prestamo[pid], 2)
+            else:
+                it["exceso_sobre_total_usd"] = None
 
         _enriquecer_items_tiene_aplicacion_cuotas(db, items)
 

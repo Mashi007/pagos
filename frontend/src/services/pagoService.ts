@@ -54,6 +54,9 @@ export interface Pago {
   /** True si existe al menos una fila en cuota_pagos para este pago (GET /pagos enriquecido). */
   tiene_aplicacion_cuotas?: boolean
 
+  /** Monto en USD que el préstamo rebasa sobre su total financiado (si aplica). */
+  exceso_sobre_total_usd?: number | null
+
   cuotas_atrasadas?: number // ✅ Campo calculado: cuotas vencidas con pago incompleto
 }
 
@@ -108,6 +111,8 @@ class PagoService {
 
       estado?: string
 
+      tipoRevision?: 'rebasa_total'
+
       fechaDesde?: string
 
       fechaHasta?: string
@@ -154,6 +159,7 @@ class PagoService {
       ...(filters?.cedula && { cedula: filters.cedula }),
 
       ...(filters?.estado && { estado: filters.estado }),
+      ...(filters?.tipoRevision && { tipo_revision: filters.tipoRevision }),
 
       ...(filters?.fechaDesde && { fecha_desde: filters.fechaDesde }),
 

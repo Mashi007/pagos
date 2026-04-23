@@ -214,6 +214,12 @@ export function PagosList() {
   const [deletingRevisionId, setDeletingRevisionId] = useState<number | null>(
     null
   )
+  const [selectedRevisionIds, setSelectedRevisionIds] = useState<Set<number>>(
+    new Set()
+  )
+  const [bulkRevisionObservacion, setBulkRevisionObservacion] = useState('')
+  const [isBulkSavingRevision, setIsBulkSavingRevision] = useState(false)
+  const [isBulkDeletingRevision, setIsBulkDeletingRevision] = useState(false)
   const [revisionGlobalPage, setRevisionGlobalPage] = useState(1)
   const [revisionGlobalCedulaInput, setRevisionGlobalCedulaInput] = useState('')
   const [revisionGlobalCedulaFiltro, setRevisionGlobalCedulaFiltro] = useState('')
@@ -226,12 +232,27 @@ export function PagosList() {
   const [revisionGlobalFechaPagoFiltro, setRevisionGlobalFechaPagoFiltro] =
     useState('')
   const [revisionGlobalMotivoFiltro, setRevisionGlobalMotivoFiltro] = useState<
-    '' | 'sin_credito' | 'duplicado' | 'irreal' | 'sin_aplicacion' | 'con_notas'
+    | ''
+    | 'sin_credito'
+    | 'duplicado'
+    | 'irreal'
+    | 'sin_aplicacion'
+    | 'con_notas'
+    | 'rebasa_total'
   >('')
+  const [revisionGlobalEstadoFiltro, setRevisionGlobalEstadoFiltro] = useState<
+    '' | 'PENDIENTE'
+  >('PENDIENTE')
   const [editingGlobalId, setEditingGlobalId] = useState<number | null>(null)
   const [globalNotaDraft, setGlobalNotaDraft] = useState('')
   const [savingGlobalId, setSavingGlobalId] = useState<number | null>(null)
   const [deletingGlobalId, setDeletingGlobalId] = useState<number | null>(null)
+  const [selectedGlobalIds, setSelectedGlobalIds] = useState<Set<number>>(
+    new Set()
+  )
+  const [bulkGlobalNota, setBulkGlobalNota] = useState('')
+  const [isBulkSavingGlobal, setIsBulkSavingGlobal] = useState(false)
+  const [isBulkDeletingGlobal, setIsBulkDeletingGlobal] = useState(false)
   const syncingRevisionRef = useRef(false)
   const queryClient = useQueryClient()
 
@@ -678,10 +699,17 @@ export function PagosList() {
       revisionGlobalCedulaFiltro,
       revisionGlobalNumeroDocumentoFiltro,
       revisionGlobalFechaPagoFiltro,
+      revisionGlobalEstadoFiltro,
+      revisionGlobalMotivoFiltro,
     ],
     queryFn: () =>
       pagoService.getAllPagos(revisionGlobalPage, perPage, {
         cedula: revisionGlobalCedulaFiltro || undefined,
+        estado: revisionGlobalEstadoFiltro || undefined,
+        tipoRevision:
+          revisionGlobalMotivoFiltro === 'rebasa_total'
+            ? 'rebasa_total'
+            : undefined,
         fechaDesde: revisionGlobalFechaPagoFiltro || undefined,
         fechaHasta: revisionGlobalFechaPagoFiltro || undefined,
         conciliado: 'all',
@@ -748,7 +776,14 @@ export function PagosList() {
           esDuplicadoFechaNumero,
         }
       })
-      .sort((a, b) => b.score - a.score || b.pago.id - a.pago.id)
+      .sort((a, b) => {
+        if (revisionGlobalMotivoFiltro === 'rebasa_total') {
+          const ea = Number(a.pago.exceso_sobre_total_usd ?? 0)
+          const eb = Number(b.pago.exceso_sobre_total_usd ?? 0)
+          if (eb !== ea) return eb - ea
+        }
+        return b.score - a.score || b.pago.id - a.pago.id
+      })
   }, [revisionData?.pagos, revisionTipoFiltro])
   const revisionRowsFiltradas = useMemo(() => {
     if (!revisionMotivoFiltro) return revisionRowsAnalizadas
@@ -775,6 +810,16 @@ export function PagosList() {
       return true
     })
   }, [revisionRowsAnalizadas, revisionMotivoFiltro])
+  useEffect(() => {
+    const idsVisibles = new Set(revisionRowsFiltradas.map(r => r.pago.id))
+    setSelectedRevisionIds(prev => {
+      const next = new Set<number>()
+      prev.forEach(id => {
+        if (idsVisibles.has(id)) next.add(id)
+      })
+      return next
+    })
+  }, [revisionRowsFiltradas])
   const resumenRevision = useMemo(() => {
     const resumen = {
       duplicados: 0,
@@ -847,12 +892,19 @@ export function PagosList() {
         if (!p.prestamo_id) motivos.push('Sin crédito asociado')
         if (p.tiene_aplicacion_cuotas === false) motivos.push('Sin aplicación a cuotas')
         if ((p.notas ?? '').trim()) motivos.push('Con notas')
+        if (Number(p.exceso_sobre_total_usd ?? 0) > 0) {
+          motivos.push('Rebasa total del préstamo')
+        }
+        if (revisionGlobalMotivoFiltro === 'rebasa_total') {
+          motivos.push('Rebasa total del préstamo')
+        }
         return { pago: p, motivos, score: motivos.length, esDuplicadoFechaNumero }
       })
       .sort((a, b) => b.score - a.score || b.pago.id - a.pago.id)
   }, [
     revisionGlobalData?.pagos,
     revisionGlobalNumeroDocumentoFiltro,
+    revisionGlobalMotivoFiltro,
   ])
   const revisionGlobalRowsFiltradas = useMemo(() => {
     if (!revisionGlobalMotivoFiltro) return revisionGlobalRowsAnalizadas
@@ -875,9 +927,22 @@ export function PagosList() {
       if (revisionGlobalMotivoFiltro === 'con_notas') {
         return row.motivos.includes('Con notas')
       }
+      if (revisionGlobalMotivoFiltro === 'rebasa_total') {
+        return row.motivos.includes('Rebasa total del préstamo')
+      }
       return true
     })
   }, [revisionGlobalRowsAnalizadas, revisionGlobalMotivoFiltro])
+  useEffect(() => {
+    const idsVisibles = new Set(revisionGlobalRowsFiltradas.map(r => r.pago.id))
+    setSelectedGlobalIds(prev => {
+      const next = new Set<number>()
+      prev.forEach(id => {
+        if (idsVisibles.has(id)) next.add(id)
+      })
+      return next
+    })
+  }, [revisionGlobalRowsFiltradas])
   const resumenRevisionGlobal = useMemo(() => {
     const resumen = {
       duplicados: 0,
@@ -885,6 +950,7 @@ export function PagosList() {
       sinCredito: 0,
       sinAplicacion: 0,
       conNotas: 0,
+      rebasaTotal: 0,
     }
     for (const row of revisionGlobalRowsAnalizadas) {
       if (row.esDuplicadoFechaNumero) resumen.duplicados += 1
@@ -897,6 +963,9 @@ export function PagosList() {
       if (row.motivos.includes('Sin crédito asociado')) resumen.sinCredito += 1
       if (row.motivos.includes('Sin aplicación a cuotas')) resumen.sinAplicacion += 1
       if (row.motivos.includes('Con notas')) resumen.conNotas += 1
+      if (row.motivos.includes('Rebasa total del préstamo')) {
+        resumen.rebasaTotal += 1
+      }
     }
     return resumen
   }, [revisionGlobalRowsAnalizadas])
@@ -968,6 +1037,71 @@ export function PagosList() {
       `Abriendo anomalía ${idxActual >= 0 ? idxActual + 2 : 1}/${candidatos.length} (ID ${siguiente.pago.id})`
     )
   }
+  const toggleRevisionSeleccion = (id: number) => {
+    setSelectedRevisionIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+  const toggleRevisionSeleccionTodas = () => {
+    const visibles = revisionRowsFiltradas.map(r => r.pago.id)
+    const todosSeleccionados =
+      visibles.length > 0 && visibles.every(id => selectedRevisionIds.has(id))
+    setSelectedRevisionIds(
+      todosSeleccionados ? new Set() : new Set(visibles)
+    )
+  }
+  const handleGuardarRevisionMasivo = async () => {
+    const ids = [...selectedRevisionIds]
+    if (ids.length === 0) {
+      toast.info('Seleccione al menos un pago.')
+      return
+    }
+    setIsBulkSavingRevision(true)
+    try {
+      await Promise.all(
+        ids.map(id =>
+          pagoConErrorService.update(id, {
+            observaciones: bulkRevisionObservacion.trim() || null,
+          })
+        )
+      )
+      toast.success(`Observación guardada en ${ids.length} pago(s).`)
+      setSelectedRevisionIds(new Set())
+      await queryClient.invalidateQueries({ queryKey: ['pagos-con-errores'] })
+      await queryClient.invalidateQueries({
+        queryKey: ['pagos-con-errores-tab'],
+      })
+    } catch (e) {
+      toast.error(getErrorMessage(e))
+    } finally {
+      setIsBulkSavingRevision(false)
+    }
+  }
+  const handleEliminarRevisionMasivo = async () => {
+    const ids = [...selectedRevisionIds]
+    if (ids.length === 0) {
+      toast.info('Seleccione al menos un pago.')
+      return
+    }
+    if (!window.confirm(`¿Eliminar ${ids.length} pago(s) seleccionados?`)) return
+    setIsBulkDeletingRevision(true)
+    try {
+      await Promise.all(ids.map(id => pagoConErrorService.delete(id)))
+      toast.success(`Se eliminaron ${ids.length} pago(s).`)
+      setSelectedRevisionIds(new Set())
+      await queryClient.invalidateQueries({ queryKey: ['pagos-con-errores'] })
+      await queryClient.invalidateQueries({
+        queryKey: ['pagos-con-errores-tab'],
+      })
+    } catch (e) {
+      toast.error(getErrorMessage(e))
+    } finally {
+      setIsBulkDeletingRevision(false)
+    }
+  }
   const handleBuscarRevisionGlobal = () => {
     setRevisionGlobalCedulaFiltro(revisionGlobalCedulaInput.trim())
     setRevisionGlobalNumeroDocumentoFiltro(
@@ -984,6 +1118,7 @@ export function PagosList() {
     setRevisionGlobalFechaPagoInput('')
     setRevisionGlobalFechaPagoFiltro('')
     setRevisionGlobalMotivoFiltro('')
+    setRevisionGlobalEstadoFiltro('PENDIENTE')
     setRevisionGlobalPage(1)
   }
   const handleGuardarNotaGlobal = async (id: number) => {
@@ -1034,6 +1169,63 @@ export function PagosList() {
     toast.success(
       `Abriendo anomalía ${idxActual >= 0 ? idxActual + 2 : 1}/${candidatos.length} (ID ${siguiente.pago.id})`
     )
+  }
+  const toggleGlobalSeleccion = (id: number) => {
+    setSelectedGlobalIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+  const toggleGlobalSeleccionTodas = () => {
+    const visibles = revisionGlobalRowsFiltradas.map(r => r.pago.id)
+    const todosSeleccionados =
+      visibles.length > 0 && visibles.every(id => selectedGlobalIds.has(id))
+    setSelectedGlobalIds(todosSeleccionados ? new Set() : new Set(visibles))
+  }
+  const handleGuardarGlobalMasivo = async () => {
+    const ids = [...selectedGlobalIds]
+    if (ids.length === 0) {
+      toast.info('Seleccione al menos un pago.')
+      return
+    }
+    setIsBulkSavingGlobal(true)
+    try {
+      await Promise.all(
+        ids.map(id =>
+          pagoService.updatePago(id, {
+            notas: bulkGlobalNota.trim() || null,
+          })
+        )
+      )
+      toast.success(`Nota guardada en ${ids.length} pago(s).`)
+      setSelectedGlobalIds(new Set())
+      await invalidatePagosPrestamosRevisionYCuotas(queryClient)
+    } catch (e) {
+      toast.error(getErrorMessage(e))
+    } finally {
+      setIsBulkSavingGlobal(false)
+    }
+  }
+  const handleEliminarGlobalMasivo = async () => {
+    const ids = [...selectedGlobalIds]
+    if (ids.length === 0) {
+      toast.info('Seleccione al menos un pago.')
+      return
+    }
+    if (!window.confirm(`¿Eliminar ${ids.length} pago(s) seleccionados?`)) return
+    setIsBulkDeletingGlobal(true)
+    try {
+      await Promise.all(ids.map(id => pagoService.deletePago(id)))
+      toast.success(`Se eliminaron ${ids.length} pago(s).`)
+      setSelectedGlobalIds(new Set())
+      await invalidatePagosPrestamosRevisionYCuotas(queryClient)
+    } catch (e) {
+      toast.error(getErrorMessage(e))
+    } finally {
+      setIsBulkDeletingGlobal(false)
+    }
   }
   const handleBuscarRevisionPorCedula = () => {
     setRevisionCedulaFiltro(revisionCedulaInput.trim())
@@ -1873,6 +2065,28 @@ export function PagosList() {
                 </div>
                 <div>
                   <label className="mb-1 block text-sm font-medium text-gray-700">
+                    Estado
+                  </label>
+                  <Select
+                    value={revisionGlobalEstadoFiltro || 'all'}
+                    onValueChange={value => {
+                      setRevisionGlobalEstadoFiltro(
+                        value === 'all' ? '' : 'PENDIENTE'
+                      )
+                      setRevisionGlobalPage(1)
+                    }}
+                  >
+                    <SelectTrigger className="w-[160px]">
+                      <SelectValue placeholder="Estado" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos</SelectItem>
+                      <SelectItem value="PENDIENTE">Pendiente</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">
                     Motivo
                   </label>
                   <Select
@@ -1966,6 +2180,37 @@ export function PagosList() {
                 </div>
               ) : (
                 <>
+                  <div className="mb-3 flex flex-wrap items-center gap-2">
+                    <Input
+                      placeholder="Observación masiva para seleccionados"
+                      value={bulkRevisionObservacion}
+                      onChange={e => setBulkRevisionObservacion(e.target.value)}
+                      className="max-w-sm"
+                    />
+                    <Button
+                      variant="outline"
+                      onClick={() => void handleGuardarRevisionMasivo()}
+                      disabled={
+                        selectedRevisionIds.size === 0 || isBulkSavingRevision
+                      }
+                    >
+                      {isBulkSavingRevision ? 'Guardando...' : 'Guardar seleccionados'}
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      onClick={() => void handleEliminarRevisionMasivo()}
+                      disabled={
+                        selectedRevisionIds.size === 0 || isBulkDeletingRevision
+                      }
+                    >
+                      {isBulkDeletingRevision
+                        ? 'Eliminando...'
+                        : 'Eliminar seleccionados'}
+                    </Button>
+                    <span className="text-xs text-gray-600">
+                      Seleccionados: {selectedRevisionIds.size}
+                    </span>
+                  </div>
                   <div className="mb-3 flex flex-wrap gap-2 text-xs">
                     <Badge variant="outline">
                       Duplicados: {resumenRevision.duplicados}
@@ -1984,6 +2229,18 @@ export function PagosList() {
                     <Table>
                       <TableHeader>
                         <TableRow>
+                          <TableHead className="w-[44px]">
+                            <input
+                              type="checkbox"
+                              checked={
+                                revisionRowsFiltradas.length > 0 &&
+                                revisionRowsFiltradas.every(r =>
+                                  selectedRevisionIds.has(r.pago.id)
+                                )
+                              }
+                              onChange={toggleRevisionSeleccionTodas}
+                            />
+                          </TableHead>
                           <TableHead>ID</TableHead>
                           <TableHead>Cédula</TableHead>
                           <TableHead>Crédito</TableHead>
@@ -2001,6 +2258,13 @@ export function PagosList() {
                             key={pago.id}
                             className={score >= 2 ? 'bg-amber-50/40' : undefined}
                           >
+                            <TableCell>
+                              <input
+                                type="checkbox"
+                                checked={selectedRevisionIds.has(pago.id)}
+                                onChange={() => toggleRevisionSeleccion(pago.id)}
+                              />
+                            </TableCell>
                             <TableCell>{pago.id}</TableCell>
                             <TableCell>{pago.cedula_cliente}</TableCell>
                             <TableCell>
@@ -2206,7 +2470,8 @@ export function PagosList() {
                               | 'duplicado'
                               | 'irreal'
                               | 'sin_aplicacion'
-                              | 'con_notas')
+                              | 'con_notas'
+                              | 'rebasa_total')
                       )
                       setRevisionGlobalPage(1)
                     }}
@@ -2225,6 +2490,9 @@ export function PagosList() {
                         Sin aplicación a cuotas
                       </SelectItem>
                       <SelectItem value="con_notas">Con notas</SelectItem>
+                      <SelectItem value="rebasa_total">
+                        Rebasa total del préstamo
+                      </SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -2238,6 +2506,7 @@ export function PagosList() {
                   {(revisionGlobalCedulaFiltro ||
                     revisionGlobalNumeroDocumentoFiltro ||
                     revisionGlobalFechaPagoFiltro ||
+                    revisionGlobalEstadoFiltro ||
                     revisionGlobalMotivoFiltro) && (
                     <Button variant="ghost" onClick={handleLimpiarRevisionGlobal}>
                       <X className="mr-1 h-4 w-4" />
@@ -2260,6 +2529,33 @@ export function PagosList() {
                 </div>
               ) : (
                 <>
+                  <div className="mb-3 flex flex-wrap items-center gap-2">
+                    <Input
+                      placeholder="Nota masiva para seleccionados"
+                      value={bulkGlobalNota}
+                      onChange={e => setBulkGlobalNota(e.target.value)}
+                      className="max-w-sm"
+                    />
+                    <Button
+                      variant="outline"
+                      onClick={() => void handleGuardarGlobalMasivo()}
+                      disabled={selectedGlobalIds.size === 0 || isBulkSavingGlobal}
+                    >
+                      {isBulkSavingGlobal ? 'Guardando...' : 'Guardar seleccionados'}
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      onClick={() => void handleEliminarGlobalMasivo()}
+                      disabled={selectedGlobalIds.size === 0 || isBulkDeletingGlobal}
+                    >
+                      {isBulkDeletingGlobal
+                        ? 'Eliminando...'
+                        : 'Eliminar seleccionados'}
+                    </Button>
+                    <span className="text-xs text-gray-600">
+                      Seleccionados: {selectedGlobalIds.size}
+                    </span>
+                  </div>
                   <div className="mb-3 flex flex-wrap gap-2 text-xs">
                     <Badge variant="outline">
                       Duplicados: {resumenRevisionGlobal.duplicados}
@@ -2276,17 +2572,33 @@ export function PagosList() {
                     <Badge variant="outline">
                       Con notas: {resumenRevisionGlobal.conNotas}
                     </Badge>
+                    <Badge variant="outline">
+                      Rebasa total: {resumenRevisionGlobal.rebasaTotal}
+                    </Badge>
                   </div>
                   <div className="overflow-hidden rounded-lg border">
                     <Table>
                       <TableHeader>
                         <TableRow>
+                          <TableHead className="w-[44px]">
+                            <input
+                              type="checkbox"
+                              checked={
+                                revisionGlobalRowsFiltradas.length > 0 &&
+                                revisionGlobalRowsFiltradas.every(r =>
+                                  selectedGlobalIds.has(r.pago.id)
+                                )
+                              }
+                              onChange={toggleGlobalSeleccionTodas}
+                            />
+                          </TableHead>
                           <TableHead>ID</TableHead>
                           <TableHead>Cédula</TableHead>
                           <TableHead>Crédito</TableHead>
                           <TableHead>Monto</TableHead>
                           <TableHead>Fecha Pago</TableHead>
                           <TableHead>Nº Documento</TableHead>
+                          <TableHead>Exceso USD</TableHead>
                           <TableHead>Motivos</TableHead>
                           <TableHead>Notas</TableHead>
                           <TableHead className="text-right">Acciones</TableHead>
@@ -2298,6 +2610,13 @@ export function PagosList() {
                             key={pago.id}
                             className={score >= 2 ? 'bg-amber-50/40' : undefined}
                           >
+                            <TableCell>
+                              <input
+                                type="checkbox"
+                                checked={selectedGlobalIds.has(pago.id)}
+                                onChange={() => toggleGlobalSeleccion(pago.id)}
+                              />
+                            </TableCell>
                             <TableCell>{pago.id}</TableCell>
                             <TableCell>{pago.cedula_cliente}</TableCell>
                             <TableCell>
@@ -2309,6 +2628,16 @@ export function PagosList() {
                               {textoDocumentoPagoParaListado(
                                 pago.numero_documento,
                                 pago.codigo_documento
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              {Number(pago.exceso_sobre_total_usd ?? 0) > 0 ? (
+                                <span className="font-semibold text-red-700">
+                                  $
+                                  {Number(pago.exceso_sobre_total_usd).toFixed(2)}
+                                </span>
+                              ) : (
+                                <span className="text-gray-500">-</span>
                               )}
                             </TableCell>
                             <TableCell className="max-w-[260px]">
