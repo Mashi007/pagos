@@ -1,9 +1,9 @@
 """
 Gmail: listar correos con adjunto o parte con nombre de imagen/PDF (has:attachment OR filename:png|jpg|...).
 Pipeline Pagos: extrae candidatos imagen/PDF (adjunto, cuerpo, .eml); **Gemini solo si el remitente está en tabla clientes**
-(email o email_secundario). Cada adjunto de **una sola página** (imagen o PDF de 1 pág.) es un candidato y puede generar **una fila**;
-los PDF con **2+ páginas** no se digitalizan (sin candidato para ese archivo); la etiqueta final del hilo la decide el pipeline (p. ej. TEXTO / ERROR EMAIL / MANUAL según reglas).
-Plantilla A/B/C/D la decide Gemini por binario.
+(email o email_secundario). Cada imagen es un candidato; cada **página** de un PDF también (PDF multipágina se parte en varios candidatos, **una fila** por página digitalizada).
+La etiqueta final del hilo la decide el pipeline (p. ej. TEXTO / ERROR EMAIL / MANUAL según reglas).
+Plantilla A/B/C/D/E/F la decide Gemini por binario (imagen o PDF de una página).
 """
 import base64
 import hashlib
@@ -165,14 +165,16 @@ class PagosGmailGmailListError(RuntimeError):
     """
 
 
-# Etiquetas de usuario (A = MERCANTIL, B = BNC, C = BINANCE, D = BNV / BDV). Se crean si no existen.
+# Etiquetas de usuario (A = MERCANTIL, B = BNC, C = BINANCE, D = BNV / BDV, E = Bancamiga, F = Banco del Tesoro). Se crean si no existen.
 PAGOS_GMAIL_LABEL_IMAGEN_1 = "MERCANTIL"
 PAGOS_GMAIL_LABEL_IMAGEN_2 = "BNC"
 PAGOS_GMAIL_LABEL_IMAGEN_3 = "BINANCE"
 PAGOS_GMAIL_LABEL_IMAGEN_4 = "BNV"
+PAGOS_GMAIL_LABEL_BANCAMIGA = "BANCAMIGA"
+PAGOS_GMAIL_LABEL_TESORO = "TESORO"
 # Remitente (De) sin fila en clientes.email (o fallo BD): misma leyenda que columna Cedula del Excel.
 PAGOS_GMAIL_LABEL_ERROR_EMAIL = "ERROR EMAIL"
-# Ninguna plantilla A/B/C/D reconocida (o no se aplico otra etiqueta de clasificacion).
+# Ninguna plantilla A/B/C/D/E/F reconocida (o no se aplico otra etiqueta de clasificacion).
 PAGOS_GMAIL_LABEL_MANUAL = "MANUAL"
 # Sin captura/PDF de comprobante: cuerpo u adjuntos no extraen imagen/PDF de pago (no hay columnas desde pixeles).
 PAGOS_GMAIL_LABEL_TEXTO = "TEXTO"
@@ -188,6 +190,8 @@ def pagos_gmail_label_exclusions_query() -> str:
         f'-label:"{PAGOS_GMAIL_LABEL_IMAGEN_2}" '
         f'-label:"{PAGOS_GMAIL_LABEL_IMAGEN_3}" '
         f'-label:"{PAGOS_GMAIL_LABEL_IMAGEN_4}" '
+        f'-label:"{PAGOS_GMAIL_LABEL_BANCAMIGA}" '
+        f'-label:"{PAGOS_GMAIL_LABEL_TESORO}" '
         f'-label:"{PAGOS_GMAIL_LABEL_ERROR_EMAIL}" '
         f'-label:"{PAGOS_GMAIL_LABEL_MANUAL}" '
         f'-label:"{PAGOS_GMAIL_LABEL_TEXTO}"'
@@ -1226,16 +1230,18 @@ def ensure_user_label_id(service: Any, label_name: str) -> Optional[str]:
 
 def get_or_create_pagos_gmail_plantilla_label_ids(
     service: Any, cache: Optional[Dict[str, Optional[str]]] = None
-) -> Tuple[Optional[str], Optional[str], Optional[str], Optional[str]]:
+) -> Tuple[Optional[str], Optional[str], Optional[str], Optional[str], Optional[str], Optional[str]]:
     """
-    Resuelve ids para MERCANTIL (A) / BNC (B) / BINANCE (C) / BNV (D) con cache opcional por nombre.
+    Resuelve ids para MERCANTIL (A) / BNC (B) / BINANCE (C) / BNV (D) / BANCAMIGA (E) / TESORO (F) con cache opcional por nombre.
     """
     c = cache if cache is not None else {}
-    k1, k2, k3, k4 = (
+    k1, k2, k3, k4, k5, k6 = (
         PAGOS_GMAIL_LABEL_IMAGEN_1,
         PAGOS_GMAIL_LABEL_IMAGEN_2,
         PAGOS_GMAIL_LABEL_IMAGEN_3,
         PAGOS_GMAIL_LABEL_IMAGEN_4,
+        PAGOS_GMAIL_LABEL_BANCAMIGA,
+        PAGOS_GMAIL_LABEL_TESORO,
     )
     if k1 not in c:
         c[k1] = ensure_user_label_id(service, k1)
@@ -1245,7 +1251,11 @@ def get_or_create_pagos_gmail_plantilla_label_ids(
         c[k3] = ensure_user_label_id(service, k3)
     if k4 not in c:
         c[k4] = ensure_user_label_id(service, k4)
-    return c[k1], c[k2], c[k3], c[k4]
+    if k5 not in c:
+        c[k5] = ensure_user_label_id(service, k5)
+    if k6 not in c:
+        c[k6] = ensure_user_label_id(service, k6)
+    return c[k1], c[k2], c[k3], c[k4], c[k5], c[k6]
 
 
 def add_message_star_and_user_labels(

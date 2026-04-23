@@ -26,6 +26,9 @@ const QK = ['actualizaciones', 'cuotas-vs-fecha-base'] as const
 
 const PAGE_SIZE = 50
 
+/** Máximo por petición al API (backend `recalcular-fechas-amortizacion-lote`). */
+const RECALC_LOTE_CHUNK = 80
+
 function fmtIso(s?: string | null): string {
   if (!s) return '—'
   const t = String(s).trim()
@@ -127,12 +130,19 @@ export default function CuotasVsFechaBaseAdminPage() {
     setConfirmLoteSi(false)
     let ok = 0
     const errores: string[] = []
-    for (const pid of seleccionadosElegiblesParaSi) {
+    const ids = [...seleccionadosElegiblesParaSi]
+    for (let i = 0; i < ids.length; i += RECALC_LOTE_CHUNK) {
+      const chunk = ids.slice(i, i + RECALC_LOTE_CHUNK)
       try {
-        await prestamoService.postRecalcularFechasAmortizacion(pid)
-        ok += 1
+        const res = await prestamoService.postRecalcularFechasAmortizacionLote(chunk)
+        ok += res.procesados
+        for (const err of res.errores || []) {
+          errores.push(`#${err.prestamo_id}: ${err.detail || 'error'}`)
+        }
       } catch (e) {
-        errores.push(`#${pid}: ${getErrorMessage(e) || 'error'}`)
+        for (const pid of chunk) {
+          errores.push(`#${pid}: ${getErrorMessage(e) || 'error'}`)
+        }
       }
     }
     if (errores.length === 0) {

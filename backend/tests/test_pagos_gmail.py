@@ -27,7 +27,10 @@ from app.api.v1.endpoints.pagos_gmail import (
     status,
 )
 from app.models.pagos_gmail_sync import PagosGmailSync, PagosGmailSyncItem
-from app.services.pagos_gmail.gemini_service import _parse_formato_y_pagos_json
+from app.services.pagos_gmail.gemini_service import (
+    _guess_bank_hint_from_text,
+    _parse_formato_y_pagos_json,
+)
 from app.services.pagos.comprobante_link_desde_gmail import (
     comprobante_url_para_enlace_publico,
 )
@@ -233,7 +236,10 @@ def test_is_pipeline_running_true_when_recent_running(db: Session):
 # --- Tests download_excel (404 sin datos) ---
 def test_download_excel_404_when_no_data(db: Session):
     """download_excel sin datos debe devolver 404."""
-    with patch("app.api.v1.endpoints.pagos_gmail._find_most_recent_data", return_value=(None, None, [])):
+    with patch(
+        "app.api.v1.endpoints.pagos_gmail.routes._find_most_recent_data",
+        return_value=(None, None, []),
+    ):
         with pytest.raises(HTTPException) as exc_info:
             download_excel(fecha=None, db=db)
     assert exc_info.value.status_code == 404
@@ -248,8 +254,11 @@ def test_download_excel_404_with_fecha_when_no_data_for_date(db: Session):
 
 # --- Tests _get_latest_date_with_data ---
 def test_get_latest_date_with_data_none_when_empty(db: Session):
-    """Sin ítems, _get_latest_date_with_data devuelve None."""
-    assert _get_latest_date_with_data(db) is None
+    """Sin ítems, _get_latest_date_with_data devuelve None (no depende de filas previas en BD compartida)."""
+    r = MagicMock()
+    r.scalars.return_value.first.return_value = None
+    with patch.object(db, "execute", return_value=r):
+        assert _get_latest_date_with_data(db) is None
 
 
 # --- Tests logs [ETAPA] en download ---
@@ -261,7 +270,10 @@ def test_download_excel_logs_etapa_when_has_data(db: Session, caplog_gmail):
     db.refresh(sync)
     from datetime import datetime as dt
     item = PagosGmailSyncItem(sync_id=sync.id, sheet_name="2026-01-01", correo_origen="log@test.com", asunto="Test", fecha_pago="", cedula="", monto="", numero_referencia="", drive_link=None, drive_email_link=None)
-    with patch("app.api.v1.endpoints.pagos_gmail._find_most_recent_data", return_value=("2026-01-01", dt(2026, 1, 1), [item])):
+    with patch(
+        "app.api.v1.endpoints.pagos_gmail.routes._find_most_recent_data",
+        return_value=("2026-01-01", dt(2026, 1, 1), [item]),
+    ):
         resp = download_excel(fecha=None, db=db)
     assert resp is not None
     etapas = [r.message for r in caplog_gmail.records if "[ETAPA]" in (r.message or "")]
@@ -316,6 +328,83 @@ def test_resolve_banco_excel_desde_texto_gemini():
         resolve_banco_para_excel_pagos_gmail("C", "cualquier", default_a=d_a, default_b=d_b, default_c=d_c)
         == "BINANCE"
     )
+    assert (
+        resolve_banco_para_excel_pagos_gmail(
+            "E",
+            "NA",
+            default_a=d_a,
+            default_b=d_b,
+            default_c=d_c,
+            default_d="BDV",
+            default_e="Bancamiga",
+        )
+        == "Bancamiga"
+    )
+    assert (
+        resolve_banco_para_excel_pagos_gmail(
+            "E",
+            "Bancamiga Banco Universal",
+            default_a=d_a,
+            default_b=d_b,
+            default_c=d_c,
+            default_d="BDV",
+            default_e="Bancamiga",
+        )
+        == "Bancamiga"
+    )
+    assert (
+        resolve_banco_para_excel_pagos_gmail(
+            "F",
+            "NA",
+            default_a=d_a,
+            default_b=d_b,
+            default_c=d_c,
+            default_d="BDV",
+            default_e="Bancamiga",
+            default_f="Banco del Tesoro",
+        )
+        == "Banco del Tesoro"
+    )
+    assert (
+        resolve_banco_para_excel_pagos_gmail(
+            "F",
+            "Banco del Tesoro",
+            default_a=d_a,
+            default_b=d_b,
+            default_c=d_c,
+            default_d="BDV",
+            default_e="Bancamiga",
+            default_f="Banco del Tesoro",
+        )
+        == "Banco del Tesoro"
+    )
+
+
+def test_guess_bank_hint_e_solo_anclas_fuertes_bancamiga():
+    """E no debe activarse con frases genéricas de otros bancos (referencia, monto, cuentas)."""
+    assert (
+        _guess_bank_hint_from_text(
+            "monto de la operacion\nnumero de referencia\ncuenta a debitar",
+            "comprobante.png",
+            "falto_ref",
+        )
+        is None
+    )
+    assert _guess_bank_hint_from_text("app Bancamiga", "cap.jpg", "falto_monto") == "E"
+    assert _guess_bank_hint_from_text("cuenta 01720123456789012345", "x.png", "x") == "E"
+    assert (
+        _guess_bank_hint_from_text(
+            "Banco Universal",
+            "pago.jpg",
+            "transaccion procesada ilegible",
+        )
+        == "E"
+    )
+    assert (
+        _guess_bank_hint_from_text("Banco Universal solo logo", "x.png", "falto_fecha")
+        != "E"
+    )
+    assert _guess_bank_hint_from_text("01910123456789012345 ref", "x.png", "x") == "B"
 
 
 def test_parse_formato_c_binance_ok():
@@ -409,7 +498,7 @@ def test_pagos_gmail_inbox_media_query_incluye_todo_sin_filtrar_estrella_ni_etiq
     assert "-label:" not in q
 
 
-def test_expand_pipeline_pdf_tuples_imagen_pasa_y_multipage_pdf_omite():
+def test_expand_pipeline_pdf_tuples_imagen_pasa_y_multipage_pdf_expande_por_pagina():
     from io import BytesIO
 
     from app.services.pagos_gmail.pdf_pages import expand_pipeline_pdf_tuples
@@ -420,7 +509,7 @@ def test_expand_pipeline_pdf_tuples_imagen_pasa_y_multipage_pdf_omite():
     assert out_j == jpg
 
     try:
-        from pypdf import PdfWriter
+        from pypdf import PdfReader, PdfWriter
     except ImportError:
         pytest.skip("pypdf no instalado")
     w = PdfWriter()
@@ -433,7 +522,12 @@ def test_expand_pipeline_pdf_tuples_imagen_pasa_y_multipage_pdf_omite():
         [("dos.pdf", pdf_2p, "application/pdf", "adjunta")]
     )
     assert n_p == 1
-    assert out_p == []
+    assert len(out_p) == 2
+    assert out_p[0][0] == "dos_pag1.pdf" and out_p[1][0] == "dos_pag2.pdf"
+    assert out_p[0][2] == "application/pdf" and out_p[1][2] == "application/pdf"
+    assert out_p[0][3] == "adjunta" and out_p[1][3] == "adjunta"
+    for _fname, _bytes, _, _ in out_p:
+        assert len(PdfReader(BytesIO(_bytes)).pages) == 1
 
 
 def test_sort_messages_inbox_mas_reciente_primero():
@@ -505,6 +599,30 @@ def test_parse_formato_b_modo_error_email_ab_cedula_error():
     assert fields["cedula"] == "ERROR"
 
 
+def test_parse_formato_e_bancamiga_cedula_siempre_na():
+    j = (
+        '{"formato":"E","fecha_pago":"17/04/2026","cedula":"J-505363506","monto":"Bs. 43.223,15",'
+        '"numero_referencia":"18987898","email_cliente":"NA","banco":"Bancamiga"}'
+    )
+    fmt, fields = _parse_formato_y_pagos_json(j)
+    assert fmt == "E"
+    assert fields["cedula"] == "NA"
+    assert "43.223" in (fields.get("monto") or "")
+    assert (fields.get("numero_referencia") or "").strip() == "18987898"
+
+
+def test_parse_formato_f_tesoro_cedula_siempre_na():
+    j = (
+        '{"formato":"F","fecha_pago":"18/04/2026","cedula":"J-505363506","monto":"64.810,14 Bs.",'
+        '"numero_referencia":"01834361","email_cliente":"NA","banco":"Banco del Tesoro"}'
+    )
+    fmt, fields = _parse_formato_y_pagos_json(j)
+    assert fmt == "F"
+    assert fields["cedula"] == "NA"
+    assert "64.810" in (fields.get("monto") or "") or "64810" in (fields.get("monto") or "")
+    assert (fields.get("numero_referencia") or "").strip() == "01834361"
+
+
 def test_parse_formato_a_modo_error_email_ab_cedula_desde_imagen():
     j = (
         '{"formato":"A","fecha_pago":"01/01/2026","cedula":"V-01234567","monto":"10 USD",'
@@ -528,6 +646,8 @@ def test_cedula_desde_imagen_rescan_normaliza_o_error():
 
 def test_pagos_gmail_label_exclusions_query_incluye_etiquetas_clasificacion():
     from app.services.pagos_gmail.gmail_service import (
+        PAGOS_GMAIL_LABEL_BANCAMIGA,
+        PAGOS_GMAIL_LABEL_TESORO,
         PAGOS_GMAIL_LABEL_ERROR_EMAIL,
         PAGOS_GMAIL_LABEL_IMAGEN_1,
         PAGOS_GMAIL_LABEL_IMAGEN_2,
@@ -543,6 +663,8 @@ def test_pagos_gmail_label_exclusions_query_incluye_etiquetas_clasificacion():
     assert f'-label:"{PAGOS_GMAIL_LABEL_IMAGEN_2}"' in q
     assert f'-label:"{PAGOS_GMAIL_LABEL_IMAGEN_3}"' in q
     assert f'-label:"{PAGOS_GMAIL_LABEL_IMAGEN_4}"' in q
+    assert f'-label:"{PAGOS_GMAIL_LABEL_BANCAMIGA}"' in q
+    assert f'-label:"{PAGOS_GMAIL_LABEL_TESORO}"' in q
     assert f'-label:"{PAGOS_GMAIL_LABEL_ERROR_EMAIL}"' in q
     assert f'-label:"{PAGOS_GMAIL_LABEL_MANUAL}"' in q
     assert f'-label:"{PAGOS_GMAIL_LABEL_TEXTO}"' in q

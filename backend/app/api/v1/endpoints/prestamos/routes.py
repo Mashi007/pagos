@@ -3277,7 +3277,134 @@ def generar_amortizacion(
     return {"message": "Tabla de amortización generada.", "cuotas": creadas, "creadas": creadas}
 
 
+_RECALCULAR_FECHAS_LOTE_MAX = 80
 
+
+class RecalcularFechasAmortizacionLoteBody(BaseModel):
+    """Ids de préstamos a recalcular (misma semántica que POST …/{id}/recalcular-fechas-amortizacion)."""
+
+    prestamo_ids: List[int]
+
+
+def _ejecutar_recalculo_fechas_amortizacion_por_id(db: Session, prestamo_id: int) -> dict:
+    """
+    Valida, recalcula fechas de cuotas, registra auditoría y hace commit.
+    Misma lógica que el endpoint unitario; lanza HTTPException si no aplica.
+    """
+    p = db.get(Prestamo, prestamo_id)
+
+    if not p:
+        raise HTTPException(status_code=404, detail="Préstamo no encontrado")
+
+    fecha_base = _fecha_para_amortizacion(p)
+
+    if not fecha_base:
+        raise HTTPException(
+            status_code=400,
+            detail="El préstamo debe tener fecha base de cálculo (o fecha de aprobación en datos antiguos) para recalcular fechas de vencimiento.",
+        )
+
+    existentes = db.scalar(select(func.count()).select_from(Cuota).where(Cuota.prestamo_id == prestamo_id)) or 0
+
+    if existentes == 0:
+        raise HTTPException(
+            status_code=400,
+            detail="El préstamo no tiene cuotas para recalcular.",
+        )
+
+    resultado = _recalcular_fechas_vencimiento_cuotas(db, p, fecha_base)
+
+    _fallback_uid = db.execute(
+        text("SELECT id FROM public.usuarios ORDER BY id LIMIT 1")
+    ).scalar() or 1
+    audit_recalc = Auditoria(
+        usuario_id=_fallback_uid,
+        accion="RECALCULO_FECHAS_AMORTIZACION",
+        entidad="prestamos",
+        entidad_id=prestamo_id,
+        detalles=(
+            f"Recalculo manual de fechas de cuotas (endpoint). "
+            f"Fecha base: {fecha_base}. "
+            f"Cuotas actualizadas: {resultado.get('actualizadas', 0)}"
+        ),
+        exito=True,
+    )
+    db.add(audit_recalc)
+    db.commit()
+
+    return resultado
+
+
+def _http_detail_str(detail: Any) -> str:
+    if isinstance(detail, str):
+        return detail
+    try:
+        return str(detail)[:500]
+    except Exception:
+        return "error"
+
+
+@router.post(
+    "/recalcular-fechas-amortizacion-lote",
+    response_model=dict,
+    summary="Recalcular fechas de amortización en lote (admin)",
+)
+def recalcular_fechas_amortizacion_lote(
+    body: RecalcularFechasAmortizacionLoteBody,
+    db: Session = Depends(get_db),
+    _current_user: UserResponse = Depends(require_admin),
+):
+    """
+    Misma operación que POST `/{prestamo_id}/recalcular-fechas-amortizacion` por cada id:
+    un commit por préstamo (misma atomicidad que N llamadas sueltas desde el cliente).
+    """
+    ids = sorted({int(x) for x in (body.prestamo_ids or []) if int(x) > 0})
+    if not ids:
+        raise HTTPException(status_code=400, detail="prestamo_ids vacío o inválido.")
+    if len(ids) > _RECALCULAR_FECHAS_LOTE_MAX:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Máximo {_RECALCULAR_FECHAS_LOTE_MAX} préstamos por petición.",
+        )
+
+    errores: List[dict] = []
+    prestamo_ids_ok: List[int] = []
+
+    for pid in ids:
+        try:
+            _ejecutar_recalculo_fechas_amortizacion_por_id(db, pid)
+            prestamo_ids_ok.append(pid)
+        except HTTPException as exc:
+            try:
+                db.rollback()
+            except Exception:
+                pass
+            errores.append(
+                {
+                    "prestamo_id": pid,
+                    "status_code": exc.status_code,
+                    "detail": _http_detail_str(exc.detail),
+                }
+            )
+        except Exception as exc:
+            try:
+                db.rollback()
+            except Exception:
+                pass
+            errores.append(
+                {
+                    "prestamo_id": pid,
+                    "status_code": 500,
+                    "detail": str(exc)[:500],
+                }
+            )
+
+    return {
+        "procesados": len(prestamo_ids_ok),
+        "prestamo_ids_ok": prestamo_ids_ok,
+        "errores": errores,
+        "mensaje": f"Recálculo: {len(prestamo_ids_ok)} ok, {len(errores)} con error.",
+    }
 
 
 @router.post("/{prestamo_id}/recalcular-fechas-amortizacion", response_model=dict)
@@ -3301,50 +3428,7 @@ def recalcular_fechas_amortizacion(
     
     Debe llamarse después de alinear fecha_aprobacion y fecha_base_calculo en el prestamo.
     """
-    p = db.get(Prestamo, prestamo_id)
-    
-    if not p:
-        raise HTTPException(status_code=404, detail="Préstamo no encontrado")
-    
-    fecha_base = _fecha_para_amortizacion(p)
-    
-    if not fecha_base:
-        raise HTTPException(
-            status_code=400,
-            detail="El préstamo debe tener fecha base de cálculo (o fecha de aprobación en datos antiguos) para recalcular fechas de vencimiento."
-        )
-    
-    # Verificar que existen cuotas
-    existentes = db.scalar(select(func.count()).select_from(Cuota).where(Cuota.prestamo_id == prestamo_id)) or 0
-    
-    if existentes == 0:
-        raise HTTPException(
-            status_code=400,
-            detail="El préstamo no tiene cuotas para recalcular."
-        )
-    
-    # Recalcular fechas y estados
-    resultado = _recalcular_fechas_vencimiento_cuotas(db, p, fecha_base)
-
-    _fallback_uid = db.execute(
-        text("SELECT id FROM public.usuarios ORDER BY id LIMIT 1")
-    ).scalar() or 1
-    audit_recalc = Auditoria(
-        usuario_id=_fallback_uid,
-        accion="RECALCULO_FECHAS_AMORTIZACION",
-        entidad="prestamos",
-        entidad_id=prestamo_id,
-        detalles=(
-            f"Recalculo manual de fechas de cuotas (endpoint). "
-            f"Fecha base: {fecha_base}. "
-            f"Cuotas actualizadas: {resultado.get('actualizadas', 0)}"
-        ),
-        exito=True,
-    )
-    db.add(audit_recalc)
-    db.commit()
-
-    return resultado
+    return _ejecutar_recalculo_fechas_amortizacion_por_id(db, prestamo_id)
 
 
 

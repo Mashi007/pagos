@@ -10,6 +10,7 @@
 
  * Listado de pagos reportados (módulo Cobros). Filtros, tabla, acciones Ver detalle / Aprobar / Rechazar.
  * Cola manual: filas que no cumplen validadores; «Incluir ya exportados» vuelve a mostrar las marcadas en corrección.
+ * Por defecto filtra por fecha de creación del reporte (últimos 90 días) para aligerar el barrido en API; «Sin límite de fechas» recupera el historial completo.
 
 
 
@@ -76,6 +77,22 @@ function toastAfterRechazoCobros(data: CambiarEstadoPagoResponse) {
   } else {
     toast(msg, { duration: 7000 })
   }
+}
+
+/** Alineado con filtros `fecha_desde` / `fecha_hasta` del API (fecha local del navegador). */
+const COBROS_REPORTADOS_FILTRO_FECHA_DIAS = 90
+
+function cobrosFechaLocalYMD(d: Date): string {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
+function cobrosFechaDesdeHaceNDias(n: number): string {
+  const d = new Date()
+  d.setDate(d.getDate() - n)
+  return cobrosFechaLocalYMD(d)
 }
 
 import {
@@ -306,9 +323,11 @@ export default function CobrosPagosReportadosPage() {
 
   const [estado, setEstado] = useState<string>('')
 
-  const [fechaDesde, setFechaDesde] = useState('')
+  const [fechaDesde, setFechaDesde] = useState(() =>
+    cobrosFechaDesdeHaceNDias(COBROS_REPORTADOS_FILTRO_FECHA_DIAS)
+  )
 
-  const [fechaHasta, setFechaHasta] = useState('')
+  const [fechaHasta, setFechaHasta] = useState(() => cobrosFechaLocalYMD(new Date()))
 
   const [cedula, setCedula] = useState('')
 
@@ -492,9 +511,13 @@ export default function CobrosPagosReportadosPage() {
   ])
 
   useEffect(() => {
-    const id = window.setInterval(() => {
+    const tick = () => {
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') {
+        return
+      }
       void fetchListado({ bypassCache: true, silent: true })
-    }, COBROS_LISTADO_KPIS_CACHE_TTL_MS)
+    }
+    const id = window.setInterval(tick, COBROS_LISTADO_KPIS_CACHE_TTL_MS)
     return () => window.clearInterval(id)
   }, [fetchListado])
 
@@ -932,21 +955,61 @@ export default function CobrosPagosReportadosPage() {
             </p>
           </div>
 
-          <Input
-            type="date"
-            placeholder="Fecha desde"
-            value={fechaDesde}
-            onChange={e => setFechaDesde(e.target.value)}
-            className="w-40"
-          />
+          <div className="flex min-w-[min(100%,320px)] flex-col gap-1">
+            <div className="flex flex-wrap items-end gap-2">
+              <Input
+                type="date"
+                aria-label="Fecha desde (creación del reporte)"
+                value={fechaDesde}
+                onChange={e => setFechaDesde(e.target.value)}
+                className="w-40"
+              />
 
-          <Input
-            type="date"
-            placeholder="Fecha hasta"
-            value={fechaHasta}
-            onChange={e => setFechaHasta(e.target.value)}
-            className="w-40"
-          />
+              <Input
+                type="date"
+                aria-label="Fecha hasta (creación del reporte)"
+                value={fechaHasta}
+                onChange={e => setFechaHasta(e.target.value)}
+                className="w-40"
+              />
+
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="shrink-0"
+                onClick={() => {
+                  setFechaDesde(
+                    cobrosFechaDesdeHaceNDias(COBROS_REPORTADOS_FILTRO_FECHA_DIAS)
+                  )
+                  setFechaHasta(cobrosFechaLocalYMD(new Date()))
+                  setPage(1)
+                }}
+              >
+                Últimos {COBROS_REPORTADOS_FILTRO_FECHA_DIAS} días
+              </Button>
+
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="shrink-0"
+                onClick={() => {
+                  setFechaDesde('')
+                  setFechaHasta('')
+                  setPage(1)
+                }}
+              >
+                Sin límite de fechas
+              </Button>
+            </div>
+
+            <p className="text-xs text-muted-foreground">
+              Por defecto se filtra por <strong>fecha de creación del reporte</strong> (mismo criterio
+              que el API). Acota el volumen que revisa el servidor sin cambiar validadores ni la cola
+              manual. Use «Sin límite de fechas» solo cuando necesite todo el historial.
+            </p>
+          </div>
 
           <Input
             placeholder="Cédula"

@@ -19,7 +19,7 @@ Si el mensaje ya tiene cualquier etiqueta de usuario Gmail, se omite (skip total
 import io
 import logging
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import Annotated, Optional
 
 from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
@@ -683,14 +683,18 @@ def _get_latest_date_with_data(db: Session) -> Optional[str]:
 @router.get("/download-excel")
 def download_excel(
     fecha: Optional[str] = None,
-    solo_duplicados_documento: bool = Query(
-        False,
-        description="Solo filas banco plantilla A–D cuyo serial ya existe en pagos o pagos_con_errores (revisión manual).",
-    ),
-    excluir_duplicados_documento: bool = Query(
-        False,
-        description="Excluye esas filas duplicadas; el resto (incl. NR y no-ABCD) sigue en el Excel.",
-    ),
+    solo_duplicados_documento: Annotated[
+        bool,
+        Query(
+            description="Solo filas banco plantilla A–D cuyo serial ya existe en pagos o pagos_con_errores (revisión manual).",
+        ),
+    ] = False,
+    excluir_duplicados_documento: Annotated[
+        bool,
+        Query(
+            description="Excluye esas filas duplicadas; el resto (incl. NR y no-ABCD) sigue en el Excel.",
+        ),
+    ] = False,
     db: Session = Depends(get_db),
 ):
     """
@@ -805,14 +809,18 @@ def download_excel(
 
 @router.get("/download-excel-temporal")
 def download_excel_temporal(
-    solo_duplicados_documento: bool = Query(
-        False,
-        description="Solo filas banco plantilla A–D cuyo serial ya existe en pagos o pagos_con_errores (revisión manual).",
-    ),
-    excluir_duplicados_documento: bool = Query(
-        False,
-        description="Excluye esas filas duplicadas; el resto sigue en el Excel.",
-    ),
+    solo_duplicados_documento: Annotated[
+        bool,
+        Query(
+            description="Solo filas banco plantilla A–D cuyo serial ya existe en pagos o pagos_con_errores (revisión manual).",
+        ),
+    ] = False,
+    excluir_duplicados_documento: Annotated[
+        bool,
+        Query(
+            description="Excluye esas filas duplicadas; el resto sigue en el Excel.",
+        ),
+    ] = False,
     db: Session = Depends(get_db),
 ):
     """

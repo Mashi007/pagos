@@ -1127,6 +1127,7 @@ class ApiClient {
         url.includes('/prestamos/candidatos-drive/refrescar') || // Recorre drive + prestamos + reescribe snapshot
         url.includes('/prestamos/candidatos-drive/guardar-validados-100') || // Crear préstamos por cada fila válida
         url.includes('/prestamos/candidatos-drive/guardar-fila') || // Una fila + mismas validaciones que el lote
+        url.includes('/prestamos/recalcular-fechas-amortizacion-lote') || // Hasta 80 préstamos × ~3s en Render
         url.includes('/clientes/drive-import/importar') || // Lote: un commit por fila; cientos de filas >30s en Render
         url.includes('/configuracion/email/probar') // Prueba SMTP; Recibos puede generar PDF + envío >30s
 

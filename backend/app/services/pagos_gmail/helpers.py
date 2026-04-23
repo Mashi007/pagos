@@ -310,11 +310,13 @@ def resolve_banco_para_excel_pagos_gmail(
     default_b: str,
     default_c: str,
     default_d: str = "BDV",
+    default_e: str = "Bancamiga",
+    default_f: str = "Banco del Tesoro",
     max_len: int = 50,
 ) -> str:
     """
     Columna Excel \"Banco\": institucion que aparece en el comprobante (texto de Gemini)
-    normalizado por palabras clave; si viene vacio o NA, usa el valor por plantilla A/B/C/D.
+    normalizado por palabras clave; si viene vacio o NA, usa el valor por plantilla A/B/C/D/E/F.
     """
     f = (fmt or "").strip().upper()
     if f == "NR":
@@ -341,11 +343,19 @@ def resolve_banco_para_excel_pagos_gmail(
             return "BBVA Provincial"
         if "binance" in low:
             return "BINANCE"
+        if "bancamiga" in low:
+            return "Bancamiga"
+        if "banco del tesoro" in low:
+            return "Banco del Tesoro"
         out = one_line[:max_len].strip()
         return out if out else "NR"
     if f == "C":
         return (default_c or "")[:max_len]
-    if f == "D":
+    if f == "F":
+        template_default = default_f
+    elif f == "E":
+        template_default = default_e
+    elif f == "D":
         template_default = default_d
     elif f == "A":
         template_default = default_a
@@ -376,6 +386,10 @@ def resolve_banco_para_excel_pagos_gmail(
         return "BBVA Provincial"
     if "binance" in low:
         return "BINANCE"
+    if "bancamiga" in low:
+        return "Bancamiga"
+    if "banco del tesoro" in low:
+        return "Banco del Tesoro"
     out = one_line[:max_len].strip()
     return out if out else (template_default or "")[:max_len]
 

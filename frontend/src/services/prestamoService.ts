@@ -1140,6 +1140,23 @@ class PrestamoService {
       { timeout: 120000 }
     )
   }
+
+  /**
+   * Misma operación que postRecalcularFechasAmortizacion por cada id (admin, un commit por préstamo).
+   * POST /api/v1/prestamos/recalcular-fechas-amortizacion-lote — máx. 80 ids por petición.
+   */
+  async postRecalcularFechasAmortizacionLote(prestamoIds: number[]): Promise<{
+    procesados: number
+    prestamo_ids_ok: number[]
+    errores: Array<{ prestamo_id: number; status_code: number; detail: string }>
+    mensaje: string
+  }> {
+    return apiClient.post(
+      `${this.baseUrl}/recalcular-fechas-amortizacion-lote`,
+      { prestamo_ids: prestamoIds },
+      { timeout: 300000 }
+    )
+  }
 }
 
 export const prestamoService = new PrestamoService()
