@@ -407,10 +407,16 @@ export async function enviarReportePublico(
     try {
       data = text ? JSON.parse(text) : {}
     } catch {
+      const looksLikeCloudflareHtml =
+        typeof text === 'string' &&
+        (text.includes('<html') ||
+          text.toLowerCase().includes('cloudflare') ||
+          text.toLowerCase().includes('bad request'))
       return {
         ok: false,
-        error:
-          'No se pudo procesar la respuesta del servidor. Intente nuevamente en unos minutos.',
+        error: looksLikeCloudflareHtml
+          ? `El envío fue rechazado en el borde (HTTP ${res.status}). Suele ocurrir con comprobantes muy grandes o peticiones bloqueadas por el proxy. Intente con un PDF/imagen más liviana o reintente en unos minutos.`
+          : 'No se pudo procesar la respuesta del servidor. Intente nuevamente en unos minutos.',
       }
     }
 
@@ -429,6 +435,23 @@ export async function enviarReportePublico(
       e instanceof Error ? e.message : 'Error de conexión con el servidor.'
     return { ok: false, error: mensajeErrorRedPublico(raw) }
   }
+}
+
+function humanizarErrorEnvioComprobanteAxios(st: number | undefined, detail: string): string {
+  const d = (detail || '').trim()
+  const lower = d.toLowerCase()
+  const looksHtml =
+    lower.includes('<html') ||
+    lower.includes('cloudflare') ||
+    lower.includes('bad request') ||
+    lower.includes('<!doctype html')
+
+  if (looksHtml) {
+    const stLabel = typeof st === 'number' ? String(st) : '—'
+    return `El envío fue rechazado en el borde (HTTP ${stLabel}). Suele ocurrir con comprobantes muy grandes o peticiones bloqueadas por el proxy. Intente con un PDF/imagen más liviana o reintente en unos minutos.`
+  }
+
+  return d
 }
 
 export async function digitalizarComprobantePublico(
@@ -459,7 +482,17 @@ export async function digitalizarComprobantePublico(
     try {
       data = text ? JSON.parse(text) : { ok: false, error: 'Respuesta vacía del servidor.' }
     } catch {
-      return { ok: false, error: 'No se pudo procesar la respuesta del servidor.' }
+      const looksLikeCloudflareHtml =
+        typeof text === 'string' &&
+        (text.includes('<html') ||
+          text.toLowerCase().includes('cloudflare') ||
+          text.toLowerCase().includes('bad request'))
+      return {
+        ok: false,
+        error: looksLikeCloudflareHtml
+          ? `El envío fue rechazado en el borde (HTTP ${res.status}). Suele ocurrir con comprobantes muy grandes o peticiones bloqueadas por el proxy. Intente con un PDF/imagen más liviana o reintente en unos minutos.`
+          : 'No se pudo procesar la respuesta del servidor.',
+      }
     }
     return data
   } catch (e: unknown) {
@@ -482,15 +515,19 @@ export async function enviarReporteInfopagos(
     )
   } catch (e: unknown) {
     const st = (e as { response?: { status?: number } })?.response?.status
-    const detailRaw = (
-      e as { response?: { data?: { detail?: unknown; message?: unknown } } }
-    )?.response?.data
+    const detailRaw = (e as { response?: { data?: unknown } })?.response?.data
     const detail =
-      typeof detailRaw?.detail === 'string'
-        ? detailRaw.detail
-        : typeof detailRaw?.message === 'string'
-          ? detailRaw.message
-          : ''
+      typeof detailRaw === 'string'
+        ? detailRaw
+        : typeof detailRaw === 'object' &&
+            detailRaw !== null &&
+            typeof (detailRaw as { detail?: unknown }).detail === 'string'
+          ? String((detailRaw as { detail?: string }).detail)
+          : typeof detailRaw === 'object' &&
+              detailRaw !== null &&
+              typeof (detailRaw as { message?: unknown }).message === 'string'
+            ? String((detailRaw as { message?: string }).message)
+            : ''
 
     if (st === 401) {
       return {
@@ -520,7 +557,7 @@ export async function enviarReporteInfopagos(
       }
     }
     if (detail) {
-      return { ok: false, error: detail }
+      return { ok: false, error: humanizarErrorEnvioComprobanteAxios(st, String(detail)) }
     }
 
     const raw =

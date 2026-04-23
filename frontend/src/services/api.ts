@@ -77,6 +77,60 @@ function getEffectiveApiBaseUrl(): string {
 
 export const API_BASE_URL = getEffectiveApiBaseUrl()
 
+function looksLikeHtmlErrorBody(text: string): boolean {
+  const t = text.toLowerCase()
+  return (
+    t.includes('<html') ||
+    t.includes('<!doctype html') ||
+    t.includes('cloudflare') ||
+    t.includes('bad request')
+  )
+}
+
+function readBackend4xxErrorMessage(status: number, data: unknown): string {
+  if (typeof data === 'string') {
+    const s = data.trim()
+    if (s && looksLikeHtmlErrorBody(s)) {
+      return `El servidor devolvió una página HTML de error (HTTP ${status}). Suele indicar bloqueo en el proxy (p. ej. Cloudflare) o un fallo antes de llegar al API.`
+    }
+    if (s) return s
+  }
+
+  if (data && typeof data === 'object') {
+    const anyData = data as { detail?: unknown; message?: unknown }
+    if (typeof anyData.detail === 'string' && anyData.detail.trim()) {
+      return anyData.detail
+    }
+    if (Array.isArray(anyData.detail)) {
+      return anyData.detail
+        .map((x: { msg?: string }) =>
+          typeof x?.msg === 'string' ? x.msg : JSON.stringify(x)
+        )
+        .join('; ')
+    }
+    if (typeof anyData.message === 'string' && anyData.message.trim()) {
+      return anyData.message
+    }
+  }
+
+  return `Request failed with status ${status}`
+}
+
+function compactFor4xxLog(data: unknown): unknown {
+  if (typeof data === 'string') {
+    const s = data
+    if (s.length > 400 || looksLikeHtmlErrorBody(s)) {
+      const oneLine = s.replace(/\s+/g, ' ').trim()
+      return {
+        _type: 'non_json_error_body',
+        preview: oneLine.slice(0, 240) + (oneLine.length > 240 ? '…' : ''),
+      }
+    }
+    return s
+  }
+  return data
+}
+
 // Ruta de login con base path (ej. /pagos/login cuando BASE_PATH es /pagos)
 
 const LOGIN_PATH = `${BASE_PATH}/login`.replace(/\/+/g, '/')
@@ -1202,7 +1256,7 @@ class ApiClient {
             console.error('? [ApiClient] POST recibió error 4xx:', {
               url,
               status: response.status,
-              data: response.data,
+              data: compactFor4xxLog(response.data),
             })
           }
 
@@ -1211,10 +1265,10 @@ class ApiClient {
 
         // Crear un error de Axios para que se maneje correctamente, preservando el mensaje del backend
 
-        const backendMessage =
-          (response.data as any)?.detail ||
-          (response.data as any)?.message ||
-          `Request failed with status ${response.status}`
+        const backendMessage = readBackend4xxErrorMessage(
+          response.status,
+          response.data
+        )
 
         const error = new Error(backendMessage) as any
 
@@ -1236,7 +1290,9 @@ class ApiClient {
         const status = error?.response?.status
 
         const detail =
-          error?.response?.data?.detail ?? error?.response?.data?.message
+          typeof status === 'number'
+            ? readBackend4xxErrorMessage(status, error?.response?.data)
+            : undefined
 
         console.error('? [ApiClient] POST error:', {
           url,
