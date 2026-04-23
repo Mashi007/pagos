@@ -198,6 +198,14 @@ export function PagosList() {
   const [revisionTipoFiltro, setRevisionTipoFiltro] = useState<
     '' | 'anomalo' | 'irreal' | 'duplicado'
   >('')
+  const [revisionMotivoFiltro, setRevisionMotivoFiltro] = useState<
+    | ''
+    | 'sin_credito'
+    | 'duplicado'
+    | 'irreal'
+    | 'con_observacion'
+    | 'error_validacion'
+  >('')
   const [includeRevisionExportados, setIncludeRevisionExportados] =
     useState(false)
   const [editingRevisionId, setEditingRevisionId] = useState<number | null>(null)
@@ -700,6 +708,31 @@ export function PagosList() {
       })
       .sort((a, b) => b.score - a.score || b.pago.id - a.pago.id)
   }, [revisionData?.pagos, revisionTipoFiltro])
+  const revisionRowsFiltradas = useMemo(() => {
+    if (!revisionMotivoFiltro) return revisionRowsAnalizadas
+    return revisionRowsAnalizadas.filter(row => {
+      if (revisionMotivoFiltro === 'sin_credito') {
+        return row.motivos.includes('Sin crédito asociado')
+      }
+      if (revisionMotivoFiltro === 'duplicado') {
+        return row.motivos.includes('Duplicado fecha + número')
+      }
+      if (revisionMotivoFiltro === 'irreal') {
+        return (
+          row.motivos.includes('Monto no válido') ||
+          row.motivos.includes('Fecha futura') ||
+          row.motivos.includes('Irreal detectado por regla de cartera')
+        )
+      }
+      if (revisionMotivoFiltro === 'con_observacion') {
+        return row.motivos.includes('Con observación')
+      }
+      if (revisionMotivoFiltro === 'error_validacion') {
+        return row.motivos.includes('Error de validación')
+      }
+      return true
+    })
+  }, [revisionRowsAnalizadas, revisionMotivoFiltro])
   const resumenRevision = useMemo(() => {
     const resumen = {
       duplicados: 0,
@@ -803,6 +836,7 @@ export function PagosList() {
     setRevisionFechaPagoInput('')
     setRevisionFechaPagoFiltro('')
     setRevisionTipoFiltro('')
+    setRevisionMotivoFiltro('')
     setRevisionPage(1)
   }
   const handleGuardarRevision = async (id: number) => {
@@ -1623,6 +1657,45 @@ export function PagosList() {
                     </SelectContent>
                   </Select>
                 </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">
+                    Motivo
+                  </label>
+                  <Select
+                    value={revisionMotivoFiltro || 'all'}
+                    onValueChange={value => {
+                      setRevisionMotivoFiltro(
+                        value === 'all'
+                          ? ''
+                          : (value as
+                              | 'sin_credito'
+                              | 'duplicado'
+                              | 'irreal'
+                              | 'con_observacion'
+                              | 'error_validacion')
+                      )
+                      setRevisionPage(1)
+                    }}
+                  >
+                    <SelectTrigger className="w-[220px]">
+                      <SelectValue placeholder="Motivo de anomalía" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos</SelectItem>
+                      <SelectItem value="sin_credito">Sin crédito</SelectItem>
+                      <SelectItem value="duplicado">
+                        Duplicado fecha + número
+                      </SelectItem>
+                      <SelectItem value="irreal">Irreal</SelectItem>
+                      <SelectItem value="con_observacion">
+                        Con observación
+                      </SelectItem>
+                      <SelectItem value="error_validacion">
+                        Error de validación
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
                 <div className="flex gap-2">
                   <Button
                     type="button"
@@ -1641,7 +1714,8 @@ export function PagosList() {
                   {(revisionCedulaFiltro ||
                     revisionNumeroDocumentoFiltro ||
                     revisionFechaPagoFiltro ||
-                    revisionTipoFiltro) && (
+                    revisionTipoFiltro ||
+                    revisionMotivoFiltro) && (
                     <Button
                       type="button"
                       variant="ghost"
@@ -1708,7 +1782,7 @@ export function PagosList() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {revisionRowsAnalizadas.map(({ pago, motivos, score }) => (
+                        {revisionRowsFiltradas.map(({ pago, motivos, score }) => (
                           <TableRow
                             key={pago.id}
                             className={score >= 2 ? 'bg-amber-50/40' : undefined}
