@@ -176,6 +176,11 @@ PASO 2a - D (imagen 4 / Banco de Venezuela BDV) si PASO 2 NO aplico (no es recib
     + Comprobante de **deposito en cuenta** o **Comprobante de Transaccion** / **Deposito en Cuenta** / **Pago** con monto en **USD** (o divisa impresa coherente).
     + Cuenta con formato tipo **0102-....** u OCR sucio (0102 es entidad BDV; no confundir con 0105 Mercantil ni 0191 BNC).
   Si el nucleo D se cumple -> **formato D**, no B (aunque sea deposito) ni A (no es ticket RECAUDACION vertical ni Mercantil 0105).
+  REGLA CRITICA — **0102 en pantalla de app / transferencia NO implica D (BNV / imagen 4)**:
+    Capturas de **app** (Banco de Venezuela u otro) tipo **"Transferencia interbancaria"**, **"Transferencias a otros bancos"**, comprobante en pantalla con **Origen** **0102-**** (cuenta debitada / Banco de Venezuela)** y **Destino** **0191-**** (**Banco Nacional de Credito / BNC**) u otro banco, montos en **Bs.**, lineas **Operación**, **Nombre**, **Concepto**, **Estatus**, **no** son el comprobante **impreso o termico BDV** de **deposito en cuenta** (nucleo D).
+    Ahi **0102** es casi siempre la cuenta **origen** del envio, **no** la firma del formato D. **D** exige **documento BDV** con layout de **COMPROBANTE DE TRANSACCION** / **DEPOSITO EN CUENTA** / **PAGO**, bloques **DATOS DE LA CUENTA** / **DATOS DE LA TRANSACCION**, **0102-...** como cuenta del **deposito** en ese papel, **TITULAR DE LA CUENTA** empresa, **SECUENCIAL NRO** (o numero operativo equivalente) y totales en el **mismo** bloque impreso.
+    Si el destino es **BNC** con **0191** y beneficiario RapiCredit segun **PASO 2** -> **B**, **nunca D**. Si no cumple nucleo B ni el nucleo D de papel -> **ninguno** o **NR** segun beneficiario; **prohibido** devolver **D** solo por colores corporativos BDV, icono en cabecera o ver **0102** en una linea **Origen** de una transferencia en pantalla.
+  REGLA UI — **banner superior vs bloque de detalle**: si un aviso arriba dice **exitosa** / **exitoso** pero en el detalle aparece **Estatus: En proceso** (u otro texto contradictorio), extrae **fecha_pago**, **monto** y **numero_referencia** del **bloque de filas de detalle** (fecha, operacion, montos en caja, destino); **no** inventes referencia ni monto solo desde el titulo del banner.
   Regla anti-falso-negativo BDV/BNV (fotos reales): si el comprobante horizontal o vertical muestra marca BDV/Banco de Venezuela,
     cuenta 0102-..., titular corporativo (ej. RAPI CREDIT C.A.) y bloque transaccional con monto/referencia/fecha parcialmente legibles,
     clasifica D aunque haya sello azul atravesado, manuscritos encima, contraste bajo, reflejo o OCR incompleto en lineas secundarias.
@@ -218,7 +223,7 @@ PASO 2a - D (imagen 4 / Banco de Venezuela BDV) si PASO 2 NO aplico (no es recib
     **Monto Total** / **Total Efectivo** / **Total Deposito** / monto en cifras y a veces **en letras** (ej. "CIEN CON 00/100"); puede haber **monto manuscrito** "$" en el centro — prioriza cifra impresa del sistema si hay ambas.
     **Sello azul** rectangular con logo BDV y texto de **oficina** (ej. "431-ALTAGRACIA", "401 - OFICINA UPATA", codigo + nombre sucursal); refuerza D pero no sustituye **0102** + titular + secuencial.
     Campos utiles OCR: **Oficina Deposito**, **Usuario** (cajero, ej. NM36837), **Fecha** y **Hora** en una o dos lineas.
-    Manuscrito al pie (nombre, CI, "R.F-..."): **no** uses para JSON de cedula (REGLA CEDULA); solo refuerzo visual de deposito en ventanilla.
+    Manuscrito al pie (**"Nombre y Apellido:"**, nombre del depositante cuando **DATOS DEL DEPOSITANTE** van **en blanco** impreso): **muy frecuente** en ventanilla BDV; **no** invalida D. **cedula** en JSON **siempre "NA"** (no copies nombre ni CI/RIF desde boligrafo al campo cedula). Notas tipo **"R.F-..."** al margen: no uses como **numero_referencia** unica.
     No es imagen 1 (A): aunque la tira sea vertical, si dice **Banco de Venezuela** + **0102** + titular empresa en cuenta -> **D**, no Mercantil ni RECAUDACION SPD.
 
   VARIANTE D2 — **Comprobante horizontal / hoja ancha BDV (imagen 4)** — mismo formato D:
@@ -427,6 +432,7 @@ Prioriza la plantilla BNC anterior (horizontal, vertical, con o sin sello azul d
 
 === DETALLE FORMATO D (imagen 4 / Banco de Venezuela BDV) ===
   Comprobante impreso de **Banco de Venezuela** (no BNC): deposito / transaccion a cuenta empresa en USD (titular impreso: **RAPI CREDIT**, **SOFT CREDIT C.A.** u otra razon en la linea de titular, siempre con **0102-...**).
+  **Excluye D**: pantallas solo de **app** (transferencias, saldo, movimientos) aunque muestren logo BDV y cuenta **0102** como **origen**; sin papel tipo **COMPROBANTE DE TRANSACCION** / **DEPOSITO EN CUENTA** con **DATOS DE LA CUENTA** + **DATOS DE LA TRANSACCION** -> no es imagen 4; valorar **B** (0191 destino), **ninguno** o **NR**, nunca **D** por confusion con deposito.
   Incluye **tira vertical** (VARIANTE D1) y **hoja horizontal** (VARIANTE D2) con **franja DEPOSITOS/PAGOS/TARJETAS**: ambos son D si cumplen nucleo BDV + cuenta **0102** + titular + monto + **numero de operacion** (secuencial) legible.
   **Depositante en blanco**: si **Nombre del depositante** y **CI/RIF del depositante** estan vacios, **sigue siendo D**; rellena fecha_pago, monto y numero_referencia desde el comprobante.
   banco en JSON: "BDV" o "Banco de Venezuela" si se lee; si no, "NA" (el Excel usara BDV por defecto).
@@ -1143,7 +1149,8 @@ def _rescue_prompt_suffix(bank_hint: Optional[str]) -> str:
         )
     if bank_hint == "D":
         return (
-            "\n\nMODO RESCATE D (BDV/BNV): prioriza 0102 + titular empresa + secuencial/monto total."
+            "\n\nMODO RESCATE D (BDV/BNV): prioriza papel BDV con **0102** + titular empresa + **SECUENCIAL NRO** + **TOTAL EFECTIVO**/**DEPOSITO**/**MONTO TOTAL** + fecha/hora."
+            "\n**No** rescates como D una captura de **app** de transferencia (0102 como **Origen**, 0191 **Destino**/BNC, solo UI sin COMPROBANTE DE TRANSACCION impreso)."
             "\nAnclas léxicas: **Banco de Venezuela**/**BDV**, **0102-**, **SECUENCIAL NRO**/**Secuencial**, **TOTAL EFECTIVO**/**TOTAL DEPOSITO**/**MONTO TOTAL**, **FECHA**/**HORA**."
         )
     return (
