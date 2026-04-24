@@ -66,6 +66,24 @@ export function newClientId(): string {
   return `f-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`
 }
 
+/** Fecha local (calendario) en ISO YYYY-MM-DD para inputs type="date". */
+export function fechaLocalHoyISO(): string {
+  const now = new Date()
+  const y = now.getFullYear()
+  const mo = String(now.getMonth() + 1).padStart(2, '0')
+  const da = String(now.getDate()).padStart(2, '0')
+  return `${y}-${mo}-${da}`
+}
+
+/** Valor a enviar: campo manual, o detectada, o hoy si no hubo lectura clara. */
+export function fechaPagoEfectivaParaGuardar(f: FilaLote): string {
+  const m = f.fechaPago.trim()
+  if (m) return m
+  const d = f.fechaDetectada.trim()
+  if (d) return d
+  return fechaLocalHoyISO()
+}
+
 export function filaVaciaDesdeArchivo(archivo: File): FilaLote {
   return {
     clientId: newClientId(),
@@ -116,7 +134,9 @@ export function filaTrasExtraccion(
     }
   }
   const s = res.sugerencia
-  const fechaExtraida = s.fecha_pago || ''
+  const fechaExtraida = (s.fecha_pago || '').trim()
+  const tieneFechaDetectada = Boolean(fechaExtraida)
+  const hoy = fechaLocalHoyISO()
   const inst = (s.institucion_financiera || '').trim()
   const enLista = INSTITUCIONES_FINANCIERAS.includes(
     inst as (typeof INSTITUCIONES_FINANCIERAS)[number]
@@ -130,10 +150,10 @@ export function filaTrasExtraccion(
     ...base,
     extract: 'listo',
     errorExtraccion: undefined,
-    fechaPago: fechaExtraida,
-    fechaDetectada: fechaExtraida,
-    confirmaFechaDetectada: null,
-    confirmaFechaManual: false,
+    fechaPago: tieneFechaDetectada ? fechaExtraida : hoy,
+    fechaDetectada: tieneFechaDetectada ? fechaExtraida : '',
+    confirmaFechaDetectada: tieneFechaDetectada ? 'si' : null,
+    confirmaFechaManual: !tieneFechaDetectada,
     institucion: enLista ? inst : inst,
     otroInstitucion: enLista ? '' : inst,
     numeroOperacion: s.numero_operacion || '',

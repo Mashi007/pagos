@@ -33,6 +33,7 @@ import {
   normalizarFuenteTasaCambio,
   type FuenteTasaCambio,
 } from '../constants/fuenteTasaCambio'
+import { fechaLocalHoyISO } from './escanerInfopagosLoteModel'
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024
 
@@ -196,8 +197,6 @@ export default function EscanerInfopagosPage() {
   const escanearActivoRef = useRef(false)
   const enviarActivoRef = useRef(false)
   const ultimoIntentoGuardarRef = useRef(0)
-  const confirmaFechaDetectadaRef = useRef<null | 'si' | 'no'>(null)
-  const confirmaFechaManualRef = useRef(false)
 
   const [fase, setFase] = useState<Fase>('cedula')
   const [cedulaRaw, setCedulaRaw] = useState('')
@@ -213,8 +212,6 @@ export default function EscanerInfopagosPage() {
 
   const [fechaPago, setFechaPago] = useState('')
   const [fechaDetectada, setFechaDetectada] = useState('')
-  const [confirmaFechaDetectada, setConfirmaFechaDetectada] = useState<'si' | 'no' | null>(null)
-  const [confirmaFechaManual, setConfirmaFechaManual] = useState(false)
   const [institucion, setInstitucion] = useState('')
   const [otroInstitucion, setOtroInstitucion] = useState('')
   const [escanerColision, setEscanerColision] = useState<{
@@ -359,13 +356,15 @@ export default function EscanerInfopagosPage() {
         toast.error('Sin sugerencias del modelo.')
         return
       }
-      const fechaExtraida = s.fecha_pago || ''
-      setFechaPago(fechaExtraida)
-      setFechaDetectada(fechaExtraida)
-      setConfirmaFechaDetectada(null)
-      confirmaFechaDetectadaRef.current = null
-      setConfirmaFechaManual(false)
-      confirmaFechaManualRef.current = false
+      const fechaExtraida = (s.fecha_pago || '').trim()
+      if (fechaExtraida) {
+        setFechaPago(fechaExtraida)
+        setFechaDetectada(fechaExtraida)
+      } else {
+        const hoy = fechaLocalHoyISO()
+        setFechaPago(hoy)
+        setFechaDetectada('')
+      }
       const inst = (s.institucion_financiera || '').trim()
       if (INSTITUCIONES_FINANCIERAS.includes(inst as (typeof INSTITUCIONES_FINANCIERAS)[number])) {
         setInstitucion(inst)
@@ -419,32 +418,11 @@ export default function EscanerInfopagosPage() {
       toast.error('Cédula inválida.')
       return
     }
-    const vF = validarFechaPago(fechaPago)
+    const fechaPagoEnvio =
+      fechaPago.trim() || fechaDetectada.trim() || fechaLocalHoyISO()
+    const vF = validarFechaPago(fechaPagoEnvio)
     if (!vF.valido) {
       toast.error(vF.error || 'Fecha inválida.')
-      return
-    }
-    const confirmaFechaDetectadaActual = confirmaFechaDetectadaRef.current
-    const confirmaFechaManualActual = confirmaFechaManualRef.current
-    const hayFechaDetectada = Boolean(fechaDetectada.trim())
-    if (hayFechaDetectada && confirmaFechaDetectadaActual == null) {
-      toast.error(
-        'Indique si la fecha leída del comprobante es correcta (Sí) o si la corregirá (No).'
-      )
-      return
-    }
-    if (!hayFechaDetectada && !confirmaFechaManualActual) {
-      toast.error('Confirme manualmente la fecha ingresada para continuar.')
-      return
-    }
-    if (
-      hayFechaDetectada &&
-      confirmaFechaDetectadaActual === 'si' &&
-      fechaPago.trim() !== fechaDetectada.trim()
-    ) {
-      toast.error(
-        'Marcó «Sí» a la fecha del comprobante: el campo debe coincidir con la fecha detectada, o elija «No» si corrige la fecha.'
-      )
       return
     }
     if (!institucion.trim()) {
@@ -483,16 +461,13 @@ export default function EscanerInfopagosPage() {
     form.append('tipo_cedula', tipo)
     form.append('numero_cedula', numero)
     form.append('contact_website', '')
-    form.append('fecha_pago', fechaPago)
+    form.append('fecha_pago', fechaPagoEnvio)
     form.append('institucion_financiera', institucion.trim())
     form.append('numero_operacion', numeroOperacion.trim())
     form.append('monto', montoParaApi(vM.valor))
     form.append('moneda', moneda)
     form.append('fuente_tasa_cambio', fuenteTasa)
-    const confirmacionHumana = hayFechaDetectada
-      ? confirmaFechaDetectadaActual === 'si' || confirmaFechaDetectadaActual === 'no'
-      : confirmaFechaManualActual
-    form.append('confirmacion_humana', confirmacionHumana ? 'true' : 'false')
+    form.append('confirmacion_humana', 'true')
     form.append('comprobante', archivo!)
     enviarActivoRef.current = true
     setEnviando(true)
@@ -530,8 +505,6 @@ export default function EscanerInfopagosPage() {
   }, [
     archivo,
     cedulaNormalizada,
-    confirmaFechaDetectada,
-    confirmaFechaManual,
     fechaDetectada,
     fechaPago,
     institucion,
@@ -568,10 +541,6 @@ export default function EscanerInfopagosPage() {
     setArchivo(null)
     setFechaPago('')
     setFechaDetectada('')
-    setConfirmaFechaDetectada(null)
-    confirmaFechaDetectadaRef.current = null
-    setConfirmaFechaManual(false)
-    confirmaFechaManualRef.current = false
     setInstitucion('')
     setOtroInstitucion('')
     setEscanerColision(null)
@@ -755,84 +724,19 @@ export default function EscanerInfopagosPage() {
                   </p>
                 ) : (
                   <p className="text-xs text-amber-800">
-                    No se detectó fecha clara en la imagen: indique la fecha de pago manualmente.
+                    No se detectó fecha clara en la imagen: el campo quedó con la fecha de hoy; cámbiela si el
+                    comprobante corresponde a otro día.
                   </p>
                 )}
-                {!fechaDetectada.trim() ? (
-                  <label className="mt-1 flex items-center gap-2 text-xs text-slate-700">
-                    <input
-                      type="checkbox"
-                      checked={confirmaFechaManual}
-                      onChange={e => {
-                        setConfirmaFechaManual(e.target.checked)
-                        confirmaFechaManualRef.current = e.target.checked
-                      }}
-                      className="h-4 w-4 rounded border-slate-300"
-                    />
-                    Confirmo manualmente que la fecha ingresada coincide con el comprobante.
-                  </label>
-                ) : null}
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
                   <div className="min-w-0 flex-1">
                     <Input
                       id="fecha"
                       type="date"
                       value={fechaPago}
-                      onChange={e => {
-                        const v = e.target.value
-                        setFechaPago(v)
-                        if (fechaDetectada.trim() && v.trim() !== fechaDetectada.trim()) {
-                          setConfirmaFechaDetectada('no')
-                          confirmaFechaDetectadaRef.current = 'no'
-                        } else if (!fechaDetectada.trim()) {
-                          setConfirmaFechaManual(false)
-                          confirmaFechaManualRef.current = false
-                        }
-                      }}
+                      onChange={e => setFechaPago(e.target.value)}
                     />
                   </div>
-                  {fechaDetectada.trim() ? (
-                    <div className="flex shrink-0 flex-col gap-1">
-                      <span className="text-xs font-medium text-slate-700">
-                        ¿La fecha leída es correcta?
-                      </span>
-                      <div className="flex flex-wrap gap-2">
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant={confirmaFechaDetectada === 'si' ? 'default' : 'outline'}
-                          className={
-                            confirmaFechaDetectada === 'si'
-                              ? 'bg-emerald-600 hover:bg-emerald-700'
-                              : ''
-                          }
-                          onClick={() => {
-                            setConfirmaFechaDetectada('si')
-                            confirmaFechaDetectadaRef.current = 'si'
-                            setFechaPago(fechaDetectada)
-                          }}
-                        >
-                          Sí
-                        </Button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant={confirmaFechaDetectada === 'no' ? 'default' : 'outline'}
-                          className={
-                            confirmaFechaDetectada === 'no'
-                              ? 'bg-amber-600 hover:bg-amber-700'
-                              : ''
-                          }
-                          onClick={() => {
-                            setConfirmaFechaDetectada('no')
-                            confirmaFechaDetectadaRef.current = 'no'
-                          }}
-                        >
-                          No
-                        </Button>
-                      </div>
-                    </div>
-                  ) : null}
                 </div>
               </div>
               <div className="space-y-2 sm:col-span-2">

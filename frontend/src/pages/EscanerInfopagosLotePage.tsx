@@ -66,6 +66,7 @@ import {
 import {
   filaVaciaDesdeArchivo,
   filaTrasExtraccion,
+  fechaPagoEfectivaParaGuardar,
   hayDuplicadoFila,
   type FilaLote,
 } from './escanerInfopagosLoteModel'
@@ -572,30 +573,10 @@ export default function EscanerInfopagosLotePage() {
         toast.error('Cédula inválida.')
         return
       }
-      const vF = validarFechaPago(fila.fechaPago)
+      const fechaPagoEnvio = fechaPagoEfectivaParaGuardar(fila)
+      const vF = validarFechaPago(fechaPagoEnvio)
       if (!vF.valido) {
         toast.error(vF.error || 'Fecha inválida.')
-        return
-      }
-      const hayFechaDetectada = Boolean(fila.fechaDetectada.trim())
-      if (hayFechaDetectada && fila.confirmaFechaDetectada == null) {
-        toast.error(
-          'Indique si la fecha leída del comprobante es correcta (Sí) o si la corregirá (No).'
-        )
-        return
-      }
-      if (!hayFechaDetectada && !fila.confirmaFechaManual) {
-        toast.error('Confirme manualmente la fecha ingresada para continuar.')
-        return
-      }
-      if (
-        hayFechaDetectada &&
-        fila.confirmaFechaDetectada === 'si' &&
-        fila.fechaPago.trim() !== fila.fechaDetectada.trim()
-      ) {
-        toast.error(
-          'Marcó «Sí» a la fecha del comprobante: el campo debe coincidir con la fecha detectada, o elija «No» si corrige la fecha.'
-        )
         return
       }
       if (!fila.institucion.trim()) {
@@ -634,17 +615,13 @@ export default function EscanerInfopagosLotePage() {
       form.append('tipo_cedula', tipo)
       form.append('numero_cedula', numero)
       form.append('contact_website', '')
-      form.append('fecha_pago', fila.fechaPago)
+      form.append('fecha_pago', fechaPagoEnvio)
       form.append('institucion_financiera', fila.institucion.trim())
       form.append('numero_operacion', fila.numeroOperacion.trim())
       form.append('monto', montoParaApi(vM.valor))
       form.append('moneda', fila.moneda)
       form.append('fuente_tasa_cambio', fuenteTasa)
-      const confirmacionHumana =
-        hayFechaDetectada
-          ? fila.confirmaFechaDetectada === 'si' || fila.confirmaFechaDetectada === 'no'
-          : Boolean(fila.confirmaFechaManual)
-      form.append('confirmacion_humana', confirmacionHumana ? 'true' : 'false')
+      form.append('confirmacion_humana', 'true')
       form.append('comprobante', fila.archivo)
       guardarActivoRef.current.add(clientId)
       actualizarFila(clientId, { guardando: true, guardadoError: undefined })
@@ -1061,86 +1038,20 @@ export default function EscanerInfopagosLotePage() {
                               </p>
                             ) : (
                               <p className="text-xs text-amber-800">
-                                Sin fecha clara en imagen: indique la fecha manualmente.
+                                Sin fecha clara en la imagen: se rellenó con la fecha de hoy; ajústela si el
+                                comprobante corresponde a otro día.
                               </p>
                             )}
-                            {!fila.fechaDetectada.trim() ? (
-                              <label className="mt-1 flex items-center gap-2 text-xs text-slate-700">
-                                <input
-                                  type="checkbox"
-                                  checked={Boolean(fila.confirmaFechaManual)}
-                                  onChange={e =>
-                                    actualizarFila(fila.clientId, {
-                                      confirmaFechaManual: e.target.checked,
-                                    })
-                                  }
-                                  className="h-4 w-4 rounded border-slate-300"
-                                />
-                                Confirmo manualmente que la fecha ingresada coincide con el comprobante.
-                              </label>
-                            ) : null}
                             <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
                               <div className="min-w-0 flex-1">
                                 <Input
                                   type="date"
                                   value={fila.fechaPago}
-                                  onChange={e => {
-                                    const v = e.target.value
-                                    const patch: Partial<FilaLote> = { fechaPago: v }
-                                    if (
-                                      fila.fechaDetectada.trim() &&
-                                      v.trim() !== fila.fechaDetectada.trim()
-                                    ) {
-                                      patch.confirmaFechaDetectada = 'no'
-                                    } else if (!fila.fechaDetectada.trim()) {
-                                      patch.confirmaFechaManual = false
-                                    }
-                                    actualizarFila(fila.clientId, patch)
-                                  }}
+                                  onChange={e =>
+                                    actualizarFila(fila.clientId, { fechaPago: e.target.value })
+                                  }
                                 />
                               </div>
-                              {fila.fechaDetectada.trim() ? (
-                                <div className="flex shrink-0 flex-col gap-1">
-                                  <span className="text-xs font-medium text-slate-700">
-                                    ¿La fecha leída es correcta?
-                                  </span>
-                                  <div className="flex flex-wrap gap-2">
-                                    <Button
-                                      type="button"
-                                      size="sm"
-                                      variant={fila.confirmaFechaDetectada === 'si' ? 'default' : 'outline'}
-                                      className={
-                                        fila.confirmaFechaDetectada === 'si'
-                                          ? 'bg-emerald-600 hover:bg-emerald-700'
-                                          : ''
-                                      }
-                                      onClick={() =>
-                                        actualizarFila(fila.clientId, {
-                                          confirmaFechaDetectada: 'si',
-                                          fechaPago: fila.fechaDetectada,
-                                        })
-                                      }
-                                    >
-                                      Sí
-                                    </Button>
-                                    <Button
-                                      type="button"
-                                      size="sm"
-                                      variant={fila.confirmaFechaDetectada === 'no' ? 'default' : 'outline'}
-                                      className={
-                                        fila.confirmaFechaDetectada === 'no'
-                                          ? 'bg-amber-600 hover:bg-amber-700'
-                                          : ''
-                                      }
-                                      onClick={() =>
-                                        actualizarFila(fila.clientId, { confirmaFechaDetectada: 'no' })
-                                      }
-                                    >
-                                      No
-                                    </Button>
-                                  </div>
-                                </div>
-                              ) : null}
                             </div>
                           </div>
                           <div className="space-y-2 sm:col-span-2">
@@ -1344,17 +1255,7 @@ export default function EscanerInfopagosLotePage() {
                     value={String(editDraft.fechaPago || '')}
                     onChange={e =>
                       setEditDraft(prev =>
-                        prev
-                          ? {
-                              ...prev,
-                              fechaPago: e.target.value,
-                              confirmaFechaDetectada:
-                                filaEditando.fechaDetectada.trim() &&
-                                e.target.value !== filaEditando.fechaDetectada.trim()
-                                  ? 'no'
-                                  : prev.confirmaFechaDetectada,
-                            }
-                          : prev
+                        prev ? { ...prev, fechaPago: e.target.value } : prev
                       )
                     }
                   />
