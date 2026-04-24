@@ -439,9 +439,39 @@ def test_rescue_prompt_suffix_b_refuerzo_falto_ref():
     assert "Referencia:" in s
 
 
+def test_rescue_prompt_suffix_b_refuerzo_falto_fecha():
+    s = _rescue_prompt_suffix("B", "falto_fecha")
+    assert "Refuerzo por `falto_fecha`" in s
+    assert "fecha_pago" in s
+
+
 def test_rescue_prompt_suffix_b_sin_refuerzo_si_no_falto_ref():
     s = _rescue_prompt_suffix("B", "falto_monto")
     assert "Refuerzo por `falto_ref`" not in s
+
+
+def test_parse_formato_b_app_sin_fecha_si_monto_y_referencia():
+    """B/E/F: la app a menudo no muestra fecha; basta monto + ref (fecha la pone el pipeline desde el correo)."""
+    j = (
+        '{"formato":"B","fecha_pago":"NA","cedula":"NA",'
+        '"monto":"Bs. 54.913,67","numero_referencia":"133454281",'
+        '"email_cliente":"NA","banco":"BNC"}'
+    )
+    fmt, fields = _parse_formato_y_pagos_json(j)
+    assert fmt == "B"
+    assert (fields.get("numero_referencia") or "").strip() == "133454281"
+    assert (fields.get("fecha_pago") or "").strip().upper() == "NA"
+
+
+def test_parse_formato_a_sin_fecha_sigue_rechazado():
+    j = (
+        '{"formato":"A","fecha_pago":"NA","cedula":"NA",'
+        '"monto":"100.00 USD","numero_referencia":"740087407343435",'
+        '"email_cliente":"NA","banco":"NA"}'
+    )
+    fmt, fields = _parse_formato_y_pagos_json(j)
+    assert fmt == "ninguno"
+    assert (fields.get("_diag_none_reason") or "") == "falto_fecha"
 
 
 def test_parse_formato_c_binance_ok():

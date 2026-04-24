@@ -1083,6 +1083,18 @@ def _pagos_gmail_ab_campos_imagen_completos(fields: Dict[str, str]) -> bool:
     return True
 
 
+def _pagos_gmail_bef_campos_imagen_minimos(fields: Dict[str, str]) -> bool:
+    """
+    B/E/F: capturas de app suelen no mostrar fecha de operacion en pantalla.
+    Exige monto + referencia; la fecha la completa el pipeline con la cabecera Date / internalDate del correo.
+    """
+    for k in ("monto", "numero_referencia"):
+        s = (fields.get(k) or "").strip()
+        if not s or s.upper() == PAGOS_NA:
+            return False
+    return True
+
+
 def _pagos_gmail_ab_campos_imagen_completos_error_email_ab(fields: Dict[str, str]) -> bool:
     """Modo re-escaneo ERROR EMAIL: A o B con fecha/monto/ref + cedula legible o literal ERROR."""
     for k in ("fecha_pago", "monto", "numero_referencia"):
@@ -1274,11 +1286,19 @@ def _rescue_prompt_suffix(bank_hint: Optional[str], none_reason: Optional[str] =
             if reason == "falto_ref"
             else ""
         )
+        extra_falto_fecha = (
+            "\nRefuerzo por `falto_fecha`: en app BNC movil la **fecha de la operacion** puede no aparecer en la captura; "
+            "si **Referencia** + **Monto/Total Bs.** son legibles, devuelve **fecha_pago** = **NA** (literal) y manten **formato B**; "
+            "el backend asigna la fecha operativa desde la fecha del correo."
+            if reason == "falto_fecha"
+            else ""
+        )
         return (
             "\n\nMODO RESCATE B (BNC): prioriza (1) **cajero**: cuenta **0191/...** barras + **Deposito Us$** + **Ref:**/**Serial:** + monto con asteriscos; **o** (2) **app BNC**: **Comprobante de Pago**/**Datos del Pago**/**Transferencias a Terceros** + **Referencia** + **Cuenta** 0191... + **Bs.**; **o** (3) **NOTA DE OPERACIÓN EJECUTADA** + **Ref.N°.** + **VEB**/montos + **RAPI-CREDIT**; **o** (4) **app BDV/BNV** **Comprobante de operacion** + **Transferencias a otros bancos** + **Operación** larga + **Destino 0191** + Rapicredit."
             "\n**No** uses **Rif. Nº J309841327** (ni variantes con guiones del RIF del banco) como `numero_referencia`; no uses numero de cuenta 20 digitos como referencia."
             "\nAnclas léxicas: **BNC**, **0191/** o **019101...**, **Deposito Us$**/**U.S$**, **Bs.**/**VEB**, **Serial:**, **Ref:**/**Ref.**/**Referencia**/**Ref.N°**, **Operación**/**Operacion** (app BDV origen), **Agencia**/**Terminal**/**Cajero**, asteriscos (cajero), **Ejecutada exitosamente**, **Cuenta abonada**."
             + extra_falto_ref
+            + extra_falto_fecha
         )
     if bank_hint == "C":
         return (
@@ -1400,9 +1420,14 @@ def _parse_formato_y_pagos_json(
                 return "ninguno", _out
             fields["email_cliente"] = PAGOS_NA
             return fmt, fields
-        # A, B, D, E o F: ignorar cedula del modelo; solo fecha/monto/ref desde imagen
+        # A, B, D, E o F: ignorar cedula del modelo; fecha/monto/ref segun plantilla
         fields["cedula"] = PAGOS_NA
-        if not _pagos_gmail_ab_campos_imagen_completos(fields):
+        if fmt in ("B", "E", "F"):
+            if not _pagos_gmail_bef_campos_imagen_minimos(fields):
+                _out = na_fields.copy()
+                _out["_diag_none_reason"] = _diag_none_reason_pagos(fmt_raw, fields, text)
+                return "ninguno", _out
+        elif not _pagos_gmail_ab_campos_imagen_completos(fields):
             _out = na_fields.copy()
             _out["_diag_none_reason"] = _diag_none_reason_pagos(fmt_raw, fields, text)
             return "ninguno", _out

@@ -929,6 +929,14 @@ def run_pipeline(
                                 )
                         elif usar_extraccion_cedula_imagen_ab and fmt in ("A", "B"):
                             f = normalizar_fecha_pago(_v(data.get("fecha_pago")))
+                            if (not f or not str(f).strip()) and fmt in (
+                                "B",
+                                "E",
+                                "F",
+                            ):
+                                f = normalizar_fecha_pago(
+                                    msg_date.strftime("%d/%m/%Y")
+                                )
                             m = _v(data.get("monto"))
                             r = normalizar_referencia(_v(data.get("numero_referencia")))
                             c = _cedula_desde_imagen_rescan_error_email(data.get("cedula"))
@@ -947,6 +955,14 @@ def run_pipeline(
                             )
                         else:
                             f = normalizar_fecha_pago(_v(data.get("fecha_pago")))
+                            if (not f or not str(f).strip()) and fmt in (
+                                "B",
+                                "E",
+                                "F",
+                            ):
+                                f = normalizar_fecha_pago(
+                                    msg_date.strftime("%d/%m/%Y")
+                                )
                             m = _v(data.get("monto"))
                             r = normalizar_referencia(_v(data.get("numero_referencia")))
                             c, c_ok = _cedula_columna_desde_remitente(db, sender_lc)
