@@ -85,7 +85,8 @@ function validateEnv(): EnvConfig {
         API_URL = crossOriginInBrowser ? '' : absoluteApi
         if (crossOriginInBrowser) {
           console.warn(
-            `[env] VITE_API_URL apunta a otro origen (${parsed.origin}). Se usará /api same-origin para evitar CORS.`
+            `[env] VITE_API_URL apunta a otro origen (${parsed.origin}). Se usará /api same-origin para evitar CORS. ` +
+              'Si aparecen 502 en /api, el proxy Node no está llegando al API: en Render defina API_BASE_URL o BACKEND_URL en el servicio del frontend con la URL pública del backend (no el origen del SPA).'
           )
         }
       } catch {

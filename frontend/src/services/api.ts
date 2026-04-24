@@ -398,10 +398,14 @@ class ApiClient {
           methodLc === 'post' &&
           (reqUrl.includes('/cobros/escaner/extraer-comprobante') ||
             reqUrl.includes('/cobros/escaner/lote/drive-digitalizar'))
-        /** GET idempotente: cola grande en servidor; 502/503 tras deploy o corte TCP en Render. */
-        const isCobrosListadoKpisGet =
+        /**
+         * GET idempotentes donde 502/503 suele ser cold start o proxy (Render), no lógica de negocio.
+         * Solo rutas de lectura explícitas; no ampliar a GET arbitrarios (riesgo de duplicar efectos si hubiera efectos colaterales).
+         */
+        const isSafeTransientRetryGet =
           methodLc === 'get' &&
-          reqUrl.includes('/cobros/pagos-reportados/listado-y-kpis')
+          (reqUrl.includes('/cobros/pagos-reportados/listado-y-kpis') ||
+            reqUrl.includes('/admin/tasas-cambio/estado'))
         /**
          * PATCH cambio de estado (aprobar/rechazar flujo UI). 502 del proxy sin cuerpo JSON
          * suele ser TCP/deploy; el backend puede no haber aplicado el cambio.
@@ -412,13 +416,12 @@ class ApiClient {
         const canRetryBecauseStatus =
           st === 503 ||
           st === 504 ||
-          (st === 500 && (methodLc !== 'get' || isCobrosListadoKpisGet)) ||
+          (st === 500 && (methodLc !== 'get' || isSafeTransientRetryGet)) ||
           (st === 502 &&
             (isScannerReadOnlyPost ||
-              isCobrosListadoKpisGet ||
+              isSafeTransientRetryGet ||
               isCobrosPagoReportadoEstadoPatch))
-        const mayRetryThisRequest =
-          methodLc !== 'get' || isCobrosListadoKpisGet
+        const mayRetryThisRequest = methodLc !== 'get' || isSafeTransientRetryGet
         if (
           canRetryBecauseStatus &&
           retryCount < maxRetries &&
@@ -426,7 +429,9 @@ class ApiClient {
         ) {
           ;(requestConfigForRetry as any)._retryCount = retryCount + 1
 
-          const delayMs = 500 * Math.pow(2, retryCount) // 500ms, 1s, 2s
+          // 502/503 en Render: dar tiempo al dyno del API a despertar (reintentos más espaciados).
+          const delayBase = st === 502 || st === 503 ? 2000 : 500
+          const delayMs = delayBase * Math.pow(2, retryCount)
 
           console.warn(
             `? [ApiClient] Error ${error.response?.status} (intento ${retryCount + 1}/${maxRetries}), reintentando en ${delayMs}ms:`,
@@ -883,8 +888,8 @@ class ApiClient {
 
         case 502:
           toast.error(
-            'El API no respondió (502). Si persiste tras reintentos, revise el servicio backend y API_BASE_URL en Render.',
-            { duration: 9000 }
+            'El API no respondió (502). Suele ser arranque del servidor o proxy; espere unos segundos y reintente. Si persiste, revise el servicio API y API_BASE_URL/BACKEND_URL en el servicio Node del frontend (Render).',
+            { duration: 10000 }
           )
           break
 

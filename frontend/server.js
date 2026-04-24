@@ -121,6 +121,47 @@ function warnIfApiProxyTargetIsRenderSelf(apiUrl) {
 warnIfApiProxyTargetIsRenderSelf(API_URL);
 
 /**
+ * Tras un deploy o con dyno «dormido» en Render, la primera petición del navegador puede recibir 502
+ * mientras el API arranca. Un GET /health ligero desde este proceso despierta el upstream sin tocar datos.
+ * Desactivar: DISABLE_BACKEND_WARMUP=1
+ */
+function scheduleUpstreamWarmup(apiUrl) {
+  if (process.env.DISABLE_BACKEND_WARMUP === '1') return;
+  if (!apiUrl || typeof globalThis.fetch !== 'function') return;
+  const delayMs = Math.max(0, Number(process.env.BACKEND_WARMUP_DELAY_MS || '500') || 0);
+  const timeoutMs = Math.min(
+    120000,
+    Math.max(5000, Number(process.env.BACKEND_WARMUP_TIMEOUT_MS || '55000') || 55000)
+  );
+  setTimeout(() => {
+    const base = String(apiUrl).replace(/\/$/, '');
+    const url = `${base}/health`;
+    const started = Date.now();
+    const ac = new AbortController();
+    const timer = setTimeout(() => ac.abort(), timeoutMs);
+    globalThis
+      .fetch(url, {
+        method: 'GET',
+        headers: { 'x-rapicredit-warmup': '1', Accept: 'application/json' },
+        signal: ac.signal,
+      })
+      .then((res) => {
+        const ms = Date.now() - started;
+        if (res.ok) {
+          console.log(`[proxy] Warmup upstream OK (${res.status}) en ${ms}ms`);
+        } else {
+          console.warn(`[proxy] Warmup upstream respondió HTTP ${res.status} en ${ms}ms (revisar servicio API)`);
+        }
+      })
+      .catch((e) => {
+        const ms = Date.now() - started;
+        console.warn(`[proxy] Warmup upstream falló en ${ms}ms: ${e?.message || e}`);
+      })
+      .finally(() => clearTimeout(timer));
+  }, delayMs);
+}
+
+/**
  * Starlette/FastAPI suelen enviar Location absoluta al dominio público del API.
  * El cliente llamó a https://rapicredit.../api/...; si recibe 307 hacia pagos-f2qf...,
  * el fetch sigue a otro origen y puede fallar (CORS, POST+redirect). Forzamos ruta relativa /api/...
@@ -286,6 +327,8 @@ if (API_URL) {
     target: API_URL,
     changeOrigin: true,
     xfwd: true,
+    // Sin respuesta del API (cold start Render, consultas largas): no cerrar a los 2 min por defecto del proxy.
+    proxyTimeout: 180000,
     logLevel: isDevelopment ? 'info' : 'warn', // Reducir verbosidad en producción
     // CRÍTICO: No seguir redirects (302). Si el backend devuelve 302 (ej. OAuth callback),
     // el navegador debe recibir el 302 y hacer el redirect para que la URL cambie.
@@ -811,7 +854,9 @@ try {
     console.log(`✅ Health check disponible en: http://0.0.0.0:${PORT}/health`);
     console.log(`⏰ Hora de inicio: ${startTime}`);
     console.log('✅ Servidor listo para recibir requests');
-    
+
+    scheduleUpstreamWarmup(API_URL);
+
     // Guardar tiempo de inicio para diagnóstico
     process.env.SERVER_START_TIME = startTime;
   });

@@ -1,7 +1,14 @@
-# Blueprint opcional solo del frontend (nombre rapicredit-frontend).
-# En el repo raíz hay otro render.yaml (pagos-frontend + pagos-backend) con API_BASE_URL vía fromService.
-# IMPORTANTE: API_BASE_URL debe ser la URL pública del servicio FastAPI (Gunicorn), NO la del propio frontend.
-# Si apunta al mismo host que esta SPA, el proxy /api reenvía a sí mismo y aparecen 502/timeout intermitentes.
+# Blueprint opcional: solo el servicio Node «rapicredit-frontend» (SPA + proxy /api).
+#
+# Stack completo (recomendado): en la raíz del repo, render.yaml define pagos-frontend + pagos-backend
+# y API_BASE_URL vía fromService (siempre coherente con el backend del mismo blueprint).
+#
+# Este archivo es útil si el backend ya existe en otro blueprint/servicio: entonces API_BASE_URL debe ser
+# la URL pública exacta del FastAPI (en Render: Web Service del API → Environment → RENDER_EXTERNAL_URL),
+# nunca la URL del propio frontend (si coinciden, el proxy /api se habla a sí mismo → 502).
+#
+# Navegador: las peticiones van a /api same-origin; no hace falta VITE_API_URL cruzado al API.
+# (Si en el build queda VITE_API_URL a otro origen, env.ts fuerza base '' y /api; igual conviene no definirla.)
 services:
   - type: web
     name: rapicredit-frontend
@@ -17,10 +24,8 @@ services:
     envVars:
       - key: NODE_VERSION
         value: 20.19.0
-      # Origen “público” de la app (misma SPA); el cliente fuerza /api same-origin en navegador.
-      - key: VITE_API_URL
-        value: https://rapicredit.onrender.com
-      # Proxy Express (server.js): destino del API. Sustituir por el RENDER_EXTERNAL_URL real del backend.
+      # Proxy Express (server.js): destino real del FastAPI. Sustituya por el RENDER_EXTERNAL_URL de su API.
+      # Valor de ejemplo; en el panel de Render debe coincidir con el servicio Python que ejecuta Gunicorn.
       - key: API_BASE_URL
         value: https://pagos-f2qf.onrender.com
       - key: NODE_ENV

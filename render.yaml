@@ -17,6 +17,8 @@
           name: pagos-backend
           type: web
           envVarKey: RENDER_EXTERNAL_URL
+      # No definir aquí VITE_API_URL apuntando al API en otro host: el bundle usa /api same-origin y este
+      # servicio reenvía con API_BASE_URL. VITE_API_URL cruzado solo añade avisos en consola y no es necesario.
 
   # Backend
   - type: web

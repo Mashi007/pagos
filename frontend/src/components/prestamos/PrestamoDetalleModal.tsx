@@ -61,7 +61,7 @@ export function PrestamoDetalleModal({
   const queryClient = useQueryClient()
 
   const [activeTab, setActiveTab] = useState<'detalles' | 'amortizacion'>(
-    'detalles'
+    'amortizacion'
   )
 
   const [prediccionImpago, setPrediccionImpago] = useState<any>(null)
