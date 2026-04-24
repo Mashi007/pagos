@@ -60,6 +60,13 @@ export interface RellenarTasasDesdeVecinoResponse {
 
 /** Misma convención que el resto de servicios: prefijo explícito /api/v1 (baseURL vacío en prod same-origin). */
 const ADMIN_TASAS = '/api/v1/admin/tasas-cambio'
+/**
+ * Lectura y registro del día para cualquier usuario autenticado (operadores incl.).
+ * El backend debe exponer los mismos contratos que bajo admin para: GET /estado, /hoy,
+ * /por-fecha y POST /guardar. Si aún no existen, los GET hacen fallback a admin (404).
+ * guardar hace fallback a esta ruta solo si admin responde 403.
+ */
+const TASAS_CAMBIO_API = '/api/v1/tasas-cambio'
 
 function throwFromAxios(e: unknown, fallback: string): never {
   if (isAxiosError(e)) {
@@ -73,9 +80,21 @@ function throwFromAxios(e: unknown, fallback: string): never {
   throw e instanceof Error ? e : new Error(fallback)
 }
 
+/** GET: intenta ruta para todos los autenticados; si no existe (404), usa admin (compat). */
+async function getTasaLecturaFlexible<T>(rutaRelativa: string): Promise<T> {
+  try {
+    return await apiClient.get<T>(TASAS_CAMBIO_API + rutaRelativa)
+  } catch (e) {
+    if (isAxiosError(e) && e.response?.status === 404) {
+      return await apiClient.get<T>(ADMIN_TASAS + rutaRelativa)
+    }
+    throw e
+  }
+}
+
 export async function getTasaHoy(): Promise<TasaCambioResponse | null> {
   try {
-    return await apiClient.get<TasaCambioResponse | null>(ADMIN_TASAS + '/hoy')
+    return await getTasaLecturaFlexible<TasaCambioResponse | null>('/hoy')
   } catch (e) {
     if (isAxiosError(e) && e.response?.status === 404) return null
     console.error('Error fetching tasa hoy:', e)
@@ -85,7 +104,7 @@ export async function getTasaHoy(): Promise<TasaCambioResponse | null> {
 
 export async function getEstadoTasa(): Promise<TasaCambioEstado> {
   try {
-    return await apiClient.get<TasaCambioEstado>(ADMIN_TASAS + '/estado')
+    return await getTasaLecturaFlexible<TasaCambioEstado>('/estado')
   } catch (e) {
     console.error('Error fetching estado tasa:', e)
     throwFromAxios(e, 'Error al obtener estado de tasa')
@@ -97,13 +116,28 @@ export async function guardarTasa(params: {
   tasa_bcv: number
   tasa_binance: number
 }): Promise<TasaCambioResponse> {
+  const body = {
+    tasa_oficial: params.tasa_oficial,
+    tasa_bcv: params.tasa_bcv,
+    tasa_binance: params.tasa_binance,
+  }
   try {
-    return await apiClient.post<TasaCambioResponse>(ADMIN_TASAS + '/guardar', {
-      tasa_oficial: params.tasa_oficial,
-      tasa_bcv: params.tasa_bcv,
-      tasa_binance: params.tasa_binance,
-    })
+    return await apiClient.post<TasaCambioResponse>(
+      ADMIN_TASAS + '/guardar',
+      body
+    )
   } catch (e) {
+    if (isAxiosError(e) && e.response?.status === 403) {
+      try {
+        return await apiClient.post<TasaCambioResponse>(
+          TASAS_CAMBIO_API + '/guardar',
+          body
+        )
+      } catch (e2) {
+        console.error('Error guardando tasa (ruta amplia):', e2)
+        throwFromAxios(e2, 'Error al guardar la tasa')
+      }
+    }
     console.error('Error guardando tasa:', e)
     throwFromAxios(e, 'Error al guardar la tasa')
   }
@@ -136,9 +170,9 @@ export async function guardarTasaPorFecha(
 export async function getTasaPorFecha(
   fecha: string
 ): Promise<TasaCambioResponse | null> {
+  const q = '/por-fecha?fecha=' + encodeURIComponent(fecha)
   try {
-    const url = ADMIN_TASAS + '/por-fecha?fecha=' + encodeURIComponent(fecha)
-    return await apiClient.get<TasaCambioResponse | null>(url)
+    return await getTasaLecturaFlexible<TasaCambioResponse | null>(q)
   } catch (e) {
     if (isAxiosError(e) && e.response?.status === 404) return null
     console.error('Error fetching tasa por fecha:', e)

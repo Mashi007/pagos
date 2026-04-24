@@ -405,7 +405,8 @@ class ApiClient {
         const isSafeTransientRetryGet =
           methodLc === 'get' &&
           (reqUrl.includes('/cobros/pagos-reportados/listado-y-kpis') ||
-            reqUrl.includes('/admin/tasas-cambio/estado'))
+            reqUrl.includes('/admin/tasas-cambio/estado') ||
+            reqUrl.includes('/tasas-cambio/estado'))
         /**
          * PATCH cambio de estado (aprobar/rechazar flujo UI). 502 del proxy sin cuerpo JSON
          * suele ser TCP/deploy; el backend puede no haber aplicado el cambio.
