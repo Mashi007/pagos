@@ -329,6 +329,16 @@ class ApiClient {
           config.timeout = 120000
         }
 
+        // Cobros: PATCH estado (aprobar/rechazar) puede tardar (cascada, correo, PDF).
+        if (
+          config.method?.toLowerCase() === 'patch' &&
+          config.url &&
+          /\/cobros\/pagos-reportados\/\d+\/estado(?:\?|#|$)/.test(config.url) &&
+          (config.timeout == null || config.timeout < 120000)
+        ) {
+          config.timeout = 120000
+        }
+
         // FormData: no fijar Content-Type aquí; axios/navegador añaden multipart + boundary.
         // Si queda 'application/json' por defecto o 'multipart/form-data' sin boundary, el backend puede no leer el archivo.
         if (
@@ -392,11 +402,21 @@ class ApiClient {
         const isCobrosListadoKpisGet =
           methodLc === 'get' &&
           reqUrl.includes('/cobros/pagos-reportados/listado-y-kpis')
+        /**
+         * PATCH cambio de estado (aprobar/rechazar flujo UI). 502 del proxy sin cuerpo JSON
+         * suele ser TCP/deploy; el backend puede no haber aplicado el cambio.
+         */
+        const isCobrosPagoReportadoEstadoPatch =
+          methodLc === 'patch' &&
+          /\/cobros\/pagos-reportados\/\d+\/estado(?:\?|#|$)/.test(reqUrl)
         const canRetryBecauseStatus =
           st === 503 ||
           st === 504 ||
           (st === 500 && (methodLc !== 'get' || isCobrosListadoKpisGet)) ||
-          (st === 502 && (isScannerReadOnlyPost || isCobrosListadoKpisGet))
+          (st === 502 &&
+            (isScannerReadOnlyPost ||
+              isCobrosListadoKpisGet ||
+              isCobrosPagoReportadoEstadoPatch))
         const mayRetryThisRequest =
           methodLc !== 'get' || isCobrosListadoKpisGet
         if (

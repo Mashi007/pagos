@@ -1238,24 +1238,11 @@ export async function cambiarEstadoPago(
   motivo?: string
 ): Promise<CambiarEstadoPagoResponse> {
   const path = `${BASE_COBROS}/pagos-reportados/${pagoId}/estado`
-  try {
-    return await apiClient.patch<CambiarEstadoPagoResponse>(path, {
-      estado,
-      motivo,
-    })
-  } catch (e: unknown) {
-    const status = (e as { response?: { status?: number } })?.response?.status
-    // Render/Gateway puede responder 502/503/504 de forma transitoria.
-    // Reintentamos una sola vez para evitar falsos errores al usuario.
-    if (status === 502 || status === 503 || status === 504) {
-      await new Promise<void>(resolve => window.setTimeout(resolve, 900))
-      return await apiClient.patch<CambiarEstadoPagoResponse>(path, {
-        estado,
-        motivo,
-      })
-    }
-    throw e
-  }
+  // Reintentos 502/503/504: interceptor global en api.ts (PATCH .../estado + backoff).
+  return await apiClient.patch<CambiarEstadoPagoResponse>(path, {
+    estado,
+    motivo,
+  })
 }
 
 export async function eliminarPagoReportado(
