@@ -25,10 +25,12 @@
 import React, {
   useState,
   useEffect,
+  useLayoutEffect,
   useRef,
   useCallback,
   useMemo,
 } from 'react'
+import { createPortal } from 'react-dom'
 
 import { useNavigate } from 'react-router-dom'
 
@@ -39,7 +41,6 @@ import { invalidateListasNotificacionesMora } from '../constants/queryKeys'
 import {
   listPagosReportadosConKpis,
   cambiarEstadoPago,
-  openComprobanteInNewTab,
   eliminarPagoReportado,
   invalidateCobrosListadoKpisCache,
   COBROS_LISTADO_KPIS_CACHE_TTL_MS,
@@ -48,6 +49,7 @@ import {
   type PagosReportadosKpis,
   type CambiarEstadoPagoResponse,
 } from '../services/cobrosService'
+import { apiClient } from '../services/api'
 
 import { Button } from '../components/ui/button'
 
@@ -92,6 +94,25 @@ function cobrosFechaDesdeHaceNDias(n: number): string {
   return cobrosFechaLocalYMD(d)
 }
 
+const COMPROBANTE_FLOAT_MIN_W = 260
+const COMPROBANTE_FLOAT_MIN_H = 180
+const COMPROBANTE_FLOAT_DEFAULT_W = 460
+const COMPROBANTE_FLOAT_DEFAULT_H = 560
+
+function clampComprobanteFloat(n: number, lo: number, hi: number): number {
+  return Math.min(hi, Math.max(lo, n))
+}
+
+type ComprobanteResizeCorner = 'nw' | 'ne' | 'sw' | 'se'
+type ComprobantePreviewState = {
+  open: boolean
+  pagoId: number | null
+  blobUrl: string | null
+  contentType: string | null
+  loading: boolean
+  rotDeg: number
+}
+
 import {
   Loader2,
   FileText,
@@ -106,6 +127,8 @@ import {
   Edit,
   Mail,
   Eye,
+  RotateCcw,
+  X,
 } from 'lucide-react'
 
 import { PUBLIC_REPORTE_PAGO_PATH } from '../config/env'
@@ -336,6 +359,46 @@ export default function CobrosPagosReportadosPage() {
   const [viewingComprobanteId, setViewingComprobanteId] = useState<
     number | null
   >(null)
+  const [previewComprobante, setPreviewComprobante] =
+    useState<ComprobantePreviewState>({
+      open: false,
+      pagoId: null,
+      blobUrl: null,
+      contentType: null,
+      loading: false,
+      rotDeg: 0,
+    })
+  const [previewFloatLeft, setPreviewFloatLeft] = useState(0)
+  const [previewFloatTop, setPreviewFloatTop] = useState(0)
+  const [previewFloatW, setPreviewFloatW] = useState(COMPROBANTE_FLOAT_DEFAULT_W)
+  const [previewFloatH, setPreviewFloatH] = useState(COMPROBANTE_FLOAT_DEFAULT_H)
+  const previewFloatInitRef = useRef(false)
+  const previewFloatLRef = useRef(0)
+  const previewFloatTRef = useRef(0)
+  const previewFloatWRef = useRef(COMPROBANTE_FLOAT_DEFAULT_W)
+  const previewFloatHRef = useRef(COMPROBANTE_FLOAT_DEFAULT_H)
+  const previewInteractRef = useRef<
+    | {
+        kind: 'drag'
+        pointerId: number
+        startX: number
+        startY: number
+        originL: number
+        originT: number
+      }
+    | {
+        kind: 'resize'
+        pointerId: number
+        corner: ComprobanteResizeCorner
+        startX: number
+        startY: number
+        originL: number
+        originT: number
+        originW: number
+        originH: number
+      }
+    | null
+  >(null)
 
   const [deletingId, setDeletingId] = useState<number | null>(null)
 
@@ -498,6 +561,159 @@ export default function CobrosPagosReportadosPage() {
     return () => window.clearInterval(id)
   }, [fetchListado])
 
+  useLayoutEffect(() => {
+    previewFloatLRef.current = previewFloatLeft
+    previewFloatTRef.current = previewFloatTop
+    previewFloatWRef.current = previewFloatW
+    previewFloatHRef.current = previewFloatH
+  }, [previewFloatLeft, previewFloatTop, previewFloatW, previewFloatH])
+
+  useEffect(() => {
+    if (!previewComprobante.open) {
+      previewFloatInitRef.current = false
+      return
+    }
+    if (previewFloatInitRef.current) return
+    const vw = window.innerWidth
+    const vh = window.innerHeight
+    const w = clampComprobanteFloat(
+      COMPROBANTE_FLOAT_DEFAULT_W,
+      COMPROBANTE_FLOAT_MIN_W,
+      vw - 20
+    )
+    const h = clampComprobanteFloat(
+      COMPROBANTE_FLOAT_DEFAULT_H,
+      COMPROBANTE_FLOAT_MIN_H,
+      vh - 24
+    )
+    setPreviewFloatW(w)
+    setPreviewFloatH(h)
+    setPreviewFloatLeft(clampComprobanteFloat(vw - w - 12, 8, vw - w - 8))
+    setPreviewFloatTop(clampComprobanteFloat((vh - h) / 2, 8, vh - h - 8))
+    previewFloatInitRef.current = true
+  }, [previewComprobante.open])
+
+  useEffect(() => {
+    return () => {
+      if (previewComprobante.blobUrl) URL.revokeObjectURL(previewComprobante.blobUrl)
+    }
+  }, [previewComprobante.blobUrl])
+
+  const closeComprobantePreview = useCallback(() => {
+    setPreviewComprobante(prev => {
+      if (prev.blobUrl) URL.revokeObjectURL(prev.blobUrl)
+      return {
+        open: false,
+        pagoId: null,
+        blobUrl: null,
+        contentType: null,
+        loading: false,
+        rotDeg: 0,
+      }
+    })
+    previewInteractRef.current = null
+  }, [])
+
+  const attachPreviewPointerListeners = useCallback(() => {
+    const onMove = (e: PointerEvent) => {
+      const s = previewInteractRef.current
+      if (!s || e.pointerId !== s.pointerId) return
+      const dx = e.clientX - s.startX
+      const dy = e.clientY - s.startY
+      const vw = window.innerWidth
+      const vh = window.innerHeight
+      if (s.kind === 'drag') {
+        const w = previewFloatWRef.current
+        const h = previewFloatHRef.current
+        setPreviewFloatLeft(clampComprobanteFloat(s.originL + dx, 8 - w + 64, vw - 64))
+        setPreviewFloatTop(clampComprobanteFloat(s.originT + dy, 8, vh - h - 8))
+        return
+      }
+      const right = s.originL + s.originW
+      const bottom = s.originT + s.originH
+      if (s.corner === 'se') {
+        setPreviewFloatW(
+          clampComprobanteFloat(s.originW + dx, COMPROBANTE_FLOAT_MIN_W, vw - s.originL - 8)
+        )
+        setPreviewFloatH(
+          clampComprobanteFloat(s.originH + dy, COMPROBANTE_FLOAT_MIN_H, vh - s.originT - 8)
+        )
+      } else if (s.corner === 'ne') {
+        const nextW = clampComprobanteFloat(
+          s.originW + dx,
+          COMPROBANTE_FLOAT_MIN_W,
+          vw - s.originL - 8
+        )
+        const nextTop = clampComprobanteFloat(s.originT + dy, 8, bottom - COMPROBANTE_FLOAT_MIN_H)
+        setPreviewFloatW(nextW)
+        setPreviewFloatTop(nextTop)
+        setPreviewFloatH(bottom - nextTop)
+      } else if (s.corner === 'sw') {
+        const nextLeft = clampComprobanteFloat(s.originL + dx, 8, right - COMPROBANTE_FLOAT_MIN_W)
+        setPreviewFloatLeft(nextLeft)
+        setPreviewFloatW(right - nextLeft)
+        setPreviewFloatH(
+          clampComprobanteFloat(s.originH + dy, COMPROBANTE_FLOAT_MIN_H, vh - s.originT - 8)
+        )
+      } else {
+        const nextLeft = clampComprobanteFloat(s.originL + dx, 8, right - COMPROBANTE_FLOAT_MIN_W)
+        const nextTop = clampComprobanteFloat(s.originT + dy, 8, bottom - COMPROBANTE_FLOAT_MIN_H)
+        setPreviewFloatLeft(nextLeft)
+        setPreviewFloatTop(nextTop)
+        setPreviewFloatW(right - nextLeft)
+        setPreviewFloatH(bottom - nextTop)
+      }
+    }
+    const onUp = (e: PointerEvent) => {
+      const s = previewInteractRef.current
+      if (!s || e.pointerId !== s.pointerId) return
+      previewInteractRef.current = null
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+      window.removeEventListener('pointercancel', onUp)
+    }
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+    window.addEventListener('pointercancel', onUp)
+  }, [])
+
+  const beginPreviewDrag = useCallback(
+    (e: React.PointerEvent) => {
+      if (e.button !== 0) return
+      e.preventDefault()
+      previewInteractRef.current = {
+        kind: 'drag',
+        pointerId: e.pointerId,
+        startX: e.clientX,
+        startY: e.clientY,
+        originL: previewFloatLRef.current,
+        originT: previewFloatTRef.current,
+      }
+      attachPreviewPointerListeners()
+    },
+    [attachPreviewPointerListeners]
+  )
+
+  const beginPreviewResize = useCallback(
+    (corner: ComprobanteResizeCorner) => (e: React.PointerEvent) => {
+      if (e.button !== 0) return
+      e.preventDefault()
+      previewInteractRef.current = {
+        kind: 'resize',
+        pointerId: e.pointerId,
+        corner,
+        startX: e.clientX,
+        startY: e.clientY,
+        originL: previewFloatLRef.current,
+        originT: previewFloatTRef.current,
+        originW: previewFloatWRef.current,
+        originH: previewFloatHRef.current,
+      }
+      attachPreviewPointerListeners()
+    },
+    [attachPreviewPointerListeners]
+  )
+
   const handleKpiClick = (estadoKey: string) => {
     setEstado(estadoKey)
     setPage(1)
@@ -640,11 +856,33 @@ export default function CobrosPagosReportadosPage() {
 
   const handleVerComprobante = async (id: number) => {
     setViewingComprobanteId(id)
+    setPreviewComprobante(prev => {
+      if (prev.blobUrl) URL.revokeObjectURL(prev.blobUrl)
+      return {
+        open: true,
+        pagoId: id,
+        blobUrl: null,
+        contentType: null,
+        loading: true,
+        rotDeg: 0,
+      }
+    })
 
     try {
-      await openComprobanteInNewTab(id)
+      const path = `/api/v1/cobros/pagos-reportados/${id}/comprobante`
+      const data = await apiClient.getBlob(path)
+      const blobUrl = URL.createObjectURL(data)
+      setPreviewComprobante({
+        open: true,
+        pagoId: id,
+        blobUrl,
+        contentType: data.type || null,
+        loading: false,
+        rotDeg: 0,
+      })
     } catch (e: any) {
       toast.error(e?.message || 'No se pudo abrir el comprobante.')
+      setPreviewComprobante(prev => ({ ...prev, loading: false, open: false }))
     } finally {
       setViewingComprobanteId(null)
     }
@@ -1679,6 +1917,148 @@ export default function CobrosPagosReportadosPage() {
           )}
         </CardContent>
       </Card>
+
+      {previewComprobante.open &&
+        typeof document !== 'undefined' &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-[240] bg-black/20"
+            onClick={closeComprobantePreview}
+            role="presentation"
+          >
+            <div
+              className="fixed z-[241] flex select-none flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl ring-1 ring-black/10"
+              style={{
+                left: previewFloatLeft,
+                top: previewFloatTop,
+                width: previewFloatW,
+                height: previewFloatH,
+              }}
+              onClick={e => e.stopPropagation()}
+              role="dialog"
+              aria-label="Visor temporal de comprobante"
+            >
+              <div
+                className="flex shrink-0 cursor-grab items-center gap-2 border-b border-slate-100 bg-slate-50/95 px-2 py-2 active:cursor-grabbing"
+                onPointerDown={beginPreviewDrag}
+              >
+                <span
+                  className="flex shrink-0 flex-col justify-center gap-0.5 py-0.5"
+                  aria-hidden
+                >
+                  <span className="h-0.5 w-4 rounded-full bg-slate-500" />
+                  <span className="h-0.5 w-4 rounded-full bg-slate-500" />
+                  <span className="h-0.5 w-4 rounded-full bg-slate-500" />
+                </span>
+                <span className="min-w-0 flex-1 truncate text-xs font-medium text-slate-700">
+                  Comprobante #{previewComprobante.pagoId ?? ''}
+                </span>
+                {previewComprobante.contentType?.startsWith('image/') && (
+                  <>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 w-7 p-0"
+                      title="Rotar 90° a la izquierda"
+                      aria-label="Rotar 90 grados a la izquierda"
+                      onClick={() =>
+                        setPreviewComprobante(prev => ({
+                          ...prev,
+                          rotDeg: (prev.rotDeg - 90 + 360) % 360,
+                        }))
+                      }
+                    >
+                      <RotateCcw className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 w-7 p-0"
+                      title="Rotar 90° a la derecha"
+                      aria-label="Rotar 90 grados a la derecha"
+                      onClick={() =>
+                        setPreviewComprobante(prev => ({
+                          ...prev,
+                          rotDeg: (prev.rotDeg + 90) % 360,
+                        }))
+                      }
+                    >
+                      <span className="inline-flex" aria-hidden>
+                        <RotateCcw className="h-4 w-4 scale-x-[-1]" />
+                      </span>
+                    </Button>
+                  </>
+                )}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 w-7 p-0"
+                  title="Cerrar visor"
+                  onClick={closeComprobantePreview}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+              <div className="relative min-h-0 flex-1 overflow-hidden p-1">
+                <div className="flex h-full min-h-0 w-full items-center justify-center overflow-auto rounded-md bg-slate-50">
+                  {previewComprobante.loading ? (
+                    <Loader2 className="h-10 w-10 animate-spin text-slate-500" />
+                  ) : previewComprobante.blobUrl &&
+                    previewComprobante.contentType?.startsWith('image/') ? (
+                    <div
+                      className="inline-flex max-h-full max-w-full origin-center transition-transform duration-200"
+                      style={{ transform: `rotate(${previewComprobante.rotDeg}deg)` }}
+                    >
+                      <img
+                        src={previewComprobante.blobUrl}
+                        alt="Comprobante"
+                        className="max-h-full max-w-full object-contain"
+                      />
+                    </div>
+                  ) : previewComprobante.blobUrl ? (
+                    <iframe
+                      title={`Comprobante ${previewComprobante.pagoId ?? ''}`}
+                      src={previewComprobante.blobUrl}
+                      className="h-full min-h-0 w-full border-0"
+                    />
+                  ) : (
+                    <div className="px-3 text-sm text-muted-foreground">
+                      No se pudo cargar el comprobante.
+                    </div>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  aria-label="Redimensionar esquina superior izquierda"
+                  className="absolute left-0 top-8 z-30 h-5 w-5 cursor-nwse-resize bg-transparent p-0"
+                  onPointerDown={beginPreviewResize('nw')}
+                />
+                <button
+                  type="button"
+                  aria-label="Redimensionar esquina superior derecha"
+                  className="absolute right-0 top-8 z-30 h-5 w-5 cursor-nesw-resize bg-transparent p-0"
+                  onPointerDown={beginPreviewResize('ne')}
+                />
+                <button
+                  type="button"
+                  aria-label="Redimensionar esquina inferior izquierda"
+                  className="absolute bottom-0 left-0 z-30 h-5 w-5 cursor-nesw-resize bg-transparent p-0"
+                  onPointerDown={beginPreviewResize('sw')}
+                />
+                <button
+                  type="button"
+                  aria-label="Redimensionar esquina inferior derecha"
+                  className="absolute bottom-0 right-0 z-30 h-5 w-5 cursor-nwse-resize bg-transparent p-0"
+                  onPointerDown={beginPreviewResize('se')}
+                />
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
 
       {/* Modal: interfaz rápida para escribir mensaje de rechazo y enviar correo al cliente */}
 
