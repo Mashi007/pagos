@@ -405,12 +405,7 @@ function CeldaFotografiaPagoRecibo({ row }: { row: ReciboConciliacionFila }) {
   }
 
   const imgSrc = requiereAuth ? blobUrl : href
-  const probarMiniatura =
-    pareceUrlImagenComprobante(href) &&
-    thumbOk &&
-    (!requiereAuth || (blobUrl && !blobError))
-
-  const miniaturaEsImagen = probarMiniatura && Boolean(imgSrc) && !esPdf
+  const miniaturaEsImagen = Boolean(imgSrc) && !esPdf && thumbOk
 
   const vistaPreviaImagenConRotacion = (src: string) => (
     <div className="relative flex h-full min-h-0 w-full flex-col">
@@ -493,7 +488,7 @@ function CeldaFotografiaPagoRecibo({ row }: { row: ReciboConciliacionFila }) {
       src={blobUrl}
       className="h-full min-h-0 w-full flex-1 rounded-md border-0 bg-slate-50"
     />
-  ) : !requiereAuth && pareceUrlImagenComprobante(href) ? (
+  ) : !requiereAuth && !esPdf ? (
     vistaPreviaImagenConRotacion(href)
   ) : (
     <div className="flex min-h-[120px] flex-col items-center justify-center gap-2 px-3 text-center text-sm text-slate-600">
