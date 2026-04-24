@@ -1,11 +1,14 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
+  useRef,
   useState,
   Fragment,
-  type MouseEvent,
 } from 'react'
+
+import { createPortal } from 'react-dom'
 
 import { useSearchParams } from 'react-router-dom'
 
@@ -20,6 +23,7 @@ import {
   Loader2,
   Mail,
   RefreshCw,
+  RotateCcw,
   Settings,
   TestTube,
   X,
@@ -79,6 +83,50 @@ function pareceUrlImagenComprobante(u: string): boolean {
   return low.includes('googleusercontent')
 }
 
+function esComprobantePdfRow(row: ReciboConciliacionFila, href: string): boolean {
+  const t = String(row.documento_tipo ?? '').toLowerCase()
+  if (t.includes('pdf')) return true
+  const n = String(row.documento_nombre ?? '').toLowerCase()
+  if (n.endsWith('.pdf')) return true
+  if (/\.pdf(\?|#|$)/i.test(String(href).split('?')[0])) return true
+  return false
+}
+
+const PREVIEW_FLOAT_MIN_W = 240
+
+const PREVIEW_FLOAT_MIN_H = 180
+
+const PREVIEW_FLOAT_DEFAULT_W = 400
+
+const PREVIEW_FLOAT_DEFAULT_H = 520
+
+function clampPreviewFloat(n: number, lo: number, hi: number): number {
+  return Math.min(hi, Math.max(lo, n))
+}
+
+type PreviewResizeCorner = 'nw' | 'ne' | 'sw' | 'se'
+
+type PreviewInteractState =
+  | {
+      kind: 'drag'
+      pointerId: number
+      startX: number
+      startY: number
+      originL: number
+      originT: number
+    }
+  | {
+      kind: 'resize'
+      pointerId: number
+      corner: PreviewResizeCorner
+      startX: number
+      startY: number
+      originL: number
+      originT: number
+      originW: number
+      originH: number
+    }
+
 const fmtMontoPagadoRecibo = new Intl.NumberFormat('es-VE', {
   minimumFractionDigits: 2,
   maximumFractionDigits: 2,
@@ -117,9 +165,95 @@ function CeldaFotografiaPagoRecibo({ row }: { row: ReciboConciliacionFila }) {
   const [blobUrl, setBlobUrl] = useState<string | null>(null)
   const [blobCargando, setBlobCargando] = useState(false)
   const [blobError, setBlobError] = useState(false)
+  const [hoverPreview, setHoverPreview] = useState(false)
+  const [panelLeft, setPanelLeft] = useState(0)
+  const [panelTop, setPanelTop] = useState(0)
+  const [panelW, setPanelW] = useState(PREVIEW_FLOAT_DEFAULT_W)
+  const [panelH, setPanelH] = useState(PREVIEW_FLOAT_DEFAULT_H)
+  /** Solo vista previa tipo imagen (no PDF/iframe): 0, 90, 180 o 270. */
+  const [rotacionVistaPreviaImg, setRotacionVistaPreviaImg] = useState(0)
+  const closePreviewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  )
+  const previewLayoutInitRef = useRef(false)
+  const panelLRef = useRef(0)
+  const panelTRef = useRef(0)
+  const panelWRef = useRef(PREVIEW_FLOAT_DEFAULT_W)
+  const panelHRef = useRef(PREVIEW_FLOAT_DEFAULT_H)
+  const interactRef = useRef<PreviewInteractState | null>(null)
 
   const pathAuth = href ? pathApiComprobanteImagenDesdeHref(href) : null
   const requiereAuth = Boolean(pathAuth)
+  const esPdf = esComprobantePdfRow(row, href)
+
+  useLayoutEffect(() => {
+    panelLRef.current = panelLeft
+    panelTRef.current = panelTop
+    panelWRef.current = panelW
+    panelHRef.current = panelH
+  }, [panelLeft, panelTop, panelW, panelH])
+
+  const clearClosePreviewTimer = useCallback(() => {
+    if (closePreviewTimerRef.current) {
+      clearTimeout(closePreviewTimerRef.current)
+      closePreviewTimerRef.current = null
+    }
+  }, [])
+
+  const openPreview = useCallback(() => {
+    clearClosePreviewTimer()
+    setHoverPreview(true)
+  }, [clearClosePreviewTimer])
+
+  const scheduleClosePreview = useCallback(() => {
+    clearClosePreviewTimer()
+    closePreviewTimerRef.current = setTimeout(() => {
+      closePreviewTimerRef.current = null
+      if (interactRef.current) return
+      setHoverPreview(false)
+    }, 160)
+  }, [clearClosePreviewTimer])
+
+  useEffect(() => () => clearClosePreviewTimer(), [clearClosePreviewTimer])
+
+  useEffect(() => {
+    previewLayoutInitRef.current = false
+  }, [href])
+
+  useEffect(() => {
+    setRotacionVistaPreviaImg(0)
+  }, [href])
+
+  useEffect(() => {
+    if (!hoverPreview) setRotacionVistaPreviaImg(0)
+  }, [hoverPreview])
+
+  useEffect(() => {
+    if (!hoverPreview) {
+      previewLayoutInitRef.current = false
+      return
+    }
+    if (previewLayoutInitRef.current) return
+    const vw = window.innerWidth
+    const vh = window.innerHeight
+    const w = clampPreviewFloat(
+      PREVIEW_FLOAT_DEFAULT_W,
+      PREVIEW_FLOAT_MIN_W,
+      vw - 16
+    )
+    const h = clampPreviewFloat(
+      PREVIEW_FLOAT_DEFAULT_H,
+      PREVIEW_FLOAT_MIN_H,
+      vh - 24
+    )
+    const left = clampPreviewFloat(vw - w - 12, 8, vw - w - 8)
+    const top = clampPreviewFloat((vh - h) / 2, 10, vh - h - 10)
+    setPanelW(w)
+    setPanelH(h)
+    setPanelLeft(left)
+    setPanelTop(top)
+    previewLayoutInitRef.current = true
+  }, [hoverPreview])
 
   useEffect(() => {
     if (!href || !pathAuth) {
@@ -161,25 +295,113 @@ function CeldaFotografiaPagoRecibo({ row }: { row: ReciboConciliacionFila }) {
     }
   }, [href, pathAuth])
 
+  const attachGlobalPointerListeners = useCallback(() => {
+    const onMove = (e: PointerEvent) => {
+      const s = interactRef.current
+      if (!s || e.pointerId !== s.pointerId) return
+      const dx = e.clientX - s.startX
+      const dy = e.clientY - s.startY
+      const vw = window.innerWidth
+      const vh = window.innerHeight
+      if (s.kind === 'drag') {
+        const w = panelWRef.current
+        const h = panelHRef.current
+        const vis = 56
+        setPanelLeft(clampPreviewFloat(s.originL + dx, vis - w, vw - vis))
+        setPanelTop(clampPreviewFloat(s.originT + dy, 8, vh - h - 8))
+        return
+      }
+      const { originL: ol, originT: ot, originW: ow, originH: oh, corner } = s
+      const right = ol + ow
+      const bottom = ot + oh
+      if (corner === 'se') {
+        setPanelLeft(ol)
+        setPanelTop(ot)
+        setPanelW(clampPreviewFloat(ow + dx, PREVIEW_FLOAT_MIN_W, vw - ol - 8))
+        setPanelH(clampPreviewFloat(oh + dy, PREVIEW_FLOAT_MIN_H, vh - ot - 8))
+      } else if (corner === 'ne') {
+        const nw = clampPreviewFloat(ow + dx, PREVIEW_FLOAT_MIN_W, vw - ol - 8)
+        const nt = clampPreviewFloat(ot + dy, 8, bottom - PREVIEW_FLOAT_MIN_H)
+        const nh = bottom - nt
+        setPanelLeft(ol)
+        setPanelTop(nt)
+        setPanelW(nw)
+        setPanelH(nh)
+      } else if (corner === 'sw') {
+        const nl = clampPreviewFloat(ol + dx, 8, right - PREVIEW_FLOAT_MIN_W)
+        const nw = right - nl
+        const nh = clampPreviewFloat(oh + dy, PREVIEW_FLOAT_MIN_H, vh - ot - 8)
+        setPanelLeft(nl)
+        setPanelTop(ot)
+        setPanelW(nw)
+        setPanelH(nh)
+      } else if (corner === 'nw') {
+        const nl = clampPreviewFloat(ol + dx, 8, right - PREVIEW_FLOAT_MIN_W)
+        const nw = right - nl
+        const nt = clampPreviewFloat(ot + dy, 8, bottom - PREVIEW_FLOAT_MIN_H)
+        const nh = bottom - nt
+        setPanelLeft(nl)
+        setPanelTop(nt)
+        setPanelW(nw)
+        setPanelH(nh)
+      }
+    }
+    const onUp = (e: PointerEvent) => {
+      const s = interactRef.current
+      if (!s || e.pointerId !== s.pointerId) return
+      interactRef.current = null
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+      window.removeEventListener('pointercancel', onUp)
+    }
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+    window.addEventListener('pointercancel', onUp)
+  }, [])
+
+  const beginDragPanel = useCallback(
+    (e: React.PointerEvent) => {
+      if (e.button !== 0) return
+      e.preventDefault()
+      e.stopPropagation()
+      clearClosePreviewTimer()
+      interactRef.current = {
+        kind: 'drag',
+        pointerId: e.pointerId,
+        startX: e.clientX,
+        startY: e.clientY,
+        originL: panelLRef.current,
+        originT: panelTRef.current,
+      }
+      attachGlobalPointerListeners()
+    },
+    [attachGlobalPointerListeners, clearClosePreviewTimer]
+  )
+
+  const beginResizePanel = useCallback(
+    (corner: PreviewResizeCorner) => (e: React.PointerEvent) => {
+      if (e.button !== 0) return
+      e.preventDefault()
+      e.stopPropagation()
+      clearClosePreviewTimer()
+      interactRef.current = {
+        kind: 'resize',
+        pointerId: e.pointerId,
+        corner,
+        startX: e.clientX,
+        startY: e.clientY,
+        originL: panelLRef.current,
+        originT: panelTRef.current,
+        originW: panelWRef.current,
+        originH: panelHRef.current,
+      }
+      attachGlobalPointerListeners()
+    },
+    [attachGlobalPointerListeners, clearClosePreviewTimer]
+  )
+
   if (!href) {
     return <span className="text-sm text-gray-400">-</span>
-  }
-
-  const abrirEnNuevaPestana = async (e: MouseEvent<HTMLAnchorElement>) => {
-    if (!requiereAuth || !pathAuth) return
-    e.preventDefault()
-    try {
-      const blob = await apiClient.getBlob(pathAuth)
-      const url = URL.createObjectURL(blob)
-      const w = window.open(url, '_blank', 'noopener,noreferrer')
-      if (!w) {
-        URL.revokeObjectURL(url)
-      } else {
-        window.setTimeout(() => URL.revokeObjectURL(url), 120_000)
-      }
-    } catch {
-      /* ya hay miniatura / estado; abrir pestaña sin blob falla silenciosamente */
-    }
   }
 
   const imgSrc = requiereAuth ? blobUrl : href
@@ -188,36 +410,210 @@ function CeldaFotografiaPagoRecibo({ row }: { row: ReciboConciliacionFila }) {
     thumbOk &&
     (!requiereAuth || (blobUrl && !blobError))
 
-  return (
-    <a
-      href={requiereAuth ? '#' : href}
-      target={requiereAuth ? undefined : '_blank'}
-      rel={requiereAuth ? undefined : 'noopener noreferrer'}
-      onClick={requiereAuth ? abrirEnNuevaPestana : undefined}
-      className="inline-flex max-w-[14rem] items-center gap-2 text-violet-700 hover:text-violet-900"
-      title={
-        String(row.documento_nombre ?? '').trim() ||
-        'Abrir fotografía o comprobante de pago'
-      }
-    >
-      {blobCargando && requiereAuth ? (
-        <span className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded border border-gray-200 bg-slate-50">
-          <Loader2 className="h-5 w-5 animate-spin text-slate-500" aria-hidden />
-        </span>
-      ) : probarMiniatura && imgSrc ? (
-        <img
-          src={imgSrc}
-          alt=""
-          className="h-12 w-12 shrink-0 rounded border border-gray-200 bg-white object-cover"
-          onError={() => setThumbOk(false)}
-        />
-      ) : (
-        <span className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded border border-gray-200 bg-slate-50">
-          <Eye className="h-6 w-6 text-slate-500" aria-hidden />
-        </span>
+  const miniaturaEsImagen = probarMiniatura && Boolean(imgSrc) && !esPdf
+
+  const vistaPreviaImagenConRotacion = (src: string) => (
+    <div className="relative flex h-full min-h-0 w-full flex-col">
+      <div className="pointer-events-auto absolute right-2 top-2 z-20 flex gap-1 rounded-lg border border-slate-200 bg-white/95 p-1 shadow-md">
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="h-8 w-8 shrink-0 p-0"
+          title="Girar 90° a la izquierda"
+          aria-label="Girar imagen 90 grados a la izquierda"
+          onClick={e => {
+            e.stopPropagation()
+            e.preventDefault()
+            setRotacionVistaPreviaImg(r => (r - 90 + 360) % 360)
+          }}
+        >
+          <RotateCcw className="h-4 w-4" aria-hidden />
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="h-8 w-8 shrink-0 p-0"
+          title="Girar 90° a la derecha"
+          aria-label="Girar imagen 90 grados a la derecha"
+          onClick={e => {
+            e.stopPropagation()
+            e.preventDefault()
+            setRotacionVistaPreviaImg(r => (r + 90) % 360)
+          }}
+        >
+          <span className="inline-flex" aria-hidden>
+            <RotateCcw className="h-4 w-4 scale-x-[-1]" />
+          </span>
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="h-8 w-8 shrink-0 p-0"
+          title="Restablecer orientación"
+          aria-label="Restablecer rotación de la imagen"
+          disabled={rotacionVistaPreviaImg === 0}
+          onClick={e => {
+            e.stopPropagation()
+            e.preventDefault()
+            setRotacionVistaPreviaImg(0)
+          }}
+        >
+          <RefreshCw className="h-4 w-4" aria-hidden />
+        </Button>
+      </div>
+      <div className="flex min-h-0 flex-1 items-center justify-center overflow-auto p-2">
+        <div
+          className="inline-flex max-h-full max-w-full origin-center transition-transform duration-200 ease-out"
+          style={{ transform: `rotate(${rotacionVistaPreviaImg}deg)` }}
+        >
+          <img src={src} alt="" className="max-h-full max-w-full object-contain" />
+        </div>
+      </div>
+    </div>
+  )
+
+  const cuerpoVistaPrevia = blobCargando && requiereAuth ? (
+    <div className="flex min-h-[160px] flex-1 items-center justify-center">
+      <Loader2 className="h-10 w-10 animate-spin text-slate-500" aria-hidden />
+    </div>
+  ) : requiereAuth && blobUrl && esPdf ? (
+    <iframe
+      title={String(row.documento_nombre ?? 'Comprobante PDF')}
+      src={blobUrl}
+      className="h-full min-h-0 w-full flex-1 rounded-md border-0 bg-slate-50"
+    />
+  ) : miniaturaEsImagen && imgSrc ? (
+    vistaPreviaImagenConRotacion(imgSrc)
+  ) : requiereAuth && blobUrl ? (
+    <iframe
+      title={String(row.documento_nombre ?? 'Comprobante')}
+      src={blobUrl}
+      className="h-full min-h-0 w-full flex-1 rounded-md border-0 bg-slate-50"
+    />
+  ) : !requiereAuth && pareceUrlImagenComprobante(href) ? (
+    vistaPreviaImagenConRotacion(href)
+  ) : (
+    <div className="flex min-h-[120px] flex-col items-center justify-center gap-2 px-3 text-center text-sm text-slate-600">
+      <FileText className="h-10 w-10 text-slate-400" aria-hidden />
+      <span>Vista previa no disponible para este archivo.</span>
+      {!requiereAuth && (
+        <a
+          href={href}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-violet-700 underline hover:text-violet-900"
+        >
+          Abrir enlace
+        </a>
       )}
-      <span className="text-xs font-medium">Abrir</span>
-    </a>
+    </div>
+  )
+
+  const panelVistaPrevia =
+    hoverPreview &&
+    typeof document !== 'undefined' &&
+    createPortal(
+      <div
+        className="pointer-events-auto fixed z-[220] flex select-none flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl ring-1 ring-black/5"
+        style={{
+          left: panelLeft,
+          top: panelTop,
+          width: panelW,
+          height: panelH,
+        }}
+        onMouseEnter={openPreview}
+        onMouseLeave={scheduleClosePreview}
+        role="dialog"
+        aria-label="Vista previa del comprobante"
+      >
+        <div
+          className="flex shrink-0 cursor-grab items-center gap-2 border-b border-slate-100 bg-slate-50/95 px-2 py-2 active:cursor-grabbing"
+          onPointerDown={beginDragPanel}
+        >
+          <span
+            className="flex shrink-0 flex-col justify-center gap-0.5 py-0.5"
+            aria-hidden
+          >
+            <span className="h-0.5 w-4 rounded-full bg-slate-500" />
+            <span className="h-0.5 w-4 rounded-full bg-slate-500" />
+            <span className="h-0.5 w-4 rounded-full bg-slate-500" />
+          </span>
+          <span className="min-w-0 flex-1 text-xs font-medium text-slate-700">
+            Arrastrar aquí · esquinas para tamaño
+          </span>
+        </div>
+        <div className="relative min-h-0 flex-1 overflow-hidden p-1">
+          <div className="flex h-full min-h-0 w-full items-center justify-center overflow-auto">
+            {cuerpoVistaPrevia}
+          </div>
+          <button
+            type="button"
+            aria-label="Redimensionar esquina superior izquierda"
+            className="absolute left-0 top-10 z-30 h-5 w-5 cursor-nwse-resize touch-none bg-transparent p-0"
+            onPointerDown={beginResizePanel('nw')}
+          />
+          <button
+            type="button"
+            aria-label="Redimensionar esquina superior derecha"
+            className="absolute right-0 top-10 z-30 h-5 w-5 cursor-nesw-resize touch-none bg-transparent p-0"
+            onPointerDown={beginResizePanel('ne')}
+          />
+          <button
+            type="button"
+            aria-label="Redimensionar esquina inferior izquierda"
+            className="absolute bottom-0 left-0 z-30 h-5 w-5 cursor-nesw-resize touch-none bg-transparent p-0"
+            onPointerDown={beginResizePanel('sw')}
+          />
+          <button
+            type="button"
+            aria-label="Redimensionar esquina inferior derecha"
+            className="absolute bottom-0 right-0 z-30 h-5 w-5 cursor-nwse-resize touch-none bg-transparent p-0"
+            onPointerDown={beginResizePanel('se')}
+          />
+        </div>
+      </div>,
+      document.body
+    )
+
+  return (
+    <>
+      <div
+        className="inline-flex max-w-[14rem] cursor-default select-none items-center gap-2 rounded-md text-violet-700 hover:text-violet-900"
+        onMouseEnter={openPreview}
+        onMouseLeave={scheduleClosePreview}
+        role="group"
+        title={
+          String(row.documento_nombre ?? '').trim() ||
+          'Pase el cursor: vista previa flotante (arrastrar y redimensionar)'
+        }
+      >
+        {blobCargando && requiereAuth ? (
+          <span className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded border border-gray-200 bg-slate-50">
+            <Loader2 className="h-5 w-5 animate-spin text-slate-500" aria-hidden />
+          </span>
+        ) : esPdf && (requiereAuth ? Boolean(blobUrl) : true) ? (
+          <span className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded border border-gray-200 bg-slate-50">
+            <FileText className="h-6 w-6 text-slate-500" aria-hidden />
+          </span>
+        ) : miniaturaEsImagen && imgSrc ? (
+          <img
+            src={imgSrc}
+            alt=""
+            className="h-12 w-12 shrink-0 rounded border border-gray-200 bg-white object-cover"
+            onError={() => setThumbOk(false)}
+          />
+        ) : (
+          <span className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded border border-gray-200 bg-slate-50">
+            <Eye className="h-6 w-6 text-slate-500" aria-hidden />
+          </span>
+        )}
+        <span className="text-xs font-medium">Abrir</span>
+      </div>
+      {panelVistaPrevia}
+    </>
   )
 }
 

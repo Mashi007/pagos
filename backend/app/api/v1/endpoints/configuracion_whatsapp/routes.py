@@ -6,16 +6,24 @@ cuando el frontend envía valor enmascarado (*** o vacío). Persiste en BD (tabl
 """
 import json
 import logging
-from typing import Any, Optional
+import time
+from typing import Any, List, Optional
 
-from fastapi import APIRouter, Body, Depends, HTTPException
-from pydantic import BaseModel
+from fastapi import APIRouter, Body, Depends, HTTPException, Request
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.whatsapp_config_holder import sync_from_db as whatsapp_sync_from_db
 from app.models.configuracion import Configuracion
+
+from app.api.v1.endpoints.estado_cuenta_publico.autoresponder import (
+    build_autoresponder_webhook_post_url,
+    build_payload_prueba_autoresponder,
+    get_autoresponder_webhook_monitor_snapshot,
+    url_portal_estado_cuenta_publico,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -281,3 +289,194 @@ def get_whatsapp_test_completo(db: Session = Depends(get_db)):
         "tests": tests,
         "resumen": resumen,
     }
+
+
+AUTORESPONDER_DOC_URL = (
+    "https://www.autoresponder.ai/post/connect-your-messengers-to-a-web-server-api-using-autoresponder"
+)
+
+
+class HeaderPar(BaseModel):
+    clave: str
+    valor: str
+
+
+class CedulaConsultaMonitorItem(BaseModel):
+    """Cédula enmascarada recibida en query.message (máx. 5 en cola por worker)."""
+
+    recibida_en_utc: str
+    cedula_mostrada: str
+
+
+class AutoresponderMonitorStats(BaseModel):
+    """Contadores del webhook (memoria por proceso worker)."""
+
+    peticiones_total: int = 0
+    pruebas_recibidas_ok: int = 0
+    solicitudes_codigo_exitosas: int = 0
+    solicitudes_codigo_respuesta_error: int = 0
+    fallos_autenticacion: int = 0
+    cuerpo_json_invalido: int = 0
+    json_incompleto_validacion: int = 0
+    sin_configuracion_servidor: int = 0
+    excepciones_solicitar_codigo: int = 0
+    ultima_peticion_utc: Optional[str] = None
+    ultimo_exito_utc: Optional[str] = None
+    ultimo_error_resumen: Optional[str] = None
+    nota_contadores: str = ""
+    cedulas_consulta_recientes: List[CedulaConsultaMonitorItem] = Field(default_factory=list)
+
+
+class AutoresponderEstadoCuentaInstruccionesResponse(BaseModel):
+    """Valores para copiar en AutoResponder > Conectar con tu servidor web (sin exponer la contraseña)."""
+
+    post_url: str
+    # Portal SPA: PDF tras cédula + código. Vacío si falta FRONTEND_PUBLIC_URL.
+    portal_pdf_url: Optional[str] = None
+    basic_auth_usuario: Optional[str] = None
+    basic_auth_configurado: bool = False
+    headers_recomendados: List[HeaderPar]
+    variables_entorno_render: dict[str, str]
+    documentacion_url: str
+    alcance: str
+    sugerencia_regla: str
+    monitor: AutoresponderMonitorStats
+
+
+class ProbarAutoresponderConexionResponse(BaseModel):
+    ok: bool
+    mensaje: str
+    status_code: Optional[int] = None
+    latencia_ms: Optional[int] = None
+    respuesta_replies: Optional[List[Any]] = None
+
+
+@router.get("/autoresponder-estado-cuenta", response_model=AutoresponderEstadoCuentaInstruccionesResponse)
+def get_autoresponder_estado_cuenta_instrucciones(request: Request):
+    """
+    Instrucciones y URL del webhook AutoResponder → estado de cuenta (código por correo).
+    Requiere sesión de personal. La contraseña del webhook solo vive en variables de entorno.
+    """
+    post_url = build_autoresponder_webhook_post_url()
+    if not post_url:
+        post_url = str(request.base_url).rstrip("/") + (
+            f"{settings.API_V1_STR}/estado-cuenta/public/webhook-autoresponder"
+        )
+
+    u = (getattr(settings, "AUTORESPONDER_WEBHOOK_USER", None) or "").strip() or None
+    p_set = bool((getattr(settings, "AUTORESPONDER_WEBHOOK_PASSWORD", None) or "").strip())
+    basic_ok = bool(u and p_set)
+
+    headers_recomendados = [
+        HeaderPar(clave="Content-Type", valor="application/json"),
+    ]
+
+    variables_entorno_render = {
+        "AUTORESPONDER_WEBHOOK_USER": "Mismo valor que «Usuario» en Basic Auth de AutoResponder",
+        "AUTORESPONDER_WEBHOOK_PASSWORD": "Mismo valor que «Contraseña» (solo en Render; no compartir por chat)",
+    }
+
+    alcance = (
+        "Al recibir en query.message la cédula, el servidor ejecuta la misma lógica que "
+        "«solicitar código» del portal: si aplica, envía un código al correo registrado. "
+        "El estado de cuenta en PDF no se embebe en la respuesta JSON de AutoResponder "
+        "(solo se pueden enviar mensajes de texto en replies). "
+        "El PDF se genera y descarga en el portal público rapicredit-estadocuenta "
+        "tras ingresar cédula y código; las respuestas del webhook incluyen el enlace cuando "
+        "FRONTEND_PUBLIC_URL está configurada."
+    )
+
+    sugerencia_regla = (
+        "En AutoResponder, active «Conectar con tu servidor web», pegue la URL, "
+        "configure Basic Auth con el mismo usuario y contraseña que definió en Render, "
+        "y una regla que envíe al servidor los mensajes donde el usuario escribe solo la cédula "
+        "(o el patrón que use su operación)."
+    )
+
+    snap = get_autoresponder_webhook_monitor_snapshot()
+    monitor = AutoresponderMonitorStats.model_validate(snap)
+    portal_pdf = url_portal_estado_cuenta_publico()
+
+    return AutoresponderEstadoCuentaInstruccionesResponse(
+        post_url=post_url,
+        portal_pdf_url=portal_pdf or None,
+        basic_auth_usuario=u,
+        basic_auth_configurado=basic_ok,
+        headers_recomendados=headers_recomendados,
+        variables_entorno_render=variables_entorno_render,
+        documentacion_url=AUTORESPONDER_DOC_URL,
+        alcance=alcance,
+        sugerencia_regla=sugerencia_regla,
+        monitor=monitor,
+    )
+
+
+@router.post(
+    "/autoresponder-estado-cuenta/probar-conexion",
+    response_model=ProbarAutoresponderConexionResponse,
+)
+def post_autoresponder_probar_conexion():
+    """
+    POST de prueba al webhook público (JSON con isTestMessage) usando Basic Auth desde settings.
+    Verifica conectividad HTTP + credenciales + formato de respuesta replies.
+    """
+    post_url = build_autoresponder_webhook_post_url()
+    if not post_url:
+        raise HTTPException(
+            status_code=400,
+            detail="Defina BACKEND_PUBLIC_URL (URL pública del API) para armar la URL del webhook y probar.",
+        )
+    u = (getattr(settings, "AUTORESPONDER_WEBHOOK_USER", None) or "").strip()
+    p = (getattr(settings, "AUTORESPONDER_WEBHOOK_PASSWORD", None) or "").strip()
+    if not u or not p:
+        raise HTTPException(
+            status_code=400,
+            detail="Configure AUTORESPONDER_WEBHOOK_USER y AUTORESPONDER_WEBHOOK_PASSWORD en el entorno del backend.",
+        )
+
+    try:
+        import httpx
+
+        t0 = time.perf_counter()
+        with httpx.Client(timeout=25.0) as client:
+            r = client.post(
+                post_url,
+                json=build_payload_prueba_autoresponder(),
+                auth=(u, p),
+                headers={"Content-Type": "application/json"},
+            )
+        latencia_ms = int((time.perf_counter() - t0) * 1000)
+        body: Any = None
+        try:
+            body = r.json() if r.text else None
+        except Exception:
+            body = None
+        replies = body.get("replies") if isinstance(body, dict) else None
+        ok = (
+            r.status_code == 200
+            and isinstance(replies, list)
+            and len(replies) > 0
+            and isinstance(replies[0], dict)
+            and "message" in replies[0]
+        )
+        if ok:
+            return ProbarAutoresponderConexionResponse(
+                ok=True,
+                mensaje="Conexión correcta: el webhook respondió 200 con replies (mensaje de prueba).",
+                status_code=r.status_code,
+                latencia_ms=latencia_ms,
+                respuesta_replies=replies,
+            )
+        return ProbarAutoresponderConexionResponse(
+            ok=False,
+            mensaje=f"Respuesta inesperada (HTTP {r.status_code}). Revise URL y credenciales.",
+            status_code=r.status_code,
+            latencia_ms=latencia_ms,
+            respuesta_replies=replies if isinstance(replies, list) else None,
+        )
+    except Exception as e:
+        logger.warning("autoresponder probar-conexion: %s", e)
+        return ProbarAutoresponderConexionResponse(
+            ok=False,
+            mensaje=f"No se pudo contactar el webhook: {str(e)[:300]}",
+        )

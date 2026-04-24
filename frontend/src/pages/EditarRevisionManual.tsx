@@ -117,6 +117,11 @@ import {
   textoDocumentoPagoParaListado,
 } from '../utils/pagoExcelValidation'
 
+import {
+  abrirStaffComprobanteDesdeHref,
+  esUrlComprobanteImagenConAuth,
+} from '../utils/comprobanteImagenAuth'
+
 import { validadoresService } from '../services/validadoresService'
 
 import {
@@ -3384,22 +3389,29 @@ export function EditarRevisionManual() {
                                           size="sm"
                                           className="h-7 w-7 shrink-0 p-0"
                                           disabled={
-                                            !pago.link_comprobante?.trim()
+                                            !esUrlComprobanteImagenConAuth(
+                                              pago.link_comprobante || ''
+                                            )
                                           }
                                           title={
-                                            pago.link_comprobante?.trim()
-                                              ? 'Abrir URL del comprobante'
-                                              : 'Sin URL de comprobante'
+                                            esUrlComprobanteImagenConAuth(
+                                              pago.link_comprobante || ''
+                                            )
+                                              ? 'Ver comprobante guardado en el sistema'
+                                              : pago.link_comprobante?.trim()
+                                                ? 'Solo enlace externo; use Editar pago para subir el comprobante al sistema.'
+                                                : 'Sin comprobante en el sistema'
                                           }
-                                          aria-label="Abrir comprobante en nueva pestaña"
+                                          aria-label="Ver comprobante del sistema"
                                           onClick={() => {
                                             const u =
                                               pago.link_comprobante?.trim()
-                                            if (u) {
-                                              window.open(
-                                                u,
-                                                '_blank',
-                                                'noopener,noreferrer'
+                                            if (
+                                              u &&
+                                              esUrlComprobanteImagenConAuth(u)
+                                            ) {
+                                              void abrirStaffComprobanteDesdeHref(
+                                                u
                                               )
                                             }
                                           }}

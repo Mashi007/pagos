@@ -47,6 +47,8 @@ import {
   type WhatsAppConfig,
 } from '../../services/notificacionService'
 
+import { AutoResponderEstadoCuentaCard } from './AutoResponderEstadoCuentaCard'
+
 export function WhatsAppConfig() {
   const [config, setConfig] = useState<WhatsAppConfig>({
     api_url: 'https://graph.facebook.com/v18.0',
@@ -410,6 +412,8 @@ export function WhatsAppConfig() {
           notificaciones por WhatsApp a los clientes.
         </p>
       </div>
+
+      <AutoResponderEstadoCuentaCard />
 
       {/* Configuración Meta API */}
 

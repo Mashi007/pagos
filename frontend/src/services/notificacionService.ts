@@ -1783,8 +1783,96 @@ export interface WhatsAppConfig {
   telefono_pruebas?: string
 }
 
+/** Entrada del monitor: cédula enmascarada recibida vía JSON (query.message). */
+export interface CedulaConsultaMonitorItem {
+  recibida_en_utc: string
+
+  cedula_mostrada: string
+}
+
+/** Contadores del webhook (por proceso en el servidor). */
+export interface AutoresponderMonitorStats {
+  peticiones_total: number
+
+  pruebas_recibidas_ok: number
+
+  solicitudes_codigo_exitosas: number
+
+  solicitudes_codigo_respuesta_error: number
+
+  fallos_autenticacion: number
+
+  cuerpo_json_invalido: number
+
+  json_incompleto_validacion: number
+
+  sin_configuracion_servidor: number
+
+  excepciones_solicitar_codigo: number
+
+  ultima_peticion_utc: string | null
+
+  ultimo_exito_utc: string | null
+
+  ultimo_error_resumen: string | null
+
+  nota_contadores: string
+
+  /** Hasta 5 últimas consultas reales (no isTestMessage); cédula enmascarada. */
+  cedulas_consulta_recientes?: CedulaConsultaMonitorItem[]
+}
+
+/** Instrucciones copiables: AutoResponder → webhook estado de cuenta (sesión requerida). */
+export interface AutoresponderEstadoCuentaInstrucciones {
+  post_url: string
+
+  /** Donde el cliente descarga el PDF (cédula + código). Vacío si falta FRONTEND_PUBLIC_URL en el API. */
+  portal_pdf_url?: string | null
+
+  basic_auth_usuario: string | null
+
+  basic_auth_configurado: boolean
+
+  headers_recomendados: { clave: string; valor: string }[]
+
+  variables_entorno_render: Record<string, string>
+
+  documentacion_url: string
+
+  alcance: string
+
+  sugerencia_regla: string
+
+  monitor: AutoresponderMonitorStats
+}
+
+export interface ProbarAutoresponderConexionResultado {
+  ok: boolean
+
+  mensaje: string
+
+  status_code?: number | null
+
+  latencia_ms?: number | null
+
+  respuesta_replies?: unknown[] | null
+}
+
 class WhatsAppConfigService {
   private baseUrl = '/api/v1/configuracion'
+
+  async obtenerInstruccionesAutoresponderEstadoCuenta(): Promise<AutoresponderEstadoCuentaInstrucciones> {
+    return await apiClient.get<AutoresponderEstadoCuentaInstrucciones>(
+      `${this.baseUrl}/whatsapp/autoresponder-estado-cuenta`
+    )
+  }
+
+  async probarConexionAutoresponderWebhook(): Promise<ProbarAutoresponderConexionResultado> {
+    return await apiClient.post<ProbarAutoresponderConexionResultado>(
+      `${this.baseUrl}/whatsapp/autoresponder-estado-cuenta/probar-conexion`,
+      {}
+    )
+  }
 
   async obtenerConfiguracionWhatsApp(): Promise<WhatsAppConfig> {
     return await apiClient.get<WhatsAppConfig>(

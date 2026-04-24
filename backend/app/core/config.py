@@ -240,6 +240,17 @@ class Settings(BaseSettings):
         description="App Secret de Meta para verificar firma de webhooks (recomendado)"
     )
 
+    # AutoResponder (app Android): POST JSON → solicitar código de estado de cuenta (misma lógica que /solicitar-codigo).
+    # Defina AMBOS en el entorno (Render) para activar POST .../webhook-autoresponder y Basic Auth en la app.
+    AUTORESPONDER_WEBHOOK_USER: Optional[str] = Field(
+        None,
+        description="Usuario HTTP Basic para POST /api/v1/estado-cuenta/public/webhook-autoresponder (AutoResponder).",
+    )
+    AUTORESPONDER_WEBHOOK_PASSWORD: Optional[str] = Field(
+        None,
+        description="Contraseña HTTP Basic para el webhook AutoResponder. No exponer al frontend.",
+    )
+
     # URL para aviso cuando el webhook de WhatsApp falla (ej. Slack Incoming Webhook).
     # Si está configurada, se envía un POST con el mensaje de error.
     ALERT_WEBHOOK_URL: Optional[str] = Field(
