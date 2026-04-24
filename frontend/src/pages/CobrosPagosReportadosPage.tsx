@@ -415,6 +415,7 @@ export default function CobrosPagosReportadosPage() {
 
   const [searchNonce, setSearchNonce] = useState(0)
   const loadSeqRef = useRef(0)
+  const postMutationSyncTimerRef = useRef<number | null>(null)
   const dataRef = useRef<ListPagosReportadosResponse | null>(null)
   dataRef.current = data
 
@@ -719,6 +720,19 @@ export default function CobrosPagosReportadosPage() {
     setPage(1)
   }
 
+  const schedulePostMutationSync = useCallback(() => {
+    if (postMutationSyncTimerRef.current != null) {
+      window.clearTimeout(postMutationSyncTimerRef.current)
+    }
+    postMutationSyncTimerRef.current = window.setTimeout(() => {
+      postMutationSyncTimerRef.current = null
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') {
+        return
+      }
+      void fetchListado({ silent: true })
+    }, 1800)
+  }, [fetchListado])
+
   const handleCambiarEstado = async (
     id: number,
     nuevoEstado: string,
@@ -768,9 +782,21 @@ export default function CobrosPagosReportadosPage() {
           }
         })
       }
-
-      invalidateCobrosListadoKpisCache()
-      void fetchListado({ bypassCache: true, silent: true })
+      setKpis(prev => {
+        if (!prev) return prev
+        const anterior = (data?.items ?? []).find(r => r.id === id)?.estado ?? ''
+        const from = String(anterior || '').trim() as keyof PagosReportadosKpis
+        const to = String(nuevoEstado || '').trim() as keyof PagosReportadosKpis
+        const next: PagosReportadosKpis = { ...prev }
+        if (from in next && typeof next[from] === 'number') {
+          ;(next[from] as number) = Math.max(0, Number(next[from]) - 1)
+        }
+        if (to in next && typeof next[to] === 'number') {
+          ;(next[to] as number) = Number(next[to]) + 1
+        }
+        return next
+      })
+      schedulePostMutationSync()
 
       if (nuevoEstado === 'rechazado') {
         setRechazarModal({ open: false, row: null })
@@ -838,9 +864,21 @@ export default function CobrosPagosReportadosPage() {
         }
       })
       setSelectedIds(prev => prev.filter(x => x !== id))
+      setKpis(prev => {
+        if (!prev) return prev
+        const anterior = (data?.items ?? []).find(r => r.id === id)?.estado ?? ''
+        const from = String(anterior || '').trim() as keyof PagosReportadosKpis
+        const next: PagosReportadosKpis = {
+          ...prev,
+          total: Math.max(0, Number(prev.total || 0) - 1),
+        }
+        if (from in next && typeof next[from] === 'number') {
+          ;(next[from] as number) = Math.max(0, Number(next[from]) - 1)
+        }
+        return next
+      })
       toast.success(res?.mensaje || 'Pago reportado eliminado.')
-      invalidateCobrosListadoKpisCache()
-      void fetchListado({ bypassCache: true, silent: true })
+      schedulePostMutationSync()
     } catch (e: unknown) {
       const detail = (e as { response?: { data?: { detail?: string } } })
         ?.response?.data?.detail
