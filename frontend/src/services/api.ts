@@ -404,9 +404,12 @@ class ApiClient {
          */
         const isSafeTransientRetryGet =
           methodLc === 'get' &&
-          (reqUrl.includes('/cobros/pagos-reportados/listado-y-kpis') ||
+          (reqUrl.includes('/api/v1/auth/me') ||
+            reqUrl.includes('/cobros/pagos-reportados/listado-y-kpis') ||
             reqUrl.includes('/admin/tasas-cambio/estado') ||
-            reqUrl.includes('/tasas-cambio/estado'))
+            reqUrl.includes('/admin/tasas-cambio/hoy') ||
+            reqUrl.includes('/tasas-cambio/estado') ||
+            reqUrl.includes('/tasas-cambio/hoy'))
         /**
          * PATCH cambio de estado (aprobar/rechazar flujo UI). 502 del proxy sin cuerpo JSON
          * suele ser TCP/deploy; el backend puede no haber aplicado el cambio.
@@ -434,8 +437,9 @@ class ApiClient {
           const delayBase = st === 502 || st === 503 ? 2000 : 500
           const delayMs = delayBase * Math.pow(2, retryCount)
 
-          console.warn(
-            `? [ApiClient] Error ${error.response?.status} (intento ${retryCount + 1}/${maxRetries}), reintentando en ${delayMs}ms:`,
+          // console.info: no pasa por el parche de console.warn de pagos-bootstrap.js (evita confundir la línea 128 del bootstrap con el origen del log).
+          console.info(
+            `[ApiClient] Error ${error.response?.status} (intento ${retryCount + 1}/${maxRetries}), reintentando en ${delayMs}ms:`,
             {
               url: requestConfigForRetry.url,
 

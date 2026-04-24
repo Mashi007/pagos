@@ -30,6 +30,10 @@
   function shouldSuppress(message) {
     if (!message || typeof message !== 'string') return false
     var lowerMessage = message.toLowerCase()
+    // Firefox a veces concatena mensaje + " index-XXXX.css:linea:col" en un solo string.
+    if (/reglas?\s+ignoradas/i.test(message) && /mal\s+selector|bad\s+selector|malformed\s+selector/i.test(message)) {
+      return true
+    }
     if (lowerMessage.indexOf('reglas ignoradas') !== -1 && lowerMessage.indexOf('selector') !== -1) {
       return true
     }
