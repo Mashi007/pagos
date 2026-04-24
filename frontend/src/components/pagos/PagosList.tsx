@@ -24,6 +24,7 @@ import {
   Check,
   Eye,
   FileText,
+  RotateCcw,
 } from 'lucide-react'
 import { Button } from '../../components/ui/button'
 import { ListPaginationBar } from '../../components/ui/ListPaginationBar'
@@ -99,7 +100,30 @@ import {
 import {
   abrirStaffComprobanteDesdeHref,
   esUrlComprobanteImagenConAuth,
+  fetchStaffComprobanteBlobFromHref,
 } from '../../utils/comprobanteImagenAuth'
+
+type StaffComprobanteListPreview = {
+  open: boolean
+  href: string
+  label: string
+  pagoId: number | null
+  blobUrl: string | null
+  contentType: string | null
+  loading: boolean
+  rotDeg: number
+}
+
+const STAFF_COMPROBANTE_LIST_PREVIEW_CLOSED: StaffComprobanteListPreview = {
+  open: false,
+  href: '',
+  label: '',
+  pagoId: null,
+  blobUrl: null,
+  contentType: null,
+  loading: false,
+  rotDeg: 0,
+}
 
 /** Si false, la opción "Descargar Excel" (Gmail) no se muestra en el submenú Agregar pago. */
 const SHOW_DESCARGA_EXCEL_EN_SUBMENU = false
@@ -255,6 +279,93 @@ export function PagosList() {
   const [isBulkDeletingGlobal, setIsBulkDeletingGlobal] = useState(false)
   const syncingRevisionRef = useRef(false)
   const queryClient = useQueryClient()
+
+  const [lgViewport, setLgViewport] = useState(false)
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const mq = window.matchMedia('(min-width: 1024px)')
+    const apply = () => setLgViewport(mq.matches)
+    apply()
+    mq.addEventListener('change', apply)
+    return () => mq.removeEventListener('change', apply)
+  }, [])
+
+  const [staffComprobantePreview, setStaffComprobantePreview] =
+    useState<StaffComprobanteListPreview>(STAFF_COMPROBANTE_LIST_PREVIEW_CLOSED)
+
+  useEffect(() => {
+    if (!lgViewport && staffComprobantePreview.open) {
+      setStaffComprobantePreview(prev => {
+        if (prev.blobUrl) URL.revokeObjectURL(prev.blobUrl)
+        return STAFF_COMPROBANTE_LIST_PREVIEW_CLOSED
+      })
+    }
+  }, [lgViewport, staffComprobantePreview.open])
+
+  useEffect(() => {
+    return () => {
+      if (staffComprobantePreview.blobUrl) {
+        URL.revokeObjectURL(staffComprobantePreview.blobUrl)
+      }
+    }
+  }, [staffComprobantePreview.blobUrl])
+
+  const closeStaffComprobanteListPreview = useCallback(() => {
+    setStaffComprobantePreview(prev => {
+      if (prev.blobUrl) URL.revokeObjectURL(prev.blobUrl)
+      return STAFF_COMPROBANTE_LIST_PREVIEW_CLOSED
+    })
+  }, [])
+
+  const openStaffComprobanteForList = useCallback(
+    async (href: string, label: string, pagoId: number | null) => {
+      const u = String(href || '').trim()
+      if (!u) {
+        toast.error('No hay comprobante o recibo asociado.')
+        return
+      }
+      if (!esUrlComprobanteImagenConAuth(u)) {
+        await abrirStaffComprobanteDesdeHref(u)
+        return
+      }
+      if (!lgViewport) {
+        await abrirStaffComprobanteDesdeHref(u)
+        return
+      }
+      setStaffComprobantePreview(prev => {
+        if (prev.blobUrl) URL.revokeObjectURL(prev.blobUrl)
+        return {
+          ...STAFF_COMPROBANTE_LIST_PREVIEW_CLOSED,
+          open: true,
+          href: u,
+          label,
+          pagoId,
+          loading: true,
+        }
+      })
+      try {
+        const blob = await fetchStaffComprobanteBlobFromHref(u)
+        const blobUrl = URL.createObjectURL(blob)
+        setStaffComprobantePreview(prev => ({
+          ...prev,
+          blobUrl,
+          contentType: blob.type || null,
+          loading: false,
+          rotDeg: 0,
+        }))
+      } catch (e) {
+        toast.error(getErrorMessage(e) || 'No se pudo cargar el comprobante.')
+        setStaffComprobantePreview(prev => {
+          if (prev.blobUrl) URL.revokeObjectURL(prev.blobUrl)
+          return STAFF_COMPROBANTE_LIST_PREVIEW_CLOSED
+        })
+      }
+    },
+    [lgViewport]
+  )
+
+  const dockStaffComprobante = staffComprobantePreview.open && lgViewport
 
   const sincronizarPendientesRevision = useCallback(
     async (opts?: { silent?: boolean }) => {
@@ -1395,7 +1506,131 @@ export function PagosList() {
   }
 
   return (
-    <div className="space-y-6">
+    <div
+      className={cn(
+        !dockStaffComprobante && 'space-y-6',
+        dockStaffComprobante &&
+          '-mx-6 flex w-[calc(100%+3rem)] max-w-none flex-col gap-0 border-y border-slate-200/70 bg-white lg:grid lg:h-[calc(100dvh-7.5rem)] lg:max-h-[calc(100dvh-7.5rem)] lg:grid-cols-2 lg:items-stretch lg:overflow-hidden lg:divide-x lg:divide-slate-200/70'
+      )}
+    >
+      {dockStaffComprobante ? (
+        <aside className="flex min-h-[min(36vh,320px)] min-w-0 flex-col bg-slate-100 lg:min-h-0 lg:h-full lg:max-h-full lg:overflow-y-auto lg:overscroll-y-contain">
+          <Card className="flex h-full min-h-0 flex-col rounded-none border-0 shadow-none">
+            <CardHeader className="shrink-0 border-b border-slate-200/80 px-3 pb-2 pt-3">
+              <CardTitle className="text-base">Comprobante</CardTitle>
+              <p className="text-xs text-muted-foreground">
+                {staffComprobantePreview.label}
+              </p>
+            </CardHeader>
+            <CardContent className="flex min-h-0 flex-1 flex-col space-y-2 overflow-hidden p-2 sm:p-3 lg:pl-0 lg:pr-2">
+              {staffComprobantePreview.loading ? (
+                <div className="flex flex-1 items-center justify-center py-12">
+                  <Loader2 className="h-10 w-10 animate-spin text-slate-500" />
+                </div>
+              ) : staffComprobantePreview.blobUrl &&
+                staffComprobantePreview.contentType?.startsWith('image/') ? (
+                <>
+                  <div className="flex min-h-0 flex-1 items-center justify-center overflow-auto rounded-md border border-slate-200/80 bg-white lg:rounded-l-none lg:border-l-0">
+                    <div
+                      className="inline-flex max-h-full max-w-full origin-center transition-transform duration-200"
+                      style={{
+                        transform: `rotate(${staffComprobantePreview.rotDeg}deg)`,
+                      }}
+                    >
+                      <img
+                        src={staffComprobantePreview.blobUrl}
+                        alt="Comprobante"
+                        className="max-h-full max-w-full object-contain"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex shrink-0 flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      title="Rotar 90° a la izquierda"
+                      onClick={() =>
+                        setStaffComprobantePreview(prev => ({
+                          ...prev,
+                          rotDeg: (prev.rotDeg - 90 + 360) % 360,
+                        }))
+                      }
+                    >
+                      <RotateCcw className="mr-1 h-4 w-4" />
+                      Rotar
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      title="Rotar 90° a la derecha"
+                      onClick={() =>
+                        setStaffComprobantePreview(prev => ({
+                          ...prev,
+                          rotDeg: (prev.rotDeg + 90) % 360,
+                        }))
+                      }
+                    >
+                      <span className="inline-flex" aria-hidden>
+                        <RotateCcw className="mr-1 h-4 w-4 scale-x-[-1]" />
+                      </span>
+                      Rotar der.
+                    </Button>
+                  </div>
+                </>
+              ) : staffComprobantePreview.blobUrl ? (
+                <div className="min-h-0 flex-1 overflow-auto rounded-md border border-slate-200/80 bg-white lg:rounded-l-none lg:border-l-0">
+                  <iframe
+                    title={staffComprobantePreview.label || 'Comprobante'}
+                    src={staffComprobantePreview.blobUrl}
+                    className="h-[min(36vh,320px)] min-h-[200px] w-full border-0 lg:h-full lg:min-h-[min(50vh,520px)]"
+                  />
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  No se pudo cargar el comprobante.
+                </p>
+              )}
+              {staffComprobantePreview.href ? (
+                <div className="flex shrink-0 flex-col gap-2 sm:flex-row">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="w-full sm:flex-1"
+                    onClick={() =>
+                      void abrirStaffComprobanteDesdeHref(
+                        staffComprobantePreview.href
+                      )
+                    }
+                  >
+                    <Eye className="mr-1 h-4 w-4" />
+                    Abrir en nueva pestaña
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    className="w-full sm:flex-1"
+                    onClick={closeStaffComprobanteListPreview}
+                  >
+                    Cerrar panel
+                  </Button>
+                </div>
+              ) : null}
+            </CardContent>
+          </Card>
+        </aside>
+      ) : null}
+
+      <div
+        className={cn(
+          dockStaffComprobante &&
+            'min-h-0 min-w-0 space-y-6 overflow-y-auto overscroll-y-contain px-3 py-4 sm:px-4 lg:pl-5 lg:pr-0 lg:py-4',
+          !dockStaffComprobante && 'contents'
+        )}
+      >
       <div className="flex flex-wrap items-center justify-end gap-3 rounded-xl border border-gray-200/80 bg-gray-50/50 px-4 py-3 sm:px-5 sm:py-4">
         <Button
           variant="outline"
@@ -2326,8 +2561,10 @@ export function PagosList() {
                                       )
                                       return
                                     }
-                                    void abrirStaffComprobanteDesdeHref(
-                                      pago.documento_ruta
+                                    void openStaffComprobanteForList(
+                                      pago.documento_ruta,
+                                      `Pago #${pago.id}`,
+                                      pago.id
                                     )
                                   }}
                                 >
@@ -3188,8 +3425,10 @@ export function PagosList() {
                                                 e.preventDefault()
                                                 void (async () => {
                                                   try {
-                                                    await abrirStaffComprobanteDesdeHref(
-                                                      u
+                                                    await openStaffComprobanteForList(
+                                                      u,
+                                                      `Pago #${pago.id}`,
+                                                      pago.id
                                                     )
                                                   } catch {
                                                     toast.error(
@@ -3585,6 +3824,7 @@ export function PagosList() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      </div>
     </div>
   )
 }

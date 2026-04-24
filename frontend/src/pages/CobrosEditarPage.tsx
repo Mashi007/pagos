@@ -24,6 +24,8 @@ import { useParams, useNavigate } from 'react-router-dom'
 
 import {
   getPagoReportadoDetalle,
+  getPagoReportadoComprobanteBlob,
+  openComprobanteInNewTab,
   updatePagoReportado,
   eliminarPagoReportado,
   type PagoReportadoDetalleResponse,
@@ -117,6 +119,21 @@ export default function CobrosEditarPage() {
   const [vistoAyudaOpen, setVistoAyudaOpen] = useState(false)
 
   const ultimoErrorVistoRef = useRef('')
+
+  /** Vista previa local del comprobante (blob URL); se revoca al desmontar o al recargar. */
+  const [comprobanteObjectUrl, setComprobanteObjectUrl] = useState<
+    string | null
+  >(null)
+
+  const [comprobantePreviewLoading, setComprobantePreviewLoading] =
+    useState(false)
+
+  const [comprobantePreviewError, setComprobantePreviewError] = useState<
+    string | null
+  >(null)
+
+  /** Incrementar para volver a pedir el binario del comprobante (Reintentar / tras Recargar datos). */
+  const [comprobantePreviewNonce, setComprobantePreviewNonce] = useState(0)
 
   const [otroInstitucion, setOtroInstitucion] = useState('')
   const tokensSufijoUsadosRef = useRef<Set<string>>(new Set())
@@ -294,6 +311,65 @@ export default function CobrosEditarPage() {
     load()
   }, [id])
 
+  useEffect(() => {
+    const pid = id ? Number(id) : NaN
+    if (!id || Number.isNaN(pid) || !detalle?.tiene_comprobante) {
+      setComprobanteObjectUrl(prev => {
+        if (prev) URL.revokeObjectURL(prev)
+        return null
+      })
+      setComprobantePreviewError(null)
+      setComprobantePreviewLoading(false)
+      return
+    }
+
+    let active = true
+
+    setComprobantePreviewLoading(true)
+    setComprobantePreviewError(null)
+
+    ;(async () => {
+      try {
+        const blob = await getPagoReportadoComprobanteBlob(pid)
+        const nextUrl = URL.createObjectURL(blob)
+        if (!active) {
+          URL.revokeObjectURL(nextUrl)
+          return
+        }
+        setComprobanteObjectUrl(prev => {
+          if (prev) URL.revokeObjectURL(prev)
+          return nextUrl
+        })
+      } catch (e: unknown) {
+        if (active) {
+          setComprobantePreviewError(
+            detalleErrorApi(e) || 'No se pudo cargar el comprobante.'
+          )
+        }
+      } finally {
+        if (active) setComprobantePreviewLoading(false)
+      }
+    })()
+
+    return () => {
+      active = false
+    }
+  }, [
+    id,
+    detalle?.tiene_comprobante,
+    detalle?.updated_at,
+    comprobantePreviewNonce,
+  ])
+
+  useEffect(() => {
+    return () => {
+      setComprobanteObjectUrl(prev => {
+        if (prev) URL.revokeObjectURL(prev)
+        return null
+      })
+    }
+  }, [])
+
   const handleEliminarReporteDuplicado = async () => {
     if (!id) return
     if (
@@ -399,7 +475,76 @@ export default function CobrosEditarPage() {
   }
 
   return (
-    <div className="max-w-2xl space-y-6 p-6">
+    <>
+      <div className="-mx-4 flex w-[calc(100%+2rem)] max-w-none flex-col gap-0 border-y border-slate-200/70 bg-white lg:grid lg:h-[calc(100dvh-7.5rem)] lg:max-h-[calc(100dvh-7.5rem)] lg:grid-cols-2 lg:items-stretch lg:overflow-hidden lg:divide-x lg:divide-slate-200/70">
+        <aside className="flex min-h-[min(42vh,380px)] min-w-0 flex-col bg-slate-100 lg:min-h-0 lg:h-full lg:max-h-full lg:overflow-y-auto lg:overscroll-y-contain">
+          <Card className="flex h-full min-h-0 flex-col rounded-none border-0 shadow-none">
+            <CardHeader className="shrink-0 border-b border-slate-200/80 px-3 pb-2 pt-3 lg:pl-3 lg:pr-3">
+              <CardTitle className="text-base">Comprobante</CardTitle>
+              <p className="text-xs text-muted-foreground">
+                Pantalla ancha: comprobante a la izquierda y formulario de revisión
+                manual a la derecha, usando todo el ancho del área de trabajo.
+              </p>
+            </CardHeader>
+            <CardContent className="flex min-h-0 flex-1 flex-col space-y-2 overflow-hidden p-2 sm:p-3 lg:pl-0 lg:pr-2">
+              {!detalle.tiene_comprobante ? (
+                <p className="text-sm text-muted-foreground">
+                  Este reporte no tiene archivo de comprobante adjunto.
+                </p>
+              ) : comprobantePreviewLoading ? (
+                <div className="flex items-center gap-2 py-12 text-sm text-muted-foreground">
+                  <Loader2 className="h-5 w-5 shrink-0 animate-spin" />
+                  Cargando comprobante…
+                </div>
+              ) : comprobantePreviewError ? (
+                <div className="space-y-2">
+                  <p className="text-sm text-red-700">{comprobantePreviewError}</p>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setComprobantePreviewNonce(n => n + 1)}
+                    >
+                      Reintentar
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => id && void openComprobanteInNewTab(Number(id))}
+                    >
+                      <Eye className="mr-1 h-4 w-4" />
+                      Abrir en pestaña
+                    </Button>
+                  </div>
+                </div>
+              ) : comprobanteObjectUrl ? (
+                <>
+                  <div className="min-h-0 flex-1 overflow-auto rounded-md border border-slate-200/80 bg-white lg:rounded-l-none lg:border-l-0">
+                    <iframe
+                      title="Comprobante del reporte"
+                      src={comprobanteObjectUrl}
+                      className="block h-[min(42vh,380px)] min-h-[240px] w-full border-0 lg:h-full lg:min-h-[min(50vh,520px)]"
+                    />
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="w-full shrink-0"
+                    onClick={() => id && void openComprobanteInNewTab(Number(id))}
+                  >
+                    <Eye className="mr-1 h-4 w-4" />
+                    Abrir en nueva pestaña
+                  </Button>
+                </>
+              ) : null}
+            </CardContent>
+          </Card>
+        </aside>
+
+        <div className="min-h-0 min-w-0 space-y-6 overflow-y-auto overscroll-y-contain px-3 py-4 sm:px-4 lg:pl-5 lg:pr-0 lg:py-4">
       <div className="flex items-center justify-between">
         <Button
           variant="ghost"
@@ -904,6 +1049,8 @@ export default function CobrosEditarPage() {
           </form>
         </CardContent>
       </Card>
+        </div>
+      </div>
 
       <Dialog open={vistoAyudaOpen} onOpenChange={setVistoAyudaOpen}>
         <DialogContent className="max-w-md">
@@ -947,6 +1094,6 @@ export default function CobrosEditarPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </>
   )
 }

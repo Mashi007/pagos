@@ -62,9 +62,9 @@ export interface RellenarTasasDesdeVecinoResponse {
 const ADMIN_TASAS = '/api/v1/admin/tasas-cambio'
 /**
  * Lectura y registro del día para cualquier usuario autenticado (operadores incl.).
- * El backend debe exponer los mismos contratos que bajo admin para: GET /estado, /hoy,
- * /por-fecha y POST /guardar. Si aún no existen, los GET hacen fallback a admin (404).
- * guardar hace fallback a esta ruta solo si admin responde 403.
+ * Los GET intentan primero admin; si responde 403, repiten bajo esta ruta (mismo contrato).
+ * Así los admins no generan 404 en logs cuando el API aún no monta /tasas-cambio.
+ * POST /guardar: admin primero; 403 → POST aquí.
  */
 const TASAS_CAMBIO_API = '/api/v1/tasas-cambio'
 
@@ -80,15 +80,21 @@ function throwFromAxios(e: unknown, fallback: string): never {
   throw e instanceof Error ? e : new Error(fallback)
 }
 
-/** GET: intenta ruta para todos los autenticados; si no existe (404), usa admin (compat). */
+/**
+ * GET tasas: admin primero (mayoría de despliegues). 403 → misma ruta bajo /tasas-cambio
+ * para operadores cuando el backend la exponga. Si la ruta amplia no existe (404),
+ * se propaga el error original del admin (p. ej. 403).
+ */
 async function getTasaLecturaFlexible<T>(rutaRelativa: string): Promise<T> {
   try {
-    return await apiClient.get<T>(TASAS_CAMBIO_API + rutaRelativa)
+    return await apiClient.get<T>(ADMIN_TASAS + rutaRelativa)
   } catch (e) {
-    if (isAxiosError(e) && e.response?.status === 404) {
-      return await apiClient.get<T>(ADMIN_TASAS + rutaRelativa)
+    if (!isAxiosError(e) || e.response?.status !== 403) throw e
+    try {
+      return await apiClient.get<T>(TASAS_CAMBIO_API + rutaRelativa)
+    } catch {
+      throw e
     }
-    throw e
   }
 }
 

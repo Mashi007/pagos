@@ -21,6 +21,18 @@ export function esUrlComprobanteImagenConAuth(href: string): boolean {
  * Abre el comprobante en una pestaña nueva. Si es comprobante-imagen, descarga con sesión
  * y muestra un object URL; si no, delega en `window.open` (p. ej. Drive).
  */
+/** Descarga el comprobante interno (`/api/v1/pagos/comprobante-imagen/...`) con la sesión staff. */
+export async function fetchStaffComprobanteBlobFromHref(
+  href: string
+): Promise<Blob> {
+  const t = String(href ?? '').trim()
+  const path = pathApiComprobanteImagenDesdeHref(t)
+  if (!path) {
+    throw new Error('El enlace no es un comprobante interno descargable con sesión.')
+  }
+  return apiClient.getBlob(path)
+}
+
 export async function abrirStaffComprobanteDesdeHref(href: string): Promise<void> {
   const t = String(href ?? '').trim()
   if (!t) return

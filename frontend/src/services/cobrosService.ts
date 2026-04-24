@@ -1185,11 +1185,18 @@ export async function historicoPorCliente(
   return data
 }
 
-/** Abre el comprobante (imagen/PDF) en nueva pesta├â┬▒a. Usa auth del apiClient. */
+/** Descarga el binario del comprobante (imagen/PDF) con la misma auth que el resto de Cobros. */
+export async function getPagoReportadoComprobanteBlob(
+  pagoId: number
+): Promise<Blob> {
+  const path = `${BASE_COBROS}/pagos-reportados/${pagoId}/comprobante`
+  return apiClient.getBlob(path)
+}
+
+/** Abre el comprobante (imagen/PDF) en nueva pestaña. Usa auth del apiClient. */
 
 export async function openComprobanteInNewTab(pagoId: number): Promise<void> {
-  const path = `${BASE_COBROS}/pagos-reportados/${pagoId}/comprobante`
-  const data = await apiClient.getBlob(path)
+  const data = await getPagoReportadoComprobanteBlob(pagoId)
 
   const url = URL.createObjectURL(data)
 

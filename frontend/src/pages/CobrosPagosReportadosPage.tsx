@@ -421,6 +421,20 @@ export default function CobrosPagosReportadosPage() {
 
   const [colWidths, setColWidths] = useState<number[]>(readCobrosReportadosColWidths)
 
+  /** En ≥1024px el comprobante se acopla a la izquierda y el listado a la derecha (sin ventana flotante). */
+  const [lgViewport, setLgViewport] = useState(false)
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const mq = window.matchMedia('(min-width: 1024px)')
+    const apply = () => setLgViewport(mq.matches)
+    apply()
+    mq.addEventListener('change', apply)
+    return () => mq.removeEventListener('change', apply)
+  }, [])
+
+  const dockComprobante = previewComprobante.open && lgViewport
+
   useEffect(() => {
     try {
       window.localStorage.setItem(
@@ -574,6 +588,10 @@ export default function CobrosPagosReportadosPage() {
       previewFloatInitRef.current = false
       return
     }
+    if (lgViewport) {
+      previewFloatInitRef.current = false
+      return
+    }
     if (previewFloatInitRef.current) return
     const vw = window.innerWidth
     const vh = window.innerHeight
@@ -592,7 +610,7 @@ export default function CobrosPagosReportadosPage() {
     setPreviewFloatLeft(clampComprobanteFloat(vw - w - 12, 8, vw - w - 8))
     setPreviewFloatTop(clampComprobanteFloat((vh - h) / 2, 8, vh - h - 8))
     previewFloatInitRef.current = true
-  }, [previewComprobante.open])
+  }, [previewComprobante.open, lgViewport])
 
   useEffect(() => {
     return () => {
@@ -1112,7 +1130,107 @@ export default function CobrosPagosReportadosPage() {
   }
 
   return (
-    <div className="space-y-6 p-6">
+    <div
+      className={cn(
+        !dockComprobante && 'space-y-6 p-6',
+        dockComprobante &&
+          '-mx-4 flex w-[calc(100%+2rem)] max-w-none flex-col gap-0 border-y border-slate-200/70 bg-white p-0 lg:grid lg:h-[calc(100dvh-7.5rem)] lg:max-h-[calc(100dvh-7.5rem)] lg:grid-cols-2 lg:items-stretch lg:overflow-hidden lg:divide-x lg:divide-slate-200/70'
+      )}
+    >
+      {dockComprobante ? (
+        <aside className="flex min-h-[min(36vh,320px)] min-w-0 flex-col bg-slate-100 lg:min-h-0 lg:h-full lg:max-h-full lg:overflow-y-auto lg:overscroll-y-contain">
+          <div className="flex shrink-0 items-center gap-2 border-b border-slate-200/80 bg-slate-50/95 px-3 py-2">
+            <span className="min-w-0 flex-1 truncate text-xs font-semibold text-slate-800">
+              Comprobante #{previewComprobante.pagoId ?? ''}
+            </span>
+            {previewComprobante.contentType?.startsWith('image/') && (
+              <>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 w-7 shrink-0 p-0"
+                  title="Rotar 90° a la izquierda"
+                  aria-label="Rotar 90 grados a la izquierda"
+                  onClick={() =>
+                    setPreviewComprobante(prev => ({
+                      ...prev,
+                      rotDeg: (prev.rotDeg - 90 + 360) % 360,
+                    }))
+                  }
+                >
+                  <RotateCcw className="h-4 w-4" />
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 w-7 shrink-0 p-0"
+                  title="Rotar 90° a la derecha"
+                  aria-label="Rotar 90 grados a la derecha"
+                  onClick={() =>
+                    setPreviewComprobante(prev => ({
+                      ...prev,
+                      rotDeg: (prev.rotDeg + 90) % 360,
+                    }))
+                  }
+                >
+                  <span className="inline-flex" aria-hidden>
+                    <RotateCcw className="h-4 w-4 scale-x-[-1]" />
+                  </span>
+                </Button>
+              </>
+            )}
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-7 w-7 shrink-0 p-0"
+              title="Cerrar comprobante"
+              onClick={closeComprobantePreview}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+          <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden p-2 lg:pl-0 lg:pr-2">
+            <div className="flex min-h-0 flex-1 items-center justify-center overflow-auto rounded-md border border-slate-200/80 bg-white lg:rounded-l-none lg:border-l-0">
+              {previewComprobante.loading ? (
+                <Loader2 className="h-10 w-10 animate-spin text-slate-500" />
+              ) : previewComprobante.blobUrl &&
+                previewComprobante.contentType?.startsWith('image/') ? (
+                <div
+                  className="inline-flex max-h-full max-w-full origin-center transition-transform duration-200"
+                  style={{ transform: `rotate(${previewComprobante.rotDeg}deg)` }}
+                >
+                  <img
+                    src={previewComprobante.blobUrl}
+                    alt="Comprobante"
+                    className="max-h-full max-w-full object-contain"
+                  />
+                </div>
+              ) : previewComprobante.blobUrl ? (
+                <iframe
+                  title={`Comprobante ${previewComprobante.pagoId ?? ''}`}
+                  src={previewComprobante.blobUrl}
+                  className="h-[min(36vh,320px)] min-h-[200px] w-full flex-1 border-0 lg:h-full lg:min-h-[min(50vh,520px)]"
+                />
+              ) : (
+                <div className="px-3 text-sm text-muted-foreground">
+                  No se pudo cargar el comprobante.
+                </div>
+              )}
+            </div>
+          </div>
+        </aside>
+      ) : null}
+
+      <div
+        className={cn(
+          dockComprobante &&
+            'min-h-0 min-w-0 space-y-6 overflow-y-auto overscroll-y-contain px-3 py-4 sm:px-4 lg:pl-5 lg:pr-0 lg:py-4',
+          !dockComprobante && 'contents'
+        )}
+      >
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <h1 className="text-2xl font-semibold">Pagos Reportados</h1>
@@ -1958,6 +2076,7 @@ export default function CobrosPagosReportadosPage() {
       </Card>
 
       {previewComprobante.open &&
+        !lgViewport &&
         typeof document !== 'undefined' &&
         createPortal(
           <div
@@ -2186,6 +2305,7 @@ export default function CobrosPagosReportadosPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      </div>
     </div>
   )
 }
