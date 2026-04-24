@@ -747,12 +747,14 @@ export default function CobrosPagosReportadosPage() {
     setChangingEstadoId(id)
 
     try {
-      const data = await cambiarEstadoPago(id, nuevoEstado, motivo)
+      const estadoAnteriorEnLista =
+        data?.items.find(r => r.id === id)?.estado ?? ''
+      const resp = await cambiarEstadoPago(id, nuevoEstado, motivo)
 
       if (nuevoEstado === 'rechazado') {
-        toastAfterRechazoCobros(data)
+        toastAfterRechazoCobros(resp)
       } else {
-        toast.success(data.mensaje || 'Estado actualizado.')
+        toast.success(resp.mensaje || 'Estado actualizado.')
       }
 
       // Al aprobar: el backend crea el pago en pagos, lo concilia y aplica a cuotas en cascada.
@@ -784,8 +786,7 @@ export default function CobrosPagosReportadosPage() {
       }
       setKpis(prev => {
         if (!prev) return prev
-        const anterior = (data?.items ?? []).find(r => r.id === id)?.estado ?? ''
-        const from = String(anterior || '').trim() as keyof PagosReportadosKpis
+        const from = String(estadoAnteriorEnLista || '').trim() as keyof PagosReportadosKpis
         const to = String(nuevoEstado || '').trim() as keyof PagosReportadosKpis
         const next: PagosReportadosKpis = { ...prev }
         if (from in next && typeof next[from] === 'number') {

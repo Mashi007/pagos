@@ -320,13 +320,13 @@ class ApiClient {
           config.timeout = 180000 // 3 minutos
         }
 
-        // Cobros: listado+KPIs recorre la cola en servidor; con cola grande puede acercarse o superar 30s.
+        // Cobros: listado+KPIs recorre la cola en servidor; con cola grande puede superar 60s en picos.
         if (
           config.method?.toLowerCase() === 'get' &&
           config.url?.includes('/cobros/pagos-reportados/listado-y-kpis') &&
-          (config.timeout == null || config.timeout < SLOW_ENDPOINT_TIMEOUT_MS)
+          (config.timeout == null || config.timeout < 120000)
         ) {
-          config.timeout = SLOW_ENDPOINT_TIMEOUT_MS
+          config.timeout = 120000
         }
 
         // FormData: no fijar Content-Type aquí; axios/navegador añaden multipart + boundary.
@@ -383,15 +383,26 @@ class ApiClient {
 
         const st = error.response?.status
         const reqUrl = String(requestConfigForRetry?.url || '')
+        const methodLc = String(requestConfigForRetry?.method || '').toLowerCase()
         const isScannerReadOnlyPost =
-          reqUrl.includes('/cobros/escaner/extraer-comprobante') ||
-          reqUrl.includes('/cobros/escaner/lote/drive-digitalizar')
+          methodLc === 'post' &&
+          (reqUrl.includes('/cobros/escaner/extraer-comprobante') ||
+            reqUrl.includes('/cobros/escaner/lote/drive-digitalizar'))
+        /** GET idempotente: cola grande en servidor; 502/503 tras deploy o corte TCP en Render. */
+        const isCobrosListadoKpisGet =
+          methodLc === 'get' &&
+          reqUrl.includes('/cobros/pagos-reportados/listado-y-kpis')
         const canRetryBecauseStatus =
-          st === 500 || st === 503 || (st === 502 && isScannerReadOnlyPost)
+          st === 503 ||
+          st === 504 ||
+          (st === 500 && (methodLc !== 'get' || isCobrosListadoKpisGet)) ||
+          (st === 502 && (isScannerReadOnlyPost || isCobrosListadoKpisGet))
+        const mayRetryThisRequest =
+          methodLc !== 'get' || isCobrosListadoKpisGet
         if (
           canRetryBecauseStatus &&
           retryCount < maxRetries &&
-          requestConfigForRetry.method !== 'get' // No reintentar GET en teoría; para escáner (POST) sí es seguro.
+          mayRetryThisRequest
         ) {
           ;(requestConfigForRetry as any)._retryCount = retryCount + 1
 

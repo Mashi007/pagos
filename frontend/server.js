@@ -334,11 +334,17 @@ if (API_URL) {
       const isNotificacionesLote =
         p.includes('/notificaciones/enviar-caso-manual') ||
         p.includes('/notificaciones/enviar-todas');
+      const isCobrosListadoKpis =
+        p.includes('/pagos-reportados/listado-y-kpis') ||
+        p.includes('pagos-reportados/listado-y-kpis');
       let proxyTimeoutMs = 60000;
       if (isExportReport) {
         proxyTimeoutMs = 180000;
       } else if (isNotificacionesLote) {
         proxyTimeoutMs = 900000;
+      } else if (isCobrosListadoKpis) {
+        // Barrido pesado en backend; el proxy por defecto (60s) puede cortar antes que axios (60s) en picos.
+        proxyTimeoutMs = 120000;
       }
       proxyReq.setTimeout(proxyTimeoutMs);
     },
