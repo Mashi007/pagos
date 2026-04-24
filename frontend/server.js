@@ -99,6 +99,27 @@ function resolveApiProxyTarget() {
 const _resolvedApi = resolveApiProxyTarget();
 const API_URL = _resolvedApi.url;
 
+/** Si el destino del proxy coincide con la URL pública de este servicio, /api no llega al FastAPI. */
+function warnIfApiProxyTargetIsRenderSelf(apiUrl) {
+  const ext = (process.env.RENDER_EXTERNAL_URL || '').trim();
+  if (!ext || !apiUrl) return;
+  try {
+    const selfOrigin = new URL(/^https?:\/\//i.test(ext) ? ext : `https://${ext}`).origin;
+    const targetOrigin = new URL(
+      /^https?:\/\//i.test(apiUrl) ? apiUrl : `https://${apiUrl}`
+    ).origin;
+    if (selfOrigin === targetOrigin) {
+      console.error(
+        '[proxy] API_BASE_URL (o equivalente) apunta al mismo origen que RENDER_EXTERNAL_URL (este frontend). ' +
+          'Configure la URL pública del servicio API o use el render.yaml de la raíz (fromService).'
+      );
+    }
+  } catch {
+    /* ignorar comparación si URL inválida */
+  }
+}
+warnIfApiProxyTargetIsRenderSelf(API_URL);
+
 /**
  * Starlette/FastAPI suelen enviar Location absoluta al dominio público del API.
  * El cliente llamó a https://rapicredit.../api/...; si recibe 307 hacia pagos-f2qf...,
@@ -395,6 +416,11 @@ if (API_URL) {
         console.log(`${emoji} [${req.method}] ${status} ${req.path}`);
         if (status === 404) {
           console.error(`   ❌ ERROR 404 - El backend no encontró la ruta: ${API_URL}${proxyRes.req?.path || req.path}`);
+        }
+        if (status === 502) {
+          console.error(
+            '   502 upstream: si es estable, revisar logs del servicio API (caído, timeout, deploy) y API_BASE_URL.'
+          );
         }
       } else if (isDevelopment) {
         const emoji = status >= 200 && status < 300 ? '✅' : status >= 400 ? '❌' : '⚠️';

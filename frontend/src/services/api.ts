@@ -883,7 +883,8 @@ class ApiClient {
 
         case 502:
           toast.error(
-            'El servidor tardó en responder o está reiniciando. Reintente en unos segundos.'
+            'El API no respondió (502). Si persiste tras reintentos, revise el servicio backend y API_BASE_URL en Render.',
+            { duration: 9000 }
           )
           break
 
