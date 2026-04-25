@@ -329,6 +329,14 @@ class ApiClient {
           config.timeout = 120000
         }
 
+        if (
+          config.method?.toLowerCase() === 'get' &&
+          config.url?.includes('/prestamos/candidatos-drive/snapshot') &&
+          (config.timeout == null || config.timeout < 120000)
+        ) {
+          config.timeout = 120000
+        }
+
         // Cobros: PATCH estado (aprobar/rechazar) puede tardar (cascada, correo, PDF).
         if (
           config.method?.toLowerCase() === 'patch' &&
@@ -406,6 +414,7 @@ class ApiClient {
           methodLc === 'get' &&
           (reqUrl.includes('/api/v1/auth/me') ||
             reqUrl.includes('/cobros/pagos-reportados/listado-y-kpis') ||
+            reqUrl.includes('/prestamos/candidatos-drive/snapshot') ||
             reqUrl.includes('/admin/tasas-cambio/estado') ||
             reqUrl.includes('/admin/tasas-cambio/hoy') ||
             reqUrl.includes('/tasas-cambio/estado') ||
@@ -648,7 +657,8 @@ class ApiClient {
       url.includes('/api/v1/notificaciones/cuotas-pendiente-2-dias-antes') ||
       url.includes('/api/v1/notificaciones-prejudicial') ||
       url.includes('/api/v1/cobros/pagos-reportados/listado-y-kpis') ||
-      url.includes('/api/v1/cobros/pagos-reportados/kpis')
+      url.includes('/api/v1/cobros/pagos-reportados/kpis') ||
+      url.includes('/api/v1/prestamos/candidatos-drive/snapshot')
     )
   }
 
@@ -842,7 +852,8 @@ class ApiClient {
 
           // Logging detallado para diagnóstico
 
-          console.error('? [ApiClient] Error 500 del servidor:', {
+          // console.info: el bootstrap parchea console.error y la consola atribuye el log a pagos-bootstrap.js.
+          console.info('[ApiClient] Error 500 del servidor:', {
             detail: errorDetail,
 
             message: responseData?.message,
@@ -1052,6 +1063,11 @@ class ApiClient {
 
     const listadoKpisPagosReportadosTimeout = 180000
 
+    // Préstamos Drive: snapshot lee tabla cache + validaciones; en Render frío puede acercarse a 60s.
+    const isCandidatosDriveSnapshot = url.includes('/prestamos/candidatos-drive/snapshot')
+
+    const candidatosDriveSnapshotTimeout = 120000
+
     // Sesión al arranque: Render frío + CORS preflight puede dejar el GET por detrás de un timeout corto.
     const isAuthMe = url.includes('/auth/me')
 
@@ -1061,6 +1077,8 @@ class ApiClient {
       defaultTimeout = SLOW_ENDPOINT_TIMEOUT_MS
     } else if (isListadoKpisPagosReportados) {
       defaultTimeout = listadoKpisPagosReportadosTimeout
+    } else if (isCandidatosDriveSnapshot) {
+      defaultTimeout = candidatosDriveSnapshotTimeout
     } else if (isRevisionManual) {
       defaultTimeout = revisionManualTimeout
     } else if (isReportesDashboard) {
