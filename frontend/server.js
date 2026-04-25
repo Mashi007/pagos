@@ -4,6 +4,8 @@ import { fileURLToPath } from 'url';
 import { existsSync, readdirSync, readFileSync } from 'fs';
 import { createProxyMiddleware } from 'http-proxy-middleware';
 import compression from 'compression';
+import http from 'http';
+import https from 'https';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -98,6 +100,19 @@ function resolveApiProxyTarget() {
 
 const _resolvedApi = resolveApiProxyTarget();
 const API_URL = _resolvedApi.url;
+const isHttpsApiTarget = /^https:\/\//i.test(String(API_URL || ''));
+const keepAliveAgentHttp = new http.Agent({
+  keepAlive: true,
+  keepAliveMsecs: 10_000,
+  maxSockets: 150,
+  maxFreeSockets: 20,
+});
+const keepAliveAgentHttps = new https.Agent({
+  keepAlive: true,
+  keepAliveMsecs: 10_000,
+  maxSockets: 150,
+  maxFreeSockets: 20,
+});
 
 /** Si el destino del proxy coincide con la URL pública de este servicio, /api no llega al FastAPI. */
 function warnIfApiProxyTargetIsRenderSelf(apiUrl) {
@@ -325,9 +340,11 @@ if (API_URL) {
   console.log(`➡️  Proxy de /api hacia: ${API_URL}`);
   const proxyMiddleware = createProxyMiddleware({
     target: API_URL,
+    agent: isHttpsApiTarget ? keepAliveAgentHttps : keepAliveAgentHttp,
     changeOrigin: true,
     xfwd: true,
     // Sin respuesta del API (cold start Render, consultas largas): no cerrar a los 2 min por defecto del proxy.
+    timeout: 180000,
     proxyTimeout: 180000,
     logLevel: isDevelopment ? 'info' : 'warn', // Reducir verbosidad en producción
     // CRÍTICO: No seguir redirects (302). Si el backend devuelve 302 (ej. OAuth callback),
@@ -356,10 +373,16 @@ if (API_URL) {
     // No cambiar el protocolo
     secure: true,
     onError: (err, req, res) => {
-      console.error(`❌ Error en proxy para ${req.method} ${req.originalUrl || req.url}:`, err.message);
+      const errCode = err?.code || 'UNKNOWN';
+      const errName = err?.name || 'Error';
+      console.error(
+        `❌ Error en proxy para ${req.method} ${req.originalUrl || req.url}: [${errName}:${errCode}] ${err.message}`
+      );
       if (!res.headersSent) {
+        res.setHeader('Retry-After', '3');
         res.status(502).json({
           error: 'Proxy error',
+          code: errCode,
           message: err.message,
           target: API_URL,
           path: req.path,
@@ -471,13 +494,16 @@ if (API_URL) {
       }
     },
     onProxyError: (err, req, res) => {
-      console.error(`❌ ERROR en proxy durante la petición: ${err.message}`);
+      const errCode = err?.code || 'UNKNOWN';
+      const errName = err?.name || 'Error';
+      console.error(`❌ ERROR en proxy durante la petición: [${errName}:${errCode}] ${err.message}`);
       console.error(`   URL: ${req.originalUrl || req.url}`);
       console.error(`   Target: ${API_URL}`);
       console.error(`   Stack: ${err.stack}`);
       if (!res.headersSent) {
         res.status(502).json({
           error: 'Proxy error',
+          code: errCode,
           message: err.message,
           target: API_URL,
           path: req.path

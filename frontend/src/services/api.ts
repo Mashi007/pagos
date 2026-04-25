@@ -154,6 +154,7 @@ class ApiClient {
 
   private requestCancellers: Map<string, AbortController> = new Map() // ? Para cancelar requests pendientes
   private inFlightGetRequests: Map<string, Promise<unknown>> = new Map()
+  private last502ToastAt = 0
   private putQueueByGroup: Map<
     string,
     { active: number; queue: Array<() => void>; limit: number }
@@ -903,10 +904,14 @@ class ApiClient {
           break
 
         case 502:
-          toast.error(
-            'El API no respondió (502). Suele ser arranque del servidor o proxy; espere unos segundos y reintente. Si persiste, revise el servicio API y API_BASE_URL/BACKEND_URL en el servicio Node del frontend (Render).',
-            { duration: 10000 }
-          )
+          // Evita tormenta de toasts cuando varios requests paralelos/reintentos chocan con el mismo 502 transitorio.
+          if (Date.now() - this.last502ToastAt > 15000) {
+            this.last502ToastAt = Date.now()
+            toast.error(
+              'El API no respondió (502). Suele ser arranque del servidor o proxy; espere unos segundos y reintente. Si persiste, revise el servicio API y API_BASE_URL/BACKEND_URL en el servicio Node del frontend (Render).',
+              { duration: 10000 }
+            )
+          }
           break
 
         default:
