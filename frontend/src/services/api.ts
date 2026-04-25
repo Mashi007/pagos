@@ -1243,7 +1243,8 @@ class ApiClient {
         url.includes('/prestamos/candidatos-drive/guardar-fila') || // Una fila + mismas validaciones que el lote
         url.includes('/prestamos/recalcular-fechas-amortizacion-lote') || // Hasta 80 préstamos × ~3s en Render
         url.includes('/clientes/drive-import/importar') || // Lote: un commit por fila; cientos de filas >30s en Render
-        url.includes('/configuracion/email/probar') // Prueba SMTP; Recibos puede generar PDF + envío >30s
+        url.includes('/configuracion/email/probar') || // Prueba SMTP; Recibos puede generar PDF + envío >30s
+        url.includes('/notificaciones/recibos/ejecutar') // Lote recibos: PDF/SMTP; en Render frío suele >30s
 
       // Auditoria cartera en Render: sincroniza decenas de miles de cuotas + cascadas masivas (siempre >30s).
       const isAuditoriaCarteraCorregir = url.includes(
@@ -1313,7 +1314,7 @@ class ApiClient {
           const is409Pagos = response.status === 409 && url.includes('/pagos')
 
           if (!is409Pagos) {
-            console.error('? [ApiClient] POST recibió error 4xx:', {
+            console.info('[ApiClient] POST recibió error 4xx:', {
               url,
               status: response.status,
               data: compactFor4xxLog(response.data),
@@ -1354,7 +1355,7 @@ class ApiClient {
             ? readBackend4xxErrorMessage(status, error?.response?.data)
             : undefined
 
-        console.error('? [ApiClient] POST error:', {
+        console.info('[ApiClient] POST error:', {
           url,
           status,
           detail: detail ?? error?.message,
