@@ -801,7 +801,9 @@ export default function CobrosPagosReportadosPage() {
       ) {
         return
       }
-      void fetchListado({ silent: true })
+      // bypassCache: el listado-y-kpis tiene caché en cliente; sin esto el refetch
+      // puede devolver la página anterior y reinsertar filas ya aprobadas/rechazadas/eliminadas.
+      void fetchListado({ bypassCache: true, silent: true })
     }, 1800)
   }, [fetchListado])
 
@@ -837,6 +839,8 @@ export default function CobrosPagosReportadosPage() {
         queryClient.invalidateQueries({ queryKey: ['prestamos'] })
         void invalidateListasNotificacionesMora(queryClient)
       }
+
+      invalidateCobrosListadoKpisCache()
 
       // Quitar la fila al instante si ya no pertenece al filtro actual.
       // Vista por defecto ("") muestra solo por gestionar: pendiente/en_revision.
@@ -954,6 +958,7 @@ export default function CobrosPagosReportadosPage() {
         return next
       })
       toast.success(res?.mensaje || 'Pago reportado eliminado.')
+      invalidateCobrosListadoKpisCache()
       schedulePostMutationSync()
     } catch (e: unknown) {
       const detail = (e as { response?: { data?: { detail?: string } } })
