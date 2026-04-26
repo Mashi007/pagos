@@ -239,6 +239,7 @@ def eliminar_todos_pagos_prestamo(db: Session, prestamo_id: int) -> dict[str, An
         c.fecha_pago = None
         c.pago_id = None
         c.dias_mora = None
+        c.dias_morosidad = None
 
     if cuotas:
         sincronizar_columna_estado_cuotas(db, list(cuotas), commit=False)

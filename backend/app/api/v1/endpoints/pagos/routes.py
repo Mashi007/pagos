@@ -64,6 +64,7 @@ from app.core.deps import (
     get_comprobante_imagen_reader,
     get_current_user,
     require_admin,
+    require_operator_or_higher,
 )
 
 from app.core.documento import (
@@ -6274,13 +6275,19 @@ def aplicar_pagos_pendientes_cuotas_por_prestamo(
 
 @router.delete("/por-prestamo/{prestamo_id:int}/todos", response_model=dict)
 
-def eliminar_todos_pagos_por_prestamo(prestamo_id: int, db: Session = Depends(get_db)):
+def eliminar_todos_pagos_por_prestamo(
+    prestamo_id: int,
+    db: Session = Depends(get_db),
+    _current: UserResponse = Depends(require_operator_or_higher),
+):
 
     """
 
     Elimina todos los pagos asociados al préstamo, limpia dependencias y reinicia totales en cuotas.
 
     Solo préstamos en estado APROBADO (flujo «reemplazar pagos» antes de carga masiva desde Excel).
+
+    Requiere rol operario, gerente o administrador (no «viewer»): operación masiva de escritura.
 
     """
 

@@ -134,6 +134,18 @@ export async function invalidatePagosPrestamosRevisionYCuotas(
       queryKey: ['pagos-con-errores'],
       exact: false,
     }),
+    /**
+     * Pagos → pestañas «Revisión» / «Revisión global» (PagosList): primera clave distinta
+     * de `pagos` y `pagos-con-errores`; sin esto al borrar en una pestaña la otra queda obsoleta.
+     */
+    queryClient.invalidateQueries({
+      queryKey: ['pagos-con-errores-tab'],
+      exact: false,
+    }),
+    queryClient.invalidateQueries({
+      queryKey: ['pagos-revision-global-tab'],
+      exact: false,
+    }),
     queryClient.invalidateQueries({
       queryKey: [CUOTAS_PRESTAMO_QUERY_PREFIX],
       exact: false,

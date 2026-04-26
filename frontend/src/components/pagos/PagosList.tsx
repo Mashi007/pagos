@@ -1225,10 +1225,7 @@ export function PagosList() {
       await Promise.all(ids.map(id => pagoConErrorService.delete(id)))
       toast.success(`Se eliminaron ${ids.length} pago(s).`)
       setSelectedRevisionIds(new Set())
-      await queryClient.invalidateQueries({ queryKey: ['pagos-con-errores'] })
-      await queryClient.invalidateQueries({
-        queryKey: ['pagos-con-errores-tab'],
-      })
+      await invalidatePagosPrestamosRevisionYCuotas(queryClient)
     } catch (e) {
       toast.error(getErrorMessage(e))
     } finally {
@@ -1411,11 +1408,7 @@ export function PagosList() {
       if ((revisionData?.pagos?.length ?? 0) <= 1 && revisionPage > 1) {
         setRevisionPage(prev => Math.max(1, prev - 1))
       }
-      await queryClient.invalidateQueries({ queryKey: ['pagos-con-errores'] })
-      await queryClient.invalidateQueries({
-        queryKey: ['pagos-con-errores-tab'],
-      })
-      await queryClient.invalidateQueries({ queryKey: ['pagos'], exact: false })
+      await invalidatePagosPrestamosRevisionYCuotas(queryClient)
     } catch (e) {
       toast.error(getErrorMessage(e))
     } finally {
@@ -1441,6 +1434,14 @@ export function PagosList() {
       await queryClient.refetchQueries({ queryKey: ['pagos'], exact: false })
       await queryClient.refetchQueries({
         queryKey: ['pagos-con-errores'],
+        exact: false,
+      })
+      await queryClient.refetchQueries({
+        queryKey: ['pagos-con-errores-tab'],
+        exact: false,
+      })
+      await queryClient.refetchQueries({
+        queryKey: ['pagos-revision-global-tab'],
         exact: false,
       })
       await queryClient.refetchQueries({
