@@ -5,7 +5,12 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Calendar, Edit2, Loader2, Save, Search, Trash2, X } from 'lucide-react'
 
 import { Button } from '../../components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card'
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from '../../components/ui/card'
 import { Input } from '../../components/ui/input'
 import {
   Select,
@@ -98,7 +103,9 @@ export function Fechas2BusquedaPanel({ embedded = false }: Props) {
       try {
         const body: Record<string, unknown> = {}
         const prevApDay =
-          isoDateOnly(row.fecha_aprobacion) || isoDateOnly(row.fecha_base_calculo) || ''
+          isoDateOnly(row.fecha_aprobacion) ||
+          isoDateOnly(row.fecha_base_calculo) ||
+          ''
         let approvalDay = (draft.fecha_aprobacion || '').trim()
         if (approvalDay && approvalDay !== prevApDay) {
           body.fecha_aprobacion = `${approvalDay}T00:00:00`
@@ -115,32 +122,37 @@ export function Fechas2BusquedaPanel({ embedded = false }: Props) {
 
         const res = await prestamoService.updatePrestamo(row.id, body)
         const est = String(res.estado || '').toUpperCase()
-        if (hadAprobacionCambio && (est === 'APROBADO' || est === 'LIQUIDADO')) {
+        if (
+          hadAprobacionCambio &&
+          (est === 'APROBADO' || est === 'LIQUIDADO')
+        ) {
           try {
             await prestamoService.recalcularFechasAmortizacion(row.id)
           } catch (e) {
             toast.warning(
-              `Préstamo guardado; aviso: no se pudo recalcular amortización automáticamente (${getErrorMessage(e)}).`,
+              `Préstamo guardado; aviso: no se pudo recalcular amortización automáticamente (${getErrorMessage(e)}).`
             )
           }
         }
         toast.success(`Préstamo #${row.id} actualizado.`)
         cancelEdit()
-        await qc.invalidateQueries({ queryKey: [...QK, appliedTipo, appliedFecha] })
+        await qc.invalidateQueries({
+          queryKey: [...QK, appliedTipo, appliedFecha],
+        })
       } catch (e) {
         toast.error(getErrorMessage(e))
       } finally {
         setSavingId(null)
       }
     },
-    [appliedFecha, appliedTipo, cancelEdit, draft, qc],
+    [appliedFecha, appliedTipo, cancelEdit, draft, qc]
   )
 
   const eliminar = useCallback(
     async (row: PrestamoFechas2Item) => {
       if (
         !window.confirm(
-          `¿Eliminar el préstamo #${row.id} (${row.cedula})? Esta acción no se puede deshacer.`,
+          `¿Eliminar el préstamo #${row.id} (${row.cedula})? Esta acción no se puede deshacer.`
         )
       ) {
         return
@@ -148,13 +160,15 @@ export function Fechas2BusquedaPanel({ embedded = false }: Props) {
       try {
         await prestamoService.deletePrestamo(row.id)
         toast.success(`Préstamo #${row.id} eliminado.`)
-        await qc.invalidateQueries({ queryKey: [...QK, appliedTipo, appliedFecha] })
+        await qc.invalidateQueries({
+          queryKey: [...QK, appliedTipo, appliedFecha],
+        })
         if (editingId === row.id) cancelEdit()
       } catch (e) {
         toast.error(getErrorMessage(e))
       }
     },
-    [appliedFecha, appliedTipo, cancelEdit, editingId, qc],
+    [appliedFecha, appliedTipo, cancelEdit, editingId, qc]
   )
 
   const tipoLabel = useMemo(
@@ -164,10 +178,13 @@ export function Fechas2BusquedaPanel({ embedded = false }: Props) {
       fecha_requerimiento: 'Fecha de requerimiento',
       fecha_base_calculo: 'Fecha base de cálculo',
     }),
-    [],
+    []
   )
 
-  const tiposPermitidos = useMemo<TipoFiltroFechas2[]>(() => ['fecha_aprobacion'], [])
+  const tiposPermitidos = useMemo<TipoFiltroFechas2[]>(
+    () => ['fecha_aprobacion'],
+    []
+  )
 
   return (
     <div className="space-y-4">
@@ -181,8 +198,13 @@ export function Fechas2BusquedaPanel({ embedded = false }: Props) {
         <CardContent className="flex flex-col gap-4 md:flex-row md:items-end">
           <div className="grid flex-1 gap-2 md:grid-cols-2">
             <div className="space-y-1">
-              <label className="text-sm font-medium text-muted-foreground">Campo</label>
-              <Select value={tipo} onValueChange={v => setTipo(v as TipoFiltroFechas2)}>
+              <label className="text-sm font-medium text-muted-foreground">
+                Campo
+              </label>
+              <Select
+                value={tipo}
+                onValueChange={v => setTipo(v as TipoFiltroFechas2)}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Campo" />
                 </SelectTrigger>
@@ -196,17 +218,34 @@ export function Fechas2BusquedaPanel({ embedded = false }: Props) {
               </Select>
             </div>
             <div className="space-y-1">
-              <label className="text-sm font-medium text-muted-foreground">Día (calendario)</label>
-              <Input type="date" value={fechaInput} onChange={e => setFechaInput(e.target.value)} />
+              <label className="text-sm font-medium text-muted-foreground">
+                Día (calendario)
+              </label>
+              <Input
+                type="date"
+                value={fechaInput}
+                onChange={e => setFechaInput(e.target.value)}
+              />
             </div>
           </div>
-          <Button type="button" onClick={() => void buscar()} className="shrink-0 gap-2">
+          <Button
+            type="button"
+            onClick={() => void buscar()}
+            className="shrink-0 gap-2"
+          >
             <Search className="h-4 w-4" aria-hidden />
             Buscar
           </Button>
           {!embedded ? (
-            <Button asChild type="button" variant="outline" className="shrink-0">
-              <Link to="/notificaciones/fecha">Comparar columna Q vs fecha en BD</Link>
+            <Button
+              asChild
+              type="button"
+              variant="outline"
+              className="shrink-0"
+            >
+              <Link to="/notificaciones/fecha">
+                Comparar columna Q vs fecha en BD
+              </Link>
             </Button>
           ) : null}
         </CardContent>
@@ -217,11 +256,14 @@ export function Fechas2BusquedaPanel({ embedded = false }: Props) {
           <CardTitle className="text-base">Préstamos en ese día</CardTitle>
           {appliedTipo && appliedFecha ? (
             <p className="text-sm text-muted-foreground">
-              {tipoLabel[appliedTipo]} = {appliedFecha} · {listQuery.data?.total ?? 0} fila(s) (máx.{' '}
+              {tipoLabel[appliedTipo]} = {appliedFecha} ·{' '}
+              {listQuery.data?.total ?? 0} fila(s) (máx.{' '}
               {listQuery.data?.limit ?? 500})
             </p>
           ) : (
-            <p className="text-sm text-muted-foreground">Pulse Buscar para cargar préstamos.</p>
+            <p className="text-sm text-muted-foreground">
+              Pulse Buscar para cargar préstamos.
+            </p>
           )}
         </CardHeader>
         <CardContent className="overflow-x-auto">
@@ -231,9 +273,13 @@ export function Fechas2BusquedaPanel({ embedded = false }: Props) {
               Cargando…
             </div>
           ) : listQuery.isError ? (
-            <p className="text-sm text-destructive">{getErrorMessage(listQuery.error)}</p>
+            <p className="text-sm text-destructive">
+              {getErrorMessage(listQuery.error)}
+            </p>
           ) : !queryEnabled ? null : items.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Sin préstamos para ese filtro.</p>
+            <p className="text-sm text-muted-foreground">
+              Sin préstamos para ese filtro.
+            </p>
           ) : (
             <table className="w-full min-w-[640px] border-collapse text-sm">
               <thead>
@@ -243,7 +289,7 @@ export function Fechas2BusquedaPanel({ embedded = false }: Props) {
                   <th className="py-2 pr-2 font-medium">Aprob.</th>
                   <th className="py-2 pr-2 font-medium">Req. (auto)</th>
                   <th className="py-2 pr-2 font-medium">Base cálculo (auto)</th>
-                  <th className="py-2 pr-2 font-medium text-right">Acciones</th>
+                  <th className="py-2 pr-2 text-right font-medium">Acciones</th>
                 </tr>
               </thead>
               <tbody>
@@ -251,7 +297,9 @@ export function Fechas2BusquedaPanel({ embedded = false }: Props) {
                   const isEditing = editingId === row.id
                   return (
                     <tr key={row.id} className="border-b border-border/60">
-                      <td className="py-2 pr-2 font-mono tabular-nums">{row.id}</td>
+                      <td className="py-2 pr-2 font-mono tabular-nums">
+                        {row.id}
+                      </td>
                       <td className="py-2 pr-2 font-medium">{row.cedula}</td>
                       <td className="py-2 pr-2">
                         {isEditing && draft ? (
@@ -259,16 +307,24 @@ export function Fechas2BusquedaPanel({ embedded = false }: Props) {
                             type="date"
                             value={draft.fecha_aprobacion}
                             onChange={e =>
-                              setDraft(d => (d ? { ...d, fecha_aprobacion: e.target.value } : d))
+                              setDraft(d =>
+                                d
+                                  ? { ...d, fecha_aprobacion: e.target.value }
+                                  : d
+                              )
                             }
                             className="h-8"
                           />
                         ) : (
-                          isoDateOnly(row.fecha_aprobacion) || '—'
+                          isoDateOnly(row.fecha_aprobacion) || '-'
                         )}
                       </td>
-                      <td className="py-2 pr-2">{isoDateOnly(row.fecha_requerimiento) || '—'}</td>
-                      <td className="py-2 pr-2">{isoDateOnly(row.fecha_base_calculo) || '—'}</td>
+                      <td className="py-2 pr-2">
+                        {isoDateOnly(row.fecha_requerimiento) || '-'}
+                      </td>
+                      <td className="py-2 pr-2">
+                        {isoDateOnly(row.fecha_base_calculo) || '-'}
+                      </td>
                       <td className="py-2 pl-2 text-right">
                         <div className="flex flex-wrap justify-end gap-1">
                           {isEditing ? (
@@ -282,7 +338,10 @@ export function Fechas2BusquedaPanel({ embedded = false }: Props) {
                                 onClick={() => void guardar(row)}
                               >
                                 {savingId === row.id ? (
-                                  <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+                                  <Loader2
+                                    className="h-3.5 w-3.5 animate-spin"
+                                    aria-hidden
+                                  />
                                 ) : (
                                   <Save className="h-3.5 w-3.5" aria-hidden />
                                 )}

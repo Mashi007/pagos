@@ -128,7 +128,12 @@ export function EmailCuentasConfig() {
 
         cuentas: Array.from({ length: CUENTAS_COUNT }, emptyCuenta),
 
-        asignacion: { cobros: 1, estado_cuenta: 2, notificaciones_tab: {}, recibos: 3 },
+        asignacion: {
+          cobros: 1,
+          estado_cuenta: 2,
+          notificaciones_tab: {},
+          recibos: 3,
+        },
       })
 
       setAsignacion({})
@@ -200,7 +205,8 @@ export function EmailCuentasConfig() {
 
     {
       key: 'email_activo_recibos',
-      label: 'Recibos (estado de cuenta tras conciliación, job diario 15:00 Caracas)',
+      label:
+        'Recibos (estado de cuenta tras conciliación, job diario 15:00 Caracas)',
       cuenta: 3,
     },
   ]
@@ -553,7 +559,9 @@ export function EmailCuentasConfig() {
               />
             </label>
             <label className="flex items-center justify-between gap-2 rounded border border-amber-100 bg-white/60 p-2">
-              <span className="text-sm">Recibos (post-conciliación) → pruebas</span>
+              <span className="text-sm">
+                Recibos (post-conciliación) → pruebas
+              </span>
               <input
                 type="checkbox"
                 checked={(data?.modo_pruebas_recibos ?? 'false') === 'true'}
@@ -713,13 +721,16 @@ export function EmailCuentasConfig() {
         <CardHeader>
           <CardTitle className="text-base">Asignación: Recibos</CardTitle>
           <CardDescription>
-            Correos automáticos con PDF de estado de cuenta (servicio <code>recibos</code>). Por
-            defecto Cuenta 3; puede usar la misma cuenta que Notificaciones o la de Estado de cuenta.
+            Correos automáticos con PDF de estado de cuenta (servicio{' '}
+            <code>recibos</code>). Por defecto Cuenta 3; puede usar la misma
+            cuenta que Notificaciones o la de Estado de cuenta.
           </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex max-w-md flex-col gap-2">
-            <Label htmlFor="asig-recibos-cuenta">Cuenta SMTP para Recibos</Label>
+            <Label htmlFor="asig-recibos-cuenta">
+              Cuenta SMTP para Recibos
+            </Label>
             <select
               id="asig-recibos-cuenta"
               className="flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"

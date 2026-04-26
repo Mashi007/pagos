@@ -48,7 +48,10 @@ export function PublicBasenameIndexPage() {
               onClick={() => navigate('/rapicredit-cobros')}
             >
               <span className="flex items-center gap-2 text-base font-semibold text-white">
-                <FileText className="h-5 w-5 shrink-0 text-emerald-400" aria-hidden />
+                <FileText
+                  className="h-5 w-5 shrink-0 text-emerald-400"
+                  aria-hidden
+                />
                 Reportar un pago
               </span>
               <span className="text-xs font-normal text-slate-400">
@@ -64,7 +67,10 @@ export function PublicBasenameIndexPage() {
               onClick={() => navigate('/rapicredit-estadocuenta')}
             >
               <span className="flex items-center gap-2 text-base font-semibold text-white">
-                <Wallet className="h-5 w-5 shrink-0 text-emerald-400" aria-hidden />
+                <Wallet
+                  className="h-5 w-5 shrink-0 text-emerald-400"
+                  aria-hidden
+                />
                 Estado de cuenta
               </span>
               <span className="text-xs font-normal text-slate-400">
@@ -83,7 +89,6 @@ export function PublicBasenameIndexPage() {
           Acceso personal del sistema
         </Link>
       </footer>
-
     </div>
   )
 }

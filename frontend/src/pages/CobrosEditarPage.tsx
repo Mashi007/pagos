@@ -73,7 +73,10 @@ const INSTITUCIONES_FINANCIERAS = [
   'Recibos',
 ]
 
-function baseYTokenNumeroOperacion(raw: string): { base: string; token: string } {
+function baseYTokenNumeroOperacion(raw: string): {
+  base: string
+  token: string
+} {
   const s = (raw || '').trim()
   const m = s.match(TOKEN_SUFIJO_VISTO_ARCHIVO_RE)
   if (m) {
@@ -86,7 +89,10 @@ function baseYTokenNumeroOperacion(raw: string): { base: string; token: string }
 }
 
 function detalleErrorApi(e: unknown): string {
-  const any = e as { message?: string; response?: { data?: { detail?: unknown } } }
+  const any = e as {
+    message?: string
+    response?: { data?: { detail?: unknown } }
+  }
   const d = any?.response?.data?.detail
   if (typeof d === 'string') return d
   if (Array.isArray(d)) {
@@ -249,7 +255,9 @@ export default function CobrosEditarPage() {
     const trimmed = form.numero_operacion.trim()
     const { base } = baseYTokenNumeroOperacion(trimmed)
     if (!base) {
-      toast.error('Primero indique el número de operación / referencia bancaria.')
+      toast.error(
+        'Primero indique el número de operación / referencia bancaria.'
+      )
       return
     }
 
@@ -327,7 +335,6 @@ export default function CobrosEditarPage() {
 
     setComprobantePreviewLoading(true)
     setComprobantePreviewError(null)
-
     ;(async () => {
       try {
         const blob = await getPagoReportadoComprobanteBlob(pid)
@@ -476,14 +483,15 @@ export default function CobrosEditarPage() {
 
   return (
     <>
-      <div className="-mx-4 flex w-[calc(100%+2rem)] max-w-none flex-col gap-0 border-y border-slate-200/70 bg-white lg:grid lg:h-[calc(100dvh-7.5rem)] lg:max-h-[calc(100dvh-7.5rem)] lg:grid-cols-2 lg:items-stretch lg:overflow-hidden lg:divide-x lg:divide-slate-200/70">
-        <aside className="flex min-h-[min(42vh,380px)] min-w-0 flex-col bg-slate-100 lg:min-h-0 lg:h-full lg:max-h-full lg:overflow-y-auto lg:overscroll-y-contain">
+      <div className="-mx-4 flex w-[calc(100%+2rem)] max-w-none flex-col gap-0 border-y border-slate-200/70 bg-white lg:grid lg:h-[calc(100dvh-7.5rem)] lg:max-h-[calc(100dvh-7.5rem)] lg:grid-cols-2 lg:items-stretch lg:divide-x lg:divide-slate-200/70 lg:overflow-hidden">
+        <aside className="flex min-h-[min(42vh,380px)] min-w-0 flex-col bg-slate-100 lg:h-full lg:max-h-full lg:min-h-0 lg:overflow-y-auto lg:overscroll-y-contain">
           <Card className="flex h-full min-h-0 flex-col rounded-none border-0 shadow-none">
             <CardHeader className="shrink-0 border-b border-slate-200/80 px-3 pb-2 pt-3 lg:pl-3 lg:pr-3">
               <CardTitle className="text-base">Comprobante</CardTitle>
               <p className="text-xs text-muted-foreground">
-                Pantalla ancha: comprobante a la izquierda y formulario de revisión
-                manual a la derecha, usando todo el ancho del área de trabajo.
+                Pantalla ancha: comprobante a la izquierda y formulario de
+                revisión manual a la derecha, usando todo el ancho del área de
+                trabajo.
               </p>
             </CardHeader>
             <CardContent className="flex min-h-0 flex-1 flex-col space-y-2 overflow-hidden p-2 sm:p-3 lg:pl-0 lg:pr-2">
@@ -498,7 +506,9 @@ export default function CobrosEditarPage() {
                 </div>
               ) : comprobantePreviewError ? (
                 <div className="space-y-2">
-                  <p className="text-sm text-red-700">{comprobantePreviewError}</p>
+                  <p className="text-sm text-red-700">
+                    {comprobantePreviewError}
+                  </p>
                   <div className="flex flex-wrap gap-2">
                     <Button
                       type="button"
@@ -512,7 +522,9 @@ export default function CobrosEditarPage() {
                       type="button"
                       size="sm"
                       variant="secondary"
-                      onClick={() => id && void openComprobanteInNewTab(Number(id))}
+                      onClick={() =>
+                        id && void openComprobanteInNewTab(Number(id))
+                      }
                     >
                       <Eye className="mr-1 h-4 w-4" />
                       Abrir en pestaña
@@ -533,7 +545,9 @@ export default function CobrosEditarPage() {
                     size="sm"
                     variant="outline"
                     className="w-full shrink-0"
-                    onClick={() => id && void openComprobanteInNewTab(Number(id))}
+                    onClick={() =>
+                      id && void openComprobanteInNewTab(Number(id))
+                    }
                   >
                     <Eye className="mr-1 h-4 w-4" />
                     Abrir en nueva pestaña
@@ -544,511 +558,528 @@ export default function CobrosEditarPage() {
           </Card>
         </aside>
 
-        <div className="min-h-0 min-w-0 space-y-6 overflow-y-auto overscroll-y-contain px-3 py-4 sm:px-4 lg:pl-5 lg:pr-0 lg:py-4">
-      <div className="flex items-center justify-between">
-        <Button
-          variant="ghost"
-          onClick={() => navigate('/cobros/pagos-reportados')}
-        >
-          ← Volver al listado
-        </Button>
-
-        <div className="flex flex-wrap gap-2">
-          <Button
-            type="button"
-            variant="secondary"
-            disabled={loading || saving || vistoSaving || eliminandoReporte}
-            onClick={() => load()}
-          >
-            Recargar datos
-          </Button>
-
-          <Button
-            variant="outline"
-            onClick={() => navigate(`/cobros/pagos-reportados/${id}`)}
-          >
-            Ver detalle
-          </Button>
-        </div>
-      </div>
-
-      {detalle.estado === 'rechazado' && (
-        <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-          Este reporte está <strong>rechazado</strong>. Puede corregir montos,
-          referencia y demás datos; luego cambie el estado a «En revisión» desde
-          el detalle si corresponde.
-        </p>
-      )}
-
-      {detalle.duplicado_en_pagos && (
-        <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-900">
-          <p className="font-medium text-rose-950">
-            Hay un pago en cartera que coincide con esta referencia u operación.
-            Revise la tabla y los préstamos antes de usar sufijos o «Visto».
-          </p>
-          <DuplicadoPrestamosComparacion
-            prestamoExistenteId={detalle.prestamo_existente_id}
-            pagoExistenteId={detalle.pago_existente_id}
-            pagoExistenteEstado={detalle.pago_existente_estado}
-            pagoExistenteFechaPago={detalle.pago_existente_fecha_pago}
-            prestamoObjetivoId={detalle.prestamo_objetivo_id}
-            fechaPagoReporteIso={detalle.fecha_pago}
-            prestamoDuplicadoEsObjetivo={detalle.prestamo_duplicado_es_objetivo}
-            prestamoObjetivoMultiple={detalle.prestamo_objetivo_multiple}
-          />
-          <div className="mt-2 flex flex-wrap gap-2">
-            {typeof detalle.prestamo_existente_id === 'number' ? (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={eliminandoReporte}
-                onClick={() =>
-                  navigate(
-                    `/prestamos?filtro_prestamo_id=${detalle.prestamo_existente_id}`
-                  )
-                }
-              >
-                Abrir préstamo #{detalle.prestamo_existente_id}
-              </Button>
-            ) : null}
-            {typeof detalle.prestamo_objetivo_id === 'number' &&
-            typeof detalle.prestamo_existente_id === 'number' &&
-            detalle.prestamo_objetivo_id !== detalle.prestamo_existente_id ? (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={eliminandoReporte}
-                onClick={() =>
-                  navigate(
-                    `/prestamos?filtro_prestamo_id=${detalle.prestamo_objetivo_id}`
-                  )
-                }
-              >
-                Abrir préstamo actual #{detalle.prestamo_objetivo_id}
-              </Button>
-            ) : null}
+        <div className="min-h-0 min-w-0 space-y-6 overflow-y-auto overscroll-y-contain px-3 py-4 sm:px-4 lg:py-4 lg:pl-5 lg:pr-0">
+          <div className="flex items-center justify-between">
             <Button
-              type="button"
-              variant="destructive"
-              size="sm"
-              disabled={eliminandoReporte || saving || vistoSaving}
-              onClick={() => void handleEliminarReporteDuplicado()}
+              variant="ghost"
+              onClick={() => navigate('/cobros/pagos-reportados')}
             >
-              {eliminandoReporte ? (
-                <>
-                  <Loader2 className="mr-1 h-4 w-4 animate-spin" />
-                  Eliminando…
-                </>
-              ) : (
-                'Eliminar'
-              )}
+              ← Volver al listado
             </Button>
-          </div>
-        </div>
-      )}
-
-      <Card>
-        <CardHeader>
-          <CardTitle>
-            Editar reporte{' '}
-            {detalle.referencia_interna?.startsWith('#')
-              ? detalle.referencia_interna
-              : `#${detalle.referencia_interna}`}
-          </CardTitle>
-
-          <p className="text-sm text-muted-foreground">
-            Los datos se cargan al abrir la página o con «Recargar datos». Al
-            guardar se pasa al <strong>detalle del reporte</strong> (siguiente
-            paso: aprobar, rechazar o revisar comprobante).
-          </p>
-        </CardHeader>
-
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div>
-                <label className="mb-1 block text-sm font-medium">
-                  Nombres
-                </label>
-
-                <Input
-                  value={form.nombres}
-                  onChange={e =>
-                    setForm(f => ({ ...f, nombres: e.target.value }))
-                  }
-                  placeholder="Nombres"
-                />
-              </div>
-
-              <div>
-                <label className="mb-1 block text-sm font-medium">
-                  Apellidos
-                </label>
-
-                <Input
-                  value={form.apellidos}
-                  onChange={e =>
-                    setForm(f => ({ ...f, apellidos: e.target.value }))
-                  }
-                  placeholder="Apellidos"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div>
-                <label className="mb-1 block text-sm font-medium">
-                  Tipo cédula
-                </label>
-
-                <select
-                  className="w-full rounded-md border px-3 py-2"
-                  value={form.tipo_cedula}
-                  onChange={e =>
-                    setForm(f => ({ ...f, tipo_cedula: e.target.value }))
-                  }
-                >
-                  <option value="V">V</option>
-
-                  <option value="E">E</option>
-
-                  <option value="J">J</option>
-
-                  <option value="G">G</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="mb-1 block text-sm font-medium">
-                  Número cédula
-                </label>
-
-                <Input
-                  value={form.numero_cedula}
-                  onChange={e =>
-                    setForm(f => ({
-                      ...f,
-                      numero_cedula: e.target.value
-                        .replace(/\D/g, '')
-                        .slice(0, 13),
-                    }))
-                  }
-                  placeholder="Solo dígitos"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="mb-1 block text-sm font-medium">
-                Fecha de pago
-              </label>
-
-              <Input
-                type="date"
-                value={form.fecha_pago}
-                onChange={e =>
-                  setForm(f => ({ ...f, fecha_pago: e.target.value }))
-                }
-              />
-            </div>
-
-            <div>
-              <label className="mb-1 block text-sm font-medium">
-                Institución financiera
-              </label>
-
-              <select
-                className="min-h-[40px] w-full rounded-md border bg-white px-3 py-2"
-                value={
-                  INSTITUCIONES_FINANCIERAS.includes(
-                    form.institucion_financiera
-                  )
-                    ? form.institucion_financiera
-                    : 'Otros'
-                }
-                onChange={e => {
-                  const v = e.target.value
-
-                  if (v === 'Otros') {
-                    setForm(f => ({
-                      ...f,
-                      institucion_financiera: otroInstitucion,
-                    }))
-                  } else {
-                    setForm(f => ({ ...f, institucion_financiera: v }))
-
-                    setOtroInstitucion('')
-                  }
-                }}
-              >
-                <option value="">Seleccione...</option>
-
-                {INSTITUCIONES_FINANCIERAS.map(opt => (
-                  <option key={opt} value={opt}>
-                    {opt}
-                  </option>
-                ))}
-
-                <option value="Otros">Otros</option>
-              </select>
-
-              {!INSTITUCIONES_FINANCIERAS.includes(
-                form.institucion_financiera
-              ) && (
-                <Input
-                  className="mt-2"
-                  value={form.institucion_financiera || otroInstitucion}
-                  onChange={e => {
-                    const val = e.target.value
-
-                    setOtroInstitucion(val)
-
-                    setForm(f => ({ ...f, institucion_financiera: val }))
-                  }}
-                  placeholder="Nombre del banco o entidad"
-                />
-              )}
-            </div>
-
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <label className="mb-1 block text-sm font-medium">
-                  Número de operación{' '}
-                  <span className="text-red-500">*</span>
-                </label>
-
-                <Input
-                  value={baseYTokenNumeroOperacion(form.numero_operacion).base}
-                  onChange={e => {
-                    const v = e.target.value
-                    const prevBase = baseYTokenNumeroOperacion(
-                      form.numero_operacion
-                    ).base
-                    const msg = mensajeEdicionManualSufijoVistoProhibida(
-                      prevBase,
-                      v
-                    )
-                    if (msg) {
-                      toast.error(msg)
-                      return
-                    }
-                    const token = baseYTokenNumeroOperacion(
-                      form.numero_operacion
-                    ).token
-                    const compuesto = token ? `${v.trim()}_${token}` : v
-                    setForm(f => ({ ...f, numero_operacion: compuesto }))
-                  }}
-                  onBlur={() => {
-                    setForm(prev => {
-                      const { base, token } = baseYTokenNumeroOperacion(
-                        prev.numero_operacion
-                      )
-                      const raw = base.trim()
-                      const n =
-                        normalizarNumeroDocumento(raw) || raw
-                      const msg = mensajeEdicionManualSufijoVistoProhibida(
-                        raw,
-                        n
-                      )
-                      if (msg) {
-                        toast.error(msg)
-                        return prev
-                      }
-                      const nextOp = token ? `${n}_${token}` : n
-                      if (nextOp === prev.numero_operacion) return prev
-                      return { ...prev, numero_operacion: nextOp }
-                    })
-                  }}
-                  placeholder="Referencia / serial del banco"
-                />
-                <p className="text-xs text-muted-foreground">
-                  No escriba manualmente el sufijo <code className="rounded bg-muted px-1">_A####</code> ni{' '}
-                  <code className="rounded bg-muted px-1">_P####</code>: use{' '}
-                  <strong>Visto</strong> o los botones de sufijo (borrador) y luego Guardar.
-                </p>
-              </div>
-
-              <div className="space-y-2">
-                <label className="mb-1 block text-sm font-medium">
-                  Código{' '}
-                  <span className="text-xs font-normal text-muted-foreground">
-                    (solo lectura; lo asigna Visto)
-                  </span>
-                </label>
-
-                <Input
-                  readOnly
-                  aria-readonly="true"
-                  title="Este campo no se escribe a mano. Se rellena con el botón Visto (revisión manual / Cobros)."
-                  value={baseYTokenNumeroOperacion(form.numero_operacion).token}
-                  placeholder="Pendiente: use Visto"
-                  className="cursor-default bg-slate-50 text-slate-800"
-                />
-                <p className="text-xs text-muted-foreground">
-                  Token <strong>A####</strong> / <strong>P####</strong> al final del número de operación (mismo criterio
-                  que en revisión manual y carga masiva).
-                </p>
-              </div>
-            </div>
-
-            <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-violet-200/70 bg-violet-50 px-3 py-2">
-              <p className="min-w-0 flex-1 text-xs text-violet-900">
-                <span className="font-medium">Revisión manual:</span> Visto asigna el código
-                (_A#### / _P####) y guarda en el servidor de inmediato.
-              </p>
-            <div className="flex shrink-0 items-center gap-2">
-              <button
-                type="button"
-                className="text-[11px] font-medium text-violet-700 underline underline-offset-2 hover:text-violet-950"
-                onClick={() => {
-                  if (!ultimoErrorVistoRef.current.trim()) {
-                    ultimoErrorVistoRef.current =
-                      'AYUDA_SUFIJO: usuario abrió ayuda tras revisar duplicado / préstamo.'
-                  }
-                  setVistoAyudaOpen(true)
-                }}
-              >
-                Ayuda sufijo
-              </button>
-              <Button
-                type="button"
-                size="sm"
-                  disabled={saving || vistoSaving}
-                  className="h-8 min-w-[4.5rem] bg-violet-600 px-3 text-xs font-medium text-white hover:bg-violet-700 disabled:opacity-50"
-                  onClick={() => void handleVistoRellenarSufijoYGuardar()}
-                >
-                  {vistoSaving ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    'Visto'
-                  )}
-                </Button>
-              </div>
-            </div>
 
             <div className="flex flex-wrap gap-2">
               <Button
                 type="button"
-                variant="outline"
-                onClick={() => handleAplicarSufijoOperacion('A')}
-                title="Sufijo en borrador: _A#### (luego Guardar y continuar)"
+                variant="secondary"
+                disabled={loading || saving || vistoSaving || eliminandoReporte}
+                onClick={() => load()}
               >
-                <Eye className="mr-2 h-4 w-4" />
-                Agregar sufijo A
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => handleAplicarSufijoOperacion('P')}
-                title="Sufijo en borrador: _P#### (luego Guardar y continuar)"
-              >
-                <Eye className="mr-2 h-4 w-4" />
-                Agregar sufijo P
-              </Button>
-            </div>
-
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div>
-                <label className="mb-1 block text-sm font-medium">Monto</label>
-
-                <Input
-                  type="number"
-                  inputMode="decimal"
-                  step="any"
-                  min={0}
-                  value={form.monto}
-                  onChange={e =>
-                    setForm(f => ({ ...f, monto: e.target.value }))
-                  }
-                  placeholder="0.00"
-                />
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Use punto como decimal (ej. 94.01). Editable en todos los
-                  estados permitidos.
-                </p>
-              </div>
-
-              <div>
-                <label className="mb-1 block text-sm font-medium">Moneda</label>
-
-                <select
-                  className="w-full rounded-md border bg-white px-3 py-2"
-                  value={
-                    ['BS', 'USD', 'USDT'].includes(form.moneda)
-                      ? form.moneda
-                      : 'BS'
-                  }
-                  onChange={e =>
-                    setForm(f => ({ ...f, moneda: e.target.value }))
-                  }
-                >
-                  <option value="BS">BS (Bolívares)</option>
-                  <option value="USD">USD (Dólares)</option>
-                  <option value="USDT">USDT (equivale a USD al guardar)</option>
-                </select>
-              </div>
-            </div>
-
-            <div>
-              <label className="mb-1 block text-sm font-medium">
-                Correo (para envío de recibo)
-              </label>
-
-              <Input
-                type="email"
-                value={form.correo_enviado_a}
-                onChange={e =>
-                  setForm(f => ({ ...f, correo_enviado_a: e.target.value }))
-                }
-                placeholder="email@ejemplo.com"
-              />
-            </div>
-
-            <div>
-              <label className="mb-1 block text-sm font-medium">
-                Observación (opcional)
-              </label>
-
-              <textarea
-                className="min-h-[88px] w-full rounded-md border px-3 py-2 text-sm"
-                value={form.observacion}
-                onChange={e =>
-                  setForm(f => ({ ...f, observacion: e.target.value }))
-                }
-                placeholder="Nota interna"
-                maxLength={500}
-              />
-            </div>
-
-            <div className="flex flex-wrap gap-2 pt-4">
-              <Button type="submit" disabled={saving || vistoSaving}>
-                {saving ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : null}
-                Guardar y continuar
+                Recargar datos
               </Button>
 
               <Button
-                type="button"
                 variant="outline"
                 onClick={() => navigate(`/cobros/pagos-reportados/${id}`)}
               >
-                Volver al detalle
-              </Button>
-
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={() => navigate('/cobros/pagos-reportados')}
-              >
-                Listado
+                Ver detalle
               </Button>
             </div>
-          </form>
-        </CardContent>
-      </Card>
+          </div>
+
+          {detalle.estado === 'rechazado' && (
+            <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+              Este reporte está <strong>rechazado</strong>. Puede corregir
+              montos, referencia y demás datos; luego cambie el estado a «En
+              revisión» desde el detalle si corresponde.
+            </p>
+          )}
+
+          {detalle.duplicado_en_pagos && (
+            <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-900">
+              <p className="font-medium text-rose-950">
+                Hay un pago en cartera que coincide con esta referencia u
+                operación. Revise la tabla y los préstamos antes de usar sufijos
+                o «Visto».
+              </p>
+              <DuplicadoPrestamosComparacion
+                prestamoExistenteId={detalle.prestamo_existente_id}
+                pagoExistenteId={detalle.pago_existente_id}
+                pagoExistenteEstado={detalle.pago_existente_estado}
+                pagoExistenteFechaPago={detalle.pago_existente_fecha_pago}
+                prestamoObjetivoId={detalle.prestamo_objetivo_id}
+                fechaPagoReporteIso={detalle.fecha_pago}
+                prestamoDuplicadoEsObjetivo={
+                  detalle.prestamo_duplicado_es_objetivo
+                }
+                prestamoObjetivoMultiple={detalle.prestamo_objetivo_multiple}
+              />
+              <div className="mt-2 flex flex-wrap gap-2">
+                {typeof detalle.prestamo_existente_id === 'number' ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={eliminandoReporte}
+                    onClick={() =>
+                      navigate(
+                        `/prestamos?filtro_prestamo_id=${detalle.prestamo_existente_id}`
+                      )
+                    }
+                  >
+                    Abrir préstamo #{detalle.prestamo_existente_id}
+                  </Button>
+                ) : null}
+                {typeof detalle.prestamo_objetivo_id === 'number' &&
+                typeof detalle.prestamo_existente_id === 'number' &&
+                detalle.prestamo_objetivo_id !==
+                  detalle.prestamo_existente_id ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={eliminandoReporte}
+                    onClick={() =>
+                      navigate(
+                        `/prestamos?filtro_prestamo_id=${detalle.prestamo_objetivo_id}`
+                      )
+                    }
+                  >
+                    Abrir préstamo actual #{detalle.prestamo_objetivo_id}
+                  </Button>
+                ) : null}
+                <Button
+                  type="button"
+                  variant="destructive"
+                  size="sm"
+                  disabled={eliminandoReporte || saving || vistoSaving}
+                  onClick={() => void handleEliminarReporteDuplicado()}
+                >
+                  {eliminandoReporte ? (
+                    <>
+                      <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+                      Eliminando…
+                    </>
+                  ) : (
+                    'Eliminar'
+                  )}
+                </Button>
+              </div>
+            </div>
+          )}
+
+          <Card>
+            <CardHeader>
+              <CardTitle>
+                Editar reporte{' '}
+                {detalle.referencia_interna?.startsWith('#')
+                  ? detalle.referencia_interna
+                  : `#${detalle.referencia_interna}`}
+              </CardTitle>
+
+              <p className="text-sm text-muted-foreground">
+                Los datos se cargan al abrir la página o con «Recargar datos».
+                Al guardar se pasa al <strong>detalle del reporte</strong>{' '}
+                (siguiente paso: aprobar, rechazar o revisar comprobante).
+              </p>
+            </CardHeader>
+
+            <CardContent>
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div>
+                    <label className="mb-1 block text-sm font-medium">
+                      Nombres
+                    </label>
+
+                    <Input
+                      value={form.nombres}
+                      onChange={e =>
+                        setForm(f => ({ ...f, nombres: e.target.value }))
+                      }
+                      placeholder="Nombres"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-sm font-medium">
+                      Apellidos
+                    </label>
+
+                    <Input
+                      value={form.apellidos}
+                      onChange={e =>
+                        setForm(f => ({ ...f, apellidos: e.target.value }))
+                      }
+                      placeholder="Apellidos"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div>
+                    <label className="mb-1 block text-sm font-medium">
+                      Tipo cédula
+                    </label>
+
+                    <select
+                      className="w-full rounded-md border px-3 py-2"
+                      value={form.tipo_cedula}
+                      onChange={e =>
+                        setForm(f => ({ ...f, tipo_cedula: e.target.value }))
+                      }
+                    >
+                      <option value="V">V</option>
+
+                      <option value="E">E</option>
+
+                      <option value="J">J</option>
+
+                      <option value="G">G</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-sm font-medium">
+                      Número cédula
+                    </label>
+
+                    <Input
+                      value={form.numero_cedula}
+                      onChange={e =>
+                        setForm(f => ({
+                          ...f,
+                          numero_cedula: e.target.value
+                            .replace(/\D/g, '')
+                            .slice(0, 13),
+                        }))
+                      }
+                      placeholder="Solo dígitos"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-sm font-medium">
+                    Fecha de pago
+                  </label>
+
+                  <Input
+                    type="date"
+                    value={form.fecha_pago}
+                    onChange={e =>
+                      setForm(f => ({ ...f, fecha_pago: e.target.value }))
+                    }
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-sm font-medium">
+                    Institución financiera
+                  </label>
+
+                  <select
+                    className="min-h-[40px] w-full rounded-md border bg-white px-3 py-2"
+                    value={
+                      INSTITUCIONES_FINANCIERAS.includes(
+                        form.institucion_financiera
+                      )
+                        ? form.institucion_financiera
+                        : 'Otros'
+                    }
+                    onChange={e => {
+                      const v = e.target.value
+
+                      if (v === 'Otros') {
+                        setForm(f => ({
+                          ...f,
+                          institucion_financiera: otroInstitucion,
+                        }))
+                      } else {
+                        setForm(f => ({ ...f, institucion_financiera: v }))
+
+                        setOtroInstitucion('')
+                      }
+                    }}
+                  >
+                    <option value="">Seleccione...</option>
+
+                    {INSTITUCIONES_FINANCIERAS.map(opt => (
+                      <option key={opt} value={opt}>
+                        {opt}
+                      </option>
+                    ))}
+
+                    <option value="Otros">Otros</option>
+                  </select>
+
+                  {!INSTITUCIONES_FINANCIERAS.includes(
+                    form.institucion_financiera
+                  ) && (
+                    <Input
+                      className="mt-2"
+                      value={form.institucion_financiera || otroInstitucion}
+                      onChange={e => {
+                        const val = e.target.value
+
+                        setOtroInstitucion(val)
+
+                        setForm(f => ({ ...f, institucion_financiera: val }))
+                      }}
+                      placeholder="Nombre del banco o entidad"
+                    />
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <label className="mb-1 block text-sm font-medium">
+                      Número de operación{' '}
+                      <span className="text-red-500">*</span>
+                    </label>
+
+                    <Input
+                      value={
+                        baseYTokenNumeroOperacion(form.numero_operacion).base
+                      }
+                      onChange={e => {
+                        const v = e.target.value
+                        const prevBase = baseYTokenNumeroOperacion(
+                          form.numero_operacion
+                        ).base
+                        const msg = mensajeEdicionManualSufijoVistoProhibida(
+                          prevBase,
+                          v
+                        )
+                        if (msg) {
+                          toast.error(msg)
+                          return
+                        }
+                        const token = baseYTokenNumeroOperacion(
+                          form.numero_operacion
+                        ).token
+                        const compuesto = token ? `${v.trim()}_${token}` : v
+                        setForm(f => ({ ...f, numero_operacion: compuesto }))
+                      }}
+                      onBlur={() => {
+                        setForm(prev => {
+                          const { base, token } = baseYTokenNumeroOperacion(
+                            prev.numero_operacion
+                          )
+                          const raw = base.trim()
+                          const n = normalizarNumeroDocumento(raw) || raw
+                          const msg = mensajeEdicionManualSufijoVistoProhibida(
+                            raw,
+                            n
+                          )
+                          if (msg) {
+                            toast.error(msg)
+                            return prev
+                          }
+                          const nextOp = token ? `${n}_${token}` : n
+                          if (nextOp === prev.numero_operacion) return prev
+                          return { ...prev, numero_operacion: nextOp }
+                        })
+                      }}
+                      placeholder="Referencia / serial del banco"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      No escriba manualmente el sufijo{' '}
+                      <code className="rounded bg-muted px-1">_A####</code> ni{' '}
+                      <code className="rounded bg-muted px-1">_P####</code>: use{' '}
+                      <strong>Visto</strong> o los botones de sufijo (borrador)
+                      y luego Guardar.
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="mb-1 block text-sm font-medium">
+                      Código{' '}
+                      <span className="text-xs font-normal text-muted-foreground">
+                        (solo lectura; lo asigna Visto)
+                      </span>
+                    </label>
+
+                    <Input
+                      readOnly
+                      aria-readonly="true"
+                      title="Este campo no se escribe a mano. Se rellena con el botón Visto (revisión manual / Cobros)."
+                      value={
+                        baseYTokenNumeroOperacion(form.numero_operacion).token
+                      }
+                      placeholder="Pendiente: use Visto"
+                      className="cursor-default bg-slate-50 text-slate-800"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Token <strong>A####</strong> / <strong>P####</strong> al
+                      final del número de operación (mismo criterio que en
+                      revisión manual y carga masiva).
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-violet-200/70 bg-violet-50 px-3 py-2">
+                  <p className="min-w-0 flex-1 text-xs text-violet-900">
+                    <span className="font-medium">Revisión manual:</span> Visto
+                    asigna el código (_A#### / _P####) y guarda en el servidor
+                    de inmediato.
+                  </p>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <button
+                      type="button"
+                      className="text-[11px] font-medium text-violet-700 underline underline-offset-2 hover:text-violet-950"
+                      onClick={() => {
+                        if (!ultimoErrorVistoRef.current.trim()) {
+                          ultimoErrorVistoRef.current =
+                            'AYUDA_SUFIJO: usuario abrió ayuda tras revisar duplicado / préstamo.'
+                        }
+                        setVistoAyudaOpen(true)
+                      }}
+                    >
+                      Ayuda sufijo
+                    </button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      disabled={saving || vistoSaving}
+                      className="h-8 min-w-[4.5rem] bg-violet-600 px-3 text-xs font-medium text-white hover:bg-violet-700 disabled:opacity-50"
+                      onClick={() => void handleVistoRellenarSufijoYGuardar()}
+                    >
+                      {vistoSaving ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        'Visto'
+                      )}
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => handleAplicarSufijoOperacion('A')}
+                    title="Sufijo en borrador: _A#### (luego Guardar y continuar)"
+                  >
+                    <Eye className="mr-2 h-4 w-4" />
+                    Agregar sufijo A
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => handleAplicarSufijoOperacion('P')}
+                    title="Sufijo en borrador: _P#### (luego Guardar y continuar)"
+                  >
+                    <Eye className="mr-2 h-4 w-4" />
+                    Agregar sufijo P
+                  </Button>
+                </div>
+
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div>
+                    <label className="mb-1 block text-sm font-medium">
+                      Monto
+                    </label>
+
+                    <Input
+                      type="number"
+                      inputMode="decimal"
+                      step="any"
+                      min={0}
+                      value={form.monto}
+                      onChange={e =>
+                        setForm(f => ({ ...f, monto: e.target.value }))
+                      }
+                      placeholder="0.00"
+                    />
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Use punto como decimal (ej. 94.01). Editable en todos los
+                      estados permitidos.
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-sm font-medium">
+                      Moneda
+                    </label>
+
+                    <select
+                      className="w-full rounded-md border bg-white px-3 py-2"
+                      value={
+                        ['BS', 'USD', 'USDT'].includes(form.moneda)
+                          ? form.moneda
+                          : 'BS'
+                      }
+                      onChange={e =>
+                        setForm(f => ({ ...f, moneda: e.target.value }))
+                      }
+                    >
+                      <option value="BS">BS (Bolívares)</option>
+                      <option value="USD">USD (Dólares)</option>
+                      <option value="USDT">
+                        USDT (equivale a USD al guardar)
+                      </option>
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-sm font-medium">
+                    Correo (para envío de recibo)
+                  </label>
+
+                  <Input
+                    type="email"
+                    value={form.correo_enviado_a}
+                    onChange={e =>
+                      setForm(f => ({ ...f, correo_enviado_a: e.target.value }))
+                    }
+                    placeholder="email@ejemplo.com"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-sm font-medium">
+                    Observación (opcional)
+                  </label>
+
+                  <textarea
+                    className="min-h-[88px] w-full rounded-md border px-3 py-2 text-sm"
+                    value={form.observacion}
+                    onChange={e =>
+                      setForm(f => ({ ...f, observacion: e.target.value }))
+                    }
+                    placeholder="Nota interna"
+                    maxLength={500}
+                  />
+                </div>
+
+                <div className="flex flex-wrap gap-2 pt-4">
+                  <Button type="submit" disabled={saving || vistoSaving}>
+                    {saving ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : null}
+                    Guardar y continuar
+                  </Button>
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => navigate(`/cobros/pagos-reportados/${id}`)}
+                  >
+                    Volver al detalle
+                  </Button>
+
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => navigate('/cobros/pagos-reportados')}
+                  >
+                    Listado
+                  </Button>
+                </div>
+              </form>
+            </CardContent>
+          </Card>
         </div>
       </div>
 
@@ -1058,15 +1089,19 @@ export default function CobrosEditarPage() {
             <DialogTitle>Duplicado u observación (Cobros)</DialogTitle>
             <div className="space-y-2 text-sm text-gray-600">
               <p>
-                El botón <strong>Visto</strong> añade un token <strong>_A####</strong> /{' '}
-                <strong>_P####</strong> al <strong>número de operación</strong> y{' '}
-                <strong>guarda de inmediato</strong> en el servidor. Así puede desambiguar la misma
-                referencia bancaria sin reescribir el comprobante a mano.
+                El botón <strong>Visto</strong> añade un token{' '}
+                <strong>_A####</strong> / <strong>_P####</strong> al{' '}
+                <strong>número de operación</strong> y{' '}
+                <strong>guarda de inmediato</strong> en el servidor. Así puede
+                desambiguar la misma referencia bancaria sin reescribir el
+                comprobante a mano.
               </p>
               <p className="text-xs">
-                No está permitido pegar manualmente <code className="rounded bg-gray-100 px-1">_A####</code> ni{' '}
-                <code className="rounded bg-gray-100 px-1">_P####</code> en el número de operación: use{' '}
-                <strong>Visto</strong> o los botones de sufijo en borrador y luego Guardar.
+                No está permitido pegar manualmente{' '}
+                <code className="rounded bg-gray-100 px-1">_A####</code> ni{' '}
+                <code className="rounded bg-gray-100 px-1">_P####</code> en el
+                número de operación: use <strong>Visto</strong> o los botones de
+                sufijo en borrador y luego Guardar.
               </p>
             </div>
           </DialogHeader>

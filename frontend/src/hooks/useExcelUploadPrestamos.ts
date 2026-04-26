@@ -800,7 +800,9 @@ export function useExcelUploadPrestamos({
 
             hasErrors = true
           }
-          rowData.fecha_requerimiento = /^\d{4}-\d{2}-\d{2}$/.test(fechaAprobBackend)
+          rowData.fecha_requerimiento = /^\d{4}-\d{2}-\d{2}$/.test(
+            fechaAprobBackend
+          )
             ? restarUnDiaYmd(fechaAprobBackend)
             : ''
 
@@ -874,7 +876,8 @@ export function useExcelUploadPrestamos({
 
         if (uniqueCedulas.length > 0) {
           try {
-            const cupoResponse = await prestamoService.checkCupoCedulas(uniqueCedulas)
+            const cupoResponse =
+              await prestamoService.checkCupoCedulas(uniqueCedulas)
 
             for (const cupoItem of cupoResponse.cedulas || []) {
               const claveItem = (cupoItem.cedula_normalizada || '').trim()

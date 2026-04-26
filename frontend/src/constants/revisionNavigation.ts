@@ -27,7 +27,10 @@ export function normalizarReturnToRevisionPath(raw: unknown): string | null {
 /** Llamar al montar cualquier ruta de notificaciones (a1 día, a-3 cuotas, 2 días antes, etc.). */
 export function marcarReturnRevisionDesdeNotificaciones(): void {
   try {
-    sessionStorage.setItem(SESSION_REVISION_RETURN_TO, RUTA_RETORNO_NOTIFICACIONES)
+    sessionStorage.setItem(
+      SESSION_REVISION_RETURN_TO,
+      RUTA_RETORNO_NOTIFICACIONES
+    )
   } catch {
     /* ignore */
   }

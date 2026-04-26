@@ -71,7 +71,9 @@ export const TasaCambioModal: React.FC<TasaCambioModalProps> = ({
       Number.isNaN(binN) ||
       binN <= 0
     ) {
-      setError('Ingrese las tres tasas (números mayores a 0): Euro, BCV y Binance.')
+      setError(
+        'Ingrese las tres tasas (números mayores a 0): Euro, BCV y Binance.'
+      )
 
       return
     }
@@ -117,14 +119,15 @@ export const TasaCambioModal: React.FC<TasaCambioModalProps> = ({
             <h2 className="text-lg font-bold text-gray-900">Tasas del día</h2>
 
             <p className="text-sm text-gray-600">
-              Euro (oficial), BCV y Binance — Bs. por 1 USD (Caracas)
+              Euro (oficial), BCV y Binance - Bs. por 1 USD (Caracas)
             </p>
           </div>
         </div>
 
         <p className="mb-4 text-sm text-gray-700">
-          Desde las 01:00 debe registrarse cada fuente para el día en curso. Misma
-          validación que en el módulo de tasas (sin valores de plantilla ni cero).
+          Desde las 01:00 debe registrarse cada fuente para el día en curso.
+          Misma validación que en el módulo de tasas (sin valores de plantilla
+          ni cero).
         </p>
 
         <div className="mb-4 space-y-4">
@@ -182,14 +185,22 @@ export const TasaCambioModal: React.FC<TasaCambioModalProps> = ({
           <div className="mb-4 flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 p-3">
             <Check className="h-5 w-5 text-green-600" />
 
-            <p className="text-sm text-green-700">¡Tasas guardadas exitosamente!</p>
+            <p className="text-sm text-green-700">
+              ¡Tasas guardadas exitosamente!
+            </p>
           </div>
         )}
 
         <div className="flex gap-3">
           <button
             onClick={handleSave}
-            disabled={loading || success || !euro.trim() || !bcv.trim() || !binance.trim()}
+            disabled={
+              loading ||
+              success ||
+              !euro.trim() ||
+              !bcv.trim() ||
+              !binance.trim()
+            }
             className="flex-1 rounded-lg bg-orange-600 px-4 py-2 font-medium text-white transition hover:bg-orange-700 disabled:bg-gray-300"
           >
             {loading ? 'Guardando...' : 'Guardar tasas'}

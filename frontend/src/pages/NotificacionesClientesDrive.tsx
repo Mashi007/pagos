@@ -42,7 +42,11 @@ const EMAIL_PLACEHOLDER_DRIVE = 'revisar@email.com'
 const CANDIDATOS_PAGE_SIZE = 20
 const CANDIDATOS_PAGE_BUTTONS = 5
 
-function candidatosPageWindow(current: number, total: number, maxButtons: number): number[] {
+function candidatosPageWindow(
+  current: number,
+  total: number,
+  maxButtons: number
+): number[] {
   if (total <= 0) return []
   if (total <= maxButtons) return Array.from({ length: total }, (_, i) => i + 1)
   let start = Math.max(1, current - Math.floor(maxButtons / 2))
@@ -55,7 +59,9 @@ function candidatosPageWindow(current: number, total: number, maxButtons: number
 }
 
 type DriveCandidate = NonNullable<
-  Awaited<ReturnType<typeof clienteService.getDriveImportCandidatos>>['candidatos']
+  Awaited<
+    ReturnType<typeof clienteService.getDriveImportCandidatos>
+  >['candidatos']
 >[number]
 
 function fechaInputFromDefaults(iso: string | undefined): string {
@@ -72,7 +78,9 @@ function fechaInputFromDefaults(iso: string | undefined): string {
 }
 
 /** Regla alineada con el backend: solo filas «verdes» (cédula, nombre D, correo G, teléfono F y duplicados en snapshot Drive). */
-function filaCumpleValidadoresImportacion(r: DriveCandidate | undefined): r is DriveCandidate {
+function filaCumpleValidadoresImportacion(
+  r: DriveCandidate | undefined
+): r is DriveCandidate {
   return r != null && r.seleccionable === true
 }
 
@@ -141,7 +149,9 @@ function edicionPuedeGuardarEnClientes(
   if (sec && sec.toLowerCase() === em.toLowerCase()) return false
 
   const telNorm = normalizarTelefonoColumnaDrive(draft.telefono)
-  const telSnap = normalizarTelefonoColumnaDrive(source.col_f_telefono ?? source.defaults?.telefono ?? '')
+  const telSnap = normalizarTelefonoColumnaDrive(
+    source.col_f_telefono ?? source.defaults?.telefono ?? ''
+  )
   if (telNorm === telSnap && source.telefono_valida === false) return false
   if (!telefonoColumnaFDriveValidoTrasNormalizar(telNorm)) return false
 
@@ -156,7 +166,7 @@ function edicionPuedeGuardarEnClientes(
 /** Origen del estado en lista (antes de importar a `clientes`). */
 function etiquetaValidadorPantalla(r: DriveCandidate): string {
   if (!r.cedula_valida) {
-    return 'Validador: validate_cedula (backend /validadores; solo números 6–11 dígitos → V implícita)'
+    return 'Validador: validate_cedula (backend /validadores; solo números 6-11 dígitos → V implícita)'
   }
   if (r.duplicada_en_hoja) {
     return 'Regla: cédula normalizada repetida en más de una fila del snapshot Drive (columna E)'
@@ -178,21 +188,21 @@ function mensajeErrorImportCliente(error: unknown, contexto: string): string {
   if (!isAxiosError(error)) return `${contexto}: ${base}`
   const st = error.response?.status
   if (st === 409) {
-    return `${contexto} — 409 en BD (cédula, nombre completo o correo ya usado por otro cliente): ${base}`
+    return `${contexto} - 409 en BD (cédula, nombre completo o correo ya usado por otro cliente): ${base}`
   }
   if (st === 422) {
-    return `${contexto} — 422 validación ClienteCreate / Pydantic: ${base}`
+    return `${contexto} - 422 validación ClienteCreate / Pydantic: ${base}`
   }
   if (st === 400) {
-    return `${contexto} — 400 (p. ej. cédula no coincide con fila Drive o fila no importable): ${base}`
+    return `${contexto} - 400 (p. ej. cédula no coincide con fila Drive o fila no importable): ${base}`
   }
   if (st === 404) {
-    return `${contexto} — 404 (fila ya no está entre candidatos): ${base}`
+    return `${contexto} - 404 (fila ya no está entre candidatos): ${base}`
   }
   if (st === 502 || st === 503) {
-    return `${contexto} — error de servidor/red (${st ?? '—'}): ${base}`
+    return `${contexto} - error de servidor/red (${st ?? '-'}): ${base}`
   }
-  return `${contexto} (${st ?? '—'}): ${base}`
+  return `${contexto} (${st ?? '-'}): ${base}`
 }
 
 function buildImportarFilaPayload(
@@ -203,7 +213,9 @@ function buildImportarFilaPayload(
     sheet_row_number: r.sheet_row_number,
     cedula: (r.cedula_para_crear ?? r.col_e_cedula ?? '').trim(),
     nombres: r.defaults.nombres,
-    telefono: normalizarTelefonoColumnaDrive(r.col_f_telefono ?? r.defaults.telefono ?? ''),
+    telefono: normalizarTelefonoColumnaDrive(
+      r.col_f_telefono ?? r.defaults.telefono ?? ''
+    ),
     email: r.defaults.email,
     email_secundario: null,
     direccion: r.defaults.direccion,
@@ -245,7 +257,11 @@ export default function NotificacionesClientesDrive() {
       if (!raw) return
       const arr = JSON.parse(raw) as unknown
       if (!Array.isArray(arr)) return
-      setHiddenRows(new Set(arr.map(n => Number(n)).filter(n => Number.isFinite(n) && n > 0)))
+      setHiddenRows(
+        new Set(
+          arr.map(n => Number(n)).filter(n => Number.isFinite(n) && n > 0)
+        )
+      )
     } catch {
       /* ignore */
     }
@@ -281,7 +297,10 @@ export default function NotificacionesClientesDrive() {
     () => visibleRows.filter(r => r.seleccionable === true).length,
     [visibleRows]
   )
-  const kpiNoAprueban = useMemo(() => visibleRows.length - kpiAprueban, [visibleRows, kpiAprueban])
+  const kpiNoAprueban = useMemo(
+    () => visibleRows.length - kpiAprueban,
+    [visibleRows, kpiAprueban]
+  )
 
   /** Solo filas que pasan validadores de esta pantalla (mismo criterio que `seleccionable` en API). */
   const filasValidasVisibles = useMemo(
@@ -290,18 +309,26 @@ export default function NotificacionesClientesDrive() {
   )
 
   const editSourceRow = useMemo(
-    () => (editDraft ? rows.find(r => r.sheet_row_number === editDraft.sheet_row_number) : undefined),
+    () =>
+      editDraft
+        ? rows.find(r => r.sheet_row_number === editDraft.sheet_row_number)
+        : undefined,
     [rows, editDraft]
   )
 
   const puedeGuardarEdicion = useMemo(
-    () => (editDraft ? edicionPuedeGuardarEnClientes(editDraft, editSourceRow) : false),
+    () =>
+      editDraft
+        ? edicionPuedeGuardarEnClientes(editDraft, editSourceRow)
+        : false,
     [editDraft, editSourceRow]
   )
 
   const totalCandidatosVisibles = visibleRows.length
   const totalCandidatosPages =
-    totalCandidatosVisibles === 0 ? 0 : Math.ceil(totalCandidatosVisibles / CANDIDATOS_PAGE_SIZE)
+    totalCandidatosVisibles === 0
+      ? 0
+      : Math.ceil(totalCandidatosVisibles / CANDIDATOS_PAGE_SIZE)
 
   useEffect(() => {
     if (totalCandidatosPages === 0) return
@@ -309,7 +336,12 @@ export default function NotificacionesClientesDrive() {
   }, [totalCandidatosPages])
 
   const candidatosPageNumbers = useMemo(
-    () => candidatosPageWindow(candidatosPage, totalCandidatosPages, CANDIDATOS_PAGE_BUTTONS),
+    () =>
+      candidatosPageWindow(
+        candidatosPage,
+        totalCandidatosPages,
+        CANDIDATOS_PAGE_BUTTONS
+      ),
     [candidatosPage, totalCandidatosPages]
   )
 
@@ -324,14 +356,19 @@ export default function NotificacionesClientesDrive() {
   }, [])
 
   const seleccionados = useMemo(
-    () => Object.entries(selected).filter(([, v]) => v).map(([k]) => Number(k)),
+    () =>
+      Object.entries(selected)
+        .filter(([, v]) => v)
+        .map(([k]) => Number(k)),
     [selected]
   )
 
   const seleccionadosTodosImportables = useMemo(() => {
     if (seleccionados.length === 0) return false
     return seleccionados.every(sr =>
-      filaCumpleValidadoresImportacion(rows.find(r => r.sheet_row_number === sr))
+      filaCumpleValidadoresImportacion(
+        rows.find(r => r.sheet_row_number === sr)
+      )
     )
   }, [seleccionados, rows])
 
@@ -373,9 +410,13 @@ export default function NotificacionesClientesDrive() {
       await qc.refetchQueries({ queryKey: [...QK] })
       const n = syncRes?.row_count
       const filas = typeof n === 'number' ? `${n} fila(s) en snapshot. ` : ''
-      toast.success(`${filas}Hoja CONCILIACIÓN traída desde Drive y lista de candidatos actualizada.`)
+      toast.success(
+        `${filas}Hoja CONCILIACIÓN traída desde Drive y lista de candidatos actualizada.`
+      )
     } catch (e) {
-      toast.error(getErrorMessage(e) || 'No se pudo sincronizar la hoja desde Google')
+      toast.error(
+        getErrorMessage(e) || 'No se pudo sincronizar la hoja desde Google'
+      )
     } finally {
       setManualSyncing(false)
     }
@@ -425,7 +466,10 @@ export default function NotificacionesClientesDrive() {
         await refetchCandidatosYAuditoria()
       } catch (e) {
         toast.error(
-          mensajeErrorImportCliente(e, 'Importación masiva (POST /clientes/drive-import/importar)')
+          mensajeErrorImportCliente(
+            e,
+            'Importación masiva (POST /clientes/drive-import/importar)'
+          )
         )
       } finally {
         setSaving(false)
@@ -440,7 +484,10 @@ export default function NotificacionesClientesDrive() {
       return
     }
     const noImportables = seleccionados.filter(
-      sr => !filaCumpleValidadoresImportacion(rows.find(r => r.sheet_row_number === sr))
+      sr =>
+        !filaCumpleValidadoresImportacion(
+          rows.find(r => r.sheet_row_number === sr)
+        )
     )
     if (noImportables.length > 0) {
       toast.error(
@@ -461,9 +508,12 @@ export default function NotificacionesClientesDrive() {
       return
     }
     const audit =
-      [comentario.trim(), 'Importación automática: solo filas que cumplen validadores (sin marcar).']
+      [
+        comentario.trim(),
+        'Importación automática: solo filas que cumplen validadores (sin marcar).',
+      ]
         .filter(Boolean)
-        .join(' — ') || null
+        .join(' - ') || null
     await importarLote(nums, audit)
   }
 
@@ -472,7 +522,9 @@ export default function NotificacionesClientesDrive() {
       sheet_row_number: r.sheet_row_number,
       cedula: (r.cedula_para_crear ?? r.col_e_cedula ?? '').trim(),
       nombres: r.defaults.nombres,
-      telefono: normalizarTelefonoColumnaDrive(r.col_f_telefono ?? r.defaults.telefono ?? ''),
+      telefono: normalizarTelefonoColumnaDrive(
+        r.col_f_telefono ?? r.defaults.telefono ?? ''
+      ),
       email: r.defaults.email,
       email_secundario: '',
       direccion: r.defaults.direccion,
@@ -520,7 +572,10 @@ export default function NotificacionesClientesDrive() {
       await postImportarFila(buildImportarFilaPayload(r, comentario))
     } catch (e) {
       toast.error(
-        mensajeErrorImportCliente(e, 'Guardar fila (POST /clientes/drive-import/importar-fila)')
+        mensajeErrorImportCliente(
+          e,
+          'Guardar fila (POST /clientes/drive-import/importar-fila)'
+        )
       )
     } finally {
       setSavingRowId(null)
@@ -547,14 +602,19 @@ export default function NotificacionesClientesDrive() {
       })
     } catch (e) {
       toast.error(
-        mensajeErrorImportCliente(e, 'Guardar desde edición (POST /clientes/drive-import/importar-fila)')
+        mensajeErrorImportCliente(
+          e,
+          'Guardar desde edición (POST /clientes/drive-import/importar-fila)'
+        )
       )
     } finally {
       setSavingRowId(null)
     }
   }
 
-  const onExportarExcel = async (modo: 'solo_no_seleccionable' | 'todos_candidatos') => {
+  const onExportarExcel = async (
+    modo: 'solo_no_seleccionable' | 'todos_candidatos'
+  ) => {
     setExportingModo(modo)
     try {
       await clienteService.postDriveImportExportarExcel(modo)
@@ -588,7 +648,9 @@ export default function NotificacionesClientesDrive() {
       delete next[sheetRow]
       return next
     })
-    toast.message(`Fila ${sheetRow} oculta en esta sesión (no borra datos en Drive).`)
+    toast.message(
+      `Fila ${sheetRow} oculta en esta sesión (no borra datos en Drive).`
+    )
   }
 
   return (
@@ -598,25 +660,34 @@ export default function NotificacionesClientesDrive() {
         icon={User}
         description={
           q.isLoading ? (
-            <span className="text-sm text-muted-foreground">Cargando resumen…</span>
+            <span className="text-sm text-muted-foreground">
+              Cargando resumen…
+            </span>
           ) : q.isError ? (
-            <span className="text-sm text-destructive">No se pudo cargar la lista de candidatos.</span>
+            <span className="text-sm text-destructive">
+              No se pudo cargar la lista de candidatos.
+            </span>
           ) : (
             <div className="flex flex-wrap items-center gap-2 sm:gap-3">
               <span className="inline-flex items-center gap-1.5 rounded-md border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-sm font-medium text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-100">
                 Aprueban
-                <span className="tabular-nums font-semibold">{kpiAprueban}</span>
+                <span className="font-semibold tabular-nums">
+                  {kpiAprueban}
+                </span>
               </span>
               <span className="inline-flex items-center gap-1.5 rounded-md border border-red-200 bg-red-50 px-2.5 py-1 text-sm font-medium text-red-900 dark:border-red-900/60 dark:bg-red-950/35 dark:text-red-100">
                 No aprueban
-                <span className="tabular-nums font-semibold">{kpiNoAprueban}</span>
+                <span className="font-semibold tabular-nums">
+                  {kpiNoAprueban}
+                </span>
               </span>
               <span className="text-sm text-muted-foreground">
-                Total en vista: <span className="tabular-nums font-medium text-foreground">{visibleRows.length}</span>
+                Total en vista:{' '}
+                <span className="font-medium tabular-nums text-foreground">
+                  {visibleRows.length}
+                </span>
                 {hiddenRows.size > 0 && (
-                  <span className="ml-1">
-                    ({rows.length} con ocultas)
-                  </span>
+                  <span className="ml-1">({rows.length} con ocultas)</span>
                 )}
               </span>
             </div>
@@ -634,7 +705,7 @@ export default function NotificacionesClientesDrive() {
                 ? new Date(q.data.drive_synced_at).toLocaleString('es-VE', {
                     timeZone: 'America/Caracas',
                   })
-                : '—'}
+                : '-'}
               {q.data?.from_cache === true && (
                 <span className="ml-2 rounded bg-emerald-100 px-2 py-0.5 text-emerald-900">
                   Lista en caché
@@ -645,12 +716,20 @@ export default function NotificacionesClientesDrive() {
               )}
               {q.data?.from_cache === false && q.data?.cache_computed_at && (
                 <span className="ml-2 text-xs text-muted-foreground">
-                  Recalculado {new Date(q.data.cache_computed_at).toLocaleString('es-VE', { timeZone: 'America/Caracas' })}
+                  Recalculado{' '}
+                  {new Date(q.data.cache_computed_at).toLocaleString('es-VE', {
+                    timeZone: 'America/Caracas',
+                  })}
                 </span>
               )}
             </span>
             {hiddenRows.size > 0 && (
-              <Button type="button" variant="ghost" size="sm" onClick={() => persistHidden(new Set())}>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => persistHidden(new Set())}
+              >
                 Mostrar filas ocultas ({hiddenRows.size})
               </Button>
             )}
@@ -660,7 +739,9 @@ export default function NotificacionesClientesDrive() {
               onClick={() => void onActualizacionManualDesdeGoogle()}
               disabled={manualSyncing || refreshing || q.isFetching || saving}
             >
-              <Download className={`mr-2 h-4 w-4 ${manualSyncing ? 'animate-pulse' : ''}`} />
+              <Download
+                className={`mr-2 h-4 w-4 ${manualSyncing ? 'animate-pulse' : ''}`}
+              />
               {manualSyncing ? 'Sincronizando…' : 'Actualización manual'}
             </Button>
             <Button
@@ -692,7 +773,9 @@ export default function NotificacionesClientesDrive() {
               <FileSpreadsheet
                 className={`mr-2 h-4 w-4 ${exportingModo === 'solo_no_seleccionable' ? 'animate-pulse' : ''}`}
               />
-              {exportingModo === 'solo_no_seleccionable' ? 'Excel…' : 'Excel no válidas'}
+              {exportingModo === 'solo_no_seleccionable'
+                ? 'Excel…'
+                : 'Excel no válidas'}
             </Button>
             <Button
               type="button"
@@ -721,7 +804,9 @@ export default function NotificacionesClientesDrive() {
               {getErrorMessage(q.error) || 'Error al cargar'}
             </p>
           )}
-          {q.isLoading && <p className="text-sm text-muted-foreground">Cargando…</p>}
+          {q.isLoading && (
+            <p className="text-sm text-muted-foreground">Cargando…</p>
+          )}
 
           <div className="overflow-x-auto rounded-md border">
             <table className="w-full min-w-[920px] table-fixed border-collapse text-left text-sm">
@@ -744,7 +829,9 @@ export default function NotificacionesClientesDrive() {
                   <th className="px-2 py-2">Teléfono (F)</th>
                   <th className="px-2 py-2">Email (G)</th>
                   <th className="px-2 py-2">Estado</th>
-                  <th className="px-2 py-2 text-center whitespace-nowrap">Acciones</th>
+                  <th className="whitespace-nowrap px-2 py-2 text-center">
+                    Acciones
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -756,7 +843,9 @@ export default function NotificacionesClientesDrive() {
                   const nombresOk = r.nombres_valido !== false
                   const emailOk = r.email_valido !== false
                   const telMostrar =
-                    normalizarTelefonoColumnaDrive(r.col_f_telefono ?? r.defaults.telefono ?? '') || '—'
+                    normalizarTelefonoColumnaDrive(
+                      r.col_f_telefono ?? r.defaults.telefono ?? ''
+                    ) || '-'
                   const rowTint = r.seleccionable
                     ? 'bg-emerald-50/90 hover:bg-emerald-50 dark:bg-emerald-950/25 dark:hover:bg-emerald-950/35'
                     : !r.cedula_valida
@@ -771,61 +860,93 @@ export default function NotificacionesClientesDrive() {
                               ? 'bg-[#ffe5dc] hover:bg-[#ffd5ce] dark:bg-orange-950/35 dark:hover:bg-orange-950/45'
                               : 'bg-amber-50/90 hover:bg-amber-50 dark:bg-amber-950/20 dark:hover:bg-amber-950/30'
                   return (
-                    <tr key={r.sheet_row_number} className={`border-t ${rowTint}`}>
+                    <tr
+                      key={r.sheet_row_number}
+                      className={`border-t ${rowTint}`}
+                    >
                       <td className="min-w-0 px-2 py-2 align-top">
                         <input
                           type="checkbox"
                           className="h-4 w-4 accent-primary"
                           checked={chk}
                           disabled={blocked || manualSyncing || refreshing}
-                          onChange={e => toggle(r.sheet_row_number, e.target.checked)}
+                          onChange={e =>
+                            toggle(r.sheet_row_number, e.target.checked)
+                          }
                           aria-label={`Seleccionar fila ${r.sheet_row_number}`}
                         />
                       </td>
                       <td className="min-w-0 px-2 py-2 align-top font-mono tabular-nums">
                         {r.sheet_row_number}
                       </td>
-                      <td className="min-w-0 px-2 py-2 align-top font-mono break-words">
+                      <td className="min-w-0 break-words px-2 py-2 align-top font-mono">
                         {r.col_e_cedula ?? ''}
                       </td>
-                      <td className="min-w-0 px-2 py-2 align-top break-words">{r.defaults.nombres}</td>
-                      <td className="min-w-0 px-2 py-2 align-top font-mono break-words">{telMostrar}</td>
-                      <td className="min-w-0 px-2 py-2 align-top break-all">{r.defaults.email}</td>
-                      <td className="min-w-0 px-2 py-2 align-top text-xs break-words">
+                      <td className="min-w-0 break-words px-2 py-2 align-top">
+                        {r.defaults.nombres}
+                      </td>
+                      <td className="min-w-0 break-words px-2 py-2 align-top font-mono">
+                        {telMostrar}
+                      </td>
+                      <td className="min-w-0 break-all px-2 py-2 align-top">
+                        {r.defaults.email}
+                      </td>
+                      <td className="min-w-0 break-words px-2 py-2 align-top text-xs">
                         <div className="space-y-1">
                           {!r.cedula_valida && (
-                            <div className="font-medium text-red-600">Inválida: {r.cedula_error}</div>
+                            <div className="font-medium text-red-600">
+                              Inválida: {r.cedula_error}
+                            </div>
                           )}
                           {r.cedula_valida && r.duplicada_en_hoja && (
                             <div className="font-medium text-amber-700">
                               Repetida en hoja (no importable)
                             </div>
                           )}
-                          {r.cedula_valida && !r.duplicada_en_hoja && !nombresOk && (
-                            <div className="font-medium text-red-600">
-                              Nombres (D): {r.nombres_error || 'No válido para importar'}
-                            </div>
-                          )}
-                          {r.cedula_valida && !r.duplicada_en_hoja && nombresOk && !emailOk && (
-                            <div className="font-medium text-red-600">
-                              Email (G): {r.email_error || 'No válido para importar'}
-                            </div>
-                          )}
-                          {r.cedula_valida && !r.duplicada_en_hoja && nombresOk && emailOk && !telefonoOk && (
-                            <div className="font-medium text-red-600">
-                              Teléfono (F): {r.telefono_error || 'No válido para importar'}
-                            </div>
-                          )}
-                          {r.cedula_valida && !r.duplicada_en_hoja && nombresOk && emailOk && telefonoOk && (
-                            <div className="font-medium text-emerald-700">Listo para revisión</div>
-                          )}
+                          {r.cedula_valida &&
+                            !r.duplicada_en_hoja &&
+                            !nombresOk && (
+                              <div className="font-medium text-red-600">
+                                Nombres (D):{' '}
+                                {r.nombres_error || 'No válido para importar'}
+                              </div>
+                            )}
+                          {r.cedula_valida &&
+                            !r.duplicada_en_hoja &&
+                            nombresOk &&
+                            !emailOk && (
+                              <div className="font-medium text-red-600">
+                                Email (G):{' '}
+                                {r.email_error || 'No válido para importar'}
+                              </div>
+                            )}
+                          {r.cedula_valida &&
+                            !r.duplicada_en_hoja &&
+                            nombresOk &&
+                            emailOk &&
+                            !telefonoOk && (
+                              <div className="font-medium text-red-600">
+                                Teléfono (F):{' '}
+                                {r.telefono_error || 'No válido para importar'}
+                              </div>
+                            )}
+                          {r.cedula_valida &&
+                            !r.duplicada_en_hoja &&
+                            nombresOk &&
+                            emailOk &&
+                            telefonoOk && (
+                              <div className="font-medium text-emerald-700">
+                                Listo para revisión
+                              </div>
+                            )}
                           <p className="text-[11px] leading-snug text-muted-foreground">
                             {etiquetaValidadorPantalla(r)}
                           </p>
                           {r.defaults.email === EMAIL_PLACEHOLDER_DRIVE && (
                             <p className="text-[11px] leading-snug text-amber-800/90 dark:text-amber-200/90">
-                              Columna G: el correo no pasó la validación básica en servidor; se propone
-                              placeholder hasta corregir en edición.
+                              Columna G: el correo no pasó la validación básica
+                              en servidor; se propone placeholder hasta corregir
+                              en edición.
                             </p>
                           )}
                         </div>
@@ -839,7 +960,12 @@ export default function NotificacionesClientesDrive() {
                             className="h-8 w-8"
                             title="Editar y guardar con validación (tabla clientes)"
                             onClick={() => openEdit(r)}
-                            disabled={busy || q.isFetching || manualSyncing || refreshing}
+                            disabled={
+                              busy ||
+                              q.isFetching ||
+                              manualSyncing ||
+                              refreshing
+                            }
                             aria-label={`Editar fila ${r.sheet_row_number}`}
                           >
                             <Edit2 className="h-4 w-4" />
@@ -851,7 +977,13 @@ export default function NotificacionesClientesDrive() {
                             className="h-8 w-8"
                             title="Guardar esta fila con los valores sugeridos (mismo POST /clientes)"
                             onClick={() => onGuardarFilaRapido(r)}
-                            disabled={blocked || busy || q.isFetching || manualSyncing || refreshing}
+                            disabled={
+                              blocked ||
+                              busy ||
+                              q.isFetching ||
+                              manualSyncing ||
+                              refreshing
+                            }
                             aria-label={`Guardar fila ${r.sheet_row_number}`}
                           >
                             <Save className="h-4 w-4" />
@@ -873,21 +1005,30 @@ export default function NotificacionesClientesDrive() {
                     </tr>
                   )
                 })}
-                {!q.isLoading && rows.length > 0 && visibleRows.length === 0 && (
-                  <tr>
-                    <td className="px-3 py-6 text-muted-foreground" colSpan={8}>
-                      Todas las filas están ocultas. Use «Mostrar filas ocultas» arriba para verlas de nuevo.
-                    </td>
-                  </tr>
-                )}
+                {!q.isLoading &&
+                  rows.length > 0 &&
+                  visibleRows.length === 0 && (
+                    <tr>
+                      <td
+                        className="px-3 py-6 text-muted-foreground"
+                        colSpan={8}
+                      >
+                        Todas las filas están ocultas. Use «Mostrar filas
+                        ocultas» arriba para verlas de nuevo.
+                      </td>
+                    </tr>
+                  )}
                 {!q.isLoading && rows.length === 0 && (
                   <tr>
                     <td className="px-3 py-6 text-muted-foreground" colSpan={8}>
-                      No hay filas pendientes: todas las cédulas del Drive ya existen en clientes, o el
-                      snapshot está vacío. Verifique la sincronización en Configuración (Google), el job interno
-                      (sync dom/mié 02:00 y caché de lista 03:00 Caracas si ENABLE_AUTOMATIC_SCHEDULED_JOBS=true) o
-                      un cron externo alineado (POST /api/v1/conciliacion-sheet/sync con secreto). Puede pulsar
-                      «Actualizar lista» para materializar ahora.
+                      No hay filas pendientes: todas las cédulas del Drive ya
+                      existen en clientes, o el snapshot está vacío. Verifique
+                      la sincronización en Configuración (Google), el job
+                      interno (sync dom/mié 02:00 y caché de lista 03:00 Caracas
+                      si ENABLE_AUTOMATIC_SCHEDULED_JOBS=true) o un cron externo
+                      alineado (POST /api/v1/conciliacion-sheet/sync con
+                      secreto). Puede pulsar «Actualizar lista» para
+                      materializar ahora.
                     </td>
                   </tr>
                 )}
@@ -903,7 +1044,9 @@ export default function NotificacionesClientesDrive() {
                   variant="outline"
                   size="sm"
                   className="gap-1 rounded-md border-border"
-                  disabled={candidatosPage <= 1 || manualSyncing || refreshing || saving}
+                  disabled={
+                    candidatosPage <= 1 || manualSyncing || refreshing || saving
+                  }
                   onClick={() => setCandidatosPage(p => Math.max(1, p - 1))}
                 >
                   <ChevronLeft className="h-4 w-4 shrink-0" aria-hidden />
@@ -927,8 +1070,17 @@ export default function NotificacionesClientesDrive() {
                   variant="outline"
                   size="sm"
                   className="gap-1 rounded-md border-border"
-                  disabled={candidatosPage >= totalCandidatosPages || manualSyncing || refreshing || saving}
-                  onClick={() => setCandidatosPage(p => Math.min(totalCandidatosPages, p + 1))}
+                  disabled={
+                    candidatosPage >= totalCandidatosPages ||
+                    manualSyncing ||
+                    refreshing ||
+                    saving
+                  }
+                  onClick={() =>
+                    setCandidatosPage(p =>
+                      Math.min(totalCandidatosPages, p + 1)
+                    )
+                  }
                 >
                   Siguiente
                   <ChevronRight className="h-4 w-4 shrink-0" aria-hidden />
@@ -958,9 +1110,17 @@ export default function NotificacionesClientesDrive() {
                 <Button
                   type="button"
                   onClick={() => void onGuardarSoloValidasSinMarcar()}
-                  disabled={saving || q.isFetching || manualSyncing || refreshing || filasValidasVisibles.length === 0}
+                  disabled={
+                    saving ||
+                    q.isFetching ||
+                    manualSyncing ||
+                    refreshing ||
+                    filasValidasVisibles.length === 0
+                  }
                 >
-                  {saving ? 'Guardando…' : `Guardar (${filasValidasVisibles.length} válida(s))`}
+                  {saving
+                    ? 'Guardando…'
+                    : `Guardar (${filasValidasVisibles.length} válida(s))`}
                 </Button>
                 <Button
                   type="button"
@@ -980,7 +1140,9 @@ export default function NotificacionesClientesDrive() {
                       : undefined
                   }
                 >
-                  {saving ? 'Guardando…' : `Guardar seleccionados (${seleccionados.length})`}
+                  {saving
+                    ? 'Guardando…'
+                    : `Guardar seleccionados (${seleccionados.length})`}
                 </Button>
               </div>
             </div>
@@ -1004,7 +1166,10 @@ export default function NotificacionesClientesDrive() {
             <span className="text-sm text-muted-foreground">
               Página {qa.data?.page ?? audPage} /{' '}
               {qa.data
-                ? Math.max(1, Math.ceil(qa.data.total / (qa.data.per_page || 30)))
+                ? Math.max(
+                    1,
+                    Math.ceil(qa.data.total / (qa.data.per_page || 30))
+                  )
                 : 1}
             </span>
             <Button
@@ -1013,7 +1178,11 @@ export default function NotificacionesClientesDrive() {
               size="sm"
               disabled={
                 !qa.data ||
-                audPage >= Math.max(1, Math.ceil(qa.data.total / (qa.data.per_page || 30)))
+                audPage >=
+                  Math.max(
+                    1,
+                    Math.ceil(qa.data.total / (qa.data.per_page || 30))
+                  )
               }
               onClick={() => setAudPage(p => p + 1)}
             >
@@ -1022,7 +1191,9 @@ export default function NotificacionesClientesDrive() {
           </div>
         </CardHeader>
         <CardContent>
-          {qa.isLoading && <p className="text-sm text-muted-foreground">Cargando auditoría…</p>}
+          {qa.isLoading && (
+            <p className="text-sm text-muted-foreground">Cargando auditoría…</p>
+          )}
           {qa.isError && (
             <p className="text-sm text-red-600">
               {getErrorMessage(qa.error) || 'Error al cargar'}
@@ -1058,17 +1229,25 @@ export default function NotificacionesClientesDrive() {
                         ? new Date(it.creado_en).toLocaleString('es-VE', {
                             timeZone: 'America/Caracas',
                           })
-                        : '—'}
+                        : '-'}
                     </td>
-                    <td className="min-w-0 break-words px-2 py-2 text-xs">{it.usuario_email}</td>
-                    <td className="min-w-0 break-words px-2 py-2 text-xs">{it.estado}</td>
+                    <td className="min-w-0 break-words px-2 py-2 text-xs">
+                      {it.usuario_email}
+                    </td>
+                    <td className="min-w-0 break-words px-2 py-2 text-xs">
+                      {it.estado}
+                    </td>
                     <td className="min-w-0 px-2 py-2 font-mono text-xs tabular-nums">
                       {it.sheet_row_number}
                     </td>
-                    <td className="min-w-0 break-words px-2 py-2 font-mono text-xs">{it.cedula}</td>
-                    <td className="min-w-0 break-words px-2 py-2 text-xs">{it.comentario ?? '—'}</td>
+                    <td className="min-w-0 break-words px-2 py-2 font-mono text-xs">
+                      {it.cedula}
+                    </td>
+                    <td className="min-w-0 break-words px-2 py-2 text-xs">
+                      {it.comentario ?? '-'}
+                    </td>
                     <td className="min-w-0 break-words px-2 py-2 text-xs text-red-700">
-                      {it.detalle_error ?? '—'}
+                      {it.detalle_error ?? '-'}
                     </td>
                   </tr>
                 ))}
@@ -1106,7 +1285,11 @@ export default function NotificacionesClientesDrive() {
                 <Input
                   id="ed-ced"
                   value={editDraft.cedula}
-                  onChange={e => setEditDraft(d => (d ? { ...d, cedula: e.target.value } : d))}
+                  onChange={e =>
+                    setEditDraft(d =>
+                      d ? { ...d, cedula: e.target.value } : d
+                    )
+                  }
                   autoComplete="off"
                 />
               </div>
@@ -1117,7 +1300,11 @@ export default function NotificacionesClientesDrive() {
                 <Input
                   id="ed-nom"
                   value={editDraft.nombres}
-                  onChange={e => setEditDraft(d => (d ? { ...d, nombres: e.target.value } : d))}
+                  onChange={e =>
+                    setEditDraft(d =>
+                      d ? { ...d, nombres: e.target.value } : d
+                    )
+                  }
                 />
               </div>
               <div className="space-y-1">
@@ -1127,7 +1314,11 @@ export default function NotificacionesClientesDrive() {
                 <Input
                   id="ed-tel"
                   value={editDraft.telefono}
-                  onChange={e => setEditDraft(d => (d ? { ...d, telefono: e.target.value } : d))}
+                  onChange={e =>
+                    setEditDraft(d =>
+                      d ? { ...d, telefono: e.target.value } : d
+                    )
+                  }
                   className={cn(
                     !telefonoColumnaFDriveValidoTrasNormalizar(
                       normalizarTelefonoColumnaDrive(editDraft.telefono)
@@ -1151,7 +1342,9 @@ export default function NotificacionesClientesDrive() {
                   id="ed-mail"
                   type="email"
                   value={editDraft.email}
-                  onChange={e => setEditDraft(d => (d ? { ...d, email: e.target.value } : d))}
+                  onChange={e =>
+                    setEditDraft(d => (d ? { ...d, email: e.target.value } : d))
+                  }
                 />
               </div>
               <div className="space-y-1">
@@ -1162,7 +1355,11 @@ export default function NotificacionesClientesDrive() {
                   id="ed-mail2"
                   type="email"
                   value={editDraft.email_secundario}
-                  onChange={e => setEditDraft(d => (d ? { ...d, email_secundario: e.target.value } : d))}
+                  onChange={e =>
+                    setEditDraft(d =>
+                      d ? { ...d, email_secundario: e.target.value } : d
+                    )
+                  }
                 />
               </div>
               <div className="space-y-1">
@@ -1172,7 +1369,11 @@ export default function NotificacionesClientesDrive() {
                 <Input
                   id="ed-dir"
                   value={editDraft.direccion}
-                  onChange={e => setEditDraft(d => (d ? { ...d, direccion: e.target.value } : d))}
+                  onChange={e =>
+                    setEditDraft(d =>
+                      d ? { ...d, direccion: e.target.value } : d
+                    )
+                  }
                 />
               </div>
               <div className="space-y-1">
@@ -1183,7 +1384,11 @@ export default function NotificacionesClientesDrive() {
                   id="ed-fn"
                   type="date"
                   value={editDraft.fecha_nacimiento}
-                  onChange={e => setEditDraft(d => (d ? { ...d, fecha_nacimiento: e.target.value } : d))}
+                  onChange={e =>
+                    setEditDraft(d =>
+                      d ? { ...d, fecha_nacimiento: e.target.value } : d
+                    )
+                  }
                 />
               </div>
               <div className="space-y-1">
@@ -1193,7 +1398,11 @@ export default function NotificacionesClientesDrive() {
                 <Input
                   id="ed-ocu"
                   value={editDraft.ocupacion}
-                  onChange={e => setEditDraft(d => (d ? { ...d, ocupacion: e.target.value } : d))}
+                  onChange={e =>
+                    setEditDraft(d =>
+                      d ? { ...d, ocupacion: e.target.value } : d
+                    )
+                  }
                 />
               </div>
               <div className="space-y-1">
@@ -1204,15 +1413,20 @@ export default function NotificacionesClientesDrive() {
                   id="ed-est"
                   className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   value={editDraft.estado}
-                  onChange={e => setEditDraft(d => (d ? { ...d, estado: e.target.value } : d))}
-                >
-                  {(estadosCliente.length ? estadosCliente : [{ valor: 'ACTIVO', etiqueta: 'ACTIVO', orden: 0 }]).map(
-                    op => (
-                      <option key={op.valor} value={op.valor}>
-                        {op.etiqueta}
-                      </option>
+                  onChange={e =>
+                    setEditDraft(d =>
+                      d ? { ...d, estado: e.target.value } : d
                     )
-                  )}
+                  }
+                >
+                  {(estadosCliente.length
+                    ? estadosCliente
+                    : [{ valor: 'ACTIVO', etiqueta: 'ACTIVO', orden: 0 }]
+                  ).map(op => (
+                    <option key={op.valor} value={op.valor}>
+                      {op.etiqueta}
+                    </option>
+                  ))}
                 </select>
               </div>
               <div className="space-y-1">
@@ -1223,7 +1437,9 @@ export default function NotificacionesClientesDrive() {
                   id="ed-notas"
                   rows={2}
                   value={editDraft.notas}
-                  onChange={e => setEditDraft(d => (d ? { ...d, notas: e.target.value } : d))}
+                  onChange={e =>
+                    setEditDraft(d => (d ? { ...d, notas: e.target.value } : d))
+                  }
                 />
               </div>
               <div className="space-y-1">
@@ -1234,24 +1450,37 @@ export default function NotificacionesClientesDrive() {
                   id="ed-com"
                   rows={2}
                   value={editDraft.comentario}
-                  onChange={e => setEditDraft(d => (d ? { ...d, comentario: e.target.value } : d))}
+                  onChange={e =>
+                    setEditDraft(d =>
+                      d ? { ...d, comentario: e.target.value } : d
+                    )
+                  }
                 />
               </div>
               <div className="flex flex-wrap justify-end gap-2 pt-2">
-                <Button type="button" variant="outline" onClick={() => setEditDraft(null)}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setEditDraft(null)}
+                >
                   Cancelar
                 </Button>
                 <Button
                   type="button"
                   onClick={() => onGuardarEdicion()}
-                  disabled={savingRowId === editDraft.sheet_row_number || !puedeGuardarEdicion}
+                  disabled={
+                    savingRowId === editDraft.sheet_row_number ||
+                    !puedeGuardarEdicion
+                  }
                   title={
                     !puedeGuardarEdicion
                       ? 'Activo solo si cumple todos los validadores: cédula E válida y misma clave que la fila, sin duplicar cédula en hoja, nombre D y correo G (si no los cambió: sin duplicar en clientes), teléfono F (04/02…), correo 1 ≠ 2, dirección, fecha, ocupación y estado.'
                       : undefined
                   }
                 >
-                  {savingRowId === editDraft.sheet_row_number ? 'Guardando…' : 'Guardar en clientes'}
+                  {savingRowId === editDraft.sheet_row_number
+                    ? 'Guardando…'
+                    : 'Guardar en clientes'}
                 </Button>
               </div>
             </CardContent>

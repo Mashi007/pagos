@@ -163,7 +163,10 @@ export function EditarRevisionManual() {
     const normReturnState = normalizarReturnToRevisionPath(
       (location.state as { returnTo?: unknown } | null)?.returnTo
     )
-    if (normReturnState && esReturnToRevisionDesdeNotificaciones(normReturnState)) {
+    if (
+      normReturnState &&
+      esReturnToRevisionDesdeNotificaciones(normReturnState)
+    ) {
       limpiarReturnRevisionSesion()
       return normReturnState
     }
@@ -580,10 +583,7 @@ export function EditarRevisionManual() {
         )
 
         setCuotasData(
-          mergeCuotasParaMostrar(
-            data.cuotas,
-            data.prestamo?.numero_cuotas
-          )
+          mergeCuotasParaMostrar(data.cuotas, data.prestamo?.numero_cuotas)
         )
       }
 
@@ -778,7 +778,10 @@ export function EditarRevisionManual() {
             'Indique fecha de aprobación (o base de cálculo) para generar las cuotas faltantes antes de la cascada.'
           )
         }
-        await revisionManualService.guardarPrestamoYReconstruirCuotas(pid, patch)
+        await revisionManualService.guardarPrestamoYReconstruirCuotas(
+          pid,
+          patch
+        )
       } else if (Object.keys(patch).length > 0) {
         await revisionManualService.editarPrestamo(pid, patch)
       }
@@ -1121,10 +1124,7 @@ export function EditarRevisionManual() {
       }
       if (datos?.cuotas) {
         setCuotasData(
-          mergeCuotasParaMostrar(
-            datos.cuotas,
-            datos.prestamo?.numero_cuotas
-          )
+          mergeCuotasParaMostrar(datos.cuotas, datos.prestamo?.numero_cuotas)
         )
       }
 
@@ -2912,11 +2912,13 @@ export function EditarRevisionManual() {
                       </code>
                       . En esta pantalla, al guardar o al usar «Recalcular
                       vencimientos», el valor persistido en base es el{' '}
-                      <strong className="font-medium">día calendario anterior</strong>{' '}
+                      <strong className="font-medium">
+                        día calendario anterior
+                      </strong>{' '}
                       al indicado en el selector (inicio de ese día). Es
                       obligatoria si el estado es Aprobado, Desembolsado o
-                      Liquidado. «Recalcular vencimientos» usa esa fecha persistida
-                      junto con plazo, cuota por período y modalidad.
+                      Liquidado. «Recalcular vencimientos» usa esa fecha
+                      persistida junto con plazo, cuota por período y modalidad.
                     </p>
                     <div className="relative min-w-0 max-w-md">
                       <Calendar className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
@@ -4106,7 +4108,9 @@ export function EditarRevisionManual() {
 
                                 const nuevoMonto =
                                   parseFloat(e.target.value) || 0
-                                const est = codigoEstadoCuotaParaUi(cuota.estado)
+                                const est = codigoEstadoCuotaParaUi(
+                                  cuota.estado
+                                )
                                 const syncPagado =
                                   est === 'PAGADO' || est === 'PAGO_ADELANTADO'
 
@@ -4218,8 +4222,7 @@ export function EditarRevisionManual() {
                                   estado: nuevoEstado,
                                   ...(syncPagado
                                     ? {
-                                        total_pagado:
-                                          Number(cuota.monto) || 0,
+                                        total_pagado: Number(cuota.monto) || 0,
                                       }
                                     : {}),
                                 }

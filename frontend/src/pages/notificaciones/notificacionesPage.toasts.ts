@@ -1,8 +1,6 @@
 import { toast } from 'sonner'
 
-import {
-  TIMEOUT_MS_ENVIO_NOTIFICACIONES_MANUAL,
-} from '../../services/notificacionService'
+import { TIMEOUT_MS_ENVIO_NOTIFICACIONES_MANUAL } from '../../services/notificacionService'
 
 import { getErrorMessage, isAxiosTimeoutError } from '../../types/errors'
 

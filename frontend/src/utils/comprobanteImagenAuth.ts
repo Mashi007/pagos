@@ -28,12 +28,16 @@ export async function fetchStaffComprobanteBlobFromHref(
   const t = String(href ?? '').trim()
   const path = pathApiComprobanteImagenDesdeHref(t)
   if (!path) {
-    throw new Error('El enlace no es un comprobante interno descargable con sesión.')
+    throw new Error(
+      'El enlace no es un comprobante interno descargable con sesión.'
+    )
   }
   return apiClient.getBlob(path)
 }
 
-export async function abrirStaffComprobanteDesdeHref(href: string): Promise<void> {
+export async function abrirStaffComprobanteDesdeHref(
+  href: string
+): Promise<void> {
   const t = String(href ?? '').trim()
   if (!t) return
   const path = pathApiComprobanteImagenDesdeHref(t)

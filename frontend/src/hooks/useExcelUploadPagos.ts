@@ -2345,7 +2345,15 @@ export function useExcelUploadPagos({
             // No confundir «Código documento» (solo código) con el nº de comprobante.
             const esSoloCodigoDocumento =
               match(i, 'codigo documento', 'código documento') &&
-              !match(i, 'numero', 'número', 'serial', 'referencia', 'doc ', 'doc.')
+              !match(
+                i,
+                'numero',
+                'número',
+                'serial',
+                'referencia',
+                'doc ',
+                'doc.'
+              )
 
             if (
               !esSoloCodigoDocumento &&
@@ -2377,7 +2385,13 @@ export function useExcelUploadPagos({
               prestamo = i
 
             if (
-              match(i, 'conciliacion', 'conciliación', 'conciliado', 'conciliada')
+              match(
+                i,
+                'conciliacion',
+                'conciliación',
+                'conciliado',
+                'conciliada'
+              )
             ) {
               conciliacion = i
               conciliacionExplicit = true
@@ -2507,13 +2521,13 @@ export function useExcelUploadPagos({
             cols.prestamo >= 0 ? row[cols.prestamo] : undefined
 
           const conciliacionRawCol4 = String(
-            cols.prestamo >= 0 ? row[cols.prestamo] ?? '' : ''
+            cols.prestamo >= 0 ? (row[cols.prestamo] ?? '') : ''
           )
             .trim()
             .toUpperCase()
 
           const conciliacionRawCol5 = String(
-            cols.conciliacion >= 0 ? row[cols.conciliacion] ?? '' : ''
+            cols.conciliacion >= 0 ? (row[cols.conciliacion] ?? '') : ''
           )
             .trim()
             .toUpperCase()

@@ -83,11 +83,15 @@ function mimeEfectivoCliente(file: File): string {
   return t
 }
 
-function validarArchivo(file: File | null): { valido: boolean; error?: string } {
+function validarArchivo(file: File | null): {
+  valido: boolean
+  error?: string
+} {
   if (!file)
     return {
       valido: false,
-      error: 'Seleccione un archivo de comprobante (PDF, JPEG, PNG, HEIC o WebP).',
+      error:
+        'Seleccione un archivo de comprobante (PDF, JPEG, PNG, HEIC o WebP).',
     }
   const type = mimeEfectivoCliente(file)
   if (!ALLOWED_FILE_TYPES.includes(type)) {
@@ -146,14 +150,16 @@ function montoParaApi(num: number): string {
 }
 
 function validarFechaPago(fecha: string): { valido: boolean; error?: string } {
-  if (!fecha?.trim()) return { valido: false, error: 'Seleccione la fecha de pago.' }
+  if (!fecha?.trim())
+    return { valido: false, error: 'Seleccione la fecha de pago.' }
   const hoy = new Date()
   hoy.setHours(0, 0, 0, 0)
   const d = new Date(fecha)
   if (Number.isNaN(d.getTime()))
     return { valido: false, error: 'Fecha no válida.' }
   d.setHours(0, 0, 0, 0)
-  if (d > hoy) return { valido: false, error: 'La fecha de pago no puede ser futura.' }
+  if (d > hoy)
+    return { valido: false, error: 'La fecha de pago no puede ser futura.' }
   return { valido: true }
 }
 
@@ -174,7 +180,10 @@ function validarMonto(
     }
   if (moneda === 'BS') {
     if (num < MIN_MONTO_BS_REPORTAR)
-      return { valido: false, error: 'En bolívares el monto debe ser al menos 1 Bs.' }
+      return {
+        valido: false,
+        error: 'En bolívares el monto debe ser al menos 1 Bs.',
+      }
     if (num > MAX_MONTO_BS_REPORTAR)
       return {
         valido: false,
@@ -183,8 +192,12 @@ function validarMonto(
     return { valido: true, valor: num }
   }
   if (num < MIN_MONTO)
-    return { valido: false, error: `El monto debe ser mayor a ${String(MIN_MONTO)}.` }
-  if (num > MAX_MONTO) return { valido: false, error: 'Monto fuera del rango permitido.' }
+    return {
+      valido: false,
+      error: `El monto debe ser mayor a ${String(MIN_MONTO)}.`,
+    }
+  if (num > MAX_MONTO)
+    return { valido: false, error: 'Monto fuera del rango permitido.' }
   return { valido: true, valor: num }
 }
 
@@ -202,7 +215,8 @@ export default function EscanerInfopagosPage() {
   const [cedulaRaw, setCedulaRaw] = useState('')
   const [nombreCliente, setNombreCliente] = useState('')
   const [validandoCedula, setValidandoCedula] = useState(false)
-  const [fuenteTasa, setFuenteTasa] = useState<FuenteTasaCambio>(FUENTE_TASA_DEFAULT)
+  const [fuenteTasa, setFuenteTasa] =
+    useState<FuenteTasaCambio>(FUENTE_TASA_DEFAULT)
 
   const [archivo, setArchivo] = useState<File | null>(null)
   const [escaneando, setEscaneando] = useState(false)
@@ -262,9 +276,9 @@ export default function EscanerInfopagosPage() {
     }
   }, [enRevision, fase, pagoId, reciboListo, reciboToken])
 
-
   const cedulaNormalizada = useMemo(
-    () => normalizarCedulaParaProcesar(extraerCaracteresCedulaPublica(cedulaRaw)),
+    () =>
+      normalizarCedulaParaProcesar(extraerCaracteresCedulaPublica(cedulaRaw)),
     [cedulaRaw]
   )
 
@@ -274,28 +288,31 @@ export default function EscanerInfopagosPage() {
     return Boolean(escanerColision?.duplicado_en_pagos)
   }, [escanerColision, validacionCampos, validacionReglas])
 
-  const handleAplicarSufijoOperacion = useCallback((letter: 'A' | 'P') => {
-    const actual = numeroOperacion.trim()
-    if (!actual) {
-      toast.error('Primero escriba un número de operación.')
-      return
-    }
-    if (SUFIJO_VISTO_ARCHIVO_RE.test(actual)) {
-      toast.error('Este número ya tiene sufijo admin (_A#### / _P####).')
-      return
-    }
-    const nuevo = aplicarSufijoVistoADocumento(
-      actual,
-      letter,
-      tokensSufijoUsadosRef.current
-    )
-    if (!nuevo || nuevo === actual) {
-      toast.error('No se pudo asignar sufijo.')
-      return
-    }
-    setNumeroOperacion(nuevo)
-    toast.success(`Sufijo _${letter}#### aplicado al número de operación.`)
-  }, [numeroOperacion])
+  const handleAplicarSufijoOperacion = useCallback(
+    (letter: 'A' | 'P') => {
+      const actual = numeroOperacion.trim()
+      if (!actual) {
+        toast.error('Primero escriba un número de operación.')
+        return
+      }
+      if (SUFIJO_VISTO_ARCHIVO_RE.test(actual)) {
+        toast.error('Este número ya tiene sufijo admin (_A#### / _P####).')
+        return
+      }
+      const nuevo = aplicarSufijoVistoADocumento(
+        actual,
+        letter,
+        tokensSufijoUsadosRef.current
+      )
+      if (!nuevo || nuevo === actual) {
+        toast.error('No se pudo asignar sufijo.')
+        return
+      }
+      setNumeroOperacion(nuevo)
+      toast.success(`Sufijo _${letter}#### aplicado al número de operación.`)
+    },
+    [numeroOperacion]
+  )
 
   const handleValidarCedula = useCallback(async () => {
     if (!cedulaNormalizada.valido) {
@@ -304,9 +321,12 @@ export default function EscanerInfopagosPage() {
     }
     setValidandoCedula(true)
     try {
-      const res = await validarCedulaPublico(cedulaNormalizada.valorParaEnviar!, {
-        origen: 'infopagos',
-      })
+      const res = await validarCedulaPublico(
+        cedulaNormalizada.valorParaEnviar!,
+        {
+          origen: 'infopagos',
+        }
+      )
       if (!res.ok) {
         toast.error(res.error || 'No se pudo validar la cédula.')
         return
@@ -314,9 +334,13 @@ export default function EscanerInfopagosPage() {
       setNombreCliente((res.nombre || '').trim())
       setFuenteTasa(normalizarFuenteTasaCambio(res.fuente_tasa_cambio_lista_bs))
       setFase('imagen')
-      toast.success('Cédula verificada. Se usará la tasa configurada en Pago Bs.')
+      toast.success(
+        'Cédula verificada. Se usará la tasa configurada en Pago Bs.'
+      )
     } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : 'Error al validar la cédula.')
+      toast.error(
+        e instanceof Error ? e.message : 'Error al validar la cédula.'
+      )
     } finally {
       setValidandoCedula(false)
     }
@@ -366,7 +390,11 @@ export default function EscanerInfopagosPage() {
         setFechaDetectada('')
       }
       const inst = (s.institucion_financiera || '').trim()
-      if (INSTITUCIONES_FINANCIERAS.includes(inst as (typeof INSTITUCIONES_FINANCIERAS)[number])) {
+      if (
+        INSTITUCIONES_FINANCIERAS.includes(
+          inst as (typeof INSTITUCIONES_FINANCIERAS)[number]
+        )
+      ) {
         setInstitucion(inst)
         setOtroInstitucion('')
       } else {
@@ -376,7 +404,9 @@ export default function EscanerInfopagosPage() {
       setNumeroOperacion(s.numero_operacion || '')
       setMoneda(s.moneda === 'BS' ? 'BS' : 'USD')
       if (s.monto != null && Number.isFinite(s.monto)) {
-        setMontoStr(formatoMontoParaMostrar(s.monto, s.moneda === 'BS' ? 'BS' : 'USD'))
+        setMontoStr(
+          formatoMontoParaMostrar(s.monto, s.moneda === 'BS' ? 'BS' : 'USD')
+        )
       } else {
         setMontoStr('')
       }
@@ -386,7 +416,9 @@ export default function EscanerInfopagosPage() {
       setEscanerColision({
         duplicado_en_pagos: Boolean(res.duplicado_en_pagos),
         pago_existente_id:
-          typeof res.pago_existente_id === 'number' ? res.pago_existente_id : null,
+          typeof res.pago_existente_id === 'number'
+            ? res.pago_existente_id
+            : null,
         prestamo_existente_id:
           typeof res.prestamo_existente_id === 'number'
             ? res.prestamo_existente_id
@@ -396,11 +428,13 @@ export default function EscanerInfopagosPage() {
             ? res.prestamo_objetivo_id
             : null,
       })
-      tokensSufijoUsadosRef.current = collectTokensSufijoVistoArchivoDesdeFilas([
-        { numero_documento: s.numero_operacion || '' },
-      ])
+      tokensSufijoUsadosRef.current = collectTokensSufijoVistoArchivoDesdeFilas(
+        [{ numero_documento: s.numero_operacion || '' }]
+      )
       setFase('formulario')
-      toast.success('Datos sugeridos. Revise y corrija si hace falta antes de guardar.')
+      toast.success(
+        'Datos sugeridos. Revise y corrija si hace falta antes de guardar.'
+      )
     } catch {
       /* apiClient ya muestra toast en errores HTTP */
     } finally {
@@ -487,7 +521,9 @@ export default function EscanerInfopagosPage() {
         setReciboToken(res.recibo_descarga_token)
         if (res.pago_id != null) setPagoId(res.pago_id)
         setReciboListo(
-          typeof res.recibo_listo === 'boolean' ? Boolean(res.recibo_listo) : false
+          typeof res.recibo_listo === 'boolean'
+            ? Boolean(res.recibo_listo)
+            : false
         )
       } else {
         setReciboToken(null)
@@ -528,7 +564,9 @@ export default function EscanerInfopagosPage() {
       document.body.removeChild(a)
       window.URL.revokeObjectURL(url)
     } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : 'No se pudo descargar el recibo.')
+      toast.error(
+        e instanceof Error ? e.message : 'No se pudo descargar el recibo.'
+      )
     } finally {
       setDescargandoRecibo(false)
     }
@@ -571,8 +609,8 @@ export default function EscanerInfopagosPage() {
             Escáner Infopagos
           </h1>
           <p className="text-sm text-slate-600">
-            Cédula del deudor → comprobante → IA (Gemini) sugiere el formulario → validar, editar y
-            guardar como en Infopagos.
+            Cédula del deudor → comprobante → IA (Gemini) sugiere el formulario
+            → validar, editar y guardar como en Infopagos.
           </p>
         </div>
       </div>
@@ -603,7 +641,9 @@ export default function EscanerInfopagosPage() {
                 autoComplete="off"
               />
               {!cedulaNormalizada.valido && cedulaRaw.trim().length > 3 && (
-                <p className="text-sm text-amber-700">{cedulaNormalizada.error}</p>
+                <p className="text-sm text-amber-700">
+                  {cedulaNormalizada.error}
+                </p>
               )}
             </div>
             <Button onClick={handleValidarCedula} disabled={validandoCedula}>
@@ -641,10 +681,17 @@ export default function EscanerInfopagosPage() {
               />
             </div>
             <div className="flex flex-wrap gap-2">
-              <Button variant="outline" type="button" onClick={() => setFase('cedula')}>
+              <Button
+                variant="outline"
+                type="button"
+                onClick={() => setFase('cedula')}
+              >
                 Volver
               </Button>
-              <Button onClick={handleEscanear} disabled={escaneando || !archivo}>
+              <Button
+                onClick={handleEscanear}
+                disabled={escaneando || !archivo}
+              >
                 {escaneando ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -659,8 +706,9 @@ export default function EscanerInfopagosPage() {
               </Button>
             </div>
             <p className="text-xs text-slate-500">
-              La lectura con IA suele tardar <strong>10–30 s</strong> según tamaño del archivo y la red;
-              no cierre la pestaña. Un segundo clic no repetirá el envío.
+              La lectura con IA suele tardar <strong>10-30 s</strong> según
+              tamaño del archivo y la red; no cierre la pestaña. Un segundo clic
+              no repetirá el envío.
             </p>
           </CardContent>
         </Card>
@@ -673,12 +721,15 @@ export default function EscanerInfopagosPage() {
             <p className="rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-sm font-medium text-sky-950">
               Usted está ingresando un pago para{' '}
               <strong>
-                {nombreCliente?.trim() || cedulaNormalizada.valorParaEnviar || 'cliente seleccionado'}
+                {nombreCliente?.trim() ||
+                  cedulaNormalizada.valorParaEnviar ||
+                  'cliente seleccionado'}
               </strong>
               {escanerColision?.prestamo_objetivo_id != null ? (
                 <>
                   {' '}
-                  y préstamo N° <strong>{escanerColision.prestamo_objetivo_id}</strong>.
+                  y préstamo N°{' '}
+                  <strong>{escanerColision.prestamo_objetivo_id}</strong>.
                 </>
               ) : (
                 '.'
@@ -687,7 +738,10 @@ export default function EscanerInfopagosPage() {
             {escanerColision?.prestamo_objetivo_id != null ? (
               <p className="rounded-md border border-indigo-200 bg-indigo-50 px-3 py-2 text-sm font-medium text-indigo-950">
                 Este pago se está cargando al{' '}
-                <strong>préstamo N° {escanerColision.prestamo_objetivo_id}</strong>.
+                <strong>
+                  préstamo N° {escanerColision.prestamo_objetivo_id}
+                </strong>
+                .
               </p>
             ) : null}
           </CardHeader>
@@ -706,7 +760,9 @@ export default function EscanerInfopagosPage() {
             )}
             {cedulaPagadorImg ? (
               <p className="text-xs text-slate-500">
-                <span className="font-medium text-slate-700">Cédula en comprobante (pagador):</span>{' '}
+                <span className="font-medium text-slate-700">
+                  Cédula en comprobante (pagador):
+                </span>{' '}
                 {cedulaPagadorImg}
               </p>
             ) : null}
@@ -720,12 +776,14 @@ export default function EscanerInfopagosPage() {
                     <span className="font-mono font-semibold text-slate-900">
                       {fechaDetectada}
                     </span>
-                    . Puede ajustar el campo de fecha manualmente si la lectura de la IA no coincide con el comprobante.
+                    . Puede ajustar el campo de fecha manualmente si la lectura
+                    de la IA no coincide con el comprobante.
                   </p>
                 ) : (
                   <p className="text-xs text-amber-800">
-                    No se detectó fecha clara en la imagen: el campo quedó con la fecha de hoy; cámbiela si el
-                    comprobante corresponde a otro día.
+                    No se detectó fecha clara en la imagen: el campo quedó con
+                    la fecha de hoy; cámbiela si el comprobante corresponde a
+                    otro día.
                   </p>
                 )}
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
@@ -796,24 +854,32 @@ export default function EscanerInfopagosPage() {
                 typeof escanerColision.prestamo_existente_id === 'number' ? (
                   <p className="text-sm font-medium text-rose-800">
                     Este número ya está cargado en cartera, aplicado al{' '}
-                    <strong>préstamo N° {escanerColision.prestamo_existente_id}</strong>.
+                    <strong>
+                      préstamo N° {escanerColision.prestamo_existente_id}
+                    </strong>
+                    .
                     {typeof escanerColision.pago_existente_id === 'number'
                       ? ` (pago #${escanerColision.pago_existente_id})`
                       : ''}
                   </p>
                 ) : hayDuplicadoOperacion ? (
                   <p className="text-sm font-medium text-rose-800">
-                    Validación: posible duplicado de número de operación / documento. Use un sufijo
-                    distinto si corresponde el mismo comprobante para otro caso.
+                    Validación: posible duplicado de número de operación /
+                    documento. Use un sufijo distinto si corresponde el mismo
+                    comprobante para otro caso.
                   </p>
                 ) : null}
                 {hayDuplicadoOperacion ? (
                   <div className="rounded-md border border-violet-200 bg-violet-50 px-3 py-2 text-sm text-violet-950">
-                    <p className="font-medium">Sufijo admin (misma lógica que carga masiva)</p>
+                    <p className="font-medium">
+                      Sufijo admin (misma lógica que carga masiva)
+                    </p>
                     <p className="mt-1 text-xs leading-snug">
-                      Añade <code className="rounded bg-white/80 px-1">_A####</code> o{' '}
-                      <code className="rounded bg-white/80 px-1">_P####</code> al final del número
-                      para que el documento sea único en cartera.
+                      Añade{' '}
+                      <code className="rounded bg-white/80 px-1">_A####</code> o{' '}
+                      <code className="rounded bg-white/80 px-1">_P####</code>{' '}
+                      al final del número para que el documento sea único en
+                      cartera.
                     </p>
                     <div className="mt-2 flex flex-wrap gap-2">
                       <Button
@@ -834,7 +900,9 @@ export default function EscanerInfopagosPage() {
                 <select
                   className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   value={moneda}
-                  onChange={e => setMoneda(e.target.value === 'BS' ? 'BS' : 'USD')}
+                  onChange={e =>
+                    setMoneda(e.target.value === 'BS' ? 'BS' : 'USD')
+                  }
                 >
                   <option value="USD">USD / divisas</option>
                   <option value="BS">Bolívares (Bs.)</option>
@@ -853,12 +921,17 @@ export default function EscanerInfopagosPage() {
             </div>
 
             <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
-              Se reutiliza automáticamente el comprobante escaneado al inicio para guardar y para procesos
-              siguientes (por ejemplo, recibo). No es necesario volver a cargarlo.
+              Se reutiliza automáticamente el comprobante escaneado al inicio
+              para guardar y para procesos siguientes (por ejemplo, recibo). No
+              es necesario volver a cargarlo.
             </div>
 
             <div className="flex flex-wrap gap-2">
-              <Button variant="outline" type="button" onClick={() => setFase('imagen')}>
+              <Button
+                variant="outline"
+                type="button"
+                onClick={() => setFase('imagen')}
+              >
                 Volver
               </Button>
               <Button onClick={handleGuardar} disabled={enviando}>
@@ -891,12 +964,16 @@ export default function EscanerInfopagosPage() {
           </CardHeader>
           <CardContent className="space-y-3 text-sm text-emerald-950">
             <p>
-              Referencia: <span className="font-mono font-semibold">{referencia || '—'}</span>
+              Referencia:{' '}
+              <span className="font-mono font-semibold">
+                {referencia || '-'}
+              </span>
             </p>
             {enRevision ? (
               <p>
-                Su pago está siendo revisado para asegurar coherencia con los datos de la imagen.
-                Cuando sea aprobado, el recibo quedará disponible para descarga.
+                Su pago está siendo revisado para asegurar coherencia con los
+                datos de la imagen. Cuando sea aprobado, el recibo quedará
+                disponible para descarga.
               </p>
             ) : null}
             {reciboToken && pagoId != null && reciboListo ? (
@@ -916,8 +993,8 @@ export default function EscanerInfopagosPage() {
               </p>
             ) : !enRevision ? (
               <p className="rounded-md border border-emerald-200 bg-emerald-100/60 px-3 py-2 text-xs text-emerald-900">
-                El pago fue aprobado. Si no ve el botón de descarga, actualice la página para
-                obtener el enlace del recibo.
+                El pago fue aprobado. Si no ve el botón de descarga, actualice
+                la página para obtener el enlace del recibo.
               </p>
             ) : null}
             <Button type="button" onClick={reiniciar}>

@@ -60,7 +60,10 @@ export type FilaLote = {
 }
 
 export function newClientId(): string {
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+  if (
+    typeof crypto !== 'undefined' &&
+    typeof crypto.randomUUID === 'function'
+  ) {
     return crypto.randomUUID()
   }
   return `f-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`
@@ -110,15 +113,21 @@ export function filaVaciaDesdeArchivo(archivo: File): FilaLote {
   }
 }
 
-export function mapColision(res: EscanerInfopagosExtraerResponse): EscanerColision | null {
+export function mapColision(
+  res: EscanerInfopagosExtraerResponse
+): EscanerColision | null {
   return {
     duplicado_en_pagos: Boolean(res.duplicado_en_pagos),
     pago_existente_id:
       typeof res.pago_existente_id === 'number' ? res.pago_existente_id : null,
     prestamo_existente_id:
-      typeof res.prestamo_existente_id === 'number' ? res.prestamo_existente_id : null,
+      typeof res.prestamo_existente_id === 'number'
+        ? res.prestamo_existente_id
+        : null,
     prestamo_objetivo_id:
-      typeof res.prestamo_objetivo_id === 'number' ? res.prestamo_objetivo_id : null,
+      typeof res.prestamo_objetivo_id === 'number'
+        ? res.prestamo_objetivo_id
+        : null,
   }
 }
 

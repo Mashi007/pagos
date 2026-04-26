@@ -127,7 +127,9 @@ function useVistaPreviaComprobanteGuardado(
   hrefInicial: string,
   activo: boolean
 ): { src: string | null; cargando: boolean; error: boolean } {
-  const pathAuth = activo ? pathApiComprobanteImagenDesdeHref(hrefInicial) : null
+  const pathAuth = activo
+    ? pathApiComprobanteImagenDesdeHref(hrefInicial)
+    : null
   const requiereSesion = Boolean(pathAuth)
   const [blobUrl, setBlobUrl] = useState<string | null>(null)
   const [cargando, setCargando] = useState(false)
@@ -1577,9 +1579,7 @@ export function RegistrarPagoForm({
                 </div>
               ) : null}
 
-              {isEditing &&
-              linkComprobanteParaVista &&
-              !archivoComprobante ? (
+              {isEditing && linkComprobanteParaVista && !archivoComprobante ? (
                 <div className="space-y-2 rounded border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800">
                   <p className="font-medium text-slate-900">
                     Comprobante ya registrado

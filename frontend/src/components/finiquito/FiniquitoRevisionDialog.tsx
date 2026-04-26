@@ -1001,7 +1001,10 @@ export function FiniquitoRevisionDialog({
                                 {p.conciliado ? 'Sí' : 'No'}
                               </TableCell>
                               <TableCell
-                                className={cn(tdFin, 'text-center whitespace-nowrap')}
+                                className={cn(
+                                  tdFin,
+                                  'whitespace-nowrap text-center'
+                                )}
                               >
                                 {(() => {
                                   const u =

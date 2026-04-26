@@ -590,7 +590,10 @@ export function useExcelUpload({
         const telDigits = normalizeTelefonoFromExcel(blankIfNN(row.telefono))
 
         if (telDigits.length !== 10 || !/^[1-9]\d{9}$/.test(telDigits)) {
-          addToast('error', 'Teléfono inválido: se requieren 10 dígitos válidos.')
+          addToast(
+            'error',
+            'Teléfono inválido: se requieren 10 dígitos válidos.'
+          )
 
           return false
         }
@@ -1320,7 +1323,7 @@ export function useExcelUpload({
           if (!row || row.every(cell => !cell)) continue
 
           // Columnas Estado y Activo ocultas en UI: siempre ACTIVO y TRUE para cumplir validadores
-          // Dirección, fecha nac. y ocupación: fijas (no se leen columnas 4–6 del Excel)
+          // Dirección, fecha nac. y ocupación: fijas (no se leen columnas 4-6 del Excel)
 
           const rowData: ExcelRow = {
             _rowIndex: i + 1,
@@ -1337,10 +1340,7 @@ export function useExcelUpload({
 
             telefono: normalizeTelefonoFromExcel(row[2]?.toString()),
 
-            email:
-              row[3] != null && row[3] !== ''
-                ? String(row[3]).trim()
-                : '',
+            email: row[3] != null && row[3] !== '' ? String(row[3]).trim() : '',
 
             direccion: CARGA_MASIVA_CLIENTES_DEFAULT_DIRECCION,
 
@@ -1398,9 +1398,7 @@ export function useExcelUpload({
         }
 
         const cedulasDupEnArchivo = new Set(
-          [...cedulaCounts.entries()]
-            .filter(([, n]) => n > 1)
-            .map(([k]) => k)
+          [...cedulaCounts.entries()].filter(([, n]) => n > 1).map(([k]) => k)
         )
 
         for (const row of processedData) {
@@ -1426,9 +1424,7 @@ export function useExcelUpload({
         }
 
         const emailsDupEnArchivo = new Set(
-          [...emailCounts.entries()]
-            .filter(([, n]) => n > 1)
-            .map(([k]) => k)
+          [...emailCounts.entries()].filter(([, n]) => n > 1).map(([k]) => k)
         )
 
         setDuplicateEmailKeysEnArchivo([...emailsDupEnArchivo])
@@ -1455,7 +1451,9 @@ export function useExcelUpload({
 
         const uniqueCedulas = [
           ...new Set(
-            processedData.map(r => cedulaComparableKey(r.cedula)).filter(Boolean)
+            processedData
+              .map(r => cedulaComparableKey(r.cedula))
+              .filter(Boolean)
           ),
         ]
 
@@ -1576,7 +1574,10 @@ export function useExcelUpload({
 
         processExcelFile(excelFile)
       } else {
-        addToast('error', 'Por favor selecciona un archivo Excel (.xlsx o .xls)')
+        addToast(
+          'error',
+          'Por favor selecciona un archivo Excel (.xlsx o .xls)'
+        )
       }
     },
 
@@ -1667,7 +1668,11 @@ export function useExcelUpload({
 
       const cedNorm = cedulaComparableKey(row.cedula)
 
-      if (field === 'cedula' && cedNorm && cedulasExistentesEnBD.includes(cedNorm)) {
+      if (
+        field === 'cedula' &&
+        cedNorm &&
+        cedulasExistentesEnBD.includes(cedNorm)
+      ) {
         row._validation.cedula = {
           isValid: false,
           message: 'Cédula ya existe en tabla clientes (no se puede guardar)',

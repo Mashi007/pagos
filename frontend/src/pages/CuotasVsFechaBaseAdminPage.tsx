@@ -30,7 +30,7 @@ const PAGE_SIZE = 50
 const RECALC_LOTE_CHUNK = 80
 
 function fmtIso(s?: string | null): string {
-  if (!s) return '—'
+  if (!s) return '-'
   const t = String(s).trim()
   return t.length >= 10 ? t.slice(0, 10) : t
 }
@@ -79,13 +79,13 @@ export default function CuotasVsFechaBaseAdminPage() {
     setSelected(new Set())
   }, [offset, appliedCedula])
 
-  const elegiblesPagina = useMemo(
-    () => items.filter(filaElegibleSi),
-    [items],
-  )
+  const elegiblesPagina = useMemo(() => items.filter(filaElegibleSi), [items])
   const todosElegiblesSeleccionados =
-    elegiblesPagina.length > 0 && elegiblesPagina.every(r => selected.has(r.prestamo_id))
-  const algunElegibleSeleccionado = elegiblesPagina.some(r => selected.has(r.prestamo_id))
+    elegiblesPagina.length > 0 &&
+    elegiblesPagina.every(r => selected.has(r.prestamo_id))
+  const algunElegibleSeleccionado = elegiblesPagina.some(r =>
+    selected.has(r.prestamo_id)
+  )
 
   const idsSeleccionadosOrdenados = useMemo(() => {
     const ids: number[] = []
@@ -114,7 +114,9 @@ export default function CuotasVsFechaBaseAdminPage() {
       )
       await queryClient.invalidateQueries({ queryKey: [...QK] })
     } catch (e) {
-      toast.error(getErrorMessage(e) || 'No se pudieron recalcular las fechas de cuotas.')
+      toast.error(
+        getErrorMessage(e) || 'No se pudieron recalcular las fechas de cuotas.'
+      )
     } finally {
       setBusyId(null)
     }
@@ -125,7 +127,8 @@ export default function CuotasVsFechaBaseAdminPage() {
   }
 
   const ejecutarLoteSi = async () => {
-    if (!esAdmin || batchRunning || seleccionadosElegiblesParaSi.length === 0) return
+    if (!esAdmin || batchRunning || seleccionadosElegiblesParaSi.length === 0)
+      return
     setBatchRunning(true)
     setConfirmLoteSi(false)
     let ok = 0
@@ -134,7 +137,8 @@ export default function CuotasVsFechaBaseAdminPage() {
     for (let i = 0; i < ids.length; i += RECALC_LOTE_CHUNK) {
       const chunk = ids.slice(i, i + RECALC_LOTE_CHUNK)
       try {
-        const res = await prestamoService.postRecalcularFechasAmortizacionLote(chunk)
+        const res =
+          await prestamoService.postRecalcularFechasAmortizacionLote(chunk)
         ok += res.procesados
         for (const err of res.errores || []) {
           errores.push(`#${err.prestamo_id}: ${err.detail || 'error'}`)
@@ -146,7 +150,9 @@ export default function CuotasVsFechaBaseAdminPage() {
       }
     }
     if (errores.length === 0) {
-      toast.success(`Sí en lote: ${ok} préstamo(s) con fechas de cuotas recalculadas.`)
+      toast.success(
+        `Sí en lote: ${ok} préstamo(s) con fechas de cuotas recalculadas.`
+      )
     } else {
       toast.message(
         `Sí en lote: ${ok} ok, ${errores.length} error(es). Revise consola o reintente fila a fila.`
@@ -199,7 +205,9 @@ export default function CuotasVsFechaBaseAdminPage() {
             className="gap-2"
             disabled={q.isFetching}
           >
-            <RefreshCw className={`h-4 w-4 ${q.isFetching ? 'animate-spin' : ''}`} />
+            <RefreshCw
+              className={`h-4 w-4 ${q.isFetching ? 'animate-spin' : ''}`}
+            />
             Refrescar
           </Button>
           <Button asChild type="button" variant="outline">
@@ -216,7 +224,9 @@ export default function CuotasVsFechaBaseAdminPage() {
           {q.isFetching ? (
             <p className="text-sm text-muted-foreground">Cargando…</p>
           ) : q.isError ? (
-            <p className="text-sm text-destructive">{getErrorMessage(q.error)}</p>
+            <p className="text-sm text-destructive">
+              {getErrorMessage(q.error)}
+            </p>
           ) : items.length === 0 ? (
             <p className="text-sm text-muted-foreground">
               Sin casos para este filtro (total global puede ser 0).
@@ -227,7 +237,9 @@ export default function CuotasVsFechaBaseAdminPage() {
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-sm text-muted-foreground">
                     Con casilla marcada:{' '}
-                    <span className="font-semibold text-foreground">{idsSeleccionadosOrdenados.length}</span>
+                    <span className="font-semibold text-foreground">
+                      {idsSeleccionadosOrdenados.length}
+                    </span>
                     {' · '}
                     Listos para <strong>Sí</strong> (recalcular fechas):{' '}
                     <span className="font-semibold text-foreground">
@@ -252,7 +264,9 @@ export default function CuotasVsFechaBaseAdminPage() {
                     size="sm"
                     className="gap-1.5 bg-blue-600 text-white hover:bg-blue-700"
                     disabled={
-                      !esAdmin || seleccionadosElegiblesParaSi.length === 0 || batchRunning
+                      !esAdmin ||
+                      seleccionadosElegiblesParaSi.length === 0 ||
+                      batchRunning
                     }
                     onClick={() => setConfirmLoteSi(true)}
                   >
@@ -271,7 +285,8 @@ export default function CuotasVsFechaBaseAdminPage() {
                         ref={el => {
                           if (el) {
                             el.indeterminate =
-                              algunElegibleSeleccionado && !todosElegiblesSeleccionados
+                              algunElegibleSeleccionado &&
+                              !todosElegiblesSeleccionados
                           }
                         }}
                         checked={todosElegiblesSeleccionados}
@@ -279,14 +294,20 @@ export default function CuotasVsFechaBaseAdminPage() {
                           setSelected(prev => {
                             const n = new Set(prev)
                             if (todosElegiblesSeleccionados) {
-                              elegiblesPagina.forEach(r => n.delete(r.prestamo_id))
+                              elegiblesPagina.forEach(r =>
+                                n.delete(r.prestamo_id)
+                              )
                             } else {
                               elegiblesPagina.forEach(r => n.add(r.prestamo_id))
                             }
                             return n
                           })
                         }}
-                        disabled={!esAdmin || batchRunning || elegiblesPagina.length === 0}
+                        disabled={
+                          !esAdmin ||
+                          batchRunning ||
+                          elegiblesPagina.length === 0
+                        }
                         title="Seleccionar o quitar todos los de esta página"
                         aria-label="Seleccionar todos en esta página"
                       />
@@ -307,7 +328,10 @@ export default function CuotasVsFechaBaseAdminPage() {
                   {items.map(row => {
                     const elegible = filaElegibleSi(row)
                     return (
-                      <tr key={row.prestamo_id} className="border-b border-border/60">
+                      <tr
+                        key={row.prestamo_id}
+                        className="border-b border-border/60"
+                      >
                         <td className="py-2 pr-1 text-center align-middle">
                           {elegible ? (
                             <input
@@ -325,18 +349,26 @@ export default function CuotasVsFechaBaseAdminPage() {
                               aria-label={`Seleccionar préstamo ${row.prestamo_id}`}
                             />
                           ) : (
-                            <span className="text-xs text-muted-foreground">—</span>
+                            <span className="text-xs text-muted-foreground">
+                              -
+                            </span>
                           )}
                         </td>
-                        <td className="py-2 pr-2 font-mono">{row.prestamo_id}</td>
-                        <td className="py-2 pr-2">{row.cedula || '—'}</td>
-                        <td className="py-2 pr-2">{row.estado || '—'}</td>
-                        <td className="py-2 pr-2">{fmtIso(row.fecha_base)}</td>
-                        <td className="py-2 pr-2">{fmtIso(row.vencimiento_cuota_1)}</td>
                         <td className="py-2 pr-2 font-mono">
-                          {row.dias_cuota1_menos_base ?? '—'}
+                          {row.prestamo_id}
                         </td>
-                        <td className="py-2 pr-2">{row.modalidad_pago || '—'}</td>
+                        <td className="py-2 pr-2">{row.cedula || '-'}</td>
+                        <td className="py-2 pr-2">{row.estado || '-'}</td>
+                        <td className="py-2 pr-2">{fmtIso(row.fecha_base)}</td>
+                        <td className="py-2 pr-2">
+                          {fmtIso(row.vencimiento_cuota_1)}
+                        </td>
+                        <td className="py-2 pr-2 font-mono">
+                          {row.dias_cuota1_menos_base ?? '-'}
+                        </td>
+                        <td className="py-2 pr-2">
+                          {row.modalidad_pago || '-'}
+                        </td>
                         <td className="py-2 pr-2">{row.numero_cuotas}</td>
                         <td className="py-2 pr-2">
                           <Button
@@ -345,7 +377,11 @@ export default function CuotasVsFechaBaseAdminPage() {
                             variant="outline"
                             className="h-7 px-2 text-xs"
                           >
-                            <Link to={`/prestamos?prestamo_id=${row.prestamo_id}`}>Ver</Link>
+                            <Link
+                              to={`/prestamos?prestamo_id=${row.prestamo_id}`}
+                            >
+                              Ver
+                            </Link>
                           </Button>
                         </td>
                         <td className="py-2 pr-2">
@@ -356,14 +392,23 @@ export default function CuotasVsFechaBaseAdminPage() {
                                 size="sm"
                                 variant="default"
                                 className="h-7 px-2 text-xs"
-                                disabled={!esAdmin || batchRunning || busyId === row.prestamo_id}
+                                disabled={
+                                  !esAdmin ||
+                                  batchRunning ||
+                                  busyId === row.prestamo_id
+                                }
                                 title={
                                   esAdmin
                                     ? 'Recalcular fechas de vencimiento de todas las cuotas según fecha de aprobación / base del préstamo (sin cambiar montos ni borrar cuotas).'
                                     : 'Solo administrador.'
                                 }
                                 onClick={() => {
-                                  if (!esAdmin || batchRunning || busyId != null) return
+                                  if (
+                                    !esAdmin ||
+                                    batchRunning ||
+                                    busyId != null
+                                  )
+                                    return
                                   void ejecutarSi(row)
                                 }}
                               >
@@ -374,14 +419,23 @@ export default function CuotasVsFechaBaseAdminPage() {
                                 size="sm"
                                 variant="outline"
                                 className="h-7 px-2 text-xs"
-                                disabled={!esAdmin || batchRunning || busyId === row.prestamo_id}
+                                disabled={
+                                  !esAdmin ||
+                                  batchRunning ||
+                                  busyId === row.prestamo_id
+                                }
                                 title={
                                   esAdmin
                                     ? 'No modifica la base de datos (solo descarta la acción en esta fila).'
                                     : 'Solo administrador.'
                                 }
                                 onClick={() => {
-                                  if (!esAdmin || batchRunning || busyId != null) return
+                                  if (
+                                    !esAdmin ||
+                                    batchRunning ||
+                                    busyId != null
+                                  )
+                                    return
                                   ejecutarNo(row)
                                 }}
                               >
@@ -389,7 +443,9 @@ export default function CuotasVsFechaBaseAdminPage() {
                               </Button>
                             </span>
                           ) : (
-                            <span className="text-xs text-muted-foreground">—</span>
+                            <span className="text-xs text-muted-foreground">
+                              -
+                            </span>
                           )}
                         </td>
                       </tr>
@@ -429,23 +485,40 @@ export default function CuotasVsFechaBaseAdminPage() {
         </CardContent>
       </Card>
 
-      <Dialog open={confirmLoteSi} onOpenChange={open => !open && setConfirmLoteSi(false)}>
+      <Dialog
+        open={confirmLoteSi}
+        onOpenChange={open => !open && setConfirmLoteSi(false)}
+      >
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Sí en lote (recalcular fechas de cuotas)</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
-            Se aplicará la misma acción que el botón <strong>Sí</strong> en cada fila: recalcular las fechas de
-            vencimiento de la tabla de amortización según la <strong>fecha de aprobación / base</strong> ya guardada
-            en el préstamo (montos y aplicación de pagos no se borran) en{' '}
-            <span className="font-semibold tabular-nums">{seleccionadosElegiblesParaSi.length}</span> préstamo(s){' '}
-            con casilla marcada. Los que fallen se pueden revisar uno a uno.
+            Se aplicará la misma acción que el botón <strong>Sí</strong> en cada
+            fila: recalcular las fechas de vencimiento de la tabla de
+            amortización según la <strong>fecha de aprobación / base</strong> ya
+            guardada en el préstamo (montos y aplicación de pagos no se borran)
+            en{' '}
+            <span className="font-semibold tabular-nums">
+              {seleccionadosElegiblesParaSi.length}
+            </span>{' '}
+            préstamo(s) con casilla marcada. Los que fallen se pueden revisar
+            uno a uno.
           </p>
           <DialogFooter className="gap-2 sm:gap-0">
-            <Button type="button" variant="outline" onClick={() => setConfirmLoteSi(false)} disabled={batchRunning}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setConfirmLoteSi(false)}
+              disabled={batchRunning}
+            >
               Cancelar
             </Button>
-            <Button type="button" onClick={() => void ejecutarLoteSi()} disabled={batchRunning}>
+            <Button
+              type="button"
+              onClick={() => void ejecutarLoteSi()}
+              disabled={batchRunning}
+            >
               {batchRunning ? 'Ejecutando…' : 'Confirmar y aplicar'}
             </Button>
           </DialogFooter>

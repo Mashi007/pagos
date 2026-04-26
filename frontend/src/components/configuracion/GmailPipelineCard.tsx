@@ -184,11 +184,11 @@ export function GmailPipelineCard() {
           El disparo principal es manual: Pagos → Agregar pago → Generar Excel
           desde email → Procesar correos (toda la bandeja según criterios del
           módulo). Además, en el servidor puede activarse un escaneo automático
-          de pendientes (todos los días, 06:30–19:30 Caracas); no sustituye el botón
-          manual. Solo se digitalizan correos cuyo remitente coincida con un
-          email en clientes; si no, solo ERROR EMAIL en Gmail. PDF multipágina:
-          etiqueta PAGINAS. Aquí ve el último resultado y puede descargar Excel
-          temporal.
+          de pendientes (todos los días, 06:30-19:30 Caracas); no sustituye el
+          botón manual. Solo se digitalizan correos cuyo remitente coincida con
+          un email en clientes; si no, solo ERROR EMAIL en Gmail. PDF
+          multipágina: etiqueta PAGINAS. Aquí ve el último resultado y puede
+          descargar Excel temporal.
         </CardDescription>
       </CardHeader>
 

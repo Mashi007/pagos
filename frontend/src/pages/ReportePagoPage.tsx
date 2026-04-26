@@ -369,7 +369,9 @@ function FechaPagoTecladoRapido({
 }) {
   const ini = segmentosInicialesDesdeYmd(value)
   const [dia, setDia] = useState(ini.dia)
-  const [mesCommitted, setMesCommitted] = useState<number | null>(ini.mesCommitted)
+  const [mesCommitted, setMesCommitted] = useState<number | null>(
+    ini.mesCommitted
+  )
   const [mesDigits, setMesDigits] = useState(ini.mesDigits)
   const [anio, setAnio] = useState(ini.anio)
 
@@ -522,7 +524,7 @@ function FechaPagoTecladoRapido({
         onChange={onPickerNative}
       />
       <div
-        className="flex min-h-[48px] w-full items-center gap-1 rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-base touch-manipulation focus-within:border-slate-900 focus-within:ring-1 focus-within:ring-slate-900"
+        className="flex min-h-[48px] w-full touch-manipulation items-center gap-1 rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-base focus-within:border-slate-900 focus-within:ring-1 focus-within:ring-slate-900"
         role="group"
         aria-label="Fecha de pago: día, mes y año"
       >
@@ -592,7 +594,8 @@ function validarArchivo(file: File | null): {
   if (!file)
     return {
       valido: false,
-      error: 'Seleccione un archivo de comprobante (PDF, JPEG, PNG, HEIC o WebP).',
+      error:
+        'Seleccione un archivo de comprobante (PDF, JPEG, PNG, HEIC o WebP).',
     }
 
   const type = _mimeEfectivoCliente(file)
@@ -760,7 +763,8 @@ export default function ReportePagoPage({
   /** Solo true tras validar cédula y si el backend confirma lista Bs. (cedulas_reportar_bs). */
   const [puedeReportarBs, setPuedeReportarBs] = useState(false)
 
-  const [fuenteTasa, setFuenteTasa] = useState<FuenteTasaCambio>(FUENTE_TASA_DEFAULT)
+  const [fuenteTasa, setFuenteTasa] =
+    useState<FuenteTasaCambio>(FUENTE_TASA_DEFAULT)
 
   const [numeroDocumento, setNumeroDocumento] = useState('')
 
@@ -1098,8 +1102,7 @@ export default function ReportePagoPage({
           .toLowerCase()
           .replace(/\s+/g, '_')
         const enRevision = st === 'en_revision'
-        let msgPublico =
-          res.mensaje || 'Reporte de pago enviado correctamente.'
+        let msgPublico = res.mensaje || 'Reporte de pago enviado correctamente.'
         if (enRevision) {
           msgPublico =
             'Su reporte fue recibido. El comprobante quedará en revisión manual antes de confirmarse; guarde su número de referencia.'
@@ -1169,16 +1172,22 @@ export default function ReportePagoPage({
 
         if (s.moneda === 'BS' || s.moneda === 'USD') {
           const m =
-            s.moneda === 'BS' && !puedeReportarBs ? 'USD' : (s.moneda as 'BS' | 'USD')
+            s.moneda === 'BS' && !puedeReportarBs
+              ? 'USD'
+              : (s.moneda as 'BS' | 'USD')
           setMoneda(m)
         }
 
         if (typeof s.monto === 'number' && Number.isFinite(s.monto)) {
-          setMonto(formatoMontoParaMostrar(s.monto, s.moneda === 'USD' ? 'USD' : 'BS'))
+          setMonto(
+            formatoMontoParaMostrar(s.monto, s.moneda === 'USD' ? 'USD' : 'BS')
+          )
         }
 
         if ((s.numero_operacion || '').trim()) {
-          setNumeroDocumento(s.numero_operacion.trim().slice(0, MAX_LENGTH_NUMERO_OPERACION))
+          setNumeroDocumento(
+            s.numero_operacion.trim().slice(0, MAX_LENGTH_NUMERO_OPERACION)
+          )
         }
         // Si Gemini digitaliza con éxito, llevar directo a confirmación
         // para evitar pasos redundantes.
@@ -1189,14 +1198,16 @@ export default function ReportePagoPage({
       } else {
         showNotification(
           'error',
-          res.error || 'No se pudo digitalizar el comprobante. Continúe con carga manual.'
+          res.error ||
+            'No se pudo digitalizar el comprobante. Continúe con carga manual.'
         )
       }
       setStep(isInfopagos ? 7 : 3)
     } catch (e: any) {
       showNotification(
         'error',
-        e?.message || 'No se pudo digitalizar el comprobante. Continúe con carga manual.'
+        e?.message ||
+          'No se pudo digitalizar el comprobante. Continúe con carga manual.'
       )
       setStep(isInfopagos ? 7 : 3)
     } finally {
@@ -1595,9 +1606,10 @@ export default function ReportePagoPage({
                 </CardTitle>
               </div>
               <p className="mt-2 text-sm text-slate-600">
-                Si su cédula está en la lista Bs. del administrador, el sistema sugiere la tasa
-                configurada para usted; puede cambiarla antes de continuar. BCV y Binance solo
-                aplican si están cargadas en el sistema para la fecha de pago.
+                Si su cédula está en la lista Bs. del administrador, el sistema
+                sugiere la tasa configurada para usted; puede cambiarla antes de
+                continuar. BCV y Binance solo aplican si están cargadas en el
+                sistema para la fecha de pago.
               </p>
             </CardHeader>
 
@@ -1620,7 +1632,9 @@ export default function ReportePagoPage({
                       onChange={() => setFuenteTasa(opt.value)}
                       className="h-4 w-4 accent-emerald-600"
                     />
-                    <span className="font-medium text-slate-900">{opt.label}</span>
+                    <span className="font-medium text-slate-900">
+                      {opt.label}
+                    </span>
                   </label>
                 ))}
               </div>
@@ -1701,8 +1715,12 @@ export default function ReportePagoPage({
                   <div className="rounded-lg border-2 border-emerald-300 bg-emerald-50 p-4">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0 flex-1">
-                        <p className="font-semibold text-emerald-900">Archivo seleccionado</p>
-                        <p className="mt-1 break-all text-sm text-emerald-800">{archivo.name}</p>
+                        <p className="font-semibold text-emerald-900">
+                          Archivo seleccionado
+                        </p>
+                        <p className="mt-1 break-all text-sm text-emerald-800">
+                          {archivo.name}
+                        </p>
                         <p className="mt-1 text-xs text-emerald-700">
                           {(archivo.size / 1024).toFixed(1)} KB
                         </p>
@@ -1731,13 +1749,11 @@ export default function ReportePagoPage({
                   </Button>
 
                   <Button
-                    className="min-h-[48px] min-w-0 flex-1 touch-manipulation whitespace-normal break-words px-3 text-center text-sm leading-tight bg-slate-900 font-semibold text-white hover:bg-slate-800 sm:text-base"
+                    className="min-h-[48px] min-w-0 flex-1 touch-manipulation whitespace-normal break-words bg-slate-900 px-3 text-center text-sm font-semibold leading-tight text-white hover:bg-slate-800 sm:text-base"
                     onClick={handleDigitalizarComprobante}
                     disabled={loading}
                   >
-                    {loading
-                      ? 'Procesando'
-                      : 'Cargar pago'}
+                    {loading ? 'Procesando' : 'Cargar pago'}
                   </Button>
                 </div>
               </CardContent>
@@ -1813,7 +1829,8 @@ export default function ReportePagoPage({
                     <p className="font-semibold text-slate-900">Bolivares</p>
                     <p className="mt-1 text-xs text-slate-600">Bs.</p>
                     <p className="mt-2 text-xs leading-snug text-slate-500">
-                      Monto: 1 a 10M Bs. Según la tasa elegida (BCV, Euro o Binance) para la fecha de pago.
+                      Monto: 1 a 10M Bs. Según la tasa elegida (BCV, Euro o
+                      Binance) para la fecha de pago.
                     </p>
                     {moneda === 'BS' && (
                       <div className="absolute right-3 top-3 flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500">
@@ -1935,7 +1952,9 @@ export default function ReportePagoPage({
                   {badgePasoFormulario(3, isInfopagos)}
                 </div>
                 <CardTitle className="m-0 text-lg sm:text-xl">
-                  {!isInfopagos && nombre ? `Hola, ${nombre}` : 'Institución financiera'}
+                  {!isInfopagos && nombre
+                    ? `Hola, ${nombre}`
+                    : 'Institución financiera'}
                 </CardTitle>
               </div>
               <p className="mt-2 text-sm text-slate-600">
@@ -2075,8 +2094,8 @@ export default function ReportePagoPage({
                     maxYmd={hoyYmdCaracas()}
                   />
                   <p className="mt-1 text-xs text-slate-500">
-                    Toque el ícono de calendario para elegir otra. Si no indica fecha, se usará la de
-                    hoy (Caracas) en el registro.
+                    Toque el ícono de calendario para elegir otra. Si no indica
+                    fecha, se usará la de hoy (Caracas) en el registro.
                   </p>
                 </div>
               ) : null}
@@ -2144,7 +2163,9 @@ export default function ReportePagoPage({
                 <Button
                   className="min-h-[48px] min-w-0 flex-1 touch-manipulation bg-slate-900 font-semibold text-white hover:bg-slate-800"
                   onClick={() => {
-                    const vF = validarFechaPago(fechaReporteEfectivaYmd(fechaPago))
+                    const vF = validarFechaPago(
+                      fechaReporteEfectivaYmd(fechaPago)
+                    )
 
                     if (!vF.valido) {
                       showNotification('error', vF.error ?? 'Fecha inválida.')
@@ -2676,9 +2697,7 @@ export default function ReportePagoPage({
 
           {/* Support info */}
           <div className="border-t border-slate-100 pt-4 text-center">
-            <p className="text-xs text-slate-600">
-              ¿Necesitas ayuda?
-            </p>
+            <p className="text-xs text-slate-600">¿Necesitas ayuda?</p>
             <a
               href={WHATSAPP_LINK}
               target="_blank"

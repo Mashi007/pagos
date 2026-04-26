@@ -253,7 +253,9 @@ class PrestamoService {
       error: string | null
     }>
   }> {
-    return await apiClient.post(`${this.baseUrl}/check-cupo-cedulas`, { cedulas })
+    return await apiClient.post(`${this.baseUrl}/check-cupo-cedulas`, {
+      cedulas,
+    })
   }
 
   // --- Revisar Préstamos (prestamos_con_errores) ---
@@ -383,10 +385,7 @@ class PrestamoService {
       'tasa_interes',
     ] as const
 
-    const dateKeys = new Set<string>([
-      'fecha_aprobacion',
-      'fecha_base_calculo',
-    ])
+    const dateKeys = new Set<string>(['fecha_aprobacion', 'fecha_base_calculo'])
 
     const numericKeys = new Set<string>([
       'cliente_id',
@@ -1143,7 +1142,7 @@ class PrestamoService {
 
   /**
    * Misma operación que postRecalcularFechasAmortizacion por cada id (admin, un commit por préstamo).
-   * POST /api/v1/prestamos/recalcular-fechas-amortizacion-lote — máx. 80 ids por petición.
+   * POST /api/v1/prestamos/recalcular-fechas-amortizacion-lote - máx. 80 ids por petición.
    */
   async postRecalcularFechasAmortizacionLote(prestamoIds: number[]): Promise<{
     procesados: number

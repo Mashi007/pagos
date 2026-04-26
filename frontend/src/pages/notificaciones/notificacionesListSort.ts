@@ -19,7 +19,9 @@ export function textoNumeroCreditoNotif(row: ClienteRetrasadoItem): string {
 }
 
 /** Valor numérico para ordenar (misma prioridad que el texto mostrado). */
-export function numericTotalPendienteSort(row: ClienteRetrasadoItem): number | null {
+export function numericTotalPendienteSort(
+  row: ClienteRetrasadoItem
+): number | null {
   if (row.total_pendiente_pagar != null) {
     const n = Number(row.total_pendiente_pagar)
     return Number.isFinite(n) ? n : null
@@ -45,7 +47,9 @@ export function cuotasAtrasadasSortValue(row: ClienteRetrasadoItem): number {
 }
 
 /** Diferencia ABONOS (hoja) − total pagado en cuotas; desde caché en fila (General). */
-export function numericDiferenciaAbonoSort(row: ClienteRetrasadoItem): number | null {
+export function numericDiferenciaAbonoSort(
+  row: ClienteRetrasadoItem
+): number | null {
   const d = row.comparar_abonos_drive_cuotas?.diferencia
   if (d == null || Number.isNaN(Number(d))) return null
   return Number(d)

@@ -236,8 +236,12 @@ export function Reportes() {
 
   const queryClient = useQueryClient()
 
-  const { canViewReports, canDownloadReports, canAccessReport, isFiniquitador } =
-    usePermissions()
+  const {
+    canViewReports,
+    canDownloadReports,
+    canAccessReport,
+    isFiniquitador,
+  } = usePermissions()
 
   const puedeVerReportes = canViewReports()
 
@@ -260,7 +264,9 @@ export function Reportes() {
       setEstadoHojaConciliacion({
         cargando: false,
         filasSnapshot:
-          typeof st.snapshot_row_count === 'number' ? st.snapshot_row_count : null,
+          typeof st.snapshot_row_count === 'number'
+            ? st.snapshot_row_count
+            : null,
         syncedAtIso: synced,
       })
     } catch (e: unknown) {
@@ -271,7 +277,8 @@ export function Reportes() {
         syncedAtIso: null,
       })
       toast.error(
-        getErrorMessage(e) || 'No se pudo cargar el estado de la hoja en servidor.'
+        getErrorMessage(e) ||
+          'No se pudo cargar el estado de la hoja en servidor.'
       )
     }
   }, [])
@@ -1181,12 +1188,12 @@ export function Reportes() {
                     <p className="mt-2 max-w-2xl text-xs leading-relaxed text-violet-950/85">
                       Los botones de abajo leen el mismo snapshot en base de
                       datos (no abren el Google Sheet aquí). Las filas nuevas
-                      que agregue al final en Drive aparecen aquí solo después de
-                      una sincronización exitosa (cron nocturno, cron externo o
-                      «Traer hoja desde Drive ahora»). Además, solo se importa el
-                      rango de columnas configurado en el servidor (por defecto
-                      A–S): filas totalmente vacías en ese rango no las devuelve
-                      Google hasta que tengan al menos un valor en esas
+                      que agregue al final en Drive aparecen aquí solo después
+                      de una sincronización exitosa (cron nocturno, cron externo
+                      o «Traer hoja desde Drive ahora»). Además, solo se importa
+                      el rango de columnas configurado en el servidor (por
+                      defecto A-S): filas totalmente vacías en ese rango no las
+                      devuelve Google hasta que tengan al menos un valor en esas
                       columnas.
                     </p>
                   </div>
@@ -1208,10 +1215,10 @@ export function Reportes() {
                     <span className="font-mono font-medium">
                       {estadoHojaConciliacion.cargando
                         ? '…'
-                        : estadoHojaConciliacion.filasSnapshot ?? '—'}
+                        : (estadoHojaConciliacion.filasSnapshot ?? '-')}
                     </span>
-                    . Si falta lo último que pegó en Drive, sincronice y vuelva a
-                    descargar.
+                    . Si falta lo último que pegó en Drive, sincronice y vuelva
+                    a descargar.
                   </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
@@ -1238,7 +1245,9 @@ export function Reportes() {
                       type="button"
                       size="sm"
                       className="bg-violet-600 text-white hover:bg-violet-700"
-                      onClick={() => void sincronizarHojaConciliacionDesdeDrive()}
+                      onClick={() =>
+                        void sincronizarHojaConciliacionDesdeDrive()
+                      }
                       disabled={
                         sincronizandoHojaConciliacion ||
                         estadoHojaConciliacion.cargando

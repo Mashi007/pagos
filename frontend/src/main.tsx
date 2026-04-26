@@ -24,15 +24,23 @@ declare global {
   }
 }
 
-/** Si la URL duplica el base path (/pagos/pagos/...), colapsar antes del router (evita 404 en SPA). */
+/**
+ * Si la URL duplica el base path (p. ej. /pagos/pagos/clientes), colapsar a /pagos/clientes.
+ * No tocar /pagos/pagos solo: es la ruta real del modulo Pagos (basename /pagos + path "pagos").
+ */
 function normalizeDuplicateBasePathInUrl(): void {
   const base = (BASE_PATH || '/').replace(/\/$/, '') || '/'
   if (base === '/' || typeof window === 'undefined') return
   const dupPrefix = `${base}${base}`
   let p = window.location.pathname
   let guard = 0
-  while (p.startsWith(dupPrefix) && guard < 16) {
-    p = base + p.slice(dupPrefix.length)
+  while (guard < 16) {
+    if (!p.startsWith(dupPrefix)) break
+    const rest = p.slice(dupPrefix.length)
+    // Solo colapsar si hay al menos un segmento después del prefijo duplicado ficticio
+    // (/pagos/pagos/foo), no cuando la URL canonica del modulo es exactamente /pagos/pagos.
+    if (!(rest.startsWith('/') && rest.length > 1)) break
+    p = base + rest
     guard += 1
   }
   if (p !== window.location.pathname) {

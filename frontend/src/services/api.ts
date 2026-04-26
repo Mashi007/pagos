@@ -342,7 +342,9 @@ class ApiClient {
         if (
           config.method?.toLowerCase() === 'patch' &&
           config.url &&
-          /\/cobros\/pagos-reportados\/\d+\/estado(?:\?|#|$)/.test(config.url) &&
+          /\/cobros\/pagos-reportados\/\d+\/estado(?:\?|#|$)/.test(
+            config.url
+          ) &&
           (config.timeout == null || config.timeout < 120000)
         ) {
           config.timeout = 120000
@@ -402,7 +404,9 @@ class ApiClient {
 
         const st = error.response?.status
         const reqUrl = String(requestConfigForRetry?.url || '')
-        const methodLc = String(requestConfigForRetry?.method || '').toLowerCase()
+        const methodLc = String(
+          requestConfigForRetry?.method || ''
+        ).toLowerCase()
         const isScannerReadOnlyPost =
           methodLc === 'post' &&
           (reqUrl.includes('/cobros/escaner/extraer-comprobante') ||
@@ -435,7 +439,8 @@ class ApiClient {
             (isScannerReadOnlyPost ||
               isSafeTransientRetryGet ||
               isCobrosPagoReportadoEstadoPatch))
-        const mayRetryThisRequest = methodLc !== 'get' || isSafeTransientRetryGet
+        const mayRetryThisRequest =
+          methodLc !== 'get' || isSafeTransientRetryGet
         if (
           canRetryBecauseStatus &&
           retryCount < maxRetries &&
@@ -671,7 +676,9 @@ class ApiClient {
     return `${url}::${params}`
   }
 
-  private getPutConcurrencyGroup(url: string): { key: string; limit: number } | null {
+  private getPutConcurrencyGroup(
+    url: string
+  ): { key: string; limit: number } | null {
     if (url.includes('/api/v1/revision-manual/clientes/')) {
       return { key: 'revision-manual-clientes', limit: 4 }
     }
@@ -1069,7 +1076,9 @@ class ApiClient {
     const listadoKpisPagosReportadosTimeout = 180000
 
     // Préstamos Drive: snapshot lee tabla cache + validaciones; en Render frío puede acercarse a 60s.
-    const isCandidatosDriveSnapshot = url.includes('/prestamos/candidatos-drive/snapshot')
+    const isCandidatosDriveSnapshot = url.includes(
+      '/prestamos/candidatos-drive/snapshot'
+    )
 
     const candidatosDriveSnapshotTimeout = 120000
 
@@ -1116,7 +1125,9 @@ class ApiClient {
       ? this.buildGetDedupKey(url, finalConfig)
       : null
     if (dedupKey) {
-      const pending = this.inFlightGetRequests.get(dedupKey) as Promise<T> | undefined
+      const pending = this.inFlightGetRequests.get(dedupKey) as
+        | Promise<T>
+        | undefined
       if (pending) {
         return await pending
       }
@@ -1215,9 +1226,10 @@ class ApiClient {
     config?: AxiosRequestConfig
   ): Promise<T> {
     try {
-      // Cobros: aprobar/rechazar/enviar recibo/re-analizar generan PDF, SMTP, import a pagos — en Render suele >30s.
-      const isCobrosEscanerGemini =
-        url.includes('/cobros/escaner/extraer-comprobante')
+      // Cobros: aprobar/rechazar/enviar recibo/re-analizar generan PDF, SMTP, import a pagos - en Render suele >30s.
+      const isCobrosEscanerGemini = url.includes(
+        '/cobros/escaner/extraer-comprobante'
+      )
 
       const isCobrosPagosReportadosHeavyPost =
         (url.includes('/cobros/pagos-reportados/') &&
@@ -1469,14 +1481,10 @@ class ApiClient {
     const patchTimeoutMs =
       config?.timeout ??
       (isCobrosPagoReportadoPatch ? 120000 : DEFAULT_TIMEOUT_MS)
-    const response: AxiosResponse<T> = await this.client.patch(
-      url,
-      data,
-      {
-        ...config,
-        timeout: patchTimeoutMs,
-      }
-    )
+    const response: AxiosResponse<T> = await this.client.patch(url, data, {
+      ...config,
+      timeout: patchTimeoutMs,
+    })
 
     // validateStatus permite 4xx sin lanzar en axios; igual que delete(), fallar aquí
     if (response.status >= 400 && response.status < 500) {
@@ -1650,8 +1658,7 @@ class ApiClient {
         }
       } else {
         const m =
-          /filename="([^"]+)"/i.exec(rawCd) ||
-          /filename=([^;\s]+)/i.exec(rawCd)
+          /filename="([^"]+)"/i.exec(rawCd) || /filename=([^;\s]+)/i.exec(rawCd)
         if (m?.[1]) {
           filename = m[1].replace(/"/g, '')
         }

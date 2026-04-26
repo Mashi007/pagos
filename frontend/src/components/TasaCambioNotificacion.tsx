@@ -66,9 +66,12 @@ export const TasaCambioNotificacion: React.FC<TasaCambioNotificacionProps> = ({
               } catch {
                 /* ignore */
               }
-              const b = tasa.tasa_bcv != null ? formatTasaBsUsd(tasa.tasa_bcv) : '—'
+              const b =
+                tasa.tasa_bcv != null ? formatTasaBsUsd(tasa.tasa_bcv) : '-'
               const bn =
-                tasa.tasa_binance != null ? formatTasaBsUsd(tasa.tasa_binance) : '—'
+                tasa.tasa_binance != null
+                  ? formatTasaBsUsd(tasa.tasa_binance)
+                  : '-'
               toast.info(
                 `Tasas del día (${fechaKey}): Euro ${formatTasaBsUsd(tasa.tasa_oficial)} · BCV ${b} · Binance ${bn} Bs./USD.`,
                 { duration: 9000 }
@@ -147,8 +150,8 @@ export const TasaCambioNotificacion: React.FC<TasaCambioNotificacionProps> = ({
               </p>
 
               <p className="mt-1 text-sm text-amber-800">
-                Desde las 01:00 (Caracas) debe registrar las tres tasas Bs./USD para
-                continuar. Misma regla que el módulo «Tasa de cambio».
+                Desde las 01:00 (Caracas) debe registrar las tres tasas Bs./USD
+                para continuar. Misma regla que el módulo «Tasa de cambio».
               </p>
             </div>
 

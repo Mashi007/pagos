@@ -30,12 +30,7 @@ import {
 } from 'lucide-react'
 
 import { Button } from '../components/ui/button'
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from '../components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Input } from '../components/ui/input'
 import { Label } from '../components/ui/label'
 import { ModulePageHeader } from '../components/ui/ModulePageHeader'
@@ -75,7 +70,10 @@ function hrefComprobanteRecibo(row: ReciboConciliacionFila): string {
 function pareceUrlImagenComprobante(u: string): boolean {
   if (!u) return false
   const low = u.toLowerCase()
-  if (/\/comprobante-imagen\//i.test(u) || low.includes('/pagos/comprobante-imagen/')) {
+  if (
+    /\/comprobante-imagen\//i.test(u) ||
+    low.includes('/pagos/comprobante-imagen/')
+  ) {
     return true
   }
   const path = u.split('?')[0].toLowerCase()
@@ -83,7 +81,10 @@ function pareceUrlImagenComprobante(u: string): boolean {
   return low.includes('googleusercontent')
 }
 
-function esComprobantePdfRow(row: ReciboConciliacionFila, href: string): boolean {
+function esComprobantePdfRow(
+  row: ReciboConciliacionFila,
+  href: string
+): boolean {
   const t = String(row.documento_tipo ?? '').toLowerCase()
   if (t.includes('pdf')) return true
   const n = String(row.documento_nombre ?? '').toLowerCase()
@@ -151,11 +152,15 @@ function mensajeRecibosRespuestaError(codigo: string): string {
     case 'envio_real_solo_fecha_recepcion_hoy_caracas':
       return 'El envío real solo aplica al día de hoy en Caracas, salvo «Enviar lote pasado (real)» con confirmación.'
     default:
-      return codigo ? `Respuesta del servidor: ${codigo}` : 'Error al ejecutar Recibos.'
+      return codigo
+        ? `Respuesta del servidor: ${codigo}`
+        : 'Error al ejecutar Recibos.'
   }
 }
 
-function respuestaRecibosTieneErrorNegocio(out: RecibosEjecutarEnvioResponse): boolean {
+function respuestaRecibosTieneErrorNegocio(
+  out: RecibosEjecutarEnvioResponse
+): boolean {
   return typeof out.error === 'string' && out.error.trim().length > 0
 }
 
@@ -464,48 +469,56 @@ function CeldaFotografiaPagoRecibo({ row }: { row: ReciboConciliacionFila }) {
           className="inline-flex max-h-full max-w-full origin-center transition-transform duration-200 ease-out"
           style={{ transform: `rotate(${rotacionVistaPreviaImg}deg)` }}
         >
-          <img src={src} alt="" className="max-h-full max-w-full object-contain" />
+          <img
+            src={src}
+            alt=""
+            className="max-h-full max-w-full object-contain"
+          />
         </div>
       </div>
     </div>
   )
 
-  const cuerpoVistaPrevia = blobCargando && requiereAuth ? (
-    <div className="flex min-h-[160px] flex-1 items-center justify-center">
-      <Loader2 className="h-10 w-10 animate-spin text-slate-500" aria-hidden />
-    </div>
-  ) : requiereAuth && blobUrl && esPdf ? (
-    <iframe
-      title={String(row.documento_nombre ?? 'Comprobante PDF')}
-      src={blobUrl}
-      className="h-full min-h-0 w-full flex-1 rounded-md border-0 bg-slate-50"
-    />
-  ) : miniaturaEsImagen && imgSrc ? (
-    vistaPreviaImagenConRotacion(imgSrc)
-  ) : requiereAuth && blobUrl ? (
-    <iframe
-      title={String(row.documento_nombre ?? 'Comprobante')}
-      src={blobUrl}
-      className="h-full min-h-0 w-full flex-1 rounded-md border-0 bg-slate-50"
-    />
-  ) : !requiereAuth && !esPdf ? (
-    vistaPreviaImagenConRotacion(href)
-  ) : (
-    <div className="flex min-h-[120px] flex-col items-center justify-center gap-2 px-3 text-center text-sm text-slate-600">
-      <FileText className="h-10 w-10 text-slate-400" aria-hidden />
-      <span>Vista previa no disponible para este archivo.</span>
-      {!requiereAuth && (
-        <a
-          href={href}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-violet-700 underline hover:text-violet-900"
-        >
-          Abrir enlace
-        </a>
-      )}
-    </div>
-  )
+  const cuerpoVistaPrevia =
+    blobCargando && requiereAuth ? (
+      <div className="flex min-h-[160px] flex-1 items-center justify-center">
+        <Loader2
+          className="h-10 w-10 animate-spin text-slate-500"
+          aria-hidden
+        />
+      </div>
+    ) : requiereAuth && blobUrl && esPdf ? (
+      <iframe
+        title={String(row.documento_nombre ?? 'Comprobante PDF')}
+        src={blobUrl}
+        className="h-full min-h-0 w-full flex-1 rounded-md border-0 bg-slate-50"
+      />
+    ) : miniaturaEsImagen && imgSrc ? (
+      vistaPreviaImagenConRotacion(imgSrc)
+    ) : requiereAuth && blobUrl ? (
+      <iframe
+        title={String(row.documento_nombre ?? 'Comprobante')}
+        src={blobUrl}
+        className="h-full min-h-0 w-full flex-1 rounded-md border-0 bg-slate-50"
+      />
+    ) : !requiereAuth && !esPdf ? (
+      vistaPreviaImagenConRotacion(href)
+    ) : (
+      <div className="flex min-h-[120px] flex-col items-center justify-center gap-2 px-3 text-center text-sm text-slate-600">
+        <FileText className="h-10 w-10 text-slate-400" aria-hidden />
+        <span>Vista previa no disponible para este archivo.</span>
+        {!requiereAuth && (
+          <a
+            href={href}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-violet-700 underline hover:text-violet-900"
+          >
+            Abrir enlace
+          </a>
+        )}
+      </div>
+    )
 
   const panelVistaPrevia =
     hoverPreview &&
@@ -587,7 +600,10 @@ function CeldaFotografiaPagoRecibo({ row }: { row: ReciboConciliacionFila }) {
       >
         {blobCargando && requiereAuth ? (
           <span className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded border border-gray-200 bg-slate-50">
-            <Loader2 className="h-5 w-5 animate-spin text-slate-500" aria-hidden />
+            <Loader2
+              className="h-5 w-5 animate-spin text-slate-500"
+              aria-hidden
+            />
           </span>
         ) : esPdf && (requiereAuth ? Boolean(blobUrl) : true) ? (
           <span className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded border border-gray-200 bg-slate-50">
@@ -616,7 +632,7 @@ type TabId = 'listado' | 'configuracion'
 
 const RECIBOS_LISTADO_PAGE_SIZE = 10
 
-/** Hasta ``maxButtons`` números de página centrados alrededor de ``current`` (ej. 1–5 en página 1 de 14). */
+/** Hasta ``maxButtons`` números de página centrados alrededor de ``current`` (ej. 1-5 en página 1 de 14). */
 function numerosPaginaVisibles(
   current: number,
   total: number,
@@ -648,7 +664,7 @@ function fechaHoyIsoCaracas(): string {
 /** ``creado_en`` de ``recibos_email_envio`` (ISO) mostrado en Caracas. */
 function fmtInstanteRegistroRecibosCaracas(isoUtc: string): string {
   const t = String(isoUtc || '').trim()
-  if (!t) return '—'
+  if (!t) return '-'
   const ms = Date.parse(t)
   if (Number.isNaN(ms)) return t
   return new Intl.DateTimeFormat('es-VE', {
@@ -674,7 +690,8 @@ export default function NotificacionesRecibosPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const [recibosCfgResetSeq, setRecibosCfgResetSeq] = useState(0)
   const tabRaw = (searchParams.get('tab') || '').trim().toLowerCase()
-  const activeTab: TabId = tabRaw === 'configuracion' ? 'configuracion' : 'listado'
+  const activeTab: TabId =
+    tabRaw === 'configuracion' ? 'configuracion' : 'listado'
 
   const setActiveTab = useCallback(
     (id: TabId) => {
@@ -701,7 +718,9 @@ export default function NotificacionesRecibosPage() {
 
   const [fechaCaracas, setFechaCaracas] = useState('')
   const [filtroCedula, setFiltroCedula] = useState('')
-  const [sortCol, setSortCol] = useState<NotificacionesCuotasSortCol | null>(null)
+  const [sortCol, setSortCol] = useState<NotificacionesCuotasSortCol | null>(
+    null
+  )
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const [descargandoEstadoCuentaId, setDescargandoEstadoCuentaId] = useState<
     number | null
@@ -712,7 +731,10 @@ export default function NotificacionesRecibosPage() {
   const [simulacionEnCurso, setSimulacionEnCurso] = useState(false)
 
   const listadoKey = useMemo(
-    () => [...NOTIFICACIONES_RECIBOS_LISTADO_QUERY_KEY_PREFIX, fechaCaracas || 'hoy'],
+    () => [
+      ...NOTIFICACIONES_RECIBOS_LISTADO_QUERY_KEY_PREFIX,
+      fechaCaracas || 'hoy',
+    ],
     [fechaCaracas]
   )
 
@@ -774,16 +796,27 @@ export default function NotificacionesRecibosPage() {
   const sortedList = useMemo(() => {
     if (!sortCol || list.length === 0) return list
 
-    const cmp = (a: ReciboConciliacionFila, b: ReciboConciliacionFila): number => {
+    const cmp = (
+      a: ReciboConciliacionFila,
+      b: ReciboConciliacionFila
+    ): number => {
       switch (sortCol) {
         case 'nombre':
-          return String(a.nombre ?? '').localeCompare(String(b.nombre ?? ''), 'es', {
-            sensitivity: 'base',
-          })
+          return String(a.nombre ?? '').localeCompare(
+            String(b.nombre ?? ''),
+            'es',
+            {
+              sensitivity: 'base',
+            }
+          )
         case 'cedula':
-          return String(a.cedula ?? '').localeCompare(String(b.cedula ?? ''), 'es', {
-            sensitivity: 'base',
-          })
+          return String(a.cedula ?? '').localeCompare(
+            String(b.cedula ?? ''),
+            'es',
+            {
+              sensitivity: 'base',
+            }
+          )
         case 'fecha_registro':
           return String(a.fecha_registro ?? '').localeCompare(
             String(b.fecha_registro ?? '')
@@ -843,7 +876,10 @@ export default function NotificacionesRecibosPage() {
   }, [sortedList, filtroCedula])
 
   const totalFilasListado = listaFiltradaCedula.length
-  const totalPaginasListado = Math.max(1, Math.ceil(totalFilasListado / RECIBOS_LISTADO_PAGE_SIZE))
+  const totalPaginasListado = Math.max(
+    1,
+    Math.ceil(totalFilasListado / RECIBOS_LISTADO_PAGE_SIZE)
+  )
 
   useEffect(() => {
     if (paginaRecibosListado > totalPaginasListado) {
@@ -1002,7 +1038,7 @@ export default function NotificacionesRecibosPage() {
   const ejecutar = async () => {
     if (data !== undefined && totalPagosListado === 0) {
       toast.warning(
-        'No hay pagos en la ventana para la fecha indicada: no se envía correo a nadie. Actualice el listado o cambie la fecha (ventana 00:00–23:45 Caracas).'
+        'No hay pagos en la ventana para la fecha indicada: no se envía correo a nadie. Actualice el listado o cambie la fecha (ventana 00:00-23:45 Caracas).'
       )
       return
     }
@@ -1046,7 +1082,7 @@ export default function NotificacionesRecibosPage() {
   const ejecutarLotePasadoReal = async () => {
     if (data !== undefined && totalPagosListado === 0) {
       toast.warning(
-        'No hay pagos en la ventana para la fecha indicada: no se envía correo a nadie. Actualice el listado o cambie la fecha (ventana 00:00–23:45 Caracas).'
+        'No hay pagos en la ventana para la fecha indicada: no se envía correo a nadie. Actualice el listado o cambie la fecha (ventana 00:00-23:45 Caracas).'
       )
       return
     }
@@ -1055,11 +1091,13 @@ export default function NotificacionesRecibosPage() {
       return
     }
     if (fechaCaracasTrim >= hoyCaracasIso) {
-      toast.warning('El envío manual de lote pasado solo aplica a fechas anteriores a hoy (Caracas).')
+      toast.warning(
+        'El envío manual de lote pasado solo aplica a fechas anteriores a hoy (Caracas).'
+      )
       return
     }
     const ok = window.confirm(
-      `¿Enviar correo REAL de Recibos?\n\nDía de corte (Caracas): ${fechaCaracasTrim}\nVentana: fecha_registro ese día 00:00–23:45 (America/Caracas).\n\n` +
+      `¿Enviar correo REAL de Recibos?\n\nDía de corte (Caracas): ${fechaCaracasTrim}\nVentana: fecha_registro ese día 00:00-23:45 (America/Caracas).\n\n` +
         'Se respeta idempotencia (recibos_email_envio por cédula y día). Los destinatarios son los del cliente.'
     )
     if (!ok) return
@@ -1118,7 +1156,9 @@ export default function NotificacionesRecibosPage() {
     }
   }
 
-  const esFechaPasadaReal = Boolean(fechaCaracasTrim && fechaCaracasTrim < hoyCaracasIso)
+  const esFechaPasadaReal = Boolean(
+    fechaCaracasTrim && fechaCaracasTrim < hoyCaracasIso
+  )
   const accionRecibosEnCurso =
     envioManualEnCurso || envioLotePasadoEnCurso || simulacionEnCurso
 
@@ -1132,7 +1172,11 @@ export default function NotificacionesRecibosPage() {
 
       {tabNav}
 
-      <div role="tabpanel" id="recibos-cfg-panel-listado" aria-labelledby="recibos-cfg-tab-listado">
+      <div
+        role="tabpanel"
+        id="recibos-cfg-panel-listado"
+        aria-labelledby="recibos-cfg-tab-listado"
+      >
         <>
           <Card>
             <CardHeader>
@@ -1146,13 +1190,14 @@ export default function NotificacionesRecibosPage() {
                   type="date"
                   className="max-w-[11.5rem]"
                   value={fechaCaracas}
-                  title="Pagos con fecha_registro ese día en America/Caracas, 00:00–23:45 inclusive. Vacío = hoy."
+                  title="Pagos con fecha_registro ese día en America/Caracas, 00:00-23:45 inclusive. Vacío = hoy."
                   onChange={e => setFechaCaracas(e.target.value)}
                   disabled={accionRecibosEnCurso}
-                  helperText="Vacío = hoy. Ventana: 00:00–23:45 Caracas del día elegido."
+                  helperText="Vacío = hoy. Ventana: 00:00-23:45 Caracas del día elegido."
                 />
                 <p className="text-xs text-muted-foreground">
-                  Hoy (Caracas): <span className="font-mono">{hoyCaracasIso}</span>
+                  Hoy (Caracas):{' '}
+                  <span className="font-mono">{hoyCaracasIso}</span>
                 </p>
                 <details className="rounded-md border border-slate-200 bg-slate-50/80 px-3 py-2 text-xs text-slate-700">
                   <summary className="cursor-pointer font-medium text-slate-900">
@@ -1160,22 +1205,30 @@ export default function NotificacionesRecibosPage() {
                   </summary>
                   <div className="mt-2 space-y-2 leading-relaxed">
                     <p>
-                      El listado muestra pagos pendientes de Recibos para el día de corte (aún sin registro
-                      en <code className="text-[11px]">recibos_email_envio</code> para ese día).
+                      El listado muestra pagos pendientes de Recibos para el día
+                      de corte (aún sin registro en{' '}
+                      <code className="text-[11px]">recibos_email_envio</code>{' '}
+                      para ese día).
                     </p>
                     <p>
-                      <strong>Envío manual</strong> es SMTP real para <strong>hoy</strong> Caracas o fecha
-                      vacía. Para un día anterior use <strong>Enviar lote pasado (real)</strong> (confirmación).
+                      <strong>Envío manual</strong> es SMTP real para{' '}
+                      <strong>hoy</strong> Caracas o fecha vacía. Para un día
+                      anterior use <strong>Enviar lote pasado (real)</strong>{' '}
+                      (confirmación).
                     </p>
                     <p>
-                      <strong>Simular</strong> recorre la misma lógica sin persistir envíos; con modo pruebas
-                      en Configuración &gt; Correo puede enviarse muestra SMTP por cédula.
+                      <strong>Simular</strong> recorre la misma lógica sin
+                      persistir envíos; con modo pruebas en Configuración &gt;
+                      Correo puede enviarse muestra SMTP por cédula.
                     </p>
                     <p>
-                      Los KPIs de <strong>envíos por lote</strong> listan cada ejecución manual que registró
-                      filas en <code className="text-[11px]">recibos_email_envio</code> para el día de corte
-                      elegido (misma ventana de <strong>fecha de registro</strong> 00:00–23:45 Caracas). Otro
-                      día de corte en el calendario empieza la serie de nuevo.
+                      Los KPIs de <strong>envíos por lote</strong> listan cada
+                      ejecución manual que registró filas en{' '}
+                      <code className="text-[11px]">recibos_email_envio</code>{' '}
+                      para el día de corte elegido (misma ventana de{' '}
+                      <strong>fecha de registro</strong> 00:00-23:45 Caracas).
+                      Otro día de corte en el calendario empieza la serie de
+                      nuevo.
                     </p>
                   </div>
                 </details>
@@ -1187,13 +1240,15 @@ export default function NotificacionesRecibosPage() {
                   role="alert"
                 >
                   <span>
-                    No se pudo cargar el listado: {getErrorMessage(listadoError)}
+                    No se pudo cargar el listado:{' '}
+                    {getErrorMessage(listadoError)}
                     {isPlaceholderData ? (
                       <>
                         {' '}
                         <span className="block pt-1 text-xs font-normal text-red-900/90">
-                          La tabla debajo puede corresponder a la última fecha cargada con éxito;
-                          corrija el día de corte o pulse Reintentar.
+                          La tabla debajo puede corresponder a la última fecha
+                          cargada con éxito; corrija el día de corte o pulse
+                          Reintentar.
                         </span>
                       </>
                     ) : null}
@@ -1243,7 +1298,10 @@ export default function NotificacionesRecibosPage() {
                   }
                 >
                   {envioManualEnCurso ? (
-                    <Loader2 className="mr-2 h-4 w-4 shrink-0 animate-spin" aria-hidden />
+                    <Loader2
+                      className="mr-2 h-4 w-4 shrink-0 animate-spin"
+                      aria-hidden
+                    />
                   ) : (
                     <Mail className="mr-2 h-4 w-4 shrink-0" aria-hidden />
                   )}
@@ -1258,7 +1316,10 @@ export default function NotificacionesRecibosPage() {
                   title="Misma lógica que el envío real sin registrar recibos_email_envio. Permite cualquier fecha válida; con modo pruebas puede enviarse muestra SMTP."
                 >
                   {simulacionEnCurso ? (
-                    <Loader2 className="mr-2 h-4 w-4 shrink-0 animate-spin" aria-hidden />
+                    <Loader2
+                      className="mr-2 h-4 w-4 shrink-0 animate-spin"
+                      aria-hidden
+                    />
                   ) : (
                     <TestTube className="mr-2 h-4 w-4 shrink-0" aria-hidden />
                   )}
@@ -1285,11 +1346,16 @@ export default function NotificacionesRecibosPage() {
                   }
                 >
                   {envioLotePasadoEnCurso ? (
-                    <Loader2 className="mr-2 h-4 w-4 shrink-0 animate-spin" aria-hidden />
+                    <Loader2
+                      className="mr-2 h-4 w-4 shrink-0 animate-spin"
+                      aria-hidden
+                    />
                   ) : (
                     <Mail className="mr-2 h-4 w-4 shrink-0" aria-hidden />
                   )}
-                  {envioLotePasadoEnCurso ? 'Enviando lote…' : 'Enviar lote pasado (real)'}
+                  {envioLotePasadoEnCurso
+                    ? 'Enviando lote…'
+                    : 'Enviar lote pasado (real)'}
                 </Button>
               </div>
 
@@ -1299,7 +1365,10 @@ export default function NotificacionesRecibosPage() {
                   role="status"
                   aria-live="polite"
                 >
-                  <Loader2 className="h-4 w-4 shrink-0 animate-spin text-blue-700" aria-hidden />
+                  <Loader2
+                    className="h-4 w-4 shrink-0 animate-spin text-blue-700"
+                    aria-hidden
+                  />
                   <span>
                     {envioManualEnCurso
                       ? 'Ejecutando envío manual Recibos (SMTP + registro en BD). Luego se actualiza el listado…'
@@ -1312,40 +1381,50 @@ export default function NotificacionesRecibosPage() {
 
               {esFechaPasadaReal && totalPagosListado > 0 ? (
                 <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">
-                  La fecha indicada es <strong>anterior a hoy</strong> (Caracas). Para enviar correos
-                  reales de ese día use <strong>«Enviar lote pasado (real)»</strong> (confirmación).{' '}
+                  La fecha indicada es <strong>anterior a hoy</strong>{' '}
+                  (Caracas). Para enviar correos reales de ese día use{' '}
+                  <strong>«Enviar lote pasado (real)»</strong> (confirmación).{' '}
                   «Envío manual» solo corresponde al día de hoy o fecha vacía.
                 </p>
               ) : null}
 
               {data !== undefined && totalPagosListado === 0 && !isFetching ? (
                 <p className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
-                  No hay pagos pendientes en la ventana para esta fecha: «Envío manual» permanece
-                  deshabilitado hasta que el listado muestre al menos un pago.
+                  No hay pagos pendientes en la ventana para esta fecha: «Envío
+                  manual» permanece deshabilitado hasta que el listado muestre
+                  al menos un pago.
                 </p>
               ) : null}
 
               {data ? (
                 <p className="text-sm text-muted-foreground">
-                  <strong>Fecha:</strong> {data.fecha_dia} · <strong>Id. ventana (BD):</strong> {data.slot} ·{' '}
-                  <strong>Pagos pendientes:</strong> {data.total_pagos} · <strong>Cédulas distintas:</strong>{' '}
-                  {data.cedulas_distintas}
+                  <strong>Fecha:</strong> {data.fecha_dia} ·{' '}
+                  <strong>Id. ventana (BD):</strong> {data.slot} ·{' '}
+                  <strong>Pagos pendientes:</strong> {data.total_pagos} ·{' '}
+                  <strong>Cédulas distintas:</strong> {data.cedulas_distintas}
                 </p>
               ) : null}
 
               <div className="mb-2 space-y-4">
                 <div className="rounded-lg border border-indigo-200 bg-indigo-50/90 p-4">
                   <div className="mb-3 flex flex-wrap items-start gap-2">
-                    <Mail className="mt-0.5 h-6 w-6 shrink-0 text-indigo-600" aria-hidden />
+                    <Mail
+                      className="mt-0.5 h-6 w-6 shrink-0 text-indigo-600"
+                      aria-hidden
+                    />
                     <div>
                       <p className="text-sm font-semibold text-indigo-950">
-                        Envíos por ejecución (día de corte {data?.fecha_dia ?? '—'})
+                        Envíos por ejecución (día de corte{' '}
+                        {data?.fecha_dia ?? '-'})
                       </p>
                       <p className="mt-1 text-[11px] leading-snug text-indigo-900/90">
-                        Cada ítem es un lote registrado en <code className="text-[10px]">recibos_email_envio</code>{' '}
-                        al completar un envío manual: 1.er envío, 2.o envío, … según el instante de registro
-                        en BD (un commit por ejecución, PostgreSQL). La ventana sigue siendo la de{' '}
-                        <strong>fecha de registro</strong> 00:00–23:45 Caracas de ese día.
+                        Cada ítem es un lote registrado en{' '}
+                        <code className="text-[10px]">recibos_email_envio</code>{' '}
+                        al completar un envío manual: 1.er envío, 2.o envío, …
+                        según el instante de registro en BD (un commit por
+                        ejecución, PostgreSQL). La ventana sigue siendo la de{' '}
+                        <strong>fecha de registro</strong> 00:00-23:45 Caracas
+                        de ese día.
                       </p>
                     </div>
                   </div>
@@ -1368,13 +1447,14 @@ export default function NotificacionesRecibosPage() {
                             {etiquetaOrdinalEnvioRecibos(o.orden)}
                           </span>
                           <span className="min-w-0 text-indigo-900 sm:text-right">
-                            <span className="tabular-nums font-semibold text-indigo-950">
+                            <span className="font-semibold tabular-nums text-indigo-950">
                               {o.correos_registrados_lote ?? 0}
                             </span>{' '}
                             correo(s) registrado(s){' '}
                             <span className="text-indigo-700/85">·</span>{' '}
                             <span className="text-indigo-800/90">
-                              {fmtInstanteRegistroRecibosCaracas(o.creado_en)} (Caracas)
+                              {fmtInstanteRegistroRecibosCaracas(o.creado_en)}{' '}
+                              (Caracas)
                             </span>
                           </span>
                         </li>
@@ -1383,16 +1463,26 @@ export default function NotificacionesRecibosPage() {
                   )}
                   <p className="mt-3 border-t border-indigo-200/80 pt-2 text-xs text-indigo-900/90">
                     <span className="font-medium">Resumen día de corte:</span>{' '}
-                    <span className="tabular-nums font-semibold">{kpiRegistrosTotal}</span> filas en BD
-                    (suma de lotes){' '}
+                    <span className="font-semibold tabular-nums">
+                      {kpiRegistrosTotal}
+                    </span>{' '}
+                    filas en BD (suma de lotes){' '}
                     <span className="text-indigo-800/80">·</span>{' '}
-                    <span className="tabular-nums font-semibold">{kpiRegDia}</span> cédulas distintas con
-                    registro / <span className="tabular-nums font-semibold">{kpiCedVentana}</span> cédulas
-                    distintas en ventana de pagos
+                    <span className="font-semibold tabular-nums">
+                      {kpiRegDia}
+                    </span>{' '}
+                    cédulas distintas con registro /{' '}
+                    <span className="font-semibold tabular-nums">
+                      {kpiCedVentana}
+                    </span>{' '}
+                    cédulas distintas en ventana de pagos
                   </p>
                 </div>
                 <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 p-4">
-                  <LayoutList className="h-8 w-8 shrink-0 text-slate-600" aria-hidden />
+                  <LayoutList
+                    className="h-8 w-8 shrink-0 text-slate-600"
+                    aria-hidden
+                  />
                   <div className="min-w-0">
                     <p className="text-2xl font-bold tabular-nums text-slate-900">
                       {kpiPagosVentana}
@@ -1401,20 +1491,27 @@ export default function NotificacionesRecibosPage() {
                         · {totalPagosListado} pend.
                       </span>
                     </p>
-                    <p className="text-xs font-medium text-slate-800">Pagos en ventana (00:00–23:45)</p>
+                    <p className="text-xs font-medium text-slate-800">
+                      Pagos en ventana (00:00-23:45)
+                    </p>
                     <p className="mt-1 text-[11px] leading-snug text-slate-600">
-                      Total pagos con <strong>fecha de registro</strong> en la franja vs. pendientes de envío
-                      Recibos en la tabla.
+                      Total pagos con <strong>fecha de registro</strong> en la
+                      franja vs. pendientes de envío Recibos en la tabla.
                     </p>
                   </div>
                 </div>
               </div>
               <p className="mb-2 text-center text-xs text-muted-foreground">
                 Histórico global Recibos (todos los días):{' '}
-                <span className="font-semibold tabular-nums text-foreground">{kpiEnviados}</span> envíos
-                exitosos ·{' '}
-                <span className="font-semibold tabular-nums text-foreground">{kpiRebotados}</span> fallidos
-                en <code className="text-[10px]">envios_notificacion</code>.
+                <span className="font-semibold tabular-nums text-foreground">
+                  {kpiEnviados}
+                </span>{' '}
+                envíos exitosos ·{' '}
+                <span className="font-semibold tabular-nums text-foreground">
+                  {kpiRebotados}
+                </span>{' '}
+                fallidos en{' '}
+                <code className="text-[10px]">envios_notificacion</code>.
               </p>
 
               <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
@@ -1510,14 +1607,19 @@ export default function NotificacionesRecibosPage() {
                           Fotografía de pago
                         </th>
                         <th className="w-14 whitespace-nowrap px-2 py-2 text-center font-semibold">
-                          <span title="Descargar PDF de estado de cuenta">Estado de cuenta</span>
+                          <span title="Descargar PDF de estado de cuenta">
+                            Estado de cuenta
+                          </span>
                         </th>
                       </tr>
                     </thead>
                     <tbody>
                       {listaFiltradaCedula.length === 0 ? (
                         <tr>
-                          <td colSpan={6} className="py-8 text-center text-gray-500">
+                          <td
+                            colSpan={6}
+                            className="py-8 text-center text-gray-500"
+                          >
                             <span className="block font-medium text-gray-600">
                               {list.length === 0
                                 ? 'Ningún registro en este criterio.'
@@ -1531,7 +1633,9 @@ export default function NotificacionesRecibosPage() {
                             key={`rec-${row.pago_id}`}
                             className="border-b border-gray-200 bg-white hover:bg-gray-50"
                           >
-                            <td className="px-3 py-3 font-medium">{row.nombre}</td>
+                            <td className="px-3 py-3 font-medium">
+                              {row.nombre}
+                            </td>
                             <td className="px-3 py-3">{row.cedula}</td>
                             <td className="px-3 py-3 tabular-nums text-gray-800">
                               {textoFechaRegistroListado(row.fecha_registro)}
@@ -1564,7 +1668,9 @@ export default function NotificacionesRecibosPage() {
                         size="sm"
                         className="rounded-md border-gray-300"
                         disabled={paginaRecibosListado <= 1}
-                        onClick={() => setPaginaRecibosListado(p => Math.max(1, p - 1))}
+                        onClick={() =>
+                          setPaginaRecibosListado(p => Math.max(1, p - 1))
+                        }
                       >
                         ← Anterior
                       </Button>
@@ -1579,7 +1685,9 @@ export default function NotificacionesRecibosPage() {
                               ? 'min-w-[2.25rem] rounded-md border-blue-600 bg-blue-600 text-white shadow-none hover:bg-blue-700 hover:text-white'
                               : 'min-w-[2.25rem] rounded-md border-gray-300 bg-white text-gray-900 hover:bg-gray-50'
                           }
-                          aria-current={n === paginaRecibosListado ? 'page' : undefined}
+                          aria-current={
+                            n === paginaRecibosListado ? 'page' : undefined
+                          }
                           onClick={() => setPaginaRecibosListado(n)}
                         >
                           {n}
@@ -1592,7 +1700,9 @@ export default function NotificacionesRecibosPage() {
                         className="rounded-md border-gray-300"
                         disabled={paginaRecibosListado >= totalPaginasListado}
                         onClick={() =>
-                          setPaginaRecibosListado(p => Math.min(totalPaginasListado, p + 1))
+                          setPaginaRecibosListado(p =>
+                            Math.min(totalPaginasListado, p + 1)
+                          )
                         }
                       >
                         Siguiente →

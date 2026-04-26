@@ -136,7 +136,9 @@ export type FiltroDiferenciaAbonoGeneral =
   | 'drive_mayor'
   | 'drive_menor'
 
-export function toleranciaCompararAbonos(cmp: CompararAbonosDriveCuotasResponse): number {
+export function toleranciaCompararAbonos(
+  cmp: CompararAbonosDriveCuotasResponse
+): number {
   const t = cmp.tolerancia
   return typeof t === 'number' && Number.isFinite(t) ? t : 0.02
 }
@@ -212,7 +214,9 @@ export function filaCumpleFiltroDiferenciaFechaGeneral(
   return true
 }
 
-export function fmtDiferenciaFechaDiasCelda(n: number | null | undefined): string {
+export function fmtDiferenciaFechaDiasCelda(
+  n: number | null | undefined
+): string {
   if (n == null || Number.isNaN(Number(n))) return '-'
   const v = Number(n)
   if (v === 0) return '0'
@@ -235,7 +239,10 @@ export function DiferenciaFechaGeneralCell({
   const ced = (row.cedula || '').trim()
   if (pid == null || !ced) {
     return (
-      <span className="text-xs text-muted-foreground" title="Sin cédula o préstamo">
+      <span
+        className="text-xs text-muted-foreground"
+        title="Sin cédula o préstamo"
+      >
         -
       </span>
     )
@@ -255,7 +262,7 @@ export function DiferenciaFechaGeneralCell({
   }
   return (
     <span
-      className={`tabular-nums text-sm font-medium ${
+      className={`text-sm font-medium tabular-nums ${
         data.coincide_calendario ? 'text-green-700' : 'text-amber-800'
       }`}
       title="Días (columna Q entrega en hoja − fecha_aprobacion en sistema). Valor del listado desde caché en BD."
@@ -280,7 +287,10 @@ export function DiferenciaAbonoGeneralCell({
   const ced = (row.cedula || '').trim()
   if (pid == null || !ced) {
     return (
-      <span className="text-xs text-muted-foreground" title="Sin cédula o préstamo">
+      <span
+        className="text-xs text-muted-foreground"
+        title="Sin cédula o préstamo"
+      >
         -
       </span>
     )
@@ -300,7 +310,7 @@ export function DiferenciaAbonoGeneralCell({
   }
   return (
     <span
-      className={`tabular-nums text-sm font-medium ${
+      className={`text-sm font-medium tabular-nums ${
         data.coincide_aproximado ? 'text-green-700' : 'text-amber-800'
       }`}
       title="Diferencia (hoja Drive − total pagado en cuotas). Valor fijo del listado: se actualiza en servidor a las 02:00 (Caracas) y al aplicar ABONOS desde la balanza."
@@ -314,7 +324,11 @@ export function DiferenciaAbonoGeneralCell({
  * Triángulo: un clic marca revisado (visto) y deja constancia en notas del cliente; si no hay
  * permiso para notas, en observaciones de la revisión. Visto: solo admin puede reabrir a revisando.
  */
-export function RevisionManualNotifCell({ row }: { row: ClienteRetrasadoItem }) {
+export function RevisionManualNotifCell({
+  row,
+}: {
+  row: ClienteRetrasadoItem
+}) {
   const queryClient = useQueryClient()
   const { user } = useSimpleAuth()
   const esAdmin = (user?.rol || '').toLowerCase() === 'admin'
@@ -482,7 +496,11 @@ export function abonosSuperanUmbralConfirmo(
  * Icono junto a revisión manual: compara ABONOS (hoja CONCILIACIÓN en BD) vs suma total_pagado en cuotas del préstamo.
  * El borrado de pagos y la cascada solo ocurren si el usuario pulsa explícitamente «Sí» y confirma (no al abrir el diálogo).
  */
-export function CompararAbonosDriveCuotasCell({ row }: { row: ClienteRetrasadoItem }) {
+export function CompararAbonosDriveCuotasCell({
+  row,
+}: {
+  row: ClienteRetrasadoItem
+}) {
   const queryClient = useQueryClient()
   const location = useLocation()
   const { user } = useSimpleAuth()
@@ -494,7 +512,9 @@ export function CompararAbonosDriveCuotasCell({ row }: { row: ClienteRetrasadoIt
   const [paso, setPaso] = useState<'resumen' | 'confirmar'>('resumen')
   const [loading, setLoading] = useState(false)
   const [applying, setApplying] = useState(false)
-  const [data, setData] = useState<CompararAbonosDriveCuotasResponse | null>(null)
+  const [data, setData] = useState<CompararAbonosDriveCuotasResponse | null>(
+    null
+  )
   const [confirmacionMontosAltos, setConfirmacionMontosAltos] = useState('')
 
   /** Cierra el modal sin cambiar de ruta (mismo submenú de notificaciones). */
@@ -516,7 +536,8 @@ export function CompararAbonosDriveCuotasCell({ row }: { row: ClienteRetrasadoIt
   const puedeOperar =
     loteResuelto &&
     (data?.puede_aplicar === true ||
-      (typeof data?.indicador === 'string' && data.indicador.toLowerCase() === 'si'))
+      (typeof data?.indicador === 'string' &&
+        data.indicador.toLowerCase() === 'si'))
 
   const abrir = async (loteExplicito?: string | null) => {
     setOpen(true)
@@ -543,7 +564,8 @@ export function CompararAbonosDriveCuotasCell({ row }: { row: ClienteRetrasadoIt
   const aplicar = async () => {
     setApplying(true)
     try {
-      const loteAplicar = (data?.lote_aplicado ?? '').toString().trim() || undefined
+      const loteAplicar =
+        (data?.lote_aplicado ?? '').toString().trim() || undefined
       const needConf =
         data != null && abonosSuperanUmbralConfirmo(data, data.abonos_drive)
       const res: AplicarAbonosDriveCuotasResponse =
@@ -619,20 +641,25 @@ export function CompararAbonosDriveCuotasCell({ row }: { row: ClienteRetrasadoIt
           ) : paso === 'confirmar' && data ? (
             <div className="space-y-3 text-sm">
               <p className="text-amber-900">
-                Se eliminarán todos los pagos del préstamo #{data.prestamo_id} y se registrará un
-                único pago por{' '}
-                <span className="font-semibold tabular-nums">{fmt(data.abonos_drive)}</span>{' '}
-                (ABONOS hoja), aplicado en cascada a las cuotas. Esta acción no se deshace desde
-                aquí.
+                Se eliminarán todos los pagos del préstamo #{data.prestamo_id} y
+                se registrará un único pago por{' '}
+                <span className="font-semibold tabular-nums">
+                  {fmt(data.abonos_drive)}
+                </span>{' '}
+                (ABONOS hoja), aplicado en cascada a las cuotas. Esta acción no
+                se deshace desde aquí.
               </p>
               <div className="rounded-md border border-slate-200 bg-muted/30 p-3 text-xs text-foreground">
-                <p className="mb-1 font-semibold text-slate-800">Verifique antes de aplicar</p>
+                <p className="mb-1 font-semibold text-slate-800">
+                  Verifique antes de aplicar
+                </p>
                 <ul className="list-none space-y-1 tabular-nums">
                   <li>
                     Cédula: <span className="font-medium">{data.cedula}</span>
                   </li>
                   <li>
-                    Préstamo: <span className="font-medium">#{data.prestamo_id}</span>
+                    Préstamo:{' '}
+                    <span className="font-medium">#{data.prestamo_id}</span>
                   </li>
                   <li>
                     Lote (hoja):{' '}
@@ -642,15 +669,19 @@ export function CompararAbonosDriveCuotasCell({ row }: { row: ClienteRetrasadoIt
                   </li>
                   <li>
                     Monto ABONOS (hoja):{' '}
-                    <span className="font-semibold">{fmt(data.abonos_drive)}</span>
+                    <span className="font-semibold">
+                      {fmt(data.abonos_drive)}
+                    </span>
                   </li>
                 </ul>
               </div>
               {needConfirmaMontosAltos ? (
                 <div className="space-y-2 rounded-md border border-amber-300 bg-amber-50/90 p-3 text-xs text-amber-950">
                   <p className="font-medium">
-                    Monto elevado (&gt; {umbralConfirmaAbonosUsd(data).toLocaleString('es-VE')} USD).
-                    Escriba <span className="font-mono">CONFIRMO</span> para continuar.
+                    Monto elevado (&gt;{' '}
+                    {umbralConfirmaAbonosUsd(data).toLocaleString('es-VE')}{' '}
+                    USD). Escriba <span className="font-mono">CONFIRMO</span>{' '}
+                    para continuar.
                   </p>
                   <Input
                     id="confirma-abonos-montos-altos"
@@ -664,15 +695,22 @@ export function CompararAbonosDriveCuotasCell({ row }: { row: ClienteRetrasadoIt
                 </div>
               ) : null}
               <p className="text-xs text-muted-foreground">
-                Solo continúe si revisó cédula, hoja y montos. Requiere administrador.
+                Solo continúe si revisó cédula, hoja y montos. Requiere
+                administrador.
               </p>
             </div>
           ) : data ? (
             <div className="space-y-3 text-sm">
               <p className="text-muted-foreground">
-                Cédula <span className="font-medium text-foreground">{data.cedula}</span>
+                Cédula{' '}
+                <span className="font-medium text-foreground">
+                  {data.cedula}
+                </span>
                 {' · '}
-                Préstamo <span className="font-medium text-foreground">#{data.prestamo_id}</span>
+                Préstamo{' '}
+                <span className="font-medium text-foreground">
+                  #{data.prestamo_id}
+                </span>
               </p>
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
                 <Link
@@ -710,7 +748,9 @@ export function CompararAbonosDriveCuotasCell({ row }: { row: ClienteRetrasadoIt
                       {fmt(data.prestamo_huella.total_financiamiento)}
                     </li>
                     <li>N.º cuotas: {data.prestamo_huella.numero_cuotas}</li>
-                    <li>Modalidad: {data.prestamo_huella.modalidad_pago || '-'}</li>
+                    <li>
+                      Modalidad: {data.prestamo_huella.modalidad_pago || '-'}
+                    </li>
                   </ul>
                 </div>
               ) : null}
@@ -719,16 +759,19 @@ export function CompararAbonosDriveCuotasCell({ row }: { row: ClienteRetrasadoIt
                 <p className="rounded-md border border-slate-200 bg-muted/40 p-2 text-xs text-slate-800">
                   <span className="font-medium">Regla: </span>
                   solo se puede aplicar desde aquí si ABONOS en la hoja es{' '}
-                  <strong>mayor</strong> que la suma de los pagos reflejados en cuotas del préstamo
-                  (total pagado en cuotas), más una tolerancia de ±{data.tolerancia}. Si ABONOS es
-                  igual o menor (p. ej. cero o ya cubierto en BD), el flujo queda en «No»: aquí no se
-                  reordenan pagos ni se corrigen diferencias pequeñas; use revisión manual o la
-                  conciliación habitual.
+                  <strong>mayor</strong> que la suma de los pagos reflejados en
+                  cuotas del préstamo (total pagado en cuotas), más una
+                  tolerancia de ±{data.tolerancia}. Si ABONOS es igual o menor
+                  (p. ej. cero o ya cubierto en BD), el flujo queda en «No»:
+                  aquí no se reordenan pagos ni se corrigen diferencias
+                  pequeñas; use revisión manual o la conciliación habitual.
                 </p>
               ) : null}
 
               <div className="flex flex-wrap items-center gap-2">
-                <span className="text-muted-foreground text-xs">Indicador:</span>
+                <span className="text-xs text-muted-foreground">
+                  Indicador:
+                </span>
                 <button
                   type="button"
                   disabled={!puedeOperar || !esAdmin || applying}
@@ -778,8 +821,9 @@ export function CompararAbonosDriveCuotasCell({ row }: { row: ClienteRetrasadoIt
               data.opciones_lote.length > 0 ? (
                 <div className="rounded-md border border-amber-200 bg-amber-50/90 p-3 text-xs text-amber-950">
                   <p className="mb-2 font-medium">
-                    Hay varios lotes en la hoja para esta cédula. Elija el que corresponde a este
-                    préstamo (solo se usará el abono de esa fila; no se mezclan otros créditos).
+                    Hay varios lotes en la hoja para esta cédula. Elija el que
+                    corresponde a este préstamo (solo se usará el abono de esa
+                    fila; no se mezclan otros créditos).
                   </p>
                   <div className="flex flex-wrap gap-2">
                     {data.opciones_lote.map(op => (
@@ -807,33 +851,45 @@ export function CompararAbonosDriveCuotasCell({ row }: { row: ClienteRetrasadoIt
                   Lote <span className="font-mono">{data.lote_aplicado}</span>
                   {' · '}
                   ABONOS hoja{' '}
-                  <span className="font-medium tabular-nums">{fmt(data.abonos_drive)}</span>
+                  <span className="font-medium tabular-nums">
+                    {fmt(data.abonos_drive)}
+                  </span>
                   {' · '}
                   Préstamo #{data.prestamo_id}
                 </p>
               ) : data.lote_aplicado ? (
                 <p className="text-xs text-muted-foreground">
                   Lote usado para esta comparación:{' '}
-                  <span className="font-mono font-medium text-foreground">{data.lote_aplicado}</span>
+                  <span className="font-mono font-medium text-foreground">
+                    {data.lote_aplicado}
+                  </span>
                 </p>
               ) : null}
 
               <dl className="grid grid-cols-1 gap-2 rounded-md border bg-muted/30 p-3">
                 <div className="flex justify-between gap-2">
                   <dt className="text-muted-foreground">ABONOS (hoja Drive)</dt>
-                  <dd className="font-medium tabular-nums">{fmt(data.abonos_drive)}</dd>
+                  <dd className="font-medium tabular-nums">
+                    {fmt(data.abonos_drive)}
+                  </dd>
                 </div>
                 <div className="flex justify-between gap-2">
-                  <dt className="text-muted-foreground">Total pagado (cuotas)</dt>
+                  <dt className="text-muted-foreground">
+                    Total pagado (cuotas)
+                  </dt>
                   <dd className="font-medium tabular-nums">
                     {fmt(data.total_pagado_cuotas)}
                   </dd>
                 </div>
                 <div className="flex justify-between gap-2">
-                  <dt className="text-muted-foreground">Diferencia (hoja − cuotas)</dt>
+                  <dt className="text-muted-foreground">
+                    Diferencia (hoja − cuotas)
+                  </dt>
                   <dd
                     className={`font-semibold tabular-nums ${
-                      data.coincide_aproximado ? 'text-green-700' : 'text-amber-800'
+                      data.coincide_aproximado
+                        ? 'text-green-700'
+                        : 'text-amber-800'
                     }`}
                   >
                     {fmt(data.diferencia)}
@@ -901,8 +957,8 @@ export function CompararAbonosDriveCuotasCell({ row }: { row: ClienteRetrasadoIt
                 </p>
               ) : data.diferencia != null ? (
                 <p className="text-xs text-amber-900">
-                  Hay diferencia mayor a la tolerancia (±{data.tolerancia}). Revise sync de la
-                  hoja o pagos aplicados a cuotas.
+                  Hay diferencia mayor a la tolerancia (±{data.tolerancia}).
+                  Revise sync de la hoja o pagos aplicados a cuotas.
                 </p>
               ) : null}
               {!esAdmin && puedeOperar ? (
@@ -934,7 +990,8 @@ export function CompararAbonosDriveCuotasCell({ row }: { row: ClienteRetrasadoIt
                     applying ||
                     !esAdmin ||
                     (needConfirmaMontosAltos &&
-                      confirmacionMontosAltos.trim().toUpperCase() !== 'CONFIRMO')
+                      confirmacionMontosAltos.trim().toUpperCase() !==
+                        'CONFIRMO')
                   }
                   onClick={() => {
                     void aplicar()
@@ -971,7 +1028,9 @@ export function fmtFechaNotifIso(iso?: string | null): string {
   }
   const t = Date.parse(s)
   if (Number.isNaN(t)) return s
-  return new Date(t).toLocaleDateString('es-VE', { timeZone: 'America/Caracas' })
+  return new Date(t).toLocaleDateString('es-VE', {
+    timeZone: 'America/Caracas',
+  })
 }
 
 export function fmtDiferenciaDiasNotif(n: number | null | undefined): string {
@@ -987,7 +1046,11 @@ export function fmtDiferenciaDiasNotif(n: number | null | undefined): string {
  * tabla de comparación y pie. «Sí» cuando Q interpretable difiere de `fecha_aprobacion` en BD; el POST
  * usa `PUT /prestamos/{id}` (requerimiento = día anterior a la nueva aprobación, recálculo de cuotas si aplica).
  */
-export function CompararFechaEntregaQAprobacionCell({ row }: { row: ClienteRetrasadoItem }) {
+export function CompararFechaEntregaQAprobacionCell({
+  row,
+}: {
+  row: ClienteRetrasadoItem
+}) {
   const queryClient = useQueryClient()
   const location = useLocation()
   const { user } = useSimpleAuth()
@@ -999,7 +1062,8 @@ export function CompararFechaEntregaQAprobacionCell({ row }: { row: ClienteRetra
   const [paso, setPaso] = useState<'resumen' | 'confirmar'>('resumen')
   const [loading, setLoading] = useState(false)
   const [applying, setApplying] = useState(false)
-  const [data, setData] = useState<CompararFechaEntregaQvsAprobacionResponse | null>(null)
+  const [data, setData] =
+    useState<CompararFechaEntregaQvsAprobacionResponse | null>(null)
 
   const onDialogFechaOpenChange = useCallback((v: boolean) => {
     setOpen(v)
@@ -1019,7 +1083,8 @@ export function CompararFechaEntregaQAprobacionCell({ row }: { row: ClienteRetra
   const puedeOperar =
     loteResuelto &&
     (data?.puede_aplicar === true ||
-      (typeof data?.indicador === 'string' && data.indicador.toLowerCase() === 'si'))
+      (typeof data?.indicador === 'string' &&
+        data.indicador.toLowerCase() === 'si'))
 
   const abrir = async (loteExplicito?: string | null) => {
     setOpen(true)
@@ -1028,14 +1093,18 @@ export function CompararFechaEntregaQAprobacionCell({ row }: { row: ClienteRetra
     setData(null)
     try {
       const loteQ = (loteExplicito ?? '').trim()
-      const res = await notificacionService.getCompararFechaEntregaQvsAprobacion({
-        cedula: ced,
-        prestamoId: pid,
-        ...(loteQ ? { lote: loteQ } : {}),
-      })
+      const res =
+        await notificacionService.getCompararFechaEntregaQvsAprobacion({
+          cedula: ced,
+          prestamoId: pid,
+          ...(loteQ ? { lote: loteQ } : {}),
+        })
       setData(res)
     } catch (e) {
-      toast.error(getErrorMessage(e) || 'No se pudo comparar la columna Q con la fecha de aprobación.')
+      toast.error(
+        getErrorMessage(e) ||
+          'No se pudo comparar la columna Q con la fecha de aprobación.'
+      )
       onDialogFechaOpenChange(false)
     } finally {
       setLoading(false)
@@ -1117,28 +1186,39 @@ export function CompararFechaEntregaQAprobacionCell({ row }: { row: ClienteRetra
           ) : paso === 'confirmar' && data ? (
             <div className="space-y-3 text-sm">
               <p className="text-slate-800">
-                Va a guardar en la tabla <span className="font-semibold">prestamos</span> la fecha
-                de la columna Q como <strong>nueva fecha de aprobación</strong> (y la base de cálculo
-                alineada al mismo día calendario). No modifica la hoja de Google. Si el préstamo
-                está en APROBADO o LIQUIDADO con cuotas y la base cambia, el servidor{' '}
-                <strong>recalcula fechas de vencimiento</strong> en <span className="font-semibold">cuotas</span>{' '}
-                con la misma lógica que al guardar desde revisión manual.
+                Va a guardar en la tabla{' '}
+                <span className="font-semibold">prestamos</span> la fecha de la
+                columna Q como <strong>nueva fecha de aprobación</strong> (y la
+                base de cálculo alineada al mismo día calendario). No modifica
+                la hoja de Google. Si el préstamo está en APROBADO o LIQUIDADO
+                con cuotas y la base cambia, el servidor{' '}
+                <strong>recalcula fechas de vencimiento</strong> en{' '}
+                <span className="font-semibold">cuotas</span> con la misma
+                lógica que al guardar desde revisión manual.
               </p>
               <p className="text-xs text-slate-600">
-                La <strong>fecha de requerimiento</strong> en BD (<code className="text-[11px]">prestamos.fecha_requerimiento</code>) no se
-                edita a mano: al guardar la nueva aprobación el servidor la recalcula como el <strong>día calendario anterior</strong> a esa
-                fecha de aprobación (misma regla que al editar el préstamo en revisión manual).
+                La <strong>fecha de requerimiento</strong> en BD (
+                <code className="text-[11px]">
+                  prestamos.fecha_requerimiento
+                </code>
+                ) no se edita a mano: al guardar la nueva aprobación el servidor
+                la recalcula como el <strong>día calendario anterior</strong> a
+                esa fecha de aprobación (misma regla que al editar el préstamo
+                en revisión manual).
               </p>
               <ul className="list-none space-y-1 rounded-md border border-slate-200 bg-muted/30 p-3 text-xs tabular-nums">
                 <li>
                   Cédula: <span className="font-medium">{data.cedula}</span>
                 </li>
                 <li>
-                  Préstamo: <span className="font-medium">#{data.prestamo_id}</span>
+                  Préstamo:{' '}
+                  <span className="font-medium">#{data.prestamo_id}</span>
                 </li>
                 <li>
                   Fecha Q:{' '}
-                  <span className="font-medium">{fmtFechaNotifIso(data.fecha_entrega_column_q)}</span>
+                  <span className="font-medium">
+                    {fmtFechaNotifIso(data.fecha_entrega_column_q)}
+                  </span>
                 </li>
                 <li>
                   Fecha aprobación (BD):{' '}
@@ -1147,27 +1227,36 @@ export function CompararFechaEntregaQAprobacionCell({ row }: { row: ClienteRetra
                   </span>
                 </li>
                 <li>
-                  Fecha requerimiento (BD actual; al guardar pasa a ser el día anterior a la nueva aprobación):{' '}
+                  Fecha requerimiento (BD actual; al guardar pasa a ser el día
+                  anterior a la nueva aprobación):{' '}
                   <span className="font-medium">
                     {fmtFechaNotifIso(data.fecha_requerimiento_prestamo)}
                   </span>
                 </li>
                 <li>
                   Diferencia (días):{' '}
-                  <span className="font-semibold">{fmtDiferenciaDiasNotif(data.diferencia_dias)}</span>
+                  <span className="font-semibold">
+                    {fmtDiferenciaDiasNotif(data.diferencia_dias)}
+                  </span>
                 </li>
               </ul>
               <p className="text-xs text-muted-foreground">
-                Pulse «Confirmar y guardar» solo si la fecha Q es la fuente de verdad que desea en el
-                sistema.
+                Pulse «Confirmar y guardar» solo si la fecha Q es la fuente de
+                verdad que desea en el sistema.
               </p>
             </div>
           ) : data ? (
             <div className="space-y-3 text-sm">
               <p className="text-muted-foreground">
-                Cédula <span className="font-medium text-foreground">{data.cedula}</span>
+                Cédula{' '}
+                <span className="font-medium text-foreground">
+                  {data.cedula}
+                </span>
                 {' · '}
-                Préstamo <span className="font-medium text-foreground">#{data.prestamo_id}</span>
+                Préstamo{' '}
+                <span className="font-medium text-foreground">
+                  #{data.prestamo_id}
+                </span>
               </p>
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
                 <Link
@@ -1190,7 +1279,8 @@ export function CompararFechaEntregaQAprobacionCell({ row }: { row: ClienteRetra
                   {data.hoja_sync_antigua_horas != null
                     ? `${data.hoja_sync_antigua_horas} h`
                     : '-'}
-                  ). Resincronice CONCILIACIÓN si necesita la columna Q (fechas) al día.
+                  ). Resincronice CONCILIACIÓN si necesita la columna Q (fechas)
+                  al día.
                 </p>
               ) : null}
 
@@ -1202,13 +1292,18 @@ export function CompararFechaEntregaQAprobacionCell({ row }: { row: ClienteRetra
                   <ul className="list-none space-y-0.5 tabular-nums">
                     <li>
                       Total financiamiento:{' '}
-                      {data.prestamo_huella.total_financiamiento.toLocaleString('es-VE', {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                      })}
+                      {data.prestamo_huella.total_financiamiento.toLocaleString(
+                        'es-VE',
+                        {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        }
+                      )}
                     </li>
                     <li>N.º cuotas: {data.prestamo_huella.numero_cuotas}</li>
-                    <li>Modalidad: {data.prestamo_huella.modalidad_pago || '-'}</li>
+                    <li>
+                      Modalidad: {data.prestamo_huella.modalidad_pago || '-'}
+                    </li>
                   </ul>
                 </div>
               ) : null}
@@ -1216,21 +1311,27 @@ export function CompararFechaEntregaQAprobacionCell({ row }: { row: ClienteRetra
               {!puedeOperar ? (
                 <p className="rounded-md border border-slate-200 bg-muted/40 p-2 text-xs text-slate-800">
                   <span className="font-medium">Regla: </span>
-                  el indicador «Sí» aplica cuando la fecha Q es interpretable y es <strong>distinta</strong> de la
-                  fecha de aprobación en BD (adelante o atrás). Si no hay Q interpretada, use revisión manual o la hoja.
+                  el indicador «Sí» aplica cuando la fecha Q es interpretable y
+                  es <strong>distinta</strong> de la fecha de aprobación en BD
+                  (adelante o atrás). Si no hay Q interpretada, use revisión
+                  manual o la hoja.
                 </p>
               ) : null}
 
               {puedeOperar && data?.correccion_desde_q_anterior_bd ? (
                 <p className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-950">
-                  La columna Q es <strong>anterior</strong> a la fecha de aprobación en el sistema: al
-                  confirmar se <strong>adelantará</strong> la aprobación en BD a la fecha Q y se
-                  recalcularán vencimientos de cuotas si corresponde. Pulse «No» si no desea cambiar.
+                  La columna Q es <strong>anterior</strong> a la fecha de
+                  aprobación en el sistema: al confirmar se{' '}
+                  <strong>adelantará</strong> la aprobación en BD a la fecha Q y
+                  se recalcularán vencimientos de cuotas si corresponde. Pulse
+                  «No» si no desea cambiar.
                 </p>
               ) : null}
 
               <div className="flex flex-wrap items-center gap-2">
-                <span className="text-muted-foreground text-xs">Indicador:</span>
+                <span className="text-xs text-muted-foreground">
+                  Indicador:
+                </span>
                 <button
                   type="button"
                   disabled={!puedeOperar || !esAdmin || loading}
@@ -1280,8 +1381,9 @@ export function CompararFechaEntregaQAprobacionCell({ row }: { row: ClienteRetra
               data.opciones_lote.length > 0 ? (
                 <div className="rounded-md border border-amber-200 bg-amber-50/90 p-3 text-xs text-amber-950">
                   <p className="mb-2 font-medium">
-                    Hay varios lotes en la hoja para esta cédula. Elija el que corresponde a este
-                    préstamo (solo se usará la fila de esa combinación cédula + lote).
+                    Hay varios lotes en la hoja para esta cédula. Elija el que
+                    corresponde a este préstamo (solo se usará la fila de esa
+                    combinación cédula + lote).
                   </p>
                   <div className="flex flex-wrap gap-2">
                     {data.opciones_lote.map(op => (
@@ -1315,7 +1417,9 @@ export function CompararFechaEntregaQAprobacionCell({ row }: { row: ClienteRetra
               ) : data.lote_aplicado ? (
                 <p className="text-xs text-muted-foreground">
                   Lote usado para esta comparación:{' '}
-                  <span className="font-mono font-medium text-foreground">{data.lote_aplicado}</span>
+                  <span className="font-mono font-medium text-foreground">
+                    {data.lote_aplicado}
+                  </span>
                 </p>
               ) : null}
 
@@ -1324,18 +1428,24 @@ export function CompararFechaEntregaQAprobacionCell({ row }: { row: ClienteRetra
                 data.fecha_entrega_column_q_raw != null &&
                 String(data.fecha_entrega_column_q_raw).trim() !== '' ? (
                   <div className="col-span-1 rounded-md border border-amber-200 bg-amber-50/80 px-2 py-2 text-xs text-amber-950">
-                    <span className="font-semibold">Celda Q (valor en hoja, sin interpretar): </span>
-                    <span className="font-mono break-all">
+                    <span className="font-semibold">
+                      Celda Q (valor en hoja, sin interpretar):{' '}
+                    </span>
+                    <span className="break-all font-mono">
                       {String(data.fecha_entrega_column_q_raw)}
                     </span>
                     <p className="mt-1 text-[11px] text-amber-900/90">
-                      No hay fecha Q interpretada; use revisión manual para corregir la fecha de aprobación
-                      o normalice el formato en la hoja (ideal: celda con formato «fecha» o ISO AAAA-MM-DD).
+                      No hay fecha Q interpretada; use revisión manual para
+                      corregir la fecha de aprobación o normalice el formato en
+                      la hoja (ideal: celda con formato «fecha» o ISO
+                      AAAA-MM-DD).
                     </p>
                   </div>
                 ) : null}
                 <div className="flex justify-between gap-2">
-                  <dt className="text-muted-foreground">Fecha entrega (columna Q)</dt>
+                  <dt className="text-muted-foreground">
+                    Fecha entrega (columna Q)
+                  </dt>
                   <dd className="font-medium tabular-nums">
                     {fmtFechaNotifIso(data.fecha_entrega_column_q)}
                   </dd>
@@ -1351,22 +1461,30 @@ export function CompararFechaEntregaQAprobacionCell({ row }: { row: ClienteRetra
                   </div>
                 ) : null}
                 <div className="flex justify-between gap-2">
-                  <dt className="text-muted-foreground">Fecha aprobación (sistema)</dt>
+                  <dt className="text-muted-foreground">
+                    Fecha aprobación (sistema)
+                  </dt>
                   <dd className="font-medium tabular-nums">
                     {fmtFechaNotifIso(data.fecha_aprobacion_sistema)}
                   </dd>
                 </div>
                 <div className="flex justify-between gap-2">
-                  <dt className="text-muted-foreground">Fecha requerimiento (BD)</dt>
+                  <dt className="text-muted-foreground">
+                    Fecha requerimiento (BD)
+                  </dt>
                   <dd className="font-medium tabular-nums">
                     {fmtFechaNotifIso(data.fecha_requerimiento_prestamo)}
                   </dd>
                 </div>
                 <div className="flex justify-between gap-2">
-                  <dt className="text-muted-foreground">Diferencia (Q − aprobación, días)</dt>
+                  <dt className="text-muted-foreground">
+                    Diferencia (Q − aprobación, días)
+                  </dt>
                   <dd
                     className={`font-semibold tabular-nums ${
-                      data.coincide_aproximado ? 'text-green-700' : 'text-amber-800'
+                      data.coincide_aproximado
+                        ? 'text-green-700'
+                        : 'text-amber-800'
                     }`}
                   >
                     {fmtDiferenciaDiasNotif(data.diferencia_dias)}
@@ -1375,12 +1493,16 @@ export function CompararFechaEntregaQAprobacionCell({ row }: { row: ClienteRetra
               </dl>
               <p className="text-xs text-muted-foreground">
                 Filas de la hoja que corresponden a este préstamo:{' '}
-                <span className="font-medium text-foreground">{data.filas_hoja_coincidentes}</span>
+                <span className="font-medium text-foreground">
+                  {data.filas_hoja_coincidentes}
+                </span>
                 {data.filas_misma_cedula_hoja != null ? (
                   <>
                     {' '}
                     · Filas con la misma cédula en la hoja (todas):{' '}
-                    <span className="font-medium text-foreground">{data.filas_misma_cedula_hoja}</span>
+                    <span className="font-medium text-foreground">
+                      {data.filas_misma_cedula_hoja}
+                    </span>
                   </>
                 ) : null}
                 {data.hoja_synced_at ? (
@@ -1395,18 +1517,24 @@ export function CompararFechaEntregaQAprobacionCell({ row }: { row: ClienteRetra
                   </>
                 ) : null}
               </p>
-              {data.columna_cedula_detectada || data.columna_q_letra || data.columna_lote_detectada ? (
+              {data.columna_cedula_detectada ||
+              data.columna_q_letra ||
+              data.columna_lote_detectada ? (
                 <p className="text-xs text-muted-foreground">
                   Columnas detectadas:{' '}
                   <span className="font-mono text-foreground">
                     {data.columna_cedula_detectada ?? '-'}
                   </span>
                   {' · '}
-                  <span className="font-mono text-foreground">{colQEtiqueta}</span>
+                  <span className="font-mono text-foreground">
+                    {colQEtiqueta}
+                  </span>
                   {data.columna_lote_detectada ? (
                     <>
                       {' · '}
-                      <span className="font-mono text-foreground">{data.columna_lote_detectada}</span>
+                      <span className="font-mono text-foreground">
+                        {data.columna_lote_detectada}
+                      </span>
                     </>
                   ) : null}
                   {data.rango_columnas_hoja ? (
@@ -1414,7 +1542,10 @@ export function CompararFechaEntregaQAprobacionCell({ row }: { row: ClienteRetra
                       {' '}
                       <span className="text-muted-foreground">
                         (rango hoja {data.rango_columnas_hoja}
-                        {data.columna_q_dentro_rango === false ? '; Q fuera de rango' : ''})
+                        {data.columna_q_dentro_rango === false
+                          ? '; Q fuera de rango'
+                          : ''}
+                        )
                       </span>
                     </>
                   ) : null}
@@ -1429,13 +1560,13 @@ export function CompararFechaEntregaQAprobacionCell({ row }: { row: ClienteRetra
               ) : null}
               {data.coincide_aproximado ? (
                 <p className="text-xs font-medium text-green-700">
-                  Coinciden (misma fecha en calendario; tolerancia ±{data.tolerancia_dias ?? 0}{' '}
-                  día(s)).
+                  Coinciden (misma fecha en calendario; tolerancia ±
+                  {data.tolerancia_dias ?? 0} día(s)).
                 </p>
               ) : data.diferencia_dias != null ? (
                 <p className="text-xs text-amber-900">
-                  Hay diferencia de días entre la hoja y la fecha de aprobación en BD. Revise la sync
-                  de la hoja o el registro del préstamo.
+                  Hay diferencia de días entre la hoja y la fecha de aprobación
+                  en BD. Revise la sync de la hoja o el registro del préstamo.
                 </p>
               ) : null}
               {!esAdmin && puedeOperar ? (
@@ -1470,7 +1601,11 @@ export function CompararFechaEntregaQAprobacionCell({ row }: { row: ClienteRetra
                 </Button>
               </>
             ) : (
-              <Button type="button" variant="outline" onClick={() => onDialogFechaOpenChange(false)}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => onDialogFechaOpenChange(false)}
+              >
                 Cerrar
               </Button>
             )}

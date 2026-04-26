@@ -71,7 +71,10 @@ export function gmailRunSummaryHeadline(rs: GmailRunSummary): string {
   if (typeof rs.pagos_invalidos_pendientes_revision === 'number') {
     partes.push(`Pendientes: ${rs.pagos_invalidos_pendientes_revision}`)
   }
-  if (typeof rs.pagos_sin_aplicacion_cuotas === 'number' && rs.pagos_sin_aplicacion_cuotas > 0) {
+  if (
+    typeof rs.pagos_sin_aplicacion_cuotas === 'number' &&
+    rs.pagos_sin_aplicacion_cuotas > 0
+  ) {
     partes.push(`Sin cuotas: ${rs.pagos_sin_aplicacion_cuotas}`)
   }
   if (typeof rs.comprobantes_digitados === 'number') {
@@ -79,9 +82,13 @@ export function gmailRunSummaryHeadline(rs: GmailRunSummary): string {
   }
 
   const pass2Total =
-    typeof rs.gemini_second_pass_total === 'number' ? rs.gemini_second_pass_total : null
+    typeof rs.gemini_second_pass_total === 'number'
+      ? rs.gemini_second_pass_total
+      : null
   const pass2Hits =
-    typeof rs.gemini_second_pass_hits === 'number' ? rs.gemini_second_pass_hits : null
+    typeof rs.gemini_second_pass_hits === 'number'
+      ? rs.gemini_second_pass_hits
+      : null
   if (pass2Total !== null && pass2Hits !== null && pass2Total > 0) {
     partes.push(`2ª pasada: ${pass2Hits}/${pass2Total}`)
   }
@@ -127,35 +134,51 @@ export function gmailRunSummaryLines(rs: GmailRunSummary): string[] {
   }
 
   if (typeof rs.comprobantes_digitados === 'number') {
-    lines.push(`Comprobantes digitalizados (sync_item): ${rs.comprobantes_digitados}`)
+    lines.push(
+      `Comprobantes digitalizados (sync_item): ${rs.comprobantes_digitados}`
+    )
   }
   if (typeof rs.pagos_validos_alta_automatica === 'number') {
-    lines.push(`Pagos válidos (alta automática / CUOTAS_OK): ${rs.pagos_validos_alta_automatica}`)
+    lines.push(
+      `Pagos válidos (alta automática / CUOTAS_OK): ${rs.pagos_validos_alta_automatica}`
+    )
   }
   if (typeof rs.pagos_sin_aplicacion_cuotas === 'number') {
-    lines.push(`Pagos sin aplicación a cuotas: ${rs.pagos_sin_aplicacion_cuotas}`)
+    lines.push(
+      `Pagos sin aplicación a cuotas: ${rs.pagos_sin_aplicacion_cuotas}`
+    )
   }
   if (typeof rs.pagos_invalidos_pendientes_revision === 'number') {
-    lines.push(`Pagos no válidos / pendientes revisión: ${rs.pagos_invalidos_pendientes_revision}`)
+    lines.push(
+      `Pagos no válidos / pendientes revisión: ${rs.pagos_invalidos_pendientes_revision}`
+    )
   }
 
   if (typeof rs.gemini_model === 'string' && rs.gemini_model.trim()) {
     lines.push(`Modelo Gemini: ${rs.gemini_model}`)
   }
-  const calls = typeof rs.gemini_calls_total === 'number' ? rs.gemini_calls_total : null
-  const msTotal = typeof rs.gemini_ms_total === 'number' ? rs.gemini_ms_total : null
+  const calls =
+    typeof rs.gemini_calls_total === 'number' ? rs.gemini_calls_total : null
+  const msTotal =
+    typeof rs.gemini_ms_total === 'number' ? rs.gemini_ms_total : null
   const msAvg = typeof rs.gemini_ms_avg === 'number' ? rs.gemini_ms_avg : null
   const msMax = typeof rs.gemini_ms_max === 'number' ? rs.gemini_ms_max : null
   if (calls !== null && msTotal !== null) {
     const avgTxt = msAvg !== null ? `; avg ${Math.round(msAvg)} ms` : ''
     const maxTxt = msMax !== null ? `; max ${Math.round(msMax)} ms` : ''
-    lines.push(`Gemini: ${calls} llamada(s), ${Math.round(msTotal)} ms total${avgTxt}${maxTxt}`)
+    lines.push(
+      `Gemini: ${calls} llamada(s), ${Math.round(msTotal)} ms total${avgTxt}${maxTxt}`
+    )
   }
 
   const pass2Total =
-    typeof rs.gemini_second_pass_total === 'number' ? rs.gemini_second_pass_total : null
+    typeof rs.gemini_second_pass_total === 'number'
+      ? rs.gemini_second_pass_total
+      : null
   const pass2Hits =
-    typeof rs.gemini_second_pass_hits === 'number' ? rs.gemini_second_pass_hits : null
+    typeof rs.gemini_second_pass_hits === 'number'
+      ? rs.gemini_second_pass_hits
+      : null
   if (pass2Total !== null && pass2Hits !== null && pass2Total > 0) {
     lines.push(`Rescate 2ª pasada: ${pass2Hits}/${pass2Total}`)
   }
@@ -181,19 +204,25 @@ export function gmailRunSummaryLines(rs: GmailRunSummary): string[] {
         .slice(0, 8)
     : []
   if (hintEntries.length > 0) {
-    lines.push(`Top pistas (ninguno): ${hintEntries.map(([k, v]) => `${k}=${v}`).join(', ')}`)
+    lines.push(
+      `Top pistas (ninguno): ${hintEntries.map(([k, v]) => `${k}=${v}`).join(', ')}`
+    )
   }
 
   return lines
 }
 
-export function diagnosticoIdentificacionDesdeRunSummary(rs: GmailRunSummary): string {
+export function diagnosticoIdentificacionDesdeRunSummary(
+  rs: GmailRunSummary
+): string {
   const pass2Total =
     typeof rs.gemini_second_pass_total === 'number'
       ? rs.gemini_second_pass_total
       : null
   const pass2Hits =
-    typeof rs.gemini_second_pass_hits === 'number' ? rs.gemini_second_pass_hits : null
+    typeof rs.gemini_second_pass_hits === 'number'
+      ? rs.gemini_second_pass_hits
+      : null
   const reasons = rs.none_reason_counts
   const reasonEntries = reasons
     ? Object.entries(reasons)
@@ -203,9 +232,7 @@ export function diagnosticoIdentificacionDesdeRunSummary(rs: GmailRunSummary): s
     : []
   const reasonTxt =
     reasonEntries.length > 0
-      ? ` Top fallas: ${reasonEntries
-          .map(([k, v]) => `${k}=${v}`)
-          .join(', ')}.`
+      ? ` Top fallas: ${reasonEntries.map(([k, v]) => `${k}=${v}`).join(', ')}.`
       : ''
   const passTxt =
     pass2Total !== null && pass2Hits !== null
@@ -259,8 +286,7 @@ function mensajeSinCorreosNiFilas(scan: GmailScanFilter): string {
     'No hubo correos que cumplieran la búsqueda del pipeline (p. ej. imagen/PDF que aplique) o ninguno generó filas en esta pasada (p. ej. varias piezas en el hilo, PDF multipágina, remitente sin coincidencia en clientes).'
 
   const porFiltro: Record<GmailScanFilter, string> = {
-    all:
-      ' Filtro: toda la bandeja (leídos y no leídos). Revise Gmail y las etiquetas del flujo.',
+    all: ' Filtro: toda la bandeja (leídos y no leídos). Revise Gmail y las etiquetas del flujo.',
     unread: ' Filtro: solo no leídos. Revise Gmail y las etiquetas del flujo.',
     read: ' Filtro: solo leídos. Revise Gmail y las etiquetas del flujo.',
     pending_identification:
@@ -289,7 +315,7 @@ function detalleCausaSinFilas(s: GmailStatus): string {
   }
 
   if (raw.list_error === true) {
-    return ' Motivo: falló la API de Gmail al listar correos (no significa “bandeja vacía”); revise credenciales, cuotas y el mensaje de error arriba.'
+    return ' Motivo: falló la API de Gmail al listar correos (no significa "bandeja vacía"); revise credenciales, cuotas y el mensaje de error arriba.'
   }
 
   if (listed === 0) {
@@ -333,7 +359,9 @@ function textoNotificacionFinProcesamientoGmail(s: GmailStatus): string | null {
   const validos = rs.pagos_validos_alta_automatica
   const invalidos = rs.pagos_invalidos_pendientes_revision
   const comp =
-    typeof rs.comprobantes_digitados === 'number' ? rs.comprobantes_digitados : null
+    typeof rs.comprobantes_digitados === 'number'
+      ? rs.comprobantes_digitados
+      : null
   const compTxt = comp !== null ? ` Comprobantes digitalizados: ${comp}.` : ''
   return (
     `Procesamiento terminado. Se procesaron ${correos} correo(s).` +
@@ -405,9 +433,12 @@ export function useGmailPipeline({
               const resumenErr = textoNotificacionFinProcesamientoGmail(s)
               const sufijoResumen = resumenErr ? `\n${resumenErr}` : ''
 
-              toast.error(`Error al procesar correos.${errDetail}${sufijoResumen}`, {
-                duration: 14000,
-              })
+              toast.error(
+                `Error al procesar correos.${errDetail}${sufijoResumen}`,
+                {
+                  duration: 14000,
+                }
+              )
 
               // No abrir diálogo de descarga en caso de error
             } else if (emails === 0 && files === 0) {
@@ -478,7 +509,9 @@ export function useGmailPipeline({
           _pollStatus(attempt + 1)
         } catch {
           fetchErrorStreakRef.current += 1
-          if (fetchErrorStreakRef.current >= POLL_MAX_CONSECUTIVE_FETCH_ERRORS) {
+          if (
+            fetchErrorStreakRef.current >= POLL_MAX_CONSECUTIVE_FETCH_ERRORS
+          ) {
             setLoading(false)
             toast.error(
               'No se pudo consultar el estado del pipeline Gmail (varios intentos fallidos). ' +

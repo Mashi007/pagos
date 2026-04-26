@@ -143,7 +143,10 @@ import {
   toastResultadoEnvioNotificaciones,
 } from './notificaciones/notificacionesPage.toasts'
 
-export type { NotificacionesModulo, TabId } from './notificaciones/notificacionesPage.tabs'
+export type {
+  NotificacionesModulo,
+  TabId,
+} from './notificaciones/notificacionesPage.tabs'
 
 type NotificacionesProps = {
   modulo?: NotificacionesModulo
@@ -259,10 +262,9 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
       (modulo === 'a1dia' && t === 'd2antes') ||
       (modulo === 'a10dias' &&
         (t === 'dias_1_atraso' || t === 'prejudicial' || t === 'd2antes')) ||
-      (modulo === 'd2antes' && (t === 'dias_1_atraso' || t === 'prejudicial')) ||
-      (esListaCombinadaMoras &&
-        t !== 'general_todos' &&
-        Boolean(t)) ||
+      (modulo === 'd2antes' &&
+        (t === 'dias_1_atraso' || t === 'prejudicial')) ||
+      (esListaCombinadaMoras && t !== 'general_todos' && Boolean(t)) ||
       (esListaCombinadaMoras && t === 'configuracion')
     ) {
       setSearchParams(
@@ -482,8 +484,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
   const [ackEnvioConListaVacia, setAckEnvioConListaVacia] = useState(false)
 
   /** Confirmación antes de programar el refresh masivo de caché ABONOS vs cuotas (solo General). */
-  const [confirmAbonosMasivoOpen, setConfirmAbonosMasivoOpen] =
-    useState(false)
+  const [confirmAbonosMasivoOpen, setConfirmAbonosMasivoOpen] = useState(false)
   const [confirmSyncAbonosOpen, setConfirmSyncAbonosOpen] = useState(false)
   const [syncPreviewLoading, setSyncPreviewLoading] = useState(false)
   const [syncPreviewData, setSyncPreviewData] =
@@ -676,10 +677,11 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
   const handleSincronizarAbonosDriveAuto = async () => {
     setSincronizandoAbonosDriveAuto(true)
     try {
-      const res = await notificacionService.postSincronizarAbonosDriveCuotasMasivo({
-        dry_run: false,
-        aplicar_montos_altos: false,
-      })
+      const res =
+        await notificacionService.postSincronizarAbonosDriveCuotasMasivo({
+          dry_run: false,
+          aplicar_montos_altos: false,
+        })
       const r = res.resumen
       toast.success(
         `Sincronización ABONOS completada. Evaluados: ${r.total_evaluados}. Aplicados: ${r.aplicados}. Omitidos por lote: ${r.omitidos_requiere_lote}. Omitidos por monto alto: ${r.omitidos_monto_alto}. Errores: ${r.errores}.`
@@ -721,12 +723,11 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
     setSyncPreviewLoading(true)
     setSyncPreviewData(null)
     try {
-      const res = await notificacionService.postSincronizarAbonosDriveCuotasMasivo(
-        {
+      const res =
+        await notificacionService.postSincronizarAbonosDriveCuotasMasivo({
           dry_run: true,
           aplicar_montos_altos: false,
-        }
-      )
+        })
       setSyncPreviewData(res)
     } catch (e) {
       toast.error(
@@ -1242,14 +1243,13 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
     setSortDir('desc')
   }
 
-  const isLoadingLista =
-    esListaCombinadaMoras
-      ? isPending || isPendingPrej || isPendingD2
-      : modulo === 'a1dia' || modulo === 'a10dias'
-        ? isPending
-        : modulo === 'a3cuotas'
-          ? isPendingPrej
-          : isPendingD2
+  const isLoadingLista = esListaCombinadaMoras
+    ? isPending || isPendingPrej || isPendingD2
+    : modulo === 'a1dia' || modulo === 'a10dias'
+      ? isPending
+      : modulo === 'a3cuotas'
+        ? isPendingPrej
+        : isPendingD2
 
   /**
    * No deshabilitar «Enviar notificaciones (manual)» durante refetch en segundo plano
@@ -1271,54 +1271,49 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
       !isErrorPrej) ||
     (modulo === 'd2antes' && isPendingD2 && !isFetchedD2 && !isErrorD2)
 
-  const isErrorLista =
-    esListaCombinadaMoras
-      ? isError && isErrorPrej && isErrorD2
-      : modulo === 'a1dia' || modulo === 'a10dias'
-        ? isError
-        : modulo === 'a3cuotas'
-          ? isErrorPrej
-          : isErrorD2
+  const isErrorLista = esListaCombinadaMoras
+    ? isError && isErrorPrej && isErrorD2
+    : modulo === 'a1dia' || modulo === 'a10dias'
+      ? isError
+      : modulo === 'a3cuotas'
+        ? isErrorPrej
+        : isErrorD2
 
-  const errorLista =
-    esListaCombinadaMoras
-      ? error ?? errorPrej ?? errorD2
-      : modulo === 'a1dia' || modulo === 'a10dias'
-        ? error
-        : modulo === 'a3cuotas'
-          ? errorPrej
-          : errorD2
+  const errorLista = esListaCombinadaMoras
+    ? (error ?? errorPrej ?? errorD2)
+    : modulo === 'a1dia' || modulo === 'a10dias'
+      ? error
+      : modulo === 'a3cuotas'
+        ? errorPrej
+        : errorD2
 
-  const refetchLista =
-    esListaCombinadaMoras
-      ? () => {
-          void Promise.all([refetch(), refetchPrej(), refetchD2()])
-        }
-      : modulo === 'a1dia' || modulo === 'a10dias'
-        ? refetch
-        : modulo === 'a3cuotas'
-          ? refetchPrej
-          : refetchD2
+  const refetchLista = esListaCombinadaMoras
+    ? () => {
+        void Promise.all([refetch(), refetchPrej(), refetchD2()])
+      }
+    : modulo === 'a1dia' || modulo === 'a10dias'
+      ? refetch
+      : modulo === 'a3cuotas'
+        ? refetchPrej
+        : refetchD2
 
-  const isFetchingLista =
-    esListaCombinadaMoras
-      ? isFetching || isFetchingPrej || isFetchingD2
-      : modulo === 'a1dia' || modulo === 'a10dias'
-        ? isFetching
-        : modulo === 'a3cuotas'
-          ? isFetchingPrej
-          : isFetchingD2
+  const isFetchingLista = esListaCombinadaMoras
+    ? isFetching || isFetchingPrej || isFetchingD2
+    : modulo === 'a1dia' || modulo === 'a10dias'
+      ? isFetching
+      : modulo === 'a3cuotas'
+        ? isFetchingPrej
+        : isFetchingD2
 
-  const isFetchedLista =
-    esListaCombinadaMoras
-      ? (isFetched || isError) &&
-        (isFetchedPrej || isErrorPrej) &&
-        (isFetchedD2 || isErrorD2)
-      : modulo === 'a1dia' || modulo === 'a10dias'
-        ? isFetched
-        : modulo === 'a3cuotas'
-          ? isFetchedPrej
-          : isFetchedD2
+  const isFetchedLista = esListaCombinadaMoras
+    ? (isFetched || isError) &&
+      (isFetchedPrej || isErrorPrej) &&
+      (isFetchedD2 || isErrorD2)
+    : modulo === 'a1dia' || modulo === 'a10dias'
+      ? isFetched
+      : modulo === 'a3cuotas'
+        ? isFetchedPrej
+        : isFetchedD2
 
   const listaCargadaSinFilas =
     !isErrorLista && !isLoadingLista && isFetchedLista && list.length === 0
@@ -1443,16 +1438,16 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
           aria-labelledby={`notif-cfg-tab-${activeTab}`}
         >
           <ConfiguracionNotificaciones
-          alcance={
-            modulo === 'a1dia'
-              ? 'solo_pago_1_dia'
-              : modulo === 'd2antes'
-                ? 'solo_pago_2_dias_antes_pendiente'
-                : modulo === 'a10dias'
-                  ? 'solo_pago_10_dias_atrasado'
-                  : 'solo_prejudicial'
-          }
-        />
+            alcance={
+              modulo === 'a1dia'
+                ? 'solo_pago_1_dia'
+                : modulo === 'd2antes'
+                  ? 'solo_pago_2_dias_antes_pendiente'
+                  : modulo === 'a10dias'
+                    ? 'solo_pago_10_dias_atrasado'
+                    : 'solo_prejudicial'
+            }
+          />
         </div>
       </div>
     )
@@ -1508,9 +1503,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                   type="button"
                   variant="outline"
                   onClick={() => setConfirmAbonosMasivoOpen(true)}
-                  disabled={
-                    programandoRefreshAbonosDrive || actualizandoListas
-                  }
+                  disabled={programandoRefreshAbonosDrive || actualizandoListas}
                   title="Misma lógica que el job cada domingo 04:35 (America/Caracas): persiste comparación ABONOS (hoja) vs cuotas para préstamos activos. Corre en segundo plano; luego use Actualización manual."
                 >
                   <Database
@@ -1671,1149 +1664,1166 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-              {(() => {
-                const TabIcon = TABS.find(t => t.id === activeTab)?.icon
+                {(() => {
+                  const TabIcon = TABS.find(t => t.id === activeTab)?.icon
 
-                return TabIcon ? <TabIcon className="h-5 w-5" /> : null
-              })()}
-              {modulo === 'fecha'
-                ? 'Fechas — listas de mora (contexto) y Q vs aprobación'
-                : modulo === 'general'
-                  ? 'General'
-                  : modulo === 'a3cuotas'
-                    ? 'Cinco o más cuotas VENCIDO o MORA (prejudicial)'
-                    : modulo === 'd2antes'
-                      ? '2 días antes - PENDIENTE, vence en 2 días'
-                      : modulo === 'a10dias'
-                        ? '10 días de atraso (calendario desde vencimiento)'
-                        : 'Día siguiente al vencimiento (1 día de atraso calendario)'}
-            </CardTitle>
+                  return TabIcon ? <TabIcon className="h-5 w-5" /> : null
+                })()}
+                {modulo === 'fecha'
+                  ? 'Fechas - listas de mora (contexto) y Q vs aprobación'
+                  : modulo === 'general'
+                    ? 'General'
+                    : modulo === 'a3cuotas'
+                      ? 'Cinco o más cuotas VENCIDO o MORA (prejudicial)'
+                      : modulo === 'd2antes'
+                        ? '2 días antes - PENDIENTE, vence en 2 días'
+                        : modulo === 'a10dias'
+                          ? '10 días de atraso (calendario desde vencimiento)'
+                          : 'Día siguiente al vencimiento (1 día de atraso calendario)'}
+              </CardTitle>
 
-            <CardDescription>
-              {fechaCaracasApi ? (
-                <span className="mb-2 block font-medium text-amber-800">
-                  Referencia de listado y envío: {fechaCaracasApi}{' '}
-                  (America/Caracas). Use «Hoy» arriba para volver al día actual.
-                </span>
-              ) : null}
-              {modulo === 'fecha'
-                ? 'Tabla reducida a fechas: sin Nº cuota, vencimiento, mora numérica ni montos. «Diferencia fecha» = días (Q − aprobación en BD). Abajo: búsqueda por día de aprobación (antes «Fechas 2»).'
-                : modulo === 'general'
-                  ? 'Se concatenan las mismas filas que en los submenús «Día siguiente al vencimiento», «Prejudicial (5+ cuotas)» y «2 días antes». El listado por «10 días de atraso» (calendario) es otro submenú y no entra aquí. La columna «Caso» indica el criterio. Un mismo cliente puede aparecer más de una vez si cumple varios criterios. «Diferencia abono» lee caché en BD (domingo 04:35 Caracas o Recalcular arriba; también se actualiza al aplicar ABONOS desde la balanza).'
-                  : modulo === 'a3cuotas'
-                    ? 'Una fila por cliente con al menos cinco cuotas en estado VENCIDO o MORA (columna cuotas.estado). La cuota y fecha mostradas son referencia; «Cuotas atrasadas» es el número de esas cuotas que cumplen el criterio.'
-                    : modulo === 'd2antes'
-                      ? 'Solo filas con cuotas.estado = PENDIENTE y fecha_vencimiento = hoy + 2 (calendario Caracas), sin fecha_pago y con saldo pendiente. Se omiten préstamos con «Cuotas atrasadas» = 0 (al corriente en mora). «Cuotas atrasadas» sigue la misma regla que el estado de cuenta para el préstamo.'
-                      : modulo === 'a10dias'
-                        ? 'Una fila por cuota pendiente con fecha_vencimiento = fecha de referencia − 10 días (calendario), sin fecha_pago y con saldo pendiente; préstamo no liquidado ni desistimiento. Solo si el préstamo tiene entre 2 y 3 cuotas en mora (misma regla que la columna Cuotas atrasadas); con 1 o con 4 o más no entra. No incluye cuotas con otro número de días de atraso respecto de esa fecha.'
-                        : 'Cuotas cuya fecha de vencimiento fue ayer (hoy es el primer día después del vencimiento). La columna Cuotas atrasadas cuenta las cuotas en mora del préstamo con la misma regla que el estado de cuenta (Vencido, Mora, etc.).'}
-            </CardDescription>
-          </CardHeader>
+              <CardDescription>
+                {fechaCaracasApi ? (
+                  <span className="mb-2 block font-medium text-amber-800">
+                    Referencia de listado y envío: {fechaCaracasApi}{' '}
+                    (America/Caracas). Use «Hoy» arriba para volver al día
+                    actual.
+                  </span>
+                ) : null}
+                {modulo === 'fecha'
+                  ? 'Tabla reducida a fechas: sin Nº cuota, vencimiento, mora numérica ni montos. «Diferencia fecha» = días (Q − aprobación en BD). Abajo: búsqueda por día de aprobación (antes «Fechas 2»).'
+                  : modulo === 'general'
+                    ? 'Se concatenan las mismas filas que en los submenús «Día siguiente al vencimiento», «Prejudicial (5+ cuotas)» y «2 días antes». El listado por «10 días de atraso» (calendario) es otro submenú y no entra aquí. La columna «Caso» indica el criterio. Un mismo cliente puede aparecer más de una vez si cumple varios criterios. «Diferencia abono» lee caché en BD (domingo 04:35 Caracas o Recalcular arriba; también se actualiza al aplicar ABONOS desde la balanza).'
+                    : modulo === 'a3cuotas'
+                      ? 'Una fila por cliente con al menos cinco cuotas en estado VENCIDO o MORA (columna cuotas.estado). La cuota y fecha mostradas son referencia; «Cuotas atrasadas» es el número de esas cuotas que cumplen el criterio.'
+                      : modulo === 'd2antes'
+                        ? 'Solo filas con cuotas.estado = PENDIENTE y fecha_vencimiento = hoy + 2 (calendario Caracas), sin fecha_pago y con saldo pendiente. Se omiten préstamos con «Cuotas atrasadas» = 0 (al corriente en mora). «Cuotas atrasadas» sigue la misma regla que el estado de cuenta para el préstamo.'
+                        : modulo === 'a10dias'
+                          ? 'Una fila por cuota pendiente con fecha_vencimiento = fecha de referencia − 10 días (calendario), sin fecha_pago y con saldo pendiente; préstamo no liquidado ni desistimiento. Solo si el préstamo tiene entre 2 y 3 cuotas en mora (misma regla que la columna Cuotas atrasadas); con 1 o con 4 o más no entra. No incluye cuotas con otro número de días de atraso respecto de esa fecha.'
+                          : 'Cuotas cuya fecha de vencimiento fue ayer (hoy es el primer día después del vencimiento). La columna Cuotas atrasadas cuenta las cuotas en mora del préstamo con la misma regla que el estado de cuenta (Vencido, Mora, etc.).'}
+              </CardDescription>
+            </CardHeader>
 
-          <CardContent>
-            {modulo === 'general' ? (
-              <div className="mb-4 rounded-lg border border-sky-200 bg-sky-50/90 px-4 py-3 text-sm text-sky-950">
-                <p className="mb-1 font-semibold text-sky-950">
-                  Actualización masiva (solo dólares)
-                </p>
-                <p className="mb-3 text-xs leading-relaxed text-sky-900/95">
-                  Programa en el servidor el mismo recálculo masivo que el job
-                  semanal (domingo 04:35 America/Caracas): persiste la comparación
-                  ABONOS (hoja CONCILIACIÓN) frente al total pagado en cuotas en{' '}
-                  <code className="rounded bg-white/80 px-1 py-0.5 text-[11px]">
-                    prestamos.abonos_drive_cuotas_cache
-                  </code>{' '}
-                  para préstamos elegibles. No modifica fechas ni el caché de
-                  columna Q.
-                </p>
-                <Button
-                  type="button"
-                  size="sm"
-                  className="bg-sky-700 text-white hover:bg-sky-800"
-                  onClick={() => setConfirmAbonosMasivoOpen(true)}
-                  disabled={
-                    programandoRefreshAbonosDrive ||
-                    actualizandoListas ||
-                    enviandoPrejudicial ||
-                    enviandoD2Antes ||
-                    enviandoPago1Dia ||
-                    enviandoPago10Dias
-                  }
-                >
-                  <Database
-                    className={`mr-2 h-4 w-4 ${
-                      programandoRefreshAbonosDrive ? 'animate-pulse' : ''
-                    }`}
-                  />
-                  Ejecutar actualización masiva (ABONOS / USD)
-                </Button>
-              </div>
-            ) : null}
-
-            <div className="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-2">
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => void handleRefresh()}
-                disabled={
-                  actualizandoListas ||
-                  enviandoPrejudicial ||
-                  enviandoD2Antes ||
-                  enviandoPago1Dia ||
-                  enviandoPago10Dias
-                }
-              >
-                <RefreshCw
-                  className={`mr-2 h-4 w-4 ${actualizandoListas ? 'animate-spin' : ''}`}
-                />
-                Actualización manual
-              </Button>
-
+            <CardContent>
               {modulo === 'general' ? (
+                <div className="mb-4 rounded-lg border border-sky-200 bg-sky-50/90 px-4 py-3 text-sm text-sky-950">
+                  <p className="mb-1 font-semibold text-sky-950">
+                    Actualización masiva (solo dólares)
+                  </p>
+                  <p className="mb-3 text-xs leading-relaxed text-sky-900/95">
+                    Programa en el servidor el mismo recálculo masivo que el job
+                    semanal (domingo 04:35 America/Caracas): persiste la
+                    comparación ABONOS (hoja CONCILIACIÓN) frente al total
+                    pagado en cuotas en{' '}
+                    <code className="rounded bg-white/80 px-1 py-0.5 text-[11px]">
+                      prestamos.abonos_drive_cuotas_cache
+                    </code>{' '}
+                    para préstamos elegibles. No modifica fechas ni el caché de
+                    columna Q.
+                  </p>
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="bg-sky-700 text-white hover:bg-sky-800"
+                    onClick={() => setConfirmAbonosMasivoOpen(true)}
+                    disabled={
+                      programandoRefreshAbonosDrive ||
+                      actualizandoListas ||
+                      enviandoPrejudicial ||
+                      enviandoD2Antes ||
+                      enviandoPago1Dia ||
+                      enviandoPago10Dias
+                    }
+                  >
+                    <Database
+                      className={`mr-2 h-4 w-4 ${
+                        programandoRefreshAbonosDrive ? 'animate-pulse' : ''
+                      }`}
+                    />
+                    Ejecutar actualización masiva (ABONOS / USD)
+                  </Button>
+                </div>
+              ) : null}
+
+              <div className="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-2">
                 <Button
-                  type="button"
                   variant="secondary"
                   size="sm"
-                  onClick={() => void handleTraerHojaDesdeDriveAhora()}
+                  onClick={() => void handleRefresh()}
                   disabled={
-                    sincronizandoHojaDriveAhora ||
-                    programandoRefreshAbonosDrive ||
                     actualizandoListas ||
                     enviandoPrejudicial ||
                     enviandoD2Antes ||
                     enviandoPago1Dia ||
                     enviandoPago10Dias
                   }
-                  title="Trae snapshot CONCILIACIÓN desde Drive y luego programa recálculo de diferencia abono."
                 >
-                  <Download
-                    className={`mr-2 h-4 w-4 ${
-                      sincronizandoHojaDriveAhora ? 'animate-pulse' : ''
-                    }`}
+                  <RefreshCw
+                    className={`mr-2 h-4 w-4 ${actualizandoListas ? 'animate-spin' : ''}`}
                   />
-                  Traer hoja desde Drive ahora
+                  Actualización manual
                 </Button>
-              ) : null}
-              {modulo === 'general' ? (
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => setConfirmAbonosMasivoOpen(true)}
-                  disabled={
-                    programandoRefreshAbonosDrive ||
-                    actualizandoListas ||
-                    enviandoPrejudicial ||
-                    enviandoD2Antes ||
-                    enviandoPago1Dia ||
-                    enviandoPago10Dias
-                  }
-                  title="Job en servidor (segundo plano), igual que domingo 04:35 Caracas. Luego pulse Actualización manual."
-                >
-                  <Database
-                    className={`mr-2 h-4 w-4 ${
-                      programandoRefreshAbonosDrive ? 'animate-pulse' : ''
-                    }`}
-                  />
-                  Recalcular Diferencia abono
-                </Button>
-              ) : null}
-              {modulo === 'general' ? (
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => void abrirConfirmSyncAbonos()}
-                  disabled={
-                    sincronizandoAbonosDriveAuto ||
-                    programandoRefreshAbonosDrive ||
-                    actualizandoListas ||
-                    enviandoPrejudicial ||
-                    enviandoD2Antes ||
-                    enviandoPago1Dia ||
-                    enviandoPago10Dias
-                  }
-                  title="Aplica en lote diferencias positivas ABONOS (hoja) vs cuotas en BD."
-                >
-                  <Scale
-                    className={`mr-2 h-4 w-4 ${
-                      sincronizandoAbonosDriveAuto ? 'animate-pulse' : ''
-                    }`}
-                  />
-                  Sincronizar diferencias ABONOS
-                </Button>
-              ) : null}
 
-              {modulo === 'fecha' ? (
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => void handleRefreshFechaEntregaQCache()}
-                  disabled={
-                    programandoRefreshFechaQ ||
-                    actualizandoListas ||
-                    enviandoPrejudicial ||
-                    enviandoD2Antes ||
-                    enviandoPago1Dia ||
-                    enviandoPago10Dias
-                  }
-                  title="Job en servidor (segundo plano), igual que lunes/jueves 04:00 Caracas y tras sync Drive. Luego pulse Actualización manual."
-                >
-                  <Calendar
-                    className={`mr-2 h-4 w-4 ${
-                      programandoRefreshFechaQ ? 'animate-pulse' : ''
-                    }`}
-                  />
-                  Recalcular Diferencia fecha
-                </Button>
-              ) : null}
-              {modulo === 'fecha' ? (
-                <Button asChild type="button" size="sm" variant="outline">
-                  <Link to="/notificaciones/fecha">Vista Q vs fecha BD</Link>
-                </Button>
-              ) : null}
+                {modulo === 'general' ? (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => void handleTraerHojaDesdeDriveAhora()}
+                    disabled={
+                      sincronizandoHojaDriveAhora ||
+                      programandoRefreshAbonosDrive ||
+                      actualizandoListas ||
+                      enviandoPrejudicial ||
+                      enviandoD2Antes ||
+                      enviandoPago1Dia ||
+                      enviandoPago10Dias
+                    }
+                    title="Trae snapshot CONCILIACIÓN desde Drive y luego programa recálculo de diferencia abono."
+                  >
+                    <Download
+                      className={`mr-2 h-4 w-4 ${
+                        sincronizandoHojaDriveAhora ? 'animate-pulse' : ''
+                      }`}
+                    />
+                    Traer hoja desde Drive ahora
+                  </Button>
+                ) : null}
+                {modulo === 'general' ? (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => setConfirmAbonosMasivoOpen(true)}
+                    disabled={
+                      programandoRefreshAbonosDrive ||
+                      actualizandoListas ||
+                      enviandoPrejudicial ||
+                      enviandoD2Antes ||
+                      enviandoPago1Dia ||
+                      enviandoPago10Dias
+                    }
+                    title="Job en servidor (segundo plano), igual que domingo 04:35 Caracas. Luego pulse Actualización manual."
+                  >
+                    <Database
+                      className={`mr-2 h-4 w-4 ${
+                        programandoRefreshAbonosDrive ? 'animate-pulse' : ''
+                      }`}
+                    />
+                    Recalcular Diferencia abono
+                  </Button>
+                ) : null}
+                {modulo === 'general' ? (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => void abrirConfirmSyncAbonos()}
+                    disabled={
+                      sincronizandoAbonosDriveAuto ||
+                      programandoRefreshAbonosDrive ||
+                      actualizandoListas ||
+                      enviandoPrejudicial ||
+                      enviandoD2Antes ||
+                      enviandoPago1Dia ||
+                      enviandoPago10Dias
+                    }
+                    title="Aplica en lote diferencias positivas ABONOS (hoja) vs cuotas en BD."
+                  >
+                    <Scale
+                      className={`mr-2 h-4 w-4 ${
+                        sincronizandoAbonosDriveAuto ? 'animate-pulse' : ''
+                      }`}
+                    />
+                    Sincronizar diferencias ABONOS
+                  </Button>
+                ) : null}
 
-              {modulo === 'a1dia' && (
-                <Button
-                  type="button"
-                  size="sm"
-                  onClick={solicitarConfirmacionEnvioPago1Dia}
-                  disabled={enviandoPago1Dia || esperandoPrimeraCargaLista}
-                  title={
-                    esperandoPrimeraCargaLista
-                      ? 'Espere a que termine de cargar la lista (o revise si hay error arriba).'
-                      : undefined
-                  }
-                  className="bg-blue-600 text-white hover:bg-blue-700"
-                >
-                  <Mail
-                    className={`mr-2 h-4 w-4 ${enviandoPago1Dia ? 'animate-pulse' : ''}`}
-                  />
-                  {enviandoPago1Dia
-                    ? 'Enviando...'
-                    : 'Enviar notificaciones (manual)'}
-                </Button>
-              )}
+                {modulo === 'fecha' ? (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => void handleRefreshFechaEntregaQCache()}
+                    disabled={
+                      programandoRefreshFechaQ ||
+                      actualizandoListas ||
+                      enviandoPrejudicial ||
+                      enviandoD2Antes ||
+                      enviandoPago1Dia ||
+                      enviandoPago10Dias
+                    }
+                    title="Job en servidor (segundo plano), igual que lunes/jueves 04:00 Caracas y tras sync Drive. Luego pulse Actualización manual."
+                  >
+                    <Calendar
+                      className={`mr-2 h-4 w-4 ${
+                        programandoRefreshFechaQ ? 'animate-pulse' : ''
+                      }`}
+                    />
+                    Recalcular Diferencia fecha
+                  </Button>
+                ) : null}
+                {modulo === 'fecha' ? (
+                  <Button asChild type="button" size="sm" variant="outline">
+                    <Link to="/notificaciones/fecha">Vista Q vs fecha BD</Link>
+                  </Button>
+                ) : null}
 
-              {modulo === 'a10dias' && (
-                <Button
-                  type="button"
-                  size="sm"
-                  onClick={solicitarConfirmacionEnvioPago10Dias}
-                  disabled={enviandoPago10Dias || esperandoPrimeraCargaLista}
-                  title={
-                    esperandoPrimeraCargaLista
-                      ? 'Espere a que termine de cargar la lista (o revise si hay error arriba).'
-                      : undefined
-                  }
-                  className="bg-blue-600 text-white hover:bg-blue-700"
-                >
-                  <Mail
-                    className={`mr-2 h-4 w-4 ${enviandoPago10Dias ? 'animate-pulse' : ''}`}
-                  />
-                  {enviandoPago10Dias
-                    ? 'Enviando...'
-                    : 'Enviar notificaciones (manual)'}
-                </Button>
-              )}
+                {modulo === 'a1dia' && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={solicitarConfirmacionEnvioPago1Dia}
+                    disabled={enviandoPago1Dia || esperandoPrimeraCargaLista}
+                    title={
+                      esperandoPrimeraCargaLista
+                        ? 'Espere a que termine de cargar la lista (o revise si hay error arriba).'
+                        : undefined
+                    }
+                    className="bg-blue-600 text-white hover:bg-blue-700"
+                  >
+                    <Mail
+                      className={`mr-2 h-4 w-4 ${enviandoPago1Dia ? 'animate-pulse' : ''}`}
+                    />
+                    {enviandoPago1Dia
+                      ? 'Enviando...'
+                      : 'Enviar notificaciones (manual)'}
+                  </Button>
+                )}
 
-              {modulo === 'a3cuotas' && (
-                <Button
-                  type="button"
-                  size="sm"
-                  onClick={solicitarConfirmacionEnvioPrejudicial}
-                  disabled={enviandoPrejudicial || esperandoPrimeraCargaLista}
-                  title={
-                    esperandoPrimeraCargaLista
-                      ? 'Espere a que termine de cargar la lista (o revise si hay error arriba).'
-                      : undefined
-                  }
-                  className="bg-blue-600 text-white hover:bg-blue-700"
-                >
-                  <Mail
-                    className={`mr-2 h-4 w-4 ${enviandoPrejudicial ? 'animate-pulse' : ''}`}
-                  />
-                  {enviandoPrejudicial
-                    ? 'Enviando...'
-                    : 'Enviar notificaciones (manual)'}
-                </Button>
-              )}
+                {modulo === 'a10dias' && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={solicitarConfirmacionEnvioPago10Dias}
+                    disabled={enviandoPago10Dias || esperandoPrimeraCargaLista}
+                    title={
+                      esperandoPrimeraCargaLista
+                        ? 'Espere a que termine de cargar la lista (o revise si hay error arriba).'
+                        : undefined
+                    }
+                    className="bg-blue-600 text-white hover:bg-blue-700"
+                  >
+                    <Mail
+                      className={`mr-2 h-4 w-4 ${enviandoPago10Dias ? 'animate-pulse' : ''}`}
+                    />
+                    {enviandoPago10Dias
+                      ? 'Enviando...'
+                      : 'Enviar notificaciones (manual)'}
+                  </Button>
+                )}
 
-              {modulo === 'd2antes' && (
-                <Button
-                  type="button"
-                  size="sm"
-                  onClick={solicitarConfirmacionEnvioD2Antes}
-                  disabled={enviandoD2Antes || esperandoPrimeraCargaLista}
-                  title={
-                    esperandoPrimeraCargaLista
-                      ? 'Espere a que termine de cargar la lista (o revise si hay error arriba).'
-                      : undefined
-                  }
-                  className="bg-blue-600 text-white hover:bg-blue-700"
-                >
-                  <Mail
-                    className={`mr-2 h-4 w-4 ${enviandoD2Antes ? 'animate-pulse' : ''}`}
-                  />
-                  {enviandoD2Antes
-                    ? 'Enviando...'
-                    : 'Enviar notificaciones (manual)'}
-                </Button>
-              )}
+                {modulo === 'a3cuotas' && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={solicitarConfirmacionEnvioPrejudicial}
+                    disabled={enviandoPrejudicial || esperandoPrimeraCargaLista}
+                    title={
+                      esperandoPrimeraCargaLista
+                        ? 'Espere a que termine de cargar la lista (o revise si hay error arriba).'
+                        : undefined
+                    }
+                    className="bg-blue-600 text-white hover:bg-blue-700"
+                  >
+                    <Mail
+                      className={`mr-2 h-4 w-4 ${enviandoPrejudicial ? 'animate-pulse' : ''}`}
+                    />
+                    {enviandoPrejudicial
+                      ? 'Enviando...'
+                      : 'Enviar notificaciones (manual)'}
+                  </Button>
+                )}
 
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="border-red-400 text-red-800 hover:bg-red-50"
-                disabled={!hayOperacionListaEnCurso}
-                onClick={cancelarOperacionListaEmergencia}
-                title="Emergencia: corta actualización o envío ya en curso. No sustituye al modal de confirmación: use «Enviar correos» en la ventana que se abre al pulsar enviar."
-              >
-                <X className="mr-2 h-4 w-4" />
-                Cancelar
-              </Button>
-            </div>
+                {modulo === 'd2antes' && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={solicitarConfirmacionEnvioD2Antes}
+                    disabled={enviandoD2Antes || esperandoPrimeraCargaLista}
+                    title={
+                      esperandoPrimeraCargaLista
+                        ? 'Espere a que termine de cargar la lista (o revise si hay error arriba).'
+                        : undefined
+                    }
+                    className="bg-blue-600 text-white hover:bg-blue-700"
+                  >
+                    <Mail
+                      className={`mr-2 h-4 w-4 ${enviandoD2Antes ? 'animate-pulse' : ''}`}
+                    />
+                    {enviandoD2Antes
+                      ? 'Enviando...'
+                      : 'Enviar notificaciones (manual)'}
+                  </Button>
+                )}
 
-            {pausarAutoRefetchNotificaciones ? (
-              <div className="mb-4 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-                Refresco automático pausado por operación en curso. Se reanuda al finalizar.
-              </div>
-            ) : null}
-
-            <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end">
-              <div className="flex min-w-[12rem] max-w-md flex-1 flex-col gap-1">
-                <label
-                  htmlFor="filtro-cedula-notificaciones"
-                  className="text-xs font-medium text-gray-600"
-                >
-                  Filtrar por cédula
-                </label>
-                <Input
-                  id="filtro-cedula-notificaciones"
-                  type="search"
-                  placeholder="Contiene (ej. 17579297 o V-17579297)"
-                  value={filtroCedula}
-                  onChange={e => setFiltroCedula(e.target.value)}
-                  autoComplete="off"
-                  className="h-9 max-w-md bg-white"
-                  disabled={isLoadingLista}
-                />
-              </div>
-              {filtroCedula.trim() ? (
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
-                  className="h-9 shrink-0"
-                  onClick={() => setFiltroCedula('')}
+                  className="border-red-400 text-red-800 hover:bg-red-50"
+                  disabled={!hayOperacionListaEnCurso}
+                  onClick={cancelarOperacionListaEmergencia}
+                  title="Emergencia: corta actualización o envío ya en curso. No sustituye al modal de confirmación: use «Enviar correos» en la ventana que se abre al pulsar enviar."
                 >
-                  Limpiar filtro
+                  <X className="mr-2 h-4 w-4" />
+                  Cancelar
                 </Button>
-              ) : null}
-              {modulo === 'general' ? (
-                <div className="flex min-w-[14rem] max-w-md flex-col gap-1">
-                  <label
-                    htmlFor="filtro-dif-abono-general"
-                    className="text-xs font-medium text-gray-600"
-                  >
-                    Diferencia Abono (hoja − cuotas)
-                  </label>
-                  <select
-                    id="filtro-dif-abono-general"
-                    className="h-9 rounded-md border border-input bg-white px-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-                    value={filtroDiferenciaAbonoGeneral}
-                    onChange={e =>
-                      setFiltroDiferenciaAbonoGeneral(
-                        e.target.value as FiltroDiferenciaAbonoGeneral
-                      )
-                    }
-                    disabled={isLoadingLista}
-                    title="Cero = coincide con tolerancia del modal. Mayor a cero = diferencia (hoja − cuotas) estrictamente mayor que la tolerancia (mismo umbral que «Sí» en el modal). Menor a cero = diferencia menor que −tolerancia. El listado usa caché en BD: si el modal en vivo no coincide, resincronice o recalcule."
-                  >
-                    <option value="todas">Todas</option>
-                    <option value="cero">Cero (sin diferencia; tolerancia como en el modal)</option>
-                    <option value="drive_mayor">
-                      Mayor a cero (diferencia &gt; tolerancia; Drive por encima del total en cuotas)
-                    </option>
-                    <option value="drive_menor">
-                      Menor a cero (Drive &lt; sistema; más pagado en cuotas que en la hoja)
-                    </option>
-                  </select>
+              </div>
+
+              {pausarAutoRefetchNotificaciones ? (
+                <div className="mb-4 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                  Refresco automático pausado por operación en curso. Se reanuda
+                  al finalizar.
                 </div>
               ) : null}
-              {modulo === 'fecha' ? (
-                <div className="flex min-w-[14rem] max-w-md flex-col gap-1">
+
+              <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end">
+                <div className="flex min-w-[12rem] max-w-md flex-1 flex-col gap-1">
                   <label
-                    htmlFor="filtro-dif-fecha-general"
+                    htmlFor="filtro-cedula-notificaciones"
                     className="text-xs font-medium text-gray-600"
                   >
-                    Diferencia fecha (Q − aprobación)
+                    Filtrar por cédula
                   </label>
-                  <select
-                    id="filtro-dif-fecha-general"
-                    className="h-9 rounded-md border border-input bg-white px-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-                    value={filtroDiferenciaFechaGeneral}
-                    onChange={e =>
-                      setFiltroDiferenciaFechaGeneral(
-                        e.target.value as FiltroDiferenciaFechaGeneral
-                      )
-                    }
+                  <Input
+                    id="filtro-cedula-notificaciones"
+                    type="search"
+                    placeholder="Contiene (ej. 17579297 o V-17579297)"
+                    value={filtroCedula}
+                    onChange={e => setFiltroCedula(e.target.value)}
+                    autoComplete="off"
+                    className="h-9 max-w-md bg-white"
                     disabled={isLoadingLista}
-                    title="Filtros por diferencia en días (Q − aprobación en BD), usando la caché por préstamo. «Q anterior corregible» = días negativos pero se puede aplicar columna Q (p. ej. aprobación errónea en BD)."
-                  >
-                    <option value="todas">Todas</option>
-                    <option value="cero">
-                      Igual a 0 (misma fecha calendario; tolerancia como en el modal)
-                    </option>
-                    <option value="mayor_cero">
-                      Mayor que cero (Q posterior a la BD e indicador Sí: se puede aplicar)
-                    </option>
-                    <option value="q_anterior_corregible">
-                      Q anterior corregible (días &lt; 0 e indicador Sí: alinear BD con Q)
-                    </option>
-                    <option value="menor_cero">
-                      Q anterior sin indicador «Sí» (p. ej. sin caché o Q no interpretable)
-                    </option>
-                  </select>
+                  />
                 </div>
-              ) : null}
-              {filtroCedula.trim() &&
-              list.length > 0 &&
-              !(
+                {filtroCedula.trim() ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-9 shrink-0"
+                    onClick={() => setFiltroCedula('')}
+                  >
+                    Limpiar filtro
+                  </Button>
+                ) : null}
+                {modulo === 'general' ? (
+                  <div className="flex min-w-[14rem] max-w-md flex-col gap-1">
+                    <label
+                      htmlFor="filtro-dif-abono-general"
+                      className="text-xs font-medium text-gray-600"
+                    >
+                      Diferencia Abono (hoja − cuotas)
+                    </label>
+                    <select
+                      id="filtro-dif-abono-general"
+                      className="h-9 rounded-md border border-input bg-white px-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                      value={filtroDiferenciaAbonoGeneral}
+                      onChange={e =>
+                        setFiltroDiferenciaAbonoGeneral(
+                          e.target.value as FiltroDiferenciaAbonoGeneral
+                        )
+                      }
+                      disabled={isLoadingLista}
+                      title="Cero = coincide con tolerancia del modal. Mayor a cero = diferencia (hoja − cuotas) estrictamente mayor que la tolerancia (mismo umbral que «Sí» en el modal). Menor a cero = diferencia menor que −tolerancia. El listado usa caché en BD: si el modal en vivo no coincide, resincronice o recalcule."
+                    >
+                      <option value="todas">Todas</option>
+                      <option value="cero">
+                        Cero (sin diferencia; tolerancia como en el modal)
+                      </option>
+                      <option value="drive_mayor">
+                        Mayor a cero (diferencia &gt; tolerancia; Drive por
+                        encima del total en cuotas)
+                      </option>
+                      <option value="drive_menor">
+                        Menor a cero (Drive &lt; sistema; más pagado en cuotas
+                        que en la hoja)
+                      </option>
+                    </select>
+                  </div>
+                ) : null}
+                {modulo === 'fecha' ? (
+                  <div className="flex min-w-[14rem] max-w-md flex-col gap-1">
+                    <label
+                      htmlFor="filtro-dif-fecha-general"
+                      className="text-xs font-medium text-gray-600"
+                    >
+                      Diferencia fecha (Q − aprobación)
+                    </label>
+                    <select
+                      id="filtro-dif-fecha-general"
+                      className="h-9 rounded-md border border-input bg-white px-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                      value={filtroDiferenciaFechaGeneral}
+                      onChange={e =>
+                        setFiltroDiferenciaFechaGeneral(
+                          e.target.value as FiltroDiferenciaFechaGeneral
+                        )
+                      }
+                      disabled={isLoadingLista}
+                      title="Filtros por diferencia en días (Q − aprobación en BD), usando la caché por préstamo. «Q anterior corregible» = días negativos pero se puede aplicar columna Q (p. ej. aprobación errónea en BD)."
+                    >
+                      <option value="todas">Todas</option>
+                      <option value="cero">
+                        Igual a 0 (misma fecha calendario; tolerancia como en el
+                        modal)
+                      </option>
+                      <option value="mayor_cero">
+                        Mayor que cero (Q posterior a la BD e indicador Sí: se
+                        puede aplicar)
+                      </option>
+                      <option value="q_anterior_corregible">
+                        Q anterior corregible (días &lt; 0 e indicador Sí:
+                        alinear BD con Q)
+                      </option>
+                      <option value="menor_cero">
+                        Q anterior sin indicador «Sí» (p. ej. sin caché o Q no
+                        interpretable)
+                      </option>
+                    </select>
+                  </div>
+                ) : null}
+                {filtroCedula.trim() &&
+                list.length > 0 &&
+                !(
+                  modulo === 'general' &&
+                  filtroDiferenciaAbonoGeneral !== 'todas'
+                ) &&
+                !(
+                  modulo === 'fecha' && filtroDiferenciaFechaGeneral !== 'todas'
+                ) ? (
+                  <p className="text-xs text-muted-foreground sm:ml-auto">
+                    Mostrando{' '}
+                    <span className="font-semibold tabular-nums text-foreground">
+                      {listaFiltradaCedula.length}
+                    </span>{' '}
+                    de <span className="tabular-nums">{list.length}</span> filas
+                  </p>
+                ) : null}
+                {!filtroCedula.trim() &&
                 modulo === 'general' &&
-                filtroDiferenciaAbonoGeneral !== 'todas'
-              ) &&
-              !(
+                filtroDiferenciaAbonoGeneral !== 'todas' &&
+                list.length > 0 ? (
+                  <p className="text-xs text-muted-foreground sm:ml-auto">
+                    Mostrando{' '}
+                    <span className="font-semibold tabular-nums text-foreground">
+                      {listaFiltradaCedula.length}
+                    </span>{' '}
+                    de{' '}
+                    <span className="tabular-nums">
+                      {listaTrasFiltroCedula.length}
+                    </span>{' '}
+                    filas (tras filtro de diferencia de abono)
+                  </p>
+                ) : null}
+                {!filtroCedula.trim() &&
                 modulo === 'fecha' &&
-                filtroDiferenciaFechaGeneral !== 'todas'
-              ) ? (
-                <p className="text-xs text-muted-foreground sm:ml-auto">
-                  Mostrando{' '}
-                  <span className="font-semibold tabular-nums text-foreground">
-                    {listaFiltradaCedula.length}
-                  </span>{' '}
-                  de <span className="tabular-nums">{list.length}</span> filas
-                </p>
-              ) : null}
-              {!filtroCedula.trim() &&
-              modulo === 'general' &&
-              filtroDiferenciaAbonoGeneral !== 'todas' &&
-              list.length > 0 ? (
-                <p className="text-xs text-muted-foreground sm:ml-auto">
-                  Mostrando{' '}
-                  <span className="font-semibold tabular-nums text-foreground">
-                    {listaFiltradaCedula.length}
-                  </span>{' '}
-                  de{' '}
-                  <span className="tabular-nums">
-                    {listaTrasFiltroCedula.length}
-                  </span>{' '}
-                  filas (tras filtro de diferencia de abono)
-                </p>
-              ) : null}
-              {!filtroCedula.trim() &&
-              modulo === 'fecha' &&
-              filtroDiferenciaFechaGeneral !== 'todas' &&
-              list.length > 0 ? (
-                <p className="text-xs text-muted-foreground sm:ml-auto">
-                  Mostrando{' '}
-                  <span className="font-semibold tabular-nums text-foreground">
-                    {listaFiltradaCedula.length}
-                  </span>{' '}
-                  de{' '}
-                  <span className="tabular-nums">
-                    {listaTrasFiltroCedula.length}
-                  </span>{' '}
-                  filas (tras filtro de diferencia de fecha)
-                </p>
-              ) : null}
-              {filtroCedula.trim() &&
-              modulo === 'general' &&
-              filtroDiferenciaAbonoGeneral !== 'todas' &&
-              list.length > 0 ? (
-                <p className="text-xs text-muted-foreground sm:ml-auto">
-                  Tras cédula y diferencia:{' '}
-                  <span className="font-semibold tabular-nums text-foreground">
-                    {listaFiltradaCedula.length}
-                  </span>{' '}
-                  de{' '}
-                  <span className="tabular-nums">
-                    {listaTrasFiltroCedula.length}
-                  </span>
-                </p>
-              ) : null}
-              {filtroCedula.trim() &&
-              modulo === 'fecha' &&
-              filtroDiferenciaFechaGeneral !== 'todas' &&
-              list.length > 0 ? (
-                <p className="text-xs text-muted-foreground sm:ml-auto">
-                  Tras cédula y diferencia de fecha:{' '}
-                  <span className="font-semibold tabular-nums text-foreground">
-                    {listaFiltradaCedula.length}
-                  </span>{' '}
-                  de{' '}
-                  <span className="tabular-nums">
-                    {listaTrasFiltroCedula.length}
-                  </span>
-                </p>
-              ) : null}
-            </div>
+                filtroDiferenciaFechaGeneral !== 'todas' &&
+                list.length > 0 ? (
+                  <p className="text-xs text-muted-foreground sm:ml-auto">
+                    Mostrando{' '}
+                    <span className="font-semibold tabular-nums text-foreground">
+                      {listaFiltradaCedula.length}
+                    </span>{' '}
+                    de{' '}
+                    <span className="tabular-nums">
+                      {listaTrasFiltroCedula.length}
+                    </span>{' '}
+                    filas (tras filtro de diferencia de fecha)
+                  </p>
+                ) : null}
+                {filtroCedula.trim() &&
+                modulo === 'general' &&
+                filtroDiferenciaAbonoGeneral !== 'todas' &&
+                list.length > 0 ? (
+                  <p className="text-xs text-muted-foreground sm:ml-auto">
+                    Tras cédula y diferencia:{' '}
+                    <span className="font-semibold tabular-nums text-foreground">
+                      {listaFiltradaCedula.length}
+                    </span>{' '}
+                    de{' '}
+                    <span className="tabular-nums">
+                      {listaTrasFiltroCedula.length}
+                    </span>
+                  </p>
+                ) : null}
+                {filtroCedula.trim() &&
+                modulo === 'fecha' &&
+                filtroDiferenciaFechaGeneral !== 'todas' &&
+                list.length > 0 ? (
+                  <p className="text-xs text-muted-foreground sm:ml-auto">
+                    Tras cédula y diferencia de fecha:{' '}
+                    <span className="font-semibold tabular-nums text-foreground">
+                      {listaFiltradaCedula.length}
+                    </span>{' '}
+                    de{' '}
+                    <span className="tabular-nums">
+                      {listaTrasFiltroCedula.length}
+                    </span>
+                  </p>
+                ) : null}
+              </div>
 
-            {/* KPIs por pestaña: correos enviados y rebotados */}
+              {/* KPIs por pestaña: correos enviados y rebotados */}
 
-            {(activeTab as TabId) !== 'configuracion' &&
-              !esListaCombinadaMoras &&
-              estadisticasPorTab && (
-              <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-2">
-                <div className="flex items-center gap-3 rounded-lg border border-green-200 bg-green-50 p-4">
-                  <Mail className="h-8 w-8 text-green-600" />
+              {(activeTab as TabId) !== 'configuracion' &&
+                !esListaCombinadaMoras &&
+                estadisticasPorTab && (
+                  <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-2">
+                    <div className="flex items-center gap-3 rounded-lg border border-green-200 bg-green-50 p-4">
+                      <Mail className="h-8 w-8 text-green-600" />
 
-                  <div>
-                    <p className="text-2xl font-bold text-green-800">
-                      {statTabKey
-                        ? (estadisticasPorTab[statTabKey]?.enviados ?? 0)
-                        : 0}
-                    </p>
+                      <div>
+                        <p className="text-2xl font-bold text-green-800">
+                          {statTabKey
+                            ? (estadisticasPorTab[statTabKey]?.enviados ?? 0)
+                            : 0}
+                        </p>
 
-                    <p className="text-xs font-medium text-green-700">
-                      Correos enviados
-                    </p>
+                        <p className="text-xs font-medium text-green-700">
+                          Correos enviados
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 p-4">
+                      <AlertTriangle className="h-8 w-8 text-red-600" />
+
+                      <div>
+                        <p className="text-2xl font-bold text-red-800">
+                          {statTabKey
+                            ? (estadisticasPorTab[statTabKey]?.rebotados ?? 0)
+                            : 0}
+                        </p>
+
+                        <p className="text-xs font-medium text-red-700">
+                          Correos rebotados
+                        </p>
+                      </div>
+                    </div>
                   </div>
+                )}
+
+              {isErrorLista && (
+                <div className="mb-4 flex items-center justify-between gap-2 rounded border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800">
+                  <span>
+                    Error al cargar.
+                    {errorLista?.message
+                      ? ` ${String(errorLista.message)}`
+                      : ''}{' '}
+                    Comprueba que exista la tabla{' '}
+                    <code className="bg-gray-100 px-1">cuotas</code>.
+                  </span>
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => refetchLista()}
+                  >
+                    Reintentar
+                  </Button>
                 </div>
+              )}
 
-                <div className="flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 p-4">
-                  <AlertTriangle className="h-8 w-8 text-red-600" />
-
-                  <div>
-                    <p className="text-2xl font-bold text-red-800">
-                      {statTabKey
-                        ? (estadisticasPorTab[statTabKey]?.rebotados ?? 0)
-                        : 0}
-                    </p>
-
-                    <p className="text-xs font-medium text-red-700">
-                      Correos rebotados
-                    </p>
-                  </div>
+              {esListaCombinadaMoras &&
+              !isErrorLista &&
+              (isError || isErrorPrej || isErrorD2) ? (
+                <div className="mb-4 rounded border border-amber-200 bg-amber-50/90 px-3 py-2 text-xs text-amber-950">
+                  Parte de las listas no respondió (día siguiente, prejudicial o
+                  2 días antes). Se muestran las que sí cargaron; use Reintentar
+                  o Actualización manual.
                 </div>
-              </div>
-            )}
+              ) : null}
 
-            {isErrorLista && (
-              <div className="mb-4 flex items-center justify-between gap-2 rounded border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800">
-                <span>
-                  Error al cargar.
-                  {errorLista?.message
-                    ? ` ${String(errorLista.message)}`
-                    : ''}{' '}
-                  Comprueba que exista la tabla{' '}
-                  <code className="bg-gray-100 px-1">cuotas</code>.
-                </span>
+              {isLoadingLista && (
+                <div className="mb-4 flex items-center gap-2 rounded border border-blue-200 bg-blue-50 px-4 py-2 text-sm text-blue-700">
+                  <RefreshCw
+                    className={`h-4 w-4 ${isFetchingLista ? 'animate-spin' : ''}`}
+                  />
 
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => refetchLista()}
-                >
-                  Reintentar
-                </Button>
-              </div>
-            )}
-
-            {esListaCombinadaMoras &&
-            !isErrorLista &&
-            (isError || isErrorPrej || isErrorD2) ? (
-              <div className="mb-4 rounded border border-amber-200 bg-amber-50/90 px-3 py-2 text-xs text-amber-950">
-                Parte de las listas no respondió (día siguiente, prejudicial o 2
-                días antes). Se muestran las que sí cargaron; use Reintentar o
-                Actualización manual.
-              </div>
-            ) : null}
-
-            {isLoadingLista && (
-              <div className="mb-4 flex items-center gap-2 rounded border border-blue-200 bg-blue-50 px-4 py-2 text-sm text-blue-700">
-                <RefreshCw
-                  className={`h-4 w-4 ${isFetchingLista ? 'animate-spin' : ''}`}
-                />
-
-                <span>Cargando datos...</span>
-              </div>
-            )}
-
-            <Fragment>
-              {mostrarTablaCuotas ? (
-                <div className="overflow-x-auto">
-                  <table className="w-full min-w-[640px] text-sm">
-                    <thead>
-                      <tr className="border-b bg-gray-50">
-                        <th
-                          className="whitespace-nowrap px-3 py-2 text-left text-xs font-semibold leading-tight"
-                          title="Identificador del préstamo (crédito) en el sistema"
-                        >
-                          Número de
-                          <br />
-                          crédito
-                        </th>
-
-                        {!esListaCombinadaMoras ? (
-                          <th className="whitespace-nowrap px-3 py-2 text-left font-semibold">
-                            Nombre
-                          </th>
-                        ) : null}
-
-                        <th className="whitespace-nowrap px-3 py-2 text-left font-semibold">
-                          Cédula
-                        </th>
-
-                        {esListaCombinadaMoras ? (
-                          <th className="min-w-[10rem] whitespace-normal px-3 py-2 text-left text-xs font-semibold leading-tight">
-                            Caso
-                          </th>
-                        ) : null}
-
-                        {modulo === 'general' ? (
-                          <th className="whitespace-nowrap px-3 py-2 text-right text-xs font-semibold leading-tight">
-                            <div className="inline-flex w-full items-center justify-end gap-1">
-                              <span
-                                title="Valor del listado desde caché en BD: domingo 04:35 Caracas o Recalcular; también al aplicar ABONOS desde la balanza."
-                              >
-                                Diferencia Abono
-                              </span>
-
-                              <SortArrowsCuotas
-                                column="diferencia_abono"
-                                labelAsc="Orden ascendente: diferencia abono (hoja − cuotas)"
-                                labelDesc="Orden descendente: diferencia abono (hoja − cuotas)"
-                                sortCol={sortCol}
-                                sortDir={sortDir}
-                                onAsc={aplicarOrdenAsc}
-                                onDesc={aplicarOrdenDesc}
-                              />
-                            </div>
-                          </th>
-                        ) : null}
-
-                        <th className="whitespace-nowrap px-3 py-2 text-left font-semibold">
-                          <div className="inline-flex items-center gap-1">
-                            <span>Nº cuota</span>
-
-                            <SortArrowsCuotas
-                              column="numero_cuota"
-                              labelAsc="Orden ascendente: Nº cuota"
-                              labelDesc="Orden descendente: Nº cuota"
-                              sortCol={sortCol}
-                              sortDir={sortDir}
-                              onAsc={aplicarOrdenAsc}
-                              onDesc={aplicarOrdenDesc}
-                            />
-                          </div>
-                        </th>
-
-                        <th className="whitespace-nowrap px-3 py-2 text-left font-semibold">
-                          <div className="inline-flex items-center gap-1">
-                            <span>Fecha venc.</span>
-
-                            <SortArrowsCuotas
-                              column="fecha_vencimiento"
-                              labelAsc="Orden ascendente: fecha de vencimiento"
-                              labelDesc="Orden descendente: fecha de vencimiento"
-                              sortCol={sortCol}
-                              sortDir={sortDir}
-                              onAsc={aplicarOrdenAsc}
-                              onDesc={aplicarOrdenDesc}
-                            />
-                          </div>
-                        </th>
-
-                        <th className="whitespace-nowrap px-3 py-2 text-right font-semibold">
-                          <div className="inline-flex w-full items-center justify-end gap-1">
-                            <span>Cuotas atrasadas</span>
-
-                            <SortArrowsCuotas
-                              column="cuotas_atrasadas"
-                              labelAsc="Orden ascendente: cuotas atrasadas"
-                              labelDesc="Orden descendente: cuotas atrasadas"
-                              sortCol={sortCol}
-                              sortDir={sortDir}
-                              onAsc={aplicarOrdenAsc}
-                              onDesc={aplicarOrdenDesc}
-                            />
-                          </div>
-                        </th>
-
-                        <th className="max-w-[12rem] whitespace-normal px-3 py-2 text-right font-semibold leading-tight">
-                          <div className="inline-flex items-start justify-end gap-1">
-                            <span>
-                              TOTAL PENDIENTE
-                              <br />A PAGAR
-                            </span>
-
-                            <SortArrowsCuotas
-                              column="total_pendiente"
-                              labelAsc="Orden ascendente: total pendiente"
-                              labelDesc="Orden descendente: total pendiente"
-                              sortCol={sortCol}
-                              sortDir={sortDir}
-                              onAsc={aplicarOrdenAsc}
-                              onDesc={aplicarOrdenDesc}
-                            />
-                          </div>
-                        </th>
-
-                        <th
-                          className="min-w-[5.5rem] px-1 py-2 text-center text-xs font-semibold leading-tight"
-                          scope="col"
-                          title="Revisión manual (triángulo) y comparar ABONOS hoja vs total pagado en cuotas (icono azul)."
-                        >
-                          Revisión
-                          <br />
-                          manual
-                        </th>
-
-                        <th className="w-14 whitespace-nowrap px-2 py-2 text-center font-semibold">
-                          <span title="Descargar PDF de estado de cuenta">
-                            Estado de cuenta
-                          </span>
-                        </th>
-                      </tr>
-                    </thead>
-
-                    <tbody>
-                      {listaFiltradaCedula.length === 0 ? (
-                        <tr>
-                          <td
-                            colSpan={esListaCombinadaMoras ? 10 : 9}
-                            className="py-8 text-center text-gray-500"
-                          >
-                            <span className="block font-medium text-gray-600">
-                              {listaCargadaSinFilas
-                                ? 'Ningún registro en este criterio.'
-                                : filtroCedula.trim()
-                                  ? 'Ninguna fila coincide con la cédula indicada.'
-                                  : modulo === 'general' &&
-                                      filtroDiferenciaAbonoGeneral !== 'todas' &&
-                                      listaTrasFiltroCedula.length > 0
-                                    ? 'Ninguna fila cumple el filtro de diferencia de abono.'
-                                    : 'Ningún registro en este criterio.'}
-                            </span>
-                            {listaCargadaSinFilas ? (
-                              <span className="mx-auto mt-2 block max-w-lg text-xs text-gray-500">
-                                {modulo === 'general'
-                                  ? 'Listas ya cargadas: no hay filas en ninguno de los tres criterios (día siguiente, prejudicial, 2 días antes) para la fecha de referencia.'
-                                  : modulo === 'a3cuotas'
-                                    ? 'Lista ya cargada: se requieren 5+ cuotas en estado VENCIDO o MORA en BD. Si hay mora pero no aparece nadie, sincronice estados de cuotas (auditoría / job) para alinear la columna estado.'
-                                    : modulo === 'd2antes'
-                                      ? 'Lista ya cargada: solo cuotas en estado PENDIENTE con vencimiento exactamente dentro de 2 días (Caracas). Si la columna estado no es PENDIENTE o la fecha no coincide, no aparecerá.'
-                                      : modulo === 'a10dias'
-                                        ? 'Lista ya cargada: vencimiento = referencia − 10 días (Caracas), saldo pendiente y entre 2 y 3 cuotas en mora en el préstamo. Con 1 o con 4+ cuotas atrasadas, o si la fecha no coincide, no aparecerá.'
-                                        : 'Lista ya cargada: solo entran cuotas con fecha de vencimiento igual a ayer (Caracas). Si no hay ninguna, la tabla quedará vacía aunque exista mora en otros días.'}
-                              </span>
-                            ) : filtroCedula.trim() ? (
-                              <span className="mx-auto mt-2 block max-w-md text-xs text-gray-500">
-                                Ajuste el texto del filtro o use «Limpiar filtro». La
-                                búsqueda ignora puntos y guiones y compara por
-                                subcadena de dígitos.
-                              </span>
-                            ) : modulo === 'general' &&
-                              filtroDiferenciaAbonoGeneral !== 'todas' &&
-                              listaTrasFiltroCedula.length > 0 ? (
-                              <span className="mx-auto mt-2 block max-w-md text-xs text-gray-500">
-                                Elija «Todas» u otro criterio. «Cero» usa la misma
-                                coincidencia por tolerancia que el modal; «Mayor a
-                                cero» = diferencia (hoja − cuotas) mayor que la
-                                tolerancia; «Menor a cero» = diferencia menor que
-                                −tolerancia (más pagado en cuotas que en la hoja).
-                                El listado refleja caché: si difiere del modal, actualice
-                                datos o espere el recálculo programado.
-                              </span>
-                            ) : null}
-                          </td>
-                        </tr>
-                      ) : (
-                        filasPagina.map((row, idx) => (
-                          <tr
-                            key={`${row.notificacion_caso ?? 'sin-caso'}-${row.cliente_id}-${row.prestamo_id ?? 'np'}-${row.numero_cuota ?? 'nc'}-${indiceInicioPagina + idx}`}
-                            className="border-b hover:bg-gray-50"
-                          >
-                            <td className="px-3 py-2 font-medium tabular-nums">
-                              {textoNumeroCreditoNotif(row)}
-                            </td>
-
-                            {!esListaCombinadaMoras ? (
-                              <td className="px-3 py-2 font-medium">
-                                {row.nombre}
-                              </td>
-                            ) : null}
-
-                            <td className="px-3 py-2">{row.cedula}</td>
-
-                            {esListaCombinadaMoras ? (
-                              <td className="max-w-[14rem] px-3 py-2 text-xs leading-snug text-slate-800">
-                                {row.notificacion_caso ?? '-'}
-                              </td>
-                            ) : null}
-
-                            {modulo === 'general' ? (
-                              <td className="px-3 py-2 text-right align-middle">
-                                <DiferenciaAbonoGeneralCell
-                                  row={row}
-                                  data={
-                                    row.comparar_abonos_drive_cuotas ?? undefined
-                                  }
-                                  isLoading={false}
-                                  isError={false}
-                                />
-                              </td>
-                            ) : null}
-
-                            <td className="px-3 py-2">
-                              {row.numero_cuota ?? '-'}
-                            </td>
-
-                            <td className="px-3 py-2">
-                              {row.fecha_vencimiento ?? '-'}
-                            </td>
-
-                            <td className="px-3 py-2 text-right font-medium text-red-600">
-                              {row.cuotas_atrasadas ??
-                                row.total_cuotas_atrasadas ??
-                                '-'}
-                            </td>
-
-                            <td className="px-3 py-2 text-right">
-                              {textoTotalPendientePagar(row)}
-                            </td>
-
-                            <td className="px-1 py-2 text-center align-middle">
-                              <div className="flex flex-wrap items-center justify-center gap-1">
-                                <RevisionManualNotifCell row={row} />
-                                <CompararAbonosDriveCuotasCell row={row} />
-                              </div>
-                            </td>
-
-                            <td className="px-2 py-2 text-center align-middle">
-                              {estadoCuentaPdfCell(row.prestamo_id)}
-                            </td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
+                  <span>Cargando datos...</span>
                 </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b bg-gray-50">
-                        <th
-                          className="px-3 py-2 text-left text-xs font-semibold leading-tight"
-                          title="Identificador del préstamo (crédito) en el sistema"
-                        >
-                          Número de
-                          <br />
-                          crédito
-                        </th>
+              )}
 
-                        {!esListaCombinadaMoras ? (
-                          <th className="px-3 py-2 text-left font-semibold">
-                            Nombre
-                          </th>
-                        ) : null}
-
-                        <th className="px-3 py-2 text-left font-semibold">
-                          Cédula
-                        </th>
-
-                        {esListaCombinadaMoras ? (
-                          <th className="min-w-[10rem] px-3 py-2 text-left text-xs font-semibold leading-tight">
-                            Caso
-                          </th>
-                        ) : null}
-
-                        {modulo === 'general' ? (
-                          <th className="whitespace-nowrap px-3 py-2 text-right text-xs font-semibold leading-tight">
-                            <div className="inline-flex w-full items-center justify-end gap-1">
-                              <span
-                                title="Valor del listado desde caché en BD: domingo 04:35 Caracas o Recalcular; también al aplicar ABONOS desde la balanza."
-                              >
-                                Diferencia Abono
-                              </span>
-
-                              <SortArrowsCuotas
-                                column="diferencia_abono"
-                                labelAsc="Orden ascendente: diferencia abono (hoja − cuotas)"
-                                labelDesc="Orden descendente: diferencia abono (hoja − cuotas)"
-                                sortCol={sortCol}
-                                sortDir={sortDir}
-                                onAsc={aplicarOrdenAsc}
-                                onDesc={aplicarOrdenDesc}
-                              />
-                            </div>
-                          </th>
-                        ) : null}
-
-                        {modulo === 'fecha' ? (
+              <Fragment>
+                {mostrarTablaCuotas ? (
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[640px] text-sm">
+                      <thead>
+                        <tr className="border-b bg-gray-50">
                           <th
-                            className="whitespace-nowrap px-3 py-2 text-right text-xs font-semibold leading-tight"
-                            title="Días = fecha columna Q (hoja) − fecha_aprobacion (BD). Caché: lunes y jueves 04:00 Caracas, tras cada sync Drive, o Recalcular."
+                            className="whitespace-nowrap px-3 py-2 text-left text-xs font-semibold leading-tight"
+                            title="Identificador del préstamo (crédito) en el sistema"
                           >
-                            Diferencia fecha (días)
+                            Número de
+                            <br />
+                            crédito
                           </th>
-                        ) : null}
 
-                        <th
-                          className="min-w-[5.5rem] px-1 py-2 text-center text-xs font-semibold leading-tight"
-                          scope="col"
-                          title={
-                            modulo === 'fecha'
-                              ? 'Revisión manual (triángulo) y comparar columna Q (hoja) vs fecha de aprobación en BD (icono calendario).'
-                              : 'Revisión manual (triángulo) y comparar ABONOS hoja vs total pagado en cuotas (icono azul).'
-                          }
-                        >
-                          Revisión
-                          <br />
-                          manual
-                        </th>
+                          {!esListaCombinadaMoras ? (
+                            <th className="whitespace-nowrap px-3 py-2 text-left font-semibold">
+                              Nombre
+                            </th>
+                          ) : null}
 
-                        {modulo === 'fecha' ? null : (
-                          <th className="w-14 px-2 py-2 text-center font-semibold">
+                          <th className="whitespace-nowrap px-3 py-2 text-left font-semibold">
+                            Cédula
+                          </th>
+
+                          {esListaCombinadaMoras ? (
+                            <th className="min-w-[10rem] whitespace-normal px-3 py-2 text-left text-xs font-semibold leading-tight">
+                              Caso
+                            </th>
+                          ) : null}
+
+                          {modulo === 'general' ? (
+                            <th className="whitespace-nowrap px-3 py-2 text-right text-xs font-semibold leading-tight">
+                              <div className="inline-flex w-full items-center justify-end gap-1">
+                                <span title="Valor del listado desde caché en BD: domingo 04:35 Caracas o Recalcular; también al aplicar ABONOS desde la balanza.">
+                                  Diferencia Abono
+                                </span>
+
+                                <SortArrowsCuotas
+                                  column="diferencia_abono"
+                                  labelAsc="Orden ascendente: diferencia abono (hoja − cuotas)"
+                                  labelDesc="Orden descendente: diferencia abono (hoja − cuotas)"
+                                  sortCol={sortCol}
+                                  sortDir={sortDir}
+                                  onAsc={aplicarOrdenAsc}
+                                  onDesc={aplicarOrdenDesc}
+                                />
+                              </div>
+                            </th>
+                          ) : null}
+
+                          <th className="whitespace-nowrap px-3 py-2 text-left font-semibold">
+                            <div className="inline-flex items-center gap-1">
+                              <span>Nº cuota</span>
+
+                              <SortArrowsCuotas
+                                column="numero_cuota"
+                                labelAsc="Orden ascendente: Nº cuota"
+                                labelDesc="Orden descendente: Nº cuota"
+                                sortCol={sortCol}
+                                sortDir={sortDir}
+                                onAsc={aplicarOrdenAsc}
+                                onDesc={aplicarOrdenDesc}
+                              />
+                            </div>
+                          </th>
+
+                          <th className="whitespace-nowrap px-3 py-2 text-left font-semibold">
+                            <div className="inline-flex items-center gap-1">
+                              <span>Fecha venc.</span>
+
+                              <SortArrowsCuotas
+                                column="fecha_vencimiento"
+                                labelAsc="Orden ascendente: fecha de vencimiento"
+                                labelDesc="Orden descendente: fecha de vencimiento"
+                                sortCol={sortCol}
+                                sortDir={sortDir}
+                                onAsc={aplicarOrdenAsc}
+                                onDesc={aplicarOrdenDesc}
+                              />
+                            </div>
+                          </th>
+
+                          <th className="whitespace-nowrap px-3 py-2 text-right font-semibold">
+                            <div className="inline-flex w-full items-center justify-end gap-1">
+                              <span>Cuotas atrasadas</span>
+
+                              <SortArrowsCuotas
+                                column="cuotas_atrasadas"
+                                labelAsc="Orden ascendente: cuotas atrasadas"
+                                labelDesc="Orden descendente: cuotas atrasadas"
+                                sortCol={sortCol}
+                                sortDir={sortDir}
+                                onAsc={aplicarOrdenAsc}
+                                onDesc={aplicarOrdenDesc}
+                              />
+                            </div>
+                          </th>
+
+                          <th className="max-w-[12rem] whitespace-normal px-3 py-2 text-right font-semibold leading-tight">
+                            <div className="inline-flex items-start justify-end gap-1">
+                              <span>
+                                TOTAL PENDIENTE
+                                <br />A PAGAR
+                              </span>
+
+                              <SortArrowsCuotas
+                                column="total_pendiente"
+                                labelAsc="Orden ascendente: total pendiente"
+                                labelDesc="Orden descendente: total pendiente"
+                                sortCol={sortCol}
+                                sortDir={sortDir}
+                                onAsc={aplicarOrdenAsc}
+                                onDesc={aplicarOrdenDesc}
+                              />
+                            </div>
+                          </th>
+
+                          <th
+                            className="min-w-[5.5rem] px-1 py-2 text-center text-xs font-semibold leading-tight"
+                            scope="col"
+                            title="Revisión manual (triángulo) y comparar ABONOS hoja vs total pagado en cuotas (icono azul)."
+                          >
+                            Revisión
+                            <br />
+                            manual
+                          </th>
+
+                          <th className="w-14 whitespace-nowrap px-2 py-2 text-center font-semibold">
                             <span title="Descargar PDF de estado de cuenta">
                               Estado de cuenta
                             </span>
                           </th>
-                        )}
-                      </tr>
-                    </thead>
-
-                    <tbody>
-                      {listaFiltradaCedula.length === 0 ? (
-                        <tr>
-                          <td
-                            colSpan={
-                              esListaCombinadaMoras
-                                ? modulo === 'fecha'
-                                  ? 5
-                                  : 6
-                                : 5
-                            }
-                            className="py-8 text-center text-gray-500"
-                          >
-                            <span className="block font-medium text-gray-600">
-                              {listaCargadaSinFilas
-                                ? 'Ningún cliente en este criterio.'
-                                : filtroCedula.trim()
-                                  ? 'Ninguna fila coincide con la cédula indicada.'
-                                  : modulo === 'general' &&
-                                      filtroDiferenciaAbonoGeneral !== 'todas' &&
-                                      listaTrasFiltroCedula.length > 0
-                                    ? 'Ninguna fila cumple el filtro de diferencia de abono.'
-                                    : modulo === 'fecha' &&
-                                        filtroDiferenciaFechaGeneral !== 'todas' &&
-                                        listaTrasFiltroCedula.length > 0
-                                      ? 'Ninguna fila cumple el filtro de diferencia de fecha.'
-                                      : 'Ningún cliente en este criterio.'}
-                            </span>
-                            {listaCargadaSinFilas ? (
-                              <span className="mx-auto mt-2 block max-w-lg text-xs text-gray-500">
-                                {modulo === 'general' || modulo === 'fecha'
-                                  ? 'Listas ya cargadas: ningún criterio devolvió filas sin detalle de cuota para la fecha de referencia.'
-                                  : modulo === 'a3cuotas'
-                                    ? 'Lista ya cargada: 5+ cuotas VENCIDO o MORA. Sin filas con detalle de cuota: sincronice estados en BD o confirme que algún cliente cumple el umbral.'
-                                    : modulo === 'd2antes'
-                                      ? 'Lista ya cargada: sin cuotas PENDIENTE con vencimiento en 2 días. Revise estados en BD o el calendario de vencimientos.'
-                                      : modulo === 'a10dias'
-                                        ? 'Lista ya cargada: sin cuotas en −10 días con saldo pendiente y entre 2 y 3 cuotas en mora, o todos los casos tienen 1 o 4+ cuotas atrasadas (no aplican aquí).'
-                                        : 'Lista ya cargada: sin cuotas con vencimiento ayer. Use Actualizar tras registrar pagos o revise el calendario de vencimientos.'}
-                              </span>
-                            ) : filtroCedula.trim() ? (
-                              <span className="mx-auto mt-2 block max-w-md text-xs text-gray-500">
-                                Ajuste el texto del filtro o use «Limpiar filtro». La
-                                búsqueda ignora puntos y guiones y compara por
-                                subcadena de dígitos.
-                              </span>
-                            ) : modulo === 'general' &&
-                              filtroDiferenciaAbonoGeneral !== 'todas' &&
-                              listaTrasFiltroCedula.length > 0 ? (
-                              <span className="mx-auto mt-2 block max-w-md text-xs text-gray-500">
-                                Elija «Todas» u otro criterio. «Cero» coincide con la
-                                tolerancia del modal; «Mayor a cero» = diferencia
-                                mayor que tolerancia; «Menor a cero» = diferencia menor
-                                que −tolerancia. Caché en listado vs comparación en vivo
-                                en el modal pueden discrepar hasta resincronizar.
-                              </span>
-                            ) : modulo === 'fecha' &&
-                              filtroDiferenciaFechaGeneral !== 'todas' &&
-                              listaTrasFiltroCedula.length > 0 ? (
-                              <span className="mx-auto mt-2 block max-w-md text-xs text-gray-500">
-                                Elija «Todas» u otro criterio. «Igual a 0» = misma fecha
-                                (tolerancia como en el modal); «Mayor que cero» = Q
-                                posterior (indicador Sí); «Menor que cero» = Q anterior
-                                (días negativos).
-                              </span>
-                            ) : null}
-                          </td>
                         </tr>
-                      ) : (
-                        filasPagina.map((row, idx) => (
-                          <tr
-                            key={`${row.notificacion_caso ?? 'sin-caso'}-${row.cliente_id}-${row.numero_cuota ?? idx}`}
-                            className="border-b hover:bg-gray-50"
-                          >
-                            <td className="px-3 py-2 font-medium tabular-nums">
-                              {textoNumeroCreditoNotif(row)}
+                      </thead>
+
+                      <tbody>
+                        {listaFiltradaCedula.length === 0 ? (
+                          <tr>
+                            <td
+                              colSpan={esListaCombinadaMoras ? 10 : 9}
+                              className="py-8 text-center text-gray-500"
+                            >
+                              <span className="block font-medium text-gray-600">
+                                {listaCargadaSinFilas
+                                  ? 'Ningún registro en este criterio.'
+                                  : filtroCedula.trim()
+                                    ? 'Ninguna fila coincide con la cédula indicada.'
+                                    : modulo === 'general' &&
+                                        filtroDiferenciaAbonoGeneral !==
+                                          'todas' &&
+                                        listaTrasFiltroCedula.length > 0
+                                      ? 'Ninguna fila cumple el filtro de diferencia de abono.'
+                                      : 'Ningún registro en este criterio.'}
+                              </span>
+                              {listaCargadaSinFilas ? (
+                                <span className="mx-auto mt-2 block max-w-lg text-xs text-gray-500">
+                                  {modulo === 'general'
+                                    ? 'Listas ya cargadas: no hay filas en ninguno de los tres criterios (día siguiente, prejudicial, 2 días antes) para la fecha de referencia.'
+                                    : modulo === 'a3cuotas'
+                                      ? 'Lista ya cargada: se requieren 5+ cuotas en estado VENCIDO o MORA en BD. Si hay mora pero no aparece nadie, sincronice estados de cuotas (auditoría / job) para alinear la columna estado.'
+                                      : modulo === 'd2antes'
+                                        ? 'Lista ya cargada: solo cuotas en estado PENDIENTE con vencimiento exactamente dentro de 2 días (Caracas). Si la columna estado no es PENDIENTE o la fecha no coincide, no aparecerá.'
+                                        : modulo === 'a10dias'
+                                          ? 'Lista ya cargada: vencimiento = referencia − 10 días (Caracas), saldo pendiente y entre 2 y 3 cuotas en mora en el préstamo. Con 1 o con 4+ cuotas atrasadas, o si la fecha no coincide, no aparecerá.'
+                                          : 'Lista ya cargada: solo entran cuotas con fecha de vencimiento igual a ayer (Caracas). Si no hay ninguna, la tabla quedará vacía aunque exista mora en otros días.'}
+                                </span>
+                              ) : filtroCedula.trim() ? (
+                                <span className="mx-auto mt-2 block max-w-md text-xs text-gray-500">
+                                  Ajuste el texto del filtro o use «Limpiar
+                                  filtro». La búsqueda ignora puntos y guiones y
+                                  compara por subcadena de dígitos.
+                                </span>
+                              ) : modulo === 'general' &&
+                                filtroDiferenciaAbonoGeneral !== 'todas' &&
+                                listaTrasFiltroCedula.length > 0 ? (
+                                <span className="mx-auto mt-2 block max-w-md text-xs text-gray-500">
+                                  Elija «Todas» u otro criterio. «Cero» usa la
+                                  misma coincidencia por tolerancia que el
+                                  modal; «Mayor a cero» = diferencia (hoja −
+                                  cuotas) mayor que la tolerancia; «Menor a
+                                  cero» = diferencia menor que −tolerancia (más
+                                  pagado en cuotas que en la hoja). El listado
+                                  refleja caché: si difiere del modal, actualice
+                                  datos o espere el recálculo programado.
+                                </span>
+                              ) : null}
                             </td>
-
-                            {!esListaCombinadaMoras ? (
-                              <td className="px-3 py-2 font-medium">
-                                {row.nombre}
+                          </tr>
+                        ) : (
+                          filasPagina.map((row, idx) => (
+                            <tr
+                              key={`${row.notificacion_caso ?? 'sin-caso'}-${row.cliente_id}-${row.prestamo_id ?? 'np'}-${row.numero_cuota ?? 'nc'}-${indiceInicioPagina + idx}`}
+                              className="border-b hover:bg-gray-50"
+                            >
+                              <td className="px-3 py-2 font-medium tabular-nums">
+                                {textoNumeroCreditoNotif(row)}
                               </td>
-                            ) : null}
 
-                            <td className="px-3 py-2">{row.cedula}</td>
+                              {!esListaCombinadaMoras ? (
+                                <td className="px-3 py-2 font-medium">
+                                  {row.nombre}
+                                </td>
+                              ) : null}
 
-                            {esListaCombinadaMoras ? (
-                              <td className="max-w-[14rem] px-3 py-2 text-xs leading-snug text-slate-800">
-                                {row.notificacion_caso ?? '-'}
+                              <td className="px-3 py-2">{row.cedula}</td>
+
+                              {esListaCombinadaMoras ? (
+                                <td className="max-w-[14rem] px-3 py-2 text-xs leading-snug text-slate-800">
+                                  {row.notificacion_caso ?? '-'}
+                                </td>
+                              ) : null}
+
+                              {modulo === 'general' ? (
+                                <td className="px-3 py-2 text-right align-middle">
+                                  <DiferenciaAbonoGeneralCell
+                                    row={row}
+                                    data={
+                                      row.comparar_abonos_drive_cuotas ??
+                                      undefined
+                                    }
+                                    isLoading={false}
+                                    isError={false}
+                                  />
+                                </td>
+                              ) : null}
+
+                              <td className="px-3 py-2">
+                                {row.numero_cuota ?? '-'}
                               </td>
-                            ) : null}
 
-                            {modulo === 'general' ? (
-                              <td className="px-3 py-2 text-right align-middle">
-                                <DiferenciaAbonoGeneralCell
-                                  row={row}
-                                  data={
-                                    row.comparar_abonos_drive_cuotas ?? undefined
-                                  }
-                                  isLoading={false}
-                                  isError={false}
-                                />
+                              <td className="px-3 py-2">
+                                {row.fecha_vencimiento ?? '-'}
                               </td>
-                            ) : null}
 
-                            {modulo === 'fecha' ? (
-                              <td className="px-3 py-2 text-right align-middle">
-                                <DiferenciaFechaGeneralCell
-                                  row={row}
-                                  data={
-                                    row.comparar_fecha_entrega_q_aprobacion ??
-                                    undefined
-                                  }
-                                  isLoading={false}
-                                  isError={false}
-                                />
+                              <td className="px-3 py-2 text-right font-medium text-red-600">
+                                {row.cuotas_atrasadas ??
+                                  row.total_cuotas_atrasadas ??
+                                  '-'}
                               </td>
-                            ) : null}
 
-                            <td className="px-1 py-2 text-center align-middle">
-                              <div className="flex flex-wrap items-center justify-center gap-1">
-                                <RevisionManualNotifCell row={row} />
-                                {modulo === 'fecha' ? (
-                                  <CompararFechaEntregaQAprobacionCell row={row} />
-                                ) : (
+                              <td className="px-3 py-2 text-right">
+                                {textoTotalPendientePagar(row)}
+                              </td>
+
+                              <td className="px-1 py-2 text-center align-middle">
+                                <div className="flex flex-wrap items-center justify-center gap-1">
+                                  <RevisionManualNotifCell row={row} />
                                   <CompararAbonosDriveCuotasCell row={row} />
-                                )}
-                              </div>
-                            </td>
+                                </div>
+                              </td>
 
-                            {modulo === 'fecha' ? null : (
                               <td className="px-2 py-2 text-center align-middle">
                                 {estadoCuentaPdfCell(row.prestamo_id)}
                               </td>
-                            )}
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b bg-gray-50">
+                          <th
+                            className="px-3 py-2 text-left text-xs font-semibold leading-tight"
+                            title="Identificador del préstamo (crédito) en el sistema"
+                          >
+                            Número de
+                            <br />
+                            crédito
+                          </th>
 
-              {totalFilasListado > 0 ? (
-                <div className="mt-4 border-t border-gray-100 pt-4">
-                  <nav
-                    className="flex flex-col items-center gap-3"
-                    aria-label="Paginación del listado"
-                  >
-                    <div className="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2">
-                      <button
-                        type="button"
-                        disabled={paginaListaActual <= 1}
-                        onClick={() => irPaginaLista(paginaListaActual - 1)}
-                        aria-label="Página anterior"
-                        className="inline-flex h-9 items-center justify-center rounded-md border border-gray-200 bg-white px-3 text-sm font-medium text-gray-900 shadow-sm transition-colors hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 disabled:pointer-events-none disabled:opacity-40"
-                      >
-                        <span aria-hidden className="mr-1.5 text-gray-600">
-                          &larr;
-                        </span>
-                        Anterior
-                      </button>
+                          {!esListaCombinadaMoras ? (
+                            <th className="px-3 py-2 text-left font-semibold">
+                              Nombre
+                            </th>
+                          ) : null}
 
-                      {numerosPaginaVisibles.map(n => {
-                        const activa = n === paginaListaActual
-                        return (
-                          <button
-                            key={n}
-                            type="button"
-                            onClick={() => irPaginaLista(n)}
-                            aria-label={`Ir a página ${n}`}
-                            aria-current={activa ? 'page' : undefined}
-                            className={
-                              activa
-                                ? 'inline-flex h-9 min-w-[2.25rem] items-center justify-center rounded-md border border-blue-600 bg-blue-600 px-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-blue-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1'
-                                : 'inline-flex h-9 min-w-[2.25rem] items-center justify-center rounded-md border border-gray-200 bg-white px-3 text-sm font-medium text-gray-900 shadow-sm transition-colors hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1'
+                          <th className="px-3 py-2 text-left font-semibold">
+                            Cédula
+                          </th>
+
+                          {esListaCombinadaMoras ? (
+                            <th className="min-w-[10rem] px-3 py-2 text-left text-xs font-semibold leading-tight">
+                              Caso
+                            </th>
+                          ) : null}
+
+                          {modulo === 'general' ? (
+                            <th className="whitespace-nowrap px-3 py-2 text-right text-xs font-semibold leading-tight">
+                              <div className="inline-flex w-full items-center justify-end gap-1">
+                                <span title="Valor del listado desde caché en BD: domingo 04:35 Caracas o Recalcular; también al aplicar ABONOS desde la balanza.">
+                                  Diferencia Abono
+                                </span>
+
+                                <SortArrowsCuotas
+                                  column="diferencia_abono"
+                                  labelAsc="Orden ascendente: diferencia abono (hoja − cuotas)"
+                                  labelDesc="Orden descendente: diferencia abono (hoja − cuotas)"
+                                  sortCol={sortCol}
+                                  sortDir={sortDir}
+                                  onAsc={aplicarOrdenAsc}
+                                  onDesc={aplicarOrdenDesc}
+                                />
+                              </div>
+                            </th>
+                          ) : null}
+
+                          {modulo === 'fecha' ? (
+                            <th
+                              className="whitespace-nowrap px-3 py-2 text-right text-xs font-semibold leading-tight"
+                              title="Días = fecha columna Q (hoja) − fecha_aprobacion (BD). Caché: lunes y jueves 04:00 Caracas, tras cada sync Drive, o Recalcular."
+                            >
+                              Diferencia fecha (días)
+                            </th>
+                          ) : null}
+
+                          <th
+                            className="min-w-[5.5rem] px-1 py-2 text-center text-xs font-semibold leading-tight"
+                            scope="col"
+                            title={
+                              modulo === 'fecha'
+                                ? 'Revisión manual (triángulo) y comparar columna Q (hoja) vs fecha de aprobación en BD (icono calendario).'
+                                : 'Revisión manual (triángulo) y comparar ABONOS hoja vs total pagado en cuotas (icono azul).'
                             }
                           >
-                            {n}
-                          </button>
-                        )
-                      })}
+                            Revisión
+                            <br />
+                            manual
+                          </th>
 
-                      <button
-                        type="button"
-                        disabled={paginaListaActual >= totalPaginasListado}
-                        onClick={() => irPaginaLista(paginaListaActual + 1)}
-                        aria-label="Página siguiente"
-                        className="inline-flex h-9 items-center justify-center rounded-md border border-gray-200 bg-white px-3 text-sm font-medium text-gray-900 shadow-sm transition-colors hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 disabled:pointer-events-none disabled:opacity-40"
-                      >
-                        Siguiente
-                        <span aria-hidden className="ml-1.5 text-gray-600">
-                          &rarr;
-                        </span>
-                      </button>
-                    </div>
+                          {modulo === 'fecha' ? null : (
+                            <th className="w-14 px-2 py-2 text-center font-semibold">
+                              <span title="Descargar PDF de estado de cuenta">
+                                Estado de cuenta
+                              </span>
+                            </th>
+                          )}
+                        </tr>
+                      </thead>
 
-                    <p className="text-center text-xs text-gray-500 sm:text-sm">
-                      Página {paginaListaActual} de {totalPaginasListado}
-                    </p>
+                      <tbody>
+                        {listaFiltradaCedula.length === 0 ? (
+                          <tr>
+                            <td
+                              colSpan={
+                                esListaCombinadaMoras
+                                  ? modulo === 'fecha'
+                                    ? 5
+                                    : 6
+                                  : 5
+                              }
+                              className="py-8 text-center text-gray-500"
+                            >
+                              <span className="block font-medium text-gray-600">
+                                {listaCargadaSinFilas
+                                  ? 'Ningún cliente en este criterio.'
+                                  : filtroCedula.trim()
+                                    ? 'Ninguna fila coincide con la cédula indicada.'
+                                    : modulo === 'general' &&
+                                        filtroDiferenciaAbonoGeneral !==
+                                          'todas' &&
+                                        listaTrasFiltroCedula.length > 0
+                                      ? 'Ninguna fila cumple el filtro de diferencia de abono.'
+                                      : modulo === 'fecha' &&
+                                          filtroDiferenciaFechaGeneral !==
+                                            'todas' &&
+                                          listaTrasFiltroCedula.length > 0
+                                        ? 'Ninguna fila cumple el filtro de diferencia de fecha.'
+                                        : 'Ningún cliente en este criterio.'}
+                              </span>
+                              {listaCargadaSinFilas ? (
+                                <span className="mx-auto mt-2 block max-w-lg text-xs text-gray-500">
+                                  {modulo === 'general' || modulo === 'fecha'
+                                    ? 'Listas ya cargadas: ningún criterio devolvió filas sin detalle de cuota para la fecha de referencia.'
+                                    : modulo === 'a3cuotas'
+                                      ? 'Lista ya cargada: 5+ cuotas VENCIDO o MORA. Sin filas con detalle de cuota: sincronice estados en BD o confirme que algún cliente cumple el umbral.'
+                                      : modulo === 'd2antes'
+                                        ? 'Lista ya cargada: sin cuotas PENDIENTE con vencimiento en 2 días. Revise estados en BD o el calendario de vencimientos.'
+                                        : modulo === 'a10dias'
+                                          ? 'Lista ya cargada: sin cuotas en −10 días con saldo pendiente y entre 2 y 3 cuotas en mora, o todos los casos tienen 1 o 4+ cuotas atrasadas (no aplican aquí).'
+                                          : 'Lista ya cargada: sin cuotas con vencimiento ayer. Use Actualizar tras registrar pagos o revise el calendario de vencimientos.'}
+                                </span>
+                              ) : filtroCedula.trim() ? (
+                                <span className="mx-auto mt-2 block max-w-md text-xs text-gray-500">
+                                  Ajuste el texto del filtro o use «Limpiar
+                                  filtro». La búsqueda ignora puntos y guiones y
+                                  compara por subcadena de dígitos.
+                                </span>
+                              ) : modulo === 'general' &&
+                                filtroDiferenciaAbonoGeneral !== 'todas' &&
+                                listaTrasFiltroCedula.length > 0 ? (
+                                <span className="mx-auto mt-2 block max-w-md text-xs text-gray-500">
+                                  Elija «Todas» u otro criterio. «Cero» coincide
+                                  con la tolerancia del modal; «Mayor a cero» =
+                                  diferencia mayor que tolerancia; «Menor a
+                                  cero» = diferencia menor que −tolerancia.
+                                  Caché en listado vs comparación en vivo en el
+                                  modal pueden discrepar hasta resincronizar.
+                                </span>
+                              ) : modulo === 'fecha' &&
+                                filtroDiferenciaFechaGeneral !== 'todas' &&
+                                listaTrasFiltroCedula.length > 0 ? (
+                                <span className="mx-auto mt-2 block max-w-md text-xs text-gray-500">
+                                  Elija «Todas» u otro criterio. «Igual a 0» =
+                                  misma fecha (tolerancia como en el modal);
+                                  «Mayor que cero» = Q posterior (indicador Sí);
+                                  «Menor que cero» = Q anterior (días
+                                  negativos).
+                                </span>
+                              ) : null}
+                            </td>
+                          </tr>
+                        ) : (
+                          filasPagina.map((row, idx) => (
+                            <tr
+                              key={`${row.notificacion_caso ?? 'sin-caso'}-${row.cliente_id}-${row.numero_cuota ?? idx}`}
+                              className="border-b hover:bg-gray-50"
+                            >
+                              <td className="px-3 py-2 font-medium tabular-nums">
+                                {textoNumeroCreditoNotif(row)}
+                              </td>
 
-                    <p className="text-center text-[11px] leading-snug text-gray-400 sm:text-xs">
-                      Casos {indiceInicioPagina + 1}-
-                      {indiceInicioPagina + filasPagina.length} de{' '}
-                      {totalFilasListado} (
-                      {NOTIFICACIONES_MAX_CLIENTES_POR_PAGINA} por página; cada
-                      pestaña guarda su página)
-                    </p>
-                  </nav>
-                </div>
-              ) : null}
-            </Fragment>
-          </CardContent>
-        </Card>
+                              {!esListaCombinadaMoras ? (
+                                <td className="px-3 py-2 font-medium">
+                                  {row.nombre}
+                                </td>
+                              ) : null}
 
-        {modulo === 'fecha' ? (
-          <div className="mt-6 space-y-2">
-            <h2 className="text-sm font-semibold text-slate-800">
-              Ajuste por día de aprobación
-            </h2>
-            <p className="text-xs text-muted-foreground">
-              Listado de préstamos cuya fecha de aprobación coincide con el día elegido; edición directa
-              de aprobación (requerimiento y base siguen la regla del servidor).
-            </p>
-            <Fechas2BusquedaPanel embedded />
-          </div>
-        ) : null}
+                              <td className="px-3 py-2">{row.cedula}</td>
+
+                              {esListaCombinadaMoras ? (
+                                <td className="max-w-[14rem] px-3 py-2 text-xs leading-snug text-slate-800">
+                                  {row.notificacion_caso ?? '-'}
+                                </td>
+                              ) : null}
+
+                              {modulo === 'general' ? (
+                                <td className="px-3 py-2 text-right align-middle">
+                                  <DiferenciaAbonoGeneralCell
+                                    row={row}
+                                    data={
+                                      row.comparar_abonos_drive_cuotas ??
+                                      undefined
+                                    }
+                                    isLoading={false}
+                                    isError={false}
+                                  />
+                                </td>
+                              ) : null}
+
+                              {modulo === 'fecha' ? (
+                                <td className="px-3 py-2 text-right align-middle">
+                                  <DiferenciaFechaGeneralCell
+                                    row={row}
+                                    data={
+                                      row.comparar_fecha_entrega_q_aprobacion ??
+                                      undefined
+                                    }
+                                    isLoading={false}
+                                    isError={false}
+                                  />
+                                </td>
+                              ) : null}
+
+                              <td className="px-1 py-2 text-center align-middle">
+                                <div className="flex flex-wrap items-center justify-center gap-1">
+                                  <RevisionManualNotifCell row={row} />
+                                  {modulo === 'fecha' ? (
+                                    <CompararFechaEntregaQAprobacionCell
+                                      row={row}
+                                    />
+                                  ) : (
+                                    <CompararAbonosDriveCuotasCell row={row} />
+                                  )}
+                                </div>
+                              </td>
+
+                              {modulo === 'fecha' ? null : (
+                                <td className="px-2 py-2 text-center align-middle">
+                                  {estadoCuentaPdfCell(row.prestamo_id)}
+                                </td>
+                              )}
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                {totalFilasListado > 0 ? (
+                  <div className="mt-4 border-t border-gray-100 pt-4">
+                    <nav
+                      className="flex flex-col items-center gap-3"
+                      aria-label="Paginación del listado"
+                    >
+                      <div className="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2">
+                        <button
+                          type="button"
+                          disabled={paginaListaActual <= 1}
+                          onClick={() => irPaginaLista(paginaListaActual - 1)}
+                          aria-label="Página anterior"
+                          className="inline-flex h-9 items-center justify-center rounded-md border border-gray-200 bg-white px-3 text-sm font-medium text-gray-900 shadow-sm transition-colors hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 disabled:pointer-events-none disabled:opacity-40"
+                        >
+                          <span aria-hidden className="mr-1.5 text-gray-600">
+                            &larr;
+                          </span>
+                          Anterior
+                        </button>
+
+                        {numerosPaginaVisibles.map(n => {
+                          const activa = n === paginaListaActual
+                          return (
+                            <button
+                              key={n}
+                              type="button"
+                              onClick={() => irPaginaLista(n)}
+                              aria-label={`Ir a página ${n}`}
+                              aria-current={activa ? 'page' : undefined}
+                              className={
+                                activa
+                                  ? 'inline-flex h-9 min-w-[2.25rem] items-center justify-center rounded-md border border-blue-600 bg-blue-600 px-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-blue-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1'
+                                  : 'inline-flex h-9 min-w-[2.25rem] items-center justify-center rounded-md border border-gray-200 bg-white px-3 text-sm font-medium text-gray-900 shadow-sm transition-colors hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1'
+                              }
+                            >
+                              {n}
+                            </button>
+                          )
+                        })}
+
+                        <button
+                          type="button"
+                          disabled={paginaListaActual >= totalPaginasListado}
+                          onClick={() => irPaginaLista(paginaListaActual + 1)}
+                          aria-label="Página siguiente"
+                          className="inline-flex h-9 items-center justify-center rounded-md border border-gray-200 bg-white px-3 text-sm font-medium text-gray-900 shadow-sm transition-colors hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 disabled:pointer-events-none disabled:opacity-40"
+                        >
+                          Siguiente
+                          <span aria-hidden className="ml-1.5 text-gray-600">
+                            &rarr;
+                          </span>
+                        </button>
+                      </div>
+
+                      <p className="text-center text-xs text-gray-500 sm:text-sm">
+                        Página {paginaListaActual} de {totalPaginasListado}
+                      </p>
+
+                      <p className="text-center text-[11px] leading-snug text-gray-400 sm:text-xs">
+                        Casos {indiceInicioPagina + 1}-
+                        {indiceInicioPagina + filasPagina.length} de{' '}
+                        {totalFilasListado} (
+                        {NOTIFICACIONES_MAX_CLIENTES_POR_PAGINA} por página;
+                        cada pestaña guarda su página)
+                      </p>
+                    </nav>
+                  </div>
+                ) : null}
+              </Fragment>
+            </CardContent>
+          </Card>
+
+          {modulo === 'fecha' ? (
+            <div className="mt-6 space-y-2">
+              <h2 className="text-sm font-semibold text-slate-800">
+                Ajuste por día de aprobación
+              </h2>
+              <p className="text-xs text-muted-foreground">
+                Listado de préstamos cuya fecha de aprobación coincide con el
+                día elegido; edición directa de aprobación (requerimiento y base
+                siguen la regla del servidor).
+              </p>
+              <Fechas2BusquedaPanel embedded />
+            </div>
+          ) : null}
         </motion.div>
       </div>
 
@@ -2866,9 +2876,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                     type="checkbox"
                     className="mt-1 h-4 w-4 shrink-0 rounded border-gray-300 accent-blue-600"
                     checked={ackEnvioConListaVacia}
-                    onChange={e =>
-                      setAckEnvioConListaVacia(e.target.checked)
-                    }
+                    onChange={e => setAckEnvioConListaVacia(e.target.checked)}
                   />
                   <span>
                     Confirmo enviar igualmente: la lista en pantalla tiene 0
@@ -2925,8 +2933,8 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
             <div className="space-y-3 text-sm text-gray-600">
               <p>
                 Se llamará al mismo endpoint que «Recalcular Diferencia abono»:
-                el servidor programa en segundo plano el recálculo y persistencia
-                de{' '}
+                el servidor programa en segundo plano el recálculo y
+                persistencia de{' '}
                 <code className="rounded bg-slate-100 px-1 py-0.5 text-xs">
                   prestamos.abonos_drive_cuotas_cache
                 </code>{' '}
@@ -2952,9 +2960,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
             <Button
               type="button"
               className="bg-sky-700 text-white hover:bg-sky-800"
-              disabled={
-                programandoRefreshAbonosDrive || actualizandoListas
-              }
+              disabled={programandoRefreshAbonosDrive || actualizandoListas}
               onClick={() => {
                 setConfirmAbonosMasivoOpen(false)
                 void handleRefreshAbonosDriveCache()
@@ -2978,11 +2984,14 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Confirmar sincronización automática ABONOS</DialogTitle>
+            <DialogTitle>
+              Confirmar sincronización automática ABONOS
+            </DialogTitle>
             <div className="space-y-3 text-sm text-gray-600">
               <p>
-                Este proceso aplica diferencias positivas de ABONOS (hoja) contra
-                cuotas en BD. Omite casos con lote ambiguo y montos altos.
+                Este proceso aplica diferencias positivas de ABONOS (hoja)
+                contra cuotas en BD. Omite casos con lote ambiguo y montos
+                altos.
               </p>
               {syncPreviewLoading ? (
                 <p className="text-xs text-muted-foreground">
@@ -3035,8 +3044,8 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                 </p>
               )}
               <p className="font-medium text-gray-900">
-                Pulse «Sincronizar ahora» para ejecutar cambios reales. «Cancelar»
-                cierra sin aplicar.
+                Pulse «Sincronizar ahora» para ejecutar cambios reales.
+                «Cancelar» cierra sin aplicar.
               </p>
             </div>
           </DialogHeader>

@@ -50,7 +50,9 @@ export type PendingDigitacionSession = {
 
 let pendingWhenNoSink: PendingDigitacionSession | null = null
 
-export function setDigitacionLoteFilasSink(fn: null | ((rows: FilaLote[]) => void)) {
+export function setDigitacionLoteFilasSink(
+  fn: null | ((rows: FilaLote[]) => void)
+) {
   filasSink = fn
 }
 
@@ -139,7 +141,9 @@ export async function runDigitacionLoteEnSegundoPlano(
       document.title = `(${String(i + 1)}/${String(ids.length)}) Digitalizando…`
 
       working = working.map(f =>
-        f.clientId === clientId ? { ...f, extract: 'extrayendo', errorExtraccion: undefined } : f
+        f.clientId === clientId
+          ? { ...f, extract: 'extrayendo', errorExtraccion: undefined }
+          : f
       )
       pushFilas(working, contexto)
       await yieldToMain()
@@ -151,7 +155,8 @@ export async function runDigitacionLoteEnSegundoPlano(
       fd.append('comprobante', filaActual.archivo)
 
       try {
-        const res: EscanerInfopagosExtraerResponse = await escanerInfopagosExtraerComprobante(fd)
+        const res: EscanerInfopagosExtraerResponse =
+          await escanerInfopagosExtraerComprobante(fd)
         working = working.map(f => {
           if (f.clientId !== clientId) return f
           const nextF = filaTrasExtraccion(f, res)
@@ -182,11 +187,15 @@ export async function runDigitacionLoteEnSegundoPlano(
     if (aborted) {
       toast('Digitalización cancelada.')
     } else {
-      toast.success('Digitalización finalizada. Revise cada fila antes de guardar.')
+      toast.success(
+        'Digitalización finalizada. Revise cada fila antes de guardar.'
+      )
     }
   } catch (e: unknown) {
     toast.dismiss(toastId)
-    toast.error(e instanceof Error ? e.message : 'Error inesperado en digitalización.')
+    toast.error(
+      e instanceof Error ? e.message : 'Error inesperado en digitalización.'
+    )
   } finally {
     document.title = prevTitle
     uiSnapshot = { running: false, progressIndex: null, total: 0 }

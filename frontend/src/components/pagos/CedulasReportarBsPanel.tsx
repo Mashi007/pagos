@@ -200,8 +200,8 @@ export function CedulasReportarBsPanel({
           {showExcelUpload ? (
             <>
               cargue un Excel con columna <strong>cedula</strong> (opcional{' '}
-              <strong>fuente_tasa_cambio</strong>: bcv, euro o binance) o agregue
-              manualmente
+              <strong>fuente_tasa_cambio</strong>: bcv, euro o binance) o
+              agregue manualmente
             </>
           ) : (
             <>agregue o elimine manualmente</>
@@ -318,7 +318,8 @@ export function CedulasReportarBsPanel({
                       o =>
                         o.value ===
                         consultaCedulaBsResultado.fuente_tasa_cambio_lista_bs
-                    )?.label ?? consultaCedulaBsResultado.fuente_tasa_cambio_lista_bs}
+                    )?.label ??
+                      consultaCedulaBsResultado.fuente_tasa_cambio_lista_bs}
                   </span>
                 </p>
               ) : null}
@@ -347,57 +348,57 @@ export function CedulasReportarBsPanel({
               </p>
               <div className="flex flex-col gap-3">
                 <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
-                <Input
-                  placeholder="Ej: V12345678"
-                  value={nuevaCedulaBs}
-                  onChange={e => setNuevaCedulaBs(e.target.value)}
-                  className="h-10 min-w-0 border-slate-200 bg-white sm:max-w-[200px]"
-                  maxLength={20}
-                  aria-label="Cédula a agregar a la lista"
-                  onKeyDown={e =>
-                    e.key === 'Enter' &&
-                    (e.preventDefault(),
-                    document.getElementById('btn-agregar-cedula-bs')?.click())
-                  }
-                />
-                <Button
-                  id="btn-agregar-cedula-bs"
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className={cn(
-                    'h-10 border-emerald-300 bg-white text-emerald-900',
-                    'hover:bg-emerald-50'
-                  )}
-                  disabled={isAgregandoCedulaBs || !nuevaCedulaBs.trim()}
-                  onClick={async () => {
-                    const ced = nuevaCedulaBs.trim()
-                    if (!ced) return
-                    setIsAgregandoCedulaBs(true)
-                    try {
-                      const res = await pagoService.addCedulaReportarBs(
-                        ced,
-                        fuenteAltaCedula
-                      )
-                      setCedulasReportarBsTotal(res.total)
-                      setNuevaCedulaBs('')
-                      setFuenteAltaCedula(FUENTE_TASA_DEFAULT)
-                      bumpLista({ resetToFirstPage: true })
-                      toast.success(res.mensaje)
-                    } catch (err) {
-                      toast.error(getErrorMessage(err))
-                    } finally {
-                      setIsAgregandoCedulaBs(false)
+                  <Input
+                    placeholder="Ej: V12345678"
+                    value={nuevaCedulaBs}
+                    onChange={e => setNuevaCedulaBs(e.target.value)}
+                    className="h-10 min-w-0 border-slate-200 bg-white sm:max-w-[200px]"
+                    maxLength={20}
+                    aria-label="Cédula a agregar a la lista"
+                    onKeyDown={e =>
+                      e.key === 'Enter' &&
+                      (e.preventDefault(),
+                      document.getElementById('btn-agregar-cedula-bs')?.click())
                     }
-                  }}
-                >
-                  {isAgregandoCedulaBs ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : (
-                    <Plus className="mr-2 h-4 w-4" />
-                  )}
-                  Agregar cédula
-                </Button>
+                  />
+                  <Button
+                    id="btn-agregar-cedula-bs"
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className={cn(
+                      'h-10 border-emerald-300 bg-white text-emerald-900',
+                      'hover:bg-emerald-50'
+                    )}
+                    disabled={isAgregandoCedulaBs || !nuevaCedulaBs.trim()}
+                    onClick={async () => {
+                      const ced = nuevaCedulaBs.trim()
+                      if (!ced) return
+                      setIsAgregandoCedulaBs(true)
+                      try {
+                        const res = await pagoService.addCedulaReportarBs(
+                          ced,
+                          fuenteAltaCedula
+                        )
+                        setCedulasReportarBsTotal(res.total)
+                        setNuevaCedulaBs('')
+                        setFuenteAltaCedula(FUENTE_TASA_DEFAULT)
+                        bumpLista({ resetToFirstPage: true })
+                        toast.success(res.mensaje)
+                      } catch (err) {
+                        toast.error(getErrorMessage(err))
+                      } finally {
+                        setIsAgregandoCedulaBs(false)
+                      }
+                    }}
+                  >
+                    {isAgregandoCedulaBs ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Plus className="mr-2 h-4 w-4" />
+                    )}
+                    Agregar cédula
+                  </Button>
                 </div>
                 <div>
                   <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-emerald-900/80">
@@ -421,7 +422,9 @@ export function CedulasReportarBsPanel({
                           onChange={() => setFuenteAltaCedula(opt.value)}
                           className="h-3.5 w-3.5 accent-emerald-600"
                         />
-                        <span className="font-medium text-slate-800">{opt.label}</span>
+                        <span className="font-medium text-slate-800">
+                          {opt.label}
+                        </span>
                       </label>
                     ))}
                   </div>
@@ -492,7 +495,9 @@ export function CedulasReportarBsPanel({
             <div className="mt-4 flex flex-col gap-2 border-t border-slate-200/80 pt-4 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-sm text-slate-600">
                 Importación masiva reemplaza la lista completa. Columna opcional{' '}
-                <span className="font-mono text-slate-800">fuente_tasa_cambio</span>{' '}
+                <span className="font-mono text-slate-800">
+                  fuente_tasa_cambio
+                </span>{' '}
                 (bcv, euro, binance).
               </p>
               <div className="flex shrink-0 items-center gap-2">

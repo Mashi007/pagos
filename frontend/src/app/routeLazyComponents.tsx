@@ -16,7 +16,9 @@ export const EstadoCuentaPublicoPage = lazy(
   () => import('../pages/EstadoCuentaPublicoPage')
 )
 
-export const AccesoLimitadoPage = lazy(() => import('../pages/AccesoLimitadoPage'))
+export const AccesoLimitadoPage = lazy(
+  () => import('../pages/AccesoLimitadoPage')
+)
 
 export const DashboardMenu = lazy(() => import('../pages/DashboardMenu'))
 
@@ -50,9 +52,13 @@ export const TasaCambioPage = lazy(() => import('../pages/TasaCambioPage'))
 
 export const InfopagosPage = lazy(() => import('../pages/InfopagosPage'))
 
-export const EscanerInfopagosPage = lazy(() => import('../pages/EscanerInfopagosPage'))
+export const EscanerInfopagosPage = lazy(
+  () => import('../pages/EscanerInfopagosPage')
+)
 
-export const EscanerInfopagosLotePage = lazy(() => import('../pages/EscanerInfopagosLotePage'))
+export const EscanerInfopagosLotePage = lazy(
+  () => import('../pages/EscanerInfopagosLotePage')
+)
 
 export const AmortizacionPage = lazy(() => import('../pages/AmortizacionPage'))
 
@@ -62,15 +68,21 @@ export const CobrosPagosReportadosPage = lazy(
 
 export const CobrosEditarPage = lazy(() => import('../pages/CobrosEditarPage'))
 
-export const CobrosDetallePage = lazy(() => import('../pages/CobrosDetallePage'))
+export const CobrosDetallePage = lazy(
+  () => import('../pages/CobrosDetallePage')
+)
 
-export const CobrosHistoricoPage = lazy(() => import('../pages/CobrosHistoricoPage'))
+export const CobrosHistoricoPage = lazy(
+  () => import('../pages/CobrosHistoricoPage')
+)
 
 export const Reportes = lazy(() => import('../pages/Reportes'))
 
 export const RevisionManual = lazy(() => import('../pages/RevisionManual'))
 
-export const EditarRevisionManual = lazy(() => import('../pages/EditarRevisionManual'))
+export const EditarRevisionManual = lazy(
+  () => import('../pages/EditarRevisionManual')
+)
 
 export const Auditoria = lazy(() => import('../pages/Auditoria'))
 
@@ -122,7 +134,9 @@ export const Solicitudes = lazy(() => import('../pages/Solicitudes'))
 
 export const EmbudoClientes = lazy(() => import('../pages/EmbudoClientes'))
 
-export const EmbudoConcesionarios = lazy(() => import('../pages/EmbudoConcesionarios'))
+export const EmbudoConcesionarios = lazy(
+  () => import('../pages/EmbudoConcesionarios')
+)
 
 export const AdminTasaCambioPage = lazy(() =>
   import('../pages/AdminTasaCambioPage').then(m => ({

@@ -56,7 +56,7 @@ export interface EmailCuentasResponse {
 
     estado_cuenta: number
 
-    /** Índice 1–4: cuenta SMTP para envíos automáticos Recibos (post-conciliación). */
+    /** Índice 1-4: cuenta SMTP para envíos automáticos Recibos (post-conciliación). */
     recibos?: number
 
     notificaciones_tab?: Record<string, number>

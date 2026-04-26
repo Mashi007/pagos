@@ -17,7 +17,9 @@ const OPCIONES_ESTADO_PRESTAMO_REVISION: { value: string; label: string }[] = [
   { value: 'RECHAZADO', label: 'Rechazado' },
 ]
 
-export function opcionesSelectEstadoPrestamoRevision(estadoRaw: string | undefined) {
+export function opcionesSelectEstadoPrestamoRevision(
+  estadoRaw: string | undefined
+) {
   const codigo = (estadoRaw ?? '').trim().toUpperCase()
   if (
     codigo &&
@@ -334,7 +336,11 @@ export function buildPrestamoPatchGuardarRevision(
   return prestamoUpdate
 }
 
-export type FirmaCargaRevision = { cliente: string; prestamo: string; cuotas: string }
+export type FirmaCargaRevision = {
+  cliente: string
+  prestamo: string
+  cuotas: string
+}
 
 /** Lotes de PUT de cuotas en revisión manual (evita ~12 s en serie contra el mismo host). */
 export const CUOTAS_REVISION_PUT_CONCURRENCY = 6
@@ -392,7 +398,9 @@ export function fechaPagoPagoRowParaInput(pago: Pago): string {
 }
 
 /** Para ordenar filas: más reciente primero; sin fecha válida al final. */
-export function timestampOrdenFechaPago(fp: string | Date | null | undefined): number {
+export function timestampOrdenFechaPago(
+  fp: string | Date | null | undefined
+): number {
   if (fp == null || fp === '') return Number.NEGATIVE_INFINITY
   if (typeof fp === 'string') {
     const t = Date.parse(fp)

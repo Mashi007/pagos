@@ -59,8 +59,16 @@ export type PrestamoCandidatosDriveGuardarValidados100Response = {
   errores_al_guardar: number
   /** Candidatos que siguen en el snapshot (no validaron o error al crear préstamo). */
   pendientes_en_snapshot?: number
-  omitidos: Array<{ sheet_row_number: number; cedula_cmp: string; motivos: string[] }>
-  errores: Array<{ sheet_row_number: number; cedula_cmp: string; error: string }>
+  omitidos: Array<{
+    sheet_row_number: number
+    cedula_cmp: string
+    motivos: string[]
+  }>
+  errores: Array<{
+    sheet_row_number: number
+    cedula_cmp: string
+    error: string
+  }>
   mensaje: string
 }
 
@@ -84,7 +92,10 @@ export type PrestamoCandidatosDriveGuardarFilaResponse = {
 export async function postPrestamosCandidatosDriveGuardarFila(
   sheetRowNumber: number
 ): Promise<PrestamoCandidatosDriveGuardarFilaResponse> {
-  return apiClient.post<PrestamoCandidatosDriveGuardarFilaResponse>(`${BASE}/guardar-fila`, {
-    sheet_row_number: sheetRowNumber,
-  })
+  return apiClient.post<PrestamoCandidatosDriveGuardarFilaResponse>(
+    `${BASE}/guardar-fila`,
+    {
+      sheet_row_number: sheetRowNumber,
+    }
+  )
 }

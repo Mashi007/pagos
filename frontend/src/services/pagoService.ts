@@ -620,7 +620,11 @@ class PagoService {
     total: number
     page: number
     page_size: number
-    items: { cedula: string; creado_en: string | null; fuente_tasa_cambio: string }[]
+    items: {
+      cedula: string
+      creado_en: string | null
+      fuente_tasa_cambio: string
+    }[]
   }> {
     const sp = new URLSearchParams()
     if (params?.page != null) sp.set('page', String(params.page))
@@ -872,7 +876,7 @@ class PagoService {
       saldo_vencido: number
 
       total_prestamos: number
-    }>,
+    }>
     total: number
 
     page: number
@@ -1040,7 +1044,9 @@ class PagoService {
     eliminados_temporal: number
     mensaje: string
   }> {
-    return await apiClient.post(`${this.baseUrl}/gmail/migrar-pendientes-a-con-errores`)
+    return await apiClient.post(
+      `${this.baseUrl}/gmail/migrar-pendientes-a-con-errores`
+    )
   }
 
   /** Pagos Gmail: descargar Excel (solo lectura en servidor). No borra datos; las filas se siguen acumulando. */

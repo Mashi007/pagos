@@ -501,9 +501,7 @@ export function normalizeCedulaInput(value: string | null | undefined): string {
 
 /** Clave canónica para duplicados en Excel y coincidencia con `check-cedulas` (misma normalización). Vacío si no es cédula válida. */
 
-export function cedulaComparableKey(
-  value: string | null | undefined
-): string {
+export function cedulaComparableKey(value: string | null | undefined): string {
   const n = normalizeCedulaInput(blankIfNN(value ?? ''))
 
   if (!n || !/^[VEJ]\d{6,11}$/.test(n)) return ''
@@ -518,7 +516,7 @@ export function normalizeTelefonoFromExcel(
 ): string {
   if (raw == null || String(raw).trim() === '') return ''
 
-  let s = String(raw).replace(/[\s\-–—]/g, '')
+  let s = String(raw).replace(/[\s\---]/g, '')
 
   let d = s.replace(/\D/g, '')
 
@@ -627,8 +625,7 @@ export function validateField(
       if (!value?.trim())
         return { isValid: false, message: 'Teléfono requerido' }
       const d = normalizeTelefonoFromExcel(value)
-      if (d.length !== 10)
-        return { isValid: false, message: '10 dígitos' }
+      if (d.length !== 10) return { isValid: false, message: '10 dígitos' }
       return /^[1-9]\d{9}$/.test(d)
         ? { isValid: true }
         : { isValid: false, message: '10 dígitos sin 0 inicial' }

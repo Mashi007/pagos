@@ -76,7 +76,11 @@ function buildPutPayload(
     recibos_bcc_emails: string[]
   }
 ) {
-  const a = cur.asignacion ?? { cobros: 1, estado_cuenta: 2, notificaciones_tab: {} }
+  const a = cur.asignacion ?? {
+    cobros: 1,
+    estado_cuenta: 2,
+    notificaciones_tab: {},
+  }
   return {
     cuentas: cur.cuentas,
     asignacion: {
@@ -177,19 +181,24 @@ export function ConfiguracionRecibos({ emergencyResetSeq = 0 }: Props) {
   /** HTML procesado de la plantilla persistida (BD/archivo): misma fuente que job y envío real. */
   const [htmlVistaSmtpGuardada, setHtmlVistaSmtpGuardada] = useState('')
   const [vistaGuardadaCargando, setVistaGuardadaCargando] = useState(false)
-  const [vistaGuardadaError, setVistaGuardadaError] = useState<string | null>(null)
+  const [vistaGuardadaError, setVistaGuardadaError] = useState<string | null>(
+    null
+  )
   /** Último HTML crudo traído o guardado en servidor; sirve para detectar borrador sin persistir. */
-  const [plantillaCrudaUltimaServidor, setPlantillaCrudaUltimaServidor] = useState('')
+  const [plantillaCrudaUltimaServidor, setPlantillaCrudaUltimaServidor] =
+    useState('')
   const [plantillaCargando, setPlantillaCargando] = useState(false)
   const [plantillaError, setPlantillaError] = useState<string | null>(null)
-  const [guardandoPlantillaCorreo, setGuardandoPlantillaCorreo] = useState(false)
+  const [guardandoPlantillaCorreo, setGuardandoPlantillaCorreo] =
+    useState(false)
   const previewSeq = useRef(0)
 
   const cargarVistaPreviaPlantillaGuardada = useCallback(async () => {
     setVistaGuardadaCargando(true)
     setVistaGuardadaError(null)
     try {
-      const { html } = await notificacionService.obtenerPlantillaRecibosHtmlVistaEnvio()
+      const { html } =
+        await notificacionService.obtenerPlantillaRecibosHtmlVistaEnvio()
       setHtmlVistaSmtpGuardada(String(html ?? '').trim())
     } catch (e) {
       setHtmlVistaSmtpGuardada('')
@@ -232,9 +241,13 @@ export function ConfiguracionRecibos({ emergencyResetSeq = 0 }: Props) {
           return
         }
         try {
-          const { html } = await notificacionService.previsualizarPlantillaRecibosHtml(editorHtml, {
-            signal: ac.signal,
-          })
+          const { html } =
+            await notificacionService.previsualizarPlantillaRecibosHtml(
+              editorHtml,
+              {
+                signal: ac.signal,
+              }
+            )
           if (seq === previewSeq.current && !ac.signal.aborted) {
             setHtmlVistaSmtp(html)
             setPlantillaError(null)
@@ -265,7 +278,9 @@ export function ConfiguracionRecibos({ emergencyResetSeq = 0 }: Props) {
     setCuentaRecibos(
       typeof data.asignacion?.recibos === 'number' ? data.asignacion.recibos : 3
     )
-    const bcc = Array.isArray(data.recibos_bcc_emails) ? data.recibos_bcc_emails : []
+    const bcc = Array.isArray(data.recibos_bcc_emails)
+      ? data.recibos_bcc_emails
+      : []
     setRecibosBcc1(String(bcc[0] ?? '').trim())
     setRecibosBcc2(String(bcc[1] ?? '').trim())
   }, [data])
@@ -290,7 +305,9 @@ export function ConfiguracionRecibos({ emergencyResetSeq = 0 }: Props) {
     setGuardando(false)
     setProbando(false)
     setGuardandoPlantillaCorreo(false)
-    toast.info('Operación en pantalla restablecida. Si un envío sigue en el servidor, espere unos segundos.')
+    toast.info(
+      'Operación en pantalla restablecida. Si un envío sigue en el servidor, espere unos segundos.'
+    )
   }
 
   const guardar = useCallback(async () => {
@@ -305,11 +322,16 @@ export function ConfiguracionRecibos({ emergencyResetSeq = 0 }: Props) {
           email_activo_recibos: emailActivoRecibos ? 'true' : 'false',
           modo_pruebas_recibos: modoPruebasRecibos ? 'true' : 'false',
           recibos_cuenta: cuentaRecibos,
-          recibos_bcc_emails: normalizarBccRecibosParaGuardar(recibosBcc1, recibosBcc2),
+          recibos_bcc_emails: normalizarBccRecibosParaGuardar(
+            recibosBcc1,
+            recibosBcc2
+          ),
         })
       )
       toast.success('Configuración guardada')
-      await qc.invalidateQueries({ queryKey: NOTIFICACIONES_QUERY_KEYS.emailEstado })
+      await qc.invalidateQueries({
+        queryKey: NOTIFICACIONES_QUERY_KEYS.emailEstado,
+      })
       await refetch()
     } catch (e) {
       toast.error(getErrorMessage(e))
@@ -391,7 +413,10 @@ export function ConfiguracionRecibos({ emergencyResetSeq = 0 }: Props) {
     return (
       <div className="flex items-center justify-center py-16">
         <div className="text-center text-gray-500">
-          <Clock className="mx-auto mb-2 h-8 w-8 animate-pulse text-blue-500" aria-hidden />
+          <Clock
+            className="mx-auto mb-2 h-8 w-8 animate-pulse text-blue-500"
+            aria-hidden
+          />
 
           <p>Cargando configuración...</p>
         </div>
@@ -404,7 +429,8 @@ export function ConfiguracionRecibos({ emergencyResetSeq = 0 }: Props) {
       <div className="space-y-6">
         <Card className="border-red-200 bg-red-50/40">
           <CardContent className="pt-6 text-sm text-red-800">
-            No se pudo cargar la configuración de email: {getErrorMessage(error)}
+            No se pudo cargar la configuración de email:{' '}
+            {getErrorMessage(error)}
           </CardContent>
         </Card>
       </div>
@@ -415,8 +441,9 @@ export function ConfiguracionRecibos({ emergencyResetSeq = 0 }: Props) {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-red-200 bg-red-50/90 px-3 py-2">
         <p className="max-w-xl text-sm text-red-900">
-          <strong>Emergencia:</strong> cancela guardado o prueba en curso o desbloquea si el formulario
-          quedó colgado (revise en red si el PUT siguió).
+          <strong>Emergencia:</strong> cancela guardado o prueba en curso o
+          desbloquea si el formulario quedó colgado (revise en red si el PUT
+          siguió).
         </p>
 
         <Button
@@ -441,15 +468,17 @@ export function ConfiguracionRecibos({ emergencyResetSeq = 0 }: Props) {
           </CardTitle>
 
           <CardDescription>
-            Ajustes del servicio <strong>recibos</strong> en la misma persistencia que{' '}
+            Ajustes del servicio <strong>recibos</strong> en la misma
+            persistencia que{' '}
             <Link
               to="/configuracion?tab=email"
               className="font-medium text-blue-600 underline underline-offset-2"
             >
               Configuración → Email (4 cuentas)
             </Link>
-            . El modo prueba y los envíos de Recibos no toman el JSON de Notificaciones → Envíos; solo sus
-            propias claves y el correo maestro global.
+            . El modo prueba y los envíos de Recibos no toman el JSON de
+            Notificaciones → Envíos; solo sus propias claves y el correo maestro
+            global.
           </CardDescription>
         </CardHeader>
       </Card>
@@ -494,7 +523,9 @@ export function ConfiguracionRecibos({ emergencyResetSeq = 0 }: Props) {
 
         <CardContent className="space-y-4">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-sm font-medium text-gray-700">Recibos: envío</span>
+            <span className="text-sm font-medium text-gray-700">
+              Recibos: envío
+            </span>
 
             <SwitchPill
               checked={emailActivoRecibos}
@@ -511,7 +542,9 @@ export function ConfiguracionRecibos({ emergencyResetSeq = 0 }: Props) {
 
           <div className="rounded-lg border border-amber-200 bg-amber-50/80 p-3">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="text-sm font-medium text-gray-800">Modo prueba (Recibos)</span>
+              <span className="text-sm font-medium text-gray-800">
+                Modo prueba (Recibos)
+              </span>
 
               <SwitchPill
                 checked={modoPruebasRecibos}
@@ -532,7 +565,7 @@ export function ConfiguracionRecibos({ emergencyResetSeq = 0 }: Props) {
               htmlFor="rec-cuenta-sel"
               className="w-40 shrink-0 whitespace-nowrap text-sm font-medium text-gray-700"
             >
-              Cuenta SMTP (1–4)
+              Cuenta SMTP (1-4)
             </label>
 
             <Select
@@ -556,14 +589,20 @@ export function ConfiguracionRecibos({ emergencyResetSeq = 0 }: Props) {
           </div>
 
           <div className="space-y-3 rounded-lg border border-slate-200 bg-white/80 p-3">
-            <p className="text-sm font-medium text-gray-800">Copia oculta (CCO) en envíos Recibos</p>
+            <p className="text-sm font-medium text-gray-800">
+              Copia oculta (CCO) en envíos Recibos
+            </p>
             <p className="text-xs text-gray-600">
-              Opcional: hasta 2 correos que recibirán copia oculta de cada envío Recibos (mismo adjunto y
-              cuerpo). Se guardan en la configuración de email y se aplican al enviar por SMTP.
+              Opcional: hasta 2 correos que recibirán copia oculta de cada envío
+              Recibos (mismo adjunto y cuerpo). Se guardan en la configuración
+              de email y se aplican al enviar por SMTP.
             </p>
             <div className="grid max-w-xl gap-3 sm:grid-cols-2">
               <div className="flex flex-col gap-1">
-                <label htmlFor="rec-bcc-1" className="text-xs font-medium text-gray-600">
+                <label
+                  htmlFor="rec-bcc-1"
+                  className="text-xs font-medium text-gray-600"
+                >
                   CCO opción 1
                 </label>
                 <Input
@@ -578,7 +617,10 @@ export function ConfiguracionRecibos({ emergencyResetSeq = 0 }: Props) {
                 />
               </div>
               <div className="flex flex-col gap-1">
-                <label htmlFor="rec-bcc-2" className="text-xs font-medium text-gray-600">
+                <label
+                  htmlFor="rec-bcc-2"
+                  className="text-xs font-medium text-gray-600"
+                >
                   CCO opción 2
                 </label>
                 <Input
@@ -603,7 +645,10 @@ export function ConfiguracionRecibos({ emergencyResetSeq = 0 }: Props) {
               onClick={() => void refetch()}
               disabled={isFetching}
             >
-              <RefreshCw className={`mr-2 h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} aria-hidden />
+              <RefreshCw
+                className={`mr-2 h-4 w-4 ${isFetching ? 'animate-spin' : ''}`}
+                aria-hidden
+              />
               Recargar
             </Button>
 
@@ -630,11 +675,14 @@ export function ConfiguracionRecibos({ emergencyResetSeq = 0 }: Props) {
                 HTML del correo Recibos y vista previa
               </CardTitle>
               <CardDescription className="mt-1">
-                Hay dos vistas: <strong>borrador</strong> (HTML del cuadro + pipeline SMTP) y{' '}
-                <strong>plantilla guardada</strong> (lee BD/archivo en el servidor y aplica el mismo pipeline que
-                el job). Así se ve exactamente el <code className="text-[11px]">text/html</code> que se enviará
-                mientras edita sin guardar. <strong>Enviar prueba</strong>, envío manual y job solo usan la
-                versión persistida; guarde con el botón verde antes de probar o ejecutar masivo.
+                Hay dos vistas: <strong>borrador</strong> (HTML del cuadro +
+                pipeline SMTP) y <strong>plantilla guardada</strong> (lee
+                BD/archivo en el servidor y aplica el mismo pipeline que el
+                job). Así se ve exactamente el{' '}
+                <code className="text-[11px]">text/html</code> que se enviará
+                mientras edita sin guardar. <strong>Enviar prueba</strong>,
+                envío manual y job solo usan la versión persistida; guarde con
+                el botón verde antes de probar o ejecutar masivo.
               </CardDescription>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -651,7 +699,9 @@ export function ConfiguracionRecibos({ emergencyResetSeq = 0 }: Props) {
                   className={`mr-2 h-4 w-4 ${vistaGuardadaCargando ? 'animate-spin' : ''}`}
                   aria-hidden
                 />
-                {vistaGuardadaCargando ? 'Actualizando vista envío…' : 'Actualizar vista envío'}
+                {vistaGuardadaCargando
+                  ? 'Actualizando vista envío…'
+                  : 'Actualizar vista envío'}
               </Button>
               <Button
                 type="button"
@@ -675,8 +725,13 @@ export function ConfiguracionRecibos({ emergencyResetSeq = 0 }: Props) {
                 disabled={guardandoPlantillaCorreo || !editorHtml.trim()}
                 onClick={() => void guardarPlantillaCorreoEnServidor()}
               >
-                <Save className={`mr-2 h-4 w-4 ${guardandoPlantillaCorreo ? 'animate-pulse' : ''}`} aria-hidden />
-                {guardandoPlantillaCorreo ? 'Guardando plantilla…' : 'Guardar plantilla'}
+                <Save
+                  className={`mr-2 h-4 w-4 ${guardandoPlantillaCorreo ? 'animate-pulse' : ''}`}
+                  aria-hidden
+                />
+                {guardandoPlantillaCorreo
+                  ? 'Guardando plantilla…'
+                  : 'Guardar plantilla'}
               </Button>
               <Button
                 type="button"
@@ -706,18 +761,27 @@ export function ConfiguracionRecibos({ emergencyResetSeq = 0 }: Props) {
               className="flex flex-wrap items-start gap-2 rounded-md border border-amber-300 bg-amber-50/90 px-3 py-2 text-sm text-amber-950"
               role="status"
             >
-              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" aria-hidden />
+              <AlertTriangle
+                className="mt-0.5 h-4 w-4 shrink-0 text-amber-700"
+                aria-hidden
+              />
               <p>
-                Hay cambios en el editor <strong>sin guardar en el servidor</strong>. Job, envío masivo y
-                «Enviar prueba» usan la plantilla persistida; la sección <strong>Plantilla guardada</strong>{' '}
-                abajo muestra ese HTML. Guarde con el botón verde para alinear envíos con el borrador.
+                Hay cambios en el editor{' '}
+                <strong>sin guardar en el servidor</strong>. Job, envío masivo y
+                «Enviar prueba» usan la plantilla persistida; la sección{' '}
+                <strong>Plantilla guardada</strong> abajo muestra ese HTML.
+                Guarde con el botón verde para alinear envíos con el borrador.
               </p>
             </div>
           ) : null}
 
           <div className="flex flex-col gap-2">
-            <label htmlFor="recibos-html-editor" className="text-xs font-medium text-gray-700">
-              HTML (borrador: la vista previa del cuadro usa este texto; job y prueba SMTP leen solo lo guardado)
+            <label
+              htmlFor="recibos-html-editor"
+              className="text-xs font-medium text-gray-700"
+            >
+              HTML (borrador: la vista previa del cuadro usa este texto; job y
+              prueba SMTP leen solo lo guardado)
             </label>
             <Textarea
               id="recibos-html-editor"
@@ -725,13 +789,14 @@ export function ConfiguracionRecibos({ emergencyResetSeq = 0 }: Props) {
               value={editorHtml}
               onChange={e => setEditorHtml(e.target.value)}
               placeholder="Pulse «Traer del servidor» para cargar la misma versión que usa SMTP."
-              className="min-h-[220px] max-h-[min(50vh,420px)] resize-y font-mono text-xs leading-relaxed"
+              className="max-h-[min(50vh,420px)] min-h-[220px] resize-y font-mono text-xs leading-relaxed"
             />
           </div>
 
           <div>
             <p className="mb-2 text-xs font-medium text-gray-600">
-              Vista previa del borrador (mismo pipeline SMTP que la parte <code className="text-[11px]">text/html</code>)
+              Vista previa del borrador (mismo pipeline SMTP que la parte{' '}
+              <code className="text-[11px]">text/html</code>)
             </p>
             {htmlVistaSmtp.trim() ? (
               <iframe
@@ -752,7 +817,8 @@ export function ConfiguracionRecibos({ emergencyResetSeq = 0 }: Props) {
           <div className="border-t border-slate-200 pt-4">
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
               <p className="text-xs font-medium text-gray-800">
-                Plantilla guardada en servidor (misma fuente que job y envío real)
+                Plantilla guardada en servidor (misma fuente que job y envío
+                real)
               </p>
             </div>
             {vistaGuardadaError ? (
@@ -784,9 +850,11 @@ export function ConfiguracionRecibos({ emergencyResetSeq = 0 }: Props) {
           </CardTitle>
 
           <CardDescription>
-            Un solo correo de muestra: plantilla HTML <strong>ya guardada</strong> (misma que el envío masivo)
-            más PDF de estado de cuenta del primer cliente válido en la ventana (Caracas). Destino: solo el
-            correo que indique abajo. CCO según Recibos. Guarde la plantilla antes si acaba de editarla.
+            Un solo correo de muestra: plantilla HTML{' '}
+            <strong>ya guardada</strong> (misma que el envío masivo) más PDF de
+            estado de cuenta del primer cliente válido en la ventana (Caracas).
+            Destino: solo el correo que indique abajo. CCO según Recibos. Guarde
+            la plantilla antes si acaba de editarla.
           </CardDescription>
         </CardHeader>
 

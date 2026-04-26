@@ -237,7 +237,9 @@ export const AdminTasaCambioPage: React.FC = () => {
               <p className="mb-1 text-sm text-gray-600">BCV (hoy)</p>
 
               <p className="text-2xl font-bold text-gray-900">
-                {tasaHoyRow?.tasa_bcv != null ? `${tasaHoyRow.tasa_bcv.toFixed(2)}` : '-'}
+                {tasaHoyRow?.tasa_bcv != null
+                  ? `${tasaHoyRow.tasa_bcv.toFixed(2)}`
+                  : '-'}
               </p>
 
               <p className="mt-2 text-xs text-gray-500">Bs./USD</p>
@@ -273,7 +275,9 @@ export const AdminTasaCambioPage: React.FC = () => {
                 onClick={() => setMostrarModal(true)}
                 className="mt-4 w-full rounded-lg bg-orange-600 px-4 py-2 font-semibold text-white transition hover:bg-orange-700"
               >
-                {tasaHoyRow?.tasa_oficial != null ? 'Actualizar tasas' : 'Ingresar tasas'}
+                {tasaHoyRow?.tasa_oficial != null
+                  ? 'Actualizar tasas'
+                  : 'Ingresar tasas'}
               </button>
             </div>
           </div>

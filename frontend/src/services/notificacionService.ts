@@ -1313,7 +1313,9 @@ class NotificacionService {
       const detRec = typeof det === 'object' && det !== null ? det : null
       const tokenUltimo =
         detRec && 'token_seguimiento' in detRec
-          ? String((detRec as Record<string, unknown>).token_seguimiento || '').trim()
+          ? String(
+              (detRec as Record<string, unknown>).token_seguimiento || ''
+            ).trim()
           : ''
       if (
         ultimo &&
@@ -1333,7 +1335,9 @@ class NotificacionService {
           sin_email: Number(ultimo.sin_email ?? 0),
           fallidos: Number(ultimo.fallidos ?? 0),
           omitidos_config: Number(ultimo.omitidos_config ?? 0),
-          omitidos_paquete_incompleto: Number(ultimo.omitidos_paquete_incompleto ?? 0),
+          omitidos_paquete_incompleto: Number(
+            ultimo.omitidos_paquete_incompleto ?? 0
+          ),
           omitidos_desistimiento: Number(ultimo.omitidos_desistimiento ?? 0),
           enviados_whatsapp: Number(ultimo.enviados_whatsapp ?? 0),
           fallidos_whatsapp: Number(ultimo.fallidos_whatsapp ?? 0),
@@ -1350,9 +1354,7 @@ class NotificacionService {
 
   /** Ultimo resumen persistido tras enviar-todas o enviar-caso-manual (sin depender solo de logs). */
 
-  async obtenerUltimoEnvioBatch(opts?: {
-    signal?: AbortSignal
-  }): Promise<{
+  async obtenerUltimoEnvioBatch(opts?: { signal?: AbortSignal }): Promise<{
     ultimo: Record<string, unknown> | null
   }> {
     return await apiClient.get<{ ultimo: Record<string, unknown> | null }>(
@@ -1482,9 +1484,12 @@ class NotificacionService {
   async postFechaQAuditoriaMarcaNoAplicar(params: {
     prestamoId: number
   }): Promise<{ ok: boolean; prestamo_id: number }> {
-    return await apiClient.post(`${this.baseUrl}/fecha-q-auditoria-marca-no-aplicar`, {
-      prestamo_id: params.prestamoId,
-    })
+    return await apiClient.post(
+      `${this.baseUrl}/fecha-q-auditoria-marca-no-aplicar`,
+      {
+        prestamo_id: params.prestamoId,
+      }
+    )
   }
 
   /**
@@ -1503,7 +1508,10 @@ class NotificacionService {
     }
     const lote = params.lote?.trim()
     if (lote) body.lote = lote
-    return await apiClient.post(`${this.baseUrl}/aplicar-fecha-entrega-q-como-fecha-aprobacion`, body)
+    return await apiClient.post(
+      `${this.baseUrl}/aplicar-fecha-entrega-q-como-fecha-aprobacion`,
+      body
+    )
   }
 
   /**
@@ -1536,9 +1544,7 @@ class NotificacionService {
   }
 
   /** Submódulo Recibos: vista previa de pagos conciliados en la franja (fecha_registro en Caracas). */
-  async listarRecibosConciliacion(params: {
-    fecha_caracas?: string
-  }): Promise<{
+  async listarRecibosConciliacion(params: { fecha_caracas?: string }): Promise<{
     fecha_dia: string
     slot: string
     total_pagos: number
@@ -1611,7 +1617,7 @@ class NotificacionService {
 
   /**
    * Vista previa de la plantilla **ya persistida** (BD o archivo por defecto), con el mismo pipeline
-   * que `send_email` — idéntica fuente que el envío masivo Recibos en servidor.
+   * que `send_email` - idéntica fuente que el envío masivo Recibos en servidor.
    */
   async obtenerPlantillaRecibosHtmlVistaEnvio(): Promise<{ html: string }> {
     return await apiClient.get<{ html: string }>(
@@ -1621,9 +1627,12 @@ class NotificacionService {
 
   /** Persiste la plantilla en el servidor (misma fuente que el envío Recibos en servidor). */
   async guardarPlantillaRecibosHtml(html: string): Promise<{ ok: boolean }> {
-    return await apiClient.put(`${API_V1}/notificaciones/recibos/plantilla-correo-html`, {
-      html,
-    })
+    return await apiClient.put(
+      `${API_V1}/notificaciones/recibos/plantilla-correo-html`,
+      {
+        html,
+      }
+    )
   }
 }
 
@@ -1686,11 +1695,16 @@ class EmailConfigService {
 
     if (opts?.tipo_tab) body.tipo_tab = opts.tipo_tab
 
-    if (opts?.recibos_prueba_datos_reales) body.recibos_prueba_datos_reales = true
+    if (opts?.recibos_prueba_datos_reales)
+      body.recibos_prueba_datos_reales = true
 
-    if (opts?.fecha_caracas?.trim()) body.fecha_caracas = opts.fecha_caracas.trim()
+    if (opts?.fecha_caracas?.trim())
+      body.fecha_caracas = opts.fecha_caracas.trim()
 
-    if (opts?.recibos_html_plantilla != null && opts.recibos_html_plantilla !== '') {
+    if (
+      opts?.recibos_html_plantilla != null &&
+      opts.recibos_html_plantilla !== ''
+    ) {
       body.recibos_html_plantilla = opts.recibos_html_plantilla
     }
 

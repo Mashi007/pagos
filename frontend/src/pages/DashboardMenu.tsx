@@ -1191,11 +1191,11 @@ export function DashboardMenu() {
           <div className="space-y-6">
             {/* Aviso cuando no hay datos en los gráficos */}
 
-            {(!datosDashboard?.evolucion_mensual?.length ||
-              datosDashboard.evolucion_mensual.every(
-                (e: EvolucionMensualItem) =>
-                  !e.cartera && !e.cobrado && !(e.pagos_atrasos ?? 0)
-              )) ? (
+            {!datosDashboard?.evolucion_mensual?.length ||
+            datosDashboard.evolucion_mensual.every(
+              (e: EvolucionMensualItem) =>
+                !e.cartera && !e.cobrado && !(e.pagos_atrasos ?? 0)
+            ) ? (
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}

@@ -79,7 +79,10 @@ const ESTADO_BADGE: Record<string, string> = {
 }
 
 const isMercantilBank = (value: string) =>
-  String(value ?? '').trim().toLowerCase().includes('mercantil')
+  String(value ?? '')
+    .trim()
+    .toLowerCase()
+    .includes('mercantil')
 
 const MENSAJE_RECHAZO_POR_DEFECTO = `Buenas tardes
 
@@ -236,10 +239,15 @@ export default function CobrosDetallePage() {
       toast.success(res?.mensaje || 'Pago reportado eliminado.')
       navigate('/cobros/pagos-reportados')
     } catch (e: unknown) {
-      const any = e as { response?: { data?: { detail?: unknown } }; message?: string }
+      const any = e as {
+        response?: { data?: { detail?: unknown } }
+        message?: string
+      }
       const d = any?.response?.data?.detail
       const msg =
-        typeof d === 'string' ? d : any?.message || 'No se pudo eliminar el reporte.'
+        typeof d === 'string'
+          ? d
+          : any?.message || 'No se pudo eliminar el reporte.'
       toast.error(msg)
     } finally {
       setEliminandoReporte(false)
@@ -381,9 +389,9 @@ export default function CobrosDetallePage() {
           {detalle.duplicado_en_pagos && (
             <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-900">
               <p className="font-medium text-rose-950">
-                Hay un pago en cartera que coincide con esta referencia u operación.
-                Use la tabla para comparar préstamos y fechas antes de aprobar o
-                aplicar sufijos.
+                Hay un pago en cartera que coincide con esta referencia u
+                operación. Use la tabla para comparar préstamos y fechas antes
+                de aprobar o aplicar sufijos.
               </p>
               <DuplicadoPrestamosComparacion
                 prestamoExistenteId={detalle.prestamo_existente_id}
@@ -392,7 +400,9 @@ export default function CobrosDetallePage() {
                 pagoExistenteFechaPago={detalle.pago_existente_fecha_pago}
                 prestamoObjetivoId={detalle.prestamo_objetivo_id}
                 fechaPagoReporteIso={detalle.fecha_pago}
-                prestamoDuplicadoEsObjetivo={detalle.prestamo_duplicado_es_objetivo}
+                prestamoDuplicadoEsObjetivo={
+                  detalle.prestamo_duplicado_es_objetivo
+                }
                 prestamoObjetivoMultiple={detalle.prestamo_objetivo_multiple}
               />
               <div className="mt-2 flex flex-wrap gap-2">
@@ -413,7 +423,8 @@ export default function CobrosDetallePage() {
                 ) : null}
                 {typeof detalle.prestamo_objetivo_id === 'number' &&
                 typeof detalle.prestamo_existente_id === 'number' &&
-                detalle.prestamo_objetivo_id !== detalle.prestamo_existente_id ? (
+                detalle.prestamo_objetivo_id !==
+                  detalle.prestamo_existente_id ? (
                   <Button
                     type="button"
                     variant="outline"

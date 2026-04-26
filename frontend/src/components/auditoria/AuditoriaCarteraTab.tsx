@@ -88,7 +88,8 @@ const COD_CTRL_PAGOS_MISMO_DIA_MONTO = 'pagos_mismo_dia_monto'
 
 const COD_PAGOS_SIN_APLICACION = 'pagos_sin_aplicacion_a_cuotas'
 
-const COD_LIQUIDADO_DESCUADRE = 'liquidado_descuadre_total_pagos_vs_aplicado_cuotas'
+const COD_LIQUIDADO_DESCUADRE =
+  'liquidado_descuadre_total_pagos_vs_aplicado_cuotas'
 
 const PAGE_SIZE_DEFAULT = 25
 
@@ -1555,8 +1556,8 @@ export function AuditoriaCarteraTab() {
                                       </Button>
                                     </>
                                   ) : null}
-                                  {(c.codigo === COD_DESAJUSTE_PAGOS ||
-                                    c.codigo === COD_LIQUIDADO_DESCUADRE) ? (
+                                  {c.codigo === COD_DESAJUSTE_PAGOS ||
+                                  c.codigo === COD_LIQUIDADO_DESCUADRE ? (
                                     <Button
                                       type="button"
                                       variant="outline"

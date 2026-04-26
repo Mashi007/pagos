@@ -250,7 +250,10 @@ const normalizeEstadoValue = (value: string) =>
     .toLowerCase()
 
 const isMercantilBank = (value: string) =>
-  String(value ?? '').trim().toLowerCase().includes('mercantil')
+  String(value ?? '')
+    .trim()
+    .toLowerCase()
+    .includes('mercantil')
 
 /** Filas que pueden aprobarse desde el listado (misma regla que el selector «Aprobar» por fila). */
 function puedeAprobarMasivoRow(row: PagoReportadoItem): boolean {
@@ -275,15 +278,14 @@ function readCobrosReportadosColWidths(): number[] {
     const raw = window.localStorage.getItem(COBROS_REPORTADOS_COL_WIDTHS_KEY)
     if (!raw) return [...COBROS_REPORTADOS_DEFAULT_COL_WIDTHS]
     const parsed = JSON.parse(raw) as unknown
-    if (!Array.isArray(parsed) || parsed.length !== COBROS_REPORTADOS_COL_COUNT) {
+    if (
+      !Array.isArray(parsed) ||
+      parsed.length !== COBROS_REPORTADOS_COL_COUNT
+    ) {
       return [...COBROS_REPORTADOS_DEFAULT_COL_WIDTHS]
     }
     const nums = parsed.map(x => Number(x))
-    if (
-      !nums.every(
-        n => Number.isFinite(n) && n >= 48 && n <= 640
-      )
-    ) {
+    if (!nums.every(n => Number.isFinite(n) && n >= 48 && n <= 640)) {
       return [...COBROS_REPORTADOS_DEFAULT_COL_WIDTHS]
     }
     return nums
@@ -334,7 +336,9 @@ export default function CobrosPagosReportadosPage() {
     cobrosFechaDesdeHaceNDias(COBROS_REPORTADOS_FILTRO_FECHA_DIAS)
   )
 
-  const [fechaHasta, setFechaHasta] = useState(() => cobrosFechaLocalYMD(new Date()))
+  const [fechaHasta, setFechaHasta] = useState(() =>
+    cobrosFechaLocalYMD(new Date())
+  )
 
   const [cedula, setCedula] = useState('')
 
@@ -370,8 +374,12 @@ export default function CobrosPagosReportadosPage() {
     })
   const [previewFloatLeft, setPreviewFloatLeft] = useState(0)
   const [previewFloatTop, setPreviewFloatTop] = useState(0)
-  const [previewFloatW, setPreviewFloatW] = useState(COMPROBANTE_FLOAT_DEFAULT_W)
-  const [previewFloatH, setPreviewFloatH] = useState(COMPROBANTE_FLOAT_DEFAULT_H)
+  const [previewFloatW, setPreviewFloatW] = useState(
+    COMPROBANTE_FLOAT_DEFAULT_W
+  )
+  const [previewFloatH, setPreviewFloatH] = useState(
+    COMPROBANTE_FLOAT_DEFAULT_H
+  )
   const previewFloatInitRef = useRef(false)
   const previewFloatLRef = useRef(0)
   const previewFloatTRef = useRef(0)
@@ -419,7 +427,9 @@ export default function CobrosPagosReportadosPage() {
   const dataRef = useRef<ListPagosReportadosResponse | null>(null)
   dataRef.current = data
 
-  const [colWidths, setColWidths] = useState<number[]>(readCobrosReportadosColWidths)
+  const [colWidths, setColWidths] = useState<number[]>(
+    readCobrosReportadosColWidths
+  )
 
   /** En ≥1024px el comprobante se acopla a la izquierda y el listado a la derecha (sin ventana flotante). */
   const [lgViewport, setLgViewport] = useState(false)
@@ -446,34 +456,37 @@ export default function CobrosPagosReportadosPage() {
     }
   }, [colWidths])
 
-  const handleColResizeStart = useCallback((colIndex: number, e: React.MouseEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-    const startX = e.clientX
-    const startW = colWidths[colIndex] ?? 96
-    const onMove = (ev: MouseEvent) => {
-      const next = Math.max(
-        48,
-        Math.min(640, Math.round(startW + (ev.clientX - startX)))
-      )
-      setColWidths(prev => {
-        if (prev[colIndex] === next) return prev
-        const copy = [...prev]
-        copy[colIndex] = next
-        return copy
-      })
-    }
-    const onUp = () => {
-      document.body.style.cursor = ''
-      document.body.style.userSelect = ''
-      window.removeEventListener('mousemove', onMove)
-      window.removeEventListener('mouseup', onUp)
-    }
-    document.body.style.cursor = 'col-resize'
-    document.body.style.userSelect = 'none'
-    window.addEventListener('mousemove', onMove)
-    window.addEventListener('mouseup', onUp)
-  }, [colWidths])
+  const handleColResizeStart = useCallback(
+    (colIndex: number, e: React.MouseEvent) => {
+      e.preventDefault()
+      e.stopPropagation()
+      const startX = e.clientX
+      const startW = colWidths[colIndex] ?? 96
+      const onMove = (ev: MouseEvent) => {
+        const next = Math.max(
+          48,
+          Math.min(640, Math.round(startW + (ev.clientX - startX)))
+        )
+        setColWidths(prev => {
+          if (prev[colIndex] === next) return prev
+          const copy = [...prev]
+          copy[colIndex] = next
+          return copy
+        })
+      }
+      const onUp = () => {
+        document.body.style.cursor = ''
+        document.body.style.userSelect = ''
+        window.removeEventListener('mousemove', onMove)
+        window.removeEventListener('mouseup', onUp)
+      }
+      document.body.style.cursor = 'col-resize'
+      document.body.style.userSelect = 'none'
+      window.addEventListener('mousemove', onMove)
+      window.addEventListener('mouseup', onUp)
+    },
+    [colWidths]
+  )
 
   const resetColWidths = useCallback(() => {
     try {
@@ -485,7 +498,11 @@ export default function CobrosPagosReportadosPage() {
   }, [])
 
   const fetchListado = useCallback(
-    async (opts?: { bypassCache?: boolean; silent?: boolean; page?: number }) => {
+    async (opts?: {
+      bypassCache?: boolean
+      silent?: boolean
+      page?: number
+    }) => {
       const startedAt = performance.now()
       const requestSeq = ++loadSeqRef.current
       const initialLoad = dataRef.current === null
@@ -567,7 +584,10 @@ export default function CobrosPagosReportadosPage() {
 
   useEffect(() => {
     const tick = () => {
-      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') {
+      if (
+        typeof document !== 'undefined' &&
+        document.visibilityState !== 'visible'
+      ) {
         return
       }
       void fetchListado({ bypassCache: true, silent: true })
@@ -614,7 +634,8 @@ export default function CobrosPagosReportadosPage() {
 
   useEffect(() => {
     return () => {
-      if (previewComprobante.blobUrl) URL.revokeObjectURL(previewComprobante.blobUrl)
+      if (previewComprobante.blobUrl)
+        URL.revokeObjectURL(previewComprobante.blobUrl)
     }
   }, [previewComprobante.blobUrl])
 
@@ -644,7 +665,9 @@ export default function CobrosPagosReportadosPage() {
       if (s.kind === 'drag') {
         const w = previewFloatWRef.current
         const h = previewFloatHRef.current
-        setPreviewFloatLeft(clampComprobanteFloat(s.originL + dx, 8 - w + 64, vw - 64))
+        setPreviewFloatLeft(
+          clampComprobanteFloat(s.originL + dx, 8 - w + 64, vw - 64)
+        )
         setPreviewFloatTop(clampComprobanteFloat(s.originT + dy, 8, vh - h - 8))
         return
       }
@@ -652,10 +675,18 @@ export default function CobrosPagosReportadosPage() {
       const bottom = s.originT + s.originH
       if (s.corner === 'se') {
         setPreviewFloatW(
-          clampComprobanteFloat(s.originW + dx, COMPROBANTE_FLOAT_MIN_W, vw - s.originL - 8)
+          clampComprobanteFloat(
+            s.originW + dx,
+            COMPROBANTE_FLOAT_MIN_W,
+            vw - s.originL - 8
+          )
         )
         setPreviewFloatH(
-          clampComprobanteFloat(s.originH + dy, COMPROBANTE_FLOAT_MIN_H, vh - s.originT - 8)
+          clampComprobanteFloat(
+            s.originH + dy,
+            COMPROBANTE_FLOAT_MIN_H,
+            vh - s.originT - 8
+          )
         )
       } else if (s.corner === 'ne') {
         const nextW = clampComprobanteFloat(
@@ -663,20 +694,40 @@ export default function CobrosPagosReportadosPage() {
           COMPROBANTE_FLOAT_MIN_W,
           vw - s.originL - 8
         )
-        const nextTop = clampComprobanteFloat(s.originT + dy, 8, bottom - COMPROBANTE_FLOAT_MIN_H)
+        const nextTop = clampComprobanteFloat(
+          s.originT + dy,
+          8,
+          bottom - COMPROBANTE_FLOAT_MIN_H
+        )
         setPreviewFloatW(nextW)
         setPreviewFloatTop(nextTop)
         setPreviewFloatH(bottom - nextTop)
       } else if (s.corner === 'sw') {
-        const nextLeft = clampComprobanteFloat(s.originL + dx, 8, right - COMPROBANTE_FLOAT_MIN_W)
+        const nextLeft = clampComprobanteFloat(
+          s.originL + dx,
+          8,
+          right - COMPROBANTE_FLOAT_MIN_W
+        )
         setPreviewFloatLeft(nextLeft)
         setPreviewFloatW(right - nextLeft)
         setPreviewFloatH(
-          clampComprobanteFloat(s.originH + dy, COMPROBANTE_FLOAT_MIN_H, vh - s.originT - 8)
+          clampComprobanteFloat(
+            s.originH + dy,
+            COMPROBANTE_FLOAT_MIN_H,
+            vh - s.originT - 8
+          )
         )
       } else {
-        const nextLeft = clampComprobanteFloat(s.originL + dx, 8, right - COMPROBANTE_FLOAT_MIN_W)
-        const nextTop = clampComprobanteFloat(s.originT + dy, 8, bottom - COMPROBANTE_FLOAT_MIN_H)
+        const nextLeft = clampComprobanteFloat(
+          s.originL + dx,
+          8,
+          right - COMPROBANTE_FLOAT_MIN_W
+        )
+        const nextTop = clampComprobanteFloat(
+          s.originT + dy,
+          8,
+          bottom - COMPROBANTE_FLOAT_MIN_H
+        )
         setPreviewFloatLeft(nextLeft)
         setPreviewFloatTop(nextTop)
         setPreviewFloatW(right - nextLeft)
@@ -744,7 +795,10 @@ export default function CobrosPagosReportadosPage() {
     }
     postMutationSyncTimerRef.current = window.setTimeout(() => {
       postMutationSyncTimerRef.current = null
-      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') {
+      if (
+        typeof document !== 'undefined' &&
+        document.visibilityState !== 'visible'
+      ) {
         return
       }
       void fetchListado({ silent: true })
@@ -804,7 +858,9 @@ export default function CobrosPagosReportadosPage() {
       }
       setKpis(prev => {
         if (!prev) return prev
-        const from = String(estadoAnteriorEnLista || '').trim() as keyof PagosReportadosKpis
+        const from = String(
+          estadoAnteriorEnLista || ''
+        ).trim() as keyof PagosReportadosKpis
         const to = String(nuevoEstado || '').trim() as keyof PagosReportadosKpis
         const next: PagosReportadosKpis = { ...prev }
         if (from in next && typeof next[from] === 'number') {
@@ -885,7 +941,8 @@ export default function CobrosPagosReportadosPage() {
       setSelectedIds(prev => prev.filter(x => x !== id))
       setKpis(prev => {
         if (!prev) return prev
-        const anterior = (data?.items ?? []).find(r => r.id === id)?.estado ?? ''
+        const anterior =
+          (data?.items ?? []).find(r => r.id === id)?.estado ?? ''
         const from = String(anterior || '').trim() as keyof PagosReportadosKpis
         const next: PagosReportadosKpis = {
           ...prev,
@@ -1077,8 +1134,8 @@ export default function CobrosPagosReportadosPage() {
       } catch (e: unknown) {
         fail += 1
         if (!primerError) {
-          const d = (e as { response?: { data?: { detail?: string } } })?.response
-            ?.data?.detail
+          const d = (e as { response?: { data?: { detail?: string } } })
+            ?.response?.data?.detail
           primerError =
             typeof d === 'string'
               ? d
@@ -1134,11 +1191,11 @@ export default function CobrosPagosReportadosPage() {
       className={cn(
         !dockComprobante && 'space-y-6 p-6',
         dockComprobante &&
-          '-mx-4 flex w-[calc(100%+2rem)] max-w-none flex-col gap-0 border-y border-slate-200/70 bg-white p-0 lg:grid lg:h-[calc(100dvh-7.5rem)] lg:max-h-[calc(100dvh-7.5rem)] lg:grid-cols-2 lg:items-stretch lg:overflow-hidden lg:divide-x lg:divide-slate-200/70'
+          '-mx-4 flex w-[calc(100%+2rem)] max-w-none flex-col gap-0 border-y border-slate-200/70 bg-white p-0 lg:grid lg:h-[calc(100dvh-7.5rem)] lg:max-h-[calc(100dvh-7.5rem)] lg:grid-cols-2 lg:items-stretch lg:divide-x lg:divide-slate-200/70 lg:overflow-hidden'
       )}
     >
       {dockComprobante ? (
-        <aside className="flex min-h-[min(36vh,320px)] min-w-0 flex-col bg-slate-100 lg:min-h-0 lg:h-full lg:max-h-full lg:overflow-y-auto lg:overscroll-y-contain">
+        <aside className="flex min-h-[min(36vh,320px)] min-w-0 flex-col bg-slate-100 lg:h-full lg:max-h-full lg:min-h-0 lg:overflow-y-auto lg:overscroll-y-contain">
           <div className="flex shrink-0 items-center gap-2 border-b border-slate-200/80 bg-slate-50/95 px-3 py-2">
             <span className="min-w-0 flex-1 truncate text-xs font-semibold text-slate-800">
               Comprobante #{previewComprobante.pagoId ?? ''}
@@ -1200,7 +1257,9 @@ export default function CobrosPagosReportadosPage() {
                 previewComprobante.contentType?.startsWith('image/') ? (
                 <div
                   className="inline-flex max-h-full max-w-full origin-center transition-transform duration-200"
-                  style={{ transform: `rotate(${previewComprobante.rotDeg}deg)` }}
+                  style={{
+                    transform: `rotate(${previewComprobante.rotDeg}deg)`,
+                  }}
                 >
                   <img
                     src={previewComprobante.blobUrl}
@@ -1227,253 +1286,257 @@ export default function CobrosPagosReportadosPage() {
       <div
         className={cn(
           dockComprobante &&
-            'min-h-0 min-w-0 space-y-6 overflow-y-auto overscroll-y-contain px-3 py-4 sm:px-4 lg:pl-5 lg:pr-0 lg:py-4',
+            'min-h-0 min-w-0 space-y-6 overflow-y-auto overscroll-y-contain px-3 py-4 sm:px-4 lg:py-4 lg:pl-5 lg:pr-0',
           !dockComprobante && 'contents'
         )}
       >
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0">
-          <h1 className="text-2xl font-semibold">Pagos Reportados</h1>
-          <p className="mt-1 text-xs text-muted-foreground">
-            {ultimaCargaMs != null
-              ? `Última carga del listado: ${ultimaCargaMs} ms`
-              : 'Preparando diagnóstico de carga...'}
-          </p>
-          {diagnosticoNoEmail ? (
-            <p className="mt-1 text-xs font-medium text-amber-700">
-              Modo diagnóstico activo: no se permite rechazar desde esta pantalla para evitar correos.
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
+            <h1 className="text-2xl font-semibold">Pagos Reportados</h1>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {ultimaCargaMs != null
+                ? `Última carga del listado: ${ultimaCargaMs} ms`
+                : 'Preparando diagnóstico de carga...'}
             </p>
-          ) : null}
+            {diagnosticoNoEmail ? (
+              <p className="mt-1 text-xs font-medium text-amber-700">
+                Modo diagnóstico activo: no se permite rechazar desde esta
+                pantalla para evitar correos.
+              </p>
+            ) : null}
+          </div>
+
+          <a
+            href={
+              (typeof window !== 'undefined' ? window.location.origin : '') +
+              (import.meta.env.BASE_URL || '/').replace(/\/$/, '') +
+              '/' +
+              PUBLIC_REPORTE_PAGO_PATH
+            }
+            target="_blank"
+            rel="noopener noreferrer"
+            className="shrink-0 text-sm text-blue-600 hover:underline"
+          >
+            Link al formulario público
+          </a>
         </div>
 
-        <a
-          href={
-            (typeof window !== 'undefined' ? window.location.origin : '') +
-            (import.meta.env.BASE_URL || '/').replace(/\/$/, '') +
-            '/' +
-            PUBLIC_REPORTE_PAGO_PATH
-          }
-          target="_blank"
-          rel="noopener noreferrer"
-          className="shrink-0 text-sm text-blue-600 hover:underline"
-        >
-          Link al formulario público
-        </a>
-      </div>
+        <Card>
+          <CardHeader>
+            <CardTitle>Filtros</CardTitle>
+          </CardHeader>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Filtros</CardTitle>
-        </CardHeader>
-
-        <CardContent className="flex flex-wrap gap-4">
-          <div className="flex min-w-[min(100%,280px)] flex-col gap-1">
-            <select
-              className="rounded-md border px-3 py-2"
-              value={estado}
-              onChange={e => setEstado(e.target.value)}
-              aria-label="Filtrar por estado del reporte"
-            >
-              <option value="">
-                Por gestionar (excluye aprobados, importados y rechazados)
-              </option>
-
-              <option value="pendiente">Pendiente</option>
-
-              <option value="en_revision">En revisión</option>
-
-              <option value="aprobado">Aprobado</option>
-
-              <option value="rechazado">Rechazado</option>
-
-              <option value="importado">Importado a Pagos</option>
-            </select>
-
-            <p className="text-xs text-muted-foreground">
-              <strong>No cumplen validadores:</strong> misma regla que la carga
-              masiva. Por defecto no se listan aprobados, importados ni
-              rechazados, ni filas ya marcadas como exportadas a corrección;
-              use &quot;Incluir ya exportados&quot; para volver a ver esas
-              últimas. Los rechazados solo con filtro o tarjeta.
-            </p>
-          </div>
-
-          <div className="flex min-w-[min(100%,320px)] flex-col gap-1">
-            <div className="flex flex-wrap items-end gap-2">
-              <Input
-                type="date"
-                aria-label="Fecha desde (creación del reporte)"
-                value={fechaDesde}
-                onChange={e => setFechaDesde(e.target.value)}
-                className="w-40"
-              />
-
-              <Input
-                type="date"
-                aria-label="Fecha hasta (creación del reporte)"
-                value={fechaHasta}
-                onChange={e => setFechaHasta(e.target.value)}
-                className="w-40"
-              />
-
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="shrink-0"
-                onClick={() => {
-                  setFechaDesde(
-                    cobrosFechaDesdeHaceNDias(COBROS_REPORTADOS_FILTRO_FECHA_DIAS)
-                  )
-                  setFechaHasta(cobrosFechaLocalYMD(new Date()))
-                  setPage(1)
-                }}
+          <CardContent className="flex flex-wrap gap-4">
+            <div className="flex min-w-[min(100%,280px)] flex-col gap-1">
+              <select
+                className="rounded-md border px-3 py-2"
+                value={estado}
+                onChange={e => setEstado(e.target.value)}
+                aria-label="Filtrar por estado del reporte"
               >
-                Últimos {COBROS_REPORTADOS_FILTRO_FECHA_DIAS} días
-              </Button>
+                <option value="">
+                  Por gestionar (excluye aprobados, importados y rechazados)
+                </option>
 
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="shrink-0"
-                onClick={() => {
-                  setFechaDesde('')
-                  setFechaHasta('')
-                  setPage(1)
-                }}
-              >
-                Sin límite de fechas
-              </Button>
+                <option value="pendiente">Pendiente</option>
+
+                <option value="en_revision">En revisión</option>
+
+                <option value="aprobado">Aprobado</option>
+
+                <option value="rechazado">Rechazado</option>
+
+                <option value="importado">Importado a Pagos</option>
+              </select>
+
+              <p className="text-xs text-muted-foreground">
+                <strong>No cumplen validadores:</strong> misma regla que la
+                carga masiva. Por defecto no se listan aprobados, importados ni
+                rechazados, ni filas ya marcadas como exportadas a corrección;
+                use &quot;Incluir ya exportados&quot; para volver a ver esas
+                últimas. Los rechazados solo con filtro o tarjeta.
+              </p>
             </div>
 
-            <p className="text-xs text-muted-foreground">
-              Por defecto se filtra por <strong>fecha de creación del reporte</strong> (mismo criterio
-              que el API). Acota el volumen que revisa el servidor sin cambiar validadores ni la cola
-              manual. Use «Sin límite de fechas» solo cuando necesite todo el historial.
-            </p>
-          </div>
+            <div className="flex min-w-[min(100%,320px)] flex-col gap-1">
+              <div className="flex flex-wrap items-end gap-2">
+                <Input
+                  type="date"
+                  aria-label="Fecha desde (creación del reporte)"
+                  value={fechaDesde}
+                  onChange={e => setFechaDesde(e.target.value)}
+                  className="w-40"
+                />
 
-          <Input
-            placeholder="Cédula"
-            value={cedula}
-            onChange={e => setCedula(e.target.value)}
-            className="w-40"
-          />
+                <Input
+                  type="date"
+                  aria-label="Fecha hasta (creación del reporte)"
+                  value={fechaHasta}
+                  onChange={e => setFechaHasta(e.target.value)}
+                  className="w-40"
+                />
 
-          <Input
-            placeholder="Institución"
-            value={institucion}
-            onChange={e => setInstitucion(e.target.value)}
-            className="w-48"
-          />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="shrink-0"
+                  onClick={() => {
+                    setFechaDesde(
+                      cobrosFechaDesdeHaceNDias(
+                        COBROS_REPORTADOS_FILTRO_FECHA_DIAS
+                      )
+                    )
+                    setFechaHasta(cobrosFechaLocalYMD(new Date()))
+                    setPage(1)
+                  }}
+                >
+                  Últimos {COBROS_REPORTADOS_FILTRO_FECHA_DIAS} días
+                </Button>
 
-          <label
-            htmlFor="cobros-incluir-exportados"
-            className="flex max-w-xs cursor-pointer items-start gap-2 text-xs text-muted-foreground"
-          >
-            <input
-              id="cobros-incluir-exportados"
-              type="checkbox"
-              className="mt-0.5 shrink-0 rounded border-input"
-              checked={incluirExportados}
-              onChange={e => {
-                setIncluirExportados(e.target.checked)
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="shrink-0"
+                  onClick={() => {
+                    setFechaDesde('')
+                    setFechaHasta('')
+                    setPage(1)
+                  }}
+                >
+                  Sin límite de fechas
+                </Button>
+              </div>
+
+              <p className="text-xs text-muted-foreground">
+                Por defecto se filtra por{' '}
+                <strong>fecha de creación del reporte</strong> (mismo criterio
+                que el API). Acota el volumen que revisa el servidor sin cambiar
+                validadores ni la cola manual. Use «Sin límite de fechas» solo
+                cuando necesite todo el historial.
+              </p>
+            </div>
+
+            <Input
+              placeholder="Cédula"
+              value={cedula}
+              onChange={e => setCedula(e.target.value)}
+              className="w-40"
+            />
+
+            <Input
+              placeholder="Institución"
+              value={institucion}
+              onChange={e => setInstitucion(e.target.value)}
+              className="w-48"
+            />
+
+            <label
+              htmlFor="cobros-incluir-exportados"
+              className="flex max-w-xs cursor-pointer items-start gap-2 text-xs text-muted-foreground"
+            >
+              <input
+                id="cobros-incluir-exportados"
+                type="checkbox"
+                className="mt-0.5 shrink-0 rounded border-input"
+                checked={incluirExportados}
+                onChange={e => {
+                  setIncluirExportados(e.target.checked)
+                  setPage(1)
+                }}
+              />
+              <span>
+                Incluir filas ya marcadas como exportadas a corrección (ocultas
+                en la vista normal hasta activar esta opción).
+              </span>
+            </label>
+
+            <label
+              htmlFor="cobros-solo-cedulas-duplicadas"
+              className="flex max-w-xs cursor-pointer items-start gap-2 text-xs text-muted-foreground"
+            >
+              <input
+                id="cobros-solo-cedulas-duplicadas"
+                type="checkbox"
+                className="mt-0.5 shrink-0 rounded border-input"
+                checked={soloCedulasDuplicadas}
+                onChange={e => setSoloCedulasDuplicadas(e.target.checked)}
+              />
+              <span>Mostrar solo cédulas duplicadas en esta página.</span>
+            </label>
+
+            <label
+              htmlFor="cobros-solo-falla-lista-bs"
+              className="flex max-w-xs cursor-pointer items-start gap-2 text-xs text-muted-foreground"
+            >
+              <input
+                id="cobros-solo-falla-lista-bs"
+                type="checkbox"
+                className="mt-0.5 shrink-0 rounded border-input"
+                checked={soloFallaListaBs}
+                onChange={e => setSoloFallaListaBs(e.target.checked)}
+              />
+              <span>
+                Solo filas con falla de lista para pago en Bs. (texto «No pag
+                Bs.» en observación; moneda Bs. y cédula no autorizada).
+              </span>
+            </label>
+
+            <label
+              htmlFor="cobros-solo-duplicado-documento"
+              className="flex max-w-xs cursor-pointer items-start gap-2 text-xs text-muted-foreground"
+            >
+              <input
+                id="cobros-solo-duplicado-documento"
+                type="checkbox"
+                className="mt-0.5 shrink-0 rounded border-input"
+                checked={soloDuplicadoDocumento}
+                onChange={e => setSoloDuplicadoDocumento(e.target.checked)}
+              />
+              <span>
+                Solo filas con DUPLICADO en observación (documento ya en cartera
+                o repetido entre reportados en la página).
+              </span>
+            </label>
+
+            <Button
+              onClick={() => {
                 setPage(1)
+                invalidateCobrosListadoKpisCache()
+                setSearchNonce(prev => prev + 1)
               }}
-            />
-            <span>
-              Incluir filas ya marcadas como exportadas a corrección (ocultas
-              en la vista normal hasta activar esta opción).
-            </span>
-          </label>
+            >
+              Buscar
+            </Button>
+          </CardContent>
+        </Card>
 
-          <label
-            htmlFor="cobros-solo-cedulas-duplicadas"
-            className="flex max-w-xs cursor-pointer items-start gap-2 text-xs text-muted-foreground"
-          >
-            <input
-              id="cobros-solo-cedulas-duplicadas"
-              type="checkbox"
-              className="mt-0.5 shrink-0 rounded border-input"
-              checked={soloCedulasDuplicadas}
-              onChange={e => setSoloCedulasDuplicadas(e.target.checked)}
-            />
-            <span>
-              Mostrar solo cédulas duplicadas en esta página.
-            </span>
-          </label>
+        {kpis != null && (
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => handleKpiClick('')}
+              title="Cola de análisis manual: pendiente, en revisión y aprobados que aún no cumplen validadores (Gemini/reglas). Si Gemini es correcto y no hay observación, no entra en cola."
+              className={
+                'min-w-28 rounded-lg border-2 px-4 py-3 text-left transition-colors ' +
+                (estado === ''
+                  ? 'border-primary bg-primary/10 font-semibold'
+                  : 'border-muted hover:bg-muted/50')
+              }
+            >
+              <span className="block text-xs uppercase tracking-wide text-muted-foreground">
+                Por gestionar
+              </span>
 
-          <label
-            htmlFor="cobros-solo-falla-lista-bs"
-            className="flex max-w-xs cursor-pointer items-start gap-2 text-xs text-muted-foreground"
-          >
-            <input
-              id="cobros-solo-falla-lista-bs"
-              type="checkbox"
-              className="mt-0.5 shrink-0 rounded border-input"
-              checked={soloFallaListaBs}
-              onChange={e => setSoloFallaListaBs(e.target.checked)}
-            />
-            <span>
-              Solo filas con falla de lista para pago en Bs. (texto «No pag Bs.» en
-              observación; moneda Bs. y cédula no autorizada).
-            </span>
-          </label>
+              <span className="text-2xl font-bold">
+                {kpis.pendiente + kpis.en_revision + kpis.aprobado}
+              </span>
+            </button>
 
-          <label
-            htmlFor="cobros-solo-duplicado-documento"
-            className="flex max-w-xs cursor-pointer items-start gap-2 text-xs text-muted-foreground"
-          >
-            <input
-              id="cobros-solo-duplicado-documento"
-              type="checkbox"
-              className="mt-0.5 shrink-0 rounded border-input"
-              checked={soloDuplicadoDocumento}
-              onChange={e => setSoloDuplicadoDocumento(e.target.checked)}
-            />
-            <span>
-              Solo filas con DUPLICADO en observación (documento ya en cartera o
-              repetido entre reportados en la página).
-            </span>
-          </label>
-
-          <Button
-            onClick={() => {
-              setPage(1)
-              invalidateCobrosListadoKpisCache()
-              setSearchNonce(prev => prev + 1)
-            }}
-          >
-            Buscar
-          </Button>
-        </CardContent>
-      </Card>
-
-      {kpis != null && (
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() => handleKpiClick('')}
-            title="Cola de análisis manual: pendiente, en revisión y aprobados que aún no cumplen validadores (Gemini/reglas). Si Gemini es correcto y no hay observación, no entra en cola."
-            className={
-              'min-w-28 rounded-lg border-2 px-4 py-3 text-left transition-colors ' +
-              (estado === ''
-                ? 'border-primary bg-primary/10 font-semibold'
-                : 'border-muted hover:bg-muted/50')
-            }
-          >
-            <span className="block text-xs uppercase tracking-wide text-muted-foreground">
-              Por gestionar
-            </span>
-
-            <span className="text-2xl font-bold">
-              {kpis.pendiente + kpis.en_revision + kpis.aprobado}
-            </span>
-          </button>
-
-          {(['pendiente', 'en_revision', 'aprobado', 'rechazado'] as const).map(
-            key => {
+            {(
+              ['pendiente', 'en_revision', 'aprobado', 'rechazado'] as const
+            ).map(key => {
               const cfg = ESTADO_CONFIG[key]
 
               const Icon = cfg.Icon
@@ -1501,810 +1564,827 @@ export default function CobrosPagosReportadosPage() {
                   <span className="text-2xl font-bold">{kpis[key]}</span>
                 </button>
               )
-            }
-          )}
-        </div>
-      )}
+            })}
+          </div>
+        )}
 
-      <Card>
-        <CardContent className="pt-6">
-          {loading && data === null ? (
-            <div
-              className="flex flex-col items-center justify-center gap-3 py-16 text-muted-foreground"
-              role="status"
-              aria-live="polite"
-            >
-              <Loader2 className="h-10 w-10 animate-spin text-primary" />
-              <p className="text-base font-medium text-foreground">
-                Consultando cola de reportes…
-              </p>
-              <p className="max-w-md text-center text-sm">
-                Si la cartera es grande, el servidor puede tardar hasta un
-                minuto en el primer análisis; las siguientes búsquedas suelen ir
-                más rápido.
-              </p>
-            </div>
-          ) : !itemsTabla.length ? (
-            <p className="text-gray-500">No hay registros.</p>
-          ) : (
-            <>
-              <div className="mb-2 flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between">
-                <p className="text-xs text-muted-foreground">
-                  Arrastre el borde derecho del encabezado de cada columna para ajustar el ancho. Se guarda en este
-                  navegador.
+        <Card>
+          <CardContent className="pt-6">
+            {loading && data === null ? (
+              <div
+                className="flex flex-col items-center justify-center gap-3 py-16 text-muted-foreground"
+                role="status"
+                aria-live="polite"
+              >
+                <Loader2 className="h-10 w-10 animate-spin text-primary" />
+                <p className="text-base font-medium text-foreground">
+                  Consultando cola de reportes…
                 </p>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="h-8 shrink-0 self-start text-xs sm:self-auto"
-                  onClick={resetColWidths}
-                >
-                  Restaurar anchos
-                </Button>
+                <p className="max-w-md text-center text-sm">
+                  Si la cartera es grande, el servidor puede tardar hasta un
+                  minuto en el primer análisis; las siguientes búsquedas suelen
+                  ir más rápido.
+                </p>
               </div>
-              {(selectedIds.length > 0 || bulkApproving) && (
-                <div className="mb-2 flex flex-wrap items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50/90 px-3 py-2 text-sm text-emerald-950 dark:bg-emerald-950/30 dark:text-emerald-50">
-                  <span className="font-medium">
-                    {bulkApproving
-                      ? 'Aprobando…'
-                      : String(selectedIds.length) + ' seleccionado(s)'}
-                  </span>
+            ) : !itemsTabla.length ? (
+              <p className="text-gray-500">No hay registros.</p>
+            ) : (
+              <>
+                <div className="mb-2 flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between">
+                  <p className="text-xs text-muted-foreground">
+                    Arrastre el borde derecho del encabezado de cada columna
+                    para ajustar el ancho. Se guarda en este navegador.
+                  </p>
                   <Button
                     type="button"
+                    variant="outline"
                     size="sm"
-                    className="h-8 bg-emerald-600 text-white hover:bg-emerald-700"
-                    disabled={bulkApproving || selectedIds.length === 0}
-                    onClick={() => void handleAprobarMasivo()}
+                    className="h-8 shrink-0 self-start text-xs sm:self-auto"
+                    onClick={resetColWidths}
                   >
-                    {bulkApproving ? (
-                      <>
-                        <Loader2 className="mr-1.5 inline h-3.5 w-3.5 animate-spin" />
-                        Procesando
-                      </>
-                    ) : (
-                      'Aprobar seleccionados'
-                    )}
+                    Restaurar anchos
                   </Button>
+                </div>
+                {(selectedIds.length > 0 || bulkApproving) && (
+                  <div className="mb-2 flex flex-wrap items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50/90 px-3 py-2 text-sm text-emerald-950 dark:bg-emerald-950/30 dark:text-emerald-50">
+                    <span className="font-medium">
+                      {bulkApproving
+                        ? 'Aprobando…'
+                        : String(selectedIds.length) + ' seleccionado(s)'}
+                    </span>
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="h-8 bg-emerald-600 text-white hover:bg-emerald-700"
+                      disabled={bulkApproving || selectedIds.length === 0}
+                      onClick={() => void handleAprobarMasivo()}
+                    >
+                      {bulkApproving ? (
+                        <>
+                          <Loader2 className="mr-1.5 inline h-3.5 w-3.5 animate-spin" />
+                          Procesando
+                        </>
+                      ) : (
+                        'Aprobar seleccionados'
+                      )}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-8"
+                      disabled={bulkApproving}
+                      onClick={() => setSelectedIds([])}
+                    >
+                      Quitar selección
+                    </Button>
+                  </div>
+                )}
+                <div className="relative w-full min-w-0 max-w-full overflow-x-auto rounded-lg border">
+                  {refreshing ? (
+                    <div
+                      className="absolute inset-0 z-10 flex items-start justify-center bg-background/70 pt-10 backdrop-blur-[1px]"
+                      role="status"
+                      aria-live="polite"
+                    >
+                      <span className="flex items-center gap-2 rounded-md border bg-card px-3 py-2 text-sm shadow-sm">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Actualizando listado…
+                      </span>
+                    </div>
+                  ) : null}
+                  <table className="w-max min-w-full table-fixed border-collapse text-sm">
+                    <colgroup>
+                      {colWidths.map((w, i) => (
+                        <col key={`col-${i}`} style={{ width: w }} />
+                      ))}
+                    </colgroup>
+
+                    <thead>
+                      <tr className="border-b bg-muted/50">
+                        {COBROS_REPORTADOS_TABLE_HEAD.map((h, i) => (
+                          <th
+                            key={h.label}
+                            className={cn(
+                              'relative whitespace-nowrap py-2 pl-2 pr-3 text-xs font-semibold sm:text-sm',
+                              i < COBROS_REPORTADOS_TABLE_HEAD.length - 1 &&
+                                'border-r border-border/60',
+                              h.align === 'left' && 'text-left',
+                              h.align === 'right' && 'text-right',
+                              h.align === 'center' && 'text-center'
+                            )}
+                            style={{
+                              width: colWidths[i],
+                              minWidth: colWidths[i],
+                            }}
+                          >
+                            <span
+                              className={cn(
+                                'block min-w-0 overflow-hidden text-ellipsis pr-2',
+                                h.align === 'right' && 'pr-3',
+                                h.align === 'center' && 'px-1'
+                              )}
+                            >
+                              {h.label === 'Sel.' ? (
+                                <span className="flex justify-center py-0.5">
+                                  <input
+                                    ref={headerCheckboxRef}
+                                    type="checkbox"
+                                    className="h-4 w-4 cursor-pointer accent-primary"
+                                    checked={allSeleccionadosEnPagina}
+                                    onChange={toggleSeleccionarTodosPagina}
+                                    disabled={
+                                      bulkApproving ||
+                                      seleccionablesEnPagina.length === 0
+                                    }
+                                    aria-label="Seleccionar en esta página pendientes y en revisión"
+                                    title="Solo pendiente o en revisión en esta página"
+                                  />
+                                </span>
+                              ) : (
+                                h.label
+                              )}
+                            </span>
+                            <button
+                              type="button"
+                              className="absolute right-0 top-0 z-20 h-full w-2 cursor-col-resize touch-none border-0 bg-transparent p-0 hover:bg-primary/15 active:bg-primary/25"
+                              aria-label={`Redimensionar columna ${h.label}`}
+                              title="Arrastrar para cambiar ancho"
+                              onMouseDown={e => handleColResizeStart(i, e)}
+                            />
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+
+                    <tbody>
+                      {itemsTabla.map((row: PagoReportadoItem) => (
+                        <tr
+                          key={row.id}
+                          className="border-b transition-colors hover:bg-muted/20"
+                        >
+                          <td className="px-1 py-2 text-center align-middle">
+                            {puedeAprobarMasivoRow(row) ? (
+                              <input
+                                type="checkbox"
+                                className="h-4 w-4 cursor-pointer accent-primary"
+                                checked={selectedIds.includes(row.id)}
+                                onChange={e =>
+                                  toggleRowSelected(row.id, e.target.checked)
+                                }
+                                disabled={
+                                  bulkApproving || changingEstadoId === row.id
+                                }
+                                aria-label={
+                                  'Seleccionar reporte ' +
+                                  String(row.referencia_interna || row.id)
+                                }
+                              />
+                            ) : (
+                              <span
+                                className="text-muted-foreground"
+                                title="Solo se puede marcar pendiente o en revisión"
+                              >
+                                -
+                              </span>
+                            )}
+                          </td>
+                          <td
+                            className={
+                              'whitespace-nowrap px-2 py-2 align-middle text-xs sm:text-sm ' +
+                              ((row.observacion || '').trim().length > 0
+                                ? 'bg-destructive/10 font-medium text-destructive'
+                                : '')
+                            }
+                            title={
+                              (row.observacion || '').trim().length > 0
+                                ? 'Observación: ' + (row.observacion || '')
+                                : undefined
+                            }
+                          >
+                            {(row.observacion || '').trim().length > 0 && (
+                              <AlertCircle
+                                className="mr-1 inline-block h-4 w-4 align-middle"
+                                aria-hidden
+                              />
+                            )}
+
+                            <span className="block truncate">
+                              {row.cedula_display}
+                            </span>
+                          </td>
+
+                          <td className="min-w-0 px-2 py-2 align-middle">
+                            {(() => {
+                              const hasDuplicado = /DUPLICADO/i.test(
+                                row.observacion || ''
+                              )
+                              const showMercantilExceptionTag =
+                                hasDuplicado &&
+                                isMercantilBank(row.institucion_financiera)
+                              return (
+                                <>
+                                  <span
+                                    className="block truncate text-xs sm:text-sm"
+                                    title={row.institucion_financiera}
+                                  >
+                                    {row.institucion_financiera}
+                                  </span>
+                                  {showMercantilExceptionTag ? (
+                                    <span
+                                      className="mt-1 inline-flex rounded border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700"
+                                      title="Duplicado por número de operación en Mercantil: excepción activa (revisión manual)."
+                                    >
+                                      Excepción Mercantil
+                                    </span>
+                                  ) : null}
+                                </>
+                              )
+                            })()}
+                          </td>
+
+                          <td className="whitespace-nowrap px-2 py-2 text-right align-middle text-xs sm:text-sm">
+                            <span>
+                              {row.monto} {row.moneda}
+                            </span>
+                            {row.moneda === 'BS' &&
+                              row.equivalente_usd != null && (
+                                <span
+                                  className="mt-0.5 block text-xs text-emerald-700"
+                                  title={
+                                    row.tasa_cambio_bs_usd != null
+                                      ? `Tasa: ${row.tasa_cambio_bs_usd.toLocaleString('es-VE')} Bs/USD`
+                                      : 'Equivalente en USD'
+                                  }
+                                >
+                                  {'≈ '}
+                                  {row.equivalente_usd.toLocaleString('es-VE', {
+                                    minimumFractionDigits: 2,
+                                    maximumFractionDigits: 2,
+                                  })}{' '}
+                                  USD
+                                </span>
+                              )}
+                            {row.moneda === 'BS' &&
+                              row.equivalente_usd == null && (
+                                <span
+                                  className="mt-0.5 block text-xs text-amber-600"
+                                  title="No hay tasa registrada para esta fecha. Registre la tasa en Pagos antes de aprobar."
+                                >
+                                  Sin tasa
+                                </span>
+                              )}
+                          </td>
+
+                          <td className="whitespace-nowrap px-2 py-2 align-middle text-xs sm:text-sm">
+                            <span className="block truncate">
+                              {row.fecha_pago}
+                            </span>
+                          </td>
+
+                          <td
+                            className={
+                              'min-w-0 px-2 py-2 align-middle ' +
+                              (/DUPLICADO/i.test(row.observacion || '')
+                                ? 'bg-destructive/10 font-medium text-destructive'
+                                : '')
+                            }
+                            title={
+                              /DUPLICADO/i.test(row.observacion || '')
+                                ? 'DUPLICADO: el número de operación / documento coincide con otro registro en pagos o con otro reporte en esta página.'
+                                : row.numero_operacion
+                            }
+                          >
+                            <span className="block truncate font-mono text-[11px] sm:text-xs">
+                              {row.numero_operacion}
+                            </span>
+                          </td>
+
+                          <td className="whitespace-nowrap px-2 py-2 align-middle text-xs sm:text-sm">
+                            <span className="block truncate">
+                              {new Date(row.fecha_reporte).toLocaleDateString()}
+                            </span>
+                          </td>
+
+                          <td className="px-2 py-2 align-middle">
+                            {row.tiene_comprobante ? (
+                              <button
+                                type="button"
+                                onClick={() => handleVerComprobante(row.id)}
+                                disabled={viewingComprobanteId === row.id}
+                                className="mx-auto inline-flex min-w-0 max-w-full items-center justify-center gap-1 rounded-md border border-border bg-muted/30 px-2 py-1 text-[11px] font-medium text-foreground shadow-none transition-colors hover:bg-muted/60 focus:outline-none focus:ring-2 focus:ring-ring/40 disabled:opacity-60"
+                                title="Abrir imagen o PDF del comprobante"
+                              >
+                                {viewingComprobanteId === row.id ? (
+                                  <Loader2
+                                    className="h-3.5 w-3.5 shrink-0 animate-spin"
+                                    aria-hidden
+                                  />
+                                ) : (
+                                  <Eye
+                                    className="h-3.5 w-3.5 shrink-0 opacity-80"
+                                    aria-hidden
+                                  />
+                                )}
+                                <span className="truncate underline decoration-muted-foreground/40 underline-offset-2">
+                                  Ver
+                                </span>
+                              </button>
+                            ) : (
+                              <div
+                                className="mx-auto flex max-w-[5.5rem] items-center justify-center rounded-md border border-dashed border-muted-foreground/30 bg-muted/15 px-1.5 py-1 text-center"
+                                title="Sin archivo adjunto en este reporte"
+                              >
+                                <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                                  Sin archivo
+                                </span>
+                              </div>
+                            )}
+                          </td>
+
+                          <td
+                            className={
+                              'min-w-0 px-2 py-2 align-middle ' +
+                              ((row.observacion || '').trim().length > 0
+                                ? 'bg-destructive/10'
+                                : '')
+                            }
+                            title={
+                              /NO CLIENTES/i.test(row.observacion || '')
+                                ? 'NO CLIENTES: la cédula del reporte (' +
+                                  row.cedula_display +
+                                  ') no figura en la tabla clientes. Se compara normalizada (sin guión, sin ceros a la izquierda). Verifique en Préstamos > Clientes o registre al cliente.'
+                                : /DUPLICADO/i.test(row.observacion || '')
+                                  ? 'DUPLICADO: ya existe en la tabla pagos (documento/referencia normalizado) o hay otro reporte con el mismo número en esta página. No se debe aprobar dos veces el mismo comprobante.'
+                                  : /No pag Bs|solo Bs|Bolívares/i.test(
+                                        row.observacion || ''
+                                      )
+                                    ? 'No pag Bs.: la cédula no está en la lista autorizada para bolívares (cedulas_reportar_bs). Use USD o agregue la cédula en Configuración > Pagos.'
+                                    : (row.observacion ?? '')
+                            }
+                          >
+                            {row.observacion ? (
+                              <div
+                                className={
+                                  'text-xs ' +
+                                  ((row.observacion || '').trim().length > 0
+                                    ? 'font-medium text-destructive'
+                                    : 'text-muted-foreground')
+                                }
+                              >
+                                {(row.observacion || '')
+                                  .split('/')
+                                  .map(part => part.trim())
+                                  .filter(Boolean)
+                                  .map((part, idx) => (
+                                    <span
+                                      key={`${row.id}-obs-${idx}`}
+                                      className="block leading-5"
+                                    >
+                                      {part}
+                                    </span>
+                                  ))}
+                              </div>
+                            ) : (
+                              '-'
+                            )}
+                          </td>
+
+                          <td className="whitespace-nowrap px-2 py-2 align-middle">
+                            {(() => {
+                              const cfg = ESTADO_CONFIG[row.estado] ?? {
+                                label: row.estado,
+                                short: row.estado,
+                                variant: 'outline' as const,
+                                Icon: Clock,
+                              }
+
+                              const Icon = cfg.Icon
+
+                              return (
+                                <Badge
+                                  variant={cfg.variant}
+                                  className="inline-flex max-w-full items-center gap-0.5 px-1.5 py-0.5 text-[11px] font-normal leading-tight"
+                                  title={cfg.label}
+                                >
+                                  <Icon
+                                    className="h-3 w-3 shrink-0"
+                                    aria-hidden
+                                  />
+
+                                  <span className="truncate">{cfg.short}</span>
+                                </Badge>
+                              )
+                            })()}
+                          </td>
+
+                          <td className="px-2 py-2 align-middle">
+                            <div className="grid grid-cols-2 justify-items-center gap-1">
+                              {/* Estado envío recibo: X = no enviado, visto = entregado, triángulo = en revisión */}
+
+                              <span
+                                className="flex h-7 w-7 shrink-0 items-center justify-center text-muted-foreground"
+                                title={
+                                  row.estado === 'aprobado'
+                                    ? row.tiene_recibo_pdf &&
+                                      row.correo_enviado_a
+                                      ? 'Recibo enviado por correo'
+                                      : 'No se envió recibo por correo'
+                                    : 'En revisión'
+                                }
+                              >
+                                {row.estado === 'aprobado' ? (
+                                  row.tiene_recibo_pdf &&
+                                  row.correo_enviado_a ? (
+                                    <CheckCircle
+                                      className="h-3.5 w-3.5 text-green-600"
+                                      aria-hidden
+                                    />
+                                  ) : (
+                                    <XCircle
+                                      className="h-3.5 w-3.5 text-muted-foreground"
+                                      aria-hidden
+                                    />
+                                  )
+                                ) : (
+                                  <AlertTriangle
+                                    className="h-3.5 w-3.5 text-blue-600"
+                                    aria-hidden
+                                  />
+                                )}
+                              </span>
+
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 shrink-0"
+                                title="Ver detalle"
+                                onClick={() =>
+                                  navigate(
+                                    '/cobros/pagos-reportados/' + String(row.id)
+                                  )
+                                }
+                              >
+                                <FileText className="h-3.5 w-3.5" />
+                              </Button>
+
+                              {(row.estado === 'pendiente' ||
+                                row.estado === 'en_revision' ||
+                                row.estado === 'rechazado') && (
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7 shrink-0"
+                                  title="Editar (monto, referencia, cédula, etc.)"
+                                  onClick={() =>
+                                    navigate(
+                                      '/cobros/pagos-reportados/' +
+                                        String(row.id) +
+                                        '/editar'
+                                    )
+                                  }
+                                >
+                                  <Edit className="h-3.5 w-3.5" />
+                                </Button>
+                              )}
+
+                              <div className="relative inline-block h-7 w-7 shrink-0 overflow-hidden rounded-md">
+                                <select
+                                  className="absolute inset-0 box-border h-full max-h-full w-full min-w-0 max-w-full cursor-pointer opacity-0 disabled:cursor-not-allowed"
+                                  value=""
+                                  title="Estado"
+                                  aria-label="Cambiar estado del reporte"
+                                  onChange={e => {
+                                    const v = e.target.value
+
+                                    e.target.value = ''
+
+                                    if (!v) return
+
+                                    if (v === 'rechazado') {
+                                      handleAbrirModalRechazo(row)
+
+                                      return
+                                    }
+
+                                    handleCambiarEstado(row.id, v)
+                                  }}
+                                  disabled={changingEstadoId === row.id}
+                                >
+                                  <option value="">Seleccionar estado</option>
+
+                                  <option value="en_revision">
+                                    En revisión
+                                  </option>
+
+                                  <option value="aprobado">Aprobar</option>
+
+                                  {!diagnosticoNoEmail ? (
+                                    <option value="rechazado">Rechazar</option>
+                                  ) : null}
+                                </select>
+
+                                <span
+                                  className="pointer-events-none flex h-7 w-7 items-center justify-center rounded-md border border-input bg-background"
+                                  title="Estado"
+                                >
+                                  {changingEstadoId === row.id ? (
+                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                  ) : (
+                                    <Settings className="h-3.5 w-3.5" />
+                                  )}
+                                </span>
+                              </div>
+
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="relative z-10 h-7 w-7 shrink-0 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                                title="Eliminar"
+                                onClick={() =>
+                                  handleEliminar(row.id, row.referencia_interna)
+                                }
+                                disabled={deletingId === row.id}
+                              >
+                                {deletingId === row.id ? (
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                ) : (
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                )}
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+
+            {data && data.total > data.per_page && (
+              <div className="mt-4 flex justify-between">
+                <p className="text-sm text-gray-600">Total: {data.total}</p>
+
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={page <= 1}
+                    onClick={() => setPage(p => p - 1)}
+                  >
+                    Anterior
+                  </Button>
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={page * data.per_page >= data.total}
+                    onClick={() => setPage(p => p + 1)}
+                  >
+                    Siguiente
+                  </Button>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {previewComprobante.open &&
+          !lgViewport &&
+          typeof document !== 'undefined' &&
+          createPortal(
+            <div
+              className="fixed inset-0 z-[240] bg-black/20"
+              onClick={closeComprobantePreview}
+              role="presentation"
+            >
+              <div
+                className="fixed z-[241] flex select-none flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl ring-1 ring-black/10"
+                style={{
+                  left: previewFloatLeft,
+                  top: previewFloatTop,
+                  width: previewFloatW,
+                  height: previewFloatH,
+                }}
+                onClick={e => e.stopPropagation()}
+                role="dialog"
+                aria-label="Visor temporal de comprobante"
+              >
+                <div
+                  className="flex shrink-0 cursor-grab items-center gap-2 border-b border-slate-100 bg-slate-50/95 px-2 py-2 active:cursor-grabbing"
+                  onPointerDown={beginPreviewDrag}
+                >
+                  <span
+                    className="flex shrink-0 flex-col justify-center gap-0.5 py-0.5"
+                    aria-hidden
+                  >
+                    <span className="h-0.5 w-4 rounded-full bg-slate-500" />
+                    <span className="h-0.5 w-4 rounded-full bg-slate-500" />
+                    <span className="h-0.5 w-4 rounded-full bg-slate-500" />
+                  </span>
+                  <span className="min-w-0 flex-1 truncate text-xs font-medium text-slate-700">
+                    Comprobante #{previewComprobante.pagoId ?? ''}
+                  </span>
+                  {previewComprobante.contentType?.startsWith('image/') && (
+                    <>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 w-7 p-0"
+                        title="Rotar 90° a la izquierda"
+                        aria-label="Rotar 90 grados a la izquierda"
+                        onClick={() =>
+                          setPreviewComprobante(prev => ({
+                            ...prev,
+                            rotDeg: (prev.rotDeg - 90 + 360) % 360,
+                          }))
+                        }
+                      >
+                        <RotateCcw className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 w-7 p-0"
+                        title="Rotar 90° a la derecha"
+                        aria-label="Rotar 90 grados a la derecha"
+                        onClick={() =>
+                          setPreviewComprobante(prev => ({
+                            ...prev,
+                            rotDeg: (prev.rotDeg + 90) % 360,
+                          }))
+                        }
+                      >
+                        <span className="inline-flex" aria-hidden>
+                          <RotateCcw className="h-4 w-4 scale-x-[-1]" />
+                        </span>
+                      </Button>
+                    </>
+                  )}
                   <Button
                     type="button"
                     variant="ghost"
                     size="sm"
-                    className="h-8"
-                    disabled={bulkApproving}
-                    onClick={() => setSelectedIds([])}
+                    className="h-7 w-7 p-0"
+                    title="Cerrar visor"
+                    onClick={closeComprobantePreview}
                   >
-                    Quitar selección
+                    <X className="h-4 w-4" />
                   </Button>
                 </div>
-              )}
-              <div className="relative w-full max-w-full min-w-0 overflow-x-auto rounded-lg border">
-              {refreshing ? (
-                <div
-                  className="absolute inset-0 z-10 flex items-start justify-center bg-background/70 pt-10 backdrop-blur-[1px]"
-                  role="status"
-                  aria-live="polite"
-                >
-                  <span className="flex items-center gap-2 rounded-md border bg-card px-3 py-2 text-sm shadow-sm">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Actualizando listado…
-                  </span>
-                </div>
-              ) : null}
-              <table className="w-max min-w-full table-fixed border-collapse text-sm">
-                <colgroup>
-                  {colWidths.map((w, i) => (
-                    <col key={`col-${i}`} style={{ width: w }} />
-                  ))}
-                </colgroup>
-
-                <thead>
-                  <tr className="border-b bg-muted/50">
-                    {COBROS_REPORTADOS_TABLE_HEAD.map((h, i) => (
-                      <th
-                        key={h.label}
-                        className={cn(
-                          'relative whitespace-nowrap py-2 pl-2 pr-3 text-xs font-semibold sm:text-sm',
-                          i < COBROS_REPORTADOS_TABLE_HEAD.length - 1 &&
-                            'border-r border-border/60',
-                          h.align === 'left' && 'text-left',
-                          h.align === 'right' && 'text-right',
-                          h.align === 'center' && 'text-center'
-                        )}
-                        style={{ width: colWidths[i], minWidth: colWidths[i] }}
+                <div className="relative min-h-0 flex-1 overflow-hidden p-1">
+                  <div className="flex h-full min-h-0 w-full items-center justify-center overflow-auto rounded-md bg-slate-50">
+                    {previewComprobante.loading ? (
+                      <Loader2 className="h-10 w-10 animate-spin text-slate-500" />
+                    ) : previewComprobante.blobUrl &&
+                      previewComprobante.contentType?.startsWith('image/') ? (
+                      <div
+                        className="inline-flex max-h-full max-w-full origin-center transition-transform duration-200"
+                        style={{
+                          transform: `rotate(${previewComprobante.rotDeg}deg)`,
+                        }}
                       >
-                        <span
-                          className={cn(
-                            'block min-w-0 overflow-hidden text-ellipsis pr-2',
-                            h.align === 'right' && 'pr-3',
-                            h.align === 'center' && 'px-1'
-                          )}
-                        >
-                          {h.label === 'Sel.' ? (
-                            <span className="flex justify-center py-0.5">
-                              <input
-                                ref={headerCheckboxRef}
-                                type="checkbox"
-                                className="h-4 w-4 cursor-pointer accent-primary"
-                                checked={allSeleccionadosEnPagina}
-                                onChange={toggleSeleccionarTodosPagina}
-                                disabled={
-                                  bulkApproving ||
-                                  seleccionablesEnPagina.length === 0
-                                }
-                                aria-label="Seleccionar en esta página pendientes y en revisión"
-                                title="Solo pendiente o en revisión en esta página"
-                              />
-                            </span>
-                          ) : (
-                            h.label
-                          )}
-                        </span>
-                        <button
-                          type="button"
-                          className="absolute right-0 top-0 z-20 h-full w-2 cursor-col-resize touch-none border-0 bg-transparent p-0 hover:bg-primary/15 active:bg-primary/25"
-                          aria-label={`Redimensionar columna ${h.label}`}
-                          title="Arrastrar para cambiar ancho"
-                          onMouseDown={e => handleColResizeStart(i, e)}
+                        <img
+                          src={previewComprobante.blobUrl}
+                          alt="Comprobante"
+                          className="max-h-full max-w-full object-contain"
                         />
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-
-                <tbody>
-                  {itemsTabla.map((row: PagoReportadoItem) => (
-                    <tr
-                      key={row.id}
-                      className="border-b transition-colors hover:bg-muted/20"
-                    >
-                      <td className="px-1 py-2 text-center align-middle">
-                        {puedeAprobarMasivoRow(row) ? (
-                          <input
-                            type="checkbox"
-                            className="h-4 w-4 cursor-pointer accent-primary"
-                            checked={selectedIds.includes(row.id)}
-                            onChange={e =>
-                              toggleRowSelected(row.id, e.target.checked)
-                            }
-                            disabled={
-                              bulkApproving || changingEstadoId === row.id
-                            }
-                            aria-label={
-                              'Seleccionar reporte ' +
-                              String(row.referencia_interna || row.id)
-                            }
-                          />
-                        ) : (
-                          <span
-                            className="text-muted-foreground"
-                            title="Solo se puede marcar pendiente o en revisión"
-                          >
-                            —
-                          </span>
-                        )}
-                      </td>
-                      <td
-                        className={
-                          'whitespace-nowrap px-2 py-2 align-middle text-xs sm:text-sm ' +
-                          ((row.observacion || '').trim().length > 0
-                            ? 'bg-destructive/10 font-medium text-destructive'
-                            : '')
-                        }
-                        title={
-                          (row.observacion || '').trim().length > 0
-                            ? 'Observación: ' + (row.observacion || '')
-                            : undefined
-                        }
-                      >
-                        {(row.observacion || '').trim().length > 0 && (
-                          <AlertCircle
-                            className="mr-1 inline-block h-4 w-4 align-middle"
-                            aria-hidden
-                          />
-                        )}
-
-                        <span className="block truncate">{row.cedula_display}</span>
-                      </td>
-
-                      <td className="min-w-0 px-2 py-2 align-middle">
-                        {(() => {
-                          const hasDuplicado = /DUPLICADO/i.test(
-                            row.observacion || ''
-                          )
-                          const showMercantilExceptionTag =
-                            hasDuplicado &&
-                            isMercantilBank(row.institucion_financiera)
-                          return (
-                            <>
-                        <span
-                          className="block truncate text-xs sm:text-sm"
-                          title={row.institucion_financiera}
-                        >
-                          {row.institucion_financiera}
-                        </span>
-                              {showMercantilExceptionTag ? (
-                                <span
-                                  className="mt-1 inline-flex rounded border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700"
-                                  title="Duplicado por número de operación en Mercantil: excepción activa (revisión manual)."
-                                >
-                                  Excepción Mercantil
-                                </span>
-                              ) : null}
-                            </>
-                          )
-                        })()}
-                      </td>
-
-                      <td className="whitespace-nowrap px-2 py-2 text-right align-middle text-xs sm:text-sm">
-                        <span>
-                          {row.monto} {row.moneda}
-                        </span>
-                        {row.moneda === 'BS' && row.equivalente_usd != null && (
-                          <span
-                            className="mt-0.5 block text-xs text-emerald-700"
-                            title={
-                              row.tasa_cambio_bs_usd != null
-                                ? `Tasa: ${row.tasa_cambio_bs_usd.toLocaleString('es-VE')} Bs/USD`
-                                : 'Equivalente en USD'
-                            }
-                          >
-                            {'≈ '}
-                            {row.equivalente_usd.toLocaleString('es-VE', {
-                              minimumFractionDigits: 2,
-                              maximumFractionDigits: 2,
-                            })}{' '}
-                            USD
-                          </span>
-                        )}
-                        {row.moneda === 'BS' && row.equivalente_usd == null && (
-                          <span
-                            className="mt-0.5 block text-xs text-amber-600"
-                            title="No hay tasa registrada para esta fecha. Registre la tasa en Pagos antes de aprobar."
-                          >
-                            Sin tasa
-                          </span>
-                        )}
-                      </td>
-
-                      <td className="whitespace-nowrap px-2 py-2 align-middle text-xs sm:text-sm">
-                        <span className="block truncate">{row.fecha_pago}</span>
-                      </td>
-
-                      <td
-                        className={
-                          'min-w-0 px-2 py-2 align-middle ' +
-                          (/DUPLICADO/i.test(row.observacion || '')
-                            ? 'bg-destructive/10 font-medium text-destructive'
-                            : '')
-                        }
-                        title={
-                          /DUPLICADO/i.test(row.observacion || '')
-                            ? 'DUPLICADO: el número de operación / documento coincide con otro registro en pagos o con otro reporte en esta página.'
-                            : row.numero_operacion
-                        }
-                      >
-                        <span className="block truncate font-mono text-[11px] sm:text-xs">
-                          {row.numero_operacion}
-                        </span>
-                      </td>
-
-                      <td className="whitespace-nowrap px-2 py-2 align-middle text-xs sm:text-sm">
-                        <span className="block truncate">
-                          {new Date(row.fecha_reporte).toLocaleDateString()}
-                        </span>
-                      </td>
-
-                      <td className="px-2 py-2 align-middle">
-                        {row.tiene_comprobante ? (
-                          <button
-                            type="button"
-                            onClick={() => handleVerComprobante(row.id)}
-                            disabled={viewingComprobanteId === row.id}
-                            className="mx-auto inline-flex max-w-full min-w-0 items-center justify-center gap-1 rounded-md border border-border bg-muted/30 px-2 py-1 text-[11px] font-medium text-foreground shadow-none transition-colors hover:bg-muted/60 focus:outline-none focus:ring-2 focus:ring-ring/40 disabled:opacity-60"
-                            title="Abrir imagen o PDF del comprobante"
-                          >
-                            {viewingComprobanteId === row.id ? (
-                              <Loader2
-                                className="h-3.5 w-3.5 shrink-0 animate-spin"
-                                aria-hidden
-                              />
-                            ) : (
-                              <Eye
-                                className="h-3.5 w-3.5 shrink-0 opacity-80"
-                                aria-hidden
-                              />
-                            )}
-                            <span className="truncate underline decoration-muted-foreground/40 underline-offset-2">
-                              Ver
-                            </span>
-                          </button>
-                        ) : (
-                          <div
-                            className="mx-auto flex max-w-[5.5rem] items-center justify-center rounded-md border border-dashed border-muted-foreground/30 bg-muted/15 px-1.5 py-1 text-center"
-                            title="Sin archivo adjunto en este reporte"
-                          >
-                            <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                              Sin archivo
-                            </span>
-                          </div>
-                        )}
-                      </td>
-
-                      <td
-                        className={
-                          'min-w-0 px-2 py-2 align-middle ' +
-                          ((row.observacion || '').trim().length > 0
-                            ? 'bg-destructive/10'
-                            : '')
-                        }
-                        title={
-                          /NO CLIENTES/i.test(row.observacion || '')
-                            ? 'NO CLIENTES: la cédula del reporte (' +
-                              row.cedula_display +
-                              ') no figura en la tabla clientes. Se compara normalizada (sin guión, sin ceros a la izquierda). Verifique en Préstamos > Clientes o registre al cliente.'
-                            : /DUPLICADO/i.test(row.observacion || '')
-                              ? 'DUPLICADO: ya existe en la tabla pagos (documento/referencia normalizado) o hay otro reporte con el mismo número en esta página. No se debe aprobar dos veces el mismo comprobante.'
-                              : /No pag Bs|solo Bs|Bolívares/i.test(
-                                    row.observacion || ''
-                                  )
-                                ? 'No pag Bs.: la cédula no está en la lista autorizada para bolívares (cedulas_reportar_bs). Use USD o agregue la cédula en Configuración > Pagos.'
-                                : (row.observacion ?? '')
-                        }
-                      >
-                        {row.observacion ? (
-                          <div
-                            className={
-                              'text-xs ' +
-                              ((row.observacion || '').trim().length > 0
-                                ? 'font-medium text-destructive'
-                                : 'text-muted-foreground')
-                            }
-                          >
-                            {(row.observacion || '')
-                              .split('/')
-                              .map(part => part.trim())
-                              .filter(Boolean)
-                              .map((part, idx) => (
-                                <span key={`${row.id}-obs-${idx}`} className="block leading-5">
-                                  {part}
-                                </span>
-                              ))}
-                          </div>
-                        ) : (
-                          '-'
-                        )}
-                      </td>
-
-                      <td className="whitespace-nowrap px-2 py-2 align-middle">
-                        {(() => {
-                          const cfg = ESTADO_CONFIG[row.estado] ?? {
-                            label: row.estado,
-                            short: row.estado,
-                            variant: 'outline' as const,
-                            Icon: Clock,
-                          }
-
-                          const Icon = cfg.Icon
-
-                          return (
-                            <Badge
-                              variant={cfg.variant}
-                              className="inline-flex max-w-full items-center gap-0.5 px-1.5 py-0.5 text-[11px] font-normal leading-tight"
-                              title={cfg.label}
-                            >
-                              <Icon
-                                className="h-3 w-3 shrink-0"
-                                aria-hidden
-                              />
-
-                              <span className="truncate">{cfg.short}</span>
-                            </Badge>
-                          )
-                        })()}
-                      </td>
-
-                      <td className="px-2 py-2 align-middle">
-                        <div className="grid grid-cols-2 justify-items-center gap-1">
-                          {/* Estado envío recibo: X = no enviado, visto = entregado, triángulo = en revisión */}
-
-                          <span
-                            className="flex h-7 w-7 shrink-0 items-center justify-center text-muted-foreground"
-                            title={
-                              row.estado === 'aprobado'
-                                ? row.tiene_recibo_pdf && row.correo_enviado_a
-                                  ? 'Recibo enviado por correo'
-                                  : 'No se envió recibo por correo'
-                                : 'En revisión'
-                            }
-                          >
-                            {row.estado === 'aprobado' ? (
-                              row.tiene_recibo_pdf && row.correo_enviado_a ? (
-                                <CheckCircle
-                                  className="h-3.5 w-3.5 text-green-600"
-                                  aria-hidden
-                                />
-                              ) : (
-                                <XCircle
-                                  className="h-3.5 w-3.5 text-muted-foreground"
-                                  aria-hidden
-                                />
-                              )
-                            ) : (
-                              <AlertTriangle
-                                className="h-3.5 w-3.5 text-blue-600"
-                                aria-hidden
-                              />
-                            )}
-                          </span>
-
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7 shrink-0"
-                            title="Ver detalle"
-                            onClick={() =>
-                              navigate(
-                                '/cobros/pagos-reportados/' + String(row.id)
-                              )
-                            }
-                          >
-                            <FileText className="h-3.5 w-3.5" />
-                          </Button>
-
-                          {(row.estado === 'pendiente' ||
-                            row.estado === 'en_revision' ||
-                            row.estado === 'rechazado') && (
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7 shrink-0"
-                              title="Editar (monto, referencia, cédula, etc.)"
-                              onClick={() =>
-                                navigate(
-                                  '/cobros/pagos-reportados/' +
-                                    String(row.id) +
-                                    '/editar'
-                                )
-                              }
-                            >
-                              <Edit className="h-3.5 w-3.5" />
-                            </Button>
-                          )}
-
-                          <div className="relative inline-block h-7 w-7 shrink-0 overflow-hidden rounded-md">
-                            <select
-                              className="absolute inset-0 box-border h-full max-h-full w-full min-w-0 max-w-full cursor-pointer opacity-0 disabled:cursor-not-allowed"
-                              value=""
-                              title="Estado"
-                              aria-label="Cambiar estado del reporte"
-                              onChange={e => {
-                                const v = e.target.value
-
-                                e.target.value = ''
-
-                                if (!v) return
-
-                                if (v === 'rechazado') {
-                                  handleAbrirModalRechazo(row)
-
-                                  return
-                                }
-
-                                handleCambiarEstado(row.id, v)
-                              }}
-                              disabled={changingEstadoId === row.id}
-                            >
-                              <option value="">Seleccionar estado</option>
-
-                              <option value="en_revision">En revisión</option>
-
-                              <option value="aprobado">Aprobar</option>
-
-                              {!diagnosticoNoEmail ? (
-                                <option value="rechazado">Rechazar</option>
-                              ) : null}
-                            </select>
-
-                            <span
-                              className="pointer-events-none flex h-7 w-7 items-center justify-center rounded-md border border-input bg-background"
-                              title="Estado"
-                            >
-                              {changingEstadoId === row.id ? (
-                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                              ) : (
-                                <Settings className="h-3.5 w-3.5" />
-                              )}
-                            </span>
-                          </div>
-
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="relative z-10 h-7 w-7 shrink-0 text-destructive hover:bg-destructive/10 hover:text-destructive"
-                            title="Eliminar"
-                            onClick={() =>
-                              handleEliminar(row.id, row.referencia_interna)
-                            }
-                            disabled={deletingId === row.id}
-                          >
-                            {deletingId === row.id ? (
-                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                            ) : (
-                              <Trash2 className="h-3.5 w-3.5" />
-                            )}
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            </>
-          )}
-
-          {data && data.total > data.per_page && (
-            <div className="mt-4 flex justify-between">
-              <p className="text-sm text-gray-600">Total: {data.total}</p>
-
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={page <= 1}
-                  onClick={() => setPage(p => p - 1)}
-                >
-                  Anterior
-                </Button>
-
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={page * data.per_page >= data.total}
-                  onClick={() => setPage(p => p + 1)}
-                >
-                  Siguiente
-                </Button>
+                      </div>
+                    ) : previewComprobante.blobUrl ? (
+                      <iframe
+                        title={`Comprobante ${previewComprobante.pagoId ?? ''}`}
+                        src={previewComprobante.blobUrl}
+                        className="h-full min-h-0 w-full border-0"
+                      />
+                    ) : (
+                      <div className="px-3 text-sm text-muted-foreground">
+                        No se pudo cargar el comprobante.
+                      </div>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    aria-label="Redimensionar esquina superior izquierda"
+                    className="absolute left-0 top-8 z-30 h-5 w-5 cursor-nwse-resize bg-transparent p-0"
+                    onPointerDown={beginPreviewResize('nw')}
+                  />
+                  <button
+                    type="button"
+                    aria-label="Redimensionar esquina superior derecha"
+                    className="absolute right-0 top-8 z-30 h-5 w-5 cursor-nesw-resize bg-transparent p-0"
+                    onPointerDown={beginPreviewResize('ne')}
+                  />
+                  <button
+                    type="button"
+                    aria-label="Redimensionar esquina inferior izquierda"
+                    className="absolute bottom-0 left-0 z-30 h-5 w-5 cursor-nesw-resize bg-transparent p-0"
+                    onPointerDown={beginPreviewResize('sw')}
+                  />
+                  <button
+                    type="button"
+                    aria-label="Redimensionar esquina inferior derecha"
+                    className="absolute bottom-0 right-0 z-30 h-5 w-5 cursor-nwse-resize bg-transparent p-0"
+                    onPointerDown={beginPreviewResize('se')}
+                  />
+                </div>
               </div>
-            </div>
+            </div>,
+            document.body
           )}
-        </CardContent>
-      </Card>
 
-      {previewComprobante.open &&
-        !lgViewport &&
-        typeof document !== 'undefined' &&
-        createPortal(
-          <div
-            className="fixed inset-0 z-[240] bg-black/20"
-            onClick={closeComprobantePreview}
-            role="presentation"
-          >
-            <div
-              className="fixed z-[241] flex select-none flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl ring-1 ring-black/10"
-              style={{
-                left: previewFloatLeft,
-                top: previewFloatTop,
-                width: previewFloatW,
-                height: previewFloatH,
-              }}
-              onClick={e => e.stopPropagation()}
-              role="dialog"
-              aria-label="Visor temporal de comprobante"
-            >
-              <div
-                className="flex shrink-0 cursor-grab items-center gap-2 border-b border-slate-100 bg-slate-50/95 px-2 py-2 active:cursor-grabbing"
-                onPointerDown={beginPreviewDrag}
-              >
-                <span
-                  className="flex shrink-0 flex-col justify-center gap-0.5 py-0.5"
-                  aria-hidden
-                >
-                  <span className="h-0.5 w-4 rounded-full bg-slate-500" />
-                  <span className="h-0.5 w-4 rounded-full bg-slate-500" />
-                  <span className="h-0.5 w-4 rounded-full bg-slate-500" />
-                </span>
-                <span className="min-w-0 flex-1 truncate text-xs font-medium text-slate-700">
-                  Comprobante #{previewComprobante.pagoId ?? ''}
-                </span>
-                {previewComprobante.contentType?.startsWith('image/') && (
+        {/* Modal: interfaz rápida para escribir mensaje de rechazo y enviar correo al cliente */}
+
+        <Dialog
+          open={rechazarModal.open}
+          onOpenChange={open => {
+            if (!open) {
+              setRechazarModal({ open: false, row: null })
+
+              setMotivoRechazo('')
+            }
+          }}
+        >
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-destructive">
+                <XCircle className="h-5 w-5" /> Rechazar pago reportado
+              </DialogTitle>
+
+              <DialogDescription>
+                {rechazarModal.row && (
                   <>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 w-7 p-0"
-                      title="Rotar 90° a la izquierda"
-                      aria-label="Rotar 90 grados a la izquierda"
-                      onClick={() =>
-                        setPreviewComprobante(prev => ({
-                          ...prev,
-                          rotDeg: (prev.rotDeg - 90 + 360) % 360,
-                        }))
-                      }
-                    >
-                      <RotateCcw className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 w-7 p-0"
-                      title="Rotar 90° a la derecha"
-                      aria-label="Rotar 90 grados a la derecha"
-                      onClick={() =>
-                        setPreviewComprobante(prev => ({
-                          ...prev,
-                          rotDeg: (prev.rotDeg + 90) % 360,
-                        }))
-                      }
-                    >
-                      <span className="inline-flex" aria-hidden>
-                        <RotateCcw className="h-4 w-4 scale-x-[-1]" />
+                    Referencia:{' '}
+                    <strong>
+                      {rechazarModal.row.referencia_interna?.startsWith('#')
+                        ? rechazarModal.row.referencia_interna
+                        : '#' + String(rechazarModal.row.referencia_interna)}
+                    </strong>
+                    {rechazarModal.row.correo_enviado_a && (
+                      <span className="mt-1 block">
+                        Se enviará un correo automáticamente a{' '}
+                        <strong>{rechazarModal.row.correo_enviado_a}</strong>{' '}
+                        desde <strong>notificaciones@rapicreditca.com</strong>{' '}
+                        con el mensaje y el comprobante adjunto.
                       </span>
-                    </Button>
+                    )}
                   </>
                 )}
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 w-7 p-0"
-                  title="Cerrar visor"
-                  onClick={closeComprobantePreview}
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
-              <div className="relative min-h-0 flex-1 overflow-hidden p-1">
-                <div className="flex h-full min-h-0 w-full items-center justify-center overflow-auto rounded-md bg-slate-50">
-                  {previewComprobante.loading ? (
-                    <Loader2 className="h-10 w-10 animate-spin text-slate-500" />
-                  ) : previewComprobante.blobUrl &&
-                    previewComprobante.contentType?.startsWith('image/') ? (
-                    <div
-                      className="inline-flex max-h-full max-w-full origin-center transition-transform duration-200"
-                      style={{ transform: `rotate(${previewComprobante.rotDeg}deg)` }}
-                    >
-                      <img
-                        src={previewComprobante.blobUrl}
-                        alt="Comprobante"
-                        className="max-h-full max-w-full object-contain"
-                      />
-                    </div>
-                  ) : previewComprobante.blobUrl ? (
-                    <iframe
-                      title={`Comprobante ${previewComprobante.pagoId ?? ''}`}
-                      src={previewComprobante.blobUrl}
-                      className="h-full min-h-0 w-full border-0"
-                    />
-                  ) : (
-                    <div className="px-3 text-sm text-muted-foreground">
-                      No se pudo cargar el comprobante.
-                    </div>
-                  )}
-                </div>
-                <button
-                  type="button"
-                  aria-label="Redimensionar esquina superior izquierda"
-                  className="absolute left-0 top-8 z-30 h-5 w-5 cursor-nwse-resize bg-transparent p-0"
-                  onPointerDown={beginPreviewResize('nw')}
-                />
-                <button
-                  type="button"
-                  aria-label="Redimensionar esquina superior derecha"
-                  className="absolute right-0 top-8 z-30 h-5 w-5 cursor-nesw-resize bg-transparent p-0"
-                  onPointerDown={beginPreviewResize('ne')}
-                />
-                <button
-                  type="button"
-                  aria-label="Redimensionar esquina inferior izquierda"
-                  className="absolute bottom-0 left-0 z-30 h-5 w-5 cursor-nesw-resize bg-transparent p-0"
-                  onPointerDown={beginPreviewResize('sw')}
-                />
-                <button
-                  type="button"
-                  aria-label="Redimensionar esquina inferior derecha"
-                  className="absolute bottom-0 right-0 z-30 h-5 w-5 cursor-nwse-resize bg-transparent p-0"
-                  onPointerDown={beginPreviewResize('se')}
-                />
-              </div>
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-2">
+              <label className="block text-sm font-medium">
+                Mensaje para el cliente (obligatorio)
+              </label>
+
+              <textarea
+                className="min-h-[100px] w-full resize-y rounded-md border px-3 py-2 text-sm"
+                placeholder="Indique el motivo del rechazo. Este texto se enviará por correo al cliente."
+                value={motivoRechazo}
+                onChange={e => setMotivoRechazo(e.target.value)}
+                autoFocus
+              />
             </div>
-          </div>,
-          document.body
-        )}
 
-      {/* Modal: interfaz rápida para escribir mensaje de rechazo y enviar correo al cliente */}
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setRechazarModal({ open: false, row: null })
 
-      <Dialog
-        open={rechazarModal.open}
-        onOpenChange={open => {
-          if (!open) {
-            setRechazarModal({ open: false, row: null })
+                  setMotivoRechazo('')
+                }}
+              >
+                Cancelar
+              </Button>
 
-            setMotivoRechazo('')
-          }
-        }}
-      >
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-destructive">
-              <XCircle className="h-5 w-5" /> Rechazar pago reportado
-            </DialogTitle>
-
-            <DialogDescription>
-              {rechazarModal.row && (
-                <>
-                  Referencia:{' '}
-                  <strong>
-                    {rechazarModal.row.referencia_interna?.startsWith('#')
-                      ? rechazarModal.row.referencia_interna
-                      : '#' + String(rechazarModal.row.referencia_interna)}
-                  </strong>
-                  {rechazarModal.row.correo_enviado_a && (
-                    <span className="mt-1 block">
-                      Se enviará un correo automáticamente a{' '}
-                      <strong>{rechazarModal.row.correo_enviado_a}</strong>{' '}
-                      desde <strong>notificaciones@rapicreditca.com</strong> con
-                      el mensaje y el comprobante adjunto.
-                    </span>
-                  )}
-                </>
-              )}
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-2">
-            <label className="block text-sm font-medium">
-              Mensaje para el cliente (obligatorio)
-            </label>
-
-            <textarea
-              className="min-h-[100px] w-full resize-y rounded-md border px-3 py-2 text-sm"
-              placeholder="Indique el motivo del rechazo. Este texto se enviará por correo al cliente."
-              value={motivoRechazo}
-              onChange={e => setMotivoRechazo(e.target.value)}
-              autoFocus
-            />
-          </div>
-
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setRechazarModal({ open: false, row: null })
-
-                setMotivoRechazo('')
-              }}
-            >
-              Cancelar
-            </Button>
-
-            <Button
-              variant="destructive"
-              onClick={handleConfirmarRechazo}
-              disabled={
-                diagnosticoNoEmail ||
-                !motivoRechazo.trim() ||
-                changingEstadoId === rechazarModal.row?.id
-              }
-            >
-              {changingEstadoId === rechazarModal.row?.id ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <Mail className="mr-2 h-4 w-4" />
-              )}
-              {diagnosticoNoEmail
-                ? 'Bloqueado en diagnóstico (sin correo)'
-                : 'Rechazar y enviar correo'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+              <Button
+                variant="destructive"
+                onClick={handleConfirmarRechazo}
+                disabled={
+                  diagnosticoNoEmail ||
+                  !motivoRechazo.trim() ||
+                  changingEstadoId === rechazarModal.row?.id
+                }
+              >
+                {changingEstadoId === rechazarModal.row?.id ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Mail className="mr-2 h-4 w-4" />
+                )}
+                {diagnosticoNoEmail
+                  ? 'Bloqueado en diagnóstico (sin correo)'
+                  : 'Rechazar y enviar correo'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   )

@@ -1,7 +1,7 @@
 import React from 'react'
 
 function formatoFechaDdMmYyyy(iso: string | null | undefined): string {
-  if (iso == null || String(iso).trim() === '') return '—'
+  if (iso == null || String(iso).trim() === '') return '-'
   const d = String(iso).trim().slice(0, 10)
   const parts = d.split('-')
   if (parts.length === 3 && parts[0].length === 4) {
@@ -47,15 +47,15 @@ export function DuplicadoPrestamosComparacion({
   prestamoObjetivoMultiple,
 }: DuplicadoPrestamosComparacionProps) {
   const prestEx =
-    typeof prestamoExistenteId === 'number' ? `#${prestamoExistenteId}` : '—'
+    typeof prestamoExistenteId === 'number' ? `#${prestamoExistenteId}` : '-'
   const prestObj =
-    typeof prestamoObjetivoId === 'number' ? `#${prestamoObjetivoId}` : '—'
+    typeof prestamoObjetivoId === 'number' ? `#${prestamoObjetivoId}` : '-'
   const pagoTxt =
     typeof pagoExistenteId === 'number'
       ? `#${pagoExistenteId}${
           pagoExistenteEstado ? ` (${pagoExistenteEstado})` : ''
         }`
-      : '—'
+      : '-'
 
   const fechaReporteFmt = formatoFechaDdMmYyyy(fechaPagoReporteIso || undefined)
   const hoyReporte = esMismaFechaQueHoyLocal(fechaPagoReporteIso)
@@ -79,7 +79,7 @@ export function DuplicadoPrestamosComparacion({
             <tr className="border-b border-rose-100">
               <td className="max-w-[9rem] p-2 align-top font-medium text-rose-950 sm:max-w-none">
                 Ya aplicado en cartera
-                <span className="mt-0.5 block font-normal text-[11px] text-muted-foreground">
+                <span className="mt-0.5 block text-[11px] font-normal text-muted-foreground">
                   Ej.: préstamo <span className="font-mono">#647</span>, fecha{' '}
                   <span className="whitespace-nowrap">12-10-2025</span>
                 </span>
@@ -88,7 +88,7 @@ export function DuplicadoPrestamosComparacion({
               <td className="p-2 align-top font-mono text-[11px] sm:text-sm">
                 {pagoTxt}
               </td>
-              <td className="p-2 align-top whitespace-nowrap">
+              <td className="whitespace-nowrap p-2 align-top">
                 {formatoFechaDdMmYyyy(pagoExistenteFechaPago)}
                 <span className="mt-0.5 block text-[11px] font-normal text-muted-foreground">
                   del pago que ya existe
@@ -98,14 +98,14 @@ export function DuplicadoPrestamosComparacion({
             <tr>
               <td className="max-w-[9rem] p-2 align-top font-medium text-rose-950 sm:max-w-none">
                 Ahora: iría a aplicar (este reporte)
-                <span className="mt-0.5 block font-normal text-[11px] text-muted-foreground">
-                  Ej.: préstamo <span className="font-mono">#5432</span>, fecha de
-                  hoy en el comprobante
+                <span className="mt-0.5 block text-[11px] font-normal text-muted-foreground">
+                  Ej.: préstamo <span className="font-mono">#5432</span>, fecha
+                  de hoy en el comprobante
                 </span>
               </td>
               <td className="p-2 align-top font-mono">{prestObj}</td>
-              <td className="p-2 align-top text-muted-foreground">—</td>
-              <td className="p-2 align-top whitespace-nowrap">
+              <td className="p-2 align-top text-muted-foreground">-</td>
+              <td className="whitespace-nowrap p-2 align-top">
                 {fechaReporteFmt}
                 {hoyReporte ? (
                   <span className="ml-1 text-[11px] font-semibold text-emerald-700">
@@ -123,8 +123,8 @@ export function DuplicadoPrestamosComparacion({
       {prestamoObjetivoMultiple ? (
         <p className="text-xs text-amber-800">
           Hay más de un préstamo APROBADO para esta cédula: la columna «Ahora»
-          usa el préstamo más reciente; confirme en la ficha de préstamos si no es
-          el esperado.
+          usa el préstamo más reciente; confirme en la ficha de préstamos si no
+          es el esperado.
         </p>
       ) : null}
       {typeof prestamoExistenteId === 'number' &&

@@ -647,9 +647,7 @@ export function CrearPrestamoForm({
 
     if (!prestamo) {
       if (!fechaAprobTrim) {
-        errors.push(
-          'La fecha de aprobación / desembolso es obligatoria'
-        )
+        errors.push('La fecha de aprobación / desembolso es obligatoria')
       }
     }
 

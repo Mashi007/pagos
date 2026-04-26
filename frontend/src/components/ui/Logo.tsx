@@ -814,7 +814,10 @@ export function Logo({
               if (headResponse.ok) {
                 newLogoUrl = `${logoPath}?t=${Date.now()}`
 
-                devDebug('Logo recargado desde configuración (BD):', config.logo_filename)
+                devDebug(
+                  'Logo recargado desde configuración (BD):',
+                  config.logo_filename
+                )
               } else {
                 devWarn(
                   'Logo no encontrado al recargar desde configuración:',

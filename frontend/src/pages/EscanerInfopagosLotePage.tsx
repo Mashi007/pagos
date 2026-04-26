@@ -127,11 +127,15 @@ function mimeEfectivoCliente(file: File): string {
   return t
 }
 
-function validarArchivo(file: File | null): { valido: boolean; error?: string } {
+function validarArchivo(file: File | null): {
+  valido: boolean
+  error?: string
+} {
   if (!file)
     return {
       valido: false,
-      error: 'Seleccione un archivo de comprobante (PDF, JPEG, PNG, HEIC o WebP).',
+      error:
+        'Seleccione un archivo de comprobante (PDF, JPEG, PNG, HEIC o WebP).',
     }
   const type = mimeEfectivoCliente(file)
   if (!ALLOWED_FILE_TYPES.includes(type)) {
@@ -190,14 +194,16 @@ function montoParaApi(num: number): string {
 }
 
 function validarFechaPago(fecha: string): { valido: boolean; error?: string } {
-  if (!fecha?.trim()) return { valido: false, error: 'Seleccione la fecha de pago.' }
+  if (!fecha?.trim())
+    return { valido: false, error: 'Seleccione la fecha de pago.' }
   const hoy = new Date()
   hoy.setHours(0, 0, 0, 0)
   const d = new Date(fecha)
   if (Number.isNaN(d.getTime()))
     return { valido: false, error: 'Fecha no válida.' }
   d.setHours(0, 0, 0, 0)
-  if (d > hoy) return { valido: false, error: 'La fecha de pago no puede ser futura.' }
+  if (d > hoy)
+    return { valido: false, error: 'La fecha de pago no puede ser futura.' }
   return { valido: true }
 }
 
@@ -218,7 +224,10 @@ function validarMonto(
     }
   if (moneda === 'BS') {
     if (num < MIN_MONTO_BS_REPORTAR)
-      return { valido: false, error: 'En bolívares el monto debe ser al menos 1 Bs.' }
+      return {
+        valido: false,
+        error: 'En bolívares el monto debe ser al menos 1 Bs.',
+      }
     if (num > MAX_MONTO_BS_REPORTAR)
       return {
         valido: false,
@@ -227,8 +236,12 @@ function validarMonto(
     return { valido: true, valor: num }
   }
   if (num < MIN_MONTO)
-    return { valido: false, error: `El monto debe ser mayor a ${String(MIN_MONTO)}.` }
-  if (num > MAX_MONTO) return { valido: false, error: 'Monto fuera del rango permitido.' }
+    return {
+      valido: false,
+      error: `El monto debe ser mayor a ${String(MIN_MONTO)}.`,
+    }
+  if (num > MAX_MONTO)
+    return { valido: false, error: 'Monto fuera del rango permitido.' }
   return { valido: true, valor: num }
 }
 
@@ -243,7 +256,8 @@ export default function EscanerInfopagosLotePage() {
   const [cedulaRaw, setCedulaRaw] = useState('')
   const [nombreCliente, setNombreCliente] = useState('')
   const [validandoCedula, setValidandoCedula] = useState(false)
-  const [fuenteTasa, setFuenteTasa] = useState<FuenteTasaCambio>(FUENTE_TASA_DEFAULT)
+  const [fuenteTasa, setFuenteTasa] =
+    useState<FuenteTasaCambio>(FUENTE_TASA_DEFAULT)
 
   const [archivos, setArchivos] = useState<File[]>([])
   const [driveFolder, setDriveFolder] = useState(DEFAULT_DRIVE_FOLDER)
@@ -283,11 +297,14 @@ export default function EscanerInfopagosLotePage() {
     filasRef.current = bundle.filas
     setFilas(bundle.filas)
     setFase('revision')
-    toast.success('Se restauró la sesión de lote con resultados de digitalización en segundo plano.')
+    toast.success(
+      'Se restauró la sesión de lote con resultados de digitalización en segundo plano.'
+    )
   }, [])
 
   const cedulaNormalizada = useMemo(
-    () => normalizarCedulaParaProcesar(extraerCaracteresCedulaPublica(cedulaRaw)),
+    () =>
+      normalizarCedulaParaProcesar(extraerCaracteresCedulaPublica(cedulaRaw)),
     [cedulaRaw]
   )
 
@@ -298,9 +315,12 @@ export default function EscanerInfopagosLotePage() {
     }
     setValidandoCedula(true)
     try {
-      const res = await validarCedulaPublico(cedulaNormalizada.valorParaEnviar!, {
-        origen: 'infopagos',
-      })
+      const res = await validarCedulaPublico(
+        cedulaNormalizada.valorParaEnviar!,
+        {
+          origen: 'infopagos',
+        }
+      )
       if (!res.ok) {
         toast.error(res.error || 'No se pudo validar la cédula.')
         return
@@ -308,9 +328,13 @@ export default function EscanerInfopagosLotePage() {
       setNombreCliente((res.nombre || '').trim())
       setFuenteTasa(normalizarFuenteTasaCambio(res.fuente_tasa_cambio_lista_bs))
       setFase('archivos')
-      toast.success('Cédula verificada. Se usará la tasa configurada en Pago Bs.')
+      toast.success(
+        'Cédula verificada. Se usará la tasa configurada en Pago Bs.'
+      )
     } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : 'Error al validar la cédula.')
+      toast.error(
+        e instanceof Error ? e.message : 'Error al validar la cédula.'
+      )
     } finally {
       setValidandoCedula(false)
     }
@@ -322,7 +346,9 @@ export default function EscanerInfopagosLotePage() {
       const base = [...prev]
       for (const file of Array.from(list)) {
         if (base.length >= MAX_ARCHIVOS) {
-          toast.error(`Máximo ${String(MAX_ARCHIVOS)} archivos. Quite alguno para añadir más.`)
+          toast.error(
+            `Máximo ${String(MAX_ARCHIVOS)} archivos. Quite alguno para añadir más.`
+          )
           break
         }
         const v = validarArchivo(file)
@@ -384,7 +410,9 @@ export default function EscanerInfopagosLotePage() {
     setCargandoDrive(true)
     try {
       const tipo = cedulaNormalizada.valorParaEnviar.charAt(0).toUpperCase()
-      const numero = cedulaNormalizada.valorParaEnviar.slice(1).replace(/\D/g, '')
+      const numero = cedulaNormalizada.valorParaEnviar
+        .slice(1)
+        .replace(/\D/g, '')
       const fd = new FormData()
       fd.append('tipo_cedula', tipo)
       fd.append('numero_cedula', numero)
@@ -415,7 +443,8 @@ export default function EscanerInfopagosLotePage() {
           filasDrive.push({
             ...base,
             extract: 'error',
-            errorExtraccion: item.error || 'No se pudo digitalizar el comprobante.',
+            errorExtraccion:
+              item.error || 'No se pudo digitalizar el comprobante.',
           })
         }
       }
@@ -434,7 +463,9 @@ export default function EscanerInfopagosLotePage() {
         `Drive: ${String(res.total_leidos)} leído(s), ${String(res.total_eliminados)} eliminado(s) de la carpeta.`
       )
     } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : 'Error cargando imágenes desde Drive.')
+      toast.error(
+        e instanceof Error ? e.message : 'Error cargando imágenes desde Drive.'
+      )
     } finally {
       setCargandoDrive(false)
     }
@@ -461,13 +492,18 @@ export default function EscanerInfopagosLotePage() {
     )
   }, [cedulaNormalizada, cedulaRaw, nombreCliente, fuenteTasa])
 
-  const actualizarFila = useCallback((clientId: string, patch: Partial<FilaLote>) => {
-    setFilas(prev => {
-      const next = prev.map(f => (f.clientId === clientId ? { ...f, ...patch } : f))
-      filasRef.current = next
-      return next
-    })
-  }, [])
+  const actualizarFila = useCallback(
+    (clientId: string, patch: Partial<FilaLote>) => {
+      setFilas(prev => {
+        const next = prev.map(f =>
+          f.clientId === clientId ? { ...f, ...patch } : f
+        )
+        filasRef.current = next
+        return next
+      })
+    },
+    []
+  )
 
   const abrirEditarFila = useCallback((clientId: string) => {
     const fila = filasRef.current.find(f => f.clientId === clientId)
@@ -495,7 +531,8 @@ export default function EscanerInfopagosLotePage() {
     actualizarFila(editClientId, {
       fechaPago: String(editDraft.fechaPago || ''),
       confirmaFechaDetectada:
-        editDraft.confirmaFechaDetectada === 'si' || editDraft.confirmaFechaDetectada === 'no'
+        editDraft.confirmaFechaDetectada === 'si' ||
+        editDraft.confirmaFechaDetectada === 'no'
           ? editDraft.confirmaFechaDetectada
           : null,
       confirmaFechaManual: Boolean(editDraft.confirmaFechaManual),
@@ -508,41 +545,48 @@ export default function EscanerInfopagosLotePage() {
     cerrarEditorFila()
   }, [actualizarFila, cerrarEditorFila, editClientId, editDraft])
 
-  const handleAplicarSufijo = useCallback((clientId: string, letter: 'A' | 'P') => {
-    setFilas(prev => {
-      const next = prev.map(f => {
-        if (f.clientId !== clientId) return f
-        const actual = f.numeroOperacion.trim()
-        if (!actual) {
-          toast.error('Primero escriba un número de operación.')
-          return f
-        }
-        if (SUFIJO_VISTO_ARCHIVO_RE.test(actual)) {
-          toast.error('Este número ya tiene sufijo admin (_A#### / _P####).')
-          return f
-        }
-        const nuevo = aplicarSufijoVistoADocumento(
-          actual,
-          letter,
-          tokensSufijoUsadosRef.current
-        )
-        if (!nuevo || nuevo === actual) {
-          toast.error('No se pudo asignar sufijo.')
-          return f
-        }
-        toast.success(`Sufijo _${letter}#### aplicado.`)
-        return { ...f, numeroOperacion: nuevo }
+  const handleAplicarSufijo = useCallback(
+    (clientId: string, letter: 'A' | 'P') => {
+      setFilas(prev => {
+        const next = prev.map(f => {
+          if (f.clientId !== clientId) return f
+          const actual = f.numeroOperacion.trim()
+          if (!actual) {
+            toast.error('Primero escriba un número de operación.')
+            return f
+          }
+          if (SUFIJO_VISTO_ARCHIVO_RE.test(actual)) {
+            toast.error('Este número ya tiene sufijo admin (_A#### / _P####).')
+            return f
+          }
+          const nuevo = aplicarSufijoVistoADocumento(
+            actual,
+            letter,
+            tokensSufijoUsadosRef.current
+          )
+          if (!nuevo || nuevo === actual) {
+            toast.error('No se pudo asignar sufijo.')
+            return f
+          }
+          toast.success(`Sufijo _${letter}#### aplicado.`)
+          return { ...f, numeroOperacion: nuevo }
+        })
+        filasRef.current = next
+        return next
       })
-      filasRef.current = next
-      return next
-    })
-  }, [])
+    },
+    []
+  )
 
   const handleEliminarFila = useCallback(async (clientId: string) => {
     const fila = filasRef.current.find(f => f.clientId === clientId)
     if (!fila || fila.guardando) return
     if (fila.guardado && fila.pagoId != null) {
-      if (!window.confirm('¿Eliminar este pago reportado en Cobros? Esta acción no se puede deshacer.')) {
+      if (
+        !window.confirm(
+          '¿Eliminar este pago reportado en Cobros? Esta acción no se puede deshacer.'
+        )
+      ) {
         return
       }
       try {
@@ -610,7 +654,9 @@ export default function EscanerInfopagosLotePage() {
         return
       }
       const tipo = cedulaNormalizada.valorParaEnviar.charAt(0).toUpperCase()
-      const numero = cedulaNormalizada.valorParaEnviar.slice(1).replace(/\D/g, '')
+      const numero = cedulaNormalizada.valorParaEnviar
+        .slice(1)
+        .replace(/\D/g, '')
       const form = new FormData()
       form.append('tipo_cedula', tipo)
       form.append('numero_cedula', numero)
@@ -629,7 +675,10 @@ export default function EscanerInfopagosLotePage() {
         const res = await enviarReporteInfopagos(form)
         if (!res.ok) {
           toast.error(res.error || 'Error al guardar.')
-          actualizarFila(clientId, { guardando: false, guardadoError: res.error || 'Error' })
+          actualizarFila(clientId, {
+            guardando: false,
+            guardadoError: res.error || 'Error',
+          })
           return
         }
         actualizarFila(clientId, {
@@ -671,7 +720,9 @@ export default function EscanerInfopagosLotePage() {
         document.body.removeChild(a)
         window.URL.revokeObjectURL(url)
       } catch (e: unknown) {
-        toast.error(e instanceof Error ? e.message : 'No se pudo descargar el recibo.')
+        toast.error(
+          e instanceof Error ? e.message : 'No se pudo descargar el recibo.'
+        )
       } finally {
         actualizarFila(clientId, { descargandoRecibo: false })
       }
@@ -700,7 +751,10 @@ export default function EscanerInfopagosLotePage() {
 
   const listoParaDigitalizar = filas.some(f => f.extract !== 'listo')
   const filaEditando = useMemo(
-    () => (editClientId ? filas.find(f => f.clientId === editClientId) || null : null),
+    () =>
+      editClientId
+        ? filas.find(f => f.clientId === editClientId) || null
+        : null,
     [editClientId, filas]
   )
 
@@ -715,9 +769,10 @@ export default function EscanerInfopagosLotePage() {
             Escáner Infopagos (lote)
           </h1>
           <p className="text-sm text-slate-600">
-            Una cédula deudor para todos los comprobantes. Hasta {String(MAX_ARCHIVOS)} archivos,
-            digitalización y formulario iguales al escáner unitario; cada fila se guarda por separado
-            (mismo proceso Infopagos / recibo).
+            Una cédula deudor para todos los comprobantes. Hasta{' '}
+            {String(MAX_ARCHIVOS)} archivos, digitalización y formulario iguales
+            al escáner unitario; cada fila se guarda por separado (mismo proceso
+            Infopagos / recibo).
           </p>
         </div>
       </div>
@@ -735,7 +790,9 @@ export default function EscanerInfopagosLotePage() {
       {fase === 'cedula' && (
         <Card>
           <CardHeader>
-            <CardTitle>1. Cédula del deudor (común a todos los pagos)</CardTitle>
+            <CardTitle>
+              1. Cédula del deudor (común a todos los pagos)
+            </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
@@ -748,7 +805,9 @@ export default function EscanerInfopagosLotePage() {
                 autoComplete="off"
               />
               {!cedulaNormalizada.valido && cedulaRaw.trim().length > 3 && (
-                <p className="text-sm text-amber-700">{cedulaNormalizada.error}</p>
+                <p className="text-sm text-amber-700">
+                  {cedulaNormalizada.error}
+                </p>
               )}
             </div>
             <Button onClick={handleValidarCedula} disabled={validandoCedula}>
@@ -778,7 +837,8 @@ export default function EscanerInfopagosLotePage() {
             ) : null}
             <div className="space-y-2">
               <Label htmlFor="archivos-lote">
-                Añadir comprobantes (PDF, imágenes; 10 MB c/u; hasta {String(MAX_ARCHIVOS)} en total)
+                Añadir comprobantes (PDF, imágenes; 10 MB c/u; hasta{' '}
+                {String(MAX_ARCHIVOS)} en total)
               </Label>
               <Input
                 id="archivos-lote"
@@ -791,12 +851,15 @@ export default function EscanerInfopagosLotePage() {
                 }}
               />
               <p className="text-xs text-slate-500">
-                Cada lectura con IA puede tardar <strong>10–30 s</strong>; en lote se procesan en
-                cola. Puede elegir archivos varias veces para ir sumando hasta el máximo.
+                Cada lectura con IA puede tardar <strong>10-30 s</strong>; en
+                lote se procesan en cola. Puede elegir archivos varias veces
+                para ir sumando hasta el máximo.
               </p>
             </div>
             <div className="space-y-2 rounded-md border border-violet-200 bg-violet-50 p-3">
-              <Label htmlFor="drive-folder-lote">Carpeta compartida de Drive (escáner lote)</Label>
+              <Label htmlFor="drive-folder-lote">
+                Carpeta compartida de Drive (escáner lote)
+              </Label>
               <Input
                 id="drive-folder-lote"
                 value={driveFolder}
@@ -804,7 +867,12 @@ export default function EscanerInfopagosLotePage() {
                 placeholder="Pegue aquí el link de carpeta compartida o el folder ID"
               />
               <div className="flex flex-wrap items-center gap-2">
-                <Button type="button" variant="secondary" onClick={handleCargarDesdeDrive} disabled={cargandoDrive}>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={handleCargarDesdeDrive}
+                  disabled={cargandoDrive}
+                >
                   {cargandoDrive ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -815,13 +883,19 @@ export default function EscanerInfopagosLotePage() {
                   )}
                 </Button>
                 <p className="text-xs text-slate-600">
-                  Toma hasta 15 archivos, los digitaliza y luego los elimina de la carpeta origen.
+                  Toma hasta 15 archivos, los digitaliza y luego los elimina de
+                  la carpeta origen.
                 </p>
               </div>
             </div>
             {archivos.length > 0 && (
               <div className="flex justify-end">
-                <Button type="button" variant="ghost" size="sm" onClick={() => setArchivos([])}>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setArchivos([])}
+                >
                   Limpiar lista
                 </Button>
               </div>
@@ -834,7 +908,12 @@ export default function EscanerInfopagosLotePage() {
                     className="flex items-center justify-between gap-2 rounded px-2 py-1 hover:bg-white"
                   >
                     <span className="truncate font-mono text-xs">{f.name}</span>
-                    <Button type="button" variant="ghost" size="sm" onClick={() => quitarArchivo(i)}>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => quitarArchivo(i)}
+                    >
                       Quitar
                     </Button>
                   </li>
@@ -842,10 +921,18 @@ export default function EscanerInfopagosLotePage() {
               </ul>
             )}
             <div className="flex flex-wrap gap-2">
-              <Button variant="outline" type="button" onClick={() => setFase('cedula')}>
+              <Button
+                variant="outline"
+                type="button"
+                onClick={() => setFase('cedula')}
+              >
                 Volver
               </Button>
-              <Button type="button" onClick={irARevision} disabled={!archivos.length}>
+              <Button
+                type="button"
+                onClick={irARevision}
+                disabled={!archivos.length}
+              >
                 Siguiente: revisar y digitalizar
               </Button>
             </div>
@@ -860,8 +947,11 @@ export default function EscanerInfopagosLotePage() {
               <CardTitle>3. Digitalizar y completar cada pago</CardTitle>
               {nombreCliente ? (
                 <p className="text-sm text-slate-600">
-                  Cliente: <span className="font-semibold text-slate-900">{nombreCliente}</span> —{' '}
-                  {String(filas.length)} comprobante(s).
+                  Cliente:{' '}
+                  <span className="font-semibold text-slate-900">
+                    {nombreCliente}
+                  </span>{' '}
+                  - {String(filas.length)} comprobante(s).
                 </p>
               ) : null}
             </CardHeader>
@@ -871,9 +961,9 @@ export default function EscanerInfopagosLotePage() {
                   className="rounded-md border border-indigo-200 bg-indigo-50 px-3 py-2 text-sm text-indigo-950"
                   role="status"
                 >
-                  Digitalización en curso en <strong>segundo plano</strong>: puede navegar por el
-                  menú; el progreso se actualiza aquí y en la notificación fija. Use «Cancelar» si
-                  debe detener la cola.
+                  Digitalización en curso en <strong>segundo plano</strong>:
+                  puede navegar por el menú; el progreso se actualiza aquí y en
+                  la notificación fija. Use «Cancelar» si debe detener la cola.
                 </p>
               ) : null}
               <div className="flex flex-wrap items-center gap-2">
@@ -894,7 +984,8 @@ export default function EscanerInfopagosLotePage() {
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                       Digitalizando
-                      {digitacionUi.progressIndex != null && digitacionUi.total > 0
+                      {digitacionUi.progressIndex != null &&
+                      digitacionUi.total > 0
                         ? ` (${String(digitacionUi.progressIndex + 1)}/${String(digitacionUi.total)})`
                         : ''}
                       …
@@ -907,7 +998,11 @@ export default function EscanerInfopagosLotePage() {
                   )}
                 </Button>
                 {digitacionUi.running ? (
-                  <Button type="button" variant="destructive" onClick={() => cancelDigitacionLote()}>
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    onClick={() => cancelDigitacionLote()}
+                  >
                     Cancelar digitalización
                   </Button>
                 ) : null}
@@ -921,8 +1016,9 @@ export default function EscanerInfopagosLotePage() {
                 </Button>
               </div>
               <p className="text-xs text-slate-500">
-                Solo se envían a Gemini las filas que aún no están en estado «listo». Puede editar
-                manualmente tras digitalizar y guardar cada fila cuando corresponda.
+                Solo se envían a Gemini las filas que aún no están en estado
+                «listo». Puede editar manualmente tras digitalizar y guardar
+                cada fila cuando corresponda.
               </p>
             </CardContent>
           </Card>
@@ -936,23 +1032,29 @@ export default function EscanerInfopagosLotePage() {
                     <div className="flex flex-wrap items-start justify-between gap-2">
                       <div>
                         <CardTitle className="text-base">
-                          {String(index + 1)}. <span className="font-mono text-sm">{fila.nombreArchivo}</span>
+                          {String(index + 1)}.{' '}
+                          <span className="font-mono text-sm">
+                            {fila.nombreArchivo}
+                          </span>
                         </CardTitle>
                         <p className="mt-1 text-xs text-slate-500">
                           Extracción:{' '}
                           <span className="font-medium text-slate-700">
                             {fila.extract === 'pendiente' && 'Pendiente'}
-                            {fila.extract === 'extrayendo' && 'Leyendo con Gemini…'}
+                            {fila.extract === 'extrayendo' &&
+                              'Leyendo con Gemini…'}
                             {fila.extract === 'listo' && 'Listo'}
                             {fila.extract === 'error' && 'Error'}
                           </span>
                           {fila.extract === 'error' && fila.errorExtraccion
-                            ? ` — ${fila.errorExtraccion}`
+                            ? ` - ${fila.errorExtraccion}`
                             : ''}
                           {fila.guardado ? (
                             <span className="ml-2 text-emerald-700">
                               · Guardado
-                              {fila.referencia ? ` · ref. ${fila.referencia}` : ''}
+                              {fila.referencia
+                                ? ` · ref. ${fila.referencia}`
+                                : ''}
                             </span>
                           ) : null}
                         </p>
@@ -996,9 +1098,9 @@ export default function EscanerInfopagosLotePage() {
                   <CardContent className="space-y-3">
                     {!fila.editando && fila.extract === 'listo' && (
                       <p className="text-sm text-slate-700">
-                        {fila.fechaPago || '—'} · {fila.institucion || '—'} · Nº{' '}
-                        {fila.numeroOperacion || '—'} · {fila.moneda}{' '}
-                        {fila.montoStr || '—'}
+                        {fila.fechaPago || '-'} · {fila.institucion || '-'} · Nº{' '}
+                        {fila.numeroOperacion || '-'} · {fila.moneda}{' '}
+                        {fila.montoStr || '-'}
                       </p>
                     )}
 
@@ -1011,19 +1113,30 @@ export default function EscanerInfopagosLotePage() {
                           >
                             <AlertTriangle className="mt-0.5 h-5 w-5 flex-shrink-0" />
                             <div>
-                              {fila.validacionCampos ? <p>{fila.validacionCampos}</p> : null}
-                              {fila.validacionReglas ? <p>{fila.validacionReglas}</p> : null}
+                              {fila.validacionCampos ? (
+                                <p>{fila.validacionCampos}</p>
+                              ) : null}
+                              {fila.validacionReglas ? (
+                                <p>{fila.validacionReglas}</p>
+                              ) : null}
                             </div>
                           </div>
                         )}
                         {fila.escanerColision?.prestamo_objetivo_id != null ? (
                           <p className="rounded-md border border-indigo-200 bg-indigo-50 px-3 py-2 text-sm font-medium text-indigo-950">
-                            Pago hacia <strong>préstamo N° {fila.escanerColision.prestamo_objetivo_id}</strong>.
+                            Pago hacia{' '}
+                            <strong>
+                              préstamo N°{' '}
+                              {fila.escanerColision.prestamo_objetivo_id}
+                            </strong>
+                            .
                           </p>
                         ) : null}
                         {fila.cedulaPagadorImg ? (
                           <p className="text-xs text-slate-500">
-                            <span className="font-medium text-slate-700">Cédula en comprobante:</span>{' '}
+                            <span className="font-medium text-slate-700">
+                              Cédula en comprobante:
+                            </span>{' '}
                             {fila.cedulaPagadorImg}
                           </p>
                         ) : null}
@@ -1034,12 +1147,15 @@ export default function EscanerInfopagosLotePage() {
                             {fila.fechaDetectada.trim() ? (
                               <p className="text-xs text-slate-600">
                                 Detectada (IA):{' '}
-                                <span className="font-mono font-semibold">{fila.fechaDetectada}</span>
+                                <span className="font-mono font-semibold">
+                                  {fila.fechaDetectada}
+                                </span>
                               </p>
                             ) : (
                               <p className="text-xs text-amber-800">
-                                Sin fecha clara en la imagen: se rellenó con la fecha de hoy; ajústela si el
-                                comprobante corresponde a otro día.
+                                Sin fecha clara en la imagen: se rellenó con la
+                                fecha de hoy; ajústela si el comprobante
+                                corresponde a otro día.
                               </p>
                             )}
                             <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
@@ -1048,7 +1164,9 @@ export default function EscanerInfopagosLotePage() {
                                   type="date"
                                   value={fila.fechaPago}
                                   onChange={e =>
-                                    actualizarFila(fila.clientId, { fechaPago: e.target.value })
+                                    actualizarFila(fila.clientId, {
+                                      fechaPago: e.target.value,
+                                    })
                                   }
                                 />
                               </div>
@@ -1069,7 +1187,8 @@ export default function EscanerInfopagosLotePage() {
                                 const v = e.target.value
                                 if (v === 'Otros') {
                                   actualizarFila(fila.clientId, {
-                                    institucion: fila.otroInstitucion.trim() || '',
+                                    institucion:
+                                      fila.otroInstitucion.trim() || '',
                                   })
                                 } else {
                                   actualizarFila(fila.clientId, {
@@ -1109,14 +1228,18 @@ export default function EscanerInfopagosLotePage() {
                             <Input
                               value={fila.numeroOperacion}
                               onChange={e =>
-                                actualizarFila(fila.clientId, { numeroOperacion: e.target.value })
+                                actualizarFila(fila.clientId, {
+                                  numeroOperacion: e.target.value,
+                                })
                               }
                               maxLength={MAX_LENGTH_NUMERO_OPERACION}
                             />
                             {fila.escanerColision?.duplicado_en_pagos &&
-                            typeof fila.escanerColision.prestamo_existente_id === 'number' ? (
+                            typeof fila.escanerColision
+                              .prestamo_existente_id === 'number' ? (
                               <p className="text-sm font-medium text-rose-800">
-                                Número ya en cartera (préstamo N° {fila.escanerColision.prestamo_existente_id}
+                                Número ya en cartera (préstamo N°{' '}
+                                {fila.escanerColision.prestamo_existente_id}
                                 ).
                               </p>
                             ) : dup ? (
@@ -1132,7 +1255,9 @@ export default function EscanerInfopagosLotePage() {
                                     type="button"
                                     size="sm"
                                     variant="secondary"
-                                    onClick={() => handleAplicarSufijo(fila.clientId, 'A')}
+                                    onClick={() =>
+                                      handleAplicarSufijo(fila.clientId, 'A')
+                                    }
                                   >
                                     _A…
                                   </Button>
@@ -1140,7 +1265,9 @@ export default function EscanerInfopagosLotePage() {
                                     type="button"
                                     size="sm"
                                     variant="secondary"
-                                    onClick={() => handleAplicarSufijo(fila.clientId, 'P')}
+                                    onClick={() =>
+                                      handleAplicarSufijo(fila.clientId, 'P')
+                                    }
                                   >
                                     _P…
                                   </Button>
@@ -1155,7 +1282,8 @@ export default function EscanerInfopagosLotePage() {
                               value={fila.moneda}
                               onChange={e =>
                                 actualizarFila(fila.clientId, {
-                                  moneda: e.target.value === 'BS' ? 'BS' : 'USD',
+                                  moneda:
+                                    e.target.value === 'BS' ? 'BS' : 'USD',
                                 })
                               }
                             >
@@ -1168,7 +1296,9 @@ export default function EscanerInfopagosLotePage() {
                             <Input
                               value={fila.montoStr}
                               onChange={e =>
-                                actualizarFila(fila.clientId, { montoStr: e.target.value })
+                                actualizarFila(fila.clientId, {
+                                  montoStr: e.target.value,
+                                })
                               }
                               inputMode="decimal"
                               autoComplete="off"
@@ -1185,11 +1315,14 @@ export default function EscanerInfopagosLotePage() {
                           <div>
                             <p>
                               Referencia:{' '}
-                              <span className="font-mono font-semibold">{fila.referencia || '—'}</span>
+                              <span className="font-mono font-semibold">
+                                {fila.referencia || '-'}
+                              </span>
                             </p>
                             {fila.enRevision ? (
                               <p className="mt-1">
-                                Estado: <strong>en revisión manual</strong>. Sin recibo hasta aprobación.
+                                Estado: <strong>en revisión manual</strong>. Sin
+                                recibo hasta aprobación.
                               </p>
                             ) : null}
                             {fila.reciboToken && fila.pagoId != null ? (
@@ -1198,16 +1331,22 @@ export default function EscanerInfopagosLotePage() {
                                 className="mt-2"
                                 size="sm"
                                 variant="secondary"
-                                onClick={() => handleDescargarRecibo(fila.clientId)}
+                                onClick={() =>
+                                  handleDescargarRecibo(fila.clientId)
+                                }
                                 disabled={fila.descargandoRecibo}
                               >
-                                {fila.descargandoRecibo ? 'Descargando…' : 'Descargar recibo PDF'}
+                                {fila.descargandoRecibo
+                                  ? 'Descargando…'
+                                  : 'Descargar recibo PDF'}
                               </Button>
                             ) : null}
-                            {fila.guardado && fila.enRevision && fila.pagoId == null ? (
+                            {fila.guardado &&
+                            fila.enRevision &&
+                            fila.pagoId == null ? (
                               <p className="mt-2 text-xs text-slate-600">
-                                Para anular este borrador use Cobros → Pagos reportados (no hay ID de
-                                recibo en este flujo).
+                                Para anular este borrador use Cobros → Pagos
+                                reportados (no hay ID de recibo en este flujo).
                               </p>
                             ) : null}
                           </div>
@@ -1221,7 +1360,10 @@ export default function EscanerInfopagosLotePage() {
           </div>
         </>
       )}
-      <Dialog open={Boolean(filaEditando)} onOpenChange={open => (open ? undefined : cerrarEditorFila())}>
+      <Dialog
+        open={Boolean(filaEditando)}
+        onOpenChange={open => (open ? undefined : cerrarEditorFila())}
+      >
         <DialogContent className="flex max-h-[90vh] w-full max-w-2xl flex-col gap-0 p-0 sm:max-w-2xl">
           <DialogHeader className="flex-shrink-0 border-b px-6 py-4">
             <DialogTitle className="text-xl font-bold">Editar Pago</DialogTitle>
@@ -1231,8 +1373,13 @@ export default function EscanerInfopagosLotePage() {
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
                   <Label>Cédula Cliente *</Label>
-                  <Input value={cedulaNormalizada.valorParaEnviar || cedulaRaw} readOnly />
-                  <p className="text-xs text-green-700">1 préstamo en la lista</p>
+                  <Input
+                    value={cedulaNormalizada.valorParaEnviar || cedulaRaw}
+                    readOnly
+                  />
+                  <p className="text-xs text-green-700">
+                    1 préstamo en la lista
+                  </p>
                 </div>
                 <div className="space-y-2">
                   <Label>Crédito al que aplica el pago *</Label>
@@ -1261,11 +1408,15 @@ export default function EscanerInfopagosLotePage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Monto pagado ({editDraft.moneda === 'BS' ? 'BS' : 'USD'}) *</Label>
+                  <Label>
+                    Monto pagado ({editDraft.moneda === 'BS' ? 'BS' : 'USD'}) *
+                  </Label>
                   <Input
                     value={String(editDraft.montoStr || '')}
                     onChange={e =>
-                      setEditDraft(prev => (prev ? { ...prev, montoStr: e.target.value } : prev))
+                      setEditDraft(prev =>
+                        prev ? { ...prev, montoStr: e.target.value } : prev
+                      )
                     }
                   />
                 </div>
@@ -1273,8 +1424,13 @@ export default function EscanerInfopagosLotePage() {
               <div className="rounded border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800">
                 <p className="font-medium">Cómo se aplicará el pago:</p>
                 <ul className="ml-5 list-disc">
-                  <li>Se aplicará a las cuotas más antiguas primero (por fecha de vencimiento).</li>
-                  <li>Se distribuirá proporcionalmente entre capital e interés.</li>
+                  <li>
+                    Se aplicará a las cuotas más antiguas primero (por fecha de
+                    vencimiento).
+                  </li>
+                  <li>
+                    Se distribuirá proporcionalmente entre capital e interés.
+                  </li>
                 </ul>
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
@@ -1286,8 +1442,10 @@ export default function EscanerInfopagosLotePage() {
                       !String(editDraft.institucion || '').trim()
                         ? ''
                         : INSTITUCIONES_FINANCIERAS.includes(
-                        String(editDraft.institucion || '') as (typeof INSTITUCIONES_FINANCIERAS)[number]
-                      )
+                              String(
+                                editDraft.institucion || ''
+                              ) as (typeof INSTITUCIONES_FINANCIERAS)[number]
+                            )
                           ? String(editDraft.institucion || '')
                           : 'Otros'
                     }
@@ -1300,7 +1458,10 @@ export default function EscanerInfopagosLotePage() {
                                 e.target.value === 'Otros'
                                   ? String(prev.otroInstitucion || '')
                                   : e.target.value,
-                              otroInstitucion: e.target.value === 'Otros' ? String(prev.otroInstitucion || '') : '',
+                              otroInstitucion:
+                                e.target.value === 'Otros'
+                                  ? String(prev.otroInstitucion || '')
+                                  : '',
                             }
                           : prev
                       )
@@ -1315,7 +1476,9 @@ export default function EscanerInfopagosLotePage() {
                     <option value="Otros">Otro</option>
                   </select>
                   {!INSTITUCIONES_FINANCIERAS.includes(
-                    String(editDraft.institucion || '') as (typeof INSTITUCIONES_FINANCIERAS)[number]
+                    String(
+                      editDraft.institucion || ''
+                    ) as (typeof INSTITUCIONES_FINANCIERAS)[number]
                   ) ? (
                     <Input
                       placeholder="Nombre del banco o entidad"
@@ -1342,12 +1505,15 @@ export default function EscanerInfopagosLotePage() {
                     value={String(editDraft.numeroOperacion || '')}
                     onChange={e =>
                       setEditDraft(prev =>
-                        prev ? { ...prev, numeroOperacion: e.target.value } : prev
+                        prev
+                          ? { ...prev, numeroOperacion: e.target.value }
+                          : prev
                       )
                     }
                   />
                   <p className="text-xs text-slate-600">
-                    Si detecta duplicado, use <strong>Visto _A…</strong> o <strong>Visto _P…</strong>.
+                    Si detecta duplicado, use <strong>Visto _A…</strong> o{' '}
+                    <strong>Visto _P…</strong>.
                   </p>
                   <div className="flex gap-2">
                     <Button
@@ -1355,7 +1521,9 @@ export default function EscanerInfopagosLotePage() {
                       size="sm"
                       variant="secondary"
                       onClick={() => {
-                        const base = String(editDraft.numeroOperacion || '').trim()
+                        const base = String(
+                          editDraft.numeroOperacion || ''
+                        ).trim()
                         if (!base) {
                           toast.error('Primero escriba un número de operación.')
                           return
@@ -1381,7 +1549,9 @@ export default function EscanerInfopagosLotePage() {
                       size="sm"
                       variant="secondary"
                       onClick={() => {
-                        const base = String(editDraft.numeroOperacion || '').trim()
+                        const base = String(
+                          editDraft.numeroOperacion || ''
+                        ).trim()
                         if (!base) {
                           toast.error('Primero escriba un número de operación.')
                           return
@@ -1409,12 +1579,14 @@ export default function EscanerInfopagosLotePage() {
                   <Input
                     readOnly
                     value={
-                      String(editDraft.numeroOperacion || '').match(TOKEN_SUFIJO_VISTO_ARCHIVO_RE)?.[1]?.toUpperCase() ||
-                      'Pendiente: use Visto'
+                      String(editDraft.numeroOperacion || '')
+                        .match(TOKEN_SUFIJO_VISTO_ARCHIVO_RE)?.[1]
+                        ?.toUpperCase() || 'Pendiente: use Visto'
                     }
                   />
                   <p className="text-xs text-slate-600">
-                    No se puede teclear aquí. El token (formato A#### / P####) lo genera y guarda el sistema al pulsar Visto.
+                    No se puede teclear aquí. El token (formato A#### / P####)
+                    lo genera y guarda el sistema al pulsar Visto.
                   </p>
                 </div>
                 <div className="space-y-2">
@@ -1424,7 +1596,12 @@ export default function EscanerInfopagosLotePage() {
                     value={editDraft.moneda === 'BS' ? 'BS' : 'USD'}
                     onChange={e =>
                       setEditDraft(prev =>
-                        prev ? { ...prev, moneda: e.target.value === 'BS' ? 'BS' : 'USD' } : prev
+                        prev
+                          ? {
+                              ...prev,
+                              moneda: e.target.value === 'BS' ? 'BS' : 'USD',
+                            }
+                          : prev
                       )
                     }
                   >

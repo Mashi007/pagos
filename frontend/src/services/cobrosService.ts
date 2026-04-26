@@ -437,7 +437,10 @@ export async function enviarReportePublico(
   }
 }
 
-function humanizarErrorEnvioComprobanteAxios(st: number | undefined, detail: string): string {
+function humanizarErrorEnvioComprobanteAxios(
+  st: number | undefined,
+  detail: string
+): string {
   const d = (detail || '').trim()
   const lower = d.toLowerCase()
   const looksHtml =
@@ -447,7 +450,7 @@ function humanizarErrorEnvioComprobanteAxios(st: number | undefined, detail: str
     lower.includes('<!doctype html')
 
   if (looksHtml) {
-    const stLabel = typeof st === 'number' ? String(st) : '—'
+    const stLabel = typeof st === 'number' ? String(st) : '-'
     return `El envío fue rechazado en el borde (HTTP ${stLabel}). Suele ocurrir con comprobantes muy grandes o peticiones bloqueadas por el proxy. Intente con un PDF/imagen más liviana o reintente en unos minutos.`
   }
 
@@ -480,7 +483,9 @@ export async function digitalizarComprobantePublico(
     const text = await res.text()
     let data: DigitalizarComprobanteResponse
     try {
-      data = text ? JSON.parse(text) : { ok: false, error: 'Respuesta vacía del servidor.' }
+      data = text
+        ? JSON.parse(text)
+        : { ok: false, error: 'Respuesta vacía del servidor.' }
     } catch {
       const looksLikeCloudflareHtml =
         typeof text === 'string' &&
@@ -557,7 +562,10 @@ export async function enviarReporteInfopagos(
       }
     }
     if (detail) {
-      return { ok: false, error: humanizarErrorEnvioComprobanteAxios(st, String(detail)) }
+      return {
+        ok: false,
+        error: humanizarErrorEnvioComprobanteAxios(st, String(detail)),
+      }
     }
 
     const raw =
@@ -616,8 +624,7 @@ export async function escanerInfopagosExtraerComprobante(
   )
 }
 
-export interface EscanerInfopagosLoteDriveItem
-  extends EscanerInfopagosExtraerResponse {
+export interface EscanerInfopagosLoteDriveItem extends EscanerInfopagosExtraerResponse {
   drive_file_id: string
   nombre_archivo: string
   mime_type: string
@@ -714,7 +721,9 @@ export async function getReciboInfopagosStatus(
     return data
   } catch (e: unknown) {
     const raw =
-      e instanceof Error ? e.message : 'No se pudo consultar el estado del recibo.'
+      e instanceof Error
+        ? e.message
+        : 'No se pudo consultar el estado del recibo.'
     throw new Error(mensajeErrorRedPublico(raw))
   }
 }
@@ -998,10 +1007,7 @@ export async function listPagosReportadosConKpis(
 
   if (!opts?.bypassCache) {
     const hit = cobrosListadoKpisCache.get(cacheKey)
-    if (
-      hit &&
-      Date.now() - hit.storedAt < COBROS_LISTADO_KPIS_CACHE_TTL_MS
-    ) {
+    if (hit && Date.now() - hit.storedAt < COBROS_LISTADO_KPIS_CACHE_TTL_MS) {
       return cloneListadoConKpis(hit.payload)
     }
   }
@@ -1322,4 +1328,3 @@ export async function markPagosReportadosExportados(
 
   return data
 }
-

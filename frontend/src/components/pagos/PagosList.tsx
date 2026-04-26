@@ -232,7 +232,9 @@ export function PagosList() {
   >('')
   const [includeRevisionExportados, setIncludeRevisionExportados] =
     useState(false)
-  const [editingRevisionId, setEditingRevisionId] = useState<number | null>(null)
+  const [editingRevisionId, setEditingRevisionId] = useState<number | null>(
+    null
+  )
   const [revisionObservacionDraft, setRevisionObservacionDraft] = useState('')
   const [savingRevisionId, setSavingRevisionId] = useState<number | null>(null)
   const [deletingRevisionId, setDeletingRevisionId] = useState<number | null>(
@@ -246,11 +248,16 @@ export function PagosList() {
   const [isBulkDeletingRevision, setIsBulkDeletingRevision] = useState(false)
   const [revisionGlobalPage, setRevisionGlobalPage] = useState(1)
   const [revisionGlobalCedulaInput, setRevisionGlobalCedulaInput] = useState('')
-  const [revisionGlobalCedulaFiltro, setRevisionGlobalCedulaFiltro] = useState('')
-  const [revisionGlobalNumeroDocumentoInput, setRevisionGlobalNumeroDocumentoInput] =
+  const [revisionGlobalCedulaFiltro, setRevisionGlobalCedulaFiltro] =
     useState('')
-  const [revisionGlobalNumeroDocumentoFiltro, setRevisionGlobalNumeroDocumentoFiltro] =
-    useState('')
+  const [
+    revisionGlobalNumeroDocumentoInput,
+    setRevisionGlobalNumeroDocumentoInput,
+  ] = useState('')
+  const [
+    revisionGlobalNumeroDocumentoFiltro,
+    setRevisionGlobalNumeroDocumentoFiltro,
+  ] = useState('')
   const [revisionGlobalFechaPagoInput, setRevisionGlobalFechaPagoInput] =
     useState('')
   const [revisionGlobalFechaPagoFiltro, setRevisionGlobalFechaPagoFiltro] =
@@ -457,13 +464,17 @@ export function PagosList() {
     }
     setGmailMetricsSnapshot(next)
     try {
-      window.localStorage.setItem(GMAIL_METRICS_SNAPSHOT_KEY, JSON.stringify(next))
+      window.localStorage.setItem(
+        GMAIL_METRICS_SNAPSHOT_KEY,
+        JSON.stringify(next)
+      )
     } catch {
       // storage puede estar restringido; el fallback en memoria igual mantiene sesión actual
     }
   }, [gmailStatus?.last_run, gmailStatus?.last_run_summary])
 
-  const bannerSummary = gmailStatus?.last_run_summary ?? gmailMetricsSnapshot.summary
+  const bannerSummary =
+    gmailStatus?.last_run_summary ?? gmailMetricsSnapshot.summary
   const bannerLastRun = gmailStatus?.last_run ?? gmailMetricsSnapshot.lastRun
 
   useEffect(() => {
@@ -613,7 +624,9 @@ export function PagosList() {
       const ids = pagos.map(p => p.id)
       await pagoConErrorService.archivarPorDescarga(ids)
       await invalidatePagosPrestamosRevisionYCuotas(queryClient)
-      toast.success(`${pagos.length} pagos exportados y archivados para trazabilidad`)
+      toast.success(
+        `${pagos.length} pagos exportados y archivados para trazabilidad`
+      )
     } catch (err) {
       if (import.meta.env.DEV) console.error('Error al descargar Excel', err)
       toast.error('Error al descargar Excel')
@@ -704,7 +717,9 @@ export function PagosList() {
       const ids = pagos.map(p => p.id)
       await pagoConErrorService.archivarPorDescarga(ids)
       void invalidatePagosPrestamosRevisionYCuotas(queryClient)
-      toast.success(`${pagos.length} pagos exportados y archivados para trazabilidad`)
+      toast.success(
+        `${pagos.length} pagos exportados y archivados para trazabilidad`
+      )
     } catch (err) {
       if (import.meta.env.DEV) console.error('Error al exportar', err)
       toast.error('Error al exportar. Intenta de nuevo.')
@@ -1001,7 +1016,8 @@ export function PagosList() {
         }
         if (esDuplicadoFechaNumero) motivos.push('Duplicado fecha + número')
         if (!p.prestamo_id) motivos.push('Sin crédito asociado')
-        if (p.tiene_aplicacion_cuotas === false) motivos.push('Sin aplicación a cuotas')
+        if (p.tiene_aplicacion_cuotas === false)
+          motivos.push('Sin aplicación a cuotas')
         if ((p.notas ?? '').trim()) motivos.push('Con notas')
         if (Number(p.exceso_sobre_total_usd ?? 0) > 0) {
           motivos.push('Rebasa total del préstamo')
@@ -1009,7 +1025,12 @@ export function PagosList() {
         if (revisionGlobalMotivoFiltro === 'rebasa_total') {
           motivos.push('Rebasa total del préstamo')
         }
-        return { pago: p, motivos, score: motivos.length, esDuplicadoFechaNumero }
+        return {
+          pago: p,
+          motivos,
+          score: motivos.length,
+          esDuplicadoFechaNumero,
+        }
       })
       .sort((a, b) => b.score - a.score || b.pago.id - a.pago.id)
   }, [
@@ -1072,7 +1093,8 @@ export function PagosList() {
         resumen.irreales += 1
       }
       if (row.motivos.includes('Sin crédito asociado')) resumen.sinCredito += 1
-      if (row.motivos.includes('Sin aplicación a cuotas')) resumen.sinAplicacion += 1
+      if (row.motivos.includes('Sin aplicación a cuotas'))
+        resumen.sinAplicacion += 1
       if (row.motivos.includes('Con notas')) resumen.conNotas += 1
       if (row.motivos.includes('Rebasa total del préstamo')) {
         resumen.rebasaTotal += 1
@@ -1139,7 +1161,8 @@ export function PagosList() {
       return
     }
     const idxActual = candidatos.findIndex(r => r.pago.id === editingRevisionId)
-    const siguiente = candidatos[(idxActual + 1 + candidatos.length) % candidatos.length]
+    const siguiente =
+      candidatos[(idxActual + 1 + candidatos.length) % candidatos.length]
     setEditingRevisionId(siguiente.pago.id)
     setRevisionObservacionDraft((siguiente.pago.observaciones ?? '').trim())
     setPagoEditando(siguiente.pago)
@@ -1160,9 +1183,7 @@ export function PagosList() {
     const visibles = revisionRowsFiltradas.map(r => r.pago.id)
     const todosSeleccionados =
       visibles.length > 0 && visibles.every(id => selectedRevisionIds.has(id))
-    setSelectedRevisionIds(
-      todosSeleccionados ? new Set() : new Set(visibles)
-    )
+    setSelectedRevisionIds(todosSeleccionados ? new Set() : new Set(visibles))
   }
   const handleGuardarRevisionMasivo = async () => {
     const ids = [...selectedRevisionIds]
@@ -1197,7 +1218,8 @@ export function PagosList() {
       toast.info('Seleccione al menos un pago.')
       return
     }
-    if (!window.confirm(`¿Eliminar ${ids.length} pago(s) seleccionados?`)) return
+    if (!window.confirm(`¿Eliminar ${ids.length} pago(s) seleccionados?`))
+      return
     setIsBulkDeletingRevision(true)
     try {
       await Promise.all(ids.map(id => pagoConErrorService.delete(id)))
@@ -1255,7 +1277,10 @@ export function PagosList() {
     try {
       await pagoService.deletePago(id)
       toast.success('Pago eliminado')
-      if ((revisionGlobalRowsFiltradas.length ?? 0) <= 1 && revisionGlobalPage > 1) {
+      if (
+        (revisionGlobalRowsFiltradas.length ?? 0) <= 1 &&
+        revisionGlobalPage > 1
+      ) {
         setRevisionGlobalPage(prev => Math.max(1, prev - 1))
       }
       await invalidatePagosPrestamosRevisionYCuotas(queryClient)
@@ -1272,7 +1297,8 @@ export function PagosList() {
       return
     }
     const idxActual = candidatos.findIndex(r => r.pago.id === editingGlobalId)
-    const siguiente = candidatos[(idxActual + 1 + candidatos.length) % candidatos.length]
+    const siguiente =
+      candidatos[(idxActual + 1 + candidatos.length) % candidatos.length]
     setEditingGlobalId(siguiente.pago.id)
     setGlobalNotaDraft((siguiente.pago.notas ?? '').trim())
     setPagoEditando(siguiente.pago)
@@ -1325,7 +1351,8 @@ export function PagosList() {
       toast.info('Seleccione al menos un pago.')
       return
     }
-    if (!window.confirm(`¿Eliminar ${ids.length} pago(s) seleccionados?`)) return
+    if (!window.confirm(`¿Eliminar ${ids.length} pago(s) seleccionados?`))
+      return
     setIsBulkDeletingGlobal(true)
     try {
       await Promise.all(ids.map(id => pagoService.deletePago(id)))
@@ -1510,11 +1537,11 @@ export function PagosList() {
       className={cn(
         !dockStaffComprobante && 'space-y-6',
         dockStaffComprobante &&
-          '-mx-6 flex w-[calc(100%+3rem)] max-w-none flex-col gap-0 border-y border-slate-200/70 bg-white lg:grid lg:h-[calc(100dvh-7.5rem)] lg:max-h-[calc(100dvh-7.5rem)] lg:grid-cols-2 lg:items-stretch lg:overflow-hidden lg:divide-x lg:divide-slate-200/70'
+          '-mx-6 flex w-[calc(100%+3rem)] max-w-none flex-col gap-0 border-y border-slate-200/70 bg-white lg:grid lg:h-[calc(100dvh-7.5rem)] lg:max-h-[calc(100dvh-7.5rem)] lg:grid-cols-2 lg:items-stretch lg:divide-x lg:divide-slate-200/70 lg:overflow-hidden'
       )}
     >
       {dockStaffComprobante ? (
-        <aside className="flex min-h-[min(36vh,320px)] min-w-0 flex-col bg-slate-100 lg:min-h-0 lg:h-full lg:max-h-full lg:overflow-y-auto lg:overscroll-y-contain">
+        <aside className="flex min-h-[min(36vh,320px)] min-w-0 flex-col bg-slate-100 lg:h-full lg:max-h-full lg:min-h-0 lg:overflow-y-auto lg:overscroll-y-contain">
           <Card className="flex h-full min-h-0 flex-col rounded-none border-0 shadow-none">
             <CardHeader className="shrink-0 border-b border-slate-200/80 px-3 pb-2 pt-3">
               <CardTitle className="text-base">Comprobante</CardTitle>
@@ -1627,319 +1654,321 @@ export function PagosList() {
       <div
         className={cn(
           dockStaffComprobante &&
-            'min-h-0 min-w-0 space-y-6 overflow-y-auto overscroll-y-contain px-3 py-4 sm:px-4 lg:pl-5 lg:pr-0 lg:py-4',
+            'min-h-0 min-w-0 space-y-6 overflow-y-auto overscroll-y-contain px-3 py-4 sm:px-4 lg:py-4 lg:pl-5 lg:pr-0',
           !dockStaffComprobante && 'contents'
         )}
       >
-      <div className="flex flex-wrap items-center justify-end gap-3 rounded-xl border border-gray-200/80 bg-gray-50/50 px-4 py-3 sm:px-5 sm:py-4">
-        <Button
-          variant="outline"
-          size="lg"
-          onClick={handleRefresh}
-          className="px-6 py-6 text-base font-semibold"
-          disabled={isLoading}
-        >
-          <RefreshCw
-            className={`mr-2 h-5 w-5 ${isLoading ? 'animate-spin' : ''}`}
-          />
-          Actualizar
-        </Button>
-        <Button
-          variant={filters.sin_prestamo === 'si' ? 'default' : 'outline'}
-          size="lg"
-          onClick={handleRevisarPagos}
-          className="px-6 py-6 text-base font-semibold"
-          title="Ver pagos sin número de crédito asignado"
-        >
-          <Search className="mr-2 h-5 w-5" />
-          Revisar Pagos
-        </Button>
-        {filters.sin_prestamo === 'si' && (
+        <div className="flex flex-wrap items-center justify-end gap-3 rounded-xl border border-gray-200/80 bg-gray-50/50 px-4 py-3 sm:px-5 sm:py-4">
           <Button
             variant="outline"
             size="lg"
-            onClick={handleExportRevisarExcel}
-            disabled={isExportingRevisar}
+            onClick={handleRefresh}
             className="px-6 py-6 text-base font-semibold"
-            title="Descargar todos los pagos a revisar en Excel"
+            disabled={isLoading}
           >
-            {isExportingRevisar ? (
+            <RefreshCw
+              className={`mr-2 h-5 w-5 ${isLoading ? 'animate-spin' : ''}`}
+            />
+            Actualizar
+          </Button>
+          <Button
+            variant={filters.sin_prestamo === 'si' ? 'default' : 'outline'}
+            size="lg"
+            onClick={handleRevisarPagos}
+            className="px-6 py-6 text-base font-semibold"
+            title="Ver pagos sin número de crédito asignado"
+          >
+            <Search className="mr-2 h-5 w-5" />
+            Revisar Pagos
+          </Button>
+          {filters.sin_prestamo === 'si' && (
+            <Button
+              variant="outline"
+              size="lg"
+              onClick={handleExportRevisarExcel}
+              disabled={isExportingRevisar}
+              className="px-6 py-6 text-base font-semibold"
+              title="Descargar todos los pagos a revisar en Excel"
+            >
+              {isExportingRevisar ? (
+                <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+              ) : (
+                <Download className="mr-2 h-5 w-5" />
+              )}
+              Descargar Excel
+            </Button>
+          )}
+          <Button
+            variant="outline"
+            size="lg"
+            type="button"
+            onClick={() => void runGmail('all')}
+            disabled={loadingGmail}
+            className="px-6 py-6 text-base font-semibold"
+            title="Ejecuta el pipeline Gmail (misma acción que Agregar pago → Generar Excel desde email → Procesar correos)"
+          >
+            {loadingGmail ? (
               <Loader2 className="mr-2 h-5 w-5 animate-spin" />
             ) : (
-              <Download className="mr-2 h-5 w-5" />
+              <Mail className="mr-2 h-5 w-5" />
             )}
-            Descargar Excel
+            Procesar manualmente
           </Button>
-        )}
-        <Button
-          variant="outline"
-          size="lg"
-          type="button"
-          onClick={() => void runGmail('all')}
-          disabled={loadingGmail}
-          className="px-6 py-6 text-base font-semibold"
-          title="Ejecuta el pipeline Gmail (misma acción que Agregar pago → Generar Excel desde email → Procesar correos)"
-        >
-          {loadingGmail ? (
-            <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-          ) : (
-            <Mail className="mr-2 h-5 w-5" />
-          )}
-          Procesar manualmente
-        </Button>
-        <Popover open={agregarPagoOpen} onOpenChange={setAgregarPagoOpen}>
-          <PopoverTrigger asChild>
-            <Button
-              size="lg"
-              className="min-w-[200px] bg-primary px-8 py-6 text-base font-semibold text-primary-foreground hover:bg-primary/90"
-            >
-              <Plus className="mr-2 h-5 w-5" />
-              Agregar pago
-              <ChevronDown className="ml-2 h-4 w-4" />
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-80 max-w-[90vw] p-3" align="end">
-            {gmailStatus && (
-              <p className="mb-2 border-b border-gray-100 px-2 py-1.5 text-xs text-gray-600">
-                {gmailStatus.last_status === 'error' ? (
-                  <span className="block text-amber-600">
-                    <span className="font-medium text-amber-700">
-                      Última sync Gmail falló
-                    </span>
-                    {gmailStatus.last_error ? (
-                      <span className="mt-1 block max-h-28 overflow-y-auto whitespace-pre-wrap break-words font-normal text-amber-900/85 dark:text-amber-200/90">
-                        {gmailStatus.last_error.length > 400
-                          ? `${gmailStatus.last_error.slice(0, 400)}…`
-                          : gmailStatus.last_error}
+          <Popover open={agregarPagoOpen} onOpenChange={setAgregarPagoOpen}>
+            <PopoverTrigger asChild>
+              <Button
+                size="lg"
+                className="min-w-[200px] bg-primary px-8 py-6 text-base font-semibold text-primary-foreground hover:bg-primary/90"
+              >
+                <Plus className="mr-2 h-5 w-5" />
+                Agregar pago
+                <ChevronDown className="ml-2 h-4 w-4" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-80 max-w-[90vw] p-3" align="end">
+              {gmailStatus && (
+                <p className="mb-2 border-b border-gray-100 px-2 py-1.5 text-xs text-gray-600">
+                  {gmailStatus.last_status === 'error' ? (
+                    <span className="block text-amber-600">
+                      <span className="font-medium text-amber-700">
+                        Última sync Gmail falló
                       </span>
-                    ) : null}
-                    <span className="mt-1.5 block font-normal text-gray-600 dark:text-gray-400">
-                      Reintente con &quot;Procesar correos&quot; o revise OAuth
-                      en Configuración → Informe de pagos.
-                    </span>
-                    {gmailStatus.next_run_approx ? (
-                      <span className="mt-1.5 block border-t border-amber-100 pt-1.5 text-[11px] leading-snug text-gray-600 dark:text-gray-400">
-                        Próximo escaneo en servidor:{' '}
-                        {textoProximoEscaneoGmailServidor(
-                          gmailStatus.next_run_approx
-                        )}
-                      </span>
-                    ) : null}
-                  </span>
-                ) : gmailStatus.last_status === 'running' ? (
-                  <>
-                    Procesando: {gmailStatus.last_emails} correos,{' '}
-                    {gmailStatus.last_files} archivos
-                  </>
-                ) : gmailStatus.last_run ? (
-                  <>
-                    Última sync: {formatLastSyncDate(gmailStatus.last_run)} -{' '}
-                    {gmailStatus.last_emails} correos, {gmailStatus.last_files}{' '}
-                    archivos
-                    {typeof gmailStatus.last_correos_marcados_revision ===
-                      'number' &&
-                    gmailStatus.last_correos_marcados_revision > 0 ? (
-                      <>
-                        <br />
-                        <span className="text-emerald-800">
-                          {gmailStatus.last_correos_marcados_revision} correo(s)
-                          leidos con al menos un comprobante (etiqueta IMAGEN 1
-                          / 2 / 3 + estrella).
+                      {gmailStatus.last_error ? (
+                        <span className="mt-1 block max-h-28 overflow-y-auto whitespace-pre-wrap break-words font-normal text-amber-900/85 dark:text-amber-200/90">
+                          {gmailStatus.last_error.length > 400
+                            ? `${gmailStatus.last_error.slice(0, 400)}…`
+                            : gmailStatus.last_error}
                         </span>
-                      </>
-                    ) : null}
-                    {gmailStatus.next_run_approx ? (
-                      <span className="mt-1 block border-t border-gray-100 pt-1 text-[11px] leading-snug text-gray-500">
-                        Próximo escaneo en servidor:{' '}
-                        {textoProximoEscaneoGmailServidor(
-                          gmailStatus.next_run_approx
-                        )}
+                      ) : null}
+                      <span className="mt-1.5 block font-normal text-gray-600 dark:text-gray-400">
+                        Reintente con &quot;Procesar correos&quot; o revise
+                        OAuth en Configuración → Informe de pagos.
                       </span>
-                    ) : null}
-                  </>
-                ) : (
-                  <>
-                    <span className="text-gray-500">Sin sync Gmail aún</span>
-                    {gmailStatus.next_run_approx ? (
-                      <span className="mt-1 block border-t border-gray-100 pt-1 text-[11px] leading-snug text-gray-500">
-                        Próximo escaneo en servidor:{' '}
-                        {textoProximoEscaneoGmailServidor(
-                          gmailStatus.next_run_approx
-                        )}
-                      </span>
-                    ) : null}
-                  </>
-                )}
-              </p>
-            )}
-            {gmailStatus?.last_run_summary ? (
-              <details className="mb-2 rounded-md border border-gray-100 bg-gray-50/60 px-2 py-2 text-xs text-gray-700">
-                <summary className="cursor-pointer select-none font-medium text-gray-800">
-                  Métricas detalladas (última corrida)
-                </summary>
-                <ul className="mt-2 space-y-1 pl-1">
-                  {gmailRunSummaryLines(gmailStatus.last_run_summary).map(
-                    (line, idx) => (
-                      <li key={`${idx}-${line}`} className="break-words leading-snug">
-                        {line}
-                      </li>
-                    )
+                      {gmailStatus.next_run_approx ? (
+                        <span className="mt-1.5 block border-t border-amber-100 pt-1.5 text-[11px] leading-snug text-gray-600 dark:text-gray-400">
+                          Próximo escaneo en servidor:{' '}
+                          {textoProximoEscaneoGmailServidor(
+                            gmailStatus.next_run_approx
+                          )}
+                        </span>
+                      ) : null}
+                    </span>
+                  ) : gmailStatus.last_status === 'running' ? (
+                    <>
+                      Procesando: {gmailStatus.last_emails} correos,{' '}
+                      {gmailStatus.last_files} archivos
+                    </>
+                  ) : gmailStatus.last_run ? (
+                    <>
+                      Última sync: {formatLastSyncDate(gmailStatus.last_run)} -{' '}
+                      {gmailStatus.last_emails} correos,{' '}
+                      {gmailStatus.last_files} archivos
+                      {typeof gmailStatus.last_correos_marcados_revision ===
+                        'number' &&
+                      gmailStatus.last_correos_marcados_revision > 0 ? (
+                        <>
+                          <br />
+                          <span className="text-emerald-800">
+                            {gmailStatus.last_correos_marcados_revision}{' '}
+                            correo(s) leidos con al menos un comprobante
+                            (etiqueta IMAGEN 1 / 2 / 3 + estrella).
+                          </span>
+                        </>
+                      ) : null}
+                      {gmailStatus.next_run_approx ? (
+                        <span className="mt-1 block border-t border-gray-100 pt-1 text-[11px] leading-snug text-gray-500">
+                          Próximo escaneo en servidor:{' '}
+                          {textoProximoEscaneoGmailServidor(
+                            gmailStatus.next_run_approx
+                          )}
+                        </span>
+                      ) : null}
+                    </>
+                  ) : (
+                    <>
+                      <span className="text-gray-500">Sin sync Gmail aún</span>
+                      {gmailStatus.next_run_approx ? (
+                        <span className="mt-1 block border-t border-gray-100 pt-1 text-[11px] leading-snug text-gray-500">
+                          Próximo escaneo en servidor:{' '}
+                          {textoProximoEscaneoGmailServidor(
+                            gmailStatus.next_run_approx
+                          )}
+                        </span>
+                      ) : null}
+                    </>
                   )}
-                </ul>
-              </details>
-            ) : null}
-            <div className="space-y-2">
-              <a
-                href={`${BASE_PATH}/${SEGMENTO_INFOPAGOS}`.replace(/\/+/g, '/')}
-                target="_blank"
-                rel="noreferrer"
-                className="flex w-full items-center gap-3 rounded-md px-4 py-3 text-left hover:bg-blue-50"
-                onClick={() => setAgregarPagoOpen(false)}
-              >
-                <Edit className="h-5 w-5 text-gray-600" />
-                <span>Registrar un pago</span>
-                <span className="ml-auto text-xs text-gray-500">
-                  Infopagos (un solo flujo)
-                </span>
-              </a>
-              <button
-                type="button"
-                className="flex w-full items-center gap-3 rounded-md px-4 py-3 text-left hover:bg-blue-50"
-                onClick={() => {
-                  setAgregarPagoOpen(false)
-                  setShowCargaMasivaPagos(true)
-                }}
-              >
-                <FileSpreadsheet className="h-5 w-5 text-gray-600" />
-                <span>Pagos desde Excel</span>
-                <span className="ml-auto text-xs text-gray-500">
-                  Revisar y editar
-                </span>
-              </button>
-
-              {/* Submenu: Gmail (unico disparo manual: Procesar correos) */}
-              <div className="mt-2 border-t border-gray-100 pt-2">
+                </p>
+              )}
+              {gmailStatus?.last_run_summary ? (
+                <details className="mb-2 rounded-md border border-gray-100 bg-gray-50/60 px-2 py-2 text-xs text-gray-700">
+                  <summary className="cursor-pointer select-none font-medium text-gray-800">
+                    Métricas detalladas (última corrida)
+                  </summary>
+                  <ul className="mt-2 space-y-1 pl-1">
+                    {gmailRunSummaryLines(gmailStatus.last_run_summary).map(
+                      (line, idx) => (
+                        <li
+                          key={`${idx}-${line}`}
+                          className="break-words leading-snug"
+                        >
+                          {line}
+                        </li>
+                      )
+                    )}
+                  </ul>
+                </details>
+              ) : null}
+              <div className="space-y-2">
+                <a
+                  href={`${BASE_PATH}/${SEGMENTO_INFOPAGOS}`.replace(
+                    /\/+/g,
+                    '/'
+                  )}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex w-full items-center gap-3 rounded-md px-4 py-3 text-left hover:bg-blue-50"
+                  onClick={() => setAgregarPagoOpen(false)}
+                >
+                  <Edit className="h-5 w-5 text-gray-600" />
+                  <span>Registrar un pago</span>
+                  <span className="ml-auto text-xs text-gray-500">
+                    Infopagos (un solo flujo)
+                  </span>
+                </a>
                 <button
                   type="button"
-                  className="flex w-full items-center gap-3 rounded-md px-4 py-2.5 text-left hover:bg-gray-50"
-                  onClick={() => setSubmenuGmailOpen(v => !v)}
+                  className="flex w-full items-center gap-3 rounded-md px-4 py-3 text-left hover:bg-blue-50"
+                  onClick={() => {
+                    setAgregarPagoOpen(false)
+                    setShowCargaMasivaPagos(true)
+                  }}
                 >
-                  <Mail className="h-5 w-5 text-gray-600" />
-                  <span className="font-medium text-gray-800">
-                    Generar Excel desde email
+                  <FileSpreadsheet className="h-5 w-5 text-gray-600" />
+                  <span>Pagos desde Excel</span>
+                  <span className="ml-auto text-xs text-gray-500">
+                    Revisar y editar
                   </span>
-                  <ChevronRight
-                    className={cn(
-                      'ml-auto h-4 w-4 text-gray-400 transition-transform',
-                      submenuGmailOpen && 'rotate-90'
-                    )}
-                  />
                 </button>
-                {submenuGmailOpen && (
-                  <div className="ml-2 mt-2 space-y-2 rounded-r-md border-l-2 border-gray-200 bg-gray-50/80 py-2 pl-3 pr-2">
-                    <button
-                      type="button"
-                      className="flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left text-sm hover:bg-blue-50 disabled:opacity-50"
-                      onClick={handleGenerarExcelDesdeGmail}
-                      disabled={loadingGmail}
-                    >
-                      <Mail className="h-4 w-4 text-gray-600" />
-                      <span>
-                        {loadingGmail
-                          ? `Procesando... (${gmailStatus?.last_emails ?? 0} correos, ${gmailStatus?.last_files ?? 0} archivos)`
-                          : 'Procesar correos'}
-                      </span>
-                      <span className="ml-auto text-xs text-gray-500">
-                        Gmail
-                      </span>
-                    </button>
-                    {loadingGmail && (
+
+                {/* Submenu: Gmail (unico disparo manual: Procesar correos) */}
+                <div className="mt-2 border-t border-gray-100 pt-2">
+                  <button
+                    type="button"
+                    className="flex w-full items-center gap-3 rounded-md px-4 py-2.5 text-left hover:bg-gray-50"
+                    onClick={() => setSubmenuGmailOpen(v => !v)}
+                  >
+                    <Mail className="h-5 w-5 text-gray-600" />
+                    <span className="font-medium text-gray-800">
+                      Generar Excel desde email
+                    </span>
+                    <ChevronRight
+                      className={cn(
+                        'ml-auto h-4 w-4 text-gray-400 transition-transform',
+                        submenuGmailOpen && 'rotate-90'
+                      )}
+                    />
+                  </button>
+                  {submenuGmailOpen && (
+                    <div className="ml-2 mt-2 space-y-2 rounded-r-md border-l-2 border-gray-200 bg-gray-50/80 py-2 pl-3 pr-2">
                       <button
                         type="button"
-                        className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-left text-sm text-amber-800 hover:bg-amber-50"
-                        onClick={handleDetenerSeguimientoGmail}
+                        className="flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left text-sm hover:bg-blue-50 disabled:opacity-50"
+                        onClick={handleGenerarExcelDesdeGmail}
+                        disabled={loadingGmail}
                       >
-                        <X className="h-4 w-4 shrink-0" />
-                        <span>Detener seguimiento</span>
+                        <Mail className="h-4 w-4 text-gray-600" />
+                        <span>
+                          {loadingGmail
+                            ? `Procesando... (${gmailStatus?.last_emails ?? 0} correos, ${gmailStatus?.last_files ?? 0} archivos)`
+                            : 'Procesar correos'}
+                        </span>
+                        <span className="ml-auto text-xs text-gray-500">
+                          Gmail
+                        </span>
                       </button>
-                    )}
-                    <button
-                      type="button"
-                      className="flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left text-sm text-red-700 hover:bg-red-50 disabled:opacity-50"
-                      onClick={() => {
-                        setAgregarPagoOpen(false)
-                        setShowVaciarTablaGmail(true)
-                      }}
-                      disabled={isVaciarTablaGmail}
-                    >
-                      <Trash2 className="h-4 w-4 text-red-600" />
-                      <span>
-                        {isVaciarTablaGmail ? 'Vaciando...' : 'Vaciar tabla'}
-                      </span>
+                      {loadingGmail && (
+                        <button
+                          type="button"
+                          className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-left text-sm text-amber-800 hover:bg-amber-50"
+                          onClick={handleDetenerSeguimientoGmail}
+                        >
+                          <X className="h-4 w-4 shrink-0" />
+                          <span>Detener seguimiento</span>
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        className="flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left text-sm text-red-700 hover:bg-red-50 disabled:opacity-50"
+                        onClick={() => {
+                          setAgregarPagoOpen(false)
+                          setShowVaciarTablaGmail(true)
+                        }}
+                        disabled={isVaciarTablaGmail}
+                      >
+                        <Trash2 className="h-4 w-4 text-red-600" />
+                        <span>
+                          {isVaciarTablaGmail ? 'Vaciando...' : 'Vaciar tabla'}
+                        </span>
+                        <span className="ml-auto text-xs text-gray-500">
+                          Gmail
+                        </span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {SHOW_DESCARGA_EXCEL_EN_SUBMENU && submenuGmailOpen && (
+                  <button
+                    type="button"
+                    className="ml-2 flex w-full items-center gap-3 rounded-md border-l-2 border-gray-200 px-4 py-3 pl-5 text-left hover:bg-blue-50 disabled:opacity-50"
+                    onClick={async () => {
+                      setAgregarPagoOpen(false)
+                      setIsDescargandoGmailExcel(true)
+                      try {
+                        await pagoService.downloadGmailExcel(
+                          gmailStatus?.latest_data_date ?? undefined
+                        )
+                        toast.success('Excel descargado')
+                        pagoService.getGmailStatus().then(setGmailStatus)
+                      } catch (e) {
+                        toast.error(getErrorMessage(e))
+                      } finally {
+                        setIsDescargandoGmailExcel(false)
+                      }
+                    }}
+                    disabled={
+                      isDescargandoGmailExcel || !gmailStatus?.latest_data_date
+                    }
+                  >
+                    <Download className="h-5 w-5 text-gray-600" />
+                    <span>
+                      {isDescargandoGmailExcel
+                        ? 'Descargando...'
+                        : 'Descargar Excel'}
+                    </span>
+                    {gmailStatus?.latest_data_date && (
                       <span className="ml-auto text-xs text-gray-500">
-                        Gmail
+                        disponible: {gmailStatus.latest_data_date}
                       </span>
-                    </button>
-                  </div>
+                    )}
+                  </button>
                 )}
               </div>
-
-              {SHOW_DESCARGA_EXCEL_EN_SUBMENU && submenuGmailOpen && (
-                <button
-                  type="button"
-                  className="ml-2 flex w-full items-center gap-3 rounded-md border-l-2 border-gray-200 px-4 py-3 pl-5 text-left hover:bg-blue-50 disabled:opacity-50"
-                  onClick={async () => {
-                    setAgregarPagoOpen(false)
-                    setIsDescargandoGmailExcel(true)
-                    try {
-                      await pagoService.downloadGmailExcel(
-                        gmailStatus?.latest_data_date ?? undefined
-                      )
-                      toast.success('Excel descargado')
-                      pagoService.getGmailStatus().then(setGmailStatus)
-                    } catch (e) {
-                      toast.error(getErrorMessage(e))
-                    } finally {
-                      setIsDescargandoGmailExcel(false)
-                    }
-                  }}
-                  disabled={
-                    isDescargandoGmailExcel || !gmailStatus?.latest_data_date
-                  }
-                >
-                  <Download className="h-5 w-5 text-gray-600" />
-                  <span>
-                    {isDescargandoGmailExcel
-                      ? 'Descargando...'
-                      : 'Descargar Excel'}
-                  </span>
-                  {gmailStatus?.latest_data_date && (
-                    <span className="ml-auto text-xs text-gray-500">
-                      disponible: {gmailStatus.latest_data_date}
-                    </span>
-                  )}
-                </button>
-              )}
-            </div>
-          </PopoverContent>
-        </Popover>
-        <Button
-          type="button"
-          variant="outline"
-          size="lg"
-          className="px-6 py-6 text-base font-semibold"
-          onClick={abrirReemplazarPagos}
-        >
-          <span
-            className="mr-2 inline-flex h-5 w-5 shrink-0 items-center justify-center text-xl font-semibold leading-none"
-            aria-hidden
+            </PopoverContent>
+          </Popover>
+          <Button
+            type="button"
+            variant="outline"
+            size="lg"
+            className="px-6 py-6 text-base font-semibold"
+            title="Borrar todos los pagos de un préstamo aprobado para volver a cargarlos desde Excel"
+            onClick={abrirReemplazarPagos}
           >
-            -
-          </span>
-          Reemplazar pagos
-        </Button>
-      </div>
-      <div className="sticky top-2 z-20 rounded-lg border border-gray-200/80 bg-white px-4 py-3 text-sm text-gray-700 shadow-sm">
+            <Trash2 className="mr-2 h-5 w-5 shrink-0" aria-hidden />
+            Reemplazar pagos
+          </Button>
+        </div>
+        <div className="sticky top-2 z-20 rounded-lg border border-gray-200/80 bg-white px-4 py-3 text-sm text-gray-700 shadow-sm">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0">
               <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
@@ -1957,1873 +1986,1967 @@ export function PagosList() {
               ) : null}
             </div>
             <div className="shrink-0 text-xs text-gray-500">
-              Queda fija en pantalla y se actualiza en la próxima corrida manual.
+              Queda fija en pantalla y se actualiza en la próxima corrida
+              manual.
             </div>
           </div>
-      </div>
-      <Dialog
-        open={reemplazarPagosOpen}
-        onOpenChange={open => {
-          if (!open) cerrarReemplazarPagos()
-        }}
-      >
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Reemplazar pagos</DialogTitle>
-          </DialogHeader>
-          {reemplazarStep === 'cedula' && (
-            <div className="space-y-4 py-2">
-              <p className="text-sm text-gray-600">
-                Ingrese la cédula del cliente. Solo se consideran préstamos en
-                estado APROBADO.
-              </p>
-              <Input
-                placeholder="Cédula"
-                value={cedulaReemplazo}
-                onChange={e => setCedulaReemplazo(e.target.value)}
-                onKeyDown={e => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault()
-                    void handleBuscarPrestamosReemplazo()
-                  }
-                }}
-                autoFocus
-              />
-              <DialogFooter className="gap-2 sm:gap-0">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={cerrarReemplazarPagos}
-                  disabled={loadingReemplazo}
-                >
-                  Cancelar
-                </Button>
-                <Button
-                  type="button"
-                  onClick={() => void handleBuscarPrestamosReemplazo()}
-                  disabled={loadingReemplazo}
-                >
-                  {loadingReemplazo ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Buscando...
-                    </>
-                  ) : (
-                    'Continuar'
-                  )}
-                </Button>
-              </DialogFooter>
-            </div>
-          )}
-          {reemplazarStep === 'elegir' && (
-            <div className="space-y-4 py-2">
-              <p className="text-sm text-gray-600">
-                Hay {prestamosReemplazo.length} préstamos aprobados. Elija el
-                crédito cuyos pagos desea borrar y reemplazar.
-              </p>
-              <Select
-                value={
-                  prestamoIdReemplazo != null ? String(prestamoIdReemplazo) : ''
-                }
-                onValueChange={v => setPrestamoIdReemplazo(Number(v))}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Seleccione préstamo" />
-                </SelectTrigger>
-                <SelectContent>
-                  {prestamosReemplazo.map(p => (
-                    <SelectItem key={p.id} value={String(p.id)}>
-                      #{p.id} {p.modelo_vehiculo || p.producto || 'Préstamo'} -{' '}
-                      {p.nombres}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <DialogFooter className="gap-2 sm:gap-0">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => {
-                    setReemplazarStep('cedula')
-                    setPrestamoIdReemplazo(null)
-                  }}
-                  disabled={loadingReemplazo}
-                >
-                  Atrás
-                </Button>
-                <Button
-                  type="button"
-                  onClick={() => {
-                    if (prestamoIdReemplazo == null) {
-                      toast.error('Seleccione un préstamo')
-                      return
-                    }
-                    setReemplazarStep('confirmar')
-                  }}
-                  disabled={loadingReemplazo || prestamoIdReemplazo == null}
-                >
-                  Continuar
-                </Button>
-              </DialogFooter>
-            </div>
-          )}
-          {reemplazarStep === 'confirmar' &&
-            prestamoIdReemplazo != null &&
-            prestamoReemplazoSeleccionado && (
+        </div>
+        <Dialog
+          open={reemplazarPagosOpen}
+          onOpenChange={open => {
+            if (!open) cerrarReemplazarPagos()
+          }}
+        >
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Reemplazar pagos</DialogTitle>
+            </DialogHeader>
+            {reemplazarStep === 'cedula' && (
               <div className="space-y-4 py-2">
-                <p className="text-sm text-gray-700">
-                  ¿Desea borrar <strong>todos los pagos</strong> de la cédula{' '}
-                  <strong>{prestamoReemplazoSeleccionado.cedula}</strong> en el
-                  préstamo <strong>#{prestamoIdReemplazo}</strong>
-                  {prestamoReemplazoSeleccionado.modelo_vehiculo
-                    ? ` (${prestamoReemplazoSeleccionado.modelo_vehiculo})`
-                    : ''}
-                  ? Luego podrá cargar los pagos desde Excel con el flujo
-                  habitual.
+                <p className="text-sm text-gray-600">
+                  Ingrese la cédula del cliente. Solo se consideran préstamos en
+                  estado APROBADO.
                 </p>
+                <Input
+                  placeholder="Cédula"
+                  value={cedulaReemplazo}
+                  onChange={e => setCedulaReemplazo(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault()
+                      void handleBuscarPrestamosReemplazo()
+                    }
+                  }}
+                  autoFocus
+                />
                 <DialogFooter className="gap-2 sm:gap-0">
                   <Button
                     type="button"
                     variant="outline"
-                    onClick={() =>
-                      setReemplazarStep(
-                        prestamosReemplazo.length > 1 ? 'elegir' : 'cedula'
-                      )
-                    }
+                    onClick={cerrarReemplazarPagos}
+                    disabled={loadingReemplazo}
+                  >
+                    Cancelar
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={() => void handleBuscarPrestamosReemplazo()}
+                    disabled={loadingReemplazo}
+                  >
+                    {loadingReemplazo ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Buscando...
+                      </>
+                    ) : (
+                      'Continuar'
+                    )}
+                  </Button>
+                </DialogFooter>
+              </div>
+            )}
+            {reemplazarStep === 'elegir' && (
+              <div className="space-y-4 py-2">
+                <p className="text-sm text-gray-600">
+                  Hay {prestamosReemplazo.length} préstamos aprobados. Elija el
+                  crédito cuyos pagos desea borrar y reemplazar.
+                </p>
+                <Select
+                  value={
+                    prestamoIdReemplazo != null
+                      ? String(prestamoIdReemplazo)
+                      : ''
+                  }
+                  onValueChange={v => setPrestamoIdReemplazo(Number(v))}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccione préstamo" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {prestamosReemplazo.map(p => (
+                      <SelectItem key={p.id} value={String(p.id)}>
+                        #{p.id} {p.modelo_vehiculo || p.producto || 'Préstamo'}{' '}
+                        - {p.nombres}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <DialogFooter className="gap-2 sm:gap-0">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setReemplazarStep('cedula')
+                      setPrestamoIdReemplazo(null)
+                    }}
                     disabled={loadingReemplazo}
                   >
                     Atrás
                   </Button>
                   <Button
                     type="button"
-                    variant="destructive"
-                    onClick={() => void handleConfirmarReemplazarPagos()}
-                    disabled={loadingReemplazo}
+                    onClick={() => {
+                      if (prestamoIdReemplazo == null) {
+                        toast.error('Seleccione un préstamo')
+                        return
+                      }
+                      setReemplazarStep('confirmar')
+                    }}
+                    disabled={loadingReemplazo || prestamoIdReemplazo == null}
                   >
-                    {loadingReemplazo ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Borrando...
-                      </>
-                    ) : (
-                      'Sí, borrar todos los pagos'
-                    )}
+                    Continuar
                   </Button>
                 </DialogFooter>
               </div>
             )}
-        </DialogContent>
-      </Dialog>
-      {/* Después de importar desde Cobros: si hay errores, ofrecer descargar Excel de esta importación (datos_importados_conerrores) */}
-      {lastImportCobrosResult &&
-        lastImportCobrosResult.registros_con_error > 0 && (
-          <Card className="border-amber-200 bg-amber-50">
-            <CardContent className="flex flex-wrap items-center gap-3 py-3">
-              <span className="text-sm text-amber-800">
-                {lastImportCobrosResult.registros_procesados} importados
-                {typeof lastImportCobrosResult.cuotas_aplicadas === 'number' &&
-                  lastImportCobrosResult.cuotas_aplicadas > 0 && (
-                    <>
-                      {' '}
-                      ({lastImportCobrosResult.cuotas_aplicadas} operaciones en
-                      cuotas
-                      {typeof lastImportCobrosResult.pagos_con_aplicacion_a_cuotas ===
-                      'number'
-                        ? `, ${lastImportCobrosResult.pagos_con_aplicacion_a_cuotas} pago(s) con aplicación`
-                        : ''}
-                      )
-                    </>
+            {reemplazarStep === 'confirmar' &&
+              prestamoIdReemplazo != null &&
+              prestamoReemplazoSeleccionado && (
+                <div className="space-y-4 py-2">
+                  <p className="text-sm text-gray-700">
+                    ¿Desea borrar <strong>todos los pagos</strong> de la cédula{' '}
+                    <strong>{prestamoReemplazoSeleccionado.cedula}</strong> en
+                    el préstamo <strong>#{prestamoIdReemplazo}</strong>
+                    {prestamoReemplazoSeleccionado.modelo_vehiculo
+                      ? ` (${prestamoReemplazoSeleccionado.modelo_vehiculo})`
+                      : ''}
+                    ? Luego podrá cargar los pagos desde Excel con el flujo
+                    habitual.
+                  </p>
+                  <DialogFooter className="gap-2 sm:gap-0">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() =>
+                        setReemplazarStep(
+                          prestamosReemplazo.length > 1 ? 'elegir' : 'cedula'
+                        )
+                      }
+                      disabled={loadingReemplazo}
+                    >
+                      Atrás
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      onClick={() => void handleConfirmarReemplazarPagos()}
+                      disabled={loadingReemplazo}
+                    >
+                      {loadingReemplazo ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Borrando...
+                        </>
+                      ) : (
+                        'Sí, borrar todos los pagos'
+                      )}
+                    </Button>
+                  </DialogFooter>
+                </div>
+              )}
+          </DialogContent>
+        </Dialog>
+        {/* Después de importar desde Cobros: si hay errores, ofrecer descargar Excel de esta importación (datos_importados_conerrores) */}
+        {lastImportCobrosResult &&
+          lastImportCobrosResult.registros_con_error > 0 && (
+            <Card className="border-amber-200 bg-amber-50">
+              <CardContent className="flex flex-wrap items-center gap-3 py-3">
+                <span className="text-sm text-amber-800">
+                  {lastImportCobrosResult.registros_procesados} importados
+                  {typeof lastImportCobrosResult.cuotas_aplicadas ===
+                    'number' &&
+                    lastImportCobrosResult.cuotas_aplicadas > 0 && (
+                      <>
+                        {' '}
+                        ({lastImportCobrosResult.cuotas_aplicadas} operaciones
+                        en cuotas
+                        {typeof lastImportCobrosResult.pagos_con_aplicacion_a_cuotas ===
+                        'number'
+                          ? `, ${lastImportCobrosResult.pagos_con_aplicacion_a_cuotas} pago(s) con aplicación`
+                          : ''}
+                        )
+                      </>
+                    )}
+                  ; {lastImportCobrosResult.registros_con_error} con error (no
+                  cumplen reglas de carga masiva). Descargue el Excel para
+                  revisar y corregir.
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="border-amber-400 text-amber-800 hover:bg-amber-100"
+                  onClick={handleDescargarExcelErroresCobros}
+                  disabled={isDescargandoExcelCobrosErrores}
+                >
+                  {isDescargandoExcelCobrosErrores ? (
+                    <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Download className="mr-1 h-4 w-4" />
                   )}
-                ; {lastImportCobrosResult.registros_con_error} con error (no
-                cumplen reglas de carga masiva). Descargue el Excel para revisar
-                y corregir.
-              </span>
-              <Button
-                variant="outline"
-                size="sm"
-                className="border-amber-400 text-amber-800 hover:bg-amber-100"
-                onClick={handleDescargarExcelErroresCobros}
-                disabled={isDescargandoExcelCobrosErrores}
-              >
-                {isDescargandoExcelCobrosErrores ? (
-                  <Loader2 className="mr-1 h-4 w-4 animate-spin" />
-                ) : (
-                  <Download className="mr-1 h-4 w-4" />
-                )}
-                Descargar Excel (errores de esta importación)
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setLastImportCobrosResult(null)}
-              >
-                Ocultar
-              </Button>
-            </CardContent>
-          </Card>
-        )}
-      {lastImportCobrosResult &&
-        (lastImportCobrosResult.pagos_sin_aplicacion_cuotas_total ?? 0) > 0 && (
-          <Card className="border-orange-200 bg-orange-50">
-            <CardContent className="flex flex-col gap-2 py-3">
-              <span className="text-sm font-medium text-orange-900">
-                {lastImportCobrosResult.pagos_sin_aplicacion_cuotas_total}{' '}
-                pago(s) importado(s) sin aplicar a cuotas
-                {lastImportCobrosResult.pagos_sin_aplicacion_cuotas_truncados
-                  ? ' (lista truncada)'
-                  : ''}
-              </span>
-              <p className="text-xs text-orange-800">
-                Revise cuotas del préstamo o use «Aplicar a cuotas» en la fila
-                del pago. Detalle:
-              </p>
-              <ul className="max-h-32 list-disc overflow-y-auto pl-5 text-xs text-orange-900">
-                {(lastImportCobrosResult.pagos_sin_aplicacion_cuotas ?? []).map(
-                  (row, i) => (
+                  Descargar Excel (errores de esta importación)
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setLastImportCobrosResult(null)}
+                >
+                  Ocultar
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+        {lastImportCobrosResult &&
+          (lastImportCobrosResult.pagos_sin_aplicacion_cuotas_total ?? 0) >
+            0 && (
+            <Card className="border-orange-200 bg-orange-50">
+              <CardContent className="flex flex-col gap-2 py-3">
+                <span className="text-sm font-medium text-orange-900">
+                  {lastImportCobrosResult.pagos_sin_aplicacion_cuotas_total}{' '}
+                  pago(s) importado(s) sin aplicar a cuotas
+                  {lastImportCobrosResult.pagos_sin_aplicacion_cuotas_truncados
+                    ? ' (lista truncada)'
+                    : ''}
+                </span>
+                <p className="text-xs text-orange-800">
+                  Revise cuotas del préstamo o use «Aplicar a cuotas» en la fila
+                  del pago. Detalle:
+                </p>
+                <ul className="max-h-32 list-disc overflow-y-auto pl-5 text-xs text-orange-900">
+                  {(
+                    lastImportCobrosResult.pagos_sin_aplicacion_cuotas ?? []
+                  ).map((row, i) => (
                     <li key={`${row.pago_id ?? i}-${row.cedula_cliente}`}>
                       {row.pago_id != null ? `#${row.pago_id}` : '-'} ·{' '}
                       {row.cedula_cliente || '-'} · préstamo{' '}
                       {row.prestamo_id ?? '-'} · {row.motivo}: {row.detalle}
                     </li>
-                  )
-                )}
-              </ul>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="self-start"
-                onClick={() => setLastImportCobrosResult(null)}
-              >
-                Ocultar
-              </Button>
-            </CardContent>
-          </Card>
-        )}
-      {/* Pestañas: por defecto Resumen por Cliente (detalles por cliente, más reciente a más antiguo) */}
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="mb-4">
-          <TabsTrigger value="todos">Todos los Pagos</TabsTrigger>
-          <TabsTrigger value="resumen">Detalle por Cliente</TabsTrigger>
-          <TabsTrigger value="revision">Revision</TabsTrigger>
-          <TabsTrigger value="revision-global">Revision global</TabsTrigger>
-        </TabsList>
-        {/* Tab: Detalle por Cliente (resumen + ver pagos del cliente, más reciente a más antiguo) */}
-        <TabsContent value="resumen">
-          <PagosListResumen />
-        </TabsContent>
-        <TabsContent value="revision">
-          <Card>
-            <CardHeader>
-              <CardTitle>Revision</CardTitle>
-              <p className="text-sm text-muted-foreground">
-                Pagos no validados automáticamente. Aquí puede editar, guardar
-                observaciones del motivo de incumplimiento o eliminar registros.
-              </p>
-              <p className="text-xs font-medium text-amber-700">
-                Solo se listan pagos que no cumplen validadores.
-              </p>
-            </CardHeader>
-            <CardContent>
-              <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end">
-                <div className="flex-1">
-                  <label className="mb-1 block text-sm font-medium text-gray-700">
-                    Filtrar por cédula
-                  </label>
-                  <Input
-                    placeholder="Ej: V12345678"
-                    value={revisionCedulaInput}
-                    onChange={e => setRevisionCedulaInput(e.target.value)}
-                    onKeyDown={e => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault()
-                        handleBuscarRevisionPorCedula()
-                      }
-                    }}
-                    className="max-w-md"
-                  />
-                </div>
-                <div className="flex-1">
-                  <label className="mb-1 block text-sm font-medium text-gray-700">
-                    Filtrar por N° documento
-                  </label>
-                  <Input
-                    placeholder="Ej: 00012345"
-                    value={revisionNumeroDocumentoInput}
-                    onChange={e => setRevisionNumeroDocumentoInput(e.target.value)}
-                    onKeyDown={e => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault()
-                        handleBuscarRevisionPorCedula()
-                      }
-                    }}
-                    className="max-w-md"
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-gray-700">
-                    Fecha pago
-                  </label>
-                  <Input
-                    type="date"
-                    value={revisionFechaPagoInput}
-                    onChange={e => setRevisionFechaPagoInput(e.target.value)}
-                    className="w-[180px]"
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-gray-700">
-                    Tipo
-                  </label>
-                  <Select
-                    value={revisionTipoFiltro || 'all'}
-                    onValueChange={value => {
-                      setRevisionTipoFiltro(
-                        value === 'all'
-                          ? ''
-                          : (value as 'anomalo' | 'irreal' | 'duplicado')
-                      )
-                      setRevisionPage(1)
-                    }}
-                  >
-                    <SelectTrigger className="w-[210px]">
-                      <SelectValue placeholder="Tipo de revision" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Todos</SelectItem>
-                      <SelectItem value="anomalo">Anomalos</SelectItem>
-                      <SelectItem value="irreal">Irreales</SelectItem>
-                      <SelectItem value="duplicado">
-                        Duplicados (fecha + numero)
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-gray-700">
-                    Estado
-                  </label>
-                  <Select
-                    value={revisionGlobalEstadoFiltro || 'all'}
-                    onValueChange={value => {
-                      setRevisionGlobalEstadoFiltro(
-                        value === 'all' ? '' : 'PENDIENTE'
-                      )
-                      setRevisionGlobalPage(1)
-                    }}
-                  >
-                    <SelectTrigger className="w-[160px]">
-                      <SelectValue placeholder="Estado" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Todos</SelectItem>
-                      <SelectItem value="PENDIENTE">Pendiente</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-gray-700">
-                    Motivo
-                  </label>
-                  <Select
-                    value={revisionMotivoFiltro || 'all'}
-                    onValueChange={value => {
-                      setRevisionMotivoFiltro(
-                        value === 'all'
-                          ? ''
-                          : (value as
-                              | 'sin_credito'
-                              | 'duplicado'
-                              | 'irreal'
-                              | 'con_observacion'
-                              | 'error_validacion')
-                      )
-                      setRevisionPage(1)
-                    }}
-                  >
-                    <SelectTrigger className="w-[220px]">
-                      <SelectValue placeholder="Motivo de anomalía" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Todos</SelectItem>
-                      <SelectItem value="sin_credito">Sin crédito</SelectItem>
-                      <SelectItem value="duplicado">
-                        Duplicado fecha + número
-                      </SelectItem>
-                      <SelectItem value="irreal">Irreal</SelectItem>
-                      <SelectItem value="con_observacion">
-                        Con observación
-                      </SelectItem>
-                      <SelectItem value="error_validacion">
-                        Error de validación
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={handleBuscarRevisionPorCedula}
-                  >
-                    Buscar
-                  </Button>
-                  <Button
-                    type="button"
-                    onClick={handleSiguienteAnomalia}
-                    title="Abrir la siguiente fila priorizada para edición"
-                  >
-                    Siguiente anomalía
-                  </Button>
-                  {(revisionCedulaFiltro ||
-                    revisionNumeroDocumentoFiltro ||
-                    revisionFechaPagoFiltro ||
-                    revisionTipoFiltro ||
-                    revisionMotivoFiltro) && (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      onClick={handleLimpiarRevisionCedula}
-                    >
-                      <X className="mr-1 h-4 w-4" />
-                      Limpiar
-                    </Button>
-                  )}
-                </div>
-                <label className="flex items-center gap-2 text-sm text-gray-700">
-                  <input
-                    type="checkbox"
-                    checked={includeRevisionExportados}
-                    onChange={e => {
-                      setIncludeRevisionExportados(e.target.checked)
-                      setRevisionPage(1)
-                    }}
-                  />
-                  Incluir exportados/archivados
-                </label>
-              </div>
-              {isLoadingRevision ? (
-                <div className="py-8 text-center text-sm text-gray-500">
-                  Cargando pendientes de revisión...
-                </div>
-              ) : isRevisionError ? (
-                <div className="py-8 text-center text-sm text-red-600">
-                  Error cargando pendientes de revisión
-                </div>
-              ) : !revisionData?.pagos?.length ? (
-                <div className="py-8 text-center text-sm text-gray-500">
-                  No hay pagos pendientes de revisión.
-                </div>
-              ) : (
-                <>
-                  <div className="mb-3 flex flex-wrap items-center gap-2">
-                    <Input
-                      placeholder="Observación masiva para seleccionados"
-                      value={bulkRevisionObservacion}
-                      onChange={e => setBulkRevisionObservacion(e.target.value)}
-                      className="max-w-sm"
-                    />
-                    <Button
-                      variant="outline"
-                      onClick={() => void handleGuardarRevisionMasivo()}
-                      disabled={
-                        selectedRevisionIds.size === 0 || isBulkSavingRevision
-                      }
-                    >
-                      {isBulkSavingRevision ? 'Guardando...' : 'Guardar seleccionados'}
-                    </Button>
-                    <Button
-                      variant="destructive"
-                      onClick={() => void handleEliminarRevisionMasivo()}
-                      disabled={
-                        selectedRevisionIds.size === 0 || isBulkDeletingRevision
-                      }
-                    >
-                      {isBulkDeletingRevision
-                        ? 'Eliminando...'
-                        : 'Eliminar seleccionados'}
-                    </Button>
-                    <span className="text-xs text-gray-600">
-                      Seleccionados: {selectedRevisionIds.size}
-                    </span>
-                  </div>
-                  <div className="mb-3 flex flex-wrap gap-2 text-xs">
-                    <Badge variant="outline">
-                      Duplicados: {resumenRevision.duplicados}
-                    </Badge>
-                    <Badge variant="outline">
-                      Irreales: {resumenRevision.irreales}
-                    </Badge>
-                    <Badge variant="outline">
-                      Sin crédito: {resumenRevision.sinCredito}
-                    </Badge>
-                    <Badge variant="outline">
-                      Con observación: {resumenRevision.conObservacion}
-                    </Badge>
-                  </div>
-                  <div className="overflow-hidden rounded-lg border">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead className="w-[44px]">
-                            <input
-                              type="checkbox"
-                              checked={
-                                revisionRowsFiltradas.length > 0 &&
-                                revisionRowsFiltradas.every(r =>
-                                  selectedRevisionIds.has(r.pago.id)
-                                )
-                              }
-                              onChange={toggleRevisionSeleccionTodas}
-                            />
-                          </TableHead>
-                          <TableHead>ID</TableHead>
-                          <TableHead>Cédula</TableHead>
-                          <TableHead>Crédito</TableHead>
-                          <TableHead>Monto</TableHead>
-                          <TableHead>Fecha Pago</TableHead>
-                          <TableHead>Nº Documento</TableHead>
-                          <TableHead>Motivos</TableHead>
-                          <TableHead>Observación</TableHead>
-                          <TableHead className="text-right">Acciones</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {revisionRowsFiltradas.map(({ pago, motivos, score }) => (
-                          <TableRow
-                            key={pago.id}
-                            className={score >= 2 ? 'bg-amber-50/40' : undefined}
-                          >
-                            <TableCell>
-                              <input
-                                type="checkbox"
-                                checked={selectedRevisionIds.has(pago.id)}
-                                onChange={() => toggleRevisionSeleccion(pago.id)}
-                              />
-                            </TableCell>
-                            <TableCell>{pago.id}</TableCell>
-                            <TableCell>{pago.cedula_cliente}</TableCell>
-                            <TableCell>
-                              {pago.prestamo_id ? `#${pago.prestamo_id}` : '-'}
-                            </TableCell>
-                            <TableCell>${Number(pago.monto_pagado).toFixed(2)}</TableCell>
-                            <TableCell>{formatDate(pago.fecha_pago)}</TableCell>
-                            <TableCell>
-                              {textoDocumentoPagoParaListado(
-                                pago.numero_documento,
-                                pago.codigo_documento
-                              )}
-                            </TableCell>
-                            <TableCell className="max-w-[260px]">
-                              <div className="flex flex-wrap gap-1">
-                                {motivos.length === 0 ? (
-                                  <Badge variant="outline">Sin marca</Badge>
-                                ) : (
-                                  motivos.map(m => (
-                                    <Badge key={`${pago.id}-${m}`} variant="outline">
-                                      {m}
-                                    </Badge>
-                                  ))
-                                )}
-                              </div>
-                            </TableCell>
-                            <TableCell className="min-w-[260px]">
-                              {editingRevisionId === pago.id ? (
-                                <Input
-                                  value={revisionObservacionDraft}
-                                  onChange={e =>
-                                    setRevisionObservacionDraft(e.target.value)
-                                  }
-                                  onKeyDown={e => {
-                                    if (e.key === 'Enter') {
-                                      e.preventDefault()
-                                      void handleGuardarRevision(pago.id)
-                                    }
-                                  }}
-                                  placeholder="Motivo por el que no cumple"
-                                />
-                              ) : (
-                                <span className="text-sm text-amber-700">
-                                  {(pago.observaciones ?? '').trim() ||
-                                    'No cumple validaciones automáticas'}
-                                </span>
-                              )}
-                            </TableCell>
-                            <TableCell className="text-right">
-                              <div className="inline-flex items-center gap-2">
-                                <Button
-                                  size="icon"
-                                  variant="outline"
-                                  title="Ver recibo"
-                                  onClick={() => {
-                                    if (!pago.documento_ruta) {
-                                      toast.error(
-                                        'Este pago no tiene recibo o comprobante asociado.'
-                                      )
-                                      return
-                                    }
-                                    void openStaffComprobanteForList(
-                                      pago.documento_ruta,
-                                      `Pago #${pago.id}`,
-                                      pago.id
-                                    )
-                                  }}
-                                >
-                                  <Eye className="h-4 w-4" />
-                                </Button>
-                                <Button
-                                  size="icon"
-                                  variant="outline"
-                                  title="Editar pago"
-                                  onClick={() => handleAbrirEditorPagoRevision(pago)}
-                                >
-                                  <Edit className="h-4 w-4" />
-                                </Button>
-                                <Button
-                                  size="icon"
-                                  variant="outline"
-                                  title="Editar observación"
-                                  onClick={() => handleEditarRevision(pago)}
-                                >
-                                  <FileText className="h-4 w-4" />
-                                </Button>
-                                <Button
-                                  size="icon"
-                                  variant="outline"
-                                  title="Guardar observación"
-                                  disabled={
-                                    editingRevisionId !== pago.id ||
-                                    savingRevisionId === pago.id
-                                  }
-                                  onClick={() => void handleGuardarRevision(pago.id)}
-                                >
-                                  {savingRevisionId === pago.id ? (
-                                    <Loader2 className="h-4 w-4 animate-spin" />
-                                  ) : (
-                                    <Check className="h-4 w-4" />
-                                  )}
-                                </Button>
-                                <Button
-                                  size="icon"
-                                  variant="destructive"
-                                  title="Eliminar fila"
-                                  disabled={deletingRevisionId === pago.id}
-                                  onClick={() => void handleEliminarRevision(pago.id)}
-                                >
-                                  {deletingRevisionId === pago.id ? (
-                                    <Loader2 className="h-4 w-4 animate-spin" />
-                                  ) : (
-                                    <Trash2 className="h-4 w-4" />
-                                  )}
-                                </Button>
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                  <ListPaginationBar
-                    className="mt-4"
-                    page={revisionData.page}
-                    totalPages={Math.max(1, revisionData.total_pages)}
-                    onPageChange={p => setRevisionPage(p)}
-                    subtitle={`${revisionData.total} registros · ${revisionData.per_page} por página`}
-                  />
-                </>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-        <TabsContent value="revision-global">
-          <Card>
-            <CardHeader>
-              <CardTitle>Revision global de pagos</CardTitle>
-              <p className="text-sm text-muted-foreground">
-                Misma dinámica de revisión rápida, pero sobre todos los registros
-                de la tabla pagos.
-              </p>
-            </CardHeader>
-            <CardContent>
-              <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end">
-                <div className="flex-1">
-                  <label className="mb-1 block text-sm font-medium text-gray-700">
-                    Filtrar por cédula
-                  </label>
-                  <Input
-                    placeholder="Ej: V12345678"
-                    value={revisionGlobalCedulaInput}
-                    onChange={e => setRevisionGlobalCedulaInput(e.target.value)}
-                    onKeyDown={e => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault()
-                        handleBuscarRevisionGlobal()
-                      }
-                    }}
-                    className="max-w-md"
-                  />
-                </div>
-                <div className="flex-1">
-                  <label className="mb-1 block text-sm font-medium text-gray-700">
-                    Filtrar por N° documento
-                  </label>
-                  <Input
-                    placeholder="Ej: 00012345"
-                    value={revisionGlobalNumeroDocumentoInput}
-                    onChange={e =>
-                      setRevisionGlobalNumeroDocumentoInput(e.target.value)
-                    }
-                    onKeyDown={e => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault()
-                        handleBuscarRevisionGlobal()
-                      }
-                    }}
-                    className="max-w-md"
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-gray-700">
-                    Fecha pago
-                  </label>
-                  <Input
-                    type="date"
-                    value={revisionGlobalFechaPagoInput}
-                    onChange={e => setRevisionGlobalFechaPagoInput(e.target.value)}
-                    className="w-[180px]"
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-gray-700">
-                    Motivo
-                  </label>
-                  <Select
-                    value={revisionGlobalMotivoFiltro || 'all'}
-                    onValueChange={value => {
-                      setRevisionGlobalMotivoFiltro(
-                        value === 'all'
-                          ? ''
-                          : (value as
-                              | 'sin_credito'
-                              | 'duplicado'
-                              | 'irreal'
-                              | 'sin_aplicacion'
-                              | 'con_notas'
-                              | 'rebasa_total')
-                      )
-                      setRevisionGlobalPage(1)
-                    }}
-                  >
-                    <SelectTrigger className="w-[220px]">
-                      <SelectValue placeholder="Motivo de anomalía" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Todos</SelectItem>
-                      <SelectItem value="sin_credito">Sin crédito</SelectItem>
-                      <SelectItem value="duplicado">
-                        Duplicado fecha + número
-                      </SelectItem>
-                      <SelectItem value="irreal">Irreal</SelectItem>
-                      <SelectItem value="sin_aplicacion">
-                        Sin aplicación a cuotas
-                      </SelectItem>
-                      <SelectItem value="con_notas">Con notas</SelectItem>
-                      <SelectItem value="rebasa_total">
-                        Rebasa total del préstamo
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex gap-2">
-                  <Button variant="outline" onClick={handleBuscarRevisionGlobal}>
-                    Buscar
-                  </Button>
-                  <Button onClick={handleSiguienteAnomaliaGlobal}>
-                    Siguiente anomalía
-                  </Button>
-                  {(revisionGlobalCedulaFiltro ||
-                    revisionGlobalNumeroDocumentoFiltro ||
-                    revisionGlobalFechaPagoFiltro ||
-                    revisionGlobalEstadoFiltro ||
-                    revisionGlobalMotivoFiltro) && (
-                    <Button variant="ghost" onClick={handleLimpiarRevisionGlobal}>
-                      <X className="mr-1 h-4 w-4" />
-                      Limpiar
-                    </Button>
-                  )}
-                </div>
-              </div>
-              {isLoadingRevisionGlobal ? (
-                <div className="py-8 text-center text-sm text-gray-500">
-                  Cargando revisión global...
-                </div>
-              ) : isRevisionGlobalError ? (
-                <div className="py-8 text-center text-sm text-red-600">
-                  Error cargando pagos globales
-                </div>
-              ) : !revisionGlobalRowsFiltradas.length ? (
-                <div className="py-8 text-center text-sm text-gray-500">
-                  No hay pagos para esta búsqueda.
-                </div>
-              ) : (
-                <>
-                  <div className="mb-3 flex flex-wrap items-center gap-2">
-                    <Input
-                      placeholder="Nota masiva para seleccionados"
-                      value={bulkGlobalNota}
-                      onChange={e => setBulkGlobalNota(e.target.value)}
-                      className="max-w-sm"
-                    />
-                    <Button
-                      variant="outline"
-                      onClick={() => void handleGuardarGlobalMasivo()}
-                      disabled={selectedGlobalIds.size === 0 || isBulkSavingGlobal}
-                    >
-                      {isBulkSavingGlobal ? 'Guardando...' : 'Guardar seleccionados'}
-                    </Button>
-                    <Button
-                      variant="destructive"
-                      onClick={() => void handleEliminarGlobalMasivo()}
-                      disabled={selectedGlobalIds.size === 0 || isBulkDeletingGlobal}
-                    >
-                      {isBulkDeletingGlobal
-                        ? 'Eliminando...'
-                        : 'Eliminar seleccionados'}
-                    </Button>
-                    <span className="text-xs text-gray-600">
-                      Seleccionados: {selectedGlobalIds.size}
-                    </span>
-                  </div>
-                  <div className="mb-3 flex flex-wrap gap-2 text-xs">
-                    <Badge variant="outline">
-                      Duplicados: {resumenRevisionGlobal.duplicados}
-                    </Badge>
-                    <Badge variant="outline">
-                      Irreales: {resumenRevisionGlobal.irreales}
-                    </Badge>
-                    <Badge variant="outline">
-                      Sin crédito: {resumenRevisionGlobal.sinCredito}
-                    </Badge>
-                    <Badge variant="outline">
-                      Sin aplicación: {resumenRevisionGlobal.sinAplicacion}
-                    </Badge>
-                    <Badge variant="outline">
-                      Con notas: {resumenRevisionGlobal.conNotas}
-                    </Badge>
-                    <Badge variant="outline">
-                      Rebasa total: {resumenRevisionGlobal.rebasaTotal}
-                    </Badge>
-                  </div>
-                  <div className="overflow-hidden rounded-lg border">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead className="w-[44px]">
-                            <input
-                              type="checkbox"
-                              checked={
-                                revisionGlobalRowsFiltradas.length > 0 &&
-                                revisionGlobalRowsFiltradas.every(r =>
-                                  selectedGlobalIds.has(r.pago.id)
-                                )
-                              }
-                              onChange={toggleGlobalSeleccionTodas}
-                            />
-                          </TableHead>
-                          <TableHead>ID</TableHead>
-                          <TableHead>Cédula</TableHead>
-                          <TableHead>Crédito</TableHead>
-                          <TableHead>Monto</TableHead>
-                          <TableHead>Fecha Pago</TableHead>
-                          <TableHead>Nº Documento</TableHead>
-                          <TableHead>Exceso USD</TableHead>
-                          <TableHead>Motivos</TableHead>
-                          <TableHead>Notas</TableHead>
-                          <TableHead className="text-right">Acciones</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {revisionGlobalRowsFiltradas.map(({ pago, motivos, score }) => (
-                          <TableRow
-                            key={pago.id}
-                            className={score >= 2 ? 'bg-amber-50/40' : undefined}
-                          >
-                            <TableCell>
-                              <input
-                                type="checkbox"
-                                checked={selectedGlobalIds.has(pago.id)}
-                                onChange={() => toggleGlobalSeleccion(pago.id)}
-                              />
-                            </TableCell>
-                            <TableCell>{pago.id}</TableCell>
-                            <TableCell>{pago.cedula_cliente}</TableCell>
-                            <TableCell>
-                              {pago.prestamo_id ? `#${pago.prestamo_id}` : '-'}
-                            </TableCell>
-                            <TableCell>${Number(pago.monto_pagado).toFixed(2)}</TableCell>
-                            <TableCell>{formatDate(pago.fecha_pago)}</TableCell>
-                            <TableCell>
-                              {textoDocumentoPagoParaListado(
-                                pago.numero_documento,
-                                pago.codigo_documento
-                              )}
-                            </TableCell>
-                            <TableCell>
-                              {Number(pago.exceso_sobre_total_usd ?? 0) > 0 ? (
-                                <span className="font-semibold text-red-700">
-                                  $
-                                  {Number(pago.exceso_sobre_total_usd).toFixed(2)}
-                                </span>
-                              ) : (
-                                <span className="text-gray-500">-</span>
-                              )}
-                            </TableCell>
-                            <TableCell className="max-w-[260px]">
-                              <div className="flex flex-wrap gap-1">
-                                {motivos.length === 0 ? (
-                                  <Badge variant="outline">Sin marca</Badge>
-                                ) : (
-                                  motivos.map(m => (
-                                    <Badge key={`${pago.id}-${m}`} variant="outline">
-                                      {m}
-                                    </Badge>
-                                  ))
-                                )}
-                              </div>
-                            </TableCell>
-                            <TableCell className="min-w-[260px]">
-                              {editingGlobalId === pago.id ? (
-                                <Input
-                                  value={globalNotaDraft}
-                                  onChange={e => setGlobalNotaDraft(e.target.value)}
-                                  onKeyDown={e => {
-                                    if (e.key === 'Enter') {
-                                      e.preventDefault()
-                                      void handleGuardarNotaGlobal(pago.id)
-                                    }
-                                  }}
-                                  placeholder="Nota de revisión rápida"
-                                />
-                              ) : (
-                                <span className="text-sm text-amber-700">
-                                  {(pago.notas ?? '').trim() || '-'}
-                                </span>
-                              )}
-                            </TableCell>
-                            <TableCell className="text-right">
-                              <div className="inline-flex items-center gap-2">
-                                <Button
-                                  size="icon"
-                                  variant="outline"
-                                  title="Editar pago"
-                                  onClick={() => {
-                                    setPagoEditando(pago)
-                                    setShowRegistrarPago(true)
-                                  }}
-                                >
-                                  <Edit className="h-4 w-4" />
-                                </Button>
-                                <Button
-                                  size="icon"
-                                  variant="outline"
-                                  title="Editar nota"
-                                  onClick={() => {
-                                    setEditingGlobalId(pago.id)
-                                    setGlobalNotaDraft((pago.notas ?? '').trim())
-                                  }}
-                                >
-                                  <FileText className="h-4 w-4" />
-                                </Button>
-                                <Button
-                                  size="icon"
-                                  variant="outline"
-                                  title="Guardar nota"
-                                  disabled={
-                                    editingGlobalId !== pago.id ||
-                                    savingGlobalId === pago.id
-                                  }
-                                  onClick={() => void handleGuardarNotaGlobal(pago.id)}
-                                >
-                                  {savingGlobalId === pago.id ? (
-                                    <Loader2 className="h-4 w-4 animate-spin" />
-                                  ) : (
-                                    <Check className="h-4 w-4" />
-                                  )}
-                                </Button>
-                                <Button
-                                  size="icon"
-                                  variant="destructive"
-                                  title="Eliminar pago"
-                                  disabled={deletingGlobalId === pago.id}
-                                  onClick={() =>
-                                    void handleEliminarRevisionGlobal(pago.id)
-                                  }
-                                >
-                                  {deletingGlobalId === pago.id ? (
-                                    <Loader2 className="h-4 w-4 animate-spin" />
-                                  ) : (
-                                    <Trash2 className="h-4 w-4" />
-                                  )}
-                                </Button>
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                  <ListPaginationBar
-                    className="mt-4"
-                    page={revisionGlobalData?.page ?? 1}
-                    totalPages={Math.max(1, revisionGlobalData?.total_pages ?? 1)}
-                    onPageChange={p => setRevisionGlobalPage(p)}
-                    subtitle={`${revisionGlobalData?.total ?? 0} registros · ${revisionGlobalData?.per_page ?? perPage} por página`}
-                  />
-                </>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-        {/* Tab: Todos los Pagos */}
-        <TabsContent value="todos">
-          {filters.conciliado === 'si' && (
-            <Card className="mb-4 border-amber-200 bg-amber-50">
-              <CardContent className="py-3 text-sm text-amber-800">
-                Filtro activo: mostrando solo pagos conciliados. Para auditoría
-                completa cambie conciliación a <strong>Todos</strong> o{' '}
-                <strong>No</strong>.
+                  ))}
+                </ul>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="self-start"
+                  onClick={() => setLastImportCobrosResult(null)}
+                >
+                  Ocultar
+                </Button>
               </CardContent>
             </Card>
           )}
-          {/* Búsqueda y filtro Conciliación siempre visible */}
-          <Card className="mb-4">
-            <CardContent className="pt-6">
-              <div className="flex flex-col flex-wrap gap-4 sm:flex-row">
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-gray-700">
-                    Conciliación
-                  </label>
-                  <Select
-                    value={filters.conciliado || 'si'}
-                    onValueChange={value =>
-                      handleFilterChange('conciliado', value)
-                    }
-                  >
-                    <SelectTrigger className="w-[180px]">
-                      <SelectValue placeholder="Conciliación" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="si">Sí (conciliados)</SelectItem>
-                      <SelectItem value="no">No (pendientes)</SelectItem>
-                      <SelectItem value="all">Todos</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="min-w-[200px] flex-1">
-                  <label className="mb-1 block text-sm font-medium text-gray-700">
-                    Buscar por cédula
-                  </label>
-                  <Input
-                    placeholder="Escriba cédula para filtrar..."
-                    value={filters.cedula}
-                    onChange={e => {
-                      handleFilterChange('cedula', e.target.value)
-                    }}
-                    className="max-w-md"
-                  />
-                </div>
-                {filters.cedula && (
-                  <div className="flex items-end">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleFilterChange('cedula', '')}
-                    >
-                      <X className="mr-1 h-4 w-4" />
-                      Limpiar búsqueda
-                    </Button>
-                  </div>
-                )}
-                {filters.sin_prestamo === 'si' && (
-                  <div className="flex items-end">
-                    <Badge className="bg-amber-500 px-3 py-1.5 text-white">
-                      Sin crédito asignado
-                    </Badge>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleFilterChange('sin_prestamo', '')}
-                      className="ml-2"
-                    >
-                      <X className="mr-1 h-4 w-4" />
-                      Ver todos
-                    </Button>
-                  </div>
-                )}
-                {filters.prestamo_id && (
-                  <div className="flex items-end">
-                    <Badge className="bg-blue-600 px-3 py-1.5 text-white">
-                      Filtro rápido activo: Préstamo #{filters.prestamo_id}
-                    </Badge>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() =>
-                        setFilters(prev => ({
-                          ...prev,
-                          prestamo_id: '',
-                          prestamo_cartera: '',
-                        }))
-                      }
-                      className="ml-2"
-                    >
-                      <X className="mr-1 h-4 w-4" />
-                      Quitar
-                    </Button>
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-          {/* Filtros adicionales (expandibles) */}
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Filter className="h-5 w-5 text-gray-600" />
-                  <CardTitle>Filtros de Búsqueda</CardTitle>
-                  {activeFiltersCount > 0 && (
-                    <Badge variant="secondary" className="ml-2">
-                      {activeFiltersCount}{' '}
-                      {activeFiltersCount === 1
-                        ? 'filtro activo'
-                        : 'filtros activos'}
-                    </Badge>
-                  )}
-                </div>
-                <div className="flex gap-2">
-                  {activeFiltersCount > 0 && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={handleClearFilters}
-                    >
-                      <X className="mr-1 h-4 w-4" />
-                      Limpiar
-                    </Button>
-                  )}
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setShowFilters(!showFilters)}
-                  >
-                    {showFilters ? 'Ocultar' : 'Mostrar'} filtros
-                  </Button>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="pt-6">
-              <div className="space-y-4">
-                {showFilters && (
-                  <div className="grid grid-cols-1 gap-4 border-t pt-4 md:grid-cols-2 lg:grid-cols-5">
-                    <div>
-                      <label className="mb-1 block text-sm font-medium text-gray-700">
-                        Cédula de identidad
-                      </label>
-                      <Input
-                        placeholder="Cédula"
-                        value={filters.cedula}
-                        onChange={e =>
-                          handleFilterChange('cedula', e.target.value)
+        {/* Pestañas: por defecto Resumen por Cliente (detalles por cliente, más reciente a más antiguo) */}
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
+          <TabsList className="mb-4">
+            <TabsTrigger value="todos">Todos los Pagos</TabsTrigger>
+            <TabsTrigger value="resumen">Detalle por Cliente</TabsTrigger>
+            <TabsTrigger value="revision">Revision</TabsTrigger>
+            <TabsTrigger value="revision-global">Revision global</TabsTrigger>
+          </TabsList>
+          {/* Tab: Detalle por Cliente (resumen + ver pagos del cliente, más reciente a más antiguo) */}
+          <TabsContent value="resumen">
+            <PagosListResumen />
+          </TabsContent>
+          <TabsContent value="revision">
+            <Card>
+              <CardHeader>
+                <CardTitle>Revision</CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  Pagos no validados automáticamente. Aquí puede editar, guardar
+                  observaciones del motivo de incumplimiento o eliminar
+                  registros.
+                </p>
+                <p className="text-xs font-medium text-amber-700">
+                  Solo se listan pagos que no cumplen validadores.
+                </p>
+              </CardHeader>
+              <CardContent>
+                <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end">
+                  <div className="flex-1">
+                    <label className="mb-1 block text-sm font-medium text-gray-700">
+                      Filtrar por cédula
+                    </label>
+                    <Input
+                      placeholder="Ej: V12345678"
+                      value={revisionCedulaInput}
+                      onChange={e => setRevisionCedulaInput(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault()
+                          handleBuscarRevisionPorCedula()
                         }
+                      }}
+                      className="max-w-md"
+                    />
+                  </div>
+                  <div className="flex-1">
+                    <label className="mb-1 block text-sm font-medium text-gray-700">
+                      Filtrar por N° documento
+                    </label>
+                    <Input
+                      placeholder="Ej: 00012345"
+                      value={revisionNumeroDocumentoInput}
+                      onChange={e =>
+                        setRevisionNumeroDocumentoInput(e.target.value)
+                      }
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault()
+                          handleBuscarRevisionPorCedula()
+                        }
+                      }}
+                      className="max-w-md"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-700">
+                      Fecha pago
+                    </label>
+                    <Input
+                      type="date"
+                      value={revisionFechaPagoInput}
+                      onChange={e => setRevisionFechaPagoInput(e.target.value)}
+                      className="w-[180px]"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-700">
+                      Tipo
+                    </label>
+                    <Select
+                      value={revisionTipoFiltro || 'all'}
+                      onValueChange={value => {
+                        setRevisionTipoFiltro(
+                          value === 'all'
+                            ? ''
+                            : (value as 'anomalo' | 'irreal' | 'duplicado')
+                        )
+                        setRevisionPage(1)
+                      }}
+                    >
+                      <SelectTrigger className="w-[210px]">
+                        <SelectValue placeholder="Tipo de revision" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todos</SelectItem>
+                        <SelectItem value="anomalo">Anomalos</SelectItem>
+                        <SelectItem value="irreal">Irreales</SelectItem>
+                        <SelectItem value="duplicado">
+                          Duplicados (fecha + numero)
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-700">
+                      Estado
+                    </label>
+                    <Select
+                      value={revisionGlobalEstadoFiltro || 'all'}
+                      onValueChange={value => {
+                        setRevisionGlobalEstadoFiltro(
+                          value === 'all' ? '' : 'PENDIENTE'
+                        )
+                        setRevisionGlobalPage(1)
+                      }}
+                    >
+                      <SelectTrigger className="w-[160px]">
+                        <SelectValue placeholder="Estado" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todos</SelectItem>
+                        <SelectItem value="PENDIENTE">Pendiente</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-700">
+                      Motivo
+                    </label>
+                    <Select
+                      value={revisionMotivoFiltro || 'all'}
+                      onValueChange={value => {
+                        setRevisionMotivoFiltro(
+                          value === 'all'
+                            ? ''
+                            : (value as
+                                | 'sin_credito'
+                                | 'duplicado'
+                                | 'irreal'
+                                | 'con_observacion'
+                                | 'error_validacion')
+                        )
+                        setRevisionPage(1)
+                      }}
+                    >
+                      <SelectTrigger className="w-[220px]">
+                        <SelectValue placeholder="Motivo de anomalía" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todos</SelectItem>
+                        <SelectItem value="sin_credito">Sin crédito</SelectItem>
+                        <SelectItem value="duplicado">
+                          Duplicado fecha + número
+                        </SelectItem>
+                        <SelectItem value="irreal">Irreal</SelectItem>
+                        <SelectItem value="con_observacion">
+                          Con observación
+                        </SelectItem>
+                        <SelectItem value="error_validacion">
+                          Error de validación
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={handleBuscarRevisionPorCedula}
+                    >
+                      Buscar
+                    </Button>
+                    <Button
+                      type="button"
+                      onClick={handleSiguienteAnomalia}
+                      title="Abrir la siguiente fila priorizada para edición"
+                    >
+                      Siguiente anomalía
+                    </Button>
+                    {(revisionCedulaFiltro ||
+                      revisionNumeroDocumentoFiltro ||
+                      revisionFechaPagoFiltro ||
+                      revisionTipoFiltro ||
+                      revisionMotivoFiltro) && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        onClick={handleLimpiarRevisionCedula}
+                      >
+                        <X className="mr-1 h-4 w-4" />
+                        Limpiar
+                      </Button>
+                    )}
+                  </div>
+                  <label className="flex items-center gap-2 text-sm text-gray-700">
+                    <input
+                      type="checkbox"
+                      checked={includeRevisionExportados}
+                      onChange={e => {
+                        setIncludeRevisionExportados(e.target.checked)
+                        setRevisionPage(1)
+                      }}
+                    />
+                    Incluir exportados/archivados
+                  </label>
+                </div>
+                {isLoadingRevision ? (
+                  <div className="py-8 text-center text-sm text-gray-500">
+                    Cargando pendientes de revisión...
+                  </div>
+                ) : isRevisionError ? (
+                  <div className="py-8 text-center text-sm text-red-600">
+                    Error cargando pendientes de revisión
+                  </div>
+                ) : !revisionData?.pagos?.length ? (
+                  <div className="py-8 text-center text-sm text-gray-500">
+                    No hay pagos pendientes de revisión.
+                  </div>
+                ) : (
+                  <>
+                    <div className="mb-3 flex flex-wrap items-center gap-2">
+                      <Input
+                        placeholder="Observación masiva para seleccionados"
+                        value={bulkRevisionObservacion}
+                        onChange={e =>
+                          setBulkRevisionObservacion(e.target.value)
+                        }
+                        className="max-w-sm"
                       />
-                    </div>
-                    <div>
-                      <label className="mb-1 block text-sm font-medium text-gray-700">
-                        Estado
-                      </label>
-                      <Select
-                        value={filters.estado || 'all'}
-                        onValueChange={value =>
-                          handleFilterChange('estado', value)
+                      <Button
+                        variant="outline"
+                        onClick={() => void handleGuardarRevisionMasivo()}
+                        disabled={
+                          selectedRevisionIds.size === 0 || isBulkSavingRevision
                         }
                       >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Estado" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="all">Todos</SelectItem>
-                          <SelectItem value="PAGADO">Pagado</SelectItem>
-                          <SelectItem value="PENDIENTE">Pendiente</SelectItem>
-                          <SelectItem value="ATRASADO">Atrasado</SelectItem>
-                          <SelectItem value="PARCIAL">Parcial</SelectItem>
-                          <SelectItem value="ADELANTADO">Adelantado</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <label className="mb-1 block text-sm font-medium text-gray-700">
-                        Fecha desde
-                      </label>
-                      <div className="relative">
-                        <Calendar className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 transform text-gray-400" />
-                        <Input
-                          type="date"
-                          value={filters.fechaDesde}
-                          onChange={e =>
-                            handleFilterChange('fechaDesde', e.target.value)
-                          }
-                          className="pl-10"
-                        />
-                      </div>
-                    </div>
-                    <div>
-                      <label className="mb-1 block text-sm font-medium text-gray-700">
-                        Fecha hasta
-                      </label>
-                      <div className="relative">
-                        <Calendar className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 transform text-gray-400" />
-                        <Input
-                          type="date"
-                          value={filters.fechaHasta}
-                          onChange={e =>
-                            handleFilterChange('fechaHasta', e.target.value)
-                          }
-                          className="pl-10"
-                        />
-                      </div>
-                    </div>
-                    <div>
-                      <label className="mb-1 block text-sm font-medium text-gray-700">
-                        Analista
-                      </label>
-                      <Input
-                        placeholder="Analista"
-                        value={filters.analista}
-                        onChange={e =>
-                          handleFilterChange('analista', e.target.value)
+                        {isBulkSavingRevision
+                          ? 'Guardando...'
+                          : 'Guardar seleccionados'}
+                      </Button>
+                      <Button
+                        variant="destructive"
+                        onClick={() => void handleEliminarRevisionMasivo()}
+                        disabled={
+                          selectedRevisionIds.size === 0 ||
+                          isBulkDeletingRevision
                         }
-                      />
+                      >
+                        {isBulkDeletingRevision
+                          ? 'Eliminando...'
+                          : 'Eliminar seleccionados'}
+                      </Button>
+                      <span className="text-xs text-gray-600">
+                        Seleccionados: {selectedRevisionIds.size}
+                      </span>
                     </div>
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-          {/* Tabla de Pagos */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Lista de Pagos</CardTitle>
-              {!esRevisarPagos && (
-                <p className="text-sm text-gray-600">
-                  Vista de cartera activa: pagos sin crédito asignado o con
-                  préstamo en estado <strong>Aprobado</strong>. No se listan
-                  pagos de créditos liquidados u otros estados (use
-                  exportación/API con{' '}
-                  <code className="rounded bg-gray-100 px-1 text-xs">
-                    prestamo_cartera=todos
-                  </code>{' '}
-                  si necesita el histórico completo).
-                </p>
-              )}
-            </CardHeader>
-            <CardContent>
-              {isLoading ? (
-                <div className="py-12 text-center">
-                  <div className="mx-auto mb-2 h-8 w-8 animate-spin rounded-full border-b-2 border-blue-600"></div>
-                  <p className="text-gray-500">Cargando pagos...</p>
-                </div>
-              ) : isError ? (
-                <div className="py-12 text-center">
-                  <AlertCircle className="mx-auto mb-4 h-12 w-12 text-red-500" />
-                  <p className="mb-2 font-semibold text-red-600">
-                    Error al cargar los pagos
-                  </p>
-                  <p className="text-sm text-gray-600">
-                    {error instanceof Error
-                      ? error.message
-                      : 'Error desconocido'}
-                  </p>
-                  <Button
-                    className="mt-4"
-                    onClick={() =>
-                      queryClient.refetchQueries({
-                        queryKey: esRevisarPagos
-                          ? ['pagos-con-errores']
-                          : ['pagos'],
-                        exact: false,
-                      })
-                    }
-                  >
-                    Reintentar
-                  </Button>
-                </div>
-              ) : !data?.pagos || data.pagos.length === 0 ? (
-                <div className="py-12 text-center">
-                  <CreditCard className="mx-auto mb-4 h-12 w-12 text-gray-400" />
-                  <p className="mb-2 font-semibold text-gray-600">
-                    No se encontraron pagos
-                  </p>
-                  <p className="text-sm text-gray-500">
-                    {data?.total === 0
-                      ? 'No hay pagos registrados en el sistema.'
-                      : 'No hay pagos que coincidan con los filtros aplicados.'}
-                  </p>
-                  {(filters.cedula ||
-                    filters.estado ||
-                    filters.fechaDesde ||
-                    filters.fechaHasta ||
-                    filters.analista ||
-                    filters.prestamo_id ||
-                    (filters.conciliado && filters.conciliado !== 'si') ||
-                    filters.sin_prestamo === 'si') && (
-                    <Button
-                      className="mt-4"
-                      variant="outline"
-                      onClick={handleClearFilters}
-                    >
-                      Limpiar Filtros
-                    </Button>
-                  )}
-                  {resumenTotalCedula && (
-                    <p className="mt-4 rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-950">
-                      <span className="font-semibold">
-                        Total monto (cédula + filtros):
-                      </span>{' '}
-                      ${resumenTotalCedula.sum.toFixed(2)} -{' '}
-                      {resumenTotalCedula.cantidad} pago(s)
-                    </p>
-                  )}
-                </div>
-              ) : (
-                <>
-                  <div className="overflow-hidden rounded-lg border">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>ID</TableHead>
-                          <TableHead>Cédula</TableHead>
-                          <TableHead>Crédito</TableHead>
-                          <TableHead>Estado</TableHead>
-                          {esRevisarPagos && (
-                            <TableHead>Observaciones</TableHead>
-                          )}
-                          <TableHead>Monto</TableHead>
-                          <TableHead>Fecha Pago</TableHead>
-                          <TableHead>Nº Documento</TableHead>
-                          <TableHead>Conciliado</TableHead>
-                          <TableHead>Recibo cobros</TableHead>
-                          <TableHead className="text-right">Acciones</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {data.pagos.map((pago: Pago) => {
-                          const docKey = claveDocumentoPagoListaNormalizada(
-                            pago.numero_documento,
-                            pago.codigo_documento ?? null
-                          )
-                          const documentoDuplicadoEnVista =
-                            Boolean(docKey) &&
-                            documentosDuplicadosEnPagina.has(docKey)
-                          return (
-                            <TableRow key={pago.id}>
-                              <TableCell>{pago.id}</TableCell>
-                              <TableCell>{pago.cedula_cliente}</TableCell>
-                              <TableCell>
-                                {pago.prestamo_id ? (
-                                  <span className="text-sm font-medium">
-                                    #{pago.prestamo_id}
-                                  </span>
-                                ) : (
-                                  <span className="text-sm text-amber-600">
-                                    Sin asignar
-                                  </span>
-                                )}
-                              </TableCell>
-                              <TableCell>
-                                {getEstadoBadge(pago.estado)}
-                              </TableCell>
-                              {esRevisarPagos && (
-                                <TableCell className="text-xs text-amber-700">
-                                  {(pago as PagoConError).observaciones ?? '-'}
-                                </TableCell>
-                              )}
-                              <TableCell>
-                                $
-                                {typeof pago.monto_pagado === 'number'
-                                  ? pago.monto_pagado.toFixed(2)
-                                  : parseFloat(
-                                      String(pago.monto_pagado || 0)
-                                    ).toFixed(2)}
-                              </TableCell>
-                              <TableCell>
-                                {formatDate(pago.fecha_pago)}
-                              </TableCell>
-                              <TableCell
-                                className={cn(
-                                  documentoDuplicadoEnVista &&
-                                    'bg-orange-100 text-orange-950 dark:bg-orange-950/35 dark:text-orange-100'
-                                )}
-                                title={
-                                  documentoDuplicadoEnVista
-                                    ? 'Advertencia: misma clave comprobante + código aparece más de una vez en esta página.'
-                                    : undefined
+                    <div className="mb-3 flex flex-wrap gap-2 text-xs">
+                      <Badge variant="outline">
+                        Duplicados: {resumenRevision.duplicados}
+                      </Badge>
+                      <Badge variant="outline">
+                        Irreales: {resumenRevision.irreales}
+                      </Badge>
+                      <Badge variant="outline">
+                        Sin crédito: {resumenRevision.sinCredito}
+                      </Badge>
+                      <Badge variant="outline">
+                        Con observación: {resumenRevision.conObservacion}
+                      </Badge>
+                    </div>
+                    <div className="overflow-hidden rounded-lg border">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="w-[44px]">
+                              <input
+                                type="checkbox"
+                                checked={
+                                  revisionRowsFiltradas.length > 0 &&
+                                  revisionRowsFiltradas.every(r =>
+                                    selectedRevisionIds.has(r.pago.id)
+                                  )
+                                }
+                                onChange={toggleRevisionSeleccionTodas}
+                              />
+                            </TableHead>
+                            <TableHead>ID</TableHead>
+                            <TableHead>Cédula</TableHead>
+                            <TableHead>Crédito</TableHead>
+                            <TableHead>Monto</TableHead>
+                            <TableHead>Fecha Pago</TableHead>
+                            <TableHead>Nº Documento</TableHead>
+                            <TableHead>Motivos</TableHead>
+                            <TableHead>Observación</TableHead>
+                            <TableHead className="text-right">
+                              Acciones
+                            </TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {revisionRowsFiltradas.map(
+                            ({ pago, motivos, score }) => (
+                              <TableRow
+                                key={pago.id}
+                                className={
+                                  score >= 2 ? 'bg-amber-50/40' : undefined
                                 }
                               >
-                                {textoDocumentoPagoParaListado(
-                                  pago.numero_documento,
-                                  pago.codigo_documento
-                                )}
-                              </TableCell>
-                              <TableCell>
-                                {pago.verificado_concordancia === 'SI' ||
-                                pago.conciliado ? (
-                                  <Badge className="bg-green-500 text-white">
-                                    SI
-                                  </Badge>
-                                ) : (
-                                  <Badge className="bg-gray-500 text-white">
-                                    NO
-                                  </Badge>
-                                )}
-                              </TableCell>
-                              <TableCell>
-                                {pago.pago_reportado_id != null &&
-                                pago.pago_reportado_id > 0 ? (
-                                  <Link
-                                    to={`/cobros/pagos-reportados/${pago.pago_reportado_id}`}
-                                    className="inline-flex items-center gap-1 text-sm font-medium text-violet-700 hover:text-violet-900"
-                                  >
-                                    Ver recibo
-                                  </Link>
-                                ) : (
-                                  (() => {
-                                    const u =
-                                      (pago.link_comprobante || '').trim() ||
-                                      (pago.documento_ruta || '').trim()
-                                    const requiereSesion =
-                                      u && esUrlComprobanteImagenConAuth(u)
-                                    return u ? (
-                                      <a
-                                        href={requiereSesion ? '#' : u}
-                                        target={
-                                          requiereSesion ? undefined : '_blank'
-                                        }
-                                        rel={
-                                          requiereSesion
-                                            ? undefined
-                                            : 'noopener noreferrer'
-                                        }
-                                        className="inline-flex cursor-pointer items-center gap-1 text-sm font-medium text-violet-700 hover:text-violet-900"
-                                        title={
-                                          requiereSesion
-                                            ? 'Comprobante en el sistema (requiere sesión)'
-                                            : 'Comprobante en Drive u otro enlace externo'
-                                        }
-                                        onClick={
-                                          requiereSesion
-                                            ? e => {
-                                                e.preventDefault()
-                                                void (async () => {
-                                                  try {
-                                                    await openStaffComprobanteForList(
-                                                      u,
-                                                      `Pago #${pago.id}`,
-                                                      pago.id
-                                                    )
-                                                  } catch {
-                                                    toast.error(
-                                                      'No se pudo abrir el comprobante. Compruebe su sesión.'
-                                                    )
-                                                  }
-                                                })()
-                                              }
-                                            : undefined
-                                        }
-                                      >
-                                        <Eye className="h-4 w-4" />
-                                        {requiereSesion
-                                          ? 'Ver comprobante'
-                                          : 'Ver en Drive'}
-                                      </a>
+                                <TableCell>
+                                  <input
+                                    type="checkbox"
+                                    checked={selectedRevisionIds.has(pago.id)}
+                                    onChange={() =>
+                                      toggleRevisionSeleccion(pago.id)
+                                    }
+                                  />
+                                </TableCell>
+                                <TableCell>{pago.id}</TableCell>
+                                <TableCell>{pago.cedula_cliente}</TableCell>
+                                <TableCell>
+                                  {pago.prestamo_id
+                                    ? `#${pago.prestamo_id}`
+                                    : '-'}
+                                </TableCell>
+                                <TableCell>
+                                  ${Number(pago.monto_pagado).toFixed(2)}
+                                </TableCell>
+                                <TableCell>
+                                  {formatDate(pago.fecha_pago)}
+                                </TableCell>
+                                <TableCell>
+                                  {textoDocumentoPagoParaListado(
+                                    pago.numero_documento,
+                                    pago.codigo_documento
+                                  )}
+                                </TableCell>
+                                <TableCell className="max-w-[260px]">
+                                  <div className="flex flex-wrap gap-1">
+                                    {motivos.length === 0 ? (
+                                      <Badge variant="outline">Sin marca</Badge>
                                     ) : (
-                                      <span className="text-sm text-gray-500">
-                                        -
-                                      </span>
-                                    )
-                                  })()
-                                )}
-                              </TableCell>
-                              <TableCell className="text-right">
-                                <Popover
-                                  open={accionesOpenId === pago.id}
-                                  onOpenChange={open =>
-                                    setAccionesOpenId(open ? pago.id : null)
-                                  }
-                                >
-                                  <PopoverTrigger asChild>
+                                      motivos.map(m => (
+                                        <Badge
+                                          key={`${pago.id}-${m}`}
+                                          variant="outline"
+                                        >
+                                          {m}
+                                        </Badge>
+                                      ))
+                                    )}
+                                  </div>
+                                </TableCell>
+                                <TableCell className="min-w-[260px]">
+                                  {editingRevisionId === pago.id ? (
+                                    <Input
+                                      value={revisionObservacionDraft}
+                                      onChange={e =>
+                                        setRevisionObservacionDraft(
+                                          e.target.value
+                                        )
+                                      }
+                                      onKeyDown={e => {
+                                        if (e.key === 'Enter') {
+                                          e.preventDefault()
+                                          void handleGuardarRevision(pago.id)
+                                        }
+                                      }}
+                                      placeholder="Motivo por el que no cumple"
+                                    />
+                                  ) : (
+                                    <span className="text-sm text-amber-700">
+                                      {(pago.observaciones ?? '').trim() ||
+                                        'No cumple validaciones automáticas'}
+                                    </span>
+                                  )}
+                                </TableCell>
+                                <TableCell className="text-right">
+                                  <div className="inline-flex items-center gap-2">
                                     <Button
-                                      size="sm"
+                                      size="icon"
                                       variant="outline"
-                                      title="Acciones"
-                                      className="h-8 w-8 p-0"
+                                      title="Ver recibo"
+                                      onClick={() => {
+                                        if (!pago.documento_ruta) {
+                                          toast.error(
+                                            'Este pago no tiene recibo o comprobante asociado.'
+                                          )
+                                          return
+                                        }
+                                        void openStaffComprobanteForList(
+                                          pago.documento_ruta,
+                                          `Pago #${pago.id}`,
+                                          pago.id
+                                        )
+                                      }}
                                     >
-                                      <MoreHorizontal className="h-4 w-4" />
+                                      <Eye className="h-4 w-4" />
                                     </Button>
-                                  </PopoverTrigger>
-                                  <PopoverContent
-                                    className="w-56 p-2"
-                                    align="end"
-                                  >
-                                    <div className="space-y-0.5">
-                                      <button
-                                        type="button"
-                                        className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition-colors hover:bg-gray-100"
-                                        onClick={() => {
-                                          setPagoEditando(pago)
-                                          setShowRegistrarPago(true)
-                                          setAccionesOpenId(null)
-                                        }}
-                                      >
-                                        <Edit className="h-4 w-4 text-gray-600" />
-                                        Editar
-                                      </button>
-                                      <button
-                                        type="button"
-                                        className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-red-600 transition-colors hover:bg-red-50"
-                                        onClick={async () => {
-                                          setAccionesOpenId(null)
-                                          if (
-                                            window.confirm(
-                                              `¿Estás seguro de eliminar el pago ID ${pago.id}?`
-                                            )
-                                          ) {
-                                            try {
-                                              if (esRevisarPagos) {
-                                                await pagoConErrorService.delete(
-                                                  pago.id
-                                                )
-                                              } else {
-                                                await pagoService.deletePago(
-                                                  pago.id
-                                                )
-                                              }
-                                              toast.success(
-                                                'Pago eliminado exitosamente'
-                                              )
-                                              await invalidatePagosPrestamosRevisionYCuotas(
-                                                queryClient
-                                              )
-                                            } catch (error) {
-                                              toast.error(
-                                                'Error al eliminar el pago'
-                                              )
-                                              if (import.meta.env.DEV)
-                                                console.error(
-                                                  'Error al eliminar el pago',
-                                                  error
-                                                )
-                                            }
-                                          }
-                                        }}
-                                      >
-                                        <Trash2 className="h-4 w-4" />
-                                        Eliminar
-                                      </button>
-                                      {pago.verificado_concordancia === 'SI' ||
-                                      pago.conciliado ? (
-                                        <button
-                                          type="button"
-                                          className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-amber-700 transition-colors hover:bg-amber-50"
-                                          disabled={conciliandoId === pago.id}
-                                          onClick={async () => {
-                                            setAccionesOpenId(null)
-                                            setConciliandoId(pago.id)
-                                            try {
-                                              await pagoService.updateConciliado(
-                                                pago.id,
-                                                false
-                                              )
-                                              toast.success(
-                                                'Pago marcado como NO conciliado'
-                                              )
-                                              await invalidatePagosPrestamosRevisionYCuotas(
-                                                queryClient
-                                              )
-                                            } catch (error) {
-                                              toast.error(
-                                                'Error al actualizar conciliación'
-                                              )
-                                              if (import.meta.env.DEV)
-                                                console.error(
-                                                  'Error al actualizar conciliación',
-                                                  error
-                                                )
-                                            } finally {
-                                              setConciliandoId(null)
-                                            }
-                                          }}
-                                        >
-                                          <XCircle className="h-4 w-4" />
-                                          {conciliandoId === pago.id
-                                            ? 'Actualizando...'
-                                            : 'Conciliar: No'}
-                                        </button>
+                                    <Button
+                                      size="icon"
+                                      variant="outline"
+                                      title="Editar pago"
+                                      onClick={() =>
+                                        handleAbrirEditorPagoRevision(pago)
+                                      }
+                                    >
+                                      <Edit className="h-4 w-4" />
+                                    </Button>
+                                    <Button
+                                      size="icon"
+                                      variant="outline"
+                                      title="Editar observación"
+                                      onClick={() => handleEditarRevision(pago)}
+                                    >
+                                      <FileText className="h-4 w-4" />
+                                    </Button>
+                                    <Button
+                                      size="icon"
+                                      variant="outline"
+                                      title="Guardar observación"
+                                      disabled={
+                                        editingRevisionId !== pago.id ||
+                                        savingRevisionId === pago.id
+                                      }
+                                      onClick={() =>
+                                        void handleGuardarRevision(pago.id)
+                                      }
+                                    >
+                                      {savingRevisionId === pago.id ? (
+                                        <Loader2 className="h-4 w-4 animate-spin" />
                                       ) : (
-                                        <button
-                                          type="button"
-                                          className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-green-700 transition-colors hover:bg-green-50"
-                                          disabled={conciliandoId === pago.id}
-                                          onClick={async () => {
-                                            setAccionesOpenId(null)
-                                            setConciliandoId(pago.id)
-                                            try {
-                                              await pagoService.updateConciliado(
-                                                pago.id,
-                                                true
-                                              )
-                                              if (pago.prestamo_id) {
-                                                try {
-                                                  const res =
-                                                    await pagoService.aplicarPagoACuotas(
-                                                      pago.id
-                                                    )
-                                                  if (res.ya_aplicado) {
-                                                    toast.success(res.message)
-                                                  } else if (
-                                                    res.cuotas_completadas >
-                                                      0 ||
-                                                    res.cuotas_parciales > 0
-                                                  ) {
-                                                    toast.success(
-                                                      `Conciliado. ${res.message}`
-                                                    )
-                                                  } else {
-                                                    toast.success(
-                                                      'Pago marcado como conciliado'
-                                                    )
-                                                  }
-                                                } catch (applyErr) {
-                                                  if (
-                                                    isAxiosError(applyErr) &&
-                                                    applyErr.response
-                                                      ?.status === 409
-                                                  ) {
-                                                    toast.error(
-                                                      getErrorMessage(applyErr)
-                                                    )
-                                                  } else {
-                                                    toast.success(
-                                                      'Pago marcado como conciliado'
-                                                    )
-                                                  }
-                                                }
-                                              } else {
-                                                toast.success(
-                                                  'Pago marcado como conciliado'
-                                                )
-                                              }
-                                              await invalidatePagosPrestamosRevisionYCuotas(
-                                                queryClient,
-                                                { includeDashboardMenu: true }
-                                              )
-                                            } catch (error) {
-                                              toast.error(
-                                                'Error al actualizar conciliación'
-                                              )
-                                              if (import.meta.env.DEV)
-                                                console.error(
-                                                  'Error al actualizar conciliación',
-                                                  error
-                                                )
-                                            } finally {
-                                              setConciliandoId(null)
-                                            }
-                                          }}
-                                        >
-                                          <CheckCircle className="h-4 w-4" />
-                                          {conciliandoId === pago.id
-                                            ? 'Actualizando...'
-                                            : 'Conciliar: Sí'}
-                                        </button>
+                                        <Check className="h-4 w-4" />
                                       )}
-                                    </div>
-                                  </PopoverContent>
-                                </Popover>
-                              </TableCell>
-                            </TableRow>
-                          )
-                        })}
-                      </TableBody>
-                    </Table>
-                  </div>
-                  {resumenTotalCedula && (
-                    <div
-                      className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-950"
-                      role="status"
-                    >
-                      <span>
-                        <span className="font-semibold">
-                          Total para cédula filtrada:
-                        </span>{' '}
-                        {resumenTotalCedula.cedula}
-                      </span>
-                      <span>
-                        <span className="font-semibold">Suma de montos:</span> $
-                        {resumenTotalCedula.sum.toFixed(2)} -{' '}
-                        {resumenTotalCedula.cantidad} pago(s) con los filtros
-                        actuales (incluye todas las páginas)
-                      </span>
+                                    </Button>
+                                    <Button
+                                      size="icon"
+                                      variant="destructive"
+                                      title="Eliminar fila"
+                                      disabled={deletingRevisionId === pago.id}
+                                      onClick={() =>
+                                        void handleEliminarRevision(pago.id)
+                                      }
+                                    >
+                                      {deletingRevisionId === pago.id ? (
+                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                      ) : (
+                                        <Trash2 className="h-4 w-4" />
+                                      )}
+                                    </Button>
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            )
+                          )}
+                        </TableBody>
+                      </Table>
                     </div>
-                  )}
-                  {/* Paginación (formato: ← Anterior · 1…5 · Siguiente → + pie) */}
-                  {data.total > 0 && (
                     <ListPaginationBar
                       className="mt-4"
-                      page={page}
-                      totalPages={Math.max(1, data.total_pages)}
-                      onPageChange={p => setPage(p)}
-                      subtitle={
-                        typeof data.per_page === 'number'
-                          ? `${data.total} registros · ${data.per_page} por página`
-                          : `${data.total} registros`
-                      }
+                      page={revisionData.page}
+                      totalPages={Math.max(1, revisionData.total_pages)}
+                      onPageChange={p => setRevisionPage(p)}
+                      subtitle={`${revisionData.total} registros · ${revisionData.per_page} por página`}
                     />
+                  </>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+          <TabsContent value="revision-global">
+            <Card>
+              <CardHeader>
+                <CardTitle>Revision global de pagos</CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  Misma dinámica de revisión rápida, pero sobre todos los
+                  registros de la tabla pagos.
+                </p>
+              </CardHeader>
+              <CardContent>
+                <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end">
+                  <div className="flex-1">
+                    <label className="mb-1 block text-sm font-medium text-gray-700">
+                      Filtrar por cédula
+                    </label>
+                    <Input
+                      placeholder="Ej: V12345678"
+                      value={revisionGlobalCedulaInput}
+                      onChange={e =>
+                        setRevisionGlobalCedulaInput(e.target.value)
+                      }
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault()
+                          handleBuscarRevisionGlobal()
+                        }
+                      }}
+                      className="max-w-md"
+                    />
+                  </div>
+                  <div className="flex-1">
+                    <label className="mb-1 block text-sm font-medium text-gray-700">
+                      Filtrar por N° documento
+                    </label>
+                    <Input
+                      placeholder="Ej: 00012345"
+                      value={revisionGlobalNumeroDocumentoInput}
+                      onChange={e =>
+                        setRevisionGlobalNumeroDocumentoInput(e.target.value)
+                      }
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault()
+                          handleBuscarRevisionGlobal()
+                        }
+                      }}
+                      className="max-w-md"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-700">
+                      Fecha pago
+                    </label>
+                    <Input
+                      type="date"
+                      value={revisionGlobalFechaPagoInput}
+                      onChange={e =>
+                        setRevisionGlobalFechaPagoInput(e.target.value)
+                      }
+                      className="w-[180px]"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-700">
+                      Motivo
+                    </label>
+                    <Select
+                      value={revisionGlobalMotivoFiltro || 'all'}
+                      onValueChange={value => {
+                        setRevisionGlobalMotivoFiltro(
+                          value === 'all'
+                            ? ''
+                            : (value as
+                                | 'sin_credito'
+                                | 'duplicado'
+                                | 'irreal'
+                                | 'sin_aplicacion'
+                                | 'con_notas'
+                                | 'rebasa_total')
+                        )
+                        setRevisionGlobalPage(1)
+                      }}
+                    >
+                      <SelectTrigger className="w-[220px]">
+                        <SelectValue placeholder="Motivo de anomalía" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todos</SelectItem>
+                        <SelectItem value="sin_credito">Sin crédito</SelectItem>
+                        <SelectItem value="duplicado">
+                          Duplicado fecha + número
+                        </SelectItem>
+                        <SelectItem value="irreal">Irreal</SelectItem>
+                        <SelectItem value="sin_aplicacion">
+                          Sin aplicación a cuotas
+                        </SelectItem>
+                        <SelectItem value="con_notas">Con notas</SelectItem>
+                        <SelectItem value="rebasa_total">
+                          Rebasa total del préstamo
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      onClick={handleBuscarRevisionGlobal}
+                    >
+                      Buscar
+                    </Button>
+                    <Button onClick={handleSiguienteAnomaliaGlobal}>
+                      Siguiente anomalía
+                    </Button>
+                    {(revisionGlobalCedulaFiltro ||
+                      revisionGlobalNumeroDocumentoFiltro ||
+                      revisionGlobalFechaPagoFiltro ||
+                      revisionGlobalEstadoFiltro ||
+                      revisionGlobalMotivoFiltro) && (
+                      <Button
+                        variant="ghost"
+                        onClick={handleLimpiarRevisionGlobal}
+                      >
+                        <X className="mr-1 h-4 w-4" />
+                        Limpiar
+                      </Button>
+                    )}
+                  </div>
+                </div>
+                {isLoadingRevisionGlobal ? (
+                  <div className="py-8 text-center text-sm text-gray-500">
+                    Cargando revisión global...
+                  </div>
+                ) : isRevisionGlobalError ? (
+                  <div className="py-8 text-center text-sm text-red-600">
+                    Error cargando pagos globales
+                  </div>
+                ) : !revisionGlobalRowsFiltradas.length ? (
+                  <div className="py-8 text-center text-sm text-gray-500">
+                    No hay pagos para esta búsqueda.
+                  </div>
+                ) : (
+                  <>
+                    <div className="mb-3 flex flex-wrap items-center gap-2">
+                      <Input
+                        placeholder="Nota masiva para seleccionados"
+                        value={bulkGlobalNota}
+                        onChange={e => setBulkGlobalNota(e.target.value)}
+                        className="max-w-sm"
+                      />
+                      <Button
+                        variant="outline"
+                        onClick={() => void handleGuardarGlobalMasivo()}
+                        disabled={
+                          selectedGlobalIds.size === 0 || isBulkSavingGlobal
+                        }
+                      >
+                        {isBulkSavingGlobal
+                          ? 'Guardando...'
+                          : 'Guardar seleccionados'}
+                      </Button>
+                      <Button
+                        variant="destructive"
+                        onClick={() => void handleEliminarGlobalMasivo()}
+                        disabled={
+                          selectedGlobalIds.size === 0 || isBulkDeletingGlobal
+                        }
+                      >
+                        {isBulkDeletingGlobal
+                          ? 'Eliminando...'
+                          : 'Eliminar seleccionados'}
+                      </Button>
+                      <span className="text-xs text-gray-600">
+                        Seleccionados: {selectedGlobalIds.size}
+                      </span>
+                    </div>
+                    <div className="mb-3 flex flex-wrap gap-2 text-xs">
+                      <Badge variant="outline">
+                        Duplicados: {resumenRevisionGlobal.duplicados}
+                      </Badge>
+                      <Badge variant="outline">
+                        Irreales: {resumenRevisionGlobal.irreales}
+                      </Badge>
+                      <Badge variant="outline">
+                        Sin crédito: {resumenRevisionGlobal.sinCredito}
+                      </Badge>
+                      <Badge variant="outline">
+                        Sin aplicación: {resumenRevisionGlobal.sinAplicacion}
+                      </Badge>
+                      <Badge variant="outline">
+                        Con notas: {resumenRevisionGlobal.conNotas}
+                      </Badge>
+                      <Badge variant="outline">
+                        Rebasa total: {resumenRevisionGlobal.rebasaTotal}
+                      </Badge>
+                    </div>
+                    <div className="overflow-hidden rounded-lg border">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="w-[44px]">
+                              <input
+                                type="checkbox"
+                                checked={
+                                  revisionGlobalRowsFiltradas.length > 0 &&
+                                  revisionGlobalRowsFiltradas.every(r =>
+                                    selectedGlobalIds.has(r.pago.id)
+                                  )
+                                }
+                                onChange={toggleGlobalSeleccionTodas}
+                              />
+                            </TableHead>
+                            <TableHead>ID</TableHead>
+                            <TableHead>Cédula</TableHead>
+                            <TableHead>Crédito</TableHead>
+                            <TableHead>Monto</TableHead>
+                            <TableHead>Fecha Pago</TableHead>
+                            <TableHead>Nº Documento</TableHead>
+                            <TableHead>Exceso USD</TableHead>
+                            <TableHead>Motivos</TableHead>
+                            <TableHead>Notas</TableHead>
+                            <TableHead className="text-right">
+                              Acciones
+                            </TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {revisionGlobalRowsFiltradas.map(
+                            ({ pago, motivos, score }) => (
+                              <TableRow
+                                key={pago.id}
+                                className={
+                                  score >= 2 ? 'bg-amber-50/40' : undefined
+                                }
+                              >
+                                <TableCell>
+                                  <input
+                                    type="checkbox"
+                                    checked={selectedGlobalIds.has(pago.id)}
+                                    onChange={() =>
+                                      toggleGlobalSeleccion(pago.id)
+                                    }
+                                  />
+                                </TableCell>
+                                <TableCell>{pago.id}</TableCell>
+                                <TableCell>{pago.cedula_cliente}</TableCell>
+                                <TableCell>
+                                  {pago.prestamo_id
+                                    ? `#${pago.prestamo_id}`
+                                    : '-'}
+                                </TableCell>
+                                <TableCell>
+                                  ${Number(pago.monto_pagado).toFixed(2)}
+                                </TableCell>
+                                <TableCell>
+                                  {formatDate(pago.fecha_pago)}
+                                </TableCell>
+                                <TableCell>
+                                  {textoDocumentoPagoParaListado(
+                                    pago.numero_documento,
+                                    pago.codigo_documento
+                                  )}
+                                </TableCell>
+                                <TableCell>
+                                  {Number(pago.exceso_sobre_total_usd ?? 0) >
+                                  0 ? (
+                                    <span className="font-semibold text-red-700">
+                                      $
+                                      {Number(
+                                        pago.exceso_sobre_total_usd
+                                      ).toFixed(2)}
+                                    </span>
+                                  ) : (
+                                    <span className="text-gray-500">-</span>
+                                  )}
+                                </TableCell>
+                                <TableCell className="max-w-[260px]">
+                                  <div className="flex flex-wrap gap-1">
+                                    {motivos.length === 0 ? (
+                                      <Badge variant="outline">Sin marca</Badge>
+                                    ) : (
+                                      motivos.map(m => (
+                                        <Badge
+                                          key={`${pago.id}-${m}`}
+                                          variant="outline"
+                                        >
+                                          {m}
+                                        </Badge>
+                                      ))
+                                    )}
+                                  </div>
+                                </TableCell>
+                                <TableCell className="min-w-[260px]">
+                                  {editingGlobalId === pago.id ? (
+                                    <Input
+                                      value={globalNotaDraft}
+                                      onChange={e =>
+                                        setGlobalNotaDraft(e.target.value)
+                                      }
+                                      onKeyDown={e => {
+                                        if (e.key === 'Enter') {
+                                          e.preventDefault()
+                                          void handleGuardarNotaGlobal(pago.id)
+                                        }
+                                      }}
+                                      placeholder="Nota de revisión rápida"
+                                    />
+                                  ) : (
+                                    <span className="text-sm text-amber-700">
+                                      {(pago.notas ?? '').trim() || '-'}
+                                    </span>
+                                  )}
+                                </TableCell>
+                                <TableCell className="text-right">
+                                  <div className="inline-flex items-center gap-2">
+                                    <Button
+                                      size="icon"
+                                      variant="outline"
+                                      title="Editar pago"
+                                      onClick={() => {
+                                        setPagoEditando(pago)
+                                        setShowRegistrarPago(true)
+                                      }}
+                                    >
+                                      <Edit className="h-4 w-4" />
+                                    </Button>
+                                    <Button
+                                      size="icon"
+                                      variant="outline"
+                                      title="Editar nota"
+                                      onClick={() => {
+                                        setEditingGlobalId(pago.id)
+                                        setGlobalNotaDraft(
+                                          (pago.notas ?? '').trim()
+                                        )
+                                      }}
+                                    >
+                                      <FileText className="h-4 w-4" />
+                                    </Button>
+                                    <Button
+                                      size="icon"
+                                      variant="outline"
+                                      title="Guardar nota"
+                                      disabled={
+                                        editingGlobalId !== pago.id ||
+                                        savingGlobalId === pago.id
+                                      }
+                                      onClick={() =>
+                                        void handleGuardarNotaGlobal(pago.id)
+                                      }
+                                    >
+                                      {savingGlobalId === pago.id ? (
+                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                      ) : (
+                                        <Check className="h-4 w-4" />
+                                      )}
+                                    </Button>
+                                    <Button
+                                      size="icon"
+                                      variant="destructive"
+                                      title="Eliminar pago"
+                                      disabled={deletingGlobalId === pago.id}
+                                      onClick={() =>
+                                        void handleEliminarRevisionGlobal(
+                                          pago.id
+                                        )
+                                      }
+                                    >
+                                      {deletingGlobalId === pago.id ? (
+                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                      ) : (
+                                        <Trash2 className="h-4 w-4" />
+                                      )}
+                                    </Button>
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            )
+                          )}
+                        </TableBody>
+                      </Table>
+                    </div>
+                    <ListPaginationBar
+                      className="mt-4"
+                      page={revisionGlobalData?.page ?? 1}
+                      totalPages={Math.max(
+                        1,
+                        revisionGlobalData?.total_pages ?? 1
+                      )}
+                      onPageChange={p => setRevisionGlobalPage(p)}
+                      subtitle={`${revisionGlobalData?.total ?? 0} registros · ${revisionGlobalData?.per_page ?? perPage} por página`}
+                    />
+                  </>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+          {/* Tab: Todos los Pagos */}
+          <TabsContent value="todos">
+            {filters.conciliado === 'si' && (
+              <Card className="mb-4 border-amber-200 bg-amber-50">
+                <CardContent className="py-3 text-sm text-amber-800">
+                  Filtro activo: mostrando solo pagos conciliados. Para
+                  auditoría completa cambie conciliación a{' '}
+                  <strong>Todos</strong> o <strong>No</strong>.
+                </CardContent>
+              </Card>
+            )}
+            {/* Búsqueda y filtro Conciliación siempre visible */}
+            <Card className="mb-4">
+              <CardContent className="pt-6">
+                <div className="flex flex-col flex-wrap gap-4 sm:flex-row">
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-700">
+                      Conciliación
+                    </label>
+                    <Select
+                      value={filters.conciliado || 'si'}
+                      onValueChange={value =>
+                        handleFilterChange('conciliado', value)
+                      }
+                    >
+                      <SelectTrigger className="w-[180px]">
+                        <SelectValue placeholder="Conciliación" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="si">Sí (conciliados)</SelectItem>
+                        <SelectItem value="no">No (pendientes)</SelectItem>
+                        <SelectItem value="all">Todos</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="min-w-[200px] flex-1">
+                    <label className="mb-1 block text-sm font-medium text-gray-700">
+                      Buscar por cédula
+                    </label>
+                    <Input
+                      placeholder="Escriba cédula para filtrar..."
+                      value={filters.cedula}
+                      onChange={e => {
+                        handleFilterChange('cedula', e.target.value)
+                      }}
+                      className="max-w-md"
+                    />
+                  </div>
+                  {filters.cedula && (
+                    <div className="flex items-end">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleFilterChange('cedula', '')}
+                      >
+                        <X className="mr-1 h-4 w-4" />
+                        Limpiar búsqueda
+                      </Button>
+                    </div>
                   )}
-                </>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
-      {/* Registrar/Editar Pago Modal */}
-      {showRegistrarPago && (
-        <RegistrarPagoForm
-          pagoId={pagoEditando?.id}
-          modoGuardarYProcesar={
-            filters.sin_prestamo === 'si' || activeTab === 'revision'
-          }
-          esPagoConError={esRevisarPagos || activeTab === 'revision'}
-          pagoInicial={
-            pagoEditando
-              ? {
-                  cedula_cliente: pagoEditando.cedula_cliente,
-                  prestamo_id: pagoEditando.prestamo_id,
-                  fecha_pago:
-                    typeof pagoEditando.fecha_pago === 'string'
-                      ? pagoEditando.fecha_pago.split('T')[0]
-                      : new Date(pagoEditando.fecha_pago)
-                          .toISOString()
-                          .split('T')[0],
-                  monto_pagado:
-                    pagoEditando.moneda_registro === 'BS' &&
-                    pagoEditando.monto_bs_original != null
-                      ? Number(pagoEditando.monto_bs_original)
-                      : pagoEditando.monto_pagado,
-                  monto_bs_original: pagoEditando.monto_bs_original ?? null,
-                  moneda_registro:
-                    pagoEditando.moneda_registro === 'BS' ? 'BS' : 'USD',
-                  numero_documento: pagoEditando.numero_documento,
-                  codigo_documento: pagoEditando.codigo_documento ?? null,
-                  institucion_bancaria: pagoEditando.institucion_bancaria,
-                  notas: pagoEditando.notas || null,
-                }
-              : undefined
-          }
-          onClose={() => {
-            setShowRegistrarPago(false)
-            setPagoEditando(null)
-          }}
-          onSuccess={async () => {
-            setShowRegistrarPago(false)
-            setPagoEditando(null)
-            try {
+                  {filters.sin_prestamo === 'si' && (
+                    <div className="flex items-end">
+                      <Badge className="bg-amber-500 px-3 py-1.5 text-white">
+                        Sin crédito asignado
+                      </Badge>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleFilterChange('sin_prestamo', '')}
+                        className="ml-2"
+                      >
+                        <X className="mr-1 h-4 w-4" />
+                        Ver todos
+                      </Button>
+                    </div>
+                  )}
+                  {filters.prestamo_id && (
+                    <div className="flex items-end">
+                      <Badge className="bg-blue-600 px-3 py-1.5 text-white">
+                        Filtro rápido activo: Préstamo #{filters.prestamo_id}
+                      </Badge>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() =>
+                          setFilters(prev => ({
+                            ...prev,
+                            prestamo_id: '',
+                            prestamo_cartera: '',
+                          }))
+                        }
+                        className="ml-2"
+                      >
+                        <X className="mr-1 h-4 w-4" />
+                        Quitar
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+            {/* Filtros adicionales (expandibles) */}
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Filter className="h-5 w-5 text-gray-600" />
+                    <CardTitle>Filtros de Búsqueda</CardTitle>
+                    {activeFiltersCount > 0 && (
+                      <Badge variant="secondary" className="ml-2">
+                        {activeFiltersCount}{' '}
+                        {activeFiltersCount === 1
+                          ? 'filtro activo'
+                          : 'filtros activos'}
+                      </Badge>
+                    )}
+                  </div>
+                  <div className="flex gap-2">
+                    {activeFiltersCount > 0 && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={handleClearFilters}
+                      >
+                        <X className="mr-1 h-4 w-4" />
+                        Limpiar
+                      </Button>
+                    )}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowFilters(!showFilters)}
+                    >
+                      {showFilters ? 'Ocultar' : 'Mostrar'} filtros
+                    </Button>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="pt-6">
+                <div className="space-y-4">
+                  {showFilters && (
+                    <div className="grid grid-cols-1 gap-4 border-t pt-4 md:grid-cols-2 lg:grid-cols-5">
+                      <div>
+                        <label className="mb-1 block text-sm font-medium text-gray-700">
+                          Cédula de identidad
+                        </label>
+                        <Input
+                          placeholder="Cédula"
+                          value={filters.cedula}
+                          onChange={e =>
+                            handleFilterChange('cedula', e.target.value)
+                          }
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-sm font-medium text-gray-700">
+                          Estado
+                        </label>
+                        <Select
+                          value={filters.estado || 'all'}
+                          onValueChange={value =>
+                            handleFilterChange('estado', value)
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Estado" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">Todos</SelectItem>
+                            <SelectItem value="PAGADO">Pagado</SelectItem>
+                            <SelectItem value="PENDIENTE">Pendiente</SelectItem>
+                            <SelectItem value="ATRASADO">Atrasado</SelectItem>
+                            <SelectItem value="PARCIAL">Parcial</SelectItem>
+                            <SelectItem value="ADELANTADO">
+                              Adelantado
+                            </SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-sm font-medium text-gray-700">
+                          Fecha desde
+                        </label>
+                        <div className="relative">
+                          <Calendar className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 transform text-gray-400" />
+                          <Input
+                            type="date"
+                            value={filters.fechaDesde}
+                            onChange={e =>
+                              handleFilterChange('fechaDesde', e.target.value)
+                            }
+                            className="pl-10"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-sm font-medium text-gray-700">
+                          Fecha hasta
+                        </label>
+                        <div className="relative">
+                          <Calendar className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 transform text-gray-400" />
+                          <Input
+                            type="date"
+                            value={filters.fechaHasta}
+                            onChange={e =>
+                              handleFilterChange('fechaHasta', e.target.value)
+                            }
+                            className="pl-10"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-sm font-medium text-gray-700">
+                          Analista
+                        </label>
+                        <Input
+                          placeholder="Analista"
+                          value={filters.analista}
+                          onChange={e =>
+                            handleFilterChange('analista', e.target.value)
+                          }
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+            {/* Tabla de Pagos */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Lista de Pagos</CardTitle>
+                {!esRevisarPagos && (
+                  <p className="text-sm text-gray-600">
+                    Vista de cartera activa: pagos sin crédito asignado o con
+                    préstamo en estado <strong>Aprobado</strong>. No se listan
+                    pagos de créditos liquidados u otros estados (use
+                    exportación/API con{' '}
+                    <code className="rounded bg-gray-100 px-1 text-xs">
+                      prestamo_cartera=todos
+                    </code>{' '}
+                    si necesita el histórico completo).
+                  </p>
+                )}
+              </CardHeader>
+              <CardContent>
+                {isLoading ? (
+                  <div className="py-12 text-center">
+                    <div className="mx-auto mb-2 h-8 w-8 animate-spin rounded-full border-b-2 border-blue-600"></div>
+                    <p className="text-gray-500">Cargando pagos...</p>
+                  </div>
+                ) : isError ? (
+                  <div className="py-12 text-center">
+                    <AlertCircle className="mx-auto mb-4 h-12 w-12 text-red-500" />
+                    <p className="mb-2 font-semibold text-red-600">
+                      Error al cargar los pagos
+                    </p>
+                    <p className="text-sm text-gray-600">
+                      {error instanceof Error
+                        ? error.message
+                        : 'Error desconocido'}
+                    </p>
+                    <Button
+                      className="mt-4"
+                      onClick={() =>
+                        queryClient.refetchQueries({
+                          queryKey: esRevisarPagos
+                            ? ['pagos-con-errores']
+                            : ['pagos'],
+                          exact: false,
+                        })
+                      }
+                    >
+                      Reintentar
+                    </Button>
+                  </div>
+                ) : !data?.pagos || data.pagos.length === 0 ? (
+                  <div className="py-12 text-center">
+                    <CreditCard className="mx-auto mb-4 h-12 w-12 text-gray-400" />
+                    <p className="mb-2 font-semibold text-gray-600">
+                      No se encontraron pagos
+                    </p>
+                    <p className="text-sm text-gray-500">
+                      {data?.total === 0
+                        ? 'No hay pagos registrados en el sistema.'
+                        : 'No hay pagos que coincidan con los filtros aplicados.'}
+                    </p>
+                    {(filters.cedula ||
+                      filters.estado ||
+                      filters.fechaDesde ||
+                      filters.fechaHasta ||
+                      filters.analista ||
+                      filters.prestamo_id ||
+                      (filters.conciliado && filters.conciliado !== 'si') ||
+                      filters.sin_prestamo === 'si') && (
+                      <Button
+                        className="mt-4"
+                        variant="outline"
+                        onClick={handleClearFilters}
+                      >
+                        Limpiar Filtros
+                      </Button>
+                    )}
+                    {resumenTotalCedula && (
+                      <p className="mt-4 rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-950">
+                        <span className="font-semibold">
+                          Total monto (cédula + filtros):
+                        </span>{' '}
+                        ${resumenTotalCedula.sum.toFixed(2)} -{' '}
+                        {resumenTotalCedula.cantidad} pago(s)
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <>
+                    <div className="overflow-hidden rounded-lg border">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>ID</TableHead>
+                            <TableHead>Cédula</TableHead>
+                            <TableHead>Crédito</TableHead>
+                            <TableHead>Estado</TableHead>
+                            {esRevisarPagos && (
+                              <TableHead>Observaciones</TableHead>
+                            )}
+                            <TableHead>Monto</TableHead>
+                            <TableHead>Fecha Pago</TableHead>
+                            <TableHead>Nº Documento</TableHead>
+                            <TableHead>Conciliado</TableHead>
+                            <TableHead>Recibo cobros</TableHead>
+                            <TableHead className="text-right">
+                              Acciones
+                            </TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {data.pagos.map((pago: Pago) => {
+                            const docKey = claveDocumentoPagoListaNormalizada(
+                              pago.numero_documento,
+                              pago.codigo_documento ?? null
+                            )
+                            const documentoDuplicadoEnVista =
+                              Boolean(docKey) &&
+                              documentosDuplicadosEnPagina.has(docKey)
+                            return (
+                              <TableRow key={pago.id}>
+                                <TableCell>{pago.id}</TableCell>
+                                <TableCell>{pago.cedula_cliente}</TableCell>
+                                <TableCell>
+                                  {pago.prestamo_id ? (
+                                    <span className="text-sm font-medium">
+                                      #{pago.prestamo_id}
+                                    </span>
+                                  ) : (
+                                    <span className="text-sm text-amber-600">
+                                      Sin asignar
+                                    </span>
+                                  )}
+                                </TableCell>
+                                <TableCell>
+                                  {getEstadoBadge(pago.estado)}
+                                </TableCell>
+                                {esRevisarPagos && (
+                                  <TableCell className="text-xs text-amber-700">
+                                    {(pago as PagoConError).observaciones ??
+                                      '-'}
+                                  </TableCell>
+                                )}
+                                <TableCell>
+                                  $
+                                  {typeof pago.monto_pagado === 'number'
+                                    ? pago.monto_pagado.toFixed(2)
+                                    : parseFloat(
+                                        String(pago.monto_pagado || 0)
+                                      ).toFixed(2)}
+                                </TableCell>
+                                <TableCell>
+                                  {formatDate(pago.fecha_pago)}
+                                </TableCell>
+                                <TableCell
+                                  className={cn(
+                                    documentoDuplicadoEnVista &&
+                                      'bg-orange-100 text-orange-950 dark:bg-orange-950/35 dark:text-orange-100'
+                                  )}
+                                  title={
+                                    documentoDuplicadoEnVista
+                                      ? 'Advertencia: misma clave comprobante + código aparece más de una vez en esta página.'
+                                      : undefined
+                                  }
+                                >
+                                  {textoDocumentoPagoParaListado(
+                                    pago.numero_documento,
+                                    pago.codigo_documento
+                                  )}
+                                </TableCell>
+                                <TableCell>
+                                  {pago.verificado_concordancia === 'SI' ||
+                                  pago.conciliado ? (
+                                    <Badge className="bg-green-500 text-white">
+                                      SI
+                                    </Badge>
+                                  ) : (
+                                    <Badge className="bg-gray-500 text-white">
+                                      NO
+                                    </Badge>
+                                  )}
+                                </TableCell>
+                                <TableCell>
+                                  {pago.pago_reportado_id != null &&
+                                  pago.pago_reportado_id > 0 ? (
+                                    <Link
+                                      to={`/cobros/pagos-reportados/${pago.pago_reportado_id}`}
+                                      className="inline-flex items-center gap-1 text-sm font-medium text-violet-700 hover:text-violet-900"
+                                    >
+                                      Ver recibo
+                                    </Link>
+                                  ) : (
+                                    (() => {
+                                      const u =
+                                        (pago.link_comprobante || '').trim() ||
+                                        (pago.documento_ruta || '').trim()
+                                      const requiereSesion =
+                                        u && esUrlComprobanteImagenConAuth(u)
+                                      return u ? (
+                                        <a
+                                          href={requiereSesion ? '#' : u}
+                                          target={
+                                            requiereSesion
+                                              ? undefined
+                                              : '_blank'
+                                          }
+                                          rel={
+                                            requiereSesion
+                                              ? undefined
+                                              : 'noopener noreferrer'
+                                          }
+                                          className="inline-flex cursor-pointer items-center gap-1 text-sm font-medium text-violet-700 hover:text-violet-900"
+                                          title={
+                                            requiereSesion
+                                              ? 'Comprobante en el sistema (requiere sesión)'
+                                              : 'Comprobante en Drive u otro enlace externo'
+                                          }
+                                          onClick={
+                                            requiereSesion
+                                              ? e => {
+                                                  e.preventDefault()
+                                                  void (async () => {
+                                                    try {
+                                                      await openStaffComprobanteForList(
+                                                        u,
+                                                        `Pago #${pago.id}`,
+                                                        pago.id
+                                                      )
+                                                    } catch {
+                                                      toast.error(
+                                                        'No se pudo abrir el comprobante. Compruebe su sesión.'
+                                                      )
+                                                    }
+                                                  })()
+                                                }
+                                              : undefined
+                                          }
+                                        >
+                                          <Eye className="h-4 w-4" />
+                                          {requiereSesion
+                                            ? 'Ver comprobante'
+                                            : 'Ver en Drive'}
+                                        </a>
+                                      ) : (
+                                        <span className="text-sm text-gray-500">
+                                          -
+                                        </span>
+                                      )
+                                    })()
+                                  )}
+                                </TableCell>
+                                <TableCell className="text-right">
+                                  <Popover
+                                    open={accionesOpenId === pago.id}
+                                    onOpenChange={open =>
+                                      setAccionesOpenId(open ? pago.id : null)
+                                    }
+                                  >
+                                    <PopoverTrigger asChild>
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        title="Acciones"
+                                        className="h-8 w-8 p-0"
+                                      >
+                                        <MoreHorizontal className="h-4 w-4" />
+                                      </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent
+                                      className="w-56 p-2"
+                                      align="end"
+                                    >
+                                      <div className="space-y-0.5">
+                                        <button
+                                          type="button"
+                                          className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition-colors hover:bg-gray-100"
+                                          onClick={() => {
+                                            setPagoEditando(pago)
+                                            setShowRegistrarPago(true)
+                                            setAccionesOpenId(null)
+                                          }}
+                                        >
+                                          <Edit className="h-4 w-4 text-gray-600" />
+                                          Editar
+                                        </button>
+                                        <button
+                                          type="button"
+                                          className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-red-600 transition-colors hover:bg-red-50"
+                                          onClick={async () => {
+                                            setAccionesOpenId(null)
+                                            if (
+                                              window.confirm(
+                                                `¿Estás seguro de eliminar el pago ID ${pago.id}?`
+                                              )
+                                            ) {
+                                              try {
+                                                if (esRevisarPagos) {
+                                                  await pagoConErrorService.delete(
+                                                    pago.id
+                                                  )
+                                                } else {
+                                                  await pagoService.deletePago(
+                                                    pago.id
+                                                  )
+                                                }
+                                                toast.success(
+                                                  'Pago eliminado exitosamente'
+                                                )
+                                                await invalidatePagosPrestamosRevisionYCuotas(
+                                                  queryClient
+                                                )
+                                              } catch (error) {
+                                                toast.error(
+                                                  'Error al eliminar el pago'
+                                                )
+                                                if (import.meta.env.DEV)
+                                                  console.error(
+                                                    'Error al eliminar el pago',
+                                                    error
+                                                  )
+                                              }
+                                            }
+                                          }}
+                                        >
+                                          <Trash2 className="h-4 w-4" />
+                                          Eliminar
+                                        </button>
+                                        {pago.verificado_concordancia ===
+                                          'SI' || pago.conciliado ? (
+                                          <button
+                                            type="button"
+                                            className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-amber-700 transition-colors hover:bg-amber-50"
+                                            disabled={conciliandoId === pago.id}
+                                            onClick={async () => {
+                                              setAccionesOpenId(null)
+                                              setConciliandoId(pago.id)
+                                              try {
+                                                await pagoService.updateConciliado(
+                                                  pago.id,
+                                                  false
+                                                )
+                                                toast.success(
+                                                  'Pago marcado como NO conciliado'
+                                                )
+                                                await invalidatePagosPrestamosRevisionYCuotas(
+                                                  queryClient
+                                                )
+                                              } catch (error) {
+                                                toast.error(
+                                                  'Error al actualizar conciliación'
+                                                )
+                                                if (import.meta.env.DEV)
+                                                  console.error(
+                                                    'Error al actualizar conciliación',
+                                                    error
+                                                  )
+                                              } finally {
+                                                setConciliandoId(null)
+                                              }
+                                            }}
+                                          >
+                                            <XCircle className="h-4 w-4" />
+                                            {conciliandoId === pago.id
+                                              ? 'Actualizando...'
+                                              : 'Conciliar: No'}
+                                          </button>
+                                        ) : (
+                                          <button
+                                            type="button"
+                                            className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-green-700 transition-colors hover:bg-green-50"
+                                            disabled={conciliandoId === pago.id}
+                                            onClick={async () => {
+                                              setAccionesOpenId(null)
+                                              setConciliandoId(pago.id)
+                                              try {
+                                                await pagoService.updateConciliado(
+                                                  pago.id,
+                                                  true
+                                                )
+                                                if (pago.prestamo_id) {
+                                                  try {
+                                                    const res =
+                                                      await pagoService.aplicarPagoACuotas(
+                                                        pago.id
+                                                      )
+                                                    if (res.ya_aplicado) {
+                                                      toast.success(res.message)
+                                                    } else if (
+                                                      res.cuotas_completadas >
+                                                        0 ||
+                                                      res.cuotas_parciales > 0
+                                                    ) {
+                                                      toast.success(
+                                                        `Conciliado. ${res.message}`
+                                                      )
+                                                    } else {
+                                                      toast.success(
+                                                        'Pago marcado como conciliado'
+                                                      )
+                                                    }
+                                                  } catch (applyErr) {
+                                                    if (
+                                                      isAxiosError(applyErr) &&
+                                                      applyErr.response
+                                                        ?.status === 409
+                                                    ) {
+                                                      toast.error(
+                                                        getErrorMessage(
+                                                          applyErr
+                                                        )
+                                                      )
+                                                    } else {
+                                                      toast.success(
+                                                        'Pago marcado como conciliado'
+                                                      )
+                                                    }
+                                                  }
+                                                } else {
+                                                  toast.success(
+                                                    'Pago marcado como conciliado'
+                                                  )
+                                                }
+                                                await invalidatePagosPrestamosRevisionYCuotas(
+                                                  queryClient,
+                                                  { includeDashboardMenu: true }
+                                                )
+                                              } catch (error) {
+                                                toast.error(
+                                                  'Error al actualizar conciliación'
+                                                )
+                                                if (import.meta.env.DEV)
+                                                  console.error(
+                                                    'Error al actualizar conciliación',
+                                                    error
+                                                  )
+                                              } finally {
+                                                setConciliandoId(null)
+                                              }
+                                            }}
+                                          >
+                                            <CheckCircle className="h-4 w-4" />
+                                            {conciliandoId === pago.id
+                                              ? 'Actualizando...'
+                                              : 'Conciliar: Sí'}
+                                          </button>
+                                        )}
+                                      </div>
+                                    </PopoverContent>
+                                  </Popover>
+                                </TableCell>
+                              </TableRow>
+                            )
+                          })}
+                        </TableBody>
+                      </Table>
+                    </div>
+                    {resumenTotalCedula && (
+                      <div
+                        className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-950"
+                        role="status"
+                      >
+                        <span>
+                          <span className="font-semibold">
+                            Total para cédula filtrada:
+                          </span>{' '}
+                          {resumenTotalCedula.cedula}
+                        </span>
+                        <span>
+                          <span className="font-semibold">Suma de montos:</span>{' '}
+                          ${resumenTotalCedula.sum.toFixed(2)} -{' '}
+                          {resumenTotalCedula.cantidad} pago(s) con los filtros
+                          actuales (incluye todas las páginas)
+                        </span>
+                      </div>
+                    )}
+                    {/* Paginación (formato: ← Anterior · 1…5 · Siguiente → + pie) */}
+                    {data.total > 0 && (
+                      <ListPaginationBar
+                        className="mt-4"
+                        page={page}
+                        totalPages={Math.max(1, data.total_pages)}
+                        onPageChange={p => setPage(p)}
+                        subtitle={
+                          typeof data.per_page === 'number'
+                            ? `${data.total} registros · ${data.per_page} por página`
+                            : `${data.total} registros`
+                        }
+                      />
+                    )}
+                  </>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
+        {/* Registrar/Editar Pago Modal */}
+        {showRegistrarPago && (
+          <RegistrarPagoForm
+            pagoId={pagoEditando?.id}
+            modoGuardarYProcesar={
+              filters.sin_prestamo === 'si' || activeTab === 'revision'
+            }
+            esPagoConError={esRevisarPagos || activeTab === 'revision'}
+            pagoInicial={
+              pagoEditando
+                ? {
+                    cedula_cliente: pagoEditando.cedula_cliente,
+                    prestamo_id: pagoEditando.prestamo_id,
+                    fecha_pago:
+                      typeof pagoEditando.fecha_pago === 'string'
+                        ? pagoEditando.fecha_pago.split('T')[0]
+                        : new Date(pagoEditando.fecha_pago)
+                            .toISOString()
+                            .split('T')[0],
+                    monto_pagado:
+                      pagoEditando.moneda_registro === 'BS' &&
+                      pagoEditando.monto_bs_original != null
+                        ? Number(pagoEditando.monto_bs_original)
+                        : pagoEditando.monto_pagado,
+                    monto_bs_original: pagoEditando.monto_bs_original ?? null,
+                    moneda_registro:
+                      pagoEditando.moneda_registro === 'BS' ? 'BS' : 'USD',
+                    numero_documento: pagoEditando.numero_documento,
+                    codigo_documento: pagoEditando.codigo_documento ?? null,
+                    institucion_bancaria: pagoEditando.institucion_bancaria,
+                    notas: pagoEditando.notas || null,
+                  }
+                : undefined
+            }
+            onClose={() => {
+              setShowRegistrarPago(false)
+              setPagoEditando(null)
+            }}
+            onSuccess={async () => {
+              setShowRegistrarPago(false)
+              setPagoEditando(null)
+              try {
+                await invalidatePagosPrestamosRevisionYCuotas(queryClient, {
+                  includeDashboardMenu: true,
+                })
+                await queryClient.refetchQueries({
+                  queryKey: ['cuotas-prestamo'],
+                  exact: false,
+                })
+                await queryClient.refetchQueries({
+                  queryKey: ['pagos-kpis'],
+                  exact: false,
+                })
+                await queryClient.refetchQueries({
+                  queryKey: ['pagos'],
+                  exact: false,
+                })
+                await queryClient.refetchQueries({
+                  queryKey: ['pagos'],
+                  exact: false,
+                  type: 'active',
+                })
+                toast.success(
+                  'Pago registrado exitosamente. El dashboard se ha actualizado.'
+                )
+              } catch (error) {
+                if (import.meta.env.DEV)
+                  console.error('Error actualizando dashboard:', error)
+                toast.error(
+                  'Pago registrado, pero hubo un error al actualizar el dashboard'
+                )
+              }
+            }}
+          />
+        )}
+        {/* Carga masiva de pagos (Excel) desde Agregar pago: Previsualizar y editar */}
+        {showCargaMasivaPagos && (
+          <ExcelUploaderPagosUI
+            onClose={() => setShowCargaMasivaPagos(false)}
+            onSuccess={async () => {
+              setShowCargaMasivaPagos(false)
               await invalidatePagosPrestamosRevisionYCuotas(queryClient, {
                 includeDashboardMenu: true,
               })
               await queryClient.refetchQueries({
-                queryKey: ['cuotas-prestamo'],
+                queryKey: ['pagos'],
                 exact: false,
               })
               await queryClient.refetchQueries({
                 queryKey: ['pagos-kpis'],
                 exact: false,
               })
-              await queryClient.refetchQueries({
-                queryKey: ['pagos'],
-                exact: false,
-              })
-              await queryClient.refetchQueries({
-                queryKey: ['pagos'],
-                exact: false,
-                type: 'active',
-              })
-              toast.success(
-                'Pago registrado exitosamente. El dashboard se ha actualizado.'
-              )
-            } catch (error) {
-              if (import.meta.env.DEV)
-                console.error('Error actualizando dashboard:', error)
-              toast.error(
-                'Pago registrado, pero hubo un error al actualizar el dashboard'
-              )
-            }
-          }}
-        />
-      )}
-      {/* Carga masiva de pagos (Excel) desde Agregar pago: Previsualizar y editar */}
-      {showCargaMasivaPagos && (
-        <ExcelUploaderPagosUI
-          onClose={() => setShowCargaMasivaPagos(false)}
-          onSuccess={async () => {
-            setShowCargaMasivaPagos(false)
-            await invalidatePagosPrestamosRevisionYCuotas(queryClient, {
-              includeDashboardMenu: true,
-            })
-            await queryClient.refetchQueries({
-              queryKey: ['pagos'],
-              exact: false,
-            })
-            await queryClient.refetchQueries({
-              queryKey: ['pagos-kpis'],
-              exact: false,
-            })
-            toast.success('Datos actualizados correctamente')
-          }}
-        />
-      )}
-      <Dialog
-        open={showVaciarTablaGmail}
-        onOpenChange={setShowVaciarTablaGmail}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Vaciar tabla Gmail</DialogTitle>
-          </DialogHeader>
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setShowVaciarTablaGmail(false)}
-              disabled={isVaciarTablaGmail}
-            >
-              Cancelar
-            </Button>
-            <Button
-              type="button"
-              variant="destructive"
-              onClick={handleVaciarTablaGmail}
-              disabled={isVaciarTablaGmail}
-            >
-              {isVaciarTablaGmail ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <Trash2 className="mr-2 h-4 w-4" />
-              )}
-              Vaciar tabla
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+              toast.success('Datos actualizados correctamente')
+            }}
+          />
+        )}
+        <Dialog
+          open={showVaciarTablaGmail}
+          onOpenChange={setShowVaciarTablaGmail}
+        >
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Vaciar tabla Gmail</DialogTitle>
+            </DialogHeader>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setShowVaciarTablaGmail(false)}
+                disabled={isVaciarTablaGmail}
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                onClick={handleVaciarTablaGmail}
+                disabled={isVaciarTablaGmail}
+              >
+                {isVaciarTablaGmail ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Trash2 className="mr-2 h-4 w-4" />
+                )}
+                Vaciar tabla
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   )

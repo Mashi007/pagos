@@ -61,8 +61,10 @@ export function AgregarTasaFechaPagoPanel() {
       return
     }
     const opts: { tasa_bcv?: number; tasa_binance?: number } = {}
-    if (tasaBcvForm.trim() && !isNaN(bcvOpt) && bcvOpt > 0) opts.tasa_bcv = bcvOpt
-    if (tasaBinanceForm.trim() && !isNaN(binOpt) && binOpt > 0) opts.tasa_binance = binOpt
+    if (tasaBcvForm.trim() && !isNaN(bcvOpt) && bcvOpt > 0)
+      opts.tasa_bcv = bcvOpt
+    if (tasaBinanceForm.trim() && !isNaN(binOpt) && binOpt > 0)
+      opts.tasa_binance = binOpt
 
     setIsGuardandoTasa(true)
     try {
@@ -109,8 +111,10 @@ export function AgregarTasaFechaPagoPanel() {
       const bcvOpt = tasaBcvForm.trim() ? parseFloat(tasaBcvForm) : NaN
       const binOpt = tasaBinanceForm.trim() ? parseFloat(tasaBinanceForm) : NaN
       const opts: { tasa_bcv?: number; tasa_binance?: number } = {}
-      if (tasaBcvForm.trim() && !isNaN(bcvOpt) && bcvOpt > 0) opts.tasa_bcv = bcvOpt
-      if (tasaBinanceForm.trim() && !isNaN(binOpt) && binOpt > 0) opts.tasa_binance = binOpt
+      if (tasaBcvForm.trim() && !isNaN(bcvOpt) && bcvOpt > 0)
+        opts.tasa_bcv = bcvOpt
+      if (tasaBinanceForm.trim() && !isNaN(binOpt) && binOpt > 0)
+        opts.tasa_binance = binOpt
       await guardarTasaPorFecha(
         tasaExistenteDialogo.fecha,
         tasaExistenteDialogo.tasaNueva,
@@ -148,9 +152,11 @@ export function AgregarTasaFechaPagoPanel() {
               </h3>
             </div>
             <p className="text-sm text-gray-700">
-              Use la <strong>fecha de pago</strong> del reporte. <strong>Euro</strong> es la tasa por
-              defecto del sistema; opcionalmente cargue <strong>BCV</strong> y <strong>Binance</strong>{' '}
-              para que el cliente elija la fuente al reportar en bolívares.
+              Use la <strong>fecha de pago</strong> del reporte.{' '}
+              <strong>Euro</strong> es la tasa por defecto del sistema;
+              opcionalmente cargue <strong>BCV</strong> y{' '}
+              <strong>Binance</strong> para que el cliente elija la fuente al
+              reportar en bolívares.
             </p>
           </div>
 
@@ -167,7 +173,7 @@ export function AgregarTasaFechaPagoPanel() {
                   Tasa Vigente Hoy
                 </p>
                 <p className="text-base font-semibold text-amber-900">
-                  {(tasaHoyBanner.fecha || '').slice(0, 10)} — Euro: Bs.{' '}
+                  {(tasaHoyBanner.fecha || '').slice(0, 10)} - Euro: Bs.{' '}
                   {new Intl.NumberFormat('es-VE', {
                     minimumFractionDigits: 2,
                     maximumFractionDigits: 2,
@@ -217,7 +223,9 @@ export function AgregarTasaFechaPagoPanel() {
                   className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-gray-900 shadow-sm transition focus:border-amber-400 focus:ring-2 focus:ring-amber-100"
                   placeholder="ej. 3105.75"
                 />
-                <p className="text-xs text-gray-500">Obligatoria; referencia por defecto</p>
+                <p className="text-xs text-gray-500">
+                  Obligatoria; referencia por defecto
+                </p>
               </div>
 
               <div className="flex flex-col gap-2">

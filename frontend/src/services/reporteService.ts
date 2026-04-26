@@ -1376,7 +1376,7 @@ class ReporteService {
   }
 
   /**
-   * Excel Pagos Gmail: tabla `pagos_gmail_abcd_cuotas_traza` (plantilla A–D, Gemini, cuotas).
+   * Excel Pagos Gmail: tabla `pagos_gmail_abcd_cuotas_traza` (plantilla A-D, Gemini, cuotas).
    * @param fechaDesde YYYY-MM-DD inclusive
    * @param fechaHasta YYYY-MM-DD inclusive
    */

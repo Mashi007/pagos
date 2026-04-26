@@ -454,7 +454,9 @@ export function validarFilaPrestamoExcelParaGuardar(row: PrestamoExcelRow): {
     }
   }
 
-  const apB = convertirFechaParaBackendPrestamo(String(row.fecha_aprobacion ?? ''))
+  const apB = convertirFechaParaBackendPrestamo(
+    String(row.fecha_aprobacion ?? '')
+  )
 
   if (!/^\d{4}-\d{2}-\d{2}$/.test(apB)) {
     validation.fecha_aprobacion = {
@@ -475,7 +477,10 @@ export function validarFilaPrestamoExcelParaGuardar(row: PrestamoExcelRow): {
       messages.push(`cuota_periodo: ${validation.cuota_periodo.message}`)
   }
 
-  validation.tasa_interes = validatePrestamoField('tasa_interes', row.tasa_interes)
+  validation.tasa_interes = validatePrestamoField(
+    'tasa_interes',
+    row.tasa_interes
+  )
   if (!validation.tasa_interes.isValid) {
     hasErrors = true
     if (validation.tasa_interes.message)

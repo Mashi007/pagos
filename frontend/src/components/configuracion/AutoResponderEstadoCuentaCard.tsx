@@ -44,9 +44,8 @@ async function copiar(texto: string, etiqueta: string) {
 export function AutoResponderEstadoCuentaCard() {
   const [cargando, setCargando] = useState(true)
 
-  const [data, setData] = useState<AutoresponderEstadoCuentaInstrucciones | null>(
-    null
-  )
+  const [data, setData] =
+    useState<AutoresponderEstadoCuentaInstrucciones | null>(null)
 
   const [refrescandoMonitor, setRefrescandoMonitor] = useState(false)
 
@@ -83,8 +82,7 @@ export function AutoResponderEstadoCuentaCard() {
     setProbandoConexion(true)
 
     try {
-      const r =
-        await whatsappConfigService.probarConexionAutoresponderWebhook()
+      const r = await whatsappConfigService.probarConexionAutoresponderWebhook()
 
       if (r.ok) {
         toast.success(
@@ -137,9 +135,9 @@ export function AutoResponderEstadoCuentaCard() {
         </CardTitle>
 
         <CardDescription>
-          Copie estos valores en la app{' '}
-          <strong>AutoResponder</strong> en «Conectar con tu servidor web». El
-          servidor solo acepta el contrato JSON oficial y responde con{' '}
+          Copie estos valores en la app <strong>AutoResponder</strong> en
+          «Conectar con tu servidor web». El servidor solo acepta el contrato
+          JSON oficial y responde con{' '}
           <code className="rounded bg-muted px-1">replies</code>. Documentación:{' '}
           <a
             href={data.documentacion_url}
@@ -157,7 +155,7 @@ export function AutoResponderEstadoCuentaCard() {
         <p className="text-sm text-muted-foreground">{data.alcance}</p>
 
         {data.monitor && (
-          <div className="rounded-md border bg-muted/20 p-4 space-y-3">
+          <div className="space-y-3 rounded-md border bg-muted/20 p-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <h4 className="text-sm font-semibold">Monitor del webhook</h4>
 
@@ -178,9 +176,7 @@ export function AutoResponderEstadoCuentaCard() {
                 <Button
                   type="button"
                   size="sm"
-                  disabled={
-                    probandoConexion || !data.basic_auth_configurado
-                  }
+                  disabled={probandoConexion || !data.basic_auth_configurado}
                   onClick={handleProbarConexion}
                 >
                   {probandoConexion ? (
@@ -204,21 +200,27 @@ export function AutoResponderEstadoCuentaCard() {
               </div>
 
               <div className="rounded border bg-background p-2">
-                <div className="text-muted-foreground">Código solicitado (OK)</div>
+                <div className="text-muted-foreground">
+                  Código solicitado (OK)
+                </div>
                 <div className="font-mono text-lg font-semibold text-green-700">
                   {data.monitor.solicitudes_codigo_exitosas}
                 </div>
               </div>
 
               <div className="rounded border bg-background p-2">
-                <div className="text-muted-foreground">Pruebas (isTestMessage)</div>
+                <div className="text-muted-foreground">
+                  Pruebas (isTestMessage)
+                </div>
                 <div className="font-mono text-lg font-semibold">
                   {data.monitor.pruebas_recibidas_ok}
                 </div>
               </div>
 
               <div className="rounded border bg-background p-2">
-                <div className="text-muted-foreground">Error resp. solicitar</div>
+                <div className="text-muted-foreground">
+                  Error resp. solicitar
+                </div>
                 <div className="font-mono text-lg font-semibold text-amber-800">
                   {data.monitor.solicitudes_codigo_respuesta_error}
                 </div>
@@ -232,7 +234,9 @@ export function AutoResponderEstadoCuentaCard() {
               </div>
 
               <div className="rounded border bg-background p-2">
-                <div className="text-muted-foreground">JSON inválido / incompleto</div>
+                <div className="text-muted-foreground">
+                  JSON inválido / incompleto
+                </div>
                 <div className="font-mono text-lg font-semibold">
                   {data.monitor.cuerpo_json_invalido +
                     data.monitor.json_incompleto_validacion}
@@ -244,14 +248,14 @@ export function AutoResponderEstadoCuentaCard() {
               <div>
                 <span className="text-muted-foreground">Última petición: </span>
                 <span className="font-mono">
-                  {data.monitor.ultima_peticion_utc || '—'}
+                  {data.monitor.ultima_peticion_utc || '-'}
                 </span>
               </div>
 
               <div>
                 <span className="text-muted-foreground">Último éxito: </span>
                 <span className="font-mono">
-                  {data.monitor.ultimo_exito_utc || '—'}
+                  {data.monitor.ultimo_exito_utc || '-'}
                 </span>
               </div>
             </div>
@@ -263,20 +267,25 @@ export function AutoResponderEstadoCuentaCard() {
 
               {(data.monitor.cedulas_consulta_recientes || []).length === 0 ? (
                 <p className="text-xs text-muted-foreground">
-                  Aún no hay consultas con cédula en este proceso, o no ha refrescado
-                  tras un mensaje real (no cuenta «Probar conexión» con isTestMessage).
+                  Aún no hay consultas con cédula en este proceso, o no ha
+                  refrescado tras un mensaje real (no cuenta «Probar conexión»
+                  con isTestMessage).
                 </p>
               ) : (
                 <ul className="space-y-1 rounded border bg-background p-2 text-xs">
-                  {(data.monitor.cedulas_consulta_recientes || []).map((c, i) => (
-                    <li
-                      key={`${c.recibida_en_utc}-${i}`}
-                      className="flex flex-wrap justify-between gap-2 font-mono"
-                    >
-                      <span>{c.cedula_mostrada}</span>
-                      <span className="text-muted-foreground">{c.recibida_en_utc}</span>
-                    </li>
-                  ))}
+                  {(data.monitor.cedulas_consulta_recientes || []).map(
+                    (c, i) => (
+                      <li
+                        key={`${c.recibida_en_utc}-${i}`}
+                        className="flex flex-wrap justify-between gap-2 font-mono"
+                      >
+                        <span>{c.cedula_mostrada}</span>
+                        <span className="text-muted-foreground">
+                          {c.recibida_en_utc}
+                        </span>
+                      </li>
+                    )
+                  )}
                 </ul>
               )}
             </div>
@@ -293,26 +302,32 @@ export function AutoResponderEstadoCuentaCard() {
         {!data.basic_auth_configurado && (
           <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
             Defina en Render (servicio backend) las variables{' '}
-            <code className="rounded bg-amber-100 px-1">AUTORESPONDER_WEBHOOK_USER</code>{' '}
+            <code className="rounded bg-amber-100 px-1">
+              AUTORESPONDER_WEBHOOK_USER
+            </code>{' '}
             y{' '}
             <code className="rounded bg-amber-100 px-1">
               AUTORESPONDER_WEBHOOK_PASSWORD
             </code>{' '}
-            y reinicie. Sin ambas, el webhook responde 503 y AutoResponder no podrá
-            enviar códigos.
+            y reinicie. Sin ambas, el webhook responde 503 y AutoResponder no
+            podrá enviar códigos.
           </div>
         )}
 
         {data.portal_pdf_url ? (
           <div className="space-y-2">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <Label htmlFor="ar-portal-pdf">Portal PDF (cliente: cédula + código)</Label>
+              <Label htmlFor="ar-portal-pdf">
+                Portal PDF (cliente: cédula + código)
+              </Label>
 
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
-                onClick={() => copiar(data.portal_pdf_url || '', 'URL portal PDF')}
+                onClick={() =>
+                  copiar(data.portal_pdf_url || '', 'URL portal PDF')
+                }
               >
                 <Copy className="mr-1 h-3 w-3" />
                 Copiar
@@ -327,8 +342,9 @@ export function AutoResponderEstadoCuentaCard() {
             />
 
             <p className="text-xs text-muted-foreground">
-              El webhook de AutoResponder no adjunta el PDF en el JSON; el cliente obtiene el
-              archivo en esta página tras el correo con el código.
+              El webhook de AutoResponder no adjunta el PDF en el JSON; el
+              cliente obtiene el archivo en esta página tras el correo con el
+              código.
             </p>
           </div>
         ) : null}
@@ -359,7 +375,7 @@ export function AutoResponderEstadoCuentaCard() {
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <Label>Basic Auth — Usuario</Label>
+              <Label>Basic Auth - Usuario</Label>
 
               <Button
                 type="button"
@@ -378,12 +394,15 @@ export function AutoResponderEstadoCuentaCard() {
             <Input
               readOnly
               className="font-mono text-xs"
-              value={data.basic_auth_usuario || '(defina AUTORESPONDER_WEBHOOK_USER en Render)'}
+              value={
+                data.basic_auth_usuario ||
+                '(defina AUTORESPONDER_WEBHOOK_USER en Render)'
+              }
             />
           </div>
 
           <div className="space-y-2">
-            <Label>Basic Auth — Contraseña</Label>
+            <Label>Basic Auth - Contraseña</Label>
 
             <Input
               readOnly
@@ -404,7 +423,7 @@ export function AutoResponderEstadoCuentaCard() {
             <Label>Headers (opcional; recomendado Content-Type)</Label>
           </div>
 
-          {data.headers_recomendados.map((h) => (
+          {data.headers_recomendados.map(h => (
             <div
               key={h.clave}
               className="flex flex-col gap-2 rounded-md border bg-muted/30 p-3 sm:flex-row sm:items-center"

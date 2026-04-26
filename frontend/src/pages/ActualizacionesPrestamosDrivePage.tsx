@@ -34,7 +34,11 @@ const PAGE_SIZE = 100
 const PAGE_WINDOW = 5
 
 /** Ventana de números de página centrada hacia `current`, acotada a `totalPages`. */
-function numerosPaginaVisibles(current: number, totalPages: number, maxButtons: number): number[] {
+function numerosPaginaVisibles(
+  current: number,
+  totalPages: number,
+  maxButtons: number
+): number[] {
   if (totalPages <= maxButtons) {
     return Array.from({ length: totalPages }, (_, i) => i + 1)
   }
@@ -52,9 +56,12 @@ function numerosPaginaVisibles(current: number, totalPages: number, maxButtons: 
   return Array.from({ length: end - start + 1 }, (_, i) => start + i)
 }
 
-function strPayload(p: PrestamoCandidatoDriveFila['payload'], key: string): string {
+function strPayload(
+  p: PrestamoCandidatoDriveFila['payload'],
+  key: string
+): string {
   const v = p[key]
-  if (v == null) return '—'
+  if (v == null) return '-'
   return String(v)
 }
 
@@ -65,7 +72,9 @@ function escapeCsvCell(s: string): string {
 }
 
 /** Cédula normalizada tipo V o E (regla innegociable: máximo un préstamo en cartera). */
-function cedulaEsTipoVeFromPayload(p: PrestamoCandidatoDriveFila['payload']): boolean {
+function cedulaEsTipoVeFromPayload(
+  p: PrestamoCandidatoDriveFila['payload']
+): boolean {
   if (p.cedula_es_tipo_ve === true) return true
   const u = String(p.cedula_cmp ?? '')
     .trim()
@@ -75,7 +84,9 @@ function cedulaEsTipoVeFromPayload(p: PrestamoCandidatoDriveFila['payload']): bo
 }
 
 /** Cédula tipo J (jurídico): pueden existir 2 o más préstamos; no aplica el tope V/E en columna 2. */
-function cedulaEsTipoJFromPayload(p: PrestamoCandidatoDriveFila['payload']): boolean {
+function cedulaEsTipoJFromPayload(
+  p: PrestamoCandidatoDriveFila['payload']
+): boolean {
   if (p.cedula_es_tipo_j === true) return true
   const u = String(p.cedula_cmp ?? '')
     .trim()
@@ -86,7 +97,9 @@ function cedulaEsTipoJFromPayload(p: PrestamoCandidatoDriveFila['payload']): boo
 /** 1 formato cédula · 2 regla V/E vs tabla préstamos (J exento) · 3 sin duplicado en hoja */
 function validadoresTresFlags(p: PrestamoCandidatoDriveFila['payload']) {
   const formatoOk = (p.validador_formato_cedula_ok ?? p.cedula_valida) === true
-  const hojaOk = (p.validador_sin_duplicado_en_hoja_ok ?? p.duplicada_en_hoja !== true) === true
+  const hojaOk =
+    (p.validador_sin_duplicado_en_hoja_ok ?? p.duplicada_en_hoja !== true) ===
+    true
   const nPrest = Number(p.prestamos_misma_cedula_norm_count ?? 0)
   const esV = p.cedula_es_tipo_v_venezolano === true
   const esVe = cedulaEsTipoVeFromPayload(p)
@@ -116,7 +129,12 @@ function parseFechaFlexible(s: string): Date | null {
     if (day >= 1 && day <= 12 && month >= 1 && month <= 12) return null
     if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
       const d = new Date(year, month - 1, day, 12, 0, 0)
-      if (d.getFullYear() === year && d.getMonth() === month - 1 && d.getDate() === day) return d
+      if (
+        d.getFullYear() === year &&
+        d.getMonth() === month - 1 &&
+        d.getDate() === day
+      )
+        return d
     }
   }
   return null
@@ -140,7 +158,10 @@ function fechaAprobacionDesdeColQ(qVal: string): Date | null {
   }
   const multiSpace = /\s{2,}/
   if (multiSpace.test(raw)) {
-    const parts = raw.split(multiSpace).map(x => x.trim()).filter(Boolean)
+    const parts = raw
+      .split(multiSpace)
+      .map(x => x.trim())
+      .filter(Boolean)
     if (parts.length >= 2) {
       const d2 = parseFechaFlexible(parts[1])
       if (d2) return d2
@@ -164,7 +185,10 @@ function aprobacionQMasDe30Dias(qVal: string): boolean {
 function qTieneFechaAmbigua(qVal: string): boolean {
   const raw = (qVal || '').trim()
   if (!raw) return false
-  const tokens = raw.split(/[|;\n]|\s{2,}/).map(x => x.trim()).filter(Boolean)
+  const tokens = raw
+    .split(/[|;\n]|\s{2,}/)
+    .map(x => x.trim())
+    .filter(Boolean)
   const list = tokens.length > 0 ? tokens : [raw]
   return list.some(t => {
     const m = t.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
@@ -181,7 +205,9 @@ type FilaCandidatoDriveTono = 'red' | 'amber' | 'green' | 'plain'
 type FilaTablaTono = FilaCandidatoDriveTono | 'partial'
 
 /** Fondo de fila: rojo (prioridad), ámbar, verde pantalla, o neutro (solo reglas 1·2·3 + Q en UI). */
-function filaCandidatoDriveTono(p: PrestamoCandidatoDriveFila['payload']): FilaCandidatoDriveTono {
+function filaCandidatoDriveTono(
+  p: PrestamoCandidatoDriveFila['payload']
+): FilaCandidatoDriveTono {
   const { formatoOk, tablaVOk, hojaOk, nPrest, esVe } = validadoresTresFlags(p)
   const dup = p.duplicada_en_hoja === true
   const qRaw = String(p.col_q_fecha ?? '').trim()
@@ -191,7 +217,13 @@ function filaCandidatoDriveTono(p: PrestamoCandidatoDriveFila['payload']): FilaC
   const redFechaAntigua = aprobacionQMasDe30Dias(qRaw)
   const redHuellaNoComparable = p.huella_no_comparable === true
 
-  if (redInvalida || redVeDosOMasCreditos || redFechaAntigua || redHuellaNoComparable) return 'red'
+  if (
+    redInvalida ||
+    redVeDosOMasCreditos ||
+    redFechaAntigua ||
+    redHuellaNoComparable
+  )
+    return 'red'
   if (formatoOk && dup) return 'amber'
   if (formatoOk && tablaVOk && hojaOk) return 'green'
   return 'plain'
@@ -256,7 +288,8 @@ function exportarCsvVistaActual(filas: PrestamoCandidatoDriveFila[]) {
   const lines = [headers.join(',')]
   for (const r of filas) {
     const p = r.payload
-    const { formatoOk, tablaVOk, hojaOk, nPrest, esVe, esJ } = validadoresTresFlags(p)
+    const { formatoOk, tablaVOk, hojaOk, nPrest, esVe, esJ } =
+      validadoresTresFlags(p)
     const ok = p.cedula_valida === true
     const dup = p.duplicada_en_hoja === true
     let estado = 'revisión'
@@ -334,7 +367,11 @@ function AccionesPorFilaCandidatoDrive({
           toast.message(`Edición de fila ${sr} (hoja): próximamente.`)
         }
       >
-        <Edit2 className="h-3.5 w-3.5 text-foreground" strokeWidth={2} aria-hidden />
+        <Edit2
+          className="h-3.5 w-3.5 text-foreground"
+          strokeWidth={2}
+          aria-hidden
+        />
       </Button>
       <Button
         type="button"
@@ -364,7 +401,11 @@ function AccionesPorFilaCandidatoDrive({
           toast.message(`Quitar candidato fila ${sr}: próximamente.`)
         }
       >
-        <Trash2 className="h-3.5 w-3.5 text-red-600" strokeWidth={2} aria-hidden />
+        <Trash2
+          className="h-3.5 w-3.5 text-red-600"
+          strokeWidth={2}
+          aria-hidden
+        />
       </Button>
     </div>
   )
@@ -394,11 +435,16 @@ export default function ActualizacionesPrestamosDrivePage() {
   const [soloHuellaNoComparable, setSoloHuellaNoComparable] = useState(false)
   const [manualUpdating, setManualUpdating] = useState(false)
   const [guardarValidosSaving, setGuardarValidosSaving] = useState(false)
-  const [guardandoFilaSheet, setGuardandoFilaSheet] = useState<number | null>(null)
+  const [guardandoFilaSheet, setGuardandoFilaSheet] = useState<number | null>(
+    null
+  )
   const [page, setPage] = useState(1)
 
   useEffect(() => {
-    const t = window.setTimeout(() => setCedulaDebounced(cedulaInput.trim()), 400)
+    const t = window.setTimeout(
+      () => setCedulaDebounced(cedulaInput.trim()),
+      400
+    )
     return () => window.clearTimeout(t)
   }, [cedulaInput])
 
@@ -443,7 +489,9 @@ export default function ActualizacionesPrestamosDrivePage() {
       } else {
         const motivo = res?.motivo as string | undefined
         if (motivo === 'forzar_con_drive_vacio') {
-          toast.success('Snapshot vaciado (drive sin filas, recálculo forzado).')
+          toast.success(
+            'Snapshot vaciado (drive sin filas, recálculo forzado).'
+          )
         } else {
           toast.success(
             `Snapshot actualizado: ${Number(res.candidatos_insertados ?? 0)} candidato(s).`
@@ -471,9 +519,13 @@ export default function ActualizacionesPrestamosDrivePage() {
       }
       setGuardandoFilaSheet(sheetRowNumber)
       try {
-        const res = await postPrestamosCandidatosDriveGuardarFila(sheetRowNumber)
+        const res =
+          await postPrestamosCandidatosDriveGuardarFila(sheetRowNumber)
         if (!res.ok) {
-          const m = (res.motivos && res.motivos.length > 0 ? res.motivos.join(' · ') : null) || res.mensaje
+          const m =
+            (res.motivos && res.motivos.length > 0
+              ? res.motivos.join(' · ')
+              : null) || res.mensaje
           toast.error(m || 'No se pudo guardar la fila.')
           return
         }
@@ -526,9 +578,11 @@ export default function ActualizacionesPrestamosDrivePage() {
   }, [refetchLista])
 
   const fmtCaracas = useCallback((iso: string | null | undefined) => {
-    if (!iso) return '—'
+    if (!iso) return '-'
     try {
-      return new Date(iso).toLocaleString('es-VE', { timeZone: 'America/Caracas' })
+      return new Date(iso).toLocaleString('es-VE', {
+        timeZone: 'America/Caracas',
+      })
     } catch {
       return iso
     }
@@ -548,14 +602,16 @@ export default function ActualizacionesPrestamosDrivePage() {
     if (qTieneFechaAmbigua(qRaw)) {
       return (
         <span className="text-red-600">
-          (Q) Fecha ambigua en Q (dd/mm). Use YYYY-MM-DD para evitar inversión día/mes.
+          (Q) Fecha ambigua en Q (dd/mm). Use YYYY-MM-DD para evitar inversión
+          día/mes.
         </span>
       )
     }
     if (p.huella_no_comparable === true) {
       return (
         <span className="text-red-600">
-          Huella no comparable: revise y normalice N/R/S/Q (monto, cuotas, modalidad y fecha).
+          Huella no comparable: revise y normalice N/R/S/Q (monto, cuotas,
+          modalidad y fecha).
         </span>
       )
     }
@@ -566,36 +622,50 @@ export default function ActualizacionesPrestamosDrivePage() {
         </span>
       )
     }
-    if (!hojaOk) return <span className="text-amber-700">(3) Repetida en hoja</span>
+    if (!hojaOk)
+      return <span className="text-amber-700">(3) Repetida en hoja</span>
     if (!tablaVOk) {
       return (
         <span className="text-red-600">
-          (2) Cédula V o E: máximo un préstamo en tabla (innegociable). J puede tener varios.
+          (2) Cédula V o E: máximo un préstamo en tabla (innegociable). J puede
+          tener varios.
         </span>
       )
     }
     if (fila.listo_para_guardar === true) {
-      return <span className="text-emerald-700">Listo para guardar (servidor)</span>
+      return (
+        <span className="text-emerald-700">Listo para guardar (servidor)</span>
+      )
     }
     if (fila.listo_para_guardar === false) {
       return (
         <span className="text-sky-900">
-          ✓✓✓ solo en pantalla: revise cliente en BD, montos/fechas (N, R, Q), modalidad (S), analista (J), etc.
+          ✓✓✓ solo en pantalla: revise cliente en BD, montos/fechas (N, R, Q),
+          modalidad (S), analista (J), etc.
         </span>
       )
     }
-    return <span className="text-emerald-700">Listo en pantalla (1·2·3); validación servidor no recibida aún.</span>
+    return (
+      <span className="text-emerald-700">
+        Listo en pantalla (1·2·3); validación servidor no recibida aún.
+      </span>
+    )
   }, [])
 
   const showSkeleton = snapshotQuery.isPending && !snapshotQuery.data
   const isBusy = snapshotQuery.isFetching
   const listRefreshing = isBusy && !manualUpdating
   const accionesGlobalesDeshabilitadas =
-    manualUpdating || guardarValidosSaving || guardandoFilaSheet !== null || isBusy
+    manualUpdating ||
+    guardarValidosSaving ||
+    guardandoFilaSheet !== null ||
+    isBusy
   const guardables =
     typeof data?.kpis_aprueban === 'number' ? data.kpis_aprueban : null
   const huellaNoComparableTotal =
-    typeof data?.kpis_huella_no_comparable === 'number' ? data.kpis_huella_no_comparable : null
+    typeof data?.kpis_huella_no_comparable === 'number'
+      ? data.kpis_huella_no_comparable
+      : null
   const guardarMasivoDeshabilitado =
     accionesGlobalesDeshabilitadas ||
     total === 0 ||
@@ -613,19 +683,25 @@ export default function ActualizacionesPrestamosDrivePage() {
         <CardHeader className="space-y-3">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <CardTitle className="text-lg">Candidatos desde Drive</CardTitle>
-            <div className="flex shrink-0 flex-wrap gap-2 sm:justify-end" aria-label="Resumen validación guardado">
+            <div
+              className="flex shrink-0 flex-wrap gap-2 sm:justify-end"
+              aria-label="Resumen validación guardado"
+            >
               <div
                 className="min-w-[6.25rem] rounded-lg border border-emerald-200/80 bg-emerald-50 px-3 py-2 text-center shadow-sm"
                 title="Filas que pasan la validación completa de servidor para crear préstamo (cédula, cliente en BD, N, R, Q, S, J, V/E en cartera, etc.). No es un porcentaje del total: es un conteo."
               >
                 <p className="text-lg font-semibold tabular-nums text-emerald-900">
-                  {data?.kpis_aprueban ?? '—'}
+                  {data?.kpis_aprueban ?? '-'}
                 </p>
-                <p className="text-[11px] font-medium uppercase tracking-wide text-emerald-800/90">Guardables</p>
+                <p className="text-[11px] font-medium uppercase tracking-wide text-emerald-800/90">
+                  Guardables
+                </p>
               </div>
               <div
                 className={`min-w-[6.25rem] rounded-lg border px-3 py-2 text-center shadow-sm ${
-                  typeof data?.kpis_no_aprueban === 'number' && data.kpis_no_aprueban > 0
+                  typeof data?.kpis_no_aprueban === 'number' &&
+                  data.kpis_no_aprueban > 0
                     ? 'border-rose-200/90 bg-rose-50/80'
                     : 'border-border bg-muted/50'
                 }`}
@@ -633,16 +709,18 @@ export default function ActualizacionesPrestamosDrivePage() {
               >
                 <p
                   className={`text-lg font-semibold tabular-nums ${
-                    typeof data?.kpis_no_aprueban === 'number' && data.kpis_no_aprueban > 0
+                    typeof data?.kpis_no_aprueban === 'number' &&
+                    data.kpis_no_aprueban > 0
                       ? 'text-rose-900'
                       : 'text-foreground'
                   }`}
                 >
-                  {data?.kpis_no_aprueban ?? '—'}
+                  {data?.kpis_no_aprueban ?? '-'}
                 </p>
                 <p
                   className={`text-[11px] font-medium uppercase tracking-wide ${
-                    typeof data?.kpis_no_aprueban === 'number' && data.kpis_no_aprueban > 0
+                    typeof data?.kpis_no_aprueban === 'number' &&
+                    data.kpis_no_aprueban > 0
                       ? 'text-rose-800/95'
                       : 'text-muted-foreground'
                   }`}
@@ -652,7 +730,8 @@ export default function ActualizacionesPrestamosDrivePage() {
               </div>
               <div
                 className={`min-w-[6.25rem] rounded-lg border px-3 py-2 text-center shadow-sm ${
-                  typeof huellaNoComparableTotal === 'number' && huellaNoComparableTotal > 0
+                  typeof huellaNoComparableTotal === 'number' &&
+                  huellaNoComparableTotal > 0
                     ? 'border-orange-200/90 bg-orange-50/80'
                     : 'border-border bg-muted/50'
                 }`}
@@ -660,16 +739,18 @@ export default function ActualizacionesPrestamosDrivePage() {
               >
                 <p
                   className={`text-lg font-semibold tabular-nums ${
-                    typeof huellaNoComparableTotal === 'number' && huellaNoComparableTotal > 0
+                    typeof huellaNoComparableTotal === 'number' &&
+                    huellaNoComparableTotal > 0
                       ? 'text-orange-900'
                       : 'text-foreground'
                   }`}
                 >
-                  {huellaNoComparableTotal ?? '—'}
+                  {huellaNoComparableTotal ?? '-'}
                 </p>
                 <p
                   className={`text-[11px] font-medium uppercase tracking-wide ${
-                    typeof huellaNoComparableTotal === 'number' && huellaNoComparableTotal > 0
+                    typeof huellaNoComparableTotal === 'number' &&
+                    huellaNoComparableTotal > 0
                       ? 'text-orange-800/95'
                       : 'text-muted-foreground'
                   }`}
@@ -680,15 +761,22 @@ export default function ActualizacionesPrestamosDrivePage() {
             </div>
           </div>
           <p className="max-w-3xl text-xs leading-snug text-muted-foreground">
-            <strong className="font-medium text-foreground">Aclaración:</strong> «Guardar válidas» solo persiste las
-            filas «Guardables». Los tres ✓ de la columna Val. son solo reglas en pantalla: si faltan datos para el
-            servidor, la fila puede verse en <strong className="font-medium text-sky-900">azul claro</strong> con ✓✓✓;
-            el <strong className="font-medium text-emerald-900">verde intenso</strong> indica listo para guardar.
+            <strong className="font-medium text-foreground">Aclaración:</strong>{' '}
+            «Guardar válidas» solo persiste las filas «Guardables». Los tres ✓
+            de la columna Val. son solo reglas en pantalla: si faltan datos para
+            el servidor, la fila puede verse en{' '}
+            <strong className="font-medium text-sky-900">azul claro</strong> con
+            ✓✓✓; el{' '}
+            <strong className="font-medium text-emerald-900">
+              verde intenso
+            </strong>{' '}
+            indica listo para guardar.
           </p>
           <p className="text-sm text-muted-foreground">
             {cedulaDebounced && totalSinFiltro != null ? (
               <>
-                Coincidencias: <strong>{total}</strong> de {totalSinFiltro} en snapshot
+                Coincidencias: <strong>{total}</strong> de {totalSinFiltro} en
+                snapshot
               </>
             ) : (
               <>
@@ -696,7 +784,8 @@ export default function ActualizacionesPrestamosDrivePage() {
               </>
             )}
             {' · '}
-            Página <strong>{page}</strong> de {totalPages} · Esta página: <strong>{rows.length}</strong> filas
+            Página <strong>{page}</strong> de {totalPages} · Esta página:{' '}
+            <strong>{rows.length}</strong> filas
             {' · '}
             Último sync hoja: {fmtCaracas(data?.drive_synced_at ?? null)}
             {' · '}
@@ -743,7 +832,10 @@ export default function ActualizacionesPrestamosDrivePage() {
               onClick={() => void onRefrescarLista()}
               disabled={accionesGlobalesDeshabilitadas || listRefreshing}
             >
-              <Loader2 className={`mr-2 h-4 w-4 ${listRefreshing ? 'animate-spin' : ''}`} aria-hidden />
+              <Loader2
+                className={`mr-2 h-4 w-4 ${listRefreshing ? 'animate-spin' : ''}`}
+                aria-hidden
+              />
               Refrescar lista
             </Button>
             <Button
@@ -761,7 +853,10 @@ export default function ActualizacionesPrestamosDrivePage() {
 
           <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
             <div className="min-w-[200px] flex-1 space-y-1">
-              <label htmlFor="filtro-cedula" className="text-sm font-medium text-foreground">
+              <label
+                htmlFor="filtro-cedula"
+                className="text-sm font-medium text-foreground"
+              >
                 Filtrar por cédula
               </label>
               <Input
@@ -816,22 +911,42 @@ export default function ActualizacionesPrestamosDrivePage() {
               </colgroup>
               <thead className="bg-muted/60">
                 <tr>
-                  <th className="px-2 py-2.5 align-middle text-xs font-semibold">Fila</th>
-                  <th className="px-2 py-2.5 align-middle text-xs font-semibold">Cédula (E)</th>
+                  <th className="px-2 py-2.5 align-middle text-xs font-semibold">
+                    Fila
+                  </th>
+                  <th className="px-2 py-2.5 align-middle text-xs font-semibold">
+                    Cédula (E)
+                  </th>
                   <th
-                    className="px-2 py-2.5 align-middle text-xs font-semibold whitespace-nowrap"
+                    className="whitespace-nowrap px-2 py-2.5 align-middle text-xs font-semibold"
                     title="Tres ítems = solo validadores en pantalla (formato, tabla V/E, hoja). Pueden estar ✓✓✓ y la fila seguir en azul claro hasta cumplir la validación completa de servidor (columna Estado)."
                   >
                     Val. 1·2·3
                   </th>
-                  <th className="px-2 py-2.5 align-middle text-xs font-semibold">Total (N)</th>
-                  <th className="px-2 py-2.5 align-middle text-xs font-semibold">Modalidad (S)</th>
-                  <th className="px-2 py-2.5 align-middle text-xs font-semibold">Fecha (Q)</th>
-                  <th className="px-2 py-2.5 align-middle text-xs font-semibold">Cuotas (R)</th>
-                  <th className="px-2 py-2.5 align-middle text-xs font-semibold">Analista (J)</th>
-                  <th className="px-2 py-2.5 align-middle text-xs font-semibold">Conces. (K)</th>
-                  <th className="px-2 py-2.5 align-middle text-xs font-semibold">Modelo (I)</th>
-                  <th className="px-2 py-2.5 align-middle text-xs font-semibold">Estado</th>
+                  <th className="px-2 py-2.5 align-middle text-xs font-semibold">
+                    Total (N)
+                  </th>
+                  <th className="px-2 py-2.5 align-middle text-xs font-semibold">
+                    Modalidad (S)
+                  </th>
+                  <th className="px-2 py-2.5 align-middle text-xs font-semibold">
+                    Fecha (Q)
+                  </th>
+                  <th className="px-2 py-2.5 align-middle text-xs font-semibold">
+                    Cuotas (R)
+                  </th>
+                  <th className="px-2 py-2.5 align-middle text-xs font-semibold">
+                    Analista (J)
+                  </th>
+                  <th className="px-2 py-2.5 align-middle text-xs font-semibold">
+                    Conces. (K)
+                  </th>
+                  <th className="px-2 py-2.5 align-middle text-xs font-semibold">
+                    Modelo (I)
+                  </th>
+                  <th className="px-2 py-2.5 align-middle text-xs font-semibold">
+                    Estado
+                  </th>
                   <th className="sticky right-0 z-20 min-w-[7.5rem] border-l border-border bg-muted px-1 py-2.5 text-center align-middle text-xs font-semibold shadow-[-6px_0_12px_-8px_rgba(0,0,0,0.12)]">
                     Acciones
                   </th>
@@ -841,23 +956,29 @@ export default function ActualizacionesPrestamosDrivePage() {
                 {showSkeleton && <TableSkeletonRows />}
                 {!showSkeleton &&
                   rows.map(r => {
-                    const { formatoOk, tablaVOk, hojaOk } = validadoresTresFlags(r.payload)
+                    const { formatoOk, tablaVOk, hojaOk } =
+                      validadoresTresFlags(r.payload)
                     const tono = filaTonoTabla(r)
                     const trTone = FILA_TONE_TR[tono]
                     const stickyTone = FILA_TONE_STICKY_TD[tono]
                     const mk = (x: boolean) => (
-                      <span className={x ? 'text-emerald-700' : 'text-red-600'}>{x ? '✓' : '✗'}</span>
+                      <span className={x ? 'text-emerald-700' : 'text-red-600'}>
+                        {x ? '✓' : '✗'}
+                      </span>
                     )
                     return (
-                      <tr key={`${r.id}-${r.sheet_row_number}`} className={trTone}>
+                      <tr
+                        key={`${r.id}-${r.sheet_row_number}`}
+                        className={trTone}
+                      >
                         <td className="px-2 py-2 align-middle font-mono text-xs tabular-nums">
                           {r.sheet_row_number}
                         </td>
-                        <td className="px-2 py-2 align-middle font-mono text-xs whitespace-nowrap">
+                        <td className="whitespace-nowrap px-2 py-2 align-middle font-mono text-xs">
                           {strPayload(r.payload, 'col_e_cedula')}
                         </td>
                         <td
-                          className="px-2 py-2 align-middle text-center font-mono text-xs"
+                          className="px-2 py-2 text-center align-middle font-mono text-xs"
                           title="Solo reglas 1·2·3 en pantalla; no implica solo el fondo verde intenso (ver Estado / servidor)."
                         >
                           <span className="inline-flex gap-0.5">
@@ -866,41 +987,43 @@ export default function ActualizacionesPrestamosDrivePage() {
                             {mk(hojaOk)}
                           </span>
                         </td>
-                        <td className="px-2 py-2 align-middle font-mono text-xs whitespace-nowrap tabular-nums">
+                        <td className="whitespace-nowrap px-2 py-2 align-middle font-mono text-xs tabular-nums">
                           {strPayload(r.payload, 'col_n_total_financiamiento')}
                         </td>
                         <td
-                          className="max-w-0 overflow-hidden text-ellipsis px-2 py-2 align-middle whitespace-nowrap"
+                          className="max-w-0 overflow-hidden text-ellipsis whitespace-nowrap px-2 py-2 align-middle"
                           title={strPayload(r.payload, 'col_s_modalidad_pago')}
                         >
                           {strPayload(r.payload, 'col_s_modalidad_pago')}
                         </td>
-                        <td className="px-2 py-2 align-middle whitespace-nowrap">
+                        <td className="whitespace-nowrap px-2 py-2 align-middle">
                           {strPayload(r.payload, 'col_q_fecha')}
                         </td>
-                        <td className="px-2 py-2 align-middle text-center tabular-nums">
+                        <td className="px-2 py-2 text-center align-middle tabular-nums">
                           {strPayload(r.payload, 'col_r_numero_cuotas')}
                         </td>
                         <td
-                          className="max-w-0 overflow-hidden text-ellipsis px-2 py-2 align-middle whitespace-nowrap"
+                          className="max-w-0 overflow-hidden text-ellipsis whitespace-nowrap px-2 py-2 align-middle"
                           title={strPayload(r.payload, 'col_j_analista')}
                         >
                           {strPayload(r.payload, 'col_j_analista')}
                         </td>
                         <td
-                          className="max-w-0 overflow-hidden text-ellipsis px-2 py-2 align-middle whitespace-nowrap"
+                          className="max-w-0 overflow-hidden text-ellipsis whitespace-nowrap px-2 py-2 align-middle"
                           title={strPayload(r.payload, 'col_k_concesionario')}
                         >
                           {strPayload(r.payload, 'col_k_concesionario')}
                         </td>
                         <td
-                          className="max-w-0 overflow-hidden text-ellipsis px-2 py-2 align-middle whitespace-nowrap"
+                          className="max-w-0 overflow-hidden text-ellipsis whitespace-nowrap px-2 py-2 align-middle"
                           title={strPayload(r.payload, 'col_i_modelo_vehiculo')}
                         >
                           {strPayload(r.payload, 'col_i_modelo_vehiculo')}
                         </td>
                         <td className="max-w-0 overflow-hidden px-2 py-2 align-middle text-xs leading-snug">
-                          <div className="line-clamp-2 break-words">{estadoFila(r)}</div>
+                          <div className="line-clamp-2 break-words">
+                            {estadoFila(r)}
+                          </div>
                         </td>
                         <td
                           className={`sticky right-0 z-10 min-w-[7.5rem] border-l border-border px-1 py-1.5 text-center align-middle shadow-[-6px_0_12px_-8px_rgba(0,0,0,0.08)] ${stickyTone}`}
@@ -909,23 +1032,35 @@ export default function ActualizacionesPrestamosDrivePage() {
                             fila={r}
                             disabled={accionesGlobalesDeshabilitadas}
                             puedeGuardarFila={filaCumpleCienParaGuardar(r)}
-                            guardandoEstaFila={guardandoFilaSheet === r.sheet_row_number}
+                            guardandoEstaFila={
+                              guardandoFilaSheet === r.sheet_row_number
+                            }
                             onGuardarFila={sr => void onGuardarUnaFila(sr)}
                           />
                         </td>
                       </tr>
                     )
                   })}
-                {!showSkeleton && !snapshotQuery.isPending && rows.length === 0 && (
-                  <tr>
-                    <td className="px-3 py-6 text-muted-foreground" colSpan={12}>
-                      No hay candidatos: para V/E suele significar que ya tienen préstamo en cartera; el snapshot está
-                      vacío, o no hay filas que cumplan el criterio. Verifique CONCILIACIÓN en Configuración (Google)
-                      y el job automático (dom/mié 04:00 sync + 04:05 snapshot si está activo en servidor).
-                      {cedulaDebounced ? ' Pruebe otro filtro de cédula.' : ''}
-                    </td>
-                  </tr>
-                )}
+                {!showSkeleton &&
+                  !snapshotQuery.isPending &&
+                  rows.length === 0 && (
+                    <tr>
+                      <td
+                        className="px-3 py-6 text-muted-foreground"
+                        colSpan={12}
+                      >
+                        No hay candidatos: para V/E suele significar que ya
+                        tienen préstamo en cartera; el snapshot está vacío, o no
+                        hay filas que cumplan el criterio. Verifique
+                        CONCILIACIÓN en Configuración (Google) y el job
+                        automático (dom/mié 04:00 sync + 04:05 snapshot si está
+                        activo en servidor).
+                        {cedulaDebounced
+                          ? ' Pruebe otro filtro de cédula.'
+                          : ''}
+                      </td>
+                    </tr>
+                  )}
               </tbody>
             </table>
           </div>

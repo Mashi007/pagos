@@ -208,7 +208,7 @@ export interface AuditoriaLiquidadosIntensivaQuery {
 
   codigo_control?: string
 
-  /** Ratio mínimo 0.5–1.0 (backend); defecto 0.7 = 70 % similares. */
+  /** Ratio mínimo 0.5-1.0 (backend); defecto 0.7 = 70 % similares. */
   umbral_similitud_documento?: number
 }
 

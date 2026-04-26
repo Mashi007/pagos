@@ -200,7 +200,7 @@ export async function readExcelToJSON(
         }
 
         // Serial de fecha en Excel vs "número que parece serial" (p. ej. Nº operación 45991):
-        // fuera de columnas A–H no se forzaba `cell.text`; si Excel muestra DD/MM/AAAA, preferir ese texto
+        // fuera de columnas A-H no se forzaba `cell.text`; si Excel muestra DD/MM/AAAA, preferir ese texto
         // para que la carga masiva de préstamos no convierta un ID en 30/11/2025.
         if (typeof val === 'number' && !Number.isNaN(val)) {
           const absv = Math.abs(val)

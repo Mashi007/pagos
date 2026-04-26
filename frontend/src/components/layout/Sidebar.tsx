@@ -97,7 +97,11 @@ function pathnameParaMenu(pathname: string): string {
 }
 
 /** Evita que /escaner coincida con /escaner-lote (startsWith demasiado amplio). */
-function rutaActivaCoincideConHref(pathname: string, childHref: string, exact?: boolean): boolean {
+function rutaActivaCoincideConHref(
+  pathname: string,
+  childHref: string,
+  exact?: boolean
+): boolean {
   const pathOnly = childHref.split('?')[0] || childHref
   if (exact) return pathname === pathOnly
   if (pathname === pathOnly) return true
@@ -524,7 +528,11 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
         }
 
         const pathOnly = child.href.split('?')[0] || child.href
-        return rutaActivaCoincideConHref(pathnameMenu, pathOnly, child.exactHref)
+        return rutaActivaCoincideConHref(
+          pathnameMenu,
+          pathOnly,
+          child.exactHref
+        )
       })
 
       if (hasActiveChild) {

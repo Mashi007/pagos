@@ -272,8 +272,8 @@ export function ExcelUploaderUI(props: ExcelUploaderProps) {
                   </h3>
 
                   <p className="mb-4 text-sm text-gray-600">
-                    Columnas: Cédula | Nombres | Teléfono | Email (columna D). La
-                    cédula y el email se comparan con la tabla{' '}
+                    Columnas: Cédula | Nombres | Teléfono | Email (columna D).
+                    La cédula y el email se comparan con la tabla{' '}
                     <strong>clientes</strong> al cargar. Si hay duplicado en el
                     archivo o ya registrado en BD, la fila no se puede guardar
                     hasta corregir.
@@ -398,15 +398,14 @@ export function ExcelUploaderUI(props: ExcelUploaderProps) {
                       <p className="text-amber-900">
                         No se puede guardar filas con cédula o email repetido en
                         el Excel, ni si ya están en la tabla{' '}
-                        <strong>clientes</strong>. Revise las filas en rojo o use
-                        otro archivo.
+                        <strong>clientes</strong>. Revise las filas en rojo o
+                        use otro archivo.
                       </p>
 
                       {cedulasExistentesEnBD.length > 0 && (
                         <div>
                           <p className="font-medium text-amber-950">
-                            Cédulas que ya están en{' '}
-                            <strong>clientes</strong> (
+                            Cédulas que ya están en <strong>clientes</strong> (
                             {cedulasExistentesEnBD.length})
                           </p>
 
@@ -415,7 +414,7 @@ export function ExcelUploaderUI(props: ExcelUploaderProps) {
                             línea).
                           </p>
 
-                          <div className="mt-1 max-h-40 overflow-y-auto rounded border border-amber-200 bg-white/90 p-2 font-mono text-xs break-all">
+                          <div className="mt-1 max-h-40 overflow-y-auto break-all rounded border border-amber-200 bg-white/90 p-2 font-mono text-xs">
                             {cedulasExistentesEnBD.join(', ')}
                           </div>
                         </div>
@@ -424,12 +423,11 @@ export function ExcelUploaderUI(props: ExcelUploaderProps) {
                       {emailsExistentesEnBD.length > 0 && (
                         <div>
                           <p className="font-medium text-amber-950">
-                            Correos que ya están en{' '}
-                            <strong>clientes</strong> (
+                            Correos que ya están en <strong>clientes</strong> (
                             {emailsExistentesEnBD.length})
                           </p>
 
-                          <div className="mt-1 max-h-32 overflow-y-auto rounded border border-amber-200 bg-white/90 p-2 font-mono text-xs break-all">
+                          <div className="mt-1 max-h-32 overflow-y-auto break-all rounded border border-amber-200 bg-white/90 p-2 font-mono text-xs">
                             {emailsExistentesEnBD.join(', ')}
                           </div>
                         </div>
@@ -442,7 +440,7 @@ export function ExcelUploaderUI(props: ExcelUploaderProps) {
                             {cedulasDuplicadasEnArchivo.size})
                           </p>
 
-                          <div className="mt-1 max-h-32 overflow-y-auto rounded border border-amber-200 bg-white/90 p-2 font-mono text-xs break-all">
+                          <div className="mt-1 max-h-32 overflow-y-auto break-all rounded border border-amber-200 bg-white/90 p-2 font-mono text-xs">
                             {[...cedulasDuplicadasEnArchivo].join(', ')}
                           </div>
                         </div>
@@ -455,7 +453,7 @@ export function ExcelUploaderUI(props: ExcelUploaderProps) {
                             {duplicateEmailKeysEnArchivo.length})
                           </p>
 
-                          <div className="mt-1 max-h-32 overflow-y-auto rounded border border-amber-200 bg-white/90 p-2 font-mono text-xs break-all">
+                          <div className="mt-1 max-h-32 overflow-y-auto break-all rounded border border-amber-200 bg-white/90 p-2 font-mono text-xs">
                             {duplicateEmailKeysEnArchivo.join(', ')}
                           </div>
                         </div>
@@ -672,7 +670,9 @@ export function ExcelUploaderUI(props: ExcelUploaderProps) {
                                   readOnly
                                   title="Valor fijo en carga masiva (no se usa la columna del Excel)"
                                   value={row.fecha_nacimiento}
-                                  placeholder={CARGA_MASIVA_CLIENTES_DEFAULT_FECHA_NACIMIENTO}
+                                  placeholder={
+                                    CARGA_MASIVA_CLIENTES_DEFAULT_FECHA_NACIMIENTO
+                                  }
                                   maxLength={10}
                                   className={`w-full min-w-[80px] cursor-not-allowed rounded border p-2 text-sm ${
                                     row._validation.fecha_nacimiento?.isValid

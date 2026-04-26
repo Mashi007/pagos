@@ -46,9 +46,9 @@ const MEJORES_PRACTICAS_LIQUIDADOS: readonly string[] = [
   'Antes de aceptar un cierre (LIQUIDADO), cuadrar en USD la suma de pagos operativos frente a la suma aplicada en cuota_pagos (tolerancia operativa 0,02 USD), excluyendo anulados, reversados y duplicados declarados.',
   'Mantener fecha_liquidado poblada cuando el estado sea LIQUIDADO: es el ancla contable del cierre en cartera y evita listados ambiguos frente a finiquito.',
   'Respetar la regla de materialización de finiquito_casos (suma exacta de total_pagado en cuotas = total_financiamiento): si no aparece el caso, revisar redondeos por cuota y ejecutar el refresco puntual o el job programado.',
-  'Exigir comprobantes con huella y documento canónico (doc_canon_numero) consistente: duplicados en el mismo préstamo suelen ser doble captura; la sección de similitud (≥70 %) ayuda a detectar variantes tipográficas — no sustituye el control de duplicado exacto por canon.',
+  'Exigir comprobantes con huella y documento canónico (doc_canon_numero) consistente: duplicados en el mismo préstamo suelen ser doble captura; la sección de similitud (≥70 %) ayuda a detectar variantes tipográficas - no sustituye el control de duplicado exacto por canon.',
   'Si existe saldo sin aplicar a cuotas en un préstamo liquidado, tratarlo como incidente prioritario: bloquea la reconciliación del capital y puede generar colisiones de documento con otros préstamos.',
-  'Registrar excepciones en la bitácora de cartera solo cuando el motor marque un falso positivo documentado; en LIQUIDADO los descuadres de totales no son “ruido”, son riesgo de estado financiero incorrecto.',
+  'Registrar excepciones en la bitácora de cartera solo cuando el motor marque un falso positivo documentado; en LIQUIDADO los descuadres de totales no son "ruido", son riesgo de estado financiero incorrecto.',
 ]
 
 function numOr0(v: unknown): number {
@@ -56,7 +56,7 @@ function numOr0(v: unknown): number {
 }
 
 function pctSimilitud(ratio: number): string {
-  if (typeof ratio !== 'number' || !Number.isFinite(ratio)) return '—'
+  if (typeof ratio !== 'number' || !Number.isFinite(ratio)) return '-'
   return `${(ratio * 100).toFixed(1)} %`
 }
 
@@ -72,18 +72,25 @@ function TarjetaDocSimilaresPrestamo({
     <Card className="border-amber-200/80 bg-amber-50/30">
       <CardHeader className="py-3">
         <CardTitle className="text-sm font-medium">
-          <Link className="font-mono text-blue-700 underline" to={`/prestamos?prestamo_id=${item.prestamo_id}`}>
+          <Link
+            className="font-mono text-blue-700 underline"
+            to={`/prestamos?prestamo_id=${item.prestamo_id}`}
+          >
             Préstamo #{item.prestamo_id}
           </Link>
           <span className="ml-2 font-normal text-muted-foreground">
-            — {item.nombres} <span className="text-xs">({item.cedula})</span>
+            - {item.nombres} <span className="text-xs">({item.cedula})</span>
           </span>
         </CardTitle>
         {item.pares_truncados ? (
           <p className="text-xs text-amber-900">
             Comparación pareja limitada a los primeros{' '}
-            <span className="font-mono tabular-nums">{maxPagosPairwise}</span> pagos con documento; este préstamo
-            tiene <span className="font-mono tabular-nums">{item.n_pagos_con_documento ?? '—'}</span> en total.
+            <span className="font-mono tabular-nums">{maxPagosPairwise}</span>{' '}
+            pagos con documento; este préstamo tiene{' '}
+            <span className="font-mono tabular-nums">
+              {item.n_pagos_con_documento ?? '-'}
+            </span>{' '}
+            en total.
           </p>
         ) : null}
       </CardHeader>
@@ -103,16 +110,26 @@ function TarjetaDocSimilaresPrestamo({
           <TableBody>
             {item.pares.map((p, idx) => (
               <TableRow key={`${p.pago_id_a}-${p.pago_id_b}-${idx}`}>
-                <TableCell className="font-mono text-xs tabular-nums">{pctSimilitud(p.similitud)}</TableCell>
-                <TableCell className="font-mono text-xs">#{p.pago_id_a}</TableCell>
-                <TableCell className="max-w-[200px] font-mono text-xs break-all">{p.numero_documento_a}</TableCell>
-                <TableCell className="max-w-[120px] font-mono text-[11px] text-muted-foreground break-all">
-                  {p.doc_canon_numero_a || '—'}
+                <TableCell className="font-mono text-xs tabular-nums">
+                  {pctSimilitud(p.similitud)}
                 </TableCell>
-                <TableCell className="font-mono text-xs">#{p.pago_id_b}</TableCell>
-                <TableCell className="max-w-[200px] font-mono text-xs break-all">{p.numero_documento_b}</TableCell>
-                <TableCell className="max-w-[120px] font-mono text-[11px] text-muted-foreground break-all">
-                  {p.doc_canon_numero_b || '—'}
+                <TableCell className="font-mono text-xs">
+                  #{p.pago_id_a}
+                </TableCell>
+                <TableCell className="max-w-[200px] break-all font-mono text-xs">
+                  {p.numero_documento_a}
+                </TableCell>
+                <TableCell className="max-w-[120px] break-all font-mono text-[11px] text-muted-foreground">
+                  {p.doc_canon_numero_a || '-'}
+                </TableCell>
+                <TableCell className="font-mono text-xs">
+                  #{p.pago_id_b}
+                </TableCell>
+                <TableCell className="max-w-[200px] break-all font-mono text-xs">
+                  {p.numero_documento_b}
+                </TableCell>
+                <TableCell className="max-w-[120px] break-all font-mono text-[11px] text-muted-foreground">
+                  {p.doc_canon_numero_b || '-'}
                 </TableCell>
               </TableRow>
             ))}
@@ -126,8 +143,11 @@ function TarjetaDocSimilaresPrestamo({
 function ControlesCelda({ row }: { row: PrestamoCarteraChequeo }) {
   return (
     <div className="flex flex-col gap-1">
-      {row.controles.map((c) => (
-        <div key={c.codigo} className="rounded-md border border-orange-200 bg-orange-50/60 p-2 text-xs">
+      {row.controles.map(c => (
+        <div
+          key={c.codigo}
+          className="rounded-md border border-orange-200 bg-orange-50/60 p-2 text-xs"
+        >
           <div className="flex flex-wrap items-center gap-2">
             <Badge variant="outline" className="font-mono text-[10px]">
               {c.codigo}
@@ -135,7 +155,9 @@ function ControlesCelda({ row }: { row: PrestamoCarteraChequeo }) {
             <span className="font-medium text-gray-800">{c.titulo}</span>
           </div>
           {c.detalle ? (
-            <p className="mt-1 text-[11px] leading-snug text-gray-600">{c.detalle}</p>
+            <p className="mt-1 text-[11px] leading-snug text-gray-600">
+              {c.detalle}
+            </p>
           ) : null}
         </div>
       ))}
@@ -150,7 +172,9 @@ export function AuditoriaLiquidadosIntensivaTab() {
 
   const [error, setError] = useState<string | null>(null)
 
-  const [data, setData] = useState<AuditoriaLiquidadosIntensivaResponse | null>(null)
+  const [data, setData] = useState<AuditoriaLiquidadosIntensivaResponse | null>(
+    null
+  )
 
   const [cedula, setCedula] = useState('')
 
@@ -200,7 +224,8 @@ export function AuditoriaLiquidadosIntensivaTab() {
       setData(res)
     } catch (e: unknown) {
       const msg =
-        (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||
+        (e as { response?: { data?: { detail?: string } } })?.response?.data
+          ?.detail ||
         (e as Error)?.message ||
         'Error al cargar auditoria intensiva de liquidados'
 
@@ -240,16 +265,18 @@ export function AuditoriaLiquidadosIntensivaTab() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-lg">
             <Shield className="h-5 w-5 text-purple-600" />
-            Auditoria intensiva — prestamos LIQUIDADO
+            Auditoria intensiva - prestamos LIQUIDADO
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-sm text-muted-foreground">
-            Cruza el motor de cartera (solo universo LIQUIDADO) con hallazgos de cierre: fecha de liquidación,
-            fila en finiquito_casos, alineación de snapshot y riesgos de documento duplicado o pendiente de
-            aplicación frente a otro préstamo. Además lista pares de pagos con{' '}
-            <span className="font-medium">numero_documento</span> muy parecido (similitud configurable) dentro del
-            mismo préstamo, como pista de posible doble captura.
+            Cruza el motor de cartera (solo universo LIQUIDADO) con hallazgos de
+            cierre: fecha de liquidación, fila en finiquito_casos, alineación de
+            snapshot y riesgos de documento duplicado o pendiente de aplicación
+            frente a otro préstamo. Además lista pares de pagos con{' '}
+            <span className="font-medium">numero_documento</span> muy parecido
+            (similitud configurable) dentro del mismo préstamo, como pista de
+            posible doble captura.
           </p>
 
           <div className="flex flex-col gap-3 md:flex-row md:items-end">
@@ -259,7 +286,7 @@ export function AuditoriaLiquidadosIntensivaTab() {
                 <Input
                   id="liq-cedula"
                   value={cedula}
-                  onChange={(e) => {
+                  onChange={e => {
                     setCedula(e.target.value)
 
                     setPage(1)
@@ -272,7 +299,7 @@ export function AuditoriaLiquidadosIntensivaTab() {
                 <Input
                   id="liq-pid"
                   value={prestamoIdRaw}
-                  onChange={(e) => {
+                  onChange={e => {
                     setPrestamoIdRaw(e.target.value)
 
                     setPage(1)
@@ -286,7 +313,7 @@ export function AuditoriaLiquidadosIntensivaTab() {
                 <Input
                   id="liq-sim"
                   value={umbralSimDoc}
-                  onChange={(e) => {
+                  onChange={e => {
                     setUmbralSimDoc(e.target.value)
 
                     setPage(1)
@@ -294,15 +321,31 @@ export function AuditoriaLiquidadosIntensivaTab() {
                   placeholder="0.7 = 70%"
                   inputMode="decimal"
                 />
-                <p className="mt-1 text-[11px] text-muted-foreground">Rango en servidor: 0,5 a 1,0 (difflib).</p>
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  Rango en servidor: 0,5 a 1,0 (difflib).
+                </p>
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Button type="button" variant="secondary" onClick={() => void cargar()} disabled={loading}>
-                {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />}
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => void cargar()}
+                disabled={loading}
+              >
+                {loading ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Search className="mr-2 h-4 w-4" />
+                )}
                 Buscar
               </Button>
-              <Button type="button" variant="outline" onClick={() => void cargar()} disabled={loading}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => void cargar()}
+                disabled={loading}
+              >
                 <RefreshCw className="mr-2 h-4 w-4" />
                 Refrescar
               </Button>
@@ -317,7 +360,9 @@ export function AuditoriaLiquidadosIntensivaTab() {
 
           {cov ? (
             <div className="rounded-md border border-slate-200 bg-slate-50/80 p-4 text-sm">
-              <p className="font-semibold text-slate-900">Cobertura de pagos (completitud, mismo filtro)</p>
+              <p className="font-semibold text-slate-900">
+                Cobertura de pagos (completitud, mismo filtro)
+              </p>
               <p className="mt-2 grid gap-1 text-muted-foreground sm:grid-cols-2 lg:grid-cols-3">
                 <span>
                   Préstamos con ≥1 fila de pago:{' '}
@@ -327,7 +372,9 @@ export function AuditoriaLiquidadosIntensivaTab() {
                 </span>
                 <span>
                   Filas de pago (todas):{' '}
-                  <span className="font-mono tabular-nums text-slate-900">{numOr0(cov.n_pagos_total_filas)}</span>
+                  <span className="font-mono tabular-nums text-slate-900">
+                    {numOr0(cov.n_pagos_total_filas)}
+                  </span>
                 </span>
                 <span>
                   Operativos cartera:{' '}
@@ -361,9 +408,14 @@ export function AuditoriaLiquidadosIntensivaTab() {
                 </span>
               </p>
               <p className="mt-3 text-xs leading-relaxed text-slate-600">
-                <span className="font-medium text-slate-800">Regla operativo:</span> {cov.regla_exclusion_operativo_resumen}
+                <span className="font-medium text-slate-800">
+                  Regla operativo:
+                </span>{' '}
+                {cov.regla_exclusion_operativo_resumen}
               </p>
-              <p className="mt-2 text-xs leading-relaxed text-slate-600">{cov.nota_completitud_auditoria}</p>
+              <p className="mt-2 text-xs leading-relaxed text-slate-600">
+                {cov.nota_completitud_auditoria}
+              </p>
             </div>
           ) : null}
 
@@ -372,47 +424,67 @@ export function AuditoriaLiquidadosIntensivaTab() {
               <p className="font-medium text-gray-800">Cartera (LIQUIDADO)</p>
               <p className="mt-1 text-muted-foreground">
                 Evaluados:{' '}
-                <span className="font-mono tabular-nums">{numOr0(rCar.prestamos_evaluados)}</span> — Con
-                alerta motor:{' '}
+                <span className="font-mono tabular-nums">
+                  {numOr0(rCar.prestamos_evaluados)}
+                </span>{' '}
+                - Con alerta motor:{' '}
                 <span className="font-mono tabular-nums text-orange-700">
                   {numOr0(rCar.prestamos_con_alerta)}
                 </span>{' '}
-                — En esta pagina:{' '}
-                <span className="font-mono tabular-nums">{carteraItems.length}</span>
+                - En esta pagina:{' '}
+                <span className="font-mono tabular-nums">
+                  {carteraItems.length}
+                </span>
               </p>
             </div>
             <div className="rounded-md border bg-muted/30 p-3">
-              <p className="font-medium text-gray-800">Cierre / finiquito / documentos</p>
+              <p className="font-medium text-gray-800">
+                Cierre / finiquito / documentos
+              </p>
               <p className="mt-1 text-muted-foreground">
                 Prestamos con hallazgo (filtrado):{' '}
                 <span className="font-mono tabular-nums">
                   {numOr0(rCie.prestamos_con_hallazgo_cierre)}
                 </span>{' '}
-                — Hallazgos totales:{' '}
+                - Hallazgos totales:{' '}
                 <span className="font-mono tabular-nums text-orange-700">
                   {numOr0(rCie.hallazgos_totales)}
                 </span>{' '}
-                — En esta pagina:{' '}
-                <span className="font-mono tabular-nums">{cierreItems.length}</span>
+                - En esta pagina:{' '}
+                <span className="font-mono tabular-nums">
+                  {cierreItems.length}
+                </span>
               </p>
             </div>
             <div className="rounded-md border bg-muted/30 p-3">
-              <p className="font-medium text-gray-800">Documentos similares (mismo préstamo)</p>
+              <p className="font-medium text-gray-800">
+                Documentos similares (mismo préstamo)
+              </p>
               <p className="mt-1 text-muted-foreground">
                 Umbral aplicado:{' '}
-                <span className="font-mono tabular-nums">{pctSimilitud(Number(rSim.umbral_similitud) || umbralSimNum)}</span>{' '}
-                — Préstamos con pares:{' '}
+                <span className="font-mono tabular-nums">
+                  {pctSimilitud(Number(rSim.umbral_similitud) || umbralSimNum)}
+                </span>{' '}
+                - Préstamos con pares:{' '}
                 <span className="font-mono tabular-nums text-amber-800">
                   {numOr0(rSim.prestamos_con_pares_similares)}
                 </span>{' '}
-                — Pares listados:{' '}
-                <span className="font-mono tabular-nums">{numOr0(rSim.total_pares_listados)}</span>
+                - Pares listados:{' '}
+                <span className="font-mono tabular-nums">
+                  {numOr0(rSim.total_pares_listados)}
+                </span>
               </p>
             </div>
           </div>
 
           <div className="flex items-center justify-between gap-2">
-            <Button type="button" variant="outline" size="sm" disabled={loading || page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={loading || page <= 1}
+              onClick={() => setPage(p => Math.max(1, p - 1))}
+            >
               Anterior
             </Button>
             <span className="text-sm text-muted-foreground">Pagina {page}</span>
@@ -420,8 +492,12 @@ export function AuditoriaLiquidadosIntensivaTab() {
               type="button"
               variant="outline"
               size="sm"
-              disabled={loading || (carteraItems.length < PAGE_SIZE && cierreItems.length < PAGE_SIZE)}
-              onClick={() => setPage((p) => p + 1)}
+              disabled={
+                loading ||
+                (carteraItems.length < PAGE_SIZE &&
+                  cierreItems.length < PAGE_SIZE)
+              }
+              onClick={() => setPage(p => p + 1)}
             >
               Siguiente
             </Button>
@@ -431,11 +507,15 @@ export function AuditoriaLiquidadosIntensivaTab() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">1) Motor de cartera (solo LIQUIDADO)</CardTitle>
+          <CardTitle className="text-base">
+            1) Motor de cartera (solo LIQUIDADO)
+          </CardTitle>
         </CardHeader>
         <CardContent className="overflow-x-auto">
           {carteraItems.length === 0 && !loading ? (
-            <p className="text-sm text-muted-foreground">Sin alertas del motor en esta pagina.</p>
+            <p className="text-sm text-muted-foreground">
+              Sin alertas del motor en esta pagina.
+            </p>
           ) : (
             <Table>
               <TableHeader>
@@ -446,13 +526,18 @@ export function AuditoriaLiquidadosIntensivaTab() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {carteraItems.map((row) => (
+                {carteraItems.map(row => (
                   <TableRow key={row.prestamo_id}>
                     <TableCell className="align-top">
-                      <Link className="font-mono text-blue-700 underline" to={`/prestamos?prestamo_id=${row.prestamo_id}`}>
+                      <Link
+                        className="font-mono text-blue-700 underline"
+                        to={`/prestamos?prestamo_id=${row.prestamo_id}`}
+                      >
                         #{row.prestamo_id}
                       </Link>
-                      <div className="text-xs text-muted-foreground">{row.estado_prestamo}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {row.estado_prestamo}
+                      </div>
                       <div className="mt-2">
                         <div className="flex flex-wrap gap-2">
                           <Button
@@ -469,7 +554,13 @@ export function AuditoriaLiquidadosIntensivaTab() {
                             <Wrench className="h-3.5 w-3.5" />
                             Resolver rapido
                           </Button>
-                          <Button asChild type="button" variant="secondary" size="sm" className="h-8 gap-1">
+                          <Button
+                            asChild
+                            type="button"
+                            variant="secondary"
+                            size="sm"
+                            className="h-8 gap-1"
+                          >
                             <Link
                               to={`/revision-manual/editar/${row.prestamo_id}`}
                               target="_blank"
@@ -480,7 +571,13 @@ export function AuditoriaLiquidadosIntensivaTab() {
                               Ir a Pagos
                             </Link>
                           </Button>
-                          <Button asChild type="button" variant="ghost" size="sm" className="h-8 gap-1">
+                          <Button
+                            asChild
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 gap-1"
+                          >
                             <Link
                               to={`/pagos?prestamo_id=${row.prestamo_id}`}
                               target="_blank"
@@ -510,11 +607,15 @@ export function AuditoriaLiquidadosIntensivaTab() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">2) Hallazgos de cierre (contable / finiquito / documentos)</CardTitle>
+          <CardTitle className="text-base">
+            2) Hallazgos de cierre (contable / finiquito / documentos)
+          </CardTitle>
         </CardHeader>
         <CardContent className="overflow-x-auto">
           {cierreItems.length === 0 && !loading ? (
-            <p className="text-sm text-muted-foreground">Sin hallazgos de cierre en esta pagina.</p>
+            <p className="text-sm text-muted-foreground">
+              Sin hallazgos de cierre en esta pagina.
+            </p>
           ) : (
             <Table>
               <TableHeader>
@@ -525,10 +626,13 @@ export function AuditoriaLiquidadosIntensivaTab() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {cierreItems.map((row) => (
+                {cierreItems.map(row => (
                   <TableRow key={`c-${row.prestamo_id}`}>
                     <TableCell className="align-top">
-                      <Link className="font-mono text-blue-700 underline" to={`/prestamos?prestamo_id=${row.prestamo_id}`}>
+                      <Link
+                        className="font-mono text-blue-700 underline"
+                        to={`/prestamos?prestamo_id=${row.prestamo_id}`}
+                      >
                         #{row.prestamo_id}
                       </Link>
                       <div className="mt-2">
@@ -547,7 +651,13 @@ export function AuditoriaLiquidadosIntensivaTab() {
                             <Wrench className="h-3.5 w-3.5" />
                             Resolver rapido
                           </Button>
-                          <Button asChild type="button" variant="secondary" size="sm" className="h-8 gap-1">
+                          <Button
+                            asChild
+                            type="button"
+                            variant="secondary"
+                            size="sm"
+                            className="h-8 gap-1"
+                          >
                             <Link
                               to={`/revision-manual/editar/${row.prestamo_id}`}
                               target="_blank"
@@ -558,7 +668,13 @@ export function AuditoriaLiquidadosIntensivaTab() {
                               Ir a Pagos
                             </Link>
                           </Button>
-                          <Button asChild type="button" variant="ghost" size="sm" className="h-8 gap-1">
+                          <Button
+                            asChild
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 gap-1"
+                          >
                             <Link
                               to={`/pagos?prestamo_id=${row.prestamo_id}`}
                               target="_blank"
@@ -595,9 +711,11 @@ export function AuditoriaLiquidadosIntensivaTab() {
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-sm text-muted-foreground">
-            Pagos operativos del mismo préstamo LIQUIDADO cuyo <span className="font-medium">numero_documento</span>{' '}
-            alcanza al menos el umbral de similitud (secuencia normalizada). Revise montos, fechas y canon antes de
-            concluir: alta similitud sugiere la misma operación capturada dos veces, pero no lo prueba.
+            Pagos operativos del mismo préstamo LIQUIDADO cuyo{' '}
+            <span className="font-medium">numero_documento</span> alcanza al
+            menos el umbral de similitud (secuencia normalizada). Revise montos,
+            fechas y canon antes de concluir: alta similitud sugiere la misma
+            operación capturada dos veces, pero no lo prueba.
           </p>
           {typeof rSim.metodo === 'string' ? (
             <p className="text-xs text-muted-foreground">
@@ -606,12 +724,17 @@ export function AuditoriaLiquidadosIntensivaTab() {
           ) : null}
           {!loading && docSimItems.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              Sin pares por encima del umbral en el filtro actual (cédula / préstamo / universo consultado).
+              Sin pares por encima del umbral en el filtro actual (cédula /
+              préstamo / universo consultado).
             </p>
           ) : (
             <div className="space-y-3">
-              {docSimItems.map((it) => (
-                <TarjetaDocSimilaresPrestamo key={it.prestamo_id} item={it} maxPagosPairwise={maxPagosPairwise} />
+              {docSimItems.map(it => (
+                <TarjetaDocSimilaresPrestamo
+                  key={it.prestamo_id}
+                  item={it}
+                  maxPagosPairwise={maxPagosPairwise}
+                />
               ))}
             </div>
           )}
@@ -620,7 +743,9 @@ export function AuditoriaLiquidadosIntensivaTab() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Buenas practicas para el modulo (prestamos, pagos, cuotas)</CardTitle>
+          <CardTitle className="text-base">
+            Buenas practicas para el modulo (prestamos, pagos, cuotas)
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <ul className="list-disc space-y-2 pl-5 text-sm text-gray-700">
@@ -633,7 +758,7 @@ export function AuditoriaLiquidadosIntensivaTab() {
 
       <AuditoriaDescuadreRevisionDialog
         open={descRevisionOpen}
-        onOpenChange={(open) => {
+        onOpenChange={open => {
           setDescRevisionOpen(open)
           if (!open) setDescRevisionPid(null)
         }}

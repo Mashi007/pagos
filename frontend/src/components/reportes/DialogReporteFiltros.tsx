@@ -239,13 +239,16 @@ export function DialogReporteFiltros({
           <DialogHeader>
             <DialogTitle>{tituloReporte}</DialogTitle>
             <DialogDescription>
-              Filtra por día de registro en auditoría (fecha/hora guardada en el servidor).
-              Rango máximo 366 días.
+              Filtra por día de registro en auditoría (fecha/hora guardada en el
+              servidor). Rango máximo 366 días.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-800" htmlFor="fecha-desde-reporte">
+              <label
+                className="text-sm font-medium text-gray-800"
+                htmlFor="fecha-desde-reporte"
+              >
                 Fecha desde
               </label>
               <Input
@@ -256,7 +259,10 @@ export function DialogReporteFiltros({
               />
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-800" htmlFor="fecha-hasta-reporte">
+              <label
+                className="text-sm font-medium text-gray-800"
+                htmlFor="fecha-hasta-reporte"
+              >
                 Fecha hasta
               </label>
               <Input
@@ -269,7 +275,11 @@ export function DialogReporteFiltros({
           </div>
           <DialogFooter className="flex gap-2 sm:gap-0">
             <div className="flex-1" />
-            <Button type="button" variant="outline" onClick={() => handleAbrir(false)}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => handleAbrir(false)}
+            >
               Cancelar
             </Button>
             <Button

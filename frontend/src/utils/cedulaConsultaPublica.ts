@@ -1,6 +1,6 @@
 /**
  * Cédula en flujos públicos (estado de cuenta, cobros) y filtros internos (préstamos):
- * tolerar pegado con puntos, comas, guiones, espacios y variantes Unicode; validar como V/E/G/J + 6–11 dígitos.
+ * tolerar pegado con puntos, comas, guiones, espacios y variantes Unicode; validar como V/E/G/J + 6-11 dígitos.
  */
 
 export const CEDULA_REGEX = /^[VEGJ]\d{6,11}$/i
