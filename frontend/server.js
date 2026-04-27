@@ -831,11 +831,12 @@ app.get(FRONTEND_BASE + '/*', (req, res, next) => {
     }
     if (subPath.endsWith('.js')) {
       // No devolver HTML para módulos ausentes: Firefox/Chromium lo bloquean por MIME text/html.
-      // En su lugar, responder JS válido que fuerce una recarga única con cache-busting.
+      // En su lugar, responder JS que fuerce recargas con cache-busting (ver contador n<5 abajo).
       res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
       res.type('application/javascript');
+      // Tras deploy, la caché puede ignorar la 1ª recarga: hasta 5 intentos con ?nocache= antes de fallar.
       return res.status(200).send(
-        `(function(){try{var k='rapicredit_missing_chunk_reload_v1';var n=Number(sessionStorage.getItem(k)||'0');if(n<1){sessionStorage.setItem(k,String(n+1));var u=new URL(window.location.href);u.searchParams.set('nocache',String(Date.now()));window.location.replace(u.pathname+u.search+u.hash);return;}}catch(e){}throw new Error('Missing JS chunk: ${subPath.replace(/'/g, "\\'")}');})();`
+        `(function(){try{var k='rapicredit_missing_chunk_reload_v1';var n=Number(sessionStorage.getItem(k)||'0');if(n<5){sessionStorage.setItem(k,String(n+1));var u=new URL(window.location.href);u.searchParams.set('nocache',String(Date.now()));window.location.replace(u.pathname+u.search+u.hash);return;}}catch(e){}throw new Error('Missing JS chunk: ${subPath.replace(/'/g, "\\'")} (reintente con Ctrl+Shift+R o vacie caché).');})();`
       );
     }
     if (subPath.endsWith('.css')) {
