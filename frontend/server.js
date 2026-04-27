@@ -424,6 +424,15 @@ if (API_URL) {
       const isCobrosPagosReportadosSlowPath =
         p.includes('pagos-reportados/listado-y-kpis') ||
         /\/cobros\/pagos-reportados\/\d+\/estado\b/.test(p);
+      // Misma familia que main.py is_long_job_path: Gemini/SMTP/OTP pueden superar 60s; el corte
+      // del socket aqui devuelve 502 HTML al navegador aunque proxyTimeout global sea 180s.
+      const isLongJobCobrosPublicOrEscaner =
+        p.includes('cobros/public/enviar-reporte') ||
+        p.includes('cobros/public/infopagos/enviar-reporte') ||
+        p.includes('cobros/public/solicitar-codigo') ||
+        p.includes('cobros/escaner/extraer-comprobante') ||
+        p.includes('estado-cuenta/public/solicitar-codigo') ||
+        p.includes('estado-cuenta/public/verificar-codigo');
       let proxyTimeoutMs = 60000;
       if (isExportReport) {
         proxyTimeoutMs = 180000;
@@ -432,6 +441,8 @@ if (API_URL) {
       } else if (isCobrosPagosReportadosSlowPath) {
         // Listado+KPIs (barrido) o PATCH estado (aprobar puede tardar); evitar corte a 60s en el proxy.
         proxyTimeoutMs = 120000;
+      } else if (isLongJobCobrosPublicOrEscaner) {
+        proxyTimeoutMs = 180000;
       }
       proxyReq.setTimeout(proxyTimeoutMs);
     },
