@@ -18,6 +18,7 @@ Si el mensaje ya tiene cualquier etiqueta de usuario Gmail, se omite (skip total
 """
 import io
 import logging
+import re
 from datetime import datetime, timedelta
 from typing import Annotated, Optional
 
@@ -43,6 +44,26 @@ from app.services.pagos_gmail.pipeline import run_pipeline
 logger = logging.getLogger(__name__)
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
+
+# Ruta canónica del comprobante en BD (cabecera pagos_con_errores.documento_ruta VARCHAR 255).
+_COMPROBANTE_IMAGEN_PATH_RE = re.compile(
+    r"(/api/v1/pagos/comprobante-imagen/[0-9a-fA-F]{32})\b",
+    re.IGNORECASE,
+)
+
+
+def _documento_ruta_desde_gmail_temporal(drive_link: Optional[str]) -> Optional[str]:
+    """
+    Persistir enlace al comprobante al pasar gmail_temporal -> pagos_con_errores.
+    Si es URL larga del API interno, guardar solo el path (/api/v1/pagos/comprobante-imagen/{uuid32}).
+    """
+    s = (drive_link or "").strip()
+    if not s:
+        return None
+    m = _COMPROBANTE_IMAGEN_PATH_RE.search(s)
+    if m:
+        return m.group(1)
+    return s[:255]
 
 
 def _get_blocking_running_sync(db: Session) -> Optional[PagosGmailSync]:
@@ -439,6 +460,10 @@ def _migrar_pendientes_gmail_a_con_errores_core(db: Session) -> dict:
                         f"{observaciones}; monto no interpretable: {(row.monto or '').strip() or 'vacío'}"
                     )[:255]
 
+                doc_ruta = _documento_ruta_desde_gmail_temporal(
+                    getattr(row, "drive_link", None)
+                )
+
                 nuevo = PagoConError(
                     prestamo_id=None,
                     cedula_cliente=cedula or None,
@@ -455,6 +480,8 @@ def _migrar_pendientes_gmail_a_con_errores_core(db: Session) -> dict:
                     )[:1000],
                     referencia_pago=(numero_base or f"GMAILTMP-{row.id}")[:100],
                     observaciones=observaciones,
+                    documento_ruta=doc_ruta,
+                    documento_nombre=("Comprobante Gmail" if doc_ruta else None),
                 )
                 db.add(nuevo)
                 db.flush()

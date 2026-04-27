@@ -100,7 +100,7 @@ import {
 import {
   abrirStaffComprobanteDesdeHref,
   esUrlComprobanteImagenConAuth,
-  fetchStaffComprobanteBlobFromHref,
+  fetchStaffComprobanteBlobWithDisplayMime,
 } from '../../utils/comprobanteImagenAuth'
 
 type StaffComprobanteListPreview = {
@@ -352,12 +352,13 @@ export function PagosList() {
         }
       })
       try {
-        const blob = await fetchStaffComprobanteBlobFromHref(u)
+        const { blob, contentType } =
+          await fetchStaffComprobanteBlobWithDisplayMime(u)
         const blobUrl = URL.createObjectURL(blob)
         setStaffComprobantePreview(prev => ({
           ...prev,
           blobUrl,
-          contentType: blob.type || null,
+          contentType,
           loading: false,
           rotDeg: 0,
         }))

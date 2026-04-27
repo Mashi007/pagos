@@ -35,6 +35,51 @@ export async function fetchStaffComprobanteBlobFromHref(
   return apiClient.getBlob(path)
 }
 
+/** Primeros bytes del archivo para cuando `Blob.type` viene vacío u octet-stream. */
+function sniffComprobanteMimeFromHead(u: Uint8Array): string | null {
+  if (u.length < 4) return null
+  if (u[0] === 0xff && u[1] === 0xd8 && u[2] === 0xff) return 'image/jpeg'
+  if (u[0] === 0x89 && u[1] === 0x50 && u[2] === 0x4e && u[3] === 0x47) return 'image/png'
+  if (u[0] === 0x47 && u[1] === 0x49 && u[2] === 0x46 && u[3] === 0x38) return 'image/gif'
+  if (u[0] === 0x25 && u[1] === 0x50 && u[2] === 0x44 && u[3] === 0x46) return 'application/pdf'
+  if (
+    u.length >= 12 &&
+    u[0] === 0x52 &&
+    u[1] === 0x49 &&
+    u[2] === 0x46 &&
+    u[3] === 0x46 &&
+    u[8] === 0x57 &&
+    u[9] === 0x45 &&
+    u[10] === 0x42 &&
+    u[11] === 0x50
+  ) {
+    return 'image/webp'
+  }
+  return null
+}
+
+/**
+ * Descarga comprobante interno y normaliza `Content-Type` para `<img>` / iframe en el panel de revisión.
+ */
+export async function fetchStaffComprobanteBlobWithDisplayMime(
+  href: string
+): Promise<{ blob: Blob; contentType: string }> {
+  const raw = await fetchStaffComprobanteBlobFromHref(href)
+  let ct = (raw.type || '').trim()
+  if (!ct || ct === 'application/octet-stream') {
+    const head = new Uint8Array(await raw.slice(0, 24).arrayBuffer())
+    const sniffed = sniffComprobanteMimeFromHead(head)
+    if (sniffed) {
+      const buf = await raw.arrayBuffer()
+      return { blob: new Blob([buf], { type: sniffed }), contentType: sniffed }
+    }
+  }
+  return {
+    blob: raw,
+    contentType: ct || 'application/octet-stream',
+  }
+}
+
 export async function abrirStaffComprobanteDesdeHref(
   href: string
 ): Promise<void> {
