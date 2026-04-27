@@ -326,6 +326,10 @@ app.all(/^\/pagos\/pagos(\/|$|\?)/i, (req, res) => {
   while (pathOnly.startsWith('/pagos/pagos')) {
     pathOnly = `/pagos${pathOnly.slice('/pagos/pagos'.length)}`;
   }
+  // Un solo hop: si queda en "/pagos", serve-static suele emitir 301 -> "/pagos/"; evitar esa cadena.
+  if (pathOnly === '/pagos') {
+    pathOnly = '/pagos/';
+  }
   res.redirect(307, pathOnly + qs);
 });
 
