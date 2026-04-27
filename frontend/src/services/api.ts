@@ -400,8 +400,6 @@ class ApiClient {
 
         const retryCount = (requestConfigForRetry as any)._retryCount || 0
 
-        const maxRetries = 3
-
         const st = error.response?.status
         const reqUrl = String(requestConfigForRetry?.url || '')
         const methodLc = String(
@@ -429,6 +427,13 @@ class ApiClient {
             reqUrl.includes('/tasas-cambio/estado') ||
             reqUrl.includes('/tasas-cambio/hoy'))
         /**
+         * Dyno API en Render: 502/503 pueden durar >15s (arranque Gunicorn + init BD).
+         * 3 reintentos con 2+4+8s no alcanzan; aquí ampliamos solo GET seguros ante 502/503.
+         */
+        const isColdStartProxySafeGet =
+          isSafeTransientRetryGet && (st === 502 || st === 503)
+        const maxRetries = isColdStartProxySafeGet ? 6 : 3
+        /**
          * PATCH cambio de estado (aprobar/rechazar flujo UI). 502 del proxy sin cuerpo JSON
          * suele ser TCP/deploy; el backend puede no haber aplicado el cambio.
          */
@@ -453,8 +458,16 @@ class ApiClient {
           ;(requestConfigForRetry as any)._retryCount = retryCount + 1
 
           // 502/503 en Render: dar tiempo al dyno del API a despertar (reintentos más espaciados).
-          const delayBase = st === 502 || st === 503 ? 2000 : 500
-          const delayMs = delayBase * Math.pow(2, retryCount)
+          const delayBase =
+            st === 502 || st === 503
+              ? isColdStartProxySafeGet
+                ? 3500
+                : 2000
+              : 500
+          const rawDelay = delayBase * Math.pow(2, retryCount)
+          const delayMs = isColdStartProxySafeGet
+            ? Math.min(14000, rawDelay)
+            : rawDelay
 
           // console.info: no pasa por el parche de console.warn de pagos-bootstrap.js (evita confundir la línea 128 del bootstrap con el origen del log).
           console.info(
