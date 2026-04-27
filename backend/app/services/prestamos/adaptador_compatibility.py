@@ -139,9 +139,9 @@ class AdaptadorPrestamosLegacy:
                     datos['numero_cuotas']
                 )
 
-            if 'tasa_interes' in datos and datos['tasa_interes']:
+            if 'tasa_interes' in datos:
                 self.service.validacion.validar_tasa_interes(
-                    datos['tasa_interes']
+                    datos.get('tasa_interes', 0)
                 )
 
             if 'modalidad_pago' in datos:

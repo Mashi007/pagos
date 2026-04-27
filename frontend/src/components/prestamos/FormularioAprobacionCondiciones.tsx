@@ -4,7 +4,7 @@ import { motion } from 'framer-motion'
 
 import { toast } from 'sonner'
 
-import { X, DollarSign, Calendar, FileText } from 'lucide-react'
+import { X, Calendar, FileText } from 'lucide-react'
 
 import { Button } from '../../components/ui/button'
 
@@ -90,20 +90,6 @@ export function FormularioAprobacionCondiciones({
       return
     }
 
-    if (
-      condicionesAprobacion.tasa_interes < 0 ||
-      condicionesAprobacion.tasa_interes > 100
-    ) {
-      console.error(
-        'âŒ Validación fallida: tasa_interes fuera de rango',
-        condicionesAprobacion.tasa_interes
-      )
-
-      toast.error('La tasa de interés debe estar entre 0 y 100%')
-
-      return
-    }
-
     if (condicionesAprobacion.plazo_maximo <= 0) {
       console.error(
         'âŒ Validación fallida: plazo_maximo inválido',
@@ -119,7 +105,7 @@ export function FormularioAprobacionCondiciones({
 
     const mensajeConfirmacion =
       `¿Desea aprobar este préstamo con las siguientes condiciones?\n\n` +
-      `• Tasa de Interés: ${condicionesAprobacion.tasa_interes}%\n` +
+      `• Tasa de Interés: 0% (fija)\n` +
       `• Plazo Máximo: ${condicionesAprobacion.plazo_maximo} meses\n` +
       `• Fecha de Aprobacion / Desembolso: ${formatDate(condicionesAprobacion.fecha_aprobacion)}`
 
@@ -137,7 +123,7 @@ export function FormularioAprobacionCondiciones({
       const condiciones = {
         estado: 'APROBADO',
 
-        tasa_interes: condicionesAprobacion.tasa_interes,
+        tasa_interes: 0,
 
         plazo_maximo: condicionesAprobacion.plazo_maximo,
 
@@ -229,36 +215,10 @@ export function FormularioAprobacionCondiciones({
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                     <div className="space-y-2">
                       <label className="text-sm font-medium text-gray-700">
-                        Tasa de Interés (%){' '}
-                        <span className="text-red-500">*</span>
+                        Tasa de interés
                       </label>
-
-                      <div className="relative">
-                        <DollarSign className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 transform text-gray-400" />
-
-                        <Input
-                          type="number"
-                          step="0.1"
-                          min="0"
-                          max="100"
-                          value={condicionesAprobacion.tasa_interes || ''}
-                          onChange={e => {
-                            const valor =
-                              e.target.value === ''
-                                ? 0
-                                : parseFloat(e.target.value)
-
-                            console.log('ðŸ" Tasa de interés cambiada:', valor)
-
-                            setCondicionesAprobacion({
-                              ...condicionesAprobacion,
-
-                              tasa_interes: isNaN(valor) ? 0 : valor,
-                            })
-                          }}
-                          className="pl-10"
-                          placeholder="0.0"
-                        />
+                      <div className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-800">
+                        0% — producto sin interés (no editable)
                       </div>
                     </div>
 
@@ -367,19 +327,14 @@ export function FormularioAprobacionCondiciones({
                   disabled={
                     isLoading ||
                     !condicionesAprobacion.fecha_aprobacion ||
-                    condicionesAprobacion.tasa_interes < 0 ||
-                    condicionesAprobacion.tasa_interes > 100 ||
                     condicionesAprobacion.plazo_maximo <= 0
                   }
                   title={
                     !condicionesAprobacion.fecha_aprobacion
                       ? 'Debe seleccionar una fecha de desembolso'
-                      : condicionesAprobacion.tasa_interes < 0 ||
-                          condicionesAprobacion.tasa_interes > 100
-                        ? 'La tasa de interés debe estar entre 0 y 100%'
-                        : condicionesAprobacion.plazo_maximo <= 0
-                          ? 'El plazo máximo debe ser mayor a 0'
-                          : 'Aprobar préstamo con las condiciones especificadas'
+                      : condicionesAprobacion.plazo_maximo <= 0
+                        ? 'El plazo máximo debe ser mayor a 0'
+                        : 'Aprobar préstamo con las condiciones especificadas'
                   }
                 >
                   {isLoading ? 'Aprobando...' : 'Aprobar Préstamo'}

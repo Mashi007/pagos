@@ -158,6 +158,18 @@ class PrestamoUpdate(BaseModel):
     fecha_base_calculo: Optional[date] = None
     tasa_interes: Optional[Decimal] = None
 
+    @field_validator("tasa_interes")
+    @classmethod
+    def tasa_interes_solo_cero(cls, v: Optional[Decimal]) -> Optional[Decimal]:
+        if v is None:
+            return v
+        dec = v if isinstance(v, Decimal) else Decimal(str(v))
+        if dec.copy_abs() > Decimal("0"):
+            raise ValueError(
+                "tasa_interes debe ser 0. El producto no admite variación de tasa de interés."
+            )
+        return Decimal("0")
+
 
 class PrestamoResponse(BaseModel):
     """Respuesta de préstamo (columnas de la tabla prestamos)."""

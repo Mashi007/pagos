@@ -3827,6 +3827,11 @@ export function PagosList() {
               filters.sin_prestamo === 'si' || activeTab === 'revision'
             }
             esPagoConError={esRevisarPagos || activeTab === 'revision'}
+            bloquearCambioComprobanteCodigo={Boolean(
+              pagoEditando &&
+                (pagoEditando.conciliado ||
+                  String(pagoEditando.estado || '').toUpperCase() === 'PAGADO')
+            )}
             pagoInicial={
               pagoEditando
                 ? {
@@ -3850,6 +3855,10 @@ export function PagosList() {
                     codigo_documento: pagoEditando.codigo_documento ?? null,
                     institucion_bancaria: pagoEditando.institucion_bancaria,
                     notas: pagoEditando.notas || null,
+                    link_comprobante:
+                      'link_comprobante' in pagoEditando
+                        ? (pagoEditando.link_comprobante ?? null)
+                        : null,
                   }
                 : undefined
             }

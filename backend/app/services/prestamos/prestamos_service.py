@@ -82,10 +82,12 @@ class PrestamosService:
             numero_cuotas
         )
 
-        # Validar tasa si se proporciona
-        tasa_interes = float(datos_prestamo.get('tasa_interes', 0.0))
-        if tasa_interes > 0:
-            self.validacion.validar_tasa_interes(tasa_interes)
+        # Producto sin interés: solo 0%; rechazar explícitamente cualquier otro valor en el payload.
+        raw_tasa = datos_prestamo.get('tasa_interes', 0.0)
+        self.validacion.validar_tasa_interes(
+            float(raw_tasa) if raw_tasa is not None else 0.0
+        )
+        tasa_interes = 0.0
 
         # Validar modalidad
         modalidad = datos_prestamo.get('modalidad_pago', 'MENSUAL')

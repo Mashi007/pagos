@@ -82,9 +82,15 @@ class TestPrestamosValidacion:
         with pytest.raises(PrestamoValidationError):
             validacion.validar_numero_cuotas(361)
 
-    def test_validar_tasa_interes_valida(self, validacion):
-        """Valida tasa de interés válida."""
-        assert validacion.validar_tasa_interes(12.5) is True
+    def test_validar_tasa_interes_solo_cero(self, validacion):
+        """Producto sin interés: solo se acepta tasa 0%."""
+        assert validacion.validar_tasa_interes(0) is True
+        assert validacion.validar_tasa_interes(0.0) is True
+
+    def test_validar_tasa_interes_distinta_de_cero(self, validacion):
+        """Rechaza cualquier tasa distinta de 0%."""
+        with pytest.raises(PrestamoValidationError):
+            validacion.validar_tasa_interes(12.5)
 
     def test_validar_tasa_interes_negativa(self, validacion):
         """Rechaza tasa negativa."""

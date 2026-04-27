@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, Query, HTTPException, Body
 from sqlalchemy import select, func, and_, case, literal_column, text
 from sqlalchemy.orm import Session, aliased
 from sqlalchemy.exc import ProgrammingError
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from app.core.config import settings
 from app.core.database import get_db
@@ -238,7 +238,7 @@ class ClienteUpdateData(BaseModel):
 class PrestamoUpdateData(BaseModel):
     total_financiamiento: Optional[float] = Field(None, ge=0)
     numero_cuotas: Optional[int] = Field(None, ge=1, le=50)
-    tasa_interes: Optional[float] = Field(None, ge=0)
+    tasa_interes: Optional[float] = None
     producto: Optional[str] = None
     observaciones: Optional[str] = None
     cedula: Optional[str] = None
@@ -255,6 +255,18 @@ class PrestamoUpdateData(BaseModel):
     valor_activo: Optional[float] = Field(None, ge=0)
     usuario_proponente: Optional[str] = None
     usuario_aprobador: Optional[str] = None
+
+    @field_validator("tasa_interes")
+    @classmethod
+    def tasa_interes_solo_cero_revision(cls, v: Optional[float]) -> Optional[float]:
+        if v is None:
+            return None
+        if abs(float(v)) > 1e-12:
+            raise ValueError(
+                "tasa_interes debe ser 0. El producto no admite variación de tasa de interés."
+            )
+        return 0.0
+
 
 class CuotaUpdateData(BaseModel):
     fecha_pago: Optional[str] = None

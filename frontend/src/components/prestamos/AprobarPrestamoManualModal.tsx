@@ -101,15 +101,8 @@ export function AprobarPrestamoManualModal({
     return parseNumInput(String(v ?? '')) || 0
   })
 
-  const [tasaInteres, setTasaInteres] = useState<number>(() => {
-    const v = prestamo.tasa_interes
-
-    if (typeof v === 'number' && Number.isFinite(v)) return v
-
-    return prestamo.tasa_interes != null
-      ? parseNumInput(String(prestamo.tasa_interes))
-      : 0
-  })
+  // Producto sin interés: tasa fija 0% (no editable).
+  const tasaInteres = 0
 
   const [observaciones, setObservaciones] = useState<string>(
     prestamo.observaciones || ''
@@ -182,7 +175,7 @@ export function AprobarPrestamoManualModal({
 
         cuota_periodo: cuotaPeriodo,
 
-        tasa_interes: tasaInteres,
+        tasa_interes: 0,
 
         observaciones: observaciones || undefined,
       })
@@ -334,21 +327,13 @@ export function AprobarPrestamoManualModal({
 
               <div>
                 <label className="text-sm font-medium text-gray-700">
-                  Tasa de interés (%)
+                  Tasa de interés
                 </label>
-
-                <Input
-                  type="number"
-                  min={0}
-                  max={100}
-                  step={0.1}
-                  value={tasaInteres ?? ''}
-                  onChange={e => setTasaInteres(parseNumInput(e.target.value))}
-                />
-
+                <div className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-800">
+                  0% — producto sin interés (no editable)
+                </div>
                 <p className="mt-1 text-xs text-gray-500">
-                  Por defecto 0. Al cambiar, la cuota por periodo se actualiza
-                  automáticamente.
+                  La cuota por periodo es plana (monto ÷ número de cuotas).
                 </p>
               </div>
 

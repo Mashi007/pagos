@@ -546,7 +546,7 @@ export function useExcelUploadPrestamos({
 
           cuota_periodo: cuotaPeriodo,
 
-          tasa_interes: row.tasa_interes != null ? Number(row.tasa_interes) : 0,
+          tasa_interes: 0,
 
           observaciones: (row.observaciones || '').trim() || undefined,
         }
@@ -763,8 +763,7 @@ export function useExcelUploadPrestamos({
             cuota_periodo:
               parseFloat(String(pick(row, 'cuota_periodo', 9) || 0)) || 0,
 
-            tasa_interes:
-              parseFloat(String(pick(row, 'tasa_interes', 10) || 0)) || 0,
+            tasa_interes: 0,
 
             observaciones: (
               pick(row, 'observaciones', 11)?.toString() || ''

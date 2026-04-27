@@ -38,7 +38,7 @@ class TestPrestamosServiceIntegration:
             "modalidad_pago": "MENSUAL",
             "numero_cuotas": 12,
             "cuota_periodo": Decimal("883.33"),
-            "tasa_interes": Decimal("15.5000"),
+            "tasa_interes": Decimal("0.0000"),
             "producto": "Préstamo Personal",
             "estado": "DRAFT",
             "analista": "Test Analista",
@@ -51,6 +51,7 @@ class TestPrestamosServiceIntegration:
         assert prestamo.cliente_id == test_cliente.id
         assert prestamo.total_financiamiento == Decimal("10000.00")
         assert prestamo.numero_cuotas == 12
+        assert prestamo.tasa_interes == Decimal("0.0000")
 
     def test_crear_prestamo_con_fecha_base_calculo(self, db_session: Session, test_cliente, prestamos_service):
         """Test creating prestamo with fecha_base_calculo."""
@@ -63,7 +64,7 @@ class TestPrestamosServiceIntegration:
             "modalidad_pago": "MENSUAL",
             "numero_cuotas": 24,
             "cuota_periodo": Decimal("708.33"),
-            "tasa_interes": Decimal("12.0000"),
+            "tasa_interes": Decimal("0.0000"),
             "fecha_base_calculo": date(2026, 2, 15),
             "producto": "Préstamo Auto",
             "analista": "Test",
@@ -72,6 +73,7 @@ class TestPrestamosServiceIntegration:
         prestamo = prestamos_service.crear_prestamo(datos)
         
         assert prestamo.fecha_base_calculo == date(2026, 2, 15)
+        assert prestamo.tasa_interes == Decimal("0.0000")
 
     def test_crear_prestamo_valida_cliente_existe(self, db_session: Session, prestamos_service):
         """Test that creating prestamo for non-existent cliente fails."""
@@ -104,6 +106,24 @@ class TestPrestamosServiceIntegration:
             "analista": "Test",
         }
         
+        with pytest.raises(Exception):
+            prestamos_service.crear_prestamo(datos)
+
+    def test_crear_prestamo_tasa_positiva_falla(self, db_session: Session, test_cliente, prestamos_service):
+        """Test that positive tasa_interes is rejected (producto sin interés)."""
+        datos = {
+            "cliente_id": test_cliente.id,
+            "cedula": test_cliente.cedula,
+            "nombres": test_cliente.nombres,
+            "total_financiamiento": Decimal("10000.00"),
+            "fecha_requerimiento": date(2026, 1, 15),
+            "modalidad_pago": "MENSUAL",
+            "numero_cuotas": 12,
+            "cuota_periodo": Decimal("883.33"),
+            "tasa_interes": Decimal("5.0000"),
+            "analista": "Test",
+        }
+
         with pytest.raises(Exception):
             prestamos_service.crear_prestamo(datos)
 
@@ -206,15 +226,21 @@ class TestPrestamosServiceIntegration:
     # Tests: actualizar_prestamo
     # ========================================================================
 
-    def test_actualizar_prestamo_tasa(self, db_session: Session, test_prestamo, prestamos_service):
-        """Test updating prestamo tasa_interes."""
+    def test_actualizar_prestamo_tasa_positiva_falla(self, db_session: Session, test_prestamo, prestamos_service):
+        """No se permite actualizar la tasa a un valor distinto de 0%."""
         nuevos_datos = {
             "tasa_interes": Decimal("18.0000"),
         }
-        
-        prestamo = prestamos_service.actualizar_prestamo(test_prestamo.id, nuevos_datos)
-        
-        assert prestamo.tasa_interes == Decimal("18.0000")
+
+        with pytest.raises(PrestamoValidationError):
+            prestamos_service.actualizar_prestamo(test_prestamo.id, nuevos_datos)
+
+    def test_actualizar_prestamo_tasa_cero_ok(self, db_session: Session, test_prestamo, prestamos_service):
+        """Actualizar tasa explícitamente a 0 está permitido."""
+        prestamo = prestamos_service.actualizar_prestamo(
+            test_prestamo.id, {"tasa_interes": Decimal("0.0000")}
+        )
+        assert prestamo.tasa_interes == Decimal("0.0000")
 
     def test_actualizar_prestamo_observaciones(self, db_session: Session, test_prestamo, prestamos_service):
         """Test updating prestamo observaciones."""
@@ -464,21 +490,21 @@ class TestPrestamosServiceIntegration:
 
     def test_actualizar_prestamo_persiste_cambios(self, db_session: Session, test_prestamo, prestamos_service):
         """Test that prestamo updates are persisted."""
-        nueva_tasa = Decimal("20.0000")
-        
+        nuevas_obs = "Persistencia vía servicio"
+
         prestamos_service.actualizar_prestamo(
             test_prestamo.id,
-            {"tasa_interes": nueva_tasa}
+            {"observaciones": nuevas_obs},
         )
-        
+
         # Refresh
         db_session.expunge_all()
-        
+
         db_prestamo = db_session.query(Prestamo).filter(
             Prestamo.id == test_prestamo.id
         ).first()
-        
-        assert db_prestamo.tasa_interes == nueva_tasa
+
+        assert db_prestamo.observaciones == nuevas_obs
 
     def test_amortizacion_creada_en_bd(self, db_session: Session, test_prestamo_aprobado, prestamos_service):
         """Test that amortization table is created in database."""

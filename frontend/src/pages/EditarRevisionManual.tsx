@@ -1333,12 +1333,6 @@ export function EditarRevisionManual() {
         )
           prestamoUpdate.numero_cuotas = prestamoData.numero_cuotas
 
-        if (
-          prestamoData.tasa_interes !== undefined &&
-          prestamoData.tasa_interes >= 0
-        )
-          prestamoUpdate.tasa_interes = prestamoData.tasa_interes
-
         if (prestamoData.producto !== undefined)
           prestamoUpdate.producto = prestamoData.producto
 
@@ -1723,12 +1717,6 @@ export function EditarRevisionManual() {
           prestamoData.numero_cuotas >= 1
         )
           prestamoUpdate.numero_cuotas = prestamoData.numero_cuotas
-
-        if (
-          prestamoData.tasa_interes !== undefined &&
-          prestamoData.tasa_interes >= 0
-        )
-          prestamoUpdate.tasa_interes = prestamoData.tasa_interes
 
         if (prestamoData.producto !== undefined)
           prestamoUpdate.producto = prestamoData.producto

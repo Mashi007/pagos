@@ -393,14 +393,18 @@ export function validatePrestamoField(
         ? { isValid: false, message: 'Número >= 0' }
         : { isValid: true }
 
-    case 'tasa_interes':
-      if (!strVal) return { isValid: true }
-
-      const ti = parseFloat(strVal)
-
-      return Number.isNaN(ti) || ti < 0
-        ? { isValid: false, message: 'Número >= 0' }
-        : { isValid: true }
+    case 'tasa_interes': {
+      if (!strVal || String(strVal).trim() === '')
+        return { isValid: true }
+      const ti = parseFloat(String(strVal).trim())
+      if (Number.isNaN(ti) || Math.abs(ti) > 1e-9) {
+        return {
+          isValid: false,
+          message: 'Debe ser 0 o vacío (producto sin interés)',
+        }
+      }
+      return { isValid: true }
+    }
 
     case 'concesionario':
 

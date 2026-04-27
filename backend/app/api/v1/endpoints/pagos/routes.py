@@ -31,6 +31,8 @@ import logging
 
 import re
 
+import time
+
 import uuid
 
 from datetime import date, datetime, time as dt_time
@@ -5562,6 +5564,15 @@ def actualizar_pago(pago_id: int, payload: PagoUpdate, db: Session = Depends(get
     sobre el o los préstamos afectados para que la amortización y servicios alineados vuelvan a cuadrar.
     """
 
+    t0_put = time.perf_counter()
+    _fase_prev = [t0_put]
+    _fases_ms: dict[str, float] = {}
+
+    def _mark_fase(nombre: str) -> None:
+        now = time.perf_counter()
+        _fases_ms[nombre] = round((now - _fase_prev[0]) * 1000.0, 2)
+        _fase_prev[0] = now
+
     row = db.get(Pago, pago_id)
 
     if not row:
@@ -5648,6 +5659,8 @@ def actualizar_pago(pago_id: int, payload: PagoUpdate, db: Session = Depends(get
 
         row.numero_documento = new_stored
 
+    _mark_fase("validacion_documento")
+
     aplicar_conciliado = False
 
     _put_mon_keys = ("monto_pagado", "moneda_registro", "tasa_cambio_manual", "fecha_pago")
@@ -5689,6 +5702,8 @@ def actualizar_pago(pago_id: int, payload: PagoUpdate, db: Session = Depends(get
         else:
 
             setattr(row, k, v)
+
+    _mark_fase("campos_basicos")
 
     if monetario_up:
 
@@ -5842,6 +5857,8 @@ def actualizar_pago(pago_id: int, payload: PagoUpdate, db: Session = Depends(get
 
             row.fecha_tasa_referencia = None
 
+    _mark_fase("normalizacion_monetaria")
+
     fp_row = row.fecha_pago
 
     if isinstance(fp_row, datetime):
@@ -5875,11 +5892,14 @@ def actualizar_pago(pago_id: int, payload: PagoUpdate, db: Session = Depends(get
 
             raise HTTPException(status_code=409, detail=mensaje_409_huella_funcional_con_id(cid_up))
 
+    _mark_fase("huella_funcional")
+
     try:
 
         db.commit()
 
         db.refresh(row)
+        _mark_fase("commit_base")
 
     except IntegrityError as e:
 
@@ -5993,6 +6013,7 @@ def actualizar_pago(pago_id: int, payload: PagoUpdate, db: Session = Depends(get
             db.commit()
 
             db.refresh(row)
+            _mark_fase("reaplicacion_cascada")
 
         except HTTPException:
 
@@ -6020,6 +6041,15 @@ def actualizar_pago(pago_id: int, payload: PagoUpdate, db: Session = Depends(get
 
             ) from e
 
+        total_ms = round((time.perf_counter() - t0_put) * 1000.0, 2)
+        logger.info(
+            "[PAGOS_PUT_TIMING] pago_id=%s total_ms=%s fases_ms=%s had_cuota_pagos=%s articulacion_afectada=%s",
+            pago_id,
+            total_ms,
+            _fases_ms,
+            had_cuota_pagos_antes,
+            articulacion_afectada,
+        )
         return _pago_response_enriquecido(db, row)
 
     # Regla: si el pago cumple validadores (prestamo_id + monto), aplicar automáticamente a cuotas en cualquier canal
@@ -6036,6 +6066,7 @@ def actualizar_pago(pago_id: int, payload: PagoUpdate, db: Session = Depends(get
             db.commit()
 
             db.refresh(row)
+            _mark_fase("aplicar_cuotas_post_put")
 
         except IntegrityError as e:
 
@@ -6083,6 +6114,15 @@ def actualizar_pago(pago_id: int, payload: PagoUpdate, db: Session = Depends(get
                         pago_id,
                     )
 
+    total_ms = round((time.perf_counter() - t0_put) * 1000.0, 2)
+    logger.info(
+        "[PAGOS_PUT_TIMING] pago_id=%s total_ms=%s fases_ms=%s had_cuota_pagos=%s articulacion_afectada=%s",
+        pago_id,
+        total_ms,
+        _fases_ms,
+        had_cuota_pagos_antes,
+        articulacion_afectada,
+    )
     return _pago_response_enriquecido(db, row)
 
 

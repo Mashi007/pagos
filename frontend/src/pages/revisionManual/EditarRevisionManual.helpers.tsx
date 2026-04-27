@@ -286,9 +286,7 @@ export function buildPrestamoPatchGuardarRevision(
   if (p.numero_cuotas !== undefined && p.numero_cuotas >= 1) {
     prestamoUpdate.numero_cuotas = p.numero_cuotas
   }
-  if (p.tasa_interes !== undefined && p.tasa_interes >= 0) {
-    prestamoUpdate.tasa_interes = p.tasa_interes
-  }
+  // tasa_interes: producto sin interés (0%); no se envía desde el parche de revisión.
   if (p.producto !== undefined) {
     prestamoUpdate.producto = p.producto
   }

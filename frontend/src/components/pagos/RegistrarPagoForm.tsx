@@ -273,6 +273,9 @@ interface RegistrarPagoFormProps {
    * de la página actual (excluir la fila en edición en el padre). Evita guardar duplicado obvio antes del POST.
    */
   claveDocumentoPagosTablaRevision?: ReadonlySet<string>
+
+  /** Si true, al editar no envía cambios de comprobante/código (regla backend para conciliados/pagados). */
+  bloquearCambioComprobanteCodigo?: boolean
 }
 
 export function RegistrarPagoForm({
@@ -286,6 +289,7 @@ export function RegistrarPagoForm({
   prestamoContextoRevisionManualId,
   mostrarCampoCodigoDocumento = false,
   claveDocumentoPagosTablaRevision,
+  bloquearCambioComprobanteCodigo = false,
 }: RegistrarPagoFormProps) {
   const isEditing = !!pagoId
 
@@ -741,6 +745,11 @@ export function RegistrarPagoForm({
         link_comprobante: linkFinal,
       } as PagoCreate & { tasa_cambio_manual?: number; conciliado?: boolean }
 
+      if (isEditing && bloquearCambioComprobanteCodigo) {
+        delete datosEnvio.link_comprobante
+        delete datosEnvio.codigo_documento
+      }
+
       if (monedaRegistro === 'BS' && !tasaBd) {
         const tm = parseFloat(String(tasaManual).replace(',', '.'))
 
@@ -777,6 +786,14 @@ export function RegistrarPagoForm({
 
         if (status === 409 && detailLower.includes('huella funcional')) {
           errorMessage = DUPLICADO_HUELLA_UI
+        } else if (
+          status === 409 &&
+          (detailLower.includes('comprobante') ||
+            detailLower.includes('codigo en pagos conciliados') ||
+            detailLower.includes('pagos conciliados o pagados'))
+        ) {
+          errorMessage =
+            'Este pago ya está conciliado/pagado. No se permite cambiar comprobante ni código; ajuste otros campos permitidos.'
         } else if (
           status === 409 &&
           (detailLower.includes('numero_documento') ||
@@ -932,6 +949,13 @@ export function RegistrarPagoForm({
                 {errors.general}
               </div>
             )}
+
+            {isEditing && bloquearCambioComprobanteCodigo ? (
+              <div className="rounded border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                Este pago ya está conciliado o pagado. El comprobante y el código
+                se muestran solo para consulta y no se pueden modificar.
+              </div>
+            ) : null}
 
             {/* Cédula e ID Préstamo */}
 
@@ -1464,6 +1488,11 @@ export function RegistrarPagoForm({
                     lo genera y guarda el sistema al pulsar{' '}
                     <strong>Visto</strong> (mismo criterio que en carga masiva).
                   </p>
+                  {bloquearCambioComprobanteCodigo ? (
+                    <p className="text-xs text-amber-700">
+                      Código bloqueado: el pago está conciliado/pagado.
+                    </p>
+                  ) : null}
 
                   {errors.codigo_documento && (
                     <p className="text-sm text-red-600">
@@ -1491,7 +1520,7 @@ export function RegistrarPagoForm({
                   <Button
                     type="button"
                     size="sm"
-                    disabled={isSubmitting}
+                    disabled={isSubmitting || bloquearCambioComprobanteCodigo}
                     className="h-8 min-w-[4.5rem] bg-violet-600 px-3 text-xs font-medium text-white hover:bg-violet-700 disabled:opacity-50"
                     onClick={() => void handleVistoRellenarCodigoYGuardar()}
                   >
@@ -1519,7 +1548,12 @@ export function RegistrarPagoForm({
                 type="file"
                 accept="image/jpeg,image/png,image/webp,image/gif,.jpg,.jpeg,.png,.webp,.gif"
                 className="sr-only"
+                disabled={bloquearCambioComprobanteCodigo}
                 onChange={e => {
+                  if (bloquearCambioComprobanteCodigo) {
+                    e.target.value = ''
+                    return
+                  }
                   const f = e.target.files?.[0] ?? null
 
                   setArchivoComprobante(f)
@@ -1540,7 +1574,7 @@ export function RegistrarPagoForm({
                 <Button
                   type="button"
                   variant="outline"
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || bloquearCambioComprobanteCodigo}
                   className="gap-2"
                   onClick={() => comprobanteFileInputRef.current?.click()}
                 >
@@ -1553,7 +1587,7 @@ export function RegistrarPagoForm({
                     type="button"
                     variant="ghost"
                     size="sm"
-                    disabled={isSubmitting}
+                    disabled={isSubmitting || bloquearCambioComprobanteCodigo}
                     className="text-red-600 hover:text-red-700"
                     onClick={() => setArchivoComprobante(null)}
                   >
@@ -1561,6 +1595,12 @@ export function RegistrarPagoForm({
                   </Button>
                 ) : null}
               </div>
+
+              {bloquearCambioComprobanteCodigo ? (
+                <p className="text-xs text-amber-700">
+                  Comprobante bloqueado: este pago ya está conciliado/pagado.
+                </p>
+              ) : null}
 
               {archivoComprobante ? (
                 <div className="space-y-2" role="status">

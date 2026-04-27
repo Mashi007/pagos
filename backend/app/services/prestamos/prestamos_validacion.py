@@ -116,25 +116,20 @@ class PrestamosValidacion:
             )
 
     def validar_tasa_interes(self, tasa: float) -> bool:
-        """Valida que la tasa de interés sea válida."""
+        """Producto sin interés: solo se permite tasa 0%."""
         try:
             tasa_float = float(tasa)
-            if tasa_float < 0:
-                raise PrestamoValidationError(
-                    "tasa_interes",
-                    "Tasa de interés no puede ser negativa"
-                )
-            if tasa_float > 100:
-                raise PrestamoValidationError(
-                    "tasa_interes",
-                    "Tasa de interés parece demasiado alta (>100%)"
-                )
-            return True
         except (ValueError, TypeError):
             raise PrestamoValidationError(
                 "tasa_interes",
-                "Tasa de interés debe ser un número válido"
+                "Tasa de interés debe ser un número válido",
             )
+        if abs(tasa_float) > 1e-12:
+            raise PrestamoValidationError(
+                "tasa_interes",
+                "La tasa de interés debe ser 0%. No se permiten otras tasas.",
+            )
+        return True
 
     def validar_modalidad_pago(self, modalidad: str) -> bool:
         """Valida que la modalidad de pago sea válida."""

@@ -401,6 +401,46 @@ def _startup_db_with_retry(engine, max_attempts: int = 10, delay_sec: float = 3.
     ) from last_error
 
 
+def _try_claim_startup_lock(engine) -> bool:
+    """
+    Intenta reclamar un lock global de startup en PostgreSQL.
+
+    - True: este worker ejecuta inicialización pesada (create_all, migraciones en caliente, limpieza running).
+    - False: otro worker ya la está ejecutando; este worker debe omitir esa sección.
+    """
+    try:
+        dialect = getattr(engine, "dialect", None)
+        if getattr(dialect, "name", "") != "postgresql":
+            # En otros motores no usamos advisory lock; mantener comportamiento actual.
+            return True
+        from sqlalchemy import text
+        with engine.connect() as conn:
+            # Namespace fijo + clave fija para lock de startup de app.
+            claimed = conn.execute(
+                text("SELECT pg_try_advisory_lock(91827364, 11223344)")
+            ).scalar()
+        return bool(claimed)
+    except Exception as e:
+        logger.warning(
+            "[StartupLock] No se pudo reclamar advisory lock; se continúa sin lock: %s",
+            e,
+        )
+        return True
+
+
+def _release_startup_lock(engine) -> None:
+    """Libera advisory lock de startup (si este worker lo tenía)."""
+    try:
+        dialect = getattr(engine, "dialect", None)
+        if getattr(dialect, "name", "") != "postgresql":
+            return
+        from sqlalchemy import text
+        with engine.connect() as conn:
+            conn.execute(text("SELECT pg_advisory_unlock(91827364, 11223344)"))
+    except Exception as e:
+        logger.warning("[StartupLock] No se pudo liberar advisory lock: %s", e)
+
+
 @app.on_event("startup")
 def on_startup():
     """Crear tablas en la BD si no existen. Inicializar email desde .env. Jobs programados solo si ENABLE_AUTOMATIC_SCHEDULED_JOBS."""
@@ -410,49 +450,59 @@ def on_startup():
     init_email_config()
     logger.info("Configuracion de email (SMTP/tickets) inicializada desde variables de entorno.")
 
-    # Crear tablas y verificar BD con reintentos (Render puede tener la BD aun no lista en el primer worker).
-    # En Render: menos reintentos y backoff mas corto — el health check no responde hasta terminar startup (timeout de deploy).
-    _on_render = (os.environ.get("RENDER") or "").lower() in ("true", "1", "yes")
-    try:
-        _startup_db_with_retry(
-            engine,
-            max_attempts=6 if _on_render else 10,
-            delay_sec=2.0 if _on_render else 3.0,
-        )
-    except Exception as e:
-        logger.exception("Startup BD fallo tras reintentos: %s", e)
-        raise
-
-    # Gmail Pagos: filas status='running' huérfanas tras SIGTERM/deploy bloquean POST .../gmail/run-now (409)
-    # y entonces no corre el pipeline (extracción + etiquetas IMAGEN / estrella). Esto NO es un cron:
-    # debe ejecutarse aunque ENABLE_AUTOMATIC_SCHEDULED_JOBS=false.
-    try:
-        from app.core.database import SessionLocal
-        from app.models.pagos_gmail_sync import PagosGmailSync
-        from sqlalchemy import update as sa_update
-
-        db_gmail = SessionLocal()
+    # Evitar trabajo pesado duplicado cuando Gunicorn levanta múltiples workers.
+    # Solo un worker ejecuta init DB + limpiezas; los demás continúan startup normal.
+    startup_lock_claimed = _try_claim_startup_lock(engine)
+    if startup_lock_claimed:
         try:
-            result = db_gmail.execute(
-                sa_update(PagosGmailSync)
-                .where(PagosGmailSync.status == "running")
-                .values(
-                    status="error",
-                    finished_at=datetime.now(timezone.utc),
-                    error_message="Reinicio del servidor (SIGTERM) mientras el pipeline estaba en curso.",
-                )
+            # Crear tablas y verificar BD con reintentos (Render puede tener la BD aun no lista en el primer worker).
+            # En Render: menos reintentos y backoff mas corto — el health check no responde hasta terminar startup (timeout de deploy).
+            _on_render = (os.environ.get("RENDER") or "").lower() in ("true", "1", "yes")
+            _startup_db_with_retry(
+                engine,
+                max_attempts=6 if _on_render else 10,
+                delay_sec=2.0 if _on_render else 3.0,
             )
-            if result.rowcount:
-                logger.warning(
-                    "[PAGOS_GMAIL] %d sync(s) en 'running' marcadas como 'error' al arrancar "
-                    "(worker interrumpido; desbloquea run-now y etiquetado en Gmail).",
-                    result.rowcount,
-                )
-            db_gmail.commit()
+
+            # Gmail Pagos: filas status='running' huérfanas tras SIGTERM/deploy bloquean POST .../gmail/run-now (409)
+            # y entonces no corre el pipeline (extracción + etiquetas IMAGEN / estrella). Esto NO es un cron:
+            # debe ejecutarse aunque ENABLE_AUTOMATIC_SCHEDULED_JOBS=false.
+            try:
+                from app.core.database import SessionLocal
+                from app.models.pagos_gmail_sync import PagosGmailSync
+                from sqlalchemy import update as sa_update
+
+                db_gmail = SessionLocal()
+                try:
+                    result = db_gmail.execute(
+                        sa_update(PagosGmailSync)
+                        .where(PagosGmailSync.status == "running")
+                        .values(
+                            status="error",
+                            finished_at=datetime.now(timezone.utc),
+                            error_message="Reinicio del servidor (SIGTERM) mientras el pipeline estaba en curso.",
+                        )
+                    )
+                    if result.rowcount:
+                        logger.warning(
+                            "[PAGOS_GMAIL] %d sync(s) en 'running' marcadas como 'error' al arrancar "
+                            "(worker interrumpido; desbloquea run-now y etiquetado en Gmail).",
+                            result.rowcount,
+                        )
+                    db_gmail.commit()
+                finally:
+                    db_gmail.close()
+            except Exception as e:
+                logger.warning("[PAGOS_GMAIL] No se pudieron limpiar syncs huérfanas al iniciar: %s", e)
+        except Exception as e:
+            logger.exception("Startup BD fallo tras reintentos: %s", e)
+            raise
         finally:
-            db_gmail.close()
-    except Exception as e:
-        logger.warning("[PAGOS_GMAIL] No se pudieron limpiar syncs huérfanas al iniciar: %s", e)
+            _release_startup_lock(engine)
+    else:
+        logger.info(
+            "[StartupLock] Inicialización pesada ya en curso en otro worker; este worker omite init DB pesada."
+        )
 
     _auto_jobs = bool(getattr(settings, "ENABLE_AUTOMATIC_SCHEDULED_JOBS", False))
     if _auto_jobs:

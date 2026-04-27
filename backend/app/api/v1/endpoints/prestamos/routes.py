@@ -439,8 +439,16 @@ class AplicarCondicionesBody(BaseModel):
 
     observaciones: Optional[str] = None
 
-
-
+    @field_validator("tasa_interes")
+    @classmethod
+    def tasa_interes_solo_cero_aplicar(cls, v: Optional[float]) -> float:
+        if v is None:
+            return 0.0
+        if abs(float(v)) > 1e-12:
+            raise ValueError(
+                "La tasa de interés debe ser 0%. No se permiten otras tasas."
+            )
+        return 0.0
 
 
 class EvaluarRiesgoBody(BaseModel):
@@ -489,8 +497,6 @@ class AprobarManualBody(BaseModel):
 
     observaciones: Optional[str] = None
 
-
-
     @field_validator("numero_cuotas")
 
     @classmethod
@@ -503,8 +509,16 @@ class AprobarManualBody(BaseModel):
 
         return v
 
-
-
+    @field_validator("tasa_interes")
+    @classmethod
+    def tasa_interes_solo_cero_aprobar_manual(cls, v: Optional[float]) -> float:
+        if v is None:
+            return 0.0
+        if abs(float(v)) > 1e-12:
+            raise ValueError(
+                "La tasa de interés debe ser 0%. No se permiten otras tasas."
+            )
+        return 0.0
 
 
 def _saldo_pendiente_por_prestamo_cuotas(db: Session, prestamo_ids: List[int]) -> dict[int, Decimal]:
@@ -3644,9 +3658,8 @@ def aplicar_condiciones_aprobacion(
 
         )
 
-    if payload.tasa_interes is not None:
-
-        p.tasa_interes = Decimal(str(payload.tasa_interes))
+    # Producto sin interés: tasa fija 0% (no se acepta valor distinto del cliente).
+    p.tasa_interes = Decimal("0")
 
     if payload.plazo_maximo is not None:
 
@@ -3979,9 +3992,7 @@ def aprobar_manual(
 
             p.cuota_periodo = Decimal(str(payload.cuota_periodo))
 
-        if payload.tasa_interes is not None:
-
-            p.tasa_interes = Decimal(str(payload.tasa_interes))
+        p.tasa_interes = Decimal("0")
 
         if payload.observaciones is not None:
 
