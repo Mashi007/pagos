@@ -23,3 +23,7 @@ El build se genera en la carpeta `dist/`.
 - **Build Command**: `npm install && npm run build`
 - **Publish Directory**: `dist`
 - **Node Version**: 20.11.0 (o superior)
+
+## Runbooks operativos
+
+- **Incidentes 502 del proxy (`rapicredit` -> `pagos`)**: [docs/runbook-502-proxy.md](docs/runbook-502-proxy.md)

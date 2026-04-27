@@ -6,7 +6,7 @@ API v1
 
 from fastapi import APIRouter
 
-from app.api.v1.endpoints import whatsapp, auth, configuracion, configuracion_informe_pagos, pagos, pagos_gmail, pagos_con_errores, prestamos, prestamos_candidatos_drive, notificaciones, notificaciones_recibos, notificaciones_tabs, dashboard, auditoria, clientes, clientes_drive_import, tickets, crm_campanas, comunicaciones, validadores, usuarios, modelos_vehiculos, analistas, concesionarios, ai_training, revision_manual, health, cobros_publico, cobros, estado_cuenta_publico, finiquito, registro_cambios, conciliacion_sheet, admin_tasas_cambio
+from app.api.v1.endpoints import whatsapp, auth, configuracion, configuracion_informe_pagos, pagos, pagos_gmail, pagos_con_errores, prestamos, prestamos_candidatos_drive, notificaciones, notificaciones_recibos, notificaciones_tabs, dashboard, auditoria, clientes, clientes_drive_import, tickets, crm_campanas, comunicaciones, validadores, usuarios, modelos_vehiculos, analistas, concesionarios, ai_training, revision_manual, health, cobros_publico, cobros, estado_cuenta_publico, finiquito, registro_cambios, conciliacion_sheet, admin_tasas_cambio, tasas_cambio_publico
 
 from app.api.v1.endpoints.dashboard import kpis
 
@@ -134,6 +134,12 @@ api_router.include_router(
 api_router.include_router(
     admin_tasas_cambio.router,
     tags=["admin-tasas-cambio"],
+)
+
+# Tasas de cambio (lectura para autenticados): /api/v1/tasas-cambio/*
+api_router.include_router(
+    tasas_cambio_publico.router,
+    tags=["tasas-cambio"],
 )
 
 # Configuración general (general, upload-logo, delete logo; con auth)
