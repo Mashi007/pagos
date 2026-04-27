@@ -423,6 +423,7 @@ class ApiClient {
             reqUrl.includes('/modelos-vehiculos/activos') ||
             reqUrl.includes('/cobros/pagos-reportados/listado-y-kpis') ||
             reqUrl.includes('/prestamos/candidatos-drive/snapshot') ||
+            reqUrl.includes('/pagos/gmail/status') ||
             reqUrl.includes('/admin/tasas-cambio/estado') ||
             reqUrl.includes('/admin/tasas-cambio/hoy') ||
             reqUrl.includes('/tasas-cambio/estado') ||
