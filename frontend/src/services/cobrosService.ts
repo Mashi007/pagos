@@ -116,6 +116,71 @@ async function fetchWithTimeout(
   }
 }
 
+/**
+ * Extrae texto útil del JSON del proxy (502) o del backend público.
+ */
+function mensajeDesdeCuerpoJsonPublico(parsed: unknown): string {
+  if (!parsed || typeof parsed !== 'object') return ''
+  const o = parsed as { message?: unknown; error?: unknown; detail?: unknown }
+  const parts = [o.message, o.error, o.detail]
+    .filter(v => typeof v === 'string' && String(v).trim())
+    .map(v => String(v).trim())
+  return parts.length ? parts.join(' ') : ''
+}
+
+/**
+ * Lee el body tras `fetch` en cobros público: distingue 5xx/proxy (Render), HTML de borde y 4xx.
+ * No sustituye el `catch` de red (`Failed to fetch`); evita confundir 502 JSON con éxito HTTP.
+ */
+async function parsearJsonRespuestaCobrosPublic<
+  T extends { ok?: boolean; error?: string },
+>(
+  res: Response
+): Promise<{ ok: true; data: T } | { ok: false; error: string }> {
+  const text = await res.text()
+  let parsed: unknown
+  try {
+    parsed = text ? JSON.parse(text) : null
+  } catch {
+    const looksLikeHtml =
+      typeof text === 'string' &&
+      (text.includes('<html') ||
+        text.toLowerCase().includes('cloudflare') ||
+        text.toLowerCase().includes('bad request'))
+    return {
+      ok: false,
+      error: looksLikeHtml
+        ? `La petición devolvió HTML (HTTP ${res.status}). Suele ser proxy o bloqueo; pruebe otra red o más tarde.`
+        : 'No se pudo procesar la respuesta del servidor.',
+    }
+  }
+  const data = (parsed ?? {}) as T
+
+  if (res.status >= 500) {
+    const fromBody = mensajeDesdeCuerpoJsonPublico(parsed)
+    const base =
+      res.status === 503
+        ? 'Servicio temporalmente no disponible.'
+        : res.status === 504
+          ? 'Tiempo de espera agotado en el servidor intermedio.'
+          : 'No hubo respuesta del servidor de datos (502). Suele ser el API en arranque (p. ej. Render frío), un timeout hacia el backend o API_BASE_URL del frontend apuntando mal (no debe ser la misma URL que el sitio web).'
+    return {
+      ok: false,
+      error: fromBody ? `${base} Detalle: ${fromBody}` : base,
+    }
+  }
+
+  if (!res.ok) {
+    const err =
+      (typeof data.error === 'string' && data.error.trim()) ||
+      mensajeDesdeCuerpoJsonPublico(parsed) ||
+      `Error ${res.status}. Intente de nuevo.`
+    return { ok: false, error: String(err) }
+  }
+
+  return { ok: true, data }
+}
+
 export interface ValidarCedulaResponse {
   ok: boolean
 
@@ -258,10 +323,10 @@ export async function validarCedulaPublico(
       }
     }
 
-    return res.json().catch(() => ({
-      ok: false,
-      error: 'Error al procesar respuesta del servidor.',
-    }))
+    const parsed =
+      await parsearJsonRespuestaCobrosPublic<ValidarCedulaResponse>(res)
+    if (!parsed.ok) return { ok: false, error: parsed.error }
+    return parsed.data
   } catch (e: unknown) {
     const raw =
       e instanceof Error ? e.message : 'Error de conexión con el servidor.'
@@ -296,11 +361,12 @@ export async function solicitarCodigoReportePublico(body: {
       }
     }
 
-    return res.json().catch(() => ({
-      ok: false,
-
-      error: 'Error al procesar respuesta del servidor.',
-    }))
+    const parsed =
+      await parsearJsonRespuestaCobrosPublic<SolicitarCodigoReporteResponse>(
+        res
+      )
+    if (!parsed.ok) return { ok: false, error: parsed.error }
+    return parsed.data
   } catch (e: unknown) {
     const raw =
       e instanceof Error ? e.message : 'Error de conexion con el servidor.'
@@ -337,11 +403,12 @@ export async function verificarCodigoReportePublico(body: {
       }
     }
 
-    return res.json().catch(() => ({
-      ok: false,
-
-      error: 'Error al procesar respuesta del servidor.',
-    }))
+    const parsed =
+      await parsearJsonRespuestaCobrosPublic<VerificarCodigoReporteResponse>(
+        res
+      )
+    if (!parsed.ok) return { ok: false, error: parsed.error }
+    return parsed.data
   } catch (e: unknown) {
     const raw =
       e instanceof Error ? e.message : 'Error de conexion con el servidor.'
@@ -398,38 +465,10 @@ export async function enviarReportePublico(
       }
     }
 
-    // Leer el body una sola vez (evita "body stream already read" si el servidor devuelve 500/HTML)
-
-    const text = await res.text()
-
-    let data: EnviarReporteResponse
-
-    try {
-      data = text ? JSON.parse(text) : {}
-    } catch {
-      const looksLikeCloudflareHtml =
-        typeof text === 'string' &&
-        (text.includes('<html') ||
-          text.toLowerCase().includes('cloudflare') ||
-          text.toLowerCase().includes('bad request'))
-      return {
-        ok: false,
-        error: looksLikeCloudflareHtml
-          ? `El envío fue rechazado en el borde (HTTP ${res.status}). Suele ocurrir con comprobantes muy grandes o peticiones bloqueadas por el proxy. Intente con un PDF/imagen más liviana o reintente en unos minutos.`
-          : 'No se pudo procesar la respuesta del servidor. Intente nuevamente en unos minutos.',
-      }
-    }
-
-    if (!res.ok && data && typeof data === 'object') {
-      return {
-        ok: false,
-        error:
-          (data as EnviarReporteResponse).error ||
-          `Error ${res.status}. Intente más tarde o contacte por WhatsApp 424-4579934.`,
-      }
-    }
-
-    return data
+    const parsed =
+      await parsearJsonRespuestaCobrosPublic<EnviarReporteResponse>(res)
+    if (!parsed.ok) return { ok: false, error: parsed.error }
+    return parsed.data
   } catch (e: unknown) {
     const raw =
       e instanceof Error ? e.message : 'Error de conexión con el servidor.'
@@ -480,26 +519,12 @@ export async function digitalizarComprobantePublico(
       }
     }
 
-    const text = await res.text()
-    let data: DigitalizarComprobanteResponse
-    try {
-      data = text
-        ? JSON.parse(text)
-        : { ok: false, error: 'Respuesta vacía del servidor.' }
-    } catch {
-      const looksLikeCloudflareHtml =
-        typeof text === 'string' &&
-        (text.includes('<html') ||
-          text.toLowerCase().includes('cloudflare') ||
-          text.toLowerCase().includes('bad request'))
-      return {
-        ok: false,
-        error: looksLikeCloudflareHtml
-          ? `El envío fue rechazado en el borde (HTTP ${res.status}). Suele ocurrir con comprobantes muy grandes o peticiones bloqueadas por el proxy. Intente con un PDF/imagen más liviana o reintente en unos minutos.`
-          : 'No se pudo procesar la respuesta del servidor.',
-      }
-    }
-    return data
+    const parsed =
+      await parsearJsonRespuestaCobrosPublic<DigitalizarComprobanteResponse>(
+        res
+      )
+    if (!parsed.ok) return { ok: false, error: parsed.error }
+    return parsed.data
   } catch (e: unknown) {
     const raw =
       e instanceof Error ? e.message : 'Error de conexión con el servidor.'
@@ -665,12 +690,17 @@ export async function getReciboInfopagos(
       FETCH_TIMEOUT_RECIBO_INFOPAGOS_MS
     )
 
-    if (!res.ok)
-      throw new Error(
-        res.status === 401
-          ? 'Enlace de descarga expirado.'
-          : 'No se pudo descargar el recibo.'
-      )
+    if (!res.ok) {
+      if (res.status === 401) {
+        throw new Error('Enlace de descarga expirado.')
+      }
+      if (res.status === 502 || res.status === 503 || res.status === 504) {
+        throw new Error(
+          'El servidor de datos no respondió a tiempo (posible arranque en frío o proxy). Espere 20–60 s y reintente la descarga.'
+        )
+      }
+      throw new Error('No se pudo descargar el recibo.')
+    }
 
     return res.blob()
   } catch (e: unknown) {
@@ -704,21 +734,10 @@ export async function getReciboInfopagosStatus(
       },
       FETCH_TIMEOUT_MS
     )
-    const text = await res.text()
-    let data: ReciboInfopagosStatusResponse
-    try {
-      data = text ? JSON.parse(text) : ({} as ReciboInfopagosStatusResponse)
-    } catch {
-      throw new Error('Respuesta inválida del estado de recibo.')
-    }
-    if (!res.ok) {
-      throw new Error(
-        typeof (data as { mensaje?: unknown }).mensaje === 'string'
-          ? (data as { mensaje: string }).mensaje
-          : `Error ${res.status}`
-      )
-    }
-    return data
+    const parsed =
+      await parsearJsonRespuestaCobrosPublic<ReciboInfopagosStatusResponse>(res)
+    if (!parsed.ok) throw new Error(parsed.error)
+    return parsed.data
   } catch (e: unknown) {
     const raw =
       e instanceof Error
