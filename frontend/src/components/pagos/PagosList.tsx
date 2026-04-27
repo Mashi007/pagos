@@ -1140,6 +1140,17 @@ export function PagosList() {
     return dup
   }, [data?.pagos])
 
+  const refetchDiagnosticoRevision = async () => {
+    await queryClient.refetchQueries({
+      queryKey: ['pagos-con-errores-tab'],
+      exact: false,
+    })
+    await queryClient.refetchQueries({
+      queryKey: ['pagos-revision-global-tab'],
+      exact: false,
+    })
+  }
+
   const handleFilterChange = (key: string, value: string) => {
     // Convertir "all" a cadena vacía para que el servicio no incluya el filtro
     const filterValue = value === 'all' ? '' : value
@@ -1202,10 +1213,8 @@ export function PagosList() {
       )
       toast.success(`Observación guardada en ${ids.length} pago(s).`)
       setSelectedRevisionIds(new Set())
-      await queryClient.invalidateQueries({ queryKey: ['pagos-con-errores'] })
-      await queryClient.invalidateQueries({
-        queryKey: ['pagos-con-errores-tab'],
-      })
+      await invalidatePagosPrestamosRevisionYCuotas(queryClient)
+      await refetchDiagnosticoRevision()
     } catch (e) {
       toast.error(getErrorMessage(e))
     } finally {
@@ -1226,6 +1235,7 @@ export function PagosList() {
       toast.success(`Se eliminaron ${ids.length} pago(s).`)
       setSelectedRevisionIds(new Set())
       await invalidatePagosPrestamosRevisionYCuotas(queryClient)
+      await refetchDiagnosticoRevision()
     } catch (e) {
       toast.error(getErrorMessage(e))
     } finally {
@@ -1281,6 +1291,7 @@ export function PagosList() {
         setRevisionGlobalPage(prev => Math.max(1, prev - 1))
       }
       await invalidatePagosPrestamosRevisionYCuotas(queryClient)
+      await refetchDiagnosticoRevision()
     } catch (e) {
       toast.error(getErrorMessage(e))
     } finally {
@@ -1336,6 +1347,7 @@ export function PagosList() {
       toast.success(`Nota guardada en ${ids.length} pago(s).`)
       setSelectedGlobalIds(new Set())
       await invalidatePagosPrestamosRevisionYCuotas(queryClient)
+      await refetchDiagnosticoRevision()
     } catch (e) {
       toast.error(getErrorMessage(e))
     } finally {
@@ -1356,6 +1368,7 @@ export function PagosList() {
       toast.success(`Se eliminaron ${ids.length} pago(s).`)
       setSelectedGlobalIds(new Set())
       await invalidatePagosPrestamosRevisionYCuotas(queryClient)
+      await refetchDiagnosticoRevision()
     } catch (e) {
       toast.error(getErrorMessage(e))
     } finally {
@@ -1389,10 +1402,8 @@ export function PagosList() {
       toast.success('Observación guardada')
       setEditingRevisionId(null)
       setRevisionObservacionDraft('')
-      await queryClient.invalidateQueries({ queryKey: ['pagos-con-errores'] })
-      await queryClient.invalidateQueries({
-        queryKey: ['pagos-con-errores-tab'],
-      })
+      await invalidatePagosPrestamosRevisionYCuotas(queryClient)
+      await refetchDiagnosticoRevision()
     } catch (e) {
       toast.error(getErrorMessage(e))
     } finally {
@@ -1409,6 +1420,7 @@ export function PagosList() {
         setRevisionPage(prev => Math.max(1, prev - 1))
       }
       await invalidatePagosPrestamosRevisionYCuotas(queryClient)
+      await refetchDiagnosticoRevision()
     } catch (e) {
       toast.error(getErrorMessage(e))
     } finally {
@@ -3890,6 +3902,7 @@ export function PagosList() {
                   exact: false,
                   type: 'active',
                 })
+                await refetchDiagnosticoRevision()
                 toast.success(
                   'Pago registrado exitosamente. El dashboard se ha actualizado.'
                 )
