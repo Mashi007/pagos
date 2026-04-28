@@ -90,6 +90,7 @@ export interface PagoCreate {
 export type PagoInicialRegistrar = Partial<PagoCreate> & {
   moneda_registro?: string | null
   monto_bs_original?: number | null
+  documento_ruta?: string | null
 }
 
 export interface ApiResponse<T> {

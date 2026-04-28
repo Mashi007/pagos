@@ -4000,6 +4000,10 @@ export function PagosList() {
                       'link_comprobante' in pagoEditando
                         ? (pagoEditando.link_comprobante ?? null)
                         : null,
+                    documento_ruta:
+                      'documento_ruta' in pagoEditando
+                        ? (pagoEditando.documento_ruta ?? null)
+                        : null,
                   }
                 : undefined
             }

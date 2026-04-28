@@ -97,8 +97,10 @@ import { apiClient } from '../../services/api'
 
 import {
   abrirStaffComprobanteDesdeHref,
+  fetchStaffComprobanteBlobWithDisplayMime,
   pathApiComprobanteImagenDesdeHref,
 } from '../../utils/comprobanteImagenAuth'
+import { escanerInfopagosExtraerComprobante } from '../../services/cobrosService'
 
 import {
   formatMontoBsVe,
@@ -233,6 +235,27 @@ function montoInicialTextoDesdePago(
   return montoInicialTextoDesdeNumero(pagoInicial.monto_pagado, editing)
 }
 
+function resolverLinkComprobanteInicial(
+  pagoInicial?: PagoInicialRegistrar
+): string {
+  const link = (pagoInicial?.link_comprobante || '').trim()
+  if (link) return link
+  const rutaDocumento = (pagoInicial?.documento_ruta || '').trim()
+  return rutaDocumento
+}
+
+function descomponerCedula(
+  cedulaRaw: string
+): { tipo: string; numero: string } | null {
+  const clean = String(cedulaRaw || '')
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '')
+  if (!clean) return null
+  const m = /^([VEJPG])?(\d{5,12})$/.exec(clean)
+  if (!m) return null
+  return { tipo: m[1] || 'V', numero: m[2] }
+}
+
 interface RegistrarPagoFormProps {
   onClose: () => void
 
@@ -299,9 +322,7 @@ export function RegistrarPagoForm({
 
   const comprobanteFileInputRef = useRef<HTMLInputElement>(null)
 
-  const linkComprobanteInicialRef = useRef(
-    (pagoInicial?.link_comprobante || '').trim()
-  )
+  const linkComprobanteInicialRef = useRef(resolverLinkComprobanteInicial(pagoInicial))
 
   const [archivoComprobante, setArchivoComprobante] = useState<File | null>(
     null
@@ -324,6 +345,7 @@ export function RegistrarPagoForm({
   }, [archivoComprobante])
 
   const [vistoRevisionManualOpen, setVistoRevisionManualOpen] = useState(false)
+  const [isRescanning, setIsRescanning] = useState(false)
 
   const [formData, setFormData] = useState<PagoCreate>({
     cedula_cliente: pagoInicial?.cedula_cliente || '',
@@ -341,7 +363,7 @@ export function RegistrarPagoForm({
 
     notas: pagoInicial?.notas || null,
 
-    link_comprobante: pagoInicial?.link_comprobante ?? null,
+    link_comprobante: resolverLinkComprobanteInicial(pagoInicial) || null,
 
     codigo_documento:
       (pagoInicial as { codigo_documento?: string | null })?.codigo_documento ??
@@ -353,10 +375,8 @@ export function RegistrarPagoForm({
   )
 
   useEffect(() => {
-    linkComprobanteInicialRef.current = (
-      pagoInicial?.link_comprobante || ''
-    ).trim()
-  }, [pagoInicial?.link_comprobante])
+    linkComprobanteInicialRef.current = resolverLinkComprobanteInicial(pagoInicial)
+  }, [pagoInicial?.link_comprobante, pagoInicial?.documento_ruta])
 
   const [isSubmitting, setIsSubmitting] = useState(false)
 
@@ -408,6 +428,101 @@ export function RegistrarPagoForm({
     linkComprobanteParaVista,
     vistaPreviaComprobanteActiva
   )
+
+  const handleReescanearDesdeComprobanteActual = async () => {
+    if (
+      !window.confirm(
+        'Escanear reemplazara los campos actuales (fecha, banco, numero, monto y moneda). Desea continuar?'
+      )
+    ) {
+      return
+    }
+
+    const cedulaPartes = descomponerCedula(formData.cedula_cliente)
+    if (!cedulaPartes) {
+      toast.error('Ingrese una cedula valida antes de escanear.')
+      return
+    }
+
+    setIsRescanning(true)
+    try {
+      let fileToScan: File | null = archivoComprobante
+      if (!fileToScan) {
+        const href = (linkComprobanteParaVista || '').trim()
+        if (!href) {
+          toast.error('No hay comprobante disponible para escanear.')
+          return
+        }
+        const { blob, contentType } = await fetchStaffComprobanteBlobWithDisplayMime(
+          href
+        )
+        const ext =
+          contentType === 'image/png'
+            ? 'png'
+            : contentType === 'image/gif'
+              ? 'gif'
+              : contentType === 'image/webp'
+                ? 'webp'
+                : contentType === 'application/pdf'
+                  ? 'pdf'
+                  : 'jpg'
+        fileToScan = new File([blob], `comprobante.${ext}`, {
+          type: contentType || 'application/octet-stream',
+        })
+      }
+
+      const fd = new FormData()
+      fd.append('tipo_cedula', cedulaPartes.tipo)
+      fd.append('numero_cedula', cedulaPartes.numero)
+      fd.append('comprobante', fileToScan)
+      fd.append('fuente_tasa_cambio', 'euro')
+      const institucionPlantilla = (formData.institucion_bancaria || '').trim()
+      if (institucionPlantilla) {
+        fd.append('institucion_plantilla', institucionPlantilla)
+      }
+
+      const res = await escanerInfopagosExtraerComprobante(fd)
+      if (!res.ok || !res.sugerencia) {
+        toast.error(
+          res.error || 'No se pudo digitalizar el comprobante en este momento.'
+        )
+        return
+      }
+
+      const s = res.sugerencia
+      const nextMoneda = s.moneda === 'BS' ? 'BS' : 'USD'
+      const nextMonto =
+        s.monto != null && Number.isFinite(Number(s.monto))
+          ? Number(s.monto)
+          : formData.monto_pagado
+      setMonedaRegistro(nextMoneda)
+      setMontoStr(
+        nextMoneda === 'BS' ? formatMontoBsVe(nextMonto) : nextMonto.toFixed(2)
+      )
+      setFormData(prev => ({
+        ...prev,
+        fecha_pago: (s.fecha_pago || '').trim() || prev.fecha_pago,
+        institucion_bancaria:
+          (s.institucion_financiera || '').trim() || prev.institucion_bancaria,
+        numero_documento: (s.numero_operacion || '').trim() || prev.numero_documento,
+        monto_pagado: nextMonto,
+      }))
+      setErrors(prev => {
+        const next = { ...prev }
+        delete next.fecha_pago
+        delete next.institucion_bancaria
+        delete next.numero_documento
+        delete next.monto_pagado
+        delete next.general
+        return next
+      })
+      toast.success('Campos actualizados desde el comprobante.')
+    } catch {
+      toast.error('No se pudo re-escanear el comprobante.')
+    } finally {
+      setIsRescanning(false)
+    }
+  }
 
   /** Incluye el préstamo cargado por ID si la lista por cédula aún no lo trae (evita placeholder "Seleccione el crédito" con valor 478). */
   const opcionesBancoSelect = useMemo(
@@ -1605,6 +1720,24 @@ export function RegistrarPagoForm({
                   <Upload className="h-4 w-4" aria-hidden />
                   Elegir imagen
                 </Button>
+                {isEditing ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={isSubmitting || isRescanning}
+                    className="gap-2"
+                    onClick={() => void handleReescanearDesdeComprobanteActual()}
+                  >
+                    {isRescanning ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                        Escaneando...
+                      </>
+                    ) : (
+                      'Escanear'
+                    )}
+                  </Button>
+                ) : null}
 
                 {archivoComprobante ? (
                   <Button
@@ -1781,6 +1914,17 @@ export function RegistrarPagoForm({
                   <h3 className="text-sm font-semibold text-slate-800">
                     Comprobante
                   </h3>
+                  <div className="flex justify-start">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={isSubmitting || isRescanning}
+                      onClick={() => void handleReescanearDesdeComprobanteActual()}
+                    >
+                      {isRescanning ? 'Escaneando...' : 'Escanear'}
+                    </Button>
+                  </div>
                   <div className="flex min-h-0 flex-1 flex-col overflow-y-auto rounded-md border border-slate-200 bg-white p-2">
                     {archivoComprobante && objUrlVistaArchivoNuevo ? (
                       <img
