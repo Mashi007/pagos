@@ -58,6 +58,8 @@ const FETCH_TIMEOUT_MS = 30000
  * (validación, persistencia, PDF/recibo). Firefox muestra el abort como NS_BINDING_ABORTED.
  */
 const FETCH_TIMEOUT_ENVIAR_REPORTE_MS = 180000
+const ENVIAR_REPORTE_MAX_REINTENTOS = 2
+const ENVIAR_REPORTE_REINTENTO_DELAY_MS = 1500
 
 /** Descarga de recibo PDF tras guardar (puede ser lenta si el API está frío). */
 const FETCH_TIMEOUT_RECIBO_INFOPAGOS_MS = 120000
@@ -114,6 +116,14 @@ async function fetchWithTimeout(
   } finally {
     clearTimeout(timeout)
   }
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+function esFalloTransitorioEnvioReporte(status: number): boolean {
+  return status === 502 || status === 503 || status === 504
 }
 
 /**
@@ -432,47 +442,66 @@ export async function enviarReportePublico(
 
   if (tok) headers.Authorization = `Bearer ${tok}`
 
-  try {
-    const res = await fetchWithTimeout(
-      url,
-      {
-        method: 'POST',
+  for (let intento = 1; intento <= ENVIAR_REPORTE_MAX_REINTENTOS; intento++) {
+    try {
+      const res = await fetchWithTimeout(
+        url,
+        {
+          method: 'POST',
 
-        body: formData,
+          body: formData,
 
-        credentials: 'same-origin',
+          credentials: 'same-origin',
 
-        headers,
+          headers,
 
-        // No Content-Type: el navegador fija multipart boundary
-      },
-      FETCH_TIMEOUT_ENVIAR_REPORTE_MS
-    )
+          // No Content-Type: el navegador fija multipart boundary
+        },
+        FETCH_TIMEOUT_ENVIAR_REPORTE_MS
+      )
 
-    if (res.status === 429) {
-      return {
-        ok: false,
-        error: 'Ha alcanzado el límite de envíos por hora. Intente más tarde.',
+      if (res.status === 429) {
+        return {
+          ok: false,
+          error: 'Ha alcanzado el límite de envíos por hora. Intente más tarde.',
+        }
       }
-    }
 
-    if (res.status === 503) {
-      return {
-        ok: false,
-
-        error:
-          'Servicio temporalmente no disponible. Intente más tarde o contacte por WhatsApp 424-4579934.',
+      if (
+        esFalloTransitorioEnvioReporte(res.status) &&
+        intento < ENVIAR_REPORTE_MAX_REINTENTOS
+      ) {
+        await sleep(ENVIAR_REPORTE_REINTENTO_DELAY_MS)
+        continue
       }
-    }
 
-    const parsed =
-      await parsearJsonRespuestaCobrosPublic<EnviarReporteResponse>(res)
-    if (!parsed.ok) return { ok: false, error: parsed.error }
-    return parsed.data
-  } catch (e: unknown) {
-    const raw =
-      e instanceof Error ? e.message : 'Error de conexión con el servidor.'
-    return { ok: false, error: mensajeErrorRedPublico(raw) }
+      if (res.status === 503) {
+        return {
+          ok: false,
+
+          error:
+            'Servicio temporalmente no disponible. Intente más tarde o contacte por WhatsApp 424-4579934.',
+        }
+      }
+
+      const parsed =
+        await parsearJsonRespuestaCobrosPublic<EnviarReporteResponse>(res)
+      if (!parsed.ok) return { ok: false, error: parsed.error }
+      return parsed.data
+    } catch (e: unknown) {
+      const raw =
+        e instanceof Error ? e.message : 'Error de conexión con el servidor.'
+      const esUltimoIntento = intento >= ENVIAR_REPORTE_MAX_REINTENTOS
+      if (!esUltimoIntento && /timeout|fetch|network|abort|502|503|504/i.test(raw)) {
+        await sleep(ENVIAR_REPORTE_REINTENTO_DELAY_MS)
+        continue
+      }
+      return { ok: false, error: mensajeErrorRedPublico(raw) }
+    }
+  }
+  return {
+    ok: false,
+    error: 'No se pudo procesar el reporte. Intente nuevamente en unos segundos.',
   }
 }
 

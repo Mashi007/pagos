@@ -296,6 +296,24 @@ const isDevelopment = process.env.NODE_ENV === 'development';
 const isProduction = process.env.NODE_ENV === 'production' ||
                      (process.env.PORT && process.env.NODE_ENV !== 'development');
 
+function pickRequestId(req) {
+  const candidates = [
+    req.headers['x-request-id'],
+    req.headers['x-render-request-id'],
+    req.headers['x-amzn-trace-id'],
+    req.headers['cf-ray'],
+  ];
+  for (const c of candidates) {
+    if (Array.isArray(c)) {
+      const first = (c[0] || '').toString().trim();
+      if (first) return first;
+    }
+    const s = (c || '').toString().trim();
+    if (s) return s;
+  }
+  return 'n/a';
+}
+
 // Log de diagnóstico solo al inicio
 if (!isDevelopment) {
   console.log(`🔇 Logging reducido en producción (NODE_ENV=${process.env.NODE_ENV || 'undefined'}, PORT=${process.env.PORT || 'undefined'})`);
@@ -303,9 +321,13 @@ if (!isDevelopment) {
 }
 
 app.use((req, res, next) => {
+  req._proxyReqStartAt = Date.now();
+  req._proxyRequestId = pickRequestId(req);
   // Solo loggear en desarrollo - en producción no loggear nada para mejorar rendimiento
   if (isDevelopment && req.path.startsWith('/api')) {
-    console.log(`📥 [${req.method}] Petición API recibida: ${req.path}`);
+    console.log(
+      `📥 [${req.method}] Petición API recibida: ${req.path} request_id=${req._proxyRequestId}`
+    );
   }
   // En producción, no loggear nada aquí para reducir overhead
   next();
@@ -379,8 +401,11 @@ if (API_URL) {
     onError: (err, req, res) => {
       const errCode = err?.code || 'UNKNOWN';
       const errName = err?.name || 'Error';
+      const startedAt = Number(req._proxyReqStartAt || Date.now());
+      const elapsedMs = Math.max(0, Date.now() - startedAt);
+      const requestId = req._proxyRequestId || pickRequestId(req);
       console.error(
-        `❌ Error en proxy para ${req.method} ${req.originalUrl || req.url}: [${errName}:${errCode}] ${err.message}`
+        `❌ [proxy:error] request_id=${requestId} method=${req.method} path="${req.originalUrl || req.url}" elapsed_ms=${elapsedMs} target="${API_URL}" code=${errCode} error="${errName}: ${err.message}"`
       );
       if (!res.headersSent) {
         res.setHeader('Retry-After', '3');
@@ -471,6 +496,12 @@ if (API_URL) {
     },
     onProxyRes: (proxyRes, req, res) => {
       const status = proxyRes.statusCode;
+      const startedAt = Number(req._proxyReqStartAt || Date.now());
+      const elapsedMs = Math.max(0, Date.now() - startedAt);
+      const requestId = req._proxyRequestId || pickRequestId(req);
+      const upstreamPath = proxyRes.req?.path || req.path || req.originalUrl || req.url || '';
+      const shouldLogProxySummary =
+        isDevelopment || status >= 400 || elapsedMs >= 3000;
 
       const locHdr = proxyRes.headers['location'];
       if (locHdr) {
@@ -510,30 +541,25 @@ if (API_URL) {
         }
       }
 
-      // Solo loggear errores en producción, todo en desarrollo
-      if (!isDevelopment && status >= 400) {
-        const emoji = status >= 400 ? '❌' : '⚠️';
-        console.log(`${emoji} [${req.method}] ${status} ${req.path}`);
-        if (status === 404) {
-          console.error(`   ❌ ERROR 404 - El backend no encontró la ruta: ${API_URL}${proxyRes.req?.path || req.path}`);
-        }
-        if (status === 502) {
-          console.error(
-            '   502 upstream: si es estable, revisar logs del servicio API (caído, timeout, deploy) y API_BASE_URL.'
-          );
-        }
-      } else if (isDevelopment) {
-        const emoji = status >= 200 && status < 300 ? '✅' : status >= 400 ? '❌' : '⚠️';
-        console.log(`${emoji} [${req.method}] Proxy response: ${status} para ${req.originalUrl || req.url}`);
+      if (shouldLogProxySummary) {
+        const level = status >= 500 ? 'error' : status >= 400 ? 'warn' : elapsedMs >= 3000 ? 'warn' : 'info';
+        console.log(
+          `[proxy:${level}] request_id=${requestId} method=${req.method} status=${status} elapsed_ms=${elapsedMs} path="${req.originalUrl || req.url}" upstream_path="${upstreamPath}" target="${API_URL}"`
+        );
       }
     },
     onProxyError: (err, req, res) => {
       const errCode = err?.code || 'UNKNOWN';
       const errName = err?.name || 'Error';
-      console.error(`❌ ERROR en proxy durante la petición: [${errName}:${errCode}] ${err.message}`);
-      console.error(`   URL: ${req.originalUrl || req.url}`);
-      console.error(`   Target: ${API_URL}`);
-      console.error(`   Stack: ${err.stack}`);
+      const startedAt = Number(req._proxyReqStartAt || Date.now());
+      const elapsedMs = Math.max(0, Date.now() - startedAt);
+      const requestId = req._proxyRequestId || pickRequestId(req);
+      console.error(
+        `❌ [proxy:exception] request_id=${requestId} method=${req.method} path="${req.originalUrl || req.url}" elapsed_ms=${elapsedMs} target="${API_URL}" code=${errCode} error="${errName}: ${err.message}"`
+      );
+      if (isDevelopment) {
+        console.error(`   Stack: ${err.stack}`);
+      }
       if (!res.headersSent) {
         res.status(502).json({
           error: 'Proxy error',
