@@ -1839,8 +1839,8 @@ export function RegistrarPagoForm({
                   ) ? (
                     <div className="flex flex-wrap items-center gap-2 lg:hidden">
                       <p className="text-slate-700">
-                        Enlace externo (p. ej. Drive). Puede abrirlo para
-                        revisar el archivo.
+                        Comprobante guardado sin vista previa embebida. Puede
+                        abrirlo para revisarlo.
                       </p>
                       <Button
                         type="button"
@@ -1854,13 +1854,13 @@ export function RegistrarPagoForm({
                                 linkComprobanteParaVista
                               )
                             } catch {
-                              toast.error('No se pudo abrir el enlace.')
+                              toast.error('No se pudo abrir el comprobante.')
                             }
                           })()
                         }}
                       >
                         <Eye className="h-4 w-4" aria-hidden />
-                        Abrir enlace
+                        Abrir comprobante
                       </Button>
                     </div>
                   ) : null}
@@ -1993,7 +1993,7 @@ export function RegistrarPagoForm({
                           linkComprobanteParaVista
                         ) ? (
                           <div className="flex flex-col items-center gap-2 text-center text-sm text-slate-700">
-                            <p>Enlace externo al comprobante.</p>
+                            <p>Comprobante guardado sin vista previa embebida.</p>
                             <Button
                               type="button"
                               variant="outline"
@@ -2006,13 +2006,15 @@ export function RegistrarPagoForm({
                                       linkComprobanteParaVista
                                     )
                                   } catch {
-                                    toast.error('No se pudo abrir el enlace.')
+                                    toast.error(
+                                      'No se pudo abrir el comprobante.'
+                                    )
                                   }
                                 })()
                               }}
                             >
                               <Eye className="h-4 w-4" aria-hidden />
-                              Abrir enlace
+                              Abrir comprobante
                             </Button>
                           </div>
                         ) : null}
