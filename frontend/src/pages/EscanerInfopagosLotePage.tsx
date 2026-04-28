@@ -22,6 +22,7 @@ import {
   FileStack,
   Loader2,
   Pencil,
+  RefreshCw,
   Save,
   Trash2,
 } from 'lucide-react'
@@ -80,6 +81,8 @@ import {
 import { searchParamsRevisionPagosDesdeNumeroDocumento } from '../utils/linkRevisionPagosDesdeEscaner'
 
 const MAX_ARCHIVOS = 15
+/** Re-escaneo por lotes desde el modal: primeras filas de la lista en pantalla. */
+const MAX_REESCAN_LOTE_PANTALLA = 10
 const MAX_FILE_SIZE = 10 * 1024 * 1024
 const DEFAULT_DRIVE_FOLDER =
   'https://drive.google.com/drive/folders/1gQCgiT2In8BiVMnOkKyzZezWH6M_hzxh?usp=drive_link'
@@ -494,6 +497,36 @@ export default function EscanerInfopagosLotePage() {
       fuenteTasa
     )
   }, [cedulaNormalizada, cedulaRaw, nombreCliente, fuenteTasa])
+
+  const handleRescanLoteDesdeModal = useCallback(() => {
+    if (fase !== 'revision') {
+      toast.error('Vaya a la fase de revisión con comprobantes cargados.')
+      return
+    }
+    if (!cedulaNormalizada.valido || !cedulaNormalizada.valorParaEnviar) {
+      toast.error('Cédula inválida.')
+      return
+    }
+    if (!filasRef.current.length) {
+      toast.error('No hay filas en la lista.')
+      return
+    }
+    const tipo = cedulaNormalizada.valorParaEnviar.charAt(0).toUpperCase()
+    const numero = cedulaNormalizada.valorParaEnviar.slice(1).replace(/\D/g, '')
+    void runDigitacionLoteEnSegundoPlano(
+      filasRef.current,
+      tipo,
+      numero,
+      tokens => {
+        for (const t of tokens) {
+          tokensSufijoUsadosRef.current.add(t)
+        }
+      },
+      { cedulaRaw, nombreCliente },
+      fuenteTasa,
+      { maxFilas: MAX_REESCAN_LOTE_PANTALLA, forzarRescan: true }
+    )
+  }, [cedulaNormalizada, cedulaRaw, nombreCliente, fase, fuenteTasa])
 
   const actualizarFila = useCallback(
     (clientId: string, patch: Partial<FilaLote>) => {
@@ -1404,8 +1437,35 @@ export default function EscanerInfopagosLotePage() {
         onOpenChange={open => (open ? undefined : cerrarEditorFila())}
       >
         <DialogContent className="flex max-h-[90vh] w-full max-w-2xl flex-col gap-0 p-0 sm:max-w-2xl">
-          <DialogHeader className="flex-shrink-0 border-b px-6 py-4">
-            <DialogTitle className="text-xl font-bold">Editar Pago</DialogTitle>
+          <DialogHeader className="flex-shrink-0 space-y-3 border-b px-6 py-4 sm:flex sm:flex-row sm:items-start sm:justify-between sm:space-y-0">
+            <div className="min-w-0 flex-1 space-y-1">
+              <DialogTitle className="text-xl font-bold">Editar Pago</DialogTitle>
+              <p className="text-xs text-muted-foreground">
+                Re-escaneo lote: primeras {String(MAX_REESCAN_LOTE_PANTALLA)} filas
+                de la lista; Gemini usa el banco indicado en cada fila (Mercantil,
+                BNC, BDV, etc.) como plantilla junto a la imagen.
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              className="shrink-0 gap-1.5"
+              disabled={
+                digitacionUi.running ||
+                fase !== 'revision' ||
+                !cedulaNormalizada.valido ||
+                !filas.length
+              }
+              onClick={() => void handleRescanLoteDesdeModal()}
+            >
+              {digitacionUi.running ? (
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+              ) : (
+                <RefreshCw className="h-4 w-4" aria-hidden />
+              )}
+              Re-escanear lote ({String(MAX_REESCAN_LOTE_PANTALLA)})
+            </Button>
           </DialogHeader>
           {filaEditando && editDraft ? (
             <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-6">

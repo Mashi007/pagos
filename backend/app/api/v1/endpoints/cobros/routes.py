@@ -3164,12 +3164,15 @@ async def escaner_extraer_comprobante_infopagos(
     numero_cedula: str = Form(...),
     comprobante: UploadFile = File(...),
     fuente_tasa_cambio: str = Form("euro"),
+    institucion_plantilla: str = Form(""),
 ):
     """
     Personal autenticado: sugiere campos del formulario Infopagos leyendo el comprobante con Gemini.
     Orden de uso: cédula del deudor + archivo. No guarda el reporte en `pagos_reportados`.
     Si fallan validadores (o hay duplicado en cartera), persiste borrador en `infopagos_escaner_borrador`
     con el comprobante para editar / eliminar / guardar luego; si todo pasa, no crea borrador.
+    Opcional: `institucion_plantilla` (ej. Mercantil, BNC) añade al prompt pautas típicas del banco
+    sin sustituir lo visible en la imagen (re-escaneo lote Infopagos).
     """
     cedula_input = f"{(tipo_cedula or '').strip()}{(numero_cedula or '').strip()}"
     val = validate_cedula(cedula_input)
@@ -3207,8 +3210,11 @@ async def escaner_extraer_comprobante_infopagos(
     numero = (numero_cedula or "").strip()
     ctx_ced = f"{tipo}{numero}".replace("-", "")
 
+    plantilla = (institucion_plantilla or "").strip() or None
     t_gemini0 = time.perf_counter()
-    gem = extract_infopagos_campos_desde_comprobante(ctx_ced, content, filename)
+    gem = extract_infopagos_campos_desde_comprobante(
+        ctx_ced, content, filename, institucion_plantilla=plantilla
+    )
     gemini_ms = int((time.perf_counter() - t_gemini0) * 1000)
     if not gem.get("ok"):
         logger.info(

@@ -886,7 +886,11 @@ export function RegistrarPagoForm({
           initial={{ scale: 0.95, y: 20 }}
           animate={{ scale: 1, y: 0 }}
           exit={{ scale: 0.95 }}
-          className="flex max-h-[90vh] w-full max-w-2xl flex-col rounded-lg bg-white shadow-xl"
+          className={`flex max-h-[90vh] w-full flex-col rounded-lg bg-white shadow-xl ${
+            isEditing
+              ? 'max-w-[min(72rem,calc(100vw-1.5rem))]'
+              : 'max-w-2xl'
+          }`}
         >
           {/* Header fijo (fuera del scroll, evita efecto scroll-linked en Firefox) */}
 
@@ -904,8 +908,22 @@ export function RegistrarPagoForm({
 
           <form
             onSubmit={handleSubmit}
-            className="min-h-0 flex-1 space-y-6 overflow-y-auto p-6"
+            className="flex min-h-0 flex-1 flex-col overflow-hidden"
           >
+            <div
+              className={
+                isEditing
+                  ? 'flex min-h-0 flex-1 flex-col overflow-hidden lg:flex-row'
+                  : 'min-h-0 flex-1 overflow-y-auto'
+              }
+            >
+              <div
+                className={
+                  isEditing
+                    ? 'min-h-0 flex-1 space-y-6 overflow-y-auto border-slate-200 p-6 lg:w-1/2 lg:max-w-[50%] lg:border-r'
+                    : 'space-y-6 p-6'
+                }
+              >
             {/* Error general */}
 
             {!isEditing && (
@@ -1542,6 +1560,12 @@ export function RegistrarPagoForm({
                 guardar; en edicion puede conservar el comprobante ya cargado o
                 subir uno nuevo.
               </p>
+              {isEditing ? (
+                <p className="hidden text-xs text-slate-600 lg:block">
+                  Vista ampliada del comprobante a la derecha para verificar sin
+                  desplazar el formulario.
+                </p>
+              ) : null}
 
               <input
                 ref={comprobanteFileInputRef}
@@ -1608,7 +1632,7 @@ export function RegistrarPagoForm({
                     Imagen nueva lista. Se subirá al guardar el pago.
                   </p>
                   {objUrlVistaArchivoNuevo ? (
-                    <div className="flex flex-wrap items-end gap-3">
+                    <div className="flex flex-wrap items-end gap-3 lg:hidden">
                       <img
                         src={objUrlVistaArchivoNuevo}
                         alt="Vista previa del comprobante nuevo"
@@ -1640,7 +1664,7 @@ export function RegistrarPagoForm({
                     </p>
                   ) : null}
                   {vistaPreviaComprobante.src ? (
-                    <div className="flex flex-wrap items-end gap-3">
+                    <div className="flex flex-wrap items-end gap-3 lg:hidden">
                       <img
                         src={vistaPreviaComprobante.src}
                         alt="Comprobante registrado"
@@ -1677,7 +1701,7 @@ export function RegistrarPagoForm({
                   !pathApiComprobanteImagenDesdeHref(
                     linkComprobanteParaVista
                   ) ? (
-                    <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2 lg:hidden">
                       <p className="text-slate-700">
                         Enlace externo (p. ej. Drive). Puede abrirlo para
                         revisar el archivo.
@@ -1747,10 +1771,117 @@ export function RegistrarPagoForm({
                 </div>
               </div>
             )}
+              </div>
 
-            {/* Botones */}
+              {isEditing ? (
+                <aside
+                  className="hidden max-h-[42vh] min-h-[11rem] flex-shrink-0 flex-col gap-2 border-t border-slate-200 bg-slate-50/95 p-4 lg:flex lg:max-h-none lg:w-1/2 lg:max-w-[50%] lg:min-h-0 lg:border-l lg:border-t-0"
+                  aria-label="Vista del comprobante"
+                >
+                  <h3 className="text-sm font-semibold text-slate-800">
+                    Comprobante
+                  </h3>
+                  <div className="flex min-h-0 flex-1 flex-col overflow-y-auto rounded-md border border-slate-200 bg-white p-2">
+                    {archivoComprobante && objUrlVistaArchivoNuevo ? (
+                      <img
+                        src={objUrlVistaArchivoNuevo}
+                        alt="Vista previa del comprobante seleccionado"
+                        className="mx-auto max-h-[min(68vh,34rem)] w-full max-w-full object-contain"
+                      />
+                    ) : linkComprobanteParaVista && !archivoComprobante ? (
+                      <div className="flex min-h-[10rem] flex-col gap-3">
+                        {vistaPreviaComprobante.cargando ? (
+                          <div className="flex items-center gap-2 text-slate-600">
+                            <Loader2
+                              className="h-5 w-5 shrink-0 animate-spin"
+                              aria-hidden
+                            />
+                            <span>Cargando comprobante…</span>
+                          </div>
+                        ) : null}
+                        {vistaPreviaComprobante.error ? (
+                          <p className="text-sm text-red-600">
+                            No se pudo cargar la imagen. Use Abrir o revise la
+                            sesión.
+                          </p>
+                        ) : null}
+                        {vistaPreviaComprobante.src ? (
+                          <>
+                            <img
+                              src={vistaPreviaComprobante.src}
+                              alt="Comprobante registrado"
+                              className="mx-auto max-h-[min(68vh,34rem)] w-full max-w-full rounded border border-slate-100 object-contain"
+                            />
+                            <div className="flex justify-center">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="gap-1.5"
+                                onClick={() => {
+                                  void (async () => {
+                                    try {
+                                      await abrirStaffComprobanteDesdeHref(
+                                        linkComprobanteParaVista
+                                      )
+                                    } catch {
+                                      toast.error(
+                                        'No se pudo abrir el comprobante en una pestaña nueva.'
+                                      )
+                                    }
+                                  })()
+                                }}
+                              >
+                                <Eye className="h-4 w-4" aria-hidden />
+                                Abrir en pestaña
+                              </Button>
+                            </div>
+                          </>
+                        ) : null}
+                        {!vistaPreviaComprobante.cargando &&
+                        !vistaPreviaComprobante.src &&
+                        !vistaPreviaComprobante.error &&
+                        linkComprobanteParaVista &&
+                        !pathApiComprobanteImagenDesdeHref(
+                          linkComprobanteParaVista
+                        ) ? (
+                          <div className="flex flex-col items-center gap-2 text-center text-sm text-slate-700">
+                            <p>Enlace externo al comprobante.</p>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="gap-1.5"
+                              onClick={() => {
+                                void (async () => {
+                                  try {
+                                    await abrirStaffComprobanteDesdeHref(
+                                      linkComprobanteParaVista
+                                    )
+                                  } catch {
+                                    toast.error('No se pudo abrir el enlace.')
+                                  }
+                                })()
+                              }}
+                            >
+                              <Eye className="h-4 w-4" aria-hidden />
+                              Abrir enlace
+                            </Button>
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : (
+                      <p className="self-center px-2 text-center text-sm text-slate-600">
+                        Use &quot;Elegir imagen&quot; para ver la vista previa, o
+                        conserve el comprobante ya guardado para mostrarlo aquí.
+                      </p>
+                    )}
+                  </div>
+                </aside>
+              ) : null}
+            </div>
 
-            <div className="flex justify-end gap-3 border-t pt-4">
+            <div className="flex shrink-0 justify-end gap-3 border-t bg-white px-6 py-4">
               <Button
                 type="button"
                 variant="outline"

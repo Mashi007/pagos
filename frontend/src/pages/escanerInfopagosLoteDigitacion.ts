@@ -10,6 +10,21 @@ import { collectTokensSufijoVistoArchivoDesdeFilas } from '../utils/documentoSuf
 
 import { filaTrasExtraccion, type FilaLote } from './escanerInfopagosLoteModel'
 
+/** Opciones de `runDigitacionLoteEnSegundoPlano` (re-escaneo lote desde modal, etc.). */
+export type DigitacionLoteOpciones = {
+  /** Solo las primeras N filas en el orden actual de la lista (p. ej. 10 visibles). */
+  maxFilas?: number
+  /** Si true, vuelve a llamar Gemini aunque la fila ya esté en `listo`. */
+  forzarRescan?: boolean
+}
+
+function institucionPlantillaParaFila(f: FilaLote): string {
+  const inst = (f.institucion || '').trim()
+  const otro = (f.otroInstitucion || '').trim()
+  if (inst && inst !== 'Otros') return inst
+  return otro || inst
+}
+
 export type DigitacionLoteUiSnapshot = {
   running: boolean
   progressIndex: number | null
@@ -90,8 +105,8 @@ function pushFilas(
 }
 
 /**
- * Ejecuta la cola de extracciones. Idempotente respecto a filas ya en estado `listo`.
- * No bloquea el hilo entre peticiones HTTP; notifica progreso vía snapshot + sink.
+ * Ejecuta la cola de extracciones. Por defecto omite filas ya en `listo` (idempotente).
+ * Con `forzarRescan`, vuelve a llamar Gemini usando la plantilla de banco de cada fila si existe.
  */
 export async function runDigitacionLoteEnSegundoPlano(
   filas: FilaLote[],
@@ -99,7 +114,8 @@ export async function runDigitacionLoteEnSegundoPlano(
   numero: string,
   onTokens: (tokens: Iterable<string>) => void,
   contexto: { cedulaRaw: string; nombreCliente: string },
-  fuenteTasaCambio: string = 'euro'
+  fuenteTasaCambio: string = 'euro',
+  opciones?: DigitacionLoteOpciones
 ): Promise<void> {
   if (uiSnapshot.running) {
     toast.error('Ya hay una digitalización en curso.')
@@ -112,7 +128,13 @@ export async function runDigitacionLoteEnSegundoPlano(
 
   abortController = new AbortController()
   const signal = abortController.signal
-  const ids = filas.map(f => f.clientId)
+  const forzarRescan = Boolean(opciones?.forzarRescan)
+  const maxFilas = opciones?.maxFilas
+  const idsFull = filas.map(f => f.clientId)
+  const ids =
+    typeof maxFilas === 'number' && maxFilas > 0
+      ? idsFull.slice(0, Math.min(maxFilas, idsFull.length))
+      : idsFull
   const total = ids.length
 
   uiSnapshot = { running: true, progressIndex: null, total }
@@ -121,7 +143,9 @@ export async function runDigitacionLoteEnSegundoPlano(
   let working = filas.map(f => ({ ...f }))
   const prevTitle = document.title
   const toastId = toast.loading(
-    'Digitalizando comprobantes… Puede cambiar de pantalla; el proceso sigue en segundo plano.',
+    forzarRescan
+      ? 'Re-escaneando comprobantes (Gemini)… Puede cambiar de pantalla; el proceso sigue en segundo plano.'
+      : 'Digitalizando comprobantes… Puede cambiar de pantalla; el proceso sigue en segundo plano.',
     { duration: 600_000 }
   )
 
@@ -134,7 +158,8 @@ export async function runDigitacionLoteEnSegundoPlano(
       }
       const clientId = ids[i]
       const filaActual = working.find(f => f.clientId === clientId)
-      if (!filaActual || filaActual.extract === 'listo') continue
+      if (!filaActual) continue
+      if (!forzarRescan && filaActual.extract === 'listo') continue
 
       uiSnapshot = { running: true, progressIndex: i, total }
       emitUi()
@@ -153,6 +178,10 @@ export async function runDigitacionLoteEnSegundoPlano(
       fd.append('numero_cedula', numero)
       fd.append('fuente_tasa_cambio', fuenteTasaCambio)
       fd.append('comprobante', filaActual.archivo)
+      const plantilla = institucionPlantillaParaFila(filaActual)
+      if (plantilla) {
+        fd.append('institucion_plantilla', plantilla)
+      }
 
       try {
         const res: EscanerInfopagosExtraerResponse =
@@ -188,7 +217,9 @@ export async function runDigitacionLoteEnSegundoPlano(
       toast('Digitalización cancelada.')
     } else {
       toast.success(
-        'Digitalización finalizada. Revise cada fila antes de guardar.'
+        forzarRescan
+          ? 'Re-escaneo finalizado. Revise cada fila antes de guardar.'
+          : 'Digitalización finalizada. Revise cada fila antes de guardar.'
       )
     }
   } catch (e: unknown) {

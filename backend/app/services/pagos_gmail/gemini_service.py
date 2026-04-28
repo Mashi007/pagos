@@ -17,7 +17,7 @@ import re
 import time
 from datetime import date
 from functools import lru_cache
-from typing import Any, Dict, Literal, Optional, Tuple
+from typing import Any, Dict, List, Literal, Optional, Tuple
 
 GEMINI_RATE_LIMIT_RETRY_DELAY = 45
 GEMINI_RATE_LIMIT_MAX_RETRIES = 2
@@ -2148,6 +2148,51 @@ REGLAS:
 """
 
 
+def _extra_prompt_plantilla_escaner(institucion_plantilla: str) -> str:
+    """
+    Texto breve a añadir al prompt cuando el usuario ya eligió banco/emisor en el formulario
+    (re-escaneo lote Infopagos). No sustituye la imagen: solo orienta patrones típicos.
+    """
+    t = (institucion_plantilla or "").strip()
+    if not t:
+        return ""
+    low = t.lower()
+    chunks: List[str] = []
+    if "mercantil" in low:
+        chunks.append(
+            "MERCANTIL: priorice referencia / Nº operación / confirmación de Pago Móvil o transferencia "
+            "y el monto principal del comprobante."
+        )
+    if ("bnc" in low or "bnv" in low) and "venezuela" not in low:
+        chunks.append(
+            "BNC / BNV (Banco Nacional de Crédito): busque serial, referencia o código de confirmación visibles en el capture."
+        )
+    if "banco de venezuela" in low or re.search(r"\bbdv\b", low):
+        chunks.append(
+            "BANCO DE VENEZUELA (BDV): localice código de autorización, referencia y monto en Bs. del bloque principal."
+        )
+    if "banesco" in low:
+        chunks.append(
+            "BANESCO: suelen mostrar nro. confirmación o referencia y fecha de operación en el detalle."
+        )
+    if "binance" in low:
+        chunks.append(
+            "BINANCE / USDT: use ID de orden, Pay ID o referencia y el monto en USD/USDT según lo impreso."
+        )
+    if "recibo" in low:
+        chunks.append(
+            "RECIBO / ventanilla: extraiga solo lo impreso con claridad (ref., monto, fecha); sin suposiciones."
+        )
+    if not chunks:
+        chunks.append(
+            f"El operador indicó emisor «{t[:80]}»: aplique patrones habituales de ese banco sin inventar datos."
+        )
+    return (
+        "\n\nPLANTILLA / EMISOR INDICADO POR EL USUARIO (solo guía; todo debe basarse en la imagen):\n"
+        + "\n".join(f"- {c}" for c in chunks)
+    )
+
+
 def _parse_monto_escaner(val: Any) -> Optional[float]:
     if val is None:
         return None
@@ -2221,6 +2266,7 @@ def extract_infopagos_campos_desde_comprobante(
     image_bytes: bytes,
     filename: str = "comprobante.jpg",
     api_key: Optional[str] = None,
+    institucion_plantilla: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Solo lectura OCR/visión: sugiere campos del formulario Infopagos a partir del comprobante.
@@ -2251,6 +2297,11 @@ def extract_infopagos_campos_desde_comprobante(
         GEMINI_ESCANER_INFOPAGOS_PROMPT.replace("{cedula_deudor}", ctx)
         .replace("{fecha_hoy_iso}", hoy_iso)
     )
+    extra_plantilla = _extra_prompt_plantilla_escaner(
+        (institucion_plantilla or "").strip()
+    )
+    if extra_plantilla:
+        prompt = prompt + extra_plantilla
 
     model_name = getattr(settings, "GEMINI_MODEL", "gemini-2.5-flash")
     mime = get_mime_type(filename)
