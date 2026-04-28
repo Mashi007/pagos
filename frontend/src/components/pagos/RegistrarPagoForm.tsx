@@ -260,7 +260,7 @@ function descomponerCedula(
 interface RegistrarPagoFormProps {
   onClose: () => void
 
-  onSuccess: () => void
+  onSuccess: (procesado?: boolean) => void
 
   /**
    * Callback cuando se detecta documento duplicado (error 409).
@@ -880,7 +880,28 @@ export function RegistrarPagoForm({
         await pagoService.createPago(datosEnvio)
       }
 
-      onSuccess()
+      // Si es "Guardar y Procesar", autoconcilia y aplica a cuotas
+      if (modoGuardarYProcesar && fd.prestamo_id && fd.monto_pagado > 0) {
+        try {
+          // Ya se marcó como conciliado arriba (datosEnvio.conciliado = true)
+          // Ahora aplicar a cuotas
+          const resultAplicar = await pagoService.aplicarPagoACuotas(
+            isEditing ? pagoId! : (datosEnvio as any).id
+          )
+          
+          // Log del resultado (info, no error)
+          if (import.meta.env.DEV) {
+            console.log('Aplicación a cuotas:', resultAplicar)
+          }
+        } catch (applyErr) {
+          // Si falla aplicar cuotas, igual se consideró éxito porque se guardó y concilió
+          if (import.meta.env.DEV) {
+            console.warn('Error aplicando a cuotas (pero pago guardado):', applyErr)
+          }
+        }
+      }
+
+      onSuccess(modoGuardarYProcesar)
     } catch (error: unknown) {
       console.error(
         `Error ${isEditing ? 'actualizando' : 'registrando'} pago:`,

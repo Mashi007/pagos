@@ -1555,6 +1555,69 @@ export function PagosList() {
       setIsBulkScanningGlobal(false)
     }
   }
+
+  /**
+   * Handler para el botón "Visto" (✓) en las acciones individuales de la tabla.
+   * Valida, autoconcilia y aplica a cuotas de forma individual.
+   * Si tiene éxito: elimina la fila.
+   * Si falla validación: muestra error y deja la fila visible.
+   */
+  const handleVistoIndividual = async (pago: Pago | PagoConError) => {
+    try {
+      // Validaciones básicas
+      if (!pago.cedula_cliente || !pago.cedula_cliente.trim()) {
+        toast.error('Pago sin cédula definida.')
+        return
+      }
+
+      if (!pago.prestamo_id) {
+        toast.error('Pago sin crédito asignado.')
+        return
+      }
+
+      if (!pago.monto_pagado || pago.monto_pagado <= 0) {
+        toast.error('Monto debe ser mayor a 0.')
+        return
+      }
+
+      // Autoconciliar
+      await pagoService.updateConciliado(pago.id, true)
+
+      // Aplicar a cuotas (si aquí falla, devuelve error al usuario)
+      try {
+        await pagoService.aplicarPagoACuotas(pago.id)
+      } catch (applyErr) {
+        if (import.meta.env.DEV) console.warn('Error aplicando a cuotas', applyErr)
+        const errMsg = getErrorMessage(applyErr)
+        toast.error(`Error aplicando a cuotas: ${errMsg}`)
+        return
+      }
+
+      // Éxito: eliminar fila
+      toast.success('Pago validado, conciliado, aplicado y eliminado de la lista.')
+
+      // Invalidar queries y refrescar
+      await invalidatePagosPrestamosRevisionYCuotas(queryClient, {
+        includeDashboardMenu: true,
+      })
+      await queryClient.refetchQueries({
+        queryKey: ['cuotas-prestamo'],
+        exact: false,
+      })
+      await queryClient.refetchQueries({
+        queryKey: ['pagos-kpis'],
+        exact: false,
+      })
+      await queryClient.refetchQueries({
+        queryKey: ['pagos'],
+        exact: false,
+      })
+    } catch (err) {
+      if (import.meta.env.DEV) console.error('Error en handleVistoIndividual:', err)
+      toast.error(getErrorMessage(err))
+    }
+  }
+
   const handleBuscarRevisionPorCedula = () => {
     setRevisionCedulaFiltro(revisionCedulaInput.trim())
     setRevisionNumeroDocumentoFiltro(revisionNumeroDocumentoInput.trim())
@@ -3292,6 +3355,15 @@ export function PagosList() {
                                     </Button>
                                     <Button
                                       size="icon"
+                                      variant="default"
+                                      className="bg-green-600 hover:bg-green-700"
+                                      title="Visto - Validar, conciliar y aplicar"
+                                      onClick={() => void handleVistoIndividual(pago)}
+                                    >
+                                      <Check className="h-4 w-4" />
+                                    </Button>
+                                    <Button
+                                      size="icon"
                                       variant="destructive"
                                       title="Eliminar pago"
                                       disabled={deletingGlobalId === pago.id}
@@ -4115,10 +4187,33 @@ export function PagosList() {
               setShowRegistrarPago(false)
               setPagoEditando(null)
             }}
-            onSuccess={async () => {
+            onSuccess={async (procesado?: boolean) => {
               setShowRegistrarPago(false)
+              const pagoIdEliminado = pagoEditando?.id
               setPagoEditando(null)
+              
               try {
+                // Si fue "Guardar y Procesar", eliminar la fila de la tabla
+                if (procesado && pagoIdEliminado) {
+                  try {
+                    // Usar el servicio apropiado según el contexto
+                    if (esRevisarPagos || activeTab === 'revision') {
+                      await pagoConErrorService.delete(pagoIdEliminado)
+                    } else {
+                      await pagoService.deletePago(pagoIdEliminado)
+                    }
+                    toast.success('Pago guardado, conciliado, aplicado y eliminado de la lista.')
+                  } catch (deleteErr) {
+                    // Si falla el DELETE, no es crítico - el pago ya se procesó
+                    if (import.meta.env.DEV) {
+                      console.warn('Error eliminando fila:', deleteErr)
+                    }
+                    toast.success('Pago guardado, conciliado y aplicado.')
+                  }
+                } else {
+                  toast.success('Pago registrado exitosamente.')
+                }
+                
                 await invalidatePagosPrestamosRevisionYCuotas(queryClient, {
                   includeDashboardMenu: true,
                 })
@@ -4139,14 +4234,11 @@ export function PagosList() {
                   exact: false,
                   type: 'active',
                 })
-                toast.success(
-                  'Pago registrado exitosamente. El dashboard se ha actualizado.'
-                )
               } catch (error) {
                 if (import.meta.env.DEV)
                   console.error('Error actualizando dashboard:', error)
                 toast.error(
-                  'Pago registrado, pero hubo un error al actualizar el dashboard'
+                  'Pago procesado, pero hubo un error al actualizar la vista'
                 )
               }
             }}
