@@ -92,9 +92,16 @@ def parse_fecha_q_iso_y_ambigua(raw: str) -> Tuple[Optional[date], bool]:
     s = cell_str(raw)
     if not s:
         return None, False
-    if re.match(r"^\d{4}-\d{2}-\d{2}$", s):
+    m_ymd_slash = re.match(r"^(\d{4})/(\d{1,2})/(\d{1,2})$", s)
+    if m_ymd_slash:
+        y, mo, d = int(m_ymd_slash.group(1)), int(m_ymd_slash.group(2)), int(m_ymd_slash.group(3))
         try:
-            return date.fromisoformat(s), False
+            return date(y, mo, d), False
+        except ValueError:
+            return None, False
+    if re.match(r"^\d{4}-\d{2}-\d{2}(?:[T\s].*)?$", s):
+        try:
+            return date.fromisoformat(s[:10]), False
         except ValueError:
             return None, False
     m = re.match(r"^(\d{1,2})/(\d{1,2})/(\d{4})$", s)

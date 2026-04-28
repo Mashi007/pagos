@@ -3,7 +3,7 @@ Schemas para KPIs y estadísticas de usuarios.
 """
 from typing import Optional
 from datetime import datetime
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 class UsuarioInfo(BaseModel):
@@ -32,8 +32,8 @@ class KpiUsuariosResponse(BaseModel):
     ultimo_usuario_creado: UsuarioInfo
     ultimo_login: UsuarioInfo
     
-    class Config:
-        schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "total_usuarios": 5,
                 "usuarios_activos": 5,
@@ -43,17 +43,18 @@ class KpiUsuariosResponse(BaseModel):
                     "admin": 1,
                     "manager": 1,
                     "operator": 2,
-                    "viewer": 1
+                    "viewer": 1,
                 },
                 "usuarios_ultimo_mes": 3,
                 "usuarios_ultima_semana": 1,
                 "ultimo_usuario_creado": {
                     "email": "usuario@empresa.com",
-                    "fecha": "2026-04-01T10:30:00"
+                    "fecha": "2026-04-01T10:30:00",
                 },
                 "ultimo_login": {
                     "email": "admin@sistema.com",
-                    "fecha": "2026-04-01T15:45:00"
-                }
+                    "fecha": "2026-04-01T15:45:00",
+                },
             }
         }
+    )

@@ -2,7 +2,7 @@
 Schemas para carga masiva de usuarios (bulk import).
 """
 from typing import List, Optional
-from pydantic import BaseModel, EmailStr, Field, validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 
 class UserBulkItem(BaseModel):
@@ -14,24 +14,26 @@ class UserBulkItem(BaseModel):
     rol: str = Field("viewer", description="admin|manager|operator|viewer")
     password: str = Field(..., min_length=6, max_length=100)
     
-    @validator('rol')
-    def validate_rol(cls, v):
+    @field_validator("rol")
+    @classmethod
+    def validate_rol(cls, v: str) -> str:
         valid_roles = {'admin', 'manager', 'operator', 'viewer'}
         if v not in valid_roles:
             raise ValueError(f"Rol debe ser uno de: {', '.join(valid_roles)}")
         return v
     
-    class Config:
-        schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "email": "usuario@example.com",
                 "cedula": "12345678-9",
                 "nombre": "Juan Pérez García",
                 "cargo": "Operario",
                 "rol": "viewer",
-                "password": "SeguraPassword123"
+                "password": "SeguraPassword123",
             }
         }
+    )
 
 
 class UserBulkImportRequest(BaseModel):
@@ -54,8 +56,8 @@ class UserBulkImportResponse(BaseModel):
     total_errores: int
     resultados: List[BulkImportResult]
     
-    class Config:
-        schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "total_solicitados": 3,
                 "total_exitosos": 2,
@@ -65,13 +67,14 @@ class UserBulkImportResponse(BaseModel):
                         "email": "usuario1@example.com",
                         "status": "success",
                         "mensaje": "Usuario creado exitosamente",
-                        "usuario_id": 10
+                        "usuario_id": 10,
                     },
                     {
                         "email": "usuario2@example.com",
                         "status": "error",
-                        "mensaje": "Email duplicado: usuario2@example.com ya existe"
-                    }
-                ]
+                        "mensaje": "Email duplicado: usuario2@example.com ya existe",
+                    },
+                ],
             }
         }
+    )

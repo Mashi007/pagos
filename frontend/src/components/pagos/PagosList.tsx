@@ -70,6 +70,11 @@ import {
   pagoConErrorService,
   type PagoConError,
 } from '../../services/pagoConErrorService'
+import {
+  deleteInfopagosBorradorEscaneer,
+  listInfopagosBorradoresEscaneer,
+  type InfopagosBorradorListItem,
+} from '../../services/cobrosService'
 import { RegistrarPagoForm } from './RegistrarPagoForm'
 import { ExcelUploaderPagosUI } from './ExcelUploaderPagosUI'
 import {
@@ -247,6 +252,9 @@ export function PagosList() {
   const [bulkRevisionObservacion, setBulkRevisionObservacion] = useState('')
   const [isBulkSavingRevision, setIsBulkSavingRevision] = useState(false)
   const [isBulkDeletingRevision, setIsBulkDeletingRevision] = useState(false)
+  const [deletingBorradorId, setDeletingBorradorId] = useState<string | null>(
+    null
+  )
   const [revisionGlobalPage, setRevisionGlobalPage] = useState(1)
   const [revisionGlobalCedulaInput, setRevisionGlobalCedulaInput] = useState('')
   const [revisionGlobalCedulaFiltro, setRevisionGlobalCedulaFiltro] =
@@ -835,6 +843,17 @@ export function PagosList() {
     refetchOnWindowFocus: false,
   })
   const {
+    data: borradoresPendientesData,
+    isLoading: isLoadingBorradoresPendientes,
+    isError: isBorradoresPendientesError,
+  } = useQuery({
+    queryKey: ['escaner-infopagos-borradores-pendientes'],
+    queryFn: () => listInfopagosBorradoresEscaneer(40),
+    enabled: activeTab === 'revision',
+    staleTime: 15_000,
+    refetchOnWindowFocus: false,
+  })
+  const {
     data: revisionGlobalData,
     isLoading: isLoadingRevisionGlobal,
     isError: isRevisionGlobalError,
@@ -958,6 +977,8 @@ export function PagosList() {
       return true
     })
   }, [revisionRowsAnalizadas, revisionMotivoFiltro])
+  const borradoresPendientes: InfopagosBorradorListItem[] =
+    borradoresPendientesData?.items ?? []
   useEffect(() => {
     const idsVisibles = new Set(revisionRowsFiltradas.map(r => r.pago.id))
     setSelectedRevisionIds(prev => {
@@ -1490,6 +1511,26 @@ export function PagosList() {
       setDeletingRevisionId(null)
     }
   }
+  const handleEliminarBorradorPendiente = useCallback(
+    async (id: string) => {
+      if (!window.confirm('¿Eliminar este borrador con validación pendiente?')) {
+        return
+      }
+      setDeletingBorradorId(id)
+      try {
+        await deleteInfopagosBorradorEscaneer(id)
+        toast.success('Borrador eliminado')
+        await queryClient.invalidateQueries({
+          queryKey: ['escaner-infopagos-borradores-pendientes'],
+        })
+      } catch (e) {
+        toast.error(getErrorMessage(e))
+      } finally {
+        setDeletingBorradorId(null)
+      }
+    },
+    [queryClient]
+  )
   const getEstadoBadge = (estado: string) => {
     const estados: Record<string, { color: string; label: string }> = {
       PAGADO: { color: 'bg-green-500', label: 'Pagado' },
@@ -2335,6 +2376,92 @@ export function PagosList() {
                 </p>
               </CardHeader>
               <CardContent>
+                <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50/50 p-3">
+                  <p className="text-sm font-medium text-amber-950">
+                    Centro manual de revisión de pagos no validados
+                  </p>
+                  <p className="mt-1 text-xs text-amber-900/90">
+                    Esta pestaña centraliza los pagos en revisión y también los
+                    borradores del escáner que no pasaron validadores. Edite y
+                    guarde desde aquí para pasarlos al flujo normal.
+                  </p>
+                </div>
+                <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50/40 p-3">
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <p className="text-sm font-medium text-amber-950">
+                      Borradores con validación pendiente (Escáner)
+                    </p>
+                    <Badge variant="outline">
+                      {isLoadingBorradoresPendientes
+                        ? '...'
+                        : String(borradoresPendientes.length)}
+                    </Badge>
+                  </div>
+                  {isLoadingBorradoresPendientes ? (
+                    <p className="text-xs text-slate-600">Cargando lista...</p>
+                  ) : isBorradoresPendientesError ? (
+                    <p className="text-xs text-red-700">
+                      No se pudo cargar la lista de borradores del escáner.
+                    </p>
+                  ) : borradoresPendientes.length === 0 ? (
+                    <p className="text-xs text-slate-600">
+                      No hay borradores pendientes.
+                    </p>
+                  ) : (
+                    <ul className="divide-y divide-amber-200 rounded-md border border-amber-200 bg-white">
+                      {borradoresPendientes.map(row => (
+                        <li
+                          key={row.id}
+                          className="flex flex-wrap items-start justify-between gap-2 px-3 py-2 text-sm"
+                        >
+                          <div className="min-w-0 flex-1 space-y-0.5">
+                            <p className="font-medium text-slate-900">
+                              {(row.cliente_nombre || row.cedula_normalizada || '').trim() ||
+                                'Cliente'}
+                              <span className="ml-2 font-mono text-xs text-slate-600">
+                                {row.comprobante_nombre}
+                              </span>
+                            </p>
+                            <p className="text-xs text-slate-600">
+                              {row.resumen_validacion}
+                            </p>
+                          </div>
+                          <div className="flex shrink-0 gap-1">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="h-8 gap-1 px-2"
+                              asChild
+                            >
+                              <Link to={`/escaner?borrador=${encodeURIComponent(row.id)}`}>
+                                <Edit className="h-3.5 w-3.5" />
+                                Editar
+                              </Link>
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="h-8 gap-1 border-red-200 px-2 text-red-800 hover:bg-red-50"
+                              disabled={deletingBorradorId === row.id}
+                              onClick={() =>
+                                void handleEliminarBorradorPendiente(row.id)
+                              }
+                            >
+                              {deletingBorradorId === row.id ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <Trash2 className="h-3.5 w-3.5" />
+                              )}
+                              Eliminar
+                            </Button>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
                 <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end">
                   <div className="flex-1">
                     <label className="mb-1 block text-sm font-medium text-gray-700">

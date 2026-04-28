@@ -12,8 +12,6 @@ import {
   CheckCircle2,
   AlertTriangle,
   Eye,
-  Pencil,
-  Trash2,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
@@ -22,7 +20,6 @@ import { Input } from '../components/ui/input'
 import { Label } from '../components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import {
-  deleteInfopagosBorradorEscaneer,
   escanerInfopagosExtraerComprobante,
   enviarReporteInfopagos,
   getInfopagosBorradorEscaneer,
@@ -30,10 +27,8 @@ import {
   getInfopagosBorradorComprobanteBlob,
   getReciboInfopagos,
   getReciboInfopagosStatus,
-  listInfopagosBorradoresEscaneer,
   validarCedulaPublico,
   type EscanerInfopagosExtraerResponse,
-  type InfopagosBorradorListItem,
 } from '../services/cobrosService'
 import { DuplicadoPrestamosComparacion } from '../components/cobros/DuplicadoPrestamosComparacion'
 import { formatMontoBsVe, parseMontoLatam } from '../utils/montoLatam'
@@ -307,10 +302,6 @@ export default function EscanerInfopagosPage() {
   const [archivo, setArchivo] = useState<File | null>(null)
   /** Borrador persistido en BD tras escanear (reutiliza comprobante al guardar). */
   const [borradorId, setBorradorId] = useState<string | null>(null)
-  const [borradoresPendientes, setBorradoresPendientes] = useState<
-    InfopagosBorradorListItem[]
-  >([])
-  const [cargandoBorradores, setCargandoBorradores] = useState(false)
   const navigate = useNavigate()
   const [comprobantePreviewUrl, setComprobantePreviewUrl] = useState<
     string | null
@@ -347,6 +338,7 @@ export default function EscanerInfopagosPage() {
   const [reciboListo, setReciboListo] = useState<boolean | null>(null)
   const [consultandoRecibo, setConsultandoRecibo] = useState(false)
   const [descargandoRecibo, setDescargandoRecibo] = useState(false)
+  const borradorQueryAplicadoRef = useRef(false)
   useEffect(() => {
     if (fase !== 'exito') return
     if (enRevision) return
@@ -485,22 +477,6 @@ export default function EscanerInfopagosPage() {
       await openInfopagosBorradorComprobanteInNewTab(bid)
     }
   }, [archivo, borradorId])
-
-  const refrescarBorradores = useCallback(async () => {
-    setCargandoBorradores(true)
-    try {
-      const data = await listInfopagosBorradoresEscaneer(40)
-      setBorradoresPendientes(data.items ?? [])
-    } catch {
-      setBorradoresPendientes([])
-    } finally {
-      setCargandoBorradores(false)
-    }
-  }, [])
-
-  useEffect(() => {
-    void refrescarBorradores()
-  }, [refrescarBorradores])
 
   const aplicarExtraccionInfopagosAlFormulario = useCallback(
     (res: EscanerInfopagosExtraerResponse) => {
@@ -670,7 +646,6 @@ export default function EscanerInfopagosPage() {
         toast.error('Sin sugerencias del modelo.')
         return
       }
-      void refrescarBorradores()
       const bid =
         typeof res.borrador_id === 'string' && res.borrador_id.trim()
           ? res.borrador_id.trim()
@@ -686,21 +661,7 @@ export default function EscanerInfopagosPage() {
       escanearActivoRef.current = false
       setEscaneando(false)
     }
-  }, [aplicarExtraccionInfopagosAlFormulario, archivo, cedulaNormalizada, fuenteTasa, refrescarBorradores])
-
-  const handleEliminarBorrador = useCallback(
-    async (id: string) => {
-      try {
-        await deleteInfopagosBorradorEscaneer(id)
-        toast.success('Borrador eliminado.')
-        setBorradorId(cur => (cur === id ? null : cur))
-        void refrescarBorradores()
-      } catch (e: unknown) {
-        toast.error(e instanceof Error ? e.message : 'No se pudo eliminar.')
-      }
-    },
-    [refrescarBorradores]
-  )
+  }, [aplicarExtraccionInfopagosAlFormulario, archivo, cedulaNormalizada, fuenteTasa])
 
   const handleEditarBorrador = useCallback(
     async (id: string) => {
@@ -765,6 +726,16 @@ export default function EscanerInfopagosPage() {
     },
     [aplicarExtraccionInfopagosAlFormulario]
   )
+
+  useEffect(() => {
+    if (borradorQueryAplicadoRef.current) return
+    const bid = new URLSearchParams(window.location.search).get('borrador')
+    const borradorIdUrl = (bid || '').trim()
+    if (!borradorIdUrl) return
+    borradorQueryAplicadoRef.current = true
+    void handleEditarBorrador(borradorIdUrl)
+    navigate('/escaner', { replace: true })
+  }, [handleEditarBorrador, navigate])
 
   const handleGuardar = useCallback(async () => {
     const ahora = Date.now()
@@ -872,7 +843,6 @@ export default function EscanerInfopagosPage() {
         validada: true,
       })
       toast.success(res.mensaje || 'Pago registrado.')
-      void refrescarBorradores()
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : 'Error al guardar.')
     } finally {
@@ -891,7 +861,6 @@ export default function EscanerInfopagosPage() {
     nombreCliente,
     numeroOperacion,
     fuenteTasa,
-    refrescarBorradores,
   ])
 
   const handleDescargarRecibo = useCallback(async () => {
@@ -985,74 +954,20 @@ export default function EscanerInfopagosPage() {
         </div>
       </div>
 
-      {cargandoBorradores || borradoresPendientes.length > 0 ? (
-        <Card className="border-amber-200 bg-amber-50/50">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base text-amber-950">
-              Borradores con validación pendiente
-            </CardTitle>
-            <p className="text-xs text-amber-900/90">
-              Solo se guardan en servidor los escaneos que no cumplen validadores
-              (o marcan duplicado en cartera). Puede editarlos, eliminarlos o guardar
-              el reporte para pasar al flujo normal de Pagos reportados.
-            </p>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {cargandoBorradores ? (
-              <p className="text-sm text-slate-600">Cargando lista…</p>
-            ) : (
-              <ul className="divide-y divide-amber-200 rounded-md border border-amber-200 bg-white">
-                {borradoresPendientes.map(row => (
-                  <li
-                    key={row.id}
-                    className="flex flex-wrap items-start justify-between gap-2 px-3 py-2 text-sm"
-                  >
-                    <div className="min-w-0 flex-1 space-y-0.5">
-                      <p className="font-medium text-slate-900">
-                        {(row.cliente_nombre || row.cedula_normalizada || '').trim() ||
-                          'Cliente'}
-                        <span className="ml-2 font-mono text-xs text-slate-600">
-                          {row.comprobante_nombre}
-                        </span>
-                      </p>
-                      <p className="text-xs text-slate-600">
-                        {row.resumen_validacion}
-                      </p>
-                      {row.created_at ? (
-                        <p className="text-xs text-slate-500">
-                          {row.created_at.slice(0, 19).replace('T', ' ')}
-                        </p>
-                      ) : null}
-                    </div>
-                    <div className="flex shrink-0 gap-1">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="h-8 gap-1 px-2"
-                        onClick={() => void handleEditarBorrador(row.id)}
-                      >
-                        <Pencil className="h-3.5 w-3.5" />
-                        Editar
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="h-8 gap-1 border-red-200 px-2 text-red-800 hover:bg-red-50"
-                        onClick={() => void handleEliminarBorrador(row.id)}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                        Eliminar
-                      </Button>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </CardContent>
-        </Card>
-      ) : null}
+      <Card className="border-amber-200 bg-amber-50/40">
+        <CardContent className="py-3">
+          <p className="text-sm text-amber-950">
+            Los borradores con validación pendiente se gestionan desde{' '}
+            <Link
+              to="/pagos?pestana=revision"
+              className="font-semibold underline underline-offset-2"
+            >
+              Pagos &gt; Revisión
+            </Link>
+            , para evitar duplicar pantallas.
+          </p>
+        </CardContent>
+      </Card>
 
       <input
         ref={honeypotRef}

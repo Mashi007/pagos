@@ -3,8 +3,8 @@ Configuración del sistema usando Pydantic Settings
 """
 import json
 from typing import Optional, List
-from pydantic_settings import BaseSettings
-from pydantic import Field, validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import Field, field_validator
 
 
 class Settings(BaseSettings):
@@ -191,8 +191,9 @@ class Settings(BaseSettings):
             "para rate limit cuando la peticion llega detras de proxy confiable."
         ),
     )
-    @validator('SECRET_KEY')
-    def validate_secret_key(cls, v):
+    @field_validator("SECRET_KEY")
+    @classmethod
+    def validate_secret_key(cls, v: str) -> str:
         """Validar que SECRET_KEY tenga longitud y complejidad adecuadas"""
         if len(v) < 32:
             raise ValueError('SECRET_KEY debe tener al menos 32 caracteres para seguridad adecuada')
@@ -618,11 +619,12 @@ class Settings(BaseSettings):
                 out.append(extra)
         return out
     
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
-        case_sensitive = True
-        extra = "ignore"  # Ignorar variables extra del .env no definidas en Settings
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=True,
+        extra="ignore",  # Ignorar variables extra del .env no definidas en Settings
+    )
 
 
 # Instancia global de settings

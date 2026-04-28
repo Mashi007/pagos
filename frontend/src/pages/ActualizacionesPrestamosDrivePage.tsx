@@ -117,7 +117,22 @@ function validadoresTresFlags(p: PrestamoCandidatoDriveFila['payload']) {
 function parseFechaFlexible(s: string): Date | null {
   const raw = (s || '').trim()
   if (!raw) return null
-  if (/^\d{4}-\d{2}-\d{2}/.test(raw)) {
+  const ymdSlash = raw.match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})$/)
+  if (ymdSlash) {
+    const year = Number(ymdSlash[1])
+    const month = Number(ymdSlash[2])
+    const day = Number(ymdSlash[3])
+    const d = new Date(year, month - 1, day, 12, 0, 0)
+    if (
+      d.getFullYear() === year &&
+      d.getMonth() === month - 1 &&
+      d.getDate() === day
+    ) {
+      return d
+    }
+    return null
+  }
+  if (/^\d{4}-\d{2}-\d{2}(?:[T\s].*)?$/.test(raw)) {
     const d = new Date(`${raw.slice(0, 10)}T12:00:00`)
     return Number.isNaN(d.getTime()) ? null : d
   }
@@ -650,6 +665,14 @@ export default function ActualizacionesPrestamosDrivePage() {
         <span className="text-red-600">
           (Q) Fecha ambigua en Q (dd/mm). Use YYYY-MM-DD para evitar inversión
           día/mes.
+        </span>
+      )
+    }
+    if (qRaw && !parseFechaFlexible(qRaw)) {
+      return (
+        <span className="text-red-600">
+          (Q) Fecha inválida: use YYYY-MM-DD o YYYY/MM/DD (no serial, no
+          ambiguas).
         </span>
       )
     }

@@ -1009,6 +1009,16 @@ export default function EscanerInfopagosLotePage() {
               ) : null}
             </CardHeader>
             <CardContent className="space-y-4">
+              <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950">
+                Centro manual único: los pendientes se gestionan en{' '}
+                <Link
+                  to="/pagos?pestana=revision"
+                  className="font-semibold underline underline-offset-2"
+                >
+                  Pagos &gt; Revisión
+                </Link>
+                .
+              </p>
               {digitacionUi.running ? (
                 <p
                   className="rounded-md border border-indigo-200 bg-indigo-50 px-3 py-2 text-sm text-indigo-950"

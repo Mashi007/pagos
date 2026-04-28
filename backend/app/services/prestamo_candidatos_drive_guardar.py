@@ -28,6 +28,7 @@ from app.services.prestamo_candidatos_drive_validadores import (
 from app.services.prestamo_candidatos_drive_normalizacion import (
     normalizar_modalidad_drive,
     parse_decimal_monto_drive,
+    parse_fecha_q_iso_y_ambigua,
     parse_numero_cuotas_drive,
 )
 from app.schemas.prestamo import PrestamoCreate
@@ -60,12 +61,15 @@ def _parse_numero_cuotas(s: str) -> Optional[int]:
 
 
 def _parse_fecha_a_date(s: str) -> Optional[date]:
-    """Acepta DD/MM/YYYY (validadores) o YYYY-MM-DD."""
+    """Acepta DD/MM/YYYY, YYYY-MM-DD y serial de Google Sheets."""
     from app.api.v1.endpoints.validadores import validate_fecha
 
     raw = (s or "").strip()
     if not raw:
         return None
+    parsed_q, _amb = parse_fecha_q_iso_y_ambigua(raw)
+    if parsed_q is not None:
+        return parsed_q
     if re.match(r"^\d{4}-\d{2}-\d{2}", raw):
         try:
             return date.fromisoformat(raw[:10])
