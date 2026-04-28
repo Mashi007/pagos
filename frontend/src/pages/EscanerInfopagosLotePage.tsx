@@ -647,10 +647,16 @@ export default function EscanerInfopagosLotePage() {
         toast.error(vM.error || 'Monto inválido.')
         return
       }
-      const vA = validarArchivo(fila.archivo)
-      if (!vA.valido) {
-        toast.error(vA.error || 'Archivo de comprobante inválido.')
-        return
+      const borradorIdFila =
+        typeof fila.borradorId === 'string' && fila.borradorId.trim()
+          ? fila.borradorId.trim()
+          : ''
+      if (!borradorIdFila) {
+        const vA = validarArchivo(fila.archivo)
+        if (!vA.valido) {
+          toast.error(vA.error || 'Archivo de comprobante inválido.')
+          return
+        }
       }
       if (honeypotRef.current?.value?.trim()) {
         toast.error('No se pudo procesar el envío.')
@@ -671,7 +677,17 @@ export default function EscanerInfopagosLotePage() {
       form.append('moneda', fila.moneda)
       form.append('fuente_tasa_cambio', fuenteTasa)
       form.append('confirmacion_humana', 'true')
-      form.append('comprobante', fila.archivo)
+      if (borradorIdFila) {
+        form.append('borrador_id', borradorIdFila)
+      }
+      if (fila.archivo) {
+        form.append('comprobante', fila.archivo)
+      } else if (!borradorIdFila) {
+        toast.error(
+          'Adjunte el comprobante o use una fila con borrador en servidor.'
+        )
+        return
+      }
       guardarActivoRef.current.add(clientId)
       actualizarFila(clientId, { guardando: true, guardadoError: undefined })
       try {
@@ -688,6 +704,7 @@ export default function EscanerInfopagosLotePage() {
           guardando: false,
           guardado: true,
           guardadoError: undefined,
+          borradorId: null,
           referencia: res.referencia_interna || '',
           enRevision:
             String(res.estado_reportado ?? '')

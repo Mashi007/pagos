@@ -3442,6 +3442,7 @@ def _extraer_folder_id_drive(raw: str) -> str:
 
 @router.post("/escaner/lote/drive-digitalizar")
 async def escaner_lote_drive_digitalizar(
+    request: Request,
     db: Session = Depends(get_db),
     tipo_cedula: str = Form(...),
     numero_cedula: str = Form(...),
@@ -3453,7 +3454,9 @@ async def escaner_lote_drive_digitalizar(
     Escáner lote desde carpeta compartida de Drive:
     - toma hasta `max_archivos` (tope duro 15),
     - digitaliza y valida cada comprobante como el escáner unitario,
-    - elimina de Drive los archivos leídos para dejar la carpeta lista.
+    - si hay validación pendiente o duplicado en cartera, persiste borrador (como el unitario)
+      y devuelve `borrador_id` en el ítem cuando hay usuario en sesión,
+    - elimina de Drive los archivos leídos para dejar la carpeta lista (tras persistir borrador).
     """
     max_items = max(1, min(int(max_archivos or 15), 15))
     folder_id = _extraer_folder_id_drive(drive_folder)
@@ -3516,6 +3519,14 @@ async def escaner_lote_drive_digitalizar(
     numero = (numero_cedula or "").strip()
     ctx_ced = f"{tipo}{numero}".replace("-", "")
     prestamo_objetivo_id: Optional[int] = int(prestamos_aprob[0]) if len(prestamos_aprob) == 1 else None
+
+    current_user = getattr(request.state, "user", None)
+    usuario_escaner_id: Optional[int] = None
+    if current_user is not None and getattr(current_user, "id", None) is not None:
+        try:
+            usuario_escaner_id = int(current_user.id)
+        except (TypeError, ValueError):
+            usuario_escaner_id = None
 
     items = []
     delete_ok = 0
@@ -3665,6 +3676,70 @@ async def escaner_lote_drive_digitalizar(
                             if p_exist is not None:
                                 prestamo_existente_id = getattr(p_exist, "prestamo_id", None)
 
+                sugerencia = {
+                    "fecha_pago": fecha_iso,
+                    "institucion_financiera": inst,
+                    "numero_operacion": num_op,
+                    "monto": monto,
+                    "moneda": moneda if moneda in ("BS", "USD") else "BS",
+                    "cedula_pagador_en_comprobante": gem.get("cedula_pagador_en_comprobante") or "",
+                    "notas_modelo": gem.get("notas") or "",
+                }
+
+                borrador_id: Optional[str] = None
+                necesita_borrador_bd = ieb.debe_persistir_borrador_escaneo(
+                    validacion_campos=validacion_campos,
+                    validacion_reglas=validacion_reglas,
+                    duplicado_en_pagos=duplicado_en_pagos,
+                )
+                if necesita_borrador_bd and usuario_escaner_id is not None:
+                    try:
+                        payload_snap = {
+                            "source": "lote_drive",
+                            "drive_file_id": fid,
+                            "nombre_archivo": fname,
+                            "sugerencia": sugerencia,
+                            "validacion_campos": validacion_campos,
+                            "validacion_reglas": validacion_reglas,
+                            "duplicado_en_pagos": duplicado_en_pagos,
+                            "pago_existente_id": pago_existente_id,
+                            "prestamo_existente_id": prestamo_existente_id,
+                            "prestamo_objetivo_id": prestamo_objetivo_id,
+                        }
+                        borrador_id = ieb.crear_borrador_escaneo(
+                            db,
+                            cliente_id=int(cliente.id),
+                            usuario_id=usuario_escaner_id,
+                            tipo_cedula=tipo,
+                            numero_cedula=numero,
+                            cedula_normalizada=cedula_lookup,
+                            fuente_tasa_cambio=fuente_tasa_cambio,
+                            content=content,
+                            ctype=ctype,
+                            filename=filename,
+                            payload=payload_snap,
+                        )
+                        if borrador_id:
+                            db.commit()
+                        else:
+                            db.rollback()
+                            logger.warning(
+                                "[ESCANER_LOTE_DRIVE] validación con pendientes pero no se pudo persistir borrador file_id=%s",
+                                fid,
+                            )
+                    except Exception as e:
+                        db.rollback()
+                        logger.exception(
+                            "[ESCANER_LOTE_DRIVE] fallo al guardar borrador temporal file_id=%s: %s",
+                            fid,
+                            e,
+                        )
+                elif necesita_borrador_bd and usuario_escaner_id is None:
+                    logger.warning(
+                        "[ESCANER_LOTE_DRIVE] validación con pendientes pero sin usuario en sesión; no se persiste borrador file_id=%s",
+                        fid,
+                    )
+
                 items.append(
                     {
                         "drive_file_id": fid,
@@ -3673,21 +3748,14 @@ async def escaner_lote_drive_digitalizar(
                         "archivo_b64": archivo_b64,
                         "ok": True,
                         "error": None,
-                        "sugerencia": {
-                            "fecha_pago": fecha_iso,
-                            "institucion_financiera": inst,
-                            "numero_operacion": num_op,
-                            "monto": monto,
-                            "moneda": moneda if moneda in ("BS", "USD") else "BS",
-                            "cedula_pagador_en_comprobante": gem.get("cedula_pagador_en_comprobante") or "",
-                            "notas_modelo": gem.get("notas") or "",
-                        },
+                        "sugerencia": sugerencia,
                         "validacion_campos": validacion_campos,
                         "validacion_reglas": validacion_reglas,
                         "duplicado_en_pagos": duplicado_en_pagos,
                         "pago_existente_id": pago_existente_id,
                         "prestamo_existente_id": prestamo_existente_id,
                         "prestamo_objetivo_id": prestamo_objetivo_id,
+                        "borrador_id": borrador_id,
                     }
                 )
 

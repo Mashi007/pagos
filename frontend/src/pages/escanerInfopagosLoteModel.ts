@@ -57,6 +57,8 @@ export type FilaLote = {
   enRevision?: boolean
   editando: boolean
   descargandoRecibo: boolean
+  /** Borrador en BD (escáner); enviar al guardar el reporte si existe. */
+  borradorId?: string | null
 }
 
 export function newClientId(): string {
@@ -110,6 +112,7 @@ export function filaVaciaDesdeArchivo(archivo: File): FilaLote {
     guardado: false,
     editando: false,
     descargandoRecibo: false,
+    borradorId: null,
   }
 }
 
@@ -140,6 +143,7 @@ export function filaTrasExtraccion(
       ...base,
       extract: 'error',
       errorExtraccion: res.error || 'No se pudo leer el comprobante.',
+      borradorId: null,
     }
   }
   const s = res.sugerencia
@@ -155,6 +159,10 @@ export function filaTrasExtraccion(
   if (s.monto != null && Number.isFinite(s.monto)) {
     montoStr = formatoMontoParaMostrar(s.monto, mon)
   }
+  const borradorId =
+    typeof res.borrador_id === 'string' && res.borrador_id.trim()
+      ? res.borrador_id.trim()
+      : null
   return {
     ...base,
     extract: 'listo',
@@ -172,6 +180,7 @@ export function filaTrasExtraccion(
     validacionCampos: res.validacion_campos ?? null,
     validacionReglas: res.validacion_reglas ?? null,
     escanerColision: mapColision(res),
+    borradorId,
   }
 }
 
