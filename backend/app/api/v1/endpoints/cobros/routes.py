@@ -16,7 +16,7 @@ from decimal import Decimal
 from types import SimpleNamespace
 from typing import Optional, List, Tuple, Any, Dict, Set
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
@@ -27,6 +27,7 @@ from sqlalchemy.exc import ProgrammingError, OperationalError, IntegrityError
 from app.core.database import get_db
 from app.core.documento import normalize_documento
 from app.core.deps import get_current_user
+from app.services.cobros import infopagos_escaner_borrador_service as ieb
 from app.core.rate_limit_store import get_redis_client
 from app.models.pago_reportado import PagoReportado, PagoReportadoHistorial
 from app.models.pago_reportado_exportado import PagoReportadoExportado
@@ -3157,6 +3158,7 @@ def reanalizar_pago_con_gemini(
 
 @router.post("/escaner/extraer-comprobante")
 async def escaner_extraer_comprobante_infopagos(
+    request: Request,
     db: Session = Depends(get_db),
     tipo_cedula: str = Form(...),
     numero_cedula: str = Form(...),
@@ -3306,6 +3308,55 @@ async def escaner_extraer_comprobante_infopagos(
         duplicado_en_pagos,
     )
 
+    borrador_id: Optional[str] = None
+    current_user = getattr(request.state, "user", None)
+    usuario_escaner_id: Optional[int] = None
+    if current_user is not None and getattr(current_user, "id", None) is not None:
+        try:
+            usuario_escaner_id = int(current_user.id)
+        except (TypeError, ValueError):
+            usuario_escaner_id = None
+
+    if ieb.debe_persistir_borrador_escaneo(
+        validacion_campos=validacion_campos,
+        validacion_reglas=validacion_reglas,
+        duplicado_en_pagos=duplicado_en_pagos,
+    ):
+        try:
+            payload_snap = {
+                "sugerencia": sugerencia,
+                "validacion_campos": validacion_campos,
+                "validacion_reglas": validacion_reglas,
+                "duplicado_en_pagos": duplicado_en_pagos,
+                "pago_existente_id": pago_existente_id,
+                "prestamo_existente_id": prestamo_existente_id,
+                "prestamo_objetivo_id": prestamo_objetivo_id,
+            }
+            borrador_id = ieb.crear_borrador_escaneo(
+                db,
+                cliente_id=int(cliente.id),
+                usuario_id=usuario_escaner_id,
+                tipo_cedula=tipo,
+                numero_cedula=numero,
+                cedula_normalizada=cedula_lookup,
+                fuente_tasa_cambio=fuente_tasa_cambio,
+                content=content,
+                ctype=ctype,
+                filename=filename,
+                payload=payload_snap,
+            )
+            if borrador_id:
+                db.commit()
+            else:
+                db.rollback()
+                logger.warning(
+                    "[ESCANER] validación con pendientes pero no se pudo persistir borrador cedula=%s",
+                    cedula_lookup[:12],
+                )
+        except Exception as e:
+            db.rollback()
+            logger.exception("[ESCANER] fallo al guardar borrador temporal: %s", e)
+
     return {
         "ok": True,
         "error": None,
@@ -3316,7 +3367,57 @@ async def escaner_extraer_comprobante_infopagos(
         "pago_existente_id": pago_existente_id,
         "prestamo_existente_id": prestamo_existente_id,
         "prestamo_objetivo_id": prestamo_objetivo_id,
+        "borrador_id": borrador_id,
     }
+
+
+@router.get("/escaner/borradores")
+def listar_infopagos_borradores_escaner(
+    request: Request,
+    db: Session = Depends(get_db),
+    limit: int = Query(30, ge=1, le=100),
+):
+    """Borradores temporales del escáner (solo filas con validación pendiente), del usuario actual."""
+    cur = getattr(request.state, "user", None)
+    if cur is None or getattr(cur, "id", None) is None:
+        raise HTTPException(status_code=401, detail="No autenticado.")
+    uid = int(cur.id)
+    items = ieb.listar_borradores_pendientes_usuario(db, usuario_id=uid, limit=limit)
+    return {"ok": True, "items": items}
+
+
+@router.get("/escaner/borrador/{borrador_id}")
+def obtener_infopagos_borrador_escaner(
+    request: Request,
+    borrador_id: str,
+    db: Session = Depends(get_db),
+):
+    """Detalle de un borrador para continuar editando en el escáner."""
+    cur = getattr(request.state, "user", None)
+    if cur is None or getattr(cur, "id", None) is None:
+        raise HTTPException(status_code=401, detail="No autenticado.")
+    uid = int(cur.id)
+    data, err = ieb.obtener_borrador_para_edicion(db, borrador_id=borrador_id, usuario_id=uid)
+    if err or not data:
+        raise HTTPException(status_code=404, detail=err or "Borrador no encontrado.")
+    return {"ok": True, "borrador": data}
+
+
+@router.delete("/escaner/borrador/{borrador_id}")
+def eliminar_infopagos_borrador_escaner(
+    request: Request,
+    borrador_id: str,
+    db: Session = Depends(get_db),
+):
+    """Elimina un borrador temporal y el comprobante huérfano si no se usa en otro lado."""
+    cur = getattr(request.state, "user", None)
+    if cur is None or getattr(cur, "id", None) is None:
+        raise HTTPException(status_code=401, detail="No autenticado.")
+    uid = int(cur.id)
+    ok_del, err_del = ieb.eliminar_borrador_escaneo(db, borrador_id=borrador_id, usuario_id=uid)
+    if not ok_del:
+        raise HTTPException(status_code=400, detail=err_del or "No se pudo eliminar.")
+    return {"ok": True}
 
 
 def _extraer_folder_id_drive(raw: str) -> str:

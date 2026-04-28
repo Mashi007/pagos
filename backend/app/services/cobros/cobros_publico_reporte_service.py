@@ -45,6 +45,18 @@ ALLOWED_COMPROBANTE_TYPES = frozenset(
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
 DUPLICADO_NUMERO_OP_VENTANA_MIN = 10
 
+# Solo estos estados deben bloquear un nuevo envío con el mismo número de operación en la ventana
+# anti-doble-click. Excluye:
+# - eliminado_duplicado: sigue en BD pero no es un "reporte activo"; ignorarlo evita falsos
+#   "ya duplicado" cuando el listado de cobros / pestañas no lo muestra.
+# - rechazado: cobranzas rechazó el reporte; el cliente debe poder reenviar el mismo Nº de operación.
+_ESTADOS_VENTANA_DUPLICADO_NUM_OP = (
+    "pendiente",
+    "en_revision",
+    "aprobado",
+    "importado",
+)
+
 
 def _es_banco_mercantil(nombre_banco: Optional[str]) -> bool:
     return "mercantil" in (nombre_banco or "").strip().lower()
@@ -437,6 +449,7 @@ def crear_pago_reportado_con_referencia_o_retry(
     canal_ingreso: str,
     log_tag_duplicate: str,
     fuente_tasa_cambio: Optional[str] = None,
+    comprobante_imagen_id_existente: Optional[str] = None,
 ) -> Tuple[Optional[PagoReportado], Optional[str], Optional[str]]:
     """
     Intenta hasta 2 veces ante colisión de referencia_interna.
@@ -444,6 +457,7 @@ def crear_pago_reportado_con_referencia_o_retry(
     Returns:
         (pr, referencia, error) — si error, pr y referencia son None.
     """
+    from app.models.pago_comprobante_imagen import PagoComprobanteImagen
     from app.services.pagos_gmail.comprobante_bd import persistir_comprobante_gmail_en_bd
 
     pr: Optional[PagoReportado] = None
@@ -456,6 +470,10 @@ def crear_pago_reportado_con_referencia_o_retry(
         """
         Ventana anti-doble-click: mismo numero_operacion en pocos minutos.
         Conserva el primer reporte (created_at/id) y elimina hermanos nuevos en estados no terminales.
+
+        Solo considera filas en estados activos o ya importados (`_ESTADOS_VENTANA_DUPLICADO_NUM_OP`).
+        No usa `eliminado_duplicado` ni `rechazado` para bloquear: evita "duplicado fantasma" respecto
+        a listados de cobros y permite reenvío tras rechazo.
         """
         if not num_key:
             return None, None, 0
@@ -467,7 +485,10 @@ def crear_pago_reportado_con_referencia_o_retry(
                 PagoReportado.numero_operacion,
                 PagoReportado.created_at,
             )
-            .where(PagoReportado.created_at >= ventana_desde)
+            .where(
+                PagoReportado.created_at >= ventana_desde,
+                PagoReportado.estado.in_(_ESTADOS_VENTANA_DUPLICADO_NUM_OP),
+            )
             .order_by(PagoReportado.created_at.asc(), PagoReportado.id.asc())
         ).all()
         same: list[tuple[int, str, str]] = []
@@ -539,14 +560,27 @@ def crear_pago_reportado_con_referencia_o_retry(
                 )
             referencia = generar_referencia_interna(db)
             nombres, apellidos = nombres_y_apellidos_desde_cliente_nombres(cliente_nombres)
-            stored = persistir_comprobante_gmail_en_bd(db, content, ctype)
-            if not stored:
-                return (
-                    None,
-                    None,
-                    "No se pudo almacenar el comprobante. Use PDF o imagen JPEG, PNG, HEIC o WebP válida.",
-                )
-            img_id, _url = stored
+            img_ex = (comprobante_imagen_id_existente or "").strip()
+            if img_ex:
+                hit = db.execute(
+                    select(PagoComprobanteImagen.id).where(PagoComprobanteImagen.id == img_ex)
+                ).scalars().first()
+                if not hit:
+                    return (
+                        None,
+                        None,
+                        "El comprobante asociado al borrador ya no está disponible. Vuelva a escanear.",
+                    )
+                img_id = str(hit)
+            else:
+                stored = persistir_comprobante_gmail_en_bd(db, content, ctype)
+                if not stored:
+                    return (
+                        None,
+                        None,
+                        "No se pudo almacenar el comprobante. Use PDF o imagen JPEG, PNG, HEIC o WebP válida.",
+                    )
+                img_id, _url = stored
             pr = PagoReportado(
                 referencia_interna=referencia,
                 nombres=nombres,

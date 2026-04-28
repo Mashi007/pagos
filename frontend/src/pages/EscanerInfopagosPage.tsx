@@ -4,6 +4,8 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
+import { Link } from 'react-router-dom'
+
 import { Brain, Loader2, CheckCircle2, AlertTriangle } from 'lucide-react'
 import toast from 'react-hot-toast'
 
@@ -34,6 +36,72 @@ import {
   type FuenteTasaCambio,
 } from '../constants/fuenteTasaCambio'
 import { fechaLocalHoyISO } from './escanerInfopagosLoteModel'
+import { searchParamsRevisionPagosDesdeNumeroDocumento } from '../utils/linkRevisionPagosDesdeEscaner'
+
+type Fase = 'cedula' | 'imagen' | 'formulario' | 'exito'
+
+/** Sesión del escáner: cédula validada y tasa para reutilizar sin revalidar en cada visita. */
+const SK_ESCANER_CEDULA = {
+  cedula: 'rapicredit:escanerInfopagos:cedulaRaw',
+  nombre: 'rapicredit:escanerInfopagos:nombreCliente',
+  fuente: 'rapicredit:escanerInfopagos:fuenteTasa',
+  validada: 'rapicredit:escanerInfopagos:cedulaValidada',
+} as const
+
+function readPersistedCedulaFull(): {
+  cedulaRaw: string
+  nombreCliente: string
+  fuenteTasa: FuenteTasaCambio
+  faseInicial: Fase
+} {
+  try {
+    const cedulaRaw = sessionStorage.getItem(SK_ESCANER_CEDULA.cedula) || ''
+    const validada =
+      sessionStorage.getItem(SK_ESCANER_CEDULA.validada) === '1'
+    const nombreCliente = sessionStorage.getItem(SK_ESCANER_CEDULA.nombre) || ''
+    const fuenteTasa = normalizarFuenteTasaCambio(
+      sessionStorage.getItem(SK_ESCANER_CEDULA.fuente)
+    )
+    const faseInicial: Fase =
+      cedulaRaw.trim() && validada ? 'imagen' : 'cedula'
+    return { cedulaRaw, nombreCliente, fuenteTasa, faseInicial }
+  } catch {
+    return {
+      cedulaRaw: '',
+      nombreCliente: '',
+      fuenteTasa: FUENTE_TASA_DEFAULT,
+      faseInicial: 'cedula',
+    }
+  }
+}
+
+function persistirCedulaSesion(args: {
+  cedulaRaw: string
+  nombreCliente: string
+  fuenteTasa: FuenteTasaCambio
+  validada: boolean
+}) {
+  try {
+    if (!args.validada || !args.cedulaRaw.trim()) return
+    sessionStorage.setItem(SK_ESCANER_CEDULA.cedula, args.cedulaRaw)
+    sessionStorage.setItem(SK_ESCANER_CEDULA.nombre, args.nombreCliente || '')
+    sessionStorage.setItem(SK_ESCANER_CEDULA.fuente, args.fuenteTasa)
+    sessionStorage.setItem(SK_ESCANER_CEDULA.validada, '1')
+  } catch {
+    /* ignore quota / private mode */
+  }
+}
+
+function limpiarCedulaSesion() {
+  try {
+    sessionStorage.removeItem(SK_ESCANER_CEDULA.cedula)
+    sessionStorage.removeItem(SK_ESCANER_CEDULA.nombre)
+    sessionStorage.removeItem(SK_ESCANER_CEDULA.fuente)
+    sessionStorage.removeItem(SK_ESCANER_CEDULA.validada)
+  } catch {
+    /* ignore */
+  }
+}
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024
 
@@ -201,8 +269,6 @@ function validarMonto(
   return { valido: true, valor: num }
 }
 
-type Fase = 'cedula' | 'imagen' | 'formulario' | 'exito'
-
 export default function EscanerInfopagosPage() {
   const honeypotRef = useRef<HTMLInputElement>(null)
   const tokensSufijoUsadosRef = useRef<Set<string>>(new Set())
@@ -211,14 +277,20 @@ export default function EscanerInfopagosPage() {
   const enviarActivoRef = useRef(false)
   const ultimoIntentoGuardarRef = useRef(0)
 
-  const [fase, setFase] = useState<Fase>('cedula')
-  const [cedulaRaw, setCedulaRaw] = useState('')
-  const [nombreCliente, setNombreCliente] = useState('')
+  const initialFromSession = useMemo(() => readPersistedCedulaFull(), [])
+  const [fase, setFase] = useState<Fase>(initialFromSession.faseInicial)
+  const [cedulaRaw, setCedulaRaw] = useState(initialFromSession.cedulaRaw)
+  const [nombreCliente, setNombreCliente] = useState(
+    initialFromSession.nombreCliente
+  )
   const [validandoCedula, setValidandoCedula] = useState(false)
-  const [fuenteTasa, setFuenteTasa] =
-    useState<FuenteTasaCambio>(FUENTE_TASA_DEFAULT)
+  const [fuenteTasa, setFuenteTasa] = useState<FuenteTasaCambio>(
+    initialFromSession.fuenteTasa
+  )
 
   const [archivo, setArchivo] = useState<File | null>(null)
+  /** Borrador persistido en BD tras escanear (reutiliza comprobante al guardar). */
+  const [borradorId, setBorradorId] = useState<string | null>(null)
   const [escaneando, setEscaneando] = useState(false)
   const [validacionCampos, setValidacionCampos] = useState<string | null>(null)
   const [validacionReglas, setValidacionReglas] = useState<string | null>(null)
@@ -331,8 +403,18 @@ export default function EscanerInfopagosPage() {
         toast.error(res.error || 'No se pudo validar la cédula.')
         return
       }
-      setNombreCliente((res.nombre || '').trim())
-      setFuenteTasa(normalizarFuenteTasaCambio(res.fuente_tasa_cambio_lista_bs))
+      const nombreOk = (res.nombre || '').trim()
+      const fuenteOk = normalizarFuenteTasaCambio(
+        res.fuente_tasa_cambio_lista_bs
+      )
+      setNombreCliente(nombreOk)
+      setFuenteTasa(fuenteOk)
+      persistirCedulaSesion({
+        cedulaRaw,
+        nombreCliente: nombreOk,
+        fuenteTasa: fuenteOk,
+        validada: true,
+      })
       setFase('imagen')
       toast.success(
         'Cédula verificada. Se usará la tasa configurada en Pago Bs.'
@@ -344,7 +426,7 @@ export default function EscanerInfopagosPage() {
     } finally {
       setValidandoCedula(false)
     }
-  }, [cedulaNormalizada])
+  }, [cedulaRaw, cedulaNormalizada])
 
   const handleEscanear = useCallback(async () => {
     if (!cedulaNormalizada.valido || !cedulaNormalizada.valorParaEnviar) {
@@ -352,6 +434,7 @@ export default function EscanerInfopagosPage() {
       return
     }
     if (escanearActivoRef.current) return
+    setBorradorId(null)
     const vA = validarArchivo(archivo)
     if (!vA.valido) {
       toast.error(vA.error || 'Archivo inválido.')
@@ -431,9 +514,16 @@ export default function EscanerInfopagosPage() {
       tokensSufijoUsadosRef.current = collectTokensSufijoVistoArchivoDesdeFilas(
         [{ numero_documento: s.numero_operacion || '' }]
       )
+      const bid =
+        typeof res.borrador_id === 'string' && res.borrador_id.trim()
+          ? res.borrador_id.trim()
+          : null
+      setBorradorId(bid)
       setFase('formulario')
       toast.success(
-        'Datos sugeridos. Revise y corrija si hace falta antes de guardar.'
+        bid
+          ? 'Datos sugeridos y comprobante respaldado en servidor. Revise y guarde cuando esté listo.'
+          : 'Datos sugeridos. Revise y corrija si hace falta antes de guardar.'
       )
     } catch {
       /* apiClient ya muestra toast en errores HTTP */
@@ -502,6 +592,9 @@ export default function EscanerInfopagosPage() {
     form.append('moneda', moneda)
     form.append('fuente_tasa_cambio', fuenteTasa)
     form.append('confirmacion_humana', 'true')
+    if (borradorId) {
+      form.append('borrador_id', borradorId)
+    }
     form.append('comprobante', archivo!)
     enviarActivoRef.current = true
     setEnviando(true)
@@ -531,6 +624,13 @@ export default function EscanerInfopagosPage() {
         setReciboListo(null)
       }
       setFase('exito')
+      setBorradorId(null)
+      persistirCedulaSesion({
+        cedulaRaw,
+        nombreCliente: nombreCliente.trim(),
+        fuenteTasa,
+        validada: true,
+      })
       toast.success(res.mensaje || 'Pago registrado.')
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : 'Error al guardar.')
@@ -540,12 +640,14 @@ export default function EscanerInfopagosPage() {
     }
   }, [
     archivo,
+    borradorId,
     cedulaNormalizada,
     fechaDetectada,
     fechaPago,
     institucion,
     moneda,
     montoStr,
+    nombreCliente,
     numeroOperacion,
     fuenteTasa,
   ])
@@ -572,7 +674,33 @@ export default function EscanerInfopagosPage() {
     }
   }, [pagoId, reciboToken, referencia])
 
+  /** Tras éxito: conserva cédula, nombre, tasa e imagen en memoria para otro comprobante o reintento. */
   const reiniciar = () => {
+    setBorradorId(null)
+    setFase('imagen')
+    setFechaPago('')
+    setFechaDetectada('')
+    setInstitucion('')
+    setOtroInstitucion('')
+    setEscanerColision(null)
+    tokensSufijoUsadosRef.current = new Set()
+    setNumeroOperacion('')
+    setMontoStr('')
+    setMoneda('USD')
+    setValidacionCampos(null)
+    setValidacionReglas(null)
+    setCedulaPagadorImg('')
+    setReferencia('')
+    setReciboToken(null)
+    setPagoId(null)
+    setReciboListo(null)
+    setConsultandoRecibo(false)
+    setEnRevision(false)
+  }
+
+  const handleCambiarCedula = () => {
+    setBorradorId(null)
+    limpiarCedulaSesion()
     setFase('cedula')
     setCedulaRaw('')
     setNombreCliente('')
@@ -662,8 +790,24 @@ export default function EscanerInfopagosPage() {
 
       {fase === 'imagen' && (
         <Card>
-          <CardHeader>
-            <CardTitle>2. Comprobante</CardTitle>
+          <CardHeader className="space-y-2">
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <CardTitle>2. Comprobante</CardTitle>
+              <Button
+                variant="ghost"
+                type="button"
+                className="h-auto shrink-0 px-2 py-1 text-xs text-slate-600"
+                onClick={handleCambiarCedula}
+              >
+                Cambiar cédula / otro deudor
+              </Button>
+            </div>
+            {initialFromSession.faseInicial === 'imagen' ? (
+              <p className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
+                Cédula y tasa recuperadas de esta sesión. Puede adjuntar el
+                comprobante y continuar.
+              </p>
+            ) : null}
           </CardHeader>
           <CardContent className="space-y-4">
             {nombreCliente ? (
@@ -679,6 +823,15 @@ export default function EscanerInfopagosPage() {
                 accept=".pdf,.jpg,.jpeg,.png,.webp,.heic,.heif"
                 onChange={e => setArchivo(e.target.files?.[0] ?? null)}
               />
+              {archivo ? (
+                <p className="text-xs text-slate-600">
+                  Comprobante en memoria:{' '}
+                  <span className="font-mono font-medium">{archivo.name}</span>{' '}
+                  ({Math.max(1, Math.round(archivo.size / 1024))} KB). Se conserva
+                  al volver desde el formulario o al pulsar &quot;Nuevo
+                  escaneo&quot; tras guardar.
+                </p>
+              ) : null}
             </div>
             <div className="flex flex-wrap gap-2">
               <Button
@@ -716,8 +869,18 @@ export default function EscanerInfopagosPage() {
 
       {fase === 'formulario' && (
         <Card>
-          <CardHeader>
-            <CardTitle>3. Formulario (editable)</CardTitle>
+          <CardHeader className="space-y-2">
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <CardTitle>3. Formulario (editable)</CardTitle>
+              <Button
+                variant="ghost"
+                type="button"
+                className="h-auto shrink-0 px-2 py-1 text-xs text-slate-600"
+                onClick={handleCambiarCedula}
+              >
+                Cambiar cédula / otro deudor
+              </Button>
+            </div>
             <p className="rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-sm font-medium text-sky-950">
               Usted está ingresando un pago para{' '}
               <strong>
@@ -894,6 +1057,22 @@ export default function EscanerInfopagosPage() {
                     </div>
                   </div>
                 ) : null}
+                {hayDuplicadoOperacion ? (
+                  <p className="text-sm text-slate-700">
+                    <Link
+                      className="font-medium text-indigo-700 underline underline-offset-2 hover:text-indigo-900"
+                      to={{
+                        pathname: '/pagos',
+                        search:
+                          searchParamsRevisionPagosDesdeNumeroDocumento(
+                            numeroOperacion
+                          ),
+                      }}
+                    >
+                      Revisar si está en la pestaña Revisión
+                    </Link>
+                  </p>
+                ) : null}
               </div>
               <div className="space-y-2">
                 <Label>Moneda (detectada por escáner; editable)</Label>
@@ -997,9 +1176,17 @@ export default function EscanerInfopagosPage() {
                 la página para obtener el enlace del recibo.
               </p>
             ) : null}
-            <Button type="button" onClick={reiniciar}>
-              Nuevo escaneo
-            </Button>
+            <div className="space-y-2">
+              <Button type="button" onClick={reiniciar}>
+                Nuevo escaneo
+              </Button>
+              <p className="text-xs text-emerald-900/90">
+                Se conservan la cédula validada, la tasa y el archivo del
+                comprobante en esta pestaña para otro envío o corrección; use
+                &quot;Cambiar cédula&quot; en el paso del comprobante si corresponde
+                otro deudor.
+              </p>
+            </div>
           </CardContent>
         </Card>
       )}

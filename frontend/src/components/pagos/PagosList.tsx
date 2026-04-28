@@ -746,6 +746,25 @@ export function PagosList() {
       setActiveTab('todos')
       setPage(1)
       setSearchParams({}, { replace: true })
+      return
+    }
+    const pestana = (searchParams.get('pestana') || '').trim().toLowerCase()
+    if (pestana === 'revision') {
+      setActiveTab('revision')
+      const ndoc = (searchParams.get('numero_documento') || '').trim()
+      if (ndoc) {
+        setRevisionNumeroDocumentoInput(ndoc)
+        setRevisionNumeroDocumentoFiltro(ndoc)
+      }
+      setRevisionPage(1)
+      const next = new URLSearchParams(searchParams)
+      next.delete('pestana')
+      next.delete('numero_documento')
+      if (next.toString()) {
+        setSearchParams(next, { replace: true })
+      } else {
+        setSearchParams({}, { replace: true })
+      }
     }
   }, [searchParams, setSearchParams])
 
@@ -784,6 +803,8 @@ export function PagosList() {
             includeExportados: includeRevisionExportados,
           })
         : pagoService.getAllPagos(page, perPage, filtrosPagosApi),
+    // Con pestañas forceMount: no dispara los tres listados a la vez; la caché RQ se conserva al cambiar.
+    enabled: activeTab === 'todos',
     staleTime: 15_000, // 15 s - evita múltiples refetch por re-renders y cambios de foco durante batch
     refetchOnMount: true,
     refetchOnWindowFocus: false, // Desactivado para no interrumpir batch con GETs innecesarios
@@ -799,18 +820,15 @@ export function PagosList() {
       perPage,
       revisionCedulaFiltro,
       revisionNumeroDocumentoFiltro,
-      revisionFechaPagoFiltro,
-      revisionTipoFiltro,
       includeRevisionExportados,
     ],
     queryFn: () =>
       pagoConErrorService.getAll(revisionPage, perPage, {
         cedula: revisionCedulaFiltro || undefined,
         numeroDocumento: revisionNumeroDocumentoFiltro || undefined,
-        fechaPago: revisionFechaPagoFiltro || undefined,
-        tipoRevision: revisionTipoFiltro || undefined,
         includeExportados: includeRevisionExportados,
       }),
+    enabled: activeTab === 'revision',
     staleTime: 15_000,
     refetchOnWindowFocus: false,
   })
@@ -842,6 +860,7 @@ export function PagosList() {
         conciliado: 'all',
         prestamo_cartera: 'todos',
       }),
+    enabled: activeTab === 'revision-global',
     staleTime: 15_000,
     refetchOnWindowFocus: false,
   })
@@ -1379,7 +1398,10 @@ export function PagosList() {
   const handleBuscarRevisionPorCedula = () => {
     setRevisionCedulaFiltro(revisionCedulaInput.trim())
     setRevisionNumeroDocumentoFiltro(revisionNumeroDocumentoInput.trim())
-    setRevisionFechaPagoFiltro(revisionFechaPagoInput)
+    setRevisionFechaPagoFiltro('')
+    setRevisionFechaPagoInput('')
+    setRevisionTipoFiltro('')
+    setRevisionMotivoFiltro('')
     setRevisionPage(1)
   }
   const handleLimpiarRevisionCedula = () => {
@@ -2256,10 +2278,10 @@ export function PagosList() {
             <TabsTrigger value="revision-global">Revision global</TabsTrigger>
           </TabsList>
           {/* Tab: Detalle por Cliente (resumen + ver pagos del cliente, más reciente a más antiguo) */}
-          <TabsContent value="resumen">
+          <TabsContent value="resumen" forceMount>
             <PagosListResumen />
           </TabsContent>
-          <TabsContent value="revision">
+          <TabsContent value="revision" forceMount>
             <Card>
               <CardHeader>
                 <CardTitle>Revision</CardTitle>
@@ -2310,106 +2332,6 @@ export function PagosList() {
                       className="max-w-md"
                     />
                   </div>
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-gray-700">
-                      Fecha pago
-                    </label>
-                    <Input
-                      type="date"
-                      value={revisionFechaPagoInput}
-                      onChange={e => setRevisionFechaPagoInput(e.target.value)}
-                      className="w-[180px]"
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-gray-700">
-                      Tipo
-                    </label>
-                    <Select
-                      value={revisionTipoFiltro || 'all'}
-                      onValueChange={value => {
-                        setRevisionTipoFiltro(
-                          value === 'all'
-                            ? ''
-                            : (value as 'anomalo' | 'irreal' | 'duplicado')
-                        )
-                        setRevisionPage(1)
-                      }}
-                    >
-                      <SelectTrigger className="w-[210px]">
-                        <SelectValue placeholder="Tipo de revision" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">Todos</SelectItem>
-                        <SelectItem value="anomalo">Anomalos</SelectItem>
-                        <SelectItem value="irreal">Irreales</SelectItem>
-                        <SelectItem value="duplicado">
-                          Duplicados (fecha + numero)
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-gray-700">
-                      Estado
-                    </label>
-                    <Select
-                      value={revisionGlobalEstadoFiltro || 'all'}
-                      onValueChange={value => {
-                        setRevisionGlobalEstadoFiltro(
-                          value === 'all' ? '' : 'PENDIENTE'
-                        )
-                        setRevisionGlobalPage(1)
-                      }}
-                    >
-                      <SelectTrigger className="w-[160px]">
-                        <SelectValue placeholder="Estado" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">Todos</SelectItem>
-                        <SelectItem value="PENDIENTE">Pendiente</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-gray-700">
-                      Motivo
-                    </label>
-                    <Select
-                      value={revisionMotivoFiltro || 'all'}
-                      onValueChange={value => {
-                        setRevisionMotivoFiltro(
-                          value === 'all'
-                            ? ''
-                            : (value as
-                                | 'sin_credito'
-                                | 'duplicado'
-                                | 'irreal'
-                                | 'con_observacion'
-                                | 'error_validacion')
-                        )
-                        setRevisionPage(1)
-                      }}
-                    >
-                      <SelectTrigger className="w-[220px]">
-                        <SelectValue placeholder="Motivo de anomalía" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">Todos</SelectItem>
-                        <SelectItem value="sin_credito">Sin crédito</SelectItem>
-                        <SelectItem value="duplicado">
-                          Duplicado fecha + número
-                        </SelectItem>
-                        <SelectItem value="irreal">Irreal</SelectItem>
-                        <SelectItem value="con_observacion">
-                          Con observación
-                        </SelectItem>
-                        <SelectItem value="error_validacion">
-                          Error de validación
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
                   <div className="flex gap-2">
                     <Button
                       type="button"
@@ -2425,11 +2347,7 @@ export function PagosList() {
                     >
                       Siguiente anomalía
                     </Button>
-                    {(revisionCedulaFiltro ||
-                      revisionNumeroDocumentoFiltro ||
-                      revisionFechaPagoFiltro ||
-                      revisionTipoFiltro ||
-                      revisionMotivoFiltro) && (
+                    {(revisionCedulaFiltro || revisionNumeroDocumentoFiltro) && (
                       <Button
                         type="button"
                         variant="ghost"
@@ -2715,7 +2633,7 @@ export function PagosList() {
               </CardContent>
             </Card>
           </TabsContent>
-          <TabsContent value="revision-global">
+          <TabsContent value="revision-global" forceMount>
             <Card>
               <CardHeader>
                 <CardTitle>Revision global de pagos</CardTitle>
@@ -3112,7 +3030,7 @@ export function PagosList() {
             </Card>
           </TabsContent>
           {/* Tab: Todos los Pagos */}
-          <TabsContent value="todos">
+          <TabsContent value="todos" forceMount>
             {filters.conciliado === 'si' && (
               <Card className="mb-4 border-amber-200 bg-amber-50">
                 <CardContent className="py-3 text-sm text-amber-800">

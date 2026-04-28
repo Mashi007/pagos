@@ -637,6 +637,9 @@ export interface EscanerInfopagosExtraerResponse {
 
   /** Préstamo APROBADO único al que se aplicará el reporte (si aplica). */
   prestamo_objetivo_id?: number | null
+
+  /** ID de borrador en BD (tabla temporal); enviar en `borrador_id` al guardar el reporte. */
+  borrador_id?: string | null
 }
 
 /** Escáner Infopagos (auth): Gemini sugiere campos desde el comprobante; no guarda el reporte. */

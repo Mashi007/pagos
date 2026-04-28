@@ -13,6 +13,8 @@ import {
   useSyncExternalStore,
 } from 'react'
 
+import { Link } from 'react-router-dom'
+
 import {
   AlertTriangle,
   Brain,
@@ -75,6 +77,7 @@ import {
   normalizarFuenteTasaCambio,
   type FuenteTasaCambio,
 } from '../constants/fuenteTasaCambio'
+import { searchParamsRevisionPagosDesdeNumeroDocumento } from '../utils/linkRevisionPagosDesdeEscaner'
 
 const MAX_ARCHIVOS = 15
 const MAX_FILE_SIZE = 10 * 1024 * 1024
@@ -1274,6 +1277,25 @@ export default function EscanerInfopagosLotePage() {
                                 </div>
                               </div>
                             ) : null}
+                            {dup ||
+                            (fila.escanerColision?.duplicado_en_pagos &&
+                              typeof fila.escanerColision
+                                .prestamo_existente_id === 'number') ? (
+                              <p className="text-sm text-slate-700">
+                                <Link
+                                  className="font-medium text-indigo-700 underline underline-offset-2 hover:text-indigo-900"
+                                  to={{
+                                    pathname: '/pagos',
+                                    search:
+                                      searchParamsRevisionPagosDesdeNumeroDocumento(
+                                        fila.numeroOperacion
+                                      ),
+                                  }}
+                                >
+                                  Revisar si está en la pestaña Revisión
+                                </Link>
+                              </p>
+                            ) : null}
                           </div>
                           <div className="space-y-2">
                             <Label>Moneda</Label>
@@ -1515,6 +1537,24 @@ export default function EscanerInfopagosLotePage() {
                     Si detecta duplicado, use <strong>Visto _A…</strong> o{' '}
                     <strong>Visto _P…</strong>.
                   </p>
+                  {filaEditando &&
+                  (hayDuplicadoFila(filaEditando) ||
+                    Boolean(filaEditando.escanerColision?.duplicado_en_pagos)) ? (
+                    <p className="text-sm text-slate-700">
+                      <Link
+                        className="font-medium text-indigo-700 underline underline-offset-2 hover:text-indigo-900"
+                        to={{
+                          pathname: '/pagos',
+                          search:
+                            searchParamsRevisionPagosDesdeNumeroDocumento(
+                              String(editDraft?.numeroOperacion || '')
+                            ),
+                        }}
+                      >
+                        Revisar si está en la pestaña Revisión
+                      </Link>
+                    </p>
+                  ) : null}
                   <div className="flex gap-2">
                     <Button
                       type="button"

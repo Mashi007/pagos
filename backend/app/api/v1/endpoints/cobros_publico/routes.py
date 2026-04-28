@@ -50,6 +50,7 @@ from app.services.cobros.recibo_pdf import (
 from app.services.documentos_cliente_centro import generar_recibo_pdf_desde_pago_reportado
 from app.services.cobros.recibo_cuotas_lookup import texto_cuotas_aplicadas_pago_reportado
 from app.services.cobros import cobros_publico_reporte_service as cpr
+from app.services.cobros import infopagos_escaner_borrador_service as ieb
 from app.core.email import cobros_recibo_attachments_or_oversize_note, send_email
 from app.services.notificaciones_exclusion_desistimiento import cliente_bloqueado_por_desistimiento
 from app.core.security import decode_token, create_recibo_infopagos_token, create_cobros_public_token
@@ -996,6 +997,7 @@ async def enviar_reporte_infopagos(
     contact_website: Optional[str] = Form(None),
     fuente_tasa_cambio: str = Form("euro"),
     confirmacion_humana: Optional[str] = Form(None),
+    borrador_id: Optional[str] = Form(None),
 ):
     """
     Registro de pago a nombre del deudor (uso interno / personal). Misma política que enviar-reporte
@@ -1054,17 +1056,47 @@ async def enviar_reporte_infopagos(
     if err_neg:
         return EnviarReporteInfopagosResponse(ok=False, error=err_neg)
 
-    content = await comprobante.read()
-    fn_comp = comprobante.filename or "comprobante"
-    ctype = cpr.mime_efectivo_comprobante_web(comprobante.content_type or "", fn_comp)
-    err_file, filename = cpr.validar_adjunto_comprobante_bytes(
-        content,
-        ctype,
-        fn_comp,
-        mensaje_excel_largo=False,
-    )
-    if err_file:
-        return EnviarReporteInfopagosResponse(ok=False, error=err_file)
+    borrador_efectivo = (borrador_id or "").strip()
+    comprobante_imagen_id_existente: Optional[str] = None
+    if borrador_efectivo:
+        if comprobante is not None:
+            try:
+                await comprobante.read()
+            except Exception:
+                pass
+        img_reu, content, fn_comp, ctype, err_bd = ieb.cargar_borrador_y_bytes_comprobante(
+            db,
+            borrador_efectivo,
+            cedula_lookup=cedula_lookup,
+        )
+        if err_bd:
+            return EnviarReporteInfopagosResponse(ok=False, error=err_bd)
+        err_file, filename = cpr.validar_adjunto_comprobante_bytes(
+            content,
+            ctype,
+            fn_comp,
+            mensaje_excel_largo=False,
+        )
+        if err_file:
+            return EnviarReporteInfopagosResponse(ok=False, error=err_file)
+        comprobante_imagen_id_existente = img_reu
+    else:
+        if comprobante is None:
+            return EnviarReporteInfopagosResponse(
+                ok=False,
+                error="Adjunte el comprobante de pago (imagen o PDF).",
+            )
+        content = await comprobante.read()
+        fn_comp = comprobante.filename or "comprobante"
+        ctype = cpr.mime_efectivo_comprobante_web(comprobante.content_type or "", fn_comp)
+        err_file, filename = cpr.validar_adjunto_comprobante_bytes(
+            content,
+            ctype,
+            fn_comp,
+            mensaje_excel_largo=False,
+        )
+        if err_file:
+            return EnviarReporteInfopagosResponse(ok=False, error=err_file)
 
     try:
         pr, referencia, err_crear = cpr.crear_pago_reportado_con_referencia_o_retry(
@@ -1085,6 +1117,7 @@ async def enviar_reporte_infopagos(
             canal_ingreso="infopagos",
             log_tag_duplicate="INFOPAGOS",
             fuente_tasa_cambio=fuente_tasa_cambio,
+            comprobante_imagen_id_existente=comprobante_imagen_id_existente,
         )
         if err_crear or pr is None or referencia is None:
             return EnviarReporteInfopagosResponse(ok=False, error=err_crear or "No se pudo registrar el reporte.")
@@ -1132,6 +1165,22 @@ async def enviar_reporte_infopagos(
         falla_validadores = False if confirmo_humano else reportado_falla_validadores_cobros(db, pr)
         pr.estado = "en_revision" if falla_validadores else "aprobado"
         db.commit()
+
+        if borrador_efectivo:
+            try:
+                ieb.marcar_borrador_confirmado(db, borrador_efectivo, int(pr.id))
+                db.commit()
+            except Exception as mark_err:
+                logger.warning(
+                    "[INFOPAGOS] Reporte OK ref=%s pero no se pudo marcar borrador %s: %s",
+                    referencia,
+                    borrador_efectivo,
+                    mark_err,
+                )
+                try:
+                    db.rollback()
+                except Exception:
+                    pass
 
         if not falla_validadores:
             cpr.intentar_importar_reportado_automatico(db, pr, referencia, "INFOPAGOS")
