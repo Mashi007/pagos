@@ -7,7 +7,7 @@ divergencias entre refresco de snapshot, validación y guardado.
 from __future__ import annotations
 
 import re
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation
 from typing import Optional, Tuple
 
@@ -92,6 +92,17 @@ def parse_fecha_q_iso_y_ambigua(raw: str) -> Tuple[Optional[date], bool]:
     s = cell_str(raw)
     if not s:
         return None, False
+    # Google Sheets / Excel serial date (ej: 46120 -> 2026-04-08).
+    # Base: 1899-12-30 para compatibilidad con seriales de hoja.
+    if re.match(r"^\d+(?:[.,]\d+)?$", s):
+        t = s.replace(",", ".")
+        try:
+            serial = int(float(t))
+            # Ventana conservadora para fechas de operación razonables.
+            if 20000 <= serial <= 80000:
+                return date(1899, 12, 30) + timedelta(days=serial), False
+        except ValueError:
+            pass
     m_ymd_slash = re.match(r"^(\d{4})/(\d{1,2})/(\d{1,2})$", s)
     if m_ymd_slash:
         y, mo, d = int(m_ymd_slash.group(1)), int(m_ymd_slash.group(2)), int(m_ymd_slash.group(3))
