@@ -243,6 +243,7 @@ export function PagosList() {
   const [selectedRevisionIds, setSelectedRevisionIds] = useState<Set<number>>(
     new Set()
   )
+  const [isBulkScanningRevision, setIsBulkScanningRevision] = useState(false)
   const [bulkRevisionObservacion, setBulkRevisionObservacion] = useState('')
   const [isBulkSavingRevision, setIsBulkSavingRevision] = useState(false)
   const [isBulkDeletingRevision, setIsBulkDeletingRevision] = useState(false)
@@ -281,6 +282,7 @@ export function PagosList() {
   const [selectedGlobalIds, setSelectedGlobalIds] = useState<Set<number>>(
     new Set()
   )
+  const [isBulkScanningGlobal, setIsBulkScanningGlobal] = useState(false)
   const [bulkGlobalNota, setBulkGlobalNota] = useState('')
   const [isBulkSavingGlobal, setIsBulkSavingGlobal] = useState(false)
   const [isBulkDeletingGlobal, setIsBulkDeletingGlobal] = useState(false)
@@ -1262,6 +1264,35 @@ export function PagosList() {
       setIsBulkDeletingRevision(false)
     }
   }
+  const abrirEscanerLoteConIds = useCallback((idsRaw: number[]) => {
+    if (idsRaw.length === 0) {
+      toast.info('Seleccione al menos un pago.')
+      return false
+    }
+    const ids = idsRaw.slice(0, 10)
+    if (idsRaw.length > 10) {
+      toast.info('Solo se escanean 10 seleccionados por lote.')
+    }
+    const qs = new URLSearchParams({
+      from: 'pagos',
+      ids: ids.join(','),
+    })
+    const href = `${BASE_PATH}/escaner-lote?${qs.toString()}`.replace(
+      /\/+/g,
+      '/'
+    )
+    window.location.assign(href)
+    return true
+  }, [])
+  const handleEscanearRevisionMasivo = () => {
+    const ids = [...selectedRevisionIds]
+    setIsBulkScanningRevision(true)
+    try {
+      abrirEscanerLoteConIds(ids)
+    } finally {
+      setIsBulkScanningRevision(false)
+    }
+  }
   const handleBuscarRevisionGlobal = () => {
     setRevisionGlobalCedulaFiltro(revisionGlobalCedulaInput.trim())
     setRevisionGlobalNumeroDocumentoFiltro(
@@ -1393,6 +1424,15 @@ export function PagosList() {
       toast.error(getErrorMessage(e))
     } finally {
       setIsBulkDeletingGlobal(false)
+    }
+  }
+  const handleEscanearGlobalMasivo = () => {
+    const ids = [...selectedGlobalIds]
+    setIsBulkScanningGlobal(true)
+    try {
+      abrirEscanerLoteConIds(ids)
+    } finally {
+      setIsBulkScanningGlobal(false)
     }
   }
   const handleBuscarRevisionPorCedula = () => {
@@ -2416,6 +2456,18 @@ export function PagosList() {
                           ? 'Eliminando...'
                           : 'Eliminar seleccionados'}
                       </Button>
+                      <Button
+                        variant="secondary"
+                        onClick={() => handleEscanearRevisionMasivo()}
+                        disabled={
+                          selectedRevisionIds.size === 0 ||
+                          isBulkScanningRevision
+                        }
+                      >
+                        {isBulkScanningRevision
+                          ? 'Abriendo escáner...'
+                          : 'Escanear seleccionados (máx. 10)'}
+                      </Button>
                       <span className="text-xs text-gray-600">
                         Seleccionados: {selectedRevisionIds.size}
                       </span>
@@ -2803,6 +2855,17 @@ export function PagosList() {
                         {isBulkDeletingGlobal
                           ? 'Eliminando...'
                           : 'Eliminar seleccionados'}
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        onClick={() => handleEscanearGlobalMasivo()}
+                        disabled={
+                          selectedGlobalIds.size === 0 || isBulkScanningGlobal
+                        }
+                      >
+                        {isBulkScanningGlobal
+                          ? 'Abriendo escáner...'
+                          : 'Escanear seleccionados (máx. 10)'}
                       </Button>
                       <span className="text-xs text-gray-600">
                         Seleccionados: {selectedGlobalIds.size}
