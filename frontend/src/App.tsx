@@ -290,11 +290,29 @@ function App() {
 
             <Route path="rapicredit-cobros" element={<ReportePagoPage />} />
 
+            {/* Alias públicos legacy/amigables para evitar caída a login por rutas antiguas. */}
+            <Route
+              path="reportar"
+              element={<Navigate to="/rapicredit-cobros" replace />}
+            />
+            <Route
+              path="reportar-pago"
+              element={<Navigate to="/rapicredit-cobros" replace />}
+            />
+
             {/* Consulta publica de estado de cuenta (sin login). Solo esta consulta, sin acceso a otros servicios. */}
 
             <Route
               path="rapicredit-estadocuenta"
               element={<EstadoCuentaPublicoPage />}
+            />
+            <Route
+              path="estado-cuenta"
+              element={<Navigate to="/rapicredit-estadocuenta" replace />}
+            />
+            <Route
+              path="estado-de-cuenta"
+              element={<Navigate to="/rapicredit-estadocuenta" replace />}
             />
 
             {/* Acceso limitado: ruta pública (p. ej. historial); "Volver a Infopagos" exige login y redirige con state.from */}

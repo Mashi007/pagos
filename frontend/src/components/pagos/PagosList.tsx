@@ -759,7 +759,7 @@ export function PagosList() {
       return
     }
     const pestana = (searchParams.get('pestana') || '').trim().toLowerCase()
-    if (pestana === 'revision') {
+    if (pestana === 'revision' || pestana === 'revision-global') {
       setActiveTab('revision')
       const ndoc = (searchParams.get('numero_documento') || '').trim()
       if (ndoc) {
@@ -777,6 +777,12 @@ export function PagosList() {
       }
     }
   }, [searchParams, setSearchParams])
+
+  useEffect(() => {
+    if (activeTab === 'revision-global') {
+      setActiveTab('revision')
+    }
+  }, [activeTab])
 
   const esRevisarPagos = filters.sin_prestamo === 'si'
   const filtrosPagosApi: Parameters<typeof pagoService.getAllPagos>[2] = {
@@ -2356,7 +2362,6 @@ export function PagosList() {
             <TabsTrigger value="todos">Todos los Pagos</TabsTrigger>
             <TabsTrigger value="resumen">Detalle por Cliente</TabsTrigger>
             <TabsTrigger value="revision">Revision</TabsTrigger>
-            <TabsTrigger value="revision-global">Revision global</TabsTrigger>
           </TabsList>
           {/* Tab: Detalle por Cliente (resumen + ver pagos del cliente, más reciente a más antiguo) */}
           <TabsContent value="resumen" forceMount>

@@ -639,7 +639,24 @@ export default function EscanerInfopagosPage() {
     try {
       const res = await escanerInfopagosExtraerComprobante(fd)
       if (!res.ok) {
-        toast.error(res.error || 'No se pudo leer el comprobante.')
+        const bid =
+          typeof res.borrador_id === 'string' && res.borrador_id.trim()
+            ? res.borrador_id.trim()
+            : null
+        setBorradorId(bid)
+        setValidacionCampos(res.validacion_campos ?? null)
+        setValidacionReglas(
+          res.validacion_reglas ??
+            res.error ??
+            'No se pudo digitalizar con Gemini. Pase a revisión manual.'
+        )
+        // Mantener al usuario en la misma pestaña y llevarlo al formulario manual.
+        setFase('formulario')
+        toast.warning(
+          bid
+            ? 'No se digitalizó con Gemini. Se creó borrador en servidor para revisión manual en esta misma pestaña.'
+            : 'No se digitalizó con Gemini. Complete manualmente el formulario en esta misma pestaña.'
+        )
         return
       }
       if (!aplicarExtraccionInfopagosAlFormulario(res)) {

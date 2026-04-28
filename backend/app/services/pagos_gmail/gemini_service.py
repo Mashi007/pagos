@@ -1015,7 +1015,7 @@ def extract_payment_data(
                 response = client.models.generate_content(
                     model=model_name,
                     contents=contents,
-                    config=types.GenerateContentConfig(temperature=0.1),
+                    config=types.GenerateContentConfig(temperature=0.0),
                 )
                 text = ""
                 try:
@@ -1489,7 +1489,7 @@ def classify_and_extract_pagos_gmail_attachment(
                     response = client.models.generate_content(
                         model=model_name,
                         contents=[_prompt, _part],
-                        config=types.GenerateContentConfig(temperature=0.1),
+                        config=types.GenerateContentConfig(temperature=0.0),
                     )
                     text = ""
                     try:
@@ -1668,7 +1668,7 @@ def extract_cobranza_from_image(
                 response = client.models.generate_content(
                     model=model_name,
                     contents=[GEMINI_COBRANZA_PROMPT, image_part],
-                    config=types.GenerateContentConfig(temperature=0.1, safety_settings=safety),
+                    config=types.GenerateContentConfig(temperature=0.0, safety_settings=safety),
                 )
                 text = (response.text or "").strip()
                 return _parse_cobranza_json(text)
@@ -2032,7 +2032,7 @@ def compare_form_with_image(
                 response = client.models.generate_content(
                     model=model_name,
                     contents=[prompt, image_part],
-                    config=types.GenerateContentConfig(temperature=0.1),
+                    config=types.GenerateContentConfig(temperature=0.0),
                 )
                 text = (response.text or "").strip()
                 json_str = _find_json_object(text)
@@ -2320,7 +2320,7 @@ def extract_infopagos_campos_desde_comprobante(
                     model=model_name,
                     contents=[prompt, image_part],
                     config=types.GenerateContentConfig(
-                        temperature=0.1,
+                        temperature=0.0,
                         # Respuesta corta (JSON); evita respuestas largas innecesarias del modelo.
                         max_output_tokens=2048,
                     ),
@@ -2394,7 +2394,7 @@ def extract_infopagos_campos_desde_comprobante(
         logger.exception("[ESCANER] extract_infopagos_campos_desde_comprobante: %s", e)
         return {
             "ok": False,
-            "error": str(e)[:500],
+            "error": "No se pudo procesar el comprobante en este momento. Intente de nuevo.",
             "fecha_pago": None,
             "institucion_financiera": "",
             "numero_operacion": "",

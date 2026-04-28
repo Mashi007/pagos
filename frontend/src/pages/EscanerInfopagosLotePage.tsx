@@ -41,6 +41,7 @@ import {
 } from '../components/ui/dialog'
 import {
   eliminarPagoReportado,
+  escanerInfopagosExtraerComprobante,
   escanerInfopagosLoteDesdeDrive,
   enviarReporteInfopagos,
   getReciboInfopagos,
@@ -271,6 +272,7 @@ export default function EscanerInfopagosLotePage() {
   const [filas, setFilas] = useState<FilaLote[]>([])
   const [editClientId, setEditClientId] = useState<string | null>(null)
   const [editDraft, setEditDraft] = useState<Partial<FilaLote> | null>(null)
+  const [editRescanning, setEditRescanning] = useState(false)
   const filasRef = useRef<FilaLote[]>([])
 
   const digitacionUi = useSyncExternalStore(
@@ -581,6 +583,81 @@ export default function EscanerInfopagosLotePage() {
     cerrarEditorFila()
   }, [actualizarFila, cerrarEditorFila, editClientId, editDraft])
 
+  const handleReescanearFilaEditando = useCallback(async () => {
+    if (!editClientId) return
+    const fila = filasRef.current.find(f => f.clientId === editClientId)
+    if (!fila) return
+    const confirmar = window.confirm(
+      'Re-escanear reemplazará los campos actuales de esta fila (fecha, banco, número, monto, moneda y validaciones). ¿Desea continuar?'
+    )
+    if (!confirmar) return
+    if (!cedulaNormalizada.valido || !cedulaNormalizada.valorParaEnviar) {
+      toast.error('Cédula inválida.')
+      return
+    }
+    const vA = validarArchivo(fila.archivo)
+    if (!vA.valido) {
+      toast.error(vA.error || 'Archivo de comprobante inválido.')
+      return
+    }
+    const tipo = cedulaNormalizada.valorParaEnviar.charAt(0).toUpperCase()
+    const numero = cedulaNormalizada.valorParaEnviar.slice(1).replace(/\D/g, '')
+    const fd = new FormData()
+    fd.append('tipo_cedula', tipo)
+    fd.append('numero_cedula', numero)
+    fd.append('fuente_tasa_cambio', fuenteTasa)
+    fd.append('comprobante', fila.archivo)
+    const instPlantilla = String(editDraft?.institucion || '').trim()
+    if (instPlantilla) {
+      fd.append('institucion_plantilla', instPlantilla)
+    }
+    setEditRescanning(true)
+    try {
+      const res = await escanerInfopagosExtraerComprobante(fd)
+      const nextFila = filaTrasExtraccion(fila, res)
+      if (!res.ok || !res.sugerencia) {
+        const bid =
+          typeof res.borrador_id === 'string' && res.borrador_id.trim()
+            ? res.borrador_id.trim()
+            : null
+        actualizarFila(editClientId, {
+          extract: 'error',
+          errorExtraccion: res.error || 'No se pudo digitalizar el comprobante.',
+          validacionCampos: res.validacion_campos ?? null,
+          validacionReglas: res.validacion_reglas ?? res.error ?? null,
+          borradorId: bid,
+        })
+        toast.error(
+          res.error || 'No se pudo digitalizar. Continúe edición manual.'
+        )
+        return
+      }
+      actualizarFila(editClientId, nextFila)
+      setEditDraft(prev =>
+        prev
+          ? {
+              ...prev,
+              fechaPago: nextFila.fechaPago,
+              confirmaFechaDetectada: nextFila.confirmaFechaDetectada,
+              confirmaFechaManual: nextFila.confirmaFechaManual,
+              institucion: nextFila.institucion,
+              otroInstitucion: nextFila.otroInstitucion,
+              numeroOperacion: nextFila.numeroOperacion,
+              moneda: nextFila.moneda,
+              montoStr: nextFila.montoStr,
+            }
+          : prev
+      )
+      toast.success('Fila re-escaneada y campos actualizados.')
+    } catch (e: unknown) {
+      toast.error(
+        e instanceof Error ? e.message : 'Error al re-escanear la fila.'
+      )
+    } finally {
+      setEditRescanning(false)
+    }
+  }, [actualizarFila, cedulaNormalizada, editClientId, editDraft?.institucion, fuenteTasa])
+
   const handleAplicarSufijo = useCallback(
     (clientId: string, letter: 'A' | 'P') => {
       setFilas(prev => {
@@ -810,6 +887,21 @@ export default function EscanerInfopagosLotePage() {
         : null,
     [editClientId, filas]
   )
+  const [editPreviewUrl, setEditPreviewUrl] = useState<string | null>(null)
+
+  useEffect(() => {
+    setEditPreviewUrl(prev => {
+      if (prev) window.URL.revokeObjectURL(prev)
+      return null
+    })
+    const file = filaEditando?.archivo ?? null
+    if (!file) return
+    const u = window.URL.createObjectURL(file)
+    setEditPreviewUrl(u)
+    return () => {
+      window.URL.revokeObjectURL(u)
+    }
+  }, [filaEditando?.clientId, filaEditando?.archivo])
 
   return (
     <div className="mx-auto max-w-4xl space-y-6 p-4 pb-16">
@@ -1446,7 +1538,7 @@ export default function EscanerInfopagosLotePage() {
         open={Boolean(filaEditando)}
         onOpenChange={open => (open ? undefined : cerrarEditorFila())}
       >
-        <DialogContent className="flex max-h-[90vh] w-full max-w-2xl flex-col gap-0 p-0 sm:max-w-2xl">
+        <DialogContent className="flex max-h-[90vh] w-full max-w-6xl flex-col gap-0 p-0 sm:max-w-6xl">
           <DialogHeader className="flex-shrink-0 space-y-3 border-b px-6 py-4 sm:flex sm:flex-row sm:items-start sm:justify-between sm:space-y-0">
             <div className="min-w-0 flex-1 space-y-1">
               <DialogTitle className="text-xl font-bold">Editar Pago</DialogTitle>
@@ -1476,9 +1568,45 @@ export default function EscanerInfopagosLotePage() {
               )}
               Re-escanear lote ({String(MAX_REESCAN_LOTE_PANTALLA)})
             </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="shrink-0 gap-1.5"
+              disabled={editRescanning || !filaEditando}
+              onClick={() => void handleReescanearFilaEditando()}
+            >
+              {editRescanning ? (
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+              ) : (
+                <Brain className="h-4 w-4" aria-hidden />
+              )}
+              Re-escanear esta fila
+            </Button>
           </DialogHeader>
           {filaEditando && editDraft ? (
-            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-6">
+            <div className="min-h-0 flex-1 lg:grid lg:grid-cols-2">
+              <aside className="min-h-0 border-b bg-slate-100 lg:border-b-0 lg:border-r">
+                <div className="flex h-full min-h-[260px] flex-col p-3">
+                  <p className="mb-2 text-sm font-medium text-slate-800">
+                    Comprobante
+                  </p>
+                  {editPreviewUrl ? (
+                    <div className="min-h-0 flex-1 overflow-hidden rounded-md border border-slate-200 bg-white">
+                      <iframe
+                        title={`Comprobante ${filaEditando.nombreArchivo}`}
+                        src={editPreviewUrl}
+                        className="h-full min-h-[260px] w-full border-0"
+                      />
+                    </div>
+                  ) : (
+                    <div className="rounded-md border border-slate-200 bg-white p-3 text-sm text-slate-600">
+                      No hay vista previa para este comprobante.
+                    </div>
+                  )}
+                </div>
+              </aside>
+              <div className="min-h-0 space-y-4 overflow-y-auto p-6">
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
                   <Label>Cédula Cliente *</Label>
@@ -1736,6 +1864,7 @@ export default function EscanerInfopagosLotePage() {
                     <option value="BS">Bolívares (Bs.)</option>
                   </select>
                 </div>
+              </div>
               </div>
             </div>
           ) : null}

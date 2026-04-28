@@ -88,6 +88,50 @@ _COBROS_LISTADO_KPIS_CACHE_TTL_SEC = 900  # 15 minutos
 _COBROS_LISTADO_KPIS_CACHE_PREFIX = "cobros:listado_y_kpis:v1:"
 _cobros_listado_kpis_mem_cache: Dict[str, Tuple[float, dict]] = {}
 _cobros_listado_kpis_mem_lock = threading.Lock()
+_ESCANER_RATE_LIMIT_WINDOW_SEC = 60
+_ESCANER_RATE_LIMIT_MAX_COUNT = 20
+_escaner_rate_limit_mem: Dict[str, Tuple[int, float]] = {}
+_escaner_rate_limit_mem_lock = threading.Lock()
+
+
+def _enforce_escaner_rate_limit(request: Request) -> None:
+    """
+    Limita llamadas al escáner por usuario (o IP fallback) para evitar picos de costo/latencia.
+    Ventana fija de 60s: máx 20 solicitudes.
+    """
+    cur = getattr(request.state, "user", None)
+    uid = getattr(cur, "id", None) if cur is not None else None
+    actor = f"user:{uid}" if uid is not None else f"ip:{getattr(request.client, 'host', None) or 'unknown'}"
+    detail_429 = "Demasiadas solicitudes al escáner. Espere un minuto e intente de nuevo."
+    key = f"rate_limit:cobros_escaner:{actor}"
+    now = time.time()
+
+    client = get_redis_client()
+    if client:
+        try:
+            pipe = client.pipeline()
+            pipe.incr(key)
+            pipe.ttl(key)
+            incr_result, ttl = pipe.execute()
+            if ttl == -1:
+                client.expire(key, _ESCANER_RATE_LIMIT_WINDOW_SEC)
+            if int(incr_result or 0) > _ESCANER_RATE_LIMIT_MAX_COUNT:
+                raise HTTPException(status_code=429, detail=detail_429)
+            return
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.warning("[ESCANER] Rate limit Redis error: %s", e)
+
+    with _escaner_rate_limit_mem_lock:
+        count, start_ts = _escaner_rate_limit_mem.get(key, (0, now))
+        if now - start_ts >= _ESCANER_RATE_LIMIT_WINDOW_SEC:
+            _escaner_rate_limit_mem[key] = (1, now)
+            return
+        count += 1
+        _escaner_rate_limit_mem[key] = (count, start_ts)
+        if count > _ESCANER_RATE_LIMIT_MAX_COUNT:
+            raise HTTPException(status_code=429, detail=detail_429)
 
 
 def _cobros_listado_kpis_cache_key_payload(
@@ -3174,6 +3218,8 @@ async def escaner_extraer_comprobante_infopagos(
     Opcional: `institucion_plantilla` (ej. Mercantil, BNC) añade al prompt pautas típicas del banco
     sin sustituir lo visible en la imagen (re-escaneo lote Infopagos).
     """
+    _enforce_escaner_rate_limit(request)
+
     cedula_input = f"{(tipo_cedula or '').strip()}{(numero_cedula or '').strip()}"
     val = validate_cedula(cedula_input)
     if not val.get("valido"):
@@ -3209,6 +3255,13 @@ async def escaner_extraer_comprobante_infopagos(
     tipo = (tipo_cedula or "").strip().upper()[:2]
     numero = (numero_cedula or "").strip()
     ctx_ced = f"{tipo}{numero}".replace("-", "")
+    current_user = getattr(request.state, "user", None)
+    usuario_escaner_id: Optional[int] = None
+    if current_user is not None and getattr(current_user, "id", None) is not None:
+        try:
+            usuario_escaner_id = int(current_user.id)
+        except (TypeError, ValueError):
+            usuario_escaner_id = None
 
     plantilla = (institucion_plantilla or "").strip() or None
     t_gemini0 = time.perf_counter()
@@ -3217,6 +3270,51 @@ async def escaner_extraer_comprobante_infopagos(
     )
     gemini_ms = int((time.perf_counter() - t_gemini0) * 1000)
     if not gem.get("ok"):
+        validacion_manual = (
+            "Gemini no pudo digitalizar el comprobante con consistencia. "
+            "Pase a revisión manual y complete/valide los campos antes de guardar."
+        )
+        borrador_id_fallo: Optional[str] = None
+        if usuario_escaner_id is not None:
+            try:
+                payload_snap_fallo = {
+                    "sugerencia": {
+                        "fecha_pago": None,
+                        "institucion_financiera": "",
+                        "numero_operacion": "",
+                        "monto": None,
+                        "moneda": "BS",
+                        "cedula_pagador_en_comprobante": "",
+                        "notas_modelo": "",
+                    },
+                    "validacion_campos": None,
+                    "validacion_reglas": validacion_manual,
+                    "duplicado_en_pagos": False,
+                    "pago_existente_id": None,
+                    "prestamo_existente_id": None,
+                    "prestamo_objetivo_id": int(prestamos_aprob[0]) if len(prestamos_aprob) == 1 else None,
+                    "motivo_digitalizacion": "gemini_no_digitaliza",
+                }
+                borrador_id_fallo = ieb.crear_borrador_escaneo(
+                    db,
+                    cliente_id=int(cliente.id),
+                    usuario_id=usuario_escaner_id,
+                    tipo_cedula=tipo,
+                    numero_cedula=numero,
+                    cedula_normalizada=cedula_lookup,
+                    fuente_tasa_cambio=fuente_tasa_cambio,
+                    content=content,
+                    ctype=ctype,
+                    filename=filename,
+                    payload=payload_snap_fallo,
+                )
+                if borrador_id_fallo:
+                    db.commit()
+                else:
+                    db.rollback()
+            except Exception as e:
+                db.rollback()
+                logger.exception("[ESCANER] fallo al guardar borrador por no digitalizar: %s", e)
         logger.info(
             "[ESCANER_TIMING] ok=False gemini_ms=%s bytes=%s filename=%r cedula_ctx=%s err=%s",
             gemini_ms,
@@ -3227,10 +3325,11 @@ async def escaner_extraer_comprobante_infopagos(
         )
         return {
             "ok": False,
-            "error": gem.get("error") or "No se pudo leer el comprobante.",
+            "error": validacion_manual,
             "sugerencia": None,
             "validacion_campos": None,
-            "validacion_reglas": None,
+            "validacion_reglas": validacion_manual,
+            "borrador_id": borrador_id_fallo,
         }
 
     fecha_d = gem.get("fecha_pago")
@@ -3317,14 +3416,6 @@ async def escaner_extraer_comprobante_infopagos(
     )
 
     borrador_id: Optional[str] = None
-    current_user = getattr(request.state, "user", None)
-    usuario_escaner_id: Optional[int] = None
-    if current_user is not None and getattr(current_user, "id", None) is not None:
-        try:
-            usuario_escaner_id = int(current_user.id)
-        except (TypeError, ValueError):
-            usuario_escaner_id = None
-
     necesita_borrador_bd = ieb.debe_persistir_borrador_escaneo(
         validacion_campos=validacion_campos,
         validacion_reglas=validacion_reglas,
@@ -3623,6 +3714,58 @@ async def escaner_lote_drive_digitalizar(
         else:
             gem = extract_infopagos_campos_desde_comprobante(ctx_ced, content, filename)
             if not gem.get("ok"):
+                validacion_manual = (
+                    "Gemini no pudo digitalizar el comprobante con consistencia. "
+                    "Pase a revisión manual y complete/valide los campos antes de guardar."
+                )
+                borrador_id_fallo: Optional[str] = None
+                if usuario_escaner_id is not None:
+                    try:
+                        payload_snap_fallo = {
+                            "source": "lote_drive",
+                            "drive_file_id": fid,
+                            "nombre_archivo": fname,
+                            "sugerencia": {
+                                "fecha_pago": None,
+                                "institucion_financiera": "",
+                                "numero_operacion": "",
+                                "monto": None,
+                                "moneda": "BS",
+                                "cedula_pagador_en_comprobante": "",
+                                "notas_modelo": "",
+                            },
+                            "validacion_campos": None,
+                            "validacion_reglas": validacion_manual,
+                            "duplicado_en_pagos": False,
+                            "pago_existente_id": None,
+                            "prestamo_existente_id": None,
+                            "prestamo_objetivo_id": prestamo_objetivo_id,
+                            "motivo_digitalizacion": "gemini_no_digitaliza",
+                        }
+                        borrador_id_fallo = ieb.crear_borrador_escaneo(
+                            db,
+                            cliente_id=int(cliente.id),
+                            usuario_id=usuario_escaner_id,
+                            tipo_cedula=tipo,
+                            numero_cedula=numero,
+                            cedula_normalizada=cedula_lookup,
+                            fuente_tasa_cambio=fuente_tasa_cambio,
+                            content=content,
+                            ctype=ctype,
+                            filename=filename,
+                            payload=payload_snap_fallo,
+                        )
+                        if borrador_id_fallo:
+                            db.commit()
+                        else:
+                            db.rollback()
+                    except Exception as e:
+                        db.rollback()
+                        logger.exception(
+                            "[ESCANER_LOTE_DRIVE] fallo al guardar borrador por no digitalizar file_id=%s: %s",
+                            fid,
+                            e,
+                        )
                 items.append(
                     {
                         "drive_file_id": fid,
@@ -3630,14 +3773,15 @@ async def escaner_lote_drive_digitalizar(
                         "mime_type": ctype,
                         "archivo_b64": archivo_b64,
                         "ok": False,
-                        "error": gem.get("error") or "No se pudo leer el comprobante.",
+                        "error": validacion_manual,
                         "sugerencia": None,
                         "validacion_campos": None,
-                        "validacion_reglas": None,
+                        "validacion_reglas": validacion_manual,
                         "duplicado_en_pagos": False,
                         "pago_existente_id": None,
                         "prestamo_existente_id": None,
                         "prestamo_objetivo_id": prestamo_objetivo_id,
+                        "borrador_id": borrador_id_fallo,
                     }
                 )
             else:
