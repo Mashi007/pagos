@@ -129,6 +129,43 @@ def cargar_borrador_y_bytes_comprobante(
     return img_id, data, fn, ctype, None
 
 
+def bytes_comprobante_borrador_escaneo_para_owner(
+    db: Session,
+    *,
+    borrador_id: str,
+    usuario_id: int,
+) -> Tuple[Optional[bytes], Optional[str], Optional[str], Optional[str]]:
+    """
+    Vista previa del binario guardado para un borrador activo del usuario actual.
+    Devuelve (data, content_type_principal, nombre_archivo, error).
+    """
+    bid = (borrador_id or "").strip()
+    if not bid:
+        return None, None, None, "Borrador inválido."
+    row = db.execute(
+        select(InfopagosEscanerBorrador).where(InfopagosEscanerBorrador.id == bid)
+    ).scalars().first()
+    if row is None:
+        return None, None, None, "Borrador no encontrado."
+    if (row.estado or "").strip().lower() != "borrador":
+        return None, None, None, "Este borrador ya no está disponible."
+    if row.usuario_id is None or int(row.usuario_id) != int(usuario_id):
+        return None, None, None, "No tiene permiso para ver este comprobante."
+
+    img = db.execute(
+        select(PagoComprobanteImagen).where(
+            PagoComprobanteImagen.id == row.comprobante_imagen_id
+        )
+    ).scalars().first()
+    if img is None or not getattr(img, "imagen_data", None):
+        return None, None, None, "El comprobante ya no está disponible."
+
+    ctype_raw = (getattr(img, "content_type", None) or "application/octet-stream").strip()
+    ctype_main = ctype_raw.split(";")[0].strip()
+    fn = (row.comprobante_nombre or "comprobante")[:255]
+    return bytes(img.imagen_data), ctype_main, fn, None
+
+
 def marcar_borrador_confirmado(
     db: Session,
     borrador_id: str,

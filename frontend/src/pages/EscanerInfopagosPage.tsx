@@ -4,13 +4,14 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 
 import {
   Brain,
   Loader2,
   CheckCircle2,
   AlertTriangle,
+  Eye,
   Pencil,
   Trash2,
 } from 'lucide-react'
@@ -25,6 +26,8 @@ import {
   escanerInfopagosExtraerComprobante,
   enviarReporteInfopagos,
   getInfopagosBorradorEscaneer,
+  openInfopagosBorradorComprobanteInNewTab,
+  getInfopagosBorradorComprobanteBlob,
   getReciboInfopagos,
   getReciboInfopagosStatus,
   listInfopagosBorradoresEscaneer,
@@ -32,6 +35,7 @@ import {
   type EscanerInfopagosExtraerResponse,
   type InfopagosBorradorListItem,
 } from '../services/cobrosService'
+import { DuplicadoPrestamosComparacion } from '../components/cobros/DuplicadoPrestamosComparacion'
 import { formatMontoBsVe, parseMontoLatam } from '../utils/montoLatam'
 import {
   extraerCaracteresCedulaPublica,
@@ -307,6 +311,15 @@ export default function EscanerInfopagosPage() {
     InfopagosBorradorListItem[]
   >([])
   const [cargandoBorradores, setCargandoBorradores] = useState(false)
+  const navigate = useNavigate()
+  const [comprobantePreviewUrl, setComprobantePreviewUrl] = useState<
+    string | null
+  >(null)
+  const [comprobantePreviewLoading, setComprobantePreviewLoading] =
+    useState(false)
+  const [comprobantePreviewError, setComprobantePreviewError] = useState<
+    string | null
+  >(null)
   const [escaneando, setEscaneando] = useState(false)
   const [validacionCampos, setValidacionCampos] = useState<string | null>(null)
   const [validacionReglas, setValidacionReglas] = useState<string | null>(null)
@@ -375,6 +388,103 @@ export default function EscanerInfopagosPage() {
     if (/DUPLICADO/i.test(v)) return true
     return Boolean(escanerColision?.duplicado_en_pagos)
   }, [escanerColision, validacionCampos, validacionReglas])
+
+  const fechaComparacionDup = useMemo(() => {
+    const m = fechaPago.trim()
+    if (m) return m
+    const d = fechaDetectada.trim()
+    if (d) return d
+    return fechaLocalHoyISO()
+  }, [fechaPago, fechaDetectada])
+
+  const prestamoDuplicadoEsObjetivoEscaneer = useMemo(() => {
+    const ex = escanerColision?.prestamo_existente_id
+    const ob = escanerColision?.prestamo_objetivo_id
+    if (typeof ex !== 'number' || typeof ob !== 'number') return null
+    return ex === ob
+  }, [escanerColision])
+
+  useEffect(() => {
+    let cancelled = false
+
+    if (fase !== 'formulario') {
+      setComprobantePreviewUrl(prev => {
+        if (prev) URL.revokeObjectURL(prev)
+        return null
+      })
+      setComprobantePreviewLoading(false)
+      setComprobantePreviewError(null)
+      return
+    }
+
+    if (archivo) {
+      const u = URL.createObjectURL(archivo)
+      setComprobantePreviewUrl(prev => {
+        if (prev) URL.revokeObjectURL(prev)
+        return u
+      })
+      setComprobantePreviewLoading(false)
+      setComprobantePreviewError(null)
+      return () => {
+        URL.revokeObjectURL(u)
+      }
+    }
+
+    const bid = (borradorId || '').trim()
+    if (bid) {
+      setComprobantePreviewLoading(true)
+      setComprobantePreviewUrl(prev => {
+        if (prev) URL.revokeObjectURL(prev)
+        return null
+      })
+      setComprobantePreviewError(null)
+      ;(async () => {
+        try {
+          const blob = await getInfopagosBorradorComprobanteBlob(bid)
+          if (cancelled) return
+          const u = URL.createObjectURL(blob)
+          setComprobantePreviewUrl(u)
+          setComprobantePreviewError(null)
+        } catch {
+          if (!cancelled) {
+            setComprobantePreviewError(
+              'No se pudo cargar el comprobante desde el servidor.'
+            )
+          }
+        } finally {
+          if (!cancelled) setComprobantePreviewLoading(false)
+        }
+      })()
+      return () => {
+        cancelled = true
+        setComprobantePreviewUrl(prev => {
+          if (prev) URL.revokeObjectURL(prev)
+          return null
+        })
+      }
+    }
+
+    setComprobantePreviewUrl(prev => {
+      if (prev) URL.revokeObjectURL(prev)
+      return null
+    })
+    setComprobantePreviewLoading(false)
+    setComprobantePreviewError(null)
+    return undefined
+  }, [fase, archivo, borradorId])
+
+  const abrirComprobanteFormularioEnPestana = useCallback(async () => {
+    if (archivo) {
+      const u = URL.createObjectURL(archivo)
+      window.open(u, '_blank')
+      window.setTimeout(() => URL.revokeObjectURL(u), 120_000)
+      return
+    }
+    const bid = (borradorId || '').trim()
+    if (bid) {
+      await openInfopagosBorradorComprobanteInNewTab(bid)
+    }
+  }, [archivo, borradorId])
 
   const refrescarBorradores = useCallback(async () => {
     setCargandoBorradores(true)
@@ -1075,7 +1185,56 @@ export default function EscanerInfopagosPage() {
       )}
 
       {fase === 'formulario' && (
-        <Card>
+        <div className="-mx-4 flex w-[calc(100%+2rem)] max-w-none flex-col gap-0 border-y border-slate-200/70 bg-white lg:grid lg:h-[calc(100dvh-8rem)] lg:max-h-[calc(100dvh-8rem)] lg:grid-cols-2 lg:items-stretch lg:divide-x lg:divide-slate-200/70 lg:overflow-hidden">
+          <aside className="flex min-h-[min(42vh,380px)] min-w-0 flex-col bg-slate-100 lg:h-full lg:max-h-full lg:min-h-0 lg:overflow-y-auto lg:overscroll-y-contain">
+            <Card className="flex h-full min-h-0 flex-col rounded-none border-0 shadow-none">
+              <CardHeader className="shrink-0 border-b border-slate-200/80 px-3 pb-2 pt-3 lg:pl-3 lg:pr-3">
+                <CardTitle className="text-base">Comprobante</CardTitle>
+                <p className="text-xs text-slate-600">
+                  Misma disposición que revisión manual en Cobros: vista previa a
+                  la izquierda y formulario a la derecha en pantalla ancha.
+                </p>
+              </CardHeader>
+              <CardContent className="flex min-h-0 flex-1 flex-col space-y-2 overflow-hidden p-2 sm:p-3 lg:pl-0 lg:pr-2">
+                {comprobantePreviewLoading ? (
+                  <div className="flex items-center gap-2 py-12 text-sm text-slate-600">
+                    <Loader2 className="h-5 w-5 shrink-0 animate-spin" />
+                    Cargando comprobante…
+                  </div>
+                ) : comprobantePreviewError ? (
+                  <p className="text-sm text-red-700">{comprobantePreviewError}</p>
+                ) : comprobantePreviewUrl ? (
+                  <>
+                    <div className="min-h-0 flex-1 overflow-auto rounded-md border border-slate-200/80 bg-white lg:rounded-l-none lg:border-l-0">
+                      <iframe
+                        title="Comprobante del escáner"
+                        src={comprobantePreviewUrl}
+                        className="block h-[min(42vh,380px)] min-h-[240px] w-full border-0 lg:h-full lg:min-h-[min(50vh,520px)]"
+                      />
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="w-full shrink-0"
+                      onClick={() => void abrirComprobanteFormularioEnPestana()}
+                    >
+                      <Eye className="mr-1 h-4 w-4" />
+                      Abrir en nueva pestaña
+                    </Button>
+                  </>
+                ) : (
+                  <p className="text-sm text-slate-600">
+                    No hay vista previa (adjunte un comprobante en el paso 2 o
+                    cargue un borrador con archivo en el servidor).
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+          </aside>
+
+          <div className="min-h-0 min-w-0 space-y-6 overflow-y-auto overscroll-y-contain px-3 py-4 sm:px-4 lg:py-4 lg:pl-5 lg:pr-2">
+            <Card className="border-0 shadow-none lg:border lg:border-slate-200/80 lg:shadow-sm">
           <CardHeader className="space-y-2">
             <div className="flex flex-wrap items-start justify-between gap-2">
               <CardTitle>3. Formulario (editable)</CardTitle>
@@ -1220,46 +1379,94 @@ export default function EscanerInfopagosPage() {
                   onChange={e => setNumeroOperacion(e.target.value)}
                   maxLength={MAX_LENGTH_NUMERO_OPERACION}
                 />
-                {escanerColision?.duplicado_en_pagos &&
-                typeof escanerColision.prestamo_existente_id === 'number' ? (
-                  <p className="text-sm font-medium text-rose-800">
-                    Este número ya está cargado en cartera, aplicado al{' '}
-                    <strong>
-                      préstamo N° {escanerColision.prestamo_existente_id}
-                    </strong>
-                    .
-                    {typeof escanerColision.pago_existente_id === 'number'
-                      ? ` (pago #${escanerColision.pago_existente_id})`
-                      : ''}
-                  </p>
-                ) : hayDuplicadoOperacion ? (
-                  <p className="text-sm font-medium text-rose-800">
-                    Validación: posible duplicado de número de operación /
-                    documento. Use un sufijo distinto si corresponde el mismo
-                    comprobante para otro caso.
-                  </p>
+                {hayDuplicadoOperacion ? (
+                  <div className="space-y-2 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-900">
+                    <p className="font-medium text-rose-950">
+                      Hay coincidencia o posible duplicado con cartera. Compare
+                      préstamo y fecha antes de sufijo o guardar (misma vista que
+                      Cobros).
+                    </p>
+                    <DuplicadoPrestamosComparacion
+                      prestamoExistenteId={escanerColision?.prestamo_existente_id}
+                      pagoExistenteId={escanerColision?.pago_existente_id}
+                      pagoExistenteEstado={null}
+                      pagoExistenteFechaPago={null}
+                      prestamoObjetivoId={escanerColision?.prestamo_objetivo_id}
+                      fechaPagoReporteIso={fechaComparacionDup}
+                      prestamoDuplicadoEsObjetivo={
+                        prestamoDuplicadoEsObjetivoEscaneer
+                      }
+                      prestamoObjetivoMultiple={null}
+                    />
+                    <div className="flex flex-wrap gap-2">
+                      {typeof escanerColision?.prestamo_existente_id ===
+                      'number' ? (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() =>
+                            navigate(
+                              `/prestamos?filtro_prestamo_id=${escanerColision.prestamo_existente_id}`
+                            )
+                          }
+                        >
+                          Abrir préstamo #{escanerColision.prestamo_existente_id}
+                        </Button>
+                      ) : null}
+                      {typeof escanerColision?.prestamo_objetivo_id ===
+                        'number' &&
+                      typeof escanerColision?.prestamo_existente_id ===
+                        'number' &&
+                      escanerColision.prestamo_objetivo_id !==
+                        escanerColision.prestamo_existente_id ? (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() =>
+                            navigate(
+                              `/prestamos?filtro_prestamo_id=${escanerColision.prestamo_objetivo_id}`
+                            )
+                          }
+                        >
+                          Abrir préstamo actual #
+                          {escanerColision.prestamo_objetivo_id}
+                        </Button>
+                      ) : null}
+                    </div>
+                  </div>
                 ) : null}
                 {hayDuplicadoOperacion ? (
                   <div className="rounded-md border border-violet-200 bg-violet-50 px-3 py-2 text-sm text-violet-950">
-                    <p className="font-medium">
-                      Sufijo admin (misma lógica que carga masiva)
-                    </p>
+                    <p className="font-medium">Sufijo admin (carga masiva)</p>
                     <p className="mt-1 text-xs leading-snug">
                       Añade{' '}
                       <code className="rounded bg-white/80 px-1">_A####</code> o{' '}
-                      <code className="rounded bg-white/80 px-1">_P####</code>{' '}
-                      al final del número para que el documento sea único en
-                      cartera.
+                      <code className="rounded bg-white/80 px-1">_P####</code> al
+                      final del número para que el documento sea único en
+                      cartera. Luego guarde el reporte.
                     </p>
                     <div className="mt-2 flex flex-wrap gap-2">
                       <Button
                         type="button"
+                        variant="outline"
                         size="sm"
-                        variant="default"
-                        className="bg-indigo-600 font-semibold text-white shadow-sm hover:bg-indigo-700"
+                        title="Sufijo en borrador: _A#### (luego Guardar)"
                         onClick={() => handleAplicarSufijoOperacion('A')}
                       >
-                        Autirizacion documento
+                        <Eye className="mr-2 h-4 w-4" />
+                        Agregar sufijo A
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        title="Sufijo en borrador: _P#### (luego Guardar)"
+                        onClick={() => handleAplicarSufijoOperacion('P')}
+                      >
+                        <Eye className="mr-2 h-4 w-4" />
+                        Agregar sufijo P
                       </Button>
                     </div>
                   </div>
@@ -1349,6 +1556,8 @@ export default function EscanerInfopagosPage() {
             ) : null}
           </CardContent>
         </Card>
+          </div>
+        </div>
       )}
 
       {fase === 'exito' && (

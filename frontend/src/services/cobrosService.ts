@@ -699,6 +699,27 @@ export async function deleteInfopagosBorradorEscaneer(
   )
 }
 
+/** Vista previa / nueva pestaña: mismo binario que el borrador en servidor. */
+export async function getInfopagosBorradorComprobanteBlob(
+  borradorId: string
+): Promise<Blob> {
+  return apiClient.getBlob(
+    `${BASE_COBROS}/escaner/borrador/${encodeURIComponent(borradorId)}/comprobante`
+  )
+}
+
+export async function openInfopagosBorradorComprobanteInNewTab(
+  borradorId: string
+): Promise<void> {
+  const data = await getInfopagosBorradorComprobanteBlob(borradorId)
+
+  const url = URL.createObjectURL(data)
+
+  window.open(url, '_blank')
+
+  window.setTimeout(() => URL.revokeObjectURL(url), 120_000)
+}
+
 export interface EscanerInfopagosLoteDriveItem extends EscanerInfopagosExtraerResponse {
   drive_file_id: string
   nombre_archivo: string

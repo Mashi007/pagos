@@ -3428,6 +3428,27 @@ def eliminar_infopagos_borrador_escaner(
     return {"ok": True}
 
 
+@router.get("/escaner/borrador/{borrador_id}/comprobante")
+def descargar_comprobante_infopagos_borrador_escaner(
+    request: Request,
+    borrador_id: str,
+    db: Session = Depends(get_db),
+):
+    """Binario del comprobante guardado en el borrador (misma auth que lista/detalle)."""
+    cur = getattr(request.state, "user", None)
+    if cur is None or getattr(cur, "id", None) is None:
+        raise HTTPException(status_code=401, detail="No autenticado.")
+    uid = int(cur.id)
+    data, ctype, _fn, err = ieb.bytes_comprobante_borrador_escaneo_para_owner(
+        db,
+        borrador_id=borrador_id,
+        usuario_id=uid,
+    )
+    if err or data is None or ctype is None:
+        raise HTTPException(status_code=404, detail=err or "No disponible.")
+    return Response(content=data, media_type=ctype)
+
+
 def _extraer_folder_id_drive(raw: str) -> str:
     txt = (raw or "").strip()
     if not txt:
