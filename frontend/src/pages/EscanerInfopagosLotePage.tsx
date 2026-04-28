@@ -622,7 +622,8 @@ export default function EscanerInfopagosLotePage() {
             : null
         actualizarFila(editClientId, {
           extract: 'error',
-          errorExtraccion: res.error || 'No se pudo digitalizar el comprobante.',
+          errorExtraccion:
+            res.error || 'No se pudo digitalizar el comprobante.',
           validacionCampos: res.validacion_campos ?? null,
           validacionReglas: res.validacion_reglas ?? res.error ?? null,
           borradorId: bid,
@@ -656,7 +657,13 @@ export default function EscanerInfopagosLotePage() {
     } finally {
       setEditRescanning(false)
     }
-  }, [actualizarFila, cedulaNormalizada, editClientId, editDraft?.institucion, fuenteTasa])
+  }, [
+    actualizarFila,
+    cedulaNormalizada,
+    editClientId,
+    editDraft?.institucion,
+    fuenteTasa,
+  ])
 
   const handleAplicarSufijo = useCallback(
     (clientId: string, letter: 'A' | 'P') => {
@@ -1541,11 +1548,13 @@ export default function EscanerInfopagosLotePage() {
         <DialogContent className="flex max-h-[90vh] w-full max-w-6xl flex-col gap-0 p-0 sm:max-w-6xl">
           <DialogHeader className="flex-shrink-0 space-y-3 border-b px-6 py-4 sm:flex sm:flex-row sm:items-start sm:justify-between sm:space-y-0">
             <div className="min-w-0 flex-1 space-y-1">
-              <DialogTitle className="text-xl font-bold">Editar Pago</DialogTitle>
+              <DialogTitle className="text-xl font-bold">
+                Editar Pago
+              </DialogTitle>
               <p className="text-xs text-muted-foreground">
-                Re-escaneo lote: primeras {String(MAX_REESCAN_LOTE_PANTALLA)} filas
-                de la lista; Gemini usa el banco indicado en cada fila (Mercantil,
-                BNC, BDV, etc.) como plantilla junto a la imagen.
+                Re-escaneo lote: primeras {String(MAX_REESCAN_LOTE_PANTALLA)}{' '}
+                filas de la lista; Gemini usa el banco indicado en cada fila
+                (Mercantil, BNC, BDV, etc.) como plantilla junto a la imagen.
               </p>
             </div>
             <Button
@@ -1607,264 +1616,272 @@ export default function EscanerInfopagosLotePage() {
                 </div>
               </aside>
               <div className="min-h-0 space-y-4 overflow-y-auto p-6">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label>Cédula Cliente *</Label>
-                  <Input
-                    value={cedulaNormalizada.valorParaEnviar || cedulaRaw}
-                    readOnly
-                  />
-                  <p className="text-xs text-green-700">
-                    1 préstamo en la lista
-                  </p>
-                </div>
-                <div className="space-y-2">
-                  <Label>Crédito al que aplica el pago *</Label>
-                  <Input
-                    readOnly
-                    value={
-                      filaEditando.escanerColision?.prestamo_objetivo_id != null
-                        ? `Préstamo #${String(filaEditando.escanerColision.prestamo_objetivo_id)}`
-                        : 'Pendiente de detección'
-                    }
-                  />
-                  <p className="text-xs text-green-700">Cédulas coinciden</p>
-                </div>
-              </div>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label>Fecha de Pago *</Label>
-                  <Input
-                    type="date"
-                    value={String(editDraft.fechaPago || '')}
-                    onChange={e =>
-                      setEditDraft(prev =>
-                        prev ? { ...prev, fechaPago: e.target.value } : prev
-                      )
-                    }
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>
-                    Monto pagado ({editDraft.moneda === 'BS' ? 'BS' : 'USD'}) *
-                  </Label>
-                  <Input
-                    value={String(editDraft.montoStr || '')}
-                    onChange={e =>
-                      setEditDraft(prev =>
-                        prev ? { ...prev, montoStr: e.target.value } : prev
-                      )
-                    }
-                  />
-                </div>
-              </div>
-              <div className="rounded border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800">
-                <p className="font-medium">Cómo se aplicará el pago:</p>
-                <ul className="ml-5 list-disc">
-                  <li>
-                    Se aplicará a las cuotas más antiguas primero (por fecha de
-                    vencimiento).
-                  </li>
-                  <li>
-                    Se distribuirá proporcionalmente entre capital e interés.
-                  </li>
-                </ul>
-              </div>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2 sm:col-span-2">
-                  <Label>Banco</Label>
-                  <select
-                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                    value={
-                      !String(editDraft.institucion || '').trim()
-                        ? ''
-                        : INSTITUCIONES_FINANCIERAS.includes(
-                              String(
-                                editDraft.institucion || ''
-                              ) as (typeof INSTITUCIONES_FINANCIERAS)[number]
-                            )
-                          ? String(editDraft.institucion || '')
-                          : 'Otros'
-                    }
-                    onChange={e =>
-                      setEditDraft(prev =>
-                        prev
-                          ? {
-                              ...prev,
-                              institucion:
-                                e.target.value === 'Otros'
-                                  ? String(prev.otroInstitucion || '')
-                                  : e.target.value,
-                              otroInstitucion:
-                                e.target.value === 'Otros'
-                                  ? String(prev.otroInstitucion || '')
-                                  : '',
-                            }
-                          : prev
-                      )
-                    }
-                  >
-                    <option value="">Sin especificar</option>
-                    {INSTITUCIONES_FINANCIERAS.map(opt => (
-                      <option key={opt} value={opt}>
-                        {opt}
-                      </option>
-                    ))}
-                    <option value="Otros">Otro</option>
-                  </select>
-                  {!INSTITUCIONES_FINANCIERAS.includes(
-                    String(
-                      editDraft.institucion || ''
-                    ) as (typeof INSTITUCIONES_FINANCIERAS)[number]
-                  ) ? (
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label>Cédula Cliente *</Label>
                     <Input
-                      placeholder="Nombre del banco o entidad"
-                      maxLength={MAX_LENGTH_INSTITUCION}
-                      value={String(editDraft.otroInstitucion || '')}
+                      value={cedulaNormalizada.valorParaEnviar || cedulaRaw}
+                      readOnly
+                    />
+                    <p className="text-xs text-green-700">
+                      1 préstamo en la lista
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Crédito al que aplica el pago *</Label>
+                    <Input
+                      readOnly
+                      value={
+                        filaEditando.escanerColision?.prestamo_objetivo_id !=
+                        null
+                          ? `Préstamo #${String(filaEditando.escanerColision.prestamo_objetivo_id)}`
+                          : 'Pendiente de detección'
+                      }
+                    />
+                    <p className="text-xs text-green-700">Cédulas coinciden</p>
+                  </div>
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label>Fecha de Pago *</Label>
+                    <Input
+                      type="date"
+                      value={String(editDraft.fechaPago || '')}
+                      onChange={e =>
+                        setEditDraft(prev =>
+                          prev ? { ...prev, fechaPago: e.target.value } : prev
+                        )
+                      }
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>
+                      Monto pagado ({editDraft.moneda === 'BS' ? 'BS' : 'USD'})
+                      *
+                    </Label>
+                    <Input
+                      value={String(editDraft.montoStr || '')}
+                      onChange={e =>
+                        setEditDraft(prev =>
+                          prev ? { ...prev, montoStr: e.target.value } : prev
+                        )
+                      }
+                    />
+                  </div>
+                </div>
+                <div className="rounded border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800">
+                  <p className="font-medium">Cómo se aplicará el pago:</p>
+                  <ul className="ml-5 list-disc">
+                    <li>
+                      Se aplicará a las cuotas más antiguas primero (por fecha
+                      de vencimiento).
+                    </li>
+                    <li>
+                      Se distribuirá proporcionalmente entre capital e interés.
+                    </li>
+                  </ul>
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2 sm:col-span-2">
+                    <Label>Banco</Label>
+                    <select
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                      value={
+                        !String(editDraft.institucion || '').trim()
+                          ? ''
+                          : INSTITUCIONES_FINANCIERAS.includes(
+                                String(
+                                  editDraft.institucion || ''
+                                ) as (typeof INSTITUCIONES_FINANCIERAS)[number]
+                              )
+                            ? String(editDraft.institucion || '')
+                            : 'Otros'
+                      }
                       onChange={e =>
                         setEditDraft(prev =>
                           prev
                             ? {
                                 ...prev,
-                                otroInstitucion: e.target.value,
-                                institucion: e.target.value.trim(),
+                                institucion:
+                                  e.target.value === 'Otros'
+                                    ? String(prev.otroInstitucion || '')
+                                    : e.target.value,
+                                otroInstitucion:
+                                  e.target.value === 'Otros'
+                                    ? String(prev.otroInstitucion || '')
+                                    : '',
                               }
                             : prev
                         )
                       }
+                    >
+                      <option value="">Sin especificar</option>
+                      {INSTITUCIONES_FINANCIERAS.map(opt => (
+                        <option key={opt} value={opt}>
+                          {opt}
+                        </option>
+                      ))}
+                      <option value="Otros">Otro</option>
+                    </select>
+                    {!INSTITUCIONES_FINANCIERAS.includes(
+                      String(
+                        editDraft.institucion || ''
+                      ) as (typeof INSTITUCIONES_FINANCIERAS)[number]
+                    ) ? (
+                      <Input
+                        placeholder="Nombre del banco o entidad"
+                        maxLength={MAX_LENGTH_INSTITUCION}
+                        value={String(editDraft.otroInstitucion || '')}
+                        onChange={e =>
+                          setEditDraft(prev =>
+                            prev
+                              ? {
+                                  ...prev,
+                                  otroInstitucion: e.target.value,
+                                  institucion: e.target.value.trim(),
+                                }
+                              : prev
+                          )
+                        }
+                      />
+                    ) : null}
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Número de Documento *</Label>
+                    <Input
+                      maxLength={MAX_LENGTH_NUMERO_OPERACION}
+                      value={String(editDraft.numeroOperacion || '')}
+                      onChange={e =>
+                        setEditDraft(prev =>
+                          prev
+                            ? { ...prev, numeroOperacion: e.target.value }
+                            : prev
+                        )
+                      }
                     />
-                  ) : null}
-                </div>
-                <div className="space-y-2">
-                  <Label>Número de Documento *</Label>
-                  <Input
-                    maxLength={MAX_LENGTH_NUMERO_OPERACION}
-                    value={String(editDraft.numeroOperacion || '')}
-                    onChange={e =>
-                      setEditDraft(prev =>
-                        prev
-                          ? { ...prev, numeroOperacion: e.target.value }
-                          : prev
-                      )
-                    }
-                  />
-                  <p className="text-xs text-slate-600">
-                    Si detecta duplicado, use <strong>Visto _A…</strong> o{' '}
-                    <strong>Visto _P…</strong>.
-                  </p>
-                  {filaEditando &&
-                  (hayDuplicadoFila(filaEditando) ||
-                    Boolean(filaEditando.escanerColision?.duplicado_en_pagos)) ? (
-                    <p className="text-sm text-slate-700">
-                      <Link
-                        className="font-medium text-indigo-700 underline underline-offset-2 hover:text-indigo-900"
-                        to={{
-                          pathname: '/pagos',
-                          search:
-                            searchParamsRevisionPagosDesdeNumeroDocumento(
-                              String(editDraft?.numeroOperacion || '')
-                            ),
+                    <p className="text-xs text-slate-600">
+                      Si detecta duplicado, use <strong>Visto _A…</strong> o{' '}
+                      <strong>Visto _P…</strong>.
+                    </p>
+                    {filaEditando &&
+                    (hayDuplicadoFila(filaEditando) ||
+                      Boolean(
+                        filaEditando.escanerColision?.duplicado_en_pagos
+                      )) ? (
+                      <p className="text-sm text-slate-700">
+                        <Link
+                          className="font-medium text-indigo-700 underline underline-offset-2 hover:text-indigo-900"
+                          to={{
+                            pathname: '/pagos',
+                            search:
+                              searchParamsRevisionPagosDesdeNumeroDocumento(
+                                String(editDraft?.numeroOperacion || '')
+                              ),
+                          }}
+                        >
+                          Revisar si está en la pestaña Revisión
+                        </Link>
+                      </p>
+                    ) : null}
+                    <div className="flex gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => {
+                          const base = String(
+                            editDraft.numeroOperacion || ''
+                          ).trim()
+                          if (!base) {
+                            toast.error(
+                              'Primero escriba un número de operación.'
+                            )
+                            return
+                          }
+                          if (SUFIJO_VISTO_ARCHIVO_RE.test(base)) {
+                            toast.error('Este número ya tiene sufijo admin.')
+                            return
+                          }
+                          const nuevo = aplicarSufijoVistoADocumento(
+                            base,
+                            'A',
+                            tokensSufijoUsadosRef.current
+                          )
+                          setEditDraft(prev =>
+                            prev ? { ...prev, numeroOperacion: nuevo } : prev
+                          )
                         }}
                       >
-                        Revisar si está en la pestaña Revisión
-                      </Link>
+                        Visto _A…
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => {
+                          const base = String(
+                            editDraft.numeroOperacion || ''
+                          ).trim()
+                          if (!base) {
+                            toast.error(
+                              'Primero escriba un número de operación.'
+                            )
+                            return
+                          }
+                          if (SUFIJO_VISTO_ARCHIVO_RE.test(base)) {
+                            toast.error('Este número ya tiene sufijo admin.')
+                            return
+                          }
+                          const nuevo = aplicarSufijoVistoADocumento(
+                            base,
+                            'P',
+                            tokensSufijoUsadosRef.current
+                          )
+                          setEditDraft(prev =>
+                            prev ? { ...prev, numeroOperacion: nuevo } : prev
+                          )
+                        }}
+                      >
+                        Visto _P…
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Código (solo lectura; lo asigna Visto)</Label>
+                    <Input
+                      readOnly
+                      value={
+                        String(editDraft.numeroOperacion || '')
+                          .match(TOKEN_SUFIJO_VISTO_ARCHIVO_RE)?.[1]
+                          ?.toUpperCase() || 'Pendiente: use Visto'
+                      }
+                    />
+                    <p className="text-xs text-slate-600">
+                      No se puede teclear aquí. El token (formato A#### / P####)
+                      lo genera y guarda el sistema al pulsar Visto.
                     </p>
-                  ) : null}
-                  <div className="flex gap-2">
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="secondary"
-                      onClick={() => {
-                        const base = String(
-                          editDraft.numeroOperacion || ''
-                        ).trim()
-                        if (!base) {
-                          toast.error('Primero escriba un número de operación.')
-                          return
-                        }
-                        if (SUFIJO_VISTO_ARCHIVO_RE.test(base)) {
-                          toast.error('Este número ya tiene sufijo admin.')
-                          return
-                        }
-                        const nuevo = aplicarSufijoVistoADocumento(
-                          base,
-                          'A',
-                          tokensSufijoUsadosRef.current
-                        )
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Moneda *</Label>
+                    <select
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                      value={editDraft.moneda === 'BS' ? 'BS' : 'USD'}
+                      onChange={e =>
                         setEditDraft(prev =>
-                          prev ? { ...prev, numeroOperacion: nuevo } : prev
+                          prev
+                            ? {
+                                ...prev,
+                                moneda: e.target.value === 'BS' ? 'BS' : 'USD',
+                              }
+                            : prev
                         )
-                      }}
+                      }
                     >
-                      Visto _A…
-                    </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="secondary"
-                      onClick={() => {
-                        const base = String(
-                          editDraft.numeroOperacion || ''
-                        ).trim()
-                        if (!base) {
-                          toast.error('Primero escriba un número de operación.')
-                          return
-                        }
-                        if (SUFIJO_VISTO_ARCHIVO_RE.test(base)) {
-                          toast.error('Este número ya tiene sufijo admin.')
-                          return
-                        }
-                        const nuevo = aplicarSufijoVistoADocumento(
-                          base,
-                          'P',
-                          tokensSufijoUsadosRef.current
-                        )
-                        setEditDraft(prev =>
-                          prev ? { ...prev, numeroOperacion: nuevo } : prev
-                        )
-                      }}
-                    >
-                      Visto _P…
-                    </Button>
+                      <option value="USD">USD / divisas</option>
+                      <option value="BS">Bolívares (Bs.)</option>
+                    </select>
                   </div>
                 </div>
-                <div className="space-y-2">
-                  <Label>Código (solo lectura; lo asigna Visto)</Label>
-                  <Input
-                    readOnly
-                    value={
-                      String(editDraft.numeroOperacion || '')
-                        .match(TOKEN_SUFIJO_VISTO_ARCHIVO_RE)?.[1]
-                        ?.toUpperCase() || 'Pendiente: use Visto'
-                    }
-                  />
-                  <p className="text-xs text-slate-600">
-                    No se puede teclear aquí. El token (formato A#### / P####)
-                    lo genera y guarda el sistema al pulsar Visto.
-                  </p>
-                </div>
-                <div className="space-y-2">
-                  <Label>Moneda *</Label>
-                  <select
-                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                    value={editDraft.moneda === 'BS' ? 'BS' : 'USD'}
-                    onChange={e =>
-                      setEditDraft(prev =>
-                        prev
-                          ? {
-                              ...prev,
-                              moneda: e.target.value === 'BS' ? 'BS' : 'USD',
-                            }
-                          : prev
-                      )
-                    }
-                  >
-                    <option value="USD">USD / divisas</option>
-                    <option value="BS">Bolívares (Bs.)</option>
-                  </select>
-                </div>
-              </div>
               </div>
             </div>
           ) : null}

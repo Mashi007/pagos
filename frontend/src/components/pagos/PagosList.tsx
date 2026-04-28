@@ -1476,7 +1476,9 @@ export function PagosList() {
       )
 
       if (pagosConCedula.length === 0) {
-        toast.warning('Ninguno de los pagos seleccionados tiene cédula definida.')
+        toast.warning(
+          'Ninguno de los pagos seleccionados tiene cédula definida.'
+        )
         return
       }
 
@@ -1511,10 +1513,7 @@ export function PagosList() {
           } catch (applyErr) {
             // Si falla aplicar cuotas pero se concilió, registrar como error
             // pero considerarlo procesado
-            if (
-              isAxiosError(applyErr) &&
-              applyErr.response?.status === 409
-            ) {
+            if (isAxiosError(applyErr) && applyErr.response?.status === 409) {
               // Conflicto (duplicado, etc) - marcar como error pero conciliado
               resultados.conError.push(pago.id)
               resultados.fallidos++
@@ -1543,7 +1542,9 @@ export function PagosList() {
 
       if (idsExitosos.length > 0) {
         setSelectedGlobalIds(
-          new Set([...selectedGlobalIds].filter(id => !idsExitosos.includes(id)))
+          new Set(
+            [...selectedGlobalIds].filter(id => !idsExitosos.includes(id))
+          )
         )
       }
 
@@ -1587,14 +1588,17 @@ export function PagosList() {
       try {
         await pagoService.aplicarPagoACuotas(pago.id)
       } catch (applyErr) {
-        if (import.meta.env.DEV) console.warn('Error aplicando a cuotas', applyErr)
+        if (import.meta.env.DEV)
+          console.warn('Error aplicando a cuotas', applyErr)
         const errMsg = getErrorMessage(applyErr)
         toast.error(`Error aplicando a cuotas: ${errMsg}`)
         return
       }
 
       // Éxito: eliminar fila
-      toast.success('Pago validado, conciliado, aplicado y eliminado de la lista.')
+      toast.success(
+        'Pago validado, conciliado, aplicado y eliminado de la lista.'
+      )
 
       // Invalidar queries y refrescar
       await invalidatePagosPrestamosRevisionYCuotas(queryClient, {
@@ -1613,7 +1617,8 @@ export function PagosList() {
         exact: false,
       })
     } catch (err) {
-      if (import.meta.env.DEV) console.error('Error en handleVistoIndividual:', err)
+      if (import.meta.env.DEV)
+        console.error('Error en handleVistoIndividual:', err)
       toast.error(getErrorMessage(err))
     }
   }
@@ -1675,7 +1680,9 @@ export function PagosList() {
   }
   const handleEliminarBorradorPendiente = useCallback(
     async (id: string) => {
-      if (!window.confirm('¿Eliminar este borrador con validación pendiente?')) {
+      if (
+        !window.confirm('¿Eliminar este borrador con validación pendiente?')
+      ) {
         return
       }
       setDeletingBorradorId(id)
@@ -2610,7 +2617,8 @@ export function PagosList() {
                     >
                       Siguiente anomalía
                     </Button>
-                    {(revisionCedulaFiltro || revisionNumeroDocumentoFiltro) && (
+                    {(revisionCedulaFiltro ||
+                      revisionNumeroDocumentoFiltro) && (
                       <Button
                         type="button"
                         variant="ghost"
@@ -2936,8 +2944,11 @@ export function PagosList() {
                       >
                         <div className="min-w-0 flex-1 space-y-0.5">
                           <p className="font-medium text-slate-900">
-                            {(row.cliente_nombre || row.cedula_normalizada || '').trim() ||
-                              'Cliente'}
+                            {(
+                              row.cliente_nombre ||
+                              row.cedula_normalizada ||
+                              ''
+                            ).trim() || 'Cliente'}
                             <span className="ml-2 font-mono text-xs text-slate-600">
                               {row.comprobante_nombre}
                             </span>
@@ -3358,7 +3369,9 @@ export function PagosList() {
                                       variant="default"
                                       className="bg-green-600 hover:bg-green-700"
                                       title="Visto - Validar, conciliar y aplicar"
-                                      onClick={() => void handleVistoIndividual(pago)}
+                                      onClick={() =>
+                                        void handleVistoIndividual(pago)
+                                      }
                                     >
                                       <Check className="h-4 w-4" />
                                     </Button>
@@ -4133,20 +4146,26 @@ export function PagosList() {
             esPagoConError={esRevisarPagos || activeTab === 'revision'}
             bloquearCambioComprobanteCodigo={Boolean(
               pagoEditando &&
-                (pagoEditando.conciliado ||
-                  String(pagoEditando.estado || '').toUpperCase() === 'PAGADO')
+              (pagoEditando.conciliado ||
+                String(pagoEditando.estado || '').toUpperCase() === 'PAGADO')
             )}
-            onDuplicadoDetectado={(pago) => {
+            onDuplicadoDetectado={pago => {
               // Cerrar formulario de registro y abrir Revisión Manual
               setShowRegistrarPago(false)
               setPagoEditando(null)
-              
+
               // Navegar a Revisión Manual con el ID del pago y préstamo
               if (pago.prestamo_id) {
-                toast.info('Abriendo Revisión Manual para resolver el duplicado...')
-                navigate(`/revision-manual/editar/${pago.prestamo_id}?pago_id=${pago.id}`)
+                toast.info(
+                  'Abriendo Revisión Manual para resolver el duplicado...'
+                )
+                navigate(
+                  `/revision-manual/editar/${pago.prestamo_id}?pago_id=${pago.id}`
+                )
               } else {
-                toast.error('No se puede abrir Revisión Manual: el pago no tiene préstamo asignado.')
+                toast.error(
+                  'No se puede abrir Revisión Manual: el pago no tiene préstamo asignado.'
+                )
               }
             }}
             pagoInicial={
@@ -4191,7 +4210,7 @@ export function PagosList() {
               setShowRegistrarPago(false)
               const pagoIdEliminado = pagoEditando?.id
               setPagoEditando(null)
-              
+
               try {
                 // Si fue "Guardar y Procesar", eliminar la fila de la tabla
                 if (procesado && pagoIdEliminado) {
@@ -4202,7 +4221,9 @@ export function PagosList() {
                     } else {
                       await pagoService.deletePago(pagoIdEliminado)
                     }
-                    toast.success('Pago guardado, conciliado, aplicado y eliminado de la lista.')
+                    toast.success(
+                      'Pago guardado, conciliado, aplicado y eliminado de la lista.'
+                    )
                   } catch (deleteErr) {
                     // Si falla el DELETE, no es crítico - el pago ya se procesó
                     if (import.meta.env.DEV) {
@@ -4213,7 +4234,7 @@ export function PagosList() {
                 } else {
                   toast.success('Pago registrado exitosamente.')
                 }
-                
+
                 await invalidatePagosPrestamosRevisionYCuotas(queryClient, {
                   includeDashboardMenu: true,
                 })

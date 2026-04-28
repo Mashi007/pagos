@@ -463,7 +463,8 @@ export async function enviarReportePublico(
       if (res.status === 429) {
         return {
           ok: false,
-          error: 'Ha alcanzado el límite de envíos por hora. Intente más tarde.',
+          error:
+            'Ha alcanzado el límite de envíos por hora. Intente más tarde.',
         }
       }
 
@@ -492,7 +493,10 @@ export async function enviarReportePublico(
       const raw =
         e instanceof Error ? e.message : 'Error de conexión con el servidor.'
       const esUltimoIntento = intento >= ENVIAR_REPORTE_MAX_REINTENTOS
-      if (!esUltimoIntento && /timeout|fetch|network|abort|502|503|504/i.test(raw)) {
+      if (
+        !esUltimoIntento &&
+        /timeout|fetch|network|abort|502|503|504/i.test(raw)
+      ) {
         await sleep(ENVIAR_REPORTE_REINTENTO_DELAY_MS)
         continue
       }
@@ -501,7 +505,8 @@ export async function enviarReportePublico(
   }
   return {
     ok: false,
-    error: 'No se pudo procesar el reporte. Intente nuevamente en unos segundos.',
+    error:
+      'No se pudo procesar el reporte. Intente nuevamente en unos segundos.',
   }
 }
 
@@ -796,7 +801,7 @@ export async function getReciboInfopagos(
       }
       if (res.status === 502 || res.status === 503 || res.status === 504) {
         throw new Error(
-          'El servidor de datos no respondió a tiempo (posible arranque en frío o proxy). Espere 20–60 s y reintente la descarga.'
+          'El servidor de datos no respondió a tiempo (posible arranque en frío o proxy). Espere 20-60 s y reintente la descarga.'
         )
       }
       throw new Error('No se pudo descargar el recibo.')

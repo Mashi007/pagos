@@ -1100,8 +1100,8 @@ export default function NotificacionesClientesDrive() {
             <div className="flex flex-col justify-end gap-2">
               <p className="text-xs text-muted-foreground">
                 «Aprobar manualmente» importa las filas con fondo verde y estado
-                «Listo para revisión» (mismos criterios que habilitan «Guardar en
-                clientes» en el modal).
+                «Listo para revisión» (mismos criterios que habilitan «Guardar
+                en clientes» en el modal).
               </p>
               <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
                 <Button

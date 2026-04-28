@@ -637,7 +637,9 @@ export default function ActualizacionesPrestamosDrivePage() {
       setSelectedIds(new Set())
       await refrescarSnapshotPostAccion()
     } catch (e) {
-      toast.error(getErrorMessage(e) || 'No se pudieron eliminar las filas seleccionadas')
+      toast.error(
+        getErrorMessage(e) || 'No se pudieron eliminar las filas seleccionadas'
+      )
     } finally {
       setEliminandoSeleccionados(false)
     }
@@ -1028,7 +1030,9 @@ export default function ActualizacionesPrestamosDrivePage() {
                           return next
                         })
                       }}
-                      disabled={accionesGlobalesDeshabilitadas || rows.length === 0}
+                      disabled={
+                        accionesGlobalesDeshabilitadas || rows.length === 0
+                      }
                     />
                   </th>
                   <th className="px-2 py-2.5 align-middle text-xs font-semibold">
@@ -1256,5 +1260,3 @@ export default function ActualizacionesPrestamosDrivePage() {
     </div>
   )
 }
-
-

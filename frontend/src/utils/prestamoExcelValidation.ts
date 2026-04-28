@@ -394,8 +394,7 @@ export function validatePrestamoField(
         : { isValid: true }
 
     case 'tasa_interes': {
-      if (!strVal || String(strVal).trim() === '')
-        return { isValid: true }
+      if (!strVal || String(strVal).trim() === '') return { isValid: true }
       const ti = parseFloat(String(strVal).trim())
       if (Number.isNaN(ti) || Math.abs(ti) > 1e-9) {
         return {

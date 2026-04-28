@@ -39,9 +39,12 @@ export async function fetchStaffComprobanteBlobFromHref(
 function sniffComprobanteMimeFromHead(u: Uint8Array): string | null {
   if (u.length < 4) return null
   if (u[0] === 0xff && u[1] === 0xd8 && u[2] === 0xff) return 'image/jpeg'
-  if (u[0] === 0x89 && u[1] === 0x50 && u[2] === 0x4e && u[3] === 0x47) return 'image/png'
-  if (u[0] === 0x47 && u[1] === 0x49 && u[2] === 0x46 && u[3] === 0x38) return 'image/gif'
-  if (u[0] === 0x25 && u[1] === 0x50 && u[2] === 0x44 && u[3] === 0x46) return 'application/pdf'
+  if (u[0] === 0x89 && u[1] === 0x50 && u[2] === 0x4e && u[3] === 0x47)
+    return 'image/png'
+  if (u[0] === 0x47 && u[1] === 0x49 && u[2] === 0x46 && u[3] === 0x38)
+    return 'image/gif'
+  if (u[0] === 0x25 && u[1] === 0x50 && u[2] === 0x44 && u[3] === 0x46)
+    return 'application/pdf'
   if (
     u.length >= 12 &&
     u[0] === 0x52 &&

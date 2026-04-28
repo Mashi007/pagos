@@ -218,7 +218,7 @@ export function FormularioAprobacionCondiciones({
                         Tasa de interés
                       </label>
                       <div className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-800">
-                        0% — producto sin interés (no editable)
+                        0% - producto sin interés (no editable)
                       </div>
                     </div>
 
