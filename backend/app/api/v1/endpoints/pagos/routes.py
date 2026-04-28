@@ -2446,6 +2446,26 @@ def importar_un_pago_reportado_a_pagos(
 
 
     prestamo_id = prestamos[0].id
+    prestamo_sel = prestamos[0]
+    cedula_prestamo = (
+        (getattr(prestamo_sel, "cedula", "") or "")
+        .replace("-", "")
+        .strip()
+        .upper()
+    )
+    if cedula_prestamo and cedula_prestamo != cedula_raw:
+        return _err_con_pce(
+            "La cédula del reporte no coincide con la cédula del préstamo objetivo.",
+            cedula_cliente=cedula_raw,
+            prestamo_id=prestamo_id,
+        )
+
+    if getattr(prestamo_sel, "cliente_id", None) != getattr(cliente, "id", None):
+        return _err_con_pce(
+            "El préstamo objetivo no pertenece al cliente de la cédula reportada.",
+            cedula_cliente=cedula_raw,
+            prestamo_id=prestamo_id,
+        )
 
     moneda_pr = (getattr(pr, "moneda", None) or "USD").strip().upper()
 

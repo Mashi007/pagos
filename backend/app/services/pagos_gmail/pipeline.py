@@ -284,29 +284,43 @@ PAGOS_GMAIL_ETIQUETAS_FINALES_PERMITIDAS = frozenset(
 def _cedula_por_email_cliente(db: Session, email_raw: str) -> tuple[Optional[str], Optional[str]]:
     """
     Devuelve (cedula_raw, motivo_fallo).
-    motivo_fallo: None si hay cedula; "EMAIL" sin coincidencia; "BD" si la consulta lanzo excepcion.
+    motivo_fallo: None si hay cedula; "EMAIL" sin coincidencia/ambiguo; "BD" si la consulta lanzo excepcion.
     Orden fijo: primero `clientes.email` (correo principal), si no hay fila entonces `clientes.email_secundario`.
     """
     em = (email_raw or "").strip().lower()
     if not em:
         return None, "EMAIL"
     try:
-        row = db.execute(
+        rows_main = db.execute(
             select(Cliente.cedula)
             .where(func.lower(func.trim(Cliente.email)) == em)
-            .limit(1)
-        ).scalar_one_or_none()
-        if row:
-            return row, None
-        row_sec = db.execute(
+            .limit(2)
+        ).scalars().all()
+        if len(rows_main) == 1:
+            return rows_main[0], None
+        if len(rows_main) > 1:
+            logger.warning(
+                "[PAGOS_GMAIL] Email principal ambiguo en clientes (varias cédulas): %s",
+                em,
+            )
+            return None, "EMAIL"
+
+        rows_sec = db.execute(
             select(Cliente.cedula)
             .where(Cliente.email_secundario.isnot(None))
             .where(func.trim(Cliente.email_secundario) != "")
             .where(func.lower(func.trim(Cliente.email_secundario)) == em)
-            .limit(1)
-        ).scalar_one_or_none()
-        if row_sec:
-            return row_sec, None
+            .limit(2)
+        ).scalars().all()
+        if len(rows_sec) == 1:
+            return rows_sec[0], None
+        if len(rows_sec) > 1:
+            logger.warning(
+                "[PAGOS_GMAIL] Email secundario ambiguo en clientes (varias cédulas): %s",
+                em,
+            )
+            return None, "EMAIL"
+
         return None, "EMAIL"
     except Exception as ex:
         logger.warning("[PAGOS_GMAIL] Lookup cedula por email clientes: %s", ex)

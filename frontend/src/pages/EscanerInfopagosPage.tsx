@@ -652,7 +652,7 @@ export default function EscanerInfopagosPage() {
         )
         // Mantener al usuario en la misma pestaña y llevarlo al formulario manual.
         setFase('formulario')
-        toast.warning(
+        toast(
           bid
             ? 'No se digitalizó con Gemini. Se creó borrador en servidor para revisión manual en esta misma pestaña.'
             : 'No se digitalizó con Gemini. Complete manualmente el formulario en esta misma pestaña.'
@@ -1552,3 +1552,4 @@ export default function EscanerInfopagosPage() {
     </div>
   )
 }
+
