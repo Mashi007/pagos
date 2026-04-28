@@ -503,6 +503,13 @@ export default function ActualizacionesPrestamosDrivePage() {
     })
   }, [rows])
 
+  const refetchLista = snapshotQuery.refetch
+
+  const refrescarSnapshotPostAccion = useCallback(async () => {
+    await qc.invalidateQueries({ queryKey: [...QK_BASE], exact: false })
+    await refetchLista()
+  }, [qc, refetchLista])
+
   const onRecalcular = useCallback(async () => {
     setManualUpdating(true)
     try {
@@ -527,15 +534,13 @@ export default function ActualizacionesPrestamosDrivePage() {
           )
         }
       }
-      await qc.resetQueries({ queryKey: [...QK_BASE] })
+      await refrescarSnapshotPostAccion()
     } catch (e) {
       toast.error(getErrorMessage(e) || 'No se pudo recalcular')
     } finally {
       setManualUpdating(false)
     }
-  }, [qc, forzarVacio, cedulaDebounced, page])
-
-  const refetchLista = snapshotQuery.refetch
+  }, [forzarVacio, refrescarSnapshotPostAccion])
 
   const onGuardarUnaFila = useCallback(
     async (sheetRowNumber: number) => {
@@ -559,14 +564,14 @@ export default function ActualizacionesPrestamosDrivePage() {
           return
         }
         toast.success(res.mensaje || `Fila ${sheetRowNumber} guardada.`)
-        await qc.resetQueries({ queryKey: [...QK_BASE] })
+        await refrescarSnapshotPostAccion()
       } catch (e) {
         toast.error(getErrorMessage(e) || 'No se pudo guardar la fila')
       } finally {
         setGuardandoFilaSheet(null)
       }
     },
-    [qc, cedulaDebounced, page, rows]
+    [refrescarSnapshotPostAccion, rows]
   )
 
   const onGuardarValidos100 = useCallback(async () => {
@@ -595,13 +600,13 @@ export default function ActualizacionesPrestamosDrivePage() {
             'Ninguna fila cumplió la validación; no se guardó nada. Todas siguen en la lista para revisarlas y corregir.'
         )
       }
-      await qc.resetQueries({ queryKey: [...QK_BASE] })
+      await refrescarSnapshotPostAccion()
     } catch (e) {
       toast.error(getErrorMessage(e) || 'No se pudo guardar')
     } finally {
       setGuardarValidosSaving(false)
     }
-  }, [qc, guardables])
+  }, [guardables, refrescarSnapshotPostAccion])
 
   const onRefrescarLista = useCallback(async () => {
     try {
@@ -630,13 +635,13 @@ export default function ActualizacionesPrestamosDrivePage() {
           `Se eliminaron ${res?.eliminados ?? 0} fila(s) seleccionadas del snapshot.`
       )
       setSelectedIds(new Set())
-      await qc.resetQueries({ queryKey: [...QK_BASE] })
+      await refrescarSnapshotPostAccion()
     } catch (e) {
       toast.error(getErrorMessage(e) || 'No se pudieron eliminar las filas seleccionadas')
     } finally {
       setEliminandoSeleccionados(false)
     }
-  }, [qc, selectedIds])
+  }, [refrescarSnapshotPostAccion, selectedIds])
 
   const fmtCaracas = useCallback((iso: string | null | undefined) => {
     if (!iso) return '-'
