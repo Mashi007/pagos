@@ -469,6 +469,8 @@ export default function ActualizacionesPrestamosDrivePage() {
   const data = snapshotQuery.data
   const rows = data?.filas ?? []
   const total = data?.total ?? 0
+  const guardables =
+    typeof data?.kpis_aprueban === 'number' ? data.kpis_aprueban : null
   const totalSinFiltro = data?.total_sin_filtro
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
   const pageNumbers = numerosPaginaVisibles(page, totalPages, PAGE_WINDOW)
@@ -705,8 +707,6 @@ export default function ActualizacionesPrestamosDrivePage() {
     eliminandoSeleccionados ||
     guardandoFilaSheet !== null ||
     isBusy
-  const guardables =
-    typeof data?.kpis_aprueban === 'number' ? data.kpis_aprueban : null
   const huellaNoComparableTotal =
     typeof data?.kpis_huella_no_comparable === 'number'
       ? data.kpis_huella_no_comparable
@@ -1228,3 +1228,5 @@ export default function ActualizacionesPrestamosDrivePage() {
     </div>
   )
 }
+
+
