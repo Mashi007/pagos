@@ -3752,7 +3752,15 @@ export function PagosList() {
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {data.pagos.map((pago: Pago) => {
+                          {useMemo(() => {
+                            const pagosOrdenados = [...(data.pagos || [])].sort(
+                              (a, b) => {
+                                const fechaA = new Date(a.fecha_pago).getTime()
+                                const fechaB = new Date(b.fecha_pago).getTime()
+                                return fechaA - fechaB // Más antigua primero
+                              }
+                            )
+                            return pagosOrdenados.map((pago: Pago) => {
                             const docKey = claveDocumentoPagoListaNormalizada(
                               pago.numero_documento,
                               pago.codigo_documento ?? null
@@ -4093,7 +4101,8 @@ export function PagosList() {
                                 </TableCell>
                               </TableRow>
                             )
-                          })}
+                          })
+                          }, [data.pagos])}
                         </TableBody>
                       </Table>
                     </div>
