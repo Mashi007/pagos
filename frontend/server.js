@@ -347,9 +347,9 @@ if (API_URL) {
     agent: isHttpsApiTarget ? keepAliveAgentHttps : keepAliveAgentHttp,
     changeOrigin: true,
     xfwd: true,
-    // Sin respuesta del API (cold start Render, consultas largas): no cerrar a los 2 min por defecto del proxy.
-    timeout: 180000,
-    proxyTimeout: 180000,
+    // Sin respuesta del API (cold start, notificaciones 15m, drive-import 10m): alinear con el max de onProxyReq.
+    timeout: 900000,
+    proxyTimeout: 900000,
     logLevel: isDevelopment ? 'info' : 'warn', // Reducir verbosidad en producción
     // CRÍTICO: No seguir redirects (302). Si el backend devuelve 302 (ej. OAuth callback),
     // el navegador debe recibir el 302 y hacer el redirect para que la URL cambie.
@@ -421,7 +421,8 @@ if (API_URL) {
       // Timeout saliente hacia el backend: envíos masivos de notificaciones y exportaciones pueden superar 1–3 min.
       // Debe alinearse con TIMEOUT_MS_ENVIO_NOTIFICACIONES_MANUAL (15 min) en notificacionService.ts.
       const p = proxyReq.path || '';
-      const isExportReport = p.includes('/exportar/');
+      const isExportReport =
+        p.includes('/exportar/') || p.includes('drive-import/exportar-excel');
       const isNotificacionesLote =
         p.includes('/notificaciones/enviar-caso-manual') ||
         p.includes('/notificaciones/enviar-todas');
@@ -433,6 +434,12 @@ if (API_URL) {
       const isCandidatosDriveSlowPost =
         p.includes('prestamos/candidatos-drive/refrescar') ||
         p.includes('prestamos/candidatos-drive/guardar-validados-100');
+      /** Drive -> clientes: mismo origen de 502 por proxyReq 60s si no se alinea con api.ts (hasta 10m en lote). */
+      const isClientesDriveImportBulk =
+        p.includes('clientes/drive-import/importar') &&
+        !p.includes('importar-fila');
+      const isClientesDriveImportFila = p.includes('clientes/drive-import/importar-fila');
+      const isClientesDriveRefreshCache = p.includes('clientes/drive-import/refresh-cache');
       // Misma familia que main.py is_long_job_path: Gemini/SMTP/OTP pueden superar 60s; el corte
       // del socket aqui devuelve 502 HTML al navegador aunque proxyTimeout global sea 180s.
       const isLongJobCobrosPublicOrEscaner =
@@ -447,6 +454,10 @@ if (API_URL) {
         proxyTimeoutMs = 180000;
       } else if (isNotificacionesLote) {
         proxyTimeoutMs = 900000;
+      } else if (isClientesDriveImportBulk) {
+        proxyTimeoutMs = 600000;
+      } else if (isClientesDriveImportFila || isClientesDriveRefreshCache) {
+        proxyTimeoutMs = 300000;
       } else if (isCobrosPagosReportadosSlowPath) {
         // Listado+KPIs (barrido) o PATCH estado (aprobar puede tardar); evitar corte a 60s en el proxy.
         proxyTimeoutMs = 120000;
@@ -931,30 +942,43 @@ try {
     // No duplicar logs de inicio - ya se loguearon en el callback de listen()
   });
 
-  // Manejar cierre graceful del servidor
-  // OPTIMIZADO: Timeout para evitar que el servidor se cuelgue esperando conexiones
+  // Manejar cierre graceful del servidor (Render suele enviar SIGTERM con ~30s; ver GRACEFUL_SHUTDOWN_MS).
   const gracefulShutdown = (signal) => {
     const shutdownTime = new Date().toISOString();
     const startTime = process.env.SERVER_START_TIME || 'desconocido';
     const uptime = process.uptime();
-    
+    const maxMs = Math.min(
+      120000,
+      Math.max(5000, Number(process.env.GRACEFUL_SHUTDOWN_MS || '28000') || 28000)
+    );
+
     console.log(`📴 ${signal} recibido, cerrando servidor gracefully...`);
     console.log(`⏰ Hora de cierre: ${shutdownTime}`);
     console.log(`⏱️  Tiempo de ejecución: ${Math.round(uptime)} segundos (${Math.round(uptime / 60)} minutos)`);
     console.log(`📅 Inicio del servidor: ${startTime}`);
-    
+    console.log(
+      `[shutdown] No se aceptan conexiones nuevas; esperando hasta ${maxMs}ms por requests activos (import/proxy largos pueden cortarse si el dyno fuerza salida).`
+    );
+
     if (server) {
-      // Cerrar el servidor con timeout de 10 segundos
       server.close(() => {
         console.log('✅ Servidor cerrado correctamente');
         process.exit(0);
       });
 
-      // Forzar cierre después de 10 segundos si aún hay conexiones activas
-      setTimeout(() => {
-        console.warn('⚠️  Timeout alcanzado, forzando cierre del servidor...');
+      const forceTimer = setTimeout(() => {
+        console.warn(
+          `⚠️  Timeout alcanzado (${maxMs}ms), forzando cierre del servidor (p. ej. POST /api largo aún abierto)...`
+        );
+        if (typeof server.closeAllConnections === 'function') {
+          try {
+            server.closeAllConnections();
+          } catch (e) {
+            console.warn('[shutdown] closeAllConnections:', e?.message || e);
+          }
+        }
         process.exit(1);
-      }, 10000);
+      }, maxMs);
     } else {
       process.exit(0);
     }
