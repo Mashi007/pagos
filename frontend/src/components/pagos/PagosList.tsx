@@ -87,7 +87,7 @@ import {
 import { PagosListResumen } from './PagosListResumen'
 import { toast } from 'sonner'
 import { getErrorMessage, isAxiosError } from '../../types/errors'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams, useNavigate } from 'react-router-dom'
 import { SEGMENTO_INFOPAGOS } from '../../constants/rutasIngresoPago'
 import { BASE_PATH } from '../../config/env'
 import {
@@ -136,6 +136,7 @@ const GMAIL_METRICS_SNAPSHOT_KEY = 'pagos:last_gmail_metrics_snapshot'
 
 export function PagosList() {
   const [searchParams, setSearchParams] = useSearchParams()
+  const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState('todos')
   const [page, setPage] = useState(1)
   const [perPage] = useState(10)
@@ -4064,12 +4065,17 @@ export function PagosList() {
                   String(pagoEditando.estado || '').toUpperCase() === 'PAGADO')
             )}
             onDuplicadoDetectado={(pago) => {
-              // Cerrar formulario de registro
+              // Cerrar formulario de registro y abrir Revisión Manual
               setShowRegistrarPago(false)
               setPagoEditando(null)
-              toast.error(
-                `Número de documento duplicado (#${pago.id}). Usa el botón "Visto" en Revisión Manual para asignar un código único.`
-              )
+              
+              // Navegar a Revisión Manual con el ID del pago y préstamo
+              if (pago.prestamo_id) {
+                toast.info('Abriendo Revisión Manual para resolver el duplicado...')
+                navigate(`/revision-manual/editar/${pago.prestamo_id}?pago_id=${pago.id}`)
+              } else {
+                toast.error('No se puede abrir Revisión Manual: el pago no tiene préstamo asignado.')
+              }
             }}
             pagoInicial={
               pagoEditando
