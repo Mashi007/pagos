@@ -43,11 +43,12 @@ import {
 
 import {
   pagoService,
+  type Pago,
   type PagoCreate,
   type PagoInicialRegistrar,
 } from '../../services/pagoService'
 
-import { pagoConErrorService } from '../../services/pagoConErrorService'
+import { pagoConErrorService, type PagoConError } from '../../services/pagoConErrorService'
 
 import { usePrestamosByCedula, usePrestamo } from '../../hooks/usePrestamos'
 
@@ -261,6 +262,12 @@ interface RegistrarPagoFormProps {
 
   onSuccess: () => void
 
+  /**
+   * Callback cuando se detecta documento duplicado (error 409).
+   * Se pasa el pago actual para abrir revisión manual.
+   */
+  onDuplicadoDetectado?: (pago: Pago | PagoConError) => void
+
   pagoInicial?: PagoInicialRegistrar
 
   pagoId?: number // Si está presente, es modo edición
@@ -304,6 +311,7 @@ interface RegistrarPagoFormProps {
 export function RegistrarPagoForm({
   onClose,
   onSuccess,
+  onDuplicadoDetectado,
   pagoInicial,
   pagoId,
   modoGuardarYProcesar,
@@ -893,6 +901,7 @@ export function RegistrarPagoForm({
       )
 
       let errorMessage = getErrorMessage(error)
+      let esDocumentoDuplicado = false
 
       if (isAxiosError(error)) {
         const status = error.response?.status
@@ -915,9 +924,35 @@ export function RegistrarPagoForm({
             detailLower.includes('documento'))
         ) {
           errorMessage = DUPLICADO_DOCUMENTO_UI
+          esDocumentoDuplicado = true
         } else if (detail) {
           errorMessage = detail
         }
+      }
+
+      // Si es documento duplicado y estamos editando, abrir Revisión Manual
+      if (esDocumentoDuplicado && isEditing && pagoId && onDuplicadoDetectado) {
+        // Cerramos el formulario
+        onClose()
+        // Simplemente pasamos el pago ID - el callback solo lo usa para el toast
+        const pagoActual = {
+          id: pagoId,
+          cedula_cliente: formData.cedula_cliente,
+          prestamo_id: formData.prestamo_id,
+          fecha_pago: formData.fecha_pago,
+          monto_pagado: formData.monto_pagado,
+          numero_documento: formData.numero_documento,
+          codigo_documento: formData.codigo_documento ?? null,
+          institucion_bancaria: formData.institucion_bancaria || null,
+          estado: 'PENDIENTE',
+          fecha_registro: new Date().toISOString(),
+          fecha_conciliacion: null,
+          conciliado: false,
+          usuario_registro: '',
+          notas: formData.notas || null,
+        } as Pago
+        onDuplicadoDetectado(pagoActual)
+        return
       }
 
       setErrors({

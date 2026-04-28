@@ -1455,11 +1455,101 @@ export function PagosList() {
       setIsBulkDeletingGlobal(false)
     }
   }
-  const handleEscanearGlobalMasivo = () => {
+  const handleEscanearGlobalMasivo = async () => {
     const ids = [...selectedGlobalIds]
+    if (ids.length === 0) {
+      toast.info('Seleccione al menos un pago.')
+      return
+    }
+
     setIsBulkScanningGlobal(true)
     try {
-      abrirEscanerLoteConIds(ids)
+      // Obtener pagos seleccionados
+      const pagosSeleccionados = revisionGlobalRowsFiltradas
+        .filter(r => ids.includes(r.pago.id))
+        .map(r => r.pago)
+
+      // Filtrar solo los que tienen cédula definida
+      const pagosConCedula = pagosSeleccionados.filter(
+        p => p.cedula_cliente && p.cedula_cliente.trim()
+      )
+
+      if (pagosConCedula.length === 0) {
+        toast.warning('Ninguno de los pagos seleccionados tiene cédula definida.')
+        return
+      }
+
+      const resultados = {
+        exitosos: 0,
+        fallidos: 0,
+        conError: [] as number[],
+      }
+
+      // Procesar cada pago
+      for (const pago of pagosConCedula) {
+        try {
+          // Validaciones básicas (deben cumplirse según regla de cascada del backend)
+          if (!pago.prestamo_id) {
+            resultados.conError.push(pago.id)
+            resultados.fallidos++
+            continue
+          }
+
+          if (!pago.monto_pagado || pago.monto_pagado <= 0) {
+            resultados.conError.push(pago.id)
+            resultados.fallidos++
+            continue
+          }
+
+          // Marcar como conciliado
+          await pagoService.updateConciliado(pago.id, true)
+
+          // Aplicar a cuotas en cascada (sin diálogo)
+          try {
+            await pagoService.aplicarPagoACuotas(pago.id)
+          } catch (applyErr) {
+            // Si falla aplicar cuotas pero se concilió, registrar como error
+            // pero considerarlo procesado
+            if (
+              isAxiosError(applyErr) &&
+              applyErr.response?.status === 409
+            ) {
+              // Conflicto (duplicado, etc) - marcar como error pero conciliado
+              resultados.conError.push(pago.id)
+              resultados.fallidos++
+              continue
+            }
+            // Otros errores de aplicación, se considera como error
+            throw applyErr
+          }
+
+          resultados.exitosos++
+        } catch (err) {
+          resultados.conError.push(pago.id)
+          resultados.fallidos++
+        }
+      }
+
+      // Mostrar resumen
+      toast.success(
+        `Procesados: ${resultados.exitosos} exitosos, ${resultados.fallidos} con error.`
+      )
+
+      // Eliminar pagos exitosos de la tabla (limpiar checkboxes y filas)
+      const idsExitosos = pagosConCedula
+        .filter(p => !resultados.conError.includes(p.id))
+        .map(p => p.id)
+
+      if (idsExitosos.length > 0) {
+        setSelectedGlobalIds(
+          new Set([...selectedGlobalIds].filter(id => !idsExitosos.includes(id)))
+        )
+      }
+
+      // Actualizar datos
+      await invalidatePagosPrestamosRevisionYCuotas(queryClient)
+    } catch (e) {
+      toast.error(getErrorMessage(e))
     } finally {
       setIsBulkScanningGlobal(false)
     }
@@ -3973,6 +4063,14 @@ export function PagosList() {
                 (pagoEditando.conciliado ||
                   String(pagoEditando.estado || '').toUpperCase() === 'PAGADO')
             )}
+            onDuplicadoDetectado={(pago) => {
+              // Cerrar formulario de registro
+              setShowRegistrarPago(false)
+              setPagoEditando(null)
+              toast.error(
+                `Número de documento duplicado (#${pago.id}). Usa el botón "Visto" en Revisión Manual para asignar un código único.`
+              )
+            }}
             pagoInicial={
               pagoEditando
                 ? {
@@ -4035,7 +4133,6 @@ export function PagosList() {
                   exact: false,
                   type: 'active',
                 })
-                await refetchDiagnosticoRevision()
                 toast.success(
                   'Pago registrado exitosamente. El dashboard se ha actualizado.'
                 )
