@@ -237,11 +237,17 @@ def listar_prestamo_candidatos_drive_snapshot(
     if cedula_q is not None and str(cedula_q).strip():
         filt_norm = _normalizar_cedula_carga_masiva(str(cedula_q).strip())
 
+    # JSON genérico (columna SQLAlchemy JSON, no JSONB PG): .astext no existe.
+    # En payload se guarda bool Python (insert ~L172); filtrar como boolean JSON, no cadena "true".
+    huella_no_comparable_sql = PrestamoCandidatoDrive.payload["huella_no_comparable"].as_boolean().is_(
+        True
+    )
+
     base_filter = []
     if filt_norm:
         base_filter.append(PrestamoCandidatoDrive.cedula_cmp.contains(filt_norm))
     if solo_huella_no_comparable:
-        base_filter.append(PrestamoCandidatoDrive.payload["huella_no_comparable"].astext == "true")
+        base_filter.append(huella_no_comparable_sql)
 
     cnt_stmt = select(func.count(PrestamoCandidatoDrive.id))
     if base_filter:
@@ -276,9 +282,7 @@ def listar_prestamo_candidatos_drive_snapshot(
         "kpis_no_aprueban": no_aprueban,
         "kpis_huella_no_comparable": int(
             db.scalar(
-                select(func.count(PrestamoCandidatoDrive.id)).where(
-                    PrestamoCandidatoDrive.payload["huella_no_comparable"].astext == "true"
-                )
+                select(func.count(PrestamoCandidatoDrive.id)).where(huella_no_comparable_sql)
             )
             or 0
         ),
