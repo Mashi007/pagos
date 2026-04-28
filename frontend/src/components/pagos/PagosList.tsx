@@ -195,6 +195,8 @@ export function PagosList() {
   const [isDescargandoGmailExcel, setIsDescargandoGmailExcel] = useState(false)
   const [showVaciarTablaGmail, setShowVaciarTablaGmail] = useState(false)
   const [isVaciarTablaGmail, setIsVaciarTablaGmail] = useState(false)
+  const [showBorradoresEscanerDialog, setShowBorradoresEscanerDialog] =
+    useState(false)
   const [submenuGmailOpen, setSubmenuGmailOpen] = useState(false)
   const [gmailMetricsSnapshot, setGmailMetricsSnapshot] = useState<{
     lastRun: string | null
@@ -2391,82 +2393,6 @@ export function PagosList() {
                     guarde desde aquí para pasarlos al flujo normal.
                   </p>
                 </div>
-                <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50/40 p-3">
-                  <div className="mb-2 flex items-center justify-between gap-2">
-                    <p className="text-sm font-medium text-amber-950">
-                      Borradores con validación pendiente (Escáner)
-                    </p>
-                    <Badge variant="outline">
-                      {isLoadingBorradoresPendientes
-                        ? '...'
-                        : String(borradoresPendientes.length)}
-                    </Badge>
-                  </div>
-                  {isLoadingBorradoresPendientes ? (
-                    <p className="text-xs text-slate-600">Cargando lista...</p>
-                  ) : isBorradoresPendientesError ? (
-                    <p className="text-xs text-red-700">
-                      No se pudo cargar la lista de borradores del escáner.
-                    </p>
-                  ) : borradoresPendientes.length === 0 ? (
-                    <p className="text-xs text-slate-600">
-                      No hay borradores pendientes.
-                    </p>
-                  ) : (
-                    <ul className="divide-y divide-amber-200 rounded-md border border-amber-200 bg-white">
-                      {borradoresPendientes.map(row => (
-                        <li
-                          key={row.id}
-                          className="flex flex-wrap items-start justify-between gap-2 px-3 py-2 text-sm"
-                        >
-                          <div className="min-w-0 flex-1 space-y-0.5">
-                            <p className="font-medium text-slate-900">
-                              {(row.cliente_nombre || row.cedula_normalizada || '').trim() ||
-                                'Cliente'}
-                              <span className="ml-2 font-mono text-xs text-slate-600">
-                                {row.comprobante_nombre}
-                              </span>
-                            </p>
-                            <p className="text-xs text-slate-600">
-                              {row.resumen_validacion}
-                            </p>
-                          </div>
-                          <div className="flex shrink-0 gap-1">
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              className="h-8 gap-1 px-2"
-                              asChild
-                            >
-                              <Link to={`/escaner?borrador=${encodeURIComponent(row.id)}`}>
-                                <Edit className="h-3.5 w-3.5" />
-                                Editar
-                              </Link>
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              className="h-8 gap-1 border-red-200 px-2 text-red-800 hover:bg-red-50"
-                              disabled={deletingBorradorId === row.id}
-                              onClick={() =>
-                                void handleEliminarBorradorPendiente(row.id)
-                              }
-                            >
-                              {deletingBorradorId === row.id ? (
-                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                              ) : (
-                                <Trash2 className="h-3.5 w-3.5" />
-                              )}
-                              Eliminar
-                            </Button>
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
                 <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end">
                   <div className="flex-1">
                     <label className="mb-1 block text-sm font-medium text-gray-700">
@@ -2505,6 +2431,17 @@ export function PagosList() {
                     />
                   </div>
                   <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setShowBorradoresEscanerDialog(true)}
+                    >
+                      Borradores escáner (
+                      {isLoadingBorradoresPendientes
+                        ? '...'
+                        : String(borradoresPendientes.length)}
+                      )
+                    </Button>
                     <Button
                       type="button"
                       variant="outline"
@@ -2816,6 +2753,84 @@ export function PagosList() {
                 )}
               </CardContent>
             </Card>
+            <Dialog
+              open={showBorradoresEscanerDialog}
+              onOpenChange={setShowBorradoresEscanerDialog}
+            >
+              <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
+                <DialogHeader>
+                  <DialogTitle>
+                    Borradores con validación pendiente (Escáner)
+                  </DialogTitle>
+                </DialogHeader>
+                {isLoadingBorradoresPendientes ? (
+                  <p className="text-sm text-slate-600">Cargando lista...</p>
+                ) : isBorradoresPendientesError ? (
+                  <p className="text-sm text-red-700">
+                    No se pudo cargar la lista de borradores del escáner.
+                  </p>
+                ) : borradoresPendientes.length === 0 ? (
+                  <p className="text-sm text-slate-600">
+                    No hay borradores pendientes.
+                  </p>
+                ) : (
+                  <ul className="divide-y divide-amber-200 rounded-md border border-amber-200 bg-white">
+                    {borradoresPendientes.map(row => (
+                      <li
+                        key={row.id}
+                        className="flex flex-wrap items-start justify-between gap-2 px-3 py-2 text-sm"
+                      >
+                        <div className="min-w-0 flex-1 space-y-0.5">
+                          <p className="font-medium text-slate-900">
+                            {(row.cliente_nombre || row.cedula_normalizada || '').trim() ||
+                              'Cliente'}
+                            <span className="ml-2 font-mono text-xs text-slate-600">
+                              {row.comprobante_nombre}
+                            </span>
+                          </p>
+                          <p className="text-xs text-slate-600">
+                            {row.resumen_validacion}
+                          </p>
+                        </div>
+                        <div className="flex shrink-0 gap-1">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-8 gap-1 px-2"
+                            asChild
+                          >
+                            <Link
+                              to={`/escaner?borrador=${encodeURIComponent(row.id)}`}
+                            >
+                              <Edit className="h-3.5 w-3.5" />
+                              Editar
+                            </Link>
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-8 gap-1 border-red-200 px-2 text-red-800 hover:bg-red-50"
+                            disabled={deletingBorradorId === row.id}
+                            onClick={() =>
+                              void handleEliminarBorradorPendiente(row.id)
+                            }
+                          >
+                            {deletingBorradorId === row.id ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <Trash2 className="h-3.5 w-3.5" />
+                            )}
+                            Eliminar
+                          </Button>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </DialogContent>
+            </Dialog>
           </TabsContent>
           <TabsContent value="revision-global" forceMount>
             <Card>
