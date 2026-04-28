@@ -99,3 +99,18 @@ export async function postPrestamosCandidatosDriveGuardarFila(
     }
   )
 }
+
+export type PrestamoCandidatosDriveEliminarSeleccionadosResponse = {
+  eliminados: number
+  seleccionados: number
+  mensaje: string
+}
+
+export async function postPrestamosCandidatosDriveEliminarSeleccionados(
+  ids: number[]
+): Promise<PrestamoCandidatosDriveEliminarSeleccionadosResponse> {
+  return apiClient.post<PrestamoCandidatosDriveEliminarSeleccionadosResponse>(
+    `${BASE}/eliminar-seleccionados`,
+    { ids }
+  )
+}

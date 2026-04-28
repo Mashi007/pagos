@@ -15,7 +15,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import HTTPException
 from pydantic import ValidationError
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.models.cliente import Cliente
@@ -453,5 +453,41 @@ def ejecutar_guardar_candidatos_drive_una_fila(
         "mensaje": (
             f"Préstamo creado para la fila de hoja {sheet_row_number}. "
             "Esa fila se quitó del snapshot; las demás candidaturas permanecen para revisión."
+        ),
+    }
+
+
+def ejecutar_eliminar_candidatos_drive_seleccionados(
+    db: Session,
+    *,
+    ids: List[int],
+) -> Dict[str, Any]:
+    """
+    Elimina del snapshot únicamente las filas seleccionadas por `id`.
+    No crea préstamos; solo limpia candidaturas marcadas manualmente en UI.
+    """
+    ids_clean = sorted({int(x) for x in (ids or []) if int(x) > 0})
+    if not ids_clean:
+        return {
+            "eliminados": 0,
+            "seleccionados": 0,
+            "mensaje": "No se recibieron filas válidas para eliminar.",
+        }
+
+    try:
+        stmt = delete(PrestamoCandidatoDrive).where(PrestamoCandidatoDrive.id.in_(ids_clean))
+        result = db.execute(stmt)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+
+    eliminados = int(getattr(result, "rowcount", 0) or 0)
+    return {
+        "eliminados": eliminados,
+        "seleccionados": len(ids_clean),
+        "mensaje": (
+            f"Se eliminaron {eliminados} fila(s) del snapshot "
+            f"(seleccionadas: {len(ids_clean)})."
         ),
     }

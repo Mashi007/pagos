@@ -18,6 +18,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Input } from '../components/ui/input'
 import {
   getPrestamosCandidatosDriveSnapshot,
+  postPrestamosCandidatosDriveEliminarSeleccionados,
   postPrestamosCandidatosDriveGuardarFila,
   postPrestamosCandidatosDriveGuardarValidados100,
   postPrestamosCandidatosDriveRefrescar,
@@ -435,10 +436,12 @@ export default function ActualizacionesPrestamosDrivePage() {
   const [soloHuellaNoComparable, setSoloHuellaNoComparable] = useState(false)
   const [manualUpdating, setManualUpdating] = useState(false)
   const [guardarValidosSaving, setGuardarValidosSaving] = useState(false)
+  const [eliminandoSeleccionados, setEliminandoSeleccionados] = useState(false)
   const [guardandoFilaSheet, setGuardandoFilaSheet] = useState<number | null>(
     null
   )
   const [page, setPage] = useState(1)
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
 
   useEffect(() => {
     const t = window.setTimeout(
@@ -473,6 +476,15 @@ export default function ActualizacionesPrestamosDrivePage() {
   useEffect(() => {
     if (page > totalPages) setPage(totalPages)
   }, [page, totalPages])
+
+  useEffect(() => {
+    setSelectedIds(prev => {
+      if (prev.size === 0) return prev
+      const currentIds = new Set(rows.map(r => r.id))
+      const next = new Set(Array.from(prev).filter(id => currentIds.has(id)))
+      return next.size === prev.size ? prev : next
+    })
+  }, [rows])
 
   const onRecalcular = useCallback(async () => {
     setManualUpdating(true)
@@ -541,6 +553,12 @@ export default function ActualizacionesPrestamosDrivePage() {
   )
 
   const onGuardarValidos100 = useCallback(async () => {
+    if ((guardables ?? 0) <= 0) {
+      toast.message(
+        'No hay préstamos guardables en este momento. Solo se guardan filas que cumplen validadores de servidor.'
+      )
+      return
+    }
     setGuardarValidosSaving(true)
     try {
       const res = await postPrestamosCandidatosDriveGuardarValidados100()
@@ -566,7 +584,7 @@ export default function ActualizacionesPrestamosDrivePage() {
     } finally {
       setGuardarValidosSaving(false)
     }
-  }, [qc, cedulaDebounced, page])
+  }, [qc, guardables])
 
   const onRefrescarLista = useCallback(async () => {
     try {
@@ -576,6 +594,32 @@ export default function ActualizacionesPrestamosDrivePage() {
       toast.error(getErrorMessage(e) || 'No se pudo refrescar la lista')
     }
   }, [refetchLista])
+
+  const onEliminarSeleccionados = useCallback(async () => {
+    const ids = Array.from(selectedIds)
+    if (ids.length === 0) {
+      toast.message('Seleccione al menos una fila para eliminar.')
+      return
+    }
+    const confirmado = window.confirm(
+      `Va a eliminar ${ids.length} fila(s) seleccionada(s) del snapshot. Esta acción no crea préstamos ni se puede deshacer. ¿Desea continuar?`
+    )
+    if (!confirmado) return
+    setEliminandoSeleccionados(true)
+    try {
+      const res = await postPrestamosCandidatosDriveEliminarSeleccionados(ids)
+      toast.success(
+        res?.mensaje ||
+          `Se eliminaron ${res?.eliminados ?? 0} fila(s) seleccionadas del snapshot.`
+      )
+      setSelectedIds(new Set())
+      await qc.resetQueries({ queryKey: [...QK_BASE] })
+    } catch (e) {
+      toast.error(getErrorMessage(e) || 'No se pudieron eliminar las filas seleccionadas')
+    } finally {
+      setEliminandoSeleccionados(false)
+    }
+  }, [qc, selectedIds])
 
   const fmtCaracas = useCallback((iso: string | null | undefined) => {
     if (!iso) return '-'
@@ -658,6 +702,7 @@ export default function ActualizacionesPrestamosDrivePage() {
   const accionesGlobalesDeshabilitadas =
     manualUpdating ||
     guardarValidosSaving ||
+    eliminandoSeleccionados ||
     guardandoFilaSheet !== null ||
     isBusy
   const guardables =
@@ -670,6 +715,12 @@ export default function ActualizacionesPrestamosDrivePage() {
     accionesGlobalesDeshabilitadas ||
     total === 0 ||
     (guardables === 0 && total > 0)
+  const currentPageIds = rows.map(r => r.id)
+  const selectedCount = selectedIds.size
+  const allSelectedInPage =
+    currentPageIds.length > 0 && currentPageIds.every(id => selectedIds.has(id))
+  const someSelectedInPage =
+    !allSelectedInPage && currentPageIds.some(id => selectedIds.has(id))
 
   return (
     <div className="mx-auto max-w-7xl space-y-6 p-4 md:p-6">
@@ -811,19 +862,34 @@ export default function ActualizacionesPrestamosDrivePage() {
                 className={`mr-2 h-4 w-4 ${guardarValidosSaving ? 'animate-pulse' : ''}`}
                 aria-hidden
               />
-              Guardar válidas
+              Guardar préstamos validados
             </Button>
             <Button
               type="button"
               size="sm"
               onClick={() => void onRecalcular()}
               disabled={accionesGlobalesDeshabilitadas}
+              title="Sincroniza manualmente contra Drive y recalcula snapshot de candidatos."
             >
               <RefreshCw
                 className={`mr-2 h-4 w-4 ${manualUpdating ? 'animate-spin' : ''}`}
                 aria-hidden
               />
-              Actualización manual
+              Sincronización manual con Drive
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              size="sm"
+              onClick={() => void onEliminarSeleccionados()}
+              disabled={accionesGlobalesDeshabilitadas || selectedCount === 0}
+              title="Elimina del snapshot solo las filas marcadas con check."
+            >
+              <Trash2
+                className={`mr-2 h-4 w-4 ${eliminandoSeleccionados ? 'animate-pulse' : ''}`}
+                aria-hidden
+              />
+              Eliminar seleccionados ({selectedCount})
             </Button>
             <Button
               type="button"
@@ -897,6 +963,7 @@ export default function ActualizacionesPrestamosDrivePage() {
             <table className="w-full min-w-[1280px] table-fixed text-left text-sm">
               <colgroup>
                 <col style={{ width: '3%' }} />
+                <col style={{ width: '3%' }} />
                 <col style={{ width: '9%' }} />
                 <col style={{ width: '5%' }} />
                 <col style={{ width: '7%' }} />
@@ -911,6 +978,31 @@ export default function ActualizacionesPrestamosDrivePage() {
               </colgroup>
               <thead className="bg-muted/60">
                 <tr>
+                  <th className="px-2 py-2.5 text-center align-middle text-xs font-semibold">
+                    <input
+                      type="checkbox"
+                      aria-label="Seleccionar todas las filas de la página"
+                      checked={allSelectedInPage}
+                      ref={el => {
+                        if (el) {
+                          el.indeterminate = someSelectedInPage
+                        }
+                      }}
+                      onChange={e => {
+                        const checked = e.target.checked
+                        setSelectedIds(prev => {
+                          const next = new Set(prev)
+                          if (checked) {
+                            currentPageIds.forEach(id => next.add(id))
+                          } else {
+                            currentPageIds.forEach(id => next.delete(id))
+                          }
+                          return next
+                        })
+                      }}
+                      disabled={accionesGlobalesDeshabilitadas || rows.length === 0}
+                    />
+                  </th>
                   <th className="px-2 py-2.5 align-middle text-xs font-semibold">
                     Fila
                   </th>
@@ -971,6 +1063,23 @@ export default function ActualizacionesPrestamosDrivePage() {
                         key={`${r.id}-${r.sheet_row_number}`}
                         className={trTone}
                       >
+                        <td className="px-2 py-2 text-center align-middle">
+                          <input
+                            type="checkbox"
+                            aria-label={`Seleccionar fila ${r.sheet_row_number}`}
+                            checked={selectedIds.has(r.id)}
+                            onChange={e => {
+                              const checked = e.target.checked
+                              setSelectedIds(prev => {
+                                const next = new Set(prev)
+                                if (checked) next.add(r.id)
+                                else next.delete(r.id)
+                                return next
+                              })
+                            }}
+                            disabled={accionesGlobalesDeshabilitadas}
+                          />
+                        </td>
                         <td className="px-2 py-2 align-middle font-mono text-xs tabular-nums">
                           {r.sheet_row_number}
                         </td>
@@ -1047,7 +1156,7 @@ export default function ActualizacionesPrestamosDrivePage() {
                     <tr>
                       <td
                         className="px-3 py-6 text-muted-foreground"
-                        colSpan={12}
+                        colSpan={13}
                       >
                         No hay candidatos: para V/E suele significar que ya
                         tienen préstamo en cartera; el snapshot está vacío, o no

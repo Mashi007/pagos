@@ -14,6 +14,7 @@ from app.core.database import get_db
 from app.core.deps import get_current_user, require_admin
 from app.schemas.auth import UserResponse
 from app.services.prestamo_candidatos_drive_guardar import (
+    ejecutar_eliminar_candidatos_drive_seleccionados,
     ejecutar_guardar_candidatos_drive_una_fila,
     ejecutar_guardar_candidatos_drive_validados_100,
 )
@@ -77,6 +78,22 @@ def post_prestamos_candidatos_drive_guardar_fila(
     return ejecutar_guardar_candidatos_drive_una_fila(
         db, current_user=current_user, sheet_row_number=body.sheet_row_number
     )
+
+
+class PrestamoCandidatoDriveEliminarSeleccionadosBody(BaseModel):
+    ids: list[int] = Field(default_factory=list, description="IDs de filas snapshot a eliminar")
+
+
+@router.post(
+    "/eliminar-seleccionados",
+    summary="Eliminar filas seleccionadas del snapshot de candidatos",
+)
+def post_prestamos_candidatos_drive_eliminar_seleccionados(
+    body: PrestamoCandidatoDriveEliminarSeleccionadosBody,
+    db: Session = Depends(get_db),
+    _: UserResponse = Depends(require_admin),
+):
+    return ejecutar_eliminar_candidatos_drive_seleccionados(db, ids=body.ids)
 
 
 @router.post("/refrescar", summary="Recalcular snapshot ahora (misma lógica que el cron)")
