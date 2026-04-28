@@ -3167,7 +3167,9 @@ async def escaner_extraer_comprobante_infopagos(
 ):
     """
     Personal autenticado: sugiere campos del formulario Infopagos leyendo el comprobante con Gemini.
-    Orden de uso: cédula del deudor + archivo. No guarda el reporte; el front aplica validadores y envía con /cobros/public/infopagos/enviar-reporte.
+    Orden de uso: cédula del deudor + archivo. No guarda el reporte en `pagos_reportados`.
+    Si fallan validadores (o hay duplicado en cartera), persiste borrador en `infopagos_escaner_borrador`
+    con el comprobante para editar / eliminar / guardar luego; si todo pasa, no crea borrador.
     """
     cedula_input = f"{(tipo_cedula or '').strip()}{(numero_cedula or '').strip()}"
     val = validate_cedula(cedula_input)

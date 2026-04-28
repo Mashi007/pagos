@@ -25,4 +25,4 @@ CREATE INDEX IF NOT EXISTS idx_infopagos_escaner_borrador_created
     ON infopagos_escaner_borrador (created_at);
 
 COMMENT ON TABLE infopagos_escaner_borrador IS
-    'Escáner Infopagos: borrador tras extraer con Gemini; confirmado al enviar reporte (reutiliza pago_comprobante_imagen).';
+    'Escáner Infopagos: solo escaneos que no cumplen validadores o marcan duplicado en cartera. Al guardar el reporte se marca confirmado (flujo normal); se puede eliminar o reabrir para editar.';

@@ -992,7 +992,7 @@ async def enviar_reporte_infopagos(
     numero_operacion: str = Form(...),
     monto: float = Form(...),
     moneda: str = Form("BS"),
-    comprobante: UploadFile = File(...),
+    comprobante: Optional[UploadFile] = File(None),
     observacion: Optional[str] = Form(None),
     contact_website: Optional[str] = Form(None),
     fuente_tasa_cambio: str = Form("euro"),

@@ -145,23 +145,17 @@ def marcar_borrador_confirmado(
 
 
 def _imagen_sin_referencias(db: Session, imagen_id: str) -> bool:
-    n_pr = (
-        db.execute(
-            select(func.count())
-            .select_from(PagoReportado)
-            .where(PagoReportado.comprobante_imagen_id == imagen_id)
-        ).scalar()
-        or 0
-    )
-    n_br = (
-        db.execute(
-            select(func.count())
-            .select_from(InfopagosEscanerBorrador)
-            .where(InfopagosEscanerBorrador.comprobante_imagen_id == imagen_id)
-        ).scalar()
-        or 0
-    )
-    return int(n_pr) == 0 and int(n_br) == 0
+    n_pr = db.execute(
+        select(func.count())
+        .select_from(PagoReportado)
+        .where(PagoReportado.comprobante_imagen_id == imagen_id)
+    ).scalar()
+    n_br = db.execute(
+        select(func.count())
+        .select_from(InfopagosEscanerBorrador)
+        .where(InfopagosEscanerBorrador.comprobante_imagen_id == imagen_id)
+    ).scalar()
+    return int(n_pr or 0) == 0 and int(n_br or 0) == 0
 
 
 def listar_borradores_pendientes_usuario(

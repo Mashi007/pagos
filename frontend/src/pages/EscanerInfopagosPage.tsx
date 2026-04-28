@@ -6,7 +6,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { Link } from 'react-router-dom'
 
-import { Brain, Loader2, CheckCircle2, AlertTriangle } from 'lucide-react'
+import {
+  Brain,
+  Loader2,
+  CheckCircle2,
+  AlertTriangle,
+  Pencil,
+  Trash2,
+} from 'lucide-react'
 import toast from 'react-hot-toast'
 
 import { Button } from '../components/ui/button'
@@ -14,11 +21,16 @@ import { Input } from '../components/ui/input'
 import { Label } from '../components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import {
+  deleteInfopagosBorradorEscaneer,
   escanerInfopagosExtraerComprobante,
   enviarReporteInfopagos,
+  getInfopagosBorradorEscaneer,
   getReciboInfopagos,
   getReciboInfopagosStatus,
+  listInfopagosBorradoresEscaneer,
   validarCedulaPublico,
+  type EscanerInfopagosExtraerResponse,
+  type InfopagosBorradorListItem,
 } from '../services/cobrosService'
 import { formatMontoBsVe, parseMontoLatam } from '../utils/montoLatam'
 import {
@@ -291,6 +303,10 @@ export default function EscanerInfopagosPage() {
   const [archivo, setArchivo] = useState<File | null>(null)
   /** Borrador persistido en BD tras escanear (reutiliza comprobante al guardar). */
   const [borradorId, setBorradorId] = useState<string | null>(null)
+  const [borradoresPendientes, setBorradoresPendientes] = useState<
+    InfopagosBorradorListItem[]
+  >([])
+  const [cargandoBorradores, setCargandoBorradores] = useState(false)
   const [escaneando, setEscaneando] = useState(false)
   const [validacionCampos, setValidacionCampos] = useState<string | null>(null)
   const [validacionReglas, setValidacionReglas] = useState<string | null>(null)
@@ -359,6 +375,88 @@ export default function EscanerInfopagosPage() {
     if (/DUPLICADO/i.test(v)) return true
     return Boolean(escanerColision?.duplicado_en_pagos)
   }, [escanerColision, validacionCampos, validacionReglas])
+
+  const refrescarBorradores = useCallback(async () => {
+    setCargandoBorradores(true)
+    try {
+      const data = await listInfopagosBorradoresEscaneer(40)
+      setBorradoresPendientes(data.items ?? [])
+    } catch {
+      setBorradoresPendientes([])
+    } finally {
+      setCargandoBorradores(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    void refrescarBorradores()
+  }, [refrescarBorradores])
+
+  const aplicarExtraccionInfopagosAlFormulario = useCallback(
+    (res: EscanerInfopagosExtraerResponse) => {
+      const s = res.sugerencia
+      if (!s) return false
+      const fechaExtraida = (s.fecha_pago || '').trim()
+      if (fechaExtraida) {
+        setFechaPago(fechaExtraida)
+        setFechaDetectada(fechaExtraida)
+      } else {
+        const hoy = fechaLocalHoyISO()
+        setFechaPago(hoy)
+        setFechaDetectada('')
+      }
+      const inst = (s.institucion_financiera || '').trim()
+      if (
+        INSTITUCIONES_FINANCIERAS.includes(
+          inst as (typeof INSTITUCIONES_FINANCIERAS)[number]
+        )
+      ) {
+        setInstitucion(inst)
+        setOtroInstitucion('')
+      } else {
+        setInstitucion(inst)
+        setOtroInstitucion(inst)
+      }
+      setNumeroOperacion(s.numero_operacion || '')
+      setMoneda(s.moneda === 'BS' ? 'BS' : 'USD')
+      if (s.monto != null && Number.isFinite(s.monto)) {
+        setMontoStr(
+          formatoMontoParaMostrar(s.monto, s.moneda === 'BS' ? 'BS' : 'USD')
+        )
+      } else {
+        setMontoStr('')
+      }
+      setCedulaPagadorImg(s.cedula_pagador_en_comprobante || '')
+      setValidacionCampos(res.validacion_campos ?? null)
+      setValidacionReglas(res.validacion_reglas ?? null)
+      setEscanerColision({
+        duplicado_en_pagos: Boolean(res.duplicado_en_pagos),
+        pago_existente_id:
+          typeof res.pago_existente_id === 'number'
+            ? res.pago_existente_id
+            : null,
+        prestamo_existente_id:
+          typeof res.prestamo_existente_id === 'number'
+            ? res.prestamo_existente_id
+            : null,
+        prestamo_objetivo_id:
+          typeof res.prestamo_objetivo_id === 'number'
+            ? res.prestamo_objetivo_id
+            : null,
+      })
+      tokensSufijoUsadosRef.current = collectTokensSufijoVistoArchivoDesdeFilas(
+        [{ numero_documento: s.numero_operacion || '' }]
+      )
+      const bid =
+        typeof res.borrador_id === 'string' && res.borrador_id.trim()
+          ? res.borrador_id.trim()
+          : null
+      setBorradorId(bid)
+      setFase('formulario')
+      return true
+    },
+    []
+  )
 
   const handleAplicarSufijoOperacion = useCallback(
     (letter: 'A' | 'P') => {
@@ -458,71 +556,18 @@ export default function EscanerInfopagosPage() {
         toast.error(res.error || 'No se pudo leer el comprobante.')
         return
       }
-      const s = res.sugerencia
-      if (!s) {
+      if (!aplicarExtraccionInfopagosAlFormulario(res)) {
         toast.error('Sin sugerencias del modelo.')
         return
       }
-      const fechaExtraida = (s.fecha_pago || '').trim()
-      if (fechaExtraida) {
-        setFechaPago(fechaExtraida)
-        setFechaDetectada(fechaExtraida)
-      } else {
-        const hoy = fechaLocalHoyISO()
-        setFechaPago(hoy)
-        setFechaDetectada('')
-      }
-      const inst = (s.institucion_financiera || '').trim()
-      if (
-        INSTITUCIONES_FINANCIERAS.includes(
-          inst as (typeof INSTITUCIONES_FINANCIERAS)[number]
-        )
-      ) {
-        setInstitucion(inst)
-        setOtroInstitucion('')
-      } else {
-        setInstitucion(inst)
-        setOtroInstitucion(inst)
-      }
-      setNumeroOperacion(s.numero_operacion || '')
-      setMoneda(s.moneda === 'BS' ? 'BS' : 'USD')
-      if (s.monto != null && Number.isFinite(s.monto)) {
-        setMontoStr(
-          formatoMontoParaMostrar(s.monto, s.moneda === 'BS' ? 'BS' : 'USD')
-        )
-      } else {
-        setMontoStr('')
-      }
-      setCedulaPagadorImg(s.cedula_pagador_en_comprobante || '')
-      setValidacionCampos(res.validacion_campos ?? null)
-      setValidacionReglas(res.validacion_reglas ?? null)
-      setEscanerColision({
-        duplicado_en_pagos: Boolean(res.duplicado_en_pagos),
-        pago_existente_id:
-          typeof res.pago_existente_id === 'number'
-            ? res.pago_existente_id
-            : null,
-        prestamo_existente_id:
-          typeof res.prestamo_existente_id === 'number'
-            ? res.prestamo_existente_id
-            : null,
-        prestamo_objetivo_id:
-          typeof res.prestamo_objetivo_id === 'number'
-            ? res.prestamo_objetivo_id
-            : null,
-      })
-      tokensSufijoUsadosRef.current = collectTokensSufijoVistoArchivoDesdeFilas(
-        [{ numero_documento: s.numero_operacion || '' }]
-      )
+      void refrescarBorradores()
       const bid =
         typeof res.borrador_id === 'string' && res.borrador_id.trim()
           ? res.borrador_id.trim()
           : null
-      setBorradorId(bid)
-      setFase('formulario')
       toast.success(
         bid
-          ? 'Datos sugeridos y comprobante respaldado en servidor. Revise y guarde cuando esté listo.'
+          ? 'Hay observaciones de validación: el comprobante quedó en borrador en el servidor. Corrija y guarde, o gestione el borrador desde la lista.'
           : 'Datos sugeridos. Revise y corrija si hace falta antes de guardar.'
       )
     } catch {
@@ -531,7 +576,85 @@ export default function EscanerInfopagosPage() {
       escanearActivoRef.current = false
       setEscaneando(false)
     }
-  }, [archivo, cedulaNormalizada, fuenteTasa])
+  }, [aplicarExtraccionInfopagosAlFormulario, archivo, cedulaNormalizada, fuenteTasa, refrescarBorradores])
+
+  const handleEliminarBorrador = useCallback(
+    async (id: string) => {
+      try {
+        await deleteInfopagosBorradorEscaneer(id)
+        toast.success('Borrador eliminado.')
+        setBorradorId(cur => (cur === id ? null : cur))
+        void refrescarBorradores()
+      } catch (e: unknown) {
+        toast.error(e instanceof Error ? e.message : 'No se pudo eliminar.')
+      }
+    },
+    [refrescarBorradores]
+  )
+
+  const handleEditarBorrador = useCallback(
+    async (id: string) => {
+      try {
+        const data = await getInfopagosBorradorEscaneer(id)
+        const b = data.borrador
+        const cedulaDisplay = `${(b.tipo_cedula || '').trim()}-${(b.numero_cedula || '').trim()}`
+        setCedulaRaw(cedulaDisplay)
+        setNombreCliente((b.cliente_nombre || '').trim())
+        setFuenteTasa(normalizarFuenteTasaCambio(b.fuente_tasa_cambio))
+        setArchivo(null)
+        const snap = b.payload || {}
+        const sug = snap.sugerencia
+        if (!sug || typeof sug !== 'object') {
+          toast.error('Borrador sin datos de sugerencia.')
+          return
+        }
+        const resLike: EscanerInfopagosExtraerResponse = {
+          ok: true,
+          sugerencia: sug as EscanerInfopagosExtraerResponse['sugerencia'],
+          validacion_campos:
+            typeof snap.validacion_campos === 'string'
+              ? snap.validacion_campos
+              : null,
+          validacion_reglas:
+            typeof snap.validacion_reglas === 'string'
+              ? snap.validacion_reglas
+              : null,
+          duplicado_en_pagos: Boolean(snap.duplicado_en_pagos),
+          pago_existente_id:
+            typeof snap.pago_existente_id === 'number'
+              ? snap.pago_existente_id
+              : null,
+          prestamo_existente_id:
+            typeof snap.prestamo_existente_id === 'number'
+              ? snap.prestamo_existente_id
+              : null,
+          prestamo_objetivo_id:
+            typeof snap.prestamo_objetivo_id === 'number'
+              ? snap.prestamo_objetivo_id
+              : null,
+          borrador_id: b.id,
+        }
+        if (!aplicarExtraccionInfopagosAlFormulario(resLike)) {
+          toast.error('No se pudieron aplicar los datos del borrador.')
+          return
+        }
+        persistirCedulaSesion({
+          cedulaRaw: cedulaDisplay,
+          nombreCliente: (b.cliente_nombre || '').trim(),
+          fuenteTasa: normalizarFuenteTasaCambio(b.fuente_tasa_cambio),
+          validada: true,
+        })
+        toast.success(
+          'Borrador cargado. El comprobante está en el servidor; corrija y guarde para pasar al flujo normal.'
+        )
+      } catch (e: unknown) {
+        toast.error(
+          e instanceof Error ? e.message : 'No se pudo abrir el borrador.'
+        )
+      }
+    },
+    [aplicarExtraccionInfopagosAlFormulario]
+  )
 
   const handleGuardar = useCallback(async () => {
     const ahora = Date.now()
@@ -570,10 +693,12 @@ export default function EscanerInfopagosPage() {
       toast.error(vM.error || 'Monto inválido.')
       return
     }
-    const vA = validarArchivo(archivo)
-    if (!vA.valido) {
-      toast.error(vA.error || 'Adjunte el mismo comprobante escaneado.')
-      return
+    if (!borradorId) {
+      const vA = validarArchivo(archivo)
+      if (!vA.valido) {
+        toast.error(vA.error || 'Adjunte el mismo comprobante escaneado.')
+        return
+      }
     }
     if (honeypotRef.current?.value?.trim()) {
       toast.error('No se pudo procesar el envío.')
@@ -595,7 +720,12 @@ export default function EscanerInfopagosPage() {
     if (borradorId) {
       form.append('borrador_id', borradorId)
     }
-    form.append('comprobante', archivo!)
+    if (archivo) {
+      form.append('comprobante', archivo)
+    } else if (!borradorId) {
+      toast.error('Adjunte el comprobante o recupere un borrador con comprobante en servidor.')
+      return
+    }
     enviarActivoRef.current = true
     setEnviando(true)
     try {
@@ -632,6 +762,7 @@ export default function EscanerInfopagosPage() {
         validada: true,
       })
       toast.success(res.mensaje || 'Pago registrado.')
+      void refrescarBorradores()
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : 'Error al guardar.')
     } finally {
@@ -650,6 +781,7 @@ export default function EscanerInfopagosPage() {
     nombreCliente,
     numeroOperacion,
     fuenteTasa,
+    refrescarBorradores,
   ])
 
   const handleDescargarRecibo = useCallback(async () => {
@@ -742,6 +874,75 @@ export default function EscanerInfopagosPage() {
           </p>
         </div>
       </div>
+
+      {cargandoBorradores || borradoresPendientes.length > 0 ? (
+        <Card className="border-amber-200 bg-amber-50/50">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base text-amber-950">
+              Borradores con validación pendiente
+            </CardTitle>
+            <p className="text-xs text-amber-900/90">
+              Solo se guardan en servidor los escaneos que no cumplen validadores
+              (o marcan duplicado en cartera). Puede editarlos, eliminarlos o guardar
+              el reporte para pasar al flujo normal de Pagos reportados.
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {cargandoBorradores ? (
+              <p className="text-sm text-slate-600">Cargando lista…</p>
+            ) : (
+              <ul className="divide-y divide-amber-200 rounded-md border border-amber-200 bg-white">
+                {borradoresPendientes.map(row => (
+                  <li
+                    key={row.id}
+                    className="flex flex-wrap items-start justify-between gap-2 px-3 py-2 text-sm"
+                  >
+                    <div className="min-w-0 flex-1 space-y-0.5">
+                      <p className="font-medium text-slate-900">
+                        {(row.cliente_nombre || row.cedula_normalizada || '').trim() ||
+                          'Cliente'}
+                        <span className="ml-2 font-mono text-xs text-slate-600">
+                          {row.comprobante_nombre}
+                        </span>
+                      </p>
+                      <p className="text-xs text-slate-600">
+                        {row.resumen_validacion}
+                      </p>
+                      {row.created_at ? (
+                        <p className="text-xs text-slate-500">
+                          {row.created_at.slice(0, 19).replace('T', ' ')}
+                        </p>
+                      ) : null}
+                    </div>
+                    <div className="flex shrink-0 gap-1">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-8 gap-1 px-2"
+                        onClick={() => void handleEditarBorrador(row.id)}
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                        Editar
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-8 gap-1 border-red-200 px-2 text-red-800 hover:bg-red-50"
+                        onClick={() => void handleEliminarBorrador(row.id)}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                        Eliminar
+                      </Button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+      ) : null}
 
       <input
         ref={honeypotRef}
@@ -1100,9 +1301,19 @@ export default function EscanerInfopagosPage() {
             </div>
 
             <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
-              Se reutiliza automáticamente el comprobante escaneado al inicio
-              para guardar y para procesos siguientes (por ejemplo, recibo). No
-              es necesario volver a cargarlo.
+              {borradorId && !archivo ? (
+                <>
+                  El comprobante de este borrador está guardado en el servidor.
+                  Puede guardar el reporte sin volver a adjuntar archivo; si cambia
+                  de archivo local, se usará el adjunto nuevo.
+                </>
+              ) : (
+                <>
+                  Se reutiliza automáticamente el comprobante escaneado al inicio
+                  para guardar y para procesos siguientes (por ejemplo, recibo). No
+                  es necesario volver a cargarlo.
+                </>
+              )}
             </div>
 
             <div className="flex flex-wrap gap-2">

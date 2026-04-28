@@ -652,6 +652,53 @@ export async function escanerInfopagosExtraerComprobante(
   )
 }
 
+/** Listado de borradores con validación pendiente (mismo usuario autenticado). */
+export interface InfopagosBorradorListItem {
+  id: string
+  cedula_normalizada: string
+  tipo_cedula: string
+  numero_cedula: string
+  comprobante_nombre: string
+  created_at: string | null
+  resumen_validacion: string
+  cliente_nombre?: string | null
+}
+
+export async function listInfopagosBorradoresEscaneer(
+  limit = 30
+): Promise<{ ok: boolean; items: InfopagosBorradorListItem[] }> {
+  return apiClient.get<{ ok: boolean; items: InfopagosBorradorListItem[] }>(
+    `${BASE_COBROS}/escaner/borradores?limit=${limit}`
+  )
+}
+
+export interface InfopagosBorradorDetalle {
+  id: string
+  tipo_cedula: string
+  numero_cedula: string
+  cedula_normalizada: string
+  fuente_tasa_cambio: string
+  comprobante_nombre: string
+  cliente_nombre?: string | null
+  payload: Record<string, unknown>
+}
+
+export async function getInfopagosBorradorEscaneer(
+  borradorId: string
+): Promise<{ ok: boolean; borrador: InfopagosBorradorDetalle }> {
+  return apiClient.get<{ ok: boolean; borrador: InfopagosBorradorDetalle }>(
+    `${BASE_COBROS}/escaner/borrador/${encodeURIComponent(borradorId)}`
+  )
+}
+
+export async function deleteInfopagosBorradorEscaneer(
+  borradorId: string
+): Promise<{ ok: boolean }> {
+  return apiClient.delete<{ ok: boolean }>(
+    `${BASE_COBROS}/escaner/borrador/${encodeURIComponent(borradorId)}`
+  )
+}
+
 export interface EscanerInfopagosLoteDriveItem extends EscanerInfopagosExtraerResponse {
   drive_file_id: string
   nombre_archivo: string
