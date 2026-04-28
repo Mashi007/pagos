@@ -6,13 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { Link, useNavigate } from 'react-router-dom'
 
-import {
-  Brain,
-  Loader2,
-  CheckCircle2,
-  AlertTriangle,
-  Eye,
-} from 'lucide-react'
+import { Brain, Loader2, CheckCircle2, AlertTriangle, Eye } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 import { Button } from '../components/ui/button'
@@ -67,14 +61,12 @@ function readPersistedCedulaFull(): {
 } {
   try {
     const cedulaRaw = sessionStorage.getItem(SK_ESCANER_CEDULA.cedula) || ''
-    const validada =
-      sessionStorage.getItem(SK_ESCANER_CEDULA.validada) === '1'
+    const validada = sessionStorage.getItem(SK_ESCANER_CEDULA.validada) === '1'
     const nombreCliente = sessionStorage.getItem(SK_ESCANER_CEDULA.nombre) || ''
     const fuenteTasa = normalizarFuenteTasaCambio(
       sessionStorage.getItem(SK_ESCANER_CEDULA.fuente)
     )
-    const faseInicial: Fase =
-      cedulaRaw.trim() && validada ? 'imagen' : 'cedula'
+    const faseInicial: Fase = cedulaRaw.trim() && validada ? 'imagen' : 'cedula'
     return { cedulaRaw, nombreCliente, fuenteTasa, faseInicial }
   } catch {
     return {
@@ -678,7 +670,12 @@ export default function EscanerInfopagosPage() {
       escanearActivoRef.current = false
       setEscaneando(false)
     }
-  }, [aplicarExtraccionInfopagosAlFormulario, archivo, cedulaNormalizada, fuenteTasa])
+  }, [
+    aplicarExtraccionInfopagosAlFormulario,
+    archivo,
+    cedulaNormalizada,
+    fuenteTasa,
+  ])
 
   const handleEditarBorrador = useCallback(
     async (id: string) => {
@@ -821,7 +818,9 @@ export default function EscanerInfopagosPage() {
     if (archivo) {
       form.append('comprobante', archivo)
     } else if (!borradorId) {
-      toast.error('Adjunte el comprobante o recupere un borrador con comprobante en servidor.')
+      toast.error(
+        'Adjunte el comprobante o recupere un borrador con comprobante en servidor.'
+      )
       return
     }
     enviarActivoRef.current = true
@@ -851,15 +850,40 @@ export default function EscanerInfopagosPage() {
         setPagoId(null)
         setReciboListo(null)
       }
-      setFase('exito')
       setBorradorId(null)
+      limpiarCedulaSesion()
       persistirCedulaSesion({
         cedulaRaw,
         nombreCliente: nombreCliente.trim(),
         fuenteTasa,
         validada: true,
       })
-      toast.success(res.mensaje || 'Pago registrado.')
+      toast.success(
+        res.mensaje ||
+          'Pago registrado. Ingrese nueva cédula para escanear otro comprobante.'
+      )
+      setFase('cedula')
+      setCedulaRaw('')
+      setNombreCliente('')
+      setArchivo(null)
+      setFechaPago('')
+      setFechaDetectada('')
+      setInstitucion('')
+      setOtroInstitucion('')
+      setEscanerColision(null)
+      tokensSufijoUsadosRef.current = new Set()
+      setNumeroOperacion('')
+      setMontoStr('')
+      setMoneda('USD')
+      setValidacionCampos(null)
+      setValidacionReglas(null)
+      setCedulaPagadorImg('')
+      setReferencia('')
+      setReciboToken(null)
+      setPagoId(null)
+      setReciboListo(null)
+      setConsultandoRecibo(false)
+      setEnRevision(false)
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : 'Error al guardar.')
     } finally {
@@ -1076,8 +1100,8 @@ export default function EscanerInfopagosPage() {
                 <p className="text-xs text-slate-600">
                   Comprobante en memoria:{' '}
                   <span className="font-mono font-medium">{archivo.name}</span>{' '}
-                  ({Math.max(1, Math.round(archivo.size / 1024))} KB). Se conserva
-                  al volver desde el formulario o al pulsar &quot;Nuevo
+                  ({Math.max(1, Math.round(archivo.size / 1024))} KB). Se
+                  conserva al volver desde el formulario o al pulsar &quot;Nuevo
                   escaneo&quot; tras guardar.
                 </p>
               ) : null}
@@ -1123,8 +1147,8 @@ export default function EscanerInfopagosPage() {
               <CardHeader className="shrink-0 border-b border-slate-200/80 px-3 pb-2 pt-3 lg:pl-3 lg:pr-3">
                 <CardTitle className="text-base">Comprobante</CardTitle>
                 <p className="text-xs text-slate-600">
-                  Misma disposición que revisión manual en Cobros: vista previa a
-                  la izquierda y formulario a la derecha en pantalla ancha.
+                  Misma disposición que revisión manual en Cobros: vista previa
+                  a la izquierda y formulario a la derecha en pantalla ancha.
                 </p>
               </CardHeader>
               <CardContent className="flex min-h-0 flex-1 flex-col space-y-2 overflow-hidden p-2 sm:p-3 lg:pl-0 lg:pr-2">
@@ -1134,7 +1158,9 @@ export default function EscanerInfopagosPage() {
                     Cargando comprobante…
                   </div>
                 ) : comprobantePreviewError ? (
-                  <p className="text-sm text-red-700">{comprobantePreviewError}</p>
+                  <p className="text-sm text-red-700">
+                    {comprobantePreviewError}
+                  </p>
                 ) : comprobantePreviewUrl ? (
                   <>
                     <div className="min-h-0 flex-1 overflow-auto rounded-md border border-slate-200/80 bg-white lg:rounded-l-none lg:border-l-0">
@@ -1167,327 +1193,341 @@ export default function EscanerInfopagosPage() {
 
           <div className="min-h-0 min-w-0 space-y-6 overflow-y-auto overscroll-y-contain px-3 py-4 sm:px-4 lg:py-4 lg:pl-5 lg:pr-2">
             <Card className="border-0 shadow-none lg:border lg:border-slate-200/80 lg:shadow-sm">
-          <CardHeader className="space-y-2">
-            <div className="flex flex-wrap items-start justify-between gap-2">
-              <CardTitle>3. Formulario (editable)</CardTitle>
-              <Button
-                variant="ghost"
-                type="button"
-                className="h-auto shrink-0 px-2 py-1 text-xs text-slate-600"
-                onClick={handleCambiarCedula}
-              >
-                Cambiar cédula / otro deudor
-              </Button>
-            </div>
-            <p className="rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-sm font-medium text-sky-950">
-              Usted está ingresando un pago para{' '}
-              <strong>
-                {nombreCliente?.trim() ||
-                  cedulaNormalizada.valorParaEnviar ||
-                  'cliente seleccionado'}
-              </strong>
-              {escanerColision?.prestamo_objetivo_id != null ? (
-                <>
-                  {' '}
-                  y préstamo N°{' '}
-                  <strong>{escanerColision.prestamo_objetivo_id}</strong>.
-                </>
-              ) : (
-                '.'
-              )}
-            </p>
-            {escanerColision?.prestamo_objetivo_id != null ? (
-              <p className="rounded-md border border-indigo-200 bg-indigo-50 px-3 py-2 text-sm font-medium text-indigo-950">
-                Este pago se está cargando al{' '}
-                <strong>
-                  préstamo N° {escanerColision.prestamo_objetivo_id}
-                </strong>
-                .
-              </p>
-            ) : null}
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {(validacionCampos || validacionReglas) && (
-              <div
-                className="flex gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900"
-                role="status"
-              >
-                <AlertTriangle className="mt-0.5 h-5 w-5 flex-shrink-0" />
-                <div>
-                  {validacionCampos ? <p>{validacionCampos}</p> : null}
-                  {validacionReglas ? <p>{validacionReglas}</p> : null}
+              <CardHeader className="space-y-2">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <CardTitle>3. Formulario (editable)</CardTitle>
+                  <Button
+                    variant="ghost"
+                    type="button"
+                    className="h-auto shrink-0 px-2 py-1 text-xs text-slate-600"
+                    onClick={handleCambiarCedula}
+                  >
+                    Cambiar cédula / otro deudor
+                  </Button>
                 </div>
-              </div>
-            )}
-            {cedulaPagadorImg ? (
-              <p className="text-xs text-slate-500">
-                <span className="font-medium text-slate-700">
-                  Cédula en comprobante (pagador):
-                </span>{' '}
-                {cedulaPagadorImg}
-              </p>
-            ) : null}
+                <p className="rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-sm font-medium text-sky-950">
+                  Usted está ingresando un pago para{' '}
+                  <strong>
+                    {nombreCliente?.trim() ||
+                      cedulaNormalizada.valorParaEnviar ||
+                      'cliente seleccionado'}
+                  </strong>
+                  {escanerColision?.prestamo_objetivo_id != null ? (
+                    <>
+                      {' '}
+                      y préstamo N°{' '}
+                      <strong>{escanerColision.prestamo_objetivo_id}</strong>.
+                    </>
+                  ) : (
+                    '.'
+                  )}
+                </p>
+                {escanerColision?.prestamo_objetivo_id != null ? (
+                  <p className="rounded-md border border-indigo-200 bg-indigo-50 px-3 py-2 text-sm font-medium text-indigo-950">
+                    Este pago se está cargando al{' '}
+                    <strong>
+                      préstamo N° {escanerColision.prestamo_objetivo_id}
+                    </strong>
+                    .
+                  </p>
+                ) : null}
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {(validacionCampos || validacionReglas) && (
+                  <div
+                    className="flex gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900"
+                    role="status"
+                  >
+                    <AlertTriangle className="mt-0.5 h-5 w-5 flex-shrink-0" />
+                    <div>
+                      {validacionCampos ? <p>{validacionCampos}</p> : null}
+                      {validacionReglas ? <p>{validacionReglas}</p> : null}
+                    </div>
+                  </div>
+                )}
+                {cedulaPagadorImg ? (
+                  <p className="text-xs text-slate-500">
+                    <span className="font-medium text-slate-700">
+                      Cédula en comprobante (pagador):
+                    </span>{' '}
+                    {cedulaPagadorImg}
+                  </p>
+                ) : null}
 
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2 sm:col-span-2">
-                <Label htmlFor="fecha">Fecha de pago</Label>
-                {fechaDetectada.trim() ? (
-                  <p className="text-xs text-slate-600">
-                    Fecha detectada en la imagen (IA):{' '}
-                    <span className="font-mono font-semibold text-slate-900">
-                      {fechaDetectada}
-                    </span>
-                    . Puede ajustar el campo de fecha manualmente si la lectura
-                    de la IA no coincide con el comprobante.
-                  </p>
-                ) : (
-                  <p className="text-xs text-amber-800">
-                    No se detectó fecha clara en la imagen: el campo quedó con
-                    la fecha de hoy; cámbiela si el comprobante corresponde a
-                    otro día.
-                  </p>
-                )}
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-                  <div className="min-w-0 flex-1">
-                    <Input
-                      id="fecha"
-                      type="date"
-                      value={fechaPago}
-                      onChange={e => setFechaPago(e.target.value)}
-                    />
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2 sm:col-span-2">
+                    <Label htmlFor="fecha">Fecha de pago</Label>
+                    {fechaDetectada.trim() ? (
+                      <p className="text-xs text-slate-600">
+                        Fecha detectada en la imagen (IA):{' '}
+                        <span className="font-mono font-semibold text-slate-900">
+                          {fechaDetectada}
+                        </span>
+                        . Puede ajustar el campo de fecha manualmente si la
+                        lectura de la IA no coincide con el comprobante.
+                      </p>
+                    ) : (
+                      <p className="text-xs text-amber-800">
+                        No se detectó fecha clara en la imagen: el campo quedó
+                        con la fecha de hoy; cámbiela si el comprobante
+                        corresponde a otro día.
+                      </p>
+                    )}
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+                      <div className="min-w-0 flex-1">
+                        <Input
+                          id="fecha"
+                          type="date"
+                          value={fechaPago}
+                          onChange={e => setFechaPago(e.target.value)}
+                        />
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </div>
-              <div className="space-y-2 sm:col-span-2">
-                <Label htmlFor="inst">Institución financiera</Label>
-                <select
-                  id="inst"
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  value={
-                    INSTITUCIONES_FINANCIERAS.includes(
-                      institucion as (typeof INSTITUCIONES_FINANCIERAS)[number]
-                    )
-                      ? institucion
-                      : 'Otros'
-                  }
-                  onChange={e => {
-                    const v = e.target.value
-                    if (v === 'Otros') {
-                      setInstitucion(otroInstitucion.trim() || '')
-                    } else {
-                      setInstitucion(v)
-                      setOtroInstitucion('')
-                    }
-                  }}
-                >
-                  <option value="">Seleccione banco…</option>
-                  {INSTITUCIONES_FINANCIERAS.map(opt => (
-                    <option key={opt} value={opt}>
-                      {opt}
-                    </option>
-                  ))}
-                  <option value="Otros">Otro</option>
-                </select>
-                {!INSTITUCIONES_FINANCIERAS.includes(
-                  institucion as (typeof INSTITUCIONES_FINANCIERAS)[number]
-                ) && (
-                  <Input
-                    value={otroInstitucion}
-                    onChange={e => {
-                      const val = e.target.value
-                      setOtroInstitucion(val)
-                      setInstitucion(val.trim())
-                    }}
-                    placeholder="Nombre del banco o entidad"
-                    maxLength={MAX_LENGTH_INSTITUCION}
-                  />
-                )}
-              </div>
-              <div className="space-y-2 sm:col-span-2">
-                <Label htmlFor="nrop">Nº operación / referencia / serial</Label>
-                <Input
-                  id="nrop"
-                  value={numeroOperacion}
-                  onChange={e => setNumeroOperacion(e.target.value)}
-                  maxLength={MAX_LENGTH_NUMERO_OPERACION}
-                />
-                {hayDuplicadoOperacion ? (
-                  <div className="space-y-2 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-900">
-                    <p className="font-medium text-rose-950">
-                      Hay coincidencia o posible duplicado con cartera. Compare
-                      préstamo y fecha antes de sufijo o guardar (misma vista que
-                      Cobros).
-                    </p>
-                    <DuplicadoPrestamosComparacion
-                      prestamoExistenteId={escanerColision?.prestamo_existente_id}
-                      pagoExistenteId={escanerColision?.pago_existente_id}
-                      pagoExistenteEstado={null}
-                      pagoExistenteFechaPago={null}
-                      prestamoObjetivoId={escanerColision?.prestamo_objetivo_id}
-                      fechaPagoReporteIso={fechaComparacionDup}
-                      prestamoDuplicadoEsObjetivo={
-                        prestamoDuplicadoEsObjetivoEscaneer
+                  <div className="space-y-2 sm:col-span-2">
+                    <Label htmlFor="inst">Institución financiera</Label>
+                    <select
+                      id="inst"
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      value={
+                        INSTITUCIONES_FINANCIERAS.includes(
+                          institucion as (typeof INSTITUCIONES_FINANCIERAS)[number]
+                        )
+                          ? institucion
+                          : 'Otros'
                       }
-                      prestamoObjetivoMultiple={null}
-                    />
-                    <div className="flex flex-wrap gap-2">
-                      {typeof escanerColision?.prestamo_existente_id ===
-                      'number' ? (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() =>
-                            navigate(
-                              `/prestamos?filtro_prestamo_id=${escanerColision.prestamo_existente_id}`
-                            )
-                          }
-                        >
-                          Abrir préstamo #{escanerColision.prestamo_existente_id}
-                        </Button>
-                      ) : null}
-                      {typeof escanerColision?.prestamo_objetivo_id ===
-                        'number' &&
-                      typeof escanerColision?.prestamo_existente_id ===
-                        'number' &&
-                      escanerColision.prestamo_objetivo_id !==
-                        escanerColision.prestamo_existente_id ? (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() =>
-                            navigate(
-                              `/prestamos?filtro_prestamo_id=${escanerColision.prestamo_objetivo_id}`
-                            )
-                          }
-                        >
-                          Abrir préstamo actual #
-                          {escanerColision.prestamo_objetivo_id}
-                        </Button>
-                      ) : null}
-                    </div>
-                  </div>
-                ) : null}
-                {hayDuplicadoOperacion ? (
-                  <div className="rounded-md border border-violet-200 bg-violet-50 px-3 py-2 text-sm text-violet-950">
-                    <p className="font-medium">Sufijo admin (carga masiva)</p>
-                    <p className="mt-1 text-xs leading-snug">
-                      Añade{' '}
-                      <code className="rounded bg-white/80 px-1">_A####</code> o{' '}
-                      <code className="rounded bg-white/80 px-1">_P####</code> al
-                      final del número para que el documento sea único en
-                      cartera. Luego guarde el reporte.
-                    </p>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        title="Sufijo en borrador: _A#### (luego Guardar)"
-                        onClick={() => handleAplicarSufijoOperacion('A')}
-                      >
-                        <Eye className="mr-2 h-4 w-4" />
-                        Agregar sufijo A
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        title="Sufijo en borrador: _P#### (luego Guardar)"
-                        onClick={() => handleAplicarSufijoOperacion('P')}
-                      >
-                        <Eye className="mr-2 h-4 w-4" />
-                        Agregar sufijo P
-                      </Button>
-                    </div>
-                  </div>
-                ) : null}
-                {hayDuplicadoOperacion ? (
-                  <p className="text-sm text-slate-700">
-                    <Link
-                      className="font-medium text-indigo-700 underline underline-offset-2 hover:text-indigo-900"
-                      to={{
-                        pathname: '/pagos',
-                        search:
-                          searchParamsRevisionPagosDesdeNumeroDocumento(
-                            numeroOperacion
-                          ),
+                      onChange={e => {
+                        const v = e.target.value
+                        if (v === 'Otros') {
+                          setInstitucion(otroInstitucion.trim() || '')
+                        } else {
+                          setInstitucion(v)
+                          setOtroInstitucion('')
+                        }
                       }}
                     >
-                      Revisar si está en la pestaña Revisión
-                    </Link>
+                      <option value="">Seleccione banco…</option>
+                      {INSTITUCIONES_FINANCIERAS.map(opt => (
+                        <option key={opt} value={opt}>
+                          {opt}
+                        </option>
+                      ))}
+                      <option value="Otros">Otro</option>
+                    </select>
+                    {!INSTITUCIONES_FINANCIERAS.includes(
+                      institucion as (typeof INSTITUCIONES_FINANCIERAS)[number]
+                    ) && (
+                      <Input
+                        value={otroInstitucion}
+                        onChange={e => {
+                          const val = e.target.value
+                          setOtroInstitucion(val)
+                          setInstitucion(val.trim())
+                        }}
+                        placeholder="Nombre del banco o entidad"
+                        maxLength={MAX_LENGTH_INSTITUCION}
+                      />
+                    )}
+                  </div>
+                  <div className="space-y-2 sm:col-span-2">
+                    <Label htmlFor="nrop">
+                      Nº operación / referencia / serial
+                    </Label>
+                    <Input
+                      id="nrop"
+                      value={numeroOperacion}
+                      onChange={e => setNumeroOperacion(e.target.value)}
+                      maxLength={MAX_LENGTH_NUMERO_OPERACION}
+                    />
+                    {hayDuplicadoOperacion ? (
+                      <div className="space-y-2 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-900">
+                        <p className="font-medium text-rose-950">
+                          Hay coincidencia o posible duplicado con cartera.
+                          Compare préstamo y fecha antes de sufijo o guardar
+                          (misma vista que Cobros).
+                        </p>
+                        <DuplicadoPrestamosComparacion
+                          prestamoExistenteId={
+                            escanerColision?.prestamo_existente_id
+                          }
+                          pagoExistenteId={escanerColision?.pago_existente_id}
+                          pagoExistenteEstado={null}
+                          pagoExistenteFechaPago={null}
+                          prestamoObjetivoId={
+                            escanerColision?.prestamo_objetivo_id
+                          }
+                          fechaPagoReporteIso={fechaComparacionDup}
+                          prestamoDuplicadoEsObjetivo={
+                            prestamoDuplicadoEsObjetivoEscaneer
+                          }
+                          prestamoObjetivoMultiple={null}
+                        />
+                        <div className="flex flex-wrap gap-2">
+                          {typeof escanerColision?.prestamo_existente_id ===
+                          'number' ? (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() =>
+                                navigate(
+                                  `/prestamos?filtro_prestamo_id=${escanerColision.prestamo_existente_id}`
+                                )
+                              }
+                            >
+                              Abrir préstamo #
+                              {escanerColision.prestamo_existente_id}
+                            </Button>
+                          ) : null}
+                          {typeof escanerColision?.prestamo_objetivo_id ===
+                            'number' &&
+                          typeof escanerColision?.prestamo_existente_id ===
+                            'number' &&
+                          escanerColision.prestamo_objetivo_id !==
+                            escanerColision.prestamo_existente_id ? (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() =>
+                                navigate(
+                                  `/prestamos?filtro_prestamo_id=${escanerColision.prestamo_objetivo_id}`
+                                )
+                              }
+                            >
+                              Abrir préstamo actual #
+                              {escanerColision.prestamo_objetivo_id}
+                            </Button>
+                          ) : null}
+                        </div>
+                      </div>
+                    ) : null}
+                    {hayDuplicadoOperacion ? (
+                      <div className="rounded-md border border-violet-200 bg-violet-50 px-3 py-2 text-sm text-violet-950">
+                        <p className="font-medium">
+                          Sufijo admin (carga masiva)
+                        </p>
+                        <p className="mt-1 text-xs leading-snug">
+                          Añade{' '}
+                          <code className="rounded bg-white/80 px-1">
+                            _A####
+                          </code>{' '}
+                          o{' '}
+                          <code className="rounded bg-white/80 px-1">
+                            _P####
+                          </code>{' '}
+                          al final del número para que el documento sea único en
+                          cartera. Luego guarde el reporte.
+                        </p>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            title="Sufijo en borrador: _A#### (luego Guardar)"
+                            onClick={() => handleAplicarSufijoOperacion('A')}
+                          >
+                            <Eye className="mr-2 h-4 w-4" />
+                            Agregar sufijo A
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            title="Sufijo en borrador: _P#### (luego Guardar)"
+                            onClick={() => handleAplicarSufijoOperacion('P')}
+                          >
+                            <Eye className="mr-2 h-4 w-4" />
+                            Agregar sufijo P
+                          </Button>
+                        </div>
+                      </div>
+                    ) : null}
+                    {hayDuplicadoOperacion ? (
+                      <p className="text-sm text-slate-700">
+                        <Link
+                          className="font-medium text-indigo-700 underline underline-offset-2 hover:text-indigo-900"
+                          to={{
+                            pathname: '/pagos',
+                            search:
+                              searchParamsRevisionPagosDesdeNumeroDocumento(
+                                numeroOperacion
+                              ),
+                          }}
+                        >
+                          Revisar si está en la pestaña Revisión
+                        </Link>
+                      </p>
+                    ) : null}
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Moneda (detectada por escáner; editable)</Label>
+                    <select
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      value={moneda}
+                      onChange={e =>
+                        setMoneda(e.target.value === 'BS' ? 'BS' : 'USD')
+                      }
+                    >
+                      <option value="USD">USD / divisas</option>
+                      <option value="BS">Bolívares (Bs.)</option>
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="monto">Monto</Label>
+                    <Input
+                      id="monto"
+                      value={montoStr}
+                      onChange={e => setMontoStr(e.target.value)}
+                      inputMode="decimal"
+                      autoComplete="off"
+                    />
+                  </div>
+                </div>
+
+                <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
+                  {borradorId && !archivo ? (
+                    <>
+                      El comprobante de este borrador está guardado en el
+                      servidor. Puede guardar sin adjuntar de nuevo. Si en el
+                      paso anterior elige otro archivo, se descarta el enlace al
+                      borrador y se usará ese archivo al guardar.
+                    </>
+                  ) : (
+                    <>
+                      Se reutiliza automáticamente el comprobante escaneado al
+                      inicio para guardar y para procesos siguientes (por
+                      ejemplo, recibo). No es necesario volver a cargarlo.
+                    </>
+                  )}
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    variant="outline"
+                    type="button"
+                    onClick={() => setFase('imagen')}
+                  >
+                    Volver
+                  </Button>
+                  <Button onClick={handleGuardar} disabled={enviando}>
+                    {enviando ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Guardando…
+                      </>
+                    ) : (
+                      'Guardar reporte Infopagos'
+                    )}
+                  </Button>
+                </div>
+                {enviando ? (
+                  <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-900">
+                    Espere, estoy procesando su pago.
                   </p>
                 ) : null}
-              </div>
-              <div className="space-y-2">
-                <Label>Moneda (detectada por escáner; editable)</Label>
-                <select
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  value={moneda}
-                  onChange={e =>
-                    setMoneda(e.target.value === 'BS' ? 'BS' : 'USD')
-                  }
-                >
-                  <option value="USD">USD / divisas</option>
-                  <option value="BS">Bolívares (Bs.)</option>
-                </select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="monto">Monto</Label>
-                <Input
-                  id="monto"
-                  value={montoStr}
-                  onChange={e => setMontoStr(e.target.value)}
-                  inputMode="decimal"
-                  autoComplete="off"
-                />
-              </div>
-            </div>
-
-            <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
-              {borradorId && !archivo ? (
-                <>
-                  El comprobante de este borrador está guardado en el servidor.
-                  Puede guardar sin adjuntar de nuevo. Si en el paso anterior elige
-                  otro archivo, se descarta el enlace al borrador y se usará ese
-                  archivo al guardar.
-                </>
-              ) : (
-                <>
-                  Se reutiliza automáticamente el comprobante escaneado al inicio
-                  para guardar y para procesos siguientes (por ejemplo, recibo). No
-                  es necesario volver a cargarlo.
-                </>
-              )}
-            </div>
-
-            <div className="flex flex-wrap gap-2">
-              <Button
-                variant="outline"
-                type="button"
-                onClick={() => setFase('imagen')}
-              >
-                Volver
-              </Button>
-              <Button onClick={handleGuardar} disabled={enviando}>
-                {enviando ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Guardando…
-                  </>
-                ) : (
-                  'Guardar reporte Infopagos'
-                )}
-              </Button>
-            </div>
-            {enviando ? (
-              <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-900">
-                Espere, estoy procesando su pago.
-              </p>
-            ) : null}
-          </CardContent>
-        </Card>
+              </CardContent>
+            </Card>
           </div>
         </div>
       )}
@@ -1542,8 +1582,8 @@ export default function EscanerInfopagosPage() {
               <p className="text-xs text-emerald-900/90">
                 Se conservan la cédula validada, la tasa y el archivo del
                 comprobante en esta pestaña para otro envío o corrección; use
-                &quot;Cambiar cédula&quot; en el paso del comprobante si corresponde
-                otro deudor.
+                &quot;Cambiar cédula&quot; en el paso del comprobante si
+                corresponde otro deudor.
               </p>
             </div>
           </CardContent>
@@ -1552,4 +1592,3 @@ export default function EscanerInfopagosPage() {
     </div>
   )
 }
-
