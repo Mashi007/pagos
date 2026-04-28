@@ -838,20 +838,25 @@ export function RegistrarPagoForm({
         return
       }
 
-      try {
-        const u = new URL(linkFinal)
+      // Validar URL solo si es URL nueva (no es edición con comprobante existente)
+      // O si es edición pero cambió el comprobante
+      const esComprobanteNuevo = archivoComprobante || linkComprobanteTrim
+      if (esComprobanteNuevo) {
+        try {
+          const u = new URL(linkFinal)
 
-        if (!['http:', 'https:'].includes(u.protocol)) {
-          throw new Error('protocolo')
+          if (!['http:', 'https:'].includes(u.protocol)) {
+            throw new Error('protocolo')
+          }
+        } catch {
+          setErrors({
+            link_comprobante: 'No se obtuvo una URL valida para el comprobante.',
+          })
+
+          setIsSubmitting(false)
+
+          return
         }
-      } catch {
-        setErrors({
-          link_comprobante: 'No se obtuvo una URL valida para el comprobante.',
-        })
-
-        setIsSubmitting(false)
-
-        return
       }
 
       const codigoTrim = String(fd.codigo_documento ?? '').trim()
