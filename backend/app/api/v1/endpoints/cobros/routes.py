@@ -3319,11 +3319,12 @@ async def escaner_extraer_comprobante_infopagos(
         except (TypeError, ValueError):
             usuario_escaner_id = None
 
-    if ieb.debe_persistir_borrador_escaneo(
+    necesita_borrador_bd = ieb.debe_persistir_borrador_escaneo(
         validacion_campos=validacion_campos,
         validacion_reglas=validacion_reglas,
         duplicado_en_pagos=duplicado_en_pagos,
-    ):
+    )
+    if necesita_borrador_bd and usuario_escaner_id is not None:
         try:
             payload_snap = {
                 "sugerencia": sugerencia,
@@ -3358,6 +3359,11 @@ async def escaner_extraer_comprobante_infopagos(
         except Exception as e:
             db.rollback()
             logger.exception("[ESCANER] fallo al guardar borrador temporal: %s", e)
+    elif necesita_borrador_bd and usuario_escaner_id is None:
+        logger.warning(
+            "[ESCANER] validación con pendientes pero sin usuario en sesión; no se persiste borrador cedula=%s",
+            cedula_lookup[:12],
+        )
 
     return {
         "ok": True,

@@ -1022,7 +1022,13 @@ export default function EscanerInfopagosPage() {
                 id="archivo-escaner"
                 type="file"
                 accept=".pdf,.jpg,.jpeg,.png,.webp,.heic,.heif"
-                onChange={e => setArchivo(e.target.files?.[0] ?? null)}
+                onChange={e => {
+                  const f = e.target.files?.[0] ?? null
+                  setArchivo(f)
+                  if (f) {
+                    setBorradorId(null)
+                  }
+                }}
               />
               {archivo ? (
                 <p className="text-xs text-slate-600">
@@ -1304,8 +1310,9 @@ export default function EscanerInfopagosPage() {
               {borradorId && !archivo ? (
                 <>
                   El comprobante de este borrador está guardado en el servidor.
-                  Puede guardar el reporte sin volver a adjuntar archivo; si cambia
-                  de archivo local, se usará el adjunto nuevo.
+                  Puede guardar sin adjuntar de nuevo. Si en el paso anterior elige
+                  otro archivo, se descarta el enlace al borrador y se usará ese
+                  archivo al guardar.
                 </>
               ) : (
                 <>

@@ -216,7 +216,9 @@ def obtener_borrador_para_edicion(
         return None, "Borrador no encontrado."
     if (row.estado or "").strip().lower() != "borrador":
         return None, "Este borrador ya no está disponible."
-    if row.usuario_id is not None and int(row.usuario_id) != int(usuario_id):
+    if row.usuario_id is None:
+        return None, "Borrador no disponible (sin titular de sesión)."
+    if int(row.usuario_id) != int(usuario_id):
         return None, "No tiene permiso para ver este borrador."
 
     cliente_nom = None
@@ -260,7 +262,9 @@ def eliminar_borrador_escaneo(
         return False, "Borrador no encontrado."
     if (row.estado or "").strip().lower() != "borrador":
         return False, "Solo se pueden eliminar borradores pendientes."
-    if row.usuario_id is not None and int(row.usuario_id) != int(usuario_id):
+    if row.usuario_id is None:
+        return False, "Borrador no disponible (sin titular de sesión)."
+    if int(row.usuario_id) != int(usuario_id):
         return False, "No tiene permiso para eliminar este borrador."
 
     img_id = (row.comprobante_imagen_id or "").strip()
