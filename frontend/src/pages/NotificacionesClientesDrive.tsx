@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 
 import {
+  CheckCircle,
   ChevronLeft,
   ChevronRight,
   Download,
@@ -35,7 +36,6 @@ import {
 } from '../utils/telefonoDrive'
 
 const QK = ['notificaciones', 'clientes-drive', 'candidatos'] as const
-const QK_AUD = ['notificaciones', 'clientes-drive', 'auditoria'] as const
 
 const STORAGE_HIDDEN = 'notificaciones-drive-candidatos-ocultos'
 const EMAIL_PLACEHOLDER_DRIVE = 'revisar@email.com'
@@ -232,7 +232,6 @@ export default function NotificacionesClientesDrive() {
   const { opciones: estadosCliente } = useEstadosCliente()
   const [selected, setSelected] = useState<Record<number, boolean>>({})
   const [comentario, setComentario] = useState('')
-  const [audPage, setAudPage] = useState(1)
   const [candidatosPage, setCandidatosPage] = useState(1)
   const [hiddenRows, setHiddenRows] = useState<Set<number>>(() => new Set())
   const [savingRowId, setSavingRowId] = useState<number | null>(null)
@@ -279,11 +278,6 @@ export default function NotificacionesClientesDrive() {
   const q = useQuery({
     queryKey: [...QK],
     queryFn: () => clienteService.getDriveImportCandidatos(),
-  })
-
-  const qa = useQuery({
-    queryKey: [...QK_AUD, audPage],
-    queryFn: () => clienteService.getDriveImportAuditoria(audPage, 30),
   })
 
   const rows = q.data?.candidatos ?? []
@@ -380,12 +374,10 @@ export default function NotificacionesClientesDrive() {
     null | 'solo_no_seleccionable' | 'todos_candidatos'
   >(null)
 
-  const refetchCandidatosYAuditoria = useCallback(async () => {
+  const refetchCandidatos = useCallback(async () => {
     await qc.invalidateQueries({ queryKey: [...QK] })
-    await qc.invalidateQueries({ queryKey: [...QK_AUD] })
     await qc.refetchQueries({ queryKey: [...QK] })
-    await qc.refetchQueries({ queryKey: [...QK_AUD, audPage] })
-  }, [qc, audPage])
+  }, [qc])
 
   const onActualizarLista = async () => {
     setRefreshing(true)
@@ -463,7 +455,7 @@ export default function NotificacionesClientesDrive() {
           return next
         })
         setComentario('')
-        await refetchCandidatosYAuditoria()
+        await refetchCandidatos()
       } catch (e) {
         toast.error(
           mensajeErrorImportCliente(
@@ -475,7 +467,7 @@ export default function NotificacionesClientesDrive() {
         setSaving(false)
       }
     },
-    [refetchCandidatosYAuditoria]
+    [refetchCandidatos]
   )
 
   const onGuardar = async () => {
@@ -510,7 +502,7 @@ export default function NotificacionesClientesDrive() {
     const audit =
       [
         comentario.trim(),
-        'Importación automática: solo filas que cumplen validadores (sin marcar).',
+        'Aprobación manual: filas en verde (validadores completos, sin marcar).',
       ]
         .filter(Boolean)
         .join(' - ') || null
@@ -557,7 +549,7 @@ export default function NotificacionesClientesDrive() {
       return n
     })
     setEditDraft(null)
-    await refetchCandidatosYAuditoria()
+    await refetchCandidatos()
   }
 
   const onGuardarFilaRapido = async (r: DriveCandidate) => {
@@ -624,7 +616,7 @@ export default function NotificacionesClientesDrive() {
           : 'Excel descargado. Todas las filas exportadas se eliminaron del snapshot en BD; vuelven con «Actualización manual» desde Google.'
       )
       setSelected({})
-      await refetchCandidatosYAuditoria()
+      await refetchCandidatos()
     } catch (e) {
       toast.error(getErrorMessage(e) || 'No se pudo generar el Excel')
     } finally {
@@ -1106,9 +1098,20 @@ export default function NotificacionesClientesDrive() {
               />
             </div>
             <div className="flex flex-col justify-end gap-2">
+              <p className="text-xs text-muted-foreground">
+                «Aprobar manualmente» importa las filas con fondo verde y estado
+                «Listo para revisión» (mismos criterios que habilitan «Guardar en
+                clientes» en el modal).
+              </p>
               <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
                 <Button
                   type="button"
+                  className="border-emerald-600/40 bg-emerald-600 text-white hover:bg-emerald-700 dark:border-emerald-700 dark:bg-emerald-700 dark:hover:bg-emerald-600"
+                  title={
+                    filasValidasVisibles.length === 0
+                      ? 'No hay filas en verde en la vista actual.'
+                      : 'Importa todas las filas en verde de la vista (sin marcar casillas).'
+                  }
                   onClick={() => void onGuardarSoloValidasSinMarcar()}
                   disabled={
                     saving ||
@@ -1118,9 +1121,10 @@ export default function NotificacionesClientesDrive() {
                     filasValidasVisibles.length === 0
                   }
                 >
+                  <CheckCircle className="mr-2 h-4 w-4" aria-hidden />
                   {saving
-                    ? 'Guardando…'
-                    : `Guardar (${filasValidasVisibles.length} válida(s))`}
+                    ? 'Importando…'
+                    : `Aprobar manualmente (${filasValidasVisibles.length} en verde)`}
                 </Button>
                 <Button
                   type="button"
@@ -1146,120 +1150,6 @@ export default function NotificacionesClientesDrive() {
                 </Button>
               </div>
             </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3 space-y-0">
-          <CardTitle className="text-lg">Auditoría de importaciones</CardTitle>
-          <div className="flex items-center gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={audPage <= 1}
-              onClick={() => setAudPage(p => Math.max(1, p - 1))}
-            >
-              Anterior
-            </Button>
-            <span className="text-sm text-muted-foreground">
-              Página {qa.data?.page ?? audPage} /{' '}
-              {qa.data
-                ? Math.max(
-                    1,
-                    Math.ceil(qa.data.total / (qa.data.per_page || 30))
-                  )
-                : 1}
-            </span>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={
-                !qa.data ||
-                audPage >=
-                  Math.max(
-                    1,
-                    Math.ceil(qa.data.total / (qa.data.per_page || 30))
-                  )
-              }
-              onClick={() => setAudPage(p => p + 1)}
-            >
-              Siguiente
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {qa.isLoading && (
-            <p className="text-sm text-muted-foreground">Cargando auditoría…</p>
-          )}
-          {qa.isError && (
-            <p className="text-sm text-red-600">
-              {getErrorMessage(qa.error) || 'Error al cargar'}
-            </p>
-          )}
-          <div className="overflow-x-auto rounded-md border">
-            <table className="w-full min-w-[900px] table-fixed border-collapse text-left text-sm">
-              <colgroup>
-                <col className="w-[13%]" />
-                <col className="w-[14%]" />
-                <col className="w-[9%]" />
-                <col className="w-[6%]" />
-                <col className="w-[10%]" />
-                <col className="w-[22%]" />
-                <col className="w-[26%]" />
-              </colgroup>
-              <thead className="bg-muted/60">
-                <tr>
-                  <th className="px-2 py-2">Fecha</th>
-                  <th className="px-2 py-2">Usuario</th>
-                  <th className="px-2 py-2">Estado</th>
-                  <th className="px-2 py-2">Fila</th>
-                  <th className="px-2 py-2">Cédula</th>
-                  <th className="px-2 py-2">Comentario</th>
-                  <th className="px-2 py-2">Detalle</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(qa.data?.items ?? []).map(it => (
-                  <tr key={it.id} className="border-t">
-                    <td className="min-w-0 whitespace-nowrap px-2 py-2 text-xs">
-                      {it.creado_en
-                        ? new Date(it.creado_en).toLocaleString('es-VE', {
-                            timeZone: 'America/Caracas',
-                          })
-                        : '-'}
-                    </td>
-                    <td className="min-w-0 break-words px-2 py-2 text-xs">
-                      {it.usuario_email}
-                    </td>
-                    <td className="min-w-0 break-words px-2 py-2 text-xs">
-                      {it.estado}
-                    </td>
-                    <td className="min-w-0 px-2 py-2 font-mono text-xs tabular-nums">
-                      {it.sheet_row_number}
-                    </td>
-                    <td className="min-w-0 break-words px-2 py-2 font-mono text-xs">
-                      {it.cedula}
-                    </td>
-                    <td className="min-w-0 break-words px-2 py-2 text-xs">
-                      {it.comentario ?? '-'}
-                    </td>
-                    <td className="min-w-0 break-words px-2 py-2 text-xs text-red-700">
-                      {it.detalle_error ?? '-'}
-                    </td>
-                  </tr>
-                ))}
-                {!qa.isLoading && (qa.data?.items?.length ?? 0) === 0 && (
-                  <tr>
-                    <td className="px-3 py-6 text-muted-foreground" colSpan={7}>
-                      Sin registros de auditoría.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
           </div>
         </CardContent>
       </Card>
