@@ -428,6 +428,11 @@ if (API_URL) {
       const isCobrosPagosReportadosSlowPath =
         p.includes('pagos-reportados/listado-y-kpis') ||
         /\/cobros\/pagos-reportados\/\d+\/estado\b/.test(p);
+      const isConciliacionSheetSlowPost =
+        p.includes('conciliacion-sheet/sync-now') || p.includes('conciliacion-sheet/sync');
+      const isCandidatosDriveSlowPost =
+        p.includes('prestamos/candidatos-drive/refrescar') ||
+        p.includes('prestamos/candidatos-drive/guardar-validados-100');
       // Misma familia que main.py is_long_job_path: Gemini/SMTP/OTP pueden superar 60s; el corte
       // del socket aqui devuelve 502 HTML al navegador aunque proxyTimeout global sea 180s.
       const isLongJobCobrosPublicOrEscaner =
@@ -445,6 +450,9 @@ if (API_URL) {
       } else if (isCobrosPagosReportadosSlowPath) {
         // Listado+KPIs (barrido) o PATCH estado (aprobar puede tardar); evitar corte a 60s en el proxy.
         proxyTimeoutMs = 120000;
+      } else if (isConciliacionSheetSlowPost || isCandidatosDriveSlowPost) {
+        // Google Sheets + snapshot BD / Drive masivo: suele >60s; el cliente usa hasta 300s.
+        proxyTimeoutMs = 300000;
       } else if (isLongJobCobrosPublicOrEscaner) {
         proxyTimeoutMs = 180000;
       }
