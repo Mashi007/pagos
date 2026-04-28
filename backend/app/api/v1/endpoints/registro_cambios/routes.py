@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Any, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 import io
@@ -40,8 +40,7 @@ class RegistroCambiosItem(BaseModel):
     fecha_hora: str
     vigente: bool
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class RegistroCambiosListResponse(BaseModel):

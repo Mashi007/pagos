@@ -2,7 +2,7 @@
 Schemas para validación de mensajes de WhatsApp (Meta API)
 """
 from typing import Optional, List
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from datetime import datetime
 
 
@@ -44,8 +44,7 @@ class WhatsAppMessage(BaseModel):
     image: Optional[WhatsAppImage] = None
     document: Optional[WhatsAppDocument] = None
 
-    class Config:
-        populate_by_name = True
+    model_config = ConfigDict(populate_by_name=True)
 
 
 class WhatsAppValue(BaseModel):
@@ -75,8 +74,7 @@ class WhatsAppWebhookChallenge(BaseModel):
     hub_challenge: str = Field(..., alias="hub.challenge")
     hub_verify_token: str = Field(..., alias="hub.verify_token")
     
-    class Config:
-        populate_by_name = True
+    model_config = ConfigDict(populate_by_name=True)
 
 
 class WhatsAppResponse(BaseModel):

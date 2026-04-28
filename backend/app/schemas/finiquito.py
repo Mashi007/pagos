@@ -2,7 +2,7 @@
 
 from typing import Any, List, Optional
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 
 class FiniquitoRegistroRequest(BaseModel):
@@ -66,8 +66,7 @@ class FiniquitoCasoOut(BaseModel):
         ),
     )
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class FiniquitoConteoRevisionNuevosResponse(BaseModel):

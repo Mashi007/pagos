@@ -5,7 +5,7 @@ HTML, To/CC, adjunto (1 archivo jpg/png/pdf), destinatarios: todos o seleccionad
 from datetime import datetime
 from typing import Optional, List
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class CampanaCrmBase(BaseModel):
@@ -64,8 +64,7 @@ class CampanaCrmResponse(BaseModel):
     programado_cada_horas: Optional[int] = None
     programado_proxima_ejecucion: Optional[datetime] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class DestinatarioPreview(BaseModel):
@@ -89,5 +88,4 @@ class CampanaDestinatarioResponse(BaseModel):
     fecha_envio: Optional[datetime] = None
     error_mensaje: Optional[str] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
