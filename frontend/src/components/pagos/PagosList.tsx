@@ -1306,10 +1306,18 @@ export function PagosList() {
     setBulkMovingProgress({ movidos: 0, total: ids.length })
     try {
       const result = await pagoConErrorService.moverAPagosNormales(ids)
-      toast.success(
-        `✅ ${result.movidos} pago(s) movido(s) a tabla principal.\n💰 ${result.cuotas_aplicadas} cuota(s) aplicada(s).`,
-        { duration: 5000 }
-      )
+      
+      // Mensaje principal con resultados
+      let mensaje = `✅ ${result.movidos} pago(s) movido(s) a tabla principal.\n💰 ${result.cuotas_aplicadas ?? 0} cuota(s) aplicada(s).`
+      
+      // Avisar si hay errores
+      if (result.errores && result.errores.length > 0) {
+        mensaje += `\n⚠️ ${result.errores.length} error(es):\n${result.errores.join('\n')}`
+        toast.warning(mensaje, { duration: 7000 })
+      } else {
+        toast.success(mensaje, { duration: 5000 })
+      }
+      
       setSelectedRevisionIds(new Set())
       setBulkMovingProgress({ movidos: 0, total: 0 })
       await invalidatePagosPrestamosRevisionYCuotas(queryClient)

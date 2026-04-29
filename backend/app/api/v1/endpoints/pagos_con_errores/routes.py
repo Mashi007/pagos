@@ -765,7 +765,10 @@ def mover_a_pagos_normales(
 
     if not ids:
 
+        logger.info("mover_a_pagos_normales: lista vacía de IDs")
         return {"movidos": 0, "mensaje": "No hay IDs"}
+
+    logger.info(f"mover_a_pagos_normales: iniciando con {len(ids)} pago(s): {ids}")
 
     from app.models.pago import Pago
 
@@ -776,20 +779,38 @@ def mover_a_pagos_normales(
     movidos = 0
 
     cuotas_aplicadas = 0
+    
+    errores_procesamiento = []
 
-    for pid in ids:
+    for idx, pid in enumerate(ids, start=1):
 
         if not isinstance(pid, int) or pid <= 0:
 
+            logger.warning(f"mover_a_pagos_normales: ID inválido (tipo/valor): {pid}")
             continue
 
         row = db.get(PagoConError, pid)
 
         if not row:
 
+            logger.warning(f"mover_a_pagos_normales: PagoConError {pid} no encontrado")
             continue
 
+        logger.debug(f"mover_a_pagos_normales: procesando pago {idx}/{len(ids)} (id={pid}, cedula={row.cedula_cliente}, monto={row.monto_pagado})")
+
         conciliado = bool(row.conciliado) if row.conciliado is not None else False
+        
+        # Validar que no exista duplicado en tabla pagos
+        numero_documento_normalizado = row.numero_documento or ""
+        duplicado_existe = False
+        
+        if numero_documento_normalizado:
+            from app.services.pago_numero_documento import numero_documento_ya_registrado
+            duplicado_existe = numero_documento_ya_registrado(db, numero_documento_normalizado)
+            if duplicado_existe:
+                logger.warning(f"mover_a_pagos_normales: pago {pid} tiene documento duplicado en tabla pagos: {numero_documento_normalizado}")
+                errores_procesamiento.append(f"Pago {pid}: documento '{numero_documento_normalizado}' ya existe en tabla pagos")
+                continue  # Saltar este pago, no mover
 
         ahora = datetime.now(ZoneInfo("America/Caracas")) if conciliado else None
 
@@ -826,30 +847,58 @@ def mover_a_pagos_normales(
         db.flush()
 
         db.refresh(pago)
+        
+        nuevo_pago_id = pago.id
+        cc_aplicadas = 0
+        cp_aplicadas = 0
 
         if pago.prestamo_id and float(pago.monto_pagado or 0) > 0:
 
             try:
 
                 cc, cp = _aplicar_pago_a_cuotas_interno(pago, db)
+                cc_aplicadas = cc
+                cp_aplicadas = cp
 
                 if cc > 0 or cp > 0:
 
                     pago.estado = "PAGADO"
 
                     cuotas_aplicadas += cc + cp
+                    
+                    logger.info(f"mover_a_pagos_normales: pago id={nuevo_pago_id} aplicado a {cc} cuota(s) completa(s), {cp} parcial(es)")
+
+                else:
+                    
+                    logger.warning(f"mover_a_pagos_normales: pago id={nuevo_pago_id} no se aplicó a ninguna cuota (prestamo={pago.prestamo_id})")
 
             except Exception as e:
 
-                logger.warning("mover_a_pagos_normales: no se pudo aplicar pago id=%s a cuotas: %s", getattr(pago, "id", "?"), e)
+                logger.error(f"mover_a_pagos_normales: error aplicando pago id={nuevo_pago_id} a cuotas: {str(e)}", exc_info=True)
+                errores_procesamiento.append(f"Pago {pid}: {str(e)}")
 
         db.delete(row)
+        
+        logger.debug(f"mover_a_pagos_normales: pago id={pid} eliminado de pagos_con_errores, creado pago id={nuevo_pago_id}")
 
         movidos += 1
 
     db.commit()
+    
+    logger.info(f"mover_a_pagos_normales: COMPLETADO - {movidos} pago(s) movido(s), {cuotas_aplicadas} cuota(s) aplicada(s)")
+    
+    respuesta = {
+        "movidos": movidos,
+        "cuotas_aplicadas": cuotas_aplicadas,
+        "mensaje": f"{movidos} pagos movidos a tabla pagos; cuotas aplicadas: {cuotas_aplicadas}"
+    }
+    
+    if errores_procesamiento:
+        logger.warning(f"mover_a_pagos_normales: errores durante procesamiento: {errores_procesamiento}")
+        respuesta["errores"] = errores_procesamiento
+        respuesta["mensaje"] += f" ({len(errores_procesamiento)} error(es))"
 
-    return {"movidos": movidos, "cuotas_aplicadas": cuotas_aplicadas, "mensaje": f"{movidos} pagos movidos a tabla pagos; cuotas aplicadas: {cuotas_aplicadas}"}
+    return respuesta
 
 
 
@@ -949,11 +998,16 @@ def eliminar_pago_con_error(pago_id: int, db: Session = Depends(get_db)):
 
     if not row:
 
+        logger.warning(f"eliminar_pago_con_error: PagoConError {pago_id} no encontrado (404)")
         raise HTTPException(status_code=404, detail="Pago con error no encontrado")
+
+    logger.info(f"eliminar_pago_con_error: eliminando pago {pago_id} (cedula={row.cedula_cliente}, monto={row.monto_pagado})")
 
     db.delete(row)
 
     db.commit()
+    
+    logger.info(f"eliminar_pago_con_error: pago {pago_id} eliminado exitosamente de pagos_con_errores")
 
     return None
 
