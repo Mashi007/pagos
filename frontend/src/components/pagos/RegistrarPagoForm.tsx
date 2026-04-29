@@ -883,7 +883,8 @@ export function RegistrarPagoForm({
           await pagoService.updatePago(pagoId, datosEnvio)
         }
       } else {
-        await pagoService.createPago(datosEnvio)
+        const pagoCreado = await pagoService.createPago(datosEnvio)
+        pagoId = pagoCreado.id
       }
 
       // Si es "Guardar y Procesar", autoconcilia y aplica a cuotas
@@ -891,9 +892,7 @@ export function RegistrarPagoForm({
         try {
           // Ya se marcó como conciliado arriba (datosEnvio.conciliado = true)
           // Ahora aplicar a cuotas
-          const resultAplicar = await pagoService.aplicarPagoACuotas(
-            isEditing ? pagoId! : (datosEnvio as any).id
-          )
+          const resultAplicar = await pagoService.aplicarPagoACuotas(pagoId!)
 
           // Log del resultado (info, no error)
           if (import.meta.env.DEV) {
