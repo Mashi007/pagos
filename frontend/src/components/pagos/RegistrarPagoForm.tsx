@@ -873,7 +873,7 @@ export function RegistrarPagoForm({
       }
 
       if (fd.prestamo_id && fd.monto_pagado > 0) {
-        datosEnvio.conciliado = true
+        datosEnvio.conciliado = true  // ✅ AUTOCONCILIAR si hay préstamo y monto
       }
 
       if (isEditing && pagoId) {
@@ -883,15 +883,21 @@ export function RegistrarPagoForm({
           await pagoService.updatePago(pagoId, datosEnvio)
         }
       } else {
+        // ✅ CREAR NUEVO: conciliado se envía en datosEnvio
         const pagoCreado = await pagoService.createPago(datosEnvio)
         pagoId = pagoCreado.id
+        
+        // Log para verificar autoconciliación
+        if (import.meta.env.DEV) {
+          console.log(`Pago creado: id=${pagoCreado.id}, conciliado=${pagoCreado.conciliado}`)
+        }
       }
 
-      // Si es "Guardar y Procesar", autoconcilia y aplica a cuotas
+      // Si es "Guardar y Procesar", aplica a cuotas automáticamente
       if (modoGuardarYProcesar && fd.prestamo_id && fd.monto_pagado > 0) {
         try {
           // Ya se marcó como conciliado arriba (datosEnvio.conciliado = true)
-          // Ahora aplicar a cuotas
+          // Ahora aplicar a cuotas (cascada del sistema)
           const resultAplicar = await pagoService.aplicarPagoACuotas(pagoId!)
 
           // Mostrar detalle del resultado (mejorado)

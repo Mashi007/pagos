@@ -1283,15 +1283,28 @@ export function PagosList() {
     }
     if (!window.confirm(`¿Eliminar ${ids.length} pago(s) seleccionados?`))
       return
+    
+    // Invalidar caché para evitar mostrar viejo
+    queryClient.removeQueries({
+      queryKey: ['pagos-con-errores-tab']
+    })
+    
     setIsBulkDeletingRevision(true)
     try {
+      // Ejecutar eliminaciones en paralelo
       await Promise.all(ids.map(id => pagoConErrorService.delete(id)))
-      toast.success(`Se eliminaron ${ids.length} pago(s).`)
+      
+      toast.success(`✅ ${ids.length} pago(s) eliminados de la BD`)
       setSelectedRevisionIds(new Set())
+      
+      // Refrescar tabla
       await invalidatePagosPrestamosRevisionYCuotas(queryClient)
       await refetchDiagnosticoRevision()
     } catch (e) {
-      toast.error(getErrorMessage(e))
+      toast.error(`Error al eliminar: ${getErrorMessage(e)}`)
+      
+      // Refetch para sincronizar
+      await refetchDiagnosticoRevision()
     } finally {
       setIsBulkDeletingRevision(false)
     }
@@ -1698,17 +1711,31 @@ export function PagosList() {
   }
   const handleEliminarRevision = async (id: number) => {
     if (!window.confirm(`¿Eliminar el pago pendiente ID ${id}?`)) return
+    
+    // Invalidar caché para evitar mostrar viejo
+    queryClient.removeQueries({
+      queryKey: ['pagos-con-errores-tab']
+    })
+    
     setDeletingRevisionId(id)
     try {
+      // Enviar DELETE a backend
       await pagoConErrorService.delete(id)
-      toast.success('Pago pendiente eliminado')
+      
+      toast.success('✅ Pago pendiente eliminado de la BD')
+      
+      // Refrescar tabla desde servidor
+      await invalidatePagosPrestamosRevisionYCuotas(queryClient)
+      await refetchDiagnosticoRevision()
+      
       if ((revisionData?.pagos?.length ?? 0) <= 1 && revisionPage > 1) {
         setRevisionPage(prev => Math.max(1, prev - 1))
       }
-      await invalidatePagosPrestamosRevisionYCuotas(queryClient)
-      await refetchDiagnosticoRevision()
     } catch (e) {
-      toast.error(getErrorMessage(e))
+      toast.error(`Error al eliminar: ${getErrorMessage(e)}`)
+      
+      // Refetch para sincronizar en caso de error
+      await refetchDiagnosticoRevision()
     } finally {
       setDeletingRevisionId(null)
     }
