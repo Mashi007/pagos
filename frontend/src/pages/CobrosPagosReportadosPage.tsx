@@ -11,6 +11,7 @@
  * Listado de pagos reportados (módulo Cobros). Filtros, tabla, acciones Ver detalle / Aprobar / Rechazar.
  * Cola manual: filas que no cumplen validadores; «Incluir ya exportados» vuelve a mostrar las marcadas en corrección.
  * Por defecto filtra por fecha de creación del reporte (últimos 90 días) para aligerar el barrido en API; «Sin límite de fechas» recupera el historial completo.
+ * Cédula, institución y fechas editadas a mano se aplican al API con «Buscar» (no hay GET por cada tecla). Caché listado+KPIs en cliente 15 min (`cobrosService`); refresco en pestaña sin forzar bypass salvo Buscar/mutaciones. «Actualizar ahora» invalida caché y fuerza GET con los mismos filtros/página.
 
 
 
@@ -128,6 +129,7 @@ import {
   Mail,
   Eye,
   RotateCcw,
+  RefreshCw,
   X,
 } from 'lucide-react'
 
@@ -427,6 +429,26 @@ export default function CobrosPagosReportadosPage() {
   const dataRef = useRef<ListPagosReportadosResponse | null>(null)
   dataRef.current = data
 
+  /** Filtros vigentes para el API: se leen desde ref para que `fetchListado` sea estable y no dispare GET en cada tecla (cédula/institución/fechas hasta «Buscar» o atajo de fechas). */
+  const listadoParamsRef = useRef({
+    page,
+    estado,
+    fechaDesde,
+    fechaHasta,
+    cedula,
+    institucion,
+    incluirExportados,
+  })
+  listadoParamsRef.current = {
+    page,
+    estado,
+    fechaDesde,
+    fechaHasta,
+    cedula,
+    institucion,
+    incluirExportados,
+  }
+
   const [colWidths, setColWidths] = useState<number[]>(
     readCobrosReportadosColWidths
   )
@@ -503,24 +525,25 @@ export default function CobrosPagosReportadosPage() {
       silent?: boolean
       page?: number
     }) => {
+      const lp = listadoParamsRef.current
       const startedAt = performance.now()
       const requestSeq = ++loadSeqRef.current
       const initialLoad = dataRef.current === null
       const silent = Boolean(opts?.silent) && dataRef.current !== null
-      const pageToFetch = opts?.page != null ? opts.page : page
+      const pageToFetch = opts?.page != null ? opts.page : lp.page
       setLoading(initialLoad)
       // Sin overlay "Actualizando listado…" en refrescos silenciosos (p. ej. tras aprobar o intervalo automático).
       setRefreshing(!initialLoad && !silent)
 
       try {
         const filterParams = {
-          fecha_desde: fechaDesde || undefined,
+          fecha_desde: lp.fechaDesde || undefined,
 
-          fecha_hasta: fechaHasta || undefined,
+          fecha_hasta: lp.fechaHasta || undefined,
 
-          cedula: cedula.trim() || undefined,
+          cedula: lp.cedula.trim() || undefined,
 
-          institucion: institucion.trim() || undefined,
+          institucion: lp.institucion.trim() || undefined,
         }
 
         const res = await listPagosReportadosConKpis(
@@ -529,9 +552,9 @@ export default function CobrosPagosReportadosPage() {
 
             per_page: 20,
 
-            estado: estado || undefined,
+            estado: lp.estado || undefined,
 
-            incluir_exportados: incluirExportados,
+            incluir_exportados: lp.incluirExportados,
 
             ...filterParams,
           },
@@ -552,20 +575,21 @@ export default function CobrosPagosReportadosPage() {
         }
       }
     },
-    [
-      page,
-      estado,
-      fechaDesde,
-      fechaHasta,
-      cedula,
-      institucion,
-      incluirExportados,
-    ]
+    []
   )
 
+  const handleActualizarAhora = useCallback(() => {
+    invalidateCobrosListadoKpisCache()
+    void fetchListado({
+      bypassCache: true,
+      silent: false,
+    })
+  }, [fetchListado])
+
+  /** Carga al montar, al «Buscar», al cambiar página/estado/exportados y al mismo ritmo que el TTL de caché (no en cada tecla de cédula/fechas). */
   useEffect(() => {
     void fetchListado()
-  }, [fetchListado, searchNonce])
+  }, [fetchListado, searchNonce, page, estado, incluirExportados])
 
   useEffect(() => {
     setSelectedIds([])
@@ -582,6 +606,7 @@ export default function CobrosPagosReportadosPage() {
     soloDuplicadoDocumento,
   ])
 
+  /** Refresco en segundo plano: respeta caché cliente (`listPagosReportadosConKpis`); sin `bypassCache` salvo tras mutaciones o «Buscar». */
   useEffect(() => {
     const tick = () => {
       if (
@@ -590,7 +615,7 @@ export default function CobrosPagosReportadosPage() {
       ) {
         return
       }
-      void fetchListado({ bypassCache: true, silent: true })
+      void fetchListado({ silent: true })
     }
     const id = window.setInterval(tick, COBROS_LISTADO_KPIS_CACHE_TTL_MS)
     return () => window.clearInterval(id)
@@ -1394,6 +1419,8 @@ export default function CobrosPagosReportadosPage() {
                     )
                     setFechaHasta(cobrosFechaLocalYMD(new Date()))
                     setPage(1)
+                    invalidateCobrosListadoKpisCache()
+                    setSearchNonce(n => n + 1)
                   }}
                 >
                   Últimos {COBROS_REPORTADOS_FILTRO_FECHA_DIAS} días
@@ -1408,6 +1435,8 @@ export default function CobrosPagosReportadosPage() {
                     setFechaDesde('')
                     setFechaHasta('')
                     setPage(1)
+                    invalidateCobrosListadoKpisCache()
+                    setSearchNonce(n => n + 1)
                   }}
                 >
                   Sin límite de fechas
@@ -1419,7 +1448,9 @@ export default function CobrosPagosReportadosPage() {
                 <strong>fecha de creación del reporte</strong> (mismo criterio
                 que el API). Acota el volumen que revisa el servidor sin cambiar
                 validadores ni la cola manual. Use «Sin límite de fechas» solo
-                cuando necesite todo el historial.
+                cuando necesite todo el historial. Tras cambiar fechas, cédula o
+                institución a mano, pulse <strong>Buscar</strong> para
+                consultar el servidor (evita una petición por cada tecla).
               </p>
             </div>
 
@@ -1505,15 +1536,43 @@ export default function CobrosPagosReportadosPage() {
               </span>
             </label>
 
-            <Button
-              onClick={() => {
-                setPage(1)
-                invalidateCobrosListadoKpisCache()
-                setSearchNonce(prev => prev + 1)
-              }}
-            >
-              Buscar
-            </Button>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                onClick={() => {
+                  setPage(1)
+                  invalidateCobrosListadoKpisCache()
+                  setSearchNonce(prev => prev + 1)
+                }}
+              >
+                Buscar
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={loading || refreshing}
+                title="Ignora caché del navegador y vuelve a pedir listado y KPIs al servidor (mismos filtros y página)."
+                onClick={() => void handleActualizarAhora()}
+              >
+                {refreshing ? (
+                  <>
+                    <Loader2
+                      className="mr-2 h-4 w-4 shrink-0 animate-spin"
+                      aria-hidden
+                    />
+                    Actualizando…
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw
+                      className="mr-2 h-4 w-4 shrink-0 opacity-80"
+                      aria-hidden
+                    />
+                    Actualizar ahora
+                  </>
+                )}
+              </Button>
+            </div>
           </CardContent>
         </Card>
 
