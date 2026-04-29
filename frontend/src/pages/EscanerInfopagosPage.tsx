@@ -851,7 +851,6 @@ export default function EscanerInfopagosPage() {
         setReciboListo(null)
       }
       setBorradorId(null)
-      limpiarCedulaSesion()
       persistirCedulaSesion({
         cedulaRaw,
         nombreCliente: nombreCliente.trim(),
@@ -860,30 +859,24 @@ export default function EscanerInfopagosPage() {
       })
       toast.success(
         res.mensaje ||
-          'Pago registrado. Ingrese nueva cédula para escanear otro comprobante.'
+          'Pago registrado exitosamente.'
       )
-      setFase('cedula')
-      setCedulaRaw('')
-      setNombreCliente('')
-      setArchivo(null)
-      setFechaPago('')
-      setFechaDetectada('')
-      setInstitucion('')
-      setOtroInstitucion('')
-      setEscanerColision(null)
-      tokensSufijoUsadosRef.current = new Set()
-      setNumeroOperacion('')
-      setMontoStr('')
-      setMoneda('USD')
-      setValidacionCampos(null)
-      setValidacionReglas(null)
-      setCedulaPagadorImg('')
-      setReferencia('')
-      setReciboToken(null)
-      setPagoId(null)
-      setReciboListo(null)
-      setConsultandoRecibo(false)
-      setEnRevision(false)
+      setFase('exito')
+      setReferencia(res.referencia_interna || '')
+      setEnRevision(
+        String(res.estado_reportado ?? '')
+          .toLowerCase()
+          .replace(/\s+/g, '_') === 'en_revision'
+      )
+      if (res.recibo_descarga_token) {
+        setReciboToken(res.recibo_descarga_token)
+        if (res.pago_id != null) setPagoId(res.pago_id)
+        setReciboListo(
+          typeof res.recibo_listo === 'boolean'
+            ? Boolean(res.recibo_listo)
+            : false
+        )
+      }
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : 'Error al guardar.')
     } finally {
@@ -948,6 +941,7 @@ export default function EscanerInfopagosPage() {
     setReciboListo(null)
     setConsultandoRecibo(false)
     setEnRevision(false)
+    setArchivo(null)
   }
 
   const handleCambiarCedula = () => {
