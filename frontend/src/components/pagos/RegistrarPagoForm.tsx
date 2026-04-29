@@ -894,12 +894,27 @@ export function RegistrarPagoForm({
           // Ahora aplicar a cuotas
           const resultAplicar = await pagoService.aplicarPagoACuotas(pagoId!)
 
+          // Mostrar detalle del resultado (mejorado)
+          if (resultAplicar?.success) {
+            const detalleAplicacion = `${resultAplicar.cuotas_completadas} cuota(s) completada(s)${
+              resultAplicar.cuotas_parciales > 0 ? `, ${resultAplicar.cuotas_parciales} parcial(es)` : ''
+            }`
+            toast.success(
+              `Pago aplicado a cuotas: ${detalleAplicacion}`,
+              { duration: 4000 }
+            )
+          }
+
           // Log del resultado (info, no error)
           if (import.meta.env.DEV) {
             console.log('Aplicación a cuotas:', resultAplicar)
           }
         } catch (applyErr) {
           // Si falla aplicar cuotas, igual se consideró éxito porque se guardó y concilió
+          toast.warning(
+            'Pago guardado pero no se pudo aplicar automáticamente a cuotas. Use "Mover a Pagos Normales" en Revisión.',
+            { duration: 5000 }
+          )
           if (import.meta.env.DEV) {
             console.warn(
               'Error aplicando a cuotas (pero pago guardado):',

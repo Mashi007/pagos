@@ -255,6 +255,8 @@ export function PagosList() {
   const [bulkRevisionObservacion, setBulkRevisionObservacion] = useState('')
   const [isBulkSavingRevision, setIsBulkSavingRevision] = useState(false)
   const [isBulkDeletingRevision, setIsBulkDeletingRevision] = useState(false)
+  const [isBulkMovingRevision, setIsBulkMovingRevision] = useState(false)
+  const [bulkMovingProgress, setBulkMovingProgress] = useState({ movidos: 0, total: 0 })
   const [deletingBorradorId, setDeletingBorradorId] = useState<string | null>(
     null
   )
@@ -1292,6 +1294,31 @@ export function PagosList() {
       toast.error(getErrorMessage(e))
     } finally {
       setIsBulkDeletingRevision(false)
+    }
+  }
+  const handleMoverRevisionMasivo = async () => {
+    const ids = [...selectedRevisionIds]
+    if (ids.length === 0) {
+      toast.info('Seleccione al menos un pago.')
+      return
+    }
+    setIsBulkMovingRevision(true)
+    setBulkMovingProgress({ movidos: 0, total: ids.length })
+    try {
+      const result = await pagoConErrorService.moverAPagosNormales(ids)
+      toast.success(
+        `✅ ${result.movidos} pago(s) movido(s) a tabla principal.\n💰 ${result.cuotas_aplicadas} cuota(s) aplicada(s).`,
+        { duration: 5000 }
+      )
+      setSelectedRevisionIds(new Set())
+      setBulkMovingProgress({ movidos: 0, total: 0 })
+      await invalidatePagosPrestamosRevisionYCuotas(queryClient)
+      await refetchDiagnosticoRevision()
+    } catch (e) {
+      toast.error(getErrorMessage(e))
+    } finally {
+      setIsBulkMovingRevision(false)
+      setBulkMovingProgress({ movidos: 0, total: 0 })
     }
   }
   const abrirEscanerLoteConIds = useCallback((idsRaw: number[]) => {
@@ -2524,7 +2551,9 @@ export function PagosList() {
           <TabsList className="mb-4">
             <TabsTrigger value="todos">Todos los Pagos</TabsTrigger>
             <TabsTrigger value="resumen">Detalle por Cliente</TabsTrigger>
-            <TabsTrigger value="revision">Revision</TabsTrigger>
+            <TabsTrigger value="revision" title="Edita, elimina o escanea pagos con errores">
+              Revisión Manual
+            </TabsTrigger>
           </TabsList>
           {/* Tab: Detalle por Cliente (resumen + ver pagos del cliente, más reciente a más antiguo) */}
           <TabsContent value="resumen" forceMount>
@@ -2533,26 +2562,26 @@ export function PagosList() {
           <TabsContent value="revision" forceMount>
             <Card>
               <CardHeader>
-                <CardTitle>Revision</CardTitle>
+                <CardTitle>Revisión Manual de Pagos</CardTitle>
                 <p className="text-sm text-muted-foreground">
-                  Pagos no validados automáticamente. Aquí puede editar, guardar
-                  observaciones del motivo de incumplimiento o eliminar
-                  registros.
+                  Mesa de trabajo para revisar y procesar pagos con errores de validación.
+                  Edita observaciones, elimina registros o mueve pagos corregidos a la tabla principal.
                 </p>
-                <p className="text-xs font-medium text-amber-700">
-                  Solo se listan pagos que no cumplen validadores.
+                <p className="text-xs font-medium text-blue-700 bg-blue-50 p-2 rounded mt-2">
+                  ℹ️ Flujo: Edita observaciones → Mover a Pagos Normales → Se aplican automáticamente a cuotas
                 </p>
               </CardHeader>
               <CardContent>
-                <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50/50 p-3">
-                  <p className="text-sm font-medium text-amber-950">
-                    Centro manual de revisión de pagos no validados
+                <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50/50 p-3">
+                  <p className="text-sm font-medium text-blue-950">
+                    ✅ Acciones Disponibles
                   </p>
-                  <p className="mt-1 text-xs text-amber-900/90">
-                    Esta pestaña centraliza los pagos en revisión y también los
-                    borradores del escáner que no pasaron validadores. Edite y
-                    guarde desde aquí para pasarlos al flujo normal.
-                  </p>
+                  <ul className="mt-2 text-xs text-blue-900/90 space-y-1 list-disc list-inside">
+                    <li><strong>Guardar Observación:</strong> Actualiza notas sin mover el pago</li>
+                    <li><strong>Mover a Pagos Normales:</strong> Traslada a tabla principal y aplica automáticamente a cuotas</li>
+                    <li><strong>Eliminar:</strong> Borra el pago de revisión (no recuperable)</li>
+                    <li><strong>Escanear:</strong> Abre interfaz de escaneo para este lote</li>
+                  </ul>
                 </div>
                 <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end">
                   <div className="flex-1">
@@ -2674,6 +2703,23 @@ export function PagosList() {
                         {isBulkSavingRevision
                           ? 'Guardando...'
                           : 'Guardar seleccionados'}
+                      </Button>
+                      <Button
+                        variant="default"
+                        onClick={() => void handleMoverRevisionMasivo()}
+                        disabled={
+                          selectedRevisionIds.size === 0 || isBulkMovingRevision
+                        }
+                        className="bg-green-600 hover:bg-green-700"
+                      >
+                        {isBulkMovingRevision ? (
+                          <>
+                            <span className="inline-block animate-spin mr-2">⏳</span>
+                            Moviendo {bulkMovingProgress.movidos}/{bulkMovingProgress.total}...
+                          </>
+                        ) : (
+                          '✓ Mover a Pagos Normales'
+                        )}
                       </Button>
                       <Button
                         variant="destructive"
