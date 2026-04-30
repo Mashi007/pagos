@@ -186,6 +186,23 @@ def get_whatsapp_test_completo(db: Session = Depends(get_db)):
     _load_whatsapp_from_db(db)
     if not _whatsapp_stub:
         _whatsapp_stub.update(_default_config())
+    if not settings.WHATSAPP_SEND_ENABLED:
+        tests = {
+            "conexion": {
+                "nombre": "Conexión Meta API",
+                "exito": False,
+                "mensaje": (
+                    "Integración Meta/WhatsApp desactivada en el servidor (WHATSAPP_SEND_ENABLED=false). "
+                    "No se realizan llamadas a graph.facebook.com. Para habilitar: WHATSAPP_SEND_ENABLED=true y reiniciar."
+                ),
+                "detalles": None,
+                "error": "whatsapp_send_disabled",
+            }
+        }
+        return {
+            "tests": tests,
+            "resumen": {"total": 1, "exitosos": 0, "fallidos": 1, "advertencias": 1},
+        }
     cfg = _whatsapp_stub
     api_url = (cfg.get("api_url") or "https://graph.facebook.com/v18.0").rstrip("/")
     token = (cfg.get("access_token") or "").strip()

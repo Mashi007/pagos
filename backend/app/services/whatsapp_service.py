@@ -194,8 +194,8 @@ async def _enviar_mensajes_con_delay(
         if not (texto or "").strip():
             continue
         try:
-            await _send_whatsapp_async(to_phone, texto.strip())
-            if db:
+            sent = await _send_whatsapp_async(to_phone, texto.strip())
+            if db and sent:
                 guardar_mensaje_whatsapp(db, to_phone, "OUTBOUND", texto.strip(), "text")
         except Exception as e:
             logger.warning("Error enviando mensaje %d/%d (bienvenida): %s", i + 1, len(mensajes), e)
@@ -529,6 +529,8 @@ async def _send_whatsapp_async(to_phone: str, body: str) -> bool:
     digits = re.sub(r"\D", "", (to_phone or "").strip())
     if not digits or len(digits) < 10:
         return False
+    if not settings.WHATSAPP_SEND_ENABLED:
+        return False
     whatsapp_sync_from_db()
     cfg = get_whatsapp_config()
     token = (cfg.get("access_token") or "").strip()
@@ -592,16 +594,16 @@ class WhatsAppService:
                 result = await self._process_text_cobranza(message.text.body, message.from_, db)
                 message_data.update(result)
                 if result.get("response_text"):
-                    await _send_whatsapp_async(message.from_, result["response_text"])
-                    guardar_mensaje_whatsapp(db, message.from_, "OUTBOUND", result["response_text"], "text")
+                    if await _send_whatsapp_async(message.from_, result["response_text"]):
+                        guardar_mensaje_whatsapp(db, message.from_, "OUTBOUND", result["response_text"], "text")
             elif message.type == "image" and message.image and db:
                 body_imagen = (message.image.caption or "").strip() if message.image.caption else "[Imagen]"
                 guardar_mensaje_whatsapp(db, message.from_, "INBOUND", body_imagen, "image")
                 result = await self._process_image_message(message, db)
                 message_data.update(result)
                 if result.get("response_text"):
-                    await _send_whatsapp_async(message.from_, result["response_text"])
-                    guardar_mensaje_whatsapp(db, message.from_, "OUTBOUND", result["response_text"], "text")
+                    if await _send_whatsapp_async(message.from_, result["response_text"]):
+                        guardar_mensaje_whatsapp(db, message.from_, "OUTBOUND", result["response_text"], "text")
             elif message.type == "document" and message.document and db:
                 body_doc = (message.document.caption or "").strip() or (message.document.filename or "[Documento]")
                 guardar_mensaje_whatsapp(db, message.from_, "INBOUND", body_doc, "image")
@@ -612,21 +614,20 @@ class WhatsAppService:
                     result = await self._process_image_message(message, db, media_id=message.document.id)
                     message_data.update(result)
                     if result.get("response_text"):
-                        await _send_whatsapp_async(message.from_, result["response_text"])
-                        guardar_mensaje_whatsapp(db, message.from_, "OUTBOUND", result["response_text"], "text")
+                        if await _send_whatsapp_async(message.from_, result["response_text"]):
+                            guardar_mensaje_whatsapp(db, message.from_, "OUTBOUND", result["response_text"], "text")
                 else:
                     msg = "Por favor envía una foto (imagen) de tu papeleta de depósito, no un documento (PDF u otro archivo)."
                     message_data["status"] = "document_no_imagen"
                     message_data["response_text"] = msg
-                    await _send_whatsapp_async(message.from_, msg)
-                    guardar_mensaje_whatsapp(db, message.from_, "OUTBOUND", msg, "text")
+                    if await _send_whatsapp_async(message.from_, msg):
+                        guardar_mensaje_whatsapp(db, message.from_, "OUTBOUND", msg, "text")
             else:
                 message_data["status"] = "unsupported_type"
                 message_data["note"] = f"Tipo {message.type} no soportado"
                 msg = "Solo puedo procesar texto e imágenes. Para reportar tu pago envía una foto clara de tu papeleta de depósito."
                 message_data["response_text"] = msg
-                await _send_whatsapp_async(message.from_, msg)
-                if db:
+                if db and await _send_whatsapp_async(message.from_, msg):
                     guardar_mensaje_whatsapp(db, message.from_, "OUTBOUND", msg, "text")
             if contact:
                 message_data["contact_wa_id"] = contact.wa_id
@@ -951,6 +952,17 @@ class WhatsAppService:
             LOG_TAG_INFORME, phone_mask, media_id, conv.cedula,
         )
         logger.info("%s Inicio procesamiento imagen | telefono=%s media_id=%s cedula=%s intento_foto=%s", LOG_TAG_INFORME, phone_mask, media_id, conv.cedula, conv.intento_foto or 0)
+        if not settings.WHATSAPP_SEND_ENABLED:
+            logger.info(
+                "%s Meta API deshabilitada (WHATSAPP_SEND_ENABLED=false); no se descarga media | telefono=%s",
+                LOG_TAG_INFORME,
+                phone_mask,
+            )
+            return {
+                "status": "whatsapp_disabled",
+                "note": "WhatsApp Cloud API deshabilitada en el servidor",
+                "response_text": MENSAJE_IMAGEN_NO_PROCESADA,
+            }
         whatsapp_sync_from_db()
         cfg = get_whatsapp_config()
         token = (cfg.get("access_token") or "").strip()

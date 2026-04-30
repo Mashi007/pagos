@@ -61,17 +61,18 @@ Cada worker de Gunicorn tiene su propio pool. Si muchas peticiones lentas en par
 
 ## WhatsApp / Meta
 
-| Variable | Descripción |
-|----------|-------------|
-| `WHATSAPP_VERIFY_TOKEN` | Token verificación webhook |
-| `WHATSAPP_ACCESS_TOKEN` | Access Token Meta |
-| `WHATSAPP_PHONE_NUMBER_ID` | Phone Number ID |
-| `WHATSAPP_BUSINESS_ACCOUNT_ID` | Business Account ID |
-| `WHATSAPP_APP_SECRET` | App Secret (verificar firma webhooks) |
-| `WHATSAPP_GRAPH_URL` | URL API (default graph.facebook.com/v18.0) |
-| `ALERT_WEBHOOK_URL` | URL alertas (ej. Slack) cuando falla webhook |
-| `SUPPORT_PHONE` | Teléfono soporte (estado ERROR_MAX_INTENTOS) |
-| `MESSAGE_DELAY_SECONDS` | Segundos entre mensajes del bot |
+| Variable | Default | Descripción |
+|----------|---------|-------------|
+| `WHATSAPP_SEND_ENABLED` | **false** | Si **false** (defecto), no se llama a la API de Meta (envío masivo, prueba, bot saliente, descarga de media en flujo cobranza, test «conexión»). Correo y resto del sistema sin cambios. Poner **true** solo si usan Cloud API con credenciales válidas. |
+| `WHATSAPP_VERIFY_TOKEN` | — | Token verificación webhook |
+| `WHATSAPP_ACCESS_TOKEN` | — | Access Token Meta |
+| `WHATSAPP_PHONE_NUMBER_ID` | — | Phone Number ID |
+| `WHATSAPP_BUSINESS_ACCOUNT_ID` | — | Business Account ID |
+| `WHATSAPP_APP_SECRET` | — | App Secret (verificar firma webhooks) |
+| `WHATSAPP_GRAPH_URL` | graph…v18.0 | URL base API Meta |
+| `ALERT_WEBHOOK_URL` | — | URL alertas (ej. Slack) cuando falla webhook |
+| `SUPPORT_PHONE` | 0424-… | Teléfono soporte (estado ERROR_MAX_INTENTOS) |
+| `MESSAGE_DELAY_SECONDS` | 2 | Segundos entre mensajes del bot |
 
 ## Email / SMTP
 

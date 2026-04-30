@@ -84,11 +84,23 @@ function validateEnv(): EnvConfig {
         // y unificar cookies/headers. Solo usamos absoluta si coincide el origen.
         API_URL = crossOriginInBrowser ? '' : absoluteApi
         if (crossOriginInBrowser) {
-          // info (no warn): es el diseño esperado en prod; evita confundirlo con fallo. La traza a pagos-bootstrap.js es el parche de consola.
-          console.info(
-            `[env] VITE_API_URL es otro origen (${parsed.origin}); el navegador usará /api (same-origin) y el proxy Node debe tener API_BASE_URL o BACKEND_URL hacia el API. ` +
-              'Si ya están bien y no hay 502, puede ignorar este mensaje.'
-          )
+          // Diseño esperado en prod (same-origin /api). Un log por sesión para no saturar la consola.
+          const crossOriginLogKey = 'rapicredit:env:vite_api_cross_origin_logged'
+          let alreadyLogged = false
+          try {
+            if (typeof sessionStorage !== 'undefined') {
+              alreadyLogged = sessionStorage.getItem(crossOriginLogKey) === '1'
+              if (!alreadyLogged) sessionStorage.setItem(crossOriginLogKey, '1')
+            }
+          } catch {
+            alreadyLogged = false
+          }
+          if (!alreadyLogged) {
+            console.info(
+              `[env] VITE_API_URL apunta a otro origen (${parsed.origin}); el navegador usa /api (mismo sitio) y el servicio Node debe proxyear con API_BASE_URL o BACKEND_URL hacia ese API. ` +
+                'Un 502 al abrir suele ser el dyno del API arrancando en Render: espere unos segundos y reintente.'
+            )
+          }
         }
       } catch {
         API_URL = ''

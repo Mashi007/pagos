@@ -214,11 +214,14 @@ class Settings(BaseSettings):
     # ============================================
     # WhatsApp / Meta API
     # ============================================
-    # Si False: no se llama a Graph API para enviar mensajes (notificaciones/comunicaciones).
-    # Poner WHATSAPP_SEND_ENABLED=false en el entorno del servicio y reiniciar. Email y demás sin cambios.
+    # False por defecto: sin llamadas a Meta (notificaciones WhatsApp, prueba, bot saliente, test conexión).
+    # Poner WHATSAPP_SEND_ENABLED=true solo si usan Cloud API con token e ID válidos. Email y demás sin cambios.
     WHATSAPP_SEND_ENABLED: bool = Field(
-        default=True,
-        description="False = desactiva solo el envío saliente por Cloud API hasta el próximo arranque con True.",
+        default=False,
+        description=(
+            "False (defecto): no se llama a graph.facebook.com (envío, descarga de media en flujo cobranza, test Meta). "
+            "True: habilita integración; requiere token y phone_number_id en BD o env."
+        ),
     )
     WHATSAPP_VERIFY_TOKEN: Optional[str] = Field(
         None,

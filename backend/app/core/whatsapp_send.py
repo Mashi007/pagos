@@ -41,10 +41,10 @@ def send_whatsapp_text(to_phone: str, body: str) -> tuple[bool, str | None]:
         if not _whatsapp_send_disabled_logged:
             _whatsapp_send_disabled_logged = True
             logger.info(
-                "WhatsApp envío desactivado (WHATSAPP_SEND_ENABLED=False). Sin llamadas a Meta hasta reiniciar "
-                "con la variable en true o sin definir."
+                "WhatsApp/Meta desactivado (WHATSAPP_SEND_ENABLED=false): sin llamadas a Graph API. "
+                "Para reactivar: WHATSAPP_SEND_ENABLED=true y reiniciar el proceso."
             )
-        return False, "WhatsApp desactivado en el servidor (WHATSAPP_SEND_ENABLED=False)"
+        return False, "WhatsApp desactivado en el servidor (WHATSAPP_SEND_ENABLED=false)"
     whatsapp_sync_from_db()
     cfg = get_whatsapp_config()
     token = (cfg.get("access_token") or "").strip()

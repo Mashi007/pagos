@@ -1,12 +1,13 @@
 /**
- * Bootstrap temprano: suprime avisos ruidosos de CSS del navegador, recuperación de chunks tras deploy,
- * y marca styles-loaded en #root. Archivo estático para permitir script-src estricto (sin inline).
+ * Bootstrap temprano: suprime avisos ruidosos de CSS del navegador, recuperaci?n de chunks tras deploy,
+ * y marca styles-loaded en #root. Archivo est?tico para permitir script-src estricto (sin inline).
  */
 ;(function () {
   'use strict'
 
   var originalWarn = console.warn
   var originalError = console.error
+  var originalInfo = console.info
 
   function getMessage(args) {
     var arr = Array.prototype.slice.call(args)
@@ -43,10 +44,10 @@
       'reglas ignoradas',
       'debido a un mal selector',
       'mal selector',
-      'selector inválido',
+      'selector inv?lido',
       'regla ignorada',
       'propiedad desconocida',
-      'declaración rechazada',
+      'declaraci?n rechazada',
       'ignored due to bad selector',
       'ignored debido a un mal selector',
       'ignored due to malformed selector',
@@ -65,7 +66,7 @@
       'text-size-adjust',
       '-moz-osx-font-smoothing',
       'css parsing error',
-      'error de análisis css',
+      'error de an?lisis css',
       'after\\:left-\\[',
       'after\\:top-\\[',
       'placeholder\\:text-',
@@ -127,12 +128,47 @@
     return false
   }
 
+  /** Axios en 502: el interceptor ya reintenta y la UI muestra toast; el objeto Error en consola duplica ruido. */
+  function isGenericAxios502Message(args) {
+    var msg = getMessage(args)
+    if (!msg || typeof msg !== 'string') return false
+    var m = msg.toLowerCase()
+    if (m.indexOf('502') === -1) return false
+    if (m.indexOf('request failed with status code 502') !== -1) return true
+    if (m.indexOf('status code 502') !== -1 && m.indexOf('axios') !== -1) return true
+    return false
+  }
+
+  /** No silenciar logs marcados del producto (env, proxy, api). */
+  function isReservedInfoPrefix(msg) {
+    if (!msg || typeof msg !== 'string') return false
+    var t = msg.trim()
+    return /^\[(env|proxy|apiclient|bootstrap|api)\]/i.test(t)
+  }
+
+  console.info = function () {
+    var msg = getMessage(arguments)
+    if (isReservedInfoPrefix(msg)) {
+      return originalInfo.apply(console, arguments)
+    }
+    if (shouldSuppress(msg)) return
+    originalInfo.apply(console, arguments)
+  }
+
   console.warn = function () {
     if (shouldSuppress(getMessage(arguments))) return
     originalWarn.apply(console, arguments)
   }
   console.error = function () {
-    if (shouldSuppress(getMessage(arguments))) return
+    var msg = getMessage(arguments)
+    if (shouldSuppress(msg)) return
+    if (isGenericAxios502Message(arguments)) {
+      originalWarn.call(
+        console,
+        '[api] 502 Bad Gateway: suele ser proxy o API en Render arrancando; la app reintenta y puede mostrar un aviso. Revise API_BASE_URL/BACKEND_URL en el servicio Node si persiste.'
+      )
+      return
+    }
     originalError.apply(console, arguments)
   }
 
@@ -140,7 +176,7 @@
   function reloadPage() {
     if (reloadAttempted) return
     reloadAttempted = true
-    originalWarn.call(console, 'Módulo no encontrado (cache desactualizado). Recargando...')
+    originalWarn.call(console, 'M?dulo no encontrado (cache desactualizado). Recargando...')
     var base = window.location.href.split('?')[0].split('#')[0]
     window.location.replace(base + '?nocache=' + Date.now())
   }
@@ -156,7 +192,7 @@
     var m = msg.toLowerCase()
     var mimeHtml =
       (m.indexOf('text/html') !== -1 || m.indexOf('tipo mime') !== -1 || m.indexOf('mime no permitido') !== -1) &&
-      (m.indexOf('módulo') !== -1 ||
+      (m.indexOf('m?dulo') !== -1 ||
         m.indexOf('modulo') !== -1 ||
         m.indexOf('module') !== -1 ||
         m.indexOf('.js') !== -1 ||
@@ -165,8 +201,8 @@
       m.indexOf('failed to fetch dynamically imported module') !== -1 ||
       m.indexOf('error loading dynamically imported module') !== -1 ||
       m.indexOf('failed to load module') !== -1 ||
-      m.indexOf('ha fallado la carga del módulo') !== -1 ||
-      m.indexOf('se bloqueó la carga de un módulo') !== -1 ||
+      m.indexOf('ha fallado la carga del m?dulo') !== -1 ||
+      m.indexOf('se bloque? la carga de un m?dulo') !== -1 ||
       m.indexOf('failed to load module script') !== -1 ||
       mimeHtml ||
       (isAssetChunkUrl(sourceUrl) &&
@@ -177,7 +213,7 @@
   function isStaleBuildReactInvariant(msg, sourceUrl) {
     if (!msg || typeof msg !== 'string') return false
     var m = msg.toLowerCase()
-    // En producción, React minifica errores con códigos numéricos.
+    // En producci?n, React minifica errores con c?digos num?ricos.
     // Cuando hay mezcla de bundles viejos/nuevos tras deploy, puede dispararse al bootstrap.
     var isKnownInvariant =
       m.indexOf('minified react error #306') !== -1 ||
@@ -205,7 +241,7 @@
     if (!isCrossApiFallbackUrl(targetUrl)) return
     originalWarn.call(
       console,
-      '[bootstrap] Detectada API cross-origin (pagos-f2qf) desde rapicredit. Recargando para recuperar configuración same-origin.'
+      '[bootstrap] Detectada API cross-origin (pagos-f2qf) desde rapicredit. Recargando para recuperar configuraci?n same-origin.'
     )
     reloadPage()
   }
@@ -272,7 +308,7 @@
         msg.indexOf('.js') !== -1
       var mimeBlocked =
         (msg.indexOf('text/html') !== -1 || msg.indexOf('tipo mime') !== -1 || msg.indexOf('mime no permitido') !== -1) &&
-        (msg.indexOf('módulo') !== -1 ||
+        (msg.indexOf('m?dulo') !== -1 ||
           msg.indexOf('modulo') !== -1 ||
           msg.indexOf('module') !== -1 ||
           msg.indexOf('/assets/') !== -1 ||
@@ -283,7 +319,7 @@
         (msg.indexOf('failed to fetch') !== -1 && msg.indexOf('module') !== -1) ||
         (msg.indexOf('error loading') !== -1 && msg.indexOf('module') !== -1) ||
         msg.indexOf('failed to load module') !== -1 ||
-        msg.indexOf('se bloqueó la carga de un módulo') !== -1 ||
+        msg.indexOf('se bloque? la carga de un m?dulo') !== -1 ||
         (msg.indexOf('/assets/') !== -1 && msg.indexOf('.js') !== -1) ||
         (msg.indexOf('/pagos/assets/') !== -1 && msg.indexOf('.js') !== -1) ||
         mimeBlocked ||
@@ -330,7 +366,7 @@
   }, 2000)
 
   // Fallback anti-pantalla-infinita: si el shell sigue igual tras el timeout,
-  // mostramos UI de recuperación en vez de dejar "Cargando..." permanente.
+  // mostramos UI de recuperaci?n en vez de dejar "Cargando..." permanente.
   setTimeout(function () {
     var root = document.getElementById('root')
     if (!root) return
@@ -341,13 +377,13 @@
 
     originalError.call(
       console,
-      '[bootstrap] Arranque excedió el tiempo esperado. Mostrando fallback de recuperación.'
+      '[bootstrap] Arranque excedi? el tiempo esperado. Mostrando fallback de recuperaci?n.'
     )
 
     root.innerHTML =
       '<div class="app-boot-fallback" role="alert" aria-live="assertive">' +
-      '<h2>No se pudo cargar el módulo</h2>' +
-      '<p>La página tardó demasiado en iniciar. Puede ser caché desactualizado o conexión inestable.</p>' +
+      '<h2>No se pudo cargar el m?dulo</h2>' +
+      '<p>La p?gina tard? demasiado en iniciar. Puede ser cach? desactualizado o conexi?n inestable.</p>' +
       '<div class="app-boot-fallback-actions">' +
       '<button type="button" class="app-boot-fallback-primary" id="app-boot-retry">Reintentar</button>' +
       '<button type="button" class="app-boot-fallback-secondary" id="app-boot-reload">Recargar</button>' +
