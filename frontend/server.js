@@ -779,6 +779,24 @@ app.get(/^\/logos\//, (req, res) => {
   res.redirect(302, FRONTEND_BASE + '/logos' + subpath + (req.originalUrl?.includes('?') ? '?' + req.originalUrl.split('?')[1] : ''));
 });
 
+// Acceso personal para operadores: sin base -> redirigir a /pagos/acceso-personal
+app.get('/acceso-personal', (req, res) => {
+  res.redirect(302, FRONTEND_BASE + '/acceso-personal' + qs(req));
+});
+app.get('/acceso-personal/*', (req, res) => {
+  const subpath = req.path.slice('/acceso-personal'.length);
+  res.redirect(302, FRONTEND_BASE + '/acceso-personal' + subpath + qs(req));
+});
+
+// Login para operadores: sin base -> redirigir a /pagos/login
+app.get('/login', (req, res) => {
+  res.redirect(302, FRONTEND_BASE + '/login' + qs(req));
+});
+app.get('/login/*', (req, res) => {
+  const subpath = req.path.slice('/login'.length);
+  res.redirect(302, FRONTEND_BASE + '/login' + subpath + qs(req));
+});
+
 // Activar frontend en https://rapicredit.onrender.com/reportes -> redirigir a /pagos/reportes
 const qs = (req) => (req.originalUrl && req.originalUrl.includes('?') ? req.originalUrl.slice(req.originalUrl.indexOf('?')) : '');
 app.get('/reportes', (req, res) => {
