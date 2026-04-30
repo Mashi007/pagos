@@ -1570,14 +1570,11 @@ export default function EscanerInfopagosPage() {
               </p>
             ) : null}
             <div className="space-y-2">
-              <Button type="button" onClick={reiniciar}>
+              <Button type="button" onClick={handleCambiarCedula}>
                 Nuevo escaneo
               </Button>
               <p className="text-xs text-emerald-900/90">
-                Se conservan la cédula validada, la tasa y el archivo del
-                comprobante en esta pestaña para otro envío o corrección; use
-                &quot;Cambiar cédula&quot; en el paso del comprobante si
-                corresponde otro deudor.
+                Vuelve siempre a la página de inicio para otro cliente.
               </p>
             </div>
           </CardContent>
