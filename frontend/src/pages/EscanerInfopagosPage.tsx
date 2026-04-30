@@ -66,7 +66,7 @@ function readPersistedCedulaFull(): {
     const fuenteTasa = normalizarFuenteTasaCambio(
       sessionStorage.getItem(SK_ESCANER_CEDULA.fuente)
     )
-    const faseInicial: Fase = cedulaRaw.trim() && validada ? 'imagen' : 'cedula'
+    const faseInicial: Fase = 'cedula'
     return { cedulaRaw, nombreCliente, fuenteTasa, faseInicial }
   } catch {
     return {
