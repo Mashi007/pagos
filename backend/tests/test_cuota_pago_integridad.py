@@ -103,7 +103,7 @@ def test_validar_suma_supera_monto_pago_raises(db: Session):
 
 
 def test_aplicar_pago_cuotas_segunda_llamada_idempotente(db: Session):
-    from app.api.v1.endpoints.pagos import _aplicar_pago_a_cuotas_interno
+    from app.services.pagos_cascada_aplicacion import _aplicar_pago_a_cuotas_interno
 
     hoy = date.today()
     cedula = f"VIDP{datetime.now().strftime('%H%M%S')}"
@@ -181,7 +181,7 @@ def test_aplicar_pago_cuotas_segunda_llamada_idempotente(db: Session):
 
 def test_aplicar_pagos_pendientes_incluye_pagado_sin_conciliar(db: Session):
     """Reaplicacion: estado PAGADO sin conciliado debe articularse (control 15 / migraciones)."""
-    from app.api.v1.endpoints.pagos import aplicar_pagos_pendientes_prestamo
+    from app.services.pagos_aplicacion_prestamo import aplicar_pagos_pendientes_prestamo
 
     hoy = date.today()
     cedula = f"VPC{datetime.now().strftime('%H%M%S')}"
@@ -253,7 +253,7 @@ def test_aplicar_pagos_pendientes_incluye_pagado_sin_conciliar(db: Session):
 
 
 def test_mensaje_sin_aplicacion_cascada_no_elegibles():
-    from app.api.v1.endpoints.pagos import _mensaje_sin_aplicacion_cascada
+    from app.services.pagos_cascada_mensajes import _mensaje_sin_aplicacion_cascada
 
     msg = _mensaje_sin_aplicacion_cascada(
         {
@@ -271,7 +271,7 @@ def test_mensaje_sin_aplicacion_cascada_no_elegibles():
 
 def test_diagnostico_cascada_sin_cupo_cuotas_llenas(db: Session):
     """Pago elegible sin cuota_pagos pero todas las cuotas ya cubiertas: sin abono, contador 0."""
-    from app.api.v1.endpoints.pagos import aplicar_pagos_pendientes_prestamo_con_diagnostico
+    from app.services.pagos_aplicacion_prestamo import aplicar_pagos_pendientes_prestamo_con_diagnostico
 
     hoy = date.today()
     cedula = f"VDI{datetime.now().strftime('%H%M%S')}"

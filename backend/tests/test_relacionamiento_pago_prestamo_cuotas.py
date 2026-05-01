@@ -33,8 +33,9 @@ from app.models.cuota_pago import CuotaPago
 
 
 def _aplicar_pago_a_cuotas_interno(pago: Pago, db: Session):
-    """Reutiliza la lógica del endpoint para no duplicar código."""
-    from app.api.v1.endpoints.pagos import _aplicar_pago_a_cuotas_interno as aplicar
+    """Reutiliza la misma lógica que POST aplicar-cuotas (servicio de cascada)."""
+    from app.services.pagos_cascada_aplicacion import _aplicar_pago_a_cuotas_interno as aplicar
+
     return aplicar(pago, db)
 
 

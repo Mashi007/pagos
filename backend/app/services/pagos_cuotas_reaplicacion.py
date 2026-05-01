@@ -267,10 +267,8 @@ def eliminar_todos_pagos_prestamo(db: Session, prestamo_id: int) -> dict[str, An
 
 
 def reset_y_reaplicar_cascada_prestamo(db: Session, prestamo_id: int) -> dict[str, Any]:
-    from app.api.v1.endpoints.pagos import (
-        _marcar_prestamo_liquidado_si_corresponde,
-        aplicar_pagos_pendientes_prestamo,
-    )
+    from app.services.pagos_aplicacion_prestamo import aplicar_pagos_pendientes_prestamo
+    from app.services.pagos_cascada_aplicacion import _marcar_prestamo_liquidado_si_corresponde
 
     prestamo = db.get(Prestamo, prestamo_id)
     if not prestamo:
