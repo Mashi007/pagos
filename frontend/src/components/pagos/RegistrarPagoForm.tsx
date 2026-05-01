@@ -549,8 +549,8 @@ export function RegistrarPagoForm({
       let nextCedula = formData.cedula_cliente
       const cedulaExtraida = (s.cedula_pagador_en_comprobante || '').trim()
       if (cedulaExtraida) {
-        // La API retorna solo dígitos; agregar prefijo por defecto (V)
-        nextCedula = `V${cedulaExtraida}`
+        // Gemini retorna solo dígitos; el validador busca con prefijos V/E/J/G
+        nextCedula = cedulaExtraida
       }
 
       setFormData(prev => ({
@@ -576,7 +576,7 @@ export function RegistrarPagoForm({
 
       if (cedulaExtraida) {
         toast.success(
-          `Campos actualizados desde el comprobante. Cédula detectada: ${nextCedula}`
+          `Campos actualizados desde el comprobante. Cédula detectada: ${cedulaExtraida}`
         )
       } else {
         toast.success('Campos actualizados desde el comprobante.')
