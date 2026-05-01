@@ -10,16 +10,18 @@ Endpoints de pagos. Datos reales desde BD.
 
 Nº documento / referencia de pago:
 
-- No puede repetirse el mismo valor almacenado en `pagos.numero_documento` (clave canónica compuesta).
+- Regla de cartera: **no puede repetirse** el valor almacenado en `pagos.numero_documento` (único en `pagos` y
+  `pagos_con_errores`, salvo edición del mismo `pago_id`).
 
-- El mismo comprobante del banco puede repetirse si se envía un **codigo_documento** distinto: en BD se guarda
-  comprobante + sufijo interno + código (hasta 100 caracteres en total).
+- **Única forma permitida** de reutilizar el mismo texto de comprobante del banco: desambiguar con **código**
+  (`codigo_documento`). En BD se compone `base + §CD: + código` (`compose_numero_documento_almacenado`,
+  máx. 100 caracteres). En revisión manual en préstamos, el token **A#### / P####** lo asigna **Visto** (sufijo
+  operativo; mismo criterio que carga masiva).
 
-- Se aceptan TODOS los formatos de comprobante (BNC/, BINANCE, VE/, etc.). Carga masiva: columna opcional
-  inmediatamente a la derecha del Nº documento = código (formatos D, A, B, C, E según plantilla).
+- Formatos de comprobante: BNC/, BINANCE, VE/, etc. Carga masiva: columna opcional a la derecha del Nº = código.
 
-- Huella funcional (prestamo + fecha + monto + ref_norm): evita duplicar el mismo pago operativo (409),
-  alineado con ux_pagos_fingerprint_activos.
+- Además, huella funcional (prestamo + fecha + monto + ref_norm) evita duplicar el mismo pago operativo (409),
+  vía `ux_pagos_fingerprint_activos`.
 
 """
 

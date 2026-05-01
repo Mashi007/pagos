@@ -15,6 +15,7 @@ import {
   AlertCircle,
   Info,
   Eye,
+  Trash2,
 } from 'lucide-react'
 
 import { toast } from 'sonner'
@@ -408,6 +409,8 @@ export function RegistrarPagoForm({
   }, [pagoInicial?.link_comprobante, pagoInicial?.documento_ruta])
 
   const [isSubmitting, setIsSubmitting] = useState(false)
+
+  const [isDeleting, setIsDeleting] = useState(false)
 
   const [errors, setErrors] = useState<Record<string, string>>({})
 
@@ -1123,6 +1126,32 @@ export function RegistrarPagoForm({
     await submitPago(formData)
   }
 
+  const handleEliminarPago = async () => {
+    if (!isEditing || !pagoId) return
+    if (
+      !window.confirm(
+        '¿Eliminar este pago de forma permanente? Si tiene préstamo asociado, se actualizarán las cuotas.'
+      )
+    ) {
+      return
+    }
+    setIsDeleting(true)
+    try {
+      if (esPagoConError) {
+        await pagoConErrorService.delete(pagoId)
+      } else {
+        await pagoService.deletePago(pagoId)
+      }
+      toast.success('Pago eliminado.')
+      onSuccess(false)
+      onClose()
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error) || 'No se pudo eliminar el pago.')
+    } finally {
+      setIsDeleting(false)
+    }
+  }
+
   /** Visto (revisión manual): desambigua con código A####/P#### en el campo Código y guarda (BD almacena comprobante + §CD: + código). */
   const handleVistoRellenarCodigoYGuardar = async () => {
     if (
@@ -1794,6 +1823,14 @@ export function RegistrarPagoForm({
                         {errors.numero_documento}
                       </p>
                     )}
+
+                    {mostrarCampoCodigoDocumento ? (
+                      <p className="text-xs text-gray-600">
+                        Cada número de documento es único en cartera. Si este comprobante ya existe en otro pago,
+                        use <strong>Visto</strong> para asignar un código (sufijo); sin código distinto no se puede
+                        duplicar.
+                      </p>
+                    ) : null}
                   </div>
 
                   {mostrarCampoCodigoDocumento ? (
@@ -2230,17 +2267,39 @@ export function RegistrarPagoForm({
               ) : null}
             </div>
 
-            <div className="flex shrink-0 justify-end gap-3 border-t bg-white px-6 py-4">
+            <div className="flex shrink-0 flex-wrap items-center justify-end gap-3 border-t bg-white px-6 py-4">
               <Button
                 type="button"
                 variant="outline"
                 onClick={onClose}
-                disabled={isSubmitting}
+                disabled={isSubmitting || isDeleting}
               >
                 Cancelar
               </Button>
 
-              <Button type="submit" disabled={isSubmitting}>
+              {isEditing && pagoId ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="border-red-300 text-red-700 hover:bg-red-50"
+                  onClick={() => void handleEliminarPago()}
+                  disabled={isSubmitting || isDeleting}
+                >
+                  {isDeleting ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Eliminando...
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="mr-2 h-4 w-4" aria-hidden />
+                      Eliminar
+                    </>
+                  )}
+                </Button>
+              ) : null}
+
+              <Button type="submit" disabled={isSubmitting || isDeleting}>
                 {isSubmitting ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />

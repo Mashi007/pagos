@@ -1,4 +1,10 @@
-"""Consultas sobre numero_documento. Clave almacenada única por comprobante + código (compose)."""
+"""
+Consultas sobre numero_documento.
+
+Regla: el valor guardado en columna `numero_documento` es **único** en cartera. La única vía para dos pagos con el
+mismo número “visible” del banco es que el **valor almacenado** difiera por **código** compuesto (`§CD:` vía
+`compose_numero_documento_almacenado`), p. ej. revisión manual con token A####/P####.
+"""
 
 from typing import Optional
 

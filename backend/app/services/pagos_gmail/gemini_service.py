@@ -6,7 +6,9 @@ Configuración única para todo el sistema: GEMINI_API_KEY y GEMINI_MODEL (app.c
 - Pagos (Gmail): fecha_pago, cedula, monto, numero_referencia (extract_payment_data).
 - Cobranza (papeleta/informe): fecha_deposito, nombre_banco, etc. (extract_cobranza_from_image).
 - Cobros (reporte público): comparar datos del formulario vs imagen del comprobante (compare_form_with_image).
-- Cobros (escáner Infopagos, personal autenticado): extraer sugerencia de campos desde solo la imagen (extract_infopagos_campos_desde_comprobante).
+- Cobros (escáner Infopagos, personal autenticado): extraer sugerencia de campos desde solo la imagen
+  (extract_infopagos_campos_desde_comprobante); la imagen pasa por preprocesado PIL antes de Gemini
+  (`_build_image_part_escaner_infopagos`: márgenes, escala, autocontraste, nitidez).
   Cobros usa la misma API key y modelo que el resto del sistema; sin clave, los reportes van a en_revision.
 """
 import hashlib
@@ -851,6 +853,102 @@ def _build_image_part(
     except Exception as pil_err:
         logger.warning("[PAGOS_GMAIL] PIL falló (%s), bytes crudos para %s", pil_err, filename)
         return _gtypes.Part.from_bytes(data=file_content, mime_type=mime)
+
+
+def _build_image_part_escaner_infopagos(
+    file_content: bytes,
+    filename: str,
+    mime: str,
+    max_long_edge: int = 2400,
+):
+    """
+    Part de Gemini para **solo** el escáner Infopagos (personal): prepara la imagen antes del OCR.
+
+    Además del tope de tamaño, aplica la misma familia de heurísticas que el pipeline Gmail
+    (recorte de márgenes claros, escala mín/máx del borde largo para fotos muy pequeñas o enormes),
+    luego autocontraste y nitidez suave para recibos fotografiados con poca luz o bajo contraste.
+
+    PDF: sin cambios (bytes directos). Si PIL falla en cualquier paso → `_build_image_part` simple.
+    """
+    from google.genai import types as _gtypes
+
+    is_pdf = mime == "application/pdf" or filename.lower().endswith(".pdf")
+    if is_pdf:
+        return _gtypes.Part.from_bytes(data=file_content, mime_type=mime)
+
+    _ensure_pillow_heif_opener()
+    try:
+        from PIL import Image as _PIL
+        from PIL import ImageEnhance
+        from PIL import ImageFilter
+        from PIL import ImageOps
+
+        img = _PIL.open(io.BytesIO(file_content))
+        try:
+            img = ImageOps.exif_transpose(img)
+        except Exception:
+            pass
+        img = _pil_image_to_rgb_for_jpeg(img)
+        w0, h0 = img.size
+
+        img = _pagos_gmail_trim_soft_margins_pil(img, filename)
+        img = _pagos_gmail_normalize_long_edge_pil(img, filename)
+
+        w, h = img.size
+        longest = max(w, h)
+        if max_long_edge and max_long_edge > 0 and longest > max_long_edge:
+            scale = max_long_edge / float(longest)
+            nw = max(1, int(round(w * scale)))
+            nh = max(1, int(round(h * scale)))
+            try:
+                resample = _PIL.Resampling.LANCZOS  # type: ignore[attr-defined]
+            except AttributeError:
+                resample = _PIL.LANCZOS  # type: ignore[attr-defined]
+            img = img.resize((nw, nh), resample)
+            logger.debug(
+                "[ESCANER] Imagen reescalada (tope borde largo=%s): %s %sx%s -> %sx%s",
+                max_long_edge,
+                filename,
+                w,
+                h,
+                nw,
+                nh,
+            )
+
+        try:
+            img = ImageOps.autocontrast(img, cutoff=1)
+        except Exception:
+            pass
+        try:
+            img = ImageEnhance.Sharpness(img).enhance(1.28)
+        except Exception:
+            pass
+        try:
+            img = img.filter(
+                ImageFilter.UnsharpMask(radius=1.5, percent=120, threshold=2)
+            )
+        except Exception:
+            pass
+
+        buf = io.BytesIO()
+        q = _pagos_gmail_gemini_jpeg_quality()
+        img.save(buf, format="JPEG", quality=q, optimize=True)
+        out_b = buf.getvalue()
+        logger.debug(
+            "[ESCANER] Preprocesado Infopagos OK: %s px_in=%sx%s jpeg_bytes=%s",
+            filename,
+            w0,
+            h0,
+            len(out_b),
+        )
+        return _gtypes.Part.from_bytes(data=out_b, mime_type="image/jpeg")
+    except Exception as exc:
+        logger.warning(
+            "[ESCANER] Preproceso PIL falló (%s); fallback a envío simple para %s",
+            exc,
+            filename,
+        )
+        return _build_image_part(file_content, filename, mime, max_long_edge=max_long_edge)
 
 
 def _build_image_part_variants(
@@ -2340,8 +2438,10 @@ def extract_infopagos_campos_desde_comprobante(
         from google.genai import types
 
         client = _gemini_client(key)
-        # Lado más largo acotado (solo escáner): menos bytes hacia Gemini; PDF sin cambios.
-        image_part = _build_image_part(image_bytes, filename, mime, max_long_edge=2400)
+        # Escáner: recorte de márgenes, escala heurística, contraste/nitidez y tope de tamaño (PDF intacto).
+        image_part = _build_image_part_escaner_infopagos(
+            image_bytes, filename, mime, max_long_edge=2400
+        )
         _max_gemini_attempts = max(GEMINI_RATE_LIMIT_MAX_RETRIES, GEMINI_SERVER_ERROR_MAX_RETRIES) + 1
         last_error: Optional[Exception] = None
         for attempt in range(_max_gemini_attempts):
