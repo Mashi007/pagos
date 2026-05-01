@@ -1681,11 +1681,23 @@ export function RegistrarPagoForm({
 
                     {prestamosParaSelect.length > 0 ? (
                       <Select
-                        value={formData.prestamo_id?.toString() || undefined}
+                        value={
+                          formData.prestamo_id != null &&
+                          Number(formData.prestamo_id) > 0 &&
+                          (prestamosParaSelect.some(
+                            p => p.id === formData.prestamo_id
+                          ) ||
+                            prestamoSeleccionado?.id === formData.prestamo_id)
+                            ? String(formData.prestamo_id)
+                            : 'none'
+                        }
                         onValueChange={value =>
                           setFormData({
                             ...formData,
-                            prestamo_id: parseInt(value),
+                            prestamo_id:
+                              value === 'none'
+                                ? null
+                                : parseInt(value, 10),
                           })
                         }
                       >
@@ -1702,6 +1714,9 @@ export function RegistrarPagoForm({
                         </SelectTrigger>
 
                         <SelectContent>
+                          <SelectItem value="none">
+                            — Seleccione el crédito —
+                          </SelectItem>
                           {prestamosParaSelect.map(prestamo => {
                             const modelo =
                               (prestamo as any).modelo_vehiculo ||

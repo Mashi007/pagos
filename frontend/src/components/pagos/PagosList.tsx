@@ -2446,14 +2446,17 @@ export function PagosList() {
                   value={
                     prestamoIdReemplazo != null
                       ? String(prestamoIdReemplazo)
-                      : ''
+                      : 'none'
                   }
-                  onValueChange={v => setPrestamoIdReemplazo(Number(v))}
+                  onValueChange={v =>
+                    setPrestamoIdReemplazo(v === 'none' ? null : Number(v))
+                  }
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Seleccione préstamo" />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="none">Seleccione préstamo</SelectItem>
                     {prestamosReemplazo.map(p => (
                       <SelectItem key={p.id} value={String(p.id)}>
                         #{p.id} {p.modelo_vehiculo || p.producto || 'Préstamo'}{' '}
