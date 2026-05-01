@@ -452,10 +452,23 @@ export function RegistrarPagoForm({
       return
     }
 
-    const cedulaPartes = descomponerCedula(formData.cedula_cliente)
-    if (!cedulaPartes) {
-      toast.error('Ingrese una cedula valida antes de escanear.')
+    let cedulaPartes = descomponerCedula(formData.cedula_cliente)
+
+    // Permitir re-escaneo sin cédula si hay comprobante guardado
+    // (para extraer cédula del comprobante)
+    const tieneComprobanteGuardado = Boolean(
+      linkComprobanteParaVista && !archivoComprobante
+    )
+
+    if (!cedulaPartes && !tieneComprobanteGuardado) {
+      toast.error('Ingrese una cédula válida antes de escanear.')
       return
+    }
+
+    // Si no hay cédula pero hay comprobante, usar cédula dummy para escaneo
+    if (!cedulaPartes && tieneComprobanteGuardado) {
+      cedulaPartes = { tipo: 'V', numero: '0' }
+      toast.info('Re-escaneando para extraer cédula del comprobante...')
     }
 
     setIsRescanning(true)
@@ -485,8 +498,8 @@ export function RegistrarPagoForm({
       }
 
       const fd = new FormData()
-      fd.append('tipo_cedula', cedulaPartes.tipo)
-      fd.append('numero_cedula', cedulaPartes.numero)
+      fd.append('tipo_cedula', cedulaPartes!.tipo)
+      fd.append('numero_cedula', cedulaPartes!.numero)
       fd.append('comprobante', fileToScan)
       fd.append('fuente_tasa_cambio', 'euro')
       const institucionPlantilla = (formData.institucion_bancaria || '').trim()
