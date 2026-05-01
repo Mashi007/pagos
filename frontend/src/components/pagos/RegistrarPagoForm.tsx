@@ -2272,12 +2272,34 @@ export function RegistrarPagoForm({
                             </span>
                           ) : (
                             <span>
-                              <span className="font-semibold text-green-800">
-                                NO REPETIDO
-                              </span>
-                              {excludeIdConflicto
-                                ? ' - no hay otro pago con este Nº (se excluye el pago que está editando).'
-                                : ' - no hay otro pago en cartera con este Nº documento.'}{' '}
+                              {excludeIdConflicto ? (
+                                <>
+                                  <span className="font-semibold text-green-800">
+                                    Este pago ya está registrado en cartera
+                                  </span>
+                                  {pagoId != null ? (
+                                    <>
+                                      {' '}
+                                      (pago ID{' '}
+                                      <span className="font-mono">
+                                        {pagoId}
+                                      </span>
+                                      ).
+                                    </>
+                                  ) : (
+                                    '.'
+                                  )}{' '}
+                                  No hay <strong>otro</strong> pago distinto
+                                  con este mismo Nº de documento.
+                                </>
+                              ) : (
+                                <>
+                                  <span className="font-semibold text-green-800">
+                                    NO REPETIDO
+                                  </span>
+                                  {' - no hay ningún pago en cartera con este Nº documento.'}
+                                </>
+                              )}{' '}
                               Préstamo destino en este formulario:{' '}
                               <span className="font-mono font-semibold">
                                 {formData.prestamo_id != null
@@ -2304,10 +2326,9 @@ export function RegistrarPagoForm({
                           )}
                         </div>
                         <p className="text-xs text-gray-600">
-                          Cada número de documento es único en cartera. Si este
-                          comprobante ya existe en otro pago, use{' '}
-                          <strong>Visto</strong> para asignar un código
-                          (sufijo); sin código distinto no se puede duplicar.
+                          {excludeIdConflicto
+                            ? 'Este Nº de documento ya está guardado para este pago. La validación solo busca duplicados contra OTROS pagos.'
+                            : 'Cada número de documento es único en cartera. Si este comprobante ya existe en otro pago, use Visto para asignar un código (sufijo); sin código distinto no se puede duplicar.'}
                         </p>
                       </div>
                     ) : null}
