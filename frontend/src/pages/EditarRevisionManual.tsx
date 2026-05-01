@@ -4307,6 +4307,7 @@ export function EditarRevisionManual() {
           onSuccess={onExitoModalPagoRevision}
           pagoInicial={pagoModalInicial}
           pagoId={pagoModalId}
+          modoGuardarYProcesar
           mostrarCampoCodigoDocumento
           prestamoContextoRevisionManualId={
             prestamoData.prestamo_id != null &&

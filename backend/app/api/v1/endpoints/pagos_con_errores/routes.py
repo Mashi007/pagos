@@ -753,7 +753,7 @@ def exportar_pagos_con_errores(
 
 def mover_a_pagos_normales(
 
-    payload: dict = Body(..., embed=True),
+    payload: EliminarPorDescargaBody = Body(...),
 
     db: Session = Depends(get_db),
 
@@ -761,7 +761,7 @@ def mover_a_pagos_normales(
 
     """Mueve pagos corregidos de pagos_con_errores a pagos (y los elimina de con_errores). Aplica cada pago a cuotas (cascada) para que préstamos y estado de cuenta se actualicen."""
 
-    ids = payload.get("ids", [])
+    ids = payload.ids
 
     if not ids:
 

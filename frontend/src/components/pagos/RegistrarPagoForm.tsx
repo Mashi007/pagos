@@ -276,10 +276,18 @@ function cedulasMismaPersonaParaPrestamo(a: string, b: string): boolean {
   return Boolean(na && nb && na === nb)
 }
 
+/** Meta opcional para el padre (p. ej. evitar DELETE duplicado tras mover-a-pagos). */
+export type RegistrarPagoOnSuccessMeta = {
+  skipDeleteConError?: boolean
+}
+
 interface RegistrarPagoFormProps {
   onClose: () => void
 
-  onSuccess: (procesado?: boolean) => void
+  onSuccess: (
+    procesado?: boolean,
+    meta?: RegistrarPagoOnSuccessMeta
+  ) => void
 
   /**
    * Callback cuando se detecta documento duplicado (error 409).
@@ -860,7 +868,12 @@ export function RegistrarPagoForm({
         : (prestamoSeleccionado as Prestamo | undefined)
 
     if (fd.prestamo_id && prestamoParaCedula) {
-      if (fd.cedula_cliente !== prestamoParaCedula.cedula) {
+      if (
+        !cedulasMismaPersonaParaPrestamo(
+          fd.cedula_cliente,
+          prestamoParaCedula.cedula || ''
+        )
+      ) {
         newErrors.cedula_cliente = `La cédula del pago (${fd.cedula_cliente}) no coincide con la cédula del préstamo (${prestamoParaCedula.cedula}). El pago solo se aplicará si las cédulas coinciden.`
 
         newErrors.prestamo_id =
@@ -991,18 +1004,18 @@ export function RegistrarPagoForm({
         datosEnvio.conciliado = true // ✅ AUTOCONCILIAR si hay préstamo y monto
       }
 
-      if (isEditing && pagoId) {
+      let idPagoParaProcesar: number | undefined = pagoId
+
+      if (isEditing && idPagoParaProcesar) {
         if (esPagoConError) {
-          await pagoConErrorService.update(pagoId, datosEnvio)
+          await pagoConErrorService.update(idPagoParaProcesar, datosEnvio)
         } else {
-          await pagoService.updatePago(pagoId, datosEnvio)
+          await pagoService.updatePago(idPagoParaProcesar, datosEnvio)
         }
       } else {
-        // ✅ CREAR NUEVO: conciliado se envía en datosEnvio
         const pagoCreado = await pagoService.createPago(datosEnvio)
-        pagoId = pagoCreado.id
+        idPagoParaProcesar = pagoCreado.id
 
-        // Log para verificar autoconciliación
         if (import.meta.env.DEV) {
           console.log(
             `Pago creado: id=${pagoCreado.id}, conciliado=${pagoCreado.conciliado}`
@@ -1010,45 +1023,110 @@ export function RegistrarPagoForm({
         }
       }
 
-      // Si es "Guardar y Procesar", aplica a cuotas automáticamente
+      let metaExito: RegistrarPagoOnSuccessMeta | undefined
+
+      // "Guardar y Procesar": desde pagos_con_errores hay que mover a `pagos` y aplicar allí;
+      // aplicar-cuotas por ID solo existe en la tabla `pagos`.
       if (modoGuardarYProcesar && fd.prestamo_id && fd.monto_pagado > 0) {
-        try {
-          // Ya se marcó como conciliado arriba (datosEnvio.conciliado = true)
-          // Ahora aplicar a cuotas (cascada del sistema)
-          const resultAplicar = await pagoService.aplicarPagoACuotas(pagoId!)
+        const moverDesdeConErrores = Boolean(
+          esPagoConError && isEditing && pagoId
+        )
 
-          // Mostrar detalle del resultado (mejorado)
-          if (resultAplicar?.success) {
-            const detalleAplicacion = `${resultAplicar.cuotas_completadas} cuota(s) completada(s)${
-              resultAplicar.cuotas_parciales > 0
-                ? `, ${resultAplicar.cuotas_parciales} parcial(es)`
-                : ''
-            }`
-            toast.success(`Pago aplicado a cuotas: ${detalleAplicacion}`, {
-              duration: 4000,
-            })
-          }
+        if (moverDesdeConErrores && pagoId != null) {
+          const idConError = pagoId
 
-          // Log del resultado (info, no error)
-          if (import.meta.env.DEV) {
-            console.log('Aplicación a cuotas:', resultAplicar)
-          }
-        } catch (applyErr) {
-          // Si falla aplicar cuotas, igual se consideró éxito porque se guardó y concilió
-          toast.warning(
-            'Pago guardado pero no se pudo aplicar automáticamente a cuotas. Use "Mover a Pagos Normales" en Revisión.',
-            { duration: 5000 }
-          )
-          if (import.meta.env.DEV) {
-            console.warn(
-              'Error aplicando a cuotas (pero pago guardado):',
-              applyErr
+          try {
+            const resultMover =
+              await pagoConErrorService.moverAPagosNormales([idConError])
+
+            if (resultMover.movidos < 1) {
+              const detalle =
+                resultMover.errores?.filter(Boolean).join(' ') ||
+                resultMover.mensaje ||
+                'No se pudo mover el pago a la tabla operativa (pagos).'
+
+              toast.error(detalle, { duration: 7000 })
+              onSuccess(false)
+
+              return
+            }
+
+            if (resultMover.errores?.length) {
+              toast.warning(
+                `Pago pasado a cartera, pero hubo incidencias al aplicar cuotas: ${resultMover.errores.join(
+                  ' '
+                )}`,
+                { duration: 7000 }
+              )
+            } else {
+              const nCuotas =
+                typeof resultMover.cuotas_aplicadas === 'number'
+                  ? resultMover.cuotas_aplicadas
+                  : 0
+
+              toast.success(
+                nCuotas > 0
+                  ? `Pago en cartera y aplicado a cuotas (${nCuotas} aplicación(es) en cascada).`
+                  : 'Pago movido a la tabla de pagos operativa.',
+                { duration: 4000 }
+              )
+            }
+
+            metaExito = { skipDeleteConError: true }
+          } catch (moverErr: unknown) {
+            toast.warning(
+              getErrorMessage(moverErr) ||
+                'No se pudo mover el pago a cartera. Revise duplicados o reintente.',
+              { duration: 6000 }
             )
+            if (import.meta.env.DEV) {
+              console.warn('mover-a-pagos tras guardar:', moverErr)
+            }
+            onSuccess(false)
+
+            return
+          }
+        } else {
+          try {
+            const resultAplicar = await pagoService.aplicarPagoACuotas(
+              idPagoParaProcesar!
+            )
+
+            if (resultAplicar?.success) {
+              const detalleAplicacion = `${resultAplicar.cuotas_completadas} cuota(s) completada(s)${
+                resultAplicar.cuotas_parciales > 0
+                  ? `, ${resultAplicar.cuotas_parciales} parcial(es)`
+                  : ''
+              }`
+              toast.success(`Pago aplicado a cuotas: ${detalleAplicacion}`, {
+                duration: 4000,
+              })
+            } else if (resultAplicar?.message) {
+              toast.warning(
+                `Pago guardado, pero no se aplicó a cuotas: ${resultAplicar.message}`,
+                { duration: 6000 }
+              )
+            }
+
+            if (import.meta.env.DEV) {
+              console.log('Aplicación a cuotas:', resultAplicar)
+            }
+          } catch (applyErr) {
+            toast.warning(
+              'Pago guardado pero no se pudo aplicar automáticamente a cuotas. Use "Mover a Pagos Normales" en Revisión.',
+              { duration: 5000 }
+            )
+            if (import.meta.env.DEV) {
+              console.warn(
+                'Error aplicando a cuotas (pero pago guardado):',
+                applyErr
+              )
+            }
           }
         }
       }
 
-      onSuccess(modoGuardarYProcesar)
+      onSuccess(modoGuardarYProcesar, metaExito)
     } catch (error: unknown) {
       console.error(
         `Error ${isEditing ? 'actualizando' : 'registrando'} pago:`,
@@ -1466,22 +1544,28 @@ export function RegistrarPagoForm({
                       formData.cedula_cliente && (
                         <div
                           className={`flex items-start gap-2 rounded p-2 text-xs ${
-                            formData.cedula_cliente ===
-                            prestamoSeleccionado.cedula
+                            cedulasMismaPersonaParaPrestamo(
+                              formData.cedula_cliente,
+                              prestamoSeleccionado.cedula || ''
+                            )
                               ? 'border border-green-200 bg-green-50 text-green-700'
                               : 'border border-red-200 bg-red-50 text-red-700'
                           }`}
                         >
-                          {formData.cedula_cliente ===
-                          prestamoSeleccionado.cedula ? (
+                          {cedulasMismaPersonaParaPrestamo(
+                            formData.cedula_cliente,
+                            prestamoSeleccionado.cedula || ''
+                          ) ? (
                             <CheckCircle className="mt-0.5 h-4 w-4 flex-shrink-0" />
                           ) : (
                             <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0" />
                           )}
 
                           <div>
-                            {formData.cedula_cliente ===
-                            prestamoSeleccionado.cedula ? (
+                            {cedulasMismaPersonaParaPrestamo(
+                              formData.cedula_cliente,
+                              prestamoSeleccionado.cedula || ''
+                            ) ? (
                               <span className="font-medium">
                                 Cédulas coinciden
                               </span>

@@ -4328,7 +4328,7 @@ export function PagosList() {
               setShowRegistrarPago(false)
               setPagoEditando(null)
             }}
-            onSuccess={async (procesado?: boolean) => {
+            onSuccess={async (procesado, meta) => {
               setShowRegistrarPago(false)
               const pagoIdEliminado = pagoEditando?.id
               setPagoEditando(null)
@@ -4336,22 +4336,30 @@ export function PagosList() {
               try {
                 // Si fue "Guardar y Procesar", eliminar la fila de la tabla
                 if (procesado && pagoIdEliminado) {
-                  try {
-                    // Usar el servicio apropiado según el contexto
-                    if (esRevisarPagos || activeTab === 'revision') {
-                      await pagoConErrorService.delete(pagoIdEliminado)
-                    } else {
-                      await pagoService.deletePago(pagoIdEliminado)
-                    }
+                  const omitirDeleteConErrores =
+                    meta?.skipDeleteConError &&
+                    (esRevisarPagos || activeTab === 'revision')
+
+                  if (omitirDeleteConErrores) {
                     toast.success(
-                      'Pago guardado, conciliado, aplicado y eliminado de la lista.'
+                      'Pago guardado, conciliado y aplicado (movido a tabla operativa).'
                     )
-                  } catch (deleteErr) {
-                    // Si falla el DELETE, no es crítico - el pago ya se procesó
-                    if (import.meta.env.DEV) {
-                      console.warn('Error eliminando fila:', deleteErr)
+                  } else {
+                    try {
+                      if (esRevisarPagos || activeTab === 'revision') {
+                        await pagoConErrorService.delete(pagoIdEliminado)
+                      } else {
+                        await pagoService.deletePago(pagoIdEliminado)
+                      }
+                      toast.success(
+                        'Pago guardado, conciliado, aplicado y eliminado de la lista.'
+                      )
+                    } catch (deleteErr) {
+                      if (import.meta.env.DEV) {
+                        console.warn('Error eliminando fila:', deleteErr)
+                      }
+                      toast.success('Pago guardado, conciliado y aplicado.')
                     }
-                    toast.success('Pago guardado, conciliado y aplicado.')
                   }
                 } else {
                   toast.success('Pago registrado exitosamente.')
