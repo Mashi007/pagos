@@ -827,103 +827,118 @@ def mover_a_pagos_normales(
 
         logger.debug(f"mover_a_pagos_normales: procesando pago {idx}/{len(ids)} (id={pid}, cedula={row.cedula_cliente}, monto={row.monto_pagado})")
 
-        # Validar que no exista duplicado en tabla pagos
-        numero_documento_normalizado = row.numero_documento or ""
-        duplicado_existe = False
+        # Aislar el procesamiento de cada fila: si una explota (constraint, cascada, etc.) hacemos
+        # rollback parcial y seguimos con las demás, evitando 500 por toda la lista.
+        try:
 
-        if numero_documento_normalizado:
-            from app.services.pago_numero_documento import numero_documento_ya_registrado
-            duplicado_existe = numero_documento_ya_registrado(
-                db,
-                numero_documento_normalizado,
-                exclude_pago_con_error_id=pid,
+            # Validar que no exista duplicado en tabla pagos
+            numero_documento_normalizado = row.numero_documento or ""
+            duplicado_existe = False
+
+            if numero_documento_normalizado:
+                from app.services.pago_numero_documento import numero_documento_ya_registrado
+                duplicado_existe = numero_documento_ya_registrado(
+                    db,
+                    numero_documento_normalizado,
+                    exclude_pago_con_error_id=pid,
+                )
+                if duplicado_existe:
+                    logger.warning(f"mover_a_pagos_normales: pago {pid} tiene documento duplicado en tabla pagos: {numero_documento_normalizado}")
+                    errores_procesamiento.append(f"Pago {pid}: documento '{numero_documento_normalizado}' ya existe en tabla pagos")
+                    continue  # Saltar este pago, no mover
+
+            # «Guardar y procesar» = intención explícita de pasar a cartera. Si hay préstamo y monto,
+            # forzamos validación cartera (conciliado + verificado SI) para que la columna Cartera y la
+            # cascada queden alineadas con el estado final. Sin préstamo respetamos la fila origen.
+            debe_validar_cartera = bool(row.prestamo_id) and float(row.monto_pagado or 0) > 0
+            if debe_validar_cartera:
+                conciliado = True
+            else:
+                conciliado = bool(row.conciliado) if row.conciliado is not None else False
+
+            ahora = datetime.now(ZoneInfo("America/Caracas")) if conciliado else None
+
+            # `chk_pagos_conciliado_pendiente_inconsistente` rechaza (conciliado=True ∧ estado=PENDIENTE).
+            # Si vamos a marcar conciliado y el origen estaba en PENDIENTE/sin estado, abrimos en PAGADO; la
+            # cascada posterior puede sobrescribir si aplica cuotas (mismo patrón que revision_manual).
+            estado_inicial = (row.estado or "PENDIENTE").strip().upper() or "PENDIENTE"
+            if conciliado and estado_inicial == "PENDIENTE":
+                estado_inicial = "PAGADO"
+
+            pago = Pago(
+                cedula_cliente=row.cedula_cliente,
+                prestamo_id=row.prestamo_id,
+                fecha_pago=row.fecha_pago,
+                monto_pagado=row.monto_pagado,
+                numero_documento=row.numero_documento or "",
+                institucion_bancaria=row.institucion_bancaria,
+                estado=estado_inicial,
+                conciliado=conciliado,
+                fecha_conciliacion=ahora,
+                verificado_concordancia="SI" if conciliado else "",
+                notas=row.notas,
+                referencia_pago=row.referencia_pago or row.numero_documento or "N/A",
             )
-            if duplicado_existe:
-                logger.warning(f"mover_a_pagos_normales: pago {pid} tiene documento duplicado en tabla pagos: {numero_documento_normalizado}")
-                errores_procesamiento.append(f"Pago {pid}: documento '{numero_documento_normalizado}' ya existe en tabla pagos")
-                continue  # Saltar este pago, no mover
 
-        # «Guardar y procesar» = intención explícita de pasar a cartera. Si hay préstamo y monto,
-        # forzamos validación cartera (conciliado + verificado SI) para que la columna Cartera y la
-        # cascada queden alineadas con el estado final. Sin préstamo respetamos la fila origen.
-        debe_validar_cartera = bool(row.prestamo_id) and float(row.monto_pagado or 0) > 0
-        if debe_validar_cartera:
-            conciliado = True
-        else:
-            conciliado = bool(row.conciliado) if row.conciliado is not None else False
+            db.add(pago)
+            db.flush()
+            db.refresh(pago)
 
-        ahora = datetime.now(ZoneInfo("America/Caracas")) if conciliado else None
+            nuevo_pago_id = pago.id
+            cc_aplicadas = 0
+            cp_aplicadas = 0
 
-        pago = Pago(
+            if pago.prestamo_id and float(pago.monto_pagado or 0) > 0:
+                try:
+                    cc, cp = _aplicar_pago_a_cuotas_interno(pago, db)
+                    cc_aplicadas = cc
+                    cp_aplicadas = cp
 
-            cedula_cliente=row.cedula_cliente,
+                    if cc > 0 or cp > 0:
+                        pago.estado = "PAGADO"
+                        cuotas_aplicadas += cc + cp
+                        logger.info(
+                            f"mover_a_pagos_normales: pago id={nuevo_pago_id} aplicado a {cc} cuota(s) completa(s), {cp} parcial(es)"
+                        )
+                    else:
+                        logger.warning(
+                            f"mover_a_pagos_normales: pago id={nuevo_pago_id} no se aplicó a ninguna cuota (prestamo={pago.prestamo_id})"
+                        )
+                except Exception as e:
+                    logger.error(
+                        f"mover_a_pagos_normales: error aplicando pago id={nuevo_pago_id} a cuotas: {str(e)}",
+                        exc_info=True,
+                    )
+                    errores_procesamiento.append(f"Pago {pid}: cuotas: {str(e)}")
 
-            prestamo_id=row.prestamo_id,
+            db.delete(row)
+            logger.debug(
+                f"mover_a_pagos_normales: pago id={pid} eliminado de pagos_con_errores, creado pago id={nuevo_pago_id}"
+            )
 
-            fecha_pago=row.fecha_pago,
+            db.flush()
+            movidos += 1
 
-            monto_pagado=row.monto_pagado,
+        except Exception as e_row:
+            db.rollback()
+            logger.error(
+                f"mover_a_pagos_normales: fallo procesando pago_con_error id={pid}: {e_row}",
+                exc_info=True,
+            )
+            errores_procesamiento.append(f"Pago {pid}: {str(e_row)}")
+            continue
 
-            numero_documento=row.numero_documento or "",
-
-            institucion_bancaria=row.institucion_bancaria,
-
-            estado=row.estado or "PENDIENTE",
-
-            conciliado=conciliado,
-
-            fecha_conciliacion=ahora,
-
-            verificado_concordancia="SI" if conciliado else "",
-
-            notas=row.notas,
-
-            referencia_pago=row.referencia_pago or row.numero_documento or "N/A",
-
+    try:
+        db.commit()
+    except Exception as e_commit:
+        db.rollback()
+        logger.error(
+            f"mover_a_pagos_normales: fallo en commit final: {e_commit}", exc_info=True
         )
-
-        db.add(pago)
-
-        db.flush()
-
-        db.refresh(pago)
-        
-        nuevo_pago_id = pago.id
-        cc_aplicadas = 0
-        cp_aplicadas = 0
-
-        if pago.prestamo_id and float(pago.monto_pagado or 0) > 0:
-
-            try:
-
-                cc, cp = _aplicar_pago_a_cuotas_interno(pago, db)
-                cc_aplicadas = cc
-                cp_aplicadas = cp
-
-                if cc > 0 or cp > 0:
-
-                    pago.estado = "PAGADO"
-
-                    cuotas_aplicadas += cc + cp
-                    
-                    logger.info(f"mover_a_pagos_normales: pago id={nuevo_pago_id} aplicado a {cc} cuota(s) completa(s), {cp} parcial(es)")
-
-                else:
-                    
-                    logger.warning(f"mover_a_pagos_normales: pago id={nuevo_pago_id} no se aplicó a ninguna cuota (prestamo={pago.prestamo_id})")
-
-            except Exception as e:
-
-                logger.error(f"mover_a_pagos_normales: error aplicando pago id={nuevo_pago_id} a cuotas: {str(e)}", exc_info=True)
-                errores_procesamiento.append(f"Pago {pid}: {str(e)}")
-
-        db.delete(row)
-        
-        logger.debug(f"mover_a_pagos_normales: pago id={pid} eliminado de pagos_con_errores, creado pago id={nuevo_pago_id}")
-
-        movidos += 1
-
-    db.commit()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error al confirmar movimiento ({len(errores_procesamiento)} fila(s) con error). {e_commit}",
+        )
     
     logger.info(f"mover_a_pagos_normales: COMPLETADO - {movidos} pago(s) movido(s), {cuotas_aplicadas} cuota(s) aplicada(s)")
     
