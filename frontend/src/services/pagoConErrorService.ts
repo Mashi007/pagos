@@ -193,10 +193,28 @@ class PagoConErrorService {
     )
   }
 
+  /**
+   * Actualiza un PagoConError. **Caso especial**: el backend hace prechequeo estricto
+   * (mismo Nº documento canónico + cuota_pagos aplicado + misma cédula/préstamo) y, si
+   * detecta que la fila ya está cargada en cartera, la elimina y devuelve un payload
+   * con `ya_cargado_eliminado: true` en lugar del registro actualizado. Las llamadas
+   * deben verificar esa bandera antes de asumir que tienen un `PagoConError`.
+   */
   async update(
     id: number,
     data: Partial<PagoConErrorCreate>
-  ): Promise<PagoConError> {
+  ): Promise<
+    | PagoConError
+    | {
+        ya_cargado_eliminado: true
+        pago_con_error_id: number
+        pago_id: number
+        cedula?: string | null
+        prestamo_id?: number | null
+        numero_documento?: string | null
+        mensaje: string
+      }
+  > {
     return await apiClient.put(`${this.baseUrl}/${id}`, data)
   }
 
@@ -208,9 +226,47 @@ class PagoConErrorService {
     movidos: number
     cuotas_aplicadas?: number
     errores?: string[]
+    /** Filas eliminadas en silencio porque ya estaban cargadas y aplicadas en cartera. */
+    ya_cargado_eliminados?: Array<{
+      pago_con_error_id: number
+      pago_id: number
+      cedula?: string | null
+      prestamo_id?: number | null
+      numero_documento?: string | null
+    }>
+    ya_cargado_eliminados_count?: number
     mensaje: string
   }> {
     return await apiClient.post(`${this.baseUrl}/mover-a-pagos`, { ids })
+  }
+
+  /**
+   * Limpia PagoConError redundantes: si su `numero_documento` canónico ya está en `pagos`
+   * con `cuota_pagos` aplicado y misma cédula/préstamo, los elimina.
+   * - `ids` ausente o vacío: barre todos los pendientes (limitado por `max_revisar`).
+   * - `ids` con valores: solo evalúa esos.
+   */
+  async limpiarYaCargados(
+    ids?: number[],
+    maxRevisar = 5000
+  ): Promise<{
+    eliminados: number
+    evaluados: number
+    errores: string[]
+    detalles: Array<{
+      pago_con_error_id: number
+      pago_id: number
+      cedula?: string | null
+      prestamo_id?: number | null
+      numero_documento?: string | null
+    }>
+    mensaje: string
+  }> {
+    return await apiClient.post(
+      `${this.baseUrl}/limpiar-ya-cargados`,
+      { ids: ids && ids.length > 0 ? ids : null, max_revisar: maxRevisar },
+      { timeout: 120000 }
+    )
   }
 
   /** Archiva pagos exportados para mantener trazabilidad operativa. */

@@ -1204,7 +1204,37 @@ export function RegistrarPagoForm({
 
       if (isEditing && idPagoParaProcesar) {
         if (esPagoConError) {
-          await pagoConErrorService.update(idPagoParaProcesar, datosEnvio)
+          const respUpd = await pagoConErrorService.update(
+            idPagoParaProcesar,
+            datosEnvio
+          )
+          // Caso "ya cargado en cartera + cuotas": el backend eliminó el PagoConError
+          // por redundancia; cerramos el modal sin intentar mover/aplicar nada.
+          if (
+            respUpd &&
+            typeof respUpd === 'object' &&
+            'ya_cargado_eliminado' in respUpd &&
+            (respUpd as { ya_cargado_eliminado?: boolean })
+              .ya_cargado_eliminado === true
+          ) {
+            const info = respUpd as {
+              ya_cargado_eliminado: true
+              pago_id: number
+              prestamo_id?: number | null
+              mensaje: string
+            }
+            toast.success(
+              `🧹 Este pago ya estaba cargado en cartera (pago #${info.pago_id}` +
+                (info.prestamo_id != null
+                  ? `, préstamo #${info.prestamo_id}`
+                  : '') +
+                `) y aplicado a cuotas. Se eliminó de revisión por redundancia.`,
+              { duration: 6500 }
+            )
+            onSuccess(false)
+            onClose()
+            return
+          }
         } else {
           await pagoService.updatePago(idPagoParaProcesar, datosEnvio)
         }

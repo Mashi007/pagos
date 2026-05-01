@@ -317,6 +317,7 @@ export function PagosList() {
   const [isBulkSavingRevision, setIsBulkSavingRevision] = useState(false)
   const [isBulkDeletingRevision, setIsBulkDeletingRevision] = useState(false)
   const [isBulkMovingRevision, setIsBulkMovingRevision] = useState(false)
+  const [isLimpiandoYaCargados, setIsLimpiandoYaCargados] = useState(false)
   const [bulkMovingProgress, setBulkMovingProgress] = useState({
     movidos: 0,
     total: 0,
@@ -1356,14 +1357,27 @@ export function PagosList() {
     }
     setIsBulkSavingRevision(true)
     try {
-      await Promise.all(
+      const respuestas = await Promise.all(
         ids.map(id =>
           pagoConErrorService.update(id, {
             observaciones: bulkRevisionObservacion.trim() || null,
           })
         )
       )
-      toast.success(`Observación guardada en ${ids.length} pago(s).`)
+      const yaCargadoLimpiados = respuestas.filter(
+        r =>
+          r &&
+          typeof r === 'object' &&
+          'ya_cargado_eliminado' in r &&
+          (r as { ya_cargado_eliminado?: boolean }).ya_cargado_eliminado ===
+            true
+      ).length
+      const guardados = ids.length - yaCargadoLimpiados
+      let mensaje = `Observación guardada en ${guardados} pago(s).`
+      if (yaCargadoLimpiados > 0) {
+        mensaje += ` 🧹 ${yaCargadoLimpiados} ya estaban cargado(s) y aplicado(s) en cartera: eliminados por redundancia.`
+      }
+      toast.success(mensaje, { duration: 6000 })
       setSelectedRevisionIds(new Set())
       await invalidatePagosPrestamosRevisionYCuotas(queryClient)
       await refetchDiagnosticoRevision()
@@ -1418,15 +1432,18 @@ export function PagosList() {
     try {
       const result = await pagoConErrorService.moverAPagosNormales(ids)
 
-      // Mensaje principal con resultados
       let mensaje = `✅ ${result.movidos} pago(s) movido(s) a tabla principal.\n💰 ${result.cuotas_aplicadas ?? 0} cuota(s) aplicada(s).`
 
-      // Avisar si hay errores
+      const yaCargadoCount = result.ya_cargado_eliminados_count ?? 0
+      if (yaCargadoCount > 0) {
+        mensaje += `\n🧹 ${yaCargadoCount} ya estaban cargado(s) en cartera y aplicado(s) a cuotas: eliminados de revisión por redundancia.`
+      }
+
       if (result.errores && result.errores.length > 0) {
         mensaje += `\n⚠️ ${result.errores.length} error(es):\n${result.errores.join('\n')}`
-        toast.warning(mensaje, { duration: 7000 })
+        toast.warning(mensaje, { duration: 8000 })
       } else {
-        toast.success(mensaje, { duration: 5000 })
+        toast.success(mensaje, { duration: 6000 })
       }
 
       setSelectedRevisionIds(new Set())
@@ -1494,6 +1511,52 @@ export function PagosList() {
       abrirEscanerLoteConIds(ids)
     } finally {
       setIsBulkScanningRevision(false)
+    }
+  }
+  /**
+   * Limpia PagoConError redundantes con criterio estricto (mismo numero_documento canónico
+   * + cuota_pagos aplicado + misma cédula y préstamo cuando el origen lo informa).
+   * Si hay seleccionados, opera sobre ellos; si no, barre todos los pendientes.
+   */
+  const handleLimpiarYaCargados = async () => {
+    const ids = [...selectedRevisionIds]
+    const operaSobreSeleccion = ids.length > 0
+    const confirmacion = operaSobreSeleccion
+      ? `¿Eliminar de revisión los ${ids.length} pago(s) seleccionado(s) que ya estén cargados y aplicados a cuotas en cartera?`
+      : '¿Barrer toda la lista de revisión y eliminar las filas cuyo pago ya esté cargado y aplicado a cuotas en cartera? El criterio es estricto: mismo Nº documento + cuota_pagos aplicado + misma cédula/préstamo.'
+    if (!window.confirm(confirmacion)) return
+    setIsLimpiandoYaCargados(true)
+    try {
+      const result = await pagoConErrorService.limpiarYaCargados(
+        operaSobreSeleccion ? ids : undefined
+      )
+      let mensaje = `🧹 ${result.eliminados} eliminado(s) de revisión por estar ya cargado(s) en cartera.\nEvaluados: ${result.evaluados}.`
+      if (result.errores && result.errores.length > 0) {
+        mensaje += `\n⚠️ ${result.errores.length} error(es):\n${result.errores.join('\n')}`
+        toast.warning(mensaje, { duration: 8000 })
+      } else if (result.eliminados === 0) {
+        toast.info(mensaje, { duration: 4000 })
+      } else {
+        toast.success(mensaje, { duration: 6000 })
+      }
+      if (operaSobreSeleccion) {
+        const idsEliminados = new Set(
+          (result.detalles || []).map(d => d.pago_con_error_id)
+        )
+        setSelectedRevisionIds(prev => {
+          const next = new Set(prev)
+          idsEliminados.forEach(id => next.delete(id))
+          return next
+        })
+      } else {
+        setSelectedRevisionIds(new Set())
+      }
+      await invalidatePagosPrestamosRevisionYCuotas(queryClient)
+      await refetchDiagnosticoRevision()
+    } catch (e) {
+      toast.error(getErrorMessage(e))
+    } finally {
+      setIsLimpiandoYaCargados(false)
     }
   }
   const handleBuscarRevisionGlobal = () => {
@@ -1820,10 +1883,28 @@ export function PagosList() {
     if (editingRevisionId !== id) return
     setSavingRevisionId(id)
     try {
-      await pagoConErrorService.update(id, {
+      const resp = await pagoConErrorService.update(id, {
         observaciones: revisionObservacionDraft.trim() || null,
       })
-      toast.success('Observación guardada')
+      if (
+        resp &&
+        typeof resp === 'object' &&
+        'ya_cargado_eliminado' in resp &&
+        (resp as { ya_cargado_eliminado?: boolean }).ya_cargado_eliminado ===
+          true
+      ) {
+        const info = resp as { pago_id: number; prestamo_id?: number | null }
+        toast.success(
+          `🧹 Este pago ya estaba cargado en cartera (pago #${info.pago_id}` +
+            (info.prestamo_id != null
+              ? `, préstamo #${info.prestamo_id}`
+              : '') +
+            ') y aplicado a cuotas. Se eliminó de revisión por redundancia.',
+          { duration: 6500 }
+        )
+      } else {
+        toast.success('Observación guardada')
+      }
       setEditingRevisionId(null)
       setRevisionObservacionDraft('')
       await invalidatePagosPrestamosRevisionYCuotas(queryClient)
@@ -2934,6 +3015,29 @@ export function PagosList() {
                           ? 'Abriendo escáner...'
                           : 'Escanear seleccionados (máx. 10)'}
                       </Button>
+                      <Button
+                        variant="outline"
+                        onClick={() => void handleLimpiarYaCargados()}
+                        disabled={isLimpiandoYaCargados}
+                        className="border-emerald-300 text-emerald-800 hover:bg-emerald-50"
+                        title="Elimina de revisión las filas cuyo Nº de documento ya está cargado y aplicado a cuotas en cartera (mismo cliente y préstamo). Si hay seleccionados, opera sobre ellos; si no, barre toda la lista pendiente."
+                      >
+                        {isLimpiandoYaCargados ? (
+                          <>
+                            <span className="mr-2 inline-block animate-spin">
+                              ⏳
+                            </span>
+                            Limpiando...
+                          </>
+                        ) : (
+                          <>
+                            🧹 Limpiar pagos ya cargados
+                            {selectedRevisionIds.size > 0
+                              ? ` (${selectedRevisionIds.size})`
+                              : ' (toda la lista)'}
+                          </>
+                        )}
+                      </Button>
                       <span className="text-xs text-gray-600">
                         Seleccionados: {selectedRevisionIds.size}
                       </span>
@@ -2946,6 +3050,14 @@ export function PagosList() {
                       la cascada para aplicar cuotas. Las filas con documento
                       duplicado en cartera se omiten con aviso (use{' '}
                       <strong>Visto</strong> para asignar código y reintentar).
+                    </p>
+                    <p className="mb-2 text-xs text-slate-600">
+                      <strong>🧹 Limpiar pagos ya cargados</strong>: detecta y
+                      elimina filas cuyo Nº de documento ya tiene un pago en
+                      cartera con cuota_pagos aplicado (mismo cliente y
+                      préstamo). Si hay seleccionados, solo evalúa esos; si no,
+                      barre toda la lista. Ahorra ir uno por uno borrando
+                      duplicados ya conciliados en el préstamo.
                     </p>
                     <div className="mb-3 flex flex-wrap gap-2 text-xs">
                       <Badge variant="outline">

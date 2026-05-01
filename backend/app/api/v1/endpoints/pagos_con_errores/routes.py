@@ -44,6 +44,7 @@ from app.core.documento import (
 )
 from app.services.pago_numero_documento import (
     numero_documento_ya_registrado,
+    pago_con_error_ya_cargado_estricto,
     primer_pago_cartera_por_documento,
 )
 
@@ -778,6 +779,128 @@ def exportar_pagos_con_errores(
 
 
 
+class LimpiarYaCargadosBody(BaseModel):
+    """Cuerpo opcional para limpiar PagoConError redundantes (ya cargados en cartera + cuotas).
+
+    Si `ids` está vacío o ausente, se barre el universo completo de pagos_con_errores
+    (limitado por `max_revisar` para evitar barridos descontrolados).
+    """
+
+    ids: Optional[list[int]] = None
+    max_revisar: int = 5000
+
+    @field_validator("max_revisar")
+    @classmethod
+    def _max_pos(cls, v: int) -> int:
+        if v <= 0:
+            return 5000
+        return min(v, 20000)
+
+
+@router.post("/limpiar-ya-cargados", response_model=dict)
+def limpiar_pagos_con_error_ya_cargados(
+    payload: LimpiarYaCargadosBody = Body(default_factory=LimpiarYaCargadosBody),
+    db: Session = Depends(get_db),
+    current_user: UserResponse = Depends(get_current_user),
+) -> dict:
+    """
+    Elimina filas de `pagos_con_errores` cuyo equivalente ya está cargado y aplicado
+    en cartera (mismo numero_documento + cuota_pagos aplicado + misma cédula y préstamo
+    cuando el origen lo informa). El criterio es el mismo que usa `mover-a-pagos`
+    para detectar redundancia, pero aquí no movemos nada — solo limpiamos.
+
+    - `ids` vacío/ausente: barre todos los `PagoConError` (hasta `max_revisar`).
+    - `ids` con valores: solo se evalúan esos.
+
+    Aislamiento por fila: si una falla, se hace rollback parcial y se sigue.
+    """
+    _ = current_user
+
+    rows: list[PagoConError]
+    if payload.ids:
+        ids_validos = [int(i) for i in payload.ids if isinstance(i, int) and i > 0]
+        if not ids_validos:
+            return {
+                "eliminados": 0,
+                "evaluados": 0,
+                "errores": [],
+                "detalles": [],
+                "mensaje": "No hay IDs válidos para evaluar.",
+            }
+        rows = list(
+            db.execute(
+                select(PagoConError).where(PagoConError.id.in_(ids_validos))
+            ).scalars()
+        )
+    else:
+        rows = list(
+            db.execute(
+                select(PagoConError)
+                .order_by(PagoConError.id.asc())
+                .limit(payload.max_revisar)
+            ).scalars()
+        )
+
+    eliminados = 0
+    detalles: list[dict[str, Any]] = []
+    errores: list[str] = []
+
+    for row in rows:
+        pid = int(row.id)
+        try:
+            pago_existente_id = pago_con_error_ya_cargado_estricto(db, row)
+            if pago_existente_id is None:
+                continue
+            detalles.append(
+                {
+                    "pago_con_error_id": pid,
+                    "pago_id": pago_existente_id,
+                    "cedula": row.cedula_cliente,
+                    "prestamo_id": row.prestamo_id,
+                    "numero_documento": row.numero_documento,
+                }
+            )
+            db.delete(row)
+            db.flush()
+            eliminados += 1
+        except Exception as e_row:
+            db.rollback()
+            logger.error(
+                "limpiar_pagos_con_error_ya_cargados: fallo evaluando id=%s: %s",
+                pid,
+                e_row,
+                exc_info=True,
+            )
+            errores.append(f"PagoConError {pid}: {e_row}")
+            continue
+
+    try:
+        db.commit()
+    except Exception as e_commit:
+        db.rollback()
+        logger.exception(
+            "limpiar_pagos_con_error_ya_cargados: fallo en commit final: %s", e_commit
+        )
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error al confirmar la limpieza: {e_commit}",
+        ) from e_commit
+
+    mensaje = (
+        f"Evaluados {len(rows)}; eliminados {eliminados} por estar ya cargados en cartera."
+    )
+    if errores:
+        mensaje += f" Errores: {len(errores)}."
+
+    return {
+        "eliminados": eliminados,
+        "evaluados": len(rows),
+        "errores": errores,
+        "detalles": detalles,
+        "mensaje": mensaje,
+    }
+
+
 @router.post("/mover-a-pagos", response_model=dict)
 
 def mover_a_pagos_normales(
@@ -808,8 +931,11 @@ def mover_a_pagos_normales(
     movidos = 0
 
     cuotas_aplicadas = 0
-    
+
     errores_procesamiento = []
+    # Filas eliminadas en silencio porque ya están cargadas y aplicadas en cartera
+    # (mismo doc + cuota_pagos + cliente/préstamo): redundantes, no se mueven.
+    ya_cargado_eliminados: list[dict[str, Any]] = []
 
     for idx, pid in enumerate(ids, start=1):
 
@@ -831,12 +957,37 @@ def mover_a_pagos_normales(
         # rollback parcial y seguimos con las demás, evitando 500 por toda la lista.
         try:
 
-            # Validar que no exista duplicado en tabla pagos
+            # Prechequeo estricto: si el documento ya está aplicado a cuotas con misma cédula y
+            # mismo préstamo (cuando el origen lo informa), la fila es redundante: la eliminamos
+            # silenciosamente y la reportamos como "ya_cargado_eliminados". Ahorra a operación
+            # tener que ir a borrar manualmente filas duplicadas que ya pasaron al préstamo.
+            pago_existente_id = pago_con_error_ya_cargado_estricto(db, row)
+            if pago_existente_id is not None:
+                ya_cargado_eliminados.append(
+                    {
+                        "pago_con_error_id": pid,
+                        "pago_id": pago_existente_id,
+                        "cedula": row.cedula_cliente,
+                        "prestamo_id": row.prestamo_id,
+                        "numero_documento": row.numero_documento,
+                    }
+                )
+                logger.info(
+                    "mover_a_pagos_normales: pago_con_error_id=%s ya cargado en pago_id=%s; eliminado por redundante",
+                    pid,
+                    pago_existente_id,
+                )
+                db.delete(row)
+                db.flush()
+                continue
+
+            # Validar que no exista duplicado en tabla pagos (caso menos estricto: doc igual sin
+            # cuota_pagos aplicado o sin cliente/préstamo confirmado): no se mueve, queda en
+            # revisión para que el usuario desambigüe con código.
             numero_documento_normalizado = row.numero_documento or ""
             duplicado_existe = False
 
             if numero_documento_normalizado:
-                from app.services.pago_numero_documento import numero_documento_ya_registrado
                 duplicado_existe = numero_documento_ya_registrado(
                     db,
                     numero_documento_normalizado,
@@ -940,14 +1091,30 @@ def mover_a_pagos_normales(
             detail=f"Error al confirmar movimiento ({len(errores_procesamiento)} fila(s) con error). {e_commit}",
         )
     
-    logger.info(f"mover_a_pagos_normales: COMPLETADO - {movidos} pago(s) movido(s), {cuotas_aplicadas} cuota(s) aplicada(s)")
-    
-    respuesta = {
+    logger.info(
+        "mover_a_pagos_normales: COMPLETADO - movidos=%s cuotas=%s ya_cargado_eliminados=%s",
+        movidos,
+        cuotas_aplicadas,
+        len(ya_cargado_eliminados),
+    )
+
+    mensaje = (
+        f"{movidos} pagos movidos a tabla pagos; cuotas aplicadas: {cuotas_aplicadas}"
+    )
+    if ya_cargado_eliminados:
+        mensaje += (
+            f"; {len(ya_cargado_eliminados)} omitido(s) por estar ya cargado(s) "
+            "y aplicado(s) en cartera (eliminados de revisión)"
+        )
+
+    respuesta: dict[str, Any] = {
         "movidos": movidos,
         "cuotas_aplicadas": cuotas_aplicadas,
-        "mensaje": f"{movidos} pagos movidos a tabla pagos; cuotas aplicadas: {cuotas_aplicadas}"
+        "ya_cargado_eliminados": ya_cargado_eliminados,
+        "ya_cargado_eliminados_count": len(ya_cargado_eliminados),
+        "mensaje": mensaje,
     }
-    
+
     if errores_procesamiento:
         logger.warning(f"mover_a_pagos_normales: errores durante procesamiento: {errores_procesamiento}")
         respuesta["errores"] = errores_procesamiento
@@ -984,6 +1151,33 @@ def actualizar_pago_con_error(pago_id: int, payload: PagoConErrorUpdate, db: Ses
     if not row:
 
         raise HTTPException(status_code=404, detail="Pago con error no encontrado")
+
+    # Prechequeo estricto: si esta fila ya tiene un Pago equivalente cargado y aplicado a
+    # cuotas en cartera (mismo doc + cuota_pagos + cédula y préstamo cuando aplique), es
+    # redundante. La eliminamos en silencio en lugar de aceptar la edición y devolvemos
+    # `ya_cargado_eliminado=True` para que el frontend cierre el formulario sin alarma.
+    pago_existente_id = pago_con_error_ya_cargado_estricto(db, row)
+    if pago_existente_id is not None:
+        info = {
+            "ya_cargado_eliminado": True,
+            "pago_con_error_id": pago_id,
+            "pago_id": pago_existente_id,
+            "cedula": row.cedula_cliente,
+            "prestamo_id": row.prestamo_id,
+            "numero_documento": row.numero_documento,
+            "mensaje": (
+                "Este pago ya estaba cargado y aplicado a cuotas en cartera; "
+                "se eliminó de revisión por ser redundante."
+            ),
+        }
+        logger.info(
+            "actualizar_pago_con_error: pago_con_error_id=%s ya cargado en pago_id=%s; eliminado por redundante",
+            pago_id,
+            pago_existente_id,
+        )
+        db.delete(row)
+        db.commit()
+        return info
 
     data = payload.model_dump(exclude_unset=True)
 

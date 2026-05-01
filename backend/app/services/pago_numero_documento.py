@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from app.core.documento import normalize_documento
 from app.models.pago import Pago
 from app.models.pago_con_error import PagoConError
+from app.utils.cedula_almacenamiento import normalizar_cedula_almacenamiento
 
 
 def primer_pago_cartera_por_documento(
@@ -88,3 +89,57 @@ def numero_documento_ya_registrado(
         qe = qe.where(PagoConError.id != exclude_pago_con_error_id)
     qe = qe.limit(1)
     return db.scalar(qe) is not None
+
+
+def pago_con_error_ya_cargado_estricto(
+    db: Session,
+    perr: PagoConError,
+) -> Optional[int]:
+    """
+    Devuelve el `Pago.id` cargado en cartera que vuelve **redundante** a este `PagoConError`,
+    o `None` si no hay coincidencia estricta.
+
+    Criterio máximo rigor (acordado con negocio):
+      1) mismo `numero_documento` canónico (case-insensitive sobre el valor almacenado completo)
+      2) ese pago ya tiene aplicaciones en `cuota_pagos` (evita falsos positivos en cartera vacía)
+      3) misma cédula del cliente (normalizada) y mismo `prestamo_id` cuando está informado en el PagoConError
+
+    Si el PagoConError no tiene `prestamo_id`, exigimos al menos coincidencia de cédula y cuota_pagos
+    aplicado al pago en cartera (no se asume préstamo arbitrario).
+    """
+    # Import local para evitar ciclos al cargar este módulo.
+    from app.services.cuota_pago_integridad import pago_tiene_aplicaciones_cuotas
+
+    if perr is None:
+        return None
+
+    num = normalize_documento(getattr(perr, "numero_documento", None))
+    if not num:
+        return None
+    nu = num.upper()
+
+    cedula_perr = normalizar_cedula_almacenamiento(
+        getattr(perr, "cedula_cliente", None) or ""
+    )
+    prestamo_perr = getattr(perr, "prestamo_id", None)
+
+    q = select(Pago.id, Pago.cedula_cliente, Pago.prestamo_id).where(
+        func.upper(Pago.numero_documento) == nu
+    )
+    rows = db.execute(q).all()
+    for row in rows:
+        pago_id = int(row[0])
+        cedula_pago = normalizar_cedula_almacenamiento(row[1] or "")
+        prestamo_pago = row[2]
+        # Cédula igual (cuando el PagoConError trae cédula).
+        if cedula_perr and cedula_pago and cedula_perr != cedula_pago:
+            continue
+        # Préstamo igual cuando el PagoConError lo informa.
+        if prestamo_perr is not None and prestamo_pago is not None:
+            if int(prestamo_perr) != int(prestamo_pago):
+                continue
+        # Debe estar aplicado a cuotas: si no, no es "ya cargado" en sentido estricto.
+        if not pago_tiene_aplicaciones_cuotas(db, pago_id):
+            continue
+        return pago_id
+    return None
