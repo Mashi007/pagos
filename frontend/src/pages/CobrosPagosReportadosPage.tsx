@@ -1969,24 +1969,56 @@ export default function CobrosPagosReportadosPage() {
                           <td
                             className={
                               'min-w-0 px-2 py-2 align-middle ' +
-                              ((row.observacion || '').trim().length > 0
-                                ? 'bg-destructive/10'
-                                : '')
+                              (row.duplicado_en_pagos
+                                ? 'bg-orange-50/90 dark:bg-orange-950/25'
+                                : (row.observacion || '').trim().length > 0
+                                  ? 'bg-destructive/10'
+                                  : '')
                             }
                             title={
-                              /NO CLIENTES/i.test(row.observacion || '')
-                                ? 'NO CLIENTES: la cédula del reporte (' +
-                                  row.cedula_display +
-                                  ') no figura en la tabla clientes. Se compara normalizada (sin guión, sin ceros a la izquierda). Verifique en Préstamos > Clientes o registre al cliente.'
-                                : /DUPLICADO/i.test(row.observacion || '')
-                                  ? 'DUPLICADO: ya existe en la tabla pagos (documento/referencia normalizado) o hay otro reporte con el mismo número en esta página. No se debe aprobar dos veces el mismo comprobante.'
-                                  : /No pag Bs|solo Bs|Bolívares/i.test(
-                                        row.observacion || ''
-                                      )
-                                    ? 'No pag Bs.: la cédula no está en la lista autorizada para bolívares (cedulas_reportar_bs). Use USD o agregue la cédula en Configuración > Pagos.'
-                                    : (row.observacion ?? '')
+                              row.duplicado_en_pagos
+                                ? [
+                                    'PAGO DUPLICADO: ya existe en cartera (tabla pagos).',
+                                    row.numero_documento_pago_existente
+                                      ? `Nº en cartera: ${row.numero_documento_pago_existente}.`
+                                      : '',
+                                    row.pago_existente_id != null
+                                      ? `Pago ID: ${row.pago_existente_id}.`
+                                      : '',
+                                    row.prestamo_existente_id != null
+                                      ? `Préstamo ID: ${row.prestamo_existente_id}.`
+                                      : '',
+                                  ]
+                                    .filter(Boolean)
+                                    .join(' ')
+                                : /NO CLIENTES/i.test(row.observacion || '')
+                                  ? 'NO CLIENTES: la cédula del reporte (' +
+                                    row.cedula_display +
+                                    ') no figura en la tabla clientes. Se compara normalizada (sin guión, sin ceros a la izquierda). Verifique en Préstamos > Clientes o registre al cliente.'
+                                  : /DUPLICADO/i.test(row.observacion || '')
+                                    ? 'DUPLICADO: ya existe en la tabla pagos (documento/referencia normalizado) o hay otro reporte con el mismo número en esta página. No se debe aprobar dos veces el mismo comprobante.'
+                                    : /No pag Bs|solo Bs|Bolívares/i.test(
+                                          row.observacion || ''
+                                        )
+                                      ? 'No pag Bs.: la cédula no está en la lista autorizada para bolívares (cedulas_reportar_bs). Use USD o agregue la cédula en Configuración > Pagos.'
+                                      : (row.observacion ?? '')
                             }
                           >
+                            {row.duplicado_en_pagos ? (
+                              <div className="mb-1.5 rounded border border-orange-300 bg-orange-50 px-2 py-1.5 text-[11px] font-semibold leading-snug text-orange-950 dark:border-orange-800 dark:bg-orange-950/40 dark:text-orange-100">
+                                PAGO DUPLICADO — En cartera Nº{' '}
+                                <span className="break-all font-mono font-normal">
+                                  {row.numero_documento_pago_existente?.trim() ||
+                                    '—'}
+                                </span>
+                                {row.pago_existente_id != null
+                                  ? ` · pago #${row.pago_existente_id}`
+                                  : ''}
+                                {row.prestamo_existente_id != null
+                                  ? ` · préstamo #${row.prestamo_existente_id}`
+                                  : ''}
+                              </div>
+                            ) : null}
                             {row.observacion ? (
                               <div
                                 className={
@@ -2009,9 +2041,9 @@ export default function CobrosPagosReportadosPage() {
                                     </span>
                                   ))}
                               </div>
-                            ) : (
+                            ) : !row.duplicado_en_pagos ? (
                               '-'
-                            )}
+                            ) : null}
                           </td>
 
                           <td className="whitespace-nowrap px-2 py-2 align-middle">

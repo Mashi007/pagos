@@ -913,6 +913,9 @@ export interface PagoReportadoItem {
 
   prestamo_existente_id?: number | null
 
+  /** Nº documento en `pagos` que ya ocupa el comprobante (listado enriquecido). */
+  numero_documento_pago_existente?: string | null
+
   pago_existente_estado?: string | null
 
   prestamo_objetivo_id?: number | null

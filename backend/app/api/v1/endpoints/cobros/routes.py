@@ -285,6 +285,22 @@ class PagoReportadoListItem(BaseModel):
         None,
         description="infopagos | cobros_publico | null (historico). Misma cola operativa y reglas para todos.",
     )
+    duplicado_en_pagos: bool = Field(
+        False,
+        description="True si el comprobante/documento ya existe en tabla `pagos` (cartera).",
+    )
+    pago_existente_id: Optional[int] = Field(
+        None,
+        description="ID del registro en `pagos` que tiene el mismo documento.",
+    )
+    prestamo_existente_id: Optional[int] = Field(
+        None,
+        description="Préstamo asociado al pago existente en cartera.",
+    )
+    numero_documento_pago_existente: Optional[str] = Field(
+        None,
+        description="Valor almacenado en `pagos.numero_documento` del pago existente (referencia para operadores).",
+    )
 
 
 class PagoReportadoDetalle(BaseModel):
@@ -837,6 +853,20 @@ def _pago_reportado_list_items_from_rows(
             )
         else:
             tasa_x, eq_usd = None, None
+        dup_pagos = reportado_toca_claves_canonicas_en_pagos(r, claves_doc_en_pagos)
+        pago_existente_id = None
+        prestamo_existente_id = None
+        numero_documento_pago_existente = None
+        if dup_pagos:
+            pago_existente_id = primer_pago_id_si_existe_para_claves_reportado(db, r)
+            if pago_existente_id is not None:
+                prow = db.execute(
+                    select(Pago.prestamo_id, Pago.numero_documento).where(Pago.id == int(pago_existente_id))
+                ).first()
+                if prow is not None:
+                    prestamo_existente_id = prow[0]
+                    nd_raw = (prow[1] or "").strip()
+                    numero_documento_pago_existente = nd_raw or None
         items.append(PagoReportadoListItem(
             id=r.id,
             referencia_interna=r.referencia_interna,
@@ -858,6 +888,10 @@ def _pago_reportado_list_items_from_rows(
             tiene_recibo_pdf=bool(r.recibo_pdf),
             tiene_comprobante=bool(getattr(r, "comprobante_imagen_id", None)),
             canal_ingreso=getattr(r, "canal_ingreso", None),
+            duplicado_en_pagos=bool(dup_pagos),
+            pago_existente_id=pago_existente_id,
+            prestamo_existente_id=prestamo_existente_id,
+            numero_documento_pago_existente=numero_documento_pago_existente,
         ))
     return items
 
