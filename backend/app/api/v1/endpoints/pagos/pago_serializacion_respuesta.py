@@ -1,12 +1,17 @@
 """Serialización de filas Pago y enriquecimiento para respuestas API."""
 
+from collections import defaultdict
 from datetime import date, datetime
 from typing import Optional
 
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
-from app.core.documento import normalize_documento, split_numero_documento_almacenado
+from app.core.documento import (
+    compose_numero_documento_almacenado,
+    normalize_documento,
+    split_numero_documento_almacenado,
+)
 from app.models.pago import Pago
 from app.models.pago_reportado import PagoReportado
 from app.models.cuota_pago import CuotaPago
@@ -145,6 +150,53 @@ def _enriquecer_pagos_pago_reportado_id(db: Session, items: list) -> None:
     for it in items:
         nd = normalize_documento(it.get("numero_documento"))
         it["pago_reportado_id"] = by_nd.get(nd) if nd else None
+
+
+def _enriquecer_items_duplicado_clave_misma_pagina(rows: list, items: list) -> None:
+    """
+    Misma clave que el listado frontend (`claveDocumentoPagoListaNormalizada`): compuesto
+    comprobante+código. Si en la página hay más de un pago con esa clave, rellena datos del
+    otro registro para la columna Observaciones / recomendación en `/pagos`.
+    """
+    if not rows or not items or len(rows) != len(items):
+        return
+    by_clave: dict[str, list[int]] = defaultdict(list)
+    for row in rows:
+        raw = (getattr(row, "numero_documento", None) or "").strip()
+        base, code = split_numero_documento_almacenado(raw)
+        comp = compose_numero_documento_almacenado(base, code) or ""
+        clave = comp.strip().lower()
+        if clave:
+            by_clave[clave].append(int(row.id))
+    for i, row in enumerate(rows):
+        it = items[i]
+        it["dup_misma_pagina_otro_pago_id"] = None
+        it["dup_misma_pagina_otro_prestamo_id"] = None
+        it["dup_misma_pagina_otro_numero_documento"] = None
+        raw = (getattr(row, "numero_documento", None) or "").strip()
+        base, code = split_numero_documento_almacenado(raw)
+        comp = compose_numero_documento_almacenado(base, code) or ""
+        clave = comp.strip().lower()
+        if not clave:
+            continue
+        ids = sorted(by_clave.get(clave) or [])
+        if len(ids) < 2:
+            continue
+        me = int(row.id)
+        others = [x for x in ids if x != me]
+        if not others:
+            continue
+        other_id = others[0]
+        other_row = next((r for r in rows if int(r.id) == other_id), None)
+        if other_row is None:
+            continue
+        ob, _oc = split_numero_documento_almacenado(
+            (getattr(other_row, "numero_documento", None) or "").strip()
+        )
+        otro_pr = getattr(other_row, "prestamo_id", None)
+        it["dup_misma_pagina_otro_pago_id"] = other_id
+        it["dup_misma_pagina_otro_prestamo_id"] = int(otro_pr) if otro_pr is not None else None
+        it["dup_misma_pagina_otro_numero_documento"] = (ob or "").strip() or None
 
 
 def _pago_response_enriquecido(

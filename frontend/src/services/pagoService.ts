@@ -58,6 +58,13 @@ export interface Pago {
   exceso_sobre_total_usd?: number | null
 
   cuotas_atrasadas?: number // ✅ Campo calculado: cuotas vencidas con pago incompleto
+
+  /** Listado GET /pagos: otro pago en la misma página con la misma clave comprobante+código. */
+  dup_misma_pagina_otro_pago_id?: number | null
+
+  dup_misma_pagina_otro_prestamo_id?: number | null
+
+  dup_misma_pagina_otro_numero_documento?: string | null
 }
 
 export interface PagoCreate {

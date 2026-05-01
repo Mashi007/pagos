@@ -3953,17 +3953,37 @@ export function PagosList() {
                                           true &&
                                         'font-semibold text-orange-900',
                                       !esRevisarPagos &&
-                                        documentoDuplicadoEnVista &&
-                                        'font-semibold text-orange-900'
+                                        (documentoDuplicadoEnVista ||
+                                          pago.dup_misma_pagina_otro_pago_id !=
+                                            null) &&
+                                        'align-top font-semibold text-orange-900'
                                     )}
                                   >
-                                    {esRevisarPagos
-                                      ? observacionesConMarcaDuplicadoCartera(
-                                          pago as PagoConError
-                                        ).trim() || '-'
-                                      : documentoDuplicadoEnVista
-                                        ? OBSERVACION_COL_PAGO_DUPLICADO
-                                        : '-'}
+                                    {esRevisarPagos ? (
+                                      observacionesConMarcaDuplicadoCartera(
+                                        pago as PagoConError
+                                      ).trim() || '-'
+                                    ) : pago.dup_misma_pagina_otro_pago_id != null ? (
+                                      <div className="max-w-[min(24rem,85vw)] rounded border border-orange-300 bg-orange-50 px-2 py-1.5 text-[11px] font-semibold leading-snug text-orange-950 dark:border-orange-800 dark:bg-orange-950/35 dark:text-orange-100">
+                                        {OBSERVACION_COL_PAGO_DUPLICADO} — Misma clave
+                                        (comprobante+código) que otro registro en esta
+                                        página: Nº{' '}
+                                        <span className="break-all font-mono font-normal">
+                                          {pago.dup_misma_pagina_otro_numero_documento ??
+                                            '—'}
+                                        </span>
+                                        {pago.dup_misma_pagina_otro_pago_id != null
+                                          ? ` · pago #${pago.dup_misma_pagina_otro_pago_id}`
+                                          : ''}
+                                        {pago.dup_misma_pagina_otro_prestamo_id != null
+                                          ? ` · préstamo #${pago.dup_misma_pagina_otro_prestamo_id}`
+                                          : ''}
+                                      </div>
+                                    ) : documentoDuplicadoEnVista ? (
+                                      OBSERVACION_COL_PAGO_DUPLICADO
+                                    ) : (
+                                      '-'
+                                    )}
                                   </TableCell>
                                   <TableCell>
                                     $

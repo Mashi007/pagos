@@ -235,6 +235,7 @@ from .pago_conciliacion_estado import (
 )
 from .pago_cascada_reglas import _debe_aplicar_cascada_pago
 from .pago_serializacion_respuesta import (
+    _enriquecer_items_duplicado_clave_misma_pagina,
     _enriquecer_items_tiene_aplicacion_cuotas,
     _enriquecer_pagos_pago_reportado_id,
     _pago_response_enriquecido,
@@ -629,6 +630,8 @@ def listar_pagos(
         _enriquecer_items_tiene_aplicacion_cuotas(db, items)
 
         _enriquecer_pagos_pago_reportado_id(db, items)
+
+        _enriquecer_items_duplicado_clave_misma_pagina(rows, items)
 
         enriquecer_items_link_comprobante_desde_gmail(db, items)
 
