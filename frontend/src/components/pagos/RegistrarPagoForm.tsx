@@ -261,6 +261,20 @@ function descomponerCedula(
   return { tipo: m[1] || 'V', numero: m[2] }
 }
 
+/** OCR suele devolver solo dígitos; BD usa V/E/J + dígitos. Si coinciden los números, es la misma persona. */
+function cedulasMismaPersonaParaPrestamo(a: string, b: string): boolean {
+  const da = String(a || '').replace(/\D/g, '')
+  const db = String(b || '').replace(/\D/g, '')
+  if (da.length >= 6 && db.length >= 6 && da === db) return true
+  const norm = (s: string) =>
+    String(s || '')
+      .toUpperCase()
+      .replace(/[^VEJG0-9]/g, '')
+  const na = norm(a)
+  const nb = norm(b)
+  return Boolean(na && nb && na === nb)
+}
+
 interface RegistrarPagoFormProps {
   onClose: () => void
 
@@ -564,17 +578,49 @@ export function RegistrarPagoForm({
         nextCedula = cedulaExtraida
       }
 
-      setFormData(prev => ({
-        ...prev,
-        cedula_cliente: nextCedula,
-        fecha_pago: (s.fecha_pago || '').trim() || prev.fecha_pago,
-        institucion_bancaria:
-          (s.institucion_financiera || '').trim() || prev.institucion_bancaria,
-        numero_documento:
-          (s.numero_operacion || '').trim() || prev.numero_documento,
-        monto_pagado: nextMonto,
-        prestamo_id: null, // Reset préstamo al cambiar cédula
-      }))
+      setFormData(prev => {
+        const antes = (prev.cedula_cliente || '').trim()
+        const despues = (nextCedula || '').trim()
+        const cedulaCambio = despues !== antes
+
+        let nextPrestamoId: number | null = prev.prestamo_id ?? null
+        // Antes: siempre null aquí → "Guardar y Procesar" no llamaba aplicar-cuotas sin préstamo.
+        if (cedulaCambio) {
+          nextPrestamoId = null
+          const prevPid = prev.prestamo_id
+          if (prevPid && prestamoSeleccionado?.id === prevPid) {
+            if (
+              cedulasMismaPersonaParaPrestamo(
+                despues,
+                prestamoSeleccionado.cedula || ''
+              )
+            ) {
+              nextPrestamoId = prevPid
+            }
+          }
+          if (nextPrestamoId === null && pidRevisionCtx > 0) {
+            const pCtx = prestamoContextoRevisionManual as Prestamo | undefined
+            if (
+              pCtx?.id === pidRevisionCtx &&
+              cedulasMismaPersonaParaPrestamo(despues, pCtx.cedula || '')
+            ) {
+              nextPrestamoId = pidRevisionCtx
+            }
+          }
+        }
+
+        return {
+          ...prev,
+          cedula_cliente: nextCedula,
+          fecha_pago: (s.fecha_pago || '').trim() || prev.fecha_pago,
+          institucion_bancaria:
+            (s.institucion_financiera || '').trim() || prev.institucion_bancaria,
+          numero_documento:
+            (s.numero_operacion || '').trim() || prev.numero_documento,
+          monto_pagado: nextMonto,
+          prestamo_id: nextPrestamoId,
+        }
+      })
       setErrors(prev => {
         const next = { ...prev }
         delete next.fecha_pago
