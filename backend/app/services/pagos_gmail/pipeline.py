@@ -330,7 +330,9 @@ def _cedula_por_email_cliente(db: Session, email_raw: str) -> tuple[Optional[str
 def _cedula_desde_imagen_rescan_error_email(raw: Optional[str]) -> str:
     """
     Re-escaneo ERROR EMAIL (solo plantillas A/B): cédula leída de la imagen por Gemini.
-    Si no es claramente válida (V/E/J + dígitos), devuelve PAGOS_GMAIL_ERROR_CEDULA_IMAGEN.
+    Ahora Gemini devuelve SOLO DÍGITOS (ej. 1234567); backend busca variantes (V/E/J/G) + dígitos en BD.
+    Si los dígitos son válidos (5-12 dígitos), devuelve con prefijo V por defecto.
+    Si no es válido, devuelve PAGOS_GMAIL_ERROR_CEDULA_IMAGEN.
     """
     s = (raw or "").strip()
     if not s or s.upper() in (PAGOS_NA, "NA"):
@@ -340,8 +342,13 @@ def _cedula_desde_imagen_rescan_error_email(raw: Optional[str]) -> str:
     fc = formatear_cedula(s)
     if not fc or fc.upper() == PAGOS_NA:
         return PAGOS_GMAIL_ERROR_CEDULA_IMAGEN
+    # Acepta: (1) Con letra V/E/J/G (ej. V1234567) o (2) SOLO dígitos (ej. 1234567)
+    # Si solo dígitos, antepón V por defecto (backend buscará todas las variantes)
     if re.match(r"^[VEJ]\d{5,12}$", fc, re.IGNORECASE):
         return fc[0].upper() + fc[1:]
+    elif re.match(r"^\d{5,12}$", fc):
+        # Solo dígitos: antepón V; backend buscará V/E/J/G + estos dígitos en BD
+        return "V" + fc
     return PAGOS_GMAIL_ERROR_CEDULA_IMAGEN
 
 
