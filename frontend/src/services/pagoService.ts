@@ -91,6 +91,9 @@ export type PagoInicialRegistrar = Partial<PagoCreate> & {
   moneda_registro?: string | null
   monto_bs_original?: number | null
   documento_ruta?: string | null
+  duplicado_documento_en_pagos?: boolean
+  duplicado_en_cartera_prestamo_id?: number | null
+  duplicado_en_cartera_pago_id?: number | null
 }
 
 export interface ApiResponse<T> {
@@ -211,6 +214,28 @@ class PagoService {
         suma_monto_estado_pagado: number
       }
     }>(url)
+  }
+
+  /** Otro pago en cartera con el mismo Nº documento (revisión manual / duplicados). */
+  async getConflictoDocumentoCartera(params: {
+    numero_documento: string
+    exclude_pago_id?: number
+  }): Promise<{
+    conflicto: boolean
+    pago_id: number | null
+    prestamo_id: number | null
+  }> {
+    const qs = new URLSearchParams()
+    qs.set('numero_documento', params.numero_documento.trim())
+    if (
+      params.exclude_pago_id != null &&
+      Number.isFinite(params.exclude_pago_id)
+    ) {
+      qs.set('exclude_pago_id', String(Math.trunc(params.exclude_pago_id)))
+    }
+    return await apiClient.get(
+      `${this.baseUrl}/conflicto-documento-cartera?${qs.toString()}`
+    )
   }
 
   async sugerirPagosConPréstamoFaltante(

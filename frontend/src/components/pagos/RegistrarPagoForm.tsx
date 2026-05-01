@@ -1,5 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 
+import { useQuery } from '@tanstack/react-query'
+
 import { motion, AnimatePresence } from 'framer-motion'
 
 import {
@@ -119,6 +121,22 @@ const DUPLICADO_DOCUMENTO_UI =
 
 const DUPLICADO_HUELLA_UI =
   'Pago duplicado detectado para este prestamo, fecha, monto y referencia.'
+
+function etiquetaPrestamoLinea(
+  prestamoId: number | null | undefined,
+  detalle: Prestamo | undefined
+): string {
+  const pidRaw = prestamoId != null ? Number(prestamoId) : NaN
+  const pid = Number.isFinite(pidRaw) && pidRaw > 0 ? Math.trunc(pidRaw) : null
+  if (!pid) {
+    return 'Sin préstamo asignado.'
+  }
+  const frag =
+    (detalle?.producto || '').trim() ||
+    (detalle?.modelo_vehiculo || '').trim() ||
+    (detalle?.nombres || '').trim()
+  return frag ? `ID ${pid} - ${frag}` : `ID ${pid}`
+}
 
 function pareceUrlImagenComprobanteExterna(u: string): boolean {
   if (!u) return false
@@ -464,6 +482,55 @@ export function RegistrarPagoForm({
   const vistaPreviaComprobante = useVistaPreviaComprobanteGuardado(
     linkComprobanteParaVista,
     vistaPreviaComprobanteActiva
+  )
+
+  const debouncedNumeroDoc = useDebounce(
+    String(formData.numero_documento ?? '').trim(),
+    400
+  )
+
+  const excludeIdConflicto =
+    isEditing && !esPagoConError && pagoId ? pagoId : undefined
+
+  const conflictoDocQueryEnabled =
+    isEditing &&
+    Boolean(linkComprobanteParaVista && !archivoComprobante) &&
+    debouncedNumeroDoc.length > 0
+
+  const {
+    data: conflictoDocApi,
+    isPending: conflictoDocPendiente,
+    isError: conflictoDocError,
+  } = useQuery({
+    queryKey: [
+      'conflicto-documento-cartera',
+      debouncedNumeroDoc,
+      excludeIdConflicto,
+    ],
+    queryFn: () =>
+      pagoService.getConflictoDocumentoCartera({
+        numero_documento: debouncedNumeroDoc,
+        exclude_pago_id: excludeIdConflicto,
+      }),
+    enabled: conflictoDocQueryEnabled,
+    staleTime: 15_000,
+  })
+
+  const mismoDocQueInicial =
+    debouncedNumeroDoc === String(pagoInicial?.numero_documento ?? '').trim()
+
+  const pidConflictoParaDetalle =
+    conflictoDocApi?.conflicto && conflictoDocApi.prestamo_id
+      ? conflictoDocApi.prestamo_id
+      : conflictoDocPendiente &&
+          mismoDocQueInicial &&
+          pagoInicial?.duplicado_documento_en_pagos &&
+          pagoInicial?.duplicado_en_cartera_prestamo_id
+        ? pagoInicial.duplicado_en_cartera_prestamo_id
+        : 0
+
+  const { data: prestamoConflictoDetalle } = usePrestamo(
+    pidConflictoParaDetalle
   )
 
   const handleReescanearDesdeComprobanteActual = async () => {
@@ -2211,6 +2278,77 @@ export function RegistrarPagoForm({
                           </Button>
                         </div>
                       ) : null}
+                      <div className="mt-2 space-y-2 border-t border-slate-200 pt-2 text-xs text-slate-700">
+                        <p>
+                          <span className="font-medium text-slate-900">
+                            Préstamo donde ya está este Nº documento (cartera):
+                          </span>{' '}
+                          {conflictoDocError ? (
+                            <span className="text-red-600">
+                              No se pudo verificar duplicados. Intente de nuevo.
+                            </span>
+                          ) : !debouncedNumeroDoc ? (
+                            <span className="text-slate-600">
+                              Indique el número de documento del comprobante
+                              para comparar con la cartera.
+                            </span>
+                          ) : conflictoDocPendiente &&
+                            (!mismoDocQueInicial ||
+                              !pagoInicial?.duplicado_documento_en_pagos) ? (
+                            <span className="text-slate-500">Consultando…</span>
+                          ) : conflictoDocPendiente &&
+                            mismoDocQueInicial &&
+                            pagoInicial?.duplicado_documento_en_pagos ? (
+                            <>
+                              <span>
+                                {etiquetaPrestamoLinea(
+                                  pagoInicial.duplicado_en_cartera_prestamo_id,
+                                  prestamoConflictoDetalle
+                                )}
+                              </span>
+                              {pagoInicial.duplicado_en_cartera_pago_id !=
+                              null ? (
+                                <span className="text-slate-500">
+                                  {' '}
+                                  (pago ID{' '}
+                                  {pagoInicial.duplicado_en_cartera_pago_id})
+                                </span>
+                              ) : null}
+                              <span className="text-slate-500">
+                                {' '}
+                                · Verificando…
+                              </span>
+                            </>
+                          ) : conflictoDocApi?.conflicto ? (
+                            <>
+                              {etiquetaPrestamoLinea(
+                                conflictoDocApi.prestamo_id,
+                                prestamoConflictoDetalle
+                              )}
+                              {conflictoDocApi.pago_id != null ? (
+                                <span className="text-slate-500">
+                                  {' '}
+                                  (pago ID {conflictoDocApi.pago_id})
+                                </span>
+                              ) : null}
+                            </>
+                          ) : (
+                            <span className="text-slate-600">
+                              No hay otro pago en cartera con este mismo Nº
+                              documento.
+                            </span>
+                          )}
+                        </p>
+                        <p>
+                          <span className="font-medium text-slate-900">
+                            Préstamo al que se aplicará este pago (formulario):
+                          </span>{' '}
+                          {etiquetaPrestamoLinea(
+                            formData.prestamo_id,
+                            prestamoSeleccionado
+                          )}
+                        </p>
+                      </div>
                       <p className="text-xs text-slate-600">
                         Suba otra imagen solo si desea reemplazar el
                         comprobante.

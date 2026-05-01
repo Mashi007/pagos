@@ -130,14 +130,15 @@ const STAFF_COMPROBANTE_LIST_PREVIEW_CLOSED: StaffComprobanteListPreview = {
   rotDeg: 0,
 }
 
-/** Prefijo coherente con backend `mover-a-pagos` / revisión manual (tabla `pagos`). */
-const MARCA_OBS_DUPLICADO_EN_PAGOS =
-  'Documento duplicado (ya en pagos).'
+/** Visible en columna Observaciones (lista principal y revisar pagos). */
+const OBSERVACION_COL_PAGO_DUPLICADO = 'PAGO DUPLICADO'
 
 function observacionesConMarcaDuplicadoCartera(p: PagoConError): string {
   const obs = (p.observaciones ?? '').trim()
   if (p.duplicado_documento_en_pagos === true) {
-    return obs ? `${MARCA_OBS_DUPLICADO_EN_PAGOS} ${obs}` : MARCA_OBS_DUPLICADO_EN_PAGOS
+    return obs
+      ? `${OBSERVACION_COL_PAGO_DUPLICADO} ${obs}`
+      : OBSERVACION_COL_PAGO_DUPLICADO
   }
   return obs
 }
@@ -648,9 +649,7 @@ export function PagosList() {
         ),
         'Institución bancaria': p.institucion_bancaria ?? '',
         Estado: p.estado,
-        Observaciones: observacionesConMarcaDuplicadoCartera(
-          p as PagoConError
-        ),
+        Observaciones: observacionesConMarcaDuplicadoCartera(p as PagoConError),
       }))
       const nombre = `Revision_Pagos_${new Date().toISOString().slice(0, 10)}.xlsx`
       await createAndDownloadExcel(datos, 'Revisión pagos', nombre)
@@ -742,9 +741,7 @@ export function PagosList() {
         'Verificado concordancia': p.verificado_concordancia ?? '',
         'Usuario registro': p.usuario_registro ?? '',
         Notas: p.notas ?? '',
-        Observaciones: observacionesConMarcaDuplicadoCartera(
-          p as PagoConError
-        ),
+        Observaciones: observacionesConMarcaDuplicadoCartera(p as PagoConError),
       }))
       const nombre = `Revisar_Pagos_${new Date().toISOString().slice(0, 10)}.xlsx`
       await createAndDownloadExcel(datos, 'Revisar Pagos', nombre)
@@ -2968,7 +2965,8 @@ export function PagosList() {
                                         'text-sm text-amber-700',
                                         (pago as PagoConError)
                                           .duplicado_documento_en_pagos ===
-                                          true && 'font-semibold text-orange-900'
+                                          true &&
+                                          'font-semibold text-orange-900'
                                       )}
                                     >
                                       {(() => {
@@ -3902,9 +3900,7 @@ export function PagosList() {
                             <TableHead>Cédula</TableHead>
                             <TableHead>Crédito</TableHead>
                             <TableHead>Estado</TableHead>
-                            {esRevisarPagos && (
-                              <TableHead>Observaciones</TableHead>
-                            )}
+                            <TableHead>Observaciones</TableHead>
                             <TableHead>Monto</TableHead>
                             <TableHead>Fecha Pago</TableHead>
                             <TableHead>Nº Documento</TableHead>
@@ -3948,20 +3944,27 @@ export function PagosList() {
                                   <TableCell>
                                     {getEstadoBadge(pago.estado)}
                                   </TableCell>
-                                  {esRevisarPagos && (
-                                    <TableCell
-                                      className={cn(
-                                        'text-xs text-amber-700',
+                                  <TableCell
+                                    className={cn(
+                                      'text-xs text-amber-700',
+                                      esRevisarPagos &&
                                         (pago as PagoConError)
                                           .duplicado_documento_en_pagos ===
-                                          true && 'font-semibold text-orange-900'
-                                      )}
-                                    >
-                                      {observacionesConMarcaDuplicadoCartera(
-                                        pago as PagoConError
-                                      ).trim() || '-'}
-                                    </TableCell>
-                                  )}
+                                          true &&
+                                        'font-semibold text-orange-900',
+                                      !esRevisarPagos &&
+                                        documentoDuplicadoEnVista &&
+                                        'font-semibold text-orange-900'
+                                    )}
+                                  >
+                                    {esRevisarPagos
+                                      ? observacionesConMarcaDuplicadoCartera(
+                                          pago as PagoConError
+                                        ).trim() || '-'
+                                      : documentoDuplicadoEnVista
+                                        ? OBSERVACION_COL_PAGO_DUPLICADO
+                                        : '-'}
+                                  </TableCell>
                                   <TableCell>
                                     $
                                     {typeof pago.monto_pagado === 'number'
@@ -4343,9 +4346,7 @@ export function PagosList() {
                 ? Number(pagoEditando.prestamo_id)
                 : undefined
             }
-            claveDocumentoPagosTablaRevision={
-              claveDocumentoPagosTablaRevision
-            }
+            claveDocumentoPagosTablaRevision={claveDocumentoPagosTablaRevision}
             bloquearCambioComprobanteCodigo={Boolean(
               pagoEditando &&
               (pagoEditando.conciliado ||
@@ -4401,6 +4402,19 @@ export function PagosList() {
                       'documento_ruta' in pagoEditando
                         ? (pagoEditando.documento_ruta ?? null)
                         : null,
+                    ...('duplicado_documento_en_pagos' in pagoEditando
+                      ? {
+                          duplicado_documento_en_pagos: (
+                            pagoEditando as PagoConError
+                          ).duplicado_documento_en_pagos,
+                          duplicado_en_cartera_prestamo_id: (
+                            pagoEditando as PagoConError
+                          ).duplicado_en_cartera_prestamo_id,
+                          duplicado_en_cartera_pago_id: (
+                            pagoEditando as PagoConError
+                          ).duplicado_en_cartera_pago_id,
+                        }
+                      : {}),
                   }
                 : undefined
             }

@@ -50,6 +50,11 @@ export interface PagoConError {
 
   /** True si el comprobante almacenado ya existe en la tabla `pagos` (cartera). Calculado en API. */
   duplicado_documento_en_pagos?: boolean
+
+  /** Préstamo y pago en `pagos` que ya usan el mismo Nº documento (si aplica). */
+  duplicado_en_cartera_prestamo_id?: number | null
+
+  duplicado_en_cartera_pago_id?: number | null
 }
 
 export interface PagoConErrorCreate {

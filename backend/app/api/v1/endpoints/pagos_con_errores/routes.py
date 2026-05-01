@@ -42,8 +42,8 @@ from app.core.documento import (
     split_numero_documento_almacenado,
 )
 from app.services.pago_numero_documento import (
-    documento_ya_en_tabla_pagos,
     numero_documento_ya_registrado,
+    primer_pago_cartera_por_documento,
 )
 
 
@@ -221,13 +221,23 @@ def _pago_con_error_to_response(
 
     if db is not None:
 
-        out["duplicado_documento_en_pagos"] = documento_ya_en_tabla_pagos(
+        dup_pid, dup_prid = primer_pago_cartera_por_documento(
             db, row.numero_documento
         )
+
+        out["duplicado_documento_en_pagos"] = dup_pid is not None
+
+        out["duplicado_en_cartera_pago_id"] = dup_pid
+
+        out["duplicado_en_cartera_prestamo_id"] = dup_prid
 
     else:
 
         out["duplicado_documento_en_pagos"] = False
+
+        out["duplicado_en_cartera_pago_id"] = None
+
+        out["duplicado_en_cartera_prestamo_id"] = None
 
     return out
 

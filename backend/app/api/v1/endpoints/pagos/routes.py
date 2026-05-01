@@ -78,7 +78,10 @@ from app.core.documento import (
     split_numero_documento_almacenado,
 )
 from app.utils.cedula_almacenamiento import alinear_cedulas_clientes_existentes, normalizar_cedula_almacenamiento
-from app.services.pago_numero_documento import numero_documento_ya_registrado
+from app.services.pago_numero_documento import (
+    numero_documento_ya_registrado,
+    primer_pago_cartera_por_documento,
+)
 
 from app.core.serializers import to_float, format_date_iso
 
@@ -1079,6 +1082,48 @@ def get_ultimos_pagos(
         "per_page": per_page,
 
         "total_pages": total_pages,
+
+    }
+
+
+
+
+
+@router.get("/conflicto-documento-cartera", response_model=dict)
+
+
+def get_conflicto_documento_cartera(
+    numero_documento: str = Query(..., min_length=1),
+
+    exclude_pago_id: Optional[int] = Query(None),
+
+    db: Session = Depends(get_db),
+
+    current_user: UserResponse = Depends(get_current_user),
+
+):
+
+    """
+
+    Otro pago en tabla `pagos` con el mismo Nº documento (valor normalizado).
+
+    `exclude_pago_id`: al editar un pago, excluir su id para detectar duplicidad contra *otros* registros.
+
+    """
+
+    pid, prid = primer_pago_cartera_por_documento(
+
+        db, numero_documento, exclude_pago_id=exclude_pago_id
+
+    )
+
+    return {
+
+        "conflicto": pid is not None,
+
+        "pago_id": pid,
+
+        "prestamo_id": prid,
 
     }
 
