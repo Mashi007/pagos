@@ -104,6 +104,14 @@ function clampComprobanteFloat(n: number, lo: number, hi: number): number {
   return Math.min(hi, Math.max(lo, n))
 }
 
+/** Duplicado contra cartera (`pagos`): API puede mandar flags y/o IDs/Nº documento. */
+function esDuplicadoCarteraRow(row: PagoReportadoItem): boolean {
+  if (row.duplicado_en_pagos === true) return true
+  const pid = row.pago_existente_id
+  if (pid != null && Number(pid) > 0) return true
+  return Boolean(String(row.numero_documento_pago_existente ?? '').trim())
+}
+
 type ComprobanteResizeCorner = 'nw' | 'ne' | 'sw' | 'se'
 type ComprobantePreviewState = {
   open: boolean
@@ -1969,14 +1977,14 @@ export default function CobrosPagosReportadosPage() {
                           <td
                             className={
                               'min-w-0 px-2 py-2 align-middle ' +
-                              (row.duplicado_en_pagos
+                              (esDuplicadoCarteraRow(row)
                                 ? 'bg-orange-50/90 dark:bg-orange-950/25'
                                 : (row.observacion || '').trim().length > 0
                                   ? 'bg-destructive/10'
                                   : '')
                             }
                             title={
-                              row.duplicado_en_pagos
+                              esDuplicadoCarteraRow(row)
                                 ? [
                                     'PAGO DUPLICADO: ya existe en cartera (tabla pagos).',
                                     row.numero_documento_pago_existente
@@ -2004,7 +2012,7 @@ export default function CobrosPagosReportadosPage() {
                                       : (row.observacion ?? '')
                             }
                           >
-                            {row.duplicado_en_pagos ? (
+                            {esDuplicadoCarteraRow(row) ? (
                               <div className="mb-1.5 rounded border border-orange-300 bg-orange-50 px-2 py-1.5 text-[11px] font-semibold leading-snug text-orange-950 dark:border-orange-800 dark:bg-orange-950/40 dark:text-orange-100">
                                 PAGO DUPLICADO — En cartera Nº{' '}
                                 <span className="break-all font-mono font-normal">
@@ -2041,7 +2049,7 @@ export default function CobrosPagosReportadosPage() {
                                     </span>
                                   ))}
                               </div>
-                            ) : !row.duplicado_en_pagos ? (
+                            ) : !esDuplicadoCarteraRow(row) ? (
                               '-'
                             ) : null}
                           </td>

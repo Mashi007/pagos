@@ -1396,7 +1396,7 @@ def _list_pagos_reportados_payload(
         cedula=cedula,
         institucion=institucion,
     )
-    primer_precalc, primer_num_op, numeros_en_pagos = _get_primer_triple_cached(
+    primer_precalc, primer_num_op, _ = _get_primer_triple_cached(
         db, wh_primer_scope, primer_scope_key
     )
     q = select(PagoReportado).where(*wh).order_by(
@@ -1425,14 +1425,13 @@ def _list_pagos_reportados_payload(
             include_financial_fields=False,
             pagos_canon_acum=pagos_canon_acum,
         ):
-            # Regla innegociable: duplicado = mismo numero_operacion exacto/canonico.
-            # En cola operativa se muestra solo el primer reporte; reenvíos no se listan.
+            # Mismo numero_operacion canónico: en cola se lista solo el primer reporte; reenvíos no se listan.
+            # Si el nº ya está en `pagos`, el reporte SÍ debe verse (DUPLICADO + datos cartera) para
+            # rechazar o corregir (antes se omitía la fila y no aparecía en pantalla).
             num_key = _numero_operacion_canonico(getattr(it, "numero_operacion", None))
             if num_key:
                 first_id = primer_num_op.get(num_key)
                 if first_id is not None and int(it.id) != int(first_id):
-                    continue
-                if num_key in numeros_en_pagos:
                     continue
             if not _item_falla_validadores_cola_manual(it):
                 continue
