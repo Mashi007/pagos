@@ -512,14 +512,25 @@ export function RegistrarPagoForm({
       setMontoStr(
         nextMoneda === 'BS' ? formatMontoBsVe(nextMonto) : nextMonto.toFixed(2)
       )
+
+      // Procesar cédula extraída del comprobante (solo dígitos para Mercantil/BNC)
+      let nextCedula = formData.cedula_cliente
+      const cedulaExtraida = (s.cedula_pagador_en_comprobante || '').trim()
+      if (cedulaExtraida) {
+        // La API retorna solo dígitos; agregar prefijo por defecto (V)
+        nextCedula = `V${cedulaExtraida}`
+      }
+
       setFormData(prev => ({
         ...prev,
+        cedula_cliente: nextCedula,
         fecha_pago: (s.fecha_pago || '').trim() || prev.fecha_pago,
         institucion_bancaria:
           (s.institucion_financiera || '').trim() || prev.institucion_bancaria,
         numero_documento:
           (s.numero_operacion || '').trim() || prev.numero_documento,
         monto_pagado: nextMonto,
+        prestamo_id: null, // Reset préstamo al cambiar cédula
       }))
       setErrors(prev => {
         const next = { ...prev }
@@ -530,7 +541,14 @@ export function RegistrarPagoForm({
         delete next.general
         return next
       })
-      toast.success('Campos actualizados desde el comprobante.')
+
+      if (cedulaExtraida) {
+        toast.success(
+          `Campos actualizados desde el comprobante. Cédula detectada: ${nextCedula}`
+        )
+      } else {
+        toast.success('Campos actualizados desde el comprobante.')
+      }
     } catch {
       toast.error('No se pudo re-escanear el comprobante.')
     } finally {
