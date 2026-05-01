@@ -472,6 +472,27 @@ class PagoService {
     )
   }
 
+  /**
+   * Conciliación + aplicación a cuotas (cascada) en lote para pagos PENDIENTE
+   * que ya están en la tabla `pagos` (cartera). Aislamiento por fila en backend:
+   * un fallo puntual no tumba el lote; la respuesta indica `procesados`,
+   * `cuotas_aplicadas`, `saltados` y `errores[]`.
+   */
+  async conciliarYAplicarBatch(ids: number[]): Promise<{
+    procesados: number
+    cuotas_aplicadas: number
+    saltados: number
+    saltados_detalle?: string[]
+    errores: string[]
+    mensaje: string
+  }> {
+    return await apiClient.post(
+      `${this.baseUrl}/conciliar-aplicar-batch`,
+      { ids },
+      { timeout: PagoService.TIMEOUT_PAGO_CASCADA_MS }
+    )
+  }
+
   async uploadExcel(file: File): Promise<any> {
     const formData = new FormData()
 

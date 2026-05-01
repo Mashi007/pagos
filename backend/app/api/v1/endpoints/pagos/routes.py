@@ -51,6 +51,8 @@ from fastapi import APIRouter, Depends, Query, HTTPException, UploadFile, File, 
 
 from fastapi.responses import StreamingResponse, Response
 
+from pydantic import BaseModel, field_validator
+
 from sqlalchemy import and_, case, delete, desc, exists, func, inspect, not_, or_, select, text
 
 from sqlalchemy.orm import Session, aliased
@@ -6696,6 +6698,152 @@ def aplicar_pago_a_cuotas(pago_id: int, db: Session = Depends(get_db)):
 
 
 
+
+
+class ConciliarAplicarBatchBody(BaseModel):
+    """Lote de IDs de pagos a conciliar y aplicar a cuotas en una sola operación."""
+
+    ids: list[int]
+
+    @field_validator("ids")
+    @classmethod
+    def _ids_limite(cls, v: list[int]) -> list[int]:
+        if len(v) > 500:
+            raise ValueError("Máximo 500 pagos por lote.")
+        return v
+
+
+@router.post("/conciliar-aplicar-batch", response_model=dict)
+def conciliar_y_aplicar_pagos_batch(
+    payload: ConciliarAplicarBatchBody = Body(...),
+    db: Session = Depends(get_db),
+    current_user: UserResponse = Depends(get_current_user),
+) -> dict:
+    """
+    Para los IDs indicados (tabla `pagos`), si están en cartera **PENDIENTE** con préstamo y monto:
+    - fija `conciliado=True`, `verificado_concordancia="SI"`, `fecha_conciliacion=now`
+    - abre `estado="PAGADO"` (cumple `chk_pagos_conciliado_pendiente_inconsistente`)
+    - dispara la cascada `_aplicar_pago_a_cuotas_interno`
+
+    Aislamiento por fila (try/except + rollback parcial): un fallo puntual no tumba el lote;
+    devuelve resumen con `procesados`, `cuotas_aplicadas` y `errores[]` para los que no entraron.
+    Saltos no son error: pagos ya conciliados, sin préstamo, monto<=0, ya aplicados a cuotas, etc.
+    """
+    _ = current_user  # auth, no se usa el objeto aquí
+    ids = [int(i) for i in (payload.ids or []) if isinstance(i, int) and i > 0]
+    if not ids:
+        return {
+            "procesados": 0,
+            "cuotas_aplicadas": 0,
+            "saltados": 0,
+            "errores": [],
+            "mensaje": "No hay IDs válidos en el lote.",
+        }
+
+    procesados = 0
+    cuotas_aplicadas = 0
+    saltados = 0
+    errores: list[str] = []
+    saltados_detalle: list[str] = []
+
+    for pid in ids:
+        try:
+            pago = db.get(Pago, pid)
+            if pago is None:
+                saltados += 1
+                saltados_detalle.append(f"Pago {pid}: no encontrado")
+                continue
+
+            estado_actual = (pago.estado or "").strip().upper()
+            if estado_actual not in ("", "PENDIENTE"):
+                saltados += 1
+                saltados_detalle.append(
+                    f"Pago {pid}: estado {estado_actual or '∅'} ≠ PENDIENTE; ya cerrado o no aplicable."
+                )
+                continue
+
+            if not pago.prestamo_id:
+                saltados += 1
+                saltados_detalle.append(f"Pago {pid}: sin préstamo asociado.")
+                continue
+
+            try:
+                monto = float(pago.monto_pagado or 0)
+            except (TypeError, ValueError):
+                monto = 0.0
+            if monto <= 0:
+                saltados += 1
+                saltados_detalle.append(f"Pago {pid}: monto <= 0.")
+                continue
+
+            if pago_tiene_aplicaciones_cuotas(db, pago.id):
+                # Ya tenía cuota_pagos: solo alineamos la marca de cartera si hace falta.
+                cambios = False
+                if not bool(pago.conciliado):
+                    pago.conciliado = True
+                    pago.fecha_conciliacion = datetime.now(ZoneInfo("America/Caracas"))
+                    cambios = True
+                if (pago.verificado_concordancia or "").strip().upper() != "SI":
+                    pago.verificado_concordancia = "SI"
+                    cambios = True
+                if estado_actual == "PENDIENTE":
+                    pago.estado = "PAGADO"
+                    cambios = True
+                if cambios:
+                    db.flush()
+                    procesados += 1
+                else:
+                    saltados += 1
+                    saltados_detalle.append(
+                        f"Pago {pid}: ya aplicado a cuotas y marcado en cartera."
+                    )
+                continue
+
+            # Pago elegible: marcar cartera y aplicar cascada.
+            pago.conciliado = True
+            pago.verificado_concordancia = "SI"
+            pago.fecha_conciliacion = datetime.now(ZoneInfo("America/Caracas"))
+            pago.estado = "PAGADO"  # evita chk_pagos_conciliado_pendiente_inconsistente
+
+            db.flush()
+
+            cc, cp = _aplicar_pago_a_cuotas_interno(pago, db)
+            cuotas_aplicadas += int(cc) + int(cp)
+            procesados += 1
+        except Exception as e_row:
+            db.rollback()
+            logger.error(
+                "conciliar_y_aplicar_pagos_batch: fallo en pago_id=%s: %s",
+                pid,
+                e_row,
+                exc_info=True,
+            )
+            errores.append(f"Pago {pid}: {e_row}")
+            continue
+
+    try:
+        db.commit()
+    except Exception as e_commit:
+        db.rollback()
+        logger.exception("conciliar_y_aplicar_pagos_batch: commit final falló: %s", e_commit)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error al confirmar el lote: {e_commit}",
+        ) from e_commit
+
+    mensaje = (
+        f"{procesados} pago(s) procesado(s); {cuotas_aplicadas} cuota(s) afectada(s); "
+        f"{saltados} saltado(s); {len(errores)} con error."
+    )
+    respuesta: dict[str, Any] = {
+        "procesados": procesados,
+        "cuotas_aplicadas": cuotas_aplicadas,
+        "saltados": saltados,
+        "saltados_detalle": saltados_detalle,
+        "errores": errores,
+        "mensaje": mensaje,
+    }
+    return respuesta
 
 
 # --- Cédulas permitidas para reportar en Bs (rapicredit-cobros / infopagos) ---

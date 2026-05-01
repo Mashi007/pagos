@@ -166,6 +166,26 @@ function pagoEstaCerradoSoloConsulta(
   return est === 'PAGADO' || est === 'PAGO_ADELANTADO' || est === 'ADELANTADO'
 }
 
+/**
+ * Pago elegible para «Conciliar y aplicar cuotas» en lote desde la pestaña «Todos los Pagos».
+ * Requiere estar en cartera con préstamo y monto positivo, en estado PENDIENTE y aún sin cuota_pagos.
+ * Si ya está cerrado (`pagoEstaCerradoSoloConsulta`) o sin préstamo/monto, no se ofrece.
+ */
+function pagoElegibleConciliarAplicar(p: Pago | PagoConError | null | undefined): boolean {
+  if (!p) return false
+  const pago = p as Pago
+  if (!pago.prestamo_id) return false
+  const monto =
+    typeof pago.monto_pagado === 'number'
+      ? pago.monto_pagado
+      : parseFloat(String(pago.monto_pagado ?? 0))
+  if (!Number.isFinite(monto) || monto <= 0) return false
+  const estado = String(pago.estado ?? '').trim().toUpperCase()
+  if (estado !== 'PENDIENTE' && estado !== '') return false
+  if (pago.tiene_aplicacion_cuotas === true) return false
+  return true
+}
+
 /** Si false, la opción "Descargar Excel" (Gmail) no se muestra en el submenú Agregar pago. */
 const SHOW_DESCARGA_EXCEL_EN_SUBMENU = false
 const GMAIL_METRICS_SNAPSHOT_KEY = 'pagos:last_gmail_metrics_snapshot'
@@ -206,6 +226,11 @@ export function PagosList() {
   )
   const [accionesOpenId, setAccionesOpenId] = useState<number | null>(null)
   const [conciliandoId, setConciliandoId] = useState<number | null>(null)
+  // Selección masiva en pestaña «Todos los Pagos» (cartera, PENDIENTE) para conciliar+aplicar.
+  const [selectedTodosIds, setSelectedTodosIds] = useState<Set<number>>(
+    new Set()
+  )
+  const [isBulkConciliarAplicar, setIsBulkConciliarAplicar] = useState(false)
   const [isExportingRevisar, setIsExportingRevisar] = useState(false)
   const [lastImportCobrosResult, setLastImportCobrosResult] = useState<{
     registros_procesados: number
@@ -1405,6 +1430,33 @@ export function PagosList() {
     } finally {
       setIsBulkMovingRevision(false)
       setBulkMovingProgress({ movidos: 0, total: 0 })
+    }
+  }
+  const handleConciliarYAplicarMasivo = async () => {
+    const ids = [...selectedTodosIds]
+    if (ids.length === 0) {
+      toast.info('Seleccione al menos un pago PENDIENTE.')
+      return
+    }
+    setIsBulkConciliarAplicar(true)
+    try {
+      const result = await pagoService.conciliarYAplicarBatch(ids)
+      let mensaje = `✅ ${result.procesados} pago(s) procesado(s).\n💰 ${result.cuotas_aplicadas ?? 0} cuota(s) afectada(s).`
+      if (result.saltados > 0) {
+        mensaje += `\nℹ️ ${result.saltados} saltado(s) (ya cerrados / sin préstamo / monto cero).`
+      }
+      if (result.errores && result.errores.length > 0) {
+        mensaje += `\n⚠️ ${result.errores.length} error(es):\n${result.errores.join('\n')}`
+        toast.warning(mensaje, { duration: 8000 })
+      } else {
+        toast.success(mensaje, { duration: 5000 })
+      }
+      setSelectedTodosIds(new Set())
+      await invalidatePagosPrestamosRevisionYCuotas(queryClient)
+    } catch (e) {
+      toast.error(getErrorMessage(e))
+    } finally {
+      setIsBulkConciliarAplicar(false)
     }
   }
   const abrirEscanerLoteConIds = useCallback((idsRaw: number[]) => {
@@ -2831,17 +2883,23 @@ export function PagosList() {
                           selectedRevisionIds.size === 0 || isBulkMovingRevision
                         }
                         className="bg-green-600 hover:bg-green-700"
+                        title="Para los pagos seleccionados: pasan a la tabla pagos, se marcan conciliados (verificado SI) y se aplican a cuotas en cascada. Filas con duplicado de documento se omiten con aviso."
                       >
                         {isBulkMovingRevision ? (
                           <>
                             <span className="mr-2 inline-block animate-spin">
                               ⏳
                             </span>
-                            Moviendo {bulkMovingProgress.movidos}/
+                            Cargando {bulkMovingProgress.movidos}/
                             {bulkMovingProgress.total}...
                           </>
                         ) : (
-                          '✓ Mover a Pagos Normales'
+                          <>
+                            ✓ Cargar pagos en masa
+                            {selectedRevisionIds.size > 0
+                              ? ` (${selectedRevisionIds.size})`
+                              : ''}
+                          </>
                         )}
                       </Button>
                       <Button
@@ -2872,6 +2930,15 @@ export function PagosList() {
                         Seleccionados: {selectedRevisionIds.size}
                       </span>
                     </div>
+                    <p className="mb-2 text-xs text-slate-600">
+                      <strong>Cargar pagos en masa</strong>: para cada fila
+                      seleccionada se mueve a la tabla operativa{' '}
+                      <code className="font-mono">pagos</code>, se marca
+                      conciliado y verificado <strong>SI</strong>, y se ejecuta
+                      la cascada para aplicar cuotas. Las filas con documento
+                      duplicado en cartera se omiten con aviso (use{' '}
+                      <strong>Visto</strong> para asignar código y reintentar).
+                    </p>
                     <div className="mb-3 flex flex-wrap gap-2 text-xs">
                       <Badge variant="outline">
                         Duplicados: {resumenRevision.duplicados}
@@ -3956,44 +4023,178 @@ export function PagosList() {
                   </div>
                 ) : (
                   <>
-                    <div className="overflow-hidden rounded-lg border">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>ID</TableHead>
-                            <TableHead>Cédula</TableHead>
-                            <TableHead>Crédito</TableHead>
-                            <TableHead>Estado</TableHead>
-                            <TableHead>Observaciones</TableHead>
-                            <TableHead>Monto</TableHead>
-                            <TableHead>Fecha Pago</TableHead>
-                            <TableHead>Nº Documento</TableHead>
-                            <TableHead>Conciliado</TableHead>
-                            <TableHead>Recibo cobros</TableHead>
-                            <TableHead className="text-right">
-                              Acciones
-                            </TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {[...(data.pagos || [])]
-                            .sort((a, b) => {
-                              const fechaA = new Date(a.fecha_pago).getTime()
-                              const fechaB = new Date(b.fecha_pago).getTime()
-                              return fechaA - fechaB // Más antigua primero
-                            })
-                            .map((pago: Pago) => {
-                              const docKey = claveDocumentoPagoListaNormalizada(
-                                pago.numero_documento,
-                                pago.codigo_documento ?? null
-                              )
-                              const documentoDuplicadoEnVista =
-                                Boolean(docKey) &&
-                                documentosDuplicadosEnPagina.has(docKey)
-                              return (
-                                <TableRow key={pago.id}>
-                                  <TableCell>{pago.id}</TableCell>
-                                  <TableCell>{pago.cedula_cliente}</TableCell>
+                    {(() => {
+                      const pagosOrdenados = [...(data.pagos || [])].sort(
+                        (a, b) =>
+                          new Date(a.fecha_pago).getTime() -
+                          new Date(b.fecha_pago).getTime()
+                      )
+                      const elegiblesPagina = pagosOrdenados.filter(p =>
+                        pagoElegibleConciliarAplicar(p)
+                      )
+                      const elegiblesPaginaIds = elegiblesPagina.map(p => p.id)
+                      const todosPaginaSeleccionados =
+                        elegiblesPaginaIds.length > 0 &&
+                        elegiblesPaginaIds.every(id =>
+                          selectedTodosIds.has(id)
+                        )
+                      const algunoPaginaSeleccionado = elegiblesPaginaIds.some(
+                        id => selectedTodosIds.has(id)
+                      )
+                      const toggleSeleccionTodosPagina = () => {
+                        setSelectedTodosIds(prev => {
+                          const next = new Set(prev)
+                          if (todosPaginaSeleccionados) {
+                            elegiblesPaginaIds.forEach(id => next.delete(id))
+                          } else {
+                            elegiblesPaginaIds.forEach(id => next.add(id))
+                          }
+                          return next
+                        })
+                      }
+                      const toggleSeleccionPago = (id: number) => {
+                        setSelectedTodosIds(prev => {
+                          const next = new Set(prev)
+                          if (next.has(id)) next.delete(id)
+                          else next.add(id)
+                          return next
+                        })
+                      }
+                      return (
+                        <>
+                          <div className="mb-3 flex flex-wrap items-center gap-2">
+                            <Button
+                              variant="default"
+                              onClick={() =>
+                                void handleConciliarYAplicarMasivo()
+                              }
+                              disabled={
+                                selectedTodosIds.size === 0 ||
+                                isBulkConciliarAplicar
+                              }
+                              className="bg-emerald-600 hover:bg-emerald-700"
+                              title="Para los pagos PENDIENTE seleccionados: marca conciliado y verificado SI, fija estado PAGADO y aplica el monto a las cuotas del préstamo en cascada (numero_cuota). Filas con error se reportan, el lote no se detiene."
+                            >
+                              {isBulkConciliarAplicar ? (
+                                <>
+                                  <span className="mr-2 inline-block animate-spin">
+                                    ⏳
+                                  </span>
+                                  Procesando...
+                                </>
+                              ) : (
+                                <>
+                                  ✓ Conciliar y aplicar cuotas
+                                  {selectedTodosIds.size > 0
+                                    ? ` (${selectedTodosIds.size})`
+                                    : ''}
+                                </>
+                              )}
+                            </Button>
+                            {selectedTodosIds.size > 0 && (
+                              <Button
+                                variant="ghost"
+                                onClick={() => setSelectedTodosIds(new Set())}
+                                disabled={isBulkConciliarAplicar}
+                              >
+                                Limpiar selección
+                              </Button>
+                            )}
+                            <span className="text-xs text-gray-600">
+                              Elegibles en esta página:{' '}
+                              {elegiblesPaginaIds.length} · Seleccionados:{' '}
+                              {selectedTodosIds.size}
+                            </span>
+                          </div>
+                          <p className="mb-2 text-xs text-slate-600">
+                            <strong>Conciliar y aplicar cuotas</strong>: marca{' '}
+                            <strong>conciliado=SI</strong>, fija estado{' '}
+                            <strong>PAGADO</strong> y reparte el monto a las
+                            cuotas del préstamo en cascada (orden{' '}
+                            <code className="font-mono">numero_cuota</code>).
+                            Solo se ofrecen pagos en cartera con préstamo,
+                            monto&nbsp;&gt;&nbsp;0 y aún sin{' '}
+                            <code className="font-mono">cuota_pagos</code>; los
+                            ya cerrados no se listan en la selección.
+                          </p>
+                          <div className="overflow-hidden rounded-lg border">
+                            <Table>
+                              <TableHeader>
+                                <TableRow>
+                                  <TableHead className="w-[44px]">
+                                    <input
+                                      type="checkbox"
+                                      aria-label="Seleccionar todos los elegibles de esta página"
+                                      title="Seleccionar/Deseleccionar todos los elegibles (PENDIENTE, con préstamo y monto, sin cuota_pagos)"
+                                      checked={todosPaginaSeleccionados}
+                                      ref={el => {
+                                        if (el)
+                                          el.indeterminate =
+                                            !todosPaginaSeleccionados &&
+                                            algunoPaginaSeleccionado
+                                      }}
+                                      onChange={toggleSeleccionTodosPagina}
+                                      disabled={
+                                        elegiblesPaginaIds.length === 0 ||
+                                        isBulkConciliarAplicar
+                                      }
+                                    />
+                                  </TableHead>
+                                  <TableHead>ID</TableHead>
+                                  <TableHead>Cédula</TableHead>
+                                  <TableHead>Crédito</TableHead>
+                                  <TableHead>Estado</TableHead>
+                                  <TableHead>Observaciones</TableHead>
+                                  <TableHead>Monto</TableHead>
+                                  <TableHead>Fecha Pago</TableHead>
+                                  <TableHead>Nº Documento</TableHead>
+                                  <TableHead>Conciliado</TableHead>
+                                  <TableHead>Recibo cobros</TableHead>
+                                  <TableHead className="text-right">
+                                    Acciones
+                                  </TableHead>
+                                </TableRow>
+                              </TableHeader>
+                              <TableBody>
+                                {pagosOrdenados.map((pago: Pago) => {
+                                  const docKey =
+                                    claveDocumentoPagoListaNormalizada(
+                                      pago.numero_documento,
+                                      pago.codigo_documento ?? null
+                                    )
+                                  const documentoDuplicadoEnVista =
+                                    Boolean(docKey) &&
+                                    documentosDuplicadosEnPagina.has(docKey)
+                                  const elegibleSeleccion =
+                                    pagoElegibleConciliarAplicar(pago)
+                                  return (
+                                    <TableRow key={pago.id}>
+                                      <TableCell>
+                                        {elegibleSeleccion ? (
+                                          <input
+                                            type="checkbox"
+                                            aria-label={`Seleccionar pago ${pago.id} para conciliar y aplicar cuotas`}
+                                            checked={selectedTodosIds.has(
+                                              pago.id
+                                            )}
+                                            onChange={() =>
+                                              toggleSeleccionPago(pago.id)
+                                            }
+                                            disabled={isBulkConciliarAplicar}
+                                          />
+                                        ) : (
+                                          <span
+                                            className="text-[10px] text-gray-400"
+                                            title="No elegible: ya cerrado, sin préstamo o sin monto."
+                                          >
+                                            —
+                                          </span>
+                                        )}
+                                      </TableCell>
+                                      <TableCell>{pago.id}</TableCell>
+                                      <TableCell>
+                                        {pago.cedula_cliente}
+                                      </TableCell>
                                   <TableCell>
                                     {pago.prestamo_id ? (
                                       <span className="text-sm font-medium">
@@ -4386,6 +4587,9 @@ export function PagosList() {
                         </TableBody>
                       </Table>
                     </div>
+                        </>
+                      )
+                    })()}
                     {resumenTotalCedula && (
                       <div
                         className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-950"
