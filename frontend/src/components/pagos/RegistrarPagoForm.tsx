@@ -1150,25 +1150,19 @@ export function RegistrarPagoForm({
 
       let idPagoParaProcesar: number | undefined = pagoId
 
-      /** Respuesta enriquecida de cartera (`tiene_aplicacion_cuotas`); ausente si solo se editó pagos_con_errores. */
-      let pagoTrasGuardar: Pago | undefined
-
       if (isEditing && idPagoParaProcesar) {
         if (esPagoConError) {
           await pagoConErrorService.update(idPagoParaProcesar, datosEnvio)
         } else {
-          pagoTrasGuardar = await pagoService.updatePago(
-            idPagoParaProcesar,
-            datosEnvio
-          )
+          await pagoService.updatePago(idPagoParaProcesar, datosEnvio)
         }
       } else {
-        pagoTrasGuardar = await pagoService.createPago(datosEnvio)
-        idPagoParaProcesar = pagoTrasGuardar.id
+        const pagoCreado = await pagoService.createPago(datosEnvio)
+        idPagoParaProcesar = pagoCreado.id
 
         if (import.meta.env.DEV) {
           console.log(
-            `Pago creado: id=${pagoTrasGuardar.id}, conciliado=${pagoTrasGuardar.conciliado}`
+            `Pago creado: id=${pagoCreado.id}, conciliado=${pagoCreado.conciliado}`
           )
         }
       }
@@ -1258,26 +1252,42 @@ export function RegistrarPagoForm({
             return
           }
         } else {
-          const yaArticuladoAlGuardar = Boolean(
-            pagoTrasGuardar?.tiene_aplicacion_cuotas
-          )
-
-          if (yaArticuladoAlGuardar) {
-            toast.success(
-              'Pago guardado y articulado en cuotas (la cascada se aplicó al guardar). Si la amortización no refleja el abono, revise préstamo y cuotas pendientes.',
-              { duration: 5500 }
+          try {
+            const resultAplicar = await pagoService.aplicarPagoACuotas(
+              idPagoParaProcesar!
             )
-            if (import.meta.env.DEV) {
-              console.log(
-                'Guardar y procesar: cascada ya aplicada en crear/actualizar; omitiendo POST aplicar-cuotas.'
-              )
-            }
-          } else {
-            try {
-              const resultAplicar = await pagoService.aplicarPagoACuotas(
-                idPagoParaProcesar!
-              )
 
+            let mostroToastLote = false
+
+            if (
+              resultAplicar?.success &&
+              !resultAplicar.ya_aplicado &&
+              resultAplicar.cuotas_completadas === 0 &&
+              resultAplicar.cuotas_parciales === 0 &&
+              fd.prestamo_id != null &&
+              Number(fd.prestamo_id) > 0
+            ) {
+              try {
+                const lote =
+                  await pagoService.aplicarPagosPendientesCuotasPorPrestamo(
+                    Number(fd.prestamo_id)
+                  )
+                const nAplic = Number(lote.pagos_con_aplicacion ?? 0)
+                if (nAplic > 0) {
+                  mostroToastLote = true
+                  toast.success(
+                    lote.mensaje?.trim()
+                      ? lote.mensaje
+                      : `Cascada por préstamo: ${nAplic} pago(s) con abono en cuotas.`,
+                    { duration: 6500 }
+                  )
+                }
+              } catch {
+                /* continuar con toasts según resultAplicar */
+              }
+            }
+
+            if (!mostroToastLote) {
               if (resultAplicar?.success) {
                 if (resultAplicar.ya_aplicado) {
                   toast.success(
@@ -1313,21 +1323,21 @@ export function RegistrarPagoForm({
                   { duration: 6000 }
                 )
               }
+            }
 
-              if (import.meta.env.DEV) {
-                console.log('Aplicación a cuotas:', resultAplicar)
-              }
-            } catch (applyErr) {
-              toast.warning(
-                'Pago guardado pero no se pudo aplicar automáticamente a cuotas. Use "Mover a Pagos Normales" en Revisión.',
-                { duration: 5000 }
+            if (import.meta.env.DEV) {
+              console.log('Aplicación a cuotas:', resultAplicar)
+            }
+          } catch (applyErr) {
+            toast.warning(
+              'Pago guardado pero no se pudo aplicar automáticamente a cuotas (tiempo de espera agotado o error de red). Reintente o use «Aplicar pagos a cuotas» por préstamo en amortización.',
+              { duration: 7000 }
+            )
+            if (import.meta.env.DEV) {
+              console.warn(
+                'Error aplicando a cuotas (pero pago guardado):',
+                applyErr
               )
-              if (import.meta.env.DEV) {
-                console.warn(
-                  'Error aplicando a cuotas (pero pago guardado):',
-                  applyErr
-                )
-              }
             }
           }
         }

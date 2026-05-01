@@ -112,6 +112,9 @@ export interface ApiResponse<T> {
 class PagoService {
   private baseUrl = '/api/v1/pagos'
 
+  /** PUT/POST pagos y cascada pueden superar 30s en Render (reaplicación / muchas cuotas). */
+  private static readonly TIMEOUT_PAGO_CASCADA_MS = 120000
+
   async getAllPagos(
     page = 1,
 
@@ -351,7 +354,9 @@ class PagoService {
   }
 
   async createPago(data: PagoCreate): Promise<Pago> {
-    return await apiClient.post(this.baseUrl, data)
+    return await apiClient.post(this.baseUrl, data, {
+      timeout: PagoService.TIMEOUT_PAGO_CASCADA_MS,
+    })
   }
 
   /**
@@ -400,7 +405,9 @@ class PagoService {
       }
     >
   ): Promise<Pago> {
-    return await apiClient.put(`${this.baseUrl}/${id}`, data)
+    return await apiClient.put(`${this.baseUrl}/${id}`, data, {
+      timeout: PagoService.TIMEOUT_PAGO_CASCADA_MS,
+    })
   }
 
   /** Actualiza solo el estado de conciliación (Sí/No) en BD */
@@ -433,7 +440,11 @@ class PagoService {
     cuotas_parciales: number
     message: string
   }> {
-    return await apiClient.post(`${this.baseUrl}/${pagoId}/aplicar-cuotas`)
+    return await apiClient.post(
+      `${this.baseUrl}/${pagoId}/aplicar-cuotas`,
+      undefined,
+      { timeout: PagoService.TIMEOUT_PAGO_CASCADA_MS }
+    )
   }
 
   /**
