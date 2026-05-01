@@ -4,8 +4,10 @@ Lista de préstamos con detalles completos, edición de cliente/préstamo/pagos,
 Incluye validaciones y logging para garantizar integridad de datos.
 """
 import logging
+import json
 from datetime import date, datetime, timedelta
 from typing import Any, List, Optional
+from uuid import uuid4
 from fastapi import APIRouter, Depends, Query, HTTPException, Body
 from sqlalchemy import select, func, and_, case, literal_column, text
 from sqlalchemy.orm import Session, aliased
@@ -28,6 +30,7 @@ from app.models.prestamo import Prestamo
 from app.models.cuota import Cuota
 from app.models.pago import Pago
 from app.models.revision_manual_prestamo import RevisionManualPrestamo
+from app.models.revision_manual_prestamo_temporal import RevisionManualPrestamoTemp
 from app.models.revision_manual_solicitud_reapertura import RevisionManualSolicitudReapertura
 from app.models.user import User
 from app.models.auditoria import Auditoria
@@ -2117,3 +2120,389 @@ def rechazar_solicitud_reapertura_revision(
         "prestamo_id": sol.prestamo_id,
         "solicitud_id": solicitud_id,
     }
+
+
+# ============================================================================
+# TABLA TEMPORAL DE BORRADOR - 5 ENDPOINTS
+# ============================================================================
+
+
+class BorradorGuardarPayload(BaseModel):
+    cliente_datos: Optional[dict] = None
+    prestamo_datos: Optional[dict] = None
+    cuotas_datos: Optional[list] = None
+    pagos_datos: Optional[list] = None
+
+
+@router.post("/prestamos/{prestamo_id}/guardar-borrador")
+def guardar_borrador_revision(
+    prestamo_id: int,
+    payload: BorradorGuardarPayload = Body(...),
+    db: Session = Depends(get_db),
+    current_user: Any = Depends(get_current_user),
+):
+    """Guarda cambios en tabla temporal (borrador) sin afectar BD real."""
+    actor = _actor_revision_manual(current_user)
+    prestamo = db.get(Prestamo, prestamo_id)
+    if not prestamo:
+        raise HTTPException(status_code=404, detail="Préstamo no encontrado")
+
+    usuario_id = getattr(current_user, "id", None)
+
+    # Obtener o crear borrador temporal
+    borrador = db.execute(
+        select(RevisionManualPrestamoTemp).where(
+            RevisionManualPrestamoTemp.prestamo_id == prestamo_id
+        )
+    ).scalars().first()
+
+    if not borrador:
+        borrador = RevisionManualPrestamoTemp(
+            id=str(uuid4()),
+            usuario_id=usuario_id,
+            prestamo_id=prestamo_id,
+            estado="borrador",
+        )
+        db.add(borrador)
+
+    # Actualizar campos
+    if payload.cliente_datos:
+        borrador.cliente_datos_json = json.dumps(payload.cliente_datos)
+    if payload.prestamo_datos:
+        borrador.prestamo_datos_json = json.dumps(payload.prestamo_datos)
+    if payload.cuotas_datos:
+        borrador.cuotas_datos_json = json.dumps(payload.cuotas_datos)
+    if payload.pagos_datos:
+        borrador.pagos_datos_json = json.dumps(payload.pagos_datos)
+
+    borrador.actualizado_en = datetime.now()
+
+    try:
+        db.commit()
+        logger.info(
+            "revision_manual GUARDAR_BORRADOR prestamo_id=%s actor=%s",
+            prestamo_id,
+            actor,
+        )
+    except Exception as exc:
+        db.rollback()
+        logger.exception(
+            "revision_manual GUARDAR_BORRADOR_FALLIDO prestamo_id=%s actor=%s",
+            prestamo_id,
+            actor,
+        )
+        raise HTTPException(status_code=500, detail="Error al guardar borrador") from exc
+
+    return {
+        "mensaje": "Borrador guardado exitosamente",
+        "borrador_id": borrador.id,
+        "prestamo_id": prestamo_id,
+        "estado": "borrador",
+    }
+
+
+@router.get("/prestamos/{prestamo_id}/obtener-borrador")
+def obtener_borrador_revision(
+    prestamo_id: int,
+    db: Session = Depends(get_db),
+    current_user: Any = Depends(get_current_user),
+):
+    """Lee borrador temporal para preview antes de confirmar."""
+    actor = _actor_revision_manual(current_user)
+    prestamo = db.get(Prestamo, prestamo_id)
+    if not prestamo:
+        raise HTTPException(status_code=404, detail="Préstamo no encontrado")
+
+    borrador = db.execute(
+        select(RevisionManualPrestamoTemp).where(
+            RevisionManualPrestamoTemp.prestamo_id == prestamo_id
+        )
+    ).scalars().first()
+
+    if not borrador:
+        return {
+            "mensaje": "No hay borrador para este préstamo",
+            "prestamo_id": prestamo_id,
+            "borrador": None,
+        }
+
+    return {
+        "mensaje": "Borrador obtenido",
+        "prestamo_id": prestamo_id,
+        "borrador_id": borrador.id,
+        "estado": borrador.estado,
+        "cliente_datos": json.loads(borrador.cliente_datos_json or "{}"),
+        "prestamo_datos": json.loads(borrador.prestamo_datos_json or "{}"),
+        "cuotas_datos": json.loads(borrador.cuotas_datos_json or "[]"),
+        "pagos_datos": json.loads(borrador.pagos_datos_json or "[]"),
+        "validadores_resultado": json.loads(borrador.validadores_resultado or "{}"),
+        "creado_en": borrador.creado_en.isoformat() if borrador.creado_en else None,
+        "actualizado_en": borrador.actualizado_en.isoformat() if borrador.actualizado_en else None,
+    }
+
+
+@router.post("/prestamos/{prestamo_id}/validar-borrador")
+def validar_borrador_revision(
+    prestamo_id: int,
+    db: Session = Depends(get_db),
+    current_user: Any = Depends(get_current_user),
+):
+    """Ejecuta validadores sobre el borrador, retorna errores/advertencias."""
+    actor = _actor_revision_manual(current_user)
+    prestamo = db.get(Prestamo, prestamo_id)
+    if not prestamo:
+        raise HTTPException(status_code=404, detail="Préstamo no encontrado")
+
+    borrador = db.execute(
+        select(RevisionManualPrestamoTemp).where(
+            RevisionManualPrestamoTemp.prestamo_id == prestamo_id
+        )
+    ).scalars().first()
+
+    if not borrador:
+        raise HTTPException(status_code=404, detail="No hay borrador para este préstamo")
+
+    errores = []
+    advertencias = []
+
+    try:
+        # 1. Coherencia cliente-préstamo
+        if borrador.prestamo_datos_json:
+            try:
+                asegurar_prestamo_alineado_con_cliente(db, prestamo)
+            except PrestamoCedulaClienteError as e:
+                errores.append(f"Coherencia cliente-préstamo: {str(e)}")
+
+        # 2. Validar estados de cuota
+        if borrador.cuotas_datos_json:
+            try:
+                cuotas = json.loads(borrador.cuotas_datos_json)
+                estados_validos = [
+                    "PENDIENTE",
+                    "PARCIAL",
+                    "VENCIDO",
+                    "MORA",
+                    "PAGADO",
+                    "PAGO_ADELANTADO",
+                    "CANCELADA",
+                ]
+                for cuota in cuotas:
+                    estado = (cuota.get("estado") or "").strip().upper()
+                    if estado and estado not in estados_validos:
+                        errores.append(
+                            f"Cuota {cuota.get('numero_cuota', '?')}: estado '{estado}' inválido"
+                        )
+            except Exception as e:
+                errores.append(f"Error validando cuotas: {str(e)}")
+
+        # 3. Validar pagos conciliados
+        if borrador.pagos_datos_json:
+            try:
+                pagos = json.loads(borrador.pagos_datos_json)
+                for pago in pagos:
+                    estado_pago = (pago.get("estado") or "").strip().upper()
+                    if estado_pago not in ["CONCILIADO", "VERIFICADO", "PAGADO"]:
+                        errores.append(
+                            f"Pago {pago.get('id', '?')}: estado '{estado_pago}' no conciliado"
+                        )
+            except Exception as e:
+                errores.append(f"Error validando pagos: {str(e)}")
+
+        # Guardar resultado
+        resultado = {
+            "valido": len(errores) == 0,
+            "errores": errores,
+            "advertencias": advertencias,
+            "timestamp": datetime.now().isoformat(),
+        }
+
+        borrador.validadores_resultado = json.dumps(resultado)
+        borrador.estado = "validado" if len(errores) == 0 else "error"
+        if errores:
+            borrador.error_mensaje = " | ".join(errores)
+        borrador.actualizado_en = datetime.now()
+
+        db.commit()
+
+        logger.info(
+            "revision_manual VALIDAR_BORRADOR prestamo_id=%s errores=%d actor=%s",
+            prestamo_id,
+            len(errores),
+            actor,
+        )
+
+        return resultado
+
+    except Exception as exc:
+        db.rollback()
+        logger.exception(
+            "revision_manual VALIDAR_BORRADOR_FALLIDO prestamo_id=%s actor=%s",
+            prestamo_id,
+            actor,
+        )
+        raise HTTPException(status_code=500, detail="Error al validar borrador") from exc
+
+
+@router.post("/prestamos/{prestamo_id}/confirmar-borrador")
+def confirmar_borrador_revision(
+    prestamo_id: int,
+    db: Session = Depends(get_db),
+    current_user: Any = Depends(get_current_user),
+):
+    """Mueve borrador validado a BD real (cascada, cuotas, pagos) en transacción atómica."""
+    actor = _actor_revision_manual(current_user)
+    usuario_id = getattr(current_user, "id", None)
+
+    prestamo = db.get(Prestamo, prestamo_id)
+    if not prestamo:
+        raise HTTPException(status_code=404, detail="Préstamo no encontrado")
+
+    borrador = db.execute(
+        select(RevisionManualPrestamoTemp).where(
+            RevisionManualPrestamoTemp.prestamo_id == prestamo_id
+        )
+    ).scalars().first()
+
+    if not borrador:
+        raise HTTPException(status_code=404, detail="No hay borrador para este préstamo")
+
+    if borrador.estado != "validado":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Borrador no está listo para confirmar (estado: {borrador.estado})",
+        )
+
+    try:
+        cambios_dict = {}
+
+        # 1. Aplicar cambios de préstamo desde borrador
+        if borrador.prestamo_datos_json:
+            datos_prestamo = json.loads(borrador.prestamo_datos_json)
+            for campo, valor in datos_prestamo.items():
+                if hasattr(prestamo, campo):
+                    old_value = getattr(prestamo, campo)
+                    cambios_dict[campo] = (old_value, valor)
+                    setattr(prestamo, campo, valor)
+
+        prestamo.fecha_actualizacion = datetime.now()
+        marcar_o_crear_prestamo_editado_en_revision_manual(db, prestamo_id)
+
+        # 2. Reconstruir cuotas desde prestamo (con aplicación de pagos cascada)
+        from app.api.v1.endpoints.prestamos import (
+            _reconstruir_tabla_cuotas_desde_prestamo_en_sesion,
+        )
+
+        stats = _reconstruir_tabla_cuotas_desde_prestamo_en_sesion(db, prestamo_id)
+        creadas = int(stats.get("cuotas_creadas") or 0)
+        pagos_aplicados = int(stats.get("pagos_con_aplicacion") or 0)
+
+        # 3. Auditoría
+        _fallback_uid = db.execute(text("SELECT id FROM public.usuarios ORDER BY id LIMIT 1")).scalar() or 1
+        uid_audit = usuario_id or _fallback_uid
+
+        db.add(
+            Auditoria(
+                usuario_id=int(uid_audit),
+                accion="REVISION_MANUAL_CONFIRMAR_BORRADOR",
+                entidad="prestamos",
+                entidad_id=prestamo_id,
+                detalles=(
+                    f"Confirmación de borrador: {creadas} cuota(s); "
+                    f"{pagos_aplicados} pago(s) aplicado(s). "
+                    f"Campos: {list(cambios_dict.keys())}"
+                ),
+                exito=True,
+            )
+        )
+
+        _commit_revision_seguro(
+            db,
+            operacion="confirmar_borrador_revision",
+            actor=actor,
+            tabla_principal="prestamos",
+            id_principal=prestamo_id,
+            resumen_campos=list(cambios_dict.keys()) + ["reconstruccion_cuotas"],
+        )
+
+        # 4. Eliminar borrador (confirmar = consumir)
+        db.delete(borrador)
+        db.commit()
+
+        logger.info(
+            "revision_manual CONFIRMAR_BORRADOR prestamo_id=%s cuotas=%d pagos=%d actor=%s",
+            prestamo_id,
+            creadas,
+            pagos_aplicados,
+            actor,
+        )
+
+        return {
+            "mensaje": "Borrador confirmado y migrado a BD real",
+            "prestamo_id": prestamo_id,
+            "cuotas_creadas": creadas,
+            "pagos_aplicados": pagos_aplicados,
+            "cambios": {k: {"anterior": v[0], "nuevo": v[1]} for k, v in cambios_dict.items()},
+        }
+
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as exc:
+        db.rollback()
+        logger.exception(
+            "revision_manual CONFIRMAR_BORRADOR_FALLIDO prestamo_id=%s actor=%s",
+            prestamo_id,
+            actor,
+        )
+        raise HTTPException(status_code=500, detail="Error al confirmar borrador") from exc
+
+
+@router.delete("/prestamos/{prestamo_id}/descartar-borrador")
+def descartar_borrador_revision(
+    prestamo_id: int,
+    db: Session = Depends(get_db),
+    current_user: Any = Depends(get_current_user),
+):
+    """Elimina borrador temporal sin guardar (descarta cambios)."""
+    actor = _actor_revision_manual(current_user)
+    prestamo = db.get(Prestamo, prestamo_id)
+    if not prestamo:
+        raise HTTPException(status_code=404, detail="Préstamo no encontrado")
+
+    borrador = db.execute(
+        select(RevisionManualPrestamoTemp).where(
+            RevisionManualPrestamoTemp.prestamo_id == prestamo_id
+        )
+    ).scalars().first()
+
+    if not borrador:
+        return {
+            "mensaje": "No hay borrador para descartar",
+            "prestamo_id": prestamo_id,
+        }
+
+    try:
+        db.delete(borrador)
+        db.commit()
+
+        logger.info(
+            "revision_manual DESCARTAR_BORRADOR prestamo_id=%s actor=%s",
+            prestamo_id,
+            actor,
+        )
+
+        return {
+            "mensaje": "Borrador descartado (cambios no guardados)",
+            "prestamo_id": prestamo_id,
+            "borrador_id": borrador.id,
+        }
+
+    except Exception as exc:
+        db.rollback()
+        logger.exception(
+            "revision_manual DESCARTAR_BORRADOR_FALLIDO prestamo_id=%s actor=%s",
+            prestamo_id,
+            actor,
+        )
+        raise HTTPException(status_code=500, detail="Error al descartar borrador") from exc
+

@@ -85,7 +85,8 @@ function validateEnv(): EnvConfig {
         API_URL = crossOriginInBrowser ? '' : absoluteApi
         if (crossOriginInBrowser) {
           // Diseño esperado en prod (same-origin /api). Un log por sesión para no saturar la consola.
-          const crossOriginLogKey = 'rapicredit:env:vite_api_cross_origin_logged'
+          const crossOriginLogKey =
+            'rapicredit:env:vite_api_cross_origin_logged'
           let alreadyLogged = false
           try {
             if (typeof sessionStorage !== 'undefined') {

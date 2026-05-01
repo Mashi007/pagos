@@ -7,23 +7,23 @@ import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
 
 export function EscanerPage() {
-  const [showModalCambiarCedula, setShowModalCambiarCedula] = useState(false)
-  const [isLoading, setIsLoading] = useState(false)
+const [showModalCambiarCedula, setShowModalCambiarCedula] = useState(false)
+const [isLoading, setIsLoading] = useState(false)
 
-  // Simulación de referencia actual
-  const referenciaActual = 'RPC-20260428-00111'
+// Simulación de referencia actual
+const referenciaActual = 'RPC-20260428-00111'
 
-  const handleNuevoEscaneo = () => {
-    // Abrir modal para solicitar cédulas
-    setShowModalCambiarCedula(true)
-  }
+const handleNuevoEscaneo = () => {
+// Abrir modal para solicitar cédulas
+setShowModalCambiarCedula(true)
+}
 
-  const handleConfirmarCambiarCedula = async (mismaCedula: string, nuevaCedula: string) => {
-    setIsLoading(true)
-    try {
-      // Aquí va la lógica para procesar el cambio de cédula
-      // Por ejemplo: llamar a API para validar/guardar
-      console.log('Cambio de cédula:', { mismaCedula, nuevaCedula })
+const handleConfirmarCambiarCedula = async (mismaCedula: string, nuevaCedula: string) => {
+setIsLoading(true)
+try {
+// Aquí va la lógica para procesar el cambio de cédula
+// Por ejemplo: llamar a API para validar/guardar
+console.log('Cambio de cédula:', { mismaCedula, nuevaCedula })
 
       toast.success(`✅ Iniciando nuevo escaneo\nCédula anterior: ${mismaCedula}\nNueva cédula: ${nuevaCedula}`)
 
@@ -37,17 +37,18 @@ export function EscanerPage() {
     } finally {
       setIsLoading(false)
     }
-  }
 
-  return (
-    <div>
-      {/* Contenido del escáner */}
+}
+
+return (
+<div>
+{/_ Contenido del escáner _/}
 
       {/* Área de éxito - "Reporte enviado" */}
       <div className="rounded-lg border border-green-200 bg-green-50 p-6">
         <h3 className="text-lg font-semibold text-green-900 mb-2">✓ Reporte enviado</h3>
         <p className="text-sm text-green-800 mb-4">Referencia: {referenciaActual}</p>
-        
+
         <Button
           onClick={handleNuevoEscaneo}
           className="bg-blue-600 hover:bg-blue-700 text-white"
@@ -64,10 +65,11 @@ export function EscanerPage() {
         isLoading={isLoading}
       />
     </div>
-  )
+
+)
 }
 
-/*
+/\*
 INSTRUCCIONES DE INTEGRACIÓN:
 
 1. Importar el modal en el componente que tiene el botón "Nuevo escaneo":
@@ -81,16 +83,16 @@ INSTRUCCIONES DE INTEGRACIÓN:
 
 4. Renderizar el modal:
    <ModalCambiarCedula
-     isOpen={showModalCambiarCedula}
-     onClose={() => setShowModalCambiarCedula(false)}
-     onConfirm={handleConfirmarCambiarCedula}
-     isLoading={isLoading}
+   isOpen={showModalCambiarCedula}
+   onClose={() => setShowModalCambiarCedula(false)}
+   onConfirm={handleConfirmarCambiarCedula}
+   isLoading={isLoading}
    />
 
 5. Implementar handleConfirmarCambiarCedula con tu lógica:
    const handleConfirmarCambiarCedula = async (mismaCedula, nuevaCedula) => {
-     // Guardar cédulas en estado o localStorage
-     // Redirigir a interfaz de escaneo
-     // Continuar flujo
+   // Guardar cédulas en estado o localStorage
+   // Redirigir a interfaz de escaneo
+   // Continuar flujo
    }
-*/
+   \*/

@@ -467,9 +467,7 @@ class ApiClient {
           const delayBase =
             st === 502 || st === 503 ? (useLong502Delay ? 3500 : 2000) : 500
           const rawDelay = delayBase * Math.pow(2, retryCount)
-          const delayMs = useLong502Delay
-            ? Math.min(14000, rawDelay)
-            : rawDelay
+          const delayMs = useLong502Delay ? Math.min(14000, rawDelay) : rawDelay
 
           // console.info: no pasa por el parche de console.warn de pagos-bootstrap.js (evita confundir la línea 128 del bootstrap con el origen del log).
           console.info(

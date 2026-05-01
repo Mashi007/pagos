@@ -873,7 +873,7 @@ export function RegistrarPagoForm({
       }
 
       if (fd.prestamo_id && fd.monto_pagado > 0) {
-        datosEnvio.conciliado = true  // ✅ AUTOCONCILIAR si hay préstamo y monto
+        datosEnvio.conciliado = true // ✅ AUTOCONCILIAR si hay préstamo y monto
       }
 
       if (isEditing && pagoId) {
@@ -886,10 +886,12 @@ export function RegistrarPagoForm({
         // ✅ CREAR NUEVO: conciliado se envía en datosEnvio
         const pagoCreado = await pagoService.createPago(datosEnvio)
         pagoId = pagoCreado.id
-        
+
         // Log para verificar autoconciliación
         if (import.meta.env.DEV) {
-          console.log(`Pago creado: id=${pagoCreado.id}, conciliado=${pagoCreado.conciliado}`)
+          console.log(
+            `Pago creado: id=${pagoCreado.id}, conciliado=${pagoCreado.conciliado}`
+          )
         }
       }
 
@@ -903,12 +905,13 @@ export function RegistrarPagoForm({
           // Mostrar detalle del resultado (mejorado)
           if (resultAplicar?.success) {
             const detalleAplicacion = `${resultAplicar.cuotas_completadas} cuota(s) completada(s)${
-              resultAplicar.cuotas_parciales > 0 ? `, ${resultAplicar.cuotas_parciales} parcial(es)` : ''
+              resultAplicar.cuotas_parciales > 0
+                ? `, ${resultAplicar.cuotas_parciales} parcial(es)`
+                : ''
             }`
-            toast.success(
-              `Pago aplicado a cuotas: ${detalleAplicacion}`,
-              { duration: 4000 }
-            )
+            toast.success(`Pago aplicado a cuotas: ${detalleAplicacion}`, {
+              duration: 4000,
+            })
           }
 
           // Log del resultado (info, no error)

@@ -73,10 +73,12 @@ export function ModalCambiarCedula({
 
         <div className="space-y-4 py-4">
           {/* Aviso informativo */}
-          <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 flex gap-2">
-            <AlertCircle className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
+          <div className="flex gap-2 rounded-lg border border-blue-200 bg-blue-50 p-3">
+            <AlertCircle className="mt-0.5 h-5 w-5 flex-shrink-0 text-blue-600" />
             <p className="text-sm text-blue-900">
-              Se conservará la cédula validada, la tasa y el archivo del comprobante del deudor actual en el paso del comprobante si corresponde otro deudor.
+              Se conservará la cédula validada, la tasa y el archivo del
+              comprobante del deudor actual en el paso del comprobante si
+              corresponde otro deudor.
             </p>
           </div>
 
@@ -89,7 +91,7 @@ export function ModalCambiarCedula({
               type="text"
               placeholder="Ej: V12345678"
               value={mismaCedula}
-              onChange={(e) => setMismaCedula(e.target.value)}
+              onChange={e => setMismaCedula(e.target.value)}
               onKeyPress={handleKeyPress}
               disabled={isLoading}
               className="text-sm"
@@ -108,7 +110,7 @@ export function ModalCambiarCedula({
               type="text"
               placeholder="Ej: E87654321"
               value={nuevaCedula}
-              onChange={(e) => setNuevaCedula(e.target.value)}
+              onChange={e => setNuevaCedula(e.target.value)}
               onKeyPress={handleKeyPress}
               disabled={isLoading}
               className="text-sm"
@@ -120,11 +122,7 @@ export function ModalCambiarCedula({
         </div>
 
         <DialogFooter className="flex gap-2">
-          <Button
-            variant="outline"
-            onClick={handleClose}
-            disabled={isLoading}
-          >
+          <Button variant="outline" onClick={handleClose} disabled={isLoading}>
             Cancelar
           </Button>
           <Button

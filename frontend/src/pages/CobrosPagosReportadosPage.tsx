@@ -1449,8 +1449,8 @@ export default function CobrosPagosReportadosPage() {
                 que el API). Acota el volumen que revisa el servidor sin cambiar
                 validadores ni la cola manual. Use «Sin límite de fechas» solo
                 cuando necesite todo el historial. Tras cambiar fechas, cédula o
-                institución a mano, pulse <strong>Buscar</strong> para
-                consultar el servidor (evita una petición por cada tecla).
+                institución a mano, pulse <strong>Buscar</strong> para consultar
+                el servidor (evita una petición por cada tecla).
               </p>
             </div>
 

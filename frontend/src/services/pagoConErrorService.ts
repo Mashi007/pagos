@@ -198,7 +198,12 @@ class PagoConErrorService {
 
   async moverAPagosNormales(
     ids: number[]
-  ): Promise<{ movidos: number; cuotas_aplicadas?: number; errores?: string[]; mensaje: string }> {
+  ): Promise<{
+    movidos: number
+    cuotas_aplicadas?: number
+    errores?: string[]
+    mensaje: string
+  }> {
     return await apiClient.post(`${this.baseUrl}/mover-a-pagos`, { ids })
   }
 
