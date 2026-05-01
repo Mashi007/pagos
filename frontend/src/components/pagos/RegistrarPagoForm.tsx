@@ -454,20 +454,23 @@ export function RegistrarPagoForm({
 
     let cedulaPartes = descomponerCedula(formData.cedula_cliente)
 
-    // Permitir re-escaneo sin cédula si hay comprobante guardado
-    // (para extraer cédula del comprobante)
-    const tieneComprobanteGuardado = Boolean(
-      linkComprobanteParaVista && !archivoComprobante
-    )
+    // Imagen nueva (File) o comprobante ya guardado en BD (sin archivo nuevo en memoria)
+    const tieneComprobanteParaEscanear =
+      Boolean(archivoComprobante) ||
+      Boolean(linkComprobanteParaVista && !archivoComprobante)
 
-    if (!cedulaPartes && !tieneComprobanteGuardado) {
+    let extraccionSinCliente = false
+
+    if (!cedulaPartes && !tieneComprobanteParaEscanear) {
       toast.error('Ingrese una cédula válida antes de escanear.')
       return
     }
 
-    // Si no hay cédula pero hay comprobante, usar cédula dummy para escaneo
-    if (!cedulaPartes && tieneComprobanteGuardado) {
-      cedulaPartes = { tipo: 'V', numero: '0' }
+    // Sin cédula válida pero hay imagen: placeholder sintácticamente válido + backend extraccion_sin_cliente
+    // (V+0 fallaba validate_cedula 6-11 dígitos; el backend exige cliente salvo esta bandera.)
+    if (!cedulaPartes && tieneComprobanteParaEscanear) {
+      cedulaPartes = { tipo: 'V', numero: '12345678' }
+      extraccionSinCliente = true
       toast.info('Re-escaneando para extraer cédula del comprobante...')
     }
 
@@ -519,6 +522,9 @@ export function RegistrarPagoForm({
       const fd = new FormData()
       fd.append('tipo_cedula', cedulaPartes!.tipo)
       fd.append('numero_cedula', cedulaPartes!.numero)
+      if (extraccionSinCliente) {
+        fd.append('extraccion_sin_cliente', 'true')
+      }
       fd.append('comprobante', fileToScan)
       fd.append('fuente_tasa_cambio', 'euro')
       const institucionPlantilla = (formData.institucion_bancaria || '').trim()

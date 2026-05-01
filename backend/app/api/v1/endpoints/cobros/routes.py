@@ -3209,6 +3209,7 @@ async def escaner_extraer_comprobante_infopagos(
     comprobante: UploadFile = File(...),
     fuente_tasa_cambio: str = Form("euro"),
     institucion_plantilla: str = Form(""),
+    extraccion_sin_cliente: str = Form(""),
 ):
     """
     Personal autenticado: sugiere campos del formulario Infopagos leyendo el comprobante con Gemini.
@@ -3217,8 +3218,20 @@ async def escaner_extraer_comprobante_infopagos(
     con el comprobante para editar / eliminar / guardar luego; si todo pasa, no crea borrador.
     Opcional: `institucion_plantilla` (ej. Mercantil, BNC) añade al prompt pautas típicas del banco
     sin sustituir lo visible en la imagen (re-escaneo lote Infopagos).
+
+    `extraccion_sin_cliente` (multipart, ej. "true"): solo personal autenticado; la cédula del formulario
+    debe seguir siendo sintácticamente válida (placeholder), pero no se exige que exista en BD ni
+    préstamo APROBADO. Sirve para re-escanear comprobantes cuando aún no hay cédula del deudor (p. ej.
+    valor ERROR o pendiente de leer desde la imagen).
     """
     _enforce_escaner_rate_limit(request)
+
+    sin_cliente = (extraccion_sin_cliente or "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    )
 
     cedula_input = f"{(tipo_cedula or '').strip()}{(numero_cedula or '').strip()}"
     val = validate_cedula(cedula_input)
@@ -3229,16 +3242,22 @@ async def escaner_extraer_comprobante_infopagos(
     if not cedula_lookup:
         raise HTTPException(status_code=400, detail="Formato de cédula no reconocido.")
 
-    cliente = db.execute(
-        select(Cliente).where(expr_cedula_normalizada_para_comparar(Cliente.cedula) == cedula_lookup)
-    ).scalars().first()
-    if not cliente:
-        raise HTTPException(status_code=400, detail="La cédula no está registrada.")
+    cliente = None
+    prestamos_aprob: list = []
 
-    prestamos_aprob = cpr.prestamos_aprobados_del_cliente(db, cliente.id)
-    err_pres = cpr.error_si_no_puede_reportar_en_web(prestamos_aprob)
-    if err_pres:
-        raise HTTPException(status_code=400, detail=err_pres)
+    if not sin_cliente:
+        cliente = db.execute(
+            select(Cliente).where(
+                expr_cedula_normalizada_para_comparar(Cliente.cedula) == cedula_lookup
+            )
+        ).scalars().first()
+        if not cliente:
+            raise HTTPException(status_code=400, detail="La cédula no está registrada.")
+
+        prestamos_aprob = cpr.prestamos_aprobados_del_cliente(db, cliente.id)
+        err_pres = cpr.error_si_no_puede_reportar_en_web(prestamos_aprob)
+        if err_pres:
+            raise HTTPException(status_code=400, detail=err_pres)
 
     content = await comprobante.read()
     fn_comp = comprobante.filename or "comprobante"
@@ -3295,19 +3314,25 @@ async def escaner_extraer_comprobante_infopagos(
                     "prestamo_objetivo_id": int(prestamos_aprob[0]) if len(prestamos_aprob) == 1 else None,
                     "motivo_digitalizacion": "gemini_no_digitaliza",
                 }
-                borrador_id_fallo = ieb.crear_borrador_escaneo(
-                    db,
-                    cliente_id=int(cliente.id),
-                    usuario_id=usuario_escaner_id,
-                    tipo_cedula=tipo,
-                    numero_cedula=numero,
-                    cedula_normalizada=cedula_lookup,
-                    fuente_tasa_cambio=fuente_tasa_cambio,
-                    content=content,
-                    ctype=ctype,
-                    filename=filename,
-                    payload=payload_snap_fallo,
-                )
+                if cliente is not None:
+                    borrador_id_fallo = ieb.crear_borrador_escaneo(
+                        db,
+                        cliente_id=int(cliente.id),
+                        usuario_id=usuario_escaner_id,
+                        tipo_cedula=tipo,
+                        numero_cedula=numero,
+                        cedula_normalizada=cedula_lookup,
+                        fuente_tasa_cambio=fuente_tasa_cambio,
+                        content=content,
+                        ctype=ctype,
+                        filename=filename,
+                        payload=payload_snap_fallo,
+                    )
+                else:
+                    borrador_id_fallo = None
+                    logger.warning(
+                        "[ESCANER] Gemini falló y extraccion_sin_cliente=True; no se persiste borrador sin cliente."
+                    )
                 if borrador_id_fallo:
                     db.commit()
                 else:
@@ -3421,7 +3446,7 @@ async def escaner_extraer_comprobante_infopagos(
         validacion_reglas=validacion_reglas,
         duplicado_en_pagos=duplicado_en_pagos,
     )
-    if necesita_borrador_bd and usuario_escaner_id is not None:
+    if necesita_borrador_bd and usuario_escaner_id is not None and cliente is not None:
         try:
             payload_snap = {
                 "sugerencia": sugerencia,
@@ -3459,6 +3484,11 @@ async def escaner_extraer_comprobante_infopagos(
     elif necesita_borrador_bd and usuario_escaner_id is None:
         logger.warning(
             "[ESCANER] validación con pendientes pero sin usuario en sesión; no se persiste borrador cedula=%s",
+            cedula_lookup[:12],
+        )
+    elif necesita_borrador_bd and cliente is None:
+        logger.warning(
+            "[ESCANER] validación con pendientes y extraccion_sin_cliente; no se persiste borrador sin cliente cedula_ctx=%s",
             cedula_lookup[:12],
         )
 
