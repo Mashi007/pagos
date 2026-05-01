@@ -25,6 +25,9 @@ pytest-benchmark>=4.0.0
 pytest-html>=3.2.0
 coverage>=7.0.0
 
+# IANA time zones for zoneinfo on Windows (America/Caracas en tests de cascada).
+tzdata>=2024.1
+
 # Development
 ipdb>=0.13.0
 faker>=18.0.0

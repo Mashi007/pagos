@@ -340,3 +340,89 @@ def test_diagnostico_cascada_sin_cupo_cuotas_llenas(db: Session):
     assert int(diag.get("pagos_elegibles_cascada_sin_cuota_pagos") or 0) >= 1
     sin_abono = diag.get("pagos_con_intento_sin_abono_ids") or []
     assert pago.id in sin_abono
+
+
+def test_cascada_segunda_llamada_idempotente_no_duplica_cuota_pagos(db: Session):
+    """
+    Guardar (crear/actualizar) ya aplica cascada; POST aplicar-cuotas debe ser idempotente.
+
+    Segunda invocación de _aplicar_pago_a_cuotas_interno no debe crear filas extra en cuota_pagos.
+    """
+    from app.services.pagos_cascada_aplicacion import _aplicar_pago_a_cuotas_interno as aplicar
+
+    hoy = date.today()
+    cedula = f"VID{datetime.now().strftime('%H%M%S')}"
+    cliente = Cliente(
+        cedula=cedula,
+        nombres="Test idempotencia cascada",
+        telefono="0",
+        email="id@test.local",
+        direccion="X",
+        fecha_nacimiento=date(1990, 1, 1),
+        ocupacion="T",
+        estado="ACTIVO",
+        usuario_registro="test@test.local",
+        notas="idempotencia cascada",
+    )
+    db.add(cliente)
+    db.flush()
+    prestamo = Prestamo(
+        cliente_id=cliente.id,
+        cedula=cliente.cedula,
+        nombres=cliente.nombres,
+        total_financiamiento=Decimal("200.00"),
+        fecha_requerimiento=hoy,
+        modalidad_pago="MENSUAL",
+        numero_cuotas=1,
+        cuota_periodo=Decimal("200.00"),
+        producto="T",
+        analista="test@test.local",
+    )
+    db.add(prestamo)
+    db.flush()
+    db.add(
+        Cuota(
+            prestamo_id=prestamo.id,
+            numero_cuota=1,
+            fecha_vencimiento=hoy + timedelta(days=30),
+            monto=Decimal("200.00"),
+            saldo_capital_inicial=Decimal("200.00"),
+            saldo_capital_final=Decimal("0.00"),
+            monto_capital=Decimal("200.00"),
+            monto_interes=Decimal("0.00"),
+            total_pagado=None,
+            estado="PENDIENTE",
+        )
+    )
+    db.flush()
+    doc = f"IDEM-{datetime.now().strftime('%Y%m%d%H%M%S')}"
+    pago = Pago(
+        prestamo_id=prestamo.id,
+        cedula_cliente=cliente.cedula,
+        fecha_pago=datetime.now(),
+        monto_pagado=Decimal("80.00"),
+        numero_documento=doc,
+        referencia_pago=doc,
+        conciliado=True,
+        verificado_concordancia="SI",
+        estado="PAGADO",
+    )
+    db.add(pago)
+    db.flush()
+
+    cc1, cp1 = aplicar(pago, db)
+    db.flush()
+    assert cc1 + cp1 >= 1
+
+    n1 = db.scalar(
+        select(func.count()).select_from(CuotaPago).where(CuotaPago.pago_id == pago.id)
+    )
+    assert (n1 or 0) >= 1
+
+    cc2, cp2 = aplicar(pago, db)
+    assert (cc2, cp2) == (0, 0)
+
+    n2 = db.scalar(
+        select(func.count()).select_from(CuotaPago).where(CuotaPago.pago_id == pago.id)
+    )
+    assert n2 == n1

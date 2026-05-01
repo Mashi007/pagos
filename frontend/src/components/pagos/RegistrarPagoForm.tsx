@@ -146,9 +146,9 @@ function pareceUrlImagenComprobanteExterna(u: string): boolean {
   return low.includes('googleusercontent')
 }
 
-async function clasificarBlobComprobanteVisual(b: Blob): Promise<
-  'image' | 'pdf'
-> {
+async function clasificarBlobComprobanteVisual(
+  b: Blob
+): Promise<'image' | 'pdf'> {
   const ct = (b.type || '').toLowerCase()
   if (ct.includes('pdf')) return 'pdf'
   if (ct.startsWith('image/')) return 'image'
@@ -437,8 +437,8 @@ export function RegistrarPagoForm({
     () =>
       Boolean(
         archivoComprobante &&
-          (archivoComprobante.type === 'application/pdf' ||
-            /\.pdf$/i.test(archivoComprobante.name || ''))
+        (archivoComprobante.type === 'application/pdf' ||
+          /\.pdf$/i.test(archivoComprobante.name || ''))
       ),
     [archivoComprobante]
   )
@@ -468,8 +468,7 @@ export function RegistrarPagoForm({
     prestamo_id: pagoInicial?.prestamo_id || null,
 
     fecha_pago:
-      fechaPagoParaInputDate(pagoInicial?.fecha_pago) ||
-      hoyYmdCaracas(),
+      fechaPagoParaInputDate(pagoInicial?.fecha_pago) || hoyYmdCaracas(),
 
     monto_pagado: montoInicialNumericoDesdePago(pagoInicial),
 
@@ -1151,19 +1150,25 @@ export function RegistrarPagoForm({
 
       let idPagoParaProcesar: number | undefined = pagoId
 
+      /** Respuesta enriquecida de cartera (`tiene_aplicacion_cuotas`); ausente si solo se editó pagos_con_errores. */
+      let pagoTrasGuardar: Pago | undefined
+
       if (isEditing && idPagoParaProcesar) {
         if (esPagoConError) {
           await pagoConErrorService.update(idPagoParaProcesar, datosEnvio)
         } else {
-          await pagoService.updatePago(idPagoParaProcesar, datosEnvio)
+          pagoTrasGuardar = await pagoService.updatePago(
+            idPagoParaProcesar,
+            datosEnvio
+          )
         }
       } else {
-        const pagoCreado = await pagoService.createPago(datosEnvio)
-        idPagoParaProcesar = pagoCreado.id
+        pagoTrasGuardar = await pagoService.createPago(datosEnvio)
+        idPagoParaProcesar = pagoTrasGuardar.id
 
         if (import.meta.env.DEV) {
           console.log(
-            `Pago creado: id=${pagoCreado.id}, conciliado=${pagoCreado.conciliado}`
+            `Pago creado: id=${pagoTrasGuardar.id}, conciliado=${pagoTrasGuardar.conciliado}`
           )
         }
       }
@@ -1253,40 +1258,76 @@ export function RegistrarPagoForm({
             return
           }
         } else {
-          try {
-            const resultAplicar = await pagoService.aplicarPagoACuotas(
-              idPagoParaProcesar!
-            )
+          const yaArticuladoAlGuardar = Boolean(
+            pagoTrasGuardar?.tiene_aplicacion_cuotas
+          )
 
-            if (resultAplicar?.success) {
-              const detalleAplicacion = `${resultAplicar.cuotas_completadas} cuota(s) completada(s)${
-                resultAplicar.cuotas_parciales > 0
-                  ? `, ${resultAplicar.cuotas_parciales} parcial(es)`
-                  : ''
-              }`
-              toast.success(`Pago aplicado a cuotas: ${detalleAplicacion}`, {
-                duration: 4000,
-              })
-            } else if (resultAplicar?.message) {
+          if (yaArticuladoAlGuardar) {
+            toast.success(
+              'Pago guardado y articulado en cuotas (la cascada se aplicó al guardar). Si la amortización no refleja el abono, revise préstamo y cuotas pendientes.',
+              { duration: 5500 }
+            )
+            if (import.meta.env.DEV) {
+              console.log(
+                'Guardar y procesar: cascada ya aplicada en crear/actualizar; omitiendo POST aplicar-cuotas.'
+              )
+            }
+          } else {
+            try {
+              const resultAplicar = await pagoService.aplicarPagoACuotas(
+                idPagoParaProcesar!
+              )
+
+              if (resultAplicar?.success) {
+                if (resultAplicar.ya_aplicado) {
+                  toast.success(
+                    'Pago ya estaba articulado en cuotas (no se duplicó la cascada). Suele ocurrir si el guardado ya aplicó la amortización.',
+                    { duration: 5500 }
+                  )
+                } else if (
+                  resultAplicar.cuotas_completadas === 0 &&
+                  resultAplicar.cuotas_parciales === 0
+                ) {
+                  toast.warning(
+                    resultAplicar.message?.trim()
+                      ? `Pago guardado; cascada sin abono en cuotas: ${resultAplicar.message}`
+                      : 'Pago guardado; no hubo abono en cuotas (sin saldo pendiente, préstamo no aplicable o monto no distribuible). Revise la tabla de amortización.',
+                    { duration: 6500 }
+                  )
+                } else {
+                  const detalleAplicacion = `${resultAplicar.cuotas_completadas} cuota(s) completada(s)${
+                    resultAplicar.cuotas_parciales > 0
+                      ? `, ${resultAplicar.cuotas_parciales} parcial(es)`
+                      : ''
+                  }`
+                  toast.success(
+                    `Pago aplicado a cuotas: ${detalleAplicacion}`,
+                    {
+                      duration: 4000,
+                    }
+                  )
+                }
+              } else if (resultAplicar?.message) {
+                toast.warning(
+                  `Pago guardado, pero no se aplicó a cuotas: ${resultAplicar.message}`,
+                  { duration: 6000 }
+                )
+              }
+
+              if (import.meta.env.DEV) {
+                console.log('Aplicación a cuotas:', resultAplicar)
+              }
+            } catch (applyErr) {
               toast.warning(
-                `Pago guardado, pero no se aplicó a cuotas: ${resultAplicar.message}`,
-                { duration: 6000 }
+                'Pago guardado pero no se pudo aplicar automáticamente a cuotas. Use "Mover a Pagos Normales" en Revisión.',
+                { duration: 5000 }
               )
-            }
-
-            if (import.meta.env.DEV) {
-              console.log('Aplicación a cuotas:', resultAplicar)
-            }
-          } catch (applyErr) {
-            toast.warning(
-              'Pago guardado pero no se pudo aplicar automáticamente a cuotas. Use "Mover a Pagos Normales" en Revisión.',
-              { duration: 5000 }
-            )
-            if (import.meta.env.DEV) {
-              console.warn(
-                'Error aplicando a cuotas (pero pago guardado):',
-                applyErr
-              )
+              if (import.meta.env.DEV) {
+                console.warn(
+                  'Error aplicando a cuotas (pero pago guardado):',
+                  applyErr
+                )
+              }
             }
           }
         }
@@ -2123,7 +2164,7 @@ export function RegistrarPagoForm({
                               <span className="font-mono font-semibold">
                                 {formData.prestamo_id != null
                                   ? `#${formData.prestamo_id}`
-                                  : '— (sin préstamo)'}
+                                  : '- (sin préstamo)'}
                               </span>
                               .
                             </span>
@@ -2133,13 +2174,13 @@ export function RegistrarPagoForm({
                                 NO REPETIDO
                               </span>
                               {excludeIdConflicto
-                                ? ' — no hay otro pago con este Nº (se excluye el pago que está editando).'
-                                : ' — no hay otro pago en cartera con este Nº documento.'}{' '}
+                                ? ' - no hay otro pago con este Nº (se excluye el pago que está editando).'
+                                : ' - no hay otro pago en cartera con este Nº documento.'}{' '}
                               Préstamo destino en este formulario:{' '}
                               <span className="font-mono font-semibold">
                                 {formData.prestamo_id != null
                                   ? `#${formData.prestamo_id}`
-                                  : '— (sin préstamo)'}
+                                  : '- (sin préstamo)'}
                               </span>
                               .
                             </span>
