@@ -24,6 +24,7 @@ import { getErrorMessage } from '../types/errors'
 import { useSimpleAuth } from '../store/simpleAuthStore'
 import { NOTIFICACIONES_MAX_CLIENTES_POR_PAGINA } from './notificaciones/notificacionesPage.constants'
 import { Fechas2BusquedaPanel } from './notificaciones/Fechas2BusquedaPanel'
+import { fmtFechaNotifIso } from './notificaciones/notificacionesPageCells'
 
 const QK = ['notificaciones', 'fecha-q-auditoria-total'] as const
 
@@ -48,6 +49,30 @@ function fmtIso(s?: string | null): string {
   if (!s) return '-'
   const t = String(s).trim()
   return t.length >= 10 ? t.slice(0, 10) : t
+}
+
+/** Fecha Q legible: ISO, serial Sheets (46133) o texto d/m/y; si el API devuelve crudo, cae a q_cache. */
+function fmtFechaQHojaAuditoria(row: FechaQAuditoriaTotalItem): string {
+  const tryFmt = (v: unknown): string | null => {
+    if (v == null) return null
+    const s = String(v).trim()
+    if (!s) return null
+    const out = fmtFechaNotifIso(s)
+    return out === '-' ? null : out
+  }
+  const primero = tryFmt(row.q_fecha_iso)
+  if (primero) return primero
+  const qc = row.q_cache
+  if (qc && typeof qc === 'object') {
+    const o = qc as Record<string, unknown>
+    const norm = tryFmt(o.fecha_entrega_column_q_norm_iso)
+    if (norm) return norm
+    const rawQ = tryFmt(o.fecha_entrega_column_q)
+    if (rawQ) return rawQ
+    const rawCell = tryFmt(o.fecha_entrega_column_q_raw)
+    if (rawCell) return rawCell
+  }
+  return '-'
 }
 
 export default function FechaQAuditoriaTotalPage() {
@@ -480,7 +505,9 @@ export default function FechaQAuditoriaTotalPage() {
                           {row.prestamo_id}
                         </td>
                         <td className="py-2 pr-2">{row.cedula || '-'}</td>
-                        <td className="py-2 pr-2">{fmtIso(row.q_fecha_iso)}</td>
+                        <td className="py-2 pr-2 tabular-nums">
+                          {fmtFechaQHojaAuditoria(row)}
+                        </td>
                         <td className="py-2 pr-2">
                           {fmtIso(row.fecha_aprobacion)}
                         </td>

@@ -27,7 +27,10 @@ from sqlalchemy.orm import Session
 from app.core.database import SessionLocal, get_db
 from app.core.serializers import to_finite_float_or_zero
 from app.services.cuota_estado import hoy_negocio, parse_fecha_referencia_negocio
-from app.services.comparar_fecha_entrega_q_aprobacion_service import merged_fecha_q_cache_aplicar_norm_iso
+from app.services.comparar_fecha_entrega_q_aprobacion_service import (
+    fecha_q_desde_cache_json,
+    merged_fecha_q_cache_aplicar_norm_iso,
+)
 from app.services.notificacion_service import (
     CUOTA_ESTADO_NO_PAGADA_PARA_NOTIF,
     ESTADOS_CUOTA_VENCIDO_Y_MORA,
@@ -80,17 +83,6 @@ def _solo_fecha_iso(val) -> Optional[str]:
     return None
 
 
-def _parse_fecha_q_desde_cache_iso(raw: object) -> Optional[date]:
-    """
-    Interpreta `fecha_entrega_column_q` del JSON de caché para comparar con ``fecha_aprobacion``.
-
-    Usa el mismo parseo que al leer la celda de la hoja (ISO guardado por el job, o texto legado d/m/y).
-    """
-    from app.services.comparar_fecha_entrega_q_aprobacion_service import parse_fecha_entrega_column_q_valor
-
-    return parse_fecha_entrega_column_q_valor(raw)
-
-
 def _fecha_aprobacion_como_date(val: object) -> Optional[date]:
     if val is None:
         return None
@@ -108,7 +100,7 @@ def _diferencia_dias_viva(cache: Optional[dict], fecha_aprobacion_val: object) -
     """
     if not isinstance(cache, dict):
         return None
-    fq = _parse_fecha_q_desde_cache_iso(cache.get("fecha_entrega_column_q"))
+    fq = fecha_q_desde_cache_json(cache)
     fa = _fecha_aprobacion_como_date(fecha_aprobacion_val)
     if fq is None or fa is None:
         return None
@@ -122,7 +114,7 @@ def _puede_aplicar_viva(cache: Optional[dict], fecha_aprobacion_val: object) -> 
     """
     if not isinstance(cache, dict):
         return None
-    fq = _parse_fecha_q_desde_cache_iso(cache.get("fecha_entrega_column_q"))
+    fq = fecha_q_desde_cache_json(cache)
     fa = _fecha_aprobacion_como_date(fecha_aprobacion_val)
     if fq is None or fa is None:
         return None
@@ -135,7 +127,7 @@ def _correccion_desde_q_anterior_bd_viva(cache: Optional[dict], fecha_aprobacion
     """True si se puede aplicar Q y Q es estrictamente anterior a la aprobación en BD."""
     if not isinstance(cache, dict):
         return None
-    fq = _parse_fecha_q_desde_cache_iso(cache.get("fecha_entrega_column_q"))
+    fq = fecha_q_desde_cache_json(cache)
     fa = _fecha_aprobacion_como_date(fecha_aprobacion_val)
     if fq is None or fa is None:
         return None
@@ -274,6 +266,7 @@ def get_fecha_q_auditoria_total(
     items = []
     for p in rows:
         cache = p.fecha_entrega_q_aprobacion_cache if isinstance(p.fecha_entrega_q_aprobacion_cache, dict) else None
+        q_date = fecha_q_desde_cache_json(cache) if isinstance(cache, dict) else None
         items.append(
             {
                 "prestamo_id": int(p.id),
@@ -283,7 +276,7 @@ def get_fecha_q_auditoria_total(
                 "fecha_requerimiento": _solo_fecha_iso(getattr(p, "fecha_requerimiento", None)),
                 "fecha_base_calculo": _solo_fecha_iso(getattr(p, "fecha_base_calculo", None)),
                 "q_cache": cache,
-                "q_fecha_iso": _cache_field(cache, "fecha_entrega_column_q"),
+                "q_fecha_iso": q_date.isoformat() if q_date else None,
                 "q_fecha_raw": _cache_field(cache, "fecha_entrega_column_q_raw"),
                 "diferencia_dias": _diferencia_dias_viva(cache, getattr(p, "fecha_aprobacion", None)),
                 "diferencia_dias_snapshot_cache": _cache_field(cache, "diferencia_dias"),
@@ -2691,6 +2684,7 @@ def post_aplicar_fecha_entrega_q_como_fecha_aprobacion(
     from app.schemas.prestamo import PrestamoUpdate
     from app.services.comparar_fecha_entrega_q_aprobacion_service import (
         comparar_fecha_entrega_column_q_vs_aprobacion,
+        parse_fecha_entrega_column_q_valor,
     )
     from app.api.v1.endpoints.prestamos import update_prestamo
 
@@ -2729,20 +2723,25 @@ def post_aplicar_fecha_entrega_q_como_fecha_aprobacion(
             ),
         )
 
-    fq_iso = cmp.get("fecha_entrega_column_q")
-    if not fq_iso:
+    # Misma fecha calendario que la hoja: `fecha_entrega_column_q` es texto crudo (serial o d/m/y);
+    # el día a guardar es el que devuelve el mismo parser que la comparación (norm_iso / parseo de celda).
+    fecha_q: Optional[date] = None
+    niso = cmp.get("fecha_entrega_column_q_norm_iso")
+    if isinstance(niso, str) and len(niso) >= 10:
+        try:
+            fecha_q = date.fromisoformat(niso[:10])
+        except ValueError:
+            fecha_q = None
+    if fecha_q is None:
+        fecha_q = parse_fecha_entrega_column_q_valor(cmp.get("fecha_entrega_column_q_raw"))
+    if fecha_q is None:
+        fecha_q = parse_fecha_entrega_column_q_valor(cmp.get("fecha_entrega_column_q"))
+
+    if fecha_q is None:
         raise HTTPException(
             status_code=400,
             detail="No hay fecha interpretable en la columna Q para esta fila y préstamo.",
         )
-
-    try:
-        fecha_q = date.fromisoformat(str(fq_iso)[:10])
-    except ValueError as e:
-        raise HTTPException(
-            status_code=400,
-            detail="No se pudo interpretar la fecha Q como calendario (YYYY-MM-DD).",
-        ) from e
 
     row = db.get(Prestamo, prestamo_id)
     if row is None:

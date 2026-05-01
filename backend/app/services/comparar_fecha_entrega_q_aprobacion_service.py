@@ -115,6 +115,16 @@ def _parse_fecha_celda_hoja(val: Any) -> Optional[date]:
     s = _as_text(val)
     if not s:
         return None
+    # Serial Excel como texto (Sheets/API a veces devuelve "46139" o "46139.0", no número nativo).
+    s_serial = s.strip().replace(",", ".")
+    if re.fullmatch(r"\d+(?:\.\d+)?", s_serial):
+        try:
+            x = float(s_serial)
+        except (TypeError, ValueError):
+            x = None
+        if x is not None and 20000 <= x <= 80000 and abs(x - round(x)) < 1e-9:
+            base = date(1899, 12, 30)
+            return base + timedelta(days=int(round(x)))
     # Colapsar espacios alrededor de separadores ("04 / 06 / 2026" -> "04/06/2026").
     s2 = re.sub(r"\s*([/.-])\s*", r"\1", s.strip())
     # Columna Q CONCILIACIÓN: orden textual fijo día / mes / año (no permutar tokens aunque ambos ≤ 12).
@@ -154,6 +164,27 @@ def _texto_fecha_celda_hoja(val: Any) -> Optional[str]:
     else:
         txt = str(val)
     return txt if txt != "" else None
+
+
+def fecha_q_desde_cache_json(cache: Any) -> Optional[date]:
+    """
+    Fecha Q canónica desde ``prestamos.fecha_entrega_q_aprobacion_cache`` (dict JSON).
+
+    Orden: ``fecha_entrega_column_q_norm_iso`` (persistido al cerrar caché), luego el mismo
+    parseo que la hoja sobre ``fecha_entrega_column_q`` y ``fecha_entrega_column_q_raw``.
+    """
+    if not isinstance(cache, dict):
+        return None
+    niso = cache.get("fecha_entrega_column_q_norm_iso")
+    if isinstance(niso, str) and len(niso) >= 10 and niso[4:5] == "-" and niso[7:8] == "-":
+        try:
+            return date.fromisoformat(niso[:10])
+        except ValueError:
+            pass
+    q = parse_fecha_entrega_column_q_valor(cache.get("fecha_entrega_column_q"))
+    if q is None:
+        q = parse_fecha_entrega_column_q_valor(cache.get("fecha_entrega_column_q_raw"))
+    return q
 
 
 def parse_fecha_entrega_column_q_valor(val: Any) -> Optional[date]:

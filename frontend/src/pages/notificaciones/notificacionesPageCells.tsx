@@ -1016,6 +1016,28 @@ export function CompararAbonosDriveCuotasCell({
   )
 }
 
+/** Misma época que el backend (Sheets / Excel): días desde 1899-12-30. */
+function fmtSerialHojaComoFechaEsVe(s: string): string | null {
+  const serial = s.replace(',', '.').trim()
+  if (!/^\d+(?:\.\d+)?$/.test(serial)) return null
+  const x = parseFloat(serial)
+  if (
+    !Number.isFinite(x) ||
+    x < 20000 ||
+    x > 80000 ||
+    Math.abs(x - Math.round(x)) >= 1e-9
+  ) {
+    return null
+  }
+  const days = Math.round(x)
+  const t0 = Date.UTC(1899, 11, 30) + days * 86400000
+  const d = new Date(t0)
+  const y = d.getUTCFullYear()
+  const mo = String(d.getUTCMonth() + 1).padStart(2, '0')
+  const da = String(d.getUTCDate()).padStart(2, '0')
+  return `${da} / ${mo} / ${y}`
+}
+
 export function fmtFechaNotifIso(iso?: string | null): string {
   if (iso == null || String(iso).trim() === '') return '-'
   const s = String(iso).trim()
@@ -1026,6 +1048,8 @@ export function fmtFechaNotifIso(iso?: string | null): string {
     const [, y, mo, d] = m
     return `${d} / ${mo} / ${y}`
   }
+  const desdeSerial = fmtSerialHojaComoFechaEsVe(s)
+  if (desdeSerial) return desdeSerial
   const t = Date.parse(s)
   if (Number.isNaN(t)) return s
   return new Date(t).toLocaleDateString('es-VE', {

@@ -26,7 +26,7 @@ from app.services.comparar_abonos_drive_cuotas_service import (
     conciliacion_sheet_sync_flags_actual,
     refrescar_cache_comparar_abonos_totales_cuotas_bd,
 )
-from app.services.comparar_fecha_entrega_q_aprobacion_service import parse_fecha_entrega_column_q_valor
+from app.services.comparar_fecha_entrega_q_aprobacion_service import fecha_q_desde_cache_json
 from app.services.cuota_estado import (
     clasificar_estado_cuota,
     dias_retraso_desde_vencimiento,
@@ -741,10 +741,7 @@ def _merge_comparar_fecha_cache_vivo(p_row: Prestamo, cache: Any) -> Any:
     if not isinstance(cache, dict):
         return cache
     out = dict(cache)
-    fq_raw = out.get("fecha_entrega_column_q")
-    if fq_raw is None:
-        return out
-    fq = parse_fecha_entrega_column_q_valor(fq_raw)
+    fq = fecha_q_desde_cache_json(out)
     if fq is None:
         return out
     fa = _fecha_aprob_solo_fecha(getattr(p_row, "fecha_aprobacion", None))

@@ -96,7 +96,7 @@ import {
   TOKEN_SUFIJO_VISTO_ARCHIVO_RE,
 } from '../../utils/documentoSufijoVisto'
 
-import { hoyYmdCaracas } from '../../utils/fechaZona'
+import { fechaPagoParaInputDate, hoyYmdCaracas } from '../../utils/fechaZona'
 
 import { splitNumeroDocumentoAlmacenado } from '../../utils/documentoPago'
 
@@ -146,18 +146,43 @@ function pareceUrlImagenComprobanteExterna(u: string): boolean {
   return low.includes('googleusercontent')
 }
 
+async function clasificarBlobComprobanteVisual(b: Blob): Promise<
+  'image' | 'pdf'
+> {
+  const ct = (b.type || '').toLowerCase()
+  if (ct.includes('pdf')) return 'pdf'
+  if (ct.startsWith('image/')) return 'image'
+  try {
+    const buf = await b.slice(0, 5).arrayBuffer()
+    const head = new Uint8Array(buf)
+    let sig = ''
+    for (let i = 0; i < head.length; i++) sig += String.fromCharCode(head[i]!)
+    if (sig.startsWith('%PDF')) return 'pdf'
+  } catch {
+    /* ignore */
+  }
+  return 'image'
+}
+
 /**
  * Miniatura del comprobante ya guardado: interno vía sesión (blob); externo con <img> si parece imagen.
+ * PDF se muestra en `<iframe>` ( `<img>` no renderiza application/pdf → zona en blanco).
  */
 function useVistaPreviaComprobanteGuardado(
   hrefInicial: string,
   activo: boolean
-): { src: string | null; cargando: boolean; error: boolean } {
+): {
+  src: string | null
+  kind: 'image' | 'pdf'
+  cargando: boolean
+  error: boolean
+} {
   const pathAuth = activo
     ? pathApiComprobanteImagenDesdeHref(hrefInicial)
     : null
   const requiereSesion = Boolean(pathAuth)
   const [blobUrl, setBlobUrl] = useState<string | null>(null)
+  const [kind, setKind] = useState<'image' | 'pdf'>('image')
   const [cargando, setCargando] = useState(false)
   const [error, setError] = useState(false)
 
@@ -167,6 +192,7 @@ function useVistaPreviaComprobanteGuardado(
         if (u) URL.revokeObjectURL(u)
         return null
       })
+      setKind('image')
       setCargando(false)
       setError(false)
       return
@@ -176,6 +202,7 @@ function useVistaPreviaComprobanteGuardado(
         if (u) URL.revokeObjectURL(u)
         return null
       })
+      setKind('image')
       setCargando(false)
       setError(false)
       return
@@ -187,7 +214,9 @@ function useVistaPreviaComprobanteGuardado(
         setError(false)
         const blob = await apiClient.getBlob(pathAuth)
         if (cancelado) return
+        const visual = await clasificarBlobComprobanteVisual(blob)
         const objectUrl = URL.createObjectURL(blob)
+        setKind(visual)
         setBlobUrl(prev => {
           if (prev) URL.revokeObjectURL(prev)
           return objectUrl
@@ -204,19 +233,43 @@ function useVistaPreviaComprobanteGuardado(
         if (u) URL.revokeObjectURL(u)
         return null
       })
+      setKind('image')
     }
   }, [activo, hrefInicial, pathAuth, requiereSesion])
 
   if (!activo || !hrefInicial.trim()) {
-    return { src: null, cargando: false, error: false }
+    return { src: null, kind: 'image', cargando: false, error: false }
   }
   if (requiereSesion) {
-    return { src: blobUrl, cargando, error }
+    return { src: blobUrl, kind, cargando, error }
   }
   if (pareceUrlImagenComprobanteExterna(hrefInicial)) {
-    return { src: hrefInicial, cargando: false, error: false }
+    return { src: hrefInicial, kind: 'image', cargando: false, error: false }
   }
-  return { src: null, cargando: false, error: false }
+  return { src: null, kind: 'image', cargando: false, error: false }
+}
+
+function VistaEmbebidaComprobante({
+  src,
+  kind,
+  classNameImg,
+  classNamePdf,
+}: {
+  src: string
+  kind: 'image' | 'pdf'
+  classNameImg: string
+  classNamePdf: string
+}) {
+  if (kind === 'pdf') {
+    return (
+      <iframe
+        src={src}
+        title="Vista del comprobante"
+        className={classNamePdf}
+      />
+    )
+  }
+  return <img src={src} alt="Comprobante" className={classNameImg} />
 }
 
 /** Texto inicial del campo monto: vacío en alta (evita 0 + dígitos → 013). */
@@ -380,6 +433,16 @@ export function RegistrarPagoForm({
     null
   )
 
+  const archivoNuevoComprobanteEsPdf = useMemo(
+    () =>
+      Boolean(
+        archivoComprobante &&
+          (archivoComprobante.type === 'application/pdf' ||
+            /\.pdf$/i.test(archivoComprobante.name || ''))
+      ),
+    [archivoComprobante]
+  )
+
   const [objUrlVistaArchivoNuevo, setObjUrlVistaArchivoNuevo] = useState<
     string | null
   >(null)
@@ -405,7 +468,8 @@ export function RegistrarPagoForm({
     prestamo_id: pagoInicial?.prestamo_id || null,
 
     fecha_pago:
-      pagoInicial?.fecha_pago || new Date().toISOString().split('T')[0],
+      fechaPagoParaInputDate(pagoInicial?.fecha_pago) ||
+      hoyYmdCaracas(),
 
     monto_pagado: montoInicialNumericoDesdePago(pagoInicial),
 
@@ -492,10 +556,11 @@ export function RegistrarPagoForm({
   const excludeIdConflicto =
     isEditing && !esPagoConError && pagoId ? pagoId : undefined
 
+  /** En revisión manual el usuario debe ver siempre el estado del Nº doc.; no exigir comprobante enlazado. */
   const conflictoDocQueryEnabled =
-    isEditing &&
-    Boolean(linkComprobanteParaVista && !archivoComprobante) &&
-    debouncedNumeroDoc.length > 0
+    debouncedNumeroDoc.length > 0 &&
+    (mostrarCampoCodigoDocumento ||
+      (isEditing && Boolean(linkComprobanteParaVista && !archivoComprobante)))
 
   const {
     data: conflictoDocApi,
@@ -2010,12 +2075,83 @@ export function RegistrarPagoForm({
                     )}
 
                     {mostrarCampoCodigoDocumento ? (
-                      <p className="text-xs text-gray-600">
-                        Cada número de documento es único en cartera. Si este
-                        comprobante ya existe en otro pago, use{' '}
-                        <strong>Visto</strong> para asignar un código (sufijo);
-                        sin código distinto no se puede duplicar.
-                      </p>
+                      <div className="space-y-2">
+                        <div
+                          className="rounded border border-slate-200 bg-slate-50 px-2.5 py-2 text-xs leading-snug text-slate-800"
+                          role="status"
+                          aria-live="polite"
+                        >
+                          {!debouncedNumeroDoc.trim() ? (
+                            <span className="text-slate-600">
+                              Indique el número de documento para verificar si
+                              ya existe en cartera.
+                            </span>
+                          ) : conflictoDocError ? (
+                            <span className="text-red-600">
+                              No se pudo verificar duplicados. Intente de nuevo.
+                            </span>
+                          ) : conflictoDocPendiente ? (
+                            <span className="text-slate-500">
+                              Consultando unicidad en cartera…
+                            </span>
+                          ) : conflictoDocApi?.conflicto ? (
+                            <span>
+                              <span className="font-semibold text-amber-900">
+                                Documento ya registrado
+                              </span>
+                              {conflictoDocApi.prestamo_id != null ? (
+                                <>
+                                  : en préstamo{' '}
+                                  <span className="font-mono font-semibold">
+                                    #{conflictoDocApi.prestamo_id}
+                                  </span>
+                                </>
+                              ) : (
+                                ': en otro pago de cartera'
+                              )}
+                              {conflictoDocApi.pago_id != null ? (
+                                <>
+                                  {' '}
+                                  (pago ID{' '}
+                                  <span className="font-mono">
+                                    {conflictoDocApi.pago_id}
+                                  </span>
+                                  )
+                                </>
+                              ) : null}
+                              . Se pretende aplicar este pago al préstamo{' '}
+                              <span className="font-mono font-semibold">
+                                {formData.prestamo_id != null
+                                  ? `#${formData.prestamo_id}`
+                                  : '— (sin préstamo)'}
+                              </span>
+                              .
+                            </span>
+                          ) : (
+                            <span>
+                              <span className="font-semibold text-green-800">
+                                NO REPETIDO
+                              </span>
+                              {excludeIdConflicto
+                                ? ' — no hay otro pago con este Nº (se excluye el pago que está editando).'
+                                : ' — no hay otro pago en cartera con este Nº documento.'}{' '}
+                              Préstamo destino en este formulario:{' '}
+                              <span className="font-mono font-semibold">
+                                {formData.prestamo_id != null
+                                  ? `#${formData.prestamo_id}`
+                                  : '— (sin préstamo)'}
+                              </span>
+                              .
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-gray-600">
+                          Cada número de documento es único en cartera. Si este
+                          comprobante ya existe en otro pago, use{' '}
+                          <strong>Visto</strong> para asignar un código
+                          (sufijo); sin código distinto no se puede duplicar.
+                        </p>
+                      </div>
                     ) : null}
                   </div>
 
@@ -2179,10 +2315,13 @@ export function RegistrarPagoForm({
                       </p>
                       {objUrlVistaArchivoNuevo ? (
                         <div className="flex flex-wrap items-end gap-3 lg:hidden">
-                          <img
+                          <VistaEmbebidaComprobante
                             src={objUrlVistaArchivoNuevo}
-                            alt="Vista previa del comprobante nuevo"
-                            className="max-h-64 max-w-full rounded border border-gray-200 object-contain"
+                            kind={
+                              archivoNuevoComprobanteEsPdf ? 'pdf' : 'image'
+                            }
+                            classNameImg="max-h-64 max-w-full rounded border border-gray-200 object-contain"
+                            classNamePdf="h-64 w-full rounded border border-gray-200"
                           />
                         </div>
                       ) : null}
@@ -2213,10 +2352,11 @@ export function RegistrarPagoForm({
                       ) : null}
                       {vistaPreviaComprobante.src ? (
                         <div className="flex flex-wrap items-end gap-3 lg:hidden">
-                          <img
+                          <VistaEmbebidaComprobante
                             src={vistaPreviaComprobante.src}
-                            alt="Comprobante registrado"
-                            className="max-h-64 max-w-full rounded border border-gray-200 bg-white object-contain"
+                            kind={vistaPreviaComprobante.kind}
+                            classNameImg="max-h-64 max-w-full rounded border border-gray-200 bg-white object-contain"
+                            classNamePdf="h-64 w-full rounded border border-gray-200 bg-white"
                           />
                           <Button
                             type="button"
@@ -2421,10 +2561,11 @@ export function RegistrarPagoForm({
                   </div>
                   <div className="flex min-h-0 flex-1 flex-col overflow-y-auto rounded-md border border-slate-200 bg-white p-2">
                     {archivoComprobante && objUrlVistaArchivoNuevo ? (
-                      <img
+                      <VistaEmbebidaComprobante
                         src={objUrlVistaArchivoNuevo}
-                        alt="Vista previa del comprobante seleccionado"
-                        className="mx-auto max-h-[min(68vh,34rem)] w-full max-w-full object-contain"
+                        kind={archivoNuevoComprobanteEsPdf ? 'pdf' : 'image'}
+                        classNameImg="mx-auto max-h-[min(68vh,34rem)] w-full max-w-full object-contain"
+                        classNamePdf="mx-auto h-[min(68vh,34rem)] min-h-[24rem] w-full max-w-full rounded border border-slate-100"
                       />
                     ) : linkComprobanteParaVista && !archivoComprobante ? (
                       <div className="flex min-h-[10rem] flex-col gap-3">
@@ -2445,10 +2586,11 @@ export function RegistrarPagoForm({
                         ) : null}
                         {vistaPreviaComprobante.src ? (
                           <>
-                            <img
+                            <VistaEmbebidaComprobante
                               src={vistaPreviaComprobante.src}
-                              alt="Comprobante registrado"
-                              className="mx-auto max-h-[min(68vh,34rem)] w-full max-w-full rounded border border-slate-100 object-contain"
+                              kind={vistaPreviaComprobante.kind}
+                              classNameImg="mx-auto max-h-[min(68vh,34rem)] w-full max-w-full rounded border border-slate-100 object-contain"
+                              classNamePdf="mx-auto h-[min(68vh,34rem)] min-h-[24rem] w-full max-w-full rounded border border-slate-100"
                             />
                             <div className="flex justify-center">
                               <Button

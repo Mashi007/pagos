@@ -63,6 +63,7 @@ import {
   TableRow,
 } from '../../components/ui/table'
 import { formatDate, formatLastSyncDate, cn } from '../../utils'
+import { fechaPagoParaInputDate } from '../../utils/fechaZona'
 import { pagoService, type Pago } from '../../services/pagoService'
 import { prestamoService } from '../../services/prestamoService'
 import type { Prestamo } from '../../types'
@@ -4396,12 +4397,7 @@ export function PagosList() {
                 ? {
                     cedula_cliente: pagoEditando.cedula_cliente,
                     prestamo_id: pagoEditando.prestamo_id,
-                    fecha_pago:
-                      typeof pagoEditando.fecha_pago === 'string'
-                        ? pagoEditando.fecha_pago.split('T')[0]
-                        : new Date(pagoEditando.fecha_pago)
-                            .toISOString()
-                            .split('T')[0],
+                    fecha_pago: fechaPagoParaInputDate(pagoEditando.fecha_pago),
                     monto_pagado:
                       pagoEditando.moneda_registro === 'BS' &&
                       pagoEditando.monto_bs_original != null

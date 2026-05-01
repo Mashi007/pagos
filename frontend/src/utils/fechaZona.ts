@@ -21,3 +21,27 @@ export function fechaYmdEnZonaHoraria(fecha: Date, timeZone: string): string {
 export function hoyYmdCaracas(): string {
   return fechaYmdEnZonaHoraria(new Date(), TZ_CARACAS)
 }
+
+/**
+ * Valor para `<input type="date">`: mismo día civil que el backend / API.
+ * - `YYYY-MM-DD` sin hora: no pasa por `Date` (evita desplazar el día por UTC).
+ * - ISO con hora / `Date`: día calendario en America/Caracas.
+ */
+export function fechaPagoParaInputDate(v: unknown): string {
+  if (v == null || v === '') return ''
+  if (typeof v === 'string') {
+    const t = v.trim()
+    if (/^\d{4}-\d{2}-\d{2}$/.test(t)) return t
+    const d = new Date(t)
+    if (Number.isNaN(d.getTime())) {
+      const m = t.match(/^(\d{4}-\d{2}-\d{2})/)
+      return m ? m[1] : ''
+    }
+    return fechaYmdEnZonaHoraria(d, TZ_CARACAS)
+  }
+  if (v instanceof Date) {
+    if (Number.isNaN(v.getTime())) return ''
+    return fechaYmdEnZonaHoraria(v, TZ_CARACAS)
+  }
+  return ''
+}
