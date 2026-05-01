@@ -307,6 +307,7 @@ export default function EscanerInfopagosPage() {
   const [validacionCampos, setValidacionCampos] = useState<string | null>(null)
   const [validacionReglas, setValidacionReglas] = useState<string | null>(null)
   const [cedulaPagadorImg, setCedulaPagadorImg] = useState('')
+  const [cedulaPagador, setCedulaPagador] = useState('')
 
   const [fechaPago, setFechaPago] = useState('')
   const [fechaDetectada, setFechaDetectada] = useState('')
@@ -505,6 +506,7 @@ export default function EscanerInfopagosPage() {
         setMontoStr('')
       }
       setCedulaPagadorImg(s.cedula_pagador_en_comprobante || '')
+      setCedulaPagador(s.cedula_pagador_en_comprobante || '')
       setValidacionCampos(res.validacion_campos ?? null)
       setValidacionReglas(res.validacion_reglas ?? null)
       setEscanerColision({
@@ -857,10 +859,7 @@ export default function EscanerInfopagosPage() {
         fuenteTasa,
         validada: true,
       })
-      toast.success(
-        res.mensaje ||
-          'Pago registrado exitosamente.'
-      )
+      toast.success(res.mensaje || 'Pago registrado exitosamente.')
       setFase('exito')
       setReferencia(res.referencia_interna || '')
       setEnRevision(
@@ -935,6 +934,7 @@ export default function EscanerInfopagosPage() {
     setValidacionCampos(null)
     setValidacionReglas(null)
     setCedulaPagadorImg('')
+    setCedulaPagador('')
     setReferencia('')
     setReciboToken(null)
     setPagoId(null)
@@ -963,6 +963,7 @@ export default function EscanerInfopagosPage() {
     setValidacionCampos(null)
     setValidacionReglas(null)
     setCedulaPagadorImg('')
+    setCedulaPagador('')
     setReferencia('')
     setReciboToken(null)
     setPagoId(null)
@@ -1249,6 +1250,27 @@ export default function EscanerInfopagosPage() {
                 ) : null}
 
                 <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2 sm:col-span-2">
+                    <Label htmlFor="cedula-pagador">
+                      Cédula del pagador (extraída de comprobante)
+                    </Label>
+                    <Input
+                      id="cedula-pagador"
+                      value={cedulaPagador}
+                      onChange={e => setCedulaPagador(e.target.value)}
+                      placeholder="Ej. 12345678 (sin prefijo)"
+                      maxLength={30}
+                    />
+                    {cedulaPagadorImg && cedulaPagadorImg !== cedulaPagador ? (
+                      <p className="text-xs text-amber-700">
+                        Sugerencia desde imagen:{' '}
+                        <span className="font-mono font-medium">
+                          {cedulaPagadorImg}
+                        </span>{' '}
+                        (puede editar si es necesario)
+                      </p>
+                    ) : null}
+                  </div>
                   <div className="space-y-2 sm:col-span-2">
                     <Label htmlFor="fecha">Fecha de pago</Label>
                     {fechaDetectada.trim() ? (
