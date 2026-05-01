@@ -101,6 +101,7 @@ import { apiClient } from '../../services/api'
 
 import {
   abrirStaffComprobanteDesdeHref,
+  esUrlComprobanteImagenConAuth,
   fetchStaffComprobanteBlobWithDisplayMime,
   pathApiComprobanteImagenDesdeHref,
 } from '../../utils/comprobanteImagenAuth'
@@ -485,10 +486,14 @@ export function RegistrarPagoForm({
           return
         }
 
-        // Si es URL externa, no descargar, decirle al usuario que cargue de nuevo
-        if (href.startsWith('http')) {
+        // URL absoluta https solo bloquea si NO es el endpoint interno de comprobante (misma sesión Bearer).
+        // Antes se rechazaba cualquier http(s), incluso .../api/v1/pagos/comprobante-imagen/... guardado en BD.
+        if (
+          /^https?:\/\//i.test(href) &&
+          !esUrlComprobanteImagenConAuth(href)
+        ) {
           toast.error(
-            'Para re-escanear, debe adjuntar la imagen nuevamente. Haga clic en "Elegir imagen".'
+            'Este enlace no es un comprobante interno (p. ej. Drive). Para re-escanear, adjunte la imagen con "Elegir imagen".'
           )
           setIsRescanning(false)
           return

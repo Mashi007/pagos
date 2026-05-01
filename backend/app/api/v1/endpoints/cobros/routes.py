@@ -3289,9 +3289,14 @@ async def escaner_extraer_comprobante_infopagos(
     )
     gemini_ms = int((time.perf_counter() - t_gemini0) * 1000)
     if not gem.get("ok"):
-        validacion_manual = (
+        _base_escaner = (
             "Gemini no pudo digitalizar el comprobante con consistencia. "
             "Pase a revisión manual y complete/valide los campos antes de guardar."
+        )
+        _det = (str(gem.get("error") or "")).strip()
+        # Mismo texto amigable; añadimos detalle del servicio (p. ej. JSON ilegible, API) — no es caché de Gmail.
+        validacion_manual = (
+            f"{_base_escaner} Detalle: {_det[:500]}" if _det else _base_escaner
         )
         borrador_id_fallo: Optional[str] = None
         if usuario_escaner_id is not None:
@@ -3744,9 +3749,15 @@ async def escaner_lote_drive_digitalizar(
         else:
             gem = extract_infopagos_campos_desde_comprobante(ctx_ced, content, filename)
             if not gem.get("ok"):
-                validacion_manual = (
+                _base_escaner_lote = (
                     "Gemini no pudo digitalizar el comprobante con consistencia. "
                     "Pase a revisión manual y complete/valide los campos antes de guardar."
+                )
+                _det_lote = (str(gem.get("error") or "")).strip()
+                validacion_manual = (
+                    f"{_base_escaner_lote} Detalle: {_det_lote[:500]}"
+                    if _det_lote
+                    else _base_escaner_lote
                 )
                 borrador_id_fallo: Optional[str] = None
                 if usuario_escaner_id is not None:
