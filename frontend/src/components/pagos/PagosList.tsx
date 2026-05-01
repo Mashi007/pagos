@@ -144,6 +144,28 @@ function observacionesConMarcaDuplicadoCartera(p: PagoConError): string {
   return obs
 }
 
+/**
+ * Pago «cerrado»: conciliado, verificado SI, aplicado a cuotas y estado PAGADO/ADELANTADO.
+ * Para estas filas el modal solo aporta consulta — el icono debe ser Eye y «Editar» pasa a «Ver»,
+ * alineado con el modo solo-lectura del formulario y con `pagoCarteraRevisionBloquearToggleCerrado`.
+ */
+function pagoEstaCerradoSoloConsulta(
+  p: Pago | PagoConError | null | undefined
+): boolean {
+  if (!p) return false
+  const pago = p as Pago
+  if (pago.tiene_aplicacion_cuotas === false) return false
+  if (!Boolean(pago.conciliado)) return false
+  const verif = String(pago.verificado_concordancia ?? '')
+    .trim()
+    .toUpperCase()
+  if (verif !== 'SI') return false
+  const est = String(pago.estado ?? '')
+    .trim()
+    .toUpperCase()
+  return est === 'PAGADO' || est === 'PAGO_ADELANTADO' || est === 'ADELANTADO'
+}
+
 /** Si false, la opción "Descargar Excel" (Gmail) no se muestra en el submenú Agregar pago. */
 const SHOW_DESCARGA_EXCEL_EN_SUBMENU = false
 const GMAIL_METRICS_SNAPSHOT_KEY = 'pagos:last_gmail_metrics_snapshot'
@@ -3011,16 +3033,35 @@ export function PagosList() {
                                     >
                                       <Eye className="h-4 w-4" />
                                     </Button>
-                                    <Button
-                                      size="icon"
-                                      variant="outline"
-                                      title="Editar pago"
-                                      onClick={() =>
-                                        handleAbrirEditorPagoRevision(pago)
-                                      }
-                                    >
-                                      <Edit className="h-4 w-4" />
-                                    </Button>
+                                    {(() => {
+                                      const cerrado =
+                                        pagoEstaCerradoSoloConsulta(pago)
+                                      return (
+                                        <Button
+                                          size="icon"
+                                          variant="outline"
+                                          title={
+                                            cerrado
+                                              ? 'Ver pago (solo consulta — ya cargado a cuotas)'
+                                              : 'Editar pago'
+                                          }
+                                          aria-label={
+                                            cerrado
+                                              ? 'Ver pago (solo consulta)'
+                                              : 'Editar pago'
+                                          }
+                                          onClick={() =>
+                                            handleAbrirEditorPagoRevision(pago)
+                                          }
+                                        >
+                                          {cerrado ? (
+                                            <Eye className="h-4 w-4" />
+                                          ) : (
+                                            <Edit className="h-4 w-4" />
+                                          )}
+                                        </Button>
+                                      )
+                                    })()}
                                     <Button
                                       size="icon"
                                       variant="outline"
@@ -3488,17 +3529,36 @@ export function PagosList() {
                                 </TableCell>
                                 <TableCell className="text-right">
                                   <div className="inline-flex items-center gap-2">
-                                    <Button
-                                      size="icon"
-                                      variant="outline"
-                                      title="Editar pago"
-                                      onClick={() => {
-                                        setPagoEditando(pago)
-                                        setShowRegistrarPago(true)
-                                      }}
-                                    >
-                                      <Edit className="h-4 w-4" />
-                                    </Button>
+                                    {(() => {
+                                      const cerrado =
+                                        pagoEstaCerradoSoloConsulta(pago)
+                                      return (
+                                        <Button
+                                          size="icon"
+                                          variant="outline"
+                                          title={
+                                            cerrado
+                                              ? 'Ver pago (solo consulta — ya cargado a cuotas)'
+                                              : 'Editar pago'
+                                          }
+                                          aria-label={
+                                            cerrado
+                                              ? 'Ver pago (solo consulta)'
+                                              : 'Editar pago'
+                                          }
+                                          onClick={() => {
+                                            setPagoEditando(pago)
+                                            setShowRegistrarPago(true)
+                                          }}
+                                        >
+                                          {cerrado ? (
+                                            <Eye className="h-4 w-4" />
+                                          ) : (
+                                            <Edit className="h-4 w-4" />
+                                          )}
+                                        </Button>
+                                      )
+                                    })()}
                                     <Button
                                       size="icon"
                                       variant="outline"
@@ -4121,18 +4181,30 @@ export function PagosList() {
                                         align="end"
                                       >
                                         <div className="space-y-0.5">
-                                          <button
-                                            type="button"
-                                            className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition-colors hover:bg-gray-100"
-                                            onClick={() => {
-                                              setPagoEditando(pago)
-                                              setShowRegistrarPago(true)
-                                              setAccionesOpenId(null)
-                                            }}
-                                          >
-                                            <Edit className="h-4 w-4 text-gray-600" />
-                                            Editar
-                                          </button>
+                                          {(() => {
+                                            const cerrado =
+                                              pagoEstaCerradoSoloConsulta(pago)
+                                            return (
+                                              <button
+                                                type="button"
+                                                className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition-colors hover:bg-gray-100"
+                                                onClick={() => {
+                                                  setPagoEditando(pago)
+                                                  setShowRegistrarPago(true)
+                                                  setAccionesOpenId(null)
+                                                }}
+                                              >
+                                                {cerrado ? (
+                                                  <Eye className="h-4 w-4 text-gray-600" />
+                                                ) : (
+                                                  <Edit className="h-4 w-4 text-gray-600" />
+                                                )}
+                                                {cerrado
+                                                  ? 'Ver (solo consulta)'
+                                                  : 'Editar'}
+                                              </button>
+                                            )
+                                          })()}
                                           <button
                                             type="button"
                                             className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-red-600 transition-colors hover:bg-red-50"
