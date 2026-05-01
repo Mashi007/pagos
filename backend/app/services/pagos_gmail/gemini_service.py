@@ -1770,6 +1770,29 @@ def _find_json_object(text: str) -> Optional[str]:
     return None
 
 
+def _extract_first_json_dict_from_model_text(text: str) -> Optional[Dict[str, Any]]:
+    """
+    Primer objeto JSON válido en la respuesta aunque el modelo anteponga razonamiento,
+    etiquetas o fences ```json (común en Gemini 2.x). Usa JSONDecoder.raw_decode.
+    """
+    if not text or not str(text).strip():
+        return None
+    t = str(text).strip()
+    t = re.sub(r"^```(?:json)?\s*", "", t, flags=re.IGNORECASE)
+    t = re.sub(r"\s*```\s*$", "", t.strip())
+    dec = json.JSONDecoder()
+    for i, ch in enumerate(t):
+        if ch != "{":
+            continue
+        try:
+            obj, _end = dec.raw_decode(t, i)
+            if isinstance(obj, dict):
+                return obj
+        except json.JSONDecodeError:
+            continue
+    return None
+
+
 def _normalize_banco_gemini_field(val: Any) -> str:
     """Campo banco en JSON Gemini (A/B); sin prefijos de _normalize_to_na."""
     if val is None:
@@ -2146,6 +2169,7 @@ REGLAS:
   - Si la fecha no es legible con suficiente certeza, deja `fecha_pago` como "" y explícitalo en `notas`.
   - Responde ÚNICAMENTE con un objeto JSON válido, sin markdown ni texto extra, con exactamente estas claves:
   fecha_pago, institucion_financiera, numero_operacion, monto, moneda, cedula_pagador_en_comprobante, notas
+  - SALIDA OBLIGATORIA: solo el objeto JSON; ningún párrafo ni razonamiento antes ni después. Sin fences markdown ni texto extra.
 """
 
 
@@ -2327,16 +2351,32 @@ def extract_infopagos_campos_desde_comprobante(
                     contents=[prompt, image_part],
                     config=types.GenerateContentConfig(
                         temperature=0.0,
-                        # Respuesta corta (JSON); evita respuestas largas innecesarias del modelo.
-                        max_output_tokens=2048,
+                        # Gemini 2.x puede anteponer texto; 2048 truncaba el JSON → "No se pudo interpretar".
+                        max_output_tokens=8192,
                     ),
                 )
                 text = (response.text or "").strip()
-                json_str = _find_json_object(text)
-                if not json_str:
-                    m = re.search(r"\{[^{}]*\}", text, re.DOTALL)
-                    json_str = m.group(0) if m else None
-                if not json_str:
+                data = _extract_first_json_dict_from_model_text(text)
+                if data is None:
+                    json_str = _find_json_object(text)
+                    if not json_str:
+                        m = re.search(r"\{[^{}]*\}", text, re.DOTALL)
+                        json_str = m.group(0) if m else None
+                    if json_str:
+                        try:
+                            parsed = json.loads(json_str)
+                            data = parsed if isinstance(parsed, dict) else None
+                        except json.JSONDecodeError:
+                            data = None
+                if data is None:
+                    preview = (text or "").replace("\n", " ")
+                    if len(preview) > 600:
+                        preview = preview[:600] + "…"
+                    logger.warning(
+                        "[ESCANER] Sin JSON parseable len_text=%s preview=%r",
+                        len(text or ""),
+                        preview,
+                    )
                     return {
                         "ok": False,
                         "error": "No se pudo interpretar la respuesta del modelo.",
@@ -2348,7 +2388,6 @@ def extract_infopagos_campos_desde_comprobante(
                         "cedula_pagador_en_comprobante": "",
                         "notas": (text or "")[:300],
                     }
-                data = json.loads(json_str)
                 mon_raw = (data.get("moneda") or "BS").strip().upper()
                 if mon_raw in ("USD", "USDT", "$", "DOLARES", "DÓLARES", "DIVISA") or "BINANCE" in mon_raw:
                     mon_norm = "USD"
