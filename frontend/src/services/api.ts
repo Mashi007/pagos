@@ -428,11 +428,10 @@ class ApiClient {
             reqUrl.includes('/tasas-cambio/hoy'))
         /**
          * Dyno API en Render: 502/503 pueden durar >15s (arranque Gunicorn + init BD).
-         * 3 reintentos con 2+4+8s no alcanzan; aquí ampliamos solo GET seguros ante 502/503.
+         * Reintentos cortos no alcanzan; GET seguros y PATCH estado cobros-reportados usan hasta 6 con backoff.
          */
         const isColdStartProxySafeGet =
           isSafeTransientRetryGet && (st === 502 || st === 503)
-        const maxRetries = isColdStartProxySafeGet ? 6 : 3
         /**
          * PATCH cambio de estado (aprobar/rechazar flujo UI). 502 del proxy sin cuerpo JSON
          * suele ser TCP/deploy; el backend puede no haber aplicado el cambio.
@@ -440,6 +439,11 @@ class ApiClient {
         const isCobrosPagoReportadoEstadoPatch =
           methodLc === 'patch' &&
           /\/cobros\/pagos-reportados\/\d+\/estado(?:\?|#|$)/.test(reqUrl)
+        /** Mismo patrón que GET listado-y-kpis: 502/503 del proxy; dar tiempo al API. */
+        const isCobrosEstadoPatch502Storm =
+          isCobrosPagoReportadoEstadoPatch && (st === 502 || st === 503)
+        const maxRetries =
+          isColdStartProxySafeGet || isCobrosEstadoPatch502Storm ? 6 : 3
         const canRetryBecauseStatus =
           st === 503 ||
           st === 504 ||
@@ -458,14 +462,12 @@ class ApiClient {
           ;(requestConfigForRetry as any)._retryCount = retryCount + 1
 
           // 502/503 en Render: dar tiempo al dyno del API a despertar (reintentos más espaciados).
+          const useLong502Delay =
+            isColdStartProxySafeGet || isCobrosEstadoPatch502Storm
           const delayBase =
-            st === 502 || st === 503
-              ? isColdStartProxySafeGet
-                ? 3500
-                : 2000
-              : 500
+            st === 502 || st === 503 ? (useLong502Delay ? 3500 : 2000) : 500
           const rawDelay = delayBase * Math.pow(2, retryCount)
-          const delayMs = isColdStartProxySafeGet
+          const delayMs = useLong502Delay
             ? Math.min(14000, rawDelay)
             : rawDelay
 

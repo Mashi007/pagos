@@ -6,12 +6,18 @@ import React, {
   useRef,
 } from 'react'
 
-import { useNavigate, useSearchParams, useLocation } from 'react-router-dom'
+import {
+  useNavigate,
+  useSearchParams,
+  useLocation,
+  Link,
+} from 'react-router-dom'
 
 import { limpiarReturnRevisionSesion } from '../../constants/revisionNavigation'
 
 import {
   Plus,
+  Bell,
   Search,
   Filter,
   Edit,
@@ -382,7 +388,53 @@ export function PrestamosList() {
     [filters, prestamoIdFiltro]
   )
 
+  /**
+   * Si el listado ya es la cola EN_REVISION sin otros filtros (pág. 1), el total del listado
+   * coincide con el contador de «Novedades» y React Query puede usar una sola query (misma key).
+   */
+  const listadoCoincideConContadorEnRevision = useMemo(() => {
+    if (page !== 1) return false
+    if (filters.estado !== 'EN_REVISION') return false
+    if (prestamoIdFiltro != null) return false
+    if ((filters.search ?? '').trim()) return false
+    if ((filters.cedula ?? '').trim()) return false
+    if (filters.cliente_id != null) return false
+    if (filters.analista) return false
+    if (filters.concesionario) return false
+    if (filters.modelo) return false
+    if (filters.fecha_inicio) return false
+    if (filters.fecha_fin) return false
+    if (filters.requiere_revision != null) return false
+    if (filters.revision_manual_estado) return false
+    return true
+  }, [
+    page,
+    filters.estado,
+    filters.search,
+    filters.cedula,
+    filters.cliente_id,
+    filters.analista,
+    filters.concesionario,
+    filters.modelo,
+    filters.fecha_inicio,
+    filters.fecha_fin,
+    filters.requiere_revision,
+    filters.revision_manual_estado,
+    prestamoIdFiltro,
+  ])
+
   const { data, isLoading, error } = usePrestamos(listFilters, page, perPage)
+
+  const { data: enRevisionSoloData } = usePrestamos(
+    { estado: 'EN_REVISION' },
+    1,
+    1,
+    { enabled: !listadoCoincideConContadorEnRevision }
+  )
+
+  const enRevisionCount = listadoCoincideConContadorEnRevision
+    ? (data?.total ?? 0)
+    : (enRevisionSoloData?.total ?? 0)
 
   const deletePrestamo = useDeletePrestamo()
 
@@ -594,6 +646,42 @@ export function PrestamosList() {
     filters.revision_manual_estado,
   ])
 
+  const novedadesCard = useMemo(
+    () => (
+      <Card className="border-blue-100 bg-blue-50/50">
+        <CardHeader className="pb-2">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Bell className="h-4 w-4 text-blue-600" />
+            Novedades
+          </CardTitle>
+        </CardHeader>
+
+        <CardContent className="space-y-2 text-sm text-gray-700">
+          {enRevisionCount > 0 ? (
+            <p>
+              Hay <strong>{enRevisionCount}</strong> préstamo
+              {enRevisionCount !== 1 ? 's' : ''} en revisión pendiente
+              {enRevisionCount !== 1 ? 's' : ''} de aprobación.
+              <Link
+                to="/prestamos?estado=EN_REVISION"
+                className="ml-2 inline-flex items-center gap-1 font-medium text-blue-600 hover:underline"
+              >
+                <Search className="h-4 w-4" />
+                Ver en lista
+              </Link>
+            </p>
+          ) : (
+            <p>
+              No hay préstamos pendientes de revisión. Use los filtros para
+              buscar por estado, analista o fechas.
+            </p>
+          )}
+        </CardContent>
+      </Card>
+    ),
+    [enRevisionCount]
+  )
+
   const getEstadoBadge = (estado: string) => {
     const badges = {
       DRAFT: 'bg-gray-100 text-gray-800 border-gray-300',
@@ -700,80 +788,94 @@ export function PrestamosList() {
 
   if (showExcelUpload) {
     return (
-      <ExcelUploaderPrestamos
-        onClose={() => {
-          setShowExcelUpload(false)
+      <div className="space-y-6">
+        {novedadesCard}
 
-          queryClient.invalidateQueries({ queryKey: prestamoKeys.all })
+        <ExcelUploaderPrestamos
+          onClose={() => {
+            setShowExcelUpload(false)
 
-          queryClient.invalidateQueries({
-            queryKey: ['revision-manual-prestamos'],
-          })
-        }}
-        onSuccess={() => {
-          setShowExcelUpload(false)
+            queryClient.invalidateQueries({ queryKey: prestamoKeys.all })
 
-          queryClient.invalidateQueries({ queryKey: prestamoKeys.all })
+            queryClient.invalidateQueries({
+              queryKey: ['revision-manual-prestamos'],
+            })
+          }}
+          onSuccess={() => {
+            setShowExcelUpload(false)
 
-          queryClient.invalidateQueries({
-            queryKey: ['revision-manual-prestamos'],
-          })
-        }}
-      />
+            queryClient.invalidateQueries({ queryKey: prestamoKeys.all })
+
+            queryClient.invalidateQueries({
+              queryKey: ['revision-manual-prestamos'],
+            })
+          }}
+        />
+      </div>
     )
   }
 
   if (showCrearPrestamo) {
     return (
-      <CrearPrestamoForm
-        key={editingPrestamo?.id ?? 'nuevo'}
-        prestamo={editingPrestamo ?? undefined}
-        onClose={() => {
-          setShowCrearPrestamo(false)
+      <div className="space-y-6">
+        {novedadesCard}
 
-          setEditingPrestamo(null)
-        }}
-        onSuccess={() => {
-          setShowCrearPrestamo(false)
+        <CrearPrestamoForm
+          key={editingPrestamo?.id ?? 'nuevo'}
+          prestamo={editingPrestamo ?? undefined}
+          onClose={() => {
+            setShowCrearPrestamo(false)
 
-          setEditingPrestamo(null)
-        }}
-        onAprobarManual={(p: Prestamo) => {
-          setShowCrearPrestamo(false)
+            setEditingPrestamo(null)
+          }}
+          onSuccess={() => {
+            setShowCrearPrestamo(false)
 
-          setEditingPrestamo(null)
+            setEditingPrestamo(null)
+          }}
+          onAprobarManual={(p: Prestamo) => {
+            setShowCrearPrestamo(false)
 
-          setAprobacionManualPrestamo(p)
+            setEditingPrestamo(null)
 
-          setShowAprobarManual(true)
-        }}
-      />
+            setAprobacionManualPrestamo(p)
+
+            setShowAprobarManual(true)
+          }}
+        />
+      </div>
     )
   }
 
   if (showDetalle && viewingPrestamo) {
     return (
-      <PrestamoDetalleModal
-        prestamo={viewingPrestamo}
-        onClose={() => {
-          setShowDetalle(false)
+      <div className="space-y-6">
+        {novedadesCard}
 
-          setViewingPrestamo(null)
+        <PrestamoDetalleModal
+          prestamo={viewingPrestamo}
+          onClose={() => {
+            setShowDetalle(false)
 
-          if (searchParams.get('prestamo_id')) {
-            const next = new URLSearchParams(searchParams)
+            setViewingPrestamo(null)
 
-            next.delete('prestamo_id')
+            if (searchParams.get('prestamo_id')) {
+              const next = new URLSearchParams(searchParams)
 
-            setSearchParams(next, { replace: true })
-          }
-        }}
-      />
+              next.delete('prestamo_id')
+
+              setSearchParams(next, { replace: true })
+            }
+          }}
+        />
+      </div>
     )
   }
 
   return (
     <div className="space-y-6">
+      {novedadesCard}
+
       {loadingPrestamoParaEditar ? (
         <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center gap-3 bg-black/40">
           <Loader2 className="h-10 w-10 animate-spin text-white" />

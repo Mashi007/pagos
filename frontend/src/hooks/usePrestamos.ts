@@ -83,7 +83,9 @@ export function usePrestamos(
 
   page: number = 1,
 
-  perPage: number = DEFAULT_PER_PAGE
+  perPage: number = DEFAULT_PER_PAGE,
+
+  options?: { enabled?: boolean }
 ) {
   return useQuery({
     queryKey: prestamoKeys.list(filters, page, perPage),
@@ -95,6 +97,8 @@ export function usePrestamos(
     refetchOnMount: true, // Refetch cuando el componente se monta
 
     refetchOnWindowFocus: true, // Refetch cuando se enfoca la ventana (mantiene datos actualizados)
+
+    enabled: options?.enabled !== false,
   })
 }
 

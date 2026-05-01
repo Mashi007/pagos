@@ -91,23 +91,23 @@
   animation: slideIn 0.3s ease-out;
 }
 
-/* Scrollbar personalizado (solo WebKit/Blink; evita "mal selector" en Firefox) */
-@supports selector(::-webkit-scrollbar) {
-  ::-webkit-scrollbar {
-    width: 8px;
-  }
-
-  ::-webkit-scrollbar-track {
-    @apply bg-secondary;
-  }
-
-  ::-webkit-scrollbar-thumb {
-    @apply rounded-full bg-muted-foreground;
-  }
-
-  ::-webkit-scrollbar-thumb:hover {
-    @apply bg-primary;
-  }
+/*
+ * Scrollbar WebKit/Blink: sin @supports selector(...) ni @apply en pseudoelementos
+ * (evita "Juego de reglas ignoradas debido a un mal selector" en builds minificados).
+ * Firefox ignora *::-webkit-* sin romper el parseo del resto de la hoja.
+ */
+*::-webkit-scrollbar {
+  width: 8px;
+}
+*::-webkit-scrollbar-track {
+  background: hsl(var(--secondary));
+}
+*::-webkit-scrollbar-thumb {
+  border-radius: 9999px;
+  background: hsl(var(--muted-foreground));
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--primary));
 }
 
 /* Clases utilitarias personalizadas */
