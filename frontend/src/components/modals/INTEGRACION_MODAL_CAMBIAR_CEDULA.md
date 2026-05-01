@@ -41,6 +41,7 @@ console.log('Cambio de cédula:', { mismaCedula, nuevaCedula })
 }
 
 return (
+
 <div>
 {/_ Contenido del escáner _/}
 

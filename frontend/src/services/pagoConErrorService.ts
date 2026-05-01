@@ -196,9 +196,7 @@ class PagoConErrorService {
     return await apiClient.delete(`${this.baseUrl}/${id}`)
   }
 
-  async moverAPagosNormales(
-    ids: number[]
-  ): Promise<{
+  async moverAPagosNormales(ids: number[]): Promise<{
     movidos: number
     cuotas_aplicadas?: number
     errores?: string[]
