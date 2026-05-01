@@ -1572,7 +1572,11 @@ export function RegistrarPagoForm({
 
           <div className="flex flex-shrink-0 items-center justify-between rounded-t-lg border-b bg-white p-4">
             <h2 className="text-xl font-bold">
-              {isEditing ? 'Editar Pago' : 'Registrar Pago'}
+              {isEditing && bloquearCambioComprobanteCodigo
+                ? 'Consultar Pago (solo lectura)'
+                : isEditing
+                  ? 'Editar Pago'
+                  : 'Registrar Pago'}
             </h2>
 
             <Button variant="ghost" size="icon" onClick={onClose}>
@@ -1646,9 +1650,16 @@ export function RegistrarPagoForm({
 
                 {isEditing && bloquearCambioComprobanteCodigo ? (
                   <div className="rounded border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-                    Este pago ya está conciliado o pagado. El comprobante y el
-                    código se muestran solo para consulta y no se pueden
-                    modificar.
+                    <p className="font-semibold">
+                      Pago ya cargado a cuotas — solo consulta.
+                    </p>
+                    <p className="mt-1 text-xs">
+                      Este pago ya pasó a cartera, está conciliado/pagado y
+                      aplicado a una o más cuotas. El modal está en modo solo
+                      lectura: no se puede editar ni eliminar desde aquí. Si
+                      detecta un error en el comprobante, ajuste desde la
+                      pantalla de Revisión Manual del préstamo.
+                    </p>
                   </div>
                 ) : null}
 
@@ -2702,7 +2713,7 @@ export function RegistrarPagoForm({
                   />
                 </div>
 
-                {modoGuardarYProcesar && (
+                {modoGuardarYProcesar && !bloquearCambioComprobanteCodigo && (
                   <div className="rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
                     <div className="flex items-start gap-2">
                       <Info className="mt-0.5 h-4 w-4 flex-shrink-0" />
@@ -2852,10 +2863,14 @@ export function RegistrarPagoForm({
                 onClick={onClose}
                 disabled={isSubmitting || isDeleting}
               >
-                Cancelar
+                {isEditing && bloquearCambioComprobanteCodigo
+                  ? 'Cerrar'
+                  : 'Cancelar'}
               </Button>
 
-              {isEditing && pagoId ? (
+              {isEditing &&
+              pagoId &&
+              !bloquearCambioComprobanteCodigo ? (
                 <Button
                   type="button"
                   variant="outline"
@@ -2877,29 +2892,31 @@ export function RegistrarPagoForm({
                 </Button>
               ) : null}
 
-              <Button type="submit" disabled={isSubmitting || isDeleting}>
-                {isSubmitting ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              {isEditing && bloquearCambioComprobanteCodigo ? null : (
+                <Button type="submit" disabled={isSubmitting || isDeleting}>
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
 
-                    {modoGuardarYProcesar
-                      ? 'Guardando y procesando...'
-                      : isEditing
-                        ? 'Actualizando...'
-                        : 'Registrando...'}
-                  </>
-                ) : (
-                  <>
-                    <CheckCircle className="mr-2 h-4 w-4" />
+                      {modoGuardarYProcesar
+                        ? 'Guardando y procesando...'
+                        : isEditing
+                          ? 'Actualizando...'
+                          : 'Registrando...'}
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle className="mr-2 h-4 w-4" />
 
-                    {modoGuardarYProcesar
-                      ? 'Guardar y Procesar'
-                      : isEditing
-                        ? 'Actualizar Pago'
-                        : 'Registrar Pago'}
-                  </>
-                )}
-              </Button>
+                      {modoGuardarYProcesar
+                        ? 'Guardar y Procesar'
+                        : isEditing
+                          ? 'Actualizar Pago'
+                          : 'Registrar Pago'}
+                    </>
+                  )}
+                </Button>
+              )}
             </div>
           </form>
 
