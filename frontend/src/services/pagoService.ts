@@ -234,6 +234,8 @@ class PagoService {
     conflicto: boolean
     pago_id: number | null
     prestamo_id: number | null
+    /** Texto exacto cotejado contra `pagos.numero_documento` (puede incluir `§CD:` y código). */
+    clave_buscada?: string | null
   }> {
     const qs = new URLSearchParams()
     qs.set('numero_documento', params.numero_documento.trim())

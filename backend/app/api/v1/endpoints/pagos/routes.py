@@ -1117,6 +1117,10 @@ def get_conflicto_documento_cartera(
 
     `exclude_pago_id`: al editar un pago, excluir su id para detectar duplicidad contra *otros* registros.
 
+    Devuelve además `clave_buscada` (valor normalizado que se comparó contra `pagos.numero_documento`)
+
+    para que la UI muestre exactamente qué texto fue cotejado y se pueda verificar en BD.
+
     """
 
     pid, prid = primer_pago_cartera_por_documento(
@@ -1125,6 +1129,8 @@ def get_conflicto_documento_cartera(
 
     )
 
+    clave_buscada = normalize_documento(numero_documento)
+
     return {
 
         "conflicto": pid is not None,
@@ -1132,6 +1138,8 @@ def get_conflicto_documento_cartera(
         "pago_id": pid,
 
         "prestamo_id": prid,
+
+        "clave_buscada": clave_buscada,
 
     }
 

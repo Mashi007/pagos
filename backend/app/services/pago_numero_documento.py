@@ -60,12 +60,16 @@ def numero_documento_ya_registrado(
     numero_documento: Optional[str],
     *,
     exclude_pago_id: Optional[int] = None,
+    exclude_pago_con_error_id: Optional[int] = None,
 ) -> bool:
     """
     True si el valor almacenado (comprobante + §CD: + código) ya existe en `pagos` o `pagos_con_errores`.
 
     Comparación **insensible a mayúsculas** sobre la columna completa, alineada con duplicados
     que solo diferían en casing (misma clave operativa para el usuario).
+
+    `exclude_pago_con_error_id`: al validar o mover un registro en `pagos_con_errores`, excluir su propio id
+    para no contar la fila actual como duplicado de sí misma.
     """
     num = normalize_documento(numero_documento)
     if not num:
@@ -79,9 +83,8 @@ def numero_documento_ya_registrado(
     if db.scalar(q) is not None:
         return True
 
-    qe = (
-        select(PagoConError.id)
-        .where(func.upper(PagoConError.numero_documento) == nu)
-        .limit(1)
-    )
+    qe = select(PagoConError.id).where(func.upper(PagoConError.numero_documento) == nu)
+    if exclude_pago_con_error_id is not None:
+        qe = qe.where(PagoConError.id != exclude_pago_con_error_id)
+    qe = qe.limit(1)
     return db.scalar(qe) is not None

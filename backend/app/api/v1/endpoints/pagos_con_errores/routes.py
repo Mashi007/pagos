@@ -38,6 +38,7 @@ from app.schemas.auth import UserResponse
 
 from app.core.documento import (
     compose_numero_documento_almacenado,
+    normalize_codigo_documento,
     normalize_documento,
     split_numero_documento_almacenado,
 )
@@ -826,19 +827,30 @@ def mover_a_pagos_normales(
 
         logger.debug(f"mover_a_pagos_normales: procesando pago {idx}/{len(ids)} (id={pid}, cedula={row.cedula_cliente}, monto={row.monto_pagado})")
 
-        conciliado = bool(row.conciliado) if row.conciliado is not None else False
-        
         # Validar que no exista duplicado en tabla pagos
         numero_documento_normalizado = row.numero_documento or ""
         duplicado_existe = False
-        
+
         if numero_documento_normalizado:
             from app.services.pago_numero_documento import numero_documento_ya_registrado
-            duplicado_existe = numero_documento_ya_registrado(db, numero_documento_normalizado)
+            duplicado_existe = numero_documento_ya_registrado(
+                db,
+                numero_documento_normalizado,
+                exclude_pago_con_error_id=pid,
+            )
             if duplicado_existe:
                 logger.warning(f"mover_a_pagos_normales: pago {pid} tiene documento duplicado en tabla pagos: {numero_documento_normalizado}")
                 errores_procesamiento.append(f"Pago {pid}: documento '{numero_documento_normalizado}' ya existe en tabla pagos")
                 continue  # Saltar este pago, no mover
+
+        # «Guardar y procesar» = intención explícita de pasar a cartera. Si hay préstamo y monto,
+        # forzamos validación cartera (conciliado + verificado SI) para que la columna Cartera y la
+        # cascada queden alineadas con el estado final. Sin préstamo respetamos la fila origen.
+        debe_validar_cartera = bool(row.prestamo_id) and float(row.monto_pagado or 0) > 0
+        if debe_validar_cartera:
+            conciliado = True
+        else:
+            conciliado = bool(row.conciliado) if row.conciliado is not None else False
 
         ahora = datetime.now(ZoneInfo("America/Caracas")) if conciliado else None
 
@@ -958,19 +970,75 @@ def actualizar_pago_con_error(pago_id: int, payload: PagoConErrorUpdate, db: Ses
 
         raise HTTPException(status_code=404, detail="Pago con error no encontrado")
 
-    if payload.cedula_cliente is not None:
+    data = payload.model_dump(exclude_unset=True)
 
-        row.cedula_cliente = payload.cedula_cliente.strip()
+    _doc_touch = "numero_documento" in data or "codigo_documento" in data
 
-    if payload.prestamo_id is not None:
+    if _doc_touch:
 
-        row.prestamo_id = payload.prestamo_id
+        b0, c0 = split_numero_documento_almacenado(row.numero_documento or "")
 
-    if payload.fecha_pago is not None:
+        if "numero_documento" in data:
+
+            nb = normalize_documento(data["numero_documento"])
+
+        else:
+
+            nb = normalize_documento(b0)
+
+        if not nb:
+
+            raise HTTPException(status_code=400, detail="numero_documento no puede estar vacío.")
+
+        if "codigo_documento" in data:
+
+            nc = normalize_codigo_documento(data.get("codigo_documento"))
+
+        else:
+
+            nc = normalize_codigo_documento(c0) if c0 else None
+
+        new_stored = compose_numero_documento_almacenado(nb, nc)
+
+        if new_stored and numero_documento_ya_registrado(
+
+            db,
+
+            new_stored,
+
+            exclude_pago_con_error_id=pago_id,
+
+        ):
+
+            raise HTTPException(
+
+                status_code=409,
+
+                detail="Ya existe un pago o registro en revisión con la misma combinación comprobante + código.",
+
+            )
+
+        row.numero_documento = new_stored
+
+        row.referencia_pago = (new_stored or nb or "N/A")[:100]
+
+        data.pop("numero_documento", None)
+
+        data.pop("codigo_documento", None)
+
+    if "cedula_cliente" in data:
+
+        row.cedula_cliente = (data["cedula_cliente"] or "").strip()
+
+    if "prestamo_id" in data:
+
+        row.prestamo_id = data["prestamo_id"]
+
+    if "fecha_pago" in data and data["fecha_pago"] is not None:
 
         try:
 
-            row.fecha_pago = datetime.strptime(payload.fecha_pago, "%Y-%m-%d").replace(
+            row.fecha_pago = datetime.strptime(data["fecha_pago"], "%Y-%m-%d").replace(
 
                 hour=0, minute=0, second=0, microsecond=0
 
@@ -980,33 +1048,33 @@ def actualizar_pago_con_error(pago_id: int, payload: PagoConErrorUpdate, db: Ses
 
             raise HTTPException(status_code=400, detail="fecha_pago debe ser YYYY-MM-DD")
 
-    if payload.monto_pagado is not None:
+    if "monto_pagado" in data:
 
-        row.monto_pagado = payload.monto_pagado
+        row.monto_pagado = data["monto_pagado"]
 
-    if payload.numero_documento is not None:
+    if "institucion_bancaria" in data:
 
-        row.numero_documento = payload.numero_documento.strip() or None
+        row.institucion_bancaria = (
 
-    if payload.institucion_bancaria is not None:
+            data["institucion_bancaria"].strip() if data["institucion_bancaria"] else None
 
-        row.institucion_bancaria = payload.institucion_bancaria.strip() or None
+        )
 
-    if payload.notas is not None:
+    if "notas" in data:
 
-        row.notas = payload.notas
+        row.notas = data["notas"]
 
-    if payload.conciliado is not None:
+    if "conciliado" in data:
 
-        row.conciliado = payload.conciliado
+        row.conciliado = data["conciliado"]
 
-    if payload.errores_descripcion is not None:
+    if "errores_descripcion" in data:
 
-        row.errores_descripcion = payload.errores_descripcion
+        row.errores_descripcion = data["errores_descripcion"]
 
-    if payload.observaciones is not None:
+    if "observaciones" in data:
 
-        row.observaciones = payload.observaciones.strip() or None
+        row.observaciones = (data["observaciones"] or "").strip() or None
 
     db.commit()
 

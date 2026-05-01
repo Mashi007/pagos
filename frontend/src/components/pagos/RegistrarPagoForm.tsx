@@ -98,7 +98,15 @@ import {
 
 import { fechaPagoParaInputDate, hoyYmdCaracas } from '../../utils/fechaZona'
 
-import { splitNumeroDocumentoAlmacenado } from '../../utils/documentoPago'
+import {
+  composeNumeroDocumentoAlmacenado,
+  splitNumeroDocumentoAlmacenado,
+} from '../../utils/documentoPago'
+
+import {
+  extraerCaracteresCedulaPublica,
+  normalizarCedulaParaProcesar,
+} from '../../utils/cedulaConsultaPublica'
 
 import { apiClient } from '../../services/api'
 
@@ -521,10 +529,23 @@ export function RegistrarPagoForm({
 
   const debouncedCedula = useDebounce(formData.cedula_cliente, 500)
 
+  /**
+   * Cédula canónica para la búsqueda: limpia separadores (`3.14.552` → `314552`),
+   * mayúsculas y, cuando ya hay 6-11 dígitos sin letra, antepone `V` (igual que el flujo público).
+   * Acelera el match en BD porque la API recibe la misma forma con la que está almacenada.
+   */
+  const cedulaCanonicaBusqueda = useMemo(() => {
+    const limpia = extraerCaracteresCedulaPublica(debouncedCedula || '')
+    if (limpia.length < 2) return ''
+    const norm = normalizarCedulaParaProcesar(limpia)
+    if (norm.valido && norm.valorParaEnviar) return norm.valorParaEnviar
+    return limpia
+  }, [debouncedCedula])
+
   // Buscar préstamos cuando cambia la cédula (con al menos 2 caracteres)
 
   const { data: prestamos, isLoading: isLoadingPrestamos } =
-    usePrestamosByCedula(debouncedCedula.length >= 2 ? debouncedCedula : '')
+    usePrestamosByCedula(cedulaCanonicaBusqueda)
 
   // Información del préstamo seleccionado (el crédito solo puede ser uno de la lista por cédula)
 
@@ -552,12 +573,43 @@ export function RegistrarPagoForm({
     400
   )
 
+  /** Misma clave que persiste la API (`comprobante` + `§CD:` + código); el GET conflicto debe usarla para alinear con `pagos.numero_documento`. */
+  const claveDocumentoConflicto = useMemo(() => {
+    const b =
+      normalizarNumeroDocumento(
+        String(formData.numero_documento ?? '').trim()
+      ) ?? ''
+    const c = String(formData.codigo_documento ?? '').trim()
+    return (
+      composeNumeroDocumentoAlmacenado(b || null, c || null) ?? ''
+    )
+  }, [formData.numero_documento, formData.codigo_documento])
+
+  const debouncedClaveDocumentoConflicto = useDebounce(
+    claveDocumentoConflicto,
+    400
+  )
+
+  const claveDocumentoInicial = useMemo(() => {
+    const b =
+      normalizarNumeroDocumento(
+        String(pagoInicial?.numero_documento ?? '').trim()
+      ) ?? ''
+    const c = String(
+      (pagoInicial as { codigo_documento?: string | null })
+        ?.codigo_documento ?? ''
+    ).trim()
+    return (
+      composeNumeroDocumentoAlmacenado(b || null, c || null) ?? ''
+    )
+  }, [pagoInicial])
+
   const excludeIdConflicto =
     isEditing && !esPagoConError && pagoId ? pagoId : undefined
 
   /** En revisión manual el usuario debe ver siempre el estado del Nº doc.; no exigir comprobante enlazado. */
   const conflictoDocQueryEnabled =
-    debouncedNumeroDoc.length > 0 &&
+    debouncedClaveDocumentoConflicto.length > 0 &&
     (mostrarCampoCodigoDocumento ||
       (isEditing && Boolean(linkComprobanteParaVista && !archivoComprobante)))
 
@@ -568,12 +620,12 @@ export function RegistrarPagoForm({
   } = useQuery({
     queryKey: [
       'conflicto-documento-cartera',
-      debouncedNumeroDoc,
+      debouncedClaveDocumentoConflicto,
       excludeIdConflicto,
     ],
     queryFn: () =>
       pagoService.getConflictoDocumentoCartera({
-        numero_documento: debouncedNumeroDoc,
+        numero_documento: debouncedClaveDocumentoConflicto,
         exclude_pago_id: excludeIdConflicto,
       }),
     enabled: conflictoDocQueryEnabled,
@@ -581,7 +633,7 @@ export function RegistrarPagoForm({
   })
 
   const mismoDocQueInicial =
-    debouncedNumeroDoc === String(pagoInicial?.numero_documento ?? '').trim()
+    debouncedClaveDocumentoConflicto === claveDocumentoInicial
 
   const pidConflictoParaDetalle =
     conflictoDocApi?.conflicto && conflictoDocApi.prestamo_id
@@ -1613,16 +1665,41 @@ export function RegistrarPagoForm({
 
                       <Input
                         type="text"
+                        inputMode="text"
+                        autoComplete="off"
                         value={formData.cedula_cliente}
                         onChange={e => {
+                          // Tolerar `3.14.552`, `V-12.345.678`, espacios, NBSP, etc.: dejar solo V/E/G/J + dígitos.
+                          const limpia = extraerCaracteresCedulaPublica(
+                            e.target.value
+                          )
                           setFormData({
                             ...formData,
-                            cedula_cliente: e.target.value,
+                            cedula_cliente: limpia,
                             prestamo_id: null,
                           })
                         }}
+                        onBlur={() => {
+                          // Al desfocar: si hay 6-11 dígitos sin letra inicial, anteponer V
+                          // (búsqueda exacta contra `clientes.cedula` formato V########).
+                          const limpia = extraerCaracteresCedulaPublica(
+                            formData.cedula_cliente || ''
+                          )
+                          if (!limpia) return
+                          const norm = normalizarCedulaParaProcesar(limpia)
+                          if (
+                            norm.valido &&
+                            norm.valorParaEnviar &&
+                            norm.valorParaEnviar !== formData.cedula_cliente
+                          ) {
+                            setFormData(prev => ({
+                              ...prev,
+                              cedula_cliente: norm.valorParaEnviar!,
+                            }))
+                          }
+                        }}
                         className={`pl-10 ${errors.cedula_cliente ? 'border-red-500' : ''}`}
-                        placeholder="V12345678"
+                        placeholder="V12345678 (acepta 3.14.552, V-12.345.678…)"
                       />
                     </div>
 
@@ -2208,6 +2285,21 @@ export function RegistrarPagoForm({
                                   : '- (sin préstamo)'}
                               </span>
                               .
+                              {conflictoDocApi?.clave_buscada ? (
+                                <>
+                                  <br />
+                                  <span className="text-[11px] text-slate-500">
+                                    Buscado en BD (
+                                    <code className="font-mono">
+                                      pagos.numero_documento
+                                    </code>
+                                    ):{' '}
+                                  </span>
+                                  <code className="break-all font-mono text-[11px] text-slate-700">
+                                    {conflictoDocApi.clave_buscada}
+                                  </code>
+                                </>
+                              ) : null}
                             </span>
                           )}
                         </div>

@@ -3,6 +3,7 @@ type QueryClientInvalidate = {
   invalidateQueries: (filters: {
     queryKey: readonly unknown[]
     exact?: boolean
+    refetchType?: 'active' | 'inactive' | 'all' | 'none'
   }) => Promise<unknown>
 }
 
@@ -177,7 +178,16 @@ export async function invalidatePagosPrestamosRevisionYCuotas(
       queryKey: ['cuotas-prestamos'],
       exact: false,
     }),
-    queryClient.invalidateQueries({ queryKey: ['prestamos'], exact: false }),
+    /**
+     * `refetchType: 'all'` también baja a queries inactivas: la pestaña de Préstamos puede
+     * estar montada en otra ruta o con un saldo cacheado; esto fuerza el refresco de
+     * `PENDIENTE POR PAGAR` aunque la lista no sea la vista actual al guardar el pago.
+     */
+    queryClient.invalidateQueries({
+      queryKey: ['prestamos'],
+      exact: false,
+      refetchType: 'all',
+    }),
     queryClient.invalidateQueries({
       queryKey: [...NOTIFICACIONES_RECIBOS_LISTADO_QUERY_KEY_PREFIX],
       exact: false,
