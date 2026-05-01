@@ -284,10 +284,7 @@ export type RegistrarPagoOnSuccessMeta = {
 interface RegistrarPagoFormProps {
   onClose: () => void
 
-  onSuccess: (
-    procesado?: boolean,
-    meta?: RegistrarPagoOnSuccessMeta
-  ) => void
+  onSuccess: (procesado?: boolean, meta?: RegistrarPagoOnSuccessMeta) => void
 
   /**
    * Callback cuando se detecta documento duplicado (error 409).
@@ -625,7 +622,8 @@ export function RegistrarPagoForm({
           cedula_cliente: nextCedula,
           fecha_pago: (s.fecha_pago || '').trim() || prev.fecha_pago,
           institucion_bancaria:
-            (s.institucion_financiera || '').trim() || prev.institucion_bancaria,
+            (s.institucion_financiera || '').trim() ||
+            prev.institucion_bancaria,
           numero_documento:
             (s.numero_operacion || '').trim() || prev.numero_documento,
           monto_pagado: nextMonto,
@@ -837,6 +835,9 @@ export function RegistrarPagoForm({
 
     if (!fd.cedula_cliente) {
       newErrors.cedula_cliente = 'Cédula requerida'
+    } else if (/^error$/i.test(String(fd.cedula_cliente).trim())) {
+      newErrors.cedula_cliente =
+        'Corrija la cédula del cliente (no puede quedar «ERROR»). Use la del comprobante, p. ej. V28102491.'
     }
 
     if (prestamosParaSelect.length > 0 && !fd.prestamo_id) {
@@ -844,6 +845,18 @@ export function RegistrarPagoForm({
         prestamosParaSelect.length > 1
           ? 'Debe escoger un crédito de la lista'
           : 'Debe seleccionar el crédito'
+    }
+
+    if (
+      modoGuardarYProcesar &&
+      fd.monto_pagado > 0 &&
+      !fd.prestamo_id &&
+      !newErrors.prestamo_id
+    ) {
+      newErrors.prestamo_id =
+        prestamosParaSelect.length === 0
+          ? 'Para «Guardar y procesar» hace falta un crédito. Corrija la cédula hasta que carguen los préstamos (p. ej. V28102491 según el comprobante) y elija el crédito; sin préstamo no se aplica a cuotas.'
+          : 'Debe seleccionar el crédito para aplicar el pago a cuotas.'
     }
 
     const permiteCreditoRevisionManual =
@@ -1036,8 +1049,9 @@ export function RegistrarPagoForm({
           const idConError = pagoId
 
           try {
-            const resultMover =
-              await pagoConErrorService.moverAPagosNormales([idConError])
+            const resultMover = await pagoConErrorService.moverAPagosNormales([
+              idConError,
+            ])
 
             if (resultMover.movidos < 1) {
               const detalle =
@@ -1045,7 +1059,27 @@ export function RegistrarPagoForm({
                 resultMover.mensaje ||
                 'No se pudo mover el pago a la tabla operativa (pagos).'
 
+              const dupDocumentoCartera =
+                /ya existe en tabla pagos/i.test(detalle) ||
+                (/documento/i.test(detalle) && /ya existe/i.test(detalle))
+
+              setErrors(prev => ({
+                ...prev,
+                general: dupDocumentoCartera
+                  ? 'Comprobante duplicado en cartera: ese comprobante ya está registrado en pagos. Pulse «Visto» para asignar un código (sufijo) distinto y guarde de nuevo; sin código distinto «Guardar y procesar» no puede mover el pago.'
+                  : detalle,
+              }))
+
               toast.error(detalle, { duration: 7000 })
+
+              if (
+                dupDocumentoCartera &&
+                mostrarCampoCodigoDocumento &&
+                revisionManualFullEdit
+              ) {
+                setVistoRevisionManualOpen(true)
+              }
+
               onSuccess(false)
 
               return
@@ -1910,9 +1944,10 @@ export function RegistrarPagoForm({
 
                     {mostrarCampoCodigoDocumento ? (
                       <p className="text-xs text-gray-600">
-                        Cada número de documento es único en cartera. Si este comprobante ya existe en otro pago,
-                        use <strong>Visto</strong> para asignar un código (sufijo); sin código distinto no se puede
-                        duplicar.
+                        Cada número de documento es único en cartera. Si este
+                        comprobante ya existe en otro pago, use{' '}
+                        <strong>Visto</strong> para asignar un código (sufijo);
+                        sin código distinto no se puede duplicar.
                       </p>
                     ) : null}
                   </div>

@@ -41,7 +41,10 @@ from app.core.documento import (
     normalize_documento,
     split_numero_documento_almacenado,
 )
-from app.services.pago_numero_documento import numero_documento_ya_registrado
+from app.services.pago_numero_documento import (
+    documento_ya_en_tabla_pagos,
+    numero_documento_ya_registrado,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -159,7 +162,10 @@ class PagoConErrorBatchBody(BaseModel):
 
 
 
-def _pago_con_error_to_response(row: PagoConError) -> dict:
+def _pago_con_error_to_response(
+    row: PagoConError,
+    db: Optional[Session] = None,
+) -> dict:
 
     fp = row.fecha_pago
 
@@ -167,7 +173,7 @@ def _pago_con_error_to_response(row: PagoConError) -> dict:
 
     _nb, _nc = split_numero_documento_almacenado(row.numero_documento)
 
-    return {
+    out = {
 
         "id": row.id,
 
@@ -212,6 +218,18 @@ def _pago_con_error_to_response(row: PagoConError) -> dict:
         "fila_origen": row.fila_origen,
 
     }
+
+    if db is not None:
+
+        out["duplicado_documento_en_pagos"] = documento_ya_en_tabla_pagos(
+            db, row.numero_documento
+        )
+
+    else:
+
+        out["duplicado_documento_en_pagos"] = False
+
+    return out
 
 
 
@@ -395,7 +413,7 @@ def listar_pagos_con_errores(
 
         rows = db.execute(q).scalars().all()
 
-        items = [_pago_con_error_to_response(r) for r in rows]
+        items = [_pago_con_error_to_response(r, db) for r in rows]
 
         total_pages = (total + per_page - 1) // per_page if total else 0
 
@@ -507,7 +525,7 @@ def crear_pago_con_error(
 
     db.refresh(row)
 
-    return _pago_con_error_to_response(row)
+    return _pago_con_error_to_response(row, db)
 
 
 
@@ -615,7 +633,7 @@ def crear_pagos_con_error_batch(
 
             db.refresh(row)
 
-            results.append({"success": True, "pago": _pago_con_error_to_response(row)})
+            results.append({"success": True, "pago": _pago_con_error_to_response(row, db)})
 
         db.commit()
 
@@ -743,7 +761,7 @@ def exportar_pagos_con_errores(
 
     rows = db.execute(q).scalars().all()
 
-    return [_pago_con_error_to_response(r) for r in rows]
+    return [_pago_con_error_to_response(r, db) for r in rows]
 
 
 
@@ -914,7 +932,7 @@ def obtener_pago_con_error(pago_id: int, db: Session = Depends(get_db)):
 
         raise HTTPException(status_code=404, detail="Pago con error no encontrado")
 
-    return _pago_con_error_to_response(row)
+    return _pago_con_error_to_response(row, db)
 
 
 
@@ -984,7 +1002,7 @@ def actualizar_pago_con_error(pago_id: int, payload: PagoConErrorUpdate, db: Ses
 
     db.refresh(row)
 
-    return _pago_con_error_to_response(row)
+    return _pago_con_error_to_response(row, db)
 
 
 

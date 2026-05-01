@@ -47,6 +47,9 @@ export interface PagoConError {
   observaciones?: string | null
 
   fila_origen?: number | null
+
+  /** True si el comprobante almacenado ya existe en la tabla `pagos` (cartera). Calculado en API. */
+  duplicado_documento_en_pagos?: boolean
 }
 
 export interface PagoConErrorCreate {

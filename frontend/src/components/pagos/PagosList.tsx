@@ -130,6 +130,18 @@ const STAFF_COMPROBANTE_LIST_PREVIEW_CLOSED: StaffComprobanteListPreview = {
   rotDeg: 0,
 }
 
+/** Prefijo coherente con backend `mover-a-pagos` / revisión manual (tabla `pagos`). */
+const MARCA_OBS_DUPLICADO_EN_PAGOS =
+  'Documento duplicado (ya en pagos).'
+
+function observacionesConMarcaDuplicadoCartera(p: PagoConError): string {
+  const obs = (p.observaciones ?? '').trim()
+  if (p.duplicado_documento_en_pagos === true) {
+    return obs ? `${MARCA_OBS_DUPLICADO_EN_PAGOS} ${obs}` : MARCA_OBS_DUPLICADO_EN_PAGOS
+  }
+  return obs
+}
+
 /** Si false, la opción "Descargar Excel" (Gmail) no se muestra en el submenú Agregar pago. */
 const SHOW_DESCARGA_EXCEL_EN_SUBMENU = false
 const GMAIL_METRICS_SNAPSHOT_KEY = 'pagos:last_gmail_metrics_snapshot'
@@ -636,7 +648,9 @@ export function PagosList() {
         ),
         'Institución bancaria': p.institucion_bancaria ?? '',
         Estado: p.estado,
-        Observaciones: (p as PagoConError).observaciones ?? '',
+        Observaciones: observacionesConMarcaDuplicadoCartera(
+          p as PagoConError
+        ),
       }))
       const nombre = `Revision_Pagos_${new Date().toISOString().slice(0, 10)}.xlsx`
       await createAndDownloadExcel(datos, 'Revisión pagos', nombre)
@@ -728,7 +742,9 @@ export function PagosList() {
         'Verificado concordancia': p.verificado_concordancia ?? '',
         'Usuario registro': p.usuario_registro ?? '',
         Notas: p.notas ?? '',
-        Observaciones: (p as PagoConError).observaciones ?? '',
+        Observaciones: observacionesConMarcaDuplicadoCartera(
+          p as PagoConError
+        ),
       }))
       const nombre = `Revisar_Pagos_${new Date().toISOString().slice(0, 10)}.xlsx`
       await createAndDownloadExcel(datos, 'Revisar Pagos', nombre)
@@ -938,6 +954,9 @@ export function PagosList() {
           motivos.push('Fecha futura')
         }
         if (esDuplicadoFechaNumero) motivos.push('Duplicado fecha + número')
+        if ((p as PagoConError).duplicado_documento_en_pagos === true) {
+          motivos.push('Documento duplicado (pagos)')
+        }
         if (!p.prestamo_id) motivos.push('Sin crédito asociado')
         if ((p.observaciones ?? '').trim()) motivos.push('Con observación')
         if ((p.errores_descripcion ?? []).length > 0) {
@@ -973,7 +992,10 @@ export function PagosList() {
         return row.motivos.includes('Sin crédito asociado')
       }
       if (revisionMotivoFiltro === 'duplicado') {
-        return row.motivos.includes('Duplicado fecha + número')
+        return (
+          row.motivos.includes('Duplicado fecha + número') ||
+          row.motivos.includes('Documento duplicado (pagos)')
+        )
       }
       if (revisionMotivoFiltro === 'irreal') {
         return (
@@ -1196,6 +1218,26 @@ export function PagosList() {
     }
     return dup
   }, [data?.pagos])
+
+  /**
+   * Misma lógica que `EditarRevisionManual`: claves comprobante+código en la página actual,
+   * excluyendo la fila del modal. Permite avisar duplicado en pantalla y habilitar «Visto».
+   */
+  const claveDocumentoPagosTablaRevision = useMemo(() => {
+    const pagos = data?.pagos
+    if (!pagos?.length) return new Set<string>()
+    const editingId = pagoEditando?.id
+    const s = new Set<string>()
+    for (const p of pagos) {
+      if (editingId != null && p.id === editingId) continue
+      const k = claveDocumentoPagoListaNormalizada(
+        p.numero_documento,
+        p.codigo_documento ?? null
+      )
+      if (k) s.add(k)
+    }
+    return s
+  }, [data?.pagos, pagoEditando?.id])
 
   const refetchDiagnosticoRevision = async () => {
     await queryClient.refetchQueries({
@@ -2921,9 +2963,27 @@ export function PagosList() {
                                       placeholder="Motivo por el que no cumple"
                                     />
                                   ) : (
-                                    <span className="text-sm text-amber-700">
-                                      {(pago.observaciones ?? '').trim() ||
-                                        'No cumple validaciones automáticas'}
+                                    <span
+                                      className={cn(
+                                        'text-sm text-amber-700',
+                                        (pago as PagoConError)
+                                          .duplicado_documento_en_pagos ===
+                                          true && 'font-semibold text-orange-900'
+                                      )}
+                                    >
+                                      {(() => {
+                                        const pe = pago as PagoConError
+                                        const texto =
+                                          observacionesConMarcaDuplicadoCartera(
+                                            pe
+                                          ).trim()
+                                        return (
+                                          texto ||
+                                          (!pe.duplicado_documento_en_pagos &&
+                                            'No cumple validaciones automáticas') ||
+                                          ''
+                                        )
+                                      })()}
                                     </span>
                                   )}
                                 </TableCell>
@@ -3889,9 +3949,17 @@ export function PagosList() {
                                     {getEstadoBadge(pago.estado)}
                                   </TableCell>
                                   {esRevisarPagos && (
-                                    <TableCell className="text-xs text-amber-700">
-                                      {(pago as PagoConError).observaciones ??
-                                        '-'}
+                                    <TableCell
+                                      className={cn(
+                                        'text-xs text-amber-700',
+                                        (pago as PagoConError)
+                                          .duplicado_documento_en_pagos ===
+                                          true && 'font-semibold text-orange-900'
+                                      )}
+                                    >
+                                      {observacionesConMarcaDuplicadoCartera(
+                                        pago as PagoConError
+                                      ).trim() || '-'}
                                     </TableCell>
                                   )}
                                   <TableCell>
@@ -4266,6 +4334,18 @@ export function PagosList() {
               filters.sin_prestamo === 'si' || activeTab === 'revision'
             }
             esPagoConError={esRevisarPagos || activeTab === 'revision'}
+            mostrarCampoCodigoDocumento={
+              esRevisarPagos || activeTab === 'revision'
+            }
+            prestamoContextoRevisionManualId={
+              pagoEditando?.prestamo_id != null &&
+              Number(pagoEditando.prestamo_id) > 0
+                ? Number(pagoEditando.prestamo_id)
+                : undefined
+            }
+            claveDocumentoPagosTablaRevision={
+              claveDocumentoPagosTablaRevision
+            }
             bloquearCambioComprobanteCodigo={Boolean(
               pagoEditando &&
               (pagoEditando.conciliado ||

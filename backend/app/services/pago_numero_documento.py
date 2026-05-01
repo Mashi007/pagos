@@ -16,6 +16,21 @@ from app.models.pago import Pago
 from app.models.pago_con_error import PagoConError
 
 
+def documento_ya_en_tabla_pagos(db: Session, numero_documento: Optional[str]) -> bool:
+    """
+    True si el documento normalizado ya existe en la tabla `pagos` (cartera operativa).
+
+    Usado en listados de `pagos_con_errores` para marcar filas que no podrán moverse
+    hasta desambiguar con código (misma regla que mover-a-pagos).
+    """
+    num = normalize_documento(numero_documento)
+    if not num:
+        return False
+    nu = num.upper()
+    q = select(Pago.id).where(func.upper(Pago.numero_documento) == nu).limit(1)
+    return db.scalar(q) is not None
+
+
 def numero_documento_ya_registrado(
     db: Session,
     numero_documento: Optional[str],
