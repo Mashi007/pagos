@@ -87,6 +87,7 @@ import { prestamoService } from '../services/prestamoService'
 import {
   invalidateListasNotificacionesMora,
   invalidatePagosPrestamosRevisionYCuotas,
+  PAGOS_RQ_BROADCAST_CHANNEL,
 } from '../constants/queryKeys'
 
 import {
@@ -646,6 +647,22 @@ export function EditarRevisionManual() {
     refetchOnWindowFocus: true,
     refetchInterval: 60_000,
   })
+
+  /**
+   * Otras pestañas del mismo origen no reciben invalidateQueries de React Query.
+   * Tras registrar/aplicar pagos en Pagos o Notificaciones, este canal fuerza refetch del listado
+   * agrupado (clave duplicado/mismo documento) sin depender solo del intervalo de 60 s.
+   */
+  useEffect(() => {
+    if (typeof BroadcastChannel === 'undefined') return
+    const ch = new BroadcastChannel(PAGOS_RQ_BROADCAST_CHANNEL)
+    ch.onmessage = () => {
+      void refetchPagosRealizados()
+    }
+    return () => {
+      ch.close()
+    }
+  }, [refetchPagosRealizados])
 
   const conteoDocumentoPagosRevision = useMemo(() => {
     const m = new Map<string, number>()

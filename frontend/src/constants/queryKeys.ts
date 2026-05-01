@@ -50,6 +50,24 @@ export const NOTIFICACIONES_RECIBOS_LISTADO_QUERY_KEY_PREFIX = [
 export const NOTIFICACIONES_MORA_BROADCAST_CHANNEL =
   'pagos-notificaciones-mora-v1' as const
 
+/**
+ * Cuando se invalidan queries de pagos/cuotas/préstamos en una pestaña, las demás pestañas
+ * del mismo origen no reciben invalidateQueries; este canal avisa para refrescar vistas como
+ * `/revision-manual/editar/:id` (pagos agrupados por documento) sin esperar el polling de 60 s.
+ */
+export const PAGOS_RQ_BROADCAST_CHANNEL = 'pagos-rq-invalidate-v1' as const
+
+function broadcastPagosRQInvalidatePeerTabs() {
+  if (typeof BroadcastChannel === 'undefined') return
+  try {
+    const ch = new BroadcastChannel(PAGOS_RQ_BROADCAST_CHANNEL)
+    ch.postMessage({ type: 'invalidate' as const })
+    ch.close()
+  } catch {
+    // entornos sin canal o políticas del navegador
+  }
+}
+
 export type InvalidateNotificacionesMoraOptions = {
   /**
    * Evita reenviar por BroadcastChannel (la pestaña que recibe el evento
@@ -107,6 +125,10 @@ export type InvalidatePagosRevisionOptions = {
    * que acaba de traer datos frescos; evita refetch duplicado del mismo GET).
    */
   skipRevisionEditar?: boolean
+  /**
+   * No notificar otras pestañas vía `PAGOS_RQ_BROADCAST_CHANNEL` (p. ej. tests o bucles raros).
+   */
+  skipCrossTabPagosBroadcast?: boolean
 }
 
 /**
@@ -190,5 +212,8 @@ export async function invalidatePagosPrestamosRevisionYCuotas(
   await Promise.all(inv)
   if (!options?.skipNotificacionesMora) {
     void invalidateListasNotificacionesMora(queryClient)
+  }
+  if (!options?.skipCrossTabPagosBroadcast) {
+    broadcastPagosRQInvalidatePeerTabs()
   }
 }
