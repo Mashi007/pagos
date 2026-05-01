@@ -1027,9 +1027,17 @@ export function PagosList() {
           const eb = Number(b.pago.exceso_sobre_total_usd ?? 0)
           if (eb !== ea) return eb - ea
         }
-        return b.score - a.score || b.pago.id - a.pago.id
+        // Fecha de pago ascendente (más antiguas primero); fechas inválidas al final.
+        const fa = new Date(a.pago.fecha_pago as string).getTime()
+        const fb = new Date(b.pago.fecha_pago as string).getTime()
+        const aValida = !Number.isNaN(fa)
+        const bValida = !Number.isNaN(fb)
+        if (aValida && bValida && fa !== fb) return fa - fb
+        if (aValida !== bValida) return aValida ? -1 : 1
+        // Empate por fecha: anomalías primero, luego id ascendente.
+        return b.score - a.score || a.pago.id - b.pago.id
       })
-  }, [revisionData?.pagos, revisionTipoFiltro])
+  }, [revisionData?.pagos, revisionTipoFiltro, revisionGlobalMotivoFiltro])
   const revisionRowsFiltradas = useMemo(() => {
     if (!revisionMotivoFiltro) return revisionRowsAnalizadas
     return revisionRowsAnalizadas.filter(row => {
