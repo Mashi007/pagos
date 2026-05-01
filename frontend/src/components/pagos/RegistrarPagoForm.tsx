@@ -478,23 +478,42 @@ export function RegistrarPagoForm({
         const href = (linkComprobanteParaVista || '').trim()
         if (!href) {
           toast.error('No hay comprobante disponible para escanear.')
+          setIsRescanning(false)
           return
         }
-        const { blob, contentType } =
-          await fetchStaffComprobanteBlobWithDisplayMime(href)
-        const ext =
-          contentType === 'image/png'
-            ? 'png'
-            : contentType === 'image/gif'
-              ? 'gif'
-              : contentType === 'image/webp'
-                ? 'webp'
-                : contentType === 'application/pdf'
-                  ? 'pdf'
-                  : 'jpg'
-        fileToScan = new File([blob], `comprobante.${ext}`, {
-          type: contentType || 'application/octet-stream',
-        })
+
+        // Si es URL externa, no descargar, decirle al usuario que cargue de nuevo
+        if (href.startsWith('http')) {
+          toast.error(
+            'Para re-escanear, debe adjuntar la imagen nuevamente. Haga clic en "Elegir imagen".'
+          )
+          setIsRescanning(false)
+          return
+        }
+
+        try {
+          const { blob, contentType } =
+            await fetchStaffComprobanteBlobWithDisplayMime(href)
+          const ext =
+            contentType === 'image/png'
+              ? 'png'
+              : contentType === 'image/gif'
+                ? 'gif'
+                : contentType === 'image/webp'
+                  ? 'webp'
+                  : contentType === 'application/pdf'
+                    ? 'pdf'
+                    : 'jpg'
+          fileToScan = new File([blob], `comprobante.${ext}`, {
+            type: contentType || 'application/octet-stream',
+          })
+        } catch (fetchErr) {
+          toast.error(
+            'No se pudo acceder al comprobante guardado. Adjunte la imagen nuevamente.'
+          )
+          setIsRescanning(false)
+          return
+        }
       }
 
       const fd = new FormData()
@@ -562,8 +581,13 @@ export function RegistrarPagoForm({
       } else {
         toast.success('Campos actualizados desde el comprobante.')
       }
-    } catch {
-      toast.error('No se pudo re-escanear el comprobante.')
+    } catch (error) {
+      console.error('Error re-escaneando:', error)
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : 'No se pudo re-escanear el comprobante.'
+      )
     } finally {
       setIsRescanning(false)
     }
