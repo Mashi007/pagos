@@ -2132,7 +2132,7 @@ TAREA: Lee la imagen o PDF adjunto y extrae SOLO lo que aparezca con claridad en
   - numero_operacion: número o código que identifica la transacción (Serial, Ref, Nº operación, referencia, código, ID de orden en Binance, etc.). Sin etiquetas largas: solo el valor. Máximo 100 caracteres.
   - monto: número decimal con punto como separador decimal (ej. 150.25). Si hay varios montos, el del pago principal al beneficiario. Si no es legible, usa null.
   - moneda: exactamente **BS** o **USD** (USDT, $ en contexto divisa fuerte, "Dólares", Binance Pay en USDT → USD).
-  - cedula_pagador_en_comprobante: si en el comprobante aparece claramente la secuencia numérica del depositante (DP:, CI, RIF, etc.), devuélvela SOLO CON DÍGITOS sin prefijo de letra (ej. 1234567). Ignora si el comprobante trae letra (V, E, J, G) delante; extrae únicamente los dígitos. El backend buscará automáticamente coincidencias en la base de datos combinando todos los prefijos válidos (V/E/J/G) + estos dígitos. Si no aparece o hay duda, cadena vacía "".
+  - cedula_pagador_en_comprobante: secuencia numérica del **depositante** (no la del deudor del contexto). Si en el comprobante aparece claramente la línea/casilla del depositante, devuélvela **solo con dígitos** (sin letra V/E/J/G ni puntos de miles). Mercantil (misma lógica visual que formato **A** del clasificador del sistema): casillas **DP:V-/DP:E-/DP:J-**, **Cédula Dep.**, **Nro. de Cédula de Identidad del Depositante**, bloques RECAUDACIÓN / DEPÓSITO DIVISAS con cuenta 0105. BNC (misma lógica que formato **B**): línea **DP:V-/E-/J-** + dígitos en recibo cajero BNC. No inventes dígitos; si la línea no es legible o hay duda, "". El backend validador concatena prefijos V/E/J/G con esos dígitos (6–11 cifras); si tras quitar no-dígitos no quedan entre 6 y 11 cifras, deja "".
   - notas: una frase corta opcional sobre calidad de lectura o ambigüedades (máx 300 caracteres); puede ser "".
 
 REGLAS:
@@ -2161,12 +2161,17 @@ def _extra_prompt_plantilla_escaner(institucion_plantilla: str) -> str:
     chunks: List[str] = []
     if "mercantil" in low:
         chunks.append(
-            "MERCANTIL: priorice referencia / Nº operación / confirmación de Pago Móvil o transferencia "
-            "y el monto principal del comprobante."
+            "MERCANTIL (mismos patrones que clasificación **A** en el pipeline Gmail): "
+            "DEPÓSITO DIVISAS / RECAUDACIÓN / tira 0105 RAPI; para `cedula_pagador_en_comprobante` "
+            "use solo dígitos leídos en DP:V-/E-/J-, Cédula Dep., Nro. de Cédula del Depositante "
+            "(sin inventar). Referencia/serial/monto como en el papel."
         )
     if ("bnc" in low or "bnv" in low) and "venezuela" not in low:
         chunks.append(
-            "BNC / BNV (Banco Nacional de Crédito): busque serial, referencia o código de confirmación visibles en el capture."
+            "BNC / BNV (mismos patrones que clasificación **B** en el pipeline Gmail): "
+            "recibo cajero BNC; línea DP:V-/E-/J- + dígitos del depositante; "
+            "`cedula_pagador_en_comprobante` solo dígitos visibles (sin inventar). "
+            "Serial/ref/monto según bloque del ticket."
         )
     if "banco de venezuela" in low or re.search(r"\bbdv\b", low):
         chunks.append(
@@ -2354,7 +2359,12 @@ def extract_infopagos_campos_desde_comprobante(
                 num_op = str(data.get("numero_operacion") or "").strip()[:100]
                 fecha = _parse_fecha_escaner(data.get("fecha_pago"))
                 monto = _parse_monto_escaner(data.get("monto"))
-                ced_pag = str(data.get("cedula_pagador_en_comprobante") or "").strip()[:30]
+                ced_raw = str(data.get("cedula_pagador_en_comprobante") or "").strip()
+                # Solo dígitos; alineado con validate_cedula (6–11 cifras numéricas tras prefijo en BD).
+                ced_digits = re.sub(r"\D", "", ced_raw)
+                if ced_digits and (len(ced_digits) < 6 or len(ced_digits) > 11):
+                    ced_digits = ""
+                ced_pag = ced_digits[:30]
                 notas = str(data.get("notas") or "").strip()[:300]
 
                 return {
