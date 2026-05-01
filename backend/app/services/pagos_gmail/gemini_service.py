@@ -40,8 +40,9 @@ MODO ESPECIAL — RE-ESCANEO (solo esta peticion; el backend usa scan_filter **e
   CALIDAD / NO INVENTAR: Si **fecha_pago**, **monto** o **numero_referencia** no son **100%** legibles en los pixeles (borroso, recorte severo, reflejo, compresion ilegible) -> **formato "ninguno"** y todos los campos "NA". No rellenes desde asunto ni cuerpo del correo.
   FORMATOS **A** y **B** — el campo JSON **"cedula"** **si** se evalua en este modo (excepcion al bloque REGLA CEDULA **solo** para esta peticion y solo si clasificas A o B):
     - Extrae la cedula del **depositante** **unicamente** desde el comprobante: **DP:V-** / **DP:E-** / **DP:J-** + digitos, **Cedula Dep.**, casillas **Nro. de Cédula** en papel Mercantil, etc.
-    - Si **todos** los digitos son inequivocos, devuelve cadena con prefijo **V**, **E** o **J** en mayuscula + digitos sin puntos (ej. **V30145077**). Puedes leer desde linea DP con o sin guion entre letra y numeros.
-    - Si hay **cualquier** duda en un digito, la zona esta tapada/sellada o no hay patron claro -> **"cedula":"ERROR"** (literal ERROR, sin comillas extra en JSON).
+    - Si **todos** los digitos son inequivocos, devuelve **SOLO LOS DÍGITOS SIN PREFIJO DE LETRA** (ej. **30145077**). No adivines ni incluyas la letra (V/E/J/G); extrae unicamente los numeros. Puedes leer desde linea DP con o sin guion, pero devuelve solo dígitos puros.
+    - El backend buscará automáticamente coincidencias en BD combinando todos los prefijos válidos (V, E, J, G) + estos dígitos. Si encuentra coincidencia (ej. BD tiene V30145077 y tu extraes 30145077), los dígitos son iguales → VÁLIDO.
+    - Si hay **cualquier** duda en un digito, la zona esta tapada/sellada o no hay patron claro -> **"cedula":""** (cadena vacía, no "ERROR"). Si no puedes leer con certeza los numeros, no los adivines.
     - Si no devuelves A ni B (ninguno, C, D, E, F, NR), **"cedula"** debe ser **"NA"** como siempre.
   FORMATOS **C**, **D**, **E**, **F**, **NR** y **ninguno**: **"cedula":"NA"** (este modo no cambia la regla de cedula en C/D/E/F/NR).
 """
@@ -2131,7 +2132,7 @@ TAREA: Lee la imagen o PDF adjunto y extrae SOLO lo que aparezca con claridad en
   - numero_operacion: número o código que identifica la transacción (Serial, Ref, Nº operación, referencia, código, ID de orden en Binance, etc.). Sin etiquetas largas: solo el valor. Máximo 100 caracteres.
   - monto: número decimal con punto como separador decimal (ej. 150.25). Si hay varios montos, el del pago principal al beneficiario. Si no es legible, usa null.
   - moneda: exactamente **BS** o **USD** (USDT, $ en contexto divisa fuerte, "Dólares", Binance Pay en USDT → USD).
-  - cedula_pagador_en_comprobante: si en el comprobante aparece claramente la cédula del depositante (DP:, CI, RIF, etc.), devuélvela normalizada como una sola cadena tipo V12345678 (una letra V/E/J/G y dígitos sin ceros de más a la izquierda después de la letra). Si no aparece o hay duda, cadena vacía "".
+  - cedula_pagador_en_comprobante: si en el comprobante aparece claramente la secuencia numérica del depositante (DP:, CI, RIF, etc.), devuélvela SOLO CON DÍGITOS sin prefijo de letra (ej. 1234567). Ignora si el comprobante trae letra (V, E, J, G) delante; extrae únicamente los dígitos. El backend buscará automáticamente coincidencias en la base de datos combinando todos los prefijos válidos (V/E/J/G) + estos dígitos. Si no aparece o hay duda, cadena vacía "".
   - notas: una frase corta opcional sobre calidad de lectura o ambigüedades (máx 300 caracteres); puede ser "".
 
 REGLAS:
