@@ -18,8 +18,12 @@ from app.core.database import SessionLocal
 from app.api.v1.endpoints.pagos_con_errores.routes import (
     EliminarPorDescargaBody,
     archivar_por_descarga,
+    limpiar_pagos_con_error_ya_cargados,
     listar_pagos_con_errores,
+    mover_a_pagos_normales,
 )
+from app.api.v1.endpoints.pagos_con_errores import routes as pagos_con_errores_routes
+from app.models.pago import Pago
 from app.models.pago_con_error import PagoConError
 from app.schemas.auth import UserResponse
 
@@ -128,3 +132,79 @@ def test_listar_pagos_con_errores_oculta_exportados_por_defecto(db: Session):
     ids_all = {int(x["id"]) for x in resp_all.get("pagos", [])}
     assert p_visible.id in ids_all
     assert p_archivado.id in ids_all
+
+
+def test_mover_a_pagos_mantiene_filas_previas_si_una_falla(monkeypatch, db: Session):
+    p_ok = _crear_pago_con_error(db, "MOVE-SAVEPOINT-OK")
+    p_error = _crear_pago_con_error(db, "MOVE-SAVEPOINT-ERR")
+    doc_ok = p_ok.numero_documento
+    doc_error = p_error.numero_documento
+    db.commit()
+
+    monkeypatch.setattr(
+        pagos_con_errores_routes,
+        "pago_con_error_ya_cargado_estricto",
+        lambda _db, _row: None,
+    )
+    monkeypatch.setattr(
+        pagos_con_errores_routes,
+        "resolver_cedula_almacenada_en_clientes",
+        lambda _db, cedula: cedula,
+    )
+
+    def _duplicado_o_falla(_db, numero_documento, **_kwargs):
+        if numero_documento == doc_error:
+            raise RuntimeError("fallo simulado")
+        return False
+
+    monkeypatch.setattr(
+        pagos_con_errores_routes,
+        "numero_documento_ya_registrado",
+        _duplicado_o_falla,
+    )
+
+    out = mover_a_pagos_normales(
+        payload=EliminarPorDescargaBody(ids=[p_ok.id, p_error.id]),
+        db=db,
+    )
+
+    assert out["movidos"] == 1
+    assert out["errores"]
+    assert db.get(PagoConError, p_ok.id) is None
+    assert db.get(PagoConError, p_error.id) is not None
+    pago_ok = db.execute(
+        select(Pago).where(Pago.numero_documento == doc_ok)
+    ).scalar_one_or_none()
+    assert pago_ok is not None
+
+
+def test_limpiar_ya_cargados_mantiene_borrados_previos_si_una_falla(
+    monkeypatch, db: Session
+):
+    p_ok = _crear_pago_con_error(db, "CLEAN-SAVEPOINT-OK")
+    p_error = _crear_pago_con_error(db, "CLEAN-SAVEPOINT-ERR")
+    db.commit()
+
+    def _ya_cargado_o_falla(_db, row):
+        if int(row.id) == int(p_error.id):
+            raise RuntimeError("fallo simulado")
+        return 999
+
+    monkeypatch.setattr(
+        pagos_con_errores_routes,
+        "pago_con_error_ya_cargado_estricto",
+        _ya_cargado_o_falla,
+    )
+
+    out = limpiar_pagos_con_error_ya_cargados(
+        payload=pagos_con_errores_routes.LimpiarYaCargadosBody(
+            ids=[p_ok.id, p_error.id]
+        ),
+        db=db,
+        current_user=_fake_user(),
+    )
+
+    assert out["eliminados"] == 1
+    assert out["errores"]
+    assert db.get(PagoConError, p_ok.id) is None
+    assert db.get(PagoConError, p_error.id) is not None
