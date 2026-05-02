@@ -943,7 +943,7 @@ class PagoService {
       saldo_vencido: number
 
       total_prestamos: number
-    }>
+    }>,
     total: number
 
     page: number
