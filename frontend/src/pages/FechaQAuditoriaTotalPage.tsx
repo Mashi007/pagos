@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { CheckCircle2, Database, Search, RefreshCw } from 'lucide-react'
+import { CheckCircle2, Database, FolderClosed, Search, RefreshCw, XCircle } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
 
@@ -18,6 +18,7 @@ import {
 import {
   notificacionService,
   type FechaQAuditoriaTotalItem,
+  type FechaQAuditoriaLoteItem,
 } from '../services/notificacionService'
 import { reporteService } from '../services/reporteService'
 import { getErrorMessage } from '../types/errors'
@@ -27,23 +28,7 @@ import { Fechas2BusquedaPanel } from './notificaciones/Fechas2BusquedaPanel'
 import { fmtFechaNotifIso } from './notificaciones/notificacionesPageCells'
 
 const QK = ['notificaciones', 'fecha-q-auditoria-total'] as const
-
-function filaElegibleAcciones(row: FechaQAuditoriaTotalItem): boolean {
-  return row.puede_aplicar === true && Boolean((row.cedula || '').trim())
-}
-
-function loteDesdeAuditoriaItem(
-  row: FechaQAuditoriaTotalItem
-): string | undefined {
-  const qc = row.q_cache
-  const loteRaw =
-    qc && typeof qc === 'object' && 'lote_aplicado' in qc
-      ? (qc as { lote_aplicado?: unknown }).lote_aplicado
-      : undefined
-  return typeof loteRaw === 'string' && loteRaw.trim()
-    ? loteRaw.trim()
-    : undefined
-}
+const QK_LOTES = ['notificaciones', 'fecha-q-auditoria-lotes'] as const
 
 function fmtIso(s?: string | null): string {
   if (!s) return '-'
@@ -51,7 +36,6 @@ function fmtIso(s?: string | null): string {
   return t.length >= 10 ? t.slice(0, 10) : t
 }
 
-/** Fecha Q legible: ISO, serial Sheets (46133) o texto d/m/y; si el API devuelve crudo, cae a q_cache. */
 function fmtFechaQHojaAuditoria(row: FechaQAuditoriaTotalItem): string {
   const tryFmt = (v: unknown): string | null => {
     if (v == null) return null
@@ -75,6 +59,16 @@ function fmtFechaQHojaAuditoria(row: FechaQAuditoriaTotalItem): string {
   return '-'
 }
 
+function loteDesdeItem(row: FechaQAuditoriaTotalItem): string {
+  const qc = row.q_cache
+  const loteRaw =
+    qc && typeof qc === 'object' && 'lote_aplicado' in qc
+      ? (qc as { lote_aplicado?: unknown }).lote_aplicado
+      : undefined
+  const s = typeof loteRaw === 'string' ? loteRaw.trim() : ''
+  return s || '(sin lote)'
+}
+
 export default function FechaQAuditoriaTotalPage() {
   const queryClient = useQueryClient()
   const { user } = useSimpleAuth()
@@ -82,16 +76,23 @@ export default function FechaQAuditoriaTotalPage() {
 
   const [cedula, setCedula] = useState('')
   const [appliedCedula, setAppliedCedula] = useState('')
-  /** Por defecto en false: lista todo el universo paginado; activar para acotar a filas donde Q ≠ fecha BD. */
   const [soloConDiferencia, setSoloConDiferencia] = useState(false)
-  /** Si true, el GET envía `excluir_marcados_no: false` y vuelven a listarse los marcados «No». */
   const [incluirMarcadosNo, setIncluirMarcadosNo] = useState(false)
   const [offset, setOffset] = useState(0)
   const [busyId, setBusyId] = useState<number | null>(null)
   const [syncingDrive, setSyncingDrive] = useState(false)
-  const [selected, setSelected] = useState<Set<number>>(() => new Set())
   const [batchRunning, setBatchRunning] = useState(false)
-  const [confirmLote, setConfirmLote] = useState<'si' | 'no' | null>(null)
+
+  type ConfirmState =
+    | null
+    | { accion: 'si_todos' }
+    | { accion: 'si_lote'; lote: string; elegibles: number }
+    | { accion: 'no_todos' }
+    | { accion: 'no_lote'; lote: string; elegibles: number }
+    | { accion: 'elegir_lote_si' }
+    | { accion: 'elegir_lote_no' }
+
+  const [confirmState, setConfirmState] = useState<ConfirmState>(null)
   const limit = NOTIFICACIONES_MAX_CLIENTES_POR_PAGINA
 
   const q = useQuery({
@@ -112,6 +113,14 @@ export default function FechaQAuditoriaTotalPage() {
       }),
   })
 
+  const lotesQ = useQuery({
+    queryKey: [...QK_LOTES, incluirMarcadosNo],
+    queryFn: () =>
+      notificacionService.getFechaQAuditoriaLotes({
+        excluir_marcados_no: !incluirMarcadosNo,
+      }),
+  })
+
   const total = q.data?.total ?? 0
   const items = q.data?.items ?? []
   const hasPrev = offset > 0
@@ -123,110 +132,85 @@ export default function FechaQAuditoriaTotalPage() {
     return `${ini}-${fin} de ${total}`
   }, [offset, total, limit])
 
-  useEffect(() => {
-    setSelected(new Set())
-  }, [offset, appliedCedula, soloConDiferencia, incluirMarcadosNo])
+  const totalElegibles = lotesQ.data?.total_elegibles ?? 0
+  const lotes = lotesQ.data?.lotes ?? []
 
-  const elegiblesPagina = useMemo(
-    () => items.filter(filaElegibleAcciones),
-    [items]
-  )
-  const todosElegiblesSeleccionados =
-    elegiblesPagina.length > 0 &&
-    elegiblesPagina.every(r => selected.has(r.prestamo_id))
-  const algunElegibleSeleccionado = elegiblesPagina.some(r =>
-    selected.has(r.prestamo_id)
-  )
-
-  const idsSeleccionadosOrdenados = useMemo(() => {
-    const ids: number[] = []
-    for (const r of items) {
-      if (selected.has(r.prestamo_id)) ids.push(r.prestamo_id)
-    }
-    return ids
-  }, [items, selected])
-
-  /** Solo filas con checkbox (Puede aplicar = Sí y cédula); el lote ignora cualquier otro id. */
-  const seleccionadosElegiblesParaSi = useMemo(() => {
-    const out: number[] = []
-    for (const pid of idsSeleccionadosOrdenados) {
-      const row = items.find(r => r.prestamo_id === pid)
-      if (row && filaElegibleAcciones(row)) out.push(pid)
-    }
-    return out
-  }, [idsSeleccionadosOrdenados, items])
-
-  const ejecutarLoteSi = async () => {
-    if (!esAdmin || batchRunning || seleccionadosElegiblesParaSi.length === 0)
-      return
-    setBatchRunning(true)
-    setConfirmLote(null)
-    let ok = 0
-    const errores: string[] = []
-    for (const pid of seleccionadosElegiblesParaSi) {
-      const row = items.find(r => r.prestamo_id === pid)
-      if (!row || !filaElegibleAcciones(row)) continue
-      const ced = (row.cedula || '').trim()
-      const lote = loteDesdeAuditoriaItem(row)
-      try {
-        await notificacionService.postAplicarFechaEntregaQComoFechaAprobacion({
-          cedula: ced,
-          prestamoId: pid,
-          ...(lote ? { lote } : {}),
-        })
-        ok += 1
-      } catch (e) {
-        errores.push(`#${pid}: ${getErrorMessage(e) || 'error'}`)
-      }
-    }
-    if (errores.length === 0) {
-      toast.success(`Sí en lote: ${ok} préstamo(s) actualizado(s).`)
-    } else {
-      toast.message(
-        `Sí en lote: ${ok} ok, ${errores.length} error(es). Revise el detalle en consola o reintente fila a fila.`
-      )
-      console.warn('[fecha-q-auditoria] lote Sí', errores)
-    }
-    setSelected(new Set())
+  const invalidarTodo = async () => {
     await queryClient.invalidateQueries({ queryKey: [...QK] })
-    setBatchRunning(false)
+    await queryClient.invalidateQueries({ queryKey: [...QK_LOTES] })
   }
 
-  const ejecutarLoteNo = async () => {
-    if (!esAdmin || batchRunning || seleccionadosElegiblesParaSi.length === 0)
-      return
+  const ejecutarMasivoSi = async (
+    modo: 'todos' | 'por_lote',
+    lote?: string
+  ) => {
+    if (!esAdmin || batchRunning) return
     setBatchRunning(true)
-    setConfirmLote(null)
-    let ok = 0
-    const errores: string[] = []
-    for (const pid of seleccionadosElegiblesParaSi) {
-      const row = items.find(r => r.prestamo_id === pid)
-      if (!row || !filaElegibleAcciones(row)) continue
-      try {
-        await notificacionService.postFechaQAuditoriaMarcaNoAplicar({
-          prestamoId: pid,
-        })
-        ok += 1
-      } catch (e) {
-        errores.push(`#${pid}: ${getErrorMessage(e) || 'error'}`)
+    setConfirmState(null)
+    try {
+      const res = await notificacionService.postFechaQAuditoriaAplicarMasivo({
+        modo,
+        lote: modo === 'por_lote' ? lote : undefined,
+        excluir_marcados_no: !incluirMarcadosNo,
+      })
+      if (res.errores === 0) {
+        toast.success(
+          `Aprobado: ${res.aplicados} prestamo(s) actualizado(s).`
+        )
+      } else {
+        toast.message(
+          `${res.aplicados} ok, ${res.errores} error(es). Revise detalle en consola.`
+        )
+        console.warn('[fecha-q-auditoria] masivo Si', res.errores_detalle)
       }
+      await invalidarTodo()
+    } catch (e) {
+      toast.error(getErrorMessage(e) || 'Error en la aprobacion masiva.')
+    } finally {
+      setBatchRunning(false)
     }
-    if (errores.length === 0) {
-      toast.success(`No en lote: ${ok} préstamo(s) marcado(s) en auditoría.`)
-    } else {
-      toast.message(`No en lote: ${ok} ok, ${errores.length} error(es).`)
-      console.warn('[fecha-q-auditoria] lote No', errores)
-    }
-    setSelected(new Set())
-    await queryClient.invalidateQueries({ queryKey: [...QK] })
-    setBatchRunning(false)
   }
+
+  const ejecutarMasivoNo = async (
+    modo: 'todos' | 'por_lote',
+    lote?: string
+  ) => {
+    if (!esAdmin || batchRunning) return
+    setBatchRunning(true)
+    setConfirmState(null)
+    try {
+      const res = await notificacionService.postFechaQAuditoriaMarcarNoMasivo({
+        modo,
+        lote: modo === 'por_lote' ? lote : undefined,
+        excluir_marcados_no: !incluirMarcadosNo,
+      })
+      if (res.errores === 0) {
+        toast.success(
+          `No en lote: ${res.marcados} prestamo(s) marcado(s).`
+        )
+      } else {
+        toast.message(
+          `${res.marcados} ok, ${res.errores} error(es).`
+        )
+      }
+      await invalidarTodo()
+    } catch (e) {
+      toast.error(getErrorMessage(e) || 'Error al marcar No masivamente.')
+    } finally {
+      setBatchRunning(false)
+    }
+  }
+
+  const confirmDialogOpen = confirmState != null
+  const esElegirLote =
+    confirmState?.accion === 'elegir_lote_si' ||
+    confirmState?.accion === 'elegir_lote_no'
 
   return (
     <div className="mx-auto max-w-7xl space-y-6 p-4 md:p-6">
       <ModulePageHeader
-        title="Notificaciones · Fechas (Q vs BD)"
-        description="Comparación por préstamo, independiente del estado operativo (mora, liquidado, etc.): cédula, fecha de la columna Q de la hoja CONCILIACIÓN (caché en BD) y fecha de aprobación en base de datos. Si la Q es la referencia y difiere, use Sí para alinear la aprobación en BD (o No para descartar en auditoría). El caché se actualiza al sincronizar la hoja y con el job programado (lunes y jueves 04:00 Caracas). Paginación por página."
+        title="Notificaciones - Fechas (Q vs BD)"
+        description="Comparacion por prestamo: cedula, fecha de la columna Q de la hoja CONCILIACION (cache en BD) y fecha de aprobacion en base de datos. Si la Q es la referencia y difiere, use Si para alinear la aprobacion en BD (o No para descartar en auditoria)."
         icon={Database}
       />
 
@@ -237,7 +221,7 @@ export default function FechaQAuditoriaTotalPage() {
         <CardContent className="flex flex-col gap-3 md:flex-row md:items-end">
           <div className="space-y-1">
             <label className="text-sm font-medium text-muted-foreground">
-              Cédula (opcional)
+              Cedula (opcional)
             </label>
             <Input
               value={cedula}
@@ -265,7 +249,7 @@ export default function FechaQAuditoriaTotalPage() {
                 setOffset(0)
               }}
             />
-            Incluir marcados «No aplicar Q»
+            Incluir marcados "No aplicar Q"
           </label>
           <Button
             type="button"
@@ -300,7 +284,7 @@ export default function FechaQAuditoriaTotalPage() {
                 try {
                   const res =
                     await reporteService.syncConciliacionSheetDesdeDrive()
-                  await queryClient.invalidateQueries({ queryKey: [...QK] })
+                  await invalidarTodo()
                   await q.refetch()
                   const rowCountRaw = (res as { row_count?: unknown } | null)
                     ?.row_count
@@ -327,7 +311,7 @@ export default function FechaQAuditoriaTotalPage() {
             <RefreshCw
               className={`h-4 w-4 ${syncingDrive ? 'animate-spin' : ''}`}
             />
-            {syncingDrive ? 'Recargando…' : 'Recargar desde Drive'}
+            {syncingDrive ? 'Recargando...' : 'Recargar desde Drive'}
           </Button>
           <Button asChild type="button" variant="outline">
             <Link to="/notificaciones/general">
@@ -337,13 +321,95 @@ export default function FechaQAuditoriaTotalPage() {
         </CardContent>
       </Card>
 
+      {/* Acciones masivas */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Acciones masivas</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Total elegibles (Q distinta de aprobacion BD, con cedula):{' '}
+            <span className="font-semibold text-foreground">
+              {lotesQ.isFetching ? '...' : totalElegibles}
+            </span>
+            {lotes.length > 0 && (
+              <>
+                {' '}en{' '}
+                <span className="font-semibold text-foreground">
+                  {lotes.length}
+                </span>{' '}
+                lote(s)
+              </>
+            )}
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              size="sm"
+              className="gap-1.5 bg-blue-600 text-white hover:bg-blue-700"
+              disabled={
+                !esAdmin || totalElegibles === 0 || batchRunning
+              }
+              onClick={() => setConfirmState({ accion: 'si_todos' })}
+            >
+              <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden />
+              Aprobar todos ({totalElegibles})
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="gap-1.5"
+              disabled={
+                !esAdmin || lotes.length === 0 || batchRunning
+              }
+              onClick={() => setConfirmState({ accion: 'elegir_lote_si' })}
+            >
+              <FolderClosed className="h-4 w-4 shrink-0" aria-hidden />
+              Aprobar por lote
+            </Button>
+            <span className="mx-2 h-5 w-px bg-border" />
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              disabled={
+                !esAdmin || totalElegibles === 0 || batchRunning
+              }
+              onClick={() => setConfirmState({ accion: 'no_todos' })}
+            >
+              <XCircle className="h-4 w-4 shrink-0" aria-hidden />
+              Marcar No todos ({totalElegibles})
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              className="gap-1.5"
+              disabled={
+                !esAdmin || lotes.length === 0 || batchRunning
+              }
+              onClick={() => setConfirmState({ accion: 'elegir_lote_no' })}
+            >
+              <FolderClosed className="h-4 w-4 shrink-0" aria-hidden />
+              Marcar No por lote
+            </Button>
+          </div>
+          {!esAdmin && (
+            <p className="text-xs text-muted-foreground">
+              Solo administradores pueden ejecutar acciones masivas.
+            </p>
+          )}
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Resultados ({rangoTxt})</CardTitle>
         </CardHeader>
         <CardContent className="overflow-x-auto">
           {q.isFetching ? (
-            <p className="text-sm text-muted-foreground">Cargando…</p>
+            <p className="text-sm text-muted-foreground">Cargando...</p>
           ) : q.isError ? (
             <p className="text-sm text-destructive">
               {getErrorMessage(q.error)}
@@ -353,312 +419,191 @@ export default function FechaQAuditoriaTotalPage() {
               Sin filas para este filtro.
             </p>
           ) : (
-            <>
-              {items.length > 0 ? (
-                <div className="mb-3 space-y-2 border-b border-border/60 pb-3">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-sm text-muted-foreground">
-                      Con casilla marcada:{' '}
-                      <span className="font-semibold text-foreground">
-                        {idsSeleccionadosOrdenados.length}
-                      </span>
-                      {' · '}
-                      Listos para <strong>Sí</strong> (aplicar Q):{' '}
-                      <span className="font-semibold text-foreground">
-                        {seleccionadosElegiblesParaSi.length}
-                      </span>
-                      {' · '}
-                      Elegibles en esta página: {elegiblesPagina.length}
-                    </span>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      disabled={selected.size === 0 || batchRunning}
-                      onClick={() => setSelected(new Set())}
+            <table className="w-full min-w-[850px] border-collapse text-sm">
+              <thead>
+                <tr className="border-b text-left text-muted-foreground">
+                  <th className="py-2 pr-2 font-medium">Prestamo</th>
+                  <th className="py-2 pr-2 font-medium">Cedula</th>
+                  <th className="py-2 pr-2 font-medium">Lote</th>
+                  <th className="py-2 pr-2 font-medium">Fecha Q (hoja)</th>
+                  <th className="py-2 pr-2 font-medium">
+                    Fecha BD (aprobacion)
+                  </th>
+                  <th className="py-2 pr-2 font-medium">
+                    Dif. dias (Q - BD)
+                  </th>
+                  <th className="py-2 pr-2 font-medium">Puede aplicar</th>
+                  <th className="py-2 pr-2 font-medium">
+                    Q anterior corrige
+                  </th>
+                  <th className="py-2 pr-2 font-medium">Si / No</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map(row => {
+                  const elegible =
+                    row.puede_aplicar === true &&
+                    Boolean((row.cedula || '').trim())
+                  return (
+                    <tr
+                      key={row.prestamo_id}
+                      className="border-b border-border/60"
                     >
-                      Limpiar selección
-                    </Button>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Button
-                      type="button"
-                      size="sm"
-                      className="gap-1.5 bg-blue-600 text-white hover:bg-blue-700"
-                      disabled={
-                        !esAdmin ||
-                        seleccionadosElegiblesParaSi.length === 0 ||
-                        batchRunning
-                      }
-                      onClick={() => setConfirmLote('si')}
-                    >
-                      <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden />
-                      Aprobar masivamente (Sí)
-                    </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="secondary"
-                      disabled={
-                        !esAdmin ||
-                        seleccionadosElegiblesParaSi.length === 0 ||
-                        batchRunning
-                      }
-                      onClick={() => setConfirmLote('no')}
-                    >
-                      Marcar «No» en lote…
-                    </Button>
-                  </div>
-                  {elegiblesPagina.length === 0 ? (
-                    <p className="text-xs text-amber-900">
-                      En esta página no hay filas con{' '}
-                      <strong>Puede aplicar = Sí</strong> (no hay casillas).
-                      Active «Solo con diferencia de fecha», cambie de página o
-                      recalcule la caché Q.
-                    </p>
-                  ) : null}
-                </div>
-              ) : null}
-              <table className="w-full min-w-[800px] border-collapse text-sm">
-                <thead>
-                  <tr className="border-b text-left text-muted-foreground">
-                    <th className="w-10 py-2 pr-1 text-center font-medium">
-                      <input
-                        type="checkbox"
-                        ref={el => {
-                          if (el) {
-                            el.indeterminate =
-                              algunElegibleSeleccionado &&
-                              !todosElegiblesSeleccionados
-                          }
-                        }}
-                        checked={todosElegiblesSeleccionados}
-                        onChange={() => {
-                          setSelected(prev => {
-                            const n = new Set(prev)
-                            if (todosElegiblesSeleccionados) {
-                              elegiblesPagina.forEach(r =>
-                                n.delete(r.prestamo_id)
-                              )
-                            } else {
-                              elegiblesPagina.forEach(r => n.add(r.prestamo_id))
-                            }
-                            return n
-                          })
-                        }}
-                        disabled={
-                          !esAdmin ||
-                          batchRunning ||
-                          elegiblesPagina.length === 0
-                        }
-                        title="Seleccionar o quitar todos los casos elegibles de esta página"
-                        aria-label="Seleccionar todos los elegibles en esta página"
-                      />
-                    </th>
-                    <th className="py-2 pr-2 font-medium">Préstamo</th>
-                    <th className="py-2 pr-2 font-medium">Cédula</th>
-                    <th className="py-2 pr-2 font-medium">Fecha Q (hoja)</th>
-                    <th className="py-2 pr-2 font-medium">
-                      Fecha BD (aprobación)
-                    </th>
-                    <th className="py-2 pr-2 font-medium">
-                      Dif. días (Q − BD)
-                    </th>
-                    <th className="py-2 pr-2 font-medium">Puede aplicar</th>
-                    <th className="py-2 pr-2 font-medium">
-                      Q anterior corrige
-                    </th>
-                    <th className="py-2 pr-2 font-medium">Sí / No</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {items.map(row => {
-                    const elegible = filaElegibleAcciones(row)
-                    return (
-                      <tr
-                        key={row.prestamo_id}
-                        className="border-b border-border/60"
-                      >
-                        <td className="py-2 pr-1 text-center align-middle">
-                          {elegible ? (
-                            <input
-                              type="checkbox"
-                              checked={selected.has(row.prestamo_id)}
-                              onChange={e => {
-                                setSelected(prev => {
-                                  const n = new Set(prev)
-                                  if (e.target.checked) n.add(row.prestamo_id)
-                                  else n.delete(row.prestamo_id)
-                                  return n
-                                })
+                      <td className="py-2 pr-2 font-mono">
+                        {row.prestamo_id}
+                      </td>
+                      <td className="py-2 pr-2">{row.cedula || '-'}</td>
+                      <td className="py-2 pr-2 text-xs text-muted-foreground">
+                        {loteDesdeItem(row)}
+                      </td>
+                      <td className="py-2 pr-2 tabular-nums">
+                        {fmtFechaQHojaAuditoria(row)}
+                      </td>
+                      <td className="py-2 pr-2">
+                        {fmtIso(row.fecha_aprobacion)}
+                      </td>
+                      <td className="py-2 pr-2">
+                        {row.diferencia_dias ?? '-'}
+                      </td>
+                      <td className="py-2 pr-2">
+                        {row.puede_aplicar == null
+                          ? '-'
+                          : row.puede_aplicar
+                            ? 'Si'
+                            : 'No'}
+                      </td>
+                      <td className="py-2 pr-2">
+                        {row.correccion_desde_q_anterior_bd == null
+                          ? '-'
+                          : row.correccion_desde_q_anterior_bd
+                            ? 'Si'
+                            : 'No'}
+                      </td>
+                      <td className="py-2 pr-2">
+                        {elegible ? (
+                          <span className="inline-flex flex-wrap gap-1">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="default"
+                              className="h-7 px-2 text-xs"
+                              disabled={
+                                !esAdmin ||
+                                batchRunning ||
+                                busyId === row.prestamo_id
+                              }
+                              title={
+                                esAdmin
+                                  ? 'Guardar en BD la fecha Q como fecha de aprobacion.'
+                                  : 'Solo administrador.'
+                              }
+                              onClick={() => {
+                                if (
+                                  !esAdmin ||
+                                  batchRunning ||
+                                  busyId != null
+                                )
+                                  return
+                                const ced = (row.cedula || '').trim()
+                                const qc = row.q_cache
+                                const loteRaw =
+                                  qc &&
+                                  typeof qc === 'object' &&
+                                  'lote_aplicado' in qc
+                                    ? (qc as { lote_aplicado?: unknown })
+                                        .lote_aplicado
+                                    : undefined
+                                const lote =
+                                  typeof loteRaw === 'string' &&
+                                  loteRaw.trim()
+                                    ? loteRaw.trim()
+                                    : undefined
+                                setBusyId(row.prestamo_id)
+                                void (async () => {
+                                  try {
+                                    await notificacionService.postAplicarFechaEntregaQComoFechaAprobacion(
+                                      {
+                                        cedula: ced,
+                                        prestamoId: row.prestamo_id,
+                                        ...(lote ? { lote } : {}),
+                                      }
+                                    )
+                                    toast.success(
+                                      'Fecha de aprobacion actualizada con la Q.'
+                                    )
+                                    await invalidarTodo()
+                                  } catch (e) {
+                                    toast.error(
+                                      getErrorMessage(e) ||
+                                        'No se pudo aplicar la fecha Q.'
+                                    )
+                                  } finally {
+                                    setBusyId(null)
+                                  }
+                                })()
                               }}
-                              disabled={!esAdmin || batchRunning}
-                              aria-label={`Seleccionar préstamo ${row.prestamo_id}`}
-                            />
-                          ) : (
-                            <span className="text-xs text-muted-foreground">
-                              -
-                            </span>
-                          )}
-                        </td>
-                        <td className="py-2 pr-2 font-mono">
-                          {row.prestamo_id}
-                        </td>
-                        <td className="py-2 pr-2">{row.cedula || '-'}</td>
-                        <td className="py-2 pr-2 tabular-nums">
-                          {fmtFechaQHojaAuditoria(row)}
-                        </td>
-                        <td className="py-2 pr-2">
-                          {fmtIso(row.fecha_aprobacion)}
-                        </td>
-                        <td className="py-2 pr-2">
-                          {row.diferencia_dias ?? '-'}
-                        </td>
-                        <td className="py-2 pr-2">
-                          {row.puede_aplicar == null
-                            ? '-'
-                            : row.puede_aplicar
-                              ? 'Sí'
-                              : 'No'}
-                        </td>
-                        <td className="py-2 pr-2">
-                          {row.correccion_desde_q_anterior_bd == null
-                            ? '-'
-                            : row.correccion_desde_q_anterior_bd
-                              ? 'Sí'
-                              : 'No'}
-                        </td>
-                        <td className="py-2 pr-2">
-                          {row.puede_aplicar === true &&
-                          (row.cedula || '').trim() ? (
-                            <span className="inline-flex flex-wrap gap-1">
-                              <Button
-                                type="button"
-                                size="sm"
-                                variant="default"
-                                className="h-7 px-2 text-xs"
-                                disabled={
+                            >
+                              Si
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="h-7 px-2 text-xs"
+                              disabled={
+                                !esAdmin ||
+                                batchRunning ||
+                                busyId === row.prestamo_id
+                              }
+                              title={
+                                esAdmin
+                                  ? 'Descartar en auditoria (no cambia la aprobacion en BD).'
+                                  : 'Solo administrador.'
+                              }
+                              onClick={() => {
+                                if (
                                   !esAdmin ||
                                   batchRunning ||
-                                  busyId === row.prestamo_id
-                                }
-                                title={
-                                  esAdmin
-                                    ? 'Guardar en BD la fecha Q como fecha de aprobación (y reglas del servidor).'
-                                    : 'Solo administrador.'
-                                }
-                                onClick={() => {
-                                  if (
-                                    !esAdmin ||
-                                    batchRunning ||
-                                    busyId != null
-                                  )
-                                    return
-                                  const ced = (row.cedula || '').trim()
-                                  const qc = row.q_cache
-                                  const loteRaw =
-                                    qc &&
-                                    typeof qc === 'object' &&
-                                    'lote_aplicado' in qc
-                                      ? (qc as { lote_aplicado?: unknown })
-                                          .lote_aplicado
-                                      : undefined
-                                  const lote =
-                                    typeof loteRaw === 'string' &&
-                                    loteRaw.trim()
-                                      ? loteRaw.trim()
-                                      : undefined
-                                  setBusyId(row.prestamo_id)
-                                  void (async () => {
-                                    try {
-                                      await notificacionService.postAplicarFechaEntregaQComoFechaAprobacion(
-                                        {
-                                          cedula: ced,
-                                          prestamoId: row.prestamo_id,
-                                          ...(lote ? { lote } : {}),
-                                        }
-                                      )
-                                      toast.success(
-                                        'Fecha de aprobación actualizada con la Q; requerimiento y vencimientos según reglas del servidor.'
-                                      )
-                                      await queryClient.invalidateQueries({
-                                        queryKey: [...QK],
-                                      })
-                                    } catch (e) {
-                                      toast.error(
-                                        getErrorMessage(e) ||
-                                          'No se pudo aplicar la fecha Q.'
-                                      )
-                                    } finally {
-                                      setBusyId(null)
-                                    }
-                                  })()
-                                }}
-                              >
-                                Sí
-                              </Button>
-                              <Button
-                                type="button"
-                                size="sm"
-                                variant="outline"
-                                className="h-7 px-2 text-xs"
-                                disabled={
-                                  !esAdmin ||
-                                  batchRunning ||
-                                  busyId === row.prestamo_id
-                                }
-                                title={
-                                  esAdmin
-                                    ? 'Descartar en auditoría (no cambia la aprobación en BD).'
-                                    : 'Solo administrador.'
-                                }
-                                onClick={() => {
-                                  if (
-                                    !esAdmin ||
-                                    batchRunning ||
-                                    busyId != null
-                                  )
-                                    return
-                                  setBusyId(row.prestamo_id)
-                                  void (async () => {
-                                    try {
-                                      await notificacionService.postFechaQAuditoriaMarcaNoAplicar(
-                                        {
-                                          prestamoId: row.prestamo_id,
-                                        }
-                                      )
-                                      toast.message(
-                                        'Marcado como no aplicar en esta auditoría.'
-                                      )
-                                      await queryClient.invalidateQueries({
-                                        queryKey: [...QK],
-                                      })
-                                    } catch (e) {
-                                      toast.error(
-                                        getErrorMessage(e) ||
-                                          'No se pudo marcar.'
-                                      )
-                                    } finally {
-                                      setBusyId(null)
-                                    }
-                                  })()
-                                }}
-                              >
-                                No
-                              </Button>
-                            </span>
-                          ) : (
-                            <span className="text-xs text-muted-foreground">
-                              -
-                            </span>
-                          )}
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </>
+                                  busyId != null
+                                )
+                                  return
+                                setBusyId(row.prestamo_id)
+                                void (async () => {
+                                  try {
+                                    await notificacionService.postFechaQAuditoriaMarcaNoAplicar(
+                                      {
+                                        prestamoId: row.prestamo_id,
+                                      }
+                                    )
+                                    toast.message(
+                                      'Marcado como no aplicar en esta auditoria.'
+                                    )
+                                    await invalidarTodo()
+                                  } catch (e) {
+                                    toast.error(
+                                      getErrorMessage(e) ||
+                                        'No se pudo marcar.'
+                                    )
+                                  } finally {
+                                    setBusyId(null)
+                                  }
+                                })()
+                              }}
+                            >
+                              No
+                            </Button>
+                          </span>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">
+                            -
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
           )}
 
           <div className="mt-4 flex items-center justify-end gap-2">
@@ -684,77 +629,189 @@ export default function FechaQAuditoriaTotalPage() {
 
       <div className="space-y-2">
         <h2 className="text-sm font-semibold text-slate-800">
-          Ajuste manual por día de aprobación
+          Ajuste manual por dia de aprobacion
         </h2>
         <p className="text-xs text-muted-foreground">
-          Búsqueda y edición puntual de fechas (sin depender de la columna Q).
-          Misma herramienta que antes bajo Notificaciones · Fechas.
+          Busqueda y edicion puntual de fechas (sin depender de la columna Q).
         </p>
         <Fechas2BusquedaPanel embedded />
       </div>
 
+      {/* Dialogo: elegir lote */}
       <Dialog
-        open={confirmLote === 'si'}
-        onOpenChange={open => !open && setConfirmLote(null)}
+        open={esElegirLote}
+        onOpenChange={open => !open && setConfirmState(null)}
+      >
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>
+              {confirmState?.accion === 'elegir_lote_si'
+                ? 'Seleccione lote para aprobar'
+                : 'Seleccione lote para marcar No'}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2">
+            {lotesQ.isFetching ? (
+              <p className="text-sm text-muted-foreground">Cargando lotes...</p>
+            ) : lotes.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                No hay lotes con prestamos elegibles.
+              </p>
+            ) : (
+              <div className="grid gap-2">
+                {lotes.map((l: FechaQAuditoriaLoteItem) => (
+                  <Button
+                    key={l.lote}
+                    type="button"
+                    variant="outline"
+                    className="justify-between gap-4 text-left"
+                    onClick={() => {
+                      if (confirmState?.accion === 'elegir_lote_si') {
+                        setConfirmState({
+                          accion: 'si_lote',
+                          lote: l.lote,
+                          elegibles: l.elegibles,
+                        })
+                      } else {
+                        setConfirmState({
+                          accion: 'no_lote',
+                          lote: l.lote,
+                          elegibles: l.elegibles,
+                        })
+                      }
+                    }}
+                  >
+                    <span className="font-mono text-sm">{l.lote}</span>
+                    <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs font-semibold tabular-nums">
+                      {l.elegibles} elegible(s)
+                    </span>
+                  </Button>
+                ))}
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setConfirmState(null)}
+            >
+              Cancelar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialogo: confirmar Si todos */}
+      <Dialog
+        open={confirmState?.accion === 'si_todos'}
+        onOpenChange={open => !open && setConfirmState(null)}
       >
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Aprobar masivamente (fecha Q)</DialogTitle>
+            <DialogTitle>Aprobar todos los elegibles</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
-            Se aplicará la misma acción que el botón <strong>Sí</strong> en cada
-            fila: guardar la fecha Q como <strong>fecha de aprobación</strong>{' '}
-            en BD (requerimiento = día anterior, recálculo de vencimientos si el
-            servidor lo aplica) en{' '}
-            <span className="font-semibold tabular-nums">
-              {seleccionadosElegiblesParaSi.length}
+            Se aplicara la fecha Q como{' '}
+            <strong>fecha de aprobacion</strong> en BD para{' '}
+            <span className="font-semibold tabular-nums text-foreground">
+              {totalElegibles}
             </span>{' '}
-            préstamo(s) con casilla marcada y{' '}
-            <strong>Puede aplicar = Sí</strong>. Los que fallen se pueden
-            revisar uno a uno.
+            prestamo(s) donde la Q difiere de la aprobacion actual.
+            Requerimiento y vencimientos se recalculan segun reglas del
+            servidor.
           </p>
           <DialogFooter className="gap-2 sm:gap-0">
             <Button
               type="button"
               variant="outline"
-              onClick={() => setConfirmLote(null)}
+              onClick={() => setConfirmState(null)}
               disabled={batchRunning}
             >
               Cancelar
             </Button>
             <Button
               type="button"
-              onClick={() => void ejecutarLoteSi()}
+              onClick={() => void ejecutarMasivoSi('todos')}
               disabled={batchRunning}
             >
-              {batchRunning ? 'Ejecutando…' : 'Confirmar y aplicar'}
+              {batchRunning ? 'Ejecutando...' : 'Confirmar y aplicar'}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
+      {/* Dialogo: confirmar Si por lote */}
       <Dialog
-        open={confirmLote === 'no'}
-        onOpenChange={open => !open && setConfirmLote(null)}
+        open={confirmState?.accion === 'si_lote'}
+        onOpenChange={open => !open && setConfirmState(null)}
       >
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Marcar «No» en lote</DialogTitle>
+            <DialogTitle>Aprobar lote</DialogTitle>
+          </DialogHeader>
+          {confirmState?.accion === 'si_lote' && (
+            <p className="text-sm text-muted-foreground">
+              Se aplicara la fecha Q como{' '}
+              <strong>fecha de aprobacion</strong> en BD para{' '}
+              <span className="font-semibold tabular-nums text-foreground">
+                {confirmState.elegibles}
+              </span>{' '}
+              prestamo(s) del lote{' '}
+              <span className="font-mono font-semibold text-foreground">
+                {confirmState.lote}
+              </span>
+              .
+            </p>
+          )}
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() =>
+                setConfirmState({ accion: 'elegir_lote_si' })
+              }
+              disabled={batchRunning}
+            >
+              Volver
+            </Button>
+            <Button
+              type="button"
+              onClick={() => {
+                if (confirmState?.accion === 'si_lote') {
+                  void ejecutarMasivoSi('por_lote', confirmState.lote)
+                }
+              }}
+              disabled={batchRunning}
+            >
+              {batchRunning ? 'Ejecutando...' : 'Confirmar y aplicar'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialogo: confirmar No todos */}
+      <Dialog
+        open={confirmState?.accion === 'no_todos'}
+        onOpenChange={open => !open && setConfirmState(null)}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Marcar No todos los elegibles</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
-            Se aplicará la misma acción que el botón <strong>No</strong>: marcar
-            en caché «no aplicar Q» en auditoría (sin cambiar aprobación en BD)
-            en{' '}
-            <span className="font-semibold tabular-nums">
-              {seleccionadosElegiblesParaSi.length}
+            Se marcaran como{' '}
+            <strong>No aplicar Q</strong> en auditoria{' '}
+            <span className="font-semibold tabular-nums text-foreground">
+              {totalElegibles}
             </span>{' '}
-            préstamo(s) con casilla marcada.
+            prestamo(s). No cambia la aprobacion en BD.
           </p>
           <DialogFooter className="gap-2 sm:gap-0">
             <Button
               type="button"
               variant="outline"
-              onClick={() => setConfirmLote(null)}
+              onClick={() => setConfirmState(null)}
               disabled={batchRunning}
             >
               Cancelar
@@ -762,10 +819,60 @@ export default function FechaQAuditoriaTotalPage() {
             <Button
               type="button"
               variant="secondary"
-              onClick={() => void ejecutarLoteNo()}
+              onClick={() => void ejecutarMasivoNo('todos')}
               disabled={batchRunning}
             >
-              {batchRunning ? 'Ejecutando…' : 'Confirmar y marcar'}
+              {batchRunning ? 'Ejecutando...' : 'Confirmar y marcar'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialogo: confirmar No por lote */}
+      <Dialog
+        open={confirmState?.accion === 'no_lote'}
+        onOpenChange={open => !open && setConfirmState(null)}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Marcar No en lote</DialogTitle>
+          </DialogHeader>
+          {confirmState?.accion === 'no_lote' && (
+            <p className="text-sm text-muted-foreground">
+              Se marcaran como{' '}
+              <strong>No aplicar Q</strong>{' '}
+              <span className="font-semibold tabular-nums text-foreground">
+                {confirmState.elegibles}
+              </span>{' '}
+              prestamo(s) del lote{' '}
+              <span className="font-mono font-semibold text-foreground">
+                {confirmState.lote}
+              </span>
+              . No cambia la aprobacion en BD.
+            </p>
+          )}
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() =>
+                setConfirmState({ accion: 'elegir_lote_no' })
+              }
+              disabled={batchRunning}
+            >
+              Volver
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                if (confirmState?.accion === 'no_lote') {
+                  void ejecutarMasivoNo('por_lote', confirmState.lote)
+                }
+              }}
+              disabled={batchRunning}
+            >
+              {batchRunning ? 'Ejecutando...' : 'Confirmar y marcar'}
             </Button>
           </DialogFooter>
         </DialogContent>

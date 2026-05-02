@@ -338,6 +338,204 @@ def post_fecha_q_auditoria_marca_no_aplicar(
     return {"ok": True, "prestamo_id": prestamo_id}
 
 
+@router.get("/fecha-q-auditoria-lotes")
+def get_fecha_q_auditoria_lotes(
+    db: Session = Depends(get_db),
+    excluir_marcados_no: bool = Query(True),
+):
+    """
+    Lotes distintos con conteo de préstamos elegibles (puede_aplicar en vivo)
+    para la UI de aprobación masiva por lote.
+    """
+    dialect = (db.get_bind().dialect.name or "").lower()
+    stmt = select(Prestamo).order_by(Prestamo.id.asc())
+    if excluir_marcados_no:
+        stmt = stmt.where(_where_revision_q_no_descartada(dialect))
+
+    rows = list(db.execute(stmt).scalars().all())
+    lotes: dict = {}
+    total_elegibles = 0
+    for p in rows:
+        cache = p.fecha_entrega_q_aprobacion_cache if isinstance(p.fecha_entrega_q_aprobacion_cache, dict) else None
+        fq = fecha_q_desde_cache_json(cache) if cache else None
+        fa = _fecha_aprobacion_como_date(getattr(p, "fecha_aprobacion", None))
+        ced = (p.cedula or "").strip()
+        elegible = fq is not None and fa is not None and fq != fa and bool(ced)
+        if not elegible:
+            continue
+        total_elegibles += 1
+        lote_val = str(cache.get("lote_aplicado") or "").strip() if cache else ""
+        key = lote_val or "(sin lote)"
+        if key not in lotes:
+            lotes[key] = 0
+        lotes[key] += 1
+
+    items = [{"lote": k, "elegibles": v} for k, v in sorted(lotes.items(), key=lambda x: x[0])]
+    return {"total_elegibles": total_elegibles, "lotes": items}
+
+
+@router.post("/fecha-q-auditoria-aplicar-masivo")
+def post_fecha_q_auditoria_aplicar_masivo(
+    payload: dict = Body(...),
+    db: Session = Depends(get_db),
+    admin: UserResponse = Depends(require_admin),
+):
+    """
+    Aprobación masiva de fecha Q como fecha_aprobacion.
+
+    - ``modo='todos'``: todos los elegibles (Q ≠ aprobación, cédula presente, caché válida).
+    - ``modo='por_lote'``: solo los elegibles cuyo ``lote_aplicado`` en caché coincide con ``lote``.
+    """
+    from datetime import time as time_cls
+    from app.schemas.prestamo import PrestamoUpdate
+    from app.services.comparar_fecha_entrega_q_aprobacion_service import (
+        comparar_fecha_entrega_column_q_vs_aprobacion,
+    )
+    from app.api.v1.endpoints.prestamos import update_prestamo
+
+    modo = str(payload.get("modo") or "").strip()
+    lote_filtro = str(payload.get("lote") or "").strip() or None
+    p_excluir_marcados_no = payload.get("excluir_marcados_no", True)
+
+    if modo not in ("todos", "por_lote"):
+        raise HTTPException(status_code=400, detail="modo debe ser 'todos' o 'por_lote'.")
+    if modo == "por_lote" and not lote_filtro:
+        raise HTTPException(status_code=400, detail="Indique el lote a aprobar.")
+
+    dialect = (db.get_bind().dialect.name or "").lower()
+    stmt = select(Prestamo).order_by(Prestamo.id.asc())
+    if p_excluir_marcados_no:
+        stmt = stmt.where(_where_revision_q_no_descartada(dialect))
+
+    rows = list(db.execute(stmt).scalars().all())
+    aplicados = 0
+    errores_detalle: List[str] = []
+    omitidos = 0
+
+    for p in rows:
+        cache = p.fecha_entrega_q_aprobacion_cache if isinstance(p.fecha_entrega_q_aprobacion_cache, dict) else None
+        fq = fecha_q_desde_cache_json(cache) if cache else None
+        fa = _fecha_aprobacion_como_date(getattr(p, "fecha_aprobacion", None))
+        ced = (p.cedula or "").strip()
+        if fq is None or fa is None or fq == fa or not ced:
+            omitidos += 1
+            continue
+
+        if modo == "por_lote":
+            cache_lote = str(cache.get("lote_aplicado") or "").strip() if cache else ""
+            lote_key = cache_lote or "(sin lote)"
+            if lote_key != lote_filtro:
+                continue
+
+        fa_dt = datetime.combine(fq, time_cls.min)
+        try:
+            update_prestamo(
+                int(p.id),
+                PrestamoUpdate(fecha_aprobacion=fa_dt),
+                db,
+                admin,
+            )
+            try:
+                comparar_fecha_entrega_column_q_vs_aprobacion(
+                    db, cedula=ced, prestamo_id=int(p.id),
+                    lote=str(cache.get("lote_aplicado") or "").strip() or None if cache else None,
+                    persist_cache=True,
+                )
+                db.commit()
+            except Exception:
+                try:
+                    db.rollback()
+                except Exception:
+                    pass
+            aplicados += 1
+        except Exception as e:
+            errores_detalle.append(f"#{p.id}: {str(e)[:120]}")
+            try:
+                db.rollback()
+            except Exception:
+                pass
+
+    return {
+        "ok": True,
+        "modo": modo,
+        "lote": lote_filtro,
+        "aplicados": aplicados,
+        "errores": len(errores_detalle),
+        "errores_detalle": errores_detalle[:20],
+        "omitidos": omitidos,
+    }
+
+
+@router.post("/fecha-q-auditoria-marcar-no-masivo")
+def post_fecha_q_auditoria_marcar_no_masivo(
+    payload: dict = Body(...),
+    db: Session = Depends(get_db),
+):
+    """
+    Marcar «No aplicar Q» masivamente.
+
+    - ``modo='todos'``: todos los elegibles.
+    - ``modo='por_lote'``: solo los del lote indicado.
+    """
+    modo = str(payload.get("modo") or "").strip()
+    lote_filtro = str(payload.get("lote") or "").strip() or None
+    p_excluir_marcados_no = payload.get("excluir_marcados_no", True)
+
+    if modo not in ("todos", "por_lote"):
+        raise HTTPException(status_code=400, detail="modo debe ser 'todos' o 'por_lote'.")
+    if modo == "por_lote" and not lote_filtro:
+        raise HTTPException(status_code=400, detail="Indique el lote.")
+
+    dialect = (db.get_bind().dialect.name or "").lower()
+    stmt = select(Prestamo).order_by(Prestamo.id.asc())
+    if p_excluir_marcados_no:
+        stmt = stmt.where(_where_revision_q_no_descartada(dialect))
+
+    rows = list(db.execute(stmt).scalars().all())
+    marcados = 0
+    errores = 0
+
+    for p in rows:
+        cache = p.fecha_entrega_q_aprobacion_cache if isinstance(p.fecha_entrega_q_aprobacion_cache, dict) else None
+        fq = fecha_q_desde_cache_json(cache) if cache else None
+        fa = _fecha_aprobacion_como_date(getattr(p, "fecha_aprobacion", None))
+        ced = (p.cedula or "").strip()
+        if fq is None or fa is None or fq == fa or not ced:
+            continue
+
+        if modo == "por_lote":
+            cache_lote = str(cache.get("lote_aplicado") or "").strip() if cache else ""
+            lote_key = cache_lote or "(sin lote)"
+            if lote_key != lote_filtro:
+                continue
+
+        try:
+            prev = cache or {}
+            merged = dict(prev)
+            merged["revision_q_bd_omitir"] = True
+            merged["revision_q_bd_omitir_at"] = datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
+            merged_fecha_q_cache_aplicar_norm_iso(merged)
+            p.fecha_entrega_q_aprobacion_cache = json.loads(json.dumps(merged, default=str))
+            p.fecha_entrega_q_aprobacion_cache_at = datetime.utcnow()
+            db.add(p)
+            db.commit()
+            marcados += 1
+        except Exception:
+            errores += 1
+            try:
+                db.rollback()
+            except Exception:
+                pass
+
+    return {
+        "ok": True,
+        "modo": modo,
+        "lote": lote_filtro,
+        "marcados": marcados,
+        "errores": errores,
+    }
+
+
 def get_notificaciones_envios_config(db: Session) -> dict:
     """Carga la configuracion de envios por tipo (habilitado, cco, plantilla_id, programador) desde BD."""
     return get_notificaciones_envios_dict(db)

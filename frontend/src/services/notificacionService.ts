@@ -286,6 +286,34 @@ export interface FechaQAuditoriaTotalResponse {
   items: FechaQAuditoriaTotalItem[]
 }
 
+export interface FechaQAuditoriaLoteItem {
+  lote: string
+  elegibles: number
+}
+
+export interface FechaQAuditoriaLotesResponse {
+  total_elegibles: number
+  lotes: FechaQAuditoriaLoteItem[]
+}
+
+export interface FechaQAuditoriaAplicarMasivoResponse {
+  ok: boolean
+  modo: 'todos' | 'por_lote'
+  lote: string | null
+  aplicados: number
+  errores: number
+  errores_detalle: string[]
+  omitidos: number
+}
+
+export interface FechaQAuditoriaMarcarNoMasivoResponse {
+  ok: boolean
+  modo: 'todos' | 'por_lote'
+  lote: string | null
+  marcados: number
+  errores: number
+}
+
 /** Respuesta de POST /notificaciones/aplicar-abonos-drive-a-cuotas (solo admin). */
 
 export interface AplicarAbonosDriveCuotasResponse {
@@ -1511,6 +1539,50 @@ class NotificacionService {
     return await apiClient.post(
       `${this.baseUrl}/aplicar-fecha-entrega-q-como-fecha-aprobacion`,
       body
+    )
+  }
+
+  async getFechaQAuditoriaLotes(params?: {
+    excluir_marcados_no?: boolean
+  }): Promise<FechaQAuditoriaLotesResponse> {
+    const q = new URLSearchParams()
+    if (params?.excluir_marcados_no != null) {
+      q.set('excluir_marcados_no', String(Boolean(params.excluir_marcados_no)))
+    }
+    return await apiClient.get<FechaQAuditoriaLotesResponse>(
+      `${this.baseUrl}/fecha-q-auditoria-lotes?${q.toString()}`
+    )
+  }
+
+  async postFechaQAuditoriaAplicarMasivo(params: {
+    modo: 'todos' | 'por_lote'
+    lote?: string | null
+    excluir_marcados_no?: boolean
+  }): Promise<FechaQAuditoriaAplicarMasivoResponse> {
+    const body: Record<string, unknown> = { modo: params.modo }
+    if (params.lote) body.lote = params.lote
+    if (params.excluir_marcados_no != null)
+      body.excluir_marcados_no = params.excluir_marcados_no
+    return await apiClient.post<FechaQAuditoriaAplicarMasivoResponse>(
+      `${this.baseUrl}/fecha-q-auditoria-aplicar-masivo`,
+      body,
+      { timeout: 300_000 }
+    )
+  }
+
+  async postFechaQAuditoriaMarcarNoMasivo(params: {
+    modo: 'todos' | 'por_lote'
+    lote?: string | null
+    excluir_marcados_no?: boolean
+  }): Promise<FechaQAuditoriaMarcarNoMasivoResponse> {
+    const body: Record<string, unknown> = { modo: params.modo }
+    if (params.lote) body.lote = params.lote
+    if (params.excluir_marcados_no != null)
+      body.excluir_marcados_no = params.excluir_marcados_no
+    return await apiClient.post<FechaQAuditoriaMarcarNoMasivoResponse>(
+      `${this.baseUrl}/fecha-q-auditoria-marcar-no-masivo`,
+      body,
+      { timeout: 300_000 }
     )
   }
 
