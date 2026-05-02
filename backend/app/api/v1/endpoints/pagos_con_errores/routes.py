@@ -47,6 +47,10 @@ from app.services.pago_numero_documento import (
     pago_con_error_ya_cargado_estricto,
     primer_pago_cartera_por_documento,
 )
+from app.utils.cedula_almacenamiento import (
+    normalizar_cedula_almacenamiento,
+    resolver_cedula_almacenada_en_clientes,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -998,6 +1002,27 @@ def mover_a_pagos_normales(
                     errores_procesamiento.append(f"Pago {pid}: documento '{numero_documento_normalizado}' ya existe en tabla pagos")
                     continue  # Saltar este pago, no mover
 
+            # Resolver la cédula EXACTA como está almacenada en `clientes` (FK fk_pagos_cedula).
+            # El origen suele traer solo dígitos (`22621583`) mientras `clientes.cedula` está
+            # con prefijo (`V22621583`); el helper prueba candidatos V/E/J/G y devuelve la
+            # cédula tal cual está en la BD. Si no existe el cliente, registramos un error
+            # legible y dejamos la fila en revisión (no la borramos: requiere acción humana).
+            cedula_resuelta = resolver_cedula_almacenada_en_clientes(db, row.cedula_cliente)
+            if not cedula_resuelta:
+                cedula_norm_orig = (
+                    normalizar_cedula_almacenamiento(row.cedula_cliente) or "(vacía)"
+                )
+                logger.warning(
+                    "mover_a_pagos_normales: pago %s sin cliente en `clientes` (cedula=%s)",
+                    pid,
+                    cedula_norm_orig,
+                )
+                errores_procesamiento.append(
+                    f"Pago {pid}: cliente '{cedula_norm_orig}' no existe en `clientes`. "
+                    "Registre/ajuste la cédula del cliente y reintente."
+                )
+                continue  # No insertar: violaría fk_pagos_cedula.
+
             # «Guardar y procesar» = intención explícita de pasar a cartera. Si hay préstamo y monto,
             # forzamos validación cartera (conciliado + verificado SI) para que la columna Cartera y la
             # cascada queden alineadas con el estado final. Sin préstamo respetamos la fila origen.
@@ -1017,7 +1042,7 @@ def mover_a_pagos_normales(
                 estado_inicial = "PAGADO"
 
             pago = Pago(
-                cedula_cliente=row.cedula_cliente,
+                cedula_cliente=cedula_resuelta,
                 prestamo_id=row.prestamo_id,
                 fecha_pago=row.fecha_pago,
                 monto_pagado=row.monto_pagado,

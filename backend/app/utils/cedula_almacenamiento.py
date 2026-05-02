@@ -91,6 +91,39 @@ def max_aprobados_permitidos_por_prefijo(prefijo: Optional[str]) -> Optional[int
     return None
 
 
+def resolver_cedula_almacenada_en_clientes(
+    db: Session, cedula_raw: Optional[str]
+) -> Optional[str]:
+    """
+    Devuelve la cedula EXACTA como esta guardada en `clientes` para `cedula_raw`, o None.
+
+    Maneja el caso real de carga masiva donde el origen trae solo digitos (p.ej. `22621583`)
+    pero `clientes.cedula` esta almacenada con prefijo (`V22621583`). Probamos en este orden:
+      1) la cedula limpia tal cual (post-upper/trim)
+      2) si arranca con digito, los candidatos `V<digits>`, `E<digits>`, `J<digits>`, `G<digits>`
+
+    Devolver el valor exacto evita violar `fk_pagos_cedula` al insertar `pagos`.
+    """
+    from app.models.cliente import Cliente
+
+    cedula_norm = normalizar_cedula_almacenamiento(cedula_raw) or ""
+    if not cedula_norm:
+        return None
+
+    candidatos: list[str] = [cedula_norm]
+    if cedula_norm[0].isdigit():
+        for prefijo in ("V", "E", "J", "G"):
+            candidatos.append(f"{prefijo}{cedula_norm}")
+
+    for cand in candidatos:
+        existente = db.execute(
+            select(Cliente.cedula).where(Cliente.cedula == cand).limit(1)
+        ).scalar_one_or_none()
+        if existente:
+            return existente
+    return None
+
+
 def alinear_cedulas_clientes_existentes(db: Session, cedulas: Iterable[Optional[str]]) -> None:
     """
     Pone clientes.cedula en mayusculas cuando coincide en mayusculas con la clave canonica.
