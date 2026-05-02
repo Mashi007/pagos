@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { CheckCircle2, Database, FolderClosed, Search, RefreshCw, XCircle } from 'lucide-react'
+import { CheckCircle2, Database, LayoutList, Search, RefreshCw, XCircle } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
 
@@ -365,7 +365,7 @@ export default function FechaQAuditoriaTotalPage() {
               }
               onClick={() => setConfirmState({ accion: 'elegir_lote_si' })}
             >
-              <FolderClosed className="h-4 w-4 shrink-0" aria-hidden />
+              <LayoutList className="h-4 w-4 shrink-0" aria-hidden />
               Aprobar por lote
             </Button>
             <span className="mx-2 h-5 w-px bg-border" />
@@ -391,7 +391,7 @@ export default function FechaQAuditoriaTotalPage() {
               }
               onClick={() => setConfirmState({ accion: 'elegir_lote_no' })}
             >
-              <FolderClosed className="h-4 w-4 shrink-0" aria-hidden />
+              <LayoutList className="h-4 w-4 shrink-0" aria-hidden />
               Marcar No por lote
             </Button>
           </div>
