@@ -580,9 +580,7 @@ export function RegistrarPagoForm({
         String(formData.numero_documento ?? '').trim()
       ) ?? ''
     const c = String(formData.codigo_documento ?? '').trim()
-    return (
-      composeNumeroDocumentoAlmacenado(b || null, c || null) ?? ''
-    )
+    return composeNumeroDocumentoAlmacenado(b || null, c || null) ?? ''
   }, [formData.numero_documento, formData.codigo_documento])
 
   const debouncedClaveDocumentoConflicto = useDebounce(
@@ -596,12 +594,10 @@ export function RegistrarPagoForm({
         String(pagoInicial?.numero_documento ?? '').trim()
       ) ?? ''
     const c = String(
-      (pagoInicial as { codigo_documento?: string | null })
-        ?.codigo_documento ?? ''
+      (pagoInicial as { codigo_documento?: string | null })?.codigo_documento ??
+        ''
     ).trim()
-    return (
-      composeNumeroDocumentoAlmacenado(b || null, c || null) ?? ''
-    )
+    return composeNumeroDocumentoAlmacenado(b || null, c || null) ?? ''
   }, [pagoInicial])
 
   const excludeIdConflicto =
@@ -1681,7 +1677,7 @@ export function RegistrarPagoForm({
                 {isEditing && bloquearCambioComprobanteCodigo ? (
                   <div className="rounded border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
                     <p className="font-semibold">
-                      Pago ya cargado a cuotas — solo consulta.
+                      Pago ya cargado a cuotas - solo consulta.
                     </p>
                     <p className="mt-1 text-xs">
                       Este pago ya pasó a cartera, está conciliado/pagado y
@@ -1813,9 +1809,7 @@ export function RegistrarPagoForm({
                           setFormData({
                             ...formData,
                             prestamo_id:
-                              value === 'none'
-                                ? null
-                                : parseInt(value, 10),
+                              value === 'none' ? null : parseInt(value, 10),
                           })
                         }
                       >
@@ -1833,7 +1827,7 @@ export function RegistrarPagoForm({
 
                         <SelectContent>
                           <SelectItem value="none">
-                            — Seleccione el crédito —
+                            - Seleccione el crédito -
                           </SelectItem>
                           {prestamosParaSelect.map(prestamo => {
                             const modelo =
@@ -2330,15 +2324,17 @@ export function RegistrarPagoForm({
                                   ) : (
                                     '.'
                                   )}{' '}
-                                  No hay <strong>otro</strong> pago distinto
-                                  con este mismo Nº de documento.
+                                  No hay <strong>otro</strong> pago distinto con
+                                  este mismo Nº de documento.
                                 </>
                               ) : (
                                 <>
                                   <span className="font-semibold text-green-800">
                                     NO REPETIDO
                                   </span>
-                                  {' - no hay ningún pago en cartera con este Nº documento.'}
+                                  {
+                                    ' - no hay ningún pago en cartera con este Nº documento.'
+                                  }
                                 </>
                               )}{' '}
                               Préstamo destino en este formulario:{' '}
@@ -2898,9 +2894,7 @@ export function RegistrarPagoForm({
                   : 'Cancelar'}
               </Button>
 
-              {isEditing &&
-              pagoId &&
-              !bloquearCambioComprobanteCodigo ? (
+              {isEditing && pagoId && !bloquearCambioComprobanteCodigo ? (
                 <Button
                   type="button"
                   variant="outline"

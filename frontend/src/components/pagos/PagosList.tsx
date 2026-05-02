@@ -146,7 +146,7 @@ function observacionesConMarcaDuplicadoCartera(p: PagoConError): string {
 
 /**
  * Pago «cerrado»: conciliado, verificado SI, aplicado a cuotas y estado PAGADO/ADELANTADO.
- * Para estas filas el modal solo aporta consulta — el icono debe ser Eye y «Editar» pasa a «Ver»,
+ * Para estas filas el modal solo aporta consulta - el icono debe ser Eye y «Editar» pasa a «Ver»,
  * alineado con el modo solo-lectura del formulario y con `pagoCarteraRevisionBloquearToggleCerrado`.
  */
 function pagoEstaCerradoSoloConsulta(
@@ -171,7 +171,9 @@ function pagoEstaCerradoSoloConsulta(
  * Requiere estar en cartera con préstamo y monto positivo, en estado PENDIENTE y aún sin cuota_pagos.
  * Si ya está cerrado (`pagoEstaCerradoSoloConsulta`) o sin préstamo/monto, no se ofrece.
  */
-function pagoElegibleConciliarAplicar(p: Pago | PagoConError | null | undefined): boolean {
+function pagoElegibleConciliarAplicar(
+  p: Pago | PagoConError | null | undefined
+): boolean {
   if (!p) return false
   const pago = p as Pago
   if (!pago.prestamo_id) return false
@@ -180,7 +182,9 @@ function pagoElegibleConciliarAplicar(p: Pago | PagoConError | null | undefined)
       ? pago.monto_pagado
       : parseFloat(String(pago.monto_pagado ?? 0))
   if (!Number.isFinite(monto) || monto <= 0) return false
-  const estado = String(pago.estado ?? '').trim().toUpperCase()
+  const estado = String(pago.estado ?? '')
+    .trim()
+    .toUpperCase()
   if (estado !== 'PENDIENTE' && estado !== '') return false
   if (pago.tiene_aplicacion_cuotas === true) return false
   return true
@@ -3229,7 +3233,7 @@ export function PagosList() {
                                           variant="outline"
                                           title={
                                             cerrado
-                                              ? 'Ver pago (solo consulta — ya cargado a cuotas)'
+                                              ? 'Ver pago (solo consulta - ya cargado a cuotas)'
                                               : 'Editar pago'
                                           }
                                           aria-label={
@@ -3725,7 +3729,7 @@ export function PagosList() {
                                           variant="outline"
                                           title={
                                             cerrado
-                                              ? 'Ver pago (solo consulta — ya cargado a cuotas)'
+                                              ? 'Ver pago (solo consulta - ya cargado a cuotas)'
                                               : 'Editar pago'
                                           }
                                           aria-label={
@@ -4155,9 +4159,7 @@ export function PagosList() {
                       const elegiblesPaginaIds = elegiblesPagina.map(p => p.id)
                       const todosPaginaSeleccionados =
                         elegiblesPaginaIds.length > 0 &&
-                        elegiblesPaginaIds.every(id =>
-                          selectedTodosIds.has(id)
-                        )
+                        elegiblesPaginaIds.every(id => selectedTodosIds.has(id))
                       const algunoPaginaSeleccionado = elegiblesPaginaIds.some(
                         id => selectedTodosIds.has(id)
                       )
@@ -4307,7 +4309,7 @@ export function PagosList() {
                                             className="text-[10px] text-gray-400"
                                             title="No elegible: ya cerrado, sin préstamo o sin monto."
                                           >
-                                            —
+                                            -
                                           </span>
                                         )}
                                       </TableCell>
@@ -4315,398 +4317,407 @@ export function PagosList() {
                                       <TableCell>
                                         {pago.cedula_cliente}
                                       </TableCell>
-                                  <TableCell>
-                                    {pago.prestamo_id ? (
-                                      <span className="text-sm font-medium">
-                                        #{pago.prestamo_id}
-                                      </span>
-                                    ) : (
-                                      <span className="text-sm text-amber-600">
-                                        Sin asignar
-                                      </span>
-                                    )}
-                                  </TableCell>
-                                  <TableCell>
-                                    {getEstadoBadge(pago.estado)}
-                                  </TableCell>
-                                  <TableCell
-                                    className={cn(
-                                      'text-xs text-amber-700',
-                                      esRevisarPagos &&
-                                        (pago as PagoConError)
-                                          .duplicado_documento_en_pagos ===
-                                          true &&
-                                        'font-semibold text-orange-900',
-                                      !esRevisarPagos &&
-                                        (documentoDuplicadoEnVista ||
-                                          pago.dup_misma_pagina_otro_pago_id !=
-                                            null) &&
-                                        'align-top font-semibold text-orange-900'
-                                    )}
-                                  >
-                                    {esRevisarPagos ? (
-                                      observacionesConMarcaDuplicadoCartera(
-                                        pago as PagoConError
-                                      ).trim() || '-'
-                                    ) : pago.dup_misma_pagina_otro_pago_id != null ? (
-                                      <div className="max-w-[min(24rem,85vw)] rounded border border-orange-300 bg-orange-50 px-2 py-1.5 text-[11px] font-semibold leading-snug text-orange-950 dark:border-orange-800 dark:bg-orange-950/35 dark:text-orange-100">
-                                        {OBSERVACION_COL_PAGO_DUPLICADO} — Misma clave
-                                        (comprobante+código) que otro registro en esta
-                                        página: Nº{' '}
-                                        <span className="break-all font-mono font-normal">
-                                          {pago.dup_misma_pagina_otro_numero_documento ??
-                                            '—'}
-                                        </span>
-                                        {pago.dup_misma_pagina_otro_pago_id != null
-                                          ? ` · pago #${pago.dup_misma_pagina_otro_pago_id}`
-                                          : ''}
-                                        {pago.dup_misma_pagina_otro_prestamo_id != null
-                                          ? ` · préstamo #${pago.dup_misma_pagina_otro_prestamo_id}`
-                                          : ''}
-                                      </div>
-                                    ) : documentoDuplicadoEnVista ? (
-                                      OBSERVACION_COL_PAGO_DUPLICADO
-                                    ) : (
-                                      '-'
-                                    )}
-                                  </TableCell>
-                                  <TableCell>
-                                    $
-                                    {typeof pago.monto_pagado === 'number'
-                                      ? pago.monto_pagado.toFixed(2)
-                                      : parseFloat(
-                                          String(pago.monto_pagado || 0)
-                                        ).toFixed(2)}
-                                  </TableCell>
-                                  <TableCell>
-                                    {formatDate(pago.fecha_pago)}
-                                  </TableCell>
-                                  <TableCell
-                                    className={cn(
-                                      documentoDuplicadoEnVista &&
-                                        'bg-orange-100 text-orange-950 dark:bg-orange-950/35 dark:text-orange-100'
-                                    )}
-                                    title={
-                                      documentoDuplicadoEnVista
-                                        ? 'Advertencia: misma clave comprobante + código aparece más de una vez en esta página.'
-                                        : undefined
-                                    }
-                                  >
-                                    {textoDocumentoPagoParaListado(
-                                      pago.numero_documento,
-                                      pago.codigo_documento
-                                    )}
-                                  </TableCell>
-                                  <TableCell>
-                                    {pago.verificado_concordancia === 'SI' ||
-                                    pago.conciliado ? (
-                                      <Badge className="bg-green-500 text-white">
-                                        SI
-                                      </Badge>
-                                    ) : (
-                                      <Badge className="bg-gray-500 text-white">
-                                        NO
-                                      </Badge>
-                                    )}
-                                  </TableCell>
-                                  <TableCell>
-                                    {pago.pago_reportado_id != null &&
-                                    pago.pago_reportado_id > 0 ? (
-                                      <Link
-                                        to={`/cobros/pagos-reportados/${pago.pago_reportado_id}`}
-                                        className="inline-flex items-center gap-1 text-sm font-medium text-violet-700 hover:text-violet-900"
-                                      >
-                                        Ver recibo
-                                      </Link>
-                                    ) : (
-                                      (() => {
-                                        const u =
-                                          (
-                                            pago.link_comprobante || ''
-                                          ).trim() ||
-                                          (pago.documento_ruta || '').trim()
-                                        const requiereSesion =
-                                          u && esUrlComprobanteImagenConAuth(u)
-                                        return u ? (
-                                          <a
-                                            href={requiereSesion ? '#' : u}
-                                            target={
-                                              requiereSesion
-                                                ? undefined
-                                                : '_blank'
-                                            }
-                                            rel={
-                                              requiereSesion
-                                                ? undefined
-                                                : 'noopener noreferrer'
-                                            }
-                                            className="inline-flex cursor-pointer items-center gap-1 text-sm font-medium text-violet-700 hover:text-violet-900"
-                                            title={
-                                              requiereSesion
-                                                ? 'Comprobante en el sistema (requiere sesión)'
-                                                : 'Comprobante en Drive u otro enlace externo'
-                                            }
-                                            onClick={
-                                              requiereSesion
-                                                ? e => {
-                                                    e.preventDefault()
-                                                    void (async () => {
-                                                      try {
-                                                        await openStaffComprobanteForList(
-                                                          u,
-                                                          `Pago #${pago.id}`,
-                                                          pago.id
-                                                        )
-                                                      } catch {
-                                                        toast.error(
-                                                          'No se pudo abrir el comprobante. Compruebe su sesión.'
-                                                        )
-                                                      }
-                                                    })()
-                                                  }
-                                                : undefined
-                                            }
-                                          >
-                                            <Eye className="h-4 w-4" />
-                                            {requiereSesion
-                                              ? 'Ver comprobante'
-                                              : 'Ver en Drive'}
-                                          </a>
-                                        ) : (
-                                          <span className="text-sm text-gray-500">
-                                            -
+                                      <TableCell>
+                                        {pago.prestamo_id ? (
+                                          <span className="text-sm font-medium">
+                                            #{pago.prestamo_id}
                                           </span>
-                                        )
-                                      })()
-                                    )}
-                                  </TableCell>
-                                  <TableCell className="text-right">
-                                    <Popover
-                                      open={accionesOpenId === pago.id}
-                                      onOpenChange={open =>
-                                        setAccionesOpenId(open ? pago.id : null)
-                                      }
-                                    >
-                                      <PopoverTrigger asChild>
-                                        <Button
-                                          size="sm"
-                                          variant="outline"
-                                          title="Acciones"
-                                          className="h-8 w-8 p-0"
-                                        >
-                                          <MoreHorizontal className="h-4 w-4" />
-                                        </Button>
-                                      </PopoverTrigger>
-                                      <PopoverContent
-                                        className="w-56 p-2"
-                                        align="end"
+                                        ) : (
+                                          <span className="text-sm text-amber-600">
+                                            Sin asignar
+                                          </span>
+                                        )}
+                                      </TableCell>
+                                      <TableCell>
+                                        {getEstadoBadge(pago.estado)}
+                                      </TableCell>
+                                      <TableCell
+                                        className={cn(
+                                          'text-xs text-amber-700',
+                                          esRevisarPagos &&
+                                            (pago as PagoConError)
+                                              .duplicado_documento_en_pagos ===
+                                              true &&
+                                            'font-semibold text-orange-900',
+                                          !esRevisarPagos &&
+                                            (documentoDuplicadoEnVista ||
+                                              pago.dup_misma_pagina_otro_pago_id !=
+                                                null) &&
+                                            'align-top font-semibold text-orange-900'
+                                        )}
                                       >
-                                        <div className="space-y-0.5">
-                                          {(() => {
-                                            const cerrado =
-                                              pagoEstaCerradoSoloConsulta(pago)
-                                            return (
+                                        {esRevisarPagos ? (
+                                          observacionesConMarcaDuplicadoCartera(
+                                            pago as PagoConError
+                                          ).trim() || '-'
+                                        ) : pago.dup_misma_pagina_otro_pago_id !=
+                                          null ? (
+                                          <div className="max-w-[min(24rem,85vw)] rounded border border-orange-300 bg-orange-50 px-2 py-1.5 text-[11px] font-semibold leading-snug text-orange-950 dark:border-orange-800 dark:bg-orange-950/35 dark:text-orange-100">
+                                            {OBSERVACION_COL_PAGO_DUPLICADO} -
+                                            Misma clave (comprobante+código) que
+                                            otro registro en esta página: Nº{' '}
+                                            <span className="break-all font-mono font-normal">
+                                              {pago.dup_misma_pagina_otro_numero_documento ??
+                                                '-'}
+                                            </span>
+                                            {pago.dup_misma_pagina_otro_pago_id !=
+                                            null
+                                              ? ` · pago #${pago.dup_misma_pagina_otro_pago_id}`
+                                              : ''}
+                                            {pago.dup_misma_pagina_otro_prestamo_id !=
+                                            null
+                                              ? ` · préstamo #${pago.dup_misma_pagina_otro_prestamo_id}`
+                                              : ''}
+                                          </div>
+                                        ) : documentoDuplicadoEnVista ? (
+                                          OBSERVACION_COL_PAGO_DUPLICADO
+                                        ) : (
+                                          '-'
+                                        )}
+                                      </TableCell>
+                                      <TableCell>
+                                        $
+                                        {typeof pago.monto_pagado === 'number'
+                                          ? pago.monto_pagado.toFixed(2)
+                                          : parseFloat(
+                                              String(pago.monto_pagado || 0)
+                                            ).toFixed(2)}
+                                      </TableCell>
+                                      <TableCell>
+                                        {formatDate(pago.fecha_pago)}
+                                      </TableCell>
+                                      <TableCell
+                                        className={cn(
+                                          documentoDuplicadoEnVista &&
+                                            'bg-orange-100 text-orange-950 dark:bg-orange-950/35 dark:text-orange-100'
+                                        )}
+                                        title={
+                                          documentoDuplicadoEnVista
+                                            ? 'Advertencia: misma clave comprobante + código aparece más de una vez en esta página.'
+                                            : undefined
+                                        }
+                                      >
+                                        {textoDocumentoPagoParaListado(
+                                          pago.numero_documento,
+                                          pago.codigo_documento
+                                        )}
+                                      </TableCell>
+                                      <TableCell>
+                                        {pago.verificado_concordancia ===
+                                          'SI' || pago.conciliado ? (
+                                          <Badge className="bg-green-500 text-white">
+                                            SI
+                                          </Badge>
+                                        ) : (
+                                          <Badge className="bg-gray-500 text-white">
+                                            NO
+                                          </Badge>
+                                        )}
+                                      </TableCell>
+                                      <TableCell>
+                                        {pago.pago_reportado_id != null &&
+                                        pago.pago_reportado_id > 0 ? (
+                                          <Link
+                                            to={`/cobros/pagos-reportados/${pago.pago_reportado_id}`}
+                                            className="inline-flex items-center gap-1 text-sm font-medium text-violet-700 hover:text-violet-900"
+                                          >
+                                            Ver recibo
+                                          </Link>
+                                        ) : (
+                                          (() => {
+                                            const u =
+                                              (
+                                                pago.link_comprobante || ''
+                                              ).trim() ||
+                                              (pago.documento_ruta || '').trim()
+                                            const requiereSesion =
+                                              u &&
+                                              esUrlComprobanteImagenConAuth(u)
+                                            return u ? (
+                                              <a
+                                                href={requiereSesion ? '#' : u}
+                                                target={
+                                                  requiereSesion
+                                                    ? undefined
+                                                    : '_blank'
+                                                }
+                                                rel={
+                                                  requiereSesion
+                                                    ? undefined
+                                                    : 'noopener noreferrer'
+                                                }
+                                                className="inline-flex cursor-pointer items-center gap-1 text-sm font-medium text-violet-700 hover:text-violet-900"
+                                                title={
+                                                  requiereSesion
+                                                    ? 'Comprobante en el sistema (requiere sesión)'
+                                                    : 'Comprobante en Drive u otro enlace externo'
+                                                }
+                                                onClick={
+                                                  requiereSesion
+                                                    ? e => {
+                                                        e.preventDefault()
+                                                        void (async () => {
+                                                          try {
+                                                            await openStaffComprobanteForList(
+                                                              u,
+                                                              `Pago #${pago.id}`,
+                                                              pago.id
+                                                            )
+                                                          } catch {
+                                                            toast.error(
+                                                              'No se pudo abrir el comprobante. Compruebe su sesión.'
+                                                            )
+                                                          }
+                                                        })()
+                                                      }
+                                                    : undefined
+                                                }
+                                              >
+                                                <Eye className="h-4 w-4" />
+                                                {requiereSesion
+                                                  ? 'Ver comprobante'
+                                                  : 'Ver en Drive'}
+                                              </a>
+                                            ) : (
+                                              <span className="text-sm text-gray-500">
+                                                -
+                                              </span>
+                                            )
+                                          })()
+                                        )}
+                                      </TableCell>
+                                      <TableCell className="text-right">
+                                        <Popover
+                                          open={accionesOpenId === pago.id}
+                                          onOpenChange={open =>
+                                            setAccionesOpenId(
+                                              open ? pago.id : null
+                                            )
+                                          }
+                                        >
+                                          <PopoverTrigger asChild>
+                                            <Button
+                                              size="sm"
+                                              variant="outline"
+                                              title="Acciones"
+                                              className="h-8 w-8 p-0"
+                                            >
+                                              <MoreHorizontal className="h-4 w-4" />
+                                            </Button>
+                                          </PopoverTrigger>
+                                          <PopoverContent
+                                            className="w-56 p-2"
+                                            align="end"
+                                          >
+                                            <div className="space-y-0.5">
+                                              {(() => {
+                                                const cerrado =
+                                                  pagoEstaCerradoSoloConsulta(
+                                                    pago
+                                                  )
+                                                return (
+                                                  <button
+                                                    type="button"
+                                                    className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition-colors hover:bg-gray-100"
+                                                    onClick={() => {
+                                                      setPagoEditando(pago)
+                                                      setShowRegistrarPago(true)
+                                                      setAccionesOpenId(null)
+                                                    }}
+                                                  >
+                                                    {cerrado ? (
+                                                      <Eye className="h-4 w-4 text-gray-600" />
+                                                    ) : (
+                                                      <Edit className="h-4 w-4 text-gray-600" />
+                                                    )}
+                                                    {cerrado
+                                                      ? 'Ver (solo consulta)'
+                                                      : 'Editar'}
+                                                  </button>
+                                                )
+                                              })()}
                                               <button
                                                 type="button"
-                                                className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition-colors hover:bg-gray-100"
-                                                onClick={() => {
-                                                  setPagoEditando(pago)
-                                                  setShowRegistrarPago(true)
+                                                className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-red-600 transition-colors hover:bg-red-50"
+                                                onClick={async () => {
                                                   setAccionesOpenId(null)
-                                                }}
-                                              >
-                                                {cerrado ? (
-                                                  <Eye className="h-4 w-4 text-gray-600" />
-                                                ) : (
-                                                  <Edit className="h-4 w-4 text-gray-600" />
-                                                )}
-                                                {cerrado
-                                                  ? 'Ver (solo consulta)'
-                                                  : 'Editar'}
-                                              </button>
-                                            )
-                                          })()}
-                                          <button
-                                            type="button"
-                                            className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-red-600 transition-colors hover:bg-red-50"
-                                            onClick={async () => {
-                                              setAccionesOpenId(null)
-                                              if (
-                                                window.confirm(
-                                                  `¿Estás seguro de eliminar el pago ID ${pago.id}?`
-                                                )
-                                              ) {
-                                                try {
-                                                  if (esRevisarPagos) {
-                                                    await pagoConErrorService.delete(
-                                                      pago.id
+                                                  if (
+                                                    window.confirm(
+                                                      `¿Estás seguro de eliminar el pago ID ${pago.id}?`
                                                     )
-                                                  } else {
-                                                    await pagoService.deletePago(
-                                                      pago.id
-                                                    )
-                                                  }
-                                                  toast.success(
-                                                    'Pago eliminado exitosamente'
-                                                  )
-                                                  await invalidatePagosPrestamosRevisionYCuotas(
-                                                    queryClient
-                                                  )
-                                                } catch (error) {
-                                                  toast.error(
-                                                    'Error al eliminar el pago'
-                                                  )
-                                                  if (import.meta.env.DEV)
-                                                    console.error(
-                                                      'Error al eliminar el pago',
-                                                      error
-                                                    )
-                                                }
-                                              }
-                                            }}
-                                          >
-                                            <Trash2 className="h-4 w-4" />
-                                            Eliminar
-                                          </button>
-                                          {pago.verificado_concordancia ===
-                                            'SI' || pago.conciliado ? (
-                                            <button
-                                              type="button"
-                                              className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-amber-700 transition-colors hover:bg-amber-50"
-                                              disabled={
-                                                conciliandoId === pago.id
-                                              }
-                                              onClick={async () => {
-                                                setAccionesOpenId(null)
-                                                setConciliandoId(pago.id)
-                                                try {
-                                                  await pagoService.updateConciliado(
-                                                    pago.id,
-                                                    false
-                                                  )
-                                                  toast.success(
-                                                    'Pago marcado como NO conciliado'
-                                                  )
-                                                  await invalidatePagosPrestamosRevisionYCuotas(
-                                                    queryClient
-                                                  )
-                                                } catch (error) {
-                                                  toast.error(
-                                                    'Error al actualizar conciliación'
-                                                  )
-                                                  if (import.meta.env.DEV)
-                                                    console.error(
-                                                      'Error al actualizar conciliación',
-                                                      error
-                                                    )
-                                                } finally {
-                                                  setConciliandoId(null)
-                                                }
-                                              }}
-                                            >
-                                              <XCircle className="h-4 w-4" />
-                                              {conciliandoId === pago.id
-                                                ? 'Actualizando...'
-                                                : 'Conciliar: No'}
-                                            </button>
-                                          ) : (
-                                            <button
-                                              type="button"
-                                              className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-green-700 transition-colors hover:bg-green-50"
-                                              disabled={
-                                                conciliandoId === pago.id
-                                              }
-                                              onClick={async () => {
-                                                setAccionesOpenId(null)
-                                                setConciliandoId(pago.id)
-                                                try {
-                                                  await pagoService.updateConciliado(
-                                                    pago.id,
-                                                    true
-                                                  )
-                                                  if (pago.prestamo_id) {
+                                                  ) {
                                                     try {
-                                                      const res =
-                                                        await pagoService.aplicarPagoACuotas(
+                                                      if (esRevisarPagos) {
+                                                        await pagoConErrorService.delete(
                                                           pago.id
                                                         )
-                                                      if (res.ya_aplicado) {
-                                                        toast.success(
-                                                          res.message
-                                                        )
-                                                      } else if (
-                                                        res.cuotas_completadas >
-                                                          0 ||
-                                                        res.cuotas_parciales > 0
-                                                      ) {
-                                                        toast.success(
-                                                          `Conciliado. ${res.message}`
-                                                        )
                                                       } else {
-                                                        toast.success(
-                                                          'Pago marcado como conciliado'
+                                                        await pagoService.deletePago(
+                                                          pago.id
                                                         )
                                                       }
-                                                    } catch (applyErr) {
-                                                      if (
-                                                        isAxiosError(
-                                                          applyErr
-                                                        ) &&
-                                                        applyErr.response
-                                                          ?.status === 409
-                                                      ) {
-                                                        toast.error(
-                                                          getErrorMessage(
-                                                            applyErr
-                                                          )
+                                                      toast.success(
+                                                        'Pago eliminado exitosamente'
+                                                      )
+                                                      await invalidatePagosPrestamosRevisionYCuotas(
+                                                        queryClient
+                                                      )
+                                                    } catch (error) {
+                                                      toast.error(
+                                                        'Error al eliminar el pago'
+                                                      )
+                                                      if (import.meta.env.DEV)
+                                                        console.error(
+                                                          'Error al eliminar el pago',
+                                                          error
                                                         )
-                                                      } else {
-                                                        toast.success(
-                                                          'Pago marcado como conciliado'
-                                                        )
-                                                      }
                                                     }
-                                                  } else {
-                                                    toast.success(
-                                                      'Pago marcado como conciliado'
-                                                    )
                                                   }
-                                                  await invalidatePagosPrestamosRevisionYCuotas(
-                                                    queryClient,
-                                                    {
-                                                      includeDashboardMenu: true,
+                                                }}
+                                              >
+                                                <Trash2 className="h-4 w-4" />
+                                                Eliminar
+                                              </button>
+                                              {pago.verificado_concordancia ===
+                                                'SI' || pago.conciliado ? (
+                                                <button
+                                                  type="button"
+                                                  className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-amber-700 transition-colors hover:bg-amber-50"
+                                                  disabled={
+                                                    conciliandoId === pago.id
+                                                  }
+                                                  onClick={async () => {
+                                                    setAccionesOpenId(null)
+                                                    setConciliandoId(pago.id)
+                                                    try {
+                                                      await pagoService.updateConciliado(
+                                                        pago.id,
+                                                        false
+                                                      )
+                                                      toast.success(
+                                                        'Pago marcado como NO conciliado'
+                                                      )
+                                                      await invalidatePagosPrestamosRevisionYCuotas(
+                                                        queryClient
+                                                      )
+                                                    } catch (error) {
+                                                      toast.error(
+                                                        'Error al actualizar conciliación'
+                                                      )
+                                                      if (import.meta.env.DEV)
+                                                        console.error(
+                                                          'Error al actualizar conciliación',
+                                                          error
+                                                        )
+                                                    } finally {
+                                                      setConciliandoId(null)
                                                     }
-                                                  )
-                                                } catch (error) {
-                                                  toast.error(
-                                                    'Error al actualizar conciliación'
-                                                  )
-                                                  if (import.meta.env.DEV)
-                                                    console.error(
-                                                      'Error al actualizar conciliación',
-                                                      error
-                                                    )
-                                                } finally {
-                                                  setConciliandoId(null)
-                                                }
-                                              }}
-                                            >
-                                              <CheckCircle className="h-4 w-4" />
-                                              {conciliandoId === pago.id
-                                                ? 'Actualizando...'
-                                                : 'Conciliar: Sí'}
-                                            </button>
-                                          )}
-                                        </div>
-                                      </PopoverContent>
-                                    </Popover>
-                                  </TableCell>
-                                </TableRow>
-                              )
-                            })}
-                        </TableBody>
-                      </Table>
-                    </div>
+                                                  }}
+                                                >
+                                                  <XCircle className="h-4 w-4" />
+                                                  {conciliandoId === pago.id
+                                                    ? 'Actualizando...'
+                                                    : 'Conciliar: No'}
+                                                </button>
+                                              ) : (
+                                                <button
+                                                  type="button"
+                                                  className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-green-700 transition-colors hover:bg-green-50"
+                                                  disabled={
+                                                    conciliandoId === pago.id
+                                                  }
+                                                  onClick={async () => {
+                                                    setAccionesOpenId(null)
+                                                    setConciliandoId(pago.id)
+                                                    try {
+                                                      await pagoService.updateConciliado(
+                                                        pago.id,
+                                                        true
+                                                      )
+                                                      if (pago.prestamo_id) {
+                                                        try {
+                                                          const res =
+                                                            await pagoService.aplicarPagoACuotas(
+                                                              pago.id
+                                                            )
+                                                          if (res.ya_aplicado) {
+                                                            toast.success(
+                                                              res.message
+                                                            )
+                                                          } else if (
+                                                            res.cuotas_completadas >
+                                                              0 ||
+                                                            res.cuotas_parciales >
+                                                              0
+                                                          ) {
+                                                            toast.success(
+                                                              `Conciliado. ${res.message}`
+                                                            )
+                                                          } else {
+                                                            toast.success(
+                                                              'Pago marcado como conciliado'
+                                                            )
+                                                          }
+                                                        } catch (applyErr) {
+                                                          if (
+                                                            isAxiosError(
+                                                              applyErr
+                                                            ) &&
+                                                            applyErr.response
+                                                              ?.status === 409
+                                                          ) {
+                                                            toast.error(
+                                                              getErrorMessage(
+                                                                applyErr
+                                                              )
+                                                            )
+                                                          } else {
+                                                            toast.success(
+                                                              'Pago marcado como conciliado'
+                                                            )
+                                                          }
+                                                        }
+                                                      } else {
+                                                        toast.success(
+                                                          'Pago marcado como conciliado'
+                                                        )
+                                                      }
+                                                      await invalidatePagosPrestamosRevisionYCuotas(
+                                                        queryClient,
+                                                        {
+                                                          includeDashboardMenu: true,
+                                                        }
+                                                      )
+                                                    } catch (error) {
+                                                      toast.error(
+                                                        'Error al actualizar conciliación'
+                                                      )
+                                                      if (import.meta.env.DEV)
+                                                        console.error(
+                                                          'Error al actualizar conciliación',
+                                                          error
+                                                        )
+                                                    } finally {
+                                                      setConciliandoId(null)
+                                                    }
+                                                  }}
+                                                >
+                                                  <CheckCircle className="h-4 w-4" />
+                                                  {conciliandoId === pago.id
+                                                    ? 'Actualizando...'
+                                                    : 'Conciliar: Sí'}
+                                                </button>
+                                              )}
+                                            </div>
+                                          </PopoverContent>
+                                        </Popover>
+                                      </TableCell>
+                                    </TableRow>
+                                  )
+                                })}
+                              </TableBody>
+                            </Table>
+                          </div>
                         </>
                       )
                     })()}

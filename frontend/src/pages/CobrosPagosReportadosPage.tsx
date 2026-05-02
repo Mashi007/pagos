@@ -95,6 +95,26 @@ function cobrosFechaDesdeHaceNDias(n: number): string {
   return cobrosFechaLocalYMD(d)
 }
 
+/** Formatea un monto con separador de miles del locale es-VE; 2 decimales si es BS, 2 también para USD. */
+function formatMontoMoneda(monto: number, moneda: string): string {
+  const n = Number(monto)
+  if (!Number.isFinite(n)) return `${monto} ${moneda}`
+  return `${n.toLocaleString('es-VE', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })} ${moneda}`
+}
+
+/**
+ * fecha_pago llega como "YYYY-MM-DD" desde el API; `new Date(...)` aplicaría TZ y podría
+ * mostrar el día anterior. Mostramos DD/MM/YYYY directamente sin convertir a Date.
+ */
+function formatFechaPago(value: string): string {
+  const m = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})/)
+  if (!m) return value || ''
+  return `${m[3]}/${m[2]}/${m[1]}`
+}
+
 const COMPROBANTE_FLOAT_MIN_W = 260
 const COMPROBANTE_FLOAT_MIN_H = 180
 const COMPROBANTE_FLOAT_DEFAULT_W = 460
@@ -367,12 +387,21 @@ export default function CobrosPagosReportadosPage() {
   const [selectedIds, setSelectedIds] = useState<number[]>([])
 
   const [bulkApproving, setBulkApproving] = useState(false)
+  /** Progreso de aprobación masiva: {actual, total, ok, fail}; null cuando no hay lote en curso. */
+  const [bulkProgress, setBulkProgress] = useState<{
+    actual: number
+    total: number
+    ok: number
+    fail: number
+  } | null>(null)
+  const bulkCancelRef = useRef(false)
 
   const headerCheckboxRef = useRef<HTMLInputElement>(null)
 
   const [viewingComprobanteId, setViewingComprobanteId] = useState<
     number | null
   >(null)
+  const comprobanteAbortRef = useRef<AbortController | null>(null)
   const [previewComprobante, setPreviewComprobante] =
     useState<ComprobantePreviewState>({
       open: false,
@@ -594,6 +623,13 @@ export default function CobrosPagosReportadosPage() {
     })
   }, [fetchListado])
 
+  /** Disparado por el botón Buscar y por Enter en cédula/institución/fechas. */
+  const handleBuscar = useCallback(() => {
+    setPage(1)
+    invalidateCobrosListadoKpisCache()
+    setSearchNonce(prev => prev + 1)
+  }, [])
+
   /** Carga al montar, al «Buscar», al cambiar página/estado/exportados y al mismo ritmo que el TTL de caché (no en cada tecla de cédula/fechas). */
   useEffect(() => {
     void fetchListado()
@@ -672,7 +708,21 @@ export default function CobrosPagosReportadosPage() {
     }
   }, [previewComprobante.blobUrl])
 
+  useEffect(() => {
+    return () => {
+      if (comprobanteAbortRef.current) {
+        comprobanteAbortRef.current.abort()
+        comprobanteAbortRef.current = null
+      }
+      bulkCancelRef.current = true
+    }
+  }, [])
+
   const closeComprobantePreview = useCallback(() => {
+    if (comprobanteAbortRef.current) {
+      comprobanteAbortRef.current.abort()
+      comprobanteAbortRef.current = null
+    }
     setPreviewComprobante(prev => {
       if (prev.blobUrl) URL.revokeObjectURL(prev.blobUrl)
       return {
@@ -684,6 +734,9 @@ export default function CobrosPagosReportadosPage() {
         rotDeg: 0,
       }
     })
+    setViewingComprobanteId(null)
+    // Si el usuario cierra a media interacción de drag/resize, anulamos el ref para que
+    // pointermove/up no actúen sobre la ventana ya cerrada.
     previewInteractRef.current = null
   }, [])
 
@@ -1007,6 +1060,13 @@ export default function CobrosPagosReportadosPage() {
   }
 
   const handleVerComprobante = async (id: number) => {
+    // Si había una carga en curso para otra fila/comprobante, cancelarla antes de pedir la nueva.
+    if (comprobanteAbortRef.current) {
+      comprobanteAbortRef.current.abort()
+    }
+    const controller = new AbortController()
+    comprobanteAbortRef.current = controller
+
     setViewingComprobanteId(id)
     setPreviewComprobante(prev => {
       if (prev.blobUrl) URL.revokeObjectURL(prev.blobUrl)
@@ -1022,7 +1082,11 @@ export default function CobrosPagosReportadosPage() {
 
     try {
       const path = `/api/v1/cobros/pagos-reportados/${id}/comprobante`
-      const data = await apiClient.getBlob(path)
+      const data = await apiClient.getBlob(path, { signal: controller.signal })
+      // Si entre tanto se canceló o se abrió otro, no aplicar el resultado.
+      if (controller.signal.aborted) {
+        return
+      }
       const blobUrl = URL.createObjectURL(data)
       setPreviewComprobante({
         open: true,
@@ -1033,10 +1097,24 @@ export default function CobrosPagosReportadosPage() {
         rotDeg: 0,
       })
     } catch (e: any) {
+      // Cancelación del usuario al cerrar/abrir otro: silenciar.
+      const name = (e as { name?: string; code?: string })?.name || ''
+      const code = (e as { code?: string })?.code || ''
+      if (
+        controller.signal.aborted ||
+        name === 'AbortError' ||
+        name === 'CanceledError' ||
+        code === 'ERR_CANCELED'
+      ) {
+        return
+      }
       toast.error(e?.message || 'No se pudo abrir el comprobante.')
       setPreviewComprobante(prev => ({ ...prev, loading: false, open: false }))
     } finally {
-      setViewingComprobanteId(null)
+      if (comprobanteAbortRef.current === controller) {
+        comprobanteAbortRef.current = null
+      }
+      setViewingComprobanteId(prev => (prev === id ? null : prev))
     }
   }
 
@@ -1143,6 +1221,10 @@ export default function CobrosPagosReportadosPage() {
     })
   }, [])
 
+  const handleCancelarBulk = useCallback(() => {
+    bulkCancelRef.current = true
+  }, [])
+
   const handleAprobarMasivo = async () => {
     const ids = [...selectedIds]
     if (!ids.length) return
@@ -1151,24 +1233,31 @@ export default function CobrosPagosReportadosPage() {
         '¿Aprobar ' +
           String(ids.length) +
           ' pago(s) reportado(s) seleccionado(s)? Se creará el pago en cartera y se aplicará a cuotas por cada uno. ' +
-          'Los que fallen (duplicado, sin tasa Bs., etc.) se mostrarán en un resumen.'
+          'Los que fallen (duplicado, sin tasa Bs., etc.) se mostrarán en un resumen. ' +
+          'Puede cancelar el lote en cualquier momento; los ya procesados quedan aprobados.'
       )
     ) {
       return
     }
+    bulkCancelRef.current = false
     setBulkApproving(true)
+    setBulkProgress({ actual: 0, total: ids.length, ok: 0, fail: 0 })
     let ok = 0
     let fail = 0
     let primerError = ''
+    let cancelado = false
     const okIds: number[] = []
-    for (const id of ids) {
+    for (let i = 0; i < ids.length; i += 1) {
+      if (bulkCancelRef.current) {
+        cancelado = true
+        break
+      }
+      const id = ids[i]
+      setBulkProgress({ actual: i + 1, total: ids.length, ok, fail })
       try {
-        const data = await cambiarEstadoPago(id, 'aprobado')
+        await cambiarEstadoPago(id, 'aprobado')
         ok += 1
         okIds.push(id)
-        if (data?.mensaje) {
-          /* un toast por fila sería ruidoso; solo contar */
-        }
       } catch (e: unknown) {
         fail += 1
         if (!primerError) {
@@ -1180,6 +1269,7 @@ export default function CobrosPagosReportadosPage() {
               : (e as Error)?.message || 'Error desconocido'
         }
       }
+      setBulkProgress({ actual: i + 1, total: ids.length, ok, fail })
     }
     if (ok > 0) {
       queryClient.invalidateQueries({ queryKey: ['pagos'] })
@@ -1200,9 +1290,22 @@ export default function CobrosPagosReportadosPage() {
       invalidateCobrosListadoKpisCache()
       void fetchListado({ bypassCache: true, silent: true })
     }
-    setSelectedIds([])
+    setSelectedIds(prev => prev.filter(id => !okIds.includes(id)))
     setBulkApproving(false)
-    if (fail === 0 && ok > 0) {
+    setBulkProgress(null)
+    bulkCancelRef.current = false
+    if (cancelado) {
+      toast(
+        'Lote cancelado. Aprobados: ' +
+          String(ok) +
+          '. Fallidos: ' +
+          String(fail) +
+          '. Pendientes (no procesados): ' +
+          String(Math.max(0, ids.length - ok - fail)) +
+          '.',
+        { duration: 8000 }
+      )
+    } else if (fail === 0 && ok > 0) {
       toast.success('Aprobación masiva: ' + String(ok) + ' correcto(s).')
     } else if (ok > 0 && fail > 0) {
       toast(
@@ -1373,7 +1476,8 @@ export default function CobrosPagosReportadosPage() {
                 aria-label="Filtrar por estado del reporte"
               >
                 <option value="">
-                  Por gestionar (excluye aprobados, importados y rechazados)
+                  Por gestionar (pendientes, en revisión y aprobados aún sin
+                  validar)
                 </option>
 
                 <option value="pendiente">Pendiente</option>
@@ -1403,6 +1507,12 @@ export default function CobrosPagosReportadosPage() {
                   aria-label="Fecha desde (creación del reporte)"
                   value={fechaDesde}
                   onChange={e => setFechaDesde(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault()
+                      handleBuscar()
+                    }
+                  }}
                   className="w-40"
                 />
 
@@ -1411,8 +1521,30 @@ export default function CobrosPagosReportadosPage() {
                   aria-label="Fecha hasta (creación del reporte)"
                   value={fechaHasta}
                   onChange={e => setFechaHasta(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault()
+                      handleBuscar()
+                    }
+                  }}
                   className="w-40"
                 />
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="shrink-0"
+                  onClick={() => {
+                    const hoy = cobrosFechaLocalYMD(new Date())
+                    setFechaDesde(hoy)
+                    setFechaHasta(hoy)
+                    handleBuscar()
+                  }}
+                  title="Filtra por reportes creados hoy."
+                >
+                  Hoy
+                </Button>
 
                 <Button
                   type="button"
@@ -1426,9 +1558,7 @@ export default function CobrosPagosReportadosPage() {
                       )
                     )
                     setFechaHasta(cobrosFechaLocalYMD(new Date()))
-                    setPage(1)
-                    invalidateCobrosListadoKpisCache()
-                    setSearchNonce(n => n + 1)
+                    handleBuscar()
                   }}
                 >
                   Últimos {COBROS_REPORTADOS_FILTRO_FECHA_DIAS} días
@@ -1442,9 +1572,7 @@ export default function CobrosPagosReportadosPage() {
                   onClick={() => {
                     setFechaDesde('')
                     setFechaHasta('')
-                    setPage(1)
-                    invalidateCobrosListadoKpisCache()
-                    setSearchNonce(n => n + 1)
+                    handleBuscar()
                   }}
                 >
                   Sin límite de fechas
@@ -1464,15 +1592,29 @@ export default function CobrosPagosReportadosPage() {
 
             <Input
               placeholder="Cédula"
+              aria-label="Filtrar por cédula del cliente (presione Enter para buscar)"
               value={cedula}
               onChange={e => setCedula(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter') {
+                  e.preventDefault()
+                  handleBuscar()
+                }
+              }}
               className="w-40"
             />
 
             <Input
               placeholder="Institución"
+              aria-label="Filtrar por institución financiera (presione Enter para buscar)"
               value={institucion}
               onChange={e => setInstitucion(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter') {
+                  e.preventDefault()
+                  handleBuscar()
+                }
+              }}
               className="w-48"
             />
 
@@ -1545,14 +1687,7 @@ export default function CobrosPagosReportadosPage() {
             </label>
 
             <div className="flex flex-wrap items-center gap-2">
-              <Button
-                type="button"
-                onClick={() => {
-                  setPage(1)
-                  invalidateCobrosListadoKpisCache()
-                  setSearchNonce(prev => prev + 1)
-                }}
-              >
+              <Button type="button" onClick={handleBuscar}>
                 Buscar
               </Button>
               <Button
@@ -1659,7 +1794,51 @@ export default function CobrosPagosReportadosPage() {
                 </p>
               </div>
             ) : !itemsTabla.length ? (
-              <p className="text-gray-500">No hay registros.</p>
+              (() => {
+                const hayFiltrosActivos =
+                  Boolean(estado) ||
+                  Boolean(cedula.trim()) ||
+                  Boolean(institucion.trim()) ||
+                  Boolean(fechaDesde) ||
+                  Boolean(fechaHasta) ||
+                  incluirExportados ||
+                  soloCedulasDuplicadas ||
+                  soloFallaListaBs ||
+                  soloDuplicadoDocumento
+                const hayItemsBackend = (data?.items?.length ?? 0) > 0
+                return (
+                  <div className="flex flex-col items-center gap-2 py-10 text-center text-muted-foreground">
+                    <p className="text-sm">
+                      {hayItemsBackend
+                        ? 'No hay registros que cumplan los filtros locales (cédulas duplicadas / falla Bs. / DUPLICADO).'
+                        : hayFiltrosActivos
+                          ? 'No hay registros con los filtros aplicados. Pruebe a quitar restricciones (estado, cédula, institución o ampliar el rango de fechas).'
+                          : 'No hay registros.'}
+                    </p>
+                    {hayFiltrosActivos ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setEstado('')
+                          setCedula('')
+                          setInstitucion('')
+                          setFechaDesde('')
+                          setFechaHasta('')
+                          setIncluirExportados(false)
+                          setSoloCedulasDuplicadas(false)
+                          setSoloFallaListaBs(false)
+                          setSoloDuplicadoDocumento(false)
+                          handleBuscar()
+                        }}
+                      >
+                        Limpiar todos los filtros
+                      </Button>
+                    ) : null}
+                  </div>
+                )
+              })()
             ) : (
               <>
                 <div className="mb-2 flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between">
@@ -1680,10 +1859,37 @@ export default function CobrosPagosReportadosPage() {
                 {(selectedIds.length > 0 || bulkApproving) && (
                   <div className="mb-2 flex flex-wrap items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50/90 px-3 py-2 text-sm text-emerald-950 dark:bg-emerald-950/30 dark:text-emerald-50">
                     <span className="font-medium">
-                      {bulkApproving
-                        ? 'Aprobando…'
-                        : String(selectedIds.length) + ' seleccionado(s)'}
+                      {bulkApproving && bulkProgress
+                        ? `Aprobando ${bulkProgress.actual} de ${bulkProgress.total}…` +
+                          (bulkProgress.fail > 0
+                            ? ` (${bulkProgress.fail} con error)`
+                            : '')
+                        : bulkApproving
+                          ? 'Aprobando…'
+                          : String(selectedIds.length) + ' seleccionado(s)'}
                     </span>
+                    {bulkApproving && bulkProgress && bulkProgress.total > 0 ? (
+                      <span
+                        className="h-2 w-32 overflow-hidden rounded-full bg-emerald-200/60"
+                        role="progressbar"
+                        aria-valuemin={0}
+                        aria-valuemax={bulkProgress.total}
+                        aria-valuenow={bulkProgress.actual}
+                        aria-label="Progreso de aprobación masiva"
+                      >
+                        <span
+                          className="block h-full bg-emerald-600 transition-all"
+                          style={{
+                            width: `${Math.min(
+                              100,
+                              Math.round(
+                                (bulkProgress.actual / bulkProgress.total) * 100
+                              )
+                            )}%`,
+                          }}
+                        />
+                      </span>
+                    ) : null}
                     <Button
                       type="button"
                       size="sm"
@@ -1700,16 +1906,28 @@ export default function CobrosPagosReportadosPage() {
                         'Aprobar seleccionados'
                       )}
                     </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="h-8"
-                      disabled={bulkApproving}
-                      onClick={() => setSelectedIds([])}
-                    >
-                      Quitar selección
-                    </Button>
+                    {bulkApproving ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-8 border-amber-400 text-amber-800 hover:bg-amber-50"
+                        onClick={handleCancelarBulk}
+                        title="Detiene el lote tras la aprobación actual. Lo ya aprobado queda guardado."
+                      >
+                        Cancelar lote
+                      </Button>
+                    ) : (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-8"
+                        onClick={() => setSelectedIds([])}
+                      >
+                        Quitar selección
+                      </Button>
+                    )}
                   </div>
                 )}
                 <div className="relative w-full min-w-0 max-w-full overflow-x-auto rounded-lg border">
@@ -1876,8 +2094,11 @@ export default function CobrosPagosReportadosPage() {
                           </td>
 
                           <td className="whitespace-nowrap px-2 py-2 text-right align-middle text-xs sm:text-sm">
-                            <span>
-                              {row.monto} {row.moneda}
+                            <span
+                              className="tabular-nums"
+                              title={`${row.monto} ${row.moneda}`}
+                            >
+                              {formatMontoMoneda(row.monto, row.moneda)}
                             </span>
                             {row.moneda === 'BS' &&
                               row.equivalente_usd != null && (
@@ -1909,8 +2130,11 @@ export default function CobrosPagosReportadosPage() {
                           </td>
 
                           <td className="whitespace-nowrap px-2 py-2 align-middle text-xs sm:text-sm">
-                            <span className="block truncate">
-                              {row.fecha_pago}
+                            <span
+                              className="block truncate tabular-nums"
+                              title={row.fecha_pago}
+                            >
+                              {formatFechaPago(row.fecha_pago)}
                             </span>
                           </td>
 
@@ -2014,10 +2238,10 @@ export default function CobrosPagosReportadosPage() {
                           >
                             {esDuplicadoCarteraRow(row) ? (
                               <div className="mb-1.5 rounded border border-orange-300 bg-orange-50 px-2 py-1.5 text-[11px] font-semibold leading-snug text-orange-950 dark:border-orange-800 dark:bg-orange-950/40 dark:text-orange-100">
-                                PAGO DUPLICADO — En cartera Nº{' '}
+                                PAGO DUPLICADO - En cartera Nº{' '}
                                 <span className="break-all font-mono font-normal">
                                   {row.numero_documento_pago_existente?.trim() ||
-                                    '—'}
+                                    '-'}
                                 </span>
                                 {row.pago_existente_id != null
                                   ? ` · pago #${row.pago_existente_id}`
@@ -2230,15 +2454,33 @@ export default function CobrosPagosReportadosPage() {
             )}
 
             {data && data.total > data.per_page && (
-              <div className="mt-4 flex justify-between">
-                <p className="text-sm text-gray-600">Total: {data.total}</p>
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
+                {(() => {
+                  const totalPaginas = Math.max(
+                    1,
+                    Math.ceil(data.total / data.per_page)
+                  )
+                  const paginaActual = Math.min(Math.max(1, page), totalPaginas)
+                  const inicio = (paginaActual - 1) * data.per_page + 1
+                  const fin = Math.min(paginaActual * data.per_page, data.total)
+                  return (
+                    <p className="text-sm text-gray-600">
+                      Página{' '}
+                      <span className="font-semibold">{paginaActual}</span> de{' '}
+                      <span className="font-semibold">{totalPaginas}</span>{' '}
+                      <span className="text-muted-foreground">
+                        · mostrando {inicio}-{fin} de {data.total}
+                      </span>
+                    </p>
+                  )
+                })()}
 
                 <div className="flex gap-2">
                   <Button
                     variant="outline"
                     size="sm"
-                    disabled={page <= 1}
-                    onClick={() => setPage(p => p - 1)}
+                    disabled={page <= 1 || loading || refreshing}
+                    onClick={() => setPage(p => Math.max(1, p - 1))}
                   >
                     Anterior
                   </Button>
@@ -2246,7 +2488,11 @@ export default function CobrosPagosReportadosPage() {
                   <Button
                     variant="outline"
                     size="sm"
-                    disabled={page * data.per_page >= data.total}
+                    disabled={
+                      page * data.per_page >= data.total ||
+                      loading ||
+                      refreshing
+                    }
                     onClick={() => setPage(p => p + 1)}
                   >
                     Siguiente
