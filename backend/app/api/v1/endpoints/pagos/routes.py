@@ -6725,7 +6725,7 @@ def conciliar_y_aplicar_pagos_batch(
     - abre `estado="PAGADO"` (cumple `chk_pagos_conciliado_pendiente_inconsistente`)
     - dispara la cascada `_aplicar_pago_a_cuotas_interno`
 
-    Aislamiento por fila (try/except + rollback parcial): un fallo puntual no tumba el lote;
+    Aislamiento por fila (savepoint + rollback parcial): un fallo puntual no tumba el lote;
     devuelve resumen con `procesados`, `cuotas_aplicadas` y `errores[]` para los que no entraron.
     Saltos no son error: pagos ya conciliados, sin préstamo, monto<=0, ya aplicados a cuotas, etc.
     """
@@ -6748,70 +6748,70 @@ def conciliar_y_aplicar_pagos_batch(
 
     for pid in ids:
         try:
-            pago = db.get(Pago, pid)
-            if pago is None:
-                saltados += 1
-                saltados_detalle.append(f"Pago {pid}: no encontrado")
-                continue
+            with db.begin_nested():
+                pago = db.get(Pago, pid)
+                if pago is None:
+                    saltados += 1
+                    saltados_detalle.append(f"Pago {pid}: no encontrado")
+                    continue
 
-            estado_actual = (pago.estado or "").strip().upper()
-            if estado_actual not in ("", "PENDIENTE"):
-                saltados += 1
-                saltados_detalle.append(
-                    f"Pago {pid}: estado {estado_actual or '∅'} ≠ PENDIENTE; ya cerrado o no aplicable."
-                )
-                continue
-
-            if not pago.prestamo_id:
-                saltados += 1
-                saltados_detalle.append(f"Pago {pid}: sin préstamo asociado.")
-                continue
-
-            try:
-                monto = float(pago.monto_pagado or 0)
-            except (TypeError, ValueError):
-                monto = 0.0
-            if monto <= 0:
-                saltados += 1
-                saltados_detalle.append(f"Pago {pid}: monto <= 0.")
-                continue
-
-            if pago_tiene_aplicaciones_cuotas(db, pago.id):
-                # Ya tenía cuota_pagos: solo alineamos la marca de cartera si hace falta.
-                cambios = False
-                if not bool(pago.conciliado):
-                    pago.conciliado = True
-                    pago.fecha_conciliacion = datetime.now(ZoneInfo("America/Caracas"))
-                    cambios = True
-                if (pago.verificado_concordancia or "").strip().upper() != "SI":
-                    pago.verificado_concordancia = "SI"
-                    cambios = True
-                if estado_actual == "PENDIENTE":
-                    pago.estado = "PAGADO"
-                    cambios = True
-                if cambios:
-                    db.flush()
-                    procesados += 1
-                else:
+                estado_actual = (pago.estado or "").strip().upper()
+                if estado_actual not in ("", "PENDIENTE"):
                     saltados += 1
                     saltados_detalle.append(
-                        f"Pago {pid}: ya aplicado a cuotas y marcado en cartera."
+                        f"Pago {pid}: estado {estado_actual or '∅'} ≠ PENDIENTE; ya cerrado o no aplicable."
                     )
-                continue
+                    continue
 
-            # Pago elegible: marcar cartera y aplicar cascada.
-            pago.conciliado = True
-            pago.verificado_concordancia = "SI"
-            pago.fecha_conciliacion = datetime.now(ZoneInfo("America/Caracas"))
-            pago.estado = "PAGADO"  # evita chk_pagos_conciliado_pendiente_inconsistente
+                if not pago.prestamo_id:
+                    saltados += 1
+                    saltados_detalle.append(f"Pago {pid}: sin préstamo asociado.")
+                    continue
 
-            db.flush()
+                try:
+                    monto = float(pago.monto_pagado or 0)
+                except (TypeError, ValueError):
+                    monto = 0.0
+                if monto <= 0:
+                    saltados += 1
+                    saltados_detalle.append(f"Pago {pid}: monto <= 0.")
+                    continue
 
-            cc, cp = _aplicar_pago_a_cuotas_interno(pago, db)
-            cuotas_aplicadas += int(cc) + int(cp)
-            procesados += 1
+                if pago_tiene_aplicaciones_cuotas(db, pago.id):
+                    # Ya tenía cuota_pagos: solo alineamos la marca de cartera si hace falta.
+                    cambios = False
+                    if not bool(pago.conciliado):
+                        pago.conciliado = True
+                        pago.fecha_conciliacion = datetime.now(ZoneInfo("America/Caracas"))
+                        cambios = True
+                    if (pago.verificado_concordancia or "").strip().upper() != "SI":
+                        pago.verificado_concordancia = "SI"
+                        cambios = True
+                    if estado_actual == "PENDIENTE":
+                        pago.estado = "PAGADO"
+                        cambios = True
+                    if cambios:
+                        db.flush()
+                        procesados += 1
+                    else:
+                        saltados += 1
+                        saltados_detalle.append(
+                            f"Pago {pid}: ya aplicado a cuotas y marcado en cartera."
+                        )
+                    continue
+
+                # Pago elegible: marcar cartera y aplicar cascada.
+                pago.conciliado = True
+                pago.verificado_concordancia = "SI"
+                pago.fecha_conciliacion = datetime.now(ZoneInfo("America/Caracas"))
+                pago.estado = "PAGADO"  # evita chk_pagos_conciliado_pendiente_inconsistente
+
+                db.flush()
+
+                cc, cp = _aplicar_pago_a_cuotas_interno(pago, db)
+                cuotas_aplicadas += int(cc) + int(cp)
+                procesados += 1
         except Exception as e_row:
-            db.rollback()
             logger.error(
                 "conciliar_y_aplicar_pagos_batch: fallo en pago_id=%s: %s",
                 pid,
