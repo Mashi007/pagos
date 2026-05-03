@@ -1119,8 +1119,18 @@ export default function CobrosPagosReportadosPage() {
   }
 
   const itemsTabla = React.useMemo(() => {
-    const base = [...(data?.items ?? [])]
+    let base = [...(data?.items ?? [])]
     if (!base.length) return base
+
+    // Cola manual = sólo lo que requiere revisión humana (pendiente + en revisión).
+    // En el filtro por defecto («Por gestionar») nunca mostramos aprobados ni
+    // importados ni rechazados aunque el backend los devuelva por compatibilidad.
+    if (!estado) {
+      base = base.filter(
+        row => row.estado === 'pendiente' || row.estado === 'en_revision'
+      )
+      if (!base.length) return base
+    }
 
     const normalizarCedula = (value: string) =>
       String(value ?? '')
@@ -1173,6 +1183,7 @@ export default function CobrosPagosReportadosPage() {
     return filtrados
   }, [
     data?.items,
+    estado,
     soloCedulasDuplicadas,
     soloFallaListaBs,
     soloDuplicadoDocumento,
@@ -1476,8 +1487,7 @@ export default function CobrosPagosReportadosPage() {
                 aria-label="Filtrar por estado del reporte"
               >
                 <option value="">
-                  Por gestionar (pendientes, en revisión y aprobados aún sin
-                  validar)
+                  Por gestionar (sólo pendientes y en revisión)
                 </option>
 
                 <option value="pendiente">Pendiente</option>
@@ -1492,11 +1502,12 @@ export default function CobrosPagosReportadosPage() {
               </select>
 
               <p className="text-xs text-muted-foreground">
-                <strong>No cumplen validadores:</strong> misma regla que la
-                carga masiva. Por defecto no se listan aprobados, importados ni
-                rechazados, ni filas ya marcadas como exportadas a corrección;
-                use &quot;Incluir ya exportados&quot; para volver a ver esas
-                últimas. Los rechazados solo con filtro o tarjeta.
+                <strong>Cola de revisión manual:</strong> por defecto sólo se
+                listan <em>pendientes</em> y <em>en revisión</em>. Aprobados,
+                importados y rechazados no aparecen aquí salvo que se elijan
+                explícitamente en este filtro o en una tarjeta de KPI. Use
+                &quot;Incluir ya exportados&quot; para volver a ver filas que se
+                marcaron como exportadas a corrección.
               </p>
             </div>
 
@@ -1724,7 +1735,7 @@ export default function CobrosPagosReportadosPage() {
             <button
               type="button"
               onClick={() => handleKpiClick('')}
-              title="Cola de análisis manual: pendiente, en revisión y aprobados que aún no cumplen validadores (Gemini/reglas). Si Gemini es correcto y no hay observación, no entra en cola."
+              title="Cola de revisión manual: sólo pendientes y en revisión. Los aprobados, importados y rechazados no entran en esta cola."
               className={
                 'min-w-28 rounded-lg border-2 px-4 py-3 text-left transition-colors ' +
                 (estado === ''
@@ -1737,7 +1748,7 @@ export default function CobrosPagosReportadosPage() {
               </span>
 
               <span className="text-2xl font-bold">
-                {kpis.pendiente + kpis.en_revision + kpis.aprobado}
+                {kpis.pendiente + kpis.en_revision}
               </span>
             </button>
 

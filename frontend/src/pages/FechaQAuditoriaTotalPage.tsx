@@ -1,6 +1,13 @@
 import { useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { CheckCircle2, Database, LayoutList, Search, RefreshCw, XCircle } from 'lucide-react'
+import {
+  CheckCircle2,
+  Database,
+  LayoutList,
+  Search,
+  RefreshCw,
+  XCircle,
+} from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
 
@@ -154,9 +161,7 @@ export default function FechaQAuditoriaTotalPage() {
         excluir_marcados_no: !incluirMarcadosNo,
       })
       if (res.errores === 0) {
-        toast.success(
-          `Aprobado: ${res.aplicados} prestamo(s) actualizado(s).`
-        )
+        toast.success(`Aprobado: ${res.aplicados} prestamo(s) actualizado(s).`)
       } else {
         toast.message(
           `${res.aplicados} ok, ${res.errores} error(es). Revise detalle en consola.`
@@ -185,13 +190,9 @@ export default function FechaQAuditoriaTotalPage() {
         excluir_marcados_no: !incluirMarcadosNo,
       })
       if (res.errores === 0) {
-        toast.success(
-          `No en lote: ${res.marcados} prestamo(s) marcado(s).`
-        )
+        toast.success(`No en lote: ${res.marcados} prestamo(s) marcado(s).`)
       } else {
-        toast.message(
-          `${res.marcados} ok, ${res.errores} error(es).`
-        )
+        toast.message(`${res.marcados} ok, ${res.errores} error(es).`)
       }
       await invalidarTodo()
     } catch (e) {
@@ -334,7 +335,8 @@ export default function FechaQAuditoriaTotalPage() {
             </span>
             {lotes.length > 0 && (
               <>
-                {' '}en{' '}
+                {' '}
+                en{' '}
                 <span className="font-semibold text-foreground">
                   {lotes.length}
                 </span>{' '}
@@ -347,9 +349,7 @@ export default function FechaQAuditoriaTotalPage() {
               type="button"
               size="sm"
               className="gap-1.5 bg-blue-600 text-white hover:bg-blue-700"
-              disabled={
-                !esAdmin || totalElegibles === 0 || batchRunning
-              }
+              disabled={!esAdmin || totalElegibles === 0 || batchRunning}
               onClick={() => setConfirmState({ accion: 'si_todos' })}
             >
               <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden />
@@ -360,9 +360,7 @@ export default function FechaQAuditoriaTotalPage() {
               size="sm"
               variant="outline"
               className="gap-1.5"
-              disabled={
-                !esAdmin || lotes.length === 0 || batchRunning
-              }
+              disabled={!esAdmin || lotes.length === 0 || batchRunning}
               onClick={() => setConfirmState({ accion: 'elegir_lote_si' })}
             >
               <LayoutList className="h-4 w-4 shrink-0" aria-hidden />
@@ -373,9 +371,7 @@ export default function FechaQAuditoriaTotalPage() {
               type="button"
               size="sm"
               variant="secondary"
-              disabled={
-                !esAdmin || totalElegibles === 0 || batchRunning
-              }
+              disabled={!esAdmin || totalElegibles === 0 || batchRunning}
               onClick={() => setConfirmState({ accion: 'no_todos' })}
             >
               <XCircle className="h-4 w-4 shrink-0" aria-hidden />
@@ -386,9 +382,7 @@ export default function FechaQAuditoriaTotalPage() {
               size="sm"
               variant="secondary"
               className="gap-1.5"
-              disabled={
-                !esAdmin || lotes.length === 0 || batchRunning
-              }
+              disabled={!esAdmin || lotes.length === 0 || batchRunning}
               onClick={() => setConfirmState({ accion: 'elegir_lote_no' })}
             >
               <LayoutList className="h-4 w-4 shrink-0" aria-hidden />
@@ -429,13 +423,9 @@ export default function FechaQAuditoriaTotalPage() {
                   <th className="py-2 pr-2 font-medium">
                     Fecha BD (aprobacion)
                   </th>
-                  <th className="py-2 pr-2 font-medium">
-                    Dif. dias (Q - BD)
-                  </th>
+                  <th className="py-2 pr-2 font-medium">Dif. dias (Q - BD)</th>
                   <th className="py-2 pr-2 font-medium">Puede aplicar</th>
-                  <th className="py-2 pr-2 font-medium">
-                    Q anterior corrige
-                  </th>
+                  <th className="py-2 pr-2 font-medium">Q anterior corrige</th>
                   <th className="py-2 pr-2 font-medium">Si / No</th>
                 </tr>
               </thead>
@@ -449,9 +439,7 @@ export default function FechaQAuditoriaTotalPage() {
                       key={row.prestamo_id}
                       className="border-b border-border/60"
                     >
-                      <td className="py-2 pr-2 font-mono">
-                        {row.prestamo_id}
-                      </td>
+                      <td className="py-2 pr-2 font-mono">{row.prestamo_id}</td>
                       <td className="py-2 pr-2">{row.cedula || '-'}</td>
                       <td className="py-2 pr-2 text-xs text-muted-foreground">
                         {loteDesdeItem(row)}
@@ -498,11 +486,7 @@ export default function FechaQAuditoriaTotalPage() {
                                   : 'Solo administrador.'
                               }
                               onClick={() => {
-                                if (
-                                  !esAdmin ||
-                                  batchRunning ||
-                                  busyId != null
-                                )
+                                if (!esAdmin || batchRunning || busyId != null)
                                   return
                                 const ced = (row.cedula || '').trim()
                                 const qc = row.q_cache
@@ -514,8 +498,7 @@ export default function FechaQAuditoriaTotalPage() {
                                         .lote_aplicado
                                     : undefined
                                 const lote =
-                                  typeof loteRaw === 'string' &&
-                                  loteRaw.trim()
+                                  typeof loteRaw === 'string' && loteRaw.trim()
                                     ? loteRaw.trim()
                                     : undefined
                                 setBusyId(row.prestamo_id)
@@ -561,11 +544,7 @@ export default function FechaQAuditoriaTotalPage() {
                                   : 'Solo administrador.'
                               }
                               onClick={() => {
-                                if (
-                                  !esAdmin ||
-                                  batchRunning ||
-                                  busyId != null
-                                )
+                                if (!esAdmin || batchRunning || busyId != null)
                                   return
                                 setBusyId(row.prestamo_id)
                                 void (async () => {
@@ -581,8 +560,7 @@ export default function FechaQAuditoriaTotalPage() {
                                     await invalidarTodo()
                                   } catch (e) {
                                     toast.error(
-                                      getErrorMessage(e) ||
-                                        'No se pudo marcar.'
+                                      getErrorMessage(e) || 'No se pudo marcar.'
                                     )
                                   } finally {
                                     setBusyId(null)
@@ -712,8 +690,8 @@ export default function FechaQAuditoriaTotalPage() {
             <DialogTitle>Aprobar todos los elegibles</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
-            Se aplicara la fecha Q como{' '}
-            <strong>fecha de aprobacion</strong> en BD para{' '}
+            Se aplicara la fecha Q como <strong>fecha de aprobacion</strong> en
+            BD para{' '}
             <span className="font-semibold tabular-nums text-foreground">
               {totalElegibles}
             </span>{' '}
@@ -752,8 +730,8 @@ export default function FechaQAuditoriaTotalPage() {
           </DialogHeader>
           {confirmState?.accion === 'si_lote' && (
             <p className="text-sm text-muted-foreground">
-              Se aplicara la fecha Q como{' '}
-              <strong>fecha de aprobacion</strong> en BD para{' '}
+              Se aplicara la fecha Q como <strong>fecha de aprobacion</strong>{' '}
+              en BD para{' '}
               <span className="font-semibold tabular-nums text-foreground">
                 {confirmState.elegibles}
               </span>{' '}
@@ -768,9 +746,7 @@ export default function FechaQAuditoriaTotalPage() {
             <Button
               type="button"
               variant="outline"
-              onClick={() =>
-                setConfirmState({ accion: 'elegir_lote_si' })
-              }
+              onClick={() => setConfirmState({ accion: 'elegir_lote_si' })}
               disabled={batchRunning}
             >
               Volver
@@ -800,8 +776,7 @@ export default function FechaQAuditoriaTotalPage() {
             <DialogTitle>Marcar No todos los elegibles</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
-            Se marcaran como{' '}
-            <strong>No aplicar Q</strong> en auditoria{' '}
+            Se marcaran como <strong>No aplicar Q</strong> en auditoria{' '}
             <span className="font-semibold tabular-nums text-foreground">
               {totalElegibles}
             </span>{' '}
@@ -839,8 +814,7 @@ export default function FechaQAuditoriaTotalPage() {
           </DialogHeader>
           {confirmState?.accion === 'no_lote' && (
             <p className="text-sm text-muted-foreground">
-              Se marcaran como{' '}
-              <strong>No aplicar Q</strong>{' '}
+              Se marcaran como <strong>No aplicar Q</strong>{' '}
               <span className="font-semibold tabular-nums text-foreground">
                 {confirmState.elegibles}
               </span>{' '}
@@ -855,9 +829,7 @@ export default function FechaQAuditoriaTotalPage() {
             <Button
               type="button"
               variant="outline"
-              onClick={() =>
-                setConfirmState({ accion: 'elegir_lote_no' })
-              }
+              onClick={() => setConfirmState({ accion: 'elegir_lote_no' })}
               disabled={batchRunning}
             >
               Volver
