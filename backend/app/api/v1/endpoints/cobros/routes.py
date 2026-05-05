@@ -482,9 +482,11 @@ _primer_maps_triple_cache_lock = threading.Lock()
 _primer_maps_triple_cache: Dict[str, Tuple[tuple, float, Dict[str, int], Dict[str, int], frozenset]] = {}
 _REGULARIZA_MIN_INTERVAL_SEC = 90.0
 _REGULARIZA_TIME_BUDGET_MS = 350.0
-_REGULARIZA_MAX_IDS_PER_RUN = 8
+_REGULARIZA_MAX_IDS_PER_RUN = 4
 _regulariza_last_run_monotonic = 0.0
 _regulariza_lock = threading.Lock()
+_REGULARIZA_COLD_START_GRACE_SEC = 45.0
+_process_start_monotonic = time.monotonic()
 
 
 def _cedulas_en_clientes_set_cached(db: Session) -> frozenset:
@@ -1026,12 +1028,15 @@ def _regularizar_reportados_guarded(db: Session) -> None:
     Ejecuta regularización con control de impacto en requests de lectura:
     - un solo runner por proceso (lock no bloqueante),
     - cooldown entre ejecuciones,
-    - presupuesto de tiempo por request.
+    - presupuesto de tiempo por request,
+    - gracia post-cold-start para no bloquear los primeros requests.
     El backfill progresivo de falla_validadores_manual solo corre en los paths
     de cooldown/lock-miss para no bloquear el primer request post-cold-start.
     """
     global _regulariza_last_run_monotonic
     now = time.monotonic()
+    if now - _process_start_monotonic < _REGULARIZA_COLD_START_GRACE_SEC:
+        return
     if now - _regulariza_last_run_monotonic < _REGULARIZA_MIN_INTERVAL_SEC:
         _backfill_falla_validadores_lote(db)
         return
