@@ -470,24 +470,37 @@ def on_startup():
             try:
                 from app.core.database import SessionLocal
                 from app.models.pagos_gmail_sync import PagosGmailSync
-                from sqlalchemy import update as sa_update
+                from sqlalchemy import select, update as sa_update
 
                 db_gmail = SessionLocal()
                 try:
-                    result = db_gmail.execute(
-                        sa_update(PagosGmailSync)
-                        .where(PagosGmailSync.status == "running")
-                        .values(
-                            status="error",
-                            finished_at=datetime.now(timezone.utc),
-                            error_message="Reinicio del servidor (SIGTERM) mientras el pipeline estaba en curso.",
+                    orphan_ids = list(
+                        db_gmail.execute(
+                            select(PagosGmailSync.id).where(PagosGmailSync.status == "running")
                         )
+                        .scalars()
+                        .all()
                     )
-                    if result.rowcount:
-                        logger.warning(
-                            "[PAGOS_GMAIL] %d sync(s) en 'running' marcadas como 'error' al arrancar "
-                            "(worker interrumpido; desbloquea run-now y etiquetado en Gmail).",
-                            result.rowcount,
+                    if orphan_ids:
+                        result = db_gmail.execute(
+                            sa_update(PagosGmailSync)
+                            .where(PagosGmailSync.status == "running")
+                            .values(
+                                status="error",
+                                finished_at=datetime.now(timezone.utc),
+                                error_message="Reinicio del servidor (SIGTERM) mientras el pipeline estaba en curso.",
+                            )
+                        )
+                        n = int(result.rowcount or 0)
+                        preview = orphan_ids[:25]
+                        suffix = " …" if len(orphan_ids) > 25 else ""
+                        logger.info(
+                            "[PAGOS_GMAIL] Startup: %d sync(s) en 'running' pasan a 'error' "
+                            "(esperado tras redeploy/SIGTERM; evita 409 en run-now si started_at < 2 h). "
+                            "sync_ids=%s%s",
+                            n,
+                            preview,
+                            suffix,
                         )
                     db_gmail.commit()
                 finally:
