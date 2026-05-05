@@ -1027,7 +1027,8 @@ def _regularizar_reportados_guarded(db: Session) -> None:
     - un solo runner por proceso (lock no bloqueante),
     - cooldown entre ejecuciones,
     - presupuesto de tiempo por request.
-    También dispara backfill progresivo de falla_validadores_manual.
+    El backfill progresivo de falla_validadores_manual solo corre en los paths
+    de cooldown/lock-miss para no bloquear el primer request post-cold-start.
     """
     global _regulariza_last_run_monotonic
     now = time.monotonic()
@@ -1050,7 +1051,6 @@ def _regularizar_reportados_guarded(db: Session) -> None:
         )
     finally:
         _regulariza_lock.release()
-    _backfill_falla_validadores_lote(db)
 
 
 def _estado_label_estado_reportado(estado: str) -> str:
@@ -1121,17 +1121,20 @@ def actualizar_flag_falla_validadores(db: Session, pr: PagoReportado, *, commit:
     return resultado
 
 
-_BACKFILL_FLAG_BATCH = 40
+_BACKFILL_FLAG_BATCH = 5
 _backfill_flag_last_run = 0.0
-_BACKFILL_FLAG_COOLDOWN_SEC = 60.0
+_BACKFILL_FLAG_COOLDOWN_SEC = 120.0
+_BACKFILL_TIME_BUDGET_SEC = 2.0
 
 
 def _backfill_falla_validadores_lote(db: Session) -> int:
     """
-    Recalcula falla_validadores_manual para un lote de filas con flag NULL o potencialmente stale
-    (gemini='true'/'1' en cola que la migracion pudo haber marcado false por heuristica).
+    Recalcula falla_validadores_manual para un lote pequeño de filas con flag NULL o
+    potencialmente stale (gemini='true'/'1' en cola que la migracion pudo haber marcado
+    false por heuristica).
 
-    Retorna cuantas filas proceso.  Se auto-limita por cooldown para no bloquear requests.
+    Retorna cuantas filas proceso.  Se auto-limita por cooldown + time budget para
+    no bloquear requests de listado.
     """
     global _backfill_flag_last_run
     now = time.monotonic()
@@ -1159,8 +1162,11 @@ def _backfill_falla_validadores_lote(db: Session) -> int:
     if not ids:
         return 0
 
+    deadline = time.monotonic() + _BACKFILL_TIME_BUDGET_SEC
     updated = 0
     for pid in ids:
+        if time.monotonic() > deadline:
+            break
         try:
             pr = db.get(PagoReportado, pid)
             if pr is None:
