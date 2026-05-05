@@ -1068,9 +1068,9 @@ def _obs_efectiva_para_validadores(obs: str, institucion: str) -> str:
     """
     Observación relevante para decidir cola manual.
 
-    DUPLICADO de banco distinto a Mercantil no requiere revisión manual: se auto-procesa
-    (colisión → importado, o eliminado_duplicado).  Si DUPLICADO es la única observación
-    y el banco NO es Mercantil, la observación efectiva queda vacía → pasa validadores.
+    DUPLICADO de banco distinto a Mercantil → toda la observación se descarta (auto-desestimar).
+    El pago original ya está siendo gestionado; revisar el duplicado no aporta valor.
+    Solo Mercantil mantiene duplicados en cola (sus nº de operación pueden repetirse legítimamente).
     """
     if not obs:
         return ""
@@ -1078,9 +1078,7 @@ def _obs_efectiva_para_validadores(obs: str, institucion: str) -> str:
         return obs
     if _es_banco_mercantil(institucion):
         return obs
-    sin_dup = re.sub(r"\bDUPLICADO\b", "", obs)
-    sin_dup = re.sub(r"\s*/\s*", " ", sin_dup).strip()
-    return sin_dup
+    return ""
 
 
 def _item_falla_validadores_cola_manual(it: PagoReportadoListItem) -> bool:
