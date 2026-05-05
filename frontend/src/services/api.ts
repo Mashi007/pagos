@@ -416,6 +416,7 @@ class ApiClient {
         const isSafeTransientRetryGet =
           methodLc === 'get' &&
           (reqUrl.includes('/api/v1/auth/me') ||
+            reqUrl.includes('/api/v1/clientes') ||
             reqUrl.includes('/concesionarios/activos') ||
             reqUrl.includes('/analistas/activos') ||
             reqUrl.includes('/modelos-vehiculos/activos') ||
