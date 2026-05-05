@@ -940,9 +940,10 @@ def _regularizar_reportados_gemini_ok_sin_falla_manual(
     Al listar Cobros: si un reporte ya cumple validadores (misma regla que la cola), pasa a aprobado
     e intenta importar a `pagos` + cuotas como en el flujo público.
 
-    Candidatos: Gemini OK (`true`/`1`) o Gemini `false` sin comentario (falso negativo frecuente);
-    en ambos casos `reportado_falla_validadores_cobros` debe ser False (p. ej. sin DUPLICADO).
-    Errores de API (`error`) no se regularizan aquí.
+    Candidatos: estados pendiente/en_revision/aprobado con Gemini OK (`true`/`1`),
+    Gemini `false` sin comentario (falso negativo frecuente), o sin Gemini (NULL/vacío).
+    En todos los casos `reportado_falla_validadores_cobros` decide si pasa.
+    Errores de API (`error`) no son candidatos (se excluyen por el OR).
     """
     from app.services.cobros import cobros_publico_reporte_service as cpr
 
@@ -951,13 +952,14 @@ def _regularizar_reportados_gemini_ok_sin_falla_manual(
     candidatos_regularizar = or_(
         gem_col.in_(("true", "1")),
         and_(gem_col == "false", com_trim == ""),
+        gem_col == "",
     )
     try:
         ids = list(
             db.execute(
                 select(PagoReportado.id)
                 .where(
-                    PagoReportado.estado.in_(("en_revision", "aprobado")),
+                    PagoReportado.estado.in_(("pendiente", "en_revision", "aprobado")),
                     candidatos_regularizar,
                 )
                 .order_by(PagoReportado.id.desc())
@@ -974,9 +976,7 @@ def _regularizar_reportados_gemini_ok_sin_falla_manual(
             pr = db.get(PagoReportado, pid)
             if pr is None:
                 continue
-            # Si ya existe un Pago con este comprobante, no ejecutar validadores de listado (muy costosos)
-            # ni intentar_importar en cada GET: se agrupan al final en un solo UPDATE + commit.
-            if getattr(pr, "estado", None) in ("en_revision", "aprobado") and pago_reportado_colisiona_tabla_pagos(
+            if getattr(pr, "estado", None) in ("pendiente", "en_revision", "aprobado") and pago_reportado_colisiona_tabla_pagos(
                 db, pr
             ):
                 ids_colision_importado.append(pid)
@@ -987,7 +987,7 @@ def _regularizar_reportados_gemini_ok_sin_falla_manual(
                 db.commit()
                 continue
             ref = (pr.referencia_interna or "").strip() or str(pr.id)
-            if getattr(pr, "estado", None) == "en_revision":
+            if getattr(pr, "estado", None) in ("pendiente", "en_revision"):
                 pr.estado = "aprobado"
                 pr.falla_validadores_manual = False
                 db.add(pr)
