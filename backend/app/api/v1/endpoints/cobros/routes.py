@@ -1064,6 +1064,25 @@ def _estado_label_estado_reportado(estado: str) -> str:
     return m.get((estado or "").strip(), estado or "")
 
 
+def _obs_efectiva_para_validadores(obs: str, institucion: str) -> str:
+    """
+    Observación relevante para decidir cola manual.
+
+    DUPLICADO de banco distinto a Mercantil no requiere revisión manual: se auto-procesa
+    (colisión → importado, o eliminado_duplicado).  Si DUPLICADO es la única observación
+    y el banco NO es Mercantil, la observación efectiva queda vacía → pasa validadores.
+    """
+    if not obs:
+        return ""
+    if "DUPLICADO" not in obs:
+        return obs
+    if _es_banco_mercantil(institucion):
+        return obs
+    sin_dup = re.sub(r"\bDUPLICADO\b", "", obs)
+    sin_dup = re.sub(r"\s*/\s*", " ", sin_dup).strip()
+    return sin_dup
+
+
 def _item_falla_validadores_cola_manual(it: PagoReportadoListItem) -> bool:
     """
     True = requiere análisis manual (cola en pantalla: no cumplen validadores).
@@ -1071,13 +1090,18 @@ def _item_falla_validadores_cola_manual(it: PagoReportadoListItem) -> bool:
     Si Gemini marcó coincidencia exacta (`true`/`1`), solo falla si queda observación de **reglas**
     (DUPLICADO, NO CLIENTES, etc.); el texto residual de Gemini no cuenta en ese caso (se omite al armar la observación).
 
+    DUPLICADO de banco distinto a Mercantil se auto-desestima (no requiere revisión manual).
+
     Si Gemini respondió `false` pero la observación armada está vacía (sin reglas ni columnas
     deducidas del comentario), no se exige paso manual: suele ser falso negativo con comentario vacío
     cuando los validadores determinísticos ya cuadran.
 
     `error` (fallo de API / sin clave) sigue exigiendo revisión manual.
     """
-    obs = (it.observacion or "").strip()
+    obs = _obs_efectiva_para_validadores(
+        (it.observacion or "").strip(),
+        getattr(it, "institucion_financiera", "") or "",
+    )
     if _gemini_coincide_exacto_ok(it.gemini_coincide_exacto):
         return bool(obs)
     gem = (it.gemini_coincide_exacto or "").strip().lower()
