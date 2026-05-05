@@ -1504,9 +1504,7 @@ def _list_pagos_reportados_payload(
         items = _pago_reportado_list_items_from_rows(db, rows)
         return {"items": items, "total": total, "page": page, "per_page": per_page}
 
-    # Cola manual: falla_validadores_manual pre-calculado permite paginación SQL real.
-    # Ya no se cargan objetos completos para toda la tabla; solo se escanean columnas ligeras
-    # (id, numero_operacion, estado) para dedup + conteo, y se cargan objetos solo para la página.
+    # Cola manual: pendiente / en_revision / aprobado que NO cumplen validadores.
     wh = _where_clauses_cola_reportados(estado, incluir_exportados, exportados_subq, filtros)
     wh_primer_scope = (
         _where_clauses_cola_reportados(None, incluir_exportados, exportados_subq, filtros)
@@ -1520,53 +1518,74 @@ def _list_pagos_reportados_payload(
         cedula=cedula,
         institucion=institucion,
     )
-    _, primer_num_op, _ = _get_primer_triple_cached(db, wh_primer_scope, primer_scope_key)
-
-    emit_counts = bool(emit_manual_estado_counts_for_kpis and estado is None)
-
-    wh_falla = list(wh) + [PagoReportado.falla_validadores_manual == True]
-
-    lite_q = (
-        select(PagoReportado.id, PagoReportado.numero_operacion, PagoReportado.estado)
-        .where(*wh_falla)
-        .order_by(
-            case((PagoReportado.estado == "rechazado", 1), else_=0),
-            PagoReportado.created_at.asc(),
-        )
+    primer_precalc, primer_num_op, _ = _get_primer_triple_cached(
+        db, wh_primer_scope, primer_scope_key
+    )
+    q = select(PagoReportado).where(*wh).order_by(
+        case((PagoReportado.estado == "rechazado", 1), else_=0),
+        PagoReportado.created_at.asc(),
     )
 
-    all_ids_ordered: List[int] = []
+    emit_counts = bool(emit_manual_estado_counts_for_kpis and estado is None)
     by_estado_manual: Dict[str, int] = {"pendiente": 0, "en_revision": 0, "aprobado": 0}
-    for rid, num_op, st in db.execute(lite_q):
-        num_key = _numero_operacion_canonico(num_op)
-        if num_key:
-            first_id = primer_num_op.get(num_key)
-            if first_id is not None and int(rid) != int(first_id):
-                continue
-        all_ids_ordered.append(int(rid))
-        if emit_counts:
-            est = (st or "").strip()
-            if est in by_estado_manual:
-                by_estado_manual[est] += 1
 
-    total = len(all_ids_ordered)
-    start_idx = (page - 1) * per_page
-    page_ids_ordered = all_ids_ordered[start_idx : start_idx + per_page]
+    batch = _COBROS_LISTADO_SCAN_BATCH
+    offset_scan = 0
+    skip_need = (page - 1) * per_page
+    take_need = per_page
+    page_ids_ordered: List[int] = []
+    total = 0
+    pagos_canon_acum: Dict[str, Set[str]] = {"queried": set(), "present": set()}
+    while True:
+        rows = db.execute(q.offset(offset_scan).limit(batch)).scalars().all()
+        if not rows:
+            break
+        for it in _pago_reportado_list_items_from_rows(
+            db,
+            rows,
+            primer_id_por_norm_precalc=primer_precalc,
+            include_financial_fields=False,
+            pagos_canon_acum=pagos_canon_acum,
+        ):
+            num_key = _numero_operacion_canonico(getattr(it, "numero_operacion", None))
+            if num_key:
+                first_id = primer_num_op.get(num_key)
+                if first_id is not None and int(it.id) != int(first_id):
+                    continue
+            if not _item_falla_validadores_cola_manual(it):
+                continue
+            total += 1
+            if emit_counts:
+                st = (it.estado or "").strip()
+                if st in by_estado_manual:
+                    by_estado_manual[st] += 1
+            if skip_need > 0:
+                skip_need -= 1
+                continue
+            if take_need > 0:
+                page_ids_ordered.append(int(it.id))
+                take_need -= 1
+        offset_scan += len(rows)
 
     page_items: List[PagoReportadoListItem] = []
     if page_ids_ordered:
-        primer_precalc, _, _ = _get_primer_triple_cached(db, wh_primer_scope, primer_scope_key)
-        rows_page = db.execute(
-            select(PagoReportado).where(PagoReportado.id.in_(page_ids_ordered))
-        ).scalars().all()
+        seen: Set[int] = set()
+        uniq_ids: List[int] = []
+        for pid in page_ids_ordered:
+            if pid in seen:
+                continue
+            seen.add(pid)
+            uniq_ids.append(pid)
+        rows_page = db.execute(select(PagoReportado).where(PagoReportado.id.in_(uniq_ids))).scalars().all()
         by_id = {int(r.id): r for r in rows_page}
-        ordered_pr = [by_id[i] for i in page_ids_ordered if i in by_id]
+        ordered_pr = [by_id[i] for i in uniq_ids if i in by_id]
         if ordered_pr:
             page_items = _pago_reportado_list_items_from_rows(
                 db,
                 ordered_pr,
                 primer_id_por_norm_precalc=primer_precalc,
                 include_financial_fields=True,
+                pagos_canon_acum=pagos_canon_acum,
             )
 
     out: Dict[str, Any] = {"items": page_items, "total": total, "page": page, "per_page": per_page}
@@ -1622,8 +1641,6 @@ def _kpis_pagos_reportados_payload(
     else:
         exportados_subq = select(PagoReportadoExportado.pago_reportado_id)
         wh_kpi = _where_clauses_cola_reportados(None, incluir_exportados, exportados_subq, filtros)
-        wh_kpi_falla = list(wh_kpi) + [PagoReportado.falla_validadores_manual == True]
-
         kpi_scope_key = _primer_maps_scope_key(
             incluir_exportados=incluir_exportados,
             fecha_desde=fecha_desde,
@@ -1631,22 +1648,29 @@ def _kpis_pagos_reportados_payload(
             cedula=cedula,
             institucion=institucion,
         )
-        _, primer_num_op_kpi, _ = _get_primer_triple_cached(db, wh_kpi, kpi_scope_key)
+        primer_kpi, _, _ = _get_primer_triple_cached(db, wh_kpi, kpi_scope_key)
+        q_scan = select(PagoReportado).where(*wh_kpi).order_by(PagoReportado.created_at.asc())
 
-        lite_q = (
-            select(PagoReportado.id, PagoReportado.numero_operacion, PagoReportado.estado)
-            .where(*wh_kpi_falla)
-            .order_by(PagoReportado.created_at.asc())
-        )
-        for rid, num_op, st in db.execute(lite_q):
-            num_key = _numero_operacion_canonico(num_op)
-            if num_key:
-                first_id = primer_num_op_kpi.get(num_key)
-                if first_id is not None and int(rid) != int(first_id):
+        batch = _COBROS_LISTADO_SCAN_BATCH
+        offset_scan = 0
+        pagos_canon_acum_kpi: Dict[str, Set[str]] = {"queried": set(), "present": set()}
+        while True:
+            rows_b = db.execute(q_scan.offset(offset_scan).limit(batch)).scalars().all()
+            if not rows_b:
+                break
+            for it in _pago_reportado_list_items_from_rows(
+                db,
+                rows_b,
+                primer_id_por_norm_precalc=primer_kpi,
+                include_financial_fields=False,
+                pagos_canon_acum=pagos_canon_acum_kpi,
+            ):
+                if not _item_falla_validadores_cola_manual(it):
                     continue
-            est = (st or "").strip()
-            if est in ("pendiente", "en_revision", "aprobado"):
-                counts[est] += 1
+                st = (it.estado or "").strip()
+                if st in ("pendiente", "en_revision", "aprobado"):
+                    counts[st] += 1
+            offset_scan += len(rows_b)
 
     counts["total"] = sum(counts[k] for k in ("pendiente", "en_revision", "aprobado", "rechazado", "importado"))
     return counts
