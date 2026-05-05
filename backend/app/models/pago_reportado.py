@@ -7,7 +7,7 @@ Reportes de pago web (misma tabla para todo canal de entrada).
 - Binario del comprobante: solo en `pago_comprobante_imagen` (FK `comprobante_imagen_id`);
   `comprobante_nombre` conserva el nombre original del archivo.
 """
-from sqlalchemy import Column, Integer, String, Numeric, DateTime, ForeignKey, Text, Date, LargeBinary
+from sqlalchemy import Boolean, Column, Integer, String, Numeric, DateTime, ForeignKey, Text, Date, LargeBinary
 from sqlalchemy.sql import func, text
 
 from app.core.database import Base
@@ -51,6 +51,10 @@ class PagoReportado(Base):
     canal_ingreso = Column(String(32), nullable=True, index=True)
     # bcv | euro | binance — tasa Bs→USD elegida al validar cédula en cobros/infopagos (defecto euro).
     fuente_tasa_cambio = Column(String(16), nullable=True, server_default=text("'euro'"))
+    # Pre-cálculo: True si el reporte necesita revisión manual (no cumple validadores).
+    # Permite paginación SQL real en el listado (GET /pagos-reportados/listado-y-kpis).
+    # Se recalcula en cada escritura (crear, Gemini, PATCH, cambio de estado).
+    falla_validadores_manual = Column(Boolean, nullable=True, index=True)
     created_at = Column(DateTime(timezone=False), nullable=False, server_default=func.now())
     updated_at = Column(DateTime(timezone=False), nullable=False, server_default=func.now(), onupdate=func.now())
 

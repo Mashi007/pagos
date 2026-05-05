@@ -981,11 +981,15 @@ def _regularizar_reportados_gemini_ok_sin_falla_manual(
             ):
                 ids_colision_importado.append(pid)
                 continue
-            if reportado_falla_validadores_cobros(db, pr):
+            falla = reportado_falla_validadores_cobros(db, pr)
+            pr.falla_validadores_manual = falla
+            if falla:
+                db.commit()
                 continue
             ref = (pr.referencia_interna or "").strip() or str(pr.id)
             if getattr(pr, "estado", None) == "en_revision":
                 pr.estado = "aprobado"
+                pr.falla_validadores_manual = False
                 db.add(pr)
                 db.commit()
                 db.refresh(pr)
@@ -1003,7 +1007,7 @@ def _regularizar_reportados_gemini_ok_sin_falla_manual(
             db.execute(
                 update(PagoReportado)
                 .where(PagoReportado.id.in_(ids_colision_importado))
-                .values(estado="importado", updated_at=func.now())
+                .values(estado="importado", falla_validadores_manual=False, updated_at=func.now())
             )
             db.commit()
             logger.info(
@@ -1023,12 +1027,15 @@ def _regularizar_reportados_guarded(db: Session) -> None:
     - un solo runner por proceso (lock no bloqueante),
     - cooldown entre ejecuciones,
     - presupuesto de tiempo por request.
+    También dispara backfill progresivo de falla_validadores_manual.
     """
     global _regulariza_last_run_monotonic
     now = time.monotonic()
     if now - _regulariza_last_run_monotonic < _REGULARIZA_MIN_INTERVAL_SEC:
+        _backfill_falla_validadores_lote(db)
         return
     if not _regulariza_lock.acquire(blocking=False):
+        _backfill_falla_validadores_lote(db)
         return
     try:
         now_inside = time.monotonic()
@@ -1043,6 +1050,7 @@ def _regularizar_reportados_guarded(db: Session) -> None:
         )
     finally:
         _regulariza_lock.release()
+    _backfill_falla_validadores_lote(db)
 
 
 def _estado_label_estado_reportado(estado: str) -> str:
@@ -1089,6 +1097,91 @@ def reportado_falla_validadores_cobros(db: Session, pr: PagoReportado) -> bool:
     if not items:
         return True
     return _item_falla_validadores_cola_manual(items[0])
+
+
+def actualizar_flag_falla_validadores(db: Session, pr: PagoReportado, *, commit: bool = False) -> bool:
+    """
+    Recalcula y persiste ``pr.falla_validadores_manual``.
+
+    Retorna el valor calculado.  No hace commit salvo que ``commit=True``.
+    Para estados terminales no ejecuta la evaluación costosa.
+    """
+    if pr is None:
+        return True
+    estado = (getattr(pr, "estado", None) or "").strip()
+    if estado in ("importado", "rechazado", "eliminado_duplicado"):
+        pr.falla_validadores_manual = False
+        if commit:
+            db.commit()
+        return False
+    resultado = reportado_falla_validadores_cobros(db, pr)
+    pr.falla_validadores_manual = resultado
+    if commit:
+        db.commit()
+    return resultado
+
+
+_BACKFILL_FLAG_BATCH = 40
+_backfill_flag_last_run = 0.0
+_BACKFILL_FLAG_COOLDOWN_SEC = 60.0
+
+
+def _backfill_falla_validadores_lote(db: Session) -> int:
+    """
+    Recalcula falla_validadores_manual para un lote de filas con flag NULL o potencialmente stale
+    (gemini='true'/'1' en cola que la migracion pudo haber marcado false por heuristica).
+
+    Retorna cuantas filas proceso.  Se auto-limita por cooldown para no bloquear requests.
+    """
+    global _backfill_flag_last_run
+    now = time.monotonic()
+    if now - _backfill_flag_last_run < _BACKFILL_FLAG_COOLDOWN_SEC:
+        return 0
+    _backfill_flag_last_run = now
+
+    gem_col = func.lower(func.trim(func.coalesce(PagoReportado.gemini_coincide_exacto, "")))
+    ids = list(
+        db.execute(
+            select(PagoReportado.id).where(
+                or_(
+                    PagoReportado.falla_validadores_manual.is_(None),
+                    and_(
+                        PagoReportado.falla_validadores_manual == False,
+                        PagoReportado.estado.in_(("pendiente", "en_revision", "aprobado")),
+                        gem_col.in_(("true", "1")),
+                    ),
+                ),
+            )
+            .order_by(PagoReportado.id.desc())
+            .limit(_BACKFILL_FLAG_BATCH)
+        ).scalars().all()
+    )
+    if not ids:
+        return 0
+
+    updated = 0
+    for pid in ids:
+        try:
+            pr = db.get(PagoReportado, pid)
+            if pr is None:
+                continue
+            actualizar_flag_falla_validadores(db, pr)
+            updated += 1
+        except Exception:
+            try:
+                db.rollback()
+            except Exception:
+                pass
+    if updated:
+        try:
+            db.commit()
+        except Exception:
+            try:
+                db.rollback()
+            except Exception:
+                pass
+    logger.debug("[COBROS_FLAG] Backfill: %d/%d filas recalculadas.", updated, len(ids))
+    return updated
 
 
 def _persist_marcar_exportados_y_cola(db: Session, ids: List[int]) -> dict:
@@ -1378,12 +1471,10 @@ def _list_pagos_reportados_payload(
         items = _pago_reportado_list_items_from_rows(db, rows)
         return {"items": items, "total": total, "page": page, "per_page": per_page}
 
-    # Cola manual: pendiente / en_revision / aprobado que NO cumplen validadores (misma regla que el listado/KPIs).
-    # Cumplen 100% (reglas OK; Gemini true o false sin observación) → no entran aquí; flujo automático fuera de la cola.
+    # Cola manual: falla_validadores_manual pre-calculado permite paginación SQL real.
+    # Ya no se cargan objetos completos para toda la tabla; solo se escanean columnas ligeras
+    # (id, numero_operacion, estado) para dedup + conteo, y se cargan objetos solo para la página.
     wh = _where_clauses_cola_reportados(estado, incluir_exportados, exportados_subq, filtros)
-    # Con pestaña por estado, el listado filtra filas con `wh`, pero la resolución de duplicados
-    # (primer reporte por documento / nº operación) debe usar la MISMA cola completa que KPIs
-    # (pendiente+en_revision+aprobado); si no, totales y tarjetas divergen entre vistas.
     wh_primer_scope = (
         _where_clauses_cola_reportados(None, incluir_exportados, exportados_subq, filtros)
         if estado in ("pendiente", "en_revision", "aprobado")
@@ -1396,77 +1487,53 @@ def _list_pagos_reportados_payload(
         cedula=cedula,
         institucion=institucion,
     )
-    primer_precalc, primer_num_op, _ = _get_primer_triple_cached(
-        db, wh_primer_scope, primer_scope_key
-    )
-    q = select(PagoReportado).where(*wh).order_by(
-        case((PagoReportado.estado == "rechazado", 1), else_=0),
-        PagoReportado.created_at.asc(),
-    )
+    _, primer_num_op, _ = _get_primer_triple_cached(db, wh_primer_scope, primer_scope_key)
 
     emit_counts = bool(emit_manual_estado_counts_for_kpis and estado is None)
-    by_estado_manual: Dict[str, int] = {"pendiente": 0, "en_revision": 0, "aprobado": 0}
 
-    batch = _COBROS_LISTADO_SCAN_BATCH
-    offset_scan = 0
-    skip_need = (page - 1) * per_page
-    take_need = per_page
-    page_ids_ordered: List[int] = []
-    total = 0
-    pagos_canon_acum: Dict[str, Set[str]] = {"queried": set(), "present": set()}
-    while True:
-        rows = db.execute(q.offset(offset_scan).limit(batch)).scalars().all()
-        if not rows:
-            break
-        for it in _pago_reportado_list_items_from_rows(
-            db,
-            rows,
-            primer_id_por_norm_precalc=primer_precalc,
-            include_financial_fields=False,
-            pagos_canon_acum=pagos_canon_acum,
-        ):
-            # Mismo numero_operacion canónico: en cola se lista solo el primer reporte; reenvíos no se listan.
-            # Si el nº ya está en `pagos`, el reporte SÍ debe verse (DUPLICADO + datos cartera) para
-            # rechazar o corregir (antes se omitía la fila y no aparecía en pantalla).
-            num_key = _numero_operacion_canonico(getattr(it, "numero_operacion", None))
-            if num_key:
-                first_id = primer_num_op.get(num_key)
-                if first_id is not None and int(it.id) != int(first_id):
-                    continue
-            if not _item_falla_validadores_cola_manual(it):
+    wh_falla = list(wh) + [PagoReportado.falla_validadores_manual == True]
+
+    lite_q = (
+        select(PagoReportado.id, PagoReportado.numero_operacion, PagoReportado.estado)
+        .where(*wh_falla)
+        .order_by(
+            case((PagoReportado.estado == "rechazado", 1), else_=0),
+            PagoReportado.created_at.asc(),
+        )
+    )
+
+    all_ids_ordered: List[int] = []
+    by_estado_manual: Dict[str, int] = {"pendiente": 0, "en_revision": 0, "aprobado": 0}
+    for rid, num_op, st in db.execute(lite_q):
+        num_key = _numero_operacion_canonico(num_op)
+        if num_key:
+            first_id = primer_num_op.get(num_key)
+            if first_id is not None and int(rid) != int(first_id):
                 continue
-            total += 1
-            if emit_counts:
-                st = (it.estado or "").strip()
-                if st in by_estado_manual:
-                    by_estado_manual[st] += 1
-            if skip_need > 0:
-                skip_need -= 1
-                continue
-            if take_need > 0:
-                page_ids_ordered.append(int(it.id))
-                take_need -= 1
-        offset_scan += len(rows)
+        all_ids_ordered.append(int(rid))
+        if emit_counts:
+            est = (st or "").strip()
+            if est in by_estado_manual:
+                by_estado_manual[est] += 1
+
+    total = len(all_ids_ordered)
+    start_idx = (page - 1) * per_page
+    page_ids_ordered = all_ids_ordered[start_idx : start_idx + per_page]
 
     page_items: List[PagoReportadoListItem] = []
     if page_ids_ordered:
-        seen: Set[int] = set()
-        uniq_ids: List[int] = []
-        for pid in page_ids_ordered:
-            if pid in seen:
-                continue
-            seen.add(pid)
-            uniq_ids.append(pid)
-        rows_page = db.execute(select(PagoReportado).where(PagoReportado.id.in_(uniq_ids))).scalars().all()
+        primer_precalc, _, _ = _get_primer_triple_cached(db, wh_primer_scope, primer_scope_key)
+        rows_page = db.execute(
+            select(PagoReportado).where(PagoReportado.id.in_(page_ids_ordered))
+        ).scalars().all()
         by_id = {int(r.id): r for r in rows_page}
-        ordered_pr = [by_id[i] for i in uniq_ids if i in by_id]
+        ordered_pr = [by_id[i] for i in page_ids_ordered if i in by_id]
         if ordered_pr:
             page_items = _pago_reportado_list_items_from_rows(
                 db,
                 ordered_pr,
                 primer_id_por_norm_precalc=primer_precalc,
                 include_financial_fields=True,
-                pagos_canon_acum=pagos_canon_acum,
             )
 
     out: Dict[str, Any] = {"items": page_items, "total": total, "page": page, "per_page": per_page}
@@ -1522,6 +1589,8 @@ def _kpis_pagos_reportados_payload(
     else:
         exportados_subq = select(PagoReportadoExportado.pago_reportado_id)
         wh_kpi = _where_clauses_cola_reportados(None, incluir_exportados, exportados_subq, filtros)
+        wh_kpi_falla = list(wh_kpi) + [PagoReportado.falla_validadores_manual == True]
+
         kpi_scope_key = _primer_maps_scope_key(
             incluir_exportados=incluir_exportados,
             fecha_desde=fecha_desde,
@@ -1529,29 +1598,22 @@ def _kpis_pagos_reportados_payload(
             cedula=cedula,
             institucion=institucion,
         )
-        primer_kpi, _, _ = _get_primer_triple_cached(db, wh_kpi, kpi_scope_key)
-        q_scan = select(PagoReportado).where(*wh_kpi).order_by(PagoReportado.created_at.asc())
+        _, primer_num_op_kpi, _ = _get_primer_triple_cached(db, wh_kpi, kpi_scope_key)
 
-        batch = _COBROS_LISTADO_SCAN_BATCH
-        offset_scan = 0
-        pagos_canon_acum_kpi: Dict[str, Set[str]] = {"queried": set(), "present": set()}
-        while True:
-            rows_b = db.execute(q_scan.offset(offset_scan).limit(batch)).scalars().all()
-            if not rows_b:
-                break
-            for it in _pago_reportado_list_items_from_rows(
-                db,
-                rows_b,
-                primer_id_por_norm_precalc=primer_kpi,
-                include_financial_fields=False,
-                pagos_canon_acum=pagos_canon_acum_kpi,
-            ):
-                if not _item_falla_validadores_cola_manual(it):
+        lite_q = (
+            select(PagoReportado.id, PagoReportado.numero_operacion, PagoReportado.estado)
+            .where(*wh_kpi_falla)
+            .order_by(PagoReportado.created_at.asc())
+        )
+        for rid, num_op, st in db.execute(lite_q):
+            num_key = _numero_operacion_canonico(num_op)
+            if num_key:
+                first_id = primer_num_op_kpi.get(num_key)
+                if first_id is not None and int(rid) != int(first_id):
                     continue
-                st = (it.estado or "").strip()
-                if st in ("pendiente", "en_revision", "aprobado"):
-                    counts[st] += 1
-            offset_scan += len(rows_b)
+            est = (st or "").strip()
+            if est in ("pendiente", "en_revision", "aprobado"):
+                counts[est] += 1
 
     counts["total"] = sum(counts[k] for k in ("pendiente", "en_revision", "aprobado", "rechazado", "importado"))
     return counts
@@ -2043,7 +2105,7 @@ def _marcar_reportados_como_eliminado_duplicado(
     db.execute(
         update(PagoReportado)
         .where(PagoReportado.id.in_(dup_ids))
-        .values(estado="eliminado_duplicado", motivo_rechazo=motivo)
+        .values(estado="eliminado_duplicado", motivo_rechazo=motivo, falla_validadores_manual=False)
     )
     prev_states = {rid: st for rid, _rref, st in dup_rows}
     for rid in dup_ids:
@@ -2245,6 +2307,7 @@ def aprobar_pago_reportado(
         estado_anterior = pr.estado
         pr.estado = "aprobado"
         pr.motivo_rechazo = None
+        pr.falla_validadores_manual = False
         pr.usuario_gestion_id = current_user.get("id") if isinstance(current_user, dict) else getattr(current_user, "id", None)
 
         try:
@@ -2423,6 +2486,7 @@ def rechazar_pago_reportado(
     estado_anterior = pr.estado
     pr.estado = "rechazado"
     pr.motivo_rechazo = (body.motivo or "").strip()[:2000]
+    pr.falla_validadores_manual = False
     usuario_email = current_user.get("email") if isinstance(current_user, dict) else getattr(current_user, "email", None)
     pr.usuario_gestion_id = current_user.get("id") if isinstance(current_user, dict) else getattr(current_user, "id", None)
 
@@ -2857,6 +2921,7 @@ def editar_pago_reportado(
         _img_id = (getattr(pr, "comprobante_imagen_id", None) or "").strip()
         if key_recibo_antes != key_recibo_despues and (pr.recibo_pdf is not None or _img_id):
             pr.recibo_pdf = None
+        actualizar_flag_falla_validadores(db, pr)
         db.commit()
         _invalidate_cobros_listado_kpis_cache()
         logger.info("[COBROS] Pago reportado editado: id=%s ref=%s", pago_id, pr.referencia_interna)
@@ -2920,6 +2985,10 @@ def cambiar_estado_pago(
     estado_anterior = pr.estado
     pr.estado = body.estado
     pr.motivo_rechazo = (body.motivo or "").strip()[:2000] if body.estado == "rechazado" else None
+    if body.estado in ("aprobado", "rechazado", "importado"):
+        pr.falla_validadores_manual = False
+    elif body.estado in ("pendiente", "en_revision"):
+        actualizar_flag_falla_validadores(db, pr)
     pr.usuario_gestion_id = current_user.get("id") if isinstance(current_user, dict) else getattr(current_user, "id", None)
     usuario_email = current_user.get("email") if isinstance(current_user, dict) else getattr(current_user, "email", None)
 

@@ -158,6 +158,7 @@ def intentar_importar_reportado_automatico(
         db.refresh(pr)
         if pago_reportado_colisiona_tabla_pagos(db, pr):
             pr.estado = "importado"
+            pr.falla_validadores_manual = False
             db.add(pr)
             db.commit()
             logger.info(
@@ -194,6 +195,7 @@ def intentar_importar_reportado_automatico(
         if cc > 0 or cp > 0:
             pago.estado = "PAGADO"
         pr.estado = "importado"
+        pr.falla_validadores_manual = False
         db.commit()
         logger.info("[%s] Auto-import OK ref=%s pago_id=%s", log_tag, referencia, getattr(pago, "id", None))
     except Exception as e:
@@ -508,6 +510,7 @@ def crear_pago_reportado_con_referencia_o_retry(
                     .where(PagoReportado.id.in_(to_mark))
                     .values(
                         estado="en_revision",
+                        falla_validadores_manual=True,
                         motivo_rechazo=(
                             "Duplicado por número de operación en banco Mercantil: "
                             "excepción activa, requiere revisión manual."
@@ -520,6 +523,7 @@ def crear_pago_reportado_con_referencia_o_retry(
                 .where(PagoReportado.id.in_(to_mark))
                 .values(
                     estado="eliminado_duplicado",
+                    falla_validadores_manual=False,
                     motivo_rechazo=(
                         "Eliminado automáticamente por duplicado de número de operación "
                         f"(mismo número que reporte {keep_ref or keep_id})."

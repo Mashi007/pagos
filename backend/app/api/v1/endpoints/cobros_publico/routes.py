@@ -57,7 +57,7 @@ from app.core.security import decode_token, create_recibo_infopagos_token, creat
 from app.core.config import settings
 from app.core.email_config_holder import get_email_activo_servicio
 from app.utils.cliente_emails import emails_destino_desde_objeto, unir_destinatarios_log
-from app.api.v1.endpoints.cobros.routes import reportado_falla_validadores_cobros
+from app.api.v1.endpoints.cobros.routes import reportado_falla_validadores_cobros, actualizar_flag_falla_validadores
 
 logger = logging.getLogger(__name__)
 
@@ -900,12 +900,15 @@ async def enviar_reporte_publico(
         # no forzamos revisión manual por validadores automáticos.
         falla_validadores = False if confirmo_humano else reportado_falla_validadores_cobros(db, pr)
         pr.estado = "en_revision" if falla_validadores else "aprobado"
+        pr.falla_validadores_manual = falla_validadores
         db.commit()
 
         recibo_enviado_val = None
         if not falla_validadores:
             cpr.intentar_importar_reportado_automatico(db, pr, referencia, "COBROS_PUBLIC")
             db.refresh(pr)
+            if (pr.estado or "").strip() == "importado":
+                pr.falla_validadores_manual = False
             background_tasks.add_task(
                 _procesar_recibo_y_correo_aprobado_background,
                 int(pr.id),
@@ -1164,6 +1167,7 @@ async def enviar_reporte_infopagos(
         # no forzamos revisión manual por validadores automáticos.
         falla_validadores = False if confirmo_humano else reportado_falla_validadores_cobros(db, pr)
         pr.estado = "en_revision" if falla_validadores else "aprobado"
+        pr.falla_validadores_manual = falla_validadores
         db.commit()
 
         if borrador_efectivo:
@@ -1185,6 +1189,8 @@ async def enviar_reporte_infopagos(
         if not falla_validadores:
             cpr.intentar_importar_reportado_automatico(db, pr, referencia, "INFOPAGOS")
             db.refresh(pr)
+            if (pr.estado or "").strip() == "importado":
+                pr.falla_validadores_manual = False
             cuotas_display = texto_cuotas_aplicadas_pago_reportado(db, pr)
             background_tasks.add_task(
                 _procesar_recibo_y_correo_aprobado_background,
