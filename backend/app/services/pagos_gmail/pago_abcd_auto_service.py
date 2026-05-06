@@ -20,6 +20,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.api.v1.endpoints.pagos.pago_integridad_db import _integridad_error_pgcode_y_constraint
 from app.core.documento import compose_numero_documento_almacenado
 from app.models.cliente import Cliente
 from app.models.pago import Pago
@@ -241,8 +242,20 @@ def crear_pago_conciliado_y_aplicar_cuotas_gmail_plantilla_abcd(
     try:
         db.flush()
     except IntegrityError as e:
-        logger.warning("[PAGOS_GMAIL] [ABCD_PAGO] integridad al insertar: %s", e)
-        return _fail("integridad", str(e)[:400])
+        pgcode, cname = _integridad_error_pgcode_y_constraint(e)
+        logger.warning(
+            "[PAGOS_GMAIL] [ABCD_PAGO] integridad al insertar (pgcode=%s constraint=%s): %s",
+            pgcode,
+            cname,
+            e,
+        )
+        if "ux_pagos_fingerprint_activos" in (cname or "").lower():
+            registrar_rechazo_huella_funcional()
+            return _fail(
+                "huella_funcional",
+                "Pago duplicado por huella funcional: mismo préstamo, fecha, monto y referencia normalizada.",
+            )
+        return _fail("integridad", "No se pudo registrar el pago por una restricción de datos.")
 
     cc, cp = 0, 0
     if pago.prestamo_id and float(pago.monto_pagado or 0) > 0:
