@@ -86,11 +86,14 @@ router = APIRouter(dependencies=[Depends(get_current_user)])
 
 _COBROS_LISTADO_KPIS_CACHE_TTL_SEC = 900  # 15 minutos
 _COBROS_LISTADO_KPIS_CACHE_STALE_TTL_SEC = 7200  # 2 horas (fallback resiliente)
+_COBROS_LISTADO_KPIS_SINGLEFLIGHT_WAIT_SEC = 1.5
+_COBROS_LISTADO_KPIS_SINGLEFLIGHT_STALE_SEC = 30.0
 _COBROS_LISTADO_KPIS_CACHE_PREFIX = "cobros:listado_y_kpis:v1:"
 _COBROS_LISTADO_KPIS_CACHE_STALE_SUFFIX = ":stale"
 _cobros_listado_kpis_mem_cache: Dict[str, Tuple[float, dict]] = {}
 _cobros_listado_kpis_mem_stale_cache: Dict[str, Tuple[float, dict]] = {}
 _cobros_listado_kpis_mem_lock = threading.Lock()
+_cobros_listado_kpis_inflight: Dict[str, float] = {}
 _ESCANER_RATE_LIMIT_WINDOW_SEC = 60
 _ESCANER_RATE_LIMIT_MAX_COUNT = 20
 _escaner_rate_limit_mem: Dict[str, Tuple[int, float]] = {}
@@ -266,6 +269,27 @@ def _invalidate_cobros_listado_kpis_cache() -> None:
             redis_client.delete(*keys)
     except Exception as e:
         logger.warning("[COBROS_CACHE] Redis invalidate listado-y-kpis falló: %s", e)
+
+
+def _cobros_listado_kpis_try_acquire_singleflight(cache_payload: str) -> bool:
+    """
+    True si este request toma el cálculo de esta key; False si otro ya está calculando.
+    TTL interno corto para no dejar bloqueo huérfano si un worker muere.
+    """
+    key = _cobros_listado_kpis_storage_key(cache_payload)
+    now = time.time()
+    with _cobros_listado_kpis_mem_lock:
+        owner_ts = _cobros_listado_kpis_inflight.get(key)
+        if owner_ts is not None and (now - owner_ts) < _COBROS_LISTADO_KPIS_SINGLEFLIGHT_STALE_SEC:
+            return False
+        _cobros_listado_kpis_inflight[key] = now
+        return True
+
+
+def _cobros_listado_kpis_release_singleflight(cache_payload: str) -> None:
+    key = _cobros_listado_kpis_storage_key(cache_payload)
+    with _cobros_listado_kpis_mem_lock:
+        _cobros_listado_kpis_inflight.pop(key, None)
 
 
 def _log_fase_aprobacion(
@@ -1821,6 +1845,22 @@ def list_pagos_reportados_y_kpis(
     if cached is not None:
         return cached
 
+    acquired = _cobros_listado_kpis_try_acquire_singleflight(cache_payload)
+    if not acquired:
+        wait_deadline = time.monotonic() + _COBROS_LISTADO_KPIS_SINGLEFLIGHT_WAIT_SEC
+        while time.monotonic() < wait_deadline:
+            cached_wait = _cobros_listado_kpis_cache_get(cache_payload)
+            if cached_wait is not None:
+                return cached_wait
+            time.sleep(0.1)
+        stale_wait = _cobros_listado_kpis_cache_get_stale(cache_payload)
+        if stale_wait is not None:
+            logger.warning(
+                "[COBROS_CACHE] listado-y-kpis devolviendo stale por single-flight en curso (key=%s)",
+                _cobros_listado_kpis_storage_key(cache_payload),
+            )
+            return stale_wait
+
     try:
         emit_kpi_from_list = estado is None
         lista = _list_pagos_reportados_payload(
@@ -1857,6 +1897,9 @@ def list_pagos_reportados_y_kpis(
             )
             return fallback
         raise
+    finally:
+        if acquired:
+            _cobros_listado_kpis_release_singleflight(cache_payload)
 
 
 @router.get("/pagos-reportados/duplicados-eliminados", response_model=dict)
