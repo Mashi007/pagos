@@ -85,8 +85,11 @@ router = APIRouter(dependencies=[Depends(get_current_user)])
 
 
 _COBROS_LISTADO_KPIS_CACHE_TTL_SEC = 900  # 15 minutos
+_COBROS_LISTADO_KPIS_CACHE_STALE_TTL_SEC = 7200  # 2 horas (fallback resiliente)
 _COBROS_LISTADO_KPIS_CACHE_PREFIX = "cobros:listado_y_kpis:v1:"
+_COBROS_LISTADO_KPIS_CACHE_STALE_SUFFIX = ":stale"
 _cobros_listado_kpis_mem_cache: Dict[str, Tuple[float, dict]] = {}
+_cobros_listado_kpis_mem_stale_cache: Dict[str, Tuple[float, dict]] = {}
 _cobros_listado_kpis_mem_lock = threading.Lock()
 _ESCANER_RATE_LIMIT_WINDOW_SEC = 60
 _ESCANER_RATE_LIMIT_MAX_COUNT = 20
@@ -163,6 +166,10 @@ def _cobros_listado_kpis_storage_key(cache_payload: str) -> str:
     return f"{_COBROS_LISTADO_KPIS_CACHE_PREFIX}{digest}"
 
 
+def _cobros_listado_kpis_stale_storage_key(cache_payload: str) -> str:
+    return f"{_cobros_listado_kpis_storage_key(cache_payload)}{_COBROS_LISTADO_KPIS_CACHE_STALE_SUFFIX}"
+
+
 def _cobros_listado_kpis_cache_get(cache_payload: str) -> Optional[dict]:
     key = _cobros_listado_kpis_storage_key(cache_payload)
     redis_client = get_redis_client()
@@ -188,8 +195,34 @@ def _cobros_listado_kpis_cache_get(cache_payload: str) -> Optional[dict]:
     return None
 
 
+def _cobros_listado_kpis_cache_get_stale(cache_payload: str) -> Optional[dict]:
+    key = _cobros_listado_kpis_stale_storage_key(cache_payload)
+    redis_client = get_redis_client()
+    if redis_client is not None:
+        try:
+            raw = redis_client.get(key)
+            if raw:
+                parsed = json.loads(raw)
+                if isinstance(parsed, dict):
+                    return parsed
+        except Exception as e:
+            logger.warning("[COBROS_CACHE] Redis get stale listado-y-kpis falló: %s", e)
+
+    now = time.time()
+    with _cobros_listado_kpis_mem_lock:
+        hit = _cobros_listado_kpis_mem_stale_cache.get(key)
+        if not hit:
+            return None
+        exp_ts, payload = hit
+        if exp_ts > now:
+            return payload
+        _cobros_listado_kpis_mem_stale_cache.pop(key, None)
+    return None
+
+
 def _cobros_listado_kpis_cache_set(cache_payload: str, data: dict) -> None:
     key = _cobros_listado_kpis_storage_key(cache_payload)
+    stale_key = _cobros_listado_kpis_stale_storage_key(cache_payload)
     encoded = jsonable_encoder(data)
     redis_client = get_redis_client()
     if redis_client is not None:
@@ -197,6 +230,11 @@ def _cobros_listado_kpis_cache_set(cache_payload: str, data: dict) -> None:
             redis_client.setex(
                 key,
                 _COBROS_LISTADO_KPIS_CACHE_TTL_SEC,
+                json.dumps(encoded, ensure_ascii=False, default=str),
+            )
+            redis_client.setex(
+                stale_key,
+                _COBROS_LISTADO_KPIS_CACHE_STALE_TTL_SEC,
                 json.dumps(encoded, ensure_ascii=False, default=str),
             )
             return
@@ -208,11 +246,16 @@ def _cobros_listado_kpis_cache_set(cache_payload: str, data: dict) -> None:
             time.time() + _COBROS_LISTADO_KPIS_CACHE_TTL_SEC,
             encoded,
         )
+        _cobros_listado_kpis_mem_stale_cache[stale_key] = (
+            time.time() + _COBROS_LISTADO_KPIS_CACHE_STALE_TTL_SEC,
+            encoded,
+        )
 
 
 def _invalidate_cobros_listado_kpis_cache() -> None:
     with _cobros_listado_kpis_mem_lock:
         _cobros_listado_kpis_mem_cache.clear()
+        # Mantener stale cache para fallback resiliente durante picos/redeploy.
 
     redis_client = get_redis_client()
     if redis_client is None:
@@ -1778,32 +1821,42 @@ def list_pagos_reportados_y_kpis(
     if cached is not None:
         return cached
 
-    emit_kpi_from_list = estado is None
-    lista = _list_pagos_reportados_payload(
-        db,
-        estado=estado,
-        fecha_desde=fecha_desde,
-        fecha_hasta=fecha_hasta,
-        cedula=cedula,
-        institucion=institucion,
-        page=page,
-        per_page=per_page,
-        incluir_exportados=incluir_exportados,
-        emit_manual_estado_counts_for_kpis=emit_kpi_from_list,
-    )
-    manual_queue = lista.pop("_manual_kpi_counts", None) if emit_kpi_from_list else None
-    kpis = _kpis_pagos_reportados_payload(
-        db,
-        fecha_desde=fecha_desde,
-        fecha_hasta=fecha_hasta,
-        cedula=cedula,
-        institucion=institucion,
-        incluir_exportados=incluir_exportados,
-        manual_queue_counts=manual_queue,
-    )
-    payload = {**lista, "kpis": kpis}
-    _cobros_listado_kpis_cache_set(cache_payload, payload)
-    return payload
+    try:
+        emit_kpi_from_list = estado is None
+        lista = _list_pagos_reportados_payload(
+            db,
+            estado=estado,
+            fecha_desde=fecha_desde,
+            fecha_hasta=fecha_hasta,
+            cedula=cedula,
+            institucion=institucion,
+            page=page,
+            per_page=per_page,
+            incluir_exportados=incluir_exportados,
+            emit_manual_estado_counts_for_kpis=emit_kpi_from_list,
+        )
+        manual_queue = lista.pop("_manual_kpi_counts", None) if emit_kpi_from_list else None
+        kpis = _kpis_pagos_reportados_payload(
+            db,
+            fecha_desde=fecha_desde,
+            fecha_hasta=fecha_hasta,
+            cedula=cedula,
+            institucion=institucion,
+            incluir_exportados=incluir_exportados,
+            manual_queue_counts=manual_queue,
+        )
+        payload = {**lista, "kpis": kpis}
+        _cobros_listado_kpis_cache_set(cache_payload, payload)
+        return payload
+    except Exception as e:
+        fallback = _cobros_listado_kpis_cache_get_stale(cache_payload)
+        if fallback is not None:
+            logger.warning(
+                "[COBROS_CACHE] listado-y-kpis devolviendo stale cache por error de cálculo: %s",
+                e,
+            )
+            return fallback
+        raise
 
 
 @router.get("/pagos-reportados/duplicados-eliminados", response_model=dict)
