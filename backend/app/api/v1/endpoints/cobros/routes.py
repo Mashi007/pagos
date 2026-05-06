@@ -29,6 +29,7 @@ from app.core.documento import normalize_documento
 from app.core.deps import get_current_user
 from app.services.cobros import infopagos_escaner_borrador_service as ieb
 from app.core.rate_limit_store import get_redis_client
+from app.api.v1.endpoints.pagos.pago_integridad_db import _integridad_error_pgcode_y_constraint
 from app.models.pago_reportado import PagoReportado, PagoReportadoHistorial
 from app.models.pago_reportado_exportado import PagoReportadoExportado
 from app.models.pago_pendiente_descargar import PagoPendienteDescargar
@@ -75,6 +76,7 @@ from app.utils.cedula_almacenamiento import expr_cedula_normalizada_para_compara
 from app.services.pagos_gmail.comprobante_bd import url_comprobante_imagen_absoluta
 from app.services.pagos_gmail.credentials import get_pagos_gmail_credentials
 from app.services.pagos_gmail.drive_service import build_drive_service
+from app.services.pago_huella_funcional import conflicto_huella_para_creacion
 from app.services.cobros.pago_reportado_comprobante_unico import (
     comprobante_bytes_y_content_type_desde_reportado,
     nombre_adjunto_email_desde_reportado,
@@ -2358,6 +2360,16 @@ def _crear_pago_desde_reportado_y_aplicar_cuotas(db: Session, pr: PagoReportado,
     if monto <= 0:
         raise HTTPException(status_code=400, detail="El monto del reporte debe ser mayor que cero.")
     ref_pago = (num_doc or num_doc_raw or "Cobros")[:100]
+    msg_h = conflicto_huella_para_creacion(
+        db,
+        prestamo_id=prestamo.id,
+        fecha_pago=fecha_ts.date(),
+        monto_pagado=monto,
+        numero_documento=num_doc,
+        referencia_pago=ref_pago,
+    )
+    if msg_h:
+        raise HTTPException(status_code=409, detail=msg_h[:500])
     rpc_tr = (pr.referencia_interna or "").strip()[:100]
     notas_pago = None
     if rpc_tr and num_doc_raw and rpc_tr != num_doc_raw:
@@ -2388,7 +2400,27 @@ def _crear_pago_desde_reportado_y_aplicar_cuotas(db: Session, pr: PagoReportado,
         documento_nombre=doc_nom,
     )
     db.add(row)
-    db.flush()
+    try:
+        db.flush()
+    except IntegrityError as e:
+        _pgcode, _cname = _integridad_error_pgcode_y_constraint(e)
+        logger.warning(
+            "[COBROS] Aprobar ref=%s: IntegrityError creando pago (pgcode=%s constraint=%s): %s",
+            getattr(pr, "referencia_interna", None),
+            _pgcode,
+            _cname,
+            e,
+        )
+        cname_l = (_cname or "").lower()
+        if "ux_pagos_fingerprint_activos" in cname_l:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "Pago duplicado por huella funcional: mismo préstamo, fecha, monto y referencia normalizada "
+                    "que un pago ya registrado."
+                ),
+            ) from e
+        raise
     db.refresh(row)
     try:
         _aplicar_pago_a_cuotas_interno(row, db)
