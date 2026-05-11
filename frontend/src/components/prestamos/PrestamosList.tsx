@@ -85,6 +85,8 @@ import { useAnalistasActivos } from '../../hooks/useAnalistas'
 
 import { useModelosVehiculosActivos } from '../../hooks/useModelosVehiculos'
 
+import { useDebounce } from '../../hooks/useDebounce'
+
 import { CrearPrestamoForm } from './CrearPrestamoForm'
 
 import { ExcelUploaderPrestamos } from './ExcelUploaderPrestamos'
@@ -383,9 +385,19 @@ export function PrestamosList() {
     return !Number.isNaN(n) && n >= 1 ? n : undefined
   }, [prestamoIdInput])
 
+  // Debounce de la barra «Buscar» (cedula/nombre): el `<Input>` actualiza
+  // `filters.search` en cada tecla para que el campo se vea responsivo, pero
+  // sólo disparamos GET /prestamos?search=... cuando el usuario para de teclear.
+  // Sin esto, los logs muestran ~10 requests por una sola busqueda (Backspace por Backspace).
+  const debouncedSearch = useDebounce((filters.search ?? '').trim(), 350)
+
   const listFilters = useMemo(
-    () => ({ ...filters, prestamo_id: prestamoIdFiltro }),
-    [filters, prestamoIdFiltro]
+    () => ({
+      ...filters,
+      search: debouncedSearch,
+      prestamo_id: prestamoIdFiltro,
+    }),
+    [filters, debouncedSearch, prestamoIdFiltro]
   )
 
   /**

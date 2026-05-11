@@ -491,6 +491,65 @@ def send_email(
                 seen_b.add(low)
                 bcc_list.append(a)
 
+    # Saneo final: descartar destinatarios que smtplib no podra encodear a ASCII para
+    # el RCPT TO (p. ej. emails corrompidos con U+FFFD por mojibake en la BD).
+    # Sin esto, sendmail() revienta con UnicodeEncodeError y el correo queda como
+    # "ok_email_fail" sin razon visible en la UI.
+    def _es_destino_smtp_valido(direccion: str) -> bool:
+        s = (direccion or "").strip()
+        if not s or "@" not in s:
+            return False
+        if "\ufffd" in s:
+            return False
+        try:
+            s.encode("ascii")
+        except UnicodeEncodeError:
+            return False
+        for ch in s:
+            if ord(ch) < 0x20 or ord(ch) == 0x7F or ch == " ":
+                return False
+        return True
+
+    def _filtrar_smtp(lista: List[str], etiqueta: str) -> List[str]:
+        validos: List[str] = []
+        descartados: List[str] = []
+        for direccion in lista:
+            if _es_destino_smtp_valido(direccion):
+                validos.append(direccion.strip())
+            else:
+                descartados.append(direccion)
+        if descartados:
+            logger.warning(
+                "[SMTP_ENVIO] destinatarios %s descartados por caracteres invalidos (no-ASCII/U+FFFD): %s",
+                etiqueta,
+                [mask_email_for_log(d) for d in descartados],
+            )
+        return validos
+
+    to_emails_filtrados = _filtrar_smtp(list(to_emails), "TO")
+    cc_list = _filtrar_smtp(cc_list, "CC")
+    bcc_list = _filtrar_smtp(bcc_list, "BCC")
+
+    if not to_emails_filtrados:
+        log_phase(logger, FASE_SMTP_CONFIG, False, "destinatarios invalidos (no-ASCII/U+FFFD)")
+        logger.warning(
+            "[SMTP_ENVIO] estado=abortado razon=destinatarios_invalidos servicio=%s tipo_tab=%s solicitados_MASK=%s",
+            servicio or "",
+            tipo_tab or "",
+            [mask_email_for_log(x) for x in dest_solicitados_originales],
+        )
+        if smtp_session_metadata is not None:
+            smtp_session_metadata.clear()
+            smtp_session_metadata.update(
+                {"resultado": "no_intentado", "motivo": "destinatarios_invalidos"}
+            )
+        return False, (
+            "Los destinatarios contienen caracteres invalidos (mojibake/no-ASCII). "
+            "Revise el email registrado del cliente y corrijalo antes de reintentar."
+        )
+
+    to_emails = to_emails_filtrados
+
     attachments_norm = _normalize_attachments_for_smtp(attachments)
     has_attachments = len(attachments_norm) > 0
     if attachments and not attachments_norm:

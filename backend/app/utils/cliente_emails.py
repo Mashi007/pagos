@@ -30,11 +30,40 @@ Escaneo Gmail / digitalización de pagos (plantillas Mercantil, BNC, Binance, BD
 """
 from __future__ import annotations
 
+import logging
 from typing import Iterable, List, Optional, Sequence
+
+logger = logging.getLogger(__name__)
 
 
 def _norm_email(s: Optional[str]) -> str:
     return (s or "").strip()
+
+
+def _email_smtp_enrutable(email: str) -> bool:
+    """
+    True si `email` se puede entregar por SMTP estándar (ASCII puro, sin caracteres
+    de reemplazo Unicode U+FFFD ni controles).
+
+    Motivación: emails importados con codificación incorrecta quedan con `\\ufffd`
+    (p. ej. `peñaevelyn462@gmail.com` mal decodificado → `pe\\ufffdaevelyn462@gmail.com`).
+    `smtplib.sendmail` codifica el RCPT TO a ASCII y revienta con UnicodeEncodeError
+    si no filtramos antes. Tampoco soportamos direcciones SMTPUTF8/IDN en este flujo,
+    así que cualquier non-ASCII se considera inválida como destino real.
+    """
+    if not email or "@" not in email:
+        return False
+    if "\ufffd" in email:
+        return False
+    try:
+        email.encode("ascii")
+    except UnicodeEncodeError:
+        return False
+    # Cortar caracteres de control y espacios incrustados (CR/LF/TAB en medio del local-part).
+    for ch in email:
+        if ord(ch) < 0x20 or ord(ch) == 0x7F or ch == " ":
+            return False
+    return True
 
 
 def emails_destino_cliente(
@@ -46,12 +75,21 @@ def emails_destino_cliente(
     """
     Lista ordenada de correos válidos y distintos (comparación sin distinguir mayúsculas),
     máximo `max_destinos` (por defecto 2). Orden: primero correo 1 (`email`), luego correo 2 (`email_secundario`).
+
+    Descarta direcciones no enrutables por SMTP estándar (con U+FFFD u otros chars no-ASCII)
+    y deja una advertencia en el log para que un administrador corrija el registro del cliente.
     """
     out: List[str] = []
     seen_lower: set[str] = set()
     for raw in (email, email_secundario):
         e = _norm_email(raw)
         if not e or "@" not in e:
+            continue
+        if not _email_smtp_enrutable(e):
+            logger.warning(
+                "cliente_emails: email descartado por caracteres invalidos (no ASCII / mojibake U+FFFD): %r",
+                e,
+            )
             continue
         key = e.lower()
         if key in seen_lower:
@@ -78,9 +116,16 @@ def lista_correo_principal_para_notificaciones(email: Optional[str]) -> List[str
     """
     Lista con 0 o 1 dirección válida: solo la columna principal `email` del cliente.
     No usa `email_secundario` (envíos de notificaciones: un solo destino, sin confusiones).
+    Descarta direcciones no enrutables por SMTP (ver `_email_smtp_enrutable`).
     """
     e = _norm_email(email)
     if not e or "@" not in e:
+        return []
+    if not _email_smtp_enrutable(e):
+        logger.warning(
+            "cliente_emails: email principal descartado por caracteres invalidos (mojibake/non-ASCII): %r",
+            e,
+        )
         return []
     return [e]
 

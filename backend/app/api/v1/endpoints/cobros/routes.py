@@ -924,20 +924,28 @@ def _pago_reportado_list_items_from_rows(
             )
         else:
             tasa_x, eq_usd = None, None
-        dup_pagos = reportado_toca_claves_canonicas_en_pagos(r, claves_doc_en_pagos)
+        # En el barrido (include_financial_fields=False) los items se descartan: solo se
+        # leen id/observacion/gemini/numero_operacion/estado/institucion_financiera para
+        # `_item_falla_validadores_cola_manual`. Saltar los lookups a `pagos` por fila
+        # (dup_pagos + Pago.prestamo_id/numero_documento) ahorra N+1 sobre miles de filas
+        # y bajaba el listado-y-kpis de decenas de segundos a unos pocos.
         pago_existente_id = None
         prestamo_existente_id = None
         numero_documento_pago_existente = None
-        if dup_pagos:
-            pago_existente_id = primer_pago_id_si_existe_para_claves_reportado(db, r)
-            if pago_existente_id is not None:
-                prow = db.execute(
-                    select(Pago.prestamo_id, Pago.numero_documento).where(Pago.id == int(pago_existente_id))
-                ).first()
-                if prow is not None:
-                    prestamo_existente_id = prow[0]
-                    nd_raw = (prow[1] or "").strip()
-                    numero_documento_pago_existente = nd_raw or None
+        if include_financial_fields:
+            dup_pagos = reportado_toca_claves_canonicas_en_pagos(r, claves_doc_en_pagos)
+            if dup_pagos:
+                pago_existente_id = primer_pago_id_si_existe_para_claves_reportado(db, r)
+                if pago_existente_id is not None:
+                    prow = db.execute(
+                        select(Pago.prestamo_id, Pago.numero_documento).where(Pago.id == int(pago_existente_id))
+                    ).first()
+                    if prow is not None:
+                        prestamo_existente_id = prow[0]
+                        nd_raw = (prow[1] or "").strip()
+                        numero_documento_pago_existente = nd_raw or None
+        else:
+            dup_pagos = False
         items.append(PagoReportadoListItem(
             id=r.id,
             referencia_interna=r.referencia_interna,
@@ -1590,7 +1598,22 @@ def _list_pagos_reportados_payload(
     primer_precalc, primer_num_op, _ = _get_primer_triple_cached(
         db, wh_primer_scope, primer_scope_key
     )
-    q = select(PagoReportado).where(*wh).order_by(
+    # Fast path: filtrar el barrido por la columna persistida `falla_validadores_manual`
+    # (indexada). Las filas con `falla=False` ya cumplen validadores y el bucle Python las
+    # descartaria igualmente con `_item_falla_validadores_cola_manual`; ahorrar leerlas y
+    # iterarlas reduce el escaneo de O(filas_en_estado) a O(filas_que_realmente_van_a_cola).
+    # `IS NULL` (filas no backfilled todavia) se incluye para preservar correctness — el
+    # validador Python se ejecutara igual sobre ellas. El mapa de dedup (`primer_num_op`)
+    # se sigue calculando sobre `wh_primer_scope` SIN este filtro, para que un duplicado
+    # "lider" con `falla=False` siga liderando su cadena y los "seguidores" se descarten
+    # por dedup como hoy (semantica preservada).
+    wh_scan = list(wh) + [
+        or_(
+            PagoReportado.falla_validadores_manual.is_(True),
+            PagoReportado.falla_validadores_manual.is_(None),
+        )
+    ]
+    q = select(PagoReportado).where(*wh_scan).order_by(
         case((PagoReportado.estado == "rechazado", 1), else_=0),
         PagoReportado.created_at.asc(),
     )
@@ -1718,7 +1741,17 @@ def _kpis_pagos_reportados_payload(
             institucion=institucion,
         )
         primer_kpi, _, _ = _get_primer_triple_cached(db, wh_kpi, kpi_scope_key)
-        q_scan = select(PagoReportado).where(*wh_kpi).order_by(PagoReportado.created_at.asc())
+        # Fast path simetrico al listado: el barrido KPI itera solo filas que pueden caer en
+        # cola (`falla=True` o NULL pendiente de backfill). El precalc de dedup (primer_kpi)
+        # se calcula sobre el scope completo `wh_kpi` SIN filtro, para que un duplicado
+        # "lider" con `falla=False` siga liderando y sus "seguidores" se descarten igual.
+        wh_kpi_scan = list(wh_kpi) + [
+            or_(
+                PagoReportado.falla_validadores_manual.is_(True),
+                PagoReportado.falla_validadores_manual.is_(None),
+            )
+        ]
+        q_scan = select(PagoReportado).where(*wh_kpi_scan).order_by(PagoReportado.created_at.asc())
 
         batch = _COBROS_LISTADO_SCAN_BATCH
         offset_scan = 0
