@@ -41,6 +41,7 @@ import {
   CardTitle,
 } from '../components/ui/card'
 import { Input } from '../components/ui/input'
+import { ComprobanteThumb } from '../components/pagos/ComprobanteThumb'
 import {
   pagoService,
   type GmailPreviewItemUI,
@@ -121,8 +122,59 @@ export default function ActualizacionesGmailPage() {
   })
 
   const { loading: ejecutandoPipeline, gmailStatus, run } = useGmailPipeline({
-    onDone: () => {
-      void queryClient.invalidateQueries({ queryKey: QK_LIST })
+    suppressDoneToasts: true,
+    onDone: status => {
+      if (!correoActivo) {
+        void queryClient.invalidateQueries({ queryKey: QK_LIST })
+        return
+      }
+      // Refrescamos la tabla del remitente y luego mostramos un toast con el
+      // conteo real (la cuenta global `last_emails` puede ser 0 cuando todos los
+      // correos del remitente ya estaban digitalizados en pagos: el pipeline
+      // funcionó, simplemente no creó altas nuevas).
+      void queryClient
+        .invalidateQueries({ queryKey: QK_LIST })
+        .then(async () => {
+          let totalFilas = 0
+          let yaEnPagos = 0
+          try {
+            const res = await queryClient.fetchQuery({
+              queryKey: [...QK_LIST, correoActivo, 1],
+              queryFn: () =>
+                pagoService.listGmailSyncItems({
+                  correo: correoActivo,
+                  limit: PAGE_SIZE,
+                  offset: 0,
+                }),
+            })
+            totalFilas = res.total ?? res.items.length
+            yaEnPagos = res.items.filter(it => it.duplicado_en_pagos).length
+          } catch {
+            /* tabla no se pudo recargar; usa fallback abajo */
+          }
+          if (status.last_status === 'error') {
+            toast.error(
+              `Pipeline termino con error: ${status.last_error || 'desconocido'}`,
+              { duration: 12000 }
+            )
+            return
+          }
+          if (totalFilas > 0) {
+            const pendientes = Math.max(0, totalFilas - yaEnPagos)
+            toast.success(
+              `Pipeline terminado para ${correoActivo}. Filas extraidas: ${totalFilas} ` +
+                `(${yaEnPagos} ya estan en pagos; ${pendientes} pendientes de validar).`,
+              { duration: 12000 }
+            )
+          } else {
+            toast(
+              `Pipeline terminado para ${correoActivo}: no se generaron filas. ` +
+                'Posibles causas: Gmail no encontro correos del remitente con imagen/PDF en bandeja, ' +
+                'o todos los candidatos fueron descartados por Gemini. Pulsa "Probar Gmail" para diagnostico.',
+              { duration: 14000 }
+            )
+          }
+        })
     },
   })
 
@@ -597,30 +649,11 @@ export default function ActualizacionesGmailPage() {
                             {item.fecha_correo || '-'}
                           </td>
                           <td className="px-3 py-2 align-top">
-                            {compUrl ? (
-                              <a
-                                href={compUrl}
-                                target="_blank"
-                                rel="noreferrer"
-                                title="Abrir comprobante"
-                                className="inline-block"
-                              >
-                                <img
-                                  src={compUrl}
-                                  alt="Comprobante"
-                                  className="h-16 w-16 rounded border object-cover"
-                                  loading="lazy"
-                                  onError={e => {
-                                    ;(e.currentTarget as HTMLImageElement).style.display =
-                                      'none'
-                                  }}
-                                />
-                              </a>
-                            ) : (
-                              <span className="inline-flex items-center rounded border border-dashed border-muted-foreground/40 px-2 py-1 text-[11px] text-muted-foreground">
-                                Sin imagen
-                              </span>
-                            )}
+                            <ComprobanteThumb
+                              url={compUrl}
+                              alt="Comprobante"
+                              placeholderText="Sin imagen"
+                            />
                           </td>
                           <td className="px-3 py-2 align-top">
                             {enEdicion ? (

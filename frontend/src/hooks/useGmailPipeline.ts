@@ -265,6 +265,13 @@ interface UseGmailPipelineOptions {
   onDone?: (status: GmailStatus) => void
 
   onStatusUpdate?: (status: GmailStatus) => void
+
+  /**
+   * Si es true, el hook no muestra los toasts internos de "terminado" / "sin correos".
+   * El caller se encarga del feedback en `onDone` (p. ej. para usar conteos
+   * propios de la pantalla en lugar de `last_emails` del sync global).
+   */
+  suppressDoneToasts?: boolean
 }
 
 const POLL_INTERVAL_MS = 10000
@@ -376,6 +383,7 @@ function textoNotificacionFinProcesamientoGmail(s: GmailStatus): string | null {
 export function useGmailPipeline({
   onDone,
   onStatusUpdate,
+  suppressDoneToasts,
 }: UseGmailPipelineOptions = {}) {
   const [loading, setLoading] = useState(false)
 
@@ -436,12 +444,15 @@ export function useGmailPipeline({
               const resumenErr = textoNotificacionFinProcesamientoGmail(s)
               const sufijoResumen = resumenErr ? `\n${resumenErr}` : ''
 
-              toast.error(
-                `Error al procesar correos.${errDetail}${sufijoResumen}`,
-                {
-                  duration: 14000,
-                }
-              )
+              if (!suppressDoneToasts) {
+                toast.error(
+                  `Error al procesar correos.${errDetail}${sufijoResumen}`,
+                  {
+                    duration: 14000,
+                  }
+                )
+              }
+              onDoneRef.current?.(s)
 
               // No abrir diálogo de descarga en caso de error
             } else if (emails === 0 && files === 0) {
@@ -449,18 +460,23 @@ export function useGmailPipeline({
                 // Datos de una ejecución anterior disponibles para descargar
                 const resumenCero = textoNotificacionFinProcesamientoGmail(s)
                 const baseCero = `Sin correos procesados en esta ejecución (inbox con imagen/PDF según el filtro). Hay datos del ${s.latest_data_date} listos para descargar.`
-                toast(resumenCero ? `${baseCero}\n${resumenCero}` : baseCero, {
-                  duration: 10000,
-                })
+                if (!suppressDoneToasts) {
+                  toast(resumenCero ? `${baseCero}\n${resumenCero}` : baseCero, {
+                    duration: 10000,
+                  })
+                }
 
                 onDoneRef.current?.(s)
               } else {
-                toast(
-                  `${mensajeSinCorreosNiFilas(lastScanFilterRef.current)}${detalleCausaSinFilas(s)}`,
-                  {
-                    duration: 12000,
-                  }
-                )
+                if (!suppressDoneToasts) {
+                  toast(
+                    `${mensajeSinCorreosNiFilas(lastScanFilterRef.current)}${detalleCausaSinFilas(s)}`,
+                    {
+                      duration: 12000,
+                    }
+                  )
+                }
+                onDoneRef.current?.(s)
 
                 // Sin datos: no abrir el diálogo de descarga
               }
@@ -474,7 +490,9 @@ export function useGmailPipeline({
                 ? `${resumenFin}${diagIdent}${dateHint}${detalleCeroArchivosConCorreos(s)}`
                 : `Listo: se revisaron ${emails} correo(s) y ${files} archivo(s) procesados.${dateHint}${detalleCeroArchivosConCorreos(s)}`
 
-              toast.success(cuerpo, { duration: resumenFin ? 14000 : 10000 })
+              if (!suppressDoneToasts) {
+                toast.success(cuerpo, { duration: resumenFin ? 14000 : 10000 })
+              }
 
               onDoneRef.current?.(s)
             }
