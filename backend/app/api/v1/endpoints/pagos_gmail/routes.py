@@ -1337,8 +1337,9 @@ def _sync_item_duplicado_en_pagos(
 def listar_sync_items(
     correo: Optional[str] = Query(
         None,
-        description="Filtra por correo_origen (case-insensitive, coincidencia parcial). "
-        "Si no se envía, devuelve los más recientes.",
+        description="OBLIGATORIO en el módulo Actualizaciones > Gmail: correo_origen exacto "
+        "(case-insensitive). Sin él, este endpoint NO lista nada (no se expone el histórico "
+        "global de la cola Gmail).",
     ),
     limit: int = Query(200, ge=1, le=1000),
     offset: int = Query(0, ge=0),
@@ -1349,15 +1350,28 @@ def listar_sync_items(
     db: Session = Depends(get_db),
 ):
     """
-    Lista filas de `pagos_gmail_sync_item` para la tabla en pantalla del módulo
-    Actualizaciones > Gmail. Devuelve los campos exactos que necesita la UI:
-    fecha del correo, imagen (URL), banco, fecha de pago, monto, serial, asunto,
-    y un indicador `duplicado_en_pagos` con el `pago_id_existente` cuando aplica.
+    Lista filas de `pagos_gmail_sync_item` del remitente indicado.
+    No se expone el histórico global: si no se envía `correo`, el endpoint devuelve vacío.
+    Devuelve los campos exactos que necesita la UI: fecha del correo, imagen (URL), banco,
+    fecha de pago, monto, serial, asunto y un indicador `duplicado_en_pagos` con el
+    `pago_id_existente` cuando aplica.
     """
     correo_lc = (correo or "").strip().lower() or None
-    q = select(PagosGmailSyncItem).order_by(desc(PagosGmailSyncItem.created_at))
-    if correo_lc:
-        q = q.where(func.lower(PagosGmailSyncItem.correo_origen).like(f"%{correo_lc}%"))
+    if not correo_lc:
+        return {
+            "total": 0,
+            "items": [],
+            "limit": limit,
+            "offset": offset,
+            "mensaje": "Indica un remitente (parámetro 'correo') para listar sus comprobantes.",
+        }
+
+    # Match exacto (no LIKE %x%) para no mezclar dominios o cuentas similares.
+    q = (
+        select(PagosGmailSyncItem)
+        .where(func.lower(PagosGmailSyncItem.correo_origen) == correo_lc)
+        .order_by(desc(PagosGmailSyncItem.created_at))
+    )
     # Excluir filas con alta automática OK aplicada a cuotas (CUOTAS_OK + pago_id).
     if excluir_autoconciliados:
         sub_ok = (
@@ -1370,11 +1384,11 @@ def listar_sync_items(
         )
         q = q.where(PagosGmailSyncItem.id.notin_(sub_ok))
 
-    count_q = select(func.count()).select_from(PagosGmailSyncItem)
-    if correo_lc:
-        count_q = count_q.where(
-            func.lower(PagosGmailSyncItem.correo_origen).like(f"%{correo_lc}%")
-        )
+    count_q = (
+        select(func.count())
+        .select_from(PagosGmailSyncItem)
+        .where(func.lower(PagosGmailSyncItem.correo_origen) == correo_lc)
+    )
     total = int(db.scalar(count_q) or 0)
 
     rows = db.execute(q.offset(offset).limit(limit)).scalars().all()

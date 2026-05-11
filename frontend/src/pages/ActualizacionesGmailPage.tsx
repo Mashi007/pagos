@@ -24,7 +24,6 @@ import {
   Pencil,
   RefreshCw,
   Save,
-  Search,
   Trash2,
   X,
 } from 'lucide-react'
@@ -93,14 +92,16 @@ export default function ActualizacionesGmailPage() {
 
   const offset = (pagina - 1) * PAGE_SIZE
 
+  // La tabla SOLO se llena cuando hay un correo: el módulo no expone el histórico global de la cola Gmail.
   const { data, isLoading, isFetching, refetch } = useQuery({
     queryKey: [...QK_LIST, correoFiltro, pagina],
     queryFn: () =>
       pagoService.listGmailSyncItems({
-        correo: correoFiltro || null,
+        correo: correoFiltro,
         limit: PAGE_SIZE,
         offset,
       }),
+    enabled: !!correoFiltro,
     refetchOnWindowFocus: false,
   })
 
@@ -125,13 +126,7 @@ export default function ActualizacionesGmailPage() {
     void run('manual_redigitaliza_por_remitente', email)
   }, [correoInput, run])
 
-  const handleAplicarFiltro = useCallback(() => {
-    const email = correoInput.trim().toLowerCase()
-    setCorreoFiltro(email)
-    setPagina(1)
-  }, [correoInput])
-
-  const handleLimpiarFiltro = useCallback(() => {
+  const handleLimpiar = useCallback(() => {
     setCorreoInput('')
     setCorreoFiltro('')
     setPagina(1)
@@ -232,7 +227,7 @@ export default function ActualizacionesGmailPage() {
     <div className="mx-auto max-w-7xl space-y-6 p-4 md:p-6">
       <ModulePageHeader
         title="Actualizaciones · Gmail"
-        description="Re-escaneo manual por remitente. Usa el mismo pipeline que «Procesar manualmente» en Pagos, pero acotado al correo indicado. Para ese remitente concreto el pipeline omite la regla global de «skip por etiqueta de usuario» y re-clasifica. Guardar aplica cascada de cuotas vigente."
+        description="Re-escaneo manual por remitente. Indica un correo y se procesarán los mensajes de ese remitente que cumplan el criterio del pipeline (imagen/PDF en bandeja). Mismo flujo que «Procesar manualmente» en Pagos: para ese remitente concreto se omite la regla global de «skip por etiqueta de usuario» y se re-clasifica. Guardar aplica cascada de cuotas vigente."
         icon={Mail}
       />
 
@@ -254,7 +249,13 @@ export default function ActualizacionesGmailPage() {
               )}
             </div>
           </div>
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <form
+            onSubmit={e => {
+              e.preventDefault()
+              handleReescanear()
+            }}
+            className="flex flex-col gap-2 sm:flex-row sm:items-center"
+          >
             <Input
               type="email"
               autoComplete="email"
@@ -265,8 +266,7 @@ export default function ActualizacionesGmailPage() {
             />
             <div className="flex flex-wrap gap-2">
               <Button
-                type="button"
-                onClick={handleReescanear}
+                type="submit"
                 disabled={ejecutandoPipeline || !correoInput.trim()}
                 title="Lanza el pipeline Gmail acotado a este remitente. Saltea la regla de etiquetas SOLO para este correo."
               >
@@ -280,54 +280,48 @@ export default function ActualizacionesGmailPage() {
               <Button
                 type="button"
                 variant="outline"
-                onClick={handleAplicarFiltro}
-                disabled={ejecutandoPipeline}
-                title="Solo filtra la tabla (sin re-escanear Gmail)"
-              >
-                <Search className="mr-2 h-4 w-4" />
-                Filtrar tabla
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={handleLimpiarFiltro}
-                disabled={ejecutandoPipeline && !correoFiltro}
-              >
-                Limpiar
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
                 onClick={() => void refetch()}
-                disabled={isFetching}
-                title="Refresca la tabla (sin re-escanear Gmail)"
+                disabled={!correoFiltro || isFetching}
+                title="Refresca la tabla de este remitente (sin volver a Gmail)"
               >
                 {isFetching ? (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 ) : (
                   <RefreshCw className="mr-2 h-4 w-4" />
                 )}
-                Refrescar
+                Refrescar tabla
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={handleLimpiar}
+                disabled={!correoFiltro && !correoInput}
+              >
+                Limpiar
               </Button>
             </div>
-          </div>
+          </form>
         </CardHeader>
         <CardContent>
-          <div className="mb-3 flex flex-col gap-1 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
-            <span>
-              {correoFiltro
-                ? `Filtrando por: ${correoFiltro}`
-                : 'Mostrando los más recientes (sin filtro por correo).'}
-            </span>
-            <span>
-              {total} fila(s){' '}
-              {totalPaginas > 1
-                ? `· página ${pagina} de ${totalPaginas}`
-                : ''}
-            </span>
-          </div>
+          {!correoFiltro ? (
+            <div className="rounded-md border border-dashed bg-muted/30 p-6 text-center text-sm text-muted-foreground">
+              Indica un correo arriba y pulsa <strong>Re-escanear este correo</strong> para
+              procesar los mensajes de ese remitente. La tabla solo muestra los comprobantes
+              del remitente indicado: no se expone aquí la cola Gmail general.
+            </div>
+          ) : (
+            <>
+              <div className="mb-3 flex flex-col gap-1 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+                <span>Remitente: {correoFiltro}</span>
+                <span>
+                  {total} fila(s){' '}
+                  {totalPaginas > 1
+                    ? `· página ${pagina} de ${totalPaginas}`
+                    : ''}
+                </span>
+              </div>
 
-          <div className="overflow-x-auto rounded-md border">
+              <div className="overflow-x-auto rounded-md border">
             <table className="w-full text-sm">
               <thead className="bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
                 <tr>
@@ -592,29 +586,31 @@ export default function ActualizacionesGmailPage() {
             </table>
           </div>
 
-          {totalPaginas > 1 ? (
-            <div className="mt-3 flex items-center justify-between text-xs">
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => setPagina(p => Math.max(1, p - 1))}
-                disabled={pagina <= 1 || isFetching}
-              >
-                Anterior
-              </Button>
-              <span className="text-muted-foreground">
-                Página {pagina} de {totalPaginas}
-              </span>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => setPagina(p => Math.min(totalPaginas, p + 1))}
-                disabled={pagina >= totalPaginas || isFetching}
-              >
-                Siguiente
-              </Button>
-            </div>
-          ) : null}
+              {totalPaginas > 1 ? (
+                <div className="mt-3 flex items-center justify-between text-xs">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setPagina(p => Math.max(1, p - 1))}
+                    disabled={pagina <= 1 || isFetching}
+                  >
+                    Anterior
+                  </Button>
+                  <span className="text-muted-foreground">
+                    Página {pagina} de {totalPaginas}
+                  </span>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setPagina(p => Math.min(totalPaginas, p + 1))}
+                    disabled={pagina >= totalPaginas || isFetching}
+                  >
+                    Siguiente
+                  </Button>
+                </div>
+              ) : null}
+            </>
+          )}
         </CardContent>
       </Card>
     </div>
