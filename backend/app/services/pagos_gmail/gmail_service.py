@@ -523,6 +523,12 @@ def list_messages_by_filter(
             "includeSpamTrash": False,
         }
         params_base["q"] = pagos_gmail_list_query_for_scan_filter(filter_type, from_email)
+        logger.info(
+            "[PAGOS_GMAIL] list_messages_by_filter Gmail q=%r (filter=%s, from_email=%s)",
+            params_base["q"],
+            filter_type,
+            (from_email or "").strip().lower() or "(sin remitente)",
+        )
 
         while True:
             params = dict(params_base)
@@ -534,6 +540,12 @@ def list_messages_by_filter(
             page_token = result.get("nextPageToken")
             if not page_token:
                 break
+        logger.info(
+            "[PAGOS_GMAIL] list_messages_by_filter Gmail listo: %d mensajes (filter=%s, from_email=%s)",
+            len(all_msg_refs),
+            filter_type,
+            (from_email or "").strip().lower() or "(sin remitente)",
+        )
         ids_ordered = [m["id"] for m in all_msg_refs]
         meta_by_id = batch_get_messages_metadata(
             service, ids_ordered, metadata_headers=["From", "Date", "Subject"]
@@ -633,6 +645,12 @@ def count_messages_by_filter(
             "includeSpamTrash": False,
         }
         params_base["q"] = pagos_gmail_list_query_for_scan_filter(filter_type, from_email)
+        logger.info(
+            "[PAGOS_GMAIL] count_messages_by_filter Gmail q=%r (filter=%s, from_email=%s)",
+            params_base["q"],
+            filter_type,
+            (from_email or "").strip().lower() or "(sin remitente)",
+        )
         while True:
             params = dict(params_base)
             if page_token:

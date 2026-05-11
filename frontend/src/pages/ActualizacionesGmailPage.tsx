@@ -17,6 +17,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import {
+  AlertTriangle,
   CheckCircle2,
   Loader2,
   Mail,
@@ -24,6 +25,7 @@ import {
   RefreshCw,
   Save,
   Search,
+  TestTube,
   Trash2,
   X,
 } from 'lucide-react'
@@ -41,6 +43,7 @@ import {
 import { Input } from '../components/ui/input'
 import {
   pagoService,
+  type GmailPreviewItemUI,
   type GmailSyncItemUI,
 } from '../services/pagoService'
 import { useGmailPipeline } from '../hooks/useGmailPipeline'
@@ -83,6 +86,16 @@ function filaInicialDesdeItem(item: GmailSyncItemUI): FilaEnEdicion {
   }
 }
 
+interface DiagnosticoGmail {
+  correo: string
+  total: number
+  conMedia: number
+  yaProcesados: number
+  hayMasEnGmail: boolean
+  items: GmailPreviewItemUI[]
+  mensaje?: string
+}
+
 export default function ActualizacionesGmailPage() {
   const queryClient = useQueryClient()
   const [correoInput, setCorreoInput] = useState('')
@@ -91,6 +104,8 @@ export default function ActualizacionesGmailPage() {
   const [paginaTabla, setPaginaTabla] = useState(1)
   const [editandoId, setEditandoId] = useState<number | null>(null)
   const [edicion, setEdicion] = useState<FilaEnEdicion | null>(null)
+  const [diagnostico, setDiagnostico] = useState<DiagnosticoGmail | null>(null)
+  const [probandoGmail, setProbandoGmail] = useState(false)
 
   const offsetTabla = (paginaTabla - 1) * PAGE_SIZE
   const tabla = useQuery({
@@ -130,10 +145,54 @@ export default function ActualizacionesGmailPage() {
     await run('manual_redigitaliza_por_remitente', email, maxMessages)
   }, [correoInput, maxMessages, run])
 
+  const handleProbarGmail = useCallback(async () => {
+    const email = correoInput.trim().toLowerCase()
+    if (!email || !email.includes('@')) {
+      toast.error('Indica un correo valido (ej. cliente@dominio.com).')
+      return
+    }
+    setProbandoGmail(true)
+    setDiagnostico(null)
+    try {
+      const res = await pagoService.previewGmailRemitente(email, {
+        maxResults: Math.max(20, Math.min(maxMessages, 100)),
+      })
+      const items = res.items || []
+      const conMedia = items.filter(it => it.tiene_media).length
+      const yaProcesados = items.filter(it => it.ya_procesado_en_bd).length
+      setDiagnostico({
+        correo: email,
+        total: res.total ?? items.length,
+        conMedia,
+        yaProcesados,
+        hayMasEnGmail: !!res.hay_mas_en_gmail,
+        items,
+        mensaje: res.mensaje,
+      })
+      if ((res.total ?? items.length) === 0) {
+        toast(
+          `Gmail no encontro correos para "${email}" con el criterio (in:inbox + imagen/PDF). ` +
+            'Verifica que la cuenta Gmail conectada al sistema sea la correcta, ' +
+            'que el correo este bien escrito y que los mensajes esten en bandeja (no archivados).',
+          { duration: 9000 }
+        )
+      } else {
+        toast.success(
+          `Gmail encontro ${res.total ?? items.length} correo(s) del remitente; ${conMedia} con adjunto imagen/PDF.`
+        )
+      }
+    } catch (e) {
+      toast.error(getErrorMessage(e) || 'No se pudo probar Gmail')
+    } finally {
+      setProbandoGmail(false)
+    }
+  }, [correoInput, maxMessages])
+
   const handleLimpiar = useCallback(() => {
     setCorreoInput('')
     setCorreoActivo('')
     setPaginaTabla(1)
+    setDiagnostico(null)
   }, [])
 
   const guardarMutation = useMutation({
@@ -308,6 +367,22 @@ export default function ActualizacionesGmailPage() {
               <Button
                 type="button"
                 variant="outline"
+                onClick={() => void handleProbarGmail()}
+                disabled={
+                  probandoGmail || ejecutandoPipeline || !correoInput.trim()
+                }
+                title="Solo cuenta y lista (sin escanear con Gemini) lo que Gmail encuentra con la misma query. Util para diagnostico cuando 'Buscar y procesar' devuelve 0 resultados."
+              >
+                {probandoGmail ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <TestTube className="mr-2 h-4 w-4" />
+                )}
+                Probar Gmail
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
                 onClick={() => void tabla.refetch()}
                 disabled={!correoActivo || tabla.isFetching}
                 title="Refrescar tabla de resultados"
@@ -333,7 +408,113 @@ export default function ActualizacionesGmailPage() {
             pipeline vigente. Asi no se gasta Gemini en la bandeja completa
             (~6000 correos), solo en los del remitente (tipicamente ~20). El
             tope absoluto por corrida es 10000.
+            <br />
+            Si <strong>Buscar y procesar</strong> reporta 0 correos pero en Gmail si
+            hay, pulsa <strong>Probar Gmail</strong> para ver que encuentra la
+            query (sin gastar Gemini).
           </div>
+          {diagnostico ? (
+            <div
+              className={
+                'rounded-md border p-3 text-xs ' +
+                (diagnostico.total === 0
+                  ? 'border-amber-300 bg-amber-50 text-amber-900'
+                  : 'border-emerald-300 bg-emerald-50 text-emerald-900')
+              }
+            >
+              <div className="flex items-center gap-2 font-medium">
+                {diagnostico.total === 0 ? (
+                  <AlertTriangle className="h-4 w-4" />
+                ) : (
+                  <CheckCircle2 className="h-4 w-4" />
+                )}
+                Diagnostico Gmail para <code>{diagnostico.correo}</code>
+              </div>
+              <ul className="mt-2 list-disc pl-5">
+                <li>
+                  Correos del remitente listados por Gmail (criterio inbox +
+                  imagen/PDF): <strong>{diagnostico.total}</strong>
+                </li>
+                <li>
+                  Con adjunto imagen/PDF detectado:{' '}
+                  <strong>{diagnostico.conMedia}</strong>
+                </li>
+                <li>
+                  Ya procesados antes en BD (mismo gmail_message_id):{' '}
+                  <strong>{diagnostico.yaProcesados}</strong>
+                </li>
+                {diagnostico.hayMasEnGmail ? (
+                  <li>
+                    Hay <strong>mas correos</strong> del remitente en Gmail mas
+                    alla del tope &laquo;Hasta&raquo;. Sube el selector para
+                    cubrirlos.
+                  </li>
+                ) : null}
+              </ul>
+              {diagnostico.total === 0 ? (
+                <div className="mt-2">
+                  <strong>Posibles causas:</strong>
+                  <ul className="mt-1 list-disc pl-5">
+                    <li>
+                      La cuenta Gmail conectada al sistema no es la que ve esos
+                      correos (cuenta empresarial vs personal).
+                    </li>
+                    <li>
+                      El correo esta mal escrito (revisa mayusculas/dominio).
+                    </li>
+                    <li>
+                      Los mensajes estan archivados o en otra carpeta (no
+                      cumplen <code>in:inbox</code>).
+                    </li>
+                    <li>
+                      Los comprobantes vienen como imagenes inline sin filename
+                      estandar y Gmail no los considera adjunto. Reporta este
+                      caso.
+                    </li>
+                  </ul>
+                </div>
+              ) : null}
+              {diagnostico.items.length > 0 ? (
+                <div className="mt-3 overflow-x-auto rounded border bg-white">
+                  <table className="w-full text-xs">
+                    <thead className="bg-muted/30 text-left text-[10px] uppercase tracking-wide text-muted-foreground">
+                      <tr>
+                        <th className="px-2 py-1">Fecha</th>
+                        <th className="px-2 py-1">Asunto</th>
+                        <th className="px-2 py-1">Adjunto</th>
+                        <th className="px-2 py-1">Etiquetas</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {diagnostico.items.slice(0, 20).map(it => (
+                        <tr key={it.gmail_message_id} className="border-t">
+                          <td className="px-2 py-1 tabular-nums">
+                            {it.fecha_iso
+                              ? new Date(it.fecha_iso).toLocaleString()
+                              : '-'}
+                          </td>
+                          <td
+                            className="max-w-[20rem] truncate px-2 py-1"
+                            title={it.asunto}
+                          >
+                            {it.asunto || '(sin asunto)'}
+                          </td>
+                          <td className="px-2 py-1">
+                            {it.tiene_media ? 'Si' : 'No'}
+                          </td>
+                          <td className="px-2 py-1">
+                            {it.etiquetas_usuario.length === 0
+                              ? '-'
+                              : it.etiquetas_usuario.join(', ')}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
         </CardHeader>
       </Card>
 
