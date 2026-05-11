@@ -371,6 +371,8 @@ def run_pipeline(
     existing_sync_id: Optional[int] = None,
     scan_filter: str = "all",
     from_email: Optional[str] = None,
+    only_message_ids: Optional[list[str]] = None,
+    max_messages: Optional[int] = None,
 ) -> tuple[Optional[int], str]:
     """
     Ejecuta el pipeline Gmail -> Gemini -> BD (comprobante en pago_comprobante_imagen; sin subidas a Drive).
@@ -398,11 +400,26 @@ def run_pipeline(
     # Modo manual por remitente: el endpoint valida que from_email exista; aquí solo normalizamos.
     redig_por_remitente = (scan_filter or "").strip().lower() == "manual_redigitaliza_por_remitente"
     from_email_lc: Optional[str] = (from_email or "").strip().lower() or None
+    # Modo "selección": el caller pasa una lista explícita de gmail_message_id a procesar.
+    # En ese caso saltamos messages.list (no recorremos toda la bandeja) y procesamos solo esos IDs.
+    only_ids_set: Optional[frozenset[str]] = (
+        frozenset(only_message_ids) if only_message_ids else None
+    )
+    # Modo "tope": acota cuantos mensajes listados se procesan en esta corrida (head, mas reciente primero).
+    # Aplica solo cuando no se pasan only_message_ids (esos ya vienen acotados por el caller).
+    try:
+        max_messages_int: Optional[int] = (
+            int(max_messages) if max_messages is not None and int(max_messages) > 0 else None
+        )
+    except (TypeError, ValueError):
+        max_messages_int = None
     logger.info(
-        "[PAGOS_GMAIL] INICIO pipeline (existing_sync_id=%s, scan_filter=%s, from_email=%s)",
+        "[PAGOS_GMAIL] INICIO pipeline (existing_sync_id=%s, scan_filter=%s, from_email=%s, only_message_ids=%s, max_messages=%s)",
         existing_sync_id,
         scan_filter,
         from_email_lc or "(sin filtro remitente)",
+        len(only_ids_set) if only_ids_set is not None else 0,
+        max_messages_int if max_messages_int is not None else "(sin tope)",
     )
     creds = get_pagos_gmail_credentials()
     if not creds:
@@ -490,9 +507,50 @@ def run_pipeline(
         )
 
         def fetch_sorted_batch() -> list[dict]:
-            raw_messages = list_messages_by_filter(
-                gmail_svc, scan_filter, from_email=from_email_lc
-            )
+            if only_ids_set:
+                # Modo selección: no llamamos a messages.list. Construimos msg_info equivalentes
+                # con batch_get_messages_metadata (cabeceras + labelIds + internalDate).
+                from app.services.pagos_gmail.gmail_service import batch_get_messages_metadata
+                meta_by_id = batch_get_messages_metadata(
+                    gmail_svc, list(only_ids_set), metadata_headers=["From", "Date", "Subject"]
+                )
+                raw_messages = []
+                for mid in only_ids_set:
+                    meta = meta_by_id.get(mid)
+                    if not meta:
+                        logger.warning(
+                            "[PAGOS_GMAIL] only_message_ids: sin metadata para msg id=%s (omitido)",
+                            mid,
+                        )
+                        continue
+                    payload = meta.get("payload", {})
+                    headers = {h["name"].lower(): h["value"] for h in payload.get("headers", [])}
+                    try:
+                        internal_date_ms = int(meta.get("internalDate") or 0)
+                    except (TypeError, ValueError):
+                        internal_date_ms = 0
+                    label_ids = list(meta.get("labelIds") or [])
+                    _tid_raw = (meta.get("threadId") or "").strip()
+                    thread_id = _tid_raw[:100] if _tid_raw else None
+                    raw_messages.append(
+                        {
+                            "id": mid,
+                            "thread_id": thread_id,
+                            "payload": payload,
+                            "headers": headers,
+                            "internal_date_ms": internal_date_ms,
+                            "label_ids": label_ids,
+                        }
+                    )
+                logger.info(
+                    "[PAGOS_GMAIL] only_message_ids: %d/%d mensajes resueltos por metadata",
+                    len(raw_messages),
+                    len(only_ids_set),
+                )
+            else:
+                raw_messages = list_messages_by_filter(
+                    gmail_svc, scan_filter, from_email=from_email_lc
+                )
             messages = _dedupe_messages_pagos_gmail(raw_messages)
             if len(messages) < len(raw_messages):
                 logger.info(
@@ -501,6 +559,14 @@ def run_pipeline(
                     len(messages),
                 )
             ordered = _sort_messages_inbox_primero_a_ultimo(messages)
+            if max_messages_int is not None and len(ordered) > max_messages_int and not only_ids_set:
+                logger.info(
+                    "[PAGOS_GMAIL] Tope max_messages=%d aplicado: %d -> %d mensajes (head, mas reciente primero)",
+                    max_messages_int,
+                    len(ordered),
+                    max_messages_int,
+                )
+                ordered = ordered[:max_messages_int]
             logger.info(
                 "[PAGOS_GMAIL] Correos (filtro=%s): %d — listado Gmail completo (paginas hasta sin nextPageToken); "
                 "orden bandeja: mas reciente primero -> mas antiguo ultimo (internalDate; si no, cabecera Date). "
@@ -591,16 +657,20 @@ def run_pipeline(
                 sender_lc = (sender or "").strip().lower()
 
                 # Bypass selectivo del skip por etiquetas:
-                # - scan_filter == manual_redigitaliza_por_remitente
-                # - from_email_lc presente y coincide con el remitente del mensaje
-                # En ese caso, retiramos las etiquetas finales del set permitido (A/B/C/D/E/F,
-                # MANUAL, TEXTO, ERROR EMAIL) presentes en el mensaje, para que la nueva pasada
-                # pueda re-clasificar y aplicar una etiqueta final coherente. La regla global
-                # de "skip por etiqueta de usuario" se mantiene para todos los demás modos.
+                # - scan_filter == manual_redigitaliza_por_remitente y remitente coincide con from_email_lc, o
+                # - el caller pasó una lista explícita de IDs (only_ids_set) que incluye este mensaje:
+                #   el endpoint ya validó remitente/origen, el usuario marcó esta fila a propósito.
+                # En esos casos retiramos del mensaje las etiquetas finales del set permitido
+                # (A/B/C/D/E/F, MANUAL, TEXTO, ERROR EMAIL) para que la pasada pueda re-clasificar
+                # y dejar una etiqueta final única coherente. La regla global de "skip por etiqueta
+                # de usuario" se mantiene para todos los demás modos.
                 _bypass_etiquetas_remitente = (
-                    redig_por_remitente
-                    and from_email_lc is not None
-                    and sender_lc == from_email_lc
+                    (
+                        redig_por_remitente
+                        and from_email_lc is not None
+                        and sender_lc == from_email_lc
+                    )
+                    or (only_ids_set is not None and msg_id in only_ids_set)
                 )
                 if _bypass_etiquetas_remitente and _labels_catalog_ok and _user_on_msg:
                     _ids_a_quitar = [

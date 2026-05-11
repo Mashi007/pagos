@@ -92,14 +92,18 @@ def _run_pipeline_background(
     sync_id: int,
     scan_filter: str = "all",
     from_email: Optional[str] = None,
+    only_message_ids: Optional[list[str]] = None,
+    max_messages: Optional[int] = None,
 ) -> None:
     """Ejecuta el pipeline en background con su propia sesión de BD (evita el timeout de 30s de Render/Axios)."""
     db = SessionLocal()
     logger.info(
-        "[PAGOS_GMAIL] [ETAPA] Inicio pipeline background sync_id=%s scan_filter=%s from_email=%s",
+        "[PAGOS_GMAIL] [ETAPA] Inicio pipeline background sync_id=%s scan_filter=%s from_email=%s only_ids=%d max_messages=%s",
         sync_id,
         scan_filter,
         from_email or "(sin remitente)",
+        len(only_message_ids) if only_message_ids else 0,
+        max_messages if max_messages is not None else "(sin tope)",
     )
     try:
         _, final_status = run_pipeline(
@@ -107,6 +111,8 @@ def _run_pipeline_background(
             existing_sync_id=sync_id,
             scan_filter=scan_filter,
             from_email=from_email,
+            only_message_ids=only_message_ids,
+            max_messages=max_messages,
         )
         if final_status == "success":
             mig = _migrar_pendientes_gmail_a_con_errores_core(db)
@@ -205,6 +211,17 @@ def run_now(
         description="Solo modo manual_redigitaliza_por_remitente: re-escanea correos con from:<email> "
         "saltando la omisión por etiqueta de usuario únicamente para ese remitente.",
     ),
+    max_messages: Optional[int] = Query(
+        None,
+        ge=1,
+        le=10000,
+        description=(
+            "Tope de mensajes a procesar en esta corrida (head, mas reciente primero). "
+            "Solo aplica cuando el listado proviene de messages.list (no aplica si se usa "
+            "/procesar-mensajes con IDs explícitos). Si se omite, procesa todo lo que liste Gmail. "
+            "Maximo absoluto: 10000."
+        ),
+    ),
     db: Session = Depends(get_db),
 ):
     """
@@ -268,7 +285,7 @@ def run_now(
     sync_id = sync.id
     # Lanzar pipeline en segundo plano; el cliente hace polling a /status
     background_tasks.add_task(
-        _run_pipeline_background, sync_id, scan_filter, from_email_norm
+        _run_pipeline_background, sync_id, scan_filter, from_email_norm, None, max_messages
     )
     return {
         "sync_id": sync_id,
@@ -277,6 +294,7 @@ def run_now(
         "files_processed": 0,
         "scan_filter": scan_filter,
         "from_email": from_email_norm,
+        "max_messages": max_messages,
     }
 
 
@@ -1735,4 +1753,370 @@ def eliminar_sync_item(item_id: int, db: Session = Depends(get_db)):
         "ok": True,
         "sync_item_eliminado": item_id,
         "gmail_temporal_eliminados": eliminados_temporal,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Preview (paso 1) y procesar-selección (paso 2) para módulo Actualizaciones > Gmail
+# ---------------------------------------------------------------------------
+
+
+# Preview UI: por defecto se muestran los 20 más recientes; cota dura del listado Gmail = 10000.
+_GMAIL_PREVIEW_DEFAULT_RESULTS = 20
+_GMAIL_PREVIEW_HARD_CAP = 10000
+# Procesar (Gemini) por corrida: por defecto 20, tope 500 para no saturar Gemini ni el lock 2 h.
+_GMAIL_PROCESAR_DEFAULT_RESULTS = 20
+_GMAIL_PROCESAR_HARD_CAP = 500
+
+
+def _gmail_user_label_names_for_message(
+    user_label_names_by_id: dict[str, str],
+    msg_label_ids: list[str],
+) -> list[str]:
+    """Devuelve los nombres de etiquetas de usuario presentes en el mensaje (orden alfabético)."""
+    out = []
+    for lid in msg_label_ids:
+        nm = user_label_names_by_id.get(lid)
+        if nm:
+            out.append(nm)
+    return sorted(set(out))
+
+
+@router.get("/preview-remitente")
+def preview_remitente(
+    correo: str = Query(..., description="Remitente exacto a previsualizar (case-insensitive)."),
+    max_results: int = Query(
+        _GMAIL_PREVIEW_DEFAULT_RESULTS,
+        ge=1,
+        le=_GMAIL_PREVIEW_HARD_CAP,
+        description=(
+            "Cuántos mensajes traer al preview (default 20; máximo absoluto 10000). "
+            "Gmail siempre filtra por from:<correo> + criterio media; este parámetro acota "
+            "cuántos vienen al UI, no qué se escanea (Gemini solo procesa los marcados)."
+        ),
+    ),
+    db: Session = Depends(get_db),
+):
+    """
+    Paso 1 del flujo "re-escaneo selectivo":
+    Lista los correos en bandeja que cumplen `from:<correo> + criterio media` SIN escanear
+    con Gemini ni descargar binarios. Cruza con `pagos_gmail_sync_item` para indicar cuáles
+    ya fueron procesados previamente.
+
+    Coste: una `messages.list` paginada + un `messages.get(format=full)` por mensaje (5 units
+    cada uno). No invoca Gemini. Devuelve los datos mínimos para que la UI muestre la lista
+    con checkboxes.
+    """
+    correo_lc = _validate_from_email(correo)
+    if not correo_lc:
+        raise HTTPException(
+            status_code=400,
+            detail="Indica un correo válido (ej. cliente@dominio.com).",
+        )
+
+    creds = get_pagos_gmail_credentials()
+    if not creds:
+        log_pagos_gmail_config_status()
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Credenciales OAuth inválidas. Vaya a Configuración > Informe de pagos, "
+                "reconecte la cuenta Gmail y reintente."
+            ),
+        )
+
+    from app.services.pagos_gmail.gmail_service import (
+        build_gmail_service,
+        batch_get_messages_full,
+        list_gmail_user_label_ids,
+        pagos_gmail_list_query_for_scan_filter,
+        payload_has_media_candidate,
+    )
+
+    gmail_svc = build_gmail_service(creds)
+    q = pagos_gmail_list_query_for_scan_filter(
+        "manual_redigitaliza_por_remitente", correo_lc
+    )
+
+    # Listar IDs del remitente acotado a max_results. Gmail acepta hasta 500 por página;
+    # usamos pageSize ajustado para no traer más de lo necesario y ahorrar cuota.
+    all_ids: list[str] = []
+    page_token: Optional[str] = None
+    hay_mas_en_gmail = False
+    while True:
+        restantes = max_results - len(all_ids)
+        if restantes <= 0:
+            break
+        page_size = min(500, max(1, restantes))
+        params: dict = {
+            "userId": "me",
+            "maxResults": page_size,
+            "includeSpamTrash": False,
+            "q": q,
+        }
+        if page_token:
+            params["pageToken"] = page_token
+        try:
+            result = gmail_svc.users().messages().list(**params).execute()
+        except Exception as e:
+            logger.exception("[PAGOS_GMAIL] preview-remitente list error: %s", e)
+            raise HTTPException(
+                status_code=502,
+                detail=f"Error listando Gmail: {str(e)[:300]}",
+            ) from e
+        for m in result.get("messages", []):
+            all_ids.append(m["id"])
+            if len(all_ids) >= max_results:
+                break
+        page_token = result.get("nextPageToken")
+        if not page_token:
+            break
+        if len(all_ids) >= max_results:
+            # Quedaron correos sin traer porque alcanzamos el tope max_results.
+            hay_mas_en_gmail = True
+            break
+
+    if not all_ids:
+        return {
+            "correo": correo_lc,
+            "total": 0,
+            "items": [],
+            "max_results": max_results,
+            "hard_cap_preview": _GMAIL_PREVIEW_HARD_CAP,
+            "procesar_hard_cap": _GMAIL_PROCESAR_HARD_CAP,
+            "hay_mas_en_gmail": False,
+            "mensaje": "No hay correos en bandeja para ese remitente que cumplan el criterio (imagen/PDF).",
+        }
+
+    # Obtener payload completo en batch (5 units por mensaje en cuota Gmail).
+    try:
+        meta_by_id = batch_get_messages_full(gmail_svc, all_ids)
+    except Exception as e:
+        logger.exception("[PAGOS_GMAIL] preview-remitente batch error: %s", e)
+        raise HTTPException(
+            status_code=502,
+            detail=f"Error leyendo Gmail: {str(e)[:300]}",
+        ) from e
+
+    user_label_ids_set, user_label_names_by_id, _labels_ok = list_gmail_user_label_ids(gmail_svc)
+
+    # Cruce con BD: marcar mensajes ya procesados (existe sync_item con su gmail_message_id).
+    ids_ya_procesados: set[str] = set(
+        db.execute(
+            select(PagosGmailSyncItem.gmail_message_id)
+            .where(PagosGmailSyncItem.gmail_message_id.in_(all_ids))
+        ).scalars().all()
+        or []
+    )
+
+    items: list[dict] = []
+    sender_no_match: int = 0
+    sin_media: int = 0
+
+    for mid in all_ids:
+        meta = meta_by_id.get(mid)
+        if not meta:
+            continue
+        payload = meta.get("payload", {}) or {}
+        headers = {(h.get("name") or "").lower(): h.get("value") or "" for h in payload.get("headers", [])}
+        from_h = headers.get("from") or ""
+        from_email_real = (extract_sender_email_safe(from_h) or "").strip().lower()
+        # Defensa extra: aunque Gmail filtre por from:, validamos coincidencia exacta.
+        if from_email_real != correo_lc:
+            sender_no_match += 1
+            continue
+        subject = (headers.get("subject") or "").strip()
+        try:
+            internal_date_ms = int(meta.get("internalDate") or 0)
+        except (TypeError, ValueError):
+            internal_date_ms = 0
+        fecha_iso: Optional[str] = None
+        if internal_date_ms > 0:
+            try:
+                fecha_iso = (
+                    datetime.utcfromtimestamp(internal_date_ms / 1000.0)
+                    .replace(microsecond=0)
+                    .isoformat() + "Z"
+                )
+            except Exception:
+                fecha_iso = None
+        snippet = (meta.get("snippet") or "").strip()
+        label_ids = list(meta.get("labelIds") or [])
+        etiquetas_usuario = _gmail_user_label_names_for_message(
+            user_label_names_by_id, label_ids
+        )
+        tiene_media = payload_has_media_candidate(payload)
+        if not tiene_media:
+            sin_media += 1
+        thread_id = (meta.get("threadId") or "").strip()
+        items.append(
+            {
+                "gmail_message_id": mid,
+                "gmail_thread_id": thread_id or None,
+                "fecha_iso": fecha_iso,
+                "asunto": subject[:300],
+                "snippet": snippet[:300],
+                "etiquetas_usuario": etiquetas_usuario,
+                "tiene_media": tiene_media,
+                "ya_procesado_en_bd": mid in ids_ya_procesados,
+                "gmail_url": (
+                    f"https://mail.google.com/mail/u/0/#inbox/{thread_id}"
+                    if thread_id
+                    else None
+                ),
+            }
+        )
+
+    # Orden: más reciente primero (mismo criterio que el pipeline).
+    items.sort(key=lambda x: x.get("fecha_iso") or "", reverse=True)
+
+    return {
+        "correo": correo_lc,
+        "total": len(items),
+        "items": items,
+        "ids_total_listados_gmail": len(all_ids),
+        "hay_mas_en_gmail": hay_mas_en_gmail,
+        "max_results": max_results,
+        "hard_cap_preview": _GMAIL_PREVIEW_HARD_CAP,
+        "procesar_hard_cap": _GMAIL_PROCESAR_HARD_CAP,
+        "ids_remitente_no_coincide": sender_no_match,
+        "ids_sin_media": sin_media,
+        "labels_catalog_ok": _labels_ok,
+    }
+
+
+def extract_sender_email_safe(from_h: str) -> Optional[str]:
+    """Wrapper que evita importar la helper dentro del endpoint cada vez."""
+    from app.services.pagos_gmail.helpers import extract_sender_email
+    try:
+        return extract_sender_email(from_h or "")
+    except Exception:
+        return None
+
+
+class GmailProcesarMensajesBody(BaseModel):
+    correo: str
+    mensajes_ids: list[str]
+
+
+@router.post("/procesar-mensajes")
+def procesar_mensajes(
+    background_tasks: BackgroundTasks,
+    payload: GmailProcesarMensajesBody = Body(...),
+    db: Session = Depends(get_db),
+):
+    """
+    Paso 2 del flujo "re-escaneo selectivo":
+    Lanza el pipeline acotado a los `mensajes_ids` indicados (todos del remitente `correo`).
+    El pipeline NO llama a `messages.list`: procesa exactamente esos IDs con todo el flujo
+    vigente (Gemini -> plantillas A-F -> BD -> cascada de cuotas -> etiqueta final).
+
+    Reusa la misma cola/lock global de 2 h y devuelve `sync_id` para que la UI haga polling
+    a `/pagos/gmail/status`.
+    """
+    correo_lc = _validate_from_email(payload.correo)
+    if not correo_lc:
+        raise HTTPException(
+            status_code=400,
+            detail="Indica un correo válido (ej. cliente@dominio.com).",
+        )
+    ids = [str(m).strip() for m in (payload.mensajes_ids or []) if str(m).strip()]
+    if not ids:
+        raise HTTPException(
+            status_code=400,
+            detail="Indica al menos un gmail_message_id en 'mensajes_ids'.",
+        )
+    if len(ids) > _GMAIL_PROCESAR_HARD_CAP:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Demasiados mensajes en una sola corrida (máx {_GMAIL_PROCESAR_HARD_CAP}). "
+                "Divide la selección en varias pasadas."
+            ),
+        )
+
+    blocking = _get_blocking_running_sync(db)
+    if blocking is not None:
+        started = blocking.started_at.isoformat() if blocking.started_at else "?"
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Ya hay una sincronización en curso (sync_id={blocking.id}, iniciada={started}). "
+                "Espere a que termine."
+            ),
+        )
+
+    creds = get_pagos_gmail_credentials()
+    if not creds:
+        log_pagos_gmail_config_status()
+        raise HTTPException(
+            status_code=503,
+            detail="Credenciales OAuth inválidas. Reconecte la cuenta Gmail y reintente.",
+        )
+
+    # Defensa: validamos que cada ID corresponde realmente al remitente indicado.
+    from app.services.pagos_gmail.gmail_service import (
+        build_gmail_service,
+        batch_get_messages_metadata,
+    )
+    gmail_svc = build_gmail_service(creds)
+    try:
+        meta_by_id = batch_get_messages_metadata(
+            gmail_svc, ids, metadata_headers=["From"]
+        )
+    except Exception as e:
+        logger.exception("[PAGOS_GMAIL] procesar-mensajes metadata error: %s", e)
+        raise HTTPException(
+            status_code=502, detail=f"Error verificando Gmail: {str(e)[:300]}"
+        ) from e
+
+    ids_validos: list[str] = []
+    ids_remitente_distinto: list[str] = []
+    ids_inexistentes: list[str] = []
+    for mid in ids:
+        meta = meta_by_id.get(mid)
+        if not meta:
+            ids_inexistentes.append(mid)
+            continue
+        payload_meta = meta.get("payload", {}) or {}
+        headers = {(h.get("name") or "").lower(): h.get("value") or "" for h in payload_meta.get("headers", [])}
+        from_h = headers.get("from") or ""
+        from_real = (extract_sender_email_safe(from_h) or "").strip().lower()
+        if from_real != correo_lc:
+            ids_remitente_distinto.append(mid)
+            continue
+        ids_validos.append(mid)
+
+    if not ids_validos:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Ninguno de los IDs indicados corresponde al remitente '"
+                + correo_lc
+                + f"'. inexistentes={len(ids_inexistentes)}, otro_remitente={len(ids_remitente_distinto)}"
+            ),
+        )
+
+    # Crear sync_id de inmediato (evita doble click).
+    sync = PagosGmailSync(status="running", emails_processed=0, files_processed=0)
+    db.add(sync)
+    db.commit()
+    db.refresh(sync)
+    sync_id = sync.id
+
+    background_tasks.add_task(
+        _run_pipeline_background,
+        sync_id,
+        "manual_redigitaliza_por_remitente",
+        correo_lc,
+        ids_validos,
+    )
+    return {
+        "sync_id": sync_id,
+        "status": "running",
+        "scan_filter": "manual_redigitaliza_por_remitente",
+        "from_email": correo_lc,
+        "mensajes_a_procesar": len(ids_validos),
+        "ids_remitente_distinto": ids_remitente_distinto,
+        "ids_inexistentes": ids_inexistentes,
     }

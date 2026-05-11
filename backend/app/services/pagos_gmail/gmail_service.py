@@ -158,6 +158,108 @@ def batch_get_messages_metadata(
     return out
 
 
+def batch_get_messages_full(
+    service: Any,
+    message_ids: List[str],
+) -> Dict[str, dict]:
+    """
+    Como ``batch_get_messages_metadata`` pero en ``format=full``: devuelve payload completo
+    (parts con mimeType/filename, snippet, labelIds, internalDate). No descarga binarios de
+    adjuntos: para eso ``users.messages.attachments.get`` es una llamada aparte.
+
+    Útil para previsualización en UI (decidir qué mensajes escanear) sin gastar Gemini ni
+    descargar binarios. Costo en cuota Gmail por mensaje = 5 units (igual que metadata).
+    """
+    from googleapiclient.errors import HttpError
+
+    out: Dict[str, dict] = {}
+    if not message_ids:
+        return out
+
+    def _single_get(mid: str) -> None:
+        max_attempts = 6
+        for attempt in range(max_attempts):
+            try:
+                meta = service.users().messages().get(
+                    userId="me",
+                    id=mid,
+                    format="full",
+                ).execute()
+                out[mid] = meta
+                return
+            except HttpError as ex:
+                if ex.resp.status == 429 and attempt < max_attempts - 1:
+                    wait = _parse_gmail_retry_after_seconds(ex)
+                    if wait is None or wait <= 0 or wait > _GMAIL_429_MAX_WAIT_SECONDS:
+                        wait = min(8.0, 0.35 * (2**attempt))
+                    time.sleep(min(float(wait), 12.0))
+                    continue
+                logger.warning("batch_get_messages_full get individual msg=%s: %s", mid, ex)
+                return
+            except Exception as ex:
+                logger.warning("batch_get_messages_full get individual msg=%s: %s", mid, ex)
+                return
+
+    def _batch_callback(mid: str):
+        def _cb(request_id: str, response: Optional[dict], exception: Optional[BaseException]) -> None:
+            rid = request_id or mid
+            if exception is not None:
+                logger.warning("batch_get_messages_full batch msg=%s: %s", rid, exception)
+                _single_get(mid)
+            elif response is not None:
+                out[mid] = response
+            else:
+                _single_get(mid)
+
+        return _cb
+
+    chunk_sz = _gmail_metadata_batch_chunk_size()
+    sleep_between = _gmail_metadata_inter_chunk_sleep_sec()
+    for i in range(0, len(message_ids), chunk_sz):
+        chunk = message_ids[i : i + chunk_sz]
+        batch = service.new_batch_http_request()
+        for mid in chunk:
+            req = service.users().messages().get(userId="me", id=mid, format="full")
+            batch.add(req, callback=_batch_callback(mid), request_id=mid)
+        try:
+            batch.execute()
+        except Exception as ex:
+            logger.warning("batch_get_messages_full execute chunk: %s", ex)
+        for mid in chunk:
+            if mid not in out:
+                _single_get(mid)
+        if sleep_between > 0.0 and (i + chunk_sz) < len(message_ids):
+            time.sleep(sleep_between)
+    return out
+
+
+def _payload_iter_parts(payload: Optional[dict]):
+    """Itera todas las partes (recursivamente) de un payload Gmail format=full."""
+    if not payload:
+        return
+    yield payload
+    for sub in payload.get("parts", []) or []:
+        yield from _payload_iter_parts(sub)
+
+
+def payload_has_media_candidate(payload: Optional[dict]) -> bool:
+    """
+    True si el payload (format=full) tiene al menos una parte candidata imagen/PDF:
+    - mimeType en MIME_IMAGE_OR_PDF, o
+    - filename con extensión permitida (is_allowed_attachment).
+
+    No descarga el binario; solo lee parts.mimeType/filename. Usado para preview UI.
+    """
+    for part in _payload_iter_parts(payload):
+        mt = (part.get("mimeType") or "").lower()
+        if mt in MIME_IMAGE_OR_PDF:
+            return True
+        fname = part.get("filename") or ""
+        if fname and is_allowed_attachment(fname):
+            return True
+    return False
+
+
 class PagosGmailGmailListError(RuntimeError):
     """
     Fallo al listar o enriquecer metadatos desde la API de Gmail.

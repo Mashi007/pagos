@@ -538,7 +538,8 @@ export function useGmailPipeline({
   const run = useCallback(
     async (
       scanFilter?: GmailScanFilter,
-      fromEmail?: string | null
+      fromEmail?: string | null,
+      maxMessages?: number | null
     ) => {
       if (loading) return
 
@@ -553,7 +554,12 @@ export function useGmailPipeline({
       toast('Procesando correos en segundo plano...', { duration: 4000 })
 
       try {
-        await pagoService.runGmailNow(true, scanFilter, fromEmail ?? null)
+        await pagoService.runGmailNow(
+          true,
+          scanFilter,
+          fromEmail ?? null,
+          maxMessages ?? null
+        )
 
         // El endpoint devuelve inmediatamente (status="running"); hacer polling
 
@@ -578,11 +584,31 @@ export function useGmailPipeline({
       .catch(() => {})
   }, [onStatusUpdate])
 
+  /**
+   * Sólo arranca el polling a /status (sin lanzar otro pipeline).
+   * Útil cuando otro endpoint ya creó el sync_id (p. ej. /pagos/gmail/procesar-mensajes
+   * en el módulo Actualizaciones > Gmail). Igualmente respeta el lock global de 2 h:
+   * si el backend ya estaba en estado "running", el polling termina en el primer
+   * tic con last_status != "running".
+   */
+  const startPolling = useCallback(
+    (scanFilter?: GmailScanFilter) => {
+      if (loading) return
+      abortedRef.current = false
+      fetchErrorStreakRef.current = 0
+      setLoading(true)
+      lastScanFilterRef.current = scanFilter ?? 'all'
+      _pollStatus(0)
+    },
+    [loading, _pollStatus]
+  )
+
   return {
     loading,
     gmailStatus,
     setGmailStatus,
     run,
+    startPolling,
     stopPolling,
     refreshStatus,
   }

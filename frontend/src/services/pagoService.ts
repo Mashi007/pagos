@@ -110,6 +110,23 @@ export interface ApiResponse<T> {
 }
 
 /**
+ * Item del preview Gmail (paso 1 del módulo Actualizaciones > Gmail).
+ * Espejo del JSON que devuelve GET /api/v1/pagos/gmail/preview-remitente.
+ * NO incluye datos extraídos por Gemini (solo metadata Gmail + cruce BD).
+ */
+export interface GmailPreviewItemUI {
+  gmail_message_id: string
+  gmail_thread_id: string | null
+  fecha_iso: string | null
+  asunto: string
+  snippet: string
+  etiquetas_usuario: string[]
+  tiene_media: boolean
+  ya_procesado_en_bd: boolean
+  gmail_url: string | null
+}
+
+/**
  * Fila de la tabla del módulo Actualizaciones > Gmail.
  * Espejo del JSON que devuelve GET /api/v1/pagos/gmail/sync-items.
  */
@@ -1030,7 +1047,8 @@ class PagoService {
       | 'pending_identification'
       | 'error_email_rescan'
       | 'manual_redigitaliza_por_remitente',
-    fromEmail?: string | null
+    fromEmail?: string | null,
+    maxMessages?: number | null
   ): Promise<{
     sync_id: number | null
     status: string
@@ -1038,6 +1056,7 @@ class PagoService {
     files_processed?: number
     scan_filter?: string
     from_email?: string | null
+    max_messages?: number | null
   }> {
     const params = new URLSearchParams({ force: String(force) })
 
@@ -1058,10 +1077,64 @@ class PagoService {
     if (emailTrim) {
       params.set('from_email', emailTrim)
     }
+    if (typeof maxMessages === 'number' && maxMessages > 0) {
+      params.set('max_messages', String(Math.min(10000, Math.floor(maxMessages))))
+    }
 
     return await apiClient.post(
       `${this.baseUrl}/gmail/run-now?${params.toString()}`
     )
+  }
+
+  /**
+   * Paso 1 del módulo Actualizaciones > Gmail: previsualiza correos del remitente sin escanear.
+   * Devuelve lista de mensajes que cumplen `from:<correo> + criterio media` con metadata Gmail
+   * (asunto, snippet, etiquetas usuario, fecha) y marca cuáles ya fueron procesados en BD.
+   */
+  async previewGmailRemitente(
+    correo: string,
+    opts?: { maxResults?: number }
+  ): Promise<{
+    correo: string
+    total: number
+    items: GmailPreviewItemUI[]
+    ids_total_listados_gmail?: number
+    hay_mas_en_gmail?: boolean
+    max_results?: number
+    hard_cap_preview?: number
+    procesar_hard_cap?: number
+    ids_remitente_no_coincide?: number
+    ids_sin_media?: number
+    labels_catalog_ok?: boolean
+    mensaje?: string
+  }> {
+    const params = new URLSearchParams({ correo: correo.trim().toLowerCase() })
+    if (opts?.maxResults) params.set('max_results', String(opts.maxResults))
+    return await apiClient.get(
+      `${this.baseUrl}/gmail/preview-remitente?${params.toString()}`
+    )
+  }
+
+  /**
+   * Paso 2 del módulo Actualizaciones > Gmail: procesa SOLO los gmail_message_id seleccionados
+   * (con todo el flujo vigente: Gemini -> plantillas A-F -> BD -> cascada cuotas -> etiqueta final).
+   */
+  async procesarMensajesGmail(
+    correo: string,
+    mensajesIds: string[]
+  ): Promise<{
+    sync_id: number
+    status: string
+    scan_filter: string
+    from_email: string
+    mensajes_a_procesar: number
+    ids_remitente_distinto: string[]
+    ids_inexistentes: string[]
+  }> {
+    return await apiClient.post(`${this.baseUrl}/gmail/procesar-mensajes`, {
+      correo: correo.trim().toLowerCase(),
+      mensajes_ids: mensajesIds,
+    })
   }
 
   /** Pagos Gmail: lista filas de pagos_gmail_sync_item (módulo Actualizaciones > Gmail). */
