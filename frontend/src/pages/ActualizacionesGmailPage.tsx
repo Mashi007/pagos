@@ -92,6 +92,14 @@ const PAGE_SIZE = 50
 const MAX_MESSAGES_DEFAULT = 20
 const MAX_MESSAGES_OPTIONS = [20, 50, 100, 500, 1000, 5000, 10000] as const
 
+type CriterioBusqueda = 'remitente' | 'destinatario' | 'participante'
+
+const CRITERIO_LABEL: Record<CriterioBusqueda, string> = {
+  remitente: 'Remitente (from:)',
+  destinatario: 'Destinatario (to:)',
+  participante: 'Cualquier participante (from: OR to:)',
+}
+
 function urlComprobante(raw: string | null | undefined): string | null {
   const s = (raw || '').trim()
   if (!s) return null
@@ -110,6 +118,14 @@ interface DiagnosticoGmail {
   yaProcesados: number
   hayMasEnGmail: boolean
   items: GmailPreviewItemUI[]
+  /** Estimación Gmail de correos del remitente en INBOX sin filtro de media. */
+  inboxSinMedia?: number
+  /** Estimación Gmail de correos del remitente en cualquier carpeta (incluye spam/trash). */
+  global?: number
+  sentRemitente?: number
+  toRemitente?: number
+  cuentaConectada?: string | null
+  esLaCuentaConectada?: boolean
   mensaje?: string
 }
 
@@ -118,6 +134,7 @@ export default function ActualizacionesGmailPage() {
   const [correoInput, setCorreoInput] = useState('')
   const [correoActivo, setCorreoActivo] = useState('')
   const [maxMessages, setMaxMessages] = useState<number>(MAX_MESSAGES_DEFAULT)
+  const [criterio, setCriterio] = useState<CriterioBusqueda>('remitente')
   const [paginaTabla, setPaginaTabla] = useState(1)
   const [diagnostico, setDiagnostico] = useState<DiagnosticoGmail | null>(null)
   const [probandoGmail, setProbandoGmail] = useState(false)
@@ -189,9 +206,11 @@ export default function ActualizacionesGmailPage() {
           } else {
             toast(
               `Pipeline terminado para ${correoActivo}: no se generaron filas. ` +
-                'Posibles causas: Gmail no encontro correos del remitente con imagen/PDF en bandeja, ' +
-                'o todos los candidatos fueron descartados por Gemini. Pulsa "Probar Gmail" para diagnostico.',
-              { duration: 14000 }
+                'Posibles causas: la cuenta Gmail conectada no es la correcta; pusiste el correo ' +
+                'del destinatario en vez del remitente; los correos estan archivados; o los ' +
+                'comprobantes vienen como imagen inline en HTML sin has:attachment. ' +
+                'Pulsa "Probar Gmail" para ver el diagnostico exacto.',
+              { duration: 16000 }
             )
           }
         })
@@ -214,9 +233,10 @@ export default function ActualizacionesGmailPage() {
     }
     setCorreoActivo(email)
     setPaginaTabla(1)
-    await run('manual_redigitaliza_por_remitente', email, maxMessages)
-  }, [correoInput, maxMessages, run])
+    await run('manual_redigitaliza_por_remitente', email, maxMessages, criterio)
+  }, [correoInput, maxMessages, criterio, run])
 
+  // Las deps incluyen `criterio` para que el preview siga el selector actual.
   const handleProbarGmail = useCallback(async () => {
     const email = correoInput.trim().toLowerCase()
     if (!email || !email.includes('@')) {
@@ -228,6 +248,7 @@ export default function ActualizacionesGmailPage() {
     try {
       const res = await pagoService.previewGmailRemitente(email, {
         maxResults: Math.max(20, Math.min(maxMessages, 100)),
+        criterio,
       })
       const items = res.items || []
       const conMedia = items.filter(it => it.tiene_media).length
@@ -239,14 +260,20 @@ export default function ActualizacionesGmailPage() {
         yaProcesados,
         hayMasEnGmail: !!res.hay_mas_en_gmail,
         items,
+        inboxSinMedia: res.diagnostico_inbox_sin_media,
+        global: res.diagnostico_global,
+        sentRemitente: res.diagnostico_sent_remitente,
+        toRemitente: res.diagnostico_to_remitente,
+        cuentaConectada: res.cuenta_conectada,
+        esLaCuentaConectada: res.es_la_cuenta_conectada,
         mensaje: res.mensaje,
       })
       if ((res.total ?? items.length) === 0) {
+        // Backend ya devolvió un mensaje con diagnóstico (inbox sin media / global).
         toast(
-          `Gmail no encontro correos para "${email}" con el criterio (in:inbox + imagen/PDF). ` +
-            'Verifica que la cuenta Gmail conectada al sistema sea la correcta, ' +
-            'que el correo este bien escrito y que los mensajes esten en bandeja (no archivados).',
-          { duration: 9000 }
+          res.mensaje ||
+            `Gmail no encontro correos para "${email}" con el criterio (in:inbox + imagen/PDF).`,
+          { duration: 12000 }
         )
       } else {
         toast.success(
@@ -258,7 +285,7 @@ export default function ActualizacionesGmailPage() {
     } finally {
       setProbandoGmail(false)
     }
-  }, [correoInput, maxMessages])
+  }, [correoInput, maxMessages, criterio])
 
   const handleLimpiar = useCallback(() => {
     setCorreoInput('')
@@ -433,6 +460,33 @@ export default function ActualizacionesGmailPage() {
                 ))}
               </select>
             </label>
+            <label
+              className="flex items-center gap-2 text-xs text-muted-foreground"
+              title={
+                'Como aplicar el correo al filtro Gmail:\n' +
+                '• Remitente (default): from:<correo> - correos enviados POR ese email.\n' +
+                '• Destinatario: to:<correo> - correos enviados A ese email.\n' +
+                '• Cualquier participante: from:<correo> OR to:<correo> - util si en Gmail aparece el email pero el header From: real es otro (alias/plataforma).'
+              }
+            >
+              <span>Buscar como</span>
+              <select
+                value={criterio}
+                onChange={e =>
+                  setCriterio(e.target.value as CriterioBusqueda)
+                }
+                className="rounded-md border border-input bg-background px-2 py-1 text-xs"
+                disabled={ejecutandoPipeline}
+              >
+                <option value="remitente">{CRITERIO_LABEL.remitente}</option>
+                <option value="destinatario">
+                  {CRITERIO_LABEL.destinatario}
+                </option>
+                <option value="participante">
+                  {CRITERIO_LABEL.participante}
+                </option>
+              </select>
+            </label>
             <div className="flex flex-wrap gap-2">
               <Button
                 type="submit"
@@ -537,26 +591,82 @@ export default function ActualizacionesGmailPage() {
                 ) : null}
               </ul>
               {diagnostico.total === 0 ? (
-                <div className="mt-2">
-                  <strong>Posibles causas:</strong>
+                <div className="mt-2 space-y-2">
+                  {diagnostico.cuentaConectada ? (
+                    <div className="rounded border border-slate-300 bg-slate-50 p-2 text-slate-800">
+                      Cuenta Gmail conectada al sistema:{' '}
+                      <code className="font-semibold">
+                        {diagnostico.cuentaConectada}
+                      </code>
+                      {diagnostico.esLaCuentaConectada ? (
+                        <div className="mt-1 text-amber-900">
+                          <strong>Atencion:</strong> el correo que pusiste es el
+                          mismo de la cuenta conectada. <code>from:</code> busca
+                          mensajes <em>enviados POR</em> esa cuenta, no
+                          recibidos. Para procesar comprobantes, indica el correo
+                          del <strong>cliente</strong> (quien envia el email),
+                          no el de tu propio buzon.
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
                   <ul className="mt-1 list-disc pl-5">
                     <li>
-                      La cuenta Gmail conectada al sistema no es la que ve esos
-                      correos (cuenta empresarial vs personal).
+                      Como remitente en INBOX (
+                      <code>from:&lt;correo&gt; in:inbox</code>) sin filtro
+                      media: <strong>{diagnostico.inboxSinMedia ?? '?'}</strong>
                     </li>
                     <li>
-                      El correo esta mal escrito (revisa mayusculas/dominio).
+                      Como destinatario en INBOX (
+                      <code>to:&lt;correo&gt; in:inbox</code>):{' '}
+                      <strong>{diagnostico.toRemitente ?? '?'}</strong>
                     </li>
                     <li>
-                      Los mensajes estan archivados o en otra carpeta (no
-                      cumplen <code>in:inbox</code>).
+                      Como remitente en ENVIADOS (
+                      <code>from:&lt;correo&gt; in:sent</code>):{' '}
+                      <strong>{diagnostico.sentRemitente ?? '?'}</strong>
                     </li>
                     <li>
-                      Los comprobantes vienen como imagenes inline sin filename
-                      estandar y Gmail no los considera adjunto. Reporta este
-                      caso.
+                      En cualquier carpeta (incluye spam/papelera):{' '}
+                      <strong>{diagnostico.global ?? '?'}</strong>
                     </li>
                   </ul>
+                  {diagnostico.mensaje ? (
+                    <div className="rounded border border-amber-400 bg-amber-100 p-2 text-amber-900">
+                      {diagnostico.mensaje}
+                    </div>
+                  ) : null}
+                  <div>
+                    <strong>Causas habituales:</strong>
+                    <ul className="mt-1 list-disc pl-5">
+                      <li>
+                        <strong>Pones el correo del propio buzon</strong>: el
+                        sistema busca <code>from:</code>, no participantes; los
+                        envios propios estan en ENVIADOS no INBOX.
+                      </li>
+                      <li>
+                        <strong>Pones el destinatario en vez del remitente</strong>
+                        : si la cuenta recibe el comprobante, el remitente es
+                        el cliente. Diagnostico: <code>to: &gt; 0</code> pero{' '}
+                        <code>from: = 0</code>.
+                      </li>
+                      <li>
+                        La cuenta Gmail conectada no es la que ve esos correos
+                        (cuenta empresarial vs personal).
+                      </li>
+                      <li>
+                        Los mensajes estan archivados o en otra carpeta:{' '}
+                        <code>global &gt; 0</code> pero{' '}
+                        <code>inbox = 0</code>.
+                      </li>
+                      <li>
+                        Imagenes inline en HTML sin <code>has:attachment</code>:
+                        Gmail no los marca como adjunto. Diagnostico:{' '}
+                        <code>inbox sin media &gt; 0</code> pero{' '}
+                        <code>conMedia = 0</code>.
+                      </li>
+                    </ul>
+                  </div>
                 </div>
               ) : null}
               {diagnostico.items.length > 0 ? (

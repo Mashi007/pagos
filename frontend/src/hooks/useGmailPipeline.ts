@@ -557,7 +557,9 @@ export function useGmailPipeline({
     async (
       scanFilter?: GmailScanFilter,
       fromEmail?: string | null,
-      maxMessages?: number | null
+      maxMessages?: number | null,
+      /** Solo modo manual_redigitaliza_por_remitente: remitente | destinatario | participante. */
+      criterio?: 'remitente' | 'destinatario' | 'participante' | null
     ) => {
       if (loading) return
 
@@ -576,7 +578,8 @@ export function useGmailPipeline({
           true,
           scanFilter,
           fromEmail ?? null,
-          maxMessages ?? null
+          maxMessages ?? null,
+          criterio ?? null
         )
 
         // El endpoint devuelve inmediatamente (status="running"); hacer polling

@@ -1048,7 +1048,9 @@ class PagoService {
       | 'error_email_rescan'
       | 'manual_redigitaliza_por_remitente',
     fromEmail?: string | null,
-    maxMessages?: number | null
+    maxMessages?: number | null,
+    /** Solo modo manual_redigitaliza_por_remitente: cómo aplicar el correo al filtro Gmail. */
+    criterio?: 'remitente' | 'destinatario' | 'participante' | null
   ): Promise<{
     sync_id: number | null
     status: string
@@ -1057,6 +1059,7 @@ class PagoService {
     scan_filter?: string
     from_email?: string | null
     max_messages?: number | null
+    criterio?: string | null
   }> {
     const params = new URLSearchParams({ force: String(force) })
 
@@ -1080,6 +1083,12 @@ class PagoService {
     if (typeof maxMessages === 'number' && maxMessages > 0) {
       params.set('max_messages', String(Math.min(10000, Math.floor(maxMessages))))
     }
+    if (
+      criterio &&
+      ['remitente', 'destinatario', 'participante'].includes(criterio)
+    ) {
+      params.set('criterio', criterio)
+    }
 
     return await apiClient.post(
       `${this.baseUrl}/gmail/run-now?${params.toString()}`
@@ -1093,7 +1102,10 @@ class PagoService {
    */
   async previewGmailRemitente(
     correo: string,
-    opts?: { maxResults?: number }
+    opts?: {
+      maxResults?: number
+      criterio?: 'remitente' | 'destinatario' | 'participante'
+    }
   ): Promise<{
     correo: string
     total: number
@@ -1106,10 +1118,23 @@ class PagoService {
     ids_remitente_no_coincide?: number
     ids_sin_media?: number
     labels_catalog_ok?: boolean
+    /** Estimación de Gmail de correos del remitente en INBOX sin filtro de media. */
+    diagnostico_inbox_sin_media?: number
+    /** Estimación de Gmail de correos del remitente en cualquier carpeta (incluye spam/trash). */
+    diagnostico_global?: number
+    /** Estimación de correos enviados POR ese correo (carpeta ENVIADOS de la cuenta conectada). */
+    diagnostico_sent_remitente?: number
+    /** Estimación de correos cuyo destinatario es ese correo (caso clásico de poner el destinatario en vez del remitente). */
+    diagnostico_to_remitente?: number
+    /** Dirección de la cuenta Gmail conectada al sistema (via OAuth). */
+    cuenta_conectada?: string | null
+    /** True si el correo consultado coincide con la cuenta Gmail conectada (operador buscando su propio buzón). */
+    es_la_cuenta_conectada?: boolean
     mensaje?: string
   }> {
     const params = new URLSearchParams({ correo: correo.trim().toLowerCase() })
     if (opts?.maxResults) params.set('max_results', String(opts.maxResults))
+    if (opts?.criterio) params.set('criterio', opts.criterio)
     return await apiClient.get(
       `${this.baseUrl}/gmail/preview-remitente?${params.toString()}`
     )

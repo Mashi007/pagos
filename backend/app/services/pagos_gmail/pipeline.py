@@ -373,6 +373,7 @@ def run_pipeline(
     from_email: Optional[str] = None,
     only_message_ids: Optional[list[str]] = None,
     max_messages: Optional[int] = None,
+    criterio_remitente: str = "remitente",
 ) -> tuple[Optional[int], str]:
     """
     Ejecuta el pipeline Gmail -> Gemini -> BD (comprobante en pago_comprobante_imagen; sin subidas a Drive).
@@ -413,11 +414,15 @@ def run_pipeline(
         )
     except (TypeError, ValueError):
         max_messages_int = None
+    criterio_norm = (criterio_remitente or "remitente").strip().lower()
+    if criterio_norm not in {"remitente", "destinatario", "participante"}:
+        criterio_norm = "remitente"
     logger.info(
-        "[PAGOS_GMAIL] INICIO pipeline (existing_sync_id=%s, scan_filter=%s, from_email=%s, only_message_ids=%s, max_messages=%s)",
+        "[PAGOS_GMAIL] INICIO pipeline (existing_sync_id=%s, scan_filter=%s, from_email=%s, criterio=%s, only_message_ids=%s, max_messages=%s)",
         existing_sync_id,
         scan_filter,
         from_email_lc or "(sin filtro remitente)",
+        criterio_norm,
         len(only_ids_set) if only_ids_set is not None else 0,
         max_messages_int if max_messages_int is not None else "(sin tope)",
     )
@@ -549,7 +554,7 @@ def run_pipeline(
                 )
             else:
                 raw_messages = list_messages_by_filter(
-                    gmail_svc, scan_filter, from_email=from_email_lc
+                    gmail_svc, scan_filter, from_email=from_email_lc, criterio=criterio_norm
                 )
             messages = _dedupe_messages_pagos_gmail(raw_messages)
             if len(messages) < len(raw_messages):
@@ -657,19 +662,18 @@ def run_pipeline(
                 sender_lc = (sender or "").strip().lower()
 
                 # Bypass selectivo del skip por etiquetas:
-                # - scan_filter == manual_redigitaliza_por_remitente y remitente coincide con from_email_lc, o
+                # - scan_filter == manual_redigitaliza_por_remitente: el usuario pidió rastreo
+                #   selectivo de un correo específico (remitente, destinatario o participante,
+                #   según `criterio_norm`); el listado Gmail ya filtró la cadena `from:/to:`
+                #   así que cualquier mensaje devuelto pertenece al rastreo y debe re-clasificarse.
                 # - el caller pasó una lista explícita de IDs (only_ids_set) que incluye este mensaje:
-                #   el endpoint ya validó remitente/origen, el usuario marcó esta fila a propósito.
+                #   el endpoint ya validó origen, el usuario marcó esta fila a propósito.
                 # En esos casos retiramos del mensaje las etiquetas finales del set permitido
                 # (A/B/C/D/E/F, MANUAL, TEXTO, ERROR EMAIL) para que la pasada pueda re-clasificar
                 # y dejar una etiqueta final única coherente. La regla global de "skip por etiqueta
                 # de usuario" se mantiene para todos los demás modos.
                 _bypass_etiquetas_remitente = (
-                    (
-                        redig_por_remitente
-                        and from_email_lc is not None
-                        and sender_lc == from_email_lc
-                    )
+                    (redig_por_remitente and from_email_lc is not None)
                     or (only_ids_set is not None and msg_id in only_ids_set)
                 )
                 if _bypass_etiquetas_remitente and _labels_catalog_ok and _user_on_msg:

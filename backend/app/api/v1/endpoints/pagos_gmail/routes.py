@@ -94,14 +94,16 @@ def _run_pipeline_background(
     from_email: Optional[str] = None,
     only_message_ids: Optional[list[str]] = None,
     max_messages: Optional[int] = None,
+    criterio_remitente: str = "remitente",
 ) -> None:
     """Ejecuta el pipeline en background con su propia sesión de BD (evita el timeout de 30s de Render/Axios)."""
     db = SessionLocal()
     logger.info(
-        "[PAGOS_GMAIL] [ETAPA] Inicio pipeline background sync_id=%s scan_filter=%s from_email=%s only_ids=%d max_messages=%s",
+        "[PAGOS_GMAIL] [ETAPA] Inicio pipeline background sync_id=%s scan_filter=%s from_email=%s criterio=%s only_ids=%d max_messages=%s",
         sync_id,
         scan_filter,
         from_email or "(sin remitente)",
+        criterio_remitente,
         len(only_message_ids) if only_message_ids else 0,
         max_messages if max_messages is not None else "(sin tope)",
     )
@@ -113,6 +115,7 @@ def _run_pipeline_background(
             from_email=from_email,
             only_message_ids=only_message_ids,
             max_messages=max_messages,
+            criterio_remitente=criterio_remitente,
         )
         if final_status == "success":
             mig = _migrar_pendientes_gmail_a_con_errores_core(db)
@@ -222,6 +225,16 @@ def run_now(
             "Maximo absoluto: 10000."
         ),
     ),
+    criterio: Optional[str] = Query(
+        None,
+        description=(
+            "Solo modo manual_redigitaliza_por_remitente. Cómo aplicar `from_email` al filtro Gmail: "
+            "'remitente' (default, `from:<correo>`); 'destinatario' (`to:<correo>`); "
+            "'participante' (`from:<correo> OR to:<correo>`). Útil cuando el header `From:` real "
+            "no coincide con el displayName Gmail."
+        ),
+        regex="^(remitente|destinatario|participante)$",
+    ),
     db: Session = Depends(get_db),
 ):
     """
@@ -277,6 +290,9 @@ def run_now(
                 "(ej. cliente@dominio.com)."
             ),
         )
+    criterio_norm = (criterio or "remitente").strip().lower()
+    if criterio_norm not in ("remitente", "destinatario", "participante"):
+        criterio_norm = "remitente"
     # Crear registro de sync de inmediato (evita que un segundo click arranque otro pipeline)
     sync = PagosGmailSync(status="running", emails_processed=0, files_processed=0)
     db.add(sync)
@@ -285,7 +301,13 @@ def run_now(
     sync_id = sync.id
     # Lanzar pipeline en segundo plano; el cliente hace polling a /status
     background_tasks.add_task(
-        _run_pipeline_background, sync_id, scan_filter, from_email_norm, None, max_messages
+        _run_pipeline_background,
+        sync_id,
+        scan_filter,
+        from_email_norm,
+        None,
+        max_messages,
+        criterio_norm,
     )
     return {
         "sync_id": sync_id,
@@ -295,6 +317,7 @@ def run_now(
         "scan_filter": scan_filter,
         "from_email": from_email_norm,
         "max_messages": max_messages,
+        "criterio": criterio_norm,
     }
 
 
@@ -1866,16 +1889,24 @@ def _gmail_user_label_names_for_message(
 
 @router.get("/preview-remitente")
 def preview_remitente(
-    correo: str = Query(..., description="Remitente exacto a previsualizar (case-insensitive)."),
+    correo: str = Query(..., description="Correo a previsualizar (case-insensitive). Por defecto se busca como remitente."),
     max_results: int = Query(
         _GMAIL_PREVIEW_DEFAULT_RESULTS,
         ge=1,
         le=_GMAIL_PREVIEW_HARD_CAP,
         description=(
             "Cuántos mensajes traer al preview (default 20; máximo absoluto 10000). "
-            "Gmail siempre filtra por from:<correo> + criterio media; este parámetro acota "
-            "cuántos vienen al UI, no qué se escanea (Gemini solo procesa los marcados)."
+            "Gmail siempre filtra por el predicado según `criterio` + criterio media; este "
+            "parámetro acota cuántos vienen al UI, no qué se escanea."
         ),
+    ),
+    criterio: Optional[str] = Query(
+        "remitente",
+        description=(
+            "Cómo aplicar el correo al filtro Gmail: 'remitente' (default, `from:<correo>`); "
+            "'destinatario' (`to:<correo>`); 'participante' (`from:<correo> OR to:<correo>`)."
+        ),
+        regex="^(remitente|destinatario|participante)$",
     ),
     db: Session = Depends(get_db),
 ):
@@ -1916,8 +1947,14 @@ def preview_remitente(
     )
 
     gmail_svc = build_gmail_service(creds)
+    criterio_norm = (criterio or "remitente").strip().lower()
+    if criterio_norm not in ("remitente", "destinatario", "participante"):
+        criterio_norm = "remitente"
     q = pagos_gmail_list_query_for_scan_filter(
-        "manual_redigitaliza_por_remitente", correo_lc
+        "manual_redigitaliza_por_remitente", correo_lc, criterio=criterio_norm
+    )
+    logger.info(
+        "[PAGOS_GMAIL] preview-remitente q=%r (criterio=%s)", q, criterio_norm
     )
 
     # Listar IDs del remitente acotado a max_results. Gmail acepta hasta 500 por página;
@@ -1959,6 +1996,137 @@ def preview_remitente(
             break
 
     if not all_ids:
+        # Diagnóstico extra: contar correos del remitente con menos restricciones para
+        # saber si el problema es la query (no hay media), el remitente (no tiene correos),
+        # o si el operador esta buscando justamente el correo del propio buzon (caso clasico:
+        # los comprobantes los recibe el buzon, no los envia).
+        diag_inbox_sin_media = 0
+        diag_global = 0
+        diag_sent_remitente = 0
+        diag_to_remitente = 0
+        cuenta_conectada: Optional[str] = None
+        try:
+            prof = gmail_svc.users().getProfile(userId="me").execute()
+            cuenta_conectada = (
+                str(prof.get("emailAddress", "") or "").strip().lower() or None
+            )
+        except Exception as e:
+            logger.warning(
+                "[PAGOS_GMAIL] preview-remitente diag profile error: %s", e
+            )
+        try:
+            r1 = (
+                gmail_svc.users()
+                .messages()
+                .list(userId="me", maxResults=1, q=f"in:inbox from:{correo_lc}")
+                .execute()
+            )
+            diag_inbox_sin_media = int(r1.get("resultSizeEstimate", 0) or 0)
+        except Exception as e:
+            logger.warning(
+                "[PAGOS_GMAIL] preview-remitente diag inbox-sin-media error: %s", e
+            )
+        try:
+            r2 = (
+                gmail_svc.users()
+                .messages()
+                .list(
+                    userId="me",
+                    maxResults=1,
+                    includeSpamTrash=True,
+                    q=f"from:{correo_lc}",
+                )
+                .execute()
+            )
+            diag_global = int(r2.get("resultSizeEstimate", 0) or 0)
+        except Exception as e:
+            logger.warning(
+                "[PAGOS_GMAIL] preview-remitente diag global error: %s", e
+            )
+        try:
+            r3 = (
+                gmail_svc.users()
+                .messages()
+                .list(userId="me", maxResults=1, q=f"in:sent from:{correo_lc}")
+                .execute()
+            )
+            diag_sent_remitente = int(r3.get("resultSizeEstimate", 0) or 0)
+        except Exception as e:
+            logger.warning(
+                "[PAGOS_GMAIL] preview-remitente diag sent error: %s", e
+            )
+        try:
+            r4 = (
+                gmail_svc.users()
+                .messages()
+                .list(userId="me", maxResults=1, q=f"in:inbox to:{correo_lc}")
+                .execute()
+            )
+            diag_to_remitente = int(r4.get("resultSizeEstimate", 0) or 0)
+        except Exception as e:
+            logger.warning(
+                "[PAGOS_GMAIL] preview-remitente diag to error: %s", e
+            )
+
+        es_la_cuenta_conectada = bool(
+            cuenta_conectada and cuenta_conectada == correo_lc
+        )
+
+        if es_la_cuenta_conectada:
+            mensaje = (
+                f"'{correo_lc}' es la propia cuenta Gmail conectada al sistema. "
+                f"Buscar 'from:{correo_lc}' no devuelve resultados en INBOX porque esos "
+                "correos los envió esa cuenta y están en 'Enviados', no en 'Bandeja de entrada'. "
+                "Para procesar comprobantes, indique el correo del CLIENTE que los envía "
+                "(por ejemplo, el remitente real del email)."
+            )
+        elif diag_inbox_sin_media > 0:
+            mensaje = (
+                f"Gmail tiene ~{diag_inbox_sin_media} correo(s) con 'from:{correo_lc}' en INBOX, "
+                "pero ninguno cumple el criterio de adjunto/imagen/PDF "
+                "(la query exige has:attachment o filename:png/jpg/jpeg/pdf/webp/heic/gif). "
+                "Si los comprobantes están como imágenes inline en el cuerpo, Gmail no los marca "
+                "como attachment y son ignorados."
+            )
+        elif diag_to_remitente > 0:
+            mensaje = (
+                f"Gmail no encontró correos enviados POR '{correo_lc}', pero sí ~{diag_to_remitente} "
+                f"con destinatario 'to:{correo_lc}'. Probablemente está poniendo el correo del "
+                "destinatario en lugar del remitente. Use el correo del CLIENTE (quien envía el comprobante)."
+            )
+        elif diag_global > 0:
+            mensaje = (
+                f"Gmail encontró ~{diag_global} correo(s) con 'from:{correo_lc}', "
+                "pero ninguno está en INBOX (probablemente archivados, en SPAM o en la papelera). "
+                "El pipeline solo lee INBOX. Mueva los correos a la bandeja y reintente."
+            )
+        elif diag_sent_remitente > 0:
+            mensaje = (
+                f"'{correo_lc}' solo aparece como remitente en la carpeta ENVIADOS "
+                f"(~{diag_sent_remitente} correos). El pipeline solo procesa INBOX. Si esos "
+                "comprobantes los envió la propia cuenta, no se pueden re-escanear con este flujo."
+            )
+        else:
+            cuenta_txt = (
+                f" Cuenta Gmail conectada: {cuenta_conectada}." if cuenta_conectada else ""
+            )
+            mensaje = (
+                f"Gmail no encontró ningún correo con 'from:{correo_lc}'. "
+                "Verifique que la dirección esté escrita correctamente y que la cuenta Gmail "
+                f"conectada sea la que recibe esos comprobantes.{cuenta_txt}"
+            )
+
+        logger.info(
+            "[PAGOS_GMAIL] preview-remitente diagnóstico %r (cuenta=%s): "
+            "media=0 inbox_sin_media=%d global=%d sent_remitente=%d to_remitente=%d",
+            correo_lc,
+            cuenta_conectada or "?",
+            diag_inbox_sin_media,
+            diag_global,
+            diag_sent_remitente,
+            diag_to_remitente,
+        )
+
         return {
             "correo": correo_lc,
             "total": 0,
@@ -1967,7 +2135,13 @@ def preview_remitente(
             "hard_cap_preview": _GMAIL_PREVIEW_HARD_CAP,
             "procesar_hard_cap": _GMAIL_PROCESAR_HARD_CAP,
             "hay_mas_en_gmail": False,
-            "mensaje": "No hay correos en bandeja para ese remitente que cumplan el criterio (imagen/PDF).",
+            "diagnostico_inbox_sin_media": diag_inbox_sin_media,
+            "diagnostico_global": diag_global,
+            "diagnostico_sent_remitente": diag_sent_remitente,
+            "diagnostico_to_remitente": diag_to_remitente,
+            "cuenta_conectada": cuenta_conectada,
+            "es_la_cuenta_conectada": es_la_cuenta_conectada,
+            "mensaje": mensaje,
         }
 
     # Obtener payload completo en batch (5 units por mensaje en cuota Gmail).

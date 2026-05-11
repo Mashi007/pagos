@@ -376,29 +376,61 @@ def _sanitize_from_email_for_gmail_query(from_email: Optional[str]) -> Optional[
     return s
 
 
-def pagos_gmail_manual_redigitaliza_por_remitente_query(from_email: str) -> str:
+#: Criterios para el modo 'manual_redigitaliza_por_remitente':
+#: - 'remitente' (default): ``from:<correo>`` (compatible con el comportamiento anterior).
+#: - 'destinatario': ``to:<correo>`` (correos donde el correo dado es destinatario).
+#: - 'participante': ``(from:<correo> OR to:<correo>)`` (cualquier participante en INBOX).
+PAGOS_GMAIL_REDIG_CRITERIO_REMITENTE = "remitente"
+PAGOS_GMAIL_REDIG_CRITERIO_DESTINATARIO = "destinatario"
+PAGOS_GMAIL_REDIG_CRITERIO_PARTICIPANTE = "participante"
+PAGOS_GMAIL_REDIG_CRITERIOS_VALIDOS = (
+    PAGOS_GMAIL_REDIG_CRITERIO_REMITENTE,
+    PAGOS_GMAIL_REDIG_CRITERIO_DESTINATARIO,
+    PAGOS_GMAIL_REDIG_CRITERIO_PARTICIPANTE,
+)
+
+
+def _build_participante_predicate(sender: str, criterio: str) -> str:
     """
-    Re-escaneo manual: inbox + media + ``from:<correo>``. Si el correo no es válido,
-    devuelve la query base (el pipeline interpreta el caso 'sin from_email').
+    Construye el predicado Gmail según el criterio del re-escaneo selectivo.
+    ``sender`` debe estar previamente saneado por ``_sanitize_from_email_for_gmail_query``.
+    """
+    c = (criterio or "").strip().lower() or PAGOS_GMAIL_REDIG_CRITERIO_REMITENTE
+    if c == PAGOS_GMAIL_REDIG_CRITERIO_DESTINATARIO:
+        return f"to:{sender}"
+    if c == PAGOS_GMAIL_REDIG_CRITERIO_PARTICIPANTE:
+        return f"(from:{sender} OR to:{sender})"
+    return f"from:{sender}"
+
+
+def pagos_gmail_manual_redigitaliza_por_remitente_query(
+    from_email: str,
+    criterio: str = PAGOS_GMAIL_REDIG_CRITERIO_REMITENTE,
+) -> str:
+    """
+    Re-escaneo manual: inbox + media + predicado según ``criterio``.
+    Si el correo no es válido, devuelve la query base (el pipeline interpreta el caso 'sin from_email').
     """
     sender = _sanitize_from_email_for_gmail_query(from_email)
     base = pagos_gmail_inbox_media_query()
     if not sender:
         return base
-    return f"{base} from:{sender}"
+    return f"{base} {_build_participante_predicate(sender, criterio)}"
 
 
 def pagos_gmail_list_query_for_scan_filter(
     filter_type: str,
     from_email: Optional[str] = None,
+    criterio: str = PAGOS_GMAIL_REDIG_CRITERIO_REMITENTE,
 ) -> str:
     """
     Parámetro **q** de Gmail para listar/count según scan_filter del pipeline.
     - **all** / **pending_identification**: inbox + criterio imagen/PDF (incluye etiqueta ERROR EMAIL y demás).
     - **unread** / **read**: mismo criterio + is:unread / is:read.
     - **error_email_rescan**: inbox + media + label ERROR EMAIL.
-    - **manual_redigitaliza_por_remitente**: inbox + media + ``from:<correo>`` (re-escaneo manual).
-      Cuando ``from_email`` es válido, también se aplica a **all/unread/read** para acotar el listado al remitente.
+    - **manual_redigitaliza_por_remitente**: inbox + media + predicado según ``criterio``
+      (``from:``, ``to:``, o ``(from: OR to:)`` para participante).
+      Cuando ``from_email`` es válido, también se aplica a **all/unread/read** para acotar el listado.
     """
     ft = (filter_type or "").strip().lower()
     if ft == "error_email_rescan":
@@ -407,7 +439,9 @@ def pagos_gmail_list_query_for_scan_filter(
         return pagos_gmail_manual_error_email_redigitaliza_query()
     if ft == PAGOS_GMAIL_SCAN_FILTER_MANUAL_REDIG_REMITENTE:
         # from_email obligatorio para tener sentido; el endpoint valida y rechaza si falta.
-        return pagos_gmail_manual_redigitaliza_por_remitente_query(from_email or "")
+        return pagos_gmail_manual_redigitaliza_por_remitente_query(
+            from_email or "", criterio=criterio
+        )
     base = pagos_gmail_inbox_media_query()
     if ft == "unread":
         base = f"{base} is:unread"
@@ -415,7 +449,7 @@ def pagos_gmail_list_query_for_scan_filter(
         base = f"{base} is:read"
     sender = _sanitize_from_email_for_gmail_query(from_email)
     if sender:
-        return f"{base} from:{sender}"
+        return f"{base} {_build_participante_predicate(sender, criterio)}"
     return base
 
 
@@ -496,6 +530,7 @@ def list_messages_by_filter(
     service: Any,
     filter_type: str = "all",
     from_email: Optional[str] = None,
+    criterio: str = PAGOS_GMAIL_REDIG_CRITERIO_REMITENTE,
 ) -> List[dict]:
     """
     Lista mensajes segun el filtro; correos con adjunto o parte imagen/PDF nombrada (inline/cuerpo).
@@ -522,12 +557,15 @@ def list_messages_by_filter(
             "maxResults": 500,
             "includeSpamTrash": False,
         }
-        params_base["q"] = pagos_gmail_list_query_for_scan_filter(filter_type, from_email)
+        params_base["q"] = pagos_gmail_list_query_for_scan_filter(
+            filter_type, from_email, criterio=criterio
+        )
         logger.info(
-            "[PAGOS_GMAIL] list_messages_by_filter Gmail q=%r (filter=%s, from_email=%s)",
+            "[PAGOS_GMAIL] list_messages_by_filter Gmail q=%r (filter=%s, from_email=%s, criterio=%s)",
             params_base["q"],
             filter_type,
             (from_email or "").strip().lower() or "(sin remitente)",
+            criterio,
         )
 
         while True:
@@ -541,10 +579,11 @@ def list_messages_by_filter(
             if not page_token:
                 break
         logger.info(
-            "[PAGOS_GMAIL] list_messages_by_filter Gmail listo: %d mensajes (filter=%s, from_email=%s)",
+            "[PAGOS_GMAIL] list_messages_by_filter Gmail listo: %d mensajes (filter=%s, from_email=%s, criterio=%s)",
             len(all_msg_refs),
             filter_type,
             (from_email or "").strip().lower() or "(sin remitente)",
+            criterio,
         )
         ids_ordered = [m["id"] for m in all_msg_refs]
         meta_by_id = batch_get_messages_metadata(
@@ -628,11 +667,13 @@ def count_messages_by_filter(
     service: Any,
     filter_type: str = "all",
     from_email: Optional[str] = None,
+    criterio: str = PAGOS_GMAIL_REDIG_CRITERIO_REMITENTE,
 ) -> int:
     """
     Cuenta mensajes segun el filtro sin obtener metadata (solo list paginado).
     Mismo criterio **q** que list_messages_by_filter (ver pagos_gmail_list_query_for_scan_filter).
-    ``from_email`` opcional para acotar a un remitente (modo manual_redigitaliza_por_remitente).
+    ``from_email`` opcional para acotar a un correo participante.
+    ``criterio`` controla si se busca como remitente / destinatario / participante (default: remitente).
     """
     from googleapiclient.errors import HttpError
 
@@ -644,12 +685,15 @@ def count_messages_by_filter(
             "maxResults": 500,
             "includeSpamTrash": False,
         }
-        params_base["q"] = pagos_gmail_list_query_for_scan_filter(filter_type, from_email)
+        params_base["q"] = pagos_gmail_list_query_for_scan_filter(
+            filter_type, from_email, criterio=criterio
+        )
         logger.info(
-            "[PAGOS_GMAIL] count_messages_by_filter Gmail q=%r (filter=%s, from_email=%s)",
+            "[PAGOS_GMAIL] count_messages_by_filter Gmail q=%r (filter=%s, from_email=%s, criterio=%s)",
             params_base["q"],
             filter_type,
             (from_email or "").strip().lower() or "(sin remitente)",
+            criterio,
         )
         while True:
             params = dict(params_base)
