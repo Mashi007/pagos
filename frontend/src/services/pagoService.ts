@@ -1181,8 +1181,34 @@ class PagoService {
   }
 
   /**
-   * Acción "Editar": actualiza campos del sync_item (y de gmail_temporal asociado) antes de Guardar.
+   * Acción "Editar" (revisión manual): migra el sync_item a `pagos_con_errores` y
+   * devuelve el `PagoConError` recién creado, para abrir el modal `RegistrarPagoForm`
+   * con `esPagoConError=true` y `modoGuardarYProcesar=true` (mismo flujo del listado
+   * general de pagos pendientes). No aplica cascada de cuotas: eso ocurre cuando el
+   * operador pulse "Guardar y Procesar" en el modal.
+   */
+  async migrarGmailSyncItemAPendientes(
+    itemId: number
+  ): Promise<{
+    ok: boolean
+    movido_a_pagos_con_errores: boolean
+    ya_en_pagos: boolean
+    pago_id_existente: number | null
+    prestamo_id_existente?: number | null
+    pago_con_error: import('./pagoConErrorService').PagoConError | null
+    pago_con_error_id?: number
+    mensaje: string
+  }> {
+    return await apiClient.post(
+      `${this.baseUrl}/gmail/sync-items/${itemId}/migrar-a-pendientes`
+    )
+  }
+
+  /**
+   * Acción "Editar" inline (campos rápidos): actualiza el sync_item antes de Guardar.
    * Las validaciones de negocio (FK cliente, duplicado documento, monto > 0) corren en el paso Guardar.
+   * Usar este endpoint solo para correcciones triviales; para edición completa, preferir
+   * `migrarGmailSyncItemAPendientes` y el modal de revisión manual.
    */
   async editGmailSyncItem(
     itemId: number,

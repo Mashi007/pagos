@@ -1634,6 +1634,88 @@ def guardar_sync_item(
     }
 
 
+@router.post("/sync-items/{item_id}/migrar-a-pendientes")
+def migrar_sync_item_a_pendientes(
+    item_id: int,
+    db: Session = Depends(get_db),
+):
+    """
+    Acción "Editar" desde la tabla del módulo Actualizaciones > Gmail.
+
+    Migra la fila `pagos_gmail_sync_item` a `pagos_con_errores` y devuelve el
+    `PagoConError` serializado (mismo shape que GET /pagos/con-errores) para que
+    el frontend abra el modal de **revisión manual** sobre ese pago_con_error
+    (`RegistrarPagoForm` con `esPagoConError=true` + `modoGuardarYProcesar=true`
+    + `mostrarCampoCodigoDocumento=true`).
+
+    A diferencia de `/sync-items/{id}/guardar`, este endpoint **no** llama a
+    `mover_a_pagos_normales`: deja la fila en `pagos_con_errores` para que el
+    operador revise/corrija campos antes de aplicarla con cascada de cuotas. Toda
+    la validación final (FK cliente, formato de serial, duplicado documento,
+    monto>0) corre en el flujo estándar de revisión manual.
+
+    Si el serial (`numero_referencia`) ya existe en cartera (`pagos`), igualmente
+    se migra a `pagos_con_errores` y se devuelve `duplicado_documento_en_pagos=true`
+    en `pago_con_error`. Así el operador puede abrir el modal y agregar un sufijo
+    (`codigo_documento`) para diferenciar el pago - mismo flujo que en
+    `EditarRevisionManual` y `PagosList`/`pagos_con_errores`.
+    """
+    from app.api.v1.endpoints.pagos_con_errores.routes import (
+        _pago_con_error_to_response,
+    )
+
+    item = db.get(PagosGmailSyncItem, item_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail=f"sync_item {item_id} no encontrado")
+
+    duplicado, pago_id_exist, prestamo_id_exist = _sync_item_duplicado_en_pagos(
+        db, item.numero_referencia
+    )
+
+    try:
+        nuevo_pe = _pago_con_error_desde_sync_item(db, item)
+        _eliminar_filas_gmail_relacionadas(db, item)
+        db.commit()
+        db.refresh(nuevo_pe)
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.exception(
+            "[PAGOS_GMAIL] migrar_sync_item_a_pendientes: fallo item_id=%s: %s",
+            item_id,
+            e,
+        )
+        raise HTTPException(
+            status_code=500,
+            detail=f"No se pudo migrar la fila a pagos_con_errores: {str(e)[:400]}",
+        ) from e
+
+    mensaje = (
+        f"Fila migrada a pagos_con_errores (pe_id={int(nuevo_pe.id)}). "
+        "Use el modal de revisión manual para validar y aplicar."
+    )
+    if duplicado:
+        mensaje = (
+            f"Serial {item.numero_referencia or '(s/r)'} ya existe en cartera "
+            f"(pago_id={pago_id_exist}, prestamo_id={prestamo_id_exist}). "
+            f"Fila migrada a pagos_con_errores (pe_id={int(nuevo_pe.id)}); "
+            "agregue un código (sufijo) en el modal de revisión manual para resolver el duplicado."
+        )
+
+    return {
+        "ok": True,
+        "movido_a_pagos_con_errores": True,
+        "ya_en_pagos": bool(duplicado),
+        "pago_id_existente": pago_id_exist if duplicado else None,
+        "prestamo_id_existente": prestamo_id_exist if duplicado else None,
+        "pago_con_error": _pago_con_error_to_response(nuevo_pe, db),
+        "pago_con_error_id": int(nuevo_pe.id),
+        "mensaje": mensaje,
+    }
+
+
 class GmailSyncItemEditarBody(BaseModel):
     """Campos editables del sync_item antes de pulsar Guardar.
     Campos no provistos se dejan tal cual están. El backend recorta longitudes a las del modelo.

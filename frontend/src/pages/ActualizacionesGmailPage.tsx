@@ -27,7 +27,6 @@ import {
   Search,
   TestTube,
   Trash2,
-  X,
 } from 'lucide-react'
 
 import { toast } from 'sonner'
@@ -42,13 +41,48 @@ import {
 } from '../components/ui/card'
 import { Input } from '../components/ui/input'
 import { ComprobanteThumb } from '../components/pagos/ComprobanteThumb'
+import { RegistrarPagoForm } from '../components/pagos/RegistrarPagoForm'
 import {
   pagoService,
   type GmailPreviewItemUI,
   type GmailSyncItemUI,
+  type PagoInicialRegistrar,
 } from '../services/pagoService'
+import type { PagoConError } from '../services/pagoConErrorService'
 import { useGmailPipeline } from '../hooks/useGmailPipeline'
 import { getErrorMessage } from '../types/errors'
+
+/**
+ * Mapea un PagoConError recién migrado al shape `PagoInicialRegistrar` que necesita
+ * el modal `RegistrarPagoForm` (mismo mapeo que usa PagosList para revisión manual).
+ */
+function pagoInicialDesdePagoConError(
+  pe: PagoConError
+): PagoInicialRegistrar {
+  return {
+    cedula_cliente: pe.cedula_cliente,
+    prestamo_id: pe.prestamo_id,
+    fecha_pago:
+      typeof pe.fecha_pago === 'string'
+        ? pe.fecha_pago.slice(0, 10)
+        : new Date(pe.fecha_pago).toISOString().slice(0, 10),
+    monto_pagado:
+      pe.moneda_registro === 'BS' && pe.monto_bs_original != null
+        ? Number(pe.monto_bs_original)
+        : Number(pe.monto_pagado),
+    monto_bs_original: pe.monto_bs_original ?? null,
+    moneda_registro: pe.moneda_registro === 'BS' ? 'BS' : 'USD',
+    numero_documento: pe.numero_documento,
+    codigo_documento: pe.codigo_documento ?? null,
+    institucion_bancaria: pe.institucion_bancaria,
+    notas: pe.notas || null,
+    link_comprobante: null,
+    documento_ruta: pe.documento_ruta ?? null,
+    duplicado_documento_en_pagos: pe.duplicado_documento_en_pagos,
+    duplicado_en_cartera_prestamo_id: pe.duplicado_en_cartera_prestamo_id,
+    duplicado_en_cartera_pago_id: pe.duplicado_en_cartera_pago_id,
+  }
+}
 
 const QK_LIST = ['actualizaciones', 'gmail', 'sync-items'] as const
 
@@ -69,24 +103,6 @@ function safeMonto(item: GmailSyncItemUI): string {
   return m || '-'
 }
 
-interface FilaEnEdicion {
-  banco: string
-  cedula: string
-  fecha_pago: string
-  monto: string
-  numero_referencia: string
-}
-
-function filaInicialDesdeItem(item: GmailSyncItemUI): FilaEnEdicion {
-  return {
-    banco: item.banco || '',
-    cedula: item.cedula || '',
-    fecha_pago: item.fecha_pago || '',
-    monto: item.monto || '',
-    numero_referencia: item.numero_referencia || '',
-  }
-}
-
 interface DiagnosticoGmail {
   correo: string
   total: number
@@ -103,10 +119,14 @@ export default function ActualizacionesGmailPage() {
   const [correoActivo, setCorreoActivo] = useState('')
   const [maxMessages, setMaxMessages] = useState<number>(MAX_MESSAGES_DEFAULT)
   const [paginaTabla, setPaginaTabla] = useState(1)
-  const [editandoId, setEditandoId] = useState<number | null>(null)
-  const [edicion, setEdicion] = useState<FilaEnEdicion | null>(null)
   const [diagnostico, setDiagnostico] = useState<DiagnosticoGmail | null>(null)
   const [probandoGmail, setProbandoGmail] = useState(false)
+  /** Modal de revisión manual abierto sobre un pago_con_error recién migrado. */
+  const [editPago, setEditPago] = useState<{
+    pagoConErrorId: number
+    inicial: PagoInicialRegistrar
+  } | null>(null)
+  const [migrandoId, setMigrandoId] = useState<number | null>(null)
 
   const offsetTabla = (paginaTabla - 1) * PAGE_SIZE
   const tabla = useQuery({
@@ -269,39 +289,54 @@ export default function ActualizacionesGmailPage() {
     },
   })
 
-  const editarMutation = useMutation({
-    mutationFn: ({
-      itemId,
-      cambios,
-    }: {
-      itemId: number
-      cambios: FilaEnEdicion
-    }) => pagoService.editGmailSyncItem(itemId, cambios),
-    onSuccess: () => {
-      toast.success('Cambios guardados.')
-      setEditandoId(null)
-      setEdicion(null)
-      void queryClient.invalidateQueries({ queryKey: QK_LIST })
+  /**
+   * "Editar" abre el flujo de revisión manual: migra la fila a `pagos_con_errores`
+   * y abre el modal `RegistrarPagoForm` con `esPagoConError=true` y
+   * `modoGuardarYProcesar=true`. Al guardar y procesar dentro del modal, se aplica
+   * la cascada de cuotas estándar.
+   */
+  const handleEditar = useCallback(
+    async (item: GmailSyncItemUI) => {
+      setMigrandoId(item.id)
+      try {
+        const res = await pagoService.migrarGmailSyncItemAPendientes(item.id)
+        if (!res.pago_con_error || res.pago_con_error_id == null) {
+          toast.error(
+            'No se pudo abrir la revision manual (respuesta incompleta del backend).'
+          )
+          return
+        }
+        if (res.ya_en_pagos) {
+          // Serial repetido: el modal abre con `duplicado_documento_en_pagos=true`
+          // y `mostrarCampoCodigoDocumento=true`, permitiendo agregar sufijo
+          // (mismo flujo que revisión manual de préstamos).
+          toast(
+            res.mensaje ||
+              `Serial ${item.numero_referencia || '(s/r)'} ya existe en cartera. ` +
+                `Agregue un código (sufijo) para diferenciar el pago.`,
+            { duration: 8000 }
+          )
+        }
+        const inicial = pagoInicialDesdePagoConError(res.pago_con_error)
+        setEditPago({
+          pagoConErrorId: res.pago_con_error_id,
+          inicial,
+        })
+        void queryClient.invalidateQueries({ queryKey: QK_LIST })
+      } catch (e) {
+        toast.error(
+          getErrorMessage(e) || 'No se pudo migrar la fila a pagos_con_errores'
+        )
+      } finally {
+        setMigrandoId(null)
+      }
     },
-    onError: err => {
-      toast.error(getErrorMessage(err) || 'No se pudo editar')
-    },
-  })
+    [queryClient]
+  )
 
-  const handleEditar = useCallback((item: GmailSyncItemUI) => {
-    setEditandoId(item.id)
-    setEdicion(filaInicialDesdeItem(item))
+  const cerrarModalEdit = useCallback(() => {
+    setEditPago(null)
   }, [])
-
-  const handleCancelarEdicion = useCallback(() => {
-    setEditandoId(null)
-    setEdicion(null)
-  }, [])
-
-  const handleGuardarEdicion = useCallback(() => {
-    if (editandoId == null || edicion == null) return
-    editarMutation.mutate({ itemId: editandoId, cambios: edicion })
-  }, [editandoId, edicion, editarMutation])
 
   const handleEliminar = useCallback(
     (item: GmailSyncItemUI) => {
@@ -334,8 +369,6 @@ export default function ActualizacionesGmailPage() {
       void queryClient.invalidateQueries({ queryKey: QK_LIST })
     }
   }, [ejecutandoPipeline, gmailStatus?.last_status, queryClient])
-
-  const editingActive = editandoId != null && edicion != null
 
   return (
     <div className="mx-auto max-w-7xl space-y-6 p-4 md:p-6">
@@ -637,9 +670,9 @@ export default function ActualizacionesGmailPage() {
                     </tr>
                   ) : (
                     tablaItems.map(item => {
-                      const enEdicion = editingActive && editandoId === item.id
                       const dup = item.duplicado_en_pagos
                       const compUrl = urlComprobante(item.comprobante_url)
+                      const migrandoEste = migrandoId === item.id
                       return (
                         <tr
                           key={item.id}
@@ -656,75 +689,16 @@ export default function ActualizacionesGmailPage() {
                             />
                           </td>
                           <td className="px-3 py-2 align-top">
-                            {enEdicion ? (
-                              <Input
-                                value={edicion?.banco || ''}
-                                onChange={e =>
-                                  setEdicion(
-                                    prev =>
-                                      prev && { ...prev, banco: e.target.value }
-                                  )
-                                }
-                                className="h-8 text-xs"
-                              />
-                            ) : (
-                              item.banco || '-'
-                            )}
+                            {item.banco || '-'}
                           </td>
                           <td className="px-3 py-2 align-top">
-                            {enEdicion ? (
-                              <Input
-                                value={edicion?.fecha_pago || ''}
-                                onChange={e =>
-                                  setEdicion(
-                                    prev =>
-                                      prev && {
-                                        ...prev,
-                                        fecha_pago: e.target.value,
-                                      }
-                                  )
-                                }
-                                placeholder="dd/MM/yyyy o YYYY-MM-DD"
-                                className="h-8 text-xs"
-                              />
-                            ) : (
-                              item.fecha_pago || '-'
-                            )}
+                            {item.fecha_pago || '-'}
                           </td>
                           <td className="px-3 py-2 text-right align-top tabular-nums">
-                            {enEdicion ? (
-                              <Input
-                                value={edicion?.monto || ''}
-                                onChange={e =>
-                                  setEdicion(
-                                    prev =>
-                                      prev && { ...prev, monto: e.target.value }
-                                  )
-                                }
-                                className="h-8 text-right text-xs"
-                              />
-                            ) : (
-                              safeMonto(item)
-                            )}
+                            {safeMonto(item)}
                           </td>
                           <td className="px-3 py-2 align-top">
-                            {enEdicion ? (
-                              <Input
-                                value={edicion?.numero_referencia || ''}
-                                onChange={e =>
-                                  setEdicion(
-                                    prev =>
-                                      prev && {
-                                        ...prev,
-                                        numero_referencia: e.target.value,
-                                      }
-                                  )
-                                }
-                                className="h-8 text-xs"
-                              />
-                            ) : (
-                              item.numero_referencia || '-'
-                            )}
+                            {item.numero_referencia || '-'}
                           </td>
                           <td className="px-3 py-2 align-top text-xs">
                             {dup ? (
@@ -738,89 +712,55 @@ export default function ActualizacionesGmailPage() {
                             ) : (
                               <span className="text-muted-foreground">No</span>
                             )}
-                            {enEdicion ? (
-                              <div className="mt-2">
-                                <Input
-                                  value={edicion?.cedula || ''}
-                                  onChange={e =>
-                                    setEdicion(
-                                      prev =>
-                                        prev && {
-                                          ...prev,
-                                          cedula: e.target.value,
-                                        }
-                                    )
-                                  }
-                                  placeholder="Cedula"
-                                  className="h-8 text-xs"
-                                />
-                              </div>
-                            ) : null}
                           </td>
                           <td className="px-3 py-2 text-right align-top">
                             <div className="flex flex-wrap justify-end gap-1.5">
-                              {enEdicion ? (
-                                <>
-                                  <Button
-                                    size="sm"
-                                    onClick={handleGuardarEdicion}
-                                    disabled={editarMutation.isPending}
-                                  >
-                                    {editarMutation.isPending ? (
-                                      <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
-                                    ) : (
-                                      <Save className="mr-1 h-3.5 w-3.5" />
-                                    )}
-                                    OK
-                                  </Button>
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={handleCancelarEdicion}
-                                    disabled={editarMutation.isPending}
-                                  >
-                                    <X className="mr-1 h-3.5 w-3.5" />
-                                    Cancelar
-                                  </Button>
-                                </>
-                              ) : (
-                                <>
-                                  <Button
-                                    size="sm"
-                                    onClick={() => handleGuardar(item)}
-                                    disabled={
-                                      guardarMutation.isPending ||
-                                      eliminarMutation.isPending
-                                    }
-                                    title="Migrar a pagos_con_errores y aplicar mover-a-pagos (cascada cuotas)"
-                                  >
-                                    {guardarMutation.isPending ? (
-                                      <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
-                                    ) : (
-                                      <Save className="mr-1 h-3.5 w-3.5" />
-                                    )}
-                                    Guardar
-                                  </Button>
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() => handleEditar(item)}
-                                    disabled={guardarMutation.isPending}
-                                  >
-                                    <Pencil className="mr-1 h-3.5 w-3.5" />
-                                    Editar
-                                  </Button>
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() => handleEliminar(item)}
-                                    disabled={eliminarMutation.isPending}
-                                  >
-                                    <Trash2 className="mr-1 h-3.5 w-3.5" />
-                                    Eliminar
-                                  </Button>
-                                </>
-                              )}
+                              <Button
+                                size="sm"
+                                onClick={() => handleGuardar(item)}
+                                disabled={
+                                  guardarMutation.isPending ||
+                                  eliminarMutation.isPending ||
+                                  migrandoEste
+                                }
+                                title="Migrar a pagos_con_errores y aplicar mover-a-pagos (cascada cuotas)"
+                              >
+                                {guardarMutation.isPending ? (
+                                  <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                                ) : (
+                                  <Save className="mr-1 h-3.5 w-3.5" />
+                                )}
+                                Guardar
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => void handleEditar(item)}
+                                disabled={
+                                  guardarMutation.isPending ||
+                                  eliminarMutation.isPending ||
+                                  migrandoEste
+                                }
+                                title="Migra la fila a pagos_con_errores y abre el modal de revision manual (mismo flujo que pagos pendientes)"
+                              >
+                                {migrandoEste ? (
+                                  <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                                ) : (
+                                  <Pencil className="mr-1 h-3.5 w-3.5" />
+                                )}
+                                Editar
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleEliminar(item)}
+                                disabled={
+                                  eliminarMutation.isPending || migrandoEste
+                                }
+                              >
+                                <Trash2 className="mr-1 h-3.5 w-3.5" />
+                                Eliminar
+                              </Button>
                             </div>
                           </td>
                         </tr>
@@ -859,6 +799,22 @@ export default function ActualizacionesGmailPage() {
           </CardContent>
         </Card>
       ) : null}
+
+      {editPago != null && (
+        <RegistrarPagoForm
+          pagoId={editPago.pagoConErrorId}
+          pagoInicial={editPago.inicial}
+          esPagoConError
+          modoGuardarYProcesar
+          mostrarCampoCodigoDocumento
+          onClose={cerrarModalEdit}
+          onSuccess={() => {
+            cerrarModalEdit()
+            void queryClient.invalidateQueries({ queryKey: QK_LIST })
+            toast.success('Pago aplicado a cartera con cascada de cuotas.')
+          }}
+        />
+      )}
     </div>
   )
 }
