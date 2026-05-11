@@ -2845,7 +2845,14 @@ def historico_por_cliente(
 
 @router.get("/pagos-reportados/{pago_id}/comprobante")
 def get_comprobante(pago_id: int, db: Session = Depends(get_db)):
-    """Devuelve el archivo comprobante (imagen o PDF) desde BD."""
+    """Devuelve el archivo comprobante (imagen o PDF) desde BD.
+
+    Cache-Control: `private, max-age=86400, immutable`. El binario del comprobante
+    es inmutable mientras el reporte exista (no se reemplaza en el flujo actual),
+    así que permitir caché por sesión del operador evita re-descargar el archivo
+    cuando salta entre filas o reabre el visor. `private` impide que proxies
+    compartidos lo cacheen; la petición sigue requiriendo Bearer.
+    """
     pr = db.execute(select(PagoReportado).where(PagoReportado.id == pago_id)).scalars().first()
     if not pr:
         raise HTTPException(status_code=404, detail="Pago reportado no encontrado.")
@@ -2856,7 +2863,10 @@ def get_comprobante(pago_id: int, db: Session = Depends(get_db)):
     return Response(
         content=bcomp,
         media_type=(media or "application/octet-stream").split(";")[0].strip(),
-        headers={"Content-Disposition": f'inline; filename="{nombre}"'},
+        headers={
+            "Content-Disposition": f'inline; filename="{nombre}"',
+            "Cache-Control": "private, max-age=86400, immutable",
+        },
     )
 
 

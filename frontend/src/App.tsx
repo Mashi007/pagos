@@ -145,6 +145,7 @@ import { Login } from './pages/Login'
 
 import {
   AccesoLimitadoPage,
+  ActualizacionesGmailPage,
   ActualizacionesPrestamosDrivePage,
   AdminTasaCambioPage,
   AmortizacionPage,
@@ -567,6 +568,15 @@ function App() {
               element={
                 <SimpleProtectedRoute requireAdmin={true}>
                   <CuotasVsFechaBaseAdminPage />
+                </SimpleProtectedRoute>
+              }
+            />
+
+            <Route
+              path="actualizaciones/gmail"
+              element={
+                <SimpleProtectedRoute requireAdmin={true}>
+                  <ActualizacionesGmailPage />
                 </SimpleProtectedRoute>
               }
             />

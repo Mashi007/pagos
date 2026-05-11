@@ -280,6 +280,7 @@ type GmailScanFilter =
   | 'all'
   | 'pending_identification'
   | 'error_email_rescan'
+  | 'manual_redigitaliza_por_remitente'
 
 function mensajeSinCorreosNiFilas(scan: GmailScanFilter): string {
   const base =
@@ -293,6 +294,8 @@ function mensajeSinCorreosNiFilas(scan: GmailScanFilter): string {
       ' Filtro: pendientes de identificación. Revise esa vista y las etiquetas del flujo.',
     error_email_rescan:
       ' Filtro: re-escaneo ERROR EMAIL. Revise esos hilos y las etiquetas del flujo.',
+    manual_redigitaliza_por_remitente:
+      ' Filtro: re-escaneo manual por remitente. Verifica que el correo tenga adjuntos/imagen-PDF en bandeja.',
   }
 
   return base + porFiltro[scan]
@@ -534,12 +537,8 @@ export function useGmailPipeline({
 
   const run = useCallback(
     async (
-      scanFilter?:
-        | 'unread'
-        | 'read'
-        | 'all'
-        | 'pending_identification'
-        | 'error_email_rescan'
+      scanFilter?: GmailScanFilter,
+      fromEmail?: string | null
     ) => {
       if (loading) return
 
@@ -554,7 +553,7 @@ export function useGmailPipeline({
       toast('Procesando correos en segundo plano...', { duration: 4000 })
 
       try {
-        await pagoService.runGmailNow(true, scanFilter)
+        await pagoService.runGmailNow(true, scanFilter, fromEmail ?? null)
 
         // El endpoint devuelve inmediatamente (status="running"); hacer polling
 

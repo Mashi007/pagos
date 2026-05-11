@@ -115,6 +115,24 @@ function formatFechaPago(value: string): string {
   return `${m[3]}/${m[2]}/${m[1]}`
 }
 
+/**
+ * Fechas cortas mostradas en la tabla. fecha_reporte normalmente viene como
+ * datetime ISO con `T`/`Z` (TZ explícita) y `toLocaleDateString` es correcto.
+ * Pero si el backend la serializa como "YYYY-MM-DD" puro, `new Date(...)` en
+ * `America/Caracas` (UTC-4) la interpreta como medianoche UTC y la muestra un
+ * día menos. Detectamos ese caso y mostramos DD/MM/YYYY directo, sin Date.
+ */
+function formatFechaCorta(value: string): string {
+  const raw = String(value || '')
+  if (!raw) return ''
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    return formatFechaPago(raw)
+  }
+  const d = new Date(raw)
+  if (Number.isNaN(d.getTime())) return raw
+  return d.toLocaleDateString()
+}
+
 const COMPROBANTE_FLOAT_MIN_W = 260
 const COMPROBANTE_FLOAT_MIN_H = 180
 const COMPROBANTE_FLOAT_DEFAULT_W = 460
@@ -140,6 +158,53 @@ type ComprobantePreviewState = {
   contentType: string | null
   loading: boolean
   rotDeg: number
+}
+
+/**
+ * Cuerpo del visor de comprobante reutilizado por la vista docked (≥1024px) y
+ * la ventana flotante (mobile / <1024px). Solo cambia la clase del iframe (el
+ * docked usa altura completa del aside, el flotante usa el alto del modal),
+ * por eso es un prop. El resto (loader, imagen con rotación, fallback) es
+ * idéntico en ambos contextos y antes vivía duplicado en dos puntos del JSX.
+ */
+function ComprobantePreviewBody({
+  preview,
+  iframeClassName,
+}: {
+  preview: ComprobantePreviewState
+  iframeClassName: string
+}) {
+  if (preview.loading) {
+    return <Loader2 className="h-10 w-10 animate-spin text-slate-500" />
+  }
+  if (preview.blobUrl && preview.contentType?.startsWith('image/')) {
+    return (
+      <div
+        className="inline-flex max-h-full max-w-full origin-center transition-transform duration-200"
+        style={{ transform: `rotate(${preview.rotDeg}deg)` }}
+      >
+        <img
+          src={preview.blobUrl}
+          alt="Comprobante"
+          className="max-h-full max-w-full object-contain"
+        />
+      </div>
+    )
+  }
+  if (preview.blobUrl) {
+    return (
+      <iframe
+        title={`Comprobante ${preview.pagoId ?? ''}`}
+        src={preview.blobUrl}
+        className={iframeClassName}
+      />
+    )
+  }
+  return (
+    <div className="px-3 text-sm text-muted-foreground">
+      No se pudo cargar el comprobante.
+    </div>
+  )
 }
 
 import {
@@ -285,9 +350,20 @@ const isMercantilBank = (value: string) =>
     .toLowerCase()
     .includes('mercantil')
 
-/** Filas que pueden aprobarse desde el listado (misma regla que el selector «Aprobar» por fila). */
+/**
+ * Filas seleccionables para aprobación masiva.
+ *
+ * El backend rechaza con 409 cualquier aprobación cuyo `numero_operacion` ya
+ * exista en la tabla `pagos` (ver routes.py `_rechazar_aprobacion_si_documento_ya_en_pagos`).
+ * Si se permiten dentro del lote, suman ruido al contador "fail" y desperdician
+ * peticiones HTTP. Excluimos de la selección esas filas. La acción individual
+ * por fila (botón "Aprobar" en el selector de estado) sigue disponible para que
+ * el operador pueda forzar el flujo caso a caso si lo decide.
+ */
 function puedeAprobarMasivoRow(row: PagoReportadoItem): boolean {
-  return row.estado === 'pendiente' || row.estado === 'en_revision'
+  if (row.estado !== 'pendiente' && row.estado !== 'en_revision') return false
+  if (esDuplicadoCarteraRow(row)) return false
+  return true
 }
 
 /** Anchos por defecto (px) para la tabla de pagos reportados; el usuario puede redimensionar. */
@@ -650,7 +726,14 @@ export default function CobrosPagosReportadosPage() {
     soloDuplicadoDocumento,
   ])
 
-  /** Refresco en segundo plano: respeta caché cliente (`listPagosReportadosConKpis`); sin `bypassCache` salvo tras mutaciones o «Buscar». */
+  /**
+   * Refresco en segundo plano. El intervalo coincide con el TTL del caché cliente
+   * (`COBROS_LISTADO_KPIS_CACHE_TTL_MS`); si no forzamos `bypassCache`, por carrera
+   * de tiempo a veces el `listPagosReportadosConKpis` devuelve la copia local y el
+   * "refresco cada 15 min" se vuelve cada ~30 min reales. Pasamos `bypassCache: true`
+   * SOLO en este tick (no afecta a "Buscar" ni a la carga inicial); el backend tiene
+   * su propio caché Redis + single-flight para absorber la carga.
+   */
   useEffect(() => {
     const tick = () => {
       if (
@@ -659,7 +742,7 @@ export default function CobrosPagosReportadosPage() {
       ) {
         return
       }
-      void fetchListado({ silent: true })
+      void fetchListado({ silent: true, bypassCache: true })
     }
     const id = window.setInterval(tick, COBROS_LISTADO_KPIS_CACHE_TTL_MS)
     return () => window.clearInterval(id)
@@ -1164,23 +1247,32 @@ export default function CobrosPagosReportadosPage() {
     }
 
     // Cola operativa: primero la entrada más vieja.
-    filtrados.sort((a, b) => {
-      const ta = Number(new Date(a.fecha_reporte).getTime())
-      const tb = Number(new Date(b.fecha_reporte).getTime())
-      if (ta !== tb) return ta - tb
-
-      const aa = normalizarCedula(a.cedula_display)
-      const bb = normalizarCedula(b.cedula_display)
-      const cmp = aa.localeCompare(bb, 'es', {
+    // Pre-decoramos cada fila con `_ts` y `_ck` para que el comparador no instancie
+    // `Date` ni normalice cédulas O(n log n) veces durante el sort.
+    type DecoratedRow = {
+      row: PagoReportadoItem
+      ts: number
+      ck: string
+    }
+    const decorated: DecoratedRow[] = filtrados.map(row => {
+      const t = new Date(row.fecha_reporte).getTime()
+      return {
+        row,
+        ts: Number.isFinite(t) ? t : 0,
+        ck: normalizarCedula(row.cedula_display),
+      }
+    })
+    decorated.sort((a, b) => {
+      if (a.ts !== b.ts) return a.ts - b.ts
+      const cmp = a.ck.localeCompare(b.ck, 'es', {
         numeric: true,
         sensitivity: 'base',
       })
       if (cmp !== 0) return cmp
-
-      return Number(a.id) - Number(b.id)
+      return Number(a.row.id) - Number(b.row.id)
     })
 
-    return filtrados
+    return decorated.map(d => d.row)
   }, [
     data?.items,
     estado,
@@ -1403,33 +1495,10 @@ export default function CobrosPagosReportadosPage() {
           </div>
           <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden p-2 lg:pl-0 lg:pr-2">
             <div className="flex min-h-0 flex-1 items-center justify-center overflow-auto rounded-md border border-slate-200/80 bg-white lg:rounded-l-none lg:border-l-0">
-              {previewComprobante.loading ? (
-                <Loader2 className="h-10 w-10 animate-spin text-slate-500" />
-              ) : previewComprobante.blobUrl &&
-                previewComprobante.contentType?.startsWith('image/') ? (
-                <div
-                  className="inline-flex max-h-full max-w-full origin-center transition-transform duration-200"
-                  style={{
-                    transform: `rotate(${previewComprobante.rotDeg}deg)`,
-                  }}
-                >
-                  <img
-                    src={previewComprobante.blobUrl}
-                    alt="Comprobante"
-                    className="max-h-full max-w-full object-contain"
-                  />
-                </div>
-              ) : previewComprobante.blobUrl ? (
-                <iframe
-                  title={`Comprobante ${previewComprobante.pagoId ?? ''}`}
-                  src={previewComprobante.blobUrl}
-                  className="h-[min(36vh,320px)] min-h-[200px] w-full flex-1 border-0 lg:h-full lg:min-h-[min(50vh,520px)]"
-                />
-              ) : (
-                <div className="px-3 text-sm text-muted-foreground">
-                  No se pudo cargar el comprobante.
-                </div>
-              )}
+              <ComprobantePreviewBody
+                preview={previewComprobante}
+                iframeClassName="h-[min(36vh,320px)] min-h-[200px] w-full flex-1 border-0 lg:h-full lg:min-h-[min(50vh,520px)]"
+              />
             </div>
           </div>
         </aside>
@@ -2044,7 +2113,11 @@ export default function CobrosPagosReportadosPage() {
                             ) : (
                               <span
                                 className="text-muted-foreground"
-                                title="Solo se puede marcar pendiente o en revisión"
+                                title={
+                                  esDuplicadoCarteraRow(row)
+                                    ? 'No seleccionable en lote: el comprobante ya existe en cartera (PAGO DUPLICADO). Si necesita forzarlo, use el botón Aprobar por fila.'
+                                    : 'Solo se puede marcar pendiente o en revisión'
+                                }
                               >
                                 -
                               </span>
@@ -2168,8 +2241,11 @@ export default function CobrosPagosReportadosPage() {
                           </td>
 
                           <td className="whitespace-nowrap px-2 py-2 align-middle text-xs sm:text-sm">
-                            <span className="block truncate">
-                              {new Date(row.fecha_reporte).toLocaleDateString()}
+                            <span
+                              className="block truncate"
+                              title={row.fecha_reporte}
+                            >
+                              {formatFechaCorta(row.fecha_reporte)}
                             </span>
                           </td>
 
@@ -2601,33 +2677,10 @@ export default function CobrosPagosReportadosPage() {
                 </div>
                 <div className="relative min-h-0 flex-1 overflow-hidden p-1">
                   <div className="flex h-full min-h-0 w-full items-center justify-center overflow-auto rounded-md bg-slate-50">
-                    {previewComprobante.loading ? (
-                      <Loader2 className="h-10 w-10 animate-spin text-slate-500" />
-                    ) : previewComprobante.blobUrl &&
-                      previewComprobante.contentType?.startsWith('image/') ? (
-                      <div
-                        className="inline-flex max-h-full max-w-full origin-center transition-transform duration-200"
-                        style={{
-                          transform: `rotate(${previewComprobante.rotDeg}deg)`,
-                        }}
-                      >
-                        <img
-                          src={previewComprobante.blobUrl}
-                          alt="Comprobante"
-                          className="max-h-full max-w-full object-contain"
-                        />
-                      </div>
-                    ) : previewComprobante.blobUrl ? (
-                      <iframe
-                        title={`Comprobante ${previewComprobante.pagoId ?? ''}`}
-                        src={previewComprobante.blobUrl}
-                        className="h-full min-h-0 w-full border-0"
-                      />
-                    ) : (
-                      <div className="px-3 text-sm text-muted-foreground">
-                        No se pudo cargar el comprobante.
-                      </div>
-                    )}
+                    <ComprobantePreviewBody
+                      preview={previewComprobante}
+                      iframeClassName="h-full min-h-0 w-full border-0"
+                    />
                   </div>
                   <button
                     type="button"

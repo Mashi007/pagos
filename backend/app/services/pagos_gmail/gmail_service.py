@@ -248,23 +248,72 @@ def pagos_gmail_pending_identification_query() -> str:
     return pagos_gmail_inbox_media_query()
 
 
-def pagos_gmail_list_query_for_scan_filter(filter_type: str) -> str:
+# Scan filter para re-escaneo manual por remitente concreto (módulo Actualizaciones > Gmail).
+# A diferencia de **all**, este filtro acota la lista Gmail a un único `from:` y el pipeline
+# saltea la omisión por etiquetas de usuario para mensajes cuyo remitente coincida exactamente
+# (ver ``pipeline.py``: re-procesa y, antes de Gemini, retira del set permitido).
+PAGOS_GMAIL_SCAN_FILTER_MANUAL_REDIG_REMITENTE = "manual_redigitaliza_por_remitente"
+
+
+def _sanitize_from_email_for_gmail_query(from_email: Optional[str]) -> Optional[str]:
+    """
+    Normaliza el correo para usar como ``from:`` en la búsqueda Gmail.
+    Devuelve None si no es un email plausible (sin ``@`` o caracteres peligrosos para ``q``).
+    """
+    if not from_email:
+        return None
+    s = str(from_email).strip().lower()
+    if not s or "@" not in s:
+        return None
+    # Gmail acepta `from:foo@bar.com`; evitamos comillas y espacios que rompan q.
+    if any(c in s for c in (" ", '"', "'", "\n", "\r", "\t")):
+        return None
+    # Restringido a chars válidos de email + algunos signos comunes (+, %, ., _, -).
+    if not re.fullmatch(r"[a-z0-9._%+\-]+@[a-z0-9.\-]+\.[a-z]{2,}", s):
+        return None
+    return s
+
+
+def pagos_gmail_manual_redigitaliza_por_remitente_query(from_email: str) -> str:
+    """
+    Re-escaneo manual: inbox + media + ``from:<correo>``. Si el correo no es válido,
+    devuelve la query base (el pipeline interpreta el caso 'sin from_email').
+    """
+    sender = _sanitize_from_email_for_gmail_query(from_email)
+    base = pagos_gmail_inbox_media_query()
+    if not sender:
+        return base
+    return f"{base} from:{sender}"
+
+
+def pagos_gmail_list_query_for_scan_filter(
+    filter_type: str,
+    from_email: Optional[str] = None,
+) -> str:
     """
     Parámetro **q** de Gmail para listar/count según scan_filter del pipeline.
     - **all** / **pending_identification**: inbox + criterio imagen/PDF (incluye etiqueta ERROR EMAIL y demás).
     - **unread** / **read**: mismo criterio + is:unread / is:read.
     - **error_email_rescan**: inbox + media + label ERROR EMAIL.
+    - **manual_redigitaliza_por_remitente**: inbox + media + ``from:<correo>`` (re-escaneo manual).
+      Cuando ``from_email`` es válido, también se aplica a **all/unread/read** para acotar el listado al remitente.
     """
     ft = (filter_type or "").strip().lower()
     if ft == "error_email_rescan":
         return pagos_gmail_error_email_rescan_query()
     if ft == "manual_error_email_redigitaliza":
         return pagos_gmail_manual_error_email_redigitaliza_query()
+    if ft == PAGOS_GMAIL_SCAN_FILTER_MANUAL_REDIG_REMITENTE:
+        # from_email obligatorio para tener sentido; el endpoint valida y rechaza si falta.
+        return pagos_gmail_manual_redigitaliza_por_remitente_query(from_email or "")
     base = pagos_gmail_inbox_media_query()
     if ft == "unread":
-        return f"{base} is:unread"
-    if ft == "read":
-        return f"{base} is:read"
+        base = f"{base} is:unread"
+    elif ft == "read":
+        base = f"{base} is:read"
+    sender = _sanitize_from_email_for_gmail_query(from_email)
+    if sender:
+        return f"{base} from:{sender}"
     return base
 
 
@@ -341,15 +390,21 @@ def _parse_gmail_retry_after_seconds(exc: Exception) -> Optional[int]:
         return None
 
 
-def list_messages_by_filter(service: Any, filter_type: str = "all") -> List[dict]:
+def list_messages_by_filter(
+    service: Any,
+    filter_type: str = "all",
+    from_email: Optional[str] = None,
+) -> List[dict]:
     """
     Lista mensajes segun el filtro; correos con adjunto o parte imagen/PDF nombrada (inline/cuerpo).
     filter_type: "unread" | "read" | "all" | "pending_identification" | "error_email_rescan"
-    | "manual_error_email_redigitaliza".
+    | "manual_error_email_redigitaliza" | "manual_redigitaliza_por_remitente".
     Por defecto (**all** / **pending_identification**): inbox + imagen/PDF, leidos y no leidos, con cualquier etiqueta
     (incluye **ERROR EMAIL**; no se excluye por -label:).
     **unread** / **read**: mismo criterio + ``is:unread`` / ``is:read`` en la consulta Gmail.
     **error_email_rescan**: inbox con etiqueta ERROR EMAIL + media; el pipeline puede procesar si **solo** esa etiqueta de usuario (ver omision por etiquetas en ``pipeline.py``).
+    **manual_redigitaliza_por_remitente**: inbox + media + ``from:<from_email>``; el pipeline no omite por etiquetas de usuario cuando el remitente del mensaje coincide con ``from_email`` (ver pipeline).
+    ``from_email`` (opcional, solo modo manual por remitente o como acotación adicional): añade ``from:<correo>`` al criterio **q** Gmail.
     Pagina con **maxResults** 500 hasta que no haya **nextPageToken** (todos los mensajes que cumplen **q**).
     Metadata de mensajes: **batch** ``messages.get`` (tamaño de lote configurable, por defecto 8) para reducir 429 por concurrencia.
     Cada elemento incluye **internal_date_ms** (epoch ms de Gmail) y **label_ids** (incluye UNREAD si aplica);
@@ -365,7 +420,7 @@ def list_messages_by_filter(service: Any, filter_type: str = "all") -> List[dict
             "maxResults": 500,
             "includeSpamTrash": False,
         }
-        params_base["q"] = pagos_gmail_list_query_for_scan_filter(filter_type)
+        params_base["q"] = pagos_gmail_list_query_for_scan_filter(filter_type, from_email)
 
         while True:
             params = dict(params_base)
@@ -455,10 +510,15 @@ def list_messages_by_filter(service: Any, filter_type: str = "all") -> List[dict
 
 
 
-def count_messages_by_filter(service: Any, filter_type: str = "all") -> int:
+def count_messages_by_filter(
+    service: Any,
+    filter_type: str = "all",
+    from_email: Optional[str] = None,
+) -> int:
     """
     Cuenta mensajes segun el filtro sin obtener metadata (solo list paginado).
     Mismo criterio **q** que list_messages_by_filter (ver pagos_gmail_list_query_for_scan_filter).
+    ``from_email`` opcional para acotar a un remitente (modo manual_redigitaliza_por_remitente).
     """
     from googleapiclient.errors import HttpError
 
@@ -470,7 +530,7 @@ def count_messages_by_filter(service: Any, filter_type: str = "all") -> int:
             "maxResults": 500,
             "includeSpamTrash": False,
         }
-        params_base["q"] = pagos_gmail_list_query_for_scan_filter(filter_type)
+        params_base["q"] = pagos_gmail_list_query_for_scan_filter(filter_type, from_email)
         while True:
             params = dict(params_base)
             if page_token:

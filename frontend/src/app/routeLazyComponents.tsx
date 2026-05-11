@@ -100,6 +100,10 @@ export const ActualizacionesPrestamosDrivePage = lazy(
   () => import('../pages/ActualizacionesPrestamosDrivePage')
 )
 
+export const ActualizacionesGmailPage = lazy(
+  () => import('../pages/ActualizacionesGmailPage')
+)
+
 export const FechaQAuditoriaTotalPage = lazy(
   () => import('../pages/FechaQAuditoriaTotalPage')
 )

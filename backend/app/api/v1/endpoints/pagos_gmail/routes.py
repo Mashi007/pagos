@@ -88,12 +88,26 @@ def _is_pipeline_running(db: Session) -> bool:
     return _get_blocking_running_sync(db) is not None
 
 
-def _run_pipeline_background(sync_id: int, scan_filter: str = "all") -> None:
+def _run_pipeline_background(
+    sync_id: int,
+    scan_filter: str = "all",
+    from_email: Optional[str] = None,
+) -> None:
     """Ejecuta el pipeline en background con su propia sesión de BD (evita el timeout de 30s de Render/Axios)."""
     db = SessionLocal()
-    logger.info("[PAGOS_GMAIL] [ETAPA] Inicio pipeline background sync_id=%s scan_filter=%s", sync_id, scan_filter)
+    logger.info(
+        "[PAGOS_GMAIL] [ETAPA] Inicio pipeline background sync_id=%s scan_filter=%s from_email=%s",
+        sync_id,
+        scan_filter,
+        from_email or "(sin remitente)",
+    )
     try:
-        _, final_status = run_pipeline(db, existing_sync_id=sync_id, scan_filter=scan_filter)
+        _, final_status = run_pipeline(
+            db,
+            existing_sync_id=sync_id,
+            scan_filter=scan_filter,
+            from_email=from_email,
+        )
         if final_status == "success":
             mig = _migrar_pendientes_gmail_a_con_errores_core(db)
             if int(mig.get("migrados", 0) or 0) > 0:
@@ -118,9 +132,29 @@ def _run_pipeline_background(sync_id: int, scan_filter: str = "all") -> None:
         db.close()
 
 
+# Validación email para modo manual_redigitaliza_por_remitente (mismo criterio que gmail_service).
+_FROM_EMAIL_RE = re.compile(r"^[a-z0-9._%+\-]+@[a-z0-9.\-]+\.[a-z]{2,}$")
+
+
+def _validate_from_email(from_email: Optional[str]) -> Optional[str]:
+    """Devuelve el email normalizado (lower, sin espacios) si es plausible; None si no."""
+    if not from_email:
+        return None
+    s = str(from_email).strip().lower()
+    if not s or "@" not in s:
+        return None
+    if not _FROM_EMAIL_RE.fullmatch(s):
+        return None
+    return s
+
+
 @router.get("/count-pending")
 def count_pending(
     scan_filter: str = "all",
+    from_email: Optional[str] = Query(
+        None,
+        description="Solo modo manual_redigitaliza_por_remitente: acota la cuenta a correos con from:<email>.",
+    ),
     db: Session = Depends(get_db),
 ):
     """
@@ -128,7 +162,8 @@ def count_pending(
     El frontend puede mostrar "Se procesaran N correos. Iniciar? Si / No" y solo llamar
     POST /run-now si el usuario confirma (Si = inicia, No = no hace nada).
     Escaneo normal: siempre **all** (inbox + imagen/PDF, leídos y no leídos).
-    Solo se conservan filtros especiales explícitos: error_email_rescan / manual_error_email_redigitaliza.
+    Filtros especiales permitidos: error_email_rescan / manual_error_email_redigitaliza /
+    manual_redigitaliza_por_remitente.
     """
     creds = get_pagos_gmail_credentials()
     if not creds:
@@ -137,12 +172,24 @@ def count_pending(
     if scan_filter not in (
         "error_email_rescan",
         "manual_error_email_redigitaliza",
+        "manual_redigitaliza_por_remitente",
     ):
         scan_filter = "all"
+    from_email_norm = _validate_from_email(from_email)
+    if scan_filter == "manual_redigitaliza_por_remitente" and not from_email_norm:
+        return {
+            "count": 0,
+            "scan_filter": scan_filter,
+            "error": "from_email_invalido_o_faltante",
+        }
     try:
         gmail_svc = build_gmail_service(creds)
-        count = count_messages_by_filter(gmail_svc, scan_filter)
-        return {"count": count, "scan_filter": scan_filter}
+        count = count_messages_by_filter(gmail_svc, scan_filter, from_email=from_email_norm)
+        return {
+            "count": count,
+            "scan_filter": scan_filter,
+            "from_email": from_email_norm,
+        }
     except Exception as e:
         logger.warning("[PAGOS_GMAIL] count-pending error: %s", e)
         return {"count": 0, "scan_filter": scan_filter, "error": str(e)[:200]}
@@ -153,6 +200,11 @@ def run_now(
     background_tasks: BackgroundTasks,
     force: bool = True,
     scan_filter: str = "all",
+    from_email: Optional[str] = Query(
+        None,
+        description="Solo modo manual_redigitaliza_por_remitente: re-escanea correos con from:<email> "
+        "saltando la omisión por etiqueta de usuario únicamente para ese remitente.",
+    ),
     db: Session = Depends(get_db),
 ):
     """
@@ -160,7 +212,9 @@ def run_now(
     Solo correos con adjuntos; candidatos imagen/PDF: incrustados, adjuntos y reenvios rfc822.
     Escaneo normal: siempre **all** (inbox + imagen/PDF, leídos y no leídos).
     Si el mensaje ya tiene cualquier etiqueta de usuario Gmail, se omite (skip total).
-    Filtros especiales permitidos: **error_email_rescan** y **manual_error_email_redigitaliza**.
+    Filtros especiales permitidos: **error_email_rescan**, **manual_error_email_redigitaliza** y
+    **manual_redigitaliza_por_remitente** (módulo Actualizaciones > Gmail: ignora etiquetas previas
+    SOLO para mensajes cuyo remitente coincide con `from_email`).
     Listado completo por paginacion Gmail; procesamiento en orden bandeja (mas reciente primero, mas antiguo al final).
     Los mensajes no leidos quedan leidos al procesarlos en la corrida.
     El frontend debe hacer polling a GET /status hasta que last_status sea 'success' o 'error'.
@@ -190,25 +244,39 @@ def run_now(
                 "y luego pulse «Conectar con Google» para obtener un nuevo token. Sin reconectar, el token antiguo no funciona con el secret nuevo."
             ),
         )
+    # Escaneo normal siempre en "all"; conservar filtros especiales explícitos.
+    if scan_filter not in (
+        "error_email_rescan",
+        "manual_error_email_redigitaliza",
+        "manual_redigitaliza_por_remitente",
+    ):
+        scan_filter = "all"
+    from_email_norm = _validate_from_email(from_email)
+    if scan_filter == "manual_redigitaliza_por_remitente" and not from_email_norm:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "scan_filter='manual_redigitaliza_por_remitente' requiere un from_email válido "
+                "(ej. cliente@dominio.com)."
+            ),
+        )
     # Crear registro de sync de inmediato (evita que un segundo click arranque otro pipeline)
     sync = PagosGmailSync(status="running", emails_processed=0, files_processed=0)
     db.add(sync)
     db.commit()
     db.refresh(sync)
     sync_id = sync.id
-    # Escaneo normal siempre en "all"; solo conservar filtros especiales explícitos.
-    if scan_filter not in (
-        "error_email_rescan",
-        "manual_error_email_redigitaliza",
-    ):
-        scan_filter = "all"
     # Lanzar pipeline en segundo plano; el cliente hace polling a /status
-    background_tasks.add_task(_run_pipeline_background, sync_id, scan_filter)
+    background_tasks.add_task(
+        _run_pipeline_background, sync_id, scan_filter, from_email_norm
+    )
     return {
         "sync_id": sync_id,
         "status": "running",
         "emails_processed": 0,
         "files_processed": 0,
+        "scan_filter": scan_filter,
+        "from_email": from_email_norm,
     }
 
 
@@ -1210,4 +1278,447 @@ def limpiar_temporal_autoconciliados(db: Session = Depends(get_db)):
         "eliminados": len(ids),
         "mensaje": "Limpieza de residuales autoconciliados completada.",
         "ids_muestra": ids[:20],
+    }
+
+
+# ---------------------------------------------------------------------------
+# Listado/acciones por sync_item (módulo Actualizaciones > Gmail)
+# ---------------------------------------------------------------------------
+
+
+def _sync_item_fecha_correo(item: PagosGmailSyncItem) -> Optional[str]:
+    """
+    Fecha del correo (YYYY-MM-DD) reconstruida desde sheet_name si está disponible.
+    sheet_name 'Pagos_Cobros_9Marzo2026' -> '2026-03-09'.
+    Si no se puede parsear, fallback al created_at del item (UTC) en YYYY-MM-DD.
+    """
+    from app.services.pagos_gmail.helpers import parse_date_from_sheet_name
+    d = parse_date_from_sheet_name(item.sheet_name or "") if item.sheet_name else None
+    if d is not None:
+        return d.strftime("%Y-%m-%d")
+    if item.created_at:
+        return item.created_at.strftime("%Y-%m-%d")
+    return None
+
+
+def _sync_item_comprobante_url(item: PagosGmailSyncItem) -> Optional[str]:
+    """
+    URL servible del comprobante: normaliza drive_link a path interno cuando aplica.
+    Si es URL externa (Drive heredado), se devuelve tal cual.
+    """
+    raw = (item.drive_link or "").strip()
+    if not raw:
+        return None
+    m = _COMPROBANTE_IMAGEN_PATH_RE.search(raw)
+    if m:
+        return m.group(1)
+    return raw[:1000]
+
+
+def _sync_item_duplicado_en_pagos(
+    db: Session, numero_referencia: Optional[str]
+) -> tuple[bool, Optional[int], Optional[int]]:
+    """
+    Devuelve (duplicado_bool, pago_id_si_existe, prestamo_id_si_existe).
+    Reutiliza primer_pago_cartera_por_documento; el serial del comprobante se almacena tal cual en
+    pagos.numero_documento cuando el flujo manual lo da de alta.
+    """
+    from app.services.pago_numero_documento import primer_pago_cartera_por_documento
+    ref = (numero_referencia or "").strip()
+    if not ref:
+        return False, None, None
+    pid, prid = primer_pago_cartera_por_documento(db, ref)
+    if pid is None:
+        return False, None, None
+    return True, pid, prid
+
+
+@router.get("/sync-items")
+def listar_sync_items(
+    correo: Optional[str] = Query(
+        None,
+        description="Filtra por correo_origen (case-insensitive, coincidencia parcial). "
+        "Si no se envía, devuelve los más recientes.",
+    ),
+    limit: int = Query(200, ge=1, le=1000),
+    offset: int = Query(0, ge=0),
+    excluir_autoconciliados: bool = Query(
+        True,
+        description="Excluye filas con traza CUOTAS_OK + pago_id (ya en cartera, no aporta revisión).",
+    ),
+    db: Session = Depends(get_db),
+):
+    """
+    Lista filas de `pagos_gmail_sync_item` para la tabla en pantalla del módulo
+    Actualizaciones > Gmail. Devuelve los campos exactos que necesita la UI:
+    fecha del correo, imagen (URL), banco, fecha de pago, monto, serial, asunto,
+    y un indicador `duplicado_en_pagos` con el `pago_id_existente` cuando aplica.
+    """
+    correo_lc = (correo or "").strip().lower() or None
+    q = select(PagosGmailSyncItem).order_by(desc(PagosGmailSyncItem.created_at))
+    if correo_lc:
+        q = q.where(func.lower(PagosGmailSyncItem.correo_origen).like(f"%{correo_lc}%"))
+    # Excluir filas con alta automática OK aplicada a cuotas (CUOTAS_OK + pago_id).
+    if excluir_autoconciliados:
+        sub_ok = (
+            select(PagosGmailAbcdCuotasTraza.sync_item_id)
+            .where(
+                PagosGmailAbcdCuotasTraza.etapa_final == "CUOTAS_OK",
+                PagosGmailAbcdCuotasTraza.pago_id.isnot(None),
+                PagosGmailAbcdCuotasTraza.sync_item_id.isnot(None),
+            )
+        )
+        q = q.where(PagosGmailSyncItem.id.notin_(sub_ok))
+
+    count_q = select(func.count()).select_from(PagosGmailSyncItem)
+    if correo_lc:
+        count_q = count_q.where(
+            func.lower(PagosGmailSyncItem.correo_origen).like(f"%{correo_lc}%")
+        )
+    total = int(db.scalar(count_q) or 0)
+
+    rows = db.execute(q.offset(offset).limit(limit)).scalars().all()
+    items: list[dict] = []
+    for r in rows:
+        duplicado, pago_id_exist, prestamo_id_exist = _sync_item_duplicado_en_pagos(
+            db, r.numero_referencia
+        )
+        items.append(
+            {
+                "id": r.id,
+                "sync_id": r.sync_id,
+                "fecha_correo": _sync_item_fecha_correo(r),
+                "comprobante_url": _sync_item_comprobante_url(r),
+                "banco": r.banco,
+                "fecha_pago": r.fecha_pago,
+                "cedula": r.cedula,
+                "monto": r.monto,
+                "numero_referencia": r.numero_referencia,
+                "correo_origen": r.correo_origen,
+                "asunto": r.asunto,
+                "gmail_message_id": r.gmail_message_id,
+                "gmail_thread_id": r.gmail_thread_id,
+                "created_at": r.created_at.isoformat() if r.created_at else None,
+                "duplicado_en_pagos": duplicado,
+                "pago_id_existente": pago_id_exist,
+                "prestamo_id_existente": prestamo_id_exist,
+            }
+        )
+    return {"total": total, "items": items, "limit": limit, "offset": offset}
+
+
+def _pago_con_error_desde_sync_item(
+    db: Session, item: PagosGmailSyncItem
+) -> PagoConError:
+    """
+    Construye y persiste un PagoConError a partir de un sync_item.
+    Mismas reglas que _migrar_pendientes_gmail_a_con_errores_core, acotadas a una fila:
+    - normaliza referencia y compone numero_documento.
+    - parsea fecha_pago a datetime (00:00:00).
+    - cédula formateada (PagoConError acepta sin FK a clientes).
+    - drive_link -> documento_ruta (path interno si aplica).
+    Devuelve la fila persistida (con id) tras flush.
+    """
+    fallback_dt = item.created_at or datetime.utcnow()
+    fecha_pago = _parse_fecha_pago_gmail_temporal(item.fecha_pago, fallback_dt)
+    cedula = formatear_cedula(item.cedula or "")
+    monto_txt = format_monto_excel_pagos_gmail(item.monto or "")
+    try:
+        monto_num = float(monto_txt) if monto_txt else 0.0
+    except ValueError:
+        monto_num = 0.0
+
+    numero_base = normalize_documento(item.numero_referencia)
+    numero_doc = compose_numero_documento_almacenado(
+        numero_base or f"GMAILSI-{item.id}", None
+    )
+
+    observaciones = "Pendiente desde Gmail (guardado manual desde módulo Actualizaciones > Gmail)"
+    if monto_num <= 0:
+        observaciones = (
+            f"{observaciones}; monto no interpretable: {(item.monto or '').strip() or 'vacío'}"
+        )[:255]
+
+    doc_ruta = _documento_ruta_desde_gmail_temporal(getattr(item, "drive_link", None))
+
+    nuevo = PagoConError(
+        prestamo_id=None,
+        cedula_cliente=cedula or None,
+        fecha_pago=fecha_pago,
+        monto_pagado=monto_num,
+        numero_documento=numero_doc,
+        institucion_bancaria=(item.banco or None),
+        estado="PENDIENTE",
+        conciliado=False,
+        usuario_registro="GMAIL_PIPELINE",
+        notas=(
+            f"Asunto: {(item.asunto or '').strip()} | "
+            f"Correo: {(item.correo_origen or '').strip()}"
+        )[:1000],
+        referencia_pago=(numero_base or f"GMAILSI-{item.id}")[:100],
+        observaciones=observaciones,
+        documento_ruta=doc_ruta,
+        documento_nombre=("Comprobante Gmail" if doc_ruta else None),
+    )
+    db.add(nuevo)
+    db.flush()
+    db.refresh(nuevo)
+    return nuevo
+
+
+def _eliminar_filas_gmail_relacionadas(db: Session, item: PagosGmailSyncItem) -> int:
+    """
+    Borra del lado Gmail (sync_item + filas equivalentes en gmail_temporal) cuando ya pasamos
+    a pagos_con_errores. Evita que la misma fila vuelva a verse en la tabla.
+    Devuelve filas afectadas en gmail_temporal.
+    """
+    where_temp = [
+        GmailTemporal.numero_referencia == item.numero_referencia,
+        GmailTemporal.correo_origen == item.correo_origen,
+    ]
+    if item.gmail_message_id:
+        where_temp.append(GmailTemporal.gmail_message_id == item.gmail_message_id)
+    res = db.execute(delete(GmailTemporal).where(and_(*where_temp)))
+    db.delete(item)
+    return int(getattr(res, "rowcount", 0) or 0)
+
+
+@router.post("/sync-items/{item_id}/guardar")
+def guardar_sync_item(
+    item_id: int,
+    db: Session = Depends(get_db),
+):
+    """
+    Acción "Guardar" desde la tabla del módulo Actualizaciones > Gmail.
+
+    Encadena en una sola llamada:
+    1) Migra la fila `pagos_gmail_sync_item` a `pagos_con_errores` (mismas reglas que
+       `_migrar_pendientes_gmail_a_con_errores_core` para una sola fila).
+    2) Llama internamente al endpoint `pagos_con_errores/mover-a-pagos`, que:
+       - valida duplicado en `pagos`,
+       - resuelve la cédula contra `clientes` (FK fk_pagos_cedula),
+       - crea el `Pago` con conciliado/verificado SI cuando hay préstamo + monto > 0,
+       - aplica el pago a cuotas con la cascada vigente
+         (`_aplicar_pago_a_cuotas_interno`; ver regla `pagos-cascada-no-fifo`).
+
+    No invade reglas de revisión manual: las validaciones se hacen exactamente como en el
+    flujo `pagos_con_errores`. Si falla la migración (p. ej. duplicado de documento o cliente
+    inexistente), se devuelve el detalle y la fila permanece en revisión manual.
+    """
+    from app.api.v1.endpoints.pagos_con_errores.routes import (
+        mover_a_pagos_normales,
+        EliminarPorDescargaBody,
+    )
+
+    item = db.get(PagosGmailSyncItem, item_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail=f"sync_item {item_id} no encontrado")
+
+    try:
+        with db.begin_nested():
+            # Si la referencia ya está aplicada en cartera, no crear nada nuevo: avisar.
+            duplicado, pago_id_exist, _prid = _sync_item_duplicado_en_pagos(
+                db, item.numero_referencia
+            )
+            if duplicado:
+                # Eliminamos sync_item y temporales: la fila ya no aporta revisión.
+                _eliminar_filas_gmail_relacionadas(db, item)
+                db.commit()
+                return {
+                    "ok": True,
+                    "movido_a_pagos": False,
+                    "ya_en_pagos": True,
+                    "pago_id_existente": pago_id_exist,
+                    "mensaje": (
+                        f"Ya existe pago con número {item.numero_referencia or '(s/r)'} "
+                        f"en cartera (pago_id={pago_id_exist}). Se eliminó la fila de revisión Gmail."
+                    ),
+                }
+
+            nuevo_pe = _pago_con_error_desde_sync_item(db, item)
+            pago_con_error_id = int(nuevo_pe.id)
+            _eliminar_filas_gmail_relacionadas(db, item)
+
+        db.commit()
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.exception(
+            "[PAGOS_GMAIL] guardar_sync_item: fallo creando pago_con_error item_id=%s: %s",
+            item_id,
+            e,
+        )
+        raise HTTPException(
+            status_code=500,
+            detail=f"No se pudo preparar la fila para guardar: {str(e)[:400]}",
+        ) from e
+
+    # Mover a pagos aplicando cascada de cuotas. Reutilizamos el endpoint canónico.
+    try:
+        resultado = mover_a_pagos_normales(
+            EliminarPorDescargaBody(ids=[pago_con_error_id]),
+            db=db,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(
+            "[PAGOS_GMAIL] guardar_sync_item: fallo en mover_a_pagos_normales pe_id=%s: %s",
+            pago_con_error_id,
+            e,
+        )
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                f"Pago_con_error creado (id={pago_con_error_id}) pero falló mover-a-pagos. "
+                f"Revíselo en pagos_con_errores. Detalle: {str(e)[:400]}"
+            ),
+        ) from e
+
+    movidos = int(resultado.get("movidos", 0) or 0) if isinstance(resultado, dict) else 0
+    errores = (
+        resultado.get("errores_procesamiento", []) if isinstance(resultado, dict) else []
+    )
+    ya_cargado = (
+        resultado.get("ya_cargado_eliminados", []) if isinstance(resultado, dict) else []
+    )
+    return {
+        "ok": movidos > 0 or bool(ya_cargado),
+        "movido_a_pagos": movidos > 0,
+        "pago_con_error_id": pago_con_error_id,
+        "pago_con_error_pendiente": bool(errores) and movidos == 0,
+        "errores": errores,
+        "ya_cargado_eliminados": ya_cargado,
+        "mensaje": (
+            "Pago movido a cartera y aplicado a cuotas (cascada)."
+            if movidos > 0
+            else (
+                "La fila quedó en pagos_con_errores para revisión manual "
+                f"(pe_id={pago_con_error_id}). Ver detalle en `errores`."
+            )
+        ),
+    }
+
+
+class GmailSyncItemEditarBody(BaseModel):
+    """Campos editables del sync_item antes de pulsar Guardar.
+    Campos no provistos se dejan tal cual están. El backend recorta longitudes a las del modelo.
+    """
+    banco: Optional[str] = None
+    cedula: Optional[str] = None
+    fecha_pago: Optional[str] = None  # YYYY-MM-DD o dd/MM/yyyy (mismo parser de gmail_temporal)
+    monto: Optional[str] = None
+    numero_referencia: Optional[str] = None
+
+
+@router.put("/sync-items/{item_id}")
+def editar_sync_item(
+    item_id: int,
+    payload: GmailSyncItemEditarBody = Body(...),
+    db: Session = Depends(get_db),
+):
+    """
+    Edita campos del `pagos_gmail_sync_item` (y la fila equivalente en `gmail_temporal`).
+    Permite corregir extracciones imperfectas de Gemini antes de "Guardar" (que aplica cascada).
+    Las validaciones de negocio (FK cliente, duplicado documento, monto>0) siguen ocurriendo en
+    el paso Guardar (vía `mover_a_pagos_normales` de `pagos_con_errores`).
+    """
+    item = db.get(PagosGmailSyncItem, item_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail=f"sync_item {item_id} no encontrado")
+
+    cambios: dict[str, str] = {}
+    if payload.banco is not None:
+        item.banco = (payload.banco or "").strip()[:50] or None
+        cambios["banco"] = item.banco or ""
+    if payload.cedula is not None:
+        item.cedula = (payload.cedula or "").strip()[:50] or None
+        cambios["cedula"] = item.cedula or ""
+    if payload.fecha_pago is not None:
+        item.fecha_pago = (payload.fecha_pago or "").strip()[:100] or None
+        cambios["fecha_pago"] = item.fecha_pago or ""
+    if payload.monto is not None:
+        item.monto = (payload.monto or "").strip()[:100] or None
+        cambios["monto"] = item.monto or ""
+    if payload.numero_referencia is not None:
+        item.numero_referencia = (payload.numero_referencia or "").strip()[:200] or None
+        cambios["numero_referencia"] = item.numero_referencia or ""
+
+    # Propagar a gmail_temporal por trazabilidad (cuando exista fila equivalente).
+    try:
+        if item.gmail_message_id:
+            temp_rows = db.execute(
+                select(GmailTemporal).where(
+                    GmailTemporal.gmail_message_id == item.gmail_message_id
+                )
+            ).scalars().all()
+            for tr in temp_rows:
+                if payload.banco is not None:
+                    tr.banco = item.banco
+                if payload.cedula is not None:
+                    tr.cedula = item.cedula
+                if payload.fecha_pago is not None:
+                    tr.fecha_pago = item.fecha_pago
+                if payload.monto is not None:
+                    tr.monto = item.monto
+                if payload.numero_referencia is not None:
+                    tr.numero_referencia = item.numero_referencia
+        db.commit()
+        db.refresh(item)
+    except Exception as e:
+        db.rollback()
+        logger.exception(
+            "[PAGOS_GMAIL] editar_sync_item: fallo item_id=%s: %s", item_id, e
+        )
+        raise HTTPException(
+            status_code=500, detail=f"No se pudo editar: {str(e)[:400]}"
+        ) from e
+
+    duplicado, pago_id_exist, prestamo_id_exist = _sync_item_duplicado_en_pagos(
+        db, item.numero_referencia
+    )
+    return {
+        "ok": True,
+        "item": {
+            "id": item.id,
+            "banco": item.banco,
+            "cedula": item.cedula,
+            "fecha_pago": item.fecha_pago,
+            "monto": item.monto,
+            "numero_referencia": item.numero_referencia,
+            "duplicado_en_pagos": duplicado,
+            "pago_id_existente": pago_id_exist,
+            "prestamo_id_existente": prestamo_id_exist,
+        },
+        "cambios": cambios,
+    }
+
+
+@router.delete("/sync-items/{item_id}")
+def eliminar_sync_item(item_id: int, db: Session = Depends(get_db)):
+    """
+    Elimina la fila `pagos_gmail_sync_item` (y filas equivalentes en `gmail_temporal`).
+    No toca etiquetas Gmail: la regla de skip-por-etiqueta global se preserva.
+    Acción local sobre la cola de revisión del módulo.
+    """
+    item = db.get(PagosGmailSyncItem, item_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail=f"sync_item {item_id} no encontrado")
+    try:
+        eliminados_temporal = _eliminar_filas_gmail_relacionadas(db, item)
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        logger.exception(
+            "[PAGOS_GMAIL] eliminar_sync_item: fallo item_id=%s: %s", item_id, e
+        )
+        raise HTTPException(
+            status_code=500, detail=f"No se pudo eliminar: {str(e)[:400]}"
+        ) from e
+    return {
+        "ok": True,
+        "sync_item_eliminado": item_id,
+        "gmail_temporal_eliminados": eliminados_temporal,
     }

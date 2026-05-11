@@ -109,6 +109,30 @@ export interface ApiResponse<T> {
   message?: string
 }
 
+/**
+ * Fila de la tabla del módulo Actualizaciones > Gmail.
+ * Espejo del JSON que devuelve GET /api/v1/pagos/gmail/sync-items.
+ */
+export interface GmailSyncItemUI {
+  id: number
+  sync_id: number
+  fecha_correo: string | null
+  comprobante_url: string | null
+  banco: string | null
+  fecha_pago: string | null
+  cedula: string | null
+  monto: string | null
+  numero_referencia: string | null
+  correo_origen: string | null
+  asunto: string | null
+  gmail_message_id: string | null
+  gmail_thread_id: string | null
+  created_at: string | null
+  duplicado_en_pagos: boolean
+  pago_id_existente: number | null
+  prestamo_id_existente: number | null
+}
+
 class PagoService {
   private baseUrl = '/api/v1/pagos'
 
@@ -1005,11 +1029,15 @@ class PagoService {
       | 'all'
       | 'pending_identification'
       | 'error_email_rescan'
+      | 'manual_redigitaliza_por_remitente',
+    fromEmail?: string | null
   ): Promise<{
     sync_id: number | null
     status: string
     emails_processed?: number
     files_processed?: number
+    scan_filter?: string
+    from_email?: string | null
   }> {
     const params = new URLSearchParams({ force: String(force) })
 
@@ -1021,13 +1049,107 @@ class PagoService {
         'all',
         'pending_identification',
         'error_email_rescan',
+        'manual_redigitaliza_por_remitente',
       ].includes(scanFilter)
     ) {
       params.set('scan_filter', scanFilter)
     }
+    const emailTrim = (fromEmail || '').trim()
+    if (emailTrim) {
+      params.set('from_email', emailTrim)
+    }
 
     return await apiClient.post(
       `${this.baseUrl}/gmail/run-now?${params.toString()}`
+    )
+  }
+
+  /** Pagos Gmail: lista filas de pagos_gmail_sync_item (módulo Actualizaciones > Gmail). */
+  async listGmailSyncItems(opts: {
+    correo?: string | null
+    limit?: number
+    offset?: number
+    excluirAutoconciliados?: boolean
+  } = {}): Promise<{
+    total: number
+    items: GmailSyncItemUI[]
+    limit: number
+    offset: number
+  }> {
+    const params = new URLSearchParams()
+    const correo = (opts.correo || '').trim()
+    if (correo) params.set('correo', correo)
+    params.set('limit', String(opts.limit ?? 200))
+    params.set('offset', String(opts.offset ?? 0))
+    params.set(
+      'excluir_autoconciliados',
+      String(opts.excluirAutoconciliados !== false)
+    )
+    return await apiClient.get(
+      `${this.baseUrl}/gmail/sync-items?${params.toString()}`
+    )
+  }
+
+  /** Acción "Guardar": migra el sync_item a pagos_con_errores y mueve a pagos (aplica cuotas con cascada). */
+  async guardarGmailSyncItem(itemId: number): Promise<{
+    ok: boolean
+    movido_a_pagos: boolean
+    ya_en_pagos?: boolean
+    pago_id_existente?: number | null
+    pago_con_error_id?: number
+    pago_con_error_pendiente?: boolean
+    errores?: string[]
+    ya_cargado_eliminados?: unknown[]
+    mensaje: string
+  }> {
+    return await apiClient.post(
+      `${this.baseUrl}/gmail/sync-items/${itemId}/guardar`
+    )
+  }
+
+  /**
+   * Acción "Editar": actualiza campos del sync_item (y de gmail_temporal asociado) antes de Guardar.
+   * Las validaciones de negocio (FK cliente, duplicado documento, monto > 0) corren en el paso Guardar.
+   */
+  async editGmailSyncItem(
+    itemId: number,
+    cambios: {
+      banco?: string | null
+      cedula?: string | null
+      fecha_pago?: string | null
+      monto?: string | null
+      numero_referencia?: string | null
+    }
+  ): Promise<{
+    ok: boolean
+    item: Pick<
+      GmailSyncItemUI,
+      | 'id'
+      | 'banco'
+      | 'cedula'
+      | 'fecha_pago'
+      | 'monto'
+      | 'numero_referencia'
+      | 'duplicado_en_pagos'
+      | 'pago_id_existente'
+      | 'prestamo_id_existente'
+    >
+    cambios: Record<string, string>
+  }> {
+    return await apiClient.put(
+      `${this.baseUrl}/gmail/sync-items/${itemId}`,
+      cambios
+    )
+  }
+
+  /** Acción "Eliminar": borra la fila local (sync_item + gmail_temporal asociadas). No toca Gmail. */
+  async deleteGmailSyncItem(itemId: number): Promise<{
+    ok: boolean
+    sync_item_eliminado: number
+    gmail_temporal_eliminados: number
+  }> {
+    return await apiClient.delete(
+      `${this.baseUrl}/gmail/sync-items/${itemId}`
     )
   }
 

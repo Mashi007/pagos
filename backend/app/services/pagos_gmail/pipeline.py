@@ -370,6 +370,7 @@ def run_pipeline(
     db: Session,
     existing_sync_id: Optional[int] = None,
     scan_filter: str = "all",
+    from_email: Optional[str] = None,
 ) -> tuple[Optional[int], str]:
     """
     Ejecuta el pipeline Gmail -> Gemini -> BD (comprobante en pago_comprobante_imagen; sin subidas a Drive).
@@ -394,7 +395,15 @@ def run_pipeline(
     No hay dedupe por contenido para saltar candidatos: cada candidato (imagen o PDF de una pagina) se escanea y evalúa.
     Returns (sync_id, "success"|"error"|"no_credentials").
     """
-    logger.info("[PAGOS_GMAIL] INICIO pipeline (existing_sync_id=%s, scan_filter=%s)", existing_sync_id, scan_filter)
+    # Modo manual por remitente: el endpoint valida que from_email exista; aquí solo normalizamos.
+    redig_por_remitente = (scan_filter or "").strip().lower() == "manual_redigitaliza_por_remitente"
+    from_email_lc: Optional[str] = (from_email or "").strip().lower() or None
+    logger.info(
+        "[PAGOS_GMAIL] INICIO pipeline (existing_sync_id=%s, scan_filter=%s, from_email=%s)",
+        existing_sync_id,
+        scan_filter,
+        from_email_lc or "(sin filtro remitente)",
+    )
     creds = get_pagos_gmail_credentials()
     if not creds:
         if existing_sync_id:
@@ -481,7 +490,9 @@ def run_pipeline(
         )
 
         def fetch_sorted_batch() -> list[dict]:
-            raw_messages = list_messages_by_filter(gmail_svc, scan_filter)
+            raw_messages = list_messages_by_filter(
+                gmail_svc, scan_filter, from_email=from_email_lc
+            )
             messages = _dedupe_messages_pagos_gmail(raw_messages)
             if len(messages) < len(raw_messages):
                 logger.info(
@@ -570,7 +581,59 @@ def run_pipeline(
                         gmail_svc, k_err_shared
                     )
                 mid_err_shared = plantilla_label_cache.get(k_err_shared)
-                if _labels_catalog_ok and _user_on_msg:
+
+                # Extracción anticipada del remitente: necesaria para el bypass del skip por
+                # etiquetas en modo redig_por_remitente (mostrar la fila aunque ya esté etiquetada).
+                payload = msg_info["payload"]
+                headers = msg_info["headers"]
+                from_h = headers.get("from") or headers.get("From") or ""
+                sender = extract_sender_email(from_h)
+                sender_lc = (sender or "").strip().lower()
+
+                # Bypass selectivo del skip por etiquetas:
+                # - scan_filter == manual_redigitaliza_por_remitente
+                # - from_email_lc presente y coincide con el remitente del mensaje
+                # En ese caso, retiramos las etiquetas finales del set permitido (A/B/C/D/E/F,
+                # MANUAL, TEXTO, ERROR EMAIL) presentes en el mensaje, para que la nueva pasada
+                # pueda re-clasificar y aplicar una etiqueta final coherente. La regla global
+                # de "skip por etiqueta de usuario" se mantiene para todos los demás modos.
+                _bypass_etiquetas_remitente = (
+                    redig_por_remitente
+                    and from_email_lc is not None
+                    and sender_lc == from_email_lc
+                )
+                if _bypass_etiquetas_remitente and _labels_catalog_ok and _user_on_msg:
+                    _ids_a_quitar = [
+                        lid
+                        for lid in _user_on_msg
+                        if _gmail_user_label_names.get(lid, "")
+                        in PAGOS_GMAIL_ETIQUETAS_FINALES_PERMITIDAS
+                    ]
+                    if _ids_a_quitar:
+                        try:
+                            modify_message_labels_add_remove(
+                                gmail_svc,
+                                msg_id,
+                                add_ids=[],
+                                remove_ids=_ids_a_quitar,
+                            )
+                            _nombres_quitados = sorted(
+                                _gmail_user_label_names.get(lid, lid)
+                                for lid in _ids_a_quitar
+                            )
+                            logger.info(
+                                "[PAGOS_GMAIL]   Redig por remitente: etiquetas previas retiradas [%s] msg=%s sender=%s",
+                                ", ".join(_nombres_quitados),
+                                msg_id,
+                                sender_lc,
+                            )
+                        except Exception as exc:
+                            logger.warning(
+                                "[PAGOS_GMAIL]   Redig por remitente: no se pudieron retirar etiquetas previas (msg=%s): %s",
+                                msg_id,
+                                exc,
+                            )
+                elif _labels_catalog_ok and _user_on_msg:
                     _skip_por_etiquetas_usuario = True
                     _hit_names = sorted(
                         _gmail_user_label_names.get(lid, lid) for lid in _user_on_msg
@@ -589,11 +652,6 @@ def run_pipeline(
                     if was_unread:
                         mark_as_read(gmail_svc, msg_id)
                     continue
-                payload = msg_info["payload"]
-                headers = msg_info["headers"]
-                from_h = headers.get("from") or headers.get("From") or ""
-                sender = extract_sender_email(from_h)
-                sender_lc = (sender or "").strip().lower()
                 if (
                     not sender_lc
                     or sender_lc == "desconocido"
