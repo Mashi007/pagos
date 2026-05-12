@@ -1591,10 +1591,8 @@ export default function CobrosPagosReportadosPage() {
                 aria-label="Filtrar por estado del reporte"
               >
                 <option value="">
-                  Por gestionar (sólo pendientes y en revisión)
+                  Por gestionar (pendientes y en revisión)
                 </option>
-
-                <option value="pendiente">Pendiente</option>
 
                 <option value="en_revision">En revisión</option>
 
@@ -1604,13 +1602,15 @@ export default function CobrosPagosReportadosPage() {
               </select>
 
               <p className="text-xs text-muted-foreground">
-                <strong>Cola de revisión manual:</strong> por defecto sólo se
-                listan <em>pendientes</em> y <em>en revisión</em>. Los
-                aprobados ya están en cartera y se consultan desde el histórico
-                de cobros; los importados y rechazados se eligen aquí
-                explícitamente. Use &quot;Incluir ya exportados&quot; para
-                volver a ver filas que se marcaron como exportadas a
-                corrección.
+                <strong>Cola de revisión manual:</strong> por defecto se
+                listan <em>pendientes y en revisión</em> en una sola cola
+                ("Por gestionar"); el contador "Pendiente" individual quedaba
+                inconsistente cuando se aprobaban filas fuera de la página
+                actual y se retiró. Los aprobados ya están en cartera y se
+                consultan desde el histórico de cobros; los importados y
+                rechazados se eligen aquí explícitamente. Use &quot;Incluir ya
+                exportados&quot; para volver a ver filas marcadas como
+                exportadas a corrección.
               </p>
             </div>
 
@@ -1855,7 +1855,16 @@ export default function CobrosPagosReportadosPage() {
               </span>
             </button>
 
-            {(['pendiente', 'en_revision', 'rechazado'] as const).map(key => {
+            {/*
+              "Pendiente" individual se retiro de la fila de KPIs: la cola real
+              es "Por gestionar" (pendiente + en_revision) y el contador
+              pendiente puro quedaba inconsistente cuando una mutacion afectaba
+              una fila fuera de la pagina cacheada (el parche quirurgico solo
+              decrementaba kpis si el item estaba en la pagina actual del
+              cache). Mantener "En revision" como subset operativo util y
+              "Rechazado" para auditoria.
+            */}
+            {(['en_revision', 'rechazado'] as const).map(key => {
               const cfg = ESTADO_CONFIG[key]
 
               const Icon = cfg.Icon

@@ -273,20 +273,29 @@ def _invalidate_cobros_listado_kpis_cache() -> None:
         logger.warning("[COBROS_CACHE] Redis invalidate listado-y-kpis falló: %s", e)
 
 
-def _drop_pagos_from_listado_kpis_cache(pago_ids: Iterable[int]) -> None:
+def _drop_pagos_from_listado_kpis_cache(
+    pago_ids: Iterable[int],
+    *,
+    estados_previos: Optional[Dict[int, str]] = None,
+) -> None:
     """
     Parche quirurgico multi-id: quita TODOS los `pago_ids` de TODAS las entradas vivas del cache
     listado-y-kpis (Redis + memoria + stale), ajusta `total`, `kpis[estado]` y `kpis['total']`
     en sitio. Evita la recomputacion BD completa (20-30s con 1 worker) tras DELETE/APROBAR/RECHAZAR,
     que es la causa real de la cascada de 502 y de la sensacion "no borra/aprueba rapido".
 
+    `estados_previos` opcional (id -> estado_anterior, p.ej. "pendiente"/"en_revision"):
+    si el id NO esta en la pagina cacheada (paginacion: cache de page=1 no contiene
+    items de page>=2) pero la entry pertenece a la misma cola por defecto, igual se
+    decrementa `kpis[estado_anterior]` y `total`. Es la causa real del bug "card
+    Pendiente=17 pero al hacer click no hay registros": antes el contador solo se
+    decrementaba si el item era visible en la pagina, dejando el KPI inflado tras
+    aprobar/eliminar filas de paginas posteriores.
+
     Disenio:
     - Un solo barrido del cache (Redis + memoria) para todo el conjunto de ids: tras
       aprobar, ademas del pago aprobado tambien se marcan los hermanos duplicados como
       `eliminado_duplicado`; resolverlos en una sola pasada vale mas que repetir el scan.
-    - Lee cada entry cacheada, busca items por `id`, los filtra, decrementa contadores.
-    - Si la entry no contiene ninguno de los `pago_ids`, no la toca (la pagina filtrada
-      puede no tener esos ids; mantener TTL evita rejuvenecer entries casi vencidas).
     - **Preserva el TTL original** (con `redis_client.ttl(key)`); un parche no debe
       diferir el siguiente recalculo natural.
     - Si la deserializacion JSON o el TTL falla, esa entry se invalida (delete) y se
@@ -301,6 +310,11 @@ def _drop_pagos_from_listado_kpis_cache(pago_ids: Iterable[int]) -> None:
     ids: Set[int] = {int(x) for x in pago_ids if x is not None}
     if not ids:
         return
+    prev_states: Dict[int, str] = {
+        int(k): (v or "").strip()
+        for k, v in (estados_previos or {}).items()
+        if v
+    }
     redis_client = get_redis_client()
 
     def _patch_entry(payload: dict) -> Optional[dict]:
@@ -309,6 +323,7 @@ def _drop_pagos_from_listado_kpis_cache(pago_ids: Iterable[int]) -> None:
             if not isinstance(items, list):
                 return None
             removed_items: List[dict] = []
+            removed_ids_in_items: Set[int] = set()
             new_items: List[Any] = []
             for it in items:
                 if isinstance(it, dict):
@@ -318,14 +333,30 @@ def _drop_pagos_from_listado_kpis_cache(pago_ids: Iterable[int]) -> None:
                         it_id = None
                     if it_id is not None and it_id in ids:
                         removed_items.append(it)
+                        removed_ids_in_items.add(it_id)
                         continue
                 new_items.append(it)
-            if not removed_items:
+            # IDs que no estan en la pagina cacheada pero que sabemos pertenecian
+            # al scope contado por esta entry (kpis incluyen todas las paginas).
+            ghost_ids = ids - removed_ids_in_items
+            ghost_decrement_by_estado: Dict[str, int] = {}
+            ghost_total_decrement = 0
+            for gid in ghost_ids:
+                est = prev_states.get(gid)
+                if not est:
+                    continue
+                ghost_decrement_by_estado[est] = (
+                    ghost_decrement_by_estado.get(est, 0) + 1
+                )
+                ghost_total_decrement += 1
+            if not removed_items and not ghost_decrement_by_estado:
                 return None
-            payload["items"] = new_items
+            if removed_items:
+                payload["items"] = new_items
             try:
+                page_total_dec = len(removed_items) + ghost_total_decrement
                 payload["total"] = max(
-                    0, int(payload.get("total", 0)) - len(removed_items)
+                    0, int(payload.get("total", 0)) - page_total_dec
                 )
             except (TypeError, ValueError):
                 pass
@@ -339,9 +370,16 @@ def _drop_pagos_from_listado_kpis_cache(pago_ids: Iterable[int]) -> None:
                             kpis.get(est_key), (int, float)
                         ):
                             kpis[est_key] = max(0, int(kpis[est_key]) - 1)
+                for est_key, dec in ghost_decrement_by_estado.items():
+                    if est_key and isinstance(
+                        kpis.get(est_key), (int, float)
+                    ):
+                        kpis[est_key] = max(0, int(kpis[est_key]) - dec)
                 if isinstance(kpis.get("total"), (int, float)):
                     kpis["total"] = max(
-                        0, int(kpis["total"]) - len(removed_items)
+                        0,
+                        int(kpis["total"])
+                        - (len(removed_items) + ghost_total_decrement),
                     )
                 payload["kpis"] = kpis
             return payload
@@ -2649,7 +2687,11 @@ def aprobar_pago_reportado(
     registrar_historial_aprobacion = True
     # IDs a desalojar del cache listado-y-kpis tras el commit final (parche quirurgico
     # en lugar de invalidacion total: evita el recompute de 20-30s con 1 worker).
+    # Capturamos `estado_inicial` para que el parche decremente kpis[estado_anterior]
+    # incluso si el item esta en una pagina cacheada distinta de la actual.
+    estado_inicial_aprobar = (pr.estado or "").strip()
     pago_ids_para_dropear_cache: Set[int] = {int(pago_id)}
+    estados_previos_dropear_cache: Dict[int, str] = {int(pago_id): estado_inicial_aprobar}
     if pr.estado == "aprobado":
         try:
             _crear_pago_desde_reportado_y_aplicar_cuotas(db, pr, usuario_email)
@@ -2730,6 +2772,7 @@ def aprobar_pago_reportado(
                 for _hid, _href, _hst in dup_rows:
                     if _hst in ("pendiente", "en_revision", "rechazado"):
                         pago_ids_para_dropear_cache.add(int(_hid))
+                        estados_previos_dropear_cache[int(_hid)] = str(_hst)
             db.commit()
             _log_fase_aprobacion(
                 flujo="aprobar_directo",
@@ -2853,8 +2896,12 @@ def aprobar_pago_reportado(
     # Parche quirurgico (no invalidacion total): la aprobacion lleva la fila a un estado
     # que ya no esta en la cola por defecto (aprobado). Tras commit, removerla del cache
     # mantiene el listado-y-kpis caliente para los GET vecinos y la fila desaparece al
-    # instante en el frontend del operador.
-    _drop_pagos_from_listado_kpis_cache(pago_ids_para_dropear_cache)
+    # instante en el frontend del operador. `estados_previos` permite decrementar
+    # kpis[pendiente|en_revision] aunque el item este en pagina >1 del cache.
+    _drop_pagos_from_listado_kpis_cache(
+        pago_ids_para_dropear_cache,
+        estados_previos=estados_previos_dropear_cache,
+    )
     _log_fase_aprobacion(
         flujo="aprobar_directo",
         fase="total",
@@ -2963,7 +3010,15 @@ def rechazar_pago_reportado(
     # Parche quirurgico: el rechazo lleva la fila a `rechazado`, fuera de la cola por
     # defecto (pendiente/en_revision). Sacarla del cache evita el recompute completo
     # tras cada rechazo y permite que el frontend la vea desaparecer al instante.
-    _drop_pago_from_listado_kpis_cache(pago_id)
+    # `estados_previos` permite decrementar kpis[estado_anterior] aunque la fila viva
+    # en una pagina cacheada distinta de la pagina 1 (causa real del bug "Pendiente=N
+    # pero al hacer click no hay registros").
+    _drop_pagos_from_listado_kpis_cache(
+        [pago_id],
+        estados_previos={int(pago_id): (estado_anterior or "").strip()}
+        if estado_anterior
+        else None,
+    )
     out = {
         "ok": True,
         "mensaje": mensaje_final,
@@ -2984,12 +3039,18 @@ def eliminar_pago_reportado(
     if not pr:
         raise HTTPException(status_code=404, detail="Pago reportado no encontrado.")
     ref = pr.referencia_interna
+    estado_previo = (pr.estado or "").strip()
     db.delete(pr)
     db.commit()
     # Parche quirúrgico en lugar de invalidación total: evita que el siguiente
     # `listado-y-kpis` recompute toda la BD (20-30s con 1 worker), bloquee el worker
     # y dispare 502 en GET vecinos (regresión observada en producción).
-    _drop_pago_from_listado_kpis_cache(pago_id)
+    # `estados_previos` permite decrementar kpis[estado_previo] incluso si la fila
+    # vivia en pagina >1 del cache (causa del card "Pendiente" inconsistente).
+    _drop_pagos_from_listado_kpis_cache(
+        [pago_id],
+        estados_previos={int(pago_id): estado_previo} if estado_previo else None,
+    )
     logger.info("[COBROS] Pago reportado eliminado: id=%s ref=%s", pago_id, ref)
     return {"ok": True, "mensaje": f"Pago reportado {ref} eliminado."}
 
@@ -3406,8 +3467,13 @@ def cambiar_estado_pago(
     usuario_email = current_user.get("email") if isinstance(current_user, dict) else getattr(current_user, "email", None)
 
     # IDs a desalojar del cache listado-y-kpis con parche quirurgico (no invalidacion total)
-    # cuando el nuevo estado deja al item fuera de la cola por defecto.
+    # cuando el nuevo estado deja al item fuera de la cola por defecto. Capturamos el
+    # estado anterior para decrementar kpis[anterior] aunque la fila no este en la
+    # pagina cacheada (evita el efecto "Pendiente=17 pero listado vacio al click").
     pago_ids_para_dropear_cache: Set[int] = {int(pago_id)}
+    estados_previos_dropear_cache: Dict[int, str] = {
+        int(pago_id): (estado_anterior or "").strip()
+    }
 
     mensaje = f"Estado actualizado a {body.estado}."
     total_t0 = time.perf_counter() if body.estado == "aprobado" else 0.0
@@ -3443,6 +3509,7 @@ def cambiar_estado_pago(
                 for _hid, _href, _hst in dup_rows:
                     if _hst in ("pendiente", "en_revision", "rechazado"):
                         pago_ids_para_dropear_cache.add(int(_hid))
+                        estados_previos_dropear_cache[int(_hid)] = str(_hst)
             db.commit()
             _log_fase_aprobacion(
                 flujo="aprobar_patch_estado",
@@ -3594,7 +3661,10 @@ def cambiar_estado_pago(
     # Si el item vuelve a pendiente/en_revision (raro, p. ej. reabrir tras rechazo), no
     # podemos parchear sin saber donde insertarlo: invalidamos para forzar recalculo fresco.
     if body.estado in ("aprobado", "rechazado"):
-        _drop_pagos_from_listado_kpis_cache(pago_ids_para_dropear_cache)
+        _drop_pagos_from_listado_kpis_cache(
+            pago_ids_para_dropear_cache,
+            estados_previos=estados_previos_dropear_cache,
+        )
     else:
         _invalidate_cobros_listado_kpis_cache()
     if body.estado == "aprobado":
