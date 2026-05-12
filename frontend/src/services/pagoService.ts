@@ -1081,7 +1081,10 @@ class PagoService {
       params.set('from_email', emailTrim)
     }
     if (typeof maxMessages === 'number' && maxMessages > 0) {
-      params.set('max_messages', String(Math.min(10000, Math.floor(maxMessages))))
+      params.set(
+        'max_messages',
+        String(Math.min(10000, Math.floor(maxMessages)))
+      )
     }
     if (
       criterio &&
@@ -1163,12 +1166,14 @@ class PagoService {
   }
 
   /** Pagos Gmail: lista filas de pagos_gmail_sync_item (módulo Actualizaciones > Gmail). */
-  async listGmailSyncItems(opts: {
-    correo?: string | null
-    limit?: number
-    offset?: number
-    excluirAutoconciliados?: boolean
-  } = {}): Promise<{
+  async listGmailSyncItems(
+    opts: {
+      correo?: string | null
+      limit?: number
+      offset?: number
+      excluirAutoconciliados?: boolean
+    } = {}
+  ): Promise<{
     total: number
     items: GmailSyncItemUI[]
     limit: number
@@ -1212,9 +1217,7 @@ class PagoService {
    * general de pagos pendientes). No aplica cascada de cuotas: eso ocurre cuando el
    * operador pulse "Guardar y Procesar" en el modal.
    */
-  async migrarGmailSyncItemAPendientes(
-    itemId: number
-  ): Promise<{
+  async migrarGmailSyncItemAPendientes(itemId: number): Promise<{
     ok: boolean
     movido_a_pagos_con_errores: boolean
     ya_en_pagos: boolean
@@ -1272,9 +1275,7 @@ class PagoService {
     sync_item_eliminado: number
     gmail_temporal_eliminados: number
   }> {
-    return await apiClient.delete(
-      `${this.baseUrl}/gmail/sync-items/${itemId}`
-    )
+    return await apiClient.delete(`${this.baseUrl}/gmail/sync-items/${itemId}`)
   }
 
   /** Pagos Gmail: estado última ejecución, última fecha con datos; next_run_approx = próximo job programado en servidor (si aplica). */

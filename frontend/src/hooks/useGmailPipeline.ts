@@ -461,9 +461,12 @@ export function useGmailPipeline({
                 const resumenCero = textoNotificacionFinProcesamientoGmail(s)
                 const baseCero = `Sin correos procesados en esta ejecución (inbox con imagen/PDF según el filtro). Hay datos del ${s.latest_data_date} listos para descargar.`
                 if (!suppressDoneToasts) {
-                  toast(resumenCero ? `${baseCero}\n${resumenCero}` : baseCero, {
-                    duration: 10000,
-                  })
+                  toast(
+                    resumenCero ? `${baseCero}\n${resumenCero}` : baseCero,
+                    {
+                      duration: 10000,
+                    }
+                  )
                 }
 
                 onDoneRef.current?.(s)

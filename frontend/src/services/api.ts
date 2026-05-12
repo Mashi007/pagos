@@ -421,6 +421,13 @@ class ApiClient {
             reqUrl.includes('/analistas/activos') ||
             reqUrl.includes('/modelos-vehiculos/activos') ||
             reqUrl.includes('/cobros/pagos-reportados/listado-y-kpis') ||
+            // Detalle del reporte y comprobante/recibo: idempotentes (lectura). El detalle es el primer
+            // request al entrar a /editar; el comprobante/recibo lo descarga la página de revisión.
+            // Sin retry, un 502 transitorio dejaba la página rota.
+            /\/cobros\/pagos-reportados\/\d+(?:\?|#|$)/.test(reqUrl) ||
+            /\/cobros\/pagos-reportados\/\d+\/(?:comprobante|recibo\.pdf)(?:\?|#|$)/.test(
+              reqUrl
+            ) ||
             reqUrl.includes('/prestamos/candidatos-drive/snapshot') ||
             reqUrl.includes('/pagos/gmail/status') ||
             reqUrl.includes('/admin/tasas-cambio/estado') ||
@@ -440,9 +447,19 @@ class ApiClient {
         const isCobrosPagoReportadoEstadoPatch =
           methodLc === 'patch' &&
           /\/cobros\/pagos-reportados\/\d+\/estado(?:\?|#|$)/.test(reqUrl)
+        /**
+         * PATCH base "editar" (datos del reporte, sin /estado). Idempotente: enviar los mismos
+         * campos dos veces deja el mismo estado final; un 502 del proxy (TCP/cold start) suele
+         * ocurrir antes de que el backend procese la transacción. Mismo trato que /estado.
+         */
+        const isCobrosPagoReportadoEditarPatch =
+          methodLc === 'patch' &&
+          /\/cobros\/pagos-reportados\/\d+(?:\?|#|$)/.test(reqUrl)
         /** Mismo patrón que GET listado-y-kpis: 502/503 del proxy; dar tiempo al API. */
         const isCobrosEstadoPatch502Storm =
-          isCobrosPagoReportadoEstadoPatch && (st === 502 || st === 503)
+          (isCobrosPagoReportadoEstadoPatch ||
+            isCobrosPagoReportadoEditarPatch) &&
+          (st === 502 || st === 503)
         const maxRetries =
           isColdStartProxySafeGet || isCobrosEstadoPatch502Storm ? 6 : 3
         const canRetryBecauseStatus =
@@ -452,7 +469,8 @@ class ApiClient {
           (st === 502 &&
             (isScannerReadOnlyPost ||
               isSafeTransientRetryGet ||
-              isCobrosPagoReportadoEstadoPatch))
+              isCobrosPagoReportadoEstadoPatch ||
+              isCobrosPagoReportadoEditarPatch))
         const mayRetryThisRequest =
           methodLc !== 'get' || isSafeTransientRetryGet
         if (

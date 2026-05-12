@@ -33,12 +33,7 @@ import { toast } from 'sonner'
 
 import { ModulePageHeader } from '../components/ui/ModulePageHeader'
 import { Button } from '../components/ui/button'
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from '../components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Input } from '../components/ui/input'
 import { ComprobanteThumb } from '../components/pagos/ComprobanteThumb'
 import { RegistrarPagoForm } from '../components/pagos/RegistrarPagoForm'
@@ -56,9 +51,7 @@ import { getErrorMessage } from '../types/errors'
  * Mapea un PagoConError recién migrado al shape `PagoInicialRegistrar` que necesita
  * el modal `RegistrarPagoForm` (mismo mapeo que usa PagosList para revisión manual).
  */
-function pagoInicialDesdePagoConError(
-  pe: PagoConError
-): PagoInicialRegistrar {
+function pagoInicialDesdePagoConError(pe: PagoConError): PagoInicialRegistrar {
   return {
     cedula_cliente: pe.cedula_cliente,
     prestamo_id: pe.prestamo_id,
@@ -180,7 +173,11 @@ export default function ActualizacionesGmailPage() {
     refetchOnWindowFocus: false,
   })
 
-  const { loading: ejecutandoPipeline, gmailStatus, run } = useGmailPipeline({
+  const {
+    loading: ejecutandoPipeline,
+    gmailStatus,
+    run,
+  } = useGmailPipeline({
     suppressDoneToasts: true,
     onDone: status => {
       if (!correoActivo) {
@@ -235,10 +232,7 @@ export default function ActualizacionesGmailPage() {
             // para que el panel muestre si hay correos via from:/to:/sent/global y la
             // cuenta OAuth conectada. Así el usuario no tiene que pulsar otro botón.
             try {
-              await ejecutarDiagnosticoRef.current(
-                correoActivo,
-                'participante'
-              )
+              await ejecutarDiagnosticoRef.current(correoActivo, 'participante')
             } catch {
               /* el diagnóstico ya muestra su propio toast en error */
             }
@@ -565,15 +559,16 @@ export default function ActualizacionesGmailPage() {
           <div className="rounded-md border border-dashed bg-muted/20 p-3 text-xs text-muted-foreground">
             <strong>Como funciona:</strong> el sistema rastrea en Gmail solo los
             correos del remitente (filtro <code>from:&lt;correo&gt;</code> +
-            adjunto imagen/PDF en bandeja), toma los <strong>N mas recientes</strong>
+            adjunto imagen/PDF en bandeja), toma los{' '}
+            <strong>N mas recientes</strong>
             (segun el selector &laquo;Hasta&raquo;) y los procesa todos con el
             pipeline vigente. Asi no se gasta Gemini en la bandeja completa
             (~6000 correos), solo en los del remitente (tipicamente ~20). El
             tope absoluto por corrida es 10000.
             <br />
-            Si <strong>Buscar y procesar</strong> reporta 0 correos pero en Gmail si
-            hay, pulsa <strong>Probar Gmail</strong> para ver que encuentra la
-            query (sin gastar Gemini).
+            Si <strong>Buscar y procesar</strong> reporta 0 correos pero en
+            Gmail si hay, pulsa <strong>Probar Gmail</strong> para ver que
+            encuentra la query (sin gastar Gemini).
           </div>
           {diagnostico ? (
             <div
@@ -626,9 +621,9 @@ export default function ActualizacionesGmailPage() {
                           <strong>Atencion:</strong> el correo que pusiste es el
                           mismo de la cuenta conectada. <code>from:</code> busca
                           mensajes <em>enviados POR</em> esa cuenta, no
-                          recibidos. Para procesar comprobantes, indica el correo
-                          del <strong>cliente</strong> (quien envia el email),
-                          no el de tu propio buzon.
+                          recibidos. Para procesar comprobantes, indica el
+                          correo del <strong>cliente</strong> (quien envia el
+                          email), no el de tu propio buzon.
                         </div>
                       ) : null}
                     </div>
@@ -679,10 +674,9 @@ export default function ActualizacionesGmailPage() {
                       ) : null}
                       {(diagnostico.inboxSinMedia ?? 0) > 0 ? (
                         <span className="self-center text-[11px]">
-                          Hay {diagnostico.inboxSinMedia} con{' '}
-                          <code>from:</code> en INBOX <em>sin</em> adjunto
-                          imagen/PDF: revisa si los comprobantes vienen como
-                          imagen inline en HTML.
+                          Hay {diagnostico.inboxSinMedia} con <code>from:</code>{' '}
+                          en INBOX <em>sin</em> adjunto imagen/PDF: revisa si
+                          los comprobantes vienen como imagen inline en HTML.
                         </span>
                       ) : null}
                     </div>
@@ -701,9 +695,11 @@ export default function ActualizacionesGmailPage() {
                         envios propios estan en ENVIADOS no INBOX.
                       </li>
                       <li>
-                        <strong>Pones el destinatario en vez del remitente</strong>
-                        : si la cuenta recibe el comprobante, el remitente es
-                        el cliente. Diagnostico: <code>to: &gt; 0</code> pero{' '}
+                        <strong>
+                          Pones el destinatario en vez del remitente
+                        </strong>
+                        : si la cuenta recibe el comprobante, el remitente es el
+                        cliente. Diagnostico: <code>to: &gt; 0</code> pero{' '}
                         <code>from: = 0</code>.
                       </li>
                       <li>
@@ -712,8 +708,7 @@ export default function ActualizacionesGmailPage() {
                       </li>
                       <li>
                         Los mensajes estan archivados o en otra carpeta:{' '}
-                        <code>global &gt; 0</code> pero{' '}
-                        <code>inbox = 0</code>.
+                        <code>global &gt; 0</code> pero <code>inbox = 0</code>.
                       </li>
                       <li>
                         Imagenes inline en HTML sin <code>has:attachment</code>:
@@ -975,7 +970,9 @@ export default function ActualizacionesGmailPage() {
                   onClick={() =>
                     setPaginaTabla(p => Math.min(tablaTotalPaginas, p + 1))
                   }
-                  disabled={paginaTabla >= tablaTotalPaginas || tabla.isFetching}
+                  disabled={
+                    paginaTabla >= tablaTotalPaginas || tabla.isFetching
+                  }
                 >
                   Siguiente
                 </Button>

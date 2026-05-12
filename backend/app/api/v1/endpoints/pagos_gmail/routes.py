@@ -236,7 +236,7 @@ def run_now(
             "'participante' (`from:<correo> OR to:<correo>`). Útil cuando el header `From:` real "
             "no coincide con el displayName Gmail."
         ),
-        regex="^(remitente|destinatario|participante)$",
+        pattern="^(remitente|destinatario|participante)$",
     ),
     db: Session = Depends(get_db),
 ):
@@ -1949,7 +1949,7 @@ def preview_remitente(
             "Cómo aplicar el correo al filtro Gmail: 'remitente' (default, `from:<correo>`); "
             "'destinatario' (`to:<correo>`); 'participante' (`from:<correo> OR to:<correo>`)."
         ),
-        regex="^(remitente|destinatario|participante)$",
+        pattern="^(remitente|destinatario|participante)$",
     ),
     db: Session = Depends(get_db),
 ):

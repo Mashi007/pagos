@@ -401,6 +401,78 @@ def _startup_db_with_retry(engine, max_attempts: int = 10, delay_sec: float = 3.
     ) from last_error
 
 
+def _log_runtime_startcmd_diagnostics() -> None:
+    """
+    Inspecciona el cmdline del proceso master Gunicorn y avisa si difiere de los valores
+    recomendados en `render.yaml`. Pensado para detectar overrides manuales del Start Command
+    en Render Dashboard (los más peligrosos: `--workers 2`, `--timeout < 600`, sin `--graceful-timeout`).
+
+    No bloquea ni cambia comportamiento. Solo deja constancia en logs para que un revisor
+    encuentre la causa raíz cuando aparezcan 502/restart espontáneos por OOM o worker timeout.
+
+    Sólo funciona en Linux (Render). En desarrollo (Windows, macOS) sale sin hacer nada.
+    """
+    import re
+    import sys
+
+    if not sys.platform.startswith("linux"):
+        return
+    try:
+        ppid = os.getppid()
+        cmdline_path = f"/proc/{ppid}/cmdline"
+        if not os.path.exists(cmdline_path):
+            return
+        with open(cmdline_path, "rb") as f:
+            raw = f.read()
+        cmd = raw.replace(b"\x00", b" ").decode("utf-8", errors="replace").strip()
+        if not cmd or "gunicorn" not in cmd:
+            # Otro proceso padre (uvicorn directo en local, supervisord, etc.). No interesa.
+            return
+
+        avisos: List[str] = []
+
+        m_workers = re.search(r"--workers\s+(\d+)", cmd)
+        if m_workers:
+            n_workers = int(m_workers.group(1))
+            if n_workers > 1:
+                avisos.append(
+                    f"--workers={n_workers}: recomendado 1. workers>1 duplica RAM de imports "
+                    "(SDKs Google/Gemini, ORM 90+ tablas, plantillas Excel/PDF) y caches en proceso "
+                    "(listado-y-kpis, autorizados_bs, cedulas_en_clientes); riesgo de OOM en planes "
+                    "con RAM ajustada"
+                )
+
+        m_timeout = re.search(r"--timeout\s+(\d+)", cmd)
+        if m_timeout:
+            t = int(m_timeout.group(1))
+            if t < 600:
+                avisos.append(
+                    f"--timeout={t}s: recomendado 920. El proxy Express espera 180-900s en flujos "
+                    "largos (notificaciones masivas, Drive bulk, exports, escaner Gemini); con "
+                    f"timeout={t}s gunicorn mata al worker antes y el usuario ve 502 falso"
+                )
+
+        if "--graceful-timeout" not in cmd:
+            avisos.append(
+                "sin --graceful-timeout: default 30s; recomendado 60. Reduce 502 visibles "
+                "durante deploys/SIGTERM cuando hay PATCH/aprobar en vuelo"
+            )
+
+        if avisos:
+            logger.warning(
+                "[RuntimeConfig] Start Command difiere de render.yaml. "
+                "Editar en Render Dashboard > pagos-backend > Settings > Build & Deploy > Start Command. "
+                "Diferencias: %s. cmdline=%r",
+                " | ".join(avisos),
+                cmd,
+            )
+        else:
+            logger.info("[RuntimeConfig] Start Command alineado con render.yaml.")
+    except Exception as e:
+        # Inspección puramente diagnóstica: nunca debe abortar el startup.
+        logger.debug("[RuntimeConfig] No se pudo inspeccionar cmdline del master: %s", e)
+
+
 def _try_claim_startup_lock(engine) -> bool:
     """
     Intenta reclamar un lock global de startup en PostgreSQL.
@@ -453,6 +525,10 @@ def on_startup():
     # Evitar trabajo pesado duplicado cuando Gunicorn levanta múltiples workers.
     # Solo un worker ejecuta init DB + limpiezas; los demás continúan startup normal.
     startup_lock_claimed = _try_claim_startup_lock(engine)
+    # Diagnóstico del Start Command real (detecta override del Dashboard de Render).
+    # Solo el worker que reclama el lock loguea, para no duplicar la advertencia en cada arranque.
+    if startup_lock_claimed:
+        _log_runtime_startcmd_diagnostics()
     if startup_lock_claimed:
         try:
             # Crear tablas y verificar BD con reintentos (Render puede tener la BD aun no lista en el primer worker).

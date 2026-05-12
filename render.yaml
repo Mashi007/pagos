@@ -32,7 +32,12 @@
     # (reduce "Error while closing socket [Errno 9] Bad file descriptor" en shutdown)
     # 1 worker: menos RAM y un solo startup BD (workers>1 duplican import ML + on_startup; deploy Render suele timeout ~15m).
     # timeout: envíos masivos de notificaciones (p. ej. «2 días antes») superan fácil 180s; el frontend usa 15 min en axios/proxy.
-    startCommand: gunicorn app.main:app --bind 0.0.0.0:$PORT --workers 1 --timeout 920 --graceful-timeout 60 --worker-class uvicorn.workers.UvicornWorker
+    # max-requests + jitter: recicla el worker cada ~1500-1800 peticiones para liberar RSS acumulado
+    # (allocations residuales tras barridos grandes, ML/Drive/Gemini, exports). Gunicorn arranca el reemplazo,
+    # drena el viejo y reenruta sin downtime visible al usuario. Defensa frente a memory creep en uptime largo.
+    # IMPORTANTE: este Start Command lo lee el Blueprint sólo en la creación del servicio. Si en Render
+    # Dashboard hay un Start Command manual configurado, éste lo sobrescribe. Mantener ambos sincronizados.
+    startCommand: gunicorn app.main:app --bind 0.0.0.0:$PORT --workers 1 --timeout 920 --graceful-timeout 60 --max-requests 1500 --max-requests-jitter 300 --worker-class uvicorn.workers.UvicornWorker
     rootDir: backend
     # /health responde sin BD; /health/db puede marcar 503 si Postgres aun no acepta conexiones.
     healthCheckPath: /health

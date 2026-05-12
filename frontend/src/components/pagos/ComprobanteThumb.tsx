@@ -33,7 +33,12 @@ interface SnifResult {
 
 function sniffMime(head: Uint8Array): SnifResult {
   if (head.length >= 4) {
-    if (head[0] === 0x25 && head[1] === 0x50 && head[2] === 0x44 && head[3] === 0x46) {
+    if (
+      head[0] === 0x25 &&
+      head[1] === 0x50 &&
+      head[2] === 0x44 &&
+      head[3] === 0x46
+    ) {
       return { mime: 'application/pdf', isPdf: true }
     }
     if (head[0] === 0xff && head[1] === 0xd8 && head[2] === 0xff) {
