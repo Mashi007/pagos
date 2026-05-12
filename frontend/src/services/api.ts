@@ -24,6 +24,16 @@ import {
 
 import { isTokenExpired } from '../utils/token'
 
+import {
+  markBackendError,
+  markBackendSuccessAfterRetries,
+  showReconnectingToast,
+  dismissReconnectingToast,
+  dismissReconnectingToastByExhaustion,
+  suggestedDeferMsForCriticalWrite,
+  isCriticalCobrosWrite,
+} from './backendHealthTracker'
+
 const safeClear = () => {
   try {
     localStorage.clear()
@@ -184,7 +194,7 @@ class ApiClient {
     // Request interceptor - agregar token de autenticación
 
     this.client.interceptors.request.use(
-      config => {
+      async config => {
         // ? Si el refresh token esté expirado, cancelar el request inmediatamente
 
         if (this.refreshTokenExpired && !config.url?.includes('/auth/login')) {
@@ -350,6 +360,26 @@ class ApiClient {
           config.timeout = 120000
         }
 
+        // Soft circuit breaker: si hubo 502/503 reciente sobre endpoints catalogados,
+        // damos al backend hasta 3s extra antes de enviar un write crítico (PATCH ...
+        // /estado). NUNCA bloquea: como mucho retrasa el primer intento, dando margen
+        // al worker recién levantado a calentar caches. Solo afecta a la primera salida
+        // del request; los reintentos automáticos ya tienen su propio backoff.
+        try {
+          const isFirstAttempt = !(config as any)._retryCount
+          if (
+            isFirstAttempt &&
+            isCriticalCobrosWrite(config.method, config.url)
+          ) {
+            const deferMs = suggestedDeferMsForCriticalWrite()
+            if (deferMs > 0) {
+              await new Promise(resolve => setTimeout(resolve, deferMs))
+            }
+          }
+        } catch {
+          /* defensivo: nunca abortar un request por el circuit breaker */
+        }
+
         // FormData: no fijar Content-Type aquí; axios/navegador añaden multipart + boundary.
         // Si queda 'application/json' por defecto o 'multipart/form-data' sin boundary, el backend puede no leer el archivo.
         if (
@@ -388,6 +418,18 @@ class ApiClient {
 
         if (requestId) {
           this.requestCancellers.delete(requestId)
+        }
+
+        // Si este request venía de >=1 reintento por 502/503 sobre un endpoint catalogado,
+        // cerrar el toast persistente "Reconectando…" y dar feedback breve de recuperación.
+        // No-op si nunca hubo reintento.
+        try {
+          const retryCount = Number((response.config as any)?._retryCount || 0)
+          if (retryCount > 0) {
+            markBackendSuccessAfterRetries(retryCount, response.config.url)
+          }
+        } catch {
+          /* defensivo: nunca romper un response exitoso por logging UX */
         }
 
         return response
@@ -480,6 +522,18 @@ class ApiClient {
         ) {
           ;(requestConfigForRetry as any)._retryCount = retryCount + 1
 
+          // Backend Health Tracker: dejar señal de 502/503 reciente (alimenta el soft circuit
+          // breaker que añade un pequeño delay antes del próximo PATCH crítico) y mostrar el
+          // toast persistente "Reconectando…" a partir del 2º intento (retryCount >= 1).
+          try {
+            markBackendError(Number(st), reqUrl)
+            if (retryCount >= 1 && (st === 502 || st === 503)) {
+              showReconnectingToast(retryCount, maxRetries)
+            }
+          } catch {
+            /* nunca romper retries por UX */
+          }
+
           // 502/503 en Render: dar tiempo al dyno del API a despertar (reintentos más espaciados).
           const useLong502Delay =
             isColdStartProxySafeGet || isCobrosEstadoPatch502Storm
@@ -501,6 +555,25 @@ class ApiClient {
           await new Promise(resolve => setTimeout(resolve, delayMs))
 
           return this.client(requestConfigForRetry)
+        }
+
+        // Sin más reintentos disponibles: si llegamos hasta aquí con un toast persistente
+        // de "Reconectando…", reemplazarlo por un mensaje de fallo final. Solo si era un
+        // 502/503 sobre un endpoint catalogado y ya habíamos reintentado al menos una vez.
+        try {
+          if (
+            (st === 502 || st === 503) &&
+            retryCount >= 1 &&
+            (isColdStartProxySafeGet || isCobrosEstadoPatch502Storm)
+          ) {
+            dismissReconnectingToastByExhaustion()
+          } else if (retryCount > 0) {
+            // Petición falló por otro motivo tras al menos 1 reintento: cerrar el toast
+            // silenciosamente para no dejarlo colgado.
+            dismissReconnectingToast()
+          }
+        } catch {
+          /* nunca romper el flujo de error original por UX */
         }
 
         const originalRequest = error.config

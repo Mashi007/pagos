@@ -273,6 +273,138 @@ def _invalidate_cobros_listado_kpis_cache() -> None:
         logger.warning("[COBROS_CACHE] Redis invalidate listado-y-kpis falló: %s", e)
 
 
+def _drop_pago_from_listado_kpis_cache(pago_id: int) -> None:
+    """
+    Parche quirúrgico: quita el pago `pago_id` de TODAS las entradas vivas del caché
+    listado-y-kpis (Redis + memoria + stale), ajusta `total`, `kpis[estado]` y `kpis['total']`
+    en sitio. Evita la recomputación BD completa (20–30s con 1 worker) tras un DELETE,
+    que es la causa real de la cascada de 502 que el usuario percibe como "no borra rápido".
+
+    Diseño:
+    - Lee cada entry cacheada, busca el item por `id`, lo filtra, decrementa contadores.
+    - Si la entry no contiene el `pago_id`, no la toca (paginación: el item puede no estar
+      en la página 1 sin filtro pero sí en la página de un filtro específico).
+    - **Preserva el TTL original** (con `redis_client.ttl(key)`); evita que un parche
+      "rejuvenezca" entries casi expiradas y diferir el siguiente recálculo natural.
+    - Si la deserialización JSON o el TTL falla en una entry, esa entry se invalida
+      (delete) y se sigue con el resto: nunca dejar contadores corruptos visibles.
+    - El stale cache (sufijo `:stale`) también se parchea para que el fallback
+      resiliente no resucite filas eliminadas en picos / redeploy.
+
+    No reemplaza a `_invalidate_cobros_listado_kpis_cache` para mutaciones que afectan
+    múltiples filas (marcar-exportados, recibo regenerado): allí seguir invalidando.
+    """
+    redis_client = get_redis_client()
+
+    def _patch_entry(payload: dict) -> Optional[dict]:
+        try:
+            items = payload.get("items")
+            if not isinstance(items, list):
+                return None
+            removed_item: Optional[dict] = None
+            new_items: List[Any] = []
+            for it in items:
+                if isinstance(it, dict) and it.get("id") == pago_id:
+                    removed_item = it
+                    continue
+                new_items.append(it)
+            if removed_item is None:
+                return None
+            payload["items"] = new_items
+            try:
+                payload["total"] = max(0, int(payload.get("total", 0)) - 1)
+            except (TypeError, ValueError):
+                pass
+            kpis = payload.get("kpis")
+            if isinstance(kpis, dict):
+                est = removed_item.get("estado")
+                if isinstance(est, str):
+                    est_key = est.strip()
+                    if est_key and isinstance(kpis.get(est_key), (int, float)):
+                        kpis[est_key] = max(0, int(kpis[est_key]) - 1)
+                if isinstance(kpis.get("total"), (int, float)):
+                    kpis["total"] = max(0, int(kpis["total"]) - 1)
+                payload["kpis"] = kpis
+            return payload
+        except Exception:
+            return None
+
+    if redis_client is not None:
+        try:
+            keys = list(redis_client.scan_iter(match=f"{_COBROS_LISTADO_KPIS_CACHE_PREFIX}*"))
+            for key in keys:
+                try:
+                    raw = redis_client.get(key)
+                    if not raw:
+                        continue
+                    parsed = json.loads(raw)
+                    if not isinstance(parsed, dict):
+                        continue
+                    patched = _patch_entry(parsed)
+                    if patched is None:
+                        continue
+                    try:
+                        ttl = redis_client.ttl(key)
+                    except Exception:
+                        ttl = None
+                    if ttl is None or ttl < 0:
+                        # TTL desconocido: no rejuvenecer la entry; mejor borrarla para
+                        # que el próximo request vuelva a poblarla con datos frescos
+                        # (la siguiente compleja la sirve singleflight + stale fallback).
+                        try:
+                            redis_client.delete(key)
+                        except Exception:
+                            pass
+                        continue
+                    try:
+                        redis_client.setex(
+                            key,
+                            int(ttl),
+                            json.dumps(patched, ensure_ascii=False, default=str),
+                        )
+                    except Exception:
+                        try:
+                            redis_client.delete(key)
+                        except Exception:
+                            pass
+                except Exception as inner_e:
+                    logger.debug(
+                        "[COBROS_CACHE] parche delete entry %s falló (%s); borrando key",
+                        key,
+                        inner_e,
+                    )
+                    try:
+                        redis_client.delete(key)
+                    except Exception:
+                        pass
+        except Exception as e:
+            logger.warning(
+                "[COBROS_CACHE] parche delete Redis falló (%s); fallback a invalidación total.",
+                e,
+            )
+            _invalidate_cobros_listado_kpis_cache()
+            return
+
+    now = time.time()
+    with _cobros_listado_kpis_mem_lock:
+        for cache_dict in (
+            _cobros_listado_kpis_mem_cache,
+            _cobros_listado_kpis_mem_stale_cache,
+        ):
+            for key in list(cache_dict.keys()):
+                exp_ts, payload = cache_dict[key]
+                if not isinstance(payload, dict):
+                    continue
+                # Trabajar sobre copia somera; los items y kpis se reasignan en el parche.
+                patched = _patch_entry(dict(payload))
+                if patched is None:
+                    continue
+                if exp_ts <= now:
+                    cache_dict.pop(key, None)
+                    continue
+                cache_dict[key] = (exp_ts, patched)
+
+
 def _cobros_listado_kpis_try_acquire_singleflight(cache_payload: str) -> bool:
     """
     True si este request toma el cálculo de esta key; False si otro ya está calculando.
@@ -2804,7 +2936,10 @@ def eliminar_pago_reportado(
     ref = pr.referencia_interna
     db.delete(pr)
     db.commit()
-    _invalidate_cobros_listado_kpis_cache()
+    # Parche quirúrgico en lugar de invalidación total: evita que el siguiente
+    # `listado-y-kpis` recompute toda la BD (20-30s con 1 worker), bloquee el worker
+    # y dispare 502 en GET vecinos (regresión observada en producción).
+    _drop_pago_from_listado_kpis_cache(pago_id)
     logger.info("[COBROS] Pago reportado eliminado: id=%s ref=%s", pago_id, ref)
     return {"ok": True, "mensaje": f"Pago reportado {ref} eliminado."}
 
