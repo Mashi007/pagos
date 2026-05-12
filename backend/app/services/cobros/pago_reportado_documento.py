@@ -189,6 +189,12 @@ def primer_reportado_id_por_norm_batch(
 
     Escaneo acotado por `created_at_desde` (p. ej. min(created_at del lote) - 30 dias) y por
     `max_rows_scan` filas leidas en total por fase.
+
+    PERF: SELECT solo (id, numero_operacion, referencia_interna) y una sola query con
+    fetchmany() por bloques (sin OFFSET/LIMIT repetido). Antes hacia `select(PagoReportado)`
+    -> hidratacion ORM completa incluyendo el blob ``recibo_pdf`` (~100 KB por fila), lo que
+    convertia este barrido en 10+ segundos en PATCH de un solo reportado y bloqueaba el unico
+    worker en Render. El cambio reduce de ~MB a ~KB por fila y reusa el cursor.
     """
     first: Dict[str, int] = {}
     if not norms:
@@ -199,33 +205,36 @@ def primer_reportado_id_por_norm_batch(
         if not pending:
             return
         stmt = (
-            select(PagoReportado)
+            select(
+                PagoReportado.id,
+                PagoReportado.numero_operacion,
+                PagoReportado.referencia_interna,
+            )
             .where(PagoReportado.estado.in_(_ESTADOS_REPORTADO_DUP_PEER))
             .order_by(PagoReportado.created_at.asc(), PagoReportado.id.asc())
         )
         if desde is not None:
             stmt = stmt.where(PagoReportado.created_at >= desde)
         seen = 0
-        offset = 0
-        batch = 800
+        res = db.execute(stmt)
+        block_size = 4000
         while pending and seen < cap:
-            chunk = db.execute(stmt.offset(offset).limit(batch)).scalars().all()
+            chunk = res.fetchmany(block_size)
             if not chunk:
                 break
-            for pr in chunk:
+            for pid, op, ref in chunk:
                 seen += 1
                 if seen > cap:
                     return
-                _, n_eff = documento_numero_desde_pago_reportado(pr)
+                _, n_eff = documento_numero_desde_pago_reportado(
+                    SimpleNamespace(numero_operacion=op, referencia_interna=ref)
+                )
                 if not n_eff or n_eff not in pending:
                     continue
-                first[n_eff] = pr.id
+                first[n_eff] = int(pid)
                 pending.discard(n_eff)
                 if not pending:
                     return
-            offset += len(chunk)
-            if len(chunk) < batch:
-                break
 
     _scan_phase(created_at_desde, max_rows_scan)
     if pending:
