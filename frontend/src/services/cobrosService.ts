@@ -1278,28 +1278,70 @@ export interface PagoReportadoDetalleResponse {
  * en un error "silent" (no toast). 404 legítimos por URL inválida siguen
  * mostrándose porque ese id nunca estuvo en el set.
  */
-const _recentlyDeletedPagoReportadoIds = new Map<number, number>()
-const RECENTLY_DELETED_TTL_MS = 60_000
+/**
+ * IDs de pagos reportados que el frontend ya no debe mostrar en el listado por
+ * defecto (cola por gestionar) ni en pantallas de detalle, aunque el backend
+ * temporalmente devuelva la fila o un 404 fresco. Se llenan tras DELETE / aprobar
+ * / rechazar exitoso y vencen tras `RECENTLY_HIDDEN_TTL_MS`. Sirven a dos cosas:
+ *   1. Suprimir el toast "Pago reportado no encontrado" cuando un GET 404 llega
+ *      poco despues de un DELETE (carrera BFCache / refetch en vuelo).
+ *   2. Filtrar la fila del listado mientras el backend termina de propagar el
+ *      cambio (cache, replica, etc.), para que el operador vea la fila
+ *      desaparecer al instante en lugar de tras varios segundos de refetch.
+ */
+const _recentlyHiddenPagoReportadoIds = new Map<number, number>()
+const RECENTLY_HIDDEN_TTL_MS = 60_000
 
-function markPagoReportadoRecentlyDeleted(pagoId: number): void {
-  _recentlyDeletedPagoReportadoIds.set(pagoId, Date.now() + RECENTLY_DELETED_TTL_MS)
-  // Limpiar entries vencidas para no crecer indefinidamente en sesiones largas.
-  if (_recentlyDeletedPagoReportadoIds.size > 64) {
+export function markPagoReportadoRecentlyHidden(pagoId: number): void {
+  _recentlyHiddenPagoReportadoIds.set(
+    pagoId,
+    Date.now() + RECENTLY_HIDDEN_TTL_MS
+  )
+  if (_recentlyHiddenPagoReportadoIds.size > 128) {
     const now = Date.now()
-    for (const [k, expiresAt] of _recentlyDeletedPagoReportadoIds) {
-      if (expiresAt <= now) _recentlyDeletedPagoReportadoIds.delete(k)
+    for (const [k, expiresAt] of _recentlyHiddenPagoReportadoIds) {
+      if (expiresAt <= now) _recentlyHiddenPagoReportadoIds.delete(k)
     }
   }
 }
 
-function isPagoReportadoRecentlyDeleted(pagoId: number): boolean {
-  const expiresAt = _recentlyDeletedPagoReportadoIds.get(pagoId)
+export function isPagoReportadoRecentlyHidden(pagoId: number): boolean {
+  const expiresAt = _recentlyHiddenPagoReportadoIds.get(pagoId)
   if (expiresAt == null) return false
   if (expiresAt <= Date.now()) {
-    _recentlyDeletedPagoReportadoIds.delete(pagoId)
+    _recentlyHiddenPagoReportadoIds.delete(pagoId)
     return false
   }
   return true
+}
+
+/**
+ * Devuelve una copia inmutable del set actual de IDs ocultos vigentes.
+ * Util para `Array.filter` en el listado sin perder reactividad accidental
+ * (el llamador puede memoizar con `Date.now()` como key barata cada render).
+ */
+export function getRecentlyHiddenPagoReportadoIds(): ReadonlySet<number> {
+  const now = Date.now()
+  const out = new Set<number>()
+  for (const [k, expiresAt] of _recentlyHiddenPagoReportadoIds) {
+    if (expiresAt <= now) {
+      _recentlyHiddenPagoReportadoIds.delete(k)
+      continue
+    }
+    out.add(k)
+  }
+  return out
+}
+
+// Alias historicos: la API previa usaba "RecentlyDeleted"; lo mantenemos como
+// thin wrapper para no romper imports/llamadas existentes y semantica de
+// suppression de toast tras DELETE.
+function markPagoReportadoRecentlyDeleted(pagoId: number): void {
+  markPagoReportadoRecentlyHidden(pagoId)
+}
+
+function isPagoReportadoRecentlyDeleted(pagoId: number): boolean {
+  return isPagoReportadoRecentlyHidden(pagoId)
 }
 
 export async function getPagoReportadoDetalle(
@@ -1336,7 +1378,10 @@ export async function aprobarPagoReportado(
   const data = await apiClient.post<{ ok: boolean; mensaje?: string }>(
     `${BASE_COBROS}/pagos-reportados/${pagoId}/aprobar`
   )
-
+  // Tras aprobar, el pago pasa a `aprobado` y deja la cola por defecto. Marcar el
+  // id como oculto recientemente permite que el listado lo filtre al instante,
+  // antes de que el siguiente fetch al backend lo confirme.
+  markPagoReportadoRecentlyHidden(pagoId)
   return data
 }
 
@@ -1348,7 +1393,7 @@ export async function rechazarPagoReportado(
     `${BASE_COBROS}/pagos-reportados/${pagoId}/rechazar`,
     { motivo }
   )
-
+  markPagoReportadoRecentlyHidden(pagoId)
   return data
 }
 
@@ -1442,10 +1487,17 @@ export async function cambiarEstadoPago(
 ): Promise<CambiarEstadoPagoResponse> {
   const path = `${BASE_COBROS}/pagos-reportados/${pagoId}/estado`
   // Reintentos 502/503/504: interceptor global en api.ts (PATCH .../estado + backoff).
-  return await apiClient.patch<CambiarEstadoPagoResponse>(path, {
+  const data = await apiClient.patch<CambiarEstadoPagoResponse>(path, {
     estado,
     motivo,
   })
+  // Si el nuevo estado deja el item fuera de la cola por defecto, marcarlo como
+  // oculto para que el listado lo filtre al instante sin esperar al refetch.
+  const st = (estado || '').trim()
+  if (st === 'aprobado' || st === 'rechazado' || st === 'importado') {
+    markPagoReportadoRecentlyHidden(pagoId)
+  }
+  return data
 }
 
 export async function eliminarPagoReportado(

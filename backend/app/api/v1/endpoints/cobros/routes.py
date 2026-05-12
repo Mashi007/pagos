@@ -14,7 +14,7 @@ from collections import Counter
 from datetime import date, datetime, time as dt_time, timedelta
 from decimal import Decimal
 from types import SimpleNamespace
-from typing import Optional, List, Tuple, Any, Dict, Set
+from typing import Optional, List, Tuple, Any, Dict, Iterable, Set
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.encoders import jsonable_encoder
@@ -273,27 +273,34 @@ def _invalidate_cobros_listado_kpis_cache() -> None:
         logger.warning("[COBROS_CACHE] Redis invalidate listado-y-kpis falló: %s", e)
 
 
-def _drop_pago_from_listado_kpis_cache(pago_id: int) -> None:
+def _drop_pagos_from_listado_kpis_cache(pago_ids: Iterable[int]) -> None:
     """
-    Parche quirúrgico: quita el pago `pago_id` de TODAS las entradas vivas del caché
+    Parche quirurgico multi-id: quita TODOS los `pago_ids` de TODAS las entradas vivas del cache
     listado-y-kpis (Redis + memoria + stale), ajusta `total`, `kpis[estado]` y `kpis['total']`
-    en sitio. Evita la recomputación BD completa (20–30s con 1 worker) tras un DELETE,
-    que es la causa real de la cascada de 502 que el usuario percibe como "no borra rápido".
+    en sitio. Evita la recomputacion BD completa (20-30s con 1 worker) tras DELETE/APROBAR/RECHAZAR,
+    que es la causa real de la cascada de 502 y de la sensacion "no borra/aprueba rapido".
 
-    Diseño:
-    - Lee cada entry cacheada, busca el item por `id`, lo filtra, decrementa contadores.
-    - Si la entry no contiene el `pago_id`, no la toca (paginación: el item puede no estar
-      en la página 1 sin filtro pero sí en la página de un filtro específico).
-    - **Preserva el TTL original** (con `redis_client.ttl(key)`); evita que un parche
-      "rejuvenezca" entries casi expiradas y diferir el siguiente recálculo natural.
-    - Si la deserialización JSON o el TTL falla en una entry, esa entry se invalida
-      (delete) y se sigue con el resto: nunca dejar contadores corruptos visibles.
-    - El stale cache (sufijo `:stale`) también se parchea para que el fallback
-      resiliente no resucite filas eliminadas en picos / redeploy.
+    Disenio:
+    - Un solo barrido del cache (Redis + memoria) para todo el conjunto de ids: tras
+      aprobar, ademas del pago aprobado tambien se marcan los hermanos duplicados como
+      `eliminado_duplicado`; resolverlos en una sola pasada vale mas que repetir el scan.
+    - Lee cada entry cacheada, busca items por `id`, los filtra, decrementa contadores.
+    - Si la entry no contiene ninguno de los `pago_ids`, no la toca (la pagina filtrada
+      puede no tener esos ids; mantener TTL evita rejuvenecer entries casi vencidas).
+    - **Preserva el TTL original** (con `redis_client.ttl(key)`); un parche no debe
+      diferir el siguiente recalculo natural.
+    - Si la deserializacion JSON o el TTL falla, esa entry se invalida (delete) y se
+      sigue con el resto: nunca dejar contadores corruptos visibles.
+    - El stale cache (sufijo `:stale`) tambien se parchea para que el fallback
+      resiliente no resucite filas mutadas en picos / redeploy.
 
     No reemplaza a `_invalidate_cobros_listado_kpis_cache` para mutaciones que afectan
-    múltiples filas (marcar-exportados, recibo regenerado): allí seguir invalidando.
+    muchas filas a la vez (marcar-exportados, recibo regenerado, reanalisis Gemini que
+    cambia la observacion): alli seguir invalidando.
     """
+    ids: Set[int] = {int(x) for x in pago_ids if x is not None}
+    if not ids:
+        return
     redis_client = get_redis_client()
 
     def _patch_entry(payload: dict) -> Optional[dict]:
@@ -301,29 +308,41 @@ def _drop_pago_from_listado_kpis_cache(pago_id: int) -> None:
             items = payload.get("items")
             if not isinstance(items, list):
                 return None
-            removed_item: Optional[dict] = None
+            removed_items: List[dict] = []
             new_items: List[Any] = []
             for it in items:
-                if isinstance(it, dict) and it.get("id") == pago_id:
-                    removed_item = it
-                    continue
+                if isinstance(it, dict):
+                    try:
+                        it_id = int(it.get("id"))
+                    except (TypeError, ValueError):
+                        it_id = None
+                    if it_id is not None and it_id in ids:
+                        removed_items.append(it)
+                        continue
                 new_items.append(it)
-            if removed_item is None:
+            if not removed_items:
                 return None
             payload["items"] = new_items
             try:
-                payload["total"] = max(0, int(payload.get("total", 0)) - 1)
+                payload["total"] = max(
+                    0, int(payload.get("total", 0)) - len(removed_items)
+                )
             except (TypeError, ValueError):
                 pass
             kpis = payload.get("kpis")
             if isinstance(kpis, dict):
-                est = removed_item.get("estado")
-                if isinstance(est, str):
-                    est_key = est.strip()
-                    if est_key and isinstance(kpis.get(est_key), (int, float)):
-                        kpis[est_key] = max(0, int(kpis[est_key]) - 1)
+                for ri in removed_items:
+                    est = ri.get("estado") if isinstance(ri, dict) else None
+                    if isinstance(est, str):
+                        est_key = est.strip()
+                        if est_key and isinstance(
+                            kpis.get(est_key), (int, float)
+                        ):
+                            kpis[est_key] = max(0, int(kpis[est_key]) - 1)
                 if isinstance(kpis.get("total"), (int, float)):
-                    kpis["total"] = max(0, int(kpis["total"]) - 1)
+                    kpis["total"] = max(
+                        0, int(kpis["total"]) - len(removed_items)
+                    )
                 payload["kpis"] = kpis
             return payload
         except Exception:
@@ -403,6 +422,11 @@ def _drop_pago_from_listado_kpis_cache(pago_id: int) -> None:
                     cache_dict.pop(key, None)
                     continue
                 cache_dict[key] = (exp_ts, patched)
+
+
+def _drop_pago_from_listado_kpis_cache(pago_id: int) -> None:
+    """Atajo single-id; conserva firma historica del call site del DELETE."""
+    _drop_pagos_from_listado_kpis_cache([pago_id])
 
 
 def _cobros_listado_kpis_try_acquire_singleflight(cache_payload: str) -> bool:
@@ -2623,6 +2647,9 @@ def aprobar_pago_reportado(
 
     completar_solo_recibo = False
     registrar_historial_aprobacion = True
+    # IDs a desalojar del cache listado-y-kpis tras el commit final (parche quirurgico
+    # en lugar de invalidacion total: evita el recompute de 20-30s con 1 worker).
+    pago_ids_para_dropear_cache: Set[int] = {int(pago_id)}
     if pr.estado == "aprobado":
         try:
             _crear_pago_desde_reportado_y_aplicar_cuotas(db, pr, usuario_email)
@@ -2698,6 +2725,11 @@ def aprobar_pago_reportado(
                         num_key,
                         ", ".join([x for x in dup_refs if x])[:300],
                     )
+                # Hermanos marcados como `eliminado_duplicado` deben salir del cache
+                # del listado por defecto junto con el aprobado (parche quirurgico).
+                for _hid, _href, _hst in dup_rows:
+                    if _hst in ("pendiente", "en_revision", "rechazado"):
+                        pago_ids_para_dropear_cache.add(int(_hid))
             db.commit()
             _log_fase_aprobacion(
                 flujo="aprobar_directo",
@@ -2818,7 +2850,11 @@ def aprobar_pago_reportado(
     if registrar_historial_aprobacion and estado_anterior is not None:
         _registrar_historial(db, pago_id, estado_anterior, "aprobado", usuario_email, None)
     db.commit()
-    _invalidate_cobros_listado_kpis_cache()
+    # Parche quirurgico (no invalidacion total): la aprobacion lleva la fila a un estado
+    # que ya no esta en la cola por defecto (aprobado). Tras commit, removerla del cache
+    # mantiene el listado-y-kpis caliente para los GET vecinos y la fila desaparece al
+    # instante en el frontend del operador.
+    _drop_pagos_from_listado_kpis_cache(pago_ids_para_dropear_cache)
     _log_fase_aprobacion(
         flujo="aprobar_directo",
         fase="total",
@@ -2924,7 +2960,10 @@ def rechazar_pago_reportado(
         mensaje_final = "Pago rechazado. No hay correo del cliente en el sistema; no se envió notificación."
     _registrar_historial(db, pago_id, estado_anterior, "rechazado", usuario_email, pr.motivo_rechazo)
     db.commit()
-    _invalidate_cobros_listado_kpis_cache()
+    # Parche quirurgico: el rechazo lleva la fila a `rechazado`, fuera de la cola por
+    # defecto (pendiente/en_revision). Sacarla del cache evita el recompute completo
+    # tras cada rechazo y permite que el frontend la vea desaparecer al instante.
+    _drop_pago_from_listado_kpis_cache(pago_id)
     out = {
         "ok": True,
         "mensaje": mensaje_final,
@@ -3366,6 +3405,10 @@ def cambiar_estado_pago(
     pr.usuario_gestion_id = current_user.get("id") if isinstance(current_user, dict) else getattr(current_user, "id", None)
     usuario_email = current_user.get("email") if isinstance(current_user, dict) else getattr(current_user, "email", None)
 
+    # IDs a desalojar del cache listado-y-kpis con parche quirurgico (no invalidacion total)
+    # cuando el nuevo estado deja al item fuera de la cola por defecto.
+    pago_ids_para_dropear_cache: Set[int] = {int(pago_id)}
+
     mensaje = f"Estado actualizado a {body.estado}."
     total_t0 = time.perf_counter() if body.estado == "aprobado" else 0.0
     rechazo_correo_enviado: Optional[bool] = None
@@ -3397,6 +3440,9 @@ def cambiar_estado_pago(
                         num_key,
                         ", ".join([x for x in dup_refs if x])[:300],
                     )
+                for _hid, _href, _hst in dup_rows:
+                    if _hst in ("pendiente", "en_revision", "rechazado"):
+                        pago_ids_para_dropear_cache.add(int(_hid))
             db.commit()
             _log_fase_aprobacion(
                 flujo="aprobar_patch_estado",
@@ -3542,7 +3588,15 @@ def cambiar_estado_pago(
 
     _registrar_historial(db, pago_id, estado_anterior, body.estado, usuario_email, body.motivo)
     db.commit()
-    _invalidate_cobros_listado_kpis_cache()
+    # Parche quirurgico cuando el nuevo estado deja el item fuera de la cola por defecto
+    # (aprobado / rechazado): el frontend ve la fila desaparecer al instante y el siguiente
+    # listado-y-kpis no recompute toda la cola.
+    # Si el item vuelve a pendiente/en_revision (raro, p. ej. reabrir tras rechazo), no
+    # podemos parchear sin saber donde insertarlo: invalidamos para forzar recalculo fresco.
+    if body.estado in ("aprobado", "rechazado"):
+        _drop_pagos_from_listado_kpis_cache(pago_ids_para_dropear_cache)
+    else:
+        _invalidate_cobros_listado_kpis_cache()
     if body.estado == "aprobado":
         _log_fase_aprobacion(
             flujo="aprobar_patch_estado",

@@ -44,6 +44,7 @@ import {
   cambiarEstadoPago,
   eliminarPagoReportado,
   invalidateCobrosListadoKpisCache,
+  getRecentlyHiddenPagoReportadoIds,
   COBROS_LISTADO_KPIS_CACHE_TTL_MS,
   type PagoReportadoItem,
   type ListPagosReportadosResponse,
@@ -537,6 +538,16 @@ export default function CobrosPagosReportadosPage() {
   const [ultimaCargaMs, setUltimaCargaMs] = useState<number | null>(null)
 
   const [searchNonce, setSearchNonce] = useState(0)
+  /**
+   * Tick para forzar re-evaluacion de `itemsTabla` cuando se agrega un id al set
+   * de "ocultos recientemente" (aprobado / rechazado / eliminado): el Map global
+   * de la capa de servicio no es reactivo, asi que cada mutacion bumpea este
+   * contador para que el `useMemo` lo incluya en sus deps.
+   */
+  const [hiddenIdsTick, setHiddenIdsTick] = useState(0)
+  const bumpHiddenIdsTick = useCallback(() => {
+    setHiddenIdsTick(t => (t + 1) % 1_000_000)
+  }, [])
   const loadSeqRef = useRef(0)
   const postMutationSyncTimerRef = useRef<number | null>(null)
   const dataRef = useRef<ListPagosReportadosResponse | null>(null)
@@ -1010,6 +1021,10 @@ export default function CobrosPagosReportadosPage() {
       }
 
       invalidateCobrosListadoKpisCache()
+      // Bumpear tick: cambiarEstadoPago marca el id como oculto reciente cuando
+      // pasa a aprobado/rechazado/importado; el useMemo de `itemsTabla` necesita
+      // este bump para re-evaluar y filtrar la fila al instante.
+      bumpHiddenIdsTick()
 
       // Quitar la fila al instante si ya no pertenece al filtro actual.
       // Vista por defecto ("") muestra solo por gestionar: pendiente/en_revision.
@@ -1128,6 +1143,10 @@ export default function CobrosPagosReportadosPage() {
       })
       toast.success(res?.mensaje || 'Pago reportado eliminado.')
       invalidateCobrosListadoKpisCache()
+      // eliminarPagoReportado() ya marca el id como oculto reciente; bumpear el
+      // tick para que el useMemo del listado lo filtre al instante en cualquier
+      // pagina/filtro abierta (no solo la actual con optimistic ya aplicado).
+      bumpHiddenIdsTick()
       schedulePostMutationSync()
     } catch (e: unknown) {
       const detail = (e as { response?: { data?: { detail?: string } } })
@@ -1215,6 +1234,17 @@ export default function CobrosPagosReportadosPage() {
       if (!base.length) return base
     }
 
+    // Filtrar IDs marcados como ocultos recientemente (deleted/aprobado/rechazado en
+    // los ultimos ~60s). Permite que la fila desaparezca AL INSTANTE tras la
+    // mutacion aunque el siguiente refetch aun devuelva la fila por cache
+    // backend / Redis fuera de banda. `hiddenIdsTick` esta en deps para
+    // reactivamente recalcular cuando el set cambia desde un handler de mutacion.
+    const hiddenIds = getRecentlyHiddenPagoReportadoIds()
+    if (hiddenIds.size > 0) {
+      base = base.filter(row => !hiddenIds.has(row.id))
+      if (!base.length) return base
+    }
+
     const normalizarCedula = (value: string) =>
       String(value ?? '')
         .replace(/[^0-9A-Za-z]/g, '')
@@ -1279,6 +1309,7 @@ export default function CobrosPagosReportadosPage() {
     soloCedulasDuplicadas,
     soloFallaListaBs,
     soloDuplicadoDocumento,
+    hiddenIdsTick,
   ])
 
   const seleccionablesEnPagina = useMemo(
@@ -1391,6 +1422,10 @@ export default function CobrosPagosReportadosPage() {
         })
       }
       invalidateCobrosListadoKpisCache()
+      // Cada cambiarEstadoPago(..., 'aprobado') marca el id como oculto reciente
+      // en la capa de servicio; bumpear el tick una sola vez al final del lote
+      // refresca el useMemo y filtra todas las filas aprobadas al instante.
+      bumpHiddenIdsTick()
       void fetchListado({ bypassCache: true, silent: true })
     }
     setSelectedIds(prev => prev.filter(id => !okIds.includes(id)))
