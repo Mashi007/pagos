@@ -1512,7 +1512,14 @@ def _where_clauses_cola_reportados(
     exportados_subq: Any,
     filtros: List[Any],
 ) -> List[Any]:
-    """Predicados WHERE compartidos: cola pendiente / en_revision / aprobado (+ exportados + filtros fecha/cédula/banco)."""
+    """Predicados WHERE compartidos: cola pendiente / en_revision (+ exportados + filtros fecha/cedula/banco).
+
+    El estado `aprobado` ya no entra en la cola por defecto: cuando un reporte queda en
+    `aprobado` el pago ya fue creado en cartera y aplicado a cuotas; conservarlo en la
+    cola manual era ruido visual y forzaba un barrido extra de filas que no requieren
+    accion humana. Para auditoria de aprobados usar el historico o el filtro explicito
+    `estado=aprobado` (que sigue funcionando aqui por compatibilidad de URL/permaview).
+    """
     wh: List[Any] = []
     if estado == "aprobado":
         wh.append(PagoReportado.estado == "aprobado")
@@ -1523,7 +1530,7 @@ def _where_clauses_cola_reportados(
         if not incluir_exportados:
             wh.append(~PagoReportado.id.in_(exportados_subq))
     else:
-        wh.append(PagoReportado.estado.in_(("pendiente", "en_revision", "aprobado")))
+        wh.append(PagoReportado.estado.in_(("pendiente", "en_revision")))
         if not incluir_exportados:
             wh.append(~PagoReportado.id.in_(exportados_subq))
     wh.extend(filtros)
@@ -1713,11 +1720,12 @@ def _list_pagos_reportados_payload(
         items = _pago_reportado_list_items_from_rows(db, rows)
         return {"items": items, "total": total, "page": page, "per_page": per_page}
 
-    # Cola manual: pendiente / en_revision / aprobado que NO cumplen validadores.
+    # Cola manual: pendiente / en_revision que NO cumplen validadores.
+    # `aprobado` ya no entra en la cola por defecto (se accede solo via filtro explicito).
     wh = _where_clauses_cola_reportados(estado, incluir_exportados, exportados_subq, filtros)
     wh_primer_scope = (
         _where_clauses_cola_reportados(None, incluir_exportados, exportados_subq, filtros)
-        if estado in ("pendiente", "en_revision", "aprobado")
+        if estado in ("pendiente", "en_revision")
         else wh
     )
     primer_scope_key = _primer_maps_scope_key(
@@ -1751,7 +1759,7 @@ def _list_pagos_reportados_payload(
     )
 
     emit_counts = bool(emit_manual_estado_counts_for_kpis and estado is None)
-    by_estado_manual: Dict[str, int] = {"pendiente": 0, "en_revision": 0, "aprobado": 0}
+    by_estado_manual: Dict[str, int] = {"pendiente": 0, "en_revision": 0}
 
     batch = _COBROS_LISTADO_SCAN_BATCH
     offset_scan = 0
@@ -1829,9 +1837,13 @@ def _kpis_pagos_reportados_payload(
     manual_queue_counts: Optional[Dict[str, int]] = None,
 ) -> dict:
     """
-    Conteos por estado con mismos filtros fecha/cédula/institución que el listado.
-    pendiente / en_revision / aprobado: solo los que NO cumplen validadores (cola de análisis manual).
+    Conteos por estado con mismos filtros fecha/cedula/institucion que el listado.
+    pendiente / en_revision: solo los que NO cumplen validadores (cola de analisis manual).
     importado / rechazado: totales SQL (estados terminales).
+
+    `aprobado` ya no se computa: el pago aprobado ya esta en cartera (tabla pagos) y no
+    requiere accion. Mantenerlo costaba un barrido extra de la cola y un KPI confuso
+    ("aprobado" pero con observacion DUPLICADO en una pantalla de cola por gestionar).
 
     Si `manual_queue_counts` viene del listado (mismo barrido), no se vuelve a escanear la cola.
     """
@@ -1841,7 +1853,7 @@ def _kpis_pagos_reportados_payload(
         cedula=cedula,
         institucion=institucion,
     )
-    counts = {"pendiente": 0, "en_revision": 0, "aprobado": 0, "rechazado": 0, "importado": 0}
+    counts = {"pendiente": 0, "en_revision": 0, "rechazado": 0, "importado": 0}
 
     if incluir_exportados:
         base_term = select(PagoReportado.estado, func.count(PagoReportado.id).label("cnt")).where(
@@ -1861,7 +1873,6 @@ def _kpis_pagos_reportados_payload(
     if manual_queue_counts is not None:
         counts["pendiente"] = int(manual_queue_counts.get("pendiente", 0))
         counts["en_revision"] = int(manual_queue_counts.get("en_revision", 0))
-        counts["aprobado"] = int(manual_queue_counts.get("aprobado", 0))
     else:
         exportados_subq = select(PagoReportadoExportado.pago_reportado_id)
         wh_kpi = _where_clauses_cola_reportados(None, incluir_exportados, exportados_subq, filtros)
@@ -1902,11 +1913,11 @@ def _kpis_pagos_reportados_payload(
                 if not _item_falla_validadores_cola_manual(it):
                     continue
                 st = (it.estado or "").strip()
-                if st in ("pendiente", "en_revision", "aprobado"):
+                if st in ("pendiente", "en_revision"):
                     counts[st] += 1
             offset_scan += len(rows_b)
 
-    counts["total"] = sum(counts[k] for k in ("pendiente", "en_revision", "aprobado", "rechazado", "importado"))
+    counts["total"] = sum(counts[k] for k in ("pendiente", "en_revision", "rechazado", "importado"))
     return counts
 
 

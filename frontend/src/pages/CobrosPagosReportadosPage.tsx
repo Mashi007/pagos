@@ -1563,8 +1563,6 @@ export default function CobrosPagosReportadosPage() {
 
                 <option value="en_revision">En revisión</option>
 
-                <option value="aprobado">Aprobado</option>
-
                 <option value="rechazado">Rechazado</option>
 
                 <option value="importado">Importado a Pagos</option>
@@ -1572,11 +1570,12 @@ export default function CobrosPagosReportadosPage() {
 
               <p className="text-xs text-muted-foreground">
                 <strong>Cola de revisión manual:</strong> por defecto sólo se
-                listan <em>pendientes</em> y <em>en revisión</em>. Aprobados,
-                importados y rechazados no aparecen aquí salvo que se elijan
-                explícitamente en este filtro o en una tarjeta de KPI. Use
-                &quot;Incluir ya exportados&quot; para volver a ver filas que se
-                marcaron como exportadas a corrección.
+                listan <em>pendientes</em> y <em>en revisión</em>. Los
+                aprobados ya están en cartera y se consultan desde el histórico
+                de cobros; los importados y rechazados se eligen aquí
+                explícitamente. Use &quot;Incluir ya exportados&quot; para
+                volver a ver filas que se marcaron como exportadas a
+                corrección.
               </p>
             </div>
 
@@ -1821,14 +1820,14 @@ export default function CobrosPagosReportadosPage() {
               </span>
             </button>
 
-            {(
-              ['pendiente', 'en_revision', 'aprobado', 'rechazado'] as const
-            ).map(key => {
+            {(['pendiente', 'en_revision', 'rechazado'] as const).map(key => {
               const cfg = ESTADO_CONFIG[key]
 
               const Icon = cfg.Icon
 
               const selected = estado === key
+
+              const valor = Number(kpis[key] ?? 0)
 
               return (
                 <button
@@ -1848,7 +1847,7 @@ export default function CobrosPagosReportadosPage() {
                     {cfg.label}
                   </span>
 
-                  <span className="text-2xl font-bold">{kpis[key]}</span>
+                  <span className="text-2xl font-bold">{valor}</span>
                 </button>
               )
             })}

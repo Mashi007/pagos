@@ -947,7 +947,14 @@ export interface PagosReportadosKpis {
 
   en_revision: number
 
-  aprobado: number
+  /**
+   * Aprobado: opcional porque el backend ya no lo emite por defecto.
+   * El reporte aprobado ya esta en cartera (tabla pagos) y no requiere accion
+   * en la cola manual; conservar el conteo costaba un barrido extra que
+   * bloqueaba al unico worker en Render.
+   */
+
+  aprobado?: number
 
   rechazado: number
 
