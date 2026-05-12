@@ -113,10 +113,30 @@ function validadoresTresFlags(p: PrestamoCandidatoDriveFila['payload']) {
   return { formatoOk, tablaVOk, hojaOk, nPrest, esV, esVe, esJ }
 }
 
-/** Parseo ligero alineado a columna Q (DD/MM/YYYY o YYYY-MM-DD). */
+/** Parseo ligero alineado a columna Q (DD/MM/YYYY, YYYY-MM-DD o serial Sheets/Excel). */
 function parseFechaFlexible(s: string): Date | null {
   const raw = (s || '').trim()
   if (!raw) return null
+  // Serial Sheets/Excel (base 1899-12-30). Mismo rango que backend: 20000..80000.
+  const serialMatch = raw.match(/^(\d+)(?:[.,]\d+)?$/)
+  if (serialMatch) {
+    const serial = Number(serialMatch[1])
+    if (Number.isFinite(serial) && serial >= 20000 && serial <= 80000) {
+      const base = Date.UTC(1899, 11, 30)
+      const ms = base + serial * 86400000
+      const d = new Date(ms)
+      if (!Number.isNaN(d.getTime())) {
+        return new Date(
+          d.getUTCFullYear(),
+          d.getUTCMonth(),
+          d.getUTCDate(),
+          12,
+          0,
+          0
+        )
+      }
+    }
+  }
   const ymdSlash = raw.match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})$/)
   if (ymdSlash) {
     const year = Number(ymdSlash[1])
@@ -156,6 +176,34 @@ function parseFechaFlexible(s: string): Date | null {
   return null
 }
 
+/**
+ * Fecha de aprobación normalizada: usa `col_q_fecha_iso` provisto por el backend
+ * (que ya admite seriales de Google Sheets / Excel) y cae al texto crudo solo
+ * si no viene la versión normalizada.
+ */
+function fechaAprobacionNormalizada(
+  p: PrestamoCandidatoDriveFila['payload']
+): Date | null {
+  const iso = String(p.col_q_fecha_iso ?? '').trim()
+  if (iso) {
+    const d = parseFechaFlexible(iso)
+    if (d) return d
+  }
+  return fechaAprobacionDesdeColQ(String(p.col_q_fecha ?? ''))
+}
+
+/** ISO `YYYY-MM-DD` mostrable; usa el normalizado del backend si está presente. */
+function colQFechaIsoDisplay(p: PrestamoCandidatoDriveFila['payload']): string {
+  const iso = String(p.col_q_fecha_iso ?? '').trim()
+  if (iso) return iso.slice(0, 10)
+  const d = fechaAprobacionDesdeColQ(String(p.col_q_fecha ?? ''))
+  if (!d) return ''
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
 /** Segunda parte de Q = aprobación si hay separador; si no, una sola fecha cuenta para ambas. */
 function fechaAprobacionDesdeColQ(qVal: string): Date | null {
   const raw = (qVal || '').trim()
@@ -187,8 +235,10 @@ function fechaAprobacionDesdeColQ(qVal: string): Date | null {
 }
 
 /** Fecha de aprobación (Q) con más de 30 días calendario respecto a hoy (zona local). */
-function aprobacionQMasDe30Dias(qVal: string): boolean {
-  const ap = fechaAprobacionDesdeColQ(qVal)
+function aprobacionMasDe30DiasFromPayload(
+  p: PrestamoCandidatoDriveFila['payload']
+): boolean {
+  const ap = fechaAprobacionNormalizada(p)
   if (!ap) return false
   const today = new Date()
   today.setHours(0, 0, 0, 0)
@@ -198,9 +248,16 @@ function aprobacionQMasDe30Dias(qVal: string): boolean {
   return diffDays > 30
 }
 
-function qTieneFechaAmbigua(qVal: string): boolean {
-  const raw = (qVal || '').trim()
+/** Solo determina ambigüedad textual DD/MM cuando el backend no nos entregó la bandera. */
+function qTieneFechaAmbiguaFromPayload(
+  p: PrestamoCandidatoDriveFila['payload']
+): boolean {
+  if (p.col_q_fecha_ambigua === true) return true
+  if (p.col_q_fecha_ambigua === false) return false
+  const raw = String(p.col_q_fecha ?? '').trim()
   if (!raw) return false
+  // Si ya hay ISO normalizado, el dato dejó de ser ambiguo para la UI.
+  if (String(p.col_q_fecha_iso ?? '').trim()) return false
   const tokens = raw
     .split(/[|;\n]|\s{2,}/)
     .map(x => x.trim())
@@ -226,11 +283,10 @@ function filaCandidatoDriveTono(
 ): FilaCandidatoDriveTono {
   const { formatoOk, tablaVOk, hojaOk, nPrest, esVe } = validadoresTresFlags(p)
   const dup = p.duplicada_en_hoja === true
-  const qRaw = String(p.col_q_fecha ?? '').trim()
 
   const redInvalida = !formatoOk
   const redVeDosOMasCreditos = esVe && Number.isFinite(nPrest) && nPrest >= 2
-  const redFechaAntigua = aprobacionQMasDe30Dias(qRaw)
+  const redFechaAntigua = aprobacionMasDe30DiasFromPayload(p)
   const redHuellaNoComparable = p.huella_no_comparable === true
 
   if (
@@ -295,6 +351,7 @@ function exportarCsvVistaActual(filas: PrestamoCandidatoDriveFila[]) {
     'total_n',
     'modalidad_s',
     'fecha_q',
+    'fecha_q_hoja',
     'cuotas_r',
     'analista_j',
     'concesionario_k',
@@ -313,6 +370,7 @@ function exportarCsvVistaActual(filas: PrestamoCandidatoDriveFila[]) {
     else if (dup) estado = 'repetida_hoja'
     else if (!tablaVOk) estado = 'tipo_VE: más de un préstamo o no cumple tabla'
     else estado = 'listo'
+    const fechaQNorm = colQFechaIsoDisplay(p) || strPayload(p, 'col_q_fecha')
     lines.push(
       [
         r.sheet_row_number,
@@ -325,6 +383,7 @@ function exportarCsvVistaActual(filas: PrestamoCandidatoDriveFila[]) {
         hojaOk ? 'ok' : 'no',
         strPayload(p, 'col_n_total_financiamiento'),
         strPayload(p, 'col_s_modalidad_pago'),
+        fechaQNorm,
         strPayload(p, 'col_q_fecha'),
         strPayload(p, 'col_r_numero_cuotas'),
         strPayload(p, 'col_j_analista'),
@@ -660,6 +719,7 @@ export default function ActualizacionesPrestamosDrivePage() {
     const p = fila.payload
     const { formatoOk, tablaVOk, hojaOk } = validadoresTresFlags(p)
     const qRaw = String(p.col_q_fecha ?? '').trim()
+    const qIso = String(p.col_q_fecha_iso ?? '').trim()
     if (!formatoOk) {
       return (
         <span className="text-red-600">
@@ -667,19 +727,19 @@ export default function ActualizacionesPrestamosDrivePage() {
         </span>
       )
     }
-    if (qTieneFechaAmbigua(qRaw)) {
+    if (qTieneFechaAmbiguaFromPayload(p)) {
       return (
         <span className="text-red-600">
-          (Q) Fecha ambigua en Q (dd/mm). Use YYYY-MM-DD para evitar inversión
-          día/mes.
+          (Q) Fecha ambigua en Q (dd/mm). Use YYYY-MM-DD en la hoja para evitar
+          inversión día/mes.
         </span>
       )
     }
-    if (qRaw && !parseFechaFlexible(qRaw)) {
+    if (qRaw && !qIso && !parseFechaFlexible(qRaw)) {
       return (
         <span className="text-red-600">
-          (Q) Fecha inválida: use YYYY-MM-DD o YYYY/MM/DD (no serial, no
-          ambiguas).
+          (Q) Fecha inválida: use YYYY-MM-DD o YYYY/MM/DD (no ambiguas). Los
+          seriales numéricos de la hoja se aceptan y se muestran normalizados.
         </span>
       )
     }
@@ -691,7 +751,7 @@ export default function ActualizacionesPrestamosDrivePage() {
         </span>
       )
     }
-    if (aprobacionQMasDe30Dias(qRaw)) {
+    if (aprobacionMasDe30DiasFromPayload(p)) {
       return (
         <span className="text-red-600">
           (Q) Fecha de aprobación con más de 30 días; no se permite guardar.
@@ -1137,8 +1197,16 @@ export default function ActualizacionesPrestamosDrivePage() {
                         >
                           {strPayload(r.payload, 'col_s_modalidad_pago')}
                         </td>
-                        <td className="whitespace-nowrap px-2 py-2 align-middle">
-                          {strPayload(r.payload, 'col_q_fecha')}
+                        <td
+                          className="whitespace-nowrap px-2 py-2 align-middle"
+                          title={
+                            colQFechaIsoDisplay(r.payload)
+                              ? `Hoja (Q): ${strPayload(r.payload, 'col_q_fecha')}`
+                              : strPayload(r.payload, 'col_q_fecha')
+                          }
+                        >
+                          {colQFechaIsoDisplay(r.payload) ||
+                            strPayload(r.payload, 'col_q_fecha')}
                         </td>
                         <td className="px-2 py-2 text-center align-middle tabular-nums">
                           {strPayload(r.payload, 'col_r_numero_cuotas')}
