@@ -281,6 +281,14 @@ PAGOS_GMAIL_LABEL_MANUAL = "MANUAL"
 # Sin captura/PDF de comprobante: cuerpo u adjuntos no extraen imagen/PDF de pago (no hay columnas desde pixeles).
 PAGOS_GMAIL_LABEL_TEXTO = "TEXTO"
 
+# === Modo "Lote IT Master" ===
+# Correo maestro: From: <PAGOS_GMAIL_LOTE_REMITENTE_IT_MASTER>, asunto = solo cedula numerica (6-9 digitos),
+# adjuntos .eml (uno por cada comprobante real). Cada .eml se procesa como un correo independiente, pero la
+# cedula del cliente se TOMA del asunto del maestro (no de la inferida del remitente del .eml).
+PAGOS_GMAIL_LOTE_REMITENTE_IT_MASTER = "itmaster@rapicreditca.com"
+# Asunto del maestro: solo digitos (6-9). Se le antepone "V" en el pipeline para resolver el cliente.
+_PAGOS_GMAIL_LOTE_CEDULA_SUBJECT_RE = re.compile(r"^\s*(\d{6,9})\s*$")
+
 
 def pagos_gmail_label_exclusions_query() -> str:
     """
@@ -1642,3 +1650,206 @@ def mark_message_unread(service: Any, message_id: str) -> None:
         ).execute()
     except Exception as e:
         logger.warning("Error mark_message_unread %s: %s", message_id, e)
+
+
+# ===========================================================================
+# Modo "Lote IT Master": correo maestro con .eml adjuntos y cedula en asunto
+# ===========================================================================
+
+
+def _is_eml_part(part: dict) -> bool:
+    """True si la parte MIME representa un .eml (rfc822 declarado o filename .eml)."""
+    if not isinstance(part, dict):
+        return False
+    mime = (part.get("mimeType") or "").strip().lower()
+    if mime == "message/rfc822":
+        return True
+    fn = (part.get("filename") or "").strip().lower()
+    return fn.endswith(".eml")
+
+
+def _count_eml_attachments_in_payload(payload: Optional[dict]) -> int:
+    """Cuenta partes .eml/message/rfc822 (no desciende dentro del .eml para no doble-contar)."""
+    if not isinstance(payload, dict):
+        return 0
+    n = 0
+
+    def walk(parts):
+        nonlocal n
+        for p in parts or []:
+            if _is_eml_part(p):
+                n += 1
+                continue
+            walk(p.get("parts") or [])
+
+    walk(payload.get("parts") or [])
+    return n
+
+
+def extract_lote_it_master_cedula_from_subject(subject: Optional[str]) -> Optional[str]:
+    """
+    Devuelve la cedula formateada (V<digitos>) si el asunto es solo numerico (6-9 digitos),
+    o None si no encaja con el patron del lote.
+    """
+    if not subject:
+        return None
+    m = _PAGOS_GMAIL_LOTE_CEDULA_SUBJECT_RE.match(subject)
+    if not m:
+        return None
+    return f"V{m.group(1)}"
+
+
+def is_lote_it_master_message(
+    headers: Dict[str, str],
+    payload: Optional[dict],
+) -> Tuple[bool, Optional[str], int]:
+    """
+    Detecta si un mensaje Gmail es un 'lote IT Master':
+      - From == itmaster@rapicreditca.com (case-insensitive),
+      - Subject == solo digitos (6-9),
+      - Hay 1+ partes message/rfc822 o .eml en payload.
+    Devuelve (es_lote, cedula_formateada_V, n_eml_attachments).
+    """
+    try:
+        from_h = (
+            headers.get("from")
+            or headers.get("From")
+            or headers.get("FROM")
+            or ""
+        ).strip()
+    except AttributeError:
+        return False, None, 0
+    sender = (extract_sender_email(from_h) or "").strip().lower()
+    if sender != PAGOS_GMAIL_LOTE_REMITENTE_IT_MASTER:
+        return False, None, 0
+    subj = (
+        headers.get("subject")
+        or headers.get("Subject")
+        or headers.get("SUBJECT")
+        or ""
+    )
+    cedula = extract_lote_it_master_cedula_from_subject(subj)
+    if not cedula:
+        return False, None, 0
+    n_eml = _count_eml_attachments_in_payload(payload)
+    if n_eml < 1:
+        return False, None, 0
+    return True, cedula, n_eml
+
+
+def get_eml_attachments_for_message(
+    service: Any, message_id: str, payload: Optional[dict]
+) -> List[Tuple[str, bytes]]:
+    """
+    Descarga los adjuntos .eml/message/rfc822 del mensaje. Devuelve [(filename, raw_bytes), ...].
+    No desciende dentro de los .eml (cada .eml se procesa entero por separado).
+    """
+    out: List[Tuple[str, bytes]] = []
+    if not isinstance(payload, dict):
+        return out
+
+    def walk(parts):
+        for p in parts or []:
+            if _is_eml_part(p):
+                fn = (p.get("filename") or "").strip()
+                body = p.get("body") or {}
+                att_id = body.get("attachmentId")
+                inline_data = body.get("data")
+                use_fn = fn or f"adjunto_{message_id[:10]}_{abs(hash(att_id or inline_data or '')) % 10**8}.eml"
+                if att_id:
+                    try:
+                        att = (
+                            service.users()
+                            .messages()
+                            .attachments()
+                            .get(userId="me", messageId=message_id, id=att_id)
+                            .execute()
+                        )
+                        data = att.get("data")
+                        if data:
+                            out.append((use_fn, base64.urlsafe_b64decode(data)))
+                    except Exception as e:
+                        logger.warning(
+                            "[PAGOS_GMAIL] Error descargando .eml %s (msg=%s): %s",
+                            use_fn, message_id, e,
+                        )
+                elif inline_data:
+                    try:
+                        out.append((use_fn, base64.urlsafe_b64decode(inline_data)))
+                    except Exception as e:
+                        logger.warning(
+                            "[PAGOS_GMAIL] Error decodificando .eml inline %s (msg=%s): %s",
+                            use_fn, message_id, e,
+                        )
+                continue
+            walk(p.get("parts") or [])
+
+    walk(payload.get("parts") or [])
+    return out
+
+
+def parse_eml_bytes(eml_bytes: bytes) -> Tuple[Dict[str, str], List[Tuple[str, bytes, str]]]:
+    """
+    Parsea un .eml y devuelve:
+      - headers: dict normalizado en minusculas con (from, to, subject, date, message-id).
+      - attachments: [(filename, raw_bytes, mime_type), ...] con SOLO partes imagen/PDF.
+
+    Reglas de extraccion alineadas con el pipeline:
+      - mimeType en MIME_IMAGE_OR_PDF (incluye image/* y application/pdf).
+      - filename con extension permitida (is_allowed_attachment).
+      - Si no hay filename, se sintetiza uno estable con hash del contenido y ext_for_mime.
+      - Se ignoran partes multipart (recorrido walk salta contenedores).
+    """
+    from email import policy
+    from email.parser import BytesParser
+
+    headers_out: Dict[str, str] = {}
+    attachments_out: List[Tuple[str, bytes, str]] = []
+
+    if not eml_bytes:
+        return headers_out, attachments_out
+
+    try:
+        msg = BytesParser(policy=policy.default).parsebytes(eml_bytes)
+    except Exception as e:
+        logger.warning("[PAGOS_GMAIL] parse_eml_bytes: parse falló (%d bytes): %s", len(eml_bytes), e)
+        return headers_out, attachments_out
+
+    for k in ("From", "To", "Cc", "Subject", "Date", "Message-ID", "Reply-To"):
+        try:
+            v = msg.get(k)
+            if v is not None:
+                headers_out[k.lower()] = str(v).strip()
+        except Exception:
+            continue
+
+    for part in msg.walk():
+        try:
+            if part.is_multipart():
+                continue
+            mime = (part.get_content_type() or "").strip().lower()
+            fn = part.get_filename() or ""
+            allowed_by_mime = mime in MIME_IMAGE_OR_PDF
+            allowed_by_fn = bool(fn) and is_allowed_attachment(fn)
+            if not (allowed_by_mime or allowed_by_fn):
+                continue
+            try:
+                data = part.get_payload(decode=True)
+            except Exception:
+                data = None
+            if not data:
+                continue
+            data_bytes = bytes(data)
+            if len(data_bytes) == 0:
+                continue
+            use_fn = fn.strip() if fn else ""
+            if not use_fn or not is_allowed_attachment(use_fn):
+                ext = ext_for_mime(mime) if mime else "bin"
+                hsh = hashlib.sha1(data_bytes).hexdigest()[:10]
+                use_fn = f"eml_inline_{hsh}.{ext}"
+            attachments_out.append((use_fn, data_bytes, mime or "application/octet-stream"))
+        except Exception as e:
+            logger.warning("[PAGOS_GMAIL] parse_eml_bytes: error procesando part: %s", e)
+            continue
+
+    return headers_out, attachments_out

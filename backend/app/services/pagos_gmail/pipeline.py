@@ -169,6 +169,7 @@ from app.services.pagos_gmail.gmail_service import (
     get_message_date,
     get_message_full_payload,
     get_or_create_pagos_gmail_plantilla_label_ids,
+    is_lote_it_master_message,
     list_gmail_user_label_ids,
     list_messages_by_filter,
     mark_as_read,
@@ -183,7 +184,9 @@ from app.services.pagos_gmail.gmail_service import (
     PAGOS_GMAIL_LABEL_BANCAMIGA,
     PAGOS_GMAIL_LABEL_TESORO,
     PAGOS_GMAIL_LABEL_TEXTO,
+    PAGOS_GMAIL_LOTE_REMITENTE_IT_MASTER,
 )
+from app.utils.cedula_almacenamiento import resolver_cedula_almacenada_en_clientes
 from app.services.pagos_gmail.gemini_service import (
     classify_and_extract_pagos_gmail_attachment,
     PAGOS_GMAIL_FORMATOS_PLANTILLA,
@@ -744,9 +747,68 @@ def run_pipeline(
                             "[PAGOS_GMAIL]   Gmail: LEIDO tras escaneo (no leido al listar; remitente omitido)"
                         )
                     continue
+
+                # === Modo "Lote IT Master" =============================================
+                # Cuando el correo viene de itmaster@rapicreditca.com con asunto = solo cedula
+                # numerica y .eml adjuntos, la cedula del cliente se TOMA del asunto del maestro
+                # (NO de la inferida del remitente del .eml). El pipeline ya extrae las
+                # imagenes/PDF dentro de los .eml automaticamente (paso "rfc822" de
+                # get_pagos_gmail_image_pdf_files_for_pipeline), por lo que el resto del flujo
+                # (Gemini -> plantillas A/B/C/D/E/F -> BD -> cascada cuotas) corre normal y
+                # solo se sustituye la cedula de cada item por la cedula resuelta del asunto.
+                _es_lote_it_master, _cedula_lote_v_raw, _n_eml_lote = is_lote_it_master_message(
+                    headers, payload
+                )
+                _cedula_forzada_lote: Optional[str] = None
+                if _es_lote_it_master:
+                    _cedula_lote_real = resolver_cedula_almacenada_en_clientes(
+                        db, _cedula_lote_v_raw
+                    )
+                    if not _cedula_lote_real:
+                        # Cedula del asunto NO existe en clientes -> ETIQUETAR ERROR EMAIL y skip lote.
+                        try:
+                            _err_lid = ensure_user_label_id(
+                                gmail_svc, PAGOS_GMAIL_LABEL_ERROR_EMAIL
+                            )
+                            if _err_lid:
+                                modify_message_labels_add_remove(
+                                    gmail_svc, msg_id, add_ids=[_err_lid], remove_ids=[]
+                                )
+                        except Exception as _e_lbl:
+                            logger.warning(
+                                "[PAGOS_GMAIL] Lote IT Master: no se pudo etiquetar ERROR EMAIL (msg=%s): %s",
+                                msg_id, _e_lbl,
+                            )
+                        logger.info(
+                            "[PAGOS_GMAIL]   Lote IT Master: cedula '%s' del asunto NO existe en clientes; "
+                            "ERROR EMAIL aplicado, lote NO procesado (msg=%s, n_eml_adjuntos=%d, sender=%s)",
+                            _cedula_lote_v_raw, msg_id, _n_eml_lote, PAGOS_GMAIL_LOTE_REMITENTE_IT_MASTER,
+                        )
+                        _pipeline_evt(
+                            EVT_REMITENTE_NO_CLIENTE_CON_MEDIA,
+                            detalle=f"lote_it_master cedula={_cedula_lote_v_raw} sin_cliente",
+                        )
+                        if was_unread:
+                            mark_as_read(gmail_svc, msg_id)
+                        continue
+                    _cedula_forzada_lote = _cedula_lote_real
+                    logger.info(
+                        "[PAGOS_GMAIL]   Lote IT Master detectado: cedula='%s' (asunto del maestro), "
+                        "n_eml_adjuntos=%d. Cada .eml se procesa con reglas existentes (Mercantil/BNC/etc.); "
+                        "la cedula de TODAS las filas de este mensaje se forzara a la del asunto. msg=%s",
+                        _cedula_forzada_lote, _n_eml_lote, msg_id,
+                    )
+
                 remitente_solo_master = sender_lc == PAGOS_GMAIL_SENDER_MASTER
-                _ced_lookup, _ = _cedula_por_email_cliente(db, sender_lc)
-                remitente_en_clientes = _ced_lookup is not None
+                if _cedula_forzada_lote:
+                    # Lote IT Master: cedula resuelta desde el asunto, no desde el remitente del maestro.
+                    # remitente_en_clientes=True permite que el flujo aplique plantillas A-F sin
+                    # forzar el modo "plan B" (que asume sender no en BD).
+                    _ced_lookup = _cedula_forzada_lote
+                    remitente_en_clientes = True
+                else:
+                    _ced_lookup, _ = _cedula_por_email_cliente(db, sender_lc)
+                    remitente_en_clientes = _ced_lookup is not None
                 subject = (headers.get("subject") or headers.get("Subject") or "").strip() or sender
                 msg_date = get_message_date(headers)
                 sheet_name = get_sheet_name_for_date(msg_date)
@@ -1182,6 +1244,11 @@ def run_pipeline(
                             and c == PAGOS_GMAIL_ERROR_CEDULA_IMAGEN
                         ):
                             any_incomplete_or_skipped = True
+                        # Lote IT Master: la cedula del cliente la dicta el asunto del maestro,
+                        # no la inferida por Gemini desde la imagen ni por el remitente. Esto
+                        # cubre TODAS las plantillas (A/B/C/D/E/F/NR) sin tocar el resto del flujo.
+                        if _cedula_forzada_lote:
+                            c = _cedula_forzada_lote
                         pending.append(
                             {
                                 "fmt": fmt,

@@ -12,7 +12,7 @@
  * No hay paso intermedio de "preview + checkbox": Gemini solo se gasta en los correos del
  * remitente (típicamente pocos), nunca en toda la bandeja.
  */
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
@@ -88,17 +88,21 @@ const QK_LIST = ['actualizaciones', 'gmail', 'sync-items'] as const
 
 const PAGE_SIZE = 50
 
-/** Tope "Hasta N correos" del rastreo Gmail; default 20, máximo absoluto backend = 10000. */
-const MAX_MESSAGES_DEFAULT = 20
-const MAX_MESSAGES_OPTIONS = [20, 50, 100, 500, 1000, 5000, 10000] as const
+/**
+ * Tope absoluto de correos a procesar en el rastreo Gmail (máximo backend = 10000).
+ * Sin selector en UI: se usa el tope máximo permitido para no limitar la búsqueda
+ * por accidente. El state interno permite cambiarlo desde código si hace falta.
+ */
+const MAX_MESSAGES_DEFAULT = 10000
+
+/**
+ * Único remitente que este módulo procesa: lote IT Master con cédula en el asunto
+ * y .eml adjuntos. Está hardcodeado tanto aquí (UX) como en backend (validación
+ * server-side) para garantizar que ningún otro correo pase por este flujo.
+ */
+const REMITENTE_FIJO_LOTE = 'itmaster@rapicreditca.com'
 
 type CriterioBusqueda = 'remitente' | 'destinatario' | 'participante'
-
-const CRITERIO_LABEL: Record<CriterioBusqueda, string> = {
-  remitente: 'Remitente (from:)',
-  destinatario: 'Destinatario (to:)',
-  participante: 'Cualquier participante (from: OR to:)',
-}
 
 function urlComprobante(raw: string | null | undefined): string | null {
   const s = (raw || '').trim()
@@ -131,9 +135,9 @@ interface DiagnosticoGmail {
 
 export default function ActualizacionesGmailPage() {
   const queryClient = useQueryClient()
-  const [correoInput, setCorreoInput] = useState('')
+  const [correoInput, setCorreoInput] = useState(REMITENTE_FIJO_LOTE)
   const [correoActivo, setCorreoActivo] = useState('')
-  const [maxMessages, setMaxMessages] = useState<number>(MAX_MESSAGES_DEFAULT)
+  const [maxMessages] = useState<number>(MAX_MESSAGES_DEFAULT)
   const [criterio, setCriterio] = useState<CriterioBusqueda>('remitente')
   const [paginaTabla, setPaginaTabla] = useState(1)
   const [diagnostico, setDiagnostico] = useState<DiagnosticoGmail | null>(null)
@@ -144,6 +148,24 @@ export default function ActualizacionesGmailPage() {
     inicial: PagoInicialRegistrar
   } | null>(null)
   const [migrandoId, setMigrandoId] = useState<number | null>(null)
+
+  // Refs para que `onDone` (definido en useGmailPipeline) pueda acceder al criterio
+  // actual sin recrearse en cada cambio del selector.
+  const criterioRef = useRef(criterio)
+  useEffect(() => {
+    criterioRef.current = criterio
+  }, [criterio])
+
+  /**
+   * Ejecuta `previewGmailRemitente` con un criterio dado y actualiza el panel de
+   * diagnóstico. Usado por el botón "Probar Gmail" Y como auto-diagnóstico cuando
+   * `Buscar y procesar` termina con 0 filas (para no obligar al usuario a pulsar
+   * un segundo botón). Se llama también con `'participante'` desde el auto-diag
+   * para detectar casos donde el correo no es remitente puro.
+   */
+  const ejecutarDiagnosticoRef = useRef<
+    (email: string, c: CriterioBusqueda) => Promise<void>
+  >(async () => {})
 
   const offsetTabla = (paginaTabla - 1) * PAGE_SIZE
   const tabla = useQuery({
@@ -205,13 +227,21 @@ export default function ActualizacionesGmailPage() {
             )
           } else {
             toast(
-              `Pipeline terminado para ${correoActivo}: no se generaron filas. ` +
-                'Posibles causas: la cuenta Gmail conectada no es la correcta; pusiste el correo ' +
-                'del destinatario en vez del remitente; los correos estan archivados; o los ' +
-                'comprobantes vienen como imagen inline en HTML sin has:attachment. ' +
-                'Pulsa "Probar Gmail" para ver el diagnostico exacto.',
-              { duration: 16000 }
+              `Pipeline terminado para ${correoActivo}: 0 filas con criterio "${criterioRef.current}". ` +
+                'Ejecutando diagnostico automatico (cuenta Gmail conectada + conteos por criterio)...',
+              { duration: 9000 }
             )
+            // Auto-diagnóstico: probamos directamente con criterio 'participante'
+            // para que el panel muestre si hay correos via from:/to:/sent/global y la
+            // cuenta OAuth conectada. Así el usuario no tiene que pulsar otro botón.
+            try {
+              await ejecutarDiagnosticoRef.current(
+                correoActivo,
+                'participante'
+              )
+            } catch {
+              /* el diagnóstico ya muestra su propio toast en error */
+            }
           }
         })
     },
@@ -236,59 +266,82 @@ export default function ActualizacionesGmailPage() {
     await run('manual_redigitaliza_por_remitente', email, maxMessages, criterio)
   }, [correoInput, maxMessages, criterio, run])
 
-  // Las deps incluyen `criterio` para que el preview siga el selector actual.
+  /**
+   * Función reutilizable: ejecuta `previewGmailRemitente` con un criterio y
+   * actualiza el panel de diagnóstico. Si la query principal devuelve 0, el
+   * backend ya añade los conteos auxiliares (`from:`, `to:`, `sent:`, global)
+   * y la cuenta OAuth conectada para que el panel muestre la causa exacta.
+   */
+  const ejecutarDiagnostico = useCallback(
+    async (email: string, c: CriterioBusqueda) => {
+      setProbandoGmail(true)
+      setDiagnostico(null)
+      try {
+        const res = await pagoService.previewGmailRemitente(email, {
+          maxResults: Math.max(20, Math.min(maxMessages, 100)),
+          criterio: c,
+        })
+        const items = res.items || []
+        const conMedia = items.filter(it => it.tiene_media).length
+        const yaProcesados = items.filter(it => it.ya_procesado_en_bd).length
+        setDiagnostico({
+          correo: email,
+          total: res.total ?? items.length,
+          conMedia,
+          yaProcesados,
+          hayMasEnGmail: !!res.hay_mas_en_gmail,
+          items,
+          inboxSinMedia: res.diagnostico_inbox_sin_media,
+          global: res.diagnostico_global,
+          sentRemitente: res.diagnostico_sent_remitente,
+          toRemitente: res.diagnostico_to_remitente,
+          cuentaConectada: res.cuenta_conectada,
+          esLaCuentaConectada: res.es_la_cuenta_conectada,
+          mensaje: res.mensaje,
+        })
+        if ((res.total ?? items.length) === 0) {
+          toast(
+            res.mensaje ||
+              `Gmail no encontro correos para "${email}" con el criterio (in:inbox + imagen/PDF).`,
+            { duration: 12000 }
+          )
+        } else {
+          toast.success(
+            `Gmail encontro ${res.total ?? items.length} correo(s) (criterio "${c}"); ${conMedia} con adjunto imagen/PDF.`,
+            { duration: 8000 }
+          )
+        }
+      } catch (e) {
+        toast.error(getErrorMessage(e) || 'No se pudo probar Gmail')
+        throw e
+      } finally {
+        setProbandoGmail(false)
+      }
+    },
+    [maxMessages]
+  )
+
+  // Mantenemos el ref sincronizado para que `onDone` (creado al montar el hook)
+  // pueda llamar a la versión más reciente sin recrear el pipeline.
+  useEffect(() => {
+    ejecutarDiagnosticoRef.current = ejecutarDiagnostico
+  }, [ejecutarDiagnostico])
+
   const handleProbarGmail = useCallback(async () => {
     const email = correoInput.trim().toLowerCase()
     if (!email || !email.includes('@')) {
       toast.error('Indica un correo valido (ej. cliente@dominio.com).')
       return
     }
-    setProbandoGmail(true)
-    setDiagnostico(null)
     try {
-      const res = await pagoService.previewGmailRemitente(email, {
-        maxResults: Math.max(20, Math.min(maxMessages, 100)),
-        criterio,
-      })
-      const items = res.items || []
-      const conMedia = items.filter(it => it.tiene_media).length
-      const yaProcesados = items.filter(it => it.ya_procesado_en_bd).length
-      setDiagnostico({
-        correo: email,
-        total: res.total ?? items.length,
-        conMedia,
-        yaProcesados,
-        hayMasEnGmail: !!res.hay_mas_en_gmail,
-        items,
-        inboxSinMedia: res.diagnostico_inbox_sin_media,
-        global: res.diagnostico_global,
-        sentRemitente: res.diagnostico_sent_remitente,
-        toRemitente: res.diagnostico_to_remitente,
-        cuentaConectada: res.cuenta_conectada,
-        esLaCuentaConectada: res.es_la_cuenta_conectada,
-        mensaje: res.mensaje,
-      })
-      if ((res.total ?? items.length) === 0) {
-        // Backend ya devolvió un mensaje con diagnóstico (inbox sin media / global).
-        toast(
-          res.mensaje ||
-            `Gmail no encontro correos para "${email}" con el criterio (in:inbox + imagen/PDF).`,
-          { duration: 12000 }
-        )
-      } else {
-        toast.success(
-          `Gmail encontro ${res.total ?? items.length} correo(s) del remitente; ${conMedia} con adjunto imagen/PDF.`
-        )
-      }
-    } catch (e) {
-      toast.error(getErrorMessage(e) || 'No se pudo probar Gmail')
-    } finally {
-      setProbandoGmail(false)
+      await ejecutarDiagnostico(email, criterio)
+    } catch {
+      /* ya manejado dentro de ejecutarDiagnostico */
     }
-  }, [correoInput, maxMessages, criterio])
+  }, [correoInput, criterio, ejecutarDiagnostico])
 
   const handleLimpiar = useCallback(() => {
-    setCorreoInput('')
+    setCorreoInput(REMITENTE_FIJO_LOTE)
     setCorreoActivo('')
     setPaginaTabla(1)
     setDiagnostico(null)
@@ -436,57 +489,27 @@ export default function ActualizacionesGmailPage() {
             }}
             className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center"
           >
-            <Input
-              type="email"
-              autoComplete="email"
-              placeholder="correo@dominio.com"
-              value={correoInput}
-              onChange={e => setCorreoInput(e.target.value)}
-              className="sm:max-w-md"
-              disabled={ejecutandoPipeline}
-            />
-            <label className="flex items-center gap-2 text-xs text-muted-foreground">
-              <span>Hasta</span>
-              <select
-                value={maxMessages}
-                onChange={e => setMaxMessages(Number(e.target.value))}
-                className="rounded-md border border-input bg-background px-2 py-1 text-xs"
-                disabled={ejecutandoPipeline}
-              >
-                {MAX_MESSAGES_OPTIONS.map(v => (
-                  <option key={v} value={v}>
-                    {v} correo(s)
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label
-              className="flex items-center gap-2 text-xs text-muted-foreground"
-              title={
-                'Como aplicar el correo al filtro Gmail:\n' +
-                '• Remitente (default): from:<correo> - correos enviados POR ese email.\n' +
-                '• Destinatario: to:<correo> - correos enviados A ese email.\n' +
-                '• Cualquier participante: from:<correo> OR to:<correo> - util si en Gmail aparece el email pero el header From: real es otro (alias/plataforma).'
-              }
-            >
-              <span>Buscar como</span>
-              <select
-                value={criterio}
-                onChange={e =>
-                  setCriterio(e.target.value as CriterioBusqueda)
+            <div className="flex flex-col gap-1 sm:max-w-md">
+              <Input
+                type="email"
+                autoComplete="off"
+                value={REMITENTE_FIJO_LOTE}
+                readOnly
+                disabled
+                className="bg-muted/40 font-medium"
+                title={
+                  'Modulo dedicado al lote IT Master. ' +
+                  'Solo procesa correos de este remitente; los demas correos del buzon se ignoran.'
                 }
-                className="rounded-md border border-input bg-background px-2 py-1 text-xs"
-                disabled={ejecutandoPipeline}
-              >
-                <option value="remitente">{CRITERIO_LABEL.remitente}</option>
-                <option value="destinatario">
-                  {CRITERIO_LABEL.destinatario}
-                </option>
-                <option value="participante">
-                  {CRITERIO_LABEL.participante}
-                </option>
-              </select>
-            </label>
+              />
+              <span className="text-[11px] text-muted-foreground">
+                Modulo dedicado: solo se registran correos de{' '}
+                <code className="rounded bg-muted px-1 py-0.5 text-[10px]">
+                  {REMITENTE_FIJO_LOTE}
+                </code>
+                . Otros remitentes se ignoran.
+              </span>
+            </div>
             <div className="flex flex-wrap gap-2">
               <Button
                 type="submit"
@@ -631,6 +654,39 @@ export default function ActualizacionesGmailPage() {
                       <strong>{diagnostico.global ?? '?'}</strong>
                     </li>
                   </ul>
+                  {/* Acciones rápidas: si algun otro criterio sí tiene resultados,
+                      ofrece relanzar Buscar y procesar con el criterio sugerido. */}
+                  {(diagnostico.toRemitente ?? 0) > 0 ||
+                  (diagnostico.inboxSinMedia ?? 0) > 0 ? (
+                    <div className="flex flex-wrap gap-2 rounded border border-blue-300 bg-blue-50 p-2 text-blue-900">
+                      <span className="self-center text-[11px] font-medium">
+                        Sugerencia:
+                      </span>
+                      {(diagnostico.toRemitente ?? 0) > 0 ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            setCriterio('participante')
+                            void handleBuscarYProcesar()
+                          }}
+                          disabled={ejecutandoPipeline}
+                          title="Cambia el selector a 'Cualquier participante' (from: OR to:) y relanza el escaneo. Cubre el caso clasico donde el correo es destinatario, o el header From: real es distinto al displayName."
+                        >
+                          Reintentar como participante (
+                          {diagnostico.toRemitente ?? 0} via to:)
+                        </Button>
+                      ) : null}
+                      {(diagnostico.inboxSinMedia ?? 0) > 0 ? (
+                        <span className="self-center text-[11px]">
+                          Hay {diagnostico.inboxSinMedia} con{' '}
+                          <code>from:</code> en INBOX <em>sin</em> adjunto
+                          imagen/PDF: revisa si los comprobantes vienen como
+                          imagen inline en HTML.
+                        </span>
+                      ) : null}
+                    </div>
+                  ) : null}
                   {diagnostico.mensaje ? (
                     <div className="rounded border border-amber-400 bg-amber-100 p-2 text-amber-900">
                       {diagnostico.mensaje}
@@ -808,7 +864,26 @@ export default function ActualizacionesGmailPage() {
                             {safeMonto(item)}
                           </td>
                           <td className="px-3 py-2 align-top">
-                            {item.numero_referencia || '-'}
+                            <div className="flex flex-col gap-1">
+                              <span className="tabular-nums">
+                                {item.numero_referencia || '-'}
+                              </span>
+                              {dup && item.numero_referencia ? (
+                                <span
+                                  className="inline-flex w-fit items-center rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-amber-900"
+                                  title={
+                                    `Serial duplicado: ya existe un pago con este numero para la cedula ${item.cedula || '(sin cedula)'} ` +
+                                    `(pago id ${item.pago_id_existente ?? '?'}` +
+                                    (item.prestamo_id_existente
+                                      ? `, prestamo ${item.prestamo_id_existente}`
+                                      : '') +
+                                    '). Considera ELIMINAR esta fila.'
+                                  }
+                                >
+                                  Duplicado
+                                </span>
+                              ) : null}
+                            </div>
                           </td>
                           <td className="px-3 py-2 align-top text-xs">
                             {dup ? (

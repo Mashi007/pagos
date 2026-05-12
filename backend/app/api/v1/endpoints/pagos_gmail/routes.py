@@ -37,7 +37,10 @@ from app.models.pagos_gmail_abcd_cuotas_traza import PagosGmailAbcdCuotasTraza
 from app.models.pagos_gmail_pipeline_evento import PagosGmailPipelineEvento
 from app.services.pago_numero_documento import numero_documento_ya_registrado
 from app.services.pagos_gmail.credentials import get_pagos_gmail_credentials, log_pagos_gmail_config_status
-from app.services.pagos_gmail.gmail_service import PAGOS_GMAIL_LABEL_ERROR_EMAIL
+from app.services.pagos_gmail.gmail_service import (
+    PAGOS_GMAIL_LABEL_ERROR_EMAIL,
+    PAGOS_GMAIL_LOTE_REMITENTE_IT_MASTER,
+)
 from app.services.pagos_gmail.helpers import format_monto_excel_pagos_gmail, formatear_cedula
 from app.services.pagos_gmail.pipeline import run_pipeline
 
@@ -288,6 +291,22 @@ def run_now(
             detail=(
                 "scan_filter='manual_redigitaliza_por_remitente' requiere un from_email válido "
                 "(ej. cliente@dominio.com)."
+            ),
+        )
+    # El módulo "Actualizaciones > Gmail" está dedicado al lote IT Master:
+    # cualquier llamada manual_redigitaliza_por_remitente con otro from_email se rechaza
+    # para impedir que el flujo procese correos fuera del remitente autorizado.
+    if (
+        scan_filter == "manual_redigitaliza_por_remitente"
+        and from_email_norm
+        and from_email_norm.lower() != PAGOS_GMAIL_LOTE_REMITENTE_IT_MASTER
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"El módulo Actualizaciones > Gmail solo procesa correos de "
+                f"'{PAGOS_GMAIL_LOTE_REMITENTE_IT_MASTER}'. Remitente recibido: "
+                f"'{from_email_norm}'."
             ),
         )
     criterio_norm = (criterio or "remitente").strip().lower()
@@ -1357,21 +1376,45 @@ def _sync_item_comprobante_url(item: PagosGmailSyncItem) -> Optional[str]:
 
 
 def _sync_item_duplicado_en_pagos(
-    db: Session, numero_referencia: Optional[str]
+    db: Session,
+    numero_referencia: Optional[str],
+    cedula_item: Optional[str] = None,
 ) -> tuple[bool, Optional[int], Optional[int]]:
     """
     Devuelve (duplicado_bool, pago_id_si_existe, prestamo_id_si_existe).
-    Reutiliza primer_pago_cartera_por_documento; el serial del comprobante se almacena tal cual en
-    pagos.numero_documento cuando el flujo manual lo da de alta.
+
+    Reutiliza primer_pago_cartera_por_documento (busca en `pagos.numero_documento` con normalización).
+    Cuando se proporciona `cedula_item`, el resultado se considera duplicado SOLO si el pago
+    encontrado pertenece al **mismo cliente** (misma cédula normalizada). Esto evita marcar como
+    duplicados los seriales que el banco pudo reusar entre clientes diferentes.
+
+    Si `cedula_item` no se proporciona (compatibilidad con llamadas antiguas), comportamiento
+    legacy: cualquier coincidencia por documento marca duplicado.
     """
     from app.services.pago_numero_documento import primer_pago_cartera_por_documento
+    from app.utils.cedula_almacenamiento import texto_cedula_comparable_bd
+    from app.models.pago import Pago
+
     ref = (numero_referencia or "").strip()
     if not ref:
         return False, None, None
     pid, prid = primer_pago_cartera_por_documento(db, ref)
     if pid is None:
         return False, None, None
-    return True, pid, prid
+
+    cedula_norm_item = texto_cedula_comparable_bd(cedula_item) if cedula_item else ""
+    if not cedula_norm_item:
+        return True, pid, prid
+
+    pago_row = db.execute(
+        select(Pago.cedula_cliente).where(Pago.id == pid)
+    ).first()
+    if pago_row is None:
+        return False, None, None
+    cedula_pago_norm = texto_cedula_comparable_bd(pago_row[0] or "")
+    if cedula_pago_norm and cedula_pago_norm == cedula_norm_item:
+        return True, pid, prid
+    return False, None, None
 
 
 @router.get("/sync-items")
@@ -1436,7 +1479,7 @@ def listar_sync_items(
     items: list[dict] = []
     for r in rows:
         duplicado, pago_id_exist, prestamo_id_exist = _sync_item_duplicado_en_pagos(
-            db, r.numero_referencia
+            db, r.numero_referencia, r.cedula
         )
         items.append(
             {
@@ -1573,7 +1616,7 @@ def guardar_sync_item(
         with db.begin_nested():
             # Si la referencia ya está aplicada en cartera, no crear nada nuevo: avisar.
             duplicado, pago_id_exist, _prid = _sync_item_duplicado_en_pagos(
-                db, item.numero_referencia
+                db, item.numero_referencia, item.cedula
             )
             if duplicado:
                 # Eliminamos sync_item y temporales: la fila ya no aporta revisión.
@@ -1692,7 +1735,7 @@ def migrar_sync_item_a_pendientes(
         raise HTTPException(status_code=404, detail=f"sync_item {item_id} no encontrado")
 
     duplicado, pago_id_exist, prestamo_id_exist = _sync_item_duplicado_en_pagos(
-        db, item.numero_referencia
+        db, item.numero_referencia, item.cedula
     )
 
     try:
@@ -1814,7 +1857,7 @@ def editar_sync_item(
         ) from e
 
     duplicado, pago_id_exist, prestamo_id_exist = _sync_item_duplicado_en_pagos(
-        db, item.numero_referencia
+        db, item.numero_referencia, item.cedula
     )
     return {
         "ok": True,
@@ -1925,6 +1968,14 @@ def preview_remitente(
         raise HTTPException(
             status_code=400,
             detail="Indica un correo válido (ej. cliente@dominio.com).",
+        )
+    if correo_lc.lower() != PAGOS_GMAIL_LOTE_REMITENTE_IT_MASTER:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"El módulo Actualizaciones > Gmail solo previsualiza correos de "
+                f"'{PAGOS_GMAIL_LOTE_REMITENTE_IT_MASTER}'. Remitente recibido: '{correo_lc}'."
+            ),
         )
 
     creds = get_pagos_gmail_credentials()
