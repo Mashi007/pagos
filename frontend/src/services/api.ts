@@ -524,10 +524,11 @@ class ApiClient {
 
           // Backend Health Tracker: dejar señal de 502/503 reciente (alimenta el soft circuit
           // breaker que añade un pequeño delay antes del próximo PATCH crítico) y mostrar el
-          // toast persistente "Reconectando…" a partir del 2º intento (retryCount >= 1).
+          // toast persistente "Reconectando…" desde el 1er intento. Antes esperaba al 2º intento
+          // y la pantalla quedaba ~3.5s sin feedback tras el primer 502 (cold start de Render).
           try {
             markBackendError(Number(st), reqUrl)
-            if (retryCount >= 1 && (st === 502 || st === 503)) {
+            if (st === 502 || st === 503) {
               showReconnectingToast(retryCount, maxRetries)
             }
           } catch {
