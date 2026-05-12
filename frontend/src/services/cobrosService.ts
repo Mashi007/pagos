@@ -1257,14 +1257,70 @@ export interface PagoReportadoDetalleResponse {
   prestamo_duplicado_es_objetivo?: boolean | null
 }
 
+/**
+ * IDs de pagos reportados eliminados muy recientemente (este tab del navegador).
+ *
+ * Tras un DELETE exitoso, algunas piezas del cliente disparan un GET al mismo id
+ * (BFCache al volver atrás, otro componente con efecto pendiente, refetch al
+ * recuperar foco, navegación residual). El backend devuelve 404 legítimo y, como
+ * `apiClient.get` pone `response.data.detail` en `error.message`, los catch
+ * mostraban "Pago reportado no encontrado." sobre el toast de éxito → el usuario
+ * cree que el borrado falló.
+ *
+ * Marcamos el id durante ~60s para que `getPagoReportadoDetalle` traduzca ese 404
+ * en un error "silent" (no toast). 404 legítimos por URL inválida siguen
+ * mostrándose porque ese id nunca estuvo en el set.
+ */
+const _recentlyDeletedPagoReportadoIds = new Map<number, number>()
+const RECENTLY_DELETED_TTL_MS = 60_000
+
+function markPagoReportadoRecentlyDeleted(pagoId: number): void {
+  _recentlyDeletedPagoReportadoIds.set(pagoId, Date.now() + RECENTLY_DELETED_TTL_MS)
+  // Limpiar entries vencidas para no crecer indefinidamente en sesiones largas.
+  if (_recentlyDeletedPagoReportadoIds.size > 64) {
+    const now = Date.now()
+    for (const [k, expiresAt] of _recentlyDeletedPagoReportadoIds) {
+      if (expiresAt <= now) _recentlyDeletedPagoReportadoIds.delete(k)
+    }
+  }
+}
+
+function isPagoReportadoRecentlyDeleted(pagoId: number): boolean {
+  const expiresAt = _recentlyDeletedPagoReportadoIds.get(pagoId)
+  if (expiresAt == null) return false
+  if (expiresAt <= Date.now()) {
+    _recentlyDeletedPagoReportadoIds.delete(pagoId)
+    return false
+  }
+  return true
+}
+
 export async function getPagoReportadoDetalle(
   pagoId: number
 ): Promise<PagoReportadoDetalleResponse> {
-  const data = await apiClient.get<PagoReportadoDetalleResponse>(
-    `${BASE_COBROS}/pagos-reportados/${pagoId}`
-  )
-
-  return data
+  try {
+    const data = await apiClient.get<PagoReportadoDetalleResponse>(
+      `${BASE_COBROS}/pagos-reportados/${pagoId}`
+    )
+    return data
+  } catch (e: unknown) {
+    const errObj = e as { code?: string; response?: { status?: number } } | undefined
+    const status =
+      errObj?.response?.status ??
+      (errObj?.code === 'ERR_HTTP_404' ? 404 : undefined)
+    if (status === 404 && isPagoReportadoRecentlyDeleted(pagoId)) {
+      const silentErr = new Error('Pago reportado eliminado.') as Error & {
+        silent: boolean
+        code: string
+        response?: unknown
+      }
+      silentErr.silent = true
+      silentErr.code = 'ERR_PAGO_REPORTADO_RECIEN_ELIMINADO'
+      silentErr.response = errObj?.response
+      throw silentErr
+    }
+    throw e
+  }
 }
 
 export async function aprobarPagoReportado(
@@ -1391,6 +1447,10 @@ export async function eliminarPagoReportado(
   const data = await apiClient.delete<{ ok: boolean; mensaje?: string }>(
     `${BASE_COBROS}/pagos-reportados/${pagoId}`
   )
+
+  // Marcar el id como "recién eliminado" para suprimir el toast 404 que aparecía
+  // si otro efecto/BFCache disparaba GET /pagos-reportados/{id} después del DELETE.
+  markPagoReportadoRecentlyDeleted(pagoId)
 
   return data
 }

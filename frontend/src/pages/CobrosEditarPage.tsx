@@ -218,7 +218,13 @@ export default function CobrosEditarPage() {
 
       setOtroInstitucion(INSTITUCIONES_FINANCIERAS.includes(inst) ? '' : inst)
     } catch (e: any) {
-      toast.error(e?.message || 'Error al cargar.')
+      // Si el id se acaba de borrar en este tab, `getPagoReportadoDetalle` lanza
+      // un error marcado `silent: true`. Evita superponer "Pago reportado no
+      // encontrado." al toast de éxito "Pago reportado eliminado." (regresión
+      // observada al volver atrás / BFCache restore tras DELETE).
+      if (!e?.silent) {
+        toast.error(e?.message || 'Error al cargar.')
+      }
 
       navigate('/cobros/pagos-reportados')
     } finally {

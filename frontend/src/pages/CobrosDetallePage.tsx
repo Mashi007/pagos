@@ -153,7 +153,11 @@ export default function CobrosDetallePage() {
 
       setDetalle(res)
     } catch (e: any) {
-      toast.error(e?.message || 'Error al cargar.')
+      // Mismo motivo que CobrosEditarPage: si el id se acaba de borrar en este
+      // tab, no superponer "Pago reportado no encontrado." al toast de éxito.
+      if (!e?.silent) {
+        toast.error(e?.message || 'Error al cargar.')
+      }
 
       navigate('/cobros/pagos-reportados')
     } finally {
