@@ -35,6 +35,12 @@ from app.schemas.prestamo import PrestamoCreate
 
 logger = logging.getLogger(__name__)
 
+# Antigüedad máxima permitida para `fecha_aprobacion` (columna Q de Drive)
+# al crear un préstamo desde este flujo. La regla operativa es: la fecha no
+# puede estar más atrás de 1 año (365 días) respecto a hoy. Para casos más
+# antiguos, el alta debe hacerse por el módulo de préstamos manual.
+MAX_DIAS_APROBACION_DRIVE = 365
+
 # Valor antiguo mal escrito en snapshots previos al refresh.
 _LEGACY_PRODUCTO_DRIVE_TYPOS = frozenset({"FINCAMIRETO"})
 
@@ -222,10 +228,13 @@ def _motivos_no_100(
     else:
         _req_entrada, ap_d = fechas
         req_d = _fecha_requerimiento_desde_aprobacion(ap_d)
-        # Innegociable (alineado a UI): aprobación (Q) no puede ser anterior a hoy en más de 30 días.
-        if (date.today() - ap_d).days > 30:
+        # Regla operativa (alineada a UI): aprobación (Q) no puede ser anterior a hoy
+        # en más de `MAX_DIAS_APROBACION_DRIVE` días (1 año). Para casos más antiguos
+        # corresponde el alta manual en el módulo de préstamos.
+        if (date.today() - ap_d).days > MAX_DIAS_APROBACION_DRIVE:
             motivos.append(
-                "fecha de aprobación (Q) supera 30 días de antigüedad; no se permite guardar (innegociable)"
+                f"fecha de aprobación (Q) supera {MAX_DIAS_APROBACION_DRIVE} días "
+                "(1 año) de antigüedad; no se permite guardar desde este flujo."
             )
 
     mod = _normalizar_modalidad(_cell_str(payload.get("col_s_modalidad_pago")))

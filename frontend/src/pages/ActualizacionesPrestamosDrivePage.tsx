@@ -33,6 +33,13 @@ const QK_BASE = ['actualizaciones', 'prestamos-drive', 'snapshot'] as const
 const PAGE_SIZE = 100
 /** Botones numéricos visibles a la vez (ventana deslizante). */
 const PAGE_WINDOW = 5
+/**
+ * Antigüedad máxima permitida para fecha de aprobación (Q) al crear préstamo
+ * desde Drive. Debe coincidir con `MAX_DIAS_APROBACION_DRIVE` del backend
+ * (`prestamo_candidatos_drive_guardar.py`). Si supera este límite, la fila se
+ * marca en rojo y no se permite guardar por este flujo (alta manual aparte).
+ */
+const MAX_DIAS_APROBACION_DRIVE = 365
 
 /** Ventana de números de página centrada hacia `current`, acotada a `totalPages`. */
 function numerosPaginaVisibles(
@@ -234,8 +241,11 @@ function fechaAprobacionDesdeColQ(qVal: string): Date | null {
   return parseFechaFlexible(raw)
 }
 
-/** Fecha de aprobación (Q) con más de 30 días calendario respecto a hoy (zona local). */
-function aprobacionMasDe30DiasFromPayload(
+/**
+ * Fecha de aprobación (Q) más antigua que la ventana permitida (zona local).
+ * Coincide con la regla de servidor: > `MAX_DIAS_APROBACION_DRIVE` días.
+ */
+function aprobacionFueraVentanaFromPayload(
   p: PrestamoCandidatoDriveFila['payload']
 ): boolean {
   const ap = fechaAprobacionNormalizada(p)
@@ -245,7 +255,7 @@ function aprobacionMasDe30DiasFromPayload(
   const ap0 = new Date(ap)
   ap0.setHours(0, 0, 0, 0)
   const diffDays = Math.floor((today.getTime() - ap0.getTime()) / 86400000)
-  return diffDays > 30
+  return diffDays > MAX_DIAS_APROBACION_DRIVE
 }
 
 /** Solo determina ambigüedad textual DD/MM cuando el backend no nos entregó la bandera. */
@@ -286,7 +296,7 @@ function filaCandidatoDriveTono(
 
   const redInvalida = !formatoOk
   const redVeDosOMasCreditos = esVe && Number.isFinite(nPrest) && nPrest >= 2
-  const redFechaAntigua = aprobacionMasDe30DiasFromPayload(p)
+  const redFechaAntigua = aprobacionFueraVentanaFromPayload(p)
   const redHuellaNoComparable = p.huella_no_comparable === true
 
   if (
@@ -751,10 +761,12 @@ export default function ActualizacionesPrestamosDrivePage() {
         </span>
       )
     }
-    if (aprobacionMasDe30DiasFromPayload(p)) {
+    if (aprobacionFueraVentanaFromPayload(p)) {
       return (
         <span className="text-red-600">
-          (Q) Fecha de aprobación con más de 30 días; no se permite guardar.
+          (Q) Fecha de aprobación con más de {MAX_DIAS_APROBACION_DRIVE} días (1
+          año); no se permite guardar desde este flujo. Use el alta manual de
+          préstamos para operaciones más antiguas.
         </span>
       )
     }
