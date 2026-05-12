@@ -3318,6 +3318,12 @@ def cambiar_estado_pago(
     pr = db.execute(select(PagoReportado).where(PagoReportado.id == pago_id)).scalars().first()
     if not pr:
         raise HTTPException(status_code=404, detail="Pago reportado no encontrado.")
+    if (pr.estado or "").strip() == body.estado:
+        if body.estado != "aprobado" or getattr(pr, "recibo_pdf", None):
+            return {
+                "ok": True,
+                "mensaje": f"El pago reportado ya estaba en estado {body.estado}.",
+            }
     if body.estado == "rechazado" and not (body.motivo or "").strip():
         raise HTTPException(status_code=400, detail="El motivo es obligatorio al rechazar.")
     if body.estado == "aprobado" and pr.estado == "rechazado":
