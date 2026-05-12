@@ -184,6 +184,7 @@ from app.services.pagos_gmail.gmail_service import (
     PAGOS_GMAIL_LABEL_BANCAMIGA,
     PAGOS_GMAIL_LABEL_TESORO,
     PAGOS_GMAIL_LABEL_TEXTO,
+    PAGOS_GMAIL_LABEL_CONCILIACION,
     PAGOS_GMAIL_LOTE_REMITENTE_IT_MASTER,
 )
 from app.utils.cedula_almacenamiento import resolver_cedula_almacenada_en_clientes
@@ -280,6 +281,7 @@ PAGOS_GMAIL_ETIQUETAS_FINALES_PERMITIDAS = frozenset(
         PAGOS_GMAIL_LABEL_ERROR_EMAIL,
         PAGOS_GMAIL_LABEL_MANUAL,
         PAGOS_GMAIL_LABEL_TEXTO,
+        PAGOS_GMAIL_LABEL_CONCILIACION,
     }
 )
 
@@ -429,6 +431,44 @@ def run_pipeline(
         len(only_ids_set) if only_ids_set is not None else 0,
         max_messages_int if max_messages_int is not None else "(sin tope)",
     )
+
+    # === Purga semántica del modo "manual_redigitaliza_por_remitente" =====================
+    # Cada re-ejecución del módulo "Actualizaciones > Gmail" significa "redigitalizar desde
+    # cero para este remitente". Las filas pendientes previas en `pagos_gmail_sync_item` y
+    # `gmail_temporal` para ese mismo `correo_origen` se eliminan ANTES de procesar para que
+    # el set resultante refleje EXACTAMENTE lo que Gmail tiene hoy (no se acumulan duplicados
+    # de corridas anteriores). Las filas que el operador ya migró a `pago_con_error` o aplicó
+    # a `pagos` ya no están en sync_item (las elimina el flujo de guardar/editar/migrar), por
+    # lo que esta purga solo afecta pendientes "en cola" para el remitente.
+    if redig_por_remitente and from_email_lc and not only_ids_set:
+        try:
+            n_si = (
+                db.execute(
+                    delete(PagosGmailSyncItem).where(
+                        func.lower(PagosGmailSyncItem.correo_origen) == from_email_lc
+                    )
+                ).rowcount or 0
+            )
+            n_gt = (
+                db.execute(
+                    delete(GmailTemporal).where(
+                        func.lower(GmailTemporal.correo_origen) == from_email_lc
+                    )
+                ).rowcount or 0
+            )
+            db.commit()
+            logger.info(
+                "[PAGOS_GMAIL] Redigitalizar por remitente '%s': purgadas %d filas sync_item y %d filas gmail_temporal "
+                "antes de re-procesar (semantica del modo manual_redigitaliza_por_remitente).",
+                from_email_lc, n_si, n_gt,
+            )
+        except Exception as _e_purge:
+            db.rollback()
+            logger.warning(
+                "[PAGOS_GMAIL] No se pudo purgar filas previas del remitente '%s' antes de re-procesar: %s",
+                from_email_lc, _e_purge,
+            )
+
     creds = get_pagos_gmail_credentials()
     if not creds:
         if existing_sync_id:
@@ -475,6 +515,11 @@ def run_pipeline(
     error_email_rescan = (scan_filter or "").strip().lower() == "error_email_rescan"
     # Misma corrida: varias filas Excel apuntando al mismo BLOB (mismo SHA-256) sin duplicar pago_comprobante_imagen.
     comprobante_reuse_por_sha256: dict[str, tuple[str, str]] = {}
+    # Misma corrida: SHA-256 ya empaquetados como fila pending; evita procesar dos veces el mismo
+    # binario (caso real lote IT Master: el mismo comprobante puede venir adjunto en varios .eml,
+    # o un mensaje puede tener el comprobante adjunto e inline a la vez). Sin esto, se generaban
+    # dos filas idénticas en `pagos_gmail_sync_item` con el mismo `numero_referencia` y monto.
+    _sha256_pending_seen_in_run: set[str] = set()
     # IDs de gmail_temporal cuyo delete inmediato falló tras alta automática OK; se reintenta antes de cerrar cada mensaje.
     pending_gmail_temporal_delete_ids: set[int] = set()
     # Métricas para GET /pagos/gmail/status → last_run_summary (diagnóstico en toast UI).
@@ -764,24 +809,39 @@ def run_pipeline(
                     _cedula_lote_real = resolver_cedula_almacenada_en_clientes(
                         db, _cedula_lote_v_raw
                     )
+                    # CONCILIACION: marca de "ya pasó por el pipeline" para el maestro de lote.
+                    # Se aplica tanto si la cédula no existe (rechazo ERROR EMAIL) como si el lote
+                    # se procesa OK, para que el operador vea en Gmail cuáles ya fueron tocados.
+                    try:
+                        _conc_lid = ensure_user_label_id(
+                            gmail_svc, PAGOS_GMAIL_LABEL_CONCILIACION
+                        )
+                    except Exception as _e_conc_create:
+                        _conc_lid = None
+                        logger.warning(
+                            "[PAGOS_GMAIL] Lote IT Master: no se pudo crear/obtener etiqueta "
+                            "'%s' (msg=%s): %s",
+                            PAGOS_GMAIL_LABEL_CONCILIACION, msg_id, _e_conc_create,
+                        )
                     if not _cedula_lote_real:
-                        # Cedula del asunto NO existe en clientes -> ETIQUETAR ERROR EMAIL y skip lote.
+                        # Cedula del asunto NO existe en clientes -> ETIQUETAR ERROR EMAIL + CONCILIACION y skip lote.
                         try:
                             _err_lid = ensure_user_label_id(
                                 gmail_svc, PAGOS_GMAIL_LABEL_ERROR_EMAIL
                             )
-                            if _err_lid:
+                            _add_ids = [lid for lid in (_err_lid, _conc_lid) if lid]
+                            if _add_ids:
                                 modify_message_labels_add_remove(
-                                    gmail_svc, msg_id, add_ids=[_err_lid], remove_ids=[]
+                                    gmail_svc, msg_id, add_ids=_add_ids, remove_ids=[]
                                 )
                         except Exception as _e_lbl:
                             logger.warning(
-                                "[PAGOS_GMAIL] Lote IT Master: no se pudo etiquetar ERROR EMAIL (msg=%s): %s",
+                                "[PAGOS_GMAIL] Lote IT Master: no se pudo etiquetar ERROR EMAIL/CONCILIACION (msg=%s): %s",
                                 msg_id, _e_lbl,
                             )
                         logger.info(
                             "[PAGOS_GMAIL]   Lote IT Master: cedula '%s' del asunto NO existe en clientes; "
-                            "ERROR EMAIL aplicado, lote NO procesado (msg=%s, n_eml_adjuntos=%d, sender=%s)",
+                            "ERROR EMAIL + CONCILIACION aplicados, lote NO procesado (msg=%s, n_eml_adjuntos=%d, sender=%s)",
                             _cedula_lote_v_raw, msg_id, _n_eml_lote, PAGOS_GMAIL_LOTE_REMITENTE_IT_MASTER,
                         )
                         _pipeline_evt(
@@ -792,10 +852,24 @@ def run_pipeline(
                             mark_as_read(gmail_svc, msg_id)
                         continue
                     _cedula_forzada_lote = _cedula_lote_real
+                    # Lote OK -> aplicar CONCILIACION ya (el flujo normal seguirá clasificando
+                    # con plantillas A-F/MANUAL/etc.; CONCILIACION coexiste como marca adicional).
+                    if _conc_lid:
+                        try:
+                            modify_message_labels_add_remove(
+                                gmail_svc, msg_id, add_ids=[_conc_lid], remove_ids=[]
+                            )
+                        except Exception as _e_conc:
+                            logger.warning(
+                                "[PAGOS_GMAIL] Lote IT Master: no se pudo aplicar CONCILIACION al maestro "
+                                "(msg=%s): %s",
+                                msg_id, _e_conc,
+                            )
                     logger.info(
                         "[PAGOS_GMAIL]   Lote IT Master detectado: cedula='%s' (asunto del maestro), "
-                        "n_eml_adjuntos=%d. Cada .eml se procesa con reglas existentes (Mercantil/BNC/etc.); "
-                        "la cedula de TODAS las filas de este mensaje se forzara a la del asunto. msg=%s",
+                        "n_eml_adjuntos=%d. CONCILIACION aplicada al maestro. Cada .eml se procesa con "
+                        "reglas existentes (Mercantil/BNC/etc.); la cedula de TODAS las filas se forzara "
+                        "a la del asunto. msg=%s",
                         _cedula_forzada_lote, _n_eml_lote, msg_id,
                     )
 
@@ -1006,6 +1080,17 @@ def run_pipeline(
                             else bytes(content)
                         )
                         file_digest = hashlib.sha256(body_bin).hexdigest()
+
+                        # Dedupe intra-corrida: si el mismo binario (mismo SHA-256) ya generó una fila
+                        # pending en esta corrida, no llamamos a Gemini ni creamos una segunda fila.
+                        # Salva el caso "mismo comprobante adjunto en varios .eml del lote".
+                        if file_digest in _sha256_pending_seen_in_run:
+                            logger.info(
+                                "[PAGOS_GMAIL]   Skip duplicado intra-corrida por SHA-256 (mismo binario "
+                                "ya empaquetado en otra fila pending): %s (msg=%s, file=%s)",
+                                file_digest[:12], msg_id, filename,
+                            )
+                            continue
 
                         _t0_gem = perf_counter()
                         fmt, data = classify_and_extract_pagos_gmail_attachment(
@@ -1264,6 +1349,7 @@ def run_pipeline(
                                 "sha256": file_digest,
                             }
                         )
+                        _sha256_pending_seen_in_run.add(file_digest)
                     except Exception as e:
                         logger.warning("[PAGOS_GMAIL]   Error procesando %s: %s", filename, e)
                         _pipeline_evt(

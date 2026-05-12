@@ -212,6 +212,10 @@ def listar_candidatos_desde_drive(db: Session) -> Dict[str, Any]:
                 "sheet_row_number": r.sheet_row_number,
                 "col_d_nombres": raw_d or None,
                 "col_e_cedula": col_e_mostrar or None,
+                # Contenido literal de la celda E en Drive (sin normalizar). Permite a la UI
+                # mostrar exactamente qué texto está en la hoja cuando validate_cedula falla
+                # pero el display normalizado (`col_e_cedula`) parece válido.
+                "col_e_raw": raw_e or None,
                 "col_f_telefono": tel_display,
                 "col_g_email": raw_g or None,
                 "cedula_cmp": cmp_e,

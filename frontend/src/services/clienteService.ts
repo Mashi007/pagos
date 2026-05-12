@@ -524,6 +524,13 @@ class ClienteService {
       sheet_row_number: number
       col_d_nombres: string | null
       col_e_cedula: string | null
+      /**
+       * Contenido literal de la celda E en la hoja Drive (sin normalizar). Permite mostrar
+       * exactamente qué texto está en el origen cuando `cedula_valida === false` pero
+       * `col_e_cedula` (display normalizado) parece correcto. Puede no existir en payloads
+       * previos a la mejora hasta que se refresque la caché de candidatos.
+       */
+      col_e_raw?: string | null
       col_f_telefono: string | null
       col_g_email: string | null
       cedula_cmp: string

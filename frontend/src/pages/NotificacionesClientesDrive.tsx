@@ -886,8 +886,19 @@ export default function NotificacionesClientesDrive() {
                       <td className="min-w-0 break-words px-2 py-2 align-top text-xs">
                         <div className="space-y-1">
                           {!r.cedula_valida && (
-                            <div className="font-medium text-red-600">
-                              Inválida: {r.cedula_error}
+                            <div className="space-y-0.5 font-medium text-red-600">
+                              <div>Inválida: {r.cedula_error}</div>
+                              {r.col_e_raw &&
+                                r.col_e_raw.trim() !==
+                                  (r.col_e_cedula ?? '').trim() && (
+                                  <div className="font-mono text-[11px] font-normal text-red-700">
+                                    Celda Drive (E): «{r.col_e_raw}» - el
+                                    display ({r.col_e_cedula}) está limpio, pero
+                                    la celda tiene caracteres extra (letras
+                                    duplicadas, posición incorrecta o símbolos).
+                                    Corrija la hoja y resincronice.
+                                  </div>
+                                )}
                             </div>
                           )}
                           {r.cedula_valida && r.duplicada_en_hoja && (

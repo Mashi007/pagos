@@ -255,10 +255,14 @@ export default function ActualizacionesGmailPage() {
       toast.error('Indica un correo valido (ej. cliente@dominio.com).')
       return
     }
+    // Cada "Buscar y procesar" significa redigitalizar desde cero para este remitente
+    // (el backend purga las filas previas en sync_item / gmail_temporal). Limpiamos
+    // el cache de la tabla para que la UI no muestre brevemente la corrida anterior.
+    queryClient.removeQueries({ queryKey: QK_LIST })
     setCorreoActivo(email)
     setPaginaTabla(1)
     await run('manual_redigitaliza_por_remitente', email, maxMessages, criterio)
-  }, [correoInput, maxMessages, criterio, run])
+  }, [correoInput, maxMessages, criterio, run, queryClient])
 
   /**
    * Función reutilizable: ejecuta `previewGmailRemitente` con un criterio y
@@ -339,7 +343,11 @@ export default function ActualizacionesGmailPage() {
     setCorreoActivo('')
     setPaginaTabla(1)
     setDiagnostico(null)
-  }, [])
+    // Limpia el cache de React Query y resetea su estado: evita que al volver a
+    // procesar aparezcan placeholders / datos de la corrida anterior antes del
+    // refetch real (el problema "siempre veo la misma pantalla").
+    queryClient.removeQueries({ queryKey: QK_LIST })
+  }, [queryClient])
 
   const guardarMutation = useMutation({
     mutationFn: (itemId: number) => pagoService.guardarGmailSyncItem(itemId),

@@ -280,6 +280,10 @@ PAGOS_GMAIL_LABEL_ERROR_EMAIL = "ERROR EMAIL"
 PAGOS_GMAIL_LABEL_MANUAL = "MANUAL"
 # Sin captura/PDF de comprobante: cuerpo u adjuntos no extraen imagen/PDF de pago (no hay columnas desde pixeles).
 PAGOS_GMAIL_LABEL_TEXTO = "TEXTO"
+# Marca de "ya procesado por el pipeline" para el correo maestro de lote (IT Master).
+# Se agrega tras procesar el correo, independientemente de si el resultado fue OK o ERROR EMAIL,
+# para que el operador identifique visualmente en Gmail qué correos ya pasaron por el sistema.
+PAGOS_GMAIL_LABEL_CONCILIACION = "CONCILIACION"
 
 # === Modo "Lote IT Master" ===
 # Correo maestro: From: <PAGOS_GMAIL_LOTE_REMITENTE_IT_MASTER>, asunto = solo cedula numerica (6-9 digitos),
