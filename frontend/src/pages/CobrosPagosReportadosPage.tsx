@@ -1159,6 +1159,26 @@ export default function CobrosPagosReportadosPage() {
         toast.error(res.mensaje || 'No se pudo eliminar.')
         return
       }
+      // Si el visor de comprobante esta abierto justamente con este id, cerrarlo:
+      // el blob ya cargado puede quedar visible pero un refetch o cualquier
+      // efecto colateral pediria /comprobante para el id eliminado y devolveria
+      // 404 con detail "Pago reportado no encontrado." (toast indeseado).
+      setPreviewComprobante(prev => {
+        if (prev.pagoId !== id) return prev
+        if (comprobanteAbortRef.current) {
+          comprobanteAbortRef.current.abort()
+          comprobanteAbortRef.current = null
+        }
+        if (prev.blobUrl) URL.revokeObjectURL(prev.blobUrl)
+        return {
+          open: false,
+          pagoId: null,
+          blobUrl: null,
+          contentType: null,
+          loading: false,
+          rotDeg: 0,
+        }
+      })
       // Quitar la fila al instante aunque el refresh posterior falle (p. ej. 502 temporal).
       setData(prev => {
         if (!prev) return prev
@@ -1198,6 +1218,8 @@ export default function CobrosPagosReportadosPage() {
       bumpHiddenIdsTick()
       schedulePostMutationSync()
     } catch (e: unknown) {
+      const errAny = e as { silent?: boolean }
+      if (errAny?.silent) return
       const detail = (e as { response?: { data?: { detail?: string } } })
         ?.response?.data?.detail
       toast.error(
@@ -1259,7 +1281,12 @@ export default function CobrosPagosReportadosPage() {
       ) {
         return
       }
-      toast.error(e?.message || 'No se pudo abrir el comprobante.')
+      // Silenciar: si el pago se acaba de eliminar/aprobar/rechazar en este tab,
+      // `getPagoReportadoComprobanteBlob` lanza error marcado `silent: true`
+      // para no superponer "Pago reportado no encontrado." al toast de exito.
+      if (!e?.silent) {
+        toast.error(e?.message || 'No se pudo abrir el comprobante.')
+      }
       setPreviewComprobante(prev => ({ ...prev, loading: false, open: false }))
     } finally {
       if (comprobanteAbortRef.current === controller) {

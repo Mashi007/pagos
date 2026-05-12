@@ -1437,31 +1437,63 @@ function isPagoReportadoRecentlyDeleted(pagoId: number): boolean {
   return isPagoReportadoRecentlyHidden(pagoId)
 }
 
+/**
+ * Construye un error "silent" que evita superponer toast "Pago reportado no
+ * encontrado." sobre el toast de exito "Pago reportado eliminado.". Llamadores
+ * deben revisar `e.silent` antes de mostrar toast.
+ */
+function makeSilentPagoReportadoEliminadoError(): Error & {
+  silent: boolean
+  code: string
+  response?: unknown
+} {
+  const err = new Error('Pago reportado eliminado.') as Error & {
+    silent: boolean
+    code: string
+    response?: unknown
+  }
+  err.silent = true
+  err.code = 'ERR_PAGO_REPORTADO_RECIEN_ELIMINADO'
+  return err
+}
+
+/**
+ * Helper compartido: cualquier GET a `/pagos-reportados/{id}/*` debe respetar el
+ * set `recentlyHidden`. Si el id se acaba de eliminar / aprobar / rechazar en
+ * este tab, lanzar silent error UPFRONT evita la peticion HTTP fantasma (y el
+ * toast "Pago reportado no encontrado." que el backend devuelve con detail).
+ * Si el GET ya salio y devolvio 404, traduce el error a silent.
+ */
+function silentIfRecentlyHiddenPreflight(pagoId: number): void {
+  if (isPagoReportadoRecentlyHidden(pagoId)) {
+    throw makeSilentPagoReportadoEliminadoError()
+  }
+}
+
+function silentIfRecentlyHidden404(pagoId: number, e: unknown): never {
+  const errObj = e as { code?: string; response?: { status?: number } } | undefined
+  const status =
+    errObj?.response?.status ??
+    (errObj?.code === 'ERR_HTTP_404' ? 404 : undefined)
+  if (status === 404 && isPagoReportadoRecentlyHidden(pagoId)) {
+    const silentErr = makeSilentPagoReportadoEliminadoError()
+    silentErr.response = errObj?.response
+    throw silentErr
+  }
+  throw e
+}
+
 export async function getPagoReportadoDetalle(
   pagoId: number
 ): Promise<PagoReportadoDetalleResponse> {
+  silentIfRecentlyHiddenPreflight(pagoId)
   try {
     const data = await apiClient.get<PagoReportadoDetalleResponse>(
       `${BASE_COBROS}/pagos-reportados/${pagoId}`
     )
     return data
   } catch (e: unknown) {
-    const errObj = e as { code?: string; response?: { status?: number } } | undefined
-    const status =
-      errObj?.response?.status ??
-      (errObj?.code === 'ERR_HTTP_404' ? 404 : undefined)
-    if (status === 404 && isPagoReportadoRecentlyDeleted(pagoId)) {
-      const silentErr = new Error('Pago reportado eliminado.') as Error & {
-        silent: boolean
-        code: string
-        response?: unknown
-      }
-      silentErr.silent = true
-      silentErr.code = 'ERR_PAGO_REPORTADO_RECIEN_ELIMINADO'
-      silentErr.response = errObj?.response
-      throw silentErr
-    }
-    throw e
+    silentIfRecentlyHidden404(pagoId, e)
   }
 }
 
@@ -1523,8 +1555,17 @@ export async function historicoPorCliente(
 export async function getPagoReportadoComprobanteBlob(
   pagoId: number
 ): Promise<Blob> {
+  // Preflight: si el id se acaba de eliminar / aprobar / rechazar, evitar el GET
+  // 404 que el backend responderia con detail "Pago reportado no encontrado.";
+  // ese detail se propaga como error.message y handlers locales lo terminan
+  // mostrando como toast incluso despues del exito del DELETE.
+  silentIfRecentlyHiddenPreflight(pagoId)
   const path = `${BASE_COBROS}/pagos-reportados/${pagoId}/comprobante`
-  return apiClient.getBlob(path)
+  try {
+    return await apiClient.getBlob(path)
+  } catch (e: unknown) {
+    silentIfRecentlyHidden404(pagoId, e)
+  }
 }
 
 /** Abre el comprobante (imagen/PDF) en nueva pestaña. Usa auth del apiClient. */
@@ -1540,12 +1581,15 @@ export async function openComprobanteInNewTab(pagoId: number): Promise<void> {
 /** Abre o descarga el recibo PDF. Usa auth del apiClient. */
 
 export async function openReciboPdfInNewTab(pagoId: number): Promise<void> {
+  silentIfRecentlyHiddenPreflight(pagoId)
   const path = `${BASE_COBROS}/pagos-reportados/${pagoId}/recibo.pdf`
-  const data = await apiClient.getBlob(path)
-
-  const url = URL.createObjectURL(data)
-
-  window.open(url, '_blank')
+  try {
+    const data = await apiClient.getBlob(path)
+    const url = URL.createObjectURL(data)
+    window.open(url, '_blank')
+  } catch (e: unknown) {
+    silentIfRecentlyHidden404(pagoId, e)
+  }
 }
 
 /** Env├â┬¡a por correo el recibo PDF (manual). Genera PDF si no existe. */
