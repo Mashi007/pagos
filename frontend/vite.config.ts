@@ -187,7 +187,12 @@ export default defineConfig({
     rollupOptions: {
       output: {
         // ÃÂ¢ÃÂÃ¢ÂÂ¦ Deshabilitar modulePreload para chunks pesados
-        experimentalMinChunkSize: 20000,
+        // experimentalMinChunkSize eliminado: con moduleSideEffects:false y los
+        // manualChunks actuales, el merger automatico generaba imports rotos entre
+        // chunks. Sintoma en produccion: "doesn't provide an export named: 'i'"
+        // entre CobrosHistoricoPage y emailCuentasApi. Sin esta opcion, Rollup usa
+        // su chunking por defecto (estable). Los manualChunks de abajo siguen
+        // separando vendors/react-core/router/exceljs/pdf-export/etc.
         manualChunks: (id) => {
           if (id.includes('node_modules')) {
             // Debe ir con react/react-dom: usan React.memo / hooks en el tope del módulo.
