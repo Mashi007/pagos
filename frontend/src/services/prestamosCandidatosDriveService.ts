@@ -11,6 +11,12 @@ export type PrestamoCandidatoDriveFila = {
   payload: PrestamoCandidatoDrivePayload
   /** Misma validación de servidor que «Guardar (100%)» antes de crear el préstamo. */
   listo_para_guardar?: boolean
+  /**
+   * Motivos exactos por los que el servidor NO marca la fila como guardable
+   * (lista vacía o ausente si la fila está lista). Permite que la UI muestre
+   * el detalle real en lugar de un texto genérico.
+   */
+  motivos_no_guardable?: string[]
   computed_at: string | null
 }
 

@@ -420,13 +420,17 @@ function AccionesPorFilaCandidatoDrive({
   disabled,
   puedeGuardarFila,
   guardandoEstaFila,
+  eliminandoEstaFila,
   onGuardarFila,
+  onEliminarFila,
 }: {
   fila: PrestamoCandidatoDriveFila
   disabled: boolean
   puedeGuardarFila: boolean
   guardandoEstaFila: boolean
+  eliminandoEstaFila: boolean
   onGuardarFila: (sheetRowNumber: number) => void
+  onEliminarFila: (filaId: number, sheetRowNumber: number) => void
 }) {
   const iconBtn =
     'h-8 w-8 shrink-0 rounded-md border border-slate-200 bg-white p-0 shadow-sm hover:bg-slate-50 disabled:opacity-50'
@@ -437,6 +441,7 @@ function AccionesPorFilaCandidatoDrive({
       ? `Guardando fila de hoja ${sr}…`
       : `Guardar solo esta fila (misma validación de servidor que «Guardar válidas»).`
     : `No se puede guardar: la fila no cumple la validación de servidor (cliente, N, R, Q, S, J, cédula, etc.).`
+  const deleteDisabled = disabled || eliminandoEstaFila
 
   return (
     <div className="flex min-w-0 flex-nowrap items-center justify-center gap-0.5 sm:gap-1">
@@ -445,11 +450,13 @@ function AccionesPorFilaCandidatoDrive({
         variant="outline"
         size="icon"
         className={iconBtn}
-        title={`Editar fila hoja ${sr} (próximamente)`}
+        title={`Para editar esta fila modifique la hoja Drive (CONCILIACIÓN, fila ${sr}) y use «Sincronización manual con Drive» para que el snapshot la recalcule.`}
         aria-label={`Editar fila ${sr}`}
         disabled={disabled}
         onClick={() =>
-          toast.message(`Edición de fila ${sr} (hoja): próximamente.`)
+          toast.info(
+            `Edición: ajuste la fila ${sr} en la hoja Drive (CONCILIACIÓN) y luego use «Sincronización manual con Drive». El snapshot se vuelve a calcular automáticamente.`
+          )
         }
       >
         <Edit2
@@ -479,15 +486,17 @@ function AccionesPorFilaCandidatoDrive({
         variant="outline"
         size="icon"
         className={iconBtn}
-        title={`Quitar candidato fila ${sr} (próximamente)`}
-        aria-label={`Borrar fila ${sr}`}
-        disabled={disabled}
-        onClick={() =>
-          toast.message(`Quitar candidato fila ${sr}: próximamente.`)
+        title={
+          eliminandoEstaFila
+            ? `Quitando candidato fila ${sr}…`
+            : `Quitar este candidato del snapshot (no toca la hoja Drive ni crea préstamo). Volverá a aparecer en el siguiente recálculo si sigue en la hoja.`
         }
+        aria-label={`Borrar fila ${sr}`}
+        disabled={deleteDisabled}
+        onClick={() => onEliminarFila(fila.id, sr)}
       >
         <Trash2
-          className="h-3.5 w-3.5 text-red-600"
+          className={`h-3.5 w-3.5 text-red-600 ${eliminandoEstaFila ? 'animate-pulse' : ''}`}
           strokeWidth={2}
           aria-hidden
         />
@@ -524,6 +533,7 @@ export default function ActualizacionesPrestamosDrivePage() {
   const [guardandoFilaSheet, setGuardandoFilaSheet] = useState<number | null>(
     null
   )
+  const [eliminandoFilaId, setEliminandoFilaId] = useState<number | null>(null)
   const [page, setPage] = useState(1)
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
 
@@ -686,6 +696,43 @@ export default function ActualizacionesPrestamosDrivePage() {
     }
   }, [refetchLista])
 
+  const onEliminarUnaFila = useCallback(
+    async (filaId: number, sheetRowNumber: number) => {
+      if (!Number.isFinite(filaId) || filaId <= 0) {
+        toast.error('Fila inválida; no se puede eliminar.')
+        return
+      }
+      const confirmado = window.confirm(
+        `Va a quitar el candidato de la fila ${sheetRowNumber} del snapshot. No se crea préstamo ni se modifica la hoja Drive; si la fila sigue en Drive volverá a aparecer en el próximo recálculo. ¿Continuar?`
+      )
+      if (!confirmado) return
+      setEliminandoFilaId(filaId)
+      try {
+        const res = await postPrestamosCandidatosDriveEliminarSeleccionados([
+          filaId,
+        ])
+        toast.success(
+          res?.mensaje ||
+            `Candidato de la fila ${sheetRowNumber} quitado del snapshot.`
+        )
+        setSelectedIds(prev => {
+          if (!prev.has(filaId)) return prev
+          const next = new Set(prev)
+          next.delete(filaId)
+          return next
+        })
+        await refrescarSnapshotPostAccion()
+      } catch (e) {
+        toast.error(
+          getErrorMessage(e) || 'No se pudo quitar el candidato de la fila'
+        )
+      } finally {
+        setEliminandoFilaId(null)
+      }
+    },
+    [refrescarSnapshotPostAccion]
+  )
+
   const onEliminarSeleccionados = useCallback(async () => {
     const ids = Array.from(selectedIds)
     if (ids.length === 0) {
@@ -786,6 +833,21 @@ export default function ActualizacionesPrestamosDrivePage() {
       )
     }
     if (fila.listo_para_guardar === false) {
+      const motivos = (fila.motivos_no_guardable ?? []).filter(
+        m => typeof m === 'string' && m.trim().length > 0
+      )
+      if (motivos.length > 0) {
+        return (
+          <span className="text-sky-900">
+            ✓✓✓ en pantalla pero servidor rechaza:
+            <ul className="mt-0.5 list-disc pl-4">
+              {motivos.map((m, i) => (
+                <li key={`${fila.id}-mot-${i}`}>{m}</li>
+              ))}
+            </ul>
+          </span>
+        )
+      }
       return (
         <span className="text-sky-900">
           ✓✓✓ solo en pantalla: revise cliente en BD, montos/fechas (N, R, Q),
@@ -808,6 +870,7 @@ export default function ActualizacionesPrestamosDrivePage() {
     guardarValidosSaving ||
     eliminandoSeleccionados ||
     guardandoFilaSheet !== null ||
+    eliminandoFilaId !== null ||
     isBusy
   const huellaNoComparableTotal =
     typeof data?.kpis_huella_no_comparable === 'number'
@@ -1241,8 +1304,18 @@ export default function ActualizacionesPrestamosDrivePage() {
                         >
                           {strPayload(r.payload, 'col_i_modelo_vehiculo')}
                         </td>
-                        <td className="max-w-0 overflow-hidden px-2 py-2 align-middle text-xs leading-snug">
-                          <div className="line-clamp-2 break-words">
+                        <td
+                          className="max-w-0 overflow-hidden px-2 py-2 align-middle text-xs leading-snug"
+                          title={
+                            r.listo_para_guardar === false &&
+                            (r.motivos_no_guardable ?? []).length > 0
+                              ? `Motivos del servidor:\n• ${(
+                                  r.motivos_no_guardable ?? []
+                                ).join('\n• ')}`
+                              : undefined
+                          }
+                        >
+                          <div className="line-clamp-4 break-words">
                             {estadoFila(r)}
                           </div>
                         </td>
@@ -1256,7 +1329,11 @@ export default function ActualizacionesPrestamosDrivePage() {
                             guardandoEstaFila={
                               guardandoFilaSheet === r.sheet_row_number
                             }
+                            eliminandoEstaFila={eliminandoFilaId === r.id}
                             onGuardarFila={sr => void onGuardarUnaFila(sr)}
+                            onEliminarFila={(id, sr) =>
+                              void onEliminarUnaFila(id, sr)
+                            }
                           />
                         </td>
                       </tr>

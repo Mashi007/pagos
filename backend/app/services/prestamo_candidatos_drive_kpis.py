@@ -7,13 +7,17 @@ no solo el color verde de la grilla (la grilla puede verse verde y aún faltar c
 from __future__ import annotations
 
 from datetime import date
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, List, Tuple
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.prestamo_candidato_drive import PrestamoCandidatoDrive
-from app.services.prestamo_candidatos_drive_guardar import _fechas_desde_col_q, _motivos_no_100
+from app.services.prestamo_candidatos_drive_guardar import (
+    MAX_DIAS_APROBACION_DRIVE,
+    _fechas_desde_col_q,
+    _motivos_no_100,
+)
 from app.services.prestamo_candidatos_drive_validadores import conteo_prestamos_por_cedula_norm
 
 
@@ -82,7 +86,7 @@ def fila_payload_grilla_verde(payload: Dict[str, Any], cedula_cmp_fila: str) -> 
     fechas = _fechas_desde_col_q(q_raw)
     if fechas:
         _, ap_d = fechas
-        red_fecha = (date.today() - ap_d).days > 30
+        red_fecha = (date.today() - ap_d).days > MAX_DIAS_APROBACION_DRIVE
 
     red_ve = es_ve and n_prest >= 2
     if not formato_ok or red_ve or red_fecha:
@@ -97,11 +101,12 @@ def conteos_listo_guardar_y_map_por_id(
     db: Session,
     *,
     cedula_cmp_contains: str | None,
-) -> Tuple[int, int, Dict[int, bool]]:
+) -> Tuple[int, int, Dict[int, bool], Dict[int, List[str]]]:
     """
     Una sola pasada sobre el snapshot filtrado:
     - cuenta guardables / no guardables (`_motivos_no_100`, igual que «Guardar (100%)»);
-    - devuelve mapa `id` → cumple validación previa al crear préstamo (para la UI por fila).
+    - devuelve mapa `id` → cumple validación previa al crear préstamo (para la UI por fila);
+    - devuelve mapa `id` → motivos de no-guardable (lista vacía si guardable), para mostrar en UI.
     """
     prestamo_counts = conteo_prestamos_por_cedula_norm(db)
     stmt = select(PrestamoCandidatoDrive.id, PrestamoCandidatoDrive.payload, PrestamoCandidatoDrive.cedula_cmp)
@@ -110,13 +115,15 @@ def conteos_listo_guardar_y_map_por_id(
         stmt = stmt.where(PrestamoCandidatoDrive.cedula_cmp.contains(q))
     rows = list(db.execute(stmt).all() or [])
     listo_map: Dict[int, bool] = {}
+    motivos_map: Dict[int, List[str]] = {}
     apr = 0
     for rid, payload, cmp in rows:
         pl = payload if isinstance(payload, dict) else {}
-        ok, _, pc = _motivos_no_100(pl, db, prestamo_counts)
+        ok, motivos, pc = _motivos_no_100(pl, db, prestamo_counts)
         v = bool(ok and pc is not None)
         listo_map[int(rid)] = v
+        motivos_map[int(rid)] = [] if v else list(motivos)
         if v:
             apr += 1
     total = len(rows)
-    return apr, total - apr, listo_map
+    return apr, total - apr, listo_map, motivos_map

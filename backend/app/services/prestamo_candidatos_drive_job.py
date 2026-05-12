@@ -257,8 +257,10 @@ def listar_prestamo_candidatos_drive_snapshot(
     lim = max(1, min(int(limit), 2000))
     off = max(0, int(offset))
 
-    aprueban, no_aprueban, listo_por_id = conteos_listo_guardar_y_map_por_id(
-        db, cedula_cmp_contains=filt_norm or None
+    aprueban, no_aprueban, listo_por_id, motivos_por_id = (
+        conteos_listo_guardar_y_map_por_id(
+            db, cedula_cmp_contains=filt_norm or None
+        )
     )
 
     stmt = select(PrestamoCandidatoDrive).order_by(PrestamoCandidatoDrive.sheet_row_number.asc())
@@ -303,6 +305,7 @@ def listar_prestamo_candidatos_drive_snapshot(
                 "payload": r.payload,
                 "computed_at": r.computed_at.isoformat() if r.computed_at else None,
                 "listo_para_guardar": bool(listo_por_id.get(int(r.id), False)),
+                "motivos_no_guardable": list(motivos_por_id.get(int(r.id), []) or []),
             }
             for r in rows
         ],
