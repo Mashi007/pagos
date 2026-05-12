@@ -44,6 +44,8 @@ import {
   cambiarEstadoPago,
   eliminarPagoReportado,
   invalidateCobrosListadoKpisCache,
+  patchListadoKpisCacheDropPagoReportado,
+  peekListadoKpisCache,
   getRecentlyHiddenPagoReportadoIds,
   COBROS_LISTADO_KPIS_CACHE_TTL_MS,
   type PagoReportadoItem,
@@ -428,13 +430,6 @@ export default function CobrosPagosReportadosPage() {
 
   const queryClient = useQueryClient()
 
-  const [data, setData] = useState<ListPagosReportadosResponse | null>(null)
-
-  const [loading, setLoading] = useState(true)
-
-  /** Recarga con datos previos en pantalla (evita pantalla en blanco "Cargando..." durante listado-y-kpis lento). */
-  const [refreshing, setRefreshing] = useState(false)
-
   const [page, setPage] = useState(1)
 
   const [estado, setEstado] = useState<string>('')
@@ -452,6 +447,39 @@ export default function CobrosPagosReportadosPage() {
   const [institucion, setInstitucion] = useState('')
 
   const [incluirExportados, setIncluirExportados] = useState(false)
+
+  /**
+   * Hidratacion sincrona desde el cache cliente al montar: si el operador acaba
+   * de tratar un caso (aprobar/rechazar/eliminar) y vuelve al listado, el cache
+   * fue parchado quirurgicamente con la fila removida y los KPIs decrementados.
+   * Inicializar `data` y `kpis` con el snapshot cacheado evita el flash de spinner
+   * full al re-montar. Si no hay cache, queda null y el useEffect dispara fetch.
+   */
+  const cachedListadoInicial = useMemo(
+    () =>
+      peekListadoKpisCache({
+        page: 1,
+        per_page: 20,
+        estado: undefined,
+        incluir_exportados: false,
+        fecha_desde: cobrosFechaDesdeHaceNDias(
+          COBROS_REPORTADOS_FILTRO_FECHA_DIAS
+        ),
+        fecha_hasta: cobrosFechaLocalYMD(new Date()),
+        cedula: undefined,
+        institucion: undefined,
+      }),
+    []
+  )
+
+  const [data, setData] = useState<ListPagosReportadosResponse | null>(
+    () => cachedListadoInicial ?? null
+  )
+
+  const [loading, setLoading] = useState(cachedListadoInicial == null)
+
+  /** Recarga con datos previos en pantalla (evita pantalla en blanco "Cargando..." durante listado-y-kpis lento). */
+  const [refreshing, setRefreshing] = useState(false)
   const [soloCedulasDuplicadas, setSoloCedulasDuplicadas] = useState(false)
   /** Cliente: filas cuya observación incluye falla de lista autorizada para pagos en Bs. */
   const [soloFallaListaBs, setSoloFallaListaBs] = useState(false)
@@ -533,7 +561,9 @@ export default function CobrosPagosReportadosPage() {
 
   const [motivoRechazo, setMotivoRechazo] = useState('')
 
-  const [kpis, setKpis] = useState<PagosReportadosKpis | null>(null)
+  const [kpis, setKpis] = useState<PagosReportadosKpis | null>(
+    () => cachedListadoInicial?.kpis ?? null
+  )
 
   const [ultimaCargaMs, setUltimaCargaMs] = useState<number | null>(null)
 
@@ -652,38 +682,49 @@ export default function CobrosPagosReportadosPage() {
       const lp = listadoParamsRef.current
       const startedAt = performance.now()
       const requestSeq = ++loadSeqRef.current
+      const pageToFetch = opts?.page != null ? opts.page : lp.page
+
+      const filterParams = {
+        fecha_desde: lp.fechaDesde || undefined,
+        fecha_hasta: lp.fechaHasta || undefined,
+        cedula: lp.cedula.trim() || undefined,
+        institucion: lp.institucion.trim() || undefined,
+      }
+      const queryParams = {
+        page: pageToFetch,
+        per_page: 20,
+        estado: lp.estado || undefined,
+        incluir_exportados: lp.incluirExportados,
+        ...filterParams,
+      }
+
+      // Politica de cache: si hay cache cliente VIVO (TTL 15 min) y no se forzo
+      // `bypassCache`, hidratamos data/kpis SINCRONO. El operador que vuelve al
+      // listado tras tratar un caso ve la pantalla principal AL INSTANTE (sin
+      // spinner full ni round trip al backend) con los KPIs ya alineados por el
+      // parche quirurgico aplicado al cache durante la mutacion. Como
+      // `listPagosReportadosConKpis` tambien lee ese cache, no se dispara fetch
+      // de red duplicado: simplemente reusamos los datos antes del await.
+      const cached = !opts?.bypassCache ? peekListadoKpisCache(queryParams) : null
+      if (cached) {
+        setData(cached)
+        setKpis(cached.kpis)
+        setLoading(false)
+        setRefreshing(false)
+        setUltimaCargaMs(Math.round(performance.now() - startedAt))
+        return
+      }
+
       const initialLoad = dataRef.current === null
       const silent = Boolean(opts?.silent) && dataRef.current !== null
-      const pageToFetch = opts?.page != null ? opts.page : lp.page
       setLoading(initialLoad)
       // Sin overlay "Actualizando listado…" en refrescos silenciosos (p. ej. tras aprobar o intervalo automático).
       setRefreshing(!initialLoad && !silent)
 
       try {
-        const filterParams = {
-          fecha_desde: lp.fechaDesde || undefined,
-
-          fecha_hasta: lp.fechaHasta || undefined,
-
-          cedula: lp.cedula.trim() || undefined,
-
-          institucion: lp.institucion.trim() || undefined,
-        }
-
-        const res = await listPagosReportadosConKpis(
-          {
-            page: pageToFetch,
-
-            per_page: 20,
-
-            estado: lp.estado || undefined,
-
-            incluir_exportados: lp.incluirExportados,
-
-            ...filterParams,
-          },
-          { bypassCache: opts?.bypassCache }
-        )
+        const res = await listPagosReportadosConKpis(queryParams, {
+          bypassCache: opts?.bypassCache,
+        })
         if (requestSeq !== loadSeqRef.current) return
 
         setData(res)
@@ -1020,7 +1061,10 @@ export default function CobrosPagosReportadosPage() {
         void invalidateListasNotificacionesMora(queryClient)
       }
 
-      invalidateCobrosListadoKpisCache()
+      // Parche quirurgico al cache cliente: una sola fila cambio de estado.
+      // Decrementa kpis[estadoAnterior] y filtra el id de los items cacheados, sin
+      // borrar todo el cache (que forzaria refetch full al volver a esta pagina).
+      patchListadoKpisCacheDropPagoReportado(id, estadoAnteriorEnLista)
       // Bumpear tick: cambiarEstadoPago marca el id como oculto reciente cuando
       // pasa a aprobado/rechazado/importado; el useMemo de `itemsTabla` necesita
       // este bump para re-evaluar y filtrar la fila al instante.
@@ -1142,7 +1186,12 @@ export default function CobrosPagosReportadosPage() {
         return next
       })
       toast.success(res?.mensaje || 'Pago reportado eliminado.')
-      invalidateCobrosListadoKpisCache()
+      // Parche quirurgico al cache cliente: en lugar de borrar todo, decrementa
+      // counters y filtra el id de las entries vivas. Asi al volver a la pagina,
+      // los KPIs ya estan alineados sin spinner ni round trip al backend.
+      const estadoPrevio =
+        (data?.items ?? []).find(r => r.id === id)?.estado ?? ''
+      patchListadoKpisCacheDropPagoReportado(id, estadoPrevio)
       // eliminarPagoReportado() ya marca el id como oculto reciente; bumpear el
       // tick para que el useMemo del listado lo filtre al instante en cualquier
       // pagina/filtro abierta (no solo la actual con optimistic ya aplicado).

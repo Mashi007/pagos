@@ -1023,6 +1023,99 @@ export function invalidateCobrosListadoKpisCache(): void {
   cobrosListadoKpisCache.clear()
 }
 
+/**
+ * Lee el cache cliente del listado-y-kpis SIN disparar fetch ni await. Si hay una
+ * entry viva (storedAt < TTL), devuelve una copia. Permite que `CobrosPagosReportadosPage`
+ * hidrate `data`/`kpis` SINCRONO al montar (sin spinner full) cuando el operador
+ * regresa al listado tras tratar un caso: el cache fue parchado quirurgicamente y
+ * sigue siendo la fuente de verdad mas reciente que el operador vio.
+ *
+ * Retorna `null` si no hay cache, expiro, o el clon falla.
+ */
+export function peekListadoKpisCache(
+  params: CobrosListadoKpisParams
+): ListPagosReportadosConKpisResponse | null {
+  try {
+    const key = cobrosListadoKpisCacheKey(params)
+    const hit = cobrosListadoKpisCache.get(key)
+    if (!hit) return null
+    if (Date.now() - hit.storedAt >= COBROS_LISTADO_KPIS_CACHE_TTL_MS) {
+      cobrosListadoKpisCache.delete(key)
+      return null
+    }
+    return cloneListadoConKpis(hit.payload)
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Parche quirurgico en el cache cliente (analogo al `_drop_pagos_from_listado_kpis_cache`
+ * del backend): tras aprobar / rechazar / eliminar un pago reportado, en lugar de
+ * limpiar TODO el cache (lo que obligaria a re-fetch + spinner al volver a la pantalla
+ * principal), recorre las entries vivas y:
+ *   - filtra el id del array `items` si esta presente,
+ *   - decrementa `total` y `kpis[estadoPrevio]`/`kpis.total` aunque el id no este en
+ *     `items` (el caso del card "Pendiente" desactualizado cuando la fila vivia en
+ *     pagina >=2 del cache).
+ *
+ * Asi:
+ *   1. La proxima carga del listado encuentra cache hit y la pantalla regresa AL
+ *      INSTANTE con la fila ya filtrada y el KPI decrementado.
+ *   2. El backend sigue con el cache caliente (el operador NO dispara el recompute
+ *      de 20-30s) y el refresco real ocurre en background.
+ *   3. Los TTL se respetan: si la entry ya vencio antes del parche, se elimina;
+ *      si esta viva, conserva su storedAt original (no se rejuvenece artificialmente).
+ *
+ * Usar `invalidateCobrosListadoKpisCache()` solo para mutaciones que afectan a muchas
+ * filas (export masivo, recibo regenerado): este parche cubre el caso 1 fila.
+ */
+export function patchListadoKpisCacheDropPagoReportado(
+  pagoId: number,
+  estadoPrevio?: string
+): void {
+  const now = Date.now()
+  const previo = (estadoPrevio || '').trim()
+  for (const [key, entry] of cobrosListadoKpisCache) {
+    if (now - entry.storedAt >= COBROS_LISTADO_KPIS_CACHE_TTL_MS) {
+      cobrosListadoKpisCache.delete(key)
+      continue
+    }
+    const payload = entry.payload
+    const itemIndex = payload.items.findIndex(r => r.id === pagoId)
+    const wasInItems = itemIndex >= 0
+    const removedEstado = wasInItems ? payload.items[itemIndex].estado : null
+    const estadoParaDecrementar = removedEstado || previo
+    if (!wasInItems && !estadoParaDecrementar) {
+      continue
+    }
+    const nextItems = wasInItems
+      ? payload.items.filter((_, idx) => idx !== itemIndex)
+      : payload.items
+    const totalActual = Number(payload.total ?? 0)
+    const nextTotal = Math.max(0, totalActual - 1)
+    const nextKpis = { ...(payload.kpis ?? {}) } as PagosReportadosKpis
+    const totalKpiActual = Number(nextKpis.total ?? 0)
+    nextKpis.total = Math.max(0, totalKpiActual - 1)
+    if (estadoParaDecrementar) {
+      const k = estadoParaDecrementar as keyof PagosReportadosKpis
+      const v = nextKpis[k]
+      if (typeof v === 'number') {
+        ;(nextKpis[k] as number) = Math.max(0, v - 1)
+      }
+    }
+    cobrosListadoKpisCache.set(key, {
+      storedAt: entry.storedAt,
+      payload: {
+        ...payload,
+        items: nextItems,
+        total: nextTotal,
+        kpis: nextKpis,
+      },
+    })
+  }
+}
+
 export async function getPagosReportadosKpis(
   params: {
     fecha_desde?: string

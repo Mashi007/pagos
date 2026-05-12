@@ -34,7 +34,7 @@ import {
   openComprobanteInNewTab,
   openReciboPdfInNewTab,
   eliminarPagoReportado,
-  invalidateCobrosListadoKpisCache,
+  patchListadoKpisCacheDropPagoReportado,
   type PagoReportadoDetalleResponse,
   type CambiarEstadoPagoResponse,
   etiquetaCanalReportado,
@@ -175,6 +175,7 @@ export default function CobrosDetallePage() {
     setAccion('aprobar')
 
     try {
+      const estadoPrevio = detalle?.estado
       const res = await aprobarPagoReportado(Number(id))
 
       toast.success(res.mensaje || 'Pago aprobado.')
@@ -188,7 +189,11 @@ export default function CobrosDetallePage() {
       queryClient.invalidateQueries({ queryKey: ['prestamos'] })
       void invalidateListasNotificacionesMora(queryClient)
 
-      invalidateCobrosListadoKpisCache()
+      // Parche quirurgico al cache cliente del listado: en lugar de limpiar TODO el
+      // cache (lo que forzaria spinner full al volver al listado), removemos solo este
+      // id y decrementamos kpis[estadoPrevio]. La pantalla principal regresa AL
+      // INSTANTE con la fila ya filtrada y los KPIs alineados.
+      patchListadoKpisCacheDropPagoReportado(Number(id), estadoPrevio)
       navigate('/cobros/pagos-reportados')
       // El layout usa <main overflow-auto>; volver arriba (cabecera del listado).
       window.setTimeout(() => {
@@ -239,8 +244,12 @@ export default function CobrosDetallePage() {
     }
     setEliminandoReporte(true)
     try {
+      const estadoPrevio = detalle?.estado
       const res = await eliminarPagoReportado(Number(id))
       toast.success(res?.mensaje || 'Pago reportado eliminado.')
+      // Parche quirurgico en lugar de invalidar todo el cache cliente: la pantalla
+      // principal regresa al instante sin spinner y con KPIs alineados.
+      patchListadoKpisCacheDropPagoReportado(Number(id), estadoPrevio)
       navigate('/cobros/pagos-reportados')
     } catch (e: unknown) {
       const any = e as {
@@ -268,6 +277,7 @@ export default function CobrosDetallePage() {
     setAccion('rechazar')
 
     try {
+      const estadoPrevio = detalle?.estado
       const data = await rechazarPagoReportado(Number(id), motivoRechazo.trim())
 
       toastAfterRechazoDetalle(data)
@@ -276,6 +286,9 @@ export default function CobrosDetallePage() {
 
       setMotivoRechazo('')
 
+      // Parche quirurgico al cache cliente (cubre el caso de volver al listado
+      // despues del rechazo sin disparar refetch full + spinner).
+      patchListadoKpisCacheDropPagoReportado(Number(id), estadoPrevio)
       load()
     } catch (e: any) {
       toast.error(e?.message || 'Error al rechazar.')
