@@ -19,6 +19,8 @@ export type FiniquitoCasoItem = {
   cliente_telefono?: string | null
   /** ISO date: plazo 15 días laborales al pasar a En proceso (prestamos.finiquito_tramite_fecha_limite). */
   finiquito_tramite_fecha_limite?: string | null
+  /** ISO date: fecha en que el préstamo fue declarado LIQUIDADO. */
+  fecha_liquidado?: string | null
 }
 
 export type FiniquitoRevisionDatosResponse = {
@@ -109,21 +111,16 @@ export async function finiquitoAdminListar(
 export async function finiquitoAdminPatchEstado(
   casoId: number,
   estado: string,
-  contactoParaSiguientes?: boolean,
-  notaAntiguo?: string
+  contactoParaSiguientes?: boolean
 ) {
   const body: {
     estado: string
     contacto_para_siguientes?: boolean
-    nota_antiguo?: string
   } = {
     estado,
   }
   if (contactoParaSiguientes !== undefined) {
     body.contacto_para_siguientes = contactoParaSiguientes
-  }
-  if (notaAntiguo !== undefined && String(notaAntiguo).trim() !== '') {
-    body.nota_antiguo = String(notaAntiguo).trim()
   }
   return apiClient.patch<{
     ok: boolean

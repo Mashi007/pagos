@@ -1,18 +1,15 @@
 """
 Finiquito: casos materializados solo para prestamos LIQUIDADO con cuotas = financiamiento
-(jobs lun-sab 01:00 y 13:00 Caracas), portal publico OTP, bandejas, admin.
+(jobs lun-sab 01:00 y 13:00 Caracas), bandejas internas, admin.
 """
 from __future__ import annotations
 
 import logging
-import random
-import string
-import time
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Any, List, Optional
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.encoders import jsonable_encoder
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -20,9 +17,7 @@ from sqlalchemy.sql.expression import false as sql_false
 
 from app.core.config import settings
 from app.core.cobros_public_rate_limit import (
-    FINIQUITO_SOLICITAR_CODIGO_MAX,
     check_rate_limit_finiquito_registro,
-    check_rate_limit_finiquito_solicitar_codigo,
     check_rate_limit_finiquito_verificar_codigo,
     get_client_ip,
 )
@@ -31,18 +26,6 @@ from app.core.deps import (
     get_finiquito_usuario_acceso,
     require_admin,
     require_admin_or_operator,
-)
-from app.core.email import mask_email_for_log, send_email
-from app.core.email_cuentas import SERVICIO_FINIQUITO
-from app.services.notificaciones_exclusion_desistimiento import (
-    cliente_bloqueado_por_desistimiento,
-)
-from app.core.email_config_holder import (
-    get_email_activo,
-    get_email_activo_servicio,
-    get_modo_pruebas_email,
-    get_smtp_config,
-    sync_from_db,
 )
 from app.core.security import create_access_token
 from app.models.cliente import Cliente
@@ -70,10 +53,6 @@ from app.schemas.finiquito import (
     FiniquitoSolicitarCodigoResponse,
     FiniquitoVerificarCodigoRequest,
     FiniquitoVerificarCodigoResponse,
-)
-from app.services.finiquito_area_trabajo_emails import (
-    enviar_correo_en_proceso_operaciones_datos,
-    enviar_correo_rechazo_itmaster_datos,
 )
 from app.services.finiquito_prestamo_gestion_sync import (
     sincronizar_prestamo_estado_gestion_finiquito,
@@ -128,13 +107,8 @@ _ADMIN_CASOS_DEFAULT_LIMIT = 500
 _ADMIN_CASOS_MAX_LIMIT = 2000
 
 ESTADOS_VALIDOS = frozenset(
-    {"REVISION", "ACEPTADO", "RECHAZADO", "EN_PROCESO", "TERMINADO", "ANTIGUO"}
+    {"REVISION", "ACEPTADO", "RECHAZADO", "EN_PROCESO", "TERMINADO"}
 )
-
-# Ultima fecha de pago <= esta fecha: Antiguo sin nota obligatoria (operacion previa a la migracion).
-FECHA_CORTE_ANTIGUO = date(2026, 1, 1)
-MIN_NOTA_ANTIGUO = 15
-CODIGO_EXPIRA_MINUTES = 120
 FINIQUITO_PORTAL_PUBLICO_ACTIVO = False
 
 
@@ -166,21 +140,6 @@ def _caso_pertenece_a_portal(fu: FiniquitoUsuarioAcceso, caso: FiniquitoCaso) ->
         return False
     c = (normalizar_cedula_almacenamiento(caso.cedula) or "").strip()
     return c == u
-
-
-def _mask_smtp_user_for_log(user: str) -> str:
-    s = (user or "").strip()
-    if not s:
-        return "(vacío)"
-    if "@" in s:
-        return mask_email_for_log(s)
-    if len(s) <= 2:
-        return "**"
-    return f"{s[:2]}***"
-
-
-def _generar_codigo_6() -> str:
-    return "".join(random.choices(string.digits, k=6))
 
 
 def _ultima_fecha_pago_date_prestamo(db: Session, prestamo_id: int) -> Optional[date]:
@@ -264,11 +223,32 @@ def _map_finiquito_tramite_fecha_limite_por_prestamo(
     return {int(r[0]): r[1] for r in rows}
 
 
+def _map_fecha_liquidado_por_prestamo(db: Session, prestamo_ids: List[int]) -> dict[int, Any]:
+    seen: set[int] = set()
+    uniq: List[int] = []
+    for i in prestamo_ids:
+        if i is None:
+            continue
+        ii = int(i)
+        if ii not in seen:
+            seen.add(ii)
+            uniq.append(ii)
+    if not uniq:
+        return {}
+    rows = (
+        db.query(Prestamo.id, Prestamo.fecha_liquidado)
+        .filter(Prestamo.id.in_(uniq))
+        .all()
+    )
+    return {int(r[0]): r[1] for r in rows}
+
+
 def _admin_casos_to_items(db: Session, casos: List[FiniquitoCaso]) -> List[FiniquitoCasoOut]:
     mp = _map_ultima_fecha_pago_por_prestamo(db, [c.prestamo_id for c in casos])
     flmap = _map_finiquito_tramite_fecha_limite_por_prestamo(
         db, [c.prestamo_id for c in casos]
     )
+    fmap = _map_fecha_liquidado_por_prestamo(db, [c.prestamo_id for c in casos])
     clmap = _map_clientes_por_id(db, [c.cliente_id for c in casos if c.cliente_id])
     items: List[FiniquitoCasoOut] = []
     for c in casos:
@@ -277,6 +257,7 @@ def _admin_casos_to_items(db: Session, casos: List[FiniquitoCaso]) -> List[Finiq
             mp.get(c.prestamo_id),
             db,
             finiquito_tramite_fecha_limite=flmap.get(c.prestamo_id),
+            fecha_liquidado=fmap.get(c.prestamo_id),
         )
         cl = clmap.get(int(c.cliente_id)) if c.cliente_id else None
         items.append(
@@ -297,6 +278,7 @@ def _caso_to_out(
     db: Optional[Session] = None,
     *,
     finiquito_tramite_fecha_limite: Optional[Any] = None,
+    fecha_liquidado: Optional[Any] = None,
 ) -> FiniquitoCasoOut:
     ufp: Optional[str] = None
     if ultima_fecha_pago is not None:
@@ -309,6 +291,10 @@ def _caso_to_out(
     if finiquito_tramite_fecha_limite is not None:
         v = finiquito_tramite_fecha_limite
         ftl = v.isoformat() if hasattr(v, "isoformat") else str(v)
+    flq: Optional[str] = None
+    if fecha_liquidado is not None:
+        v = fecha_liquidado
+        flq = v.isoformat() if hasattr(v, "isoformat") else str(v)
     cps: Optional[bool] = None
     if db is not None and finiquito_casos_has_contacto_para_siguientes(db):
         try:
@@ -327,6 +313,7 @@ def _caso_to_out(
         ultima_fecha_pago=ufp,
         contacto_para_siguientes=cps,
         finiquito_tramite_fecha_limite=ftl,
+        fecha_liquidado=flq,
     )
 
 
@@ -587,152 +574,11 @@ def finiquito_public_solicitar_codigo(
     body: FiniquitoSolicitarCodigoRequest,
     db: Session = Depends(get_db),
 ):
+    """Portal publico deshabilitado: no genera codigos ni envia correos."""
     _require_portal_publico_activo()
-    cedula = normalizar_cedula_almacenamiento(body.cedula)
-    email = (body.email or "").lower().strip()
-    if not cedula or not email:
-        raise HTTPException(status_code=400, detail="Cedula y correo son obligatorios.")
-
-    ip = get_client_ip(request)
-    try:
-        check_rate_limit_finiquito_solicitar_codigo(ip)
-    except HTTPException as e:
-        if e.status_code == 429:
-            finiquito_otp_bump("rate_limit_429")
-            logger.info(
-                "finiquito solicitar-codigo: rate limit 429 (max %s por hora por IP)",
-                FINIQUITO_SOLICITAR_CODIGO_MAX,
-            )
-        raise
-    finiquito_otp_bump("solicitudes_recibidas")
-
-    u = (
-        db.query(FiniquitoUsuarioAcceso)
-        .filter(
-            FiniquitoUsuarioAcceso.cedula == cedula,
-            FiniquitoUsuarioAcceso.email == email,
-            FiniquitoUsuarioAcceso.is_active.is_(True),
-        )
-        .first()
-    )
-    if not u:
-        finiquito_otp_bump("usuario_no_encontrado")
-        logger.debug(
-            "finiquito solicitar-codigo: sin usuario activo cedula+email (respuesta generica al cliente). email_MASK=%s",
-            mask_email_for_log(email),
-        )
-        return FiniquitoSolicitarCodigoResponse(
-            ok=True,
-            message="Si los datos son correctos, recibira un codigo en su correo.",
-        )
-
-    now_utc = datetime.utcnow()
-    codigo = _generar_codigo_6()
-    expira = now_utc + timedelta(minutes=CODIGO_EXPIRA_MINUTES)
-    db.add(
-        FiniquitoLoginCodigo(
-            finiquito_usuario_id=u.id,
-            codigo=codigo,
-            expira_en=expira,
-            usado=False,
-            creado_en=now_utc,
-        )
-    )
-
-    asunto = "[RapiCredit] Codigo de acceso Finiquito"
-    cuerpo = (
-        f"Su codigo de acceso al portal Finiquito es: {codigo}\n\n"
-        f"Valido por {CODIGO_EXPIRA_MINUTES} minutos.\n"
-        "Si usted no solicito este codigo, ignore este mensaje."
-    )
-
-    # SMTP: servicio "finiquito" usa la misma cuenta que "estado_cuenta" (Cuenta 2 por defecto).
-    # respetar_destinos_manuales=True evita redirigir el OTP al correo de pruebas del modo pruebas.
-    sync_from_db()
-    master_on = get_email_activo()
-    finiquito_on = get_email_activo_servicio(SERVICIO_FINIQUITO)
-    modo_pruebas, emails_prueba = get_modo_pruebas_email(servicio=SERVICIO_FINIQUITO)
-    cfg_smtp = get_smtp_config(servicio=SERVICIO_FINIQUITO)
-    smtp_host = (cfg_smtp.get("smtp_host") or "").strip()
-    smtp_user = (cfg_smtp.get("smtp_user") or "").strip()
-    pwd_set = bool((cfg_smtp.get("smtp_password") or "").strip()) and (
-        cfg_smtp.get("smtp_password") or ""
-    ).strip() != "***"
-    logger.info(
-        "finiquito solicitar-codigo: diagnostico pre-envio finiquito_usuario_id=%s dest_MASK=%s "
-        "email_master_activo=%s email_servicio_finiquito=%s modo_pruebas_finiquito=%s "
-        "correos_prueba_configurados=%s smtp_host=%s smtp_user_MASK=%s smtp_password_configurada=%s",
-        u.id,
-        mask_email_for_log(email),
-        master_on,
-        finiquito_on,
-        modo_pruebas,
-        bool(emails_prueba),
-        smtp_host[:120] if smtp_host else "(vacío)",
-        _mask_smtp_user_for_log(smtp_user),
-        pwd_set,
-    )
-
-    if not finiquito_on:
-        db.rollback()
-        finiquito_otp_bump("envio_bloqueado_config_email")
-        logger.warning(
-            "finiquito solicitar-codigo: no enviado email_master=%s email_finiquito_o_estado_cuenta=%s "
-            "(Configuracion > Email: interruptor general o Finiquito/Estado de cuenta desactivado).",
-            master_on,
-            finiquito_on,
-        )
-        return FiniquitoSolicitarCodigoResponse(
-            ok=True,
-            message="Si los datos son correctos, recibira un codigo en su correo.",
-        )
-
-    if cliente_bloqueado_por_desistimiento(db, email=email):
-        db.rollback()
-        finiquito_otp_bump("envio_bloqueado_desistimiento")
-        logger.info(
-            "finiquito solicitar-codigo: bloqueo por DESISTIMIENTO dest_MASK=%s",
-            mask_email_for_log(email),
-        )
-        return FiniquitoSolicitarCodigoResponse(
-            ok=True,
-            message="Si los datos son correctos, recibira un codigo en su correo.",
-        )
-
-    t0 = time.perf_counter()
-    ok_send, err_send = send_email(
-        [email],
-        asunto,
-        cuerpo,
-        servicio=SERVICIO_FINIQUITO,
-        respetar_destinos_manuales=True,
-    )
-    elapsed_ms = (time.perf_counter() - t0) * 1000.0
-    if not ok_send:
-        db.rollback()
-        finiquito_otp_bump("envio_smtp_fallo")
-        logger.warning(
-            "finiquito solicitar-codigo: SMTP fallo dest_MASK=%s duracion_ms=%.0f err=%s",
-            mask_email_for_log(email),
-            elapsed_ms,
-            err_send or "send_email devolvio False",
-        )
-        return FiniquitoSolicitarCodigoResponse(
-            ok=True,
-            message="Si los datos son correctos, recibira un codigo en su correo.",
-        )
-
-    db.commit()
-    finiquito_otp_bump("envio_smtp_ok")
-    logger.info(
-        "finiquito solicitar-codigo: enviado ok finiquito_usuario_id=%s dest_MASK=%s duracion_ms=%.0f",
-        u.id,
-        mask_email_for_log(email),
-        elapsed_ms,
-    )
     return FiniquitoSolicitarCodigoResponse(
-        ok=True,
-        message="Si los datos son correctos, recibira un codigo en su correo.",
+        ok=False,
+        message="El acceso publico de finiquitos esta deshabilitado.",
     )
 
 
@@ -971,7 +817,7 @@ def finiquito_public_patch_estado(
 def finiquito_admin_listar(
     estado: Optional[str] = Query(
         None,
-        description="Un solo estado (REVISION, ACEPTADO, RECHAZADO, EN_PROCESO, TERMINADO, ANTIGUO)",
+        description="Un solo estado (REVISION, ACEPTADO, RECHAZADO, EN_PROCESO, TERMINADO)",
     ),
     estado_in: Optional[str] = Query(
         None,
@@ -1088,7 +934,6 @@ def finiquito_admin_revision_datos(
 def finiquito_admin_patch_estado(
     caso_id: int,
     body: FiniquitoPatchEstadoRequest,
-    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     panel_user: UserResponse = Depends(require_admin_or_operator),
 ):
@@ -1101,41 +946,6 @@ def finiquito_admin_patch_estado(
         raise HTTPException(status_code=404, detail="Caso no encontrado")
     anterior = (caso.estado or "").upper().strip()
     if nuevo == anterior:
-        caso_out = _admin_casos_to_items(db, [caso])[0]
-        return FiniquitoPatchEstadoResponse(ok=True, caso=caso_out)
-
-    if nuevo == "ANTIGUO":
-        if anterior != "REVISION":
-            return FiniquitoPatchEstadoResponse(
-                ok=False,
-                error="Antiguo solo desde la bandeja principal (estado Revisión).",
-            )
-        ufp_d = _ultima_fecha_pago_date_prestamo(db, caso.prestamo_id)
-        nota = (body.nota_antiguo or "").strip()
-        requiere_nota = ufp_d is None or ufp_d > FECHA_CORTE_ANTIGUO
-        if requiere_nota and len(nota) < MIN_NOTA_ANTIGUO:
-            return FiniquitoPatchEstadoResponse(
-                ok=False,
-                error=(
-                    "Nota justificativa obligatoria (minimo 15 caracteres) si la ultima fecha de pago "
-                    "es posterior al 01/01/2026 o no consta."
-                ),
-            )
-        caso.estado = nuevo
-        if finiquito_casos_has_contacto_para_siguientes(db):
-            caso.contacto_para_siguientes = None
-        _registrar_historial(
-            db,
-            caso=caso,
-            estado_anterior=anterior,
-            estado_nuevo=nuevo,
-            actor_tipo="admin",
-            user_id=panel_user.id,
-            nota=nota or None,
-        )
-        sincronizar_prestamo_estado_gestion_finiquito(db, caso.prestamo_id, caso.estado)
-        db.commit()
-        db.refresh(caso)
         caso_out = _admin_casos_to_items(db, [caso])[0]
         return FiniquitoPatchEstadoResponse(ok=True, caso=caso_out)
 
@@ -1262,25 +1072,6 @@ def finiquito_admin_patch_estado(
     sincronizar_prestamo_estado_gestion_finiquito(db, caso.prestamo_id, caso.estado)
     db.commit()
     db.refresh(caso)
-    caso_snapshot = {
-        "caso_id": int(caso.id),
-        "prestamo_id": int(caso.prestamo_id),
-        "cedula": caso.cedula or "",
-    }
-    if nuevo == "EN_PROCESO":
-        background_tasks.add_task(
-            enviar_correo_en_proceso_operaciones_datos,
-            caso_id=caso_snapshot["caso_id"],
-            prestamo_id=caso_snapshot["prestamo_id"],
-            cedula=caso_snapshot["cedula"],
-            admin_email=panel_user.email or "",
-            admin_nombre=f"{(panel_user.nombre or '').strip()} {(panel_user.apellido or '').strip()}".strip(),
-        )
-    elif nuevo == "RECHAZADO":
-        background_tasks.add_task(
-            enviar_correo_rechazo_itmaster_datos,
-            caso_snapshot["caso_id"],
-        )
     caso_out = _admin_casos_to_items(db, [caso])[0]
     return FiniquitoPatchEstadoResponse(ok=True, caso=caso_out)
 

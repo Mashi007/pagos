@@ -22,7 +22,6 @@ import { Button } from '../components/ui/button'
 import { FiniquitoWorkspaceShell } from '../components/finiquito/FiniquitoWorkspaceShell'
 import { Input } from '../components/ui/input'
 import { Label } from '../components/ui/label'
-import { Textarea } from '../components/ui/textarea'
 import {
   Select,
   SelectContent,
@@ -75,47 +74,41 @@ function textoUltimoPago(iso: string | null | undefined): string {
   }
 }
 
-/** YYYY-MM-DD desde ISO o fecha parseable (comparar con corte migracion). */
-function parseIsoDateOnly(iso: string | null | undefined): string | null {
-  if (iso == null || String(iso).trim() === '') return null
-  const s = String(iso).trim()
-  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/)
-  if (m) return `${m[1]}-${m[2]}-${m[3]}`
-  const d = new Date(s)
+const DIAS_REVISION_SIN_ATRASO = 3
+
+function diasDesdeFechaLiquidado(fechaLiquidado: string | null | undefined) {
+  if (fechaLiquidado == null || String(fechaLiquidado).trim() === '') {
+    return null
+  }
+  const d = new Date(`${String(fechaLiquidado).slice(0, 10)}T00:00:00`)
   if (Number.isNaN(d.getTime())) return null
-  const y = d.getFullYear()
-  const mo = String(d.getMonth() + 1).padStart(2, '0')
-  const da = String(d.getDate()).padStart(2, '0')
-  return `${y}-${mo}-${da}`
+  const hoy = new Date()
+  hoy.setHours(0, 0, 0, 0)
+  return Math.floor((hoy.getTime() - d.getTime()) / 86_400_000)
 }
 
-const FECHA_CORTE_ANTIGUO = '2026-01-01'
-
-const MIN_NOTA_ANTIGUO = 15
-
-/** True si hace falta nota: sin fecha, o ultimo pago estrictamente despues del 01/01/2026. */
-function requiereNotaJustificativaAntiguo(
-  ultimaFechaPagoIso: string | null | undefined
-): boolean {
-  const day = parseIsoDateOnly(ultimaFechaPagoIso)
-  if (day == null) return true
-  return day > FECHA_CORTE_ANTIGUO
+function casoRevisionAtrasado(caso: FiniquitoCasoItem): boolean {
+  if (caso.estado !== 'REVISION') return false
+  const dias = diasDesdeFechaLiquidado(caso.fecha_liquidado)
+  return dias != null && dias > DIAS_REVISION_SIN_ATRASO
 }
 
-function estadoEtiquetaVisible(estado: string): string {
+function estadoEtiquetaVisible(caso: FiniquitoCasoItem): string {
+  const estado = caso.estado
+  if (casoRevisionAtrasado(caso)) return 'Atrasado'
   const map: Record<string, string> = {
     REVISION: 'Revisión',
     ACEPTADO: 'Aceptado',
     RECHAZADO: 'Rechazado',
     EN_PROCESO: 'En proceso',
     TERMINADO: 'Terminado',
-    ANTIGUO: 'Antiguo',
   }
   return map[estado] ?? estado.replace(/_/g, ' ')
 }
 
-function estadoBadgeClassName(estado: string): string {
-  switch (estado) {
+function estadoBadgeClassName(caso: FiniquitoCasoItem): string {
+  if (casoRevisionAtrasado(caso)) return 'bg-red-100 text-red-950'
+  switch (caso.estado) {
     case 'REVISION':
       return 'bg-sky-100 text-sky-950'
     case 'ACEPTADO':
@@ -126,8 +119,6 @@ function estadoBadgeClassName(estado: string): string {
       return 'bg-amber-100 text-amber-950'
     case 'TERMINADO':
       return 'bg-emerald-100 text-emerald-950'
-    case 'ANTIGUO':
-      return 'bg-violet-100 text-violet-950'
     default:
       return 'bg-slate-100 text-slate-800'
   }
@@ -269,10 +260,6 @@ function FiniquitoGestionPageInner() {
   const [pendingRechazoCasoId, setPendingRechazoCasoId] = useState<
     number | null
   >(null)
-  const [dialogAntiguoRow, setDialogAntiguoRow] =
-    useState<FiniquitoCasoItem | null>(null)
-  const [antiguoNota, setAntiguoNota] = useState('')
-  const [antiguoSubmitting, setAntiguoSubmitting] = useState(false)
   const [kpiNuevosRevision, setKpiNuevosRevision] = useState<{
     total: number
     ventana_horas: number
@@ -435,12 +422,9 @@ function FiniquitoGestionPageInner() {
         incorporarCasoActualizado(r.caso)
       }
       if (estado === 'EN_PROCESO') {
-        toast.success('En proceso', {
-          description:
-            'Se envió aviso a operaciones y cobranza (si el correo del servidor está configurado).',
-        })
+        toast.success('En proceso')
       } else if (estado === 'REVISION') {
-        toast.success('Caso en bandeja principal (Revisión)')
+        toast.success('Caso en bandeja principal (Atrasado)')
       } else {
         toast.success('Estado actualizado')
       }
@@ -458,53 +442,7 @@ function FiniquitoGestionPageInner() {
       setPendingRechazoCasoId(row.id)
       return
     }
-    if (v === 'ANTIGUO') {
-      setDialogAntiguoRow(row)
-      setAntiguoNota('')
-      return
-    }
     void cambiarEstado(row.id, v)
-  }
-
-  const confirmarAntiguo = async () => {
-    if (dialogAntiguoRow == null) return
-    const req = requiereNotaJustificativaAntiguo(
-      dialogAntiguoRow.ultima_fecha_pago
-    )
-    const nota = antiguoNota.trim()
-    if (req && nota.length < MIN_NOTA_ANTIGUO) {
-      toast.error(
-        `Nota justificativa obligatoria (minimo ${MIN_NOTA_ANTIGUO} caracteres) si la ultima fecha de pago es posterior al 01/01/2026 o no consta.`
-      )
-      return
-    }
-    setAntiguoSubmitting(true)
-    setPendingEstadoCasoId(dialogAntiguoRow.id)
-    try {
-      const r = await finiquitoAdminPatchEstado(
-        dialogAntiguoRow.id,
-        'ANTIGUO',
-        undefined,
-        nota.length > 0 ? nota : undefined
-      )
-      if (!r.ok) {
-        toast.error(r.error || 'No se pudo actualizar')
-        return
-      }
-      setDialogAntiguoRow(null)
-      setAntiguoNota('')
-      toast.success('Caso marcado como Antiguo')
-      if (r.caso) {
-        incorporarCasoActualizado(r.caso)
-      }
-      void invalidatePrestamosQueries(queryClient)
-      await cargarListas({ silent: true })
-    } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : 'Error')
-    } finally {
-      setAntiguoSubmitting(false)
-      setPendingEstadoCasoId(null)
-    }
   }
 
   const confirmarRechazo = async () => {
@@ -593,20 +531,28 @@ function FiniquitoGestionPageInner() {
       </Button>
       <Select
         key={`estado-sel-${row.id}-${row.estado}`}
+        value={row.estado === 'REVISION' ? 'REVISION' : undefined}
         disabled={casoTieneAccionPendiente(row.id)}
         onValueChange={v => onSeleccionarEstadoBandeja(row, v)}
       >
         <SelectTrigger
-          className="h-8 min-w-[158px] max-w-[200px] text-xs"
+          className={cn(
+            'h-8 min-w-[158px] max-w-[200px] text-xs',
+            casoRevisionAtrasado(row)
+              ? 'border-red-200 bg-red-50 text-red-900'
+              : row.estado === 'REVISION' &&
+                  'border-sky-200 bg-sky-50 text-sky-900'
+          )}
           aria-label={`Cambiar estado del caso ${row.id}`}
         >
           <SelectValue placeholder="Estado..." />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="REVISION">Revisión</SelectItem>
+          <SelectItem value="REVISION" disabled>
+            {casoRevisionAtrasado(row) ? 'Atrasado' : 'Revisión'}
+          </SelectItem>
           <SelectItem value="ACEPTADO">Aceptado</SelectItem>
           <SelectItem value="RECHAZADO">Rechazado</SelectItem>
-          <SelectItem value="ANTIGUO">Antiguo</SelectItem>
         </SelectContent>
       </Select>
     </div>
@@ -852,10 +798,10 @@ function FiniquitoGestionPageInner() {
                 <span
                   className={cn(
                     'rounded px-1.5 py-0.5 text-xs font-medium',
-                    estadoBadgeClassName(row.estado)
+                    estadoBadgeClassName(row)
                   )}
                 >
-                  {estadoEtiquetaVisible(row.estado)}
+                  {estadoEtiquetaVisible(row)}
                 </span>
               </TableCell>
               <TableCell className={cn(tdGestion, 'text-right')}>
@@ -985,7 +931,7 @@ function FiniquitoGestionPageInner() {
                       'bg-emerald-100 text-emerald-950'
                   )}
                 >
-                  {estadoEtiquetaVisible(row.estado)}
+                  {estadoEtiquetaVisible(row)}
                 </span>
               </TableCell>
               <TableCell className={cn(tdGestion, 'text-right')}>
@@ -1025,13 +971,13 @@ function FiniquitoGestionPageInner() {
         <Card className="border-slate-200 shadow-sm">
           <CardContent className="space-y-1 p-4">
             <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-              Revisión (bandeja)
+              Atrasados (bandeja)
             </p>
             <p className="text-2xl font-bold tabular-nums text-[#1e3a5f]">
               {loading ? '-' : totalBandeja}
             </p>
             <p className="text-xs text-slate-500">
-              Total en estado Revisión
+              Pendientes sin aceptar/rechazar
               {cedulaBusqueda ? ' (filtro cédula)' : ''}
             </p>
           </CardContent>
@@ -1100,7 +1046,7 @@ function FiniquitoGestionPageInner() {
               {loading ? '-' : totalRechazados}
             </p>
             <p className="text-xs text-slate-500">
-              Casos rechazados en el portal
+              Casos rechazados desde bandeja principal
             </p>
           </CardContent>
         </Card>
@@ -1126,8 +1072,7 @@ function FiniquitoGestionPageInner() {
                 Área de trabajo
               </h2>
               <p className="text-xs text-emerald-100">
-                Aceptados, en proceso y terminados · {totalAreaTrabajo}{' '}
-                {subtituloTrabajo}
+                Aceptados y en proceso · {totalAreaTrabajo} {subtituloTrabajo}
               </p>
             </div>
           </div>
@@ -1215,9 +1160,8 @@ function FiniquitoGestionPageInner() {
                 ) : (
                   <>
                     No hay casos en esta bandeja. Los aceptados aparecen aquí;
-                    puede usar «En proceso» (aviso a operaciones/cobranza) o
-                    «Terminado» para dejar el caso en pasivo y sacarlo de la
-                    pantalla operativa.
+                    puede usar «En proceso» o «Terminado» para dejar el caso en
+                    pasivo y sacarlo de la pantalla operativa.
                   </>
                 )}
               </p>
@@ -1248,9 +1192,9 @@ function FiniquitoGestionPageInner() {
                 Bandeja principal
               </h2>
               <p className="text-xs text-slate-600 sm:text-sm">
-                Casos en <strong>revisión</strong>. Escriba parte de la cédula
-                para acotar (espera ~{DEBOUNCE_MS / 1000} s tras dejar de
-                escribir).
+                Casos <strong>atrasados</strong> pendientes de aceptar o
+                rechazar. Escriba parte de la cédula para acotar (espera ~
+                {DEBOUNCE_MS / 1000} s tras dejar de escribir).
               </p>
             </div>
             <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-end lg:w-auto lg:min-w-[320px]">
@@ -1322,8 +1266,8 @@ function FiniquitoGestionPageInner() {
             ) : itemsBandeja.length === 0 ? (
               <p className="rounded-lg border border-dashed border-slate-200 bg-slate-50/50 px-4 py-10 text-center text-sm leading-relaxed text-slate-600">
                 {cedulaBusqueda
-                  ? 'Ningún caso en revisión coincide con esa cédula. Pruebe otra subcadena o limpie el filtro.'
-                  : 'No hay casos en revisión. Use «Refrescar materializado» para traer préstamos LIQUIDADO con cuotas cubiertas a la bandeja principal.'}
+                  ? 'Ningún caso atrasado coincide con esa cédula. Pruebe otra subcadena o limpie el filtro.'
+                  : 'No hay casos atrasados. Use «Refrescar materializado» para traer préstamos LIQUIDADO con cuotas cubiertas a la bandeja principal.'}
               </p>
             ) : (
               <>
@@ -1450,91 +1394,6 @@ function FiniquitoGestionPageInner() {
                 Confirmar
               </Button>
             )}
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog
-        open={dialogAntiguoRow != null}
-        onOpenChange={open => {
-          if (!open) {
-            setDialogAntiguoRow(null)
-            setAntiguoNota('')
-          }
-        }}
-      >
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Marcar como Antiguo</DialogTitle>
-            <DialogDescription className="space-y-2 text-left text-sm text-slate-700">
-              <span className="block">
-                Indica que el finiquito ya se gestionó antes de migrar a este
-                sistema. Queda registrado en el historial de estados.
-              </span>
-              {dialogAntiguoRow ? (
-                <>
-                  <span className="block">
-                    Última fecha de pago (referencia):{' '}
-                    <strong>
-                      {textoUltimoPago(dialogAntiguoRow.ultima_fecha_pago)}
-                    </strong>
-                  </span>
-                  {requiereNotaJustificativaAntiguo(
-                    dialogAntiguoRow.ultima_fecha_pago
-                  ) ? (
-                    <span className="block font-medium text-amber-900">
-                      Obligatorio: nota justificativa (mín. {MIN_NOTA_ANTIGUO}{' '}
-                      caracteres) porque la fecha es posterior al 01/01/2026 o
-                      no consta.
-                    </span>
-                  ) : (
-                    <span className="block text-slate-600">
-                      No exige nota (último pago en o antes del 01/01/2026).
-                      Puede añadir una nota opcional para auditoría.
-                    </span>
-                  )}
-                </>
-              ) : null}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-2">
-            <Label htmlFor="finiquito-antiguo-nota">Nota</Label>
-            <Textarea
-              id="finiquito-antiguo-nota"
-              value={antiguoNota}
-              onChange={e => setAntiguoNota(e.target.value)}
-              rows={4}
-              placeholder="Referencia interna, acuerdo, expediente..."
-              className="resize-y"
-            />
-          </div>
-          <DialogFooter className="gap-2 sm:gap-0">
-            <Button
-              type="button"
-              variant="outline"
-              disabled={antiguoSubmitting}
-              onClick={() => {
-                setDialogAntiguoRow(null)
-                setAntiguoNota('')
-              }}
-            >
-              Cancelar
-            </Button>
-            <Button
-              type="button"
-              className="bg-violet-700 hover:bg-violet-800"
-              disabled={antiguoSubmitting}
-              onClick={() => void confirmarAntiguo()}
-            >
-              {antiguoSubmitting ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Guardando...
-                </>
-              ) : (
-                'Confirmar Antiguo'
-              )}
-            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

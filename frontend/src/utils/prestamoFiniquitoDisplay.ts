@@ -18,7 +18,6 @@ export function lineasFiniquitoColumna(
   const g = (p.estado_gestion_finiquito || '').toUpperCase().trim()
   const sufijo: Record<string, string> = {
     REVISION: 'En revisión',
-    ANTIGUO: 'Antiguo',
     EN_PROCESO: 'En proceso',
     TERMINADO: 'Terminado',
   }
@@ -37,7 +36,6 @@ export function lineasFiniquitoColumna(
 export function finiquitoGestionBadgeClass(g: string): string {
   const map: Record<string, string> = {
     REVISION: 'border-amber-200 bg-amber-50 text-amber-900',
-    ANTIGUO: 'border-amber-200 bg-amber-50 text-amber-900',
     EN_PROCESO: 'border-sky-200 bg-sky-50 text-sky-900',
     TERMINADO: 'border-emerald-200 bg-emerald-50 text-emerald-900',
   }

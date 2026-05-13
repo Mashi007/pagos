@@ -65,6 +65,10 @@ class FiniquitoCasoOut(BaseModel):
             "Desde prestamos: fecha limite del tramite (15 dias laborales al pasar a EN_PROCESO), ISO date."
         ),
     )
+    fecha_liquidado: Optional[str] = Field(
+        default=None,
+        description="Desde prestamos: fecha calendario en que el prestamo paso a LIQUIDADO.",
+    )
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -100,7 +104,7 @@ class FiniquitoCasoListaResponse(BaseModel):
 class FiniquitoPatchEstadoRequest(BaseModel):
     estado: str = Field(
         ...,
-        description="REVISION | ACEPTADO | RECHAZADO | EN_PROCESO | TERMINADO | ANTIGUO",
+        description="REVISION | ACEPTADO | RECHAZADO | EN_PROCESO | TERMINADO",
     )
     contacto_para_siguientes: Optional[bool] = Field(
         None,
@@ -109,15 +113,6 @@ class FiniquitoPatchEstadoRequest(BaseModel):
             "opcional si venia de ACEPTADO (por defecto false)."
         ),
     )
-    nota_antiguo: Optional[str] = Field(
-        None,
-        max_length=4000,
-        description=(
-            "Si estado=ANTIGUO y la ultima fecha de pago es posterior a 2026-01-01 (o no hay fecha), "
-            "obligatoria (min. 15 caracteres). Opcional si ultima fecha <= 2026-01-01."
-        ),
-    )
-
 
 class FiniquitoPatchEstadoResponse(BaseModel):
     ok: bool
