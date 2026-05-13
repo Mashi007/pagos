@@ -4708,10 +4708,13 @@ def crear_prestamo_servicio_interno(
     db: Session,
     payload: PrestamoCreate,
     current_user: UserResponse,
+    *,
+    commit_transaction: bool = True,
 ) -> PrestamoResponse:
     """
     Misma lógica que POST /prestamos (sin Depends).
     Usada por el endpoint público y por guardado masivo desde candidatos Drive.
+    Si commit_transaction=False, el caller debe confirmar o revertir la transacción completa.
     """
     cliente = db.get(Cliente, payload.cliente_id)
 
@@ -4808,9 +4811,11 @@ def crear_prestamo_servicio_interno(
         usuario_id=_audit_user_id(db, current_user),
     )
 
-    db.commit()
-
-    db.refresh(row)
+    if commit_transaction:
+        db.commit()
+        db.refresh(row)
+    else:
+        db.flush()
 
     # Generar cuotas con fecha_base_calculo (alineada con fecha de aprobacion). Creacion individual y carga masiva ya dejan APROBADO y fechas.
 
@@ -4834,7 +4839,10 @@ def crear_prestamo_servicio_interno(
 
             aplicar_pagos_pendientes_prestamo(row.id, db)
 
-            db.commit()
+            if commit_transaction:
+                db.commit()
+            else:
+                db.flush()
 
             logger.info(f"Préstamo {prestamo_id}: {cuotas_generadas} cuotas generadas automáticamente (fecha_base={fecha_base_cuotas})")
 
@@ -4858,7 +4866,10 @@ def crear_prestamo_servicio_interno(
 
     _registrar_en_revision_manual(db, row.id)
 
-    db.commit()
+    if commit_transaction:
+        db.commit()
+    else:
+        db.flush()
 
     return PrestamoResponse.model_validate(row)
 
