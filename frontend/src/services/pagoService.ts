@@ -1120,6 +1120,7 @@ class PagoService {
     procesar_hard_cap?: number
     ids_remitente_no_coincide?: number
     ids_sin_media?: number
+    ids_no_lote_it_master?: number
     labels_catalog_ok?: boolean
     /** Estimación de Gmail de correos del remitente en INBOX sin filtro de media. */
     diagnostico_inbox_sin_media?: number

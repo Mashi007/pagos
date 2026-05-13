@@ -794,7 +794,7 @@ def run_pipeline(
                     continue
 
                 # === Modo "Lote IT Master" =============================================
-                # Cuando el correo viene de itmaster@rapicreditca.com con asunto = solo cedula
+                # Cuando el correo llega al buzón itmaster@rapicreditca.com con asunto = solo cedula
                 # numerica y .eml adjuntos, la cedula del cliente se TOMA del asunto del maestro
                 # (NO de la inferida del remitente del .eml). El pipeline ya extrae las
                 # imagenes/PDF dentro de los .eml automaticamente (paso "rfc822" de
@@ -805,6 +805,22 @@ def run_pipeline(
                     headers, payload
                 )
                 _cedula_forzada_lote: Optional[str] = None
+                if (
+                    redig_por_remitente
+                    and from_email_lc == PAGOS_GMAIL_LOTE_REMITENTE_IT_MASTER
+                    and not _es_lote_it_master
+                ):
+                    # Este módulo NO debe escanear el buzón completo de itmaster ni PDFs sueltos.
+                    # Solo procesa correos lote: asunto cedula + adjuntos .eml/message-rfc822.
+                    # Los demás mensajes se ignoran sin Gemini, sin marcar leídos y sin etiquetas.
+                    logger.info(
+                        "[PAGOS_GMAIL]   IT Master omitido antes de Gemini: no es lote válido "
+                        "(requiere asunto cedula + .eml). msg=%s sender=%s subject=%s",
+                        msg_id,
+                        sender_lc,
+                        (headers.get("subject") or headers.get("Subject") or "")[:120],
+                    )
+                    continue
                 if _es_lote_it_master:
                     _cedula_lote_real = resolver_cedula_almacenada_en_clientes(
                         db, _cedula_lote_v_raw

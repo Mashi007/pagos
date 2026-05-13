@@ -2000,6 +2000,7 @@ def preview_remitente(
     from app.services.pagos_gmail.gmail_service import (
         build_gmail_service,
         batch_get_messages_full,
+        is_lote_it_master_message,
         list_gmail_user_label_ids,
         pagos_gmail_list_query_for_scan_filter,
         payload_has_media_candidate,
@@ -2230,6 +2231,7 @@ def preview_remitente(
     items: list[dict] = []
     sender_no_match: int = 0
     sin_media: int = 0
+    no_lote_it_master: int = 0
 
     for mid in all_ids:
         meta = meta_by_id.get(mid)
@@ -2268,6 +2270,13 @@ def preview_remitente(
         tiene_media = payload_has_media_candidate(payload)
         if not tiene_media:
             sin_media += 1
+        if correo_lc == PAGOS_GMAIL_LOTE_REMITENTE_IT_MASTER:
+            es_lote_it_master, _cedula_lote_preview, _n_eml_lote_preview = (
+                is_lote_it_master_message(headers, payload)
+            )
+            if not es_lote_it_master:
+                no_lote_it_master += 1
+                continue
         thread_id = (meta.get("threadId") or "").strip()
         items.append(
             {
@@ -2364,7 +2373,13 @@ def preview_remitente(
                 "[PAGOS_GMAIL] preview-remitente diag to error (final vacío): %s", e
             )
 
-        if sender_no_match > 0:
+        if no_lote_it_master > 0:
+            mensaje = (
+                f"Gmail devolvió {len(all_ids)} mensaje(s), pero {no_lote_it_master} "
+                "no cumplen el formato del lote IT Master: asunto numérico de cédula "
+                "y al menos un adjunto .eml/message-rfc822. Esos mensajes se omiten sin Gemini."
+            )
+        elif sender_no_match > 0:
             mensaje = (
                 f"Gmail devolvió {len(all_ids)} mensaje(s) con la query, pero {sender_no_match} "
                 f"fueron descartados porque el header From real no coincide exactamente con "
@@ -2404,6 +2419,7 @@ def preview_remitente(
         "procesar_hard_cap": _GMAIL_PROCESAR_HARD_CAP,
         "ids_remitente_no_coincide": sender_no_match,
         "ids_sin_media": sin_media,
+        "ids_no_lote_it_master": no_lote_it_master,
         "labels_catalog_ok": _labels_ok,
         **diag_extra,
     }

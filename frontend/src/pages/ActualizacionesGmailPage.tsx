@@ -118,6 +118,7 @@ interface DiagnosticoGmail {
   idsTotalListadosGmail?: number
   idsRemitenteNoCoincide?: number
   idsSinMedia?: number
+  idsNoLoteItMaster?: number
   /** Estimación Gmail de correos del remitente en INBOX sin filtro de media. */
   inboxSinMedia?: number
   /** Estimación Gmail de correos del remitente en cualquier carpeta (incluye spam/trash). */
@@ -295,6 +296,7 @@ export default function ActualizacionesGmailPage() {
           idsTotalListadosGmail: res.ids_total_listados_gmail,
           idsRemitenteNoCoincide: res.ids_remitente_no_coincide,
           idsSinMedia: res.ids_sin_media,
+          idsNoLoteItMaster: res.ids_no_lote_it_master,
           inboxSinMedia: res.diagnostico_inbox_sin_media,
           global: res.diagnostico_global,
           sentRemitente: res.diagnostico_sent_remitente,
@@ -620,6 +622,12 @@ export default function ActualizacionesGmailPage() {
                   <li>
                     Descartados sin .eml/imagen/PDF detectable:{' '}
                     <strong>{diagnostico.idsSinMedia}</strong>
+                  </li>
+                ) : null}
+                {(diagnostico.idsNoLoteItMaster ?? 0) > 0 ? (
+                  <li>
+                    Descartados por no ser lote IT Master (asunto cédula + .eml):{' '}
+                    <strong>{diagnostico.idsNoLoteItMaster}</strong>
                   </li>
                 ) : null}
                 <li>
