@@ -244,9 +244,10 @@ def _payload_iter_parts(payload: Optional[dict]):
 
 def payload_has_media_candidate(payload: Optional[dict]) -> bool:
     """
-    True si el payload (format=full) tiene al menos una parte candidata imagen/PDF:
+    True si el payload (format=full) tiene al menos una parte candidata:
     - mimeType en MIME_IMAGE_OR_PDF, o
     - filename con extensión permitida (is_allowed_attachment).
+    - message/rfc822 / .eml, usado por el lote IT Master.
 
     No descarga el binario; solo lee parts.mimeType/filename. Usado para preview UI.
     """
@@ -254,8 +255,12 @@ def payload_has_media_candidate(payload: Optional[dict]) -> bool:
         mt = (part.get("mimeType") or "").lower()
         if mt in MIME_IMAGE_OR_PDF:
             return True
+        if mt == "message/rfc822":
+            return True
         fname = part.get("filename") or ""
         if fname and is_allowed_attachment(fname):
+            return True
+        if fname.strip().lower().endswith((".eml", ".msg")):
             return True
     return False
 
@@ -314,12 +319,14 @@ def pagos_gmail_label_exclusions_query() -> str:
 
 def pagos_gmail_list_q_media_parts() -> str:
     """
-    Criterio Gmail: adjunto declarado O parte con nombre de imagen/PDF (capturas en cuerpo / inline).
+    Criterio Gmail: adjunto declarado, .eml de lote IT Master, o parte con nombre de imagen/PDF
+    (capturas en cuerpo / inline).
     Evita perder Binance y similares que no disparan has:attachment en algunos clientes.
     """
     return (
         "(has:attachment OR filename:png OR filename:jpg OR filename:jpeg OR "
-        "filename:pdf OR filename:webp OR filename:heic OR filename:gif)"
+        "filename:pdf OR filename:webp OR filename:heic OR filename:gif OR "
+        "filename:eml OR filename:msg)"
     )
 
 
@@ -486,6 +493,8 @@ def _message_has_extractable_content(payload: dict) -> bool:
     for part in parts:
         filename = (part.get("filename") or "").strip()
         if filename and is_allowed_attachment(filename):
+            return True
+        if filename.lower().endswith((".eml", ".msg")):
             return True
         mime = (part.get("mimeType") or "").strip().lower()
         if mime in MIME_IMAGE_OR_PDF:

@@ -115,6 +115,9 @@ interface DiagnosticoGmail {
   yaProcesados: number
   hayMasEnGmail: boolean
   items: GmailPreviewItemUI[]
+  idsTotalListadosGmail?: number
+  idsRemitenteNoCoincide?: number
+  idsSinMedia?: number
   /** Estimación Gmail de correos del remitente en INBOX sin filtro de media. */
   inboxSinMedia?: number
   /** Estimación Gmail de correos del remitente en cualquier carpeta (incluye spam/trash). */
@@ -289,6 +292,9 @@ export default function ActualizacionesGmailPage() {
           yaProcesados,
           hayMasEnGmail: !!res.hay_mas_en_gmail,
           items,
+          idsTotalListadosGmail: res.ids_total_listados_gmail,
+          idsRemitenteNoCoincide: res.ids_remitente_no_coincide,
+          idsSinMedia: res.ids_sin_media,
           inboxSinMedia: res.diagnostico_inbox_sin_media,
           global: res.diagnostico_global,
           sentRemitente: res.diagnostico_sent_remitente,
@@ -300,12 +306,12 @@ export default function ActualizacionesGmailPage() {
         if ((res.total ?? items.length) === 0) {
           toast(
             res.mensaje ||
-              `Gmail no encontro correos para "${email}" con el criterio (in:inbox + imagen/PDF).`,
+              `Gmail no encontro correos para "${email}" con el criterio (in:inbox + .eml/imagen/PDF).`,
             { duration: 12000 }
           )
         } else {
           toast.success(
-            `Gmail encontro ${res.total ?? items.length} correo(s) (criterio "${c}"); ${conMedia} con adjunto imagen/PDF.`,
+            `Gmail encontro ${res.total ?? items.length} correo(s) (criterio "${c}"); ${conMedia} con adjunto .eml/imagen/PDF.`,
             { duration: 8000 }
           )
         }
@@ -565,14 +571,12 @@ export default function ActualizacionesGmailPage() {
             </div>
           </form>
           <div className="rounded-md border border-dashed bg-muted/20 p-3 text-xs text-muted-foreground">
-            <strong>Como funciona:</strong> el sistema rastrea en Gmail solo los
-            correos del remitente (filtro <code>from:&lt;correo&gt;</code> +
-            adjunto imagen/PDF en bandeja), toma los{' '}
-            <strong>N mas recientes</strong>
-            (segun el selector &laquo;Hasta&raquo;) y los procesa todos con el
-            pipeline vigente. Asi no se gasta Gemini en la bandeja completa
-            (~6000 correos), solo en los del remitente (tipicamente ~20). El
-            tope absoluto por corrida es 10000.
+            <strong>Como funciona:</strong> el sistema rastrea en Gmail solo
+            correos de <code>{REMITENTE_FIJO_LOTE}</code> en INBOX con adjunto{' '}
+            <code>.eml</code> / imagen / PDF. En este flujo el asunto del correo
+            maestro debe ser la cedula, y cada <code>.eml</code> adjunto se
+            procesa como comprobante usando esa cedula fija. El tope absoluto
+            por corrida es 10000.
             <br />
             Si <strong>Buscar y procesar</strong> reporta 0 correos pero en
             Gmail si hay, pulsa <strong>Probar Gmail</strong> para ver que
@@ -597,11 +601,29 @@ export default function ActualizacionesGmailPage() {
               </div>
               <ul className="mt-2 list-disc pl-5">
                 <li>
-                  Correos del remitente listados por Gmail (criterio inbox +
-                  imagen/PDF): <strong>{diagnostico.total}</strong>
+                  Correos visibles en preview (INBOX + .eml/imagen/PDF):{' '}
+                  <strong>{diagnostico.total}</strong>
                 </li>
+                {diagnostico.idsTotalListadosGmail != null ? (
+                  <li>
+                    IDs devueltos por Gmail antes de filtros internos:{' '}
+                    <strong>{diagnostico.idsTotalListadosGmail}</strong>
+                  </li>
+                ) : null}
+                {(diagnostico.idsRemitenteNoCoincide ?? 0) > 0 ? (
+                  <li>
+                    Descartados por From real distinto:{' '}
+                    <strong>{diagnostico.idsRemitenteNoCoincide}</strong>
+                  </li>
+                ) : null}
+                {(diagnostico.idsSinMedia ?? 0) > 0 ? (
+                  <li>
+                    Descartados sin .eml/imagen/PDF detectable:{' '}
+                    <strong>{diagnostico.idsSinMedia}</strong>
+                  </li>
+                ) : null}
                 <li>
-                  Con adjunto imagen/PDF detectado:{' '}
+                  Con adjunto .eml/imagen/PDF detectado:{' '}
                   <strong>{diagnostico.conMedia}</strong>
                 </li>
                 <li>
@@ -611,8 +633,7 @@ export default function ActualizacionesGmailPage() {
                 {diagnostico.hayMasEnGmail ? (
                   <li>
                     Hay <strong>mas correos</strong> del remitente en Gmail mas
-                    alla del tope &laquo;Hasta&raquo;. Sube el selector para
-                    cubrirlos.
+                    alla del tope de preview. El procesamiento usa hasta 10000.
                   </li>
                 ) : null}
               </ul>
@@ -683,8 +704,8 @@ export default function ActualizacionesGmailPage() {
                       {(diagnostico.inboxSinMedia ?? 0) > 0 ? (
                         <span className="self-center text-[11px]">
                           Hay {diagnostico.inboxSinMedia} con <code>from:</code>{' '}
-                          en INBOX <em>sin</em> adjunto imagen/PDF: revisa si
-                          los comprobantes vienen como imagen inline en HTML.
+                          en INBOX <em>sin</em> adjunto .eml/imagen/PDF
+                          detectable.
                         </span>
                       ) : null}
                     </div>
@@ -719,8 +740,9 @@ export default function ActualizacionesGmailPage() {
                         <code>global &gt; 0</code> pero <code>inbox = 0</code>.
                       </li>
                       <li>
-                        Imagenes inline en HTML sin <code>has:attachment</code>:
-                        Gmail no los marca como adjunto. Diagnostico:{' '}
+                        Adjuntos no detectables por Gmail: para IT Master se
+                        espera <code>.eml</code> o <code>message/rfc822</code>.
+                        Diagnostico:{' '}
                         <code>inbox sin media &gt; 0</code> pero{' '}
                         <code>conMedia = 0</code>.
                       </li>

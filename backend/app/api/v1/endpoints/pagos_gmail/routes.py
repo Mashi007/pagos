@@ -2135,7 +2135,7 @@ def preview_remitente(
             mensaje = (
                 f"Gmail tiene ~{diag_inbox_sin_media} correo(s) con 'from:{correo_lc}' en INBOX, "
                 "pero ninguno cumple el criterio de adjunto/imagen/PDF "
-                "(la query exige has:attachment o filename:png/jpg/jpeg/pdf/webp/heic/gif). "
+                "(la query exige has:attachment, filename:eml/msg o filename:png/jpg/jpeg/pdf/webp/heic/gif). "
                 "Si los comprobantes están como imágenes inline en el cuerpo, Gmail no los marca "
                 "como attachment y son ignorados."
             )
@@ -2277,6 +2277,109 @@ def preview_remitente(
     # Orden: más reciente primero (mismo criterio que el pipeline).
     items.sort(key=lambda x: x.get("fecha_iso") or "", reverse=True)
 
+    # Si Gmail devolvió IDs pero la UI queda en 0 (p. ej. por From real distinto al
+    # correo consultado), devolvemos también los contadores auxiliares. Antes esos
+    # campos solo existían cuando `messages.list` devolvía 0 IDs, por eso el panel
+    # mostraba "?" aunque sí había señales útiles para diagnosticar.
+    diag_extra: dict = {}
+    if not items:
+        diag_inbox_sin_media = 0
+        diag_global = 0
+        diag_sent_remitente = 0
+        diag_to_remitente = 0
+        cuenta_conectada: Optional[str] = None
+        try:
+            prof = gmail_svc.users().getProfile(userId="me").execute()
+            cuenta_conectada = (
+                str(prof.get("emailAddress", "") or "").strip().lower() or None
+            )
+        except Exception as e:
+            logger.warning(
+                "[PAGOS_GMAIL] preview-remitente diag profile error (final vacío): %s", e
+            )
+        try:
+            r1 = (
+                gmail_svc.users()
+                .messages()
+                .list(userId="me", maxResults=1, q=f"in:inbox from:{correo_lc}")
+                .execute()
+            )
+            diag_inbox_sin_media = int(r1.get("resultSizeEstimate", 0) or 0)
+        except Exception as e:
+            logger.warning(
+                "[PAGOS_GMAIL] preview-remitente diag inbox-sin-media error (final vacío): %s", e
+            )
+        try:
+            r2 = (
+                gmail_svc.users()
+                .messages()
+                .list(
+                    userId="me",
+                    maxResults=1,
+                    includeSpamTrash=True,
+                    q=f"from:{correo_lc}",
+                )
+                .execute()
+            )
+            diag_global = int(r2.get("resultSizeEstimate", 0) or 0)
+        except Exception as e:
+            logger.warning(
+                "[PAGOS_GMAIL] preview-remitente diag global error (final vacío): %s", e
+            )
+        try:
+            r3 = (
+                gmail_svc.users()
+                .messages()
+                .list(userId="me", maxResults=1, q=f"in:sent from:{correo_lc}")
+                .execute()
+            )
+            diag_sent_remitente = int(r3.get("resultSizeEstimate", 0) or 0)
+        except Exception as e:
+            logger.warning(
+                "[PAGOS_GMAIL] preview-remitente diag sent error (final vacío): %s", e
+            )
+        try:
+            r4 = (
+                gmail_svc.users()
+                .messages()
+                .list(userId="me", maxResults=1, q=f"in:inbox to:{correo_lc}")
+                .execute()
+            )
+            diag_to_remitente = int(r4.get("resultSizeEstimate", 0) or 0)
+        except Exception as e:
+            logger.warning(
+                "[PAGOS_GMAIL] preview-remitente diag to error (final vacío): %s", e
+            )
+
+        if sender_no_match > 0:
+            mensaje = (
+                f"Gmail devolvió {len(all_ids)} mensaje(s) con la query, pero {sender_no_match} "
+                f"fueron descartados porque el header From real no coincide exactamente con "
+                f"'{correo_lc}'. Revise el remitente real del correo IT Master en Gmail."
+            )
+        elif sin_media > 0:
+            mensaje = (
+                f"Gmail devolvió {len(all_ids)} mensaje(s), pero {sin_media} no exponen "
+                "adjuntos compatibles al leer el payload (se esperan .eml/message-rfc822 o imagen/PDF)."
+            )
+        else:
+            mensaje = (
+                f"Gmail devolvió {len(all_ids)} mensaje(s), pero ninguno quedó visible en el preview. "
+                "Revise logs backend para ids_remitente_no_coincide / ids_sin_media."
+            )
+
+        diag_extra = {
+            "diagnostico_inbox_sin_media": diag_inbox_sin_media,
+            "diagnostico_global": diag_global,
+            "diagnostico_sent_remitente": diag_sent_remitente,
+            "diagnostico_to_remitente": diag_to_remitente,
+            "cuenta_conectada": cuenta_conectada,
+            "es_la_cuenta_conectada": bool(
+                cuenta_conectada and cuenta_conectada == correo_lc
+            ),
+            "mensaje": mensaje,
+        }
+
     return {
         "correo": correo_lc,
         "total": len(items),
@@ -2289,6 +2392,7 @@ def preview_remitente(
         "ids_remitente_no_coincide": sender_no_match,
         "ids_sin_media": sin_media,
         "labels_catalog_ok": _labels_ok,
+        **diag_extra,
     }
 
 
