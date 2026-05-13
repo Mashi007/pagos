@@ -75,6 +75,7 @@ function textoUltimoPago(iso: string | null | undefined): string {
 }
 
 const DIAS_REVISION_SIN_ATRASO = 3
+const DIAS_LIMITE_AREA_TRABAJO = 30
 
 function diasDesdeFechaLiquidado(fechaLiquidado: string | null | undefined) {
   if (fechaLiquidado == null || String(fechaLiquidado).trim() === '') {
@@ -91,6 +92,28 @@ function casoRevisionAtrasado(caso: FiniquitoCasoItem): boolean {
   if (caso.estado !== 'REVISION') return false
   const dias = diasDesdeFechaLiquidado(caso.fecha_liquidado)
   return dias != null && dias > DIAS_REVISION_SIN_ATRASO
+}
+
+function diasRestantesAreaTrabajo(caso: FiniquitoCasoItem): number | null {
+  const fechaBase = caso.fecha_liquidado || caso.ultima_fecha_pago
+  const diasTranscurridos = diasDesdeFechaLiquidado(fechaBase)
+  if (diasTranscurridos == null) return null
+  return DIAS_LIMITE_AREA_TRABAJO - Math.max(0, diasTranscurridos)
+}
+
+function textoTiempoLimiteAreaTrabajo(caso: FiniquitoCasoItem): string {
+  const dias = diasRestantesAreaTrabajo(caso)
+  if (dias == null) return '-'
+  if (dias <= 0) return 'Atrasado'
+  return `${dias} ${dias === 1 ? 'día' : 'días'}`
+}
+
+function tiempoLimiteAreaTrabajoClassName(caso: FiniquitoCasoItem): string {
+  const dias = diasRestantesAreaTrabajo(caso)
+  if (dias == null) return 'bg-slate-100 text-slate-700'
+  if (dias <= 0) return 'bg-red-100 text-red-950'
+  if (dias <= 3) return 'bg-amber-100 text-amber-950'
+  return 'bg-emerald-100 text-emerald-950'
 }
 
 function estadoEtiquetaVisible(caso: FiniquitoCasoItem): string {
@@ -845,12 +868,12 @@ function FiniquitoGestionPageInner() {
             <TableHead
               className={cn(
                 thGestion,
-                'max-w-[10.5rem] whitespace-normal leading-tight'
+                'max-w-[9rem] whitespace-normal leading-tight'
               )}
               scope="col"
-              title="Fecha estimada de terminación del proceso de finiquito (15 días laborales desde En proceso)"
+              title="Tiempo límite: cuenta regresiva de 30 días desde la liquidación o último pago"
             >
-              Fecha estimada de terminación del proceso de finiquito
+              Tiempo límite
             </TableHead>
             <TableHead className={cn(thGestion, 'min-w-[140px]')} scope="col">
               Contacto
@@ -888,14 +911,19 @@ function FiniquitoGestionPageInner() {
               <TableCell
                 className={cn(tdGestion, 'whitespace-nowrap text-slate-800')}
                 title={
-                  row.finiquito_tramite_fecha_limite
-                    ? 'Plazo calculado al marcar En proceso (días laborales)'
-                    : undefined
+                  row.fecha_liquidado || row.ultima_fecha_pago
+                    ? `Cuenta regresiva de 30 días desde ${row.fecha_liquidado || row.ultima_fecha_pago}`
+                    : 'Sin fecha de liquidación ni último pago'
                 }
               >
-                {row.finiquito_tramite_fecha_limite
-                  ? formatDate(String(row.finiquito_tramite_fecha_limite))
-                  : '-'}
+                <span
+                  className={cn(
+                    'rounded px-1.5 py-0.5 text-xs font-medium',
+                    tiempoLimiteAreaTrabajoClassName(row)
+                  )}
+                >
+                  {textoTiempoLimiteAreaTrabajo(row)}
+                </span>
               </TableCell>
               <TableCell className={cn(tdGestion, 'max-w-[200px]')}>
                 <div className="space-y-0.5 text-xs leading-snug text-slate-800">
