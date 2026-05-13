@@ -95,6 +95,7 @@ import {
   leerYConsumirReturnRevisionSesion,
   limpiarReturnRevisionSesion,
   normalizarReturnToRevisionPath,
+  RUTA_RETORNO_FINIQUITOS_GESTION,
 } from '../constants/revisionNavigation'
 
 import { useEstadosCliente } from '../hooks/useEstadosCliente'
@@ -175,6 +176,10 @@ export function EditarRevisionManual() {
   }, [location.key, location.state])
 
   const queryClient = useQueryClient()
+
+  const vieneDesdeFiniquitos =
+    returnToRevision === RUTA_RETORNO_FINIQUITOS_GESTION ||
+    Boolean(returnToRevision?.startsWith(`${RUTA_RETORNO_FINIQUITOS_GESTION}?`))
 
   const irAListaPrestamos = () => {
     const scrollPosition = window.scrollY
@@ -1191,13 +1196,19 @@ export function EditarRevisionManual() {
       : opcionesBase
 
   /** Botón "Guardar Cambios": PUT a BD (cliente, préstamo incl. estado, cuotas). */
-  const handleGuardarParciales = async () => {
+  const handleGuardarParciales = async (opts?: {
+    volverAunqueNoHayaCambios?: boolean
+  }) => {
     if (!prestamoId) return
 
     if (soloLectura) {
       toast.info(
         'Este préstamo está en solo lectura (revisión ya cerrada en el sistema).'
       )
+      if (opts?.volverAunqueNoHayaCambios) {
+        await refrescarOrigenDatosTrasRevisionManual()
+        navegarTrasGuardarRevision()
+      }
 
       return
     }
@@ -1210,6 +1221,10 @@ export function EditarRevisionManual() {
     // Sin cambios de formulario ni operaciones (pagos/cascada/etc.) pendientes de reconocer
     if (!hayDiferenciaVsCargaInicial() && !revisionOperativaSucia) {
       toast.info('ℹ️ No hay cambios para guardar')
+      if (opts?.volverAunqueNoHayaCambios) {
+        await refrescarOrigenDatosTrasRevisionManual()
+        navegarTrasGuardarRevision()
+      }
       return
     }
 
@@ -2133,7 +2148,7 @@ export function EditarRevisionManual() {
             <Button
               type="button"
               variant="outline"
-              onClick={handleGuardarParciales}
+              onClick={() => void handleGuardarParciales()}
               disabled={soloLectura || guardandoParcial || guardandoFinal}
               className={`gap-2 ${claseResaltarGuardarRevision}`}
               title="Guarda los cambios y continúa revisando - estado cambia a ?"
@@ -2142,17 +2157,39 @@ export function EditarRevisionManual() {
               Guardar Cambios
             </Button>
 
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setShowRechazarModal(true)}
-              disabled={guardandoParcial || guardandoFinal || guardandoRechazo}
-              className="gap-2 border-red-300 text-red-600 hover:bg-red-50"
-              title="Marcar como rechazado - no guarda cambios, solo marca el préstamo"
-            >
-              <X className="h-4 w-4" />
-              Rechazar
-            </Button>
+            {vieneDesdeFiniquitos ? (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() =>
+                  void handleGuardarParciales({
+                    volverAunqueNoHayaCambios: true,
+                  })
+                }
+                disabled={
+                  guardandoParcial || guardandoFinal || guardandoRechazo
+                }
+                className="gap-2 border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+                title="Guarda cambios pendientes y vuelve al área de trabajo de Finiquitos"
+              >
+                <ChevronLeft className="h-4 w-4" />
+                Volver a finiquitos
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setShowRechazarModal(true)}
+                disabled={
+                  guardandoParcial || guardandoFinal || guardandoRechazo
+                }
+                className="gap-2 border-red-300 text-red-600 hover:bg-red-50"
+                title="Marcar como rechazado - no guarda cambios, solo marca el préstamo"
+              >
+                <X className="h-4 w-4" />
+                Rechazar
+              </Button>
+            )}
 
             <Button
               type="button"
@@ -4263,7 +4300,7 @@ export function EditarRevisionManual() {
           <Button
             type="button"
             variant="outline"
-            onClick={handleGuardarParciales}
+            onClick={() => void handleGuardarParciales()}
             disabled={soloLectura || guardandoParcial || guardandoFinal}
             className={`gap-2 ${claseResaltarGuardarRevision}`}
             title="Guarda los cambios y continúa revisando - estado cambia a ?"
@@ -4272,17 +4309,33 @@ export function EditarRevisionManual() {
             Guardar Cambios
           </Button>
 
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => setShowRechazarModal(true)}
-            disabled={guardandoParcial || guardandoFinal || guardandoRechazo}
-            className="gap-2 border-red-300 text-red-600 hover:bg-red-50"
-            title="Marcar como rechazado - no guarda cambios, solo marca el préstamo"
-          >
-            <X className="h-4 w-4" />
-            Rechazar
-          </Button>
+          {vieneDesdeFiniquitos ? (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() =>
+                void handleGuardarParciales({ volverAunqueNoHayaCambios: true })
+              }
+              disabled={guardandoParcial || guardandoFinal || guardandoRechazo}
+              className="gap-2 border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+              title="Guarda cambios pendientes y vuelve al área de trabajo de Finiquitos"
+            >
+              <ChevronLeft className="h-4 w-4" />
+              Volver a finiquitos
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setShowRechazarModal(true)}
+              disabled={guardandoParcial || guardandoFinal || guardandoRechazo}
+              className="gap-2 border-red-300 text-red-600 hover:bg-red-50"
+              title="Marcar como rechazado - no guarda cambios, solo marca el préstamo"
+            >
+              <X className="h-4 w-4" />
+              Rechazar
+            </Button>
+          )}
 
           <Button
             type="button"

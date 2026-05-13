@@ -55,10 +55,31 @@ from app.services.revision_manual.revision_manual_reapertura_notificaciones impo
     notify_admins_nueva_solicitud_reapertura,
     notify_operario_solicitud_reapertura_aprobada,
 )
+from app.services.finiquito_refresh import refrescar_finiquito_caso_prestamo_si_aplica
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
+
+
+def _sincronizar_finiquito_tras_revision_manual(
+    db: Session, prestamo_id: int, contexto: str
+) -> dict[str, Any]:
+    """
+    Reevalua el espacio de Finiquitos despues de cambios de Revisión Manual.
+
+    Si el prestamo deja de calificar (no LIQUIDADO o cuotas sin cuadrar), borra el
+    caso finiquito. Si vuelve a calificar como LIQUIDADO, lo materializa en REVISION.
+    No hace commit; el endpoint conserva la transaccion principal.
+    """
+    res = refrescar_finiquito_caso_prestamo_si_aplica(db, prestamo_id)
+    logger.info(
+        "revision_manual finiquito_sync contexto=%s prestamo_id=%s resultado=%s",
+        contexto,
+        prestamo_id,
+        res,
+    )
+    return res
 
 
 def _solicitud_reapertura_estado_pendiente_sql(column):
@@ -539,6 +560,9 @@ def confirmar_prestamo_revisado(
         rev_manual.fecha_revision = datetime.now()
     
     _aplicar_saldo_cero_si_corresponde(db, prestamo)
+    _sincronizar_finiquito_tras_revision_manual(
+        db, prestamo_id, "confirmar_prestamo_revisado"
+    )
     _commit_revision_seguro(
         db,
         operacion="confirmar_prestamo_revisado",
@@ -927,12 +951,8 @@ def editar_prestamo_revision(
 
     marcar_o_crear_prestamo_editado_en_revision_manual(db, prestamo_id)
 
-    from app.services.finiquito_caso_cleanup import (
-        eliminar_finiquito_casos_si_prestamo_no_liquidado,
-    )
-
-    eliminar_finiquito_casos_si_prestamo_no_liquidado(
-        db, prestamo_id, prestamo.estado
+    _sincronizar_finiquito_tras_revision_manual(
+        db, prestamo_id, "editar_prestamo_revision"
     )
 
     _commit_revision_seguro(
@@ -1057,10 +1077,6 @@ def guardar_prestamo_y_reconstruir_cuotas(
         prestamo.fecha_actualizacion = datetime.now()
         marcar_o_crear_prestamo_editado_en_revision_manual(db, prestamo_id)
 
-        from app.services.finiquito_caso_cleanup import eliminar_finiquito_casos_si_prestamo_no_liquidado
-
-        eliminar_finiquito_casos_si_prestamo_no_liquidado(db, prestamo_id, prestamo.estado)
-
     try:
         stats = _reconstruir_tabla_cuotas_desde_prestamo_en_sesion(db, prestamo_id)
     except HTTPException:
@@ -1070,6 +1086,9 @@ def guardar_prestamo_y_reconstruir_cuotas(
     creadas = int(stats.get("cuotas_creadas") or 0)
     pagos_aplicados = int(stats.get("pagos_con_aplicacion") or 0)
     elim = {k: v for k, v in stats.items() if k not in ("message", "cuotas_creadas", "pagos_con_aplicacion")}
+    _sincronizar_finiquito_tras_revision_manual(
+        db, prestamo_id, "guardar_prestamo_y_reconstruir_cuotas"
+    )
 
     _fallback_uid = db.execute(text("SELECT id FROM public.usuarios ORDER BY id LIMIT 1")).scalar() or 1
     uid_audit = getattr(current_user, "id", None) or _fallback_uid
@@ -1709,6 +1728,9 @@ def finalizar_revision_prestamo(
         rev_manual.fecha_revision = datetime.now()
     
     _aplicar_saldo_cero_si_corresponde(db, prestamo)
+    _sincronizar_finiquito_tras_revision_manual(
+        db, prestamo_id, "finalizar_revision_prestamo"
+    )
     _commit_revision_seguro(
         db,
         operacion="finalizar_revision_prestamo",
@@ -2395,6 +2417,9 @@ def confirmar_borrador_revision(
         stats = _reconstruir_tabla_cuotas_desde_prestamo_en_sesion(db, prestamo_id)
         creadas = int(stats.get("cuotas_creadas") or 0)
         pagos_aplicados = int(stats.get("pagos_con_aplicacion") or 0)
+        _sincronizar_finiquito_tras_revision_manual(
+            db, prestamo_id, "confirmar_borrador_revision"
+        )
 
         # 3. Auditoría
         _fallback_uid = db.execute(text("SELECT id FROM public.usuarios ORDER BY id LIMIT 1")).scalar() or 1
