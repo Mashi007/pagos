@@ -134,7 +134,7 @@ export default function ActualizacionesGmailPage() {
   const [correoInput, setCorreoInput] = useState(REMITENTE_FIJO_LOTE)
   const [correoActivo, setCorreoActivo] = useState('')
   const [maxMessages] = useState<number>(MAX_MESSAGES_DEFAULT)
-  const [criterio, setCriterio] = useState<CriterioBusqueda>('remitente')
+  const [criterio] = useState<CriterioBusqueda>('destinatario')
   const [paginaTabla, setPaginaTabla] = useState(1)
   const [diagnostico, setDiagnostico] = useState<DiagnosticoGmail | null>(null)
   const [probandoGmail, setProbandoGmail] = useState(false)
@@ -156,8 +156,8 @@ export default function ActualizacionesGmailPage() {
    * Ejecuta `previewGmailRemitente` con un criterio dado y actualiza el panel de
    * diagnóstico. Usado por el botón "Probar Gmail" Y como auto-diagnóstico cuando
    * `Buscar y procesar` termina con 0 filas (para no obligar al usuario a pulsar
-   * un segundo botón). Se llama también con `'participante'` desde el auto-diag
-   * para detectar casos donde el correo no es remitente puro.
+   * un segundo botón). Para IT Master se usa `'destinatario'` porque el correo
+   * fijo es la cuenta Gmail conectada/buzón receptor.
    */
   const ejecutarDiagnosticoRef = useRef<
     (email: string, c: CriterioBusqueda) => Promise<void>
@@ -231,11 +231,11 @@ export default function ActualizacionesGmailPage() {
                 'Ejecutando diagnostico automatico (cuenta Gmail conectada + conteos por criterio)...',
               { duration: 9000 }
             )
-            // Auto-diagnóstico: probamos directamente con criterio 'participante'
+            // Auto-diagnóstico: probamos directamente como destinatario (to:)
             // para que el panel muestre si hay correos via from:/to:/sent/global y la
             // cuenta OAuth conectada. Así el usuario no tiene que pulsar otro botón.
             try {
-              await ejecutarDiagnosticoRef.current(correoActivo, 'participante')
+              await ejecutarDiagnosticoRef.current(correoActivo, 'destinatario')
             } catch {
               /* el diagnóstico ya muestra su propio toast en error */
             }
@@ -647,26 +647,24 @@ export default function ActualizacionesGmailPage() {
                       </code>
                       {diagnostico.esLaCuentaConectada ? (
                         <div className="mt-1 text-amber-900">
-                          <strong>Atencion:</strong> el correo que pusiste es el
-                          mismo de la cuenta conectada. <code>from:</code> busca
-                          mensajes <em>enviados POR</em> esa cuenta, no
-                          recibidos. Para procesar comprobantes, indica el
-                          correo del <strong>cliente</strong> (quien envia el
-                          email), no el de tu propio buzon.
+                          <strong>Modo IT Master:</strong> este correo es la
+                          cuenta conectada. El sistema busca en INBOX como{' '}
+                          <code>to:{REMITENTE_FIJO_LOTE}</code> y procesa
+                          correos con asunto cédula + adjuntos <code>.eml</code>.
                         </div>
                       ) : null}
                     </div>
                   ) : null}
                   <ul className="mt-1 list-disc pl-5">
                     <li>
-                      Como remitente en INBOX (
-                      <code>from:&lt;correo&gt; in:inbox</code>) sin filtro
-                      media: <strong>{diagnostico.inboxSinMedia ?? '?'}</strong>
-                    </li>
-                    <li>
                       Como destinatario en INBOX (
                       <code>to:&lt;correo&gt; in:inbox</code>):{' '}
                       <strong>{diagnostico.toRemitente ?? '?'}</strong>
+                    </li>
+                    <li>
+                      Como remitente en INBOX (
+                      <code>from:&lt;correo&gt; in:inbox</code>) sin filtro
+                      media: <strong>{diagnostico.inboxSinMedia ?? '?'}</strong>
                     </li>
                     <li>
                       Como remitente en ENVIADOS (
@@ -678,8 +676,6 @@ export default function ActualizacionesGmailPage() {
                       <strong>{diagnostico.global ?? '?'}</strong>
                     </li>
                   </ul>
-                  {/* Acciones rápidas: si algun otro criterio sí tiene resultados,
-                      ofrece relanzar Buscar y procesar con el criterio sugerido. */}
                   {(diagnostico.toRemitente ?? 0) > 0 ||
                   (diagnostico.inboxSinMedia ?? 0) > 0 ? (
                     <div className="flex flex-wrap gap-2 rounded border border-blue-300 bg-blue-50 p-2 text-blue-900">
@@ -687,19 +683,12 @@ export default function ActualizacionesGmailPage() {
                         Sugerencia:
                       </span>
                       {(diagnostico.toRemitente ?? 0) > 0 ? (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => {
-                            setCriterio('participante')
-                            void handleBuscarYProcesar()
-                          }}
-                          disabled={ejecutandoPipeline}
-                          title="Cambia el selector a 'Cualquier participante' (from: OR to:) y relanza el escaneo. Cubre el caso clasico donde el correo es destinatario, o el header From: real es distinto al displayName."
-                        >
-                          Reintentar como participante (
-                          {diagnostico.toRemitente ?? 0} via to:)
-                        </Button>
+                        <span className="self-center text-[11px]">
+                          Hay {diagnostico.toRemitente} correo(s) dirigidos a{' '}
+                          <code>{REMITENTE_FIJO_LOTE}</code> en INBOX. Pulsa{' '}
+                          <strong>Buscar y procesar</strong> para leerlos como
+                          lote IT Master.
+                        </span>
                       ) : null}
                       {(diagnostico.inboxSinMedia ?? 0) > 0 ? (
                         <span className="self-center text-[11px]">
@@ -719,17 +708,16 @@ export default function ActualizacionesGmailPage() {
                     <strong>Causas habituales:</strong>
                     <ul className="mt-1 list-disc pl-5">
                       <li>
-                        <strong>Pones el correo del propio buzon</strong>: el
-                        sistema busca <code>from:</code>, no participantes; los
-                        envios propios estan en ENVIADOS no INBOX.
+                        <strong>Correo del propio buzon</strong>: en este módulo
+                        es esperado. Se busca como <code>to:</code> porque IT
+                        Master es la cuenta conectada.
                       </li>
                       <li>
                         <strong>
-                          Pones el destinatario en vez del remitente
+                          El correo está en otra carpeta
                         </strong>
-                        : si la cuenta recibe el comprobante, el remitente es el
-                        cliente. Diagnostico: <code>to: &gt; 0</code> pero{' '}
-                        <code>from: = 0</code>.
+                        : el pipeline lee INBOX. Diagnóstico:{' '}
+                        <code>global &gt; 0</code> pero <code>to: = 0</code>.
                       </li>
                       <li>
                         La cuenta Gmail conectada no es la que ve esos correos

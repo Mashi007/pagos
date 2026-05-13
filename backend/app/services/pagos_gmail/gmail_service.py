@@ -434,6 +434,11 @@ def pagos_gmail_manual_redigitaliza_por_remitente_query(
     base = pagos_gmail_inbox_media_query()
     if not sender:
         return base
+    # En el módulo IT Master, el correo configurado es la cuenta Gmail conectada
+    # (buzón receptor). Por eso se rastrea en INBOX como destinatario (`to:`),
+    # no como remitente (`from:`); los `from:` reales pueden ser clientes/terceros.
+    if sender == PAGOS_GMAIL_LOTE_REMITENTE_IT_MASTER:
+        return f"{base} to:{sender}"
     return f"{base} {_build_participante_predicate(sender, criterio)}"
 
 
@@ -1718,7 +1723,8 @@ def is_lote_it_master_message(
 ) -> Tuple[bool, Optional[str], int]:
     """
     Detecta si un mensaje Gmail es un 'lote IT Master':
-      - From == itmaster@rapicreditca.com (case-insensitive),
+      - From == itmaster@rapicreditca.com, o To/Cc/Bcc contiene itmaster@rapicreditca.com
+        (la cuenta conectada suele ser el buzón receptor),
       - Subject == solo digitos (6-9),
       - Hay 1+ partes message/rfc822 o .eml en payload.
     Devuelve (es_lote, cedula_formateada_V, n_eml_attachments).
@@ -1733,7 +1739,19 @@ def is_lote_it_master_message(
     except AttributeError:
         return False, None, 0
     sender = (extract_sender_email(from_h) or "").strip().lower()
-    if sender != PAGOS_GMAIL_LOTE_REMITENTE_IT_MASTER:
+    destinatarios_h = " ".join(
+        str(
+            headers.get(k)
+            or headers.get(k.title())
+            or headers.get(k.upper())
+            or ""
+        )
+        for k in ("to", "cc", "bcc", "delivered-to")
+    ).lower()
+    if (
+        sender != PAGOS_GMAIL_LOTE_REMITENTE_IT_MASTER
+        and PAGOS_GMAIL_LOTE_REMITENTE_IT_MASTER not in destinatarios_h
+    ):
         return False, None, 0
     subj = (
         headers.get("subject")

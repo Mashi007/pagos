@@ -1379,8 +1379,13 @@ def run_pipeline(
                 rows_pairs: list[tuple[PagosGmailSyncItem, GmailTemporal, dict]] = []
                 if pending:
                     for p in pending:
+                        correo_origen_item = (
+                            PAGOS_GMAIL_LOTE_REMITENTE_IT_MASTER
+                            if _cedula_forzada_lote
+                            else sender
+                        )
                         inserted = _insert_rows_sin_drive(
-                            sender,
+                            correo_origen_item,
                             p["f"],
                             p["c"],
                             p["m"],

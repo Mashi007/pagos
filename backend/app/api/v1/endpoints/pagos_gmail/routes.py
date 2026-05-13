@@ -312,6 +312,14 @@ def run_now(
     criterio_norm = (criterio or "remitente").strip().lower()
     if criterio_norm not in ("remitente", "destinatario", "participante"):
         criterio_norm = "remitente"
+    if (
+        scan_filter == "manual_redigitaliza_por_remitente"
+        and from_email_norm
+        and from_email_norm.lower() == PAGOS_GMAIL_LOTE_REMITENTE_IT_MASTER
+    ):
+        # IT Master es la cuenta Gmail conectada/buzón receptor; este módulo debe leer
+        # INBOX como destinatario, no `from:`. gmail_service también lo fuerza por defensa.
+        criterio_norm = "destinatario"
     # Crear registro de sync de inmediato (evita que un segundo click arranque otro pipeline)
     sync = PagosGmailSync(status="running", emails_processed=0, files_processed=0)
     db.add(sync)
@@ -2001,6 +2009,9 @@ def preview_remitente(
     criterio_norm = (criterio or "remitente").strip().lower()
     if criterio_norm not in ("remitente", "destinatario", "participante"):
         criterio_norm = "remitente"
+    if correo_lc.lower() == PAGOS_GMAIL_LOTE_REMITENTE_IT_MASTER:
+        # IT Master es el buzón conectado: buscar en INBOX como destinatario.
+        criterio_norm = "destinatario"
     q = pagos_gmail_list_query_for_scan_filter(
         "manual_redigitaliza_por_remitente", correo_lc, criterio=criterio_norm
     )
@@ -2126,10 +2137,10 @@ def preview_remitente(
         if es_la_cuenta_conectada:
             mensaje = (
                 f"'{correo_lc}' es la propia cuenta Gmail conectada al sistema. "
-                f"Buscar 'from:{correo_lc}' no devuelve resultados en INBOX porque esos "
-                "correos los envió esa cuenta y están en 'Enviados', no en 'Bandeja de entrada'. "
-                "Para procesar comprobantes, indique el correo del CLIENTE que los envía "
-                "(por ejemplo, el remitente real del email)."
+                "Para el módulo IT Master el sistema busca en INBOX como destinatario "
+                f"(`to:{correo_lc}`) y procesa correos con asunto cédula + adjuntos .eml. "
+                "Si no aparecen resultados, revise que los correos estén en Bandeja de entrada "
+                "de esta cuenta y que tengan adjuntos .eml/message-rfc822."
             )
         elif diag_inbox_sin_media > 0:
             mensaje = (
@@ -2228,8 +2239,10 @@ def preview_remitente(
         headers = {(h.get("name") or "").lower(): h.get("value") or "" for h in payload.get("headers", [])}
         from_h = headers.get("from") or ""
         from_email_real = (extract_sender_email_safe(from_h) or "").strip().lower()
-        # Defensa extra: aunque Gmail filtre por from:, validamos coincidencia exacta.
-        if from_email_real != correo_lc:
+        # Defensa extra para filtros por remitente reales. En IT Master el correo consultado
+        # es el buzón receptor (`to:`), por lo que el From real puede ser distinto y NO debe
+        # descartarse.
+        if correo_lc != PAGOS_GMAIL_LOTE_REMITENTE_IT_MASTER and from_email_real != correo_lc:
             sender_no_match += 1
             continue
         subject = (headers.get("subject") or "").strip()
