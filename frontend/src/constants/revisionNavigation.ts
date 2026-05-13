@@ -3,6 +3,7 @@
  * (p. ej. https://rapicredit.onrender.com/pagos/notificaciones con basename /pagos).
  */
 export const RUTA_RETORNO_NOTIFICACIONES = '/notificaciones'
+export const RUTA_RETORNO_FINIQUITOS_GESTION = '/finiquitos/gestion'
 
 const SESSION_REVISION_RETURN_TO = 'rapicredit-revision-return-to'
 
@@ -11,7 +12,9 @@ export function esReturnToRevisionDesdeNotificaciones(p: string): boolean {
   return (
     p === RUTA_RETORNO_NOTIFICACIONES ||
     p.startsWith(`${RUTA_RETORNO_NOTIFICACIONES}/`) ||
-    p.startsWith(`${RUTA_RETORNO_NOTIFICACIONES}?`)
+    p.startsWith(`${RUTA_RETORNO_NOTIFICACIONES}?`) ||
+    p === RUTA_RETORNO_FINIQUITOS_GESTION ||
+    p.startsWith(`${RUTA_RETORNO_FINIQUITOS_GESTION}?`)
   )
 }
 

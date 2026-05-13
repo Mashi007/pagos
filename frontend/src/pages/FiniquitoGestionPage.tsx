@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
 
 import { useQueryClient } from '@tanstack/react-query'
+import { useLocation, useNavigate } from 'react-router-dom'
 
 import {
   Bell,
@@ -249,6 +250,8 @@ function FiniquitoTablaScrollHint({
 
 function FiniquitoGestionPageInner() {
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
+  const location = useLocation()
 
   const [cedulaInput, setCedulaInput] = useState('')
   const [cedulaBusqueda, setCedulaBusqueda] = useState('')
@@ -520,6 +523,12 @@ function FiniquitoGestionPageInner() {
   const casoTieneAccionPendiente = (casoId: number) =>
     pendingEstadoCasoId === casoId
 
+  const abrirRevisionManualPrestamo = (prestamoId: number) => {
+    navigate(`/revision-manual/editar/${prestamoId}`, {
+      state: { returnTo: `${location.pathname}${location.search}` },
+    })
+  }
+
   const renderAcciones = (row: FiniquitoCasoItem) => (
     <div className="flex flex-wrap items-center justify-end gap-2">
       <Button
@@ -588,12 +597,9 @@ function FiniquitoGestionPageInner() {
         size="icon"
         variant="outline"
         className="h-8 w-8 border-slate-300"
-        title="Ver préstamo, cuotas y pagos"
-        aria-label={`Ver préstamo, cuotas y pagos del caso ${row.id}`}
-        onClick={() => {
-          setRevisionCasoId(row.id)
-          setRevisionOpen(true)
-        }}
+        title="Abrir revisión manual del préstamo"
+        aria-label={`Abrir revisión manual del préstamo ${row.prestamo_id}`}
+        onClick={() => abrirRevisionManualPrestamo(row.prestamo_id)}
       >
         <Eye className="h-4 w-4" aria-hidden />
       </Button>
