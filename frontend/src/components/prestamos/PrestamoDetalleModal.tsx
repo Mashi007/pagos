@@ -88,15 +88,12 @@ export function PrestamoDetalleModal({
     },
   })
 
-  // Cargar predicción de impago si el préstamo está aprobado
+  // La predicción de impago es opcional y puede tardar en Render; no cargarla al abrir.
 
   useEffect(() => {
-    const prestamoData = prestamo || prestamoInitial
-
-    if (prestamoData?.estado === 'APROBADO') {
-      cargarPrediccionImpago(prestamoData.id)
-    }
-  }, [prestamo, prestamoInitial])
+    setPrediccionImpago(null)
+    setCargandoPrediccion(false)
+  }, [prestamo?.id, prestamoInitial.id])
 
   const cargarPrediccionImpago = async (prestamoId: number) => {
     setCargandoPrediccion(true)
@@ -108,9 +105,17 @@ export function PrestamoDetalleModal({
     } catch (error: any) {
       // No mostrar error si no hay modelo activo, solo no mostrar la predicción
 
-      if (error?.response?.status !== 400) {
+      const esTimeoutOpcional =
+        error?.code === 'ECONNABORTED' ||
+        String(error?.message || '')
+          .toLowerCase()
+          .includes('timeout') ||
+        error?.code === 'ERR_CANCELED'
+
+      if (error?.response?.status !== 400 && !esTimeoutOpcional) {
         console.error('Error cargando predicción de impago:', error)
       }
+      setPrediccionImpago(null)
     } finally {
       setCargandoPrediccion(false)
     }
@@ -598,13 +603,26 @@ export function PrestamoDetalleModal({
                     }
                   >
                     <CardHeader>
-                      <CardTitle className="flex items-center gap-2">
-                        <TrendingUp className="h-5 w-5" />
-                        Predicción de Impago de Cuotas
-                        {cargandoPrediccion && (
-                          <Loader2 className="ml-2 h-4 w-4 animate-spin" />
-                        )}
-                      </CardTitle>
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <CardTitle className="flex items-center gap-2">
+                          <TrendingUp className="h-5 w-5" />
+                          Predicción de Impago de Cuotas
+                          {cargandoPrediccion && (
+                            <Loader2 className="ml-2 h-4 w-4 animate-spin" />
+                          )}
+                        </CardTitle>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          disabled={cargandoPrediccion}
+                          onClick={() =>
+                            void cargarPrediccionImpago(prestamoData.id)
+                          }
+                        >
+                          {cargandoPrediccion ? 'Calculando...' : 'Calcular'}
+                        </Button>
+                      </div>
                     </CardHeader>
 
                     <CardContent>
@@ -707,8 +725,8 @@ export function PrestamoDetalleModal({
                       ) : (
                         <div className="py-4 text-center">
                           <p className="text-sm text-gray-500">
-                            No hay modelo activo para predecir impago. Entrena
-                            un modelo en Configuración â†' AI â†' ML Impago.
+                            Predicción opcional. Pulse «Calcular» si necesita
+                            consultar el modelo de impago.
                           </p>
                         </div>
                       )}

@@ -1334,9 +1334,13 @@ class AITrainingService {
       accuracy?: number
     }
   }> {
-    return await apiClient.post(`${this.baseUrl}/ml-impago/predecir`, {
-      prestamo_id: prestamoId,
-    })
+    return await apiClient.post(
+      `${this.baseUrl}/ml-impago/predecir`,
+      {
+        prestamo_id: prestamoId,
+      },
+      { timeout: 120000 }
+    )
   }
 }
 
