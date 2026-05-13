@@ -1,6 +1,6 @@
 """
 Refleja en prestamos.estado_gestion_finiquito la fase finiquito visible para todos
-(ANTIGUO, EN_PROCESO, TERMINADO). No sustituye prestamos.estado (LIQUIDADO, etc.).
+(REVISION, ANTIGUO, EN_PROCESO, TERMINADO). No sustituye prestamos.estado (LIQUIDADO, etc.).
 
 En EN_PROCESO fija finiquito_tramite_fecha_limite = 15 dias laborales (lun-vie,
 America/Caracas) desde la fecha del cambio. En otros estados la limpia.
@@ -17,7 +17,9 @@ from app.utils.dias_laborales_caracas import (
     sumar_dias_laborales_lun_vie,
 )
 
-_VALORES_GESTION_EN_PRESTAMO = frozenset({"ANTIGUO", "EN_PROCESO", "TERMINADO"})
+_VALORES_GESTION_EN_PRESTAMO = frozenset(
+    {"REVISION", "ANTIGUO", "EN_PROCESO", "TERMINADO"}
+)
 
 
 def sincronizar_prestamo_estado_gestion_finiquito(

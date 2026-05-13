@@ -1039,7 +1039,7 @@ def finiquito_admin_conteo_revision_nuevos(
         ge=1,
         le=720,
         description=(
-            "Ventana en horas: cuenta casos nuevos en area de trabajo cuyo creado_en (materializacion) "
+            "Ventana en horas: cuenta casos nuevos en bandeja principal cuyo creado_en (materializacion) "
             "cae en ese intervalo hacia atras desde ahora (UTC)."
         ),
     ),
@@ -1051,12 +1051,12 @@ def finiquito_admin_conteo_revision_nuevos(
     _: UserResponse = Depends(require_admin_or_operator),
 ):
     """
-    KPI alarma: préstamos recién ingresados a finiquito (ACEPTADO / area de trabajo) al catalogarse como
+    KPI alarma: préstamos recién ingresados a finiquito (REVISION / bandeja principal) al catalogarse como
     LIQUIDADO elegibles en el job / refresco materializado.
     """
     cutoff = datetime.utcnow() - timedelta(hours=int(horas))
     q = db.query(func.count(FiniquitoCaso.id)).filter(
-        FiniquitoCaso.estado == "ACEPTADO",
+        FiniquitoCaso.estado == "REVISION",
         FiniquitoCaso.creado_en >= cutoff,
     )
     if cedula and cedula.strip():

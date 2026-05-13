@@ -154,7 +154,7 @@ function textoToastRefresco(r: FiniquitoRefreshStats): {
     titulo: `Refresco: ${elg} elegibles · ${ins} nuevos · ${act} actualizados`,
     descripcion:
       ins === 0 && elg > 0
-        ? 'Insertados 0 es normal si esos préstamos ya estaban en finiquito. Los saldados se muestran en el área de trabajo.'
+        ? 'Insertados 0 es normal si esos préstamos ya estaban en finiquito. Los saldados se muestran en la bandeja principal.'
         : `Quitados del listado (ya no califican): ${eli}. Revise el filtro de bandeja si no ve filas.`,
   }
 }
@@ -305,7 +305,7 @@ function FiniquitoGestionPageInner() {
           finiquitoAdminListar(
             undefined,
             cedulaTrabajoBusqueda || undefined,
-            'ACEPTADO,EN_PROCESO,TERMINADO',
+            'ACEPTADO,EN_PROCESO',
             { limit: FETCH_LIMIT, offset: 0 }
           ),
           finiquitoAdminListar('RECHAZADO', undefined, undefined, {
@@ -353,7 +353,7 @@ function FiniquitoGestionPageInner() {
   const incorporarCasoActualizado = useCallback(
     (caso: FiniquitoCasoItem) => {
       const debeAreaTrabajo =
-        ['ACEPTADO', 'EN_PROCESO', 'TERMINADO'].includes(caso.estado) &&
+        ['ACEPTADO', 'EN_PROCESO'].includes(caso.estado) &&
         casoCoincideCedula(caso, cedulaTrabajoBusqueda)
       const debeBandeja =
         caso.estado === 'REVISION' && casoCoincideCedula(caso, cedulaBusqueda)
@@ -1003,7 +1003,7 @@ function FiniquitoGestionPageInner() {
 
   return (
     <FiniquitoWorkspaceShell
-      description="Los créditos LIQUIDADO con cuotas cubiertas (= financiamiento) entran automáticamente al área de trabajo para el último proceso de cobranza. Abajo: rechazados."
+      description="Los créditos LIQUIDADO con cuotas cubiertas (= financiamiento) entran automáticamente a la bandeja principal. Desde acciones se aceptan para pasar al área de trabajo o se rechazan al área de revisión."
       actions={
         <Button
           size="sm"
@@ -1056,7 +1056,7 @@ function FiniquitoGestionPageInner() {
                 aria-hidden
               />
               <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                Nuevos en trabajo
+                Nuevos en bandeja
               </p>
             </div>
             <p
@@ -1086,7 +1086,7 @@ function FiniquitoGestionPageInner() {
               {loading ? '-' : totalAreaTrabajo}
             </p>
             <p className="text-xs text-slate-500">
-              Aceptado / En proceso / Terminado
+              Aceptado / En proceso
               {cedulaTrabajoBusqueda ? ' (filtro cédula)' : ''}
             </p>
           </CardContent>
@@ -1216,7 +1216,8 @@ function FiniquitoGestionPageInner() {
                   <>
                     No hay casos en esta bandeja. Los aceptados aparecen aquí;
                     puede usar «En proceso» (aviso a operaciones/cobranza) o
-                    «Terminado» para dejar el caso en pasivo.
+                    «Terminado» para dejar el caso en pasivo y sacarlo de la
+                    pantalla operativa.
                   </>
                 )}
               </p>
@@ -1322,7 +1323,7 @@ function FiniquitoGestionPageInner() {
               <p className="rounded-lg border border-dashed border-slate-200 bg-slate-50/50 px-4 py-10 text-center text-sm leading-relaxed text-slate-600">
                 {cedulaBusqueda
                   ? 'Ningún caso en revisión coincide con esa cédula. Pruebe otra subcadena o limpie el filtro.'
-                  : 'No hay casos en revisión. Use «Refrescar materializado» tras marcar préstamos como LIQUIDADO y cuadrar cuotas.'}
+                  : 'No hay casos en revisión. Use «Refrescar materializado» para traer préstamos LIQUIDADO con cuotas cubiertas a la bandeja principal.'}
               </p>
             ) : (
               <>
