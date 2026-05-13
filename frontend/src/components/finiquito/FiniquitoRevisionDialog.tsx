@@ -248,11 +248,7 @@ type Props = {
   onOpenChange: (open: boolean) => void
 }
 
-export function FiniquitoRevisionDialog({
-  open,
-  casoId,
-  onOpenChange,
-}: Props) {
+export function FiniquitoRevisionDialog({ open, casoId, onOpenChange }: Props) {
   const [loading, setLoading] = useState(false)
   const [data, setData] = useState<FiniquitoRevisionDatosResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -1028,12 +1024,7 @@ export function FiniquitoRevisionDialog({
                                       onClick={() =>
                                         void (async () => {
                                           try {
-                                            await abrirComprobanteDesdeHref(
-                                              u,
-                                              mode === 'admin'
-                                                ? 'staff'
-                                                : 'finiquito'
-                                            )
+                                            await abrirComprobanteDesdeHref(u)
                                           } catch {
                                             toast.error(
                                               'No se pudo abrir el comprobante.'

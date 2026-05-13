@@ -1,5 +1,4 @@
 import { apiClient } from '../services/api'
-import { finiquitoGetBlob } from '../services/finiquitoService'
 
 /**
  * Ruta `/api/v1/pagos/comprobante-imagen/{id}` extraída de una URL absoluta o relativa.
@@ -103,33 +102,6 @@ export async function abrirStaffComprobanteDesdeHref(
   window.setTimeout(() => URL.revokeObjectURL(url), 120_000)
 }
 
-/** Misma lógica que staff pero con JWT del portal Finiquito (revisión de caso). */
-export async function abrirFiniquitoComprobanteDesdeHref(
-  href: string
-): Promise<void> {
-  const t = String(href ?? '').trim()
-  if (!t) return
-  const path = pathApiComprobanteImagenDesdeHref(t)
-  if (!path) {
-    window.open(t, '_blank', 'noopener,noreferrer')
-    return
-  }
-  const blob = await finiquitoGetBlob(path)
-  const url = URL.createObjectURL(blob)
-  const w = window.open(url, '_blank', 'noopener,noreferrer')
-  if (!w) {
-    URL.revokeObjectURL(url)
-    return
-  }
-  window.setTimeout(() => URL.revokeObjectURL(url), 120_000)
-}
-
-export async function abrirComprobanteDesdeHref(
-  href: string,
-  authMode: 'staff' | 'finiquito'
-): Promise<void> {
-  if (authMode === 'finiquito') {
-    return abrirFiniquitoComprobanteDesdeHref(href)
-  }
+export async function abrirComprobanteDesdeHref(href: string): Promise<void> {
   return abrirStaffComprobanteDesdeHref(href)
 }
