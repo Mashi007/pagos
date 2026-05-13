@@ -96,10 +96,9 @@ function casoRevisionAtrasado(caso: FiniquitoCasoItem): boolean {
 }
 
 function diasRestantesAreaTrabajo(caso: FiniquitoCasoItem): number | null {
-  const fechaBase = caso.fecha_liquidado || caso.ultima_fecha_pago
-  const diasTranscurridos = diasDesdeFechaLiquidado(fechaBase)
+  const diasTranscurridos = diasDesdeFechaLiquidado(caso.ultima_fecha_pago)
   if (diasTranscurridos == null) return null
-  return DIAS_LIMITE_AREA_TRABAJO - Math.max(0, diasTranscurridos)
+  return DIAS_LIMITE_AREA_TRABAJO - diasTranscurridos
 }
 
 function textoTiempoLimiteAreaTrabajo(caso: FiniquitoCasoItem): string {
@@ -917,9 +916,9 @@ function FiniquitoGestionPageInner() {
               <TableCell
                 className={cn(tdGestion, 'whitespace-nowrap text-slate-800')}
                 title={
-                  row.fecha_liquidado || row.ultima_fecha_pago
-                    ? `Cuenta regresiva de 30 días desde ${row.fecha_liquidado || row.ultima_fecha_pago}`
-                    : 'Sin fecha de liquidación ni último pago'
+                  row.ultima_fecha_pago
+                    ? `Cuenta regresiva de 30 días desde último pago: ${row.ultima_fecha_pago}`
+                    : 'Sin último pago'
                 }
               >
                 <span
