@@ -1,7 +1,9 @@
 """
-Refresco de finiquito_casos: solo préstamos en estado LIQUIDADO donde la suma de
-cuotas.total_pagado cuadra con total_financiamiento con tolerancia 0.02 (alineado
-con redondeos y cuadre pagos/cuotas en cartera).
+Refresco de finiquito_casos: antes de materializar, persiste como LIQUIDADO los
+préstamos APROBADO que ya están efectivamente cubiertos por cuotas. Luego toma
+solo préstamos LIQUIDADO donde la suma de cuotas.total_pagado cuadra con
+total_financiamiento con tolerancia 0.02 (alineado con redondeos y cuadre
+pagos/cuotas en cartera).
 
 - Jobs lun-sab 01:00 y 13:00 America/Caracas (si ENABLE_AUTOMATIC_SCHEDULED_JOBS).
 - Tras marcar LIQUIDADO en cascada de pagos/cuotas: refrescar un solo préstamo
@@ -24,6 +26,17 @@ from app.services.finiquito_prestamo_gestion_sync import (
 logger = logging.getLogger(__name__)
 
 ESTADO_ENTRADA_TRABAJO = "ACEPTADO"
+
+
+def persistir_liquidaciones_efectivas_para_finiquito(db: Session) -> None:
+    """
+    Alinea la liquidacion efectiva que ya muestra la UI con el estado persistido.
+
+    La funcion SQL existente actualiza prestamos APROBADO con todas las cuotas
+    cubiertas a LIQUIDADO y registra auditoria_cambios_estado_prestamo. No hace
+    commit aqui: el refresco de finiquitos controla la transaccion completa.
+    """
+    db.execute(text("SELECT actualizar_prestamos_a_liquidado_automatico()"))
 
 
 def _es_revision_heredada_sin_gestion(db: Session, caso: FiniquitoCaso) -> bool:
@@ -177,6 +190,8 @@ def ejecutar_refresh_finiquito_casos(db: Session) -> dict[str, Any]:
     - Elimina casos cuyo prestamo ya no califica (dejo de ser LIQUIDADO, cuotas sin cuadrar, etc.),
       en cualquier estado del caso (REVISION, ACEPTADO, area de trabajo, etc.).
     """
+    persistir_liquidaciones_efectivas_para_finiquito(db)
+
     sql = text(
         """
         SELECT p.id AS prestamo_id,
