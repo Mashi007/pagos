@@ -70,12 +70,12 @@ class FiniquitoCasoOut(BaseModel):
 
 
 class FiniquitoConteoRevisionNuevosResponse(BaseModel):
-    """Casos en REVISION creados recientemente (al materializarse como LIQUIDADO elegible)."""
+    """Casos en area de trabajo creados recientemente (al materializarse como LIQUIDADO elegible)."""
 
     total: int = Field(
         ...,
         ge=0,
-        description="Cantidad en revision dentro de la ventana temporal.",
+        description="Cantidad en area de trabajo dentro de la ventana temporal.",
     )
     ventana_horas: int = Field(
         ...,

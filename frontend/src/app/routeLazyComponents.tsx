@@ -26,18 +26,6 @@ export const Clientes = lazy(() => import('../pages/Clientes'))
 
 export const Prestamos = lazy(() => import('../pages/Prestamos'))
 
-export const FiniquitoRootPage = lazy(() =>
-  import('../pages/FiniquitoRootPage').then(m => ({
-    default: m.FiniquitoRootPage,
-  }))
-)
-
-export const FiniquitoAccesoPage = lazy(() =>
-  import('../pages/FiniquitoAccesoPage').then(m => ({
-    default: m.FiniquitoAccesoPage,
-  }))
-)
-
 export const FiniquitoGestionGatePage = lazy(() =>
   import('../pages/FiniquitoGestionGatePage').then(m => ({
     default: m.FiniquitoGestionGatePage,

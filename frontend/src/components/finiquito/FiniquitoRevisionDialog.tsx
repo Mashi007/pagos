@@ -50,7 +50,6 @@ import { lineasFiniquitoColumna } from '../../utils/prestamoFiniquitoDisplay'
 
 import {
   finiquitoAdminRevisionDatos,
-  finiquitoRevisionDatos,
   type FiniquitoRevisionDatosResponse,
 } from '../../services/finiquitoService'
 import {
@@ -247,14 +246,12 @@ type Props = {
   open: boolean
   casoId: number | null
   onOpenChange: (open: boolean) => void
-  mode?: 'public' | 'admin'
 }
 
 export function FiniquitoRevisionDialog({
   open,
   casoId,
   onOpenChange,
-  mode = 'public',
 }: Props) {
   const [loading, setLoading] = useState(false)
   const [data, setData] = useState<FiniquitoRevisionDatosResponse | null>(null)
@@ -274,11 +271,7 @@ export function FiniquitoRevisionDialog({
     let cancelled = false
     setLoading(true)
     setError(null)
-    const promise =
-      mode === 'admin'
-        ? finiquitoAdminRevisionDatos(casoId)
-        : finiquitoRevisionDatos(casoId)
-    promise
+    finiquitoAdminRevisionDatos(casoId)
       .then(res => {
         if (!cancelled) setData(res)
       })
@@ -292,7 +285,7 @@ export function FiniquitoRevisionDialog({
     return () => {
       cancelled = true
     }
-  }, [open, casoId, mode])
+  }, [open, casoId])
 
   const prestamosItems = data?.prestamos?.prestamos ?? []
   const pagosItems = data?.pagos?.pagos ?? []

@@ -26,18 +26,6 @@ class LiquidadoScheduler:
         try:
             logger.info('INICIANDO: Actualizacion de prestamos a LIQUIDADO')
             
-            # Obtener prestamos que van a ser liquidados (antes de actualizar)
-            prestamos_a_liquidar = db.execute(text('''
-                SELECT p.id, p.total_financiamiento, COALESCE(SUM(c.monto_cuota) FILTER (WHERE c.estado = 'PAGADO'), 0)
-                FROM prestamos p
-                LEFT JOIN cuotas c ON c.prestamo_id = p.id
-                WHERE p.estado = 'APROBADO'
-                GROUP BY p.id, p.total_financiamiento
-                HAVING COALESCE(SUM(c.monto_cuota) FILTER (WHERE c.estado = 'PAGADO'), 0) >= p.total_financiamiento - 0.01
-            ''')).fetchall()
-            
-            logger.info(f'Se encontraron {len(prestamos_a_liquidar)} prestamos para liquidar')
-            
             # Ejecutar funcion que actualiza estados
             result = db.execute(text('''
                 SELECT actualizar_prestamos_a_liquidado_automatico()
@@ -45,7 +33,18 @@ class LiquidadoScheduler:
             
             db.commit()
 
-            ids_liquidados = [row[0] for row in prestamos_a_liquidar]
+            ids_liquidados = [
+                int(row[0])
+                for row in db.execute(text('''
+                    SELECT DISTINCT prestamo_id
+                    FROM auditoria_cambios_estado_prestamo
+                    WHERE DATE(fecha_cambio) = CURRENT_DATE
+                      AND estado_nuevo = 'LIQUIDADO'
+                ''')).fetchall()
+                if row[0] is not None
+            ]
+            logger.info(f'Se encontraron {len(ids_liquidados)} prestamos liquidados hoy para refrescar finiquito')
+
             if ids_liquidados and prestamos_tiene_columna_fecha_liquidado(db):
                 fd = hoy_negocio()
                 db.execute(
@@ -102,7 +101,7 @@ class LiquidadoScheduler:
     
     def iniciar_scheduler(self):
         """Inicia el scheduler"""
-        self.scheduler = BackgroundScheduler()
+        self.scheduler = BackgroundScheduler(timezone='America/Caracas')
         
         # Configurar job a las 9 PM (21:00) todos los dias
         self.scheduler.add_job(

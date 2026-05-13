@@ -12,7 +12,7 @@ from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Any, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
 from fastapi.encoders import jsonable_encoder
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -72,8 +72,8 @@ from app.schemas.finiquito import (
     FiniquitoVerificarCodigoResponse,
 )
 from app.services.finiquito_area_trabajo_emails import (
-    enviar_correo_en_proceso_operaciones,
-    enviar_correo_rechazo_itmaster,
+    enviar_correo_en_proceso_operaciones_datos,
+    enviar_correo_rechazo_itmaster_datos,
 )
 from app.services.finiquito_prestamo_gestion_sync import (
     sincronizar_prestamo_estado_gestion_finiquito,
@@ -135,6 +135,15 @@ ESTADOS_VALIDOS = frozenset(
 FECHA_CORTE_ANTIGUO = date(2026, 1, 1)
 MIN_NOTA_ANTIGUO = 15
 CODIGO_EXPIRA_MINUTES = 120
+FINIQUITO_PORTAL_PUBLICO_ACTIVO = False
+
+
+def _require_portal_publico_activo() -> None:
+    if not FINIQUITO_PORTAL_PUBLICO_ACTIVO:
+        raise HTTPException(
+            status_code=404,
+            detail="Portal publico de finiquitos no disponible.",
+        )
 
 
 def _cedula_portal_token_normalizada(fu: FiniquitoUsuarioAcceso) -> str:
@@ -537,6 +546,7 @@ def finiquito_public_registro(
     db: Session = Depends(get_db),
 ):
     """Primera vez: cedula + email unicos en el modulo Finiquito."""
+    _require_portal_publico_activo()
     cedula = normalizar_cedula_almacenamiento(body.cedula)
     email = (body.email or "").lower().strip()
     if not cedula or not email:
@@ -577,6 +587,7 @@ def finiquito_public_solicitar_codigo(
     body: FiniquitoSolicitarCodigoRequest,
     db: Session = Depends(get_db),
 ):
+    _require_portal_publico_activo()
     cedula = normalizar_cedula_almacenamiento(body.cedula)
     email = (body.email or "").lower().strip()
     if not cedula or not email:
@@ -742,6 +753,7 @@ def finiquito_public_verificar_codigo(
     body: FiniquitoVerificarCodigoRequest,
     db: Session = Depends(get_db),
 ):
+    _require_portal_publico_activo()
     cedula = normalizar_cedula_almacenamiento(body.cedula)
     email = (body.email or "").lower().strip()
     codigo = (body.codigo or "").strip()
@@ -812,6 +824,7 @@ def finiquito_public_listar_casos(
     db: Session = Depends(get_db),
     fu: FiniquitoUsuarioAcceso = Depends(get_finiquito_usuario_acceso),
 ):
+    _require_portal_publico_activo()
     b = (bandeja or "").lower().strip()
     if b in ("", "todos", "todas", "all"):
         q = db.query(FiniquitoCaso).order_by(FiniquitoCaso.id.desc())
@@ -853,6 +866,7 @@ def finiquito_public_detalle(
     db: Session = Depends(get_db),
     fu: FiniquitoUsuarioAcceso = Depends(get_finiquito_usuario_acceso),
 ):
+    _require_portal_publico_activo()
     caso = db.query(FiniquitoCaso).filter(FiniquitoCaso.id == caso_id).first()
     if not caso or not _caso_pertenece_a_portal(fu, caso):
         raise HTTPException(status_code=404, detail="Caso no encontrado")
@@ -891,6 +905,7 @@ def finiquito_public_revision_datos(
     Detalle del caso: préstamo vinculado (campos ampliados), plan de cuotas,
     listado /prestamos por cédula y /pagos por cédula (todos los pagos, tope 100 por API).
     """
+    _require_portal_publico_activo()
     caso = db.query(FiniquitoCaso).filter(FiniquitoCaso.id == caso_id).first()
     if not caso or not _caso_pertenece_a_portal(fu, caso):
         raise HTTPException(status_code=404, detail="Caso no encontrado")
@@ -908,6 +923,7 @@ def finiquito_public_patch_estado(
     fu: FiniquitoUsuarioAcceso = Depends(get_finiquito_usuario_acceso),
 ):
     """Usuario portal: solo desde REVISION a ACEPTADO o RECHAZADO."""
+    _require_portal_publico_activo()
     nuevo = (body.estado or "").upper().strip()
     if nuevo not in ("ACEPTADO", "RECHAZADO"):
         return FiniquitoPatchEstadoResponse(
@@ -922,7 +938,10 @@ def finiquito_public_patch_estado(
             ok=False,
             error="Solo puede cambiar casos en estado REVISION.",
         )
-    anterior = caso.estado
+    anterior = (caso.estado or "").upper().strip()
+    if nuevo == anterior:
+        caso_out = _admin_casos_to_items(db, [caso])[0]
+        return FiniquitoPatchEstadoResponse(ok=True, caso=caso_out)
     caso.estado = nuevo
     _registrar_historial(
         db,
@@ -1020,7 +1039,7 @@ def finiquito_admin_conteo_revision_nuevos(
         ge=1,
         le=720,
         description=(
-            "Ventana en horas: cuenta casos en REVISION cuyo creado_en (materializacion) "
+            "Ventana en horas: cuenta casos nuevos en area de trabajo cuyo creado_en (materializacion) "
             "cae en ese intervalo hacia atras desde ahora (UTC)."
         ),
     ),
@@ -1032,12 +1051,12 @@ def finiquito_admin_conteo_revision_nuevos(
     _: UserResponse = Depends(require_admin_or_operator),
 ):
     """
-    KPI alarma: préstamos recién ingresados a finiquito (REVISION) al catalogarse como
+    KPI alarma: préstamos recién ingresados a finiquito (ACEPTADO / area de trabajo) al catalogarse como
     LIQUIDADO elegibles en el job / refresco materializado.
     """
     cutoff = datetime.utcnow() - timedelta(hours=int(horas))
     q = db.query(func.count(FiniquitoCaso.id)).filter(
-        FiniquitoCaso.estado == "REVISION",
+        FiniquitoCaso.estado == "ACEPTADO",
         FiniquitoCaso.creado_en >= cutoff,
     )
     if cedula and cedula.strip():
@@ -1069,6 +1088,7 @@ def finiquito_admin_revision_datos(
 def finiquito_admin_patch_estado(
     caso_id: int,
     body: FiniquitoPatchEstadoRequest,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     panel_user: UserResponse = Depends(require_admin_or_operator),
 ):
@@ -1079,7 +1099,10 @@ def finiquito_admin_patch_estado(
     caso = db.query(FiniquitoCaso).filter(FiniquitoCaso.id == caso_id).first()
     if not caso:
         raise HTTPException(status_code=404, detail="Caso no encontrado")
-    anterior = caso.estado
+    anterior = (caso.estado or "").upper().strip()
+    if nuevo == anterior:
+        caso_out = _admin_casos_to_items(db, [caso])[0]
+        return FiniquitoPatchEstadoResponse(ok=True, caso=caso_out)
 
     if nuevo == "ANTIGUO":
         if anterior != "REVISION":
@@ -1117,12 +1140,12 @@ def finiquito_admin_patch_estado(
         return FiniquitoPatchEstadoResponse(ok=True, caso=caso_out)
 
     if nuevo == "REVISION":
-        if anterior not in ("ACEPTADO", "EN_PROCESO", "TERMINADO"):
+        if anterior not in ("ACEPTADO", "EN_PROCESO", "TERMINADO", "RECHAZADO"):
             return FiniquitoPatchEstadoResponse(
                 ok=False,
                 error=(
                     "Solo puede devolver a Revision desde el area de trabajo "
-                    "(Aceptado, En proceso o Terminado)."
+                    "o desde Rechazado."
                 ),
             )
         caso.estado = nuevo
@@ -1151,6 +1174,20 @@ def finiquito_admin_patch_estado(
         db.refresh(caso)
         caso_out = _admin_casos_to_items(db, [caso])[0]
         return FiniquitoPatchEstadoResponse(ok=True, caso=caso_out)
+
+    if nuevo == "ACEPTADO":
+        if anterior not in ("REVISION", "EN_PROCESO"):
+            return FiniquitoPatchEstadoResponse(
+                ok=False,
+                error="Aceptado solo desde Revision o En proceso.",
+            )
+
+    if nuevo == "RECHAZADO":
+        if anterior != "REVISION":
+            return FiniquitoPatchEstadoResponse(
+                ok=False,
+                error="Rechazado solo desde la bandeja principal (Revision).",
+            )
 
     if nuevo in ("EN_PROCESO", "TERMINADO") and not finiquito_casos_has_contacto_para_siguientes(db):
         return FiniquitoPatchEstadoResponse(
@@ -1225,15 +1262,25 @@ def finiquito_admin_patch_estado(
     sincronizar_prestamo_estado_gestion_finiquito(db, caso.prestamo_id, caso.estado)
     db.commit()
     db.refresh(caso)
+    caso_snapshot = {
+        "caso_id": int(caso.id),
+        "prestamo_id": int(caso.prestamo_id),
+        "cedula": caso.cedula or "",
+    }
     if nuevo == "EN_PROCESO":
-        enviar_correo_en_proceso_operaciones(
-            db,
-            caso,
+        background_tasks.add_task(
+            enviar_correo_en_proceso_operaciones_datos,
+            caso_id=caso_snapshot["caso_id"],
+            prestamo_id=caso_snapshot["prestamo_id"],
+            cedula=caso_snapshot["cedula"],
             admin_email=panel_user.email or "",
             admin_nombre=f"{(panel_user.nombre or '').strip()} {(panel_user.apellido or '').strip()}".strip(),
         )
     elif nuevo == "RECHAZADO":
-        enviar_correo_rechazo_itmaster(caso)
+        background_tasks.add_task(
+            enviar_correo_rechazo_itmaster_datos,
+            caso_snapshot["caso_id"],
+        )
     caso_out = _admin_casos_to_items(db, [caso])[0]
     return FiniquitoPatchEstadoResponse(ok=True, caso=caso_out)
 

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState, type ReactNode } from 'react'
 
 import { useQueryClient } from '@tanstack/react-query'
 
@@ -154,7 +154,7 @@ function textoToastRefresco(r: FiniquitoRefreshStats): {
     titulo: `Refresco: ${elg} elegibles · ${ins} nuevos · ${act} actualizados`,
     descripcion:
       ins === 0 && elg > 0
-        ? 'Insertados 0 es normal si esos préstamos ya estaban en finiquito. Los saldados suelen verse en la bandeja Revisión (no en Rechazados).'
+        ? 'Insertados 0 es normal si esos préstamos ya estaban en finiquito. Los saldados se muestran en el área de trabajo.'
         : `Quitados del listado (ya no califican): ${eli}. Revise el filtro de bandeja si no ve filas.`,
   }
 }
@@ -163,6 +163,38 @@ const DEBOUNCE_MS = 420
 
 /** Coincide con backend `_ADMIN_CASOS_MAX_LIMIT` (listar sin paginar en UI). */
 const FETCH_LIMIT = 2000
+
+function casoCoincideCedula(caso: FiniquitoCasoItem, filtro: string): boolean {
+  const f = filtro.trim().toLowerCase()
+  if (!f) return true
+  return String(caso.cedula || '')
+    .toLowerCase()
+    .includes(f)
+}
+
+function reconciliarCasoEnLista(
+  prev: FiniquitoCasoItem[],
+  caso: FiniquitoCasoItem,
+  debeEstar: boolean
+): FiniquitoCasoItem[] {
+  const idx = prev.findIndex(r => r.id === caso.id)
+  if (!debeEstar) {
+    return idx >= 0 ? prev.filter(r => r.id !== caso.id) : prev
+  }
+  if (idx >= 0) {
+    return prev.map((r, i) => (i === idx ? { ...r, ...caso } : r))
+  }
+  return [caso, ...prev].slice(0, FETCH_LIMIT)
+}
+
+function totalTrasMovimiento(
+  total: number,
+  estaba: boolean,
+  debeEstar: boolean
+): number {
+  if (estaba === debeEstar) return total
+  return debeEstar ? total + 1 : Math.max(0, total - 1)
+}
 
 /**
  * Altura máxima del cuerpo de la tabla: ~10 filas en primer plano; el resto con scroll.
@@ -225,6 +257,9 @@ function FiniquitoGestionPageInner() {
   const [totalBandeja, setTotalBandeja] = useState(0)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
+  const [pendingEstadoCasoId, setPendingEstadoCasoId] = useState<number | null>(
+    null
+  )
   const [revisionOpen, setRevisionOpen] = useState(false)
   const [revisionCasoId, setRevisionCasoId] = useState<number | null>(null)
   const [
@@ -314,31 +349,45 @@ function FiniquitoGestionPageInner() {
     [cedulaBusqueda, cedulaTrabajoBusqueda]
   )
 
-  /** Actualiza filas locales al instante con el caso devuelto por PATCH (antes del refetch). */
-  const incorporarCasoActualizado = useCallback((caso: FiniquitoCasoItem) => {
-    const enAreaTrabajo = ['ACEPTADO', 'EN_PROCESO', 'TERMINADO'].includes(
-      caso.estado
-    )
-    setItemsAreaTrabajo(prev => {
-      if (!prev.some(r => r.id === caso.id)) return prev
-      if (!enAreaTrabajo) {
-        return prev.filter(r => r.id !== caso.id)
-      }
-      return prev.map(r => (r.id === caso.id ? { ...r, ...caso } : r))
-    })
-    setItemsBandeja(prev => {
-      if (!prev.some(r => r.id === caso.id)) return prev
-      if (caso.estado !== 'REVISION') {
-        return prev.filter(r => r.id !== caso.id)
-      }
-      return prev.map(r => (r.id === caso.id ? { ...r, ...caso } : r))
-    })
-    setItemsRechazados(prev =>
-      prev.some(r => r.id === caso.id)
-        ? prev.map(r => (r.id === caso.id ? { ...r, ...caso } : r))
-        : prev
-    )
-  }, [])
+  /** Mueve filas locales al instante con el caso devuelto por PATCH (antes del refetch). */
+  const incorporarCasoActualizado = useCallback(
+    (caso: FiniquitoCasoItem) => {
+      const debeAreaTrabajo =
+        ['ACEPTADO', 'EN_PROCESO', 'TERMINADO'].includes(caso.estado) &&
+        casoCoincideCedula(caso, cedulaTrabajoBusqueda)
+      const debeBandeja =
+        caso.estado === 'REVISION' && casoCoincideCedula(caso, cedulaBusqueda)
+      const debeRechazados = caso.estado === 'RECHAZADO'
+
+      const estabaAreaTrabajo = itemsAreaTrabajo.some(r => r.id === caso.id)
+      const estabaBandeja = itemsBandeja.some(r => r.id === caso.id)
+      const estabaRechazados = itemsRechazados.some(r => r.id === caso.id)
+
+      setItemsAreaTrabajo(prev =>
+        reconciliarCasoEnLista(prev, caso, debeAreaTrabajo)
+      )
+      setTotalAreaTrabajo(prev =>
+        totalTrasMovimiento(prev, estabaAreaTrabajo, debeAreaTrabajo)
+      )
+      setItemsBandeja(prev => reconciliarCasoEnLista(prev, caso, debeBandeja))
+      setTotalBandeja(prev =>
+        totalTrasMovimiento(prev, estabaBandeja, debeBandeja)
+      )
+      setItemsRechazados(prev =>
+        reconciliarCasoEnLista(prev, caso, debeRechazados)
+      )
+      setTotalRechazados(prev =>
+        totalTrasMovimiento(prev, estabaRechazados, debeRechazados)
+      )
+    },
+    [
+      cedulaBusqueda,
+      cedulaTrabajoBusqueda,
+      itemsAreaTrabajo,
+      itemsBandeja,
+      itemsRechazados,
+    ]
+  )
 
   useEffect(() => {
     void cargarListas()
@@ -374,6 +423,8 @@ function FiniquitoGestionPageInner() {
   }
 
   const cambiarEstado = async (id: number, estado: string) => {
+    if (pendingEstadoCasoId != null) return
+    setPendingEstadoCasoId(id)
     try {
       const r = await finiquitoAdminPatchEstado(id, estado)
       if (!r.ok) {
@@ -397,6 +448,8 @@ function FiniquitoGestionPageInner() {
       await cargarListas({ silent: true })
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : 'Error')
+    } finally {
+      setPendingEstadoCasoId(null)
     }
   }
 
@@ -426,6 +479,7 @@ function FiniquitoGestionPageInner() {
       return
     }
     setAntiguoSubmitting(true)
+    setPendingEstadoCasoId(dialogAntiguoRow.id)
     try {
       const r = await finiquitoAdminPatchEstado(
         dialogAntiguoRow.id,
@@ -449,6 +503,7 @@ function FiniquitoGestionPageInner() {
       toast.error(e instanceof Error ? e.message : 'Error')
     } finally {
       setAntiguoSubmitting(false)
+      setPendingEstadoCasoId(null)
     }
   }
 
@@ -465,6 +520,8 @@ function FiniquitoGestionPageInner() {
     if (preguntarContactoCliente && contactoParaSiguientes === undefined) {
       return
     }
+    if (pendingEstadoCasoId != null) return
+    setPendingEstadoCasoId(casoId)
     try {
       const r = await finiquitoAdminPatchEstado(
         casoId,
@@ -484,6 +541,8 @@ function FiniquitoGestionPageInner() {
       await cargarListas({ silent: true })
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : 'Error')
+    } finally {
+      setPendingEstadoCasoId(null)
     }
   }
 
@@ -496,6 +555,9 @@ function FiniquitoGestionPageInner() {
     setCedulaTrabajoInput('')
     setCedulaTrabajoBusqueda('')
   }
+
+  const casoTieneAccionPendiente = (casoId: number) =>
+    pendingEstadoCasoId === casoId
 
   const renderAcciones = (row: FiniquitoCasoItem) => (
     <div className="flex flex-wrap items-center justify-end gap-2">
@@ -531,6 +593,7 @@ function FiniquitoGestionPageInner() {
       </Button>
       <Select
         key={`estado-sel-${row.id}-${row.estado}`}
+        disabled={casoTieneAccionPendiente(row.id)}
         onValueChange={v => onSeleccionarEstadoBandeja(row, v)}
       >
         <SelectTrigger
@@ -585,6 +648,7 @@ function FiniquitoGestionPageInner() {
         <>
           <Select
             key={`proceso-revision-${row.id}-${row.estado}`}
+            disabled={casoTieneAccionPendiente(row.id)}
             value={row.estado === 'EN_PROCESO' ? 'EN_PROCESO' : undefined}
             onValueChange={v => {
               if (v === 'REVISION') {
@@ -613,6 +677,7 @@ function FiniquitoGestionPageInner() {
               type="button"
               size="sm"
               className="h-8 bg-emerald-700 text-xs hover:bg-emerald-800"
+              disabled={casoTieneAccionPendiente(row.id)}
               onClick={() =>
                 setDialogTerminado({
                   casoId: row.id,
@@ -632,6 +697,7 @@ function FiniquitoGestionPageInner() {
             size="sm"
             variant="outline"
             className="h-8 border-slate-300 text-xs"
+            disabled={casoTieneAccionPendiente(row.id)}
             onClick={() => cambiarEstado(row.id, 'ACEPTADO')}
           >
             Volver a aceptado
@@ -640,6 +706,7 @@ function FiniquitoGestionPageInner() {
             type="button"
             size="sm"
             className="h-8 bg-emerald-700 text-xs hover:bg-emerald-800"
+            disabled={casoTieneAccionPendiente(row.id)}
             onClick={() =>
               setDialogTerminado({
                 casoId: row.id,
@@ -654,6 +721,7 @@ function FiniquitoGestionPageInner() {
       {row.estado === 'TERMINADO' ? (
         <Select
           key={`solo-revision-${row.id}`}
+          disabled={casoTieneAccionPendiente(row.id)}
           onValueChange={v => {
             if (v === 'REVISION') void cambiarEstado(row.id, 'REVISION')
           }}
@@ -674,7 +742,55 @@ function FiniquitoGestionPageInner() {
     </div>
   )
 
-  const renderTabla = (items: FiniquitoCasoItem[]) => (
+  const renderAccionesRechazado = (row: FiniquitoCasoItem) => (
+    <div className="flex flex-wrap items-center justify-end gap-2">
+      <Button
+        type="button"
+        size="icon"
+        variant="outline"
+        className="h-8 w-8 border-slate-300"
+        title="Ver préstamo, cuotas y pagos"
+        aria-label={`Ver préstamo, cuotas y pagos del caso ${row.id}`}
+        onClick={() => {
+          setRevisionCasoId(row.id)
+          setRevisionOpen(true)
+        }}
+      >
+        <Eye className="h-4 w-4" aria-hidden />
+      </Button>
+      <Button
+        type="button"
+        size="icon"
+        variant="outline"
+        className="h-8 w-8 border-slate-300"
+        title="Descargar estado de cuenta (PDF)"
+        aria-label={`Descargar estado de cuenta PDF del préstamo ${row.prestamo_id}`}
+        disabled={descargandoEstadoCuentaPrestamoId === row.prestamo_id}
+        onClick={() => descargarEstadoCuenta(row.prestamo_id)}
+      >
+        {descargandoEstadoCuentaPrestamoId === row.prestamo_id ? (
+          <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+        ) : (
+          <Download className="h-4 w-4" aria-hidden />
+        )}
+      </Button>
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        className="h-8 border-slate-300 text-xs"
+        disabled={casoTieneAccionPendiente(row.id)}
+        onClick={() => cambiarEstado(row.id, 'REVISION')}
+      >
+        Volver a revisión
+      </Button>
+    </div>
+  )
+
+  const renderTabla = (
+    items: FiniquitoCasoItem[],
+    renderAccionesFila: (row: FiniquitoCasoItem) => ReactNode = renderAcciones
+  ) => (
     <div
       className={cn(
         TABLA_SCROLL_MAX_H_COMPACTO,
@@ -743,7 +859,7 @@ function FiniquitoGestionPageInner() {
                 </span>
               </TableCell>
               <TableCell className={cn(tdGestion, 'text-right')}>
-                {renderAcciones(row)}
+                {renderAccionesFila(row)}
               </TableCell>
             </TableRow>
           ))}
@@ -887,7 +1003,7 @@ function FiniquitoGestionPageInner() {
 
   return (
     <FiniquitoWorkspaceShell
-      description="Solo entran créditos LIQUIDADO con cuotas cubiertas (= financiamiento). Área de trabajo: en proceso y terminado. Bandeja central por cédula. Abajo: rechazados."
+      description="Los créditos LIQUIDADO con cuotas cubiertas (= financiamiento) entran automáticamente al área de trabajo para el último proceso de cobranza. Abajo: rechazados."
       actions={
         <Button
           size="sm"
@@ -940,7 +1056,7 @@ function FiniquitoGestionPageInner() {
                 aria-hidden
               />
               <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                Nuevos en revisión
+                Nuevos en trabajo
               </p>
             </div>
             <p
@@ -1259,7 +1375,7 @@ function FiniquitoGestionPageInner() {
               </p>
             ) : (
               <>
-                {renderTabla(itemsRechazados)}
+                {renderTabla(itemsRechazados, renderAccionesRechazado)}
                 <FiniquitoTablaScrollHint
                   total={totalRechazados}
                   cargados={itemsRechazados.length}
@@ -1273,7 +1389,6 @@ function FiniquitoGestionPageInner() {
       <FiniquitoRevisionDialog
         open={revisionOpen}
         casoId={revisionCasoId}
-        mode="admin"
         onOpenChange={open => {
           setRevisionOpen(open)
           if (!open) setRevisionCasoId(null)

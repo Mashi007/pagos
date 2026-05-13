@@ -16,6 +16,37 @@ FINIQUITO_EMAIL_COBRANZA = "cobranza@rapicreditca.com"
 FINIQUITO_EMAIL_ITMASTER = "itmaster@rapicreditca.com"
 
 
+def enviar_correo_en_proceso_operaciones_datos(
+    *,
+    caso_id: int,
+    prestamo_id: int,
+    cedula: str,
+    admin_email: str,
+    admin_nombre: str = "",
+) -> Tuple[bool, Optional[str]]:
+    """Aviso a operaciones y cobranza con datos primitivos (apto para background task)."""
+    dest = [FINIQUITO_EMAIL_OPERACIONES, FINIQUITO_EMAIL_COBRANZA]
+    ced = (cedula or "").strip()
+    subj = f"[RapiCredit Finiquito] Inicio proceso liberacion - cedula {ced}"
+    admin = (admin_email or "").strip() or "(sin email)"
+    nom = (admin_nombre or "").strip()
+    firma_admin = f"{nom} ({admin})" if nom else admin
+    body = (
+        f"Se ha marcado como «En proceso» el caso de finiquito del cliente con cedula {ced}.\n\n"
+        f"ID caso finiquito: {caso_id}\n"
+        f"ID prestamo: {prestamo_id}\n\n"
+        f"Accion registrada en el panel por: {firma_admin}\n"
+    )
+    ok, err = send_email(dest, subj, body, servicio=None)
+    if not ok:
+        logger.warning(
+            "finiquito en_proceso: fallo envio ops/cobranza caso_id=%s err=%s",
+            caso_id,
+            err,
+        )
+    return ok, err
+
+
 def enviar_correo_en_proceso_operaciones(
     db: Session,
     caso: FiniquitoCaso,
@@ -24,29 +55,16 @@ def enviar_correo_en_proceso_operaciones(
     admin_nombre: str = "",
 ) -> Tuple[bool, Optional[str]]:
     """Aviso a operaciones y cobranza: cliente en proceso de liberacion (finiquito)."""
-    dest = [FINIQUITO_EMAIL_OPERACIONES, FINIQUITO_EMAIL_COBRANZA]
-    ced = (caso.cedula or "").strip()
-    subj = f"[RapiCredit Finiquito] Inicio proceso liberacion - cedula {ced}"
-    admin = (admin_email or "").strip() or "(sin email)"
-    nom = (admin_nombre or "").strip()
-    firma_admin = f"{nom} ({admin})" if nom else admin
-    body = (
-        f"Se ha marcado como «En proceso» el caso de finiquito del cliente con cedula {ced}.\n\n"
-        f"ID caso finiquito: {caso.id}\n"
-        f"ID prestamo: {caso.prestamo_id}\n\n"
-        f"Accion registrada en el panel por: {firma_admin}\n"
+    return enviar_correo_en_proceso_operaciones_datos(
+        caso_id=int(caso.id),
+        prestamo_id=int(caso.prestamo_id),
+        cedula=caso.cedula or "",
+        admin_email=admin_email,
+        admin_nombre=admin_nombre,
     )
-    ok, err = send_email(dest, subj, body, servicio=None)
-    if not ok:
-        logger.warning(
-            "finiquito en_proceso: fallo envio ops/cobranza caso_id=%s err=%s",
-            caso.id,
-            err,
-        )
-    return ok, err
 
 
-def enviar_correo_rechazo_itmaster(caso: FiniquitoCaso) -> Tuple[bool, Optional[str]]:
+def enviar_correo_rechazo_itmaster_datos(caso_id: int) -> Tuple[bool, Optional[str]]:
     """Aviso generico a IT al marcar Rechazado desde la bandeja principal (admin)."""
     subj = "[RapiCredit Finiquito] revisar caso"
     body = "revisar caso"
@@ -54,7 +72,12 @@ def enviar_correo_rechazo_itmaster(caso: FiniquitoCaso) -> Tuple[bool, Optional[
     if not ok:
         logger.warning(
             "finiquito rechazo itmaster: fallo envio caso_id=%s err=%s",
-            caso.id,
+            caso_id,
             err,
         )
     return ok, err
+
+
+def enviar_correo_rechazo_itmaster(caso: FiniquitoCaso) -> Tuple[bool, Optional[str]]:
+    """Aviso generico a IT al marcar Rechazado desde la bandeja principal (admin)."""
+    return enviar_correo_rechazo_itmaster_datos(int(caso.id))

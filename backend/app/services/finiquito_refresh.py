@@ -14,7 +14,7 @@ from typing import Any, Optional
 from sqlalchemy import insert, text
 from sqlalchemy.orm import Session
 
-from app.models.finiquito import FiniquitoCaso
+from app.models.finiquito import FiniquitoCaso, FiniquitoEstadoHistorial
 from app.services.finiquito_caso_cleanup import eliminar_finiquito_casos_por_prestamo
 from app.services.finiquito_db_schema import finiquito_casos_has_contacto_para_siguientes
 from app.services.finiquito_prestamo_gestion_sync import (
@@ -22,6 +22,21 @@ from app.services.finiquito_prestamo_gestion_sync import (
 )
 
 logger = logging.getLogger(__name__)
+
+ESTADO_ENTRADA_TRABAJO = "ACEPTADO"
+
+
+def _es_revision_heredada_sin_gestion(db: Session, caso: FiniquitoCaso) -> bool:
+    """True si el caso quedo en REVISION por la regla anterior, no por decision operativa."""
+    if (caso.estado or "").strip().upper() != "REVISION":
+        return False
+    tiene_historial = (
+        db.query(FiniquitoEstadoHistorial.id)
+        .filter(FiniquitoEstadoHistorial.caso_id == int(caso.id))
+        .first()
+        is not None
+    )
+    return not tiene_historial
 
 
 def _upsert_finiquito_caso_desde_valores(
@@ -43,6 +58,8 @@ def _upsert_finiquito_caso_desde_valores(
         caso_existente.total_financiamiento = total_fin
         caso_existente.sum_total_pagado = sum_tp
         caso_existente.ultimo_refresh_utc = now
+        if _es_revision_heredada_sin_gestion(db, caso_existente):
+            caso_existente.estado = ESTADO_ENTRADA_TRABAJO
         return "actualizado"
     if finiquito_casos_has_contacto_para_siguientes(db):
         db.add(
@@ -52,7 +69,7 @@ def _upsert_finiquito_caso_desde_valores(
                 cedula=cedula,
                 total_financiamiento=total_fin,
                 sum_total_pagado=sum_tp,
-                estado="REVISION",
+                estado=ESTADO_ENTRADA_TRABAJO,
                 ultimo_refresh_utc=now,
             )
         )
@@ -64,7 +81,7 @@ def _upsert_finiquito_caso_desde_valores(
                 cedula=cedula,
                 total_financiamiento=total_fin,
                 sum_total_pagado=sum_tp,
-                estado="REVISION",
+                estado=ESTADO_ENTRADA_TRABAJO,
                 ultimo_refresh_utc=now,
             )
         )
@@ -153,8 +170,10 @@ def refrescar_finiquito_caso_prestamo_si_aplica(db: Session, prestamo_id: int) -
 
 def ejecutar_refresh_finiquito_casos(db: Session) -> dict[str, Any]:
     """
-    - Inserta nuevos casos en REVISION (solo prestamos LIQUIDADO que cumplen la regla).
-    - Actualiza sum_total_pagado / totales en casos existentes (mantiene estado).
+    - Inserta nuevos casos en ACEPTADO (area de trabajo) para prestamos LIQUIDADO que cumplen la regla.
+    - Actualiza sum_total_pagado / totales en casos existentes.
+      Si aun estaban en REVISION por la regla anterior y no tienen historial operativo,
+      los normaliza a ACEPTADO.
     - Elimina casos cuyo prestamo ya no califica (dejo de ser LIQUIDADO, cuotas sin cuadrar, etc.),
       en cualquier estado del caso (REVISION, ACEPTADO, area de trabajo, etc.).
     """

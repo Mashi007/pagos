@@ -2,10 +2,6 @@ import { Navigate } from 'react-router-dom'
 
 import { FiniquitoGestionPage } from './FiniquitoGestionPage'
 
-import { FiniquitoPanelPage } from './FiniquitoPanelPage'
-
-import { getFiniquitoAccessToken } from '../services/finiquitoService'
-
 import { useSimpleAuth } from '../store/simpleAuthStore'
 import { isAdminRole, isManagerRole, isOperatorRole } from '../utils/rol'
 
@@ -24,29 +20,16 @@ function GateSpinner() {
 /**
  * Una sola URL canónica /finiquitos/gestion:
  * - Usuario con rol admin, operario o gerente (panel) → bandeja gestión (FiniquitoGestionPage).
- * - Colaborador con JWT OTP (sessionStorage) → mismo enlace, contenido de portal (FiniquitoPanelPage).
- * - Sin admin ni token OTP → /finiquitos/acceso (no al login del sistema).
+ * - Sin rol autorizado → acceso limitado.
  */
 export function FiniquitoGestionGatePage() {
   const { isAuthenticated, user, isLoading } = useSimpleAuth()
-
-  const finiToken = getFiniquitoAccessToken()?.trim()
 
   const esPanelGestionFiniquito =
     isAuthenticated &&
     (isAdminRole(user?.rol) ||
       isOperatorRole(user?.rol) ||
       isManagerRole(user?.rol))
-
-  if (finiToken) {
-    if (isLoading && isAuthenticated) {
-      return <GateSpinner />
-    }
-
-    if (!esPanelGestionFiniquito) {
-      return <FiniquitoPanelPage />
-    }
-  }
 
   if (isLoading) {
     return <GateSpinner />
@@ -56,5 +39,5 @@ export function FiniquitoGestionGatePage() {
     return <FiniquitoGestionPage />
   }
 
-  return <Navigate to="/finiquitos/acceso" replace />
+  return <Navigate to="/acceso-limitado" replace />
 }

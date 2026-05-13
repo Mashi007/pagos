@@ -52,8 +52,7 @@ export function usePermissions() {
   }
 
   /**
-   * Panel interno /finiquitos/gestion (misma vista que administrador): admin u operario.
-   * Colaboradores externos usan OTP (FiniquitoPanelPage), no este flag.
+   * Panel interno de finiquitos: disponible desde Sidebar para admin, operario o gerente.
    */
 
   const isFiniquitador = (): boolean => {

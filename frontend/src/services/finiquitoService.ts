@@ -1,136 +1,6 @@
-import axios, { type AxiosInstance } from 'axios'
-
-import { API_BASE_URL, apiClient } from './api'
-
-import { FINIQUITO_ACCESS_TOKEN_KEY } from '../constants/finiquitoStorage'
+import { apiClient } from './api'
 
 const BASE = '/api/v1/finiquito'
-
-function getFiniquitoToken(): string {
-  try {
-    return sessionStorage.getItem(FINIQUITO_ACCESS_TOKEN_KEY) || ''
-  } catch {
-    return ''
-  }
-}
-
-function createFiniquitoClient(): AxiosInstance {
-  const c = axios.create({
-    baseURL: API_BASE_URL,
-    timeout: 30000,
-    headers: { 'Content-Type': 'application/json' },
-    validateStatus: s => s < 500,
-  })
-  c.interceptors.request.use(cfg => {
-    const t = getFiniquitoToken().trim()
-    if (t) {
-      cfg.headers.Authorization = `Bearer ${t.startsWith('Bearer ') ? t.slice(7) : t}`
-    }
-    return cfg
-  })
-  return c
-}
-
-const finiquitoAxios = createFiniquitoClient()
-
-const COMPROBANTE_BLOB_TIMEOUT_MS = 120000
-
-/**
- * GET binario (p. ej. /api/v1/pagos/comprobante-imagen/{id}) con Bearer del portal Finiquito.
- */
-export async function finiquitoGetBlob(apiPath: string): Promise<Blob> {
-  const path = (apiPath || '').trim()
-  if (!path.startsWith('/')) {
-    throw new Error('Ruta de API invalida')
-  }
-  const response = await finiquitoAxios.get(path, {
-    responseType: 'blob',
-    timeout: path.includes('comprobante-imagen')
-      ? COMPROBANTE_BLOB_TIMEOUT_MS
-      : 30000,
-  })
-  const { data, status } = response
-  if (status === 401) {
-    throw new Error('Sesión expirada. Ingrese de nuevo.')
-  }
-  if (status === 403) {
-    throw new Error('No tiene permiso para ver este comprobante.')
-  }
-  if (status >= 400) {
-    let msg = `Error ${status}`
-    const blobErr = data as Blob
-    if (blobErr && typeof blobErr.text === 'function') {
-      try {
-        const txt = await blobErr.text()
-        const j = JSON.parse(txt) as { detail?: string }
-        if (typeof j?.detail === 'string' && j.detail.trim()) {
-          msg = j.detail
-        }
-      } catch {
-        /* ignore */
-      }
-    }
-    throw new Error(msg)
-  }
-  return data as Blob
-}
-
-function detailToString(detail: unknown): string {
-  if (typeof detail === 'string' && detail.trim()) return detail
-  if (Array.isArray(detail)) {
-    const parts = detail
-      .map((x: unknown) => {
-        if (typeof x === 'string') return x
-        if (x && typeof x === 'object' && 'msg' in x) {
-          const m = (x as { msg?: string }).msg
-          return typeof m === 'string' ? m : ''
-        }
-        return ''
-      })
-      .filter(Boolean)
-    if (parts.length) return parts.join('; ')
-  }
-  return ''
-}
-
-/** Error HTTP 4xx/5xx del flujo Finiquito (axios no lanza en 4xx con validateStatus). */
-export class FiniquitoHttpError extends Error {
-  readonly status: number
-
-  constructor(message: string, status: number) {
-    super(message)
-    this.name = 'FiniquitoHttpError'
-    this.status = status
-  }
-}
-
-function throwIfFiniquitoHttpError(status: number, data: unknown): void {
-  if (status < 400) return
-  const d = data as { detail?: unknown; message?: string }
-  const fromDetail = detailToString(d?.detail)
-  const msg =
-    fromDetail ||
-    (typeof d?.message === 'string' && d.message) ||
-    'Solicitud no procesada'
-  throw new FiniquitoHttpError(msg, status)
-}
-
-export function setFiniquitoAccessToken(token: string | null): void {
-  try {
-    if (token) sessionStorage.setItem(FINIQUITO_ACCESS_TOKEN_KEY, token)
-    else sessionStorage.removeItem(FINIQUITO_ACCESS_TOKEN_KEY)
-  } catch {
-    /* ignore */
-  }
-}
-
-export function getFiniquitoAccessToken(): string | null {
-  try {
-    return sessionStorage.getItem(FINIQUITO_ACCESS_TOKEN_KEY)
-  } catch {
-    return null
-  }
-}
 
 export type FiniquitoCasoItem = {
   id: number
@@ -149,110 +19,6 @@ export type FiniquitoCasoItem = {
   cliente_telefono?: string | null
   /** ISO date: plazo 15 días laborales al pasar a En proceso (prestamos.finiquito_tramite_fecha_limite). */
   finiquito_tramite_fecha_limite?: string | null
-}
-
-export async function finiquitoRegistro(cedula: string, email: string) {
-  const { data, status } = await finiquitoAxios.post(
-    `${BASE}/public/registro`,
-    {
-      cedula,
-      email,
-    }
-  )
-  throwIfFiniquitoHttpError(status, data)
-  return data as { ok: boolean; message: string }
-}
-
-export async function finiquitoSolicitarCodigo(cedula: string, email: string) {
-  const { data, status } = await finiquitoAxios.post(
-    `${BASE}/public/solicitar-codigo`,
-    {
-      cedula,
-      email,
-    }
-  )
-  throwIfFiniquitoHttpError(status, data)
-  return data as { ok: boolean; message: string }
-}
-
-export async function finiquitoVerificarCodigo(
-  cedula: string,
-  email: string,
-  codigo: string
-) {
-  const { data, status } = await finiquitoAxios.post(
-    `${BASE}/public/verificar-codigo`,
-    {
-      cedula,
-      email,
-      codigo,
-    }
-  )
-  throwIfFiniquitoHttpError(status, data)
-  return data as {
-    ok: boolean
-    access_token?: string
-    expires_in?: number
-    error?: string
-  }
-}
-
-/**
- * Lista casos materializados (suma abonos = financiamiento).
- * Sin filtro o `todos`: todos los registros. `entrada` / `desk`: solo ese estado.
- */
-export async function finiquitoListarCasos(
-  bandeja?: 'entrada' | 'desk' | 'todos'
-) {
-  const params: Record<string, string> = {}
-  if (bandeja === 'entrada' || bandeja === 'desk') {
-    params.bandeja = bandeja
-  }
-  const { data, status } = await finiquitoAxios.get(`${BASE}/public/casos`, {
-    params,
-  })
-  if (status === 401) {
-    throw new Error('Token inválido o expirado. Ingrese de nuevo.')
-  }
-  if (status >= 400) {
-    const msg =
-      (data as { detail?: string })?.detail || 'No se pudo cargar la lista'
-    throw new Error(msg)
-  }
-  return data as { items: FiniquitoCasoItem[] }
-}
-
-export async function finiquitoPatchEstadoPublic(
-  casoId: number,
-  estado: string
-) {
-  const { data, status } = await finiquitoAxios.patch(
-    `${BASE}/public/casos/${casoId}/estado`,
-    { estado }
-  )
-  if (status >= 400) {
-    const msg =
-      (data as { detail?: string })?.detail ||
-      (data as { error?: string })?.error ||
-      'Error al actualizar'
-    throw new Error(msg)
-  }
-  return data as { ok: boolean; caso?: FiniquitoCasoItem; error?: string }
-}
-
-export async function finiquitoDetalle(casoId: number) {
-  const { data, status } = await finiquitoAxios.get(
-    `${BASE}/public/casos/${casoId}/detalle`
-  )
-  if (status >= 400) {
-    const msg = (data as { detail?: string })?.detail || 'No se pudo cargar'
-    throw new Error(msg)
-  }
-  return data as {
-    caso: FiniquitoCasoItem
-    prestamo: Record<string, unknown> | null
-    cuotas: Record<string, unknown>[] | null
-  }
 }
 
 export type FiniquitoRevisionDatosResponse = {
@@ -277,23 +43,7 @@ export type FiniquitoRevisionDatosResponse = {
   }
 }
 
-/** Detalle del caso: préstamo, cuotas, listados préstamos/pagos por cédula (portal colaborador). */
-export async function finiquitoRevisionDatos(casoId: number) {
-  const { data, status } = await finiquitoAxios.get(
-    `${BASE}/public/revision-datos/${casoId}`
-  )
-  if (status === 401) {
-    throw new Error('Token inválido o expirado. Ingrese de nuevo.')
-  }
-  if (status >= 400) {
-    const msg =
-      (data as { detail?: string })?.detail || 'No se pudo cargar la revision'
-    throw new Error(msg)
-  }
-  return data as FiniquitoRevisionDatosResponse
-}
-
-/** Igual que finiquitoRevisionDatos; usa sesión administrador del panel. */
+/** Detalle interno del caso: préstamo, cuotas, listados préstamos/pagos por cédula. */
 export async function finiquitoAdminRevisionDatos(casoId: number) {
   return apiClient.get<FiniquitoRevisionDatosResponse>(
     `${BASE}/admin/casos/${casoId}/revision-datos`
@@ -379,7 +129,7 @@ export async function finiquitoAdminPatchEstado(
     ok: boolean
     caso?: FiniquitoCasoItem
     error?: string
-  }>(`${BASE}/admin/casos/${casoId}/estado`, body)
+  }>(`${BASE}/admin/casos/${casoId}/estado`, body, { timeout: 120000 })
 }
 
 export type FiniquitoRefreshStats = {
@@ -391,6 +141,8 @@ export type FiniquitoRefreshStats = {
 
 export async function finiquitoAdminRefreshMaterializado() {
   return apiClient.post<FiniquitoRefreshStats>(
-    `${BASE}/admin/refresh-materializado`
+    `${BASE}/admin/refresh-materializado`,
+    undefined,
+    { timeout: 180000 }
   )
 }

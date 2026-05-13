@@ -2,15 +2,16 @@
 """
 Endpoint para ejecutar actualizacion manual de prestamos a LIQUIDADO
 """
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from app.core.database import get_db
-from app.core.deps import get_current_user
+from app.core.deps import require_admin
 
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from datetime import datetime
 
 from app.services.cuota_estado import hoy_negocio
+from app.services.finiquito_refresh import refrescar_finiquito_caso_prestamo_si_aplica
 from app.services.prestamo_db_compat import prestamos_tiene_columna_fecha_liquidado
 
 router = APIRouter(prefix='/api/v1/prestamos', tags=['prestamos'])
@@ -18,7 +19,7 @@ router = APIRouter(prefix='/api/v1/prestamos', tags=['prestamos'])
 @router.post('/actualizar-liquidado-manual')
 async def actualizar_liquidado_manual(
     db: Session = Depends(get_db),
-    usuario = Depends(get_current_user)
+    _usuario = Depends(require_admin)
 ):
     """
     Ejecuta manualmente la actualizacion de prestamos a LIQUIDADO.
@@ -51,6 +52,18 @@ async def actualizar_liquidado_manual(
                 ),
                 {"fd": fd},
             )
+            db.commit()
+
+        ids_liquidados_hoy = db.execute(text('''
+            SELECT DISTINCT prestamo_id
+            FROM auditoria_cambios_estado_prestamo
+            WHERE DATE(fecha_cambio) = CURRENT_DATE
+              AND estado_nuevo = 'LIQUIDADO'
+        ''')).fetchall()
+        for row in ids_liquidados_hoy:
+            if row[0] is not None:
+                refrescar_finiquito_caso_prestamo_si_aplica(db, int(row[0]))
+        if ids_liquidados_hoy:
             db.commit()
         
         # Contar cambios hoy
@@ -102,9 +115,9 @@ async def actualizar_liquidado_manual(
 
 @router.get('/auditoria-cambios-estado')
 async def obtener_auditoria_cambios_estado(
-    dias: int = 7,
+    dias: int = Query(7, ge=1, le=90),
     db: Session = Depends(get_db),
-    usuario = Depends(get_current_user)
+    _usuario = Depends(require_admin)
 ):
     """
     Obtiene el historial de cambios de estado a LIQUIDADO.
@@ -122,7 +135,7 @@ async def obtener_auditoria_cambios_estado(
               total_financiamiento,
               suma_pagado
             FROM auditoria_cambios_estado_prestamo
-            WHERE fecha_cambio >= CURRENT_DATE - INTERVAL ':dias days'
+            WHERE fecha_cambio >= CURRENT_DATE - (:dias * INTERVAL '1 day')
             ORDER BY fecha_cambio DESC
         '''), {'dias': dias}).fetchall()
         
@@ -132,7 +145,7 @@ async def obtener_auditoria_cambios_estado(
               COUNT(DISTINCT prestamo_id) as prestamos_afectados,
               SUM(total_financiamiento)::numeric(14,2) as suma_capital
             FROM auditoria_cambios_estado_prestamo
-            WHERE fecha_cambio >= CURRENT_DATE - INTERVAL ':dias days'
+            WHERE fecha_cambio >= CURRENT_DATE - (:dias * INTERVAL '1 day')
         '''), {'dias': dias}).fetchone()
         
         return {

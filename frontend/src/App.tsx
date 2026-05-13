@@ -14,13 +14,11 @@ import { SimpleProtectedRoute } from './components/auth/SimpleProtectedRoute'
 
 import { useSimpleAuth } from './store/simpleAuthStore'
 
-import { getFiniquitoAccessToken } from './services/finiquitoService'
-
 import { BASE_PATH, STAFF_LOGIN_SEARCH } from './config/env'
 
 import { RUTAS_REPORTE_PAGO_PUBLICO } from './constants/rutasIngresoPago'
 
-import { isAdminRole, isManagerRole, isOperatorRole } from './utils/rol'
+import { isAdminRole } from './utils/rol'
 import {
   defaultHomePathForRol,
   isDelegatedPathForRol,
@@ -95,39 +93,6 @@ function RootLayoutWrapper() {
     return <Navigate to={defaultHomePathForRol(user.rol)} replace />
   }
 
-  const esGestionFiniquito = pathnameFromRouter === '/finiquitos/gestion'
-
-  const tokenPortalFiniquito = getFiniquitoAccessToken()?.trim()
-
-  const esAdminPanel = isAuthenticated && isAdminRole(user?.rol)
-
-  const esOperatorPanel = isAuthenticated && isOperatorRole(user?.rol)
-
-  const esManagerPanel = isAuthenticated && isManagerRole(user?.rol)
-
-  const esPanelGestionFiniquitoInterno =
-    esAdminPanel || esOperatorPanel || esManagerPanel
-
-  if (esGestionFiniquito && !esPanelGestionFiniquitoInterno) {
-    if (tokenPortalFiniquito) {
-      return <Outlet />
-    }
-
-    if (isLoading) {
-      return (
-        <div className="flex min-h-[100dvh] items-center justify-center bg-slate-100/80">
-          <div
-            className="h-10 w-10 animate-spin rounded-full border-2 border-slate-400 border-t-transparent"
-            aria-label="Cargando"
-            role="status"
-          />
-        </div>
-      )
-    }
-
-    return <Navigate to="/finiquitos/acceso" replace />
-  }
-
   return (
     <SimpleProtectedRoute>
       <Layout />
@@ -166,9 +131,7 @@ import {
   EmbudoClientes,
   EmbudoConcesionarios,
   EstadoCuentaPublicoPage,
-  FiniquitoAccesoPage,
   FiniquitoGestionGatePage,
-  FiniquitoRootPage,
   InfopagosPage,
   EscanerInfopagosPage,
   EscanerInfopagosLotePage,
@@ -260,10 +223,7 @@ function App() {
 
   const isPublicPath = PUBLIC_PATHS.some((p: string) => pathname === p)
 
-  const colaboradorFiniquitoEnGestion =
-    pathname === '/finiquitos/gestion' && !!getFiniquitoAccessToken()?.trim()
-
-  if (isLoading && !isPublicPath && !colaboradorFiniquitoEnGestion) {
+  if (isLoading && !isPublicPath) {
     return <PageLoader />
   }
 
@@ -332,9 +292,7 @@ function App() {
               }
             />
 
-            {/* Finiquito: portal OTP y gestion comparten URL /finiquitos/gestion (gate); panel redirige */}
-
-            {/* Nota: Rutas de finiquitos han sido movidas a sección protegida (después de login) */}
+            {/* Finiquitos: módulo interno protegido (admin, operador, gerente). */}
 
             {/* Login: misma pantalla que index cuando no autenticado */}
 
@@ -378,15 +336,21 @@ function App() {
 
             <Route path="prestamos" element={<Prestamos />} />
 
-            {/* Finiquitos: DEBE IR ANTES de /pagos para no ser capturado por <Route path="pagos"> */}
+            {/* Finiquitos: entrada interna solo desde Sidebar -> /finiquitos/gestion. */}
 
-            <Route path="finiquitos" element={<FiniquitoRootPage />} />
+            <Route
+              path="finiquitos"
+              element={<Navigate to="/acceso-limitado" replace />}
+            />
 
-            <Route path="finiquitos/acceso" element={<FiniquitoAccesoPage />} />
+            <Route
+              path="finiquitos/acceso"
+              element={<Navigate to="/acceso-limitado" replace />}
+            />
 
             <Route
               path="finiquitos/panel"
-              element={<Navigate to="/finiquitos/gestion" replace />}
+              element={<Navigate to="/acceso-limitado" replace />}
             />
 
             <Route

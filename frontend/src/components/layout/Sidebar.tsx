@@ -43,7 +43,7 @@ import {
 
 import { cn } from '../../utils'
 
-import { isAdminRole, isOperatorRole } from '../../utils/rol'
+import { isAdminRole, isManagerRole, isOperatorRole } from '../../utils/rol'
 import { isHrefDelegatedForRol } from '../../config/roleRoutes'
 import { BASE_PATH } from '../../config/env'
 
@@ -488,9 +488,11 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
               if (!child.href) return false
               if (child.adminOnly) {
                 if (isAdmin) return isHrefDelegatedForRol(user?.rol, child.href)
-                if (
-                  isOperatorRole(user?.rol) &&
+                const isFiniquitosGestion =
                   child.href.split('?')[0] === '/finiquitos/gestion'
+                if (
+                  (isOperatorRole(user?.rol) || isManagerRole(user?.rol)) &&
+                  isFiniquitosGestion
                 ) {
                   return isHrefDelegatedForRol(user?.rol, child.href)
                 }
