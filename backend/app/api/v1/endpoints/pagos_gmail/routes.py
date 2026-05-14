@@ -26,6 +26,7 @@ from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException, Qu
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy import and_, delete, desc, func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.database import SessionLocal, get_db
@@ -1515,7 +1516,7 @@ def listar_sync_items(
 
 def _pago_con_error_desde_sync_item(
     db: Session, item: PagosGmailSyncItem
-) -> PagoConError:
+) -> tuple[PagoConError, bool]:
     """
     Construye y persiste un PagoConError a partir de un sync_item.
     Mismas reglas que _migrar_pendientes_gmail_a_con_errores_core, acotadas a una fila:
@@ -1523,7 +1524,11 @@ def _pago_con_error_desde_sync_item(
     - parsea fecha_pago a datetime (00:00:00).
     - cédula formateada (PagoConError acepta sin FK a clientes).
     - drive_link -> documento_ruta (path interno si aplica).
-    Devuelve la fila persistida (con id) tras flush.
+    Devuelve (fila_pago_con_error, reutilizada_bool). Si ya existe una fila pendiente
+    con el mismo `numero_documento` (índice único ux_pagos_con_errores_numero_documento_btrim),
+    la reutiliza/actualiza en lugar de insertar otra. Esto hace idempotente el botón
+    "Editar" cuando el operador pulsa varias veces o cuando otro sync_item con el mismo
+    serial ya fue migrado a revisión manual.
     """
     fallback_dt = item.created_at or datetime.utcnow()
     fecha_pago = _parse_fecha_pago_gmail_temporal(item.fecha_pago, fallback_dt)
@@ -1538,6 +1543,7 @@ def _pago_con_error_desde_sync_item(
     numero_doc = compose_numero_documento_almacenado(
         numero_base or f"GMAILSI-{item.id}", None
     )
+    numero_doc_key = (numero_doc or "").strip().upper()
 
     observaciones = "Pendiente desde Gmail (guardado manual desde módulo Actualizaciones > Gmail)"
     if monto_num <= 0:
@@ -1546,6 +1552,38 @@ def _pago_con_error_desde_sync_item(
         )[:255]
 
     doc_ruta = _documento_ruta_desde_gmail_temporal(getattr(item, "drive_link", None))
+
+    def _buscar_existente_por_numero() -> Optional[PagoConError]:
+        if not numero_doc_key:
+            return None
+        return db.execute(
+            select(PagoConError).where(
+                func.upper(func.trim(PagoConError.numero_documento)) == numero_doc_key
+            )
+        ).scalars().first()
+
+    existente = _buscar_existente_por_numero()
+    if existente is not None:
+        existente.prestamo_id = existente.prestamo_id
+        existente.cedula_cliente = existente.cedula_cliente or (cedula or None)
+        existente.fecha_pago = fecha_pago
+        existente.monto_pagado = monto_num
+        existente.institucion_bancaria = (item.banco or None)
+        existente.estado = existente.estado or "PENDIENTE"
+        existente.conciliado = bool(existente.conciliado) if existente.conciliado is not None else False
+        existente.usuario_registro = existente.usuario_registro or "GMAIL_PIPELINE"
+        if doc_ruta and not existente.documento_ruta:
+            existente.documento_ruta = doc_ruta
+            existente.documento_nombre = "Comprobante Gmail"
+        existente.notas = (
+            f"Asunto: {(item.asunto or '').strip()} | "
+            f"Correo: {(item.correo_origen or '').strip()}"
+        )[:1000]
+        existente.referencia_pago = (numero_base or f"GMAILSI-{item.id}")[:100]
+        existente.observaciones = observaciones
+        db.flush()
+        db.refresh(existente)
+        return existente, True
 
     nuevo = PagoConError(
         prestamo_id=None,
@@ -1566,10 +1604,37 @@ def _pago_con_error_desde_sync_item(
         documento_ruta=doc_ruta,
         documento_nombre=("Comprobante Gmail" if doc_ruta else None),
     )
-    db.add(nuevo)
-    db.flush()
-    db.refresh(nuevo)
-    return nuevo
+    try:
+        # Savepoint: si otro proceso/fila ya creó el mismo numero_documento, el
+        # UniqueViolation no deja abortada la transacción exterior del endpoint.
+        with db.begin_nested():
+            db.add(nuevo)
+            db.flush()
+        db.refresh(nuevo)
+        return nuevo, False
+    except IntegrityError as exc:
+        logger.info(
+            "[PAGOS_GMAIL] PagoConError ya existía al migrar sync_item=%s numero_documento=%s; reutilizando fila existente. err=%s",
+            getattr(item, "id", None),
+            numero_doc,
+            str(exc)[:200],
+        )
+        existente = _buscar_existente_por_numero()
+        if existente is None:
+            raise
+        if doc_ruta and not existente.documento_ruta:
+            existente.documento_ruta = doc_ruta
+            existente.documento_nombre = "Comprobante Gmail"
+        existente.cedula_cliente = existente.cedula_cliente or (cedula or None)
+        existente.fecha_pago = fecha_pago
+        existente.monto_pagado = monto_num
+        existente.institucion_bancaria = (item.banco or None)
+        existente.estado = existente.estado or "PENDIENTE"
+        existente.referencia_pago = (numero_base or f"GMAILSI-{item.id}")[:100]
+        existente.observaciones = observaciones
+        db.flush()
+        db.refresh(existente)
+        return existente, True
 
 
 def _eliminar_filas_gmail_relacionadas(db: Session, item: PagosGmailSyncItem) -> int:
@@ -1747,7 +1812,7 @@ def migrar_sync_item_a_pendientes(
     )
 
     try:
-        nuevo_pe = _pago_con_error_desde_sync_item(db, item)
+        nuevo_pe, pe_reutilizado = _pago_con_error_desde_sync_item(db, item)
         _eliminar_filas_gmail_relacionadas(db, item)
         db.commit()
         db.refresh(nuevo_pe)
@@ -1767,14 +1832,23 @@ def migrar_sync_item_a_pendientes(
         ) from e
 
     mensaje = (
-        f"Fila migrada a pagos_con_errores (pe_id={int(nuevo_pe.id)}). "
-        "Use el modal de revisión manual para validar y aplicar."
+        (
+            f"Ya existía en pagos_con_errores (pe_id={int(nuevo_pe.id)}); se reutilizó esa fila. "
+            if pe_reutilizado
+            else f"Fila migrada a pagos_con_errores (pe_id={int(nuevo_pe.id)}). "
+        )
+        + "Use el modal de revisión manual para validar y aplicar."
     )
     if duplicado:
         mensaje = (
             f"Serial {item.numero_referencia or '(s/r)'} ya existe en cartera "
             f"(pago_id={pago_id_exist}, prestamo_id={prestamo_id_exist}). "
-            f"Fila migrada a pagos_con_errores (pe_id={int(nuevo_pe.id)}); "
+            + (
+                f"Ya existía en pagos_con_errores (pe_id={int(nuevo_pe.id)}); "
+                if pe_reutilizado
+                else f"Fila migrada a pagos_con_errores (pe_id={int(nuevo_pe.id)}); "
+            )
+            +
             "agregue un código (sufijo) en el modal de revisión manual para resolver el duplicado."
         )
 
