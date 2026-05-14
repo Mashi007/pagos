@@ -28,7 +28,9 @@ import {
   openComprobanteInNewTab,
   updatePagoReportado,
   eliminarPagoReportado,
+  diagnosticoDuplicadoPagoReportado,
   type PagoReportadoDetalleResponse,
+  type PagoReportadoDuplicadoDiagnostico,
 } from '../services/cobrosService'
 
 import { Button } from '../components/ui/button'
@@ -113,6 +115,8 @@ export default function CobrosEditarPage() {
   const [detalle, setDetalle] = useState<PagoReportadoDetalleResponse | null>(
     null
   )
+  const [duplicadoDiagnostico, setDuplicadoDiagnostico] =
+    useState<PagoReportadoDuplicadoDiagnostico | null>(null)
 
   const [loading, setLoading] = useState(true)
 
@@ -177,6 +181,7 @@ export default function CobrosEditarPage() {
       const res = await getPagoReportadoDetalle(Number(id))
 
       setDetalle(res)
+      setDuplicadoDiagnostico(null)
 
       // Monto como texto plano para <input type="number"> (evita miles es-VE que bloquean la edición)
       const montoRaw =
@@ -327,6 +332,41 @@ export default function CobrosEditarPage() {
 
   useEffect(() => {
     const pid = id ? Number(id) : NaN
+    if (!id || Number.isNaN(pid) || !detalle) return
+
+    const numeroOperacion = form.numero_operacion.trim()
+    if (!numeroOperacion) {
+      setDuplicadoDiagnostico({
+        duplicado_en_pagos: false,
+        prestamo_objetivo_id: detalle.prestamo_objetivo_id,
+        prestamo_objetivo_multiple: detalle.prestamo_objetivo_multiple,
+      })
+      return
+    }
+
+    let active = true
+    const timer = window.setTimeout(() => {
+      void diagnosticoDuplicadoPagoReportado(pid, {
+        numero_operacion: numeroOperacion,
+        tipo_cedula: form.tipo_cedula.trim(),
+        numero_cedula: form.numero_cedula.trim(),
+      })
+        .then(res => {
+          if (active) setDuplicadoDiagnostico(res)
+        })
+        .catch(() => {
+          if (active) setDuplicadoDiagnostico(null)
+        })
+    }, 350)
+
+    return () => {
+      active = false
+      window.clearTimeout(timer)
+    }
+  }, [id, detalle, form.numero_operacion, form.tipo_cedula, form.numero_cedula])
+
+  useEffect(() => {
+    const pid = id ? Number(id) : NaN
     if (!id || Number.isNaN(pid) || !detalle?.tiene_comprobante) {
       setComprobanteObjectUrl(prev => {
         if (prev) URL.revokeObjectURL(prev)
@@ -469,6 +509,8 @@ export default function CobrosEditarPage() {
     )
   }
 
+  const duplicadoActual = duplicadoDiagnostico ?? detalle
+
   if (detalle.estado === 'aprobado' || detalle.estado === 'importado') {
     return (
       <div className="space-y-4 p-6">
@@ -600,7 +642,7 @@ export default function CobrosEditarPage() {
             </p>
           )}
 
-          {detalle.duplicado_en_pagos && (
+          {duplicadoActual.duplicado_en_pagos && (
             <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-900">
               <p className="font-medium text-rose-950">
                 Hay un pago en cartera que coincide con esta referencia u
@@ -608,19 +650,23 @@ export default function CobrosEditarPage() {
                 o «Visto».
               </p>
               <DuplicadoPrestamosComparacion
-                prestamoExistenteId={detalle.prestamo_existente_id}
-                pagoExistenteId={detalle.pago_existente_id}
-                pagoExistenteEstado={detalle.pago_existente_estado}
-                pagoExistenteFechaPago={detalle.pago_existente_fecha_pago}
-                prestamoObjetivoId={detalle.prestamo_objetivo_id}
+                prestamoExistenteId={duplicadoActual.prestamo_existente_id}
+                pagoExistenteId={duplicadoActual.pago_existente_id}
+                pagoExistenteEstado={duplicadoActual.pago_existente_estado}
+                pagoExistenteFechaPago={
+                  duplicadoActual.pago_existente_fecha_pago
+                }
+                prestamoObjetivoId={duplicadoActual.prestamo_objetivo_id}
                 fechaPagoReporteIso={detalle.fecha_pago}
                 prestamoDuplicadoEsObjetivo={
-                  detalle.prestamo_duplicado_es_objetivo
+                  duplicadoActual.prestamo_duplicado_es_objetivo
                 }
-                prestamoObjetivoMultiple={detalle.prestamo_objetivo_multiple}
+                prestamoObjetivoMultiple={
+                  duplicadoActual.prestamo_objetivo_multiple
+                }
               />
               <div className="mt-2 flex flex-wrap gap-2">
-                {typeof detalle.prestamo_existente_id === 'number' ? (
+                {typeof duplicadoActual.prestamo_existente_id === 'number' ? (
                   <Button
                     type="button"
                     variant="outline"
@@ -628,17 +674,17 @@ export default function CobrosEditarPage() {
                     disabled={eliminandoReporte}
                     onClick={() =>
                       navigate(
-                        `/prestamos?filtro_prestamo_id=${detalle.prestamo_existente_id}`
+                        `/prestamos?filtro_prestamo_id=${duplicadoActual.prestamo_existente_id}`
                       )
                     }
                   >
-                    Abrir préstamo #{detalle.prestamo_existente_id}
+                    Abrir préstamo #{duplicadoActual.prestamo_existente_id}
                   </Button>
                 ) : null}
-                {typeof detalle.prestamo_objetivo_id === 'number' &&
-                typeof detalle.prestamo_existente_id === 'number' &&
-                detalle.prestamo_objetivo_id !==
-                  detalle.prestamo_existente_id ? (
+                {typeof duplicadoActual.prestamo_objetivo_id === 'number' &&
+                typeof duplicadoActual.prestamo_existente_id === 'number' &&
+                duplicadoActual.prestamo_objetivo_id !==
+                  duplicadoActual.prestamo_existente_id ? (
                   <Button
                     type="button"
                     variant="outline"
@@ -646,11 +692,12 @@ export default function CobrosEditarPage() {
                     disabled={eliminandoReporte}
                     onClick={() =>
                       navigate(
-                        `/prestamos?filtro_prestamo_id=${detalle.prestamo_objetivo_id}`
+                        `/prestamos?filtro_prestamo_id=${duplicadoActual.prestamo_objetivo_id}`
                       )
                     }
                   >
-                    Abrir préstamo actual #{detalle.prestamo_objetivo_id}
+                    Abrir préstamo actual #
+                    {duplicadoActual.prestamo_objetivo_id}
                   </Button>
                 ) : null}
                 <Button

@@ -1357,6 +1357,17 @@ export interface PagoReportadoDetalleResponse {
   prestamo_duplicado_es_objetivo?: boolean | null
 }
 
+export interface PagoReportadoDuplicadoDiagnostico {
+  duplicado_en_pagos: boolean
+  pago_existente_id?: number | null
+  prestamo_existente_id?: number | null
+  pago_existente_estado?: string | null
+  pago_existente_fecha_pago?: string | null
+  prestamo_objetivo_id?: number | null
+  prestamo_objetivo_multiple?: boolean | null
+  prestamo_duplicado_es_objetivo?: boolean | null
+}
+
 /**
  * IDs de pagos reportados eliminados muy recientemente (este tab del navegador).
  *
@@ -1519,6 +1530,24 @@ export async function getPagoReportadoDetalle(
   } catch (e: unknown) {
     silentAndHideIfDetalle404(pagoId, e)
   }
+}
+
+export async function diagnosticoDuplicadoPagoReportado(
+  pagoId: number,
+  params: {
+    numero_operacion?: string
+    tipo_cedula?: string
+    numero_cedula?: string
+  }
+): Promise<PagoReportadoDuplicadoDiagnostico> {
+  const q = new URLSearchParams()
+  if (params.numero_operacion)
+    q.set('numero_operacion', params.numero_operacion)
+  if (params.tipo_cedula) q.set('tipo_cedula', params.tipo_cedula)
+  if (params.numero_cedula) q.set('numero_cedula', params.numero_cedula)
+  return await apiClient.get<PagoReportadoDuplicadoDiagnostico>(
+    `${BASE_COBROS}/pagos-reportados/${pagoId}/diagnostico-duplicado?${q}`
+  )
 }
 
 export async function aprobarPagoReportado(

@@ -618,6 +618,17 @@ class PagoReportadoDetalle(BaseModel):
     prestamo_duplicado_es_objetivo: Optional[bool] = None
 
 
+class PagoReportadoDuplicadoDiagnostico(BaseModel):
+    duplicado_en_pagos: bool = False
+    pago_existente_id: Optional[int] = None
+    prestamo_existente_id: Optional[int] = None
+    pago_existente_estado: Optional[str] = None
+    pago_existente_fecha_pago: Optional[date] = None
+    prestamo_objetivo_id: Optional[int] = None
+    prestamo_objetivo_multiple: Optional[bool] = None
+    prestamo_duplicado_es_objetivo: Optional[bool] = None
+
+
 class AprobarRechazarBody(BaseModel):
     motivo: Optional[str] = None
 
@@ -1544,6 +1555,103 @@ def _estado_label_estado_reportado(estado: str) -> str:
         "importado": "Importado a Pagos",
     }
     return m.get((estado or "").strip(), estado or "")
+
+
+def _prestamo_objetivo_desde_cedula(
+    db: Session,
+    tipo_cedula: Optional[str],
+    numero_cedula: Optional[str],
+) -> Tuple[Optional[int], Optional[bool]]:
+    cedula_norm = _normalize_cedula_for_client_lookup(
+        ((tipo_cedula or "") + (numero_cedula or ""))
+        .replace("-", "")
+        .replace(" ", "")
+        .strip()
+        .upper()
+    )
+    variants = _cedula_lookup_variants(cedula_norm)
+    if not variants:
+        return None, None
+
+    cedula_lookup = func.upper(
+        func.replace(func.replace(Cliente.cedula, "-", ""), " ", "")
+    )
+    cliente = db.execute(
+        select(Cliente).where(cedula_lookup.in_(variants))
+    ).scalars().first()
+    if not cliente:
+        return None, None
+
+    prestamos_aprob = db.execute(
+        select(Prestamo.id)
+        .where(
+            Prestamo.cliente_id == cliente.id,
+            func.upper(Prestamo.estado) == "APROBADO",
+        )
+        .order_by(Prestamo.id.desc())
+    ).scalars().all()
+    if not prestamos_aprob:
+        return None, None
+    return int(prestamos_aprob[0]), len(prestamos_aprob) > 1
+
+
+def _diagnostico_duplicado_reportado(
+    db: Session,
+    pr_like: Any,
+    *,
+    tipo_cedula: Optional[str],
+    numero_cedula: Optional[str],
+) -> PagoReportadoDuplicadoDiagnostico:
+    pago_existente_info = _pago_existente_info_para_reportado(
+        pr_like,
+        _pagos_existentes_info_por_clave(
+            db,
+            _collect_candidatos_canon_desde_reportados([pr_like]),
+        ),
+    )
+    pago_existente_id: Optional[int] = (
+        pago_existente_info[0] if pago_existente_info is not None else None
+    )
+    prestamo_existente_id: Optional[int] = None
+    pago_existente_estado: Optional[str] = None
+    pago_existente_fecha_pago: Optional[date] = None
+    if pago_existente_id is not None:
+        p_exist = db.execute(
+            select(Pago).where(Pago.id == pago_existente_id)
+        ).scalars().first()
+        if p_exist:
+            prestamo_existente_id = getattr(p_exist, "prestamo_id", None)
+            pago_existente_estado = getattr(p_exist, "estado", None)
+            fp = getattr(p_exist, "fecha_pago", None)
+            if fp is not None:
+                pago_existente_fecha_pago = (
+                    fp.date() if isinstance(fp, datetime) else fp
+                )
+
+    try:
+        prestamo_objetivo_id, prestamo_objetivo_multiple = (
+            _prestamo_objetivo_desde_cedula(db, tipo_cedula, numero_cedula)
+        )
+    except Exception:
+        prestamo_objetivo_id = None
+        prestamo_objetivo_multiple = None
+
+    prestamo_duplicado_es_objetivo: Optional[bool] = None
+    if prestamo_existente_id is not None and prestamo_objetivo_id is not None:
+        prestamo_duplicado_es_objetivo = int(prestamo_existente_id) == int(
+            prestamo_objetivo_id
+        )
+
+    return PagoReportadoDuplicadoDiagnostico(
+        duplicado_en_pagos=bool(pago_existente_id is not None),
+        pago_existente_id=pago_existente_id,
+        prestamo_existente_id=prestamo_existente_id,
+        pago_existente_estado=pago_existente_estado,
+        pago_existente_fecha_pago=pago_existente_fecha_pago,
+        prestamo_objetivo_id=prestamo_objetivo_id,
+        prestamo_objetivo_multiple=prestamo_objetivo_multiple,
+        prestamo_duplicado_es_objetivo=prestamo_duplicado_es_objetivo,
+    )
 
 
 def _obs_sin_duplicado(obs: str) -> str:
@@ -2519,6 +2627,39 @@ def exportar_pagos_aprobados_correccion(
     )
 
 
+@router.get(
+    "/pagos-reportados/{pago_id}/diagnostico-duplicado",
+    response_model=PagoReportadoDuplicadoDiagnostico,
+)
+def diagnostico_duplicado_pago_reportado(
+    pago_id: int,
+    numero_operacion: Optional[str] = Query(None),
+    tipo_cedula: Optional[str] = Query(None),
+    numero_cedula: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+):
+    """
+    Diagnóstico liviano para la pantalla de edición: evalúa el número actualmente
+    escrito en el formulario, aunque todavía no se haya guardado.
+    """
+    pr = db.execute(
+        select(PagoReportado).where(PagoReportado.id == pago_id)
+    ).scalars().first()
+    if not pr:
+        raise HTTPException(status_code=404, detail="Pago reportado no encontrado.")
+
+    pr_like = SimpleNamespace(
+        referencia_interna=getattr(pr, "referencia_interna", None),
+        numero_operacion=(numero_operacion or getattr(pr, "numero_operacion", None)),
+    )
+    return _diagnostico_duplicado_reportado(
+        db,
+        pr_like,
+        tipo_cedula=tipo_cedula or getattr(pr, "tipo_cedula", None),
+        numero_cedula=numero_cedula or getattr(pr, "numero_cedula", None),
+    )
+
+
 @router.get("/pagos-reportados/{pago_id}", response_model=PagoReportadoDetalle)
 def get_pago_reportado_detalle(pago_id: int, db: Session = Depends(get_db)):
     """Detalle de un pago reportado + historial de cambios de estado."""
@@ -2543,73 +2684,12 @@ def get_pago_reportado_detalle(pago_id: int, db: Session = Depends(get_db)):
     tasa_x, eq_usd = tasa_y_equivalente_usd_excel(
         db, pr.fecha_pago, float(pr.monto), pr.moneda or "BS"
     )
-    pago_existente_info = _pago_existente_info_para_reportado(
+    duplicado_diag = _diagnostico_duplicado_reportado(
+        db,
         pr,
-        _pagos_existentes_info_por_clave(
-            db,
-            _collect_candidatos_canon_desde_reportados([pr]),
-        ),
+        tipo_cedula=pr.tipo_cedula,
+        numero_cedula=pr.numero_cedula,
     )
-    pago_existente_id: Optional[int] = (
-        pago_existente_info[0] if pago_existente_info is not None else None
-    )
-    prestamo_existente_id: Optional[int] = None
-    pago_existente_estado: Optional[str] = None
-    pago_existente_fecha_pago: Optional[date] = None
-    prestamo_objetivo_id: Optional[int] = None
-    prestamo_objetivo_multiple: Optional[bool] = None
-    prestamo_duplicado_es_objetivo: Optional[bool] = None
-    if pago_existente_id is not None:
-        p_exist = db.execute(
-            select(Pago).where(Pago.id == pago_existente_id)
-        ).scalars().first()
-        if p_exist:
-            prestamo_existente_id = getattr(p_exist, "prestamo_id", None)
-            pago_existente_estado = getattr(p_exist, "estado", None)
-            fp = getattr(p_exist, "fecha_pago", None)
-            if fp is not None:
-                pago_existente_fecha_pago = (
-                    fp.date() if isinstance(fp, datetime) else fp
-                )
-    try:
-        cedula_norm = _normalize_cedula_for_client_lookup(
-            ((pr.tipo_cedula or "") + (pr.numero_cedula or ""))
-            .replace("-", "")
-            .replace(" ", "")
-            .strip()
-            .upper()
-        )
-        variants = _cedula_lookup_variants(cedula_norm)
-        if variants:
-            cedula_lookup = func.upper(
-                func.replace(func.replace(Cliente.cedula, "-", ""), " ", "")
-            )
-            cliente = db.execute(
-                select(Cliente).where(cedula_lookup.in_(variants))
-            ).scalars().first()
-            if cliente:
-                prestamos_aprob = db.execute(
-                    select(Prestamo.id)
-                    .where(
-                        Prestamo.cliente_id == cliente.id,
-                        func.upper(Prestamo.estado) == "APROBADO",
-                    )
-                    .order_by(Prestamo.id.desc())
-                ).scalars().all()
-                if prestamos_aprob:
-                    prestamo_objetivo_id = int(prestamos_aprob[0])
-                    prestamo_objetivo_multiple = len(prestamos_aprob) > 1
-    except Exception:
-        # No romper detalle por diagnóstico comparativo; los campos quedan null.
-        prestamo_objetivo_id = None
-        prestamo_objetivo_multiple = None
-    if (
-        prestamo_existente_id is not None
-        and prestamo_objetivo_id is not None
-    ):
-        prestamo_duplicado_es_objetivo = int(prestamo_existente_id) == int(
-            prestamo_objetivo_id
-        )
     return PagoReportadoDetalle(
         id=pr.id,
         referencia_interna=pr.referencia_interna,
@@ -2637,14 +2717,14 @@ def get_pago_reportado_detalle(pago_id: int, db: Session = Depends(get_db)):
         updated_at=pr.updated_at,
         historial=historial,
         canal_ingreso=getattr(pr, "canal_ingreso", None),
-        duplicado_en_pagos=bool(pago_existente_id is not None),
-        pago_existente_id=pago_existente_id,
-        prestamo_existente_id=prestamo_existente_id,
-        pago_existente_estado=pago_existente_estado,
-        pago_existente_fecha_pago=pago_existente_fecha_pago,
-        prestamo_objetivo_id=prestamo_objetivo_id,
-        prestamo_objetivo_multiple=prestamo_objetivo_multiple,
-        prestamo_duplicado_es_objetivo=prestamo_duplicado_es_objetivo,
+        duplicado_en_pagos=duplicado_diag.duplicado_en_pagos,
+        pago_existente_id=duplicado_diag.pago_existente_id,
+        prestamo_existente_id=duplicado_diag.prestamo_existente_id,
+        pago_existente_estado=duplicado_diag.pago_existente_estado,
+        pago_existente_fecha_pago=duplicado_diag.pago_existente_fecha_pago,
+        prestamo_objetivo_id=duplicado_diag.prestamo_objetivo_id,
+        prestamo_objetivo_multiple=duplicado_diag.prestamo_objetivo_multiple,
+        prestamo_duplicado_es_objetivo=duplicado_diag.prestamo_duplicado_es_objetivo,
     )
 
 
