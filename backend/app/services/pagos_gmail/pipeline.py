@@ -801,6 +801,18 @@ def run_pipeline(
                 # get_pagos_gmail_image_pdf_files_for_pipeline), por lo que el resto del flujo
                 # (Gemini -> plantillas A/B/C/D/E/F -> BD -> cascada cuotas) corre normal y
                 # solo se sustituye la cedula de cada item por la cedula resuelta del asunto.
+                full_payload: Optional[dict] = None
+                if redig_por_remitente and from_email_lc == PAGOS_GMAIL_LOTE_REMITENTE_IT_MASTER:
+                    # list_messages_by_filter trae solo metadata (From/Date/Subject), sin To ni partes.
+                    # Para validar si es lote real (To/Cc/Delivered-To + .eml) necesitamos format=full
+                    # ANTES de la compuerta que evita gastar Gemini en PDFs/JPG sueltos.
+                    full_payload = get_message_full_payload(gmail_svc, msg_id)
+                    if full_payload:
+                        payload = full_payload
+                        headers = {
+                            (h.get("name") or "").lower(): h.get("value") or ""
+                            for h in (full_payload.get("headers") or [])
+                        }
                 _es_lote_it_master, _cedula_lote_v_raw, _n_eml_lote = is_lote_it_master_message(
                     headers, payload
                 )
@@ -959,7 +971,8 @@ def run_pipeline(
                     subject[:50],
                 )
 
-                full_payload = get_message_full_payload(gmail_svc, msg_id)
+                if full_payload is None:
+                    full_payload = get_message_full_payload(gmail_svc, msg_id)
                 if not full_payload and payload.get("parts"):
                     full_payload = payload
 
