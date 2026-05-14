@@ -908,13 +908,23 @@ export default function ActualizacionesGmailPage() {
                           </td>
                           <td className="px-3 py-2 align-top text-xs">
                             {dup ? (
-                              <span
-                                className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-medium text-emerald-900"
-                                title={`Ya existe en pagos (id ${item.pago_id_existente ?? '?'})`}
-                              >
-                                <CheckCircle2 className="mr-1 h-3.5 w-3.5" />
-                                Si - pago {item.pago_id_existente ?? '?'}
-                              </span>
+                              <div className="flex flex-col gap-1">
+                                <span
+                                  className="inline-flex w-fit items-center rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-medium text-emerald-900"
+                                  title={
+                                    `Ya existe en pagos (id ${item.pago_id_existente ?? '?'})` +
+                                    (item.prestamo_id_existente
+                                      ? `, prestamo ${item.prestamo_id_existente}`
+                                      : '')
+                                  }
+                                >
+                                  <CheckCircle2 className="mr-1 h-3.5 w-3.5" />
+                                  Si - pago {item.pago_id_existente ?? '?'}
+                                </span>
+                                <span className="text-[11px] text-muted-foreground">
+                                  Prestamo {item.prestamo_id_existente ?? '?'}
+                                </span>
+                              </div>
                             ) : (
                               <span className="text-muted-foreground">No</span>
                             )}
