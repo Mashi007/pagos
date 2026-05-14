@@ -4,8 +4,11 @@ from __future__ import annotations
 
 import os
 import sys
+import types
+import importlib.util
 from datetime import datetime
 from decimal import Decimal
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -16,16 +19,34 @@ from sqlalchemy.orm import Session
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.core.database import SessionLocal
-from app.api.v1.endpoints.pagos_con_errores.routes import (
-    EliminarPorDescargaBody,
-    LimpiarYaCargadosBody,
-    archivar_por_descarga,
-    limpiar_pagos_con_error_ya_cargados,
-    listar_pagos_con_errores,
-    mover_a_pagos_normales,
-)
 from app.models.pago_con_error import PagoConError
 from app.schemas.auth import UserResponse
+
+_ROUTES_PATH = (
+    Path(__file__).resolve().parents[1]
+    / "app"
+    / "api"
+    / "v1"
+    / "endpoints"
+    / "pagos_con_errores"
+    / "routes.py"
+)
+_ROUTES_SPEC = importlib.util.spec_from_file_location(
+    "pagos_con_errores_routes_under_test", _ROUTES_PATH
+)
+assert _ROUTES_SPEC is not None and _ROUTES_SPEC.loader is not None
+pagos_con_errores_routes = importlib.util.module_from_spec(_ROUTES_SPEC)
+sys.modules[_ROUTES_SPEC.name] = pagos_con_errores_routes
+_ROUTES_SPEC.loader.exec_module(pagos_con_errores_routes)
+
+EliminarPorDescargaBody = pagos_con_errores_routes.EliminarPorDescargaBody
+LimpiarYaCargadosBody = pagos_con_errores_routes.LimpiarYaCargadosBody
+archivar_por_descarga = pagos_con_errores_routes.archivar_por_descarga
+limpiar_pagos_con_error_ya_cargados = (
+    pagos_con_errores_routes.limpiar_pagos_con_error_ya_cargados
+)
+listar_pagos_con_errores = pagos_con_errores_routes.listar_pagos_con_errores
+mover_a_pagos_normales = pagos_con_errores_routes.mover_a_pagos_normales
 
 
 @pytest.fixture(scope="function")
@@ -228,7 +249,8 @@ def test_limpiar_usa_savepoint_por_fila_sin_revertir_exitos_previos(monkeypatch)
         raise RuntimeError("fallo controlado")
 
     monkeypatch.setattr(
-        "app.api.v1.endpoints.pagos_con_errores.routes.pago_con_error_ya_cargado_estricto",
+        pagos_con_errores_routes,
+        "pago_con_error_ya_cargado_estricto",
         _estricto,
     )
 
@@ -260,25 +282,36 @@ def test_mover_retiene_pago_con_error_si_falla_cascada_cuotas(monkeypatch):
     fake_db = _FakeSession([row])
 
     monkeypatch.setattr(
-        "app.api.v1.endpoints.pagos_con_errores.routes.pago_con_error_ya_cargado_estricto",
+        pagos_con_errores_routes,
+        "pago_con_error_ya_cargado_estricto",
         lambda _db, _row: None,
     )
     monkeypatch.setattr(
-        "app.api.v1.endpoints.pagos_con_errores.routes.numero_documento_ya_registrado",
+        pagos_con_errores_routes,
+        "numero_documento_ya_registrado",
         lambda *_args, **_kwargs: False,
     )
     monkeypatch.setattr(
-        "app.api.v1.endpoints.pagos_con_errores.routes.resolver_cedula_almacenada_en_clientes",
+        pagos_con_errores_routes,
+        "resolver_cedula_almacenada_en_clientes",
         lambda _db, _cedula: "V12345678",
     )
 
     def _fallar_cascada(_pago, _db):
         raise RuntimeError("cuota bloqueada")
 
-    monkeypatch.setattr(
-        "app.api.v1.endpoints.pagos._aplicar_pago_a_cuotas_interno",
-        _fallar_cascada,
-    )
+    api_module = types.ModuleType("app.api")
+    v1_module = types.ModuleType("app.api.v1")
+    endpoints_module = types.ModuleType("app.api.v1.endpoints")
+    pagos_module = types.ModuleType("app.api.v1.endpoints.pagos")
+    pagos_module._aplicar_pago_a_cuotas_interno = _fallar_cascada
+    api_module.v1 = v1_module
+    v1_module.endpoints = endpoints_module
+    endpoints_module.pagos = pagos_module
+    monkeypatch.setitem(sys.modules, "app.api", api_module)
+    monkeypatch.setitem(sys.modules, "app.api.v1", v1_module)
+    monkeypatch.setitem(sys.modules, "app.api.v1.endpoints", endpoints_module)
+    monkeypatch.setitem(sys.modules, "app.api.v1.endpoints.pagos", pagos_module)
 
     out = mover_a_pagos_normales(
         payload=EliminarPorDescargaBody(ids=[10]),
