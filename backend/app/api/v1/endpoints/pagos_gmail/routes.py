@@ -2219,11 +2219,17 @@ def preview_remitente(
 
     user_label_ids_set, user_label_names_by_id, _labels_ok = list_gmail_user_label_ids(gmail_svc)
 
-    # Cruce con BD: marcar mensajes ya procesados (existe sync_item con su gmail_message_id).
+    # Cruce con BD: marcar mensajes ya procesados por ESTE módulo/correo. Antes se contaba
+    # cualquier sync_item con el mismo gmail_message_id, incluso filas viejas creadas con
+    # correo_origen distinto (cuando IT Master se trataba como From real). Eso hacía que el
+    # preview dijera "ya procesado" pero la tabla fija de itmaster quedara en 0.
     ids_ya_procesados: set[str] = set(
         db.execute(
             select(PagosGmailSyncItem.gmail_message_id)
-            .where(PagosGmailSyncItem.gmail_message_id.in_(all_ids))
+            .where(
+                PagosGmailSyncItem.gmail_message_id.in_(all_ids),
+                func.lower(PagosGmailSyncItem.correo_origen) == correo_lc,
+            )
         ).scalars().all()
         or []
     )

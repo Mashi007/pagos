@@ -172,6 +172,7 @@ export default function ActualizacionesGmailPage() {
         correo: correoActivo,
         limit: PAGE_SIZE,
         offset: offsetTabla,
+        excluirAutoconciliados: false,
       }),
     enabled: !!correoActivo,
     refetchOnWindowFocus: false,
@@ -205,6 +206,7 @@ export default function ActualizacionesGmailPage() {
                   correo: correoActivo,
                   limit: PAGE_SIZE,
                   offset: 0,
+                  excluirAutoconciliados: false,
                 }),
             })
             totalFilas = res.total ?? res.items.length
