@@ -407,7 +407,7 @@ interface RegistrarPagoFormProps {
    */
   claveDocumentoPagosTablaRevision?: ReadonlySet<string>
 
-  /** Si true, al editar no envía cambios de comprobante/código (regla backend para conciliados/pagados). */
+  /** Si true, al editar bloquea imagen de comprobante y código, pero permite corregir el Nº de documento. */
   bloquearCambioComprobanteCodigo?: boolean
 }
 
@@ -1445,7 +1445,7 @@ export function RegistrarPagoForm({
             detailLower.includes('pagos conciliados o pagados'))
         ) {
           errorMessage =
-            'Este pago ya está conciliado/pagado. No se permite cambiar comprobante ni código; ajuste otros campos permitidos.'
+            'Este pago ya está conciliado/pagado. No se permite cambiar el código; sí puede corregir el Nº de documento y otros campos permitidos.'
         } else if (
           status === 409 &&
           (detailLower.includes('numero_documento') ||
@@ -1598,11 +1598,7 @@ export function RegistrarPagoForm({
 
           <div className="flex flex-shrink-0 items-center justify-between rounded-t-lg border-b bg-white p-4">
             <h2 className="text-xl font-bold">
-              {isEditing && bloquearCambioComprobanteCodigo
-                ? 'Consultar Pago (solo lectura)'
-                : isEditing
-                  ? 'Editar Pago'
-                  : 'Registrar Pago'}
+              {isEditing ? 'Editar Pago' : 'Registrar Pago'}
             </h2>
 
             <Button variant="ghost" size="icon" onClick={onClose}>
@@ -1676,15 +1672,11 @@ export function RegistrarPagoForm({
 
                 {isEditing && bloquearCambioComprobanteCodigo ? (
                   <div className="rounded border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-                    <p className="font-semibold">
-                      Pago ya cargado a cuotas - solo consulta.
-                    </p>
+                    <p className="font-semibold">Pago ya conciliado/pagado.</p>
                     <p className="mt-1 text-xs">
-                      Este pago ya pasó a cartera, está conciliado/pagado y
-                      aplicado a una o más cuotas. El modal está en modo solo
-                      lectura: no se puede editar ni eliminar desde aquí. Si
-                      detecta un error en el comprobante, ajuste desde la
-                      pantalla de Revisión Manual del préstamo.
+                      Se bloquean la imagen del comprobante y el código. Puede
+                      corregir el Nº de documento y otros campos permitidos; la
+                      validación de duplicados sigue activa.
                     </p>
                   </div>
                 ) : null}
@@ -2889,9 +2881,7 @@ export function RegistrarPagoForm({
                 onClick={onClose}
                 disabled={isSubmitting || isDeleting}
               >
-                {isEditing && bloquearCambioComprobanteCodigo
-                  ? 'Cerrar'
-                  : 'Cancelar'}
+                Cancelar
               </Button>
 
               {isEditing && pagoId && !bloquearCambioComprobanteCodigo ? (
@@ -2916,31 +2906,29 @@ export function RegistrarPagoForm({
                 </Button>
               ) : null}
 
-              {isEditing && bloquearCambioComprobanteCodigo ? null : (
-                <Button type="submit" disabled={isSubmitting || isDeleting}>
-                  {isSubmitting ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              <Button type="submit" disabled={isSubmitting || isDeleting}>
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
 
-                      {modoGuardarYProcesar
-                        ? 'Guardando y procesando...'
-                        : isEditing
-                          ? 'Actualizando...'
-                          : 'Registrando...'}
-                    </>
-                  ) : (
-                    <>
-                      <CheckCircle className="mr-2 h-4 w-4" />
+                    {modoGuardarYProcesar
+                      ? 'Guardando y procesando...'
+                      : isEditing
+                        ? 'Actualizando...'
+                        : 'Registrando...'}
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle className="mr-2 h-4 w-4" />
 
-                      {modoGuardarYProcesar
-                        ? 'Guardar y Procesar'
-                        : isEditing
-                          ? 'Actualizar Pago'
-                          : 'Registrar Pago'}
-                    </>
-                  )}
-                </Button>
-              )}
+                    {modoGuardarYProcesar
+                      ? 'Guardar y Procesar'
+                      : isEditing
+                        ? 'Actualizar Pago'
+                        : 'Registrar Pago'}
+                  </>
+                )}
+              </Button>
             </div>
           </form>
 

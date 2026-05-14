@@ -5712,9 +5712,11 @@ def actualizar_pago(pago_id: int, payload: PagoUpdate, db: Session = Depends(get
 
         new_stored = compose_numero_documento_almacenado(nb, nc)
 
-        old_stored = (row.numero_documento or "").strip()
+        codigo_anterior = normalize_codigo_documento(c0) if c0 else None
 
-        if (new_stored or "") != old_stored and (
+        codigo_cambio = (nc or "") != (codigo_anterior or "")
+
+        if codigo_cambio and (
 
             bool(row.conciliado) or str(row.estado or "").upper() in ("PAGADO", "PAGO_ADELANTADO")
 
@@ -5724,7 +5726,7 @@ def actualizar_pago(pago_id: int, payload: PagoUpdate, db: Session = Depends(get
 
                 status_code=409,
 
-                detail="No se permite cambiar comprobante/código en pagos conciliados o pagados.",
+                detail="No se permite cambiar código en pagos conciliados o pagados.",
 
             )
 
