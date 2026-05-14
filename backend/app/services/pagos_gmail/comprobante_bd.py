@@ -96,6 +96,10 @@ def persistir_comprobante_gmail_en_bd(
     uid = uuid.uuid4().hex
     row = PagoComprobanteImagen(id=uid, content_type=ct, imagen_data=body)
     db.add(row)
+    # No todos los modelos que referencian esta tabla declaran una relación ORM;
+    # hacen FK por id escalar. Forzar el INSERT aquí evita que el unit of work
+    # intente insertar primero la fila hija y PostgreSQL rechace la FK.
+    db.flush([row])
     url = url_comprobante_imagen_absoluta(uid)
     if not url.lower().startswith("http"):
         logger.info(
