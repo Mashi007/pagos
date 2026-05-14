@@ -122,11 +122,42 @@ def claves_documento_para_lote_reportados(reportados: Iterable[PagoReportado]) -
 
 
 def primer_pago_id_si_existe_para_claves_reportado(db: "Session", pr: PagoReportado) -> Optional[int]:
-    """Id de un `Pago` cuyo `numero_documento` coincide con alguna clave del reporte, o None."""
+    """Id de un `Pago` cuyo documento coincide con alguna clave del reporte, o None."""
     claves = claves_documento_pago_para_reportado(pr)
     if not claves:
         return None
-    return db.execute(select(Pago.id).where(Pago.numero_documento.in_(claves)).limit(1)).scalar()
+    candidatos: Set[str] = set()
+    for k in claves:
+        if not k:
+            continue
+        c = normalize_documento(k) or k
+        if c:
+            candidatos.add(c)
+    if candidatos:
+        lst = list(candidatos)
+        for i in range(0, len(lst), 450):
+            part = lst[i : i + 450]
+            if not part:
+                continue
+            found = db.execute(
+                select(Pago.id).where(Pago.doc_canon_numero.in_(part)).limit(1)
+            ).scalar()
+            if found is not None:
+                return int(found)
+            found = db.execute(
+                select(Pago.id).where(Pago.doc_canon_referencia.in_(part)).limit(1)
+            ).scalar()
+            if found is not None:
+                return int(found)
+    found = db.execute(
+        select(Pago.id).where(Pago.numero_documento.in_(claves)).limit(1)
+    ).scalar()
+    if found is not None:
+        return int(found)
+    found = db.execute(
+        select(Pago.id).where(Pago.referencia_pago.in_(claves)).limit(1)
+    ).scalar()
+    return int(found) if found is not None else None
 
 
 _ESTADOS_REPORTADO_DUP_PEER = ("pendiente", "en_revision", "aprobado")

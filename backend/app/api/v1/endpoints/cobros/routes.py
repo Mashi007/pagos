@@ -2543,7 +2543,16 @@ def get_pago_reportado_detalle(pago_id: int, db: Session = Depends(get_db)):
     tasa_x, eq_usd = tasa_y_equivalente_usd_excel(
         db, pr.fecha_pago, float(pr.monto), pr.moneda or "BS"
     )
-    pago_existente_id: Optional[int] = primer_pago_id_si_existe_para_claves_reportado(db, pr)
+    pago_existente_info = _pago_existente_info_para_reportado(
+        pr,
+        _pagos_existentes_info_por_clave(
+            db,
+            _collect_candidatos_canon_desde_reportados([pr]),
+        ),
+    )
+    pago_existente_id: Optional[int] = (
+        pago_existente_info[0] if pago_existente_info is not None else None
+    )
     prestamo_existente_id: Optional[int] = None
     pago_existente_estado: Optional[str] = None
     pago_existente_fecha_pago: Optional[date] = None
@@ -2551,7 +2560,9 @@ def get_pago_reportado_detalle(pago_id: int, db: Session = Depends(get_db)):
     prestamo_objetivo_multiple: Optional[bool] = None
     prestamo_duplicado_es_objetivo: Optional[bool] = None
     if pago_existente_id is not None:
-        p_exist = db.execute(select(Pago).where(Pago.id == pago_existente_id)).scalars().first()
+        p_exist = db.execute(
+            select(Pago).where(Pago.id == pago_existente_id)
+        ).scalars().first()
         if p_exist:
             prestamo_existente_id = getattr(p_exist, "prestamo_id", None)
             pago_existente_estado = getattr(p_exist, "estado", None)
