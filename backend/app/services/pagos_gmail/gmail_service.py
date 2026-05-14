@@ -1266,6 +1266,36 @@ def get_pagos_gmail_image_pdf_files_for_pipeline(
     except Exception as e:
         logger.warning("[PAGOS_GMAIL] rfc822 en pipeline: %s", e)
 
+    # Lote IT Master / correos reenviados como archivo: Gmail a veces expone el .eml
+    # como adjunto descargable con filename .eml o message/rfc822, pero sin desglosar
+    # sus hijos image/PDF en el payload del mensaje maestro. El extractor legacy de
+    # message/rfc822 cubre algunos casos, pero no todos. Aquí descargamos cada .eml
+    # explícitamente y lo parseamos con email.parser para sacar sus adjuntos reales.
+    eml_inner_parts: List[Tuple[str, bytes, str]] = []
+    try:
+        for eml_idx, (eml_filename, eml_raw) in enumerate(
+            get_eml_attachments_for_message(service, message_id, payload)
+        ):
+            _eml_headers, eml_atts = parse_eml_bytes(eml_raw)
+            if eml_atts:
+                logger.info(
+                    "[PAGOS_GMAIL] .eml '%s': %d adjunto(s) imagen/PDF extraido(s) para Gemini (msg=%s)",
+                    eml_filename,
+                    len(eml_atts),
+                    message_id,
+                )
+            else:
+                logger.info(
+                    "[PAGOS_GMAIL] .eml '%s': sin adjuntos imagen/PDF internos (msg=%s)",
+                    eml_filename,
+                    message_id,
+                )
+            for att_idx, (fn, raw, mime) in enumerate(eml_atts):
+                safe_fn = fn or f"eml_{eml_idx}_{att_idx}.{ext_for_mime(mime)}"
+                eml_inner_parts.append((f"{eml_filename}__{safe_fn}", raw, mime))
+    except Exception as e:
+        logger.warning("[PAGOS_GMAIL] .eml parser en pipeline: %s", e)
+
     part_roots: List[dict] = list(payload.get("parts") or [])
     if not part_roots:
         mime_root = (payload.get("mimeType") or "").strip().lower()
@@ -1281,6 +1311,7 @@ def get_pagos_gmail_image_pdf_files_for_pipeline(
     merged.extend((a[0], a[1], a[2], "embebida") for a in embedded)
     merged.extend((a[0], a[1], a[2], "adjunta") for a in attached)
     merged.extend((a[0], a[1], a[2], "reenvio_eml") for a in rfc822_parts)
+    merged.extend((a[0], a[1], a[2], "reenvio_eml") for a in eml_inner_parts)
     merged.extend((a[0], a[1], a[2], "mime_recorrido") for a in mime_walk)
     unique = _dedupe_pipeline_candidates(merged)
     logger.debug(
@@ -1288,7 +1319,7 @@ def get_pagos_gmail_image_pdf_files_for_pipeline(
         message_id,
         len(embedded),
         len(attached),
-        len(rfc822_parts),
+        len(rfc822_parts) + len(eml_inner_parts),
         len(mime_walk),
         len(unique),
     )
