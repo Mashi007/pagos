@@ -1654,6 +1654,67 @@ def _eliminar_filas_gmail_relacionadas(db: Session, item: PagosGmailSyncItem) ->
     return int(getattr(res, "rowcount", 0) or 0)
 
 
+@router.post("/sync-items/limpiar-remitente")
+def limpiar_sync_items_remitente(
+    correo: str = Query(..., description="Correo origen del módulo Gmail a limpiar."),
+    db: Session = Depends(get_db),
+):
+    """
+    Limpieza explícita del módulo Actualizaciones > Gmail.
+
+    Borra únicamente la cola local del remitente fijo IT Master (`pagos_gmail_sync_item`
+    y `gmail_temporal`). No toca `pagos`, `pagos_con_errores` ni Gmail.
+    Deja la UI en cero para que la próxima corrida sea un escaneo fresco.
+    """
+    correo_lc = _validate_from_email(correo)
+    if not correo_lc:
+        raise HTTPException(status_code=400, detail="Correo inválido.")
+    if correo_lc.lower() != PAGOS_GMAIL_LOTE_REMITENTE_IT_MASTER:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Este módulo solo permite limpiar '{PAGOS_GMAIL_LOTE_REMITENTE_IT_MASTER}'."
+            ),
+        )
+    try:
+        res_si = db.execute(
+            delete(PagosGmailSyncItem).where(
+                func.lower(PagosGmailSyncItem.correo_origen) == correo_lc
+            )
+        )
+        res_gt = db.execute(
+            delete(GmailTemporal).where(
+                func.lower(GmailTemporal.correo_origen) == correo_lc
+            )
+        )
+        db.commit()
+        borrados_si = int(getattr(res_si, "rowcount", 0) or 0)
+        borrados_gt = int(getattr(res_gt, "rowcount", 0) or 0)
+        logger.info(
+            "[PAGOS_GMAIL] limpiar-remitente correo=%s sync_items=%d gmail_temporal=%d",
+            correo_lc,
+            borrados_si,
+            borrados_gt,
+        )
+        return {
+            "ok": True,
+            "correo": correo_lc,
+            "sync_items_eliminados": borrados_si,
+            "gmail_temporal_eliminados": borrados_gt,
+            "mensaje": (
+                f"Limpieza completada: {borrados_si} fila(s) de resultados y "
+                f"{borrados_gt} temporal(es) eliminados."
+            ),
+        }
+    except Exception as e:
+        db.rollback()
+        logger.exception("[PAGOS_GMAIL] limpiar-remitente fallo correo=%s: %s", correo_lc, e)
+        raise HTTPException(
+            status_code=500,
+            detail=f"No se pudo limpiar resultados Gmail: {str(e)[:400]}",
+        ) from e
+
+
 @router.post("/sync-items/{item_id}/guardar")
 def guardar_sync_item(
     item_id: int,
@@ -1706,7 +1767,7 @@ def guardar_sync_item(
                     ),
                 }
 
-            nuevo_pe = _pago_con_error_desde_sync_item(db, item)
+            nuevo_pe, _pe_reutilizado = _pago_con_error_desde_sync_item(db, item)
             pago_con_error_id = int(nuevo_pe.id)
             _eliminar_filas_gmail_relacionadas(db, item)
 
