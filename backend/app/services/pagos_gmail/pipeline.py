@@ -736,8 +736,8 @@ def run_pipeline(
                             modify_message_labels_add_remove(
                                 gmail_svc,
                                 msg_id,
-                                add_ids=[],
-                                remove_ids=_ids_a_quitar,
+                                add_label_ids=[],
+                                remove_label_ids=_ids_a_quitar,
                             )
                             _nombres_quitados = sorted(
                                 _gmail_user_label_names.get(lid, lid)
@@ -860,7 +860,7 @@ def run_pipeline(
                             _add_ids = [lid for lid in (_err_lid, _conc_lid) if lid]
                             if _add_ids:
                                 modify_message_labels_add_remove(
-                                    gmail_svc, msg_id, add_ids=_add_ids, remove_ids=[]
+                                    gmail_svc, msg_id, add_label_ids=_add_ids, remove_label_ids=[]
                                 )
                         except Exception as _e_lbl:
                             logger.warning(
@@ -885,7 +885,7 @@ def run_pipeline(
                     if _conc_lid:
                         try:
                             modify_message_labels_add_remove(
-                                gmail_svc, msg_id, add_ids=[_conc_lid], remove_ids=[]
+                                gmail_svc, msg_id, add_label_ids=[_conc_lid], remove_label_ids=[]
                             )
                         except Exception as _e_conc:
                             logger.warning(
@@ -1305,6 +1305,13 @@ def run_pipeline(
                                     sender_lc[:72],
                                     filename,
                                 )
+                        if _cedula_forzada_lote:
+                            # Lote IT Master: la cédula validada desde el asunto del correo maestro
+                            # reemplaza cualquier cédula inferida por imagen/remitente y debe hacerlo
+                            # ANTES del gate `if not c_ok`, para que formatos BNC/Mercantil/etc. no
+                            # queden descartados como ERROR EMAIL por venir de cobranza@...
+                            c = _cedula_forzada_lote
+                            c_ok = True
                         # Sin cédula de cliente no hay fila Excel/BD (la literal ERROR EMAIL no se exporta).
                         if not c_ok:
                             any_incomplete_or_skipped = True
