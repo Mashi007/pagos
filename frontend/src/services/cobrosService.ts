@@ -1470,12 +1470,36 @@ function silentIfRecentlyHiddenPreflight(pagoId: number): void {
   }
 }
 
-function silentIfRecentlyHidden404(pagoId: number, e: unknown): never {
-  const errObj = e as { code?: string; response?: { status?: number } } | undefined
-  const status =
+function getPagoReportadoErrorStatus(e: unknown): number | undefined {
+  const errObj = e as
+    | { code?: string; response?: { status?: number } }
+    | undefined
+  return (
     errObj?.response?.status ??
     (errObj?.code === 'ERR_HTTP_404' ? 404 : undefined)
+  )
+}
+
+function silentIfRecentlyHidden404(pagoId: number, e: unknown): never {
+  const errObj = e as
+    | { code?: string; response?: { status?: number } }
+    | undefined
+  const status = getPagoReportadoErrorStatus(e)
   if (status === 404 && isPagoReportadoRecentlyHidden(pagoId)) {
+    const silentErr = makeSilentPagoReportadoEliminadoError()
+    silentErr.response = errObj?.response
+    throw silentErr
+  }
+  throw e
+}
+
+function silentAndHideIfDetalle404(pagoId: number, e: unknown): never {
+  const errObj = e as { response?: unknown } | undefined
+  if (getPagoReportadoErrorStatus(e) === 404) {
+    // Fila obsoleta: pudo quedar en cache local/listado tras borrado en otra
+    // pestana u operador. Ocultarla evita que vuelva a salir al regresar.
+    markPagoReportadoRecentlyHidden(pagoId)
+    patchListadoKpisCacheDropPagoReportado(pagoId)
     const silentErr = makeSilentPagoReportadoEliminadoError()
     silentErr.response = errObj?.response
     throw silentErr
@@ -1493,7 +1517,7 @@ export async function getPagoReportadoDetalle(
     )
     return data
   } catch (e: unknown) {
-    silentIfRecentlyHidden404(pagoId, e)
+    silentAndHideIfDetalle404(pagoId, e)
   }
 }
 
@@ -1553,7 +1577,8 @@ export async function historicoPorCliente(
 
 /** Descarga el binario del comprobante (imagen/PDF) con la misma auth que el resto de Cobros. */
 export async function getPagoReportadoComprobanteBlob(
-  pagoId: number
+  pagoId: number,
+  config?: Parameters<typeof apiClient.getBlob>[1]
 ): Promise<Blob> {
   // Preflight: si el id se acaba de eliminar / aprobar / rechazar, evitar el GET
   // 404 que el backend responderia con detail "Pago reportado no encontrado.";
@@ -1562,7 +1587,7 @@ export async function getPagoReportadoComprobanteBlob(
   silentIfRecentlyHiddenPreflight(pagoId)
   const path = `${BASE_COBROS}/pagos-reportados/${pagoId}/comprobante`
   try {
-    return await apiClient.getBlob(path)
+    return await apiClient.getBlob(path, config)
   } catch (e: unknown) {
     silentIfRecentlyHidden404(pagoId, e)
   }

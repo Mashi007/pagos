@@ -626,8 +626,8 @@ export default function ActualizacionesGmailPage() {
                 ) : null}
                 {(diagnostico.idsNoLoteItMaster ?? 0) > 0 ? (
                   <li>
-                    Descartados por no ser lote IT Master (asunto cédula + .eml):{' '}
-                    <strong>{diagnostico.idsNoLoteItMaster}</strong>
+                    Descartados por no ser lote IT Master (asunto cédula +
+                    .eml): <strong>{diagnostico.idsNoLoteItMaster}</strong>
                   </li>
                 ) : null}
                 <li>
@@ -658,7 +658,8 @@ export default function ActualizacionesGmailPage() {
                           <strong>Modo IT Master:</strong> este correo es la
                           cuenta conectada. El sistema busca en INBOX como{' '}
                           <code>to:{REMITENTE_FIJO_LOTE}</code> y procesa
-                          correos con asunto cédula + adjuntos <code>.eml</code>.
+                          correos con asunto cédula + adjuntos <code>.eml</code>
+                          .
                         </div>
                       ) : null}
                     </div>
@@ -721,10 +722,8 @@ export default function ActualizacionesGmailPage() {
                         Master es la cuenta conectada.
                       </li>
                       <li>
-                        <strong>
-                          El correo está en otra carpeta
-                        </strong>
-                        : el pipeline lee INBOX. Diagnóstico:{' '}
+                        <strong>El correo está en otra carpeta</strong>: el
+                        pipeline lee INBOX. Diagnóstico:{' '}
                         <code>global &gt; 0</code> pero <code>to: = 0</code>.
                       </li>
                       <li>
@@ -738,8 +737,7 @@ export default function ActualizacionesGmailPage() {
                       <li>
                         Adjuntos no detectables por Gmail: para IT Master se
                         espera <code>.eml</code> o <code>message/rfc822</code>.
-                        Diagnostico:{' '}
-                        <code>inbox sin media &gt; 0</code> pero{' '}
+                        Diagnostico: <code>inbox sin media &gt; 0</code> pero{' '}
                         <code>conMedia = 0</code>.
                       </li>
                     </ul>

@@ -10,7 +10,7 @@ import json
 import re
 import threading
 import time
-from collections import Counter
+from collections import Counter, defaultdict
 from datetime import date, datetime, time as dt_time, timedelta
 from decimal import Decimal
 from types import SimpleNamespace
@@ -90,7 +90,7 @@ _COBROS_LISTADO_KPIS_CACHE_TTL_SEC = 900  # 15 minutos
 _COBROS_LISTADO_KPIS_CACHE_STALE_TTL_SEC = 7200  # 2 horas (fallback resiliente)
 _COBROS_LISTADO_KPIS_SINGLEFLIGHT_WAIT_SEC = 1.5
 _COBROS_LISTADO_KPIS_SINGLEFLIGHT_STALE_SEC = 30.0
-_COBROS_LISTADO_KPIS_CACHE_PREFIX = "cobros:listado_y_kpis:v1:"
+_COBROS_LISTADO_KPIS_CACHE_PREFIX = "cobros:listado_y_kpis:v2:"
 _COBROS_LISTADO_KPIS_CACHE_STALE_SUFFIX = ":stale"
 _cobros_listado_kpis_mem_cache: Dict[str, Tuple[float, dict]] = {}
 _cobros_listado_kpis_mem_stale_cache: Dict[str, Tuple[float, dict]] = {}
@@ -564,6 +564,9 @@ class PagoReportadoListItem(BaseModel):
         None,
         description="Valor almacenado en `pagos.numero_documento` del pago existente (referencia para operadores).",
     )
+    prestamo_objetivo_id: Optional[int] = None
+    prestamo_objetivo_multiple: Optional[bool] = None
+    prestamo_duplicado_es_objetivo: Optional[bool] = None
 
 
 class PagoReportadoDetalle(BaseModel):
@@ -859,6 +862,183 @@ def _pagos_canonicos_presentes_para_claves_reutilizando(
     return frozenset(present & claves)
 
 
+PagoExistenteInfo = Tuple[int, Optional[int], Optional[str]]
+
+
+def _pagos_existentes_info_por_clave(
+    db: Session,
+    claves: Set[str],
+) -> Dict[str, PagoExistenteInfo]:
+    """
+    Mapa canonico -> (pago_id, prestamo_id, numero_documento) para claves ya presentes
+    en cartera. Es la version con datos del set `_pagos_canonicos_presentes_para_claves`.
+    """
+    if not claves:
+        return {}
+    out: Dict[str, PagoExistenteInfo] = {}
+
+    def _add(
+        key: Optional[str],
+        pago_id: int,
+        prestamo_id: Optional[int],
+        numero_documento: Optional[str],
+    ) -> None:
+        k = (key or "").strip()
+        if not k or k in out:
+            return
+        out[k] = (
+            int(pago_id),
+            int(prestamo_id) if prestamo_id is not None else None,
+            (numero_documento or "").strip() or None,
+        )
+
+    lst = [x for x in claves if x]
+    chunk_size = 450
+    for i in range(0, len(lst), chunk_size):
+        part = lst[i : i + chunk_size]
+        if not part:
+            continue
+        for key, pid, prestamo_id, numero_documento in db.execute(
+            select(
+                Pago.doc_canon_numero,
+                Pago.id,
+                Pago.prestamo_id,
+                Pago.numero_documento,
+            ).where(Pago.doc_canon_numero.in_(part))
+        ).all():
+            _add(key, pid, prestamo_id, numero_documento)
+        for key, pid, prestamo_id, numero_documento in db.execute(
+            select(
+                Pago.doc_canon_referencia,
+                Pago.id,
+                Pago.prestamo_id,
+                Pago.numero_documento,
+            ).where(Pago.doc_canon_referencia.in_(part))
+        ).all():
+            _add(key, pid, prestamo_id, numero_documento)
+        for raw, pid, prestamo_id, numero_documento in db.execute(
+            select(
+                Pago.numero_documento,
+                Pago.id,
+                Pago.prestamo_id,
+                Pago.numero_documento,
+            ).where(Pago.numero_documento.in_(part))
+        ).all():
+            _add(
+                (normalize_documento(raw) or raw) if raw else None,
+                pid,
+                prestamo_id,
+                numero_documento,
+            )
+        for raw, pid, prestamo_id, numero_documento in db.execute(
+            select(
+                Pago.referencia_pago,
+                Pago.id,
+                Pago.prestamo_id,
+                Pago.numero_documento,
+            ).where(Pago.referencia_pago.in_(part))
+        ).all():
+            _add(
+                (normalize_documento(raw) or raw) if raw else None,
+                pid,
+                prestamo_id,
+                numero_documento,
+            )
+    return out
+
+
+def _pagos_existentes_info_por_clave_reutilizando(
+    db: Session,
+    claves: Set[str],
+    acum: Dict[str, Any],
+) -> Dict[str, PagoExistenteInfo]:
+    if not claves:
+        return {}
+    queried: Set[str] = acum.setdefault("info_queried", set())
+    by_key: Dict[str, PagoExistenteInfo] = acum.setdefault("info_by_key", {})
+    nuevas = {x for x in claves if x} - queried
+    if nuevas:
+        by_key.update(_pagos_existentes_info_por_clave(db, nuevas))
+        queried.update(nuevas)
+    return {k: v for k, v in by_key.items() if k in claves}
+
+
+def _pago_existente_info_para_reportado(
+    pr: PagoReportado,
+    info_por_clave: Dict[str, PagoExistenteInfo],
+) -> Optional[PagoExistenteInfo]:
+    if not info_por_clave:
+        return None
+    for raw in claves_documento_pago_para_reportado(pr):
+        c = (normalize_documento(raw) or raw) if raw else None
+        if c and c in info_por_clave:
+            return info_por_clave[c]
+    return None
+
+
+def _prestamo_objetivo_por_cedula_norm_batch(
+    db: Session,
+    cedulas_norm: Set[str],
+) -> Tuple[Dict[str, int], Set[str]]:
+    """
+    Para cada cedula normalizada del lote, devuelve el prestamo APROBADO mas reciente.
+    Se usa para saber si un duplicado de Mercantil ya pertenece al mismo prestamo.
+    """
+    if not cedulas_norm:
+        return {}, set()
+
+    variant_to_norms: Dict[str, Set[str]] = defaultdict(set)
+    for norm in cedulas_norm:
+        for variant in _cedula_lookup_variants(norm):
+            variant_to_norms[variant].add(norm)
+    if not variant_to_norms:
+        return {}, set()
+
+    cedula_lookup = func.upper(
+        func.replace(func.replace(Cliente.cedula, "-", ""), " ", "")
+    )
+    client_ids_by_norm: Dict[str, Set[int]] = defaultdict(set)
+    for cliente_id, cedula_raw in db.execute(
+        select(Cliente.id, Cliente.cedula).where(
+            cedula_lookup.in_(list(variant_to_norms.keys()))
+        )
+    ).all():
+        ced_db = _normalize_cedula_for_client_lookup(str(cedula_raw or ""))
+        matched_norms: Set[str] = set()
+        for variant in _cedula_lookup_variants(ced_db):
+            matched_norms.update(variant_to_norms.get(variant, set()))
+        for norm in matched_norms:
+            client_ids_by_norm[norm].add(int(cliente_id))
+
+    client_ids = {cid for ids in client_ids_by_norm.values() for cid in ids}
+    if not client_ids:
+        return {}, set()
+
+    target_by_client: Dict[int, int] = {}
+    for cliente_id, prestamo_id in db.execute(
+        select(Prestamo.cliente_id, Prestamo.id)
+        .where(
+            Prestamo.cliente_id.in_(client_ids),
+            func.upper(Prestamo.estado) == "APROBADO",
+        )
+        .order_by(Prestamo.cliente_id.asc(), Prestamo.id.desc())
+    ).all():
+        cid = int(cliente_id)
+        if cid not in target_by_client:
+            target_by_client[cid] = int(prestamo_id)
+
+    target_by_norm: Dict[str, int] = {}
+    multiple_by_norm: Set[str] = set()
+    for norm, ids in client_ids_by_norm.items():
+        targets = [target_by_client[cid] for cid in ids if cid in target_by_client]
+        if not targets:
+            continue
+        target_by_norm[norm] = max(targets)
+        if len(set(targets)) > 1:
+            multiple_by_norm.add(norm)
+    return target_by_norm, multiple_by_norm
+
+
 def _rechazar_aprobacion_si_documento_ya_en_pagos(db: Session, pr: PagoReportado) -> None:
     """Regla operativa: no aprobar si el comprobante ya existe en cartera (`pagos`)."""
     if pago_reportado_colisiona_tabla_pagos(db, pr):
@@ -1034,6 +1214,7 @@ def _pago_reportado_list_items_from_rows(
     primer_id_por_norm_precalc: Optional[Dict[str, int]] = None,
     include_financial_fields: bool = True,
     pagos_canon_acum: Optional[Dict[str, Set[str]]] = None,
+    pagos_info_acum: Optional[Dict[str, Any]] = None,
 ) -> List[PagoReportadoListItem]:
     """Misma lógica de observaciones / tasa que el listado paginado.
 
@@ -1070,6 +1251,31 @@ def _pago_reportado_list_items_from_rows(
         claves_doc_en_pagos = _pagos_canonicos_presentes_para_claves_reutilizando(
             db, candidatos, pagos_canon_acum
         )
+    if pagos_info_acum is None:
+        pagos_info_por_clave = _pagos_existentes_info_por_clave(
+            db, set(claves_doc_en_pagos)
+        )
+    else:
+        pagos_info_por_clave = _pagos_existentes_info_por_clave_reutilizando(
+            db, set(claves_doc_en_pagos), pagos_info_acum
+        )
+    pago_info_por_reportado: Dict[int, PagoExistenteInfo] = {}
+    cedulas_con_dup: Set[str] = set()
+    for idx, r in enumerate(rows):
+        info = _pago_existente_info_para_reportado(r, pagos_info_por_clave)
+        if info is None:
+            continue
+        pago_info_por_reportado[int(r.id)] = info
+        if not _es_banco_mercantil(getattr(r, "institucion_financiera", None)):
+            continue
+        ced_norm = cedula_norms[idx] if idx < len(cedula_norms) else ""
+        if ced_norm:
+            cedulas_con_dup.add(ced_norm)
+    prestamo_objetivo_por_cedula, prestamo_objetivo_multiple_cedulas = (
+        _prestamo_objetivo_por_cedula_norm_batch(db, cedulas_con_dup)
+        if cedulas_con_dup
+        else ({}, set())
+    )
     norm_por_fila = []
     for r in rows:
         _, n_eff = documento_numero_desde_pago_reportado(r)
@@ -1118,28 +1324,25 @@ def _pago_reportado_list_items_from_rows(
             )
         else:
             tasa_x, eq_usd = None, None
-        # En el barrido (include_financial_fields=False) los items se descartan: solo se
-        # leen id/observacion/gemini/numero_operacion/estado/institucion_financiera para
-        # `_item_falla_validadores_cola_manual`. Saltar los lookups a `pagos` por fila
-        # (dup_pagos + Pago.prestamo_id/numero_documento) ahorra N+1 sobre miles de filas
-        # y bajaba el listado-y-kpis de decenas de segundos a unos pocos.
-        pago_existente_id = None
-        prestamo_existente_id = None
-        numero_documento_pago_existente = None
-        if include_financial_fields:
-            dup_pagos = reportado_toca_claves_canonicas_en_pagos(r, claves_doc_en_pagos)
-            if dup_pagos:
-                pago_existente_id = primer_pago_id_si_existe_para_claves_reportado(db, r)
-                if pago_existente_id is not None:
-                    prow = db.execute(
-                        select(Pago.prestamo_id, Pago.numero_documento).where(Pago.id == int(pago_existente_id))
-                    ).first()
-                    if prow is not None:
-                        prestamo_existente_id = prow[0]
-                        nd_raw = (prow[1] or "").strip()
-                        numero_documento_pago_existente = nd_raw or None
-        else:
-            dup_pagos = False
+        pago_info = pago_info_por_reportado.get(int(r.id))
+        dup_pagos = pago_info is not None
+        pago_existente_id = pago_info[0] if pago_info is not None else None
+        prestamo_existente_id = pago_info[1] if pago_info is not None else None
+        numero_documento_pago_existente = (
+            pago_info[2] if pago_info is not None else None
+        )
+        cedula_norm = cedula_norms[i] if i < len(cedula_norms) else ""
+        prestamo_objetivo_id = prestamo_objetivo_por_cedula.get(cedula_norm)
+        prestamo_objetivo_multiple = (
+            cedula_norm in prestamo_objetivo_multiple_cedulas
+            if prestamo_objetivo_id is not None
+            else None
+        )
+        prestamo_duplicado_es_objetivo = (
+            int(prestamo_existente_id) == int(prestamo_objetivo_id)
+            if prestamo_existente_id is not None and prestamo_objetivo_id is not None
+            else None
+        )
         items.append(PagoReportadoListItem(
             id=r.id,
             referencia_interna=r.referencia_interna,
@@ -1165,6 +1368,9 @@ def _pago_reportado_list_items_from_rows(
             pago_existente_id=pago_existente_id,
             prestamo_existente_id=prestamo_existente_id,
             numero_documento_pago_existente=numero_documento_pago_existente,
+            prestamo_objetivo_id=prestamo_objetivo_id,
+            prestamo_objetivo_multiple=prestamo_objetivo_multiple,
+            prestamo_duplicado_es_objetivo=prestamo_duplicado_es_objetivo,
         ))
     return items
 
@@ -1340,18 +1546,32 @@ def _estado_label_estado_reportado(estado: str) -> str:
     return m.get((estado or "").strip(), estado or "")
 
 
-def _obs_efectiva_para_validadores(obs: str, institucion: str) -> str:
+def _obs_sin_duplicado(obs: str) -> str:
+    partes = [p.strip() for p in (obs or "").split("/") if p.strip()]
+    partes = [p for p in partes if "DUPLICADO" not in p.upper()]
+    return " / ".join(partes)
+
+
+def _obs_efectiva_para_validadores(
+    obs: str,
+    institucion: str,
+    *,
+    duplicado_mismo_prestamo: bool = False,
+) -> str:
     """
     Observación relevante para decidir cola manual.
 
     DUPLICADO de banco distinto a Mercantil → toda la observación se descarta (auto-desestimar).
     El pago original ya está siendo gestionado; revisar el duplicado no aporta valor.
-    Solo Mercantil mantiene duplicados en cola (sus nº de operación pueden repetirse legítimamente).
+    Mercantil mantiene duplicados en cola salvo que el pago existente sea del mismo
+    préstamo objetivo; en ese caso "DUPLICADO" no cuenta como falla manual.
     """
     if not obs:
         return ""
     if "DUPLICADO" not in obs:
         return obs
+    if duplicado_mismo_prestamo:
+        return _obs_sin_duplicado(obs)
     if _es_banco_mercantil(institucion):
         return obs
     return ""
@@ -1375,6 +1595,10 @@ def _item_falla_validadores_cola_manual(it: PagoReportadoListItem) -> bool:
     obs = _obs_efectiva_para_validadores(
         (it.observacion or "").strip(),
         getattr(it, "institucion_financiera", "") or "",
+        duplicado_mismo_prestamo=getattr(
+            it, "prestamo_duplicado_es_objetivo", None
+        )
+        is True,
     )
     if _gemini_coincide_exacto_ok(it.gemini_coincide_exacto):
         return bool(obs)
@@ -1830,6 +2054,7 @@ def _list_pagos_reportados_payload(
     page_ids_ordered: List[int] = []
     total = 0
     pagos_canon_acum: Dict[str, Set[str]] = {"queried": set(), "present": set()}
+    pagos_info_acum: Dict[str, Any] = {"info_queried": set(), "info_by_key": {}}
     while True:
         rows = db.execute(q.offset(offset_scan).limit(batch)).scalars().all()
         if not rows:
@@ -1840,6 +2065,7 @@ def _list_pagos_reportados_payload(
             primer_id_por_norm_precalc=primer_precalc,
             include_financial_fields=False,
             pagos_canon_acum=pagos_canon_acum,
+            pagos_info_acum=pagos_info_acum,
         ):
             num_key = _numero_operacion_canonico(getattr(it, "numero_operacion", None))
             if num_key:
@@ -1880,6 +2106,7 @@ def _list_pagos_reportados_payload(
                 primer_id_por_norm_precalc=primer_precalc,
                 include_financial_fields=True,
                 pagos_canon_acum=pagos_canon_acum,
+                pagos_info_acum=pagos_info_acum,
             )
 
     out: Dict[str, Any] = {"items": page_items, "total": total, "page": page, "per_page": per_page}
@@ -1961,6 +2188,7 @@ def _kpis_pagos_reportados_payload(
         batch = _COBROS_LISTADO_SCAN_BATCH
         offset_scan = 0
         pagos_canon_acum_kpi: Dict[str, Set[str]] = {"queried": set(), "present": set()}
+        pagos_info_acum_kpi: Dict[str, Any] = {"info_queried": set(), "info_by_key": {}}
         while True:
             rows_b = db.execute(q_scan.offset(offset_scan).limit(batch)).scalars().all()
             if not rows_b:
@@ -1971,6 +2199,7 @@ def _kpis_pagos_reportados_payload(
                 primer_id_por_norm_precalc=primer_kpi,
                 include_financial_fields=False,
                 pagos_canon_acum=pagos_canon_acum_kpi,
+                pagos_info_acum=pagos_info_acum_kpi,
             ):
                 if not _item_falla_validadores_cola_manual(it):
                     continue

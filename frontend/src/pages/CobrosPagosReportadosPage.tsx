@@ -47,13 +47,13 @@ import {
   patchListadoKpisCacheDropPagoReportado,
   peekListadoKpisCache,
   getRecentlyHiddenPagoReportadoIds,
+  getPagoReportadoComprobanteBlob,
   COBROS_LISTADO_KPIS_CACHE_TTL_MS,
   type PagoReportadoItem,
   type ListPagosReportadosResponse,
   type PagosReportadosKpis,
   type CambiarEstadoPagoResponse,
 } from '../services/cobrosService'
-import { apiClient } from '../services/api'
 
 import { Button } from '../components/ui/button'
 
@@ -705,7 +705,9 @@ export default function CobrosPagosReportadosPage() {
       // parche quirurgico aplicado al cache durante la mutacion. Como
       // `listPagosReportadosConKpis` tambien lee ese cache, no se dispara fetch
       // de red duplicado: simplemente reusamos los datos antes del await.
-      const cached = !opts?.bypassCache ? peekListadoKpisCache(queryParams) : null
+      const cached = !opts?.bypassCache
+        ? peekListadoKpisCache(queryParams)
+        : null
       if (cached) {
         setData(cached)
         setKpis(cached.kpis)
@@ -1254,8 +1256,9 @@ export default function CobrosPagosReportadosPage() {
     })
 
     try {
-      const path = `/api/v1/cobros/pagos-reportados/${id}/comprobante`
-      const data = await apiClient.getBlob(path, { signal: controller.signal })
+      const data = await getPagoReportadoComprobanteBlob(id, {
+        signal: controller.signal,
+      })
       // Si entre tanto se canceló o se abrió otro, no aplicar el resultado.
       if (controller.signal.aborted) {
         return
@@ -1678,9 +1681,9 @@ export default function CobrosPagosReportadosPage() {
               </select>
 
               <p className="text-xs text-muted-foreground">
-                <strong>Cola de revisión manual:</strong> por defecto se
-                listan <em>pendientes y en revisión</em> en una sola cola
-                ("Por gestionar"); el contador "Pendiente" individual quedaba
+                <strong>Cola de revisión manual:</strong> por defecto se listan{' '}
+                <em>pendientes y en revisión</em> en una sola cola ("Por
+                gestionar"); el contador "Pendiente" individual quedaba
                 inconsistente cuando se aprobaban filas fuera de la página
                 actual y se retiró. Los aprobados ya están en cartera y se
                 consultan desde el histórico de cobros; los importados y
