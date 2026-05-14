@@ -946,6 +946,38 @@ export function RegistrarPagoForm({
   }, [isEditing, pagoId, pagoInicial])
 
   useEffect(() => {
+    if (!esPagoConError) return
+    const cedulaActual = String(formData.cedula_cliente ?? '')
+      .trim()
+      .toUpperCase()
+    if (
+      cedulaActual &&
+      cedulaActual !== 'ERROR' &&
+      cedulaActual !== 'ERROR EMAIL'
+    ) {
+      return
+    }
+    const psel = prestamoSeleccionado as Prestamo | undefined
+    const cedulaPrestamo = String(psel?.cedula ?? '').trim()
+    if (!cedulaPrestamo || psel?.id !== formData.prestamo_id) return
+    setFormData(prev => ({
+      ...prev,
+      cedula_cliente: cedulaPrestamo,
+    }))
+    setErrors(prev => {
+      const next = { ...prev }
+      delete next.cedula_cliente
+      delete next.prestamo_id
+      return next
+    })
+  }, [
+    esPagoConError,
+    formData.cedula_cliente,
+    formData.prestamo_id,
+    prestamoSeleccionado,
+  ])
+
+  useEffect(() => {
     if (monedaRegistro !== 'BS') {
       setTasaBd(null)
 
@@ -1139,6 +1171,25 @@ export function RegistrarPagoForm({
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors)
 
+      return
+    }
+
+    if (
+      modoGuardarYProcesar &&
+      esPagoConError &&
+      mostrarCampoCodigoDocumento &&
+      revisionManualFullEdit &&
+      conflictoDocApi?.conflicto &&
+      !String(fd.codigo_documento ?? '').trim() &&
+      !bloquearCambioComprobanteCodigo
+    ) {
+      setErrors(prev => ({
+        ...prev,
+        general:
+          'Comprobante duplicado en cartera: pulse Visto para asignar un Código automático antes de guardar y procesar.',
+      }))
+      setVistoRevisionManualOpen(true)
+      window.setTimeout(() => codigoDocumentoInputRef.current?.focus(), 0)
       return
     }
 
@@ -1481,6 +1532,16 @@ export function RegistrarPagoForm({
         } as Pago
         onDuplicadoDetectado(pagoActual)
         return
+      }
+
+      if (
+        esDocumentoDuplicado &&
+        mostrarCampoCodigoDocumento &&
+        revisionManualFullEdit &&
+        !bloquearCambioComprobanteCodigo
+      ) {
+        setVistoRevisionManualOpen(true)
+        window.setTimeout(() => codigoDocumentoInputRef.current?.focus(), 0)
       }
 
       setErrors({
@@ -2963,6 +3024,17 @@ export function RegistrarPagoForm({
                 </div>
               </DialogHeader>
               <DialogFooter className="flex flex-col gap-2 sm:flex-col sm:justify-stretch">
+                <button
+                  type="button"
+                  className="w-full rounded-md bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700 disabled:opacity-50"
+                  disabled={isSubmitting || bloquearCambioComprobanteCodigo}
+                  onClick={() => {
+                    setVistoRevisionManualOpen(false)
+                    void handleVistoRellenarCodigoYGuardar()
+                  }}
+                >
+                  Asignar Código y guardar
+                </button>
                 <button
                   type="button"
                   className="w-full rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50"

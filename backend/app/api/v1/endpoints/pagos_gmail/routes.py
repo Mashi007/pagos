@@ -43,6 +43,7 @@ from app.services.pagos_gmail.credentials import get_pagos_gmail_credentials, lo
 from app.services.pagos_gmail.gmail_service import (
     PAGOS_GMAIL_LABEL_ERROR_EMAIL,
     PAGOS_GMAIL_LOTE_REMITENTE_IT_MASTER,
+    extract_lote_it_master_cedula_from_subject,
 )
 from app.services.pagos_gmail.helpers import format_monto_excel_pagos_gmail, formatear_cedula
 from app.services.pagos_gmail.pipeline import run_pipeline
@@ -1387,6 +1388,32 @@ def _sync_item_comprobante_url(item: PagosGmailSyncItem) -> Optional[str]:
     return raw[:1000]
 
 
+def _cedula_placeholder_error(valor: Optional[str]) -> bool:
+    s = (valor or "").strip().upper()
+    return not s or s in {"ERROR", "ERROR EMAIL", "ERROR_EMAIL"}
+
+
+def _cedula_sync_item_efectiva(db: Session, item: PagosGmailSyncItem) -> str:
+    """
+    Lote IT Master: la cédula del cliente viene del asunto del correo maestro.
+
+    Si una fila vieja quedó con `ERROR` por una extracción anterior, se repara aquí
+    antes de mostrar, guardar o migrar a revisión manual.
+    """
+    cedula_actual = formatear_cedula(item.cedula or "")
+    if (
+        (item.correo_origen or "").strip().lower() == PAGOS_GMAIL_LOTE_REMITENTE_IT_MASTER
+        and _cedula_placeholder_error(cedula_actual)
+    ):
+        cedula_asunto = extract_lote_it_master_cedula_from_subject(item.asunto)
+        cedula_resuelta = resolver_cedula_almacenada_en_clientes(db, cedula_asunto)
+        if cedula_resuelta:
+            item.cedula = cedula_resuelta
+            db.flush()
+            return cedula_resuelta
+    return cedula_actual
+
+
 def _sync_item_duplicado_en_pagos(
     db: Session,
     numero_referencia: Optional[str],
@@ -1490,8 +1517,9 @@ def listar_sync_items(
     rows = db.execute(q.offset(offset).limit(limit)).scalars().all()
     items: list[dict] = []
     for r in rows:
+        cedula_item = _cedula_sync_item_efectiva(db, r)
         duplicado, pago_id_exist, prestamo_id_exist = _sync_item_duplicado_en_pagos(
-            db, r.numero_referencia, r.cedula
+            db, r.numero_referencia, cedula_item
         )
         items.append(
             {
@@ -1501,7 +1529,7 @@ def listar_sync_items(
                 "comprobante_url": _sync_item_comprobante_url(r),
                 "banco": r.banco,
                 "fecha_pago": r.fecha_pago,
-                "cedula": r.cedula,
+                "cedula": cedula_item,
                 "monto": r.monto,
                 "numero_referencia": r.numero_referencia,
                 "correo_origen": r.correo_origen,
@@ -1535,7 +1563,7 @@ def _pago_con_error_desde_sync_item(
     """
     fallback_dt = item.created_at or datetime.utcnow()
     fecha_pago = _parse_fecha_pago_gmail_temporal(item.fecha_pago, fallback_dt)
-    cedula = formatear_cedula(item.cedula or "")
+    cedula = _cedula_sync_item_efectiva(db, item)
     monto_txt = format_monto_excel_pagos_gmail(item.monto or "")
     try:
         monto_num = float(monto_txt) if monto_txt else 0.0
@@ -1786,9 +1814,10 @@ def guardar_sync_item(
 
     try:
         with db.begin_nested():
+            cedula_item = _cedula_sync_item_efectiva(db, item)
             # Si la referencia ya está aplicada en cartera, no crear nada nuevo: avisar.
             duplicado, pago_id_exist, _prid = _sync_item_duplicado_en_pagos(
-                db, item.numero_referencia, item.cedula
+                db, item.numero_referencia, cedula_item
             )
             if duplicado:
                 return {
@@ -1968,8 +1997,9 @@ def migrar_sync_item_a_pendientes(
     if item is None:
         raise HTTPException(status_code=404, detail=f"sync_item {item_id} no encontrado")
 
+    cedula_item = _cedula_sync_item_efectiva(db, item)
     duplicado, pago_id_exist, prestamo_id_exist = _sync_item_duplicado_en_pagos(
-        db, item.numero_referencia, item.cedula
+        db, item.numero_referencia, cedula_item
     )
 
     try:
@@ -2099,15 +2129,16 @@ def editar_sync_item(
             status_code=500, detail=f"No se pudo editar: {str(e)[:400]}"
         ) from e
 
+    cedula_item = _cedula_sync_item_efectiva(db, item)
     duplicado, pago_id_exist, prestamo_id_exist = _sync_item_duplicado_en_pagos(
-        db, item.numero_referencia, item.cedula
+        db, item.numero_referencia, cedula_item
     )
     return {
         "ok": True,
         "item": {
             "id": item.id,
             "banco": item.banco,
-            "cedula": item.cedula,
+            "cedula": cedula_item,
             "fecha_pago": item.fecha_pago,
             "monto": item.monto,
             "numero_referencia": item.numero_referencia,

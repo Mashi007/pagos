@@ -47,6 +47,7 @@ from app.services.pago_numero_documento import (
     pago_con_error_ya_cargado_estricto,
     primer_pago_cartera_por_documento,
 )
+from app.services.pagos_gmail.gmail_service import extract_lote_it_master_cedula_from_subject
 from app.utils.cedula_almacenamiento import (
     normalizar_cedula_almacenamiento,
     resolver_cedula_almacenada_en_clientes,
@@ -82,6 +83,26 @@ def _usuario_registro_desde_current_user(current_user: Optional[Any]) -> str:
 
     return _USUARIO_REGISTRO_FALLBACK
 
+
+
+def _cedula_placeholder_error(valor: Optional[str]) -> bool:
+    s = (valor or "").strip().upper()
+    return not s or s in {"ERROR", "ERROR EMAIL", "ERROR_EMAIL"}
+
+
+def _cedula_lote_it_master_desde_pago_con_error(
+    db: Session, row: PagoConError
+) -> Optional[str]:
+    """
+    Pagos Gmail IT Master: si una fila histórica quedó con cédula ERROR, recuperar
+    la cédula desde `notas` ("Asunto: <cedula> | Correo: ...") antes de actualizar.
+    """
+    notas = (getattr(row, "notas", None) or "").strip()
+    if not notas or "Asunto:" not in notas:
+        return None
+    asunto = notas.split("Asunto:", 1)[1].split("|", 1)[0].strip()
+    cedula_asunto = extract_lote_it_master_cedula_from_subject(asunto)
+    return resolver_cedula_almacenada_en_clientes(db, cedula_asunto)
 
 
 
@@ -1205,6 +1226,22 @@ def actualizar_pago_con_error(pago_id: int, payload: PagoConErrorUpdate, db: Ses
         return info
 
     data = payload.model_dump(exclude_unset=True)
+
+    cedula_enviada_o_actual = (
+        data.get("cedula_cliente")
+        if "cedula_cliente" in data
+        else getattr(row, "cedula_cliente", None)
+    )
+    if _cedula_placeholder_error(cedula_enviada_o_actual):
+        cedula_lote = _cedula_lote_it_master_desde_pago_con_error(db, row)
+        if cedula_lote:
+            data["cedula_cliente"] = cedula_lote
+        elif (row.usuario_registro or "").strip().upper() == "GMAIL_PIPELINE":
+            prestamo_id_destino = data.get("prestamo_id", row.prestamo_id)
+            if prestamo_id_destino:
+                prestamo_destino = db.get(Prestamo, prestamo_id_destino)
+                if prestamo_destino and getattr(prestamo_destino, "cedula", None):
+                    data["cedula_cliente"] = prestamo_destino.cedula
 
     _doc_touch = "numero_documento" in data or "codigo_documento" in data
 
