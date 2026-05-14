@@ -1791,17 +1791,20 @@ def guardar_sync_item(
                 db, item.numero_referencia, item.cedula
             )
             if duplicado:
-                # Eliminamos sync_item y temporales: la fila ya no aporta revisión.
-                _eliminar_filas_gmail_relacionadas(db, item)
-                db.commit()
                 return {
-                    "ok": True,
+                    "ok": False,
                     "movido_a_pagos": False,
+                    "cuotas_aplicadas": 0,
                     "ya_en_pagos": True,
                     "pago_id_existente": pago_id_exist,
+                    "pago_con_error_pendiente": False,
+                    "errores": [
+                        "No se puede guardar automáticamente: el serial ya existe en pagos. "
+                        "Use Editar para agregar sufijo o Eliminar si ya fue aplicado."
+                    ],
                     "mensaje": (
                         f"Ya existe pago con número {item.numero_referencia or '(s/r)'} "
-                        f"en cartera (pago_id={pago_id_exist}). Se eliminó la fila de revisión Gmail."
+                        f"en cartera (pago_id={pago_id_exist}). No se creó otro pago."
                     ),
                 }
 
