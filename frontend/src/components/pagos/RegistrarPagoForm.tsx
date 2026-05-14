@@ -1440,9 +1440,9 @@ export function RegistrarPagoForm({
           errorMessage = DUPLICADO_HUELLA_UI
         } else if (
           status === 409 &&
-          (detailLower.includes('comprobante') ||
-            detailLower.includes('codigo en pagos conciliados') ||
-            detailLower.includes('pagos conciliados o pagados'))
+          detailLower.includes('no se permite cambiar') &&
+          (detailLower.includes('codigo') || detailLower.includes('código')) &&
+          (detailLower.includes('conciliad') || detailLower.includes('pagad'))
         ) {
           errorMessage =
             'Este pago ya está conciliado/pagado. No se permite cambiar el código; sí puede corregir el Nº de documento y otros campos permitidos.'
