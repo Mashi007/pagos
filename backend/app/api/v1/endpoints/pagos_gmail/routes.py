@@ -32,10 +32,12 @@ from sqlalchemy.orm import Session
 from app.core.database import SessionLocal, get_db
 from app.core.deps import get_current_user
 from app.core.documento import compose_numero_documento_almacenado, normalize_documento
+from app.models.cliente import Cliente
 from app.models.pago_con_error import PagoConError
 from app.models.pagos_gmail_sync import PagosGmailSync, PagosGmailSyncItem, GmailTemporal
 from app.models.pagos_gmail_abcd_cuotas_traza import PagosGmailAbcdCuotasTraza
 from app.models.pagos_gmail_pipeline_evento import PagosGmailPipelineEvento
+from app.models.prestamo import Prestamo
 from app.services.pago_numero_documento import numero_documento_ya_registrado
 from app.services.pagos_gmail.credentials import get_pagos_gmail_credentials, log_pagos_gmail_config_status
 from app.services.pagos_gmail.gmail_service import (
@@ -44,6 +46,7 @@ from app.services.pagos_gmail.gmail_service import (
 )
 from app.services.pagos_gmail.helpers import format_monto_excel_pagos_gmail, formatear_cedula
 from app.services.pagos_gmail.pipeline import run_pipeline
+from app.utils.cedula_almacenamiento import resolver_cedula_almacenada_en_clientes
 
 logger = logging.getLogger(__name__)
 
@@ -1552,6 +1555,40 @@ def _pago_con_error_desde_sync_item(
         )[:255]
 
     doc_ruta = _documento_ruta_desde_gmail_temporal(getattr(item, "drive_link", None))
+    cedula_resuelta = resolver_cedula_almacenada_en_clientes(db, cedula)
+    prestamo_id_auto: Optional[int] = None
+    if cedula_resuelta:
+        cliente = db.execute(
+            select(Cliente).where(Cliente.cedula == cedula_resuelta)
+        ).scalars().first()
+        if cliente is not None:
+            prestamos = (
+                db.execute(
+                    select(Prestamo)
+                    .where(
+                        Prestamo.cliente_id == cliente.id,
+                        Prestamo.estado == "APROBADO",
+                    )
+                    .order_by(Prestamo.id)
+                )
+                .scalars()
+                .all()
+            )
+            if len(prestamos) == 1:
+                prestamo_id_auto = int(prestamos[0].id)
+            elif len(prestamos) > 1:
+                observaciones = (
+                    f"{observaciones}; cédula con {len(prestamos)} préstamos APROBADOS, "
+                    "requiere seleccionar préstamo en revisión manual"
+                )[:255]
+            else:
+                observaciones = (
+                    f"{observaciones}; sin préstamo APROBADO para autoconciliar"
+                )[:255]
+    else:
+        observaciones = (
+            f"{observaciones}; cédula no encontrada en clientes para autoconciliar"
+        )[:255]
 
     def _buscar_existente_por_numero() -> Optional[PagoConError]:
         if not numero_doc_key:
@@ -1564,8 +1601,8 @@ def _pago_con_error_desde_sync_item(
 
     existente = _buscar_existente_por_numero()
     if existente is not None:
-        existente.prestamo_id = existente.prestamo_id
-        existente.cedula_cliente = existente.cedula_cliente or (cedula or None)
+        existente.prestamo_id = existente.prestamo_id or prestamo_id_auto
+        existente.cedula_cliente = existente.cedula_cliente or cedula_resuelta or (cedula or None)
         existente.fecha_pago = fecha_pago
         existente.monto_pagado = monto_num
         existente.institucion_bancaria = (item.banco or None)
@@ -1586,8 +1623,8 @@ def _pago_con_error_desde_sync_item(
         return existente, True
 
     nuevo = PagoConError(
-        prestamo_id=None,
-        cedula_cliente=cedula or None,
+        prestamo_id=prestamo_id_auto,
+        cedula_cliente=cedula_resuelta or cedula or None,
         fecha_pago=fecha_pago,
         monto_pagado=monto_num,
         numero_documento=numero_doc,
@@ -1625,7 +1662,8 @@ def _pago_con_error_desde_sync_item(
         if doc_ruta and not existente.documento_ruta:
             existente.documento_ruta = doc_ruta
             existente.documento_nombre = "Comprobante Gmail"
-        existente.cedula_cliente = existente.cedula_cliente or (cedula or None)
+        existente.prestamo_id = existente.prestamo_id or prestamo_id_auto
+        existente.cedula_cliente = existente.cedula_cliente or cedula_resuelta or (cedula or None)
         existente.fecha_pago = fecha_pago
         existente.monto_pagado = monto_num
         existente.institucion_bancaria = (item.banco or None)
@@ -1769,7 +1807,6 @@ def guardar_sync_item(
 
             nuevo_pe, _pe_reutilizado = _pago_con_error_desde_sync_item(db, item)
             pago_con_error_id = int(nuevo_pe.id)
-            _eliminar_filas_gmail_relacionadas(db, item)
 
         db.commit()
     except HTTPException:
@@ -1786,6 +1823,41 @@ def guardar_sync_item(
             status_code=500,
             detail=f"No se pudo preparar la fila para guardar: {str(e)[:400]}",
         ) from e
+
+    pago_preparado = db.get(PagoConError, pago_con_error_id)
+    if pago_preparado is None:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Pago_con_error {pago_con_error_id} no encontrado tras preparar la fila.",
+        )
+    if not getattr(pago_preparado, "prestamo_id", None):
+        return {
+            "ok": False,
+            "movido_a_pagos": False,
+            "cuotas_aplicadas": 0,
+            "pago_con_error_id": pago_con_error_id,
+            "pago_con_error_pendiente": True,
+            "errores": [
+                "No se puede autoconciliar desde Gmail: no hay un préstamo APROBADO único "
+                "para la cédula. Use Editar para seleccionar/corregir antes de aplicar."
+            ],
+            "ya_cargado_eliminados": [],
+            "mensaje": "La fila quedó en revisión manual; no se creó pago ni se aplicaron cuotas.",
+        }
+    if float(getattr(pago_preparado, "monto_pagado", 0) or 0) <= 0:
+        return {
+            "ok": False,
+            "movido_a_pagos": False,
+            "cuotas_aplicadas": 0,
+            "pago_con_error_id": pago_con_error_id,
+            "pago_con_error_pendiente": True,
+            "errores": [
+                "No se puede autoconciliar desde Gmail: el monto no es mayor que cero. "
+                "Use Editar para corregirlo."
+            ],
+            "ya_cargado_eliminados": [],
+            "mensaje": "La fila quedó en revisión manual; no se creó pago ni se aplicaron cuotas.",
+        }
 
     # Mover a pagos aplicando cascada de cuotas. Reutilizamos el endpoint canónico.
     try:
@@ -1816,9 +1888,34 @@ def guardar_sync_item(
     ya_cargado = (
         resultado.get("ya_cargado_eliminados", []) if isinstance(resultado, dict) else []
     )
+    cuotas_aplicadas = (
+        int(resultado.get("cuotas_aplicadas", 0) or 0) if isinstance(resultado, dict) else 0
+    )
+    if movidos > 0 or bool(ya_cargado):
+        try:
+            item_limpieza = db.get(PagosGmailSyncItem, item_id)
+            if item_limpieza is not None:
+                _eliminar_filas_gmail_relacionadas(db, item_limpieza)
+                db.commit()
+        except Exception as e:
+            db.rollback()
+            logger.exception(
+                "[PAGOS_GMAIL] guardar_sync_item: pago procesado pero no se pudo limpiar sync_item=%s: %s",
+                item_id,
+                e,
+            )
+            raise HTTPException(
+                status_code=500,
+                detail=(
+                    "El pago fue procesado, pero no se pudo limpiar la fila Gmail. "
+                    f"Refresque y reintente eliminarla. Detalle: {str(e)[:400]}"
+                ),
+            ) from e
+
     return {
         "ok": movidos > 0 or bool(ya_cargado),
         "movido_a_pagos": movidos > 0,
+        "cuotas_aplicadas": cuotas_aplicadas,
         "pago_con_error_id": pago_con_error_id,
         "pago_con_error_pendiente": bool(errores) and movidos == 0,
         "errores": errores,

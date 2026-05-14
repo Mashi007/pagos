@@ -1213,6 +1213,7 @@ class PagoService {
   async guardarGmailSyncItem(itemId: number): Promise<{
     ok: boolean
     movido_a_pagos: boolean
+    cuotas_aplicadas?: number
     ya_en_pagos?: boolean
     pago_id_existente?: number | null
     pago_con_error_id?: number

@@ -388,7 +388,23 @@ export default function ActualizacionesGmailPage() {
   const guardarMutation = useMutation({
     mutationFn: (itemId: number) => pagoService.guardarGmailSyncItem(itemId),
     onSuccess: res => {
-      toast.success(res.mensaje || 'Pago guardado.')
+      if (res.ok && res.movido_a_pagos) {
+        const cuotas = Number(res.cuotas_aplicadas ?? 0)
+        toast.success(
+          cuotas > 0
+            ? `Pago guardado y aplicado a ${cuotas} cuota(s).`
+            : res.mensaje || 'Pago guardado en cartera.'
+        )
+      } else if (res.ok) {
+        toast.success(res.mensaje || 'Pago ya estaba cargado.')
+      } else {
+        const detalle = res.errores?.length ? ` ${res.errores.join(' ')}` : ''
+        toast.error(
+          (res.mensaje ||
+            'No se pudo guardar el pago; quedó en revisión manual.') + detalle,
+          { duration: 12000 }
+        )
+      }
       void queryClient.invalidateQueries({ queryKey: QK_LIST })
     },
     onError: err => {
