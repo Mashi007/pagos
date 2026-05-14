@@ -108,6 +108,14 @@ function safeMonto(item: GmailSyncItemUI): string {
   return m || '-'
 }
 
+function esSyncItemObsoleto(err: unknown): boolean {
+  const msg = getErrorMessage(err).toLowerCase()
+  return (
+    msg.includes('sync_item') &&
+    (msg.includes('no encontrado') || msg.includes('not found'))
+  )
+}
+
 interface DiagnosticoGmail {
   correo: string
   total: number
@@ -366,6 +374,14 @@ export default function ActualizacionesGmailPage() {
       void queryClient.invalidateQueries({ queryKey: QK_LIST })
     },
     onError: err => {
+      if (esSyncItemObsoleto(err)) {
+        toast(
+          'La fila ya no existe porque el lote fue reprocesado. Refrescando resultados...',
+          { duration: 6000 }
+        )
+        void queryClient.invalidateQueries({ queryKey: QK_LIST })
+        return
+      }
       toast.error(getErrorMessage(err) || 'No se pudo guardar')
     },
   })
@@ -377,6 +393,14 @@ export default function ActualizacionesGmailPage() {
       void queryClient.invalidateQueries({ queryKey: QK_LIST })
     },
     onError: err => {
+      if (esSyncItemObsoleto(err)) {
+        toast(
+          'La fila ya no existe porque el lote fue reprocesado. Refrescando resultados...',
+          { duration: 6000 }
+        )
+        void queryClient.invalidateQueries({ queryKey: QK_LIST })
+        return
+      }
       toast.error(getErrorMessage(err) || 'No se pudo eliminar')
     },
   })
@@ -416,6 +440,14 @@ export default function ActualizacionesGmailPage() {
         })
         void queryClient.invalidateQueries({ queryKey: QK_LIST })
       } catch (e) {
+        if (esSyncItemObsoleto(e)) {
+          toast(
+            'La fila ya no existe porque el lote fue reprocesado. Refrescando resultados...',
+            { duration: 6000 }
+          )
+          void queryClient.invalidateQueries({ queryKey: QK_LIST })
+          return
+        }
         toast.error(
           getErrorMessage(e) || 'No se pudo migrar la fila a pagos_con_errores'
         )
@@ -935,6 +967,7 @@ export default function ActualizacionesGmailPage() {
                                 size="sm"
                                 onClick={() => handleGuardar(item)}
                                 disabled={
+                                  ejecutandoPipeline ||
                                   guardarMutation.isPending ||
                                   eliminarMutation.isPending ||
                                   migrandoEste
@@ -953,6 +986,7 @@ export default function ActualizacionesGmailPage() {
                                 variant="outline"
                                 onClick={() => void handleEditar(item)}
                                 disabled={
+                                  ejecutandoPipeline ||
                                   guardarMutation.isPending ||
                                   eliminarMutation.isPending ||
                                   migrandoEste
@@ -971,7 +1005,9 @@ export default function ActualizacionesGmailPage() {
                                 variant="outline"
                                 onClick={() => handleEliminar(item)}
                                 disabled={
-                                  eliminarMutation.isPending || migrandoEste
+                                  ejecutandoPipeline ||
+                                  eliminarMutation.isPending ||
+                                  migrandoEste
                                 }
                               >
                                 <Trash2 className="mr-1 h-3.5 w-3.5" />
