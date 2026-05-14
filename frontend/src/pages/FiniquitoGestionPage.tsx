@@ -175,8 +175,9 @@ function textoToastRefresco(r: FiniquitoRefreshStats): {
 
 const DEBOUNCE_MS = 420
 
-/** Coincide con backend `_ADMIN_CASOS_MAX_LIMIT` (listar sin paginar en UI). */
+/** Coincide con backend `_ADMIN_CASOS_MAX_LIMIT` para bandejas pequeñas. */
 const FETCH_LIMIT = 2000
+const BANDEJA_PRINCIPAL_FETCH_LIMIT = 100
 
 function casoCoincideCedula(caso: FiniquitoCasoItem, filtro: string): boolean {
   const f = filtro.trim().toLowerCase()
@@ -223,12 +224,14 @@ const theadStickyClass =
 function FiniquitoTablaScrollHint({
   total,
   cargados,
+  limit = FETCH_LIMIT,
 }: {
   total: number
   cargados: number
+  limit?: number
 }) {
   if (cargados === 0) return null
-  const truncado = total > FETCH_LIMIT && cargados === FETCH_LIMIT
+  const truncado = total > limit && cargados === limit
   return (
     <p className="mt-2 text-center text-[11px] leading-snug text-slate-500">
       {cargados === total
@@ -238,7 +241,8 @@ function FiniquitoTablaScrollHint({
         <>
           {' '}
           <span className="font-medium text-amber-900">
-            Listado acotado a {FETCH_LIMIT} (límite API).
+            Listado acotado a {limit}; use el filtro por cédula para ubicar
+            casos fuera de esta primera carga.
           </span>
         </>
       ) : null}{' '}
@@ -329,7 +333,7 @@ function FiniquitoGestionPageInner() {
             cedulaBusqueda || undefined,
             undefined,
             {
-              limit: FETCH_LIMIT,
+              limit: BANDEJA_PRINCIPAL_FETCH_LIMIT,
               offset: 0,
             }
           ),
@@ -1308,6 +1312,7 @@ function FiniquitoGestionPageInner() {
                 <FiniquitoTablaScrollHint
                   total={totalBandeja}
                   cargados={itemsBandeja.length}
+                  limit={BANDEJA_PRINCIPAL_FETCH_LIMIT}
                 />
               </>
             )}
