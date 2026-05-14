@@ -153,6 +153,7 @@ export default function ActualizacionesGmailPage() {
     pagoConErrorId: number
     inicial: PagoInicialRegistrar
   } | null>(null)
+  const [guardandoId, setGuardandoId] = useState<number | null>(null)
   const [migrandoId, setMigrandoId] = useState<number | null>(null)
 
   // Refs para que `onDone` (definido en useGmailPipeline) pueda acceder al criterio
@@ -418,6 +419,9 @@ export default function ActualizacionesGmailPage() {
       }
       toast.error(getErrorMessage(err) || 'No se pudo guardar')
     },
+    onSettled: (_data, _error, itemId) => {
+      setGuardandoId(current => (current === itemId ? null : current))
+    },
   })
 
   const eliminarMutation = useMutation({
@@ -517,6 +521,7 @@ export default function ActualizacionesGmailPage() {
         )
         if (!ok) return
       }
+      setGuardandoId(item.id)
       guardarMutation.mutate(item.id)
     },
     [guardarMutation]
@@ -932,6 +937,7 @@ export default function ActualizacionesGmailPage() {
                     tablaItems.map(item => {
                       const dup = item.duplicado_en_pagos
                       const compUrl = urlComprobante(item.comprobante_url)
+                      const guardandoEste = guardandoId === item.id
                       const migrandoEste = migrandoId === item.id
                       return (
                         <tr
@@ -1009,13 +1015,13 @@ export default function ActualizacionesGmailPage() {
                                 onClick={() => handleGuardar(item)}
                                 disabled={
                                   ejecutandoPipeline ||
-                                  guardarMutation.isPending ||
+                                  guardandoEste ||
                                   eliminarMutation.isPending ||
                                   migrandoEste
                                 }
                                 title="Migrar a pagos_con_errores y aplicar mover-a-pagos (cascada cuotas)"
                               >
-                                {guardarMutation.isPending ? (
+                                {guardandoEste ? (
                                   <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
                                 ) : (
                                   <Save className="mr-1 h-3.5 w-3.5" />
@@ -1028,7 +1034,7 @@ export default function ActualizacionesGmailPage() {
                                 onClick={() => void handleEditar(item)}
                                 disabled={
                                   ejecutandoPipeline ||
-                                  guardarMutation.isPending ||
+                                  guardandoEste ||
                                   eliminarMutation.isPending ||
                                   migrandoEste
                                 }
