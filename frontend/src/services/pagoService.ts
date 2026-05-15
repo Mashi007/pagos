@@ -1194,8 +1194,11 @@ class PagoService {
     )
   }
 
-  /** Limpia la cola local del módulo Gmail para el correo indicado. No toca pagos ya guardados. */
-  async limpiarGmailSyncItemsPorCorreo(correo: string): Promise<{
+  /** Limpia la cola local del módulo Gmail para el correo indicado. Acción destructiva y confirmada. */
+  async limpiarGmailSyncItemsPorCorreo(
+    correo: string,
+    confirmarEliminacion = false
+  ): Promise<{
     ok: boolean
     correo: string
     sync_items_eliminados: number
@@ -1204,6 +1207,7 @@ class PagoService {
   }> {
     const params = new URLSearchParams()
     params.set('correo', correo.trim().toLowerCase())
+    if (confirmarEliminacion) params.set('confirmar_eliminacion', 'true')
     return await apiClient.post(
       `${this.baseUrl}/gmail/sync-items/limpiar-remitente?${params.toString()}`
     )

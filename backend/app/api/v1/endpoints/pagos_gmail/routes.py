@@ -1723,6 +1723,13 @@ def _eliminar_filas_gmail_relacionadas(db: Session, item: PagosGmailSyncItem) ->
 @router.post("/sync-items/limpiar-remitente")
 def limpiar_sync_items_remitente(
     correo: str = Query(..., description="Correo origen del módulo Gmail a limpiar."),
+    confirmar_eliminacion: bool = Query(
+        False,
+        description=(
+            "Debe ser true para borrar filas locales pendientes. La UI normal solo limpia "
+            "su vista/cache y no debe invocar este borrado destructivo."
+        ),
+    ),
     db: Session = Depends(get_db),
 ):
     """
@@ -1730,7 +1737,9 @@ def limpiar_sync_items_remitente(
 
     Borra únicamente la cola local del remitente fijo IT Master (`pagos_gmail_sync_item`
     y `gmail_temporal`). No toca `pagos`, `pagos_con_errores` ni Gmail.
-    Deja la UI en cero para que la próxima corrida sea un escaneo fresco.
+
+    Requiere confirmación explícita porque los mensajes ya etiquetados en Gmail pueden
+    omitirse en re-escaneos; borrar estas filas sin intención puede perder revisión pendiente.
     """
     correo_lc = _validate_from_email(correo)
     if not correo_lc:
@@ -1740,6 +1749,14 @@ def limpiar_sync_items_remitente(
             status_code=400,
             detail=(
                 f"Este módulo solo permite limpiar '{PAGOS_GMAIL_LOTE_REMITENTE_IT_MASTER}'."
+            ),
+        )
+    if not confirmar_eliminacion:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "La limpieza de resultados Gmail es destructiva. Use "
+                "confirmar_eliminacion=true solo desde una acción administrativa explícita."
             ),
         )
     try:

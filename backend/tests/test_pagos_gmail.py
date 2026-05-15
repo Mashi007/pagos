@@ -26,6 +26,10 @@ from app.api.v1.endpoints.pagos_gmail import (
     download_excel,
     status,
 )
+from app.api.v1.endpoints.pagos_gmail.routes import (
+    PAGOS_GMAIL_LOTE_REMITENTE_IT_MASTER,
+    limpiar_sync_items_remitente,
+)
 from app.models.pagos_gmail_sync import PagosGmailSync, PagosGmailSyncItem
 from app.services.pagos_gmail.gemini_service import (
     _guess_bank_hint_from_text,
@@ -137,6 +141,27 @@ def test_status_when_no_sync(db: Session):
     """Sin ningún PagosGmailSync, status no debe fallar."""
     resp = status(db=db)
     assert "last_run" in resp and "last_status" in resp
+
+
+def test_limpiar_sync_items_remitente_requires_explicit_confirmation():
+    """El endpoint destructivo no debe borrar cola Gmail sin confirmación explícita."""
+
+    class DbShouldNotBeTouched:
+        def execute(self, *_args, **_kwargs):
+            raise AssertionError("No debe tocar BD sin confirmación")
+
+        def rollback(self):
+            raise AssertionError("No debe abrir transacción sin confirmación")
+
+    with pytest.raises(HTTPException) as exc:
+        limpiar_sync_items_remitente(
+            correo=PAGOS_GMAIL_LOTE_REMITENTE_IT_MASTER,
+            confirmar_eliminacion=False,
+            db=DbShouldNotBeTouched(),
+        )
+
+    assert exc.value.status_code == 409
+    assert "destructiva" in str(exc.value.detail).lower()
 
 
 # --- Tests _find_most_recent_data (límite y conteo) ---
