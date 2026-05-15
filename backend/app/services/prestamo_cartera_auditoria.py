@@ -357,10 +357,11 @@ def ejecutar_auditoria_cartera(
         text(
             """
             WITH agr AS (
-              SELECT UPPER(TRIM(BOTH FROM cedula)) AS ced_norm, COUNT(*)::int AS n
+              SELECT REPLACE(REPLACE(UPPER(TRIM(BOTH FROM cedula)), '-', ''), ' ', '') AS ced_norm,
+                     COUNT(*)::int AS n
               FROM prestamos
               WHERE estado = 'APROBADO'
-              GROUP BY UPPER(TRIM(BOTH FROM cedula))
+              GROUP BY 1
             )
             SELECT ced_norm FROM agr
             WHERE ced_norm IS NOT NULL

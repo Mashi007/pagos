@@ -47,6 +47,12 @@ import { Textarea } from '../../components/ui/textarea'
 import { clienteService } from '../../services/clienteService'
 
 import { extraerCaracteresCedulaPublica } from '../../utils/cedulaConsultaPublica'
+import {
+  descripcionPoliticaCupo,
+  normalizarCedulaClaveCupo,
+  prefijoPoliticaCupoAprobados,
+  type PrefijoCupoCedula,
+} from '../../utils/cupoCedulaPrestamo'
 
 import { useCreatePrestamo, useUpdatePrestamo } from '../../hooks/usePrestamos'
 
@@ -380,6 +386,16 @@ export function CrearPrestamoForm({
 
   const [justificacionAutorizacion, setJustificacionAutorizacion] = useState('')
 
+  const [cupoCedula, setCupoCedula] = useState<{
+    prefijo: PrefijoCupoCedula | null
+    max_aprobados: number | null
+    aprobados_actuales: number
+    puede_agregar: boolean
+    error: string | null
+  } | null>(null)
+
+  const [cupoCedulaLoading, setCupoCedulaLoading] = useState(false)
+
   const [anticipo, setAnticipo] = useState<number>(0)
 
   const [showAdditionalInfo, setShowAdditionalInfo] = useState(false)
@@ -570,6 +586,53 @@ export function CrearPrestamoForm({
     }
   }, [clienteInfo, formData.cedula])
 
+  const cedulaParaCupo = useMemo(() => {
+    const c = (clienteData?.cedula || debouncedCedula || '').trim()
+    return c
+  }, [clienteData?.cedula, debouncedCedula])
+
+  useEffect(() => {
+    if (prestamo || !cedulaParaCupo || cedulaParaCupo.length < 2) {
+      setCupoCedula(null)
+      setCupoCedulaLoading(false)
+      return
+    }
+
+    let cancelled = false
+    setCupoCedulaLoading(true)
+
+    ;(async () => {
+      try {
+        const res = await prestamoService.checkCupoCedulas([cedulaParaCupo])
+        if (cancelled) return
+        const clave = normalizarCedulaClaveCupo(cedulaParaCupo)
+        const item = (res.cedulas || []).find(
+          c => (c.cedula_normalizada || '').trim() === clave
+        )
+        if (!item) {
+          setCupoCedula(null)
+          return
+        }
+        const pref = prefijoPoliticaCupoAprobados(clave)
+        setCupoCedula({
+          prefijo: pref,
+          max_aprobados: item.max_aprobados,
+          aprobados_actuales: item.aprobados_actuales,
+          puede_agregar: item.puede_agregar,
+          error: item.error,
+        })
+      } catch {
+        if (!cancelled) setCupoCedula(null)
+      } finally {
+        if (!cancelled) setCupoCedulaLoading(false)
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [prestamo, cedulaParaCupo])
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
@@ -694,6 +757,32 @@ export function CrearPrestamoForm({
     }
 
     // Si hay errores, mostrar notificación consolidada y bloquear envío
+
+    if (!prestamo && cedulaParaCupo) {
+      try {
+        const cupoRes = await prestamoService.checkCupoCedulas([cedulaParaCupo])
+        const clave = normalizarCedulaClaveCupo(cedulaParaCupo)
+        const cupoItem = (cupoRes.cedulas || []).find(
+          c => (c.cedula_normalizada || '').trim() === clave
+        )
+        if (
+          cupoItem &&
+          (Boolean(cupoItem.error) || cupoItem.puede_agregar === false)
+        ) {
+          errors.push(
+            cupoItem.error ||
+              'Cupo de prestamos APROBADO excedido para esta cedula (V/E maximo 1; J hasta 5, solo si la cedula empieza por J).'
+          )
+        }
+      } catch {
+        if (cupoCedula && !cupoCedula.puede_agregar) {
+          errors.push(
+            cupoCedula.error ||
+              'Cupo de prestamos APROBADO excedido para esta cedula.'
+          )
+        }
+      }
+    }
 
     if (errors.length > 0) {
       const listado = errors.map(e => `• ${e}`).join('\n')
@@ -1048,7 +1137,7 @@ export function CrearPrestamoForm({
                   </label>
 
                   <Input
-                    placeholder="Ej: V-16.578.561 o 16.578.561"
+                    placeholder="Ej: V-16.578.561, E-... o J-40123456-1"
                     value={formData.cedula}
                     onChange={e =>
                       setFormData({
@@ -1059,7 +1148,48 @@ export function CrearPrestamoForm({
                     disabled={isReadOnly || isLoadingCliente}
                     maxLength={28}
                   />
+
+                  {!prestamo && (
+                    <p className="mt-1 text-xs text-gray-500">
+                      Cupo APROBADO: V y E maximo 1 por cedula; J (cedula que
+                      empieza por J) hasta 5.
+                    </p>
+                  )}
                 </div>
+
+                {cupoCedulaLoading &&
+                  !prestamo &&
+                  cedulaParaCupo &&
+                  cedulaParaCupo.length >= 2 && (
+                    <motion.div className="flex items-center gap-2 text-xs text-gray-500">
+                      <div className="h-4 w-4 animate-spin rounded-full border-b-2 border-gray-400" />
+                      Verificando cupo de prestamos...
+                    </motion.div>
+                  )}
+
+                {cupoCedula &&
+                  !cupoCedulaLoading &&
+                  !prestamo &&
+                  clienteData && (
+                    <div
+                      className={`rounded-lg border p-3 text-sm ${
+                        cupoCedula.puede_agregar
+                          ? 'border-blue-200 bg-blue-50 text-blue-900'
+                          : 'border-red-200 bg-red-50 text-red-900'
+                      }`}
+                    >
+                      <p>{descripcionPoliticaCupo(cupoCedula.prefijo)}</p>
+                      <p className="mt-1 font-medium">
+                        APROBADO en cartera: {cupoCedula.aprobados_actuales}
+                        {cupoCedula.max_aprobados != null
+                          ? ` / maximo ${cupoCedula.max_aprobados}`
+                          : ''}
+                      </p>
+                      {!cupoCedula.puede_agregar && cupoCedula.error && (
+                        <p className="mt-1">{cupoCedula.error}</p>
+                      )}
+                    </div>
+                  )}
 
                 {isLoadingCliente &&
                   formData.cedula &&
