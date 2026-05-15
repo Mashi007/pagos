@@ -136,6 +136,26 @@ def limpiar_utf8(texto: str) -> str:
         return texto
 
 
+def texto_cliente_para_ui(texto: Optional[str]) -> str:
+    """
+    Texto de cliente (nombres) listo para UI pública y JSON.
+
+    En importaciones antiguas la «ñ» y tildes a veces quedaron como U+FFFD en BD
+    (p. ej. «Noreña» → «Nore\\ufffda»). Para mostrar al usuario se intenta
+    recuperar la letra más habitual en español.
+    """
+    if texto is None:
+        return ""
+    t = limpiar_utf8(str(texto).strip())
+    if not t:
+        return ""
+    if "\ufffd" in t:
+        t = t.replace("\ufffd", "ñ")
+        if "\ufffd" in t:
+            t = t.replace("\ufffd", "")
+    return t
+
+
 def validar_utf8(texto: str) -> bool:
     """Valida que un string sea UTF-8 válido."""
     try:

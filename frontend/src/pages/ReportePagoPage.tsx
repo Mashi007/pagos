@@ -640,6 +640,22 @@ const ESTADO_CUENTA_LINK = '/rapicredit-estadocuenta'
 
 const NOTIFICATION_DURATION_MS = 10000
 
+/** Mensaje claro si Gemini/red falló; no dejar «Sin conexión» en pantalla de confirmación. */
+function mensajeErrorDigitalizarComprobante(msg: string): string {
+  const m = (msg || '').trim()
+  if (
+    /sin conexión con el servidor|failed to fetch|load failed|networkerror|timeout|abort/i.test(
+      m
+    )
+  ) {
+    return (
+      'No se pudo digitalizar el comprobante por conexión o tiempo de espera. ' +
+      'Puede continuar: revise los datos en los pasos siguientes o use «Atrás» y complete manualmente.'
+    )
+  }
+  return m || 'No se pudo digitalizar el comprobante. Continúe con carga manual.'
+}
+
 type NotificationType = 'error' | 'success'
 
 type NotificationState = { type: NotificationType; message: string } | null
@@ -1192,22 +1208,21 @@ export default function ReportePagoPage({
         // Si Gemini digitaliza con éxito, llevar directo a confirmación
         // para evitar pasos redundantes.
         if (!isInfopagos) {
+          dismissNotification()
           setStep(7)
           return
         }
       } else {
         showNotification(
           'error',
-          res.error ||
-            'No se pudo digitalizar el comprobante. Continúe con carga manual.'
+          mensajeErrorDigitalizarComprobante(res.error || '')
         )
       }
       setStep(isInfopagos ? 7 : 3)
     } catch (e: any) {
       showNotification(
         'error',
-        e?.message ||
-          'No se pudo digitalizar el comprobante. Continúe con carga manual.'
+        mensajeErrorDigitalizarComprobante(e?.message || '')
       )
       setStep(isInfopagos ? 7 : 3)
     } finally {
@@ -2288,6 +2303,7 @@ export default function ReportePagoPage({
                       return
                     }
 
+                    dismissNotification()
                     setStep(isInfopagos ? 6 : 7)
                   }}
                 >

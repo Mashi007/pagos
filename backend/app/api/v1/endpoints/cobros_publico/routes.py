@@ -55,6 +55,7 @@ from app.core.email import cobros_recibo_attachments_or_oversize_note, send_emai
 from app.services.notificaciones_exclusion_desistimiento import cliente_bloqueado_por_desistimiento
 from app.core.security import decode_token, create_recibo_infopagos_token, create_cobros_public_token
 from app.core.config import settings
+from app.core.encoding_config import texto_cliente_para_ui
 from app.core.email_config_holder import get_email_activo_servicio
 from app.utils.cliente_emails import emails_destino_desde_objeto, unir_destinatarios_log
 from app.api.v1.endpoints.cobros.routes import reportado_falla_validadores_cobros, actualizar_flag_falla_validadores
@@ -472,7 +473,7 @@ def cobros_public_solicitar_codigo_reporte(
     db.add(row)
     db.commit()
 
-    nombre_c = (cliente.nombres or "").strip() or "Cliente"
+    nombre_c = texto_cliente_para_ui(cliente.nombres) or "Cliente"
     asunto = "[RapiCredit] Codigo para reportar su pago"
     cuerpo = (
         f"Estimado(a) {nombre_c},\n\n"
@@ -582,7 +583,7 @@ def cobros_public_verificar_codigo_reporte(
             error="No fue posible validar los datos. Verifique e intente nuevamente.",
         )
 
-    nombre = (cliente.nombres or "").strip()
+    nombre = texto_cliente_para_ui(cliente.nombres)
     email_raw = ((fila.email or "").strip() or (cliente.email or "").strip())
     puede_bs = cedula_autorizada_para_bs(db, cedula_lookup)
     fuente_lb = (
@@ -660,7 +661,7 @@ def validar_cedula_publico(
         if puede_bs
         else None
     )
-    nombre = (cliente.nombres or "").strip()
+    nombre = texto_cliente_para_ui(cliente.nombres)
     email = (cliente.email or "").strip()
     return ValidarCedulaResponse(
         ok=True,
