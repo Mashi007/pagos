@@ -6,7 +6,7 @@ Orquestacion: Gmail -> Gemini/BD por **cada adjunto elegible** (remitente en cli
 
 **Re-proceso innegociable:** si el mensaje tiene **cualquier etiqueta de usuario** Gmail (API ``type=user``), el pipeline **no** vuelve a escanear ni reetiqueta. Se hace *skip total* (sin nuevas filas Excel/BD), preservando la etiqueta existente.
 
-**Regla (1 binario = 1 petición Gemini):** imágenes tal cual; cada **página** de un PDF es un candidato (los PDF multipágina se parten en N PDFs de 1 pág.). Todas las plantillas A/B/C/D/E/F se evalúan igual sobre cada binario.
+**Regla (1 binario = 1 petición Gemini):** imágenes tal cual; cada **página** de un PDF es un candidato (los PDF multipágina se parten en N PDFs de 1 pág.). Todas las plantillas A/B/C/D/E/F se evalúan igual sobre cada binario. Con **varios** candidatos imagen/PDF, se omiten heurísticamente firmas/logos embebidos muy pequeños (p. ej. `image.png`) antes de llamar a Gemini.
 
 **Solo texto:** si no hay candidatos imagen/PDF (`candidatos` vacío: solo cuerpo u otros adjuntos no imagen/PDF) y no aplica **MANUAL** por `master@`, la etiqueta final de Gmail es **TEXTO**.
 
@@ -166,6 +166,7 @@ from app.services.pagos_gmail.gmail_service import (
     get_existing_user_label_id,
     invalidate_gmail_labels_list_cache,
     get_pagos_gmail_image_pdf_files_for_pipeline,
+    get_message_body_text,
     get_message_date,
     get_message_full_payload,
     get_or_create_pagos_gmail_plantilla_label_ids,
@@ -196,6 +197,7 @@ from app.services.pagos_gmail.gemini_service import (
 from app.services.pagos_gmail.pdf_pages import expand_pipeline_pdf_tuples
 from app.services.pagos_gmail.helpers import (
     extract_sender_email,
+    extraer_cedula_desde_asunto_cuerpo_pipeline,
     formatear_cedula,
     get_sheet_name_for_date,
     normalizar_fecha_pago,
@@ -355,6 +357,81 @@ def _cedula_desde_imagen_rescan_error_email(raw: Optional[str]) -> str:
         # Solo dígitos: antepón V; backend buscará V/E/J/G + estos dígitos en BD
         return "V" + fc
     return PAGOS_GMAIL_ERROR_CEDULA_IMAGEN
+
+
+def _es_adjunto_ruido_gemini_pagos_gmail(
+    filename: str,
+    content: object,
+    origen_binario: str,
+    mime_type: str,
+) -> bool:
+    """
+    Heuristica: firmas/logos embebidos muy pequeños (p. ej. image.png) no son comprobantes.
+    Solo aplica a imagenes embebidas; nunca descarta PDF ni adjuntos descargables tipicos.
+    """
+    ob = (origen_binario or "").strip().lower()
+    if ob != "embebida":
+        return False
+    fn = (filename or "").strip().lower()
+    if fn.endswith(".pdf"):
+        return False
+    mt = (mime_type or "").strip().lower()
+    if mt == "application/pdf" or not mt.startswith("image/"):
+        return False
+    try:
+        if isinstance(content, (bytes, bytearray)):
+            n = len(content)
+        else:
+            n = len(bytes(content))
+    except Exception:
+        return False
+    if n > 100_000:
+        return False
+    base = fn.rsplit("/", 1)[-1].rsplit("\\", 1)[-1]
+    generic = frozenset(
+        {
+            "image.png",
+            "image.jpg",
+            "image.jpeg",
+            "image.gif",
+            "image.webp",
+            "inline.png",
+            "unnamed.png",
+            "unnamed.jpg",
+        }
+    )
+    if base in generic:
+        return True
+    if base.startswith("image") and base.endswith(".png") and n <= 65_536:
+        return True
+    return False
+
+
+def _filtrar_adjuntos_ruido_pagos_gmail_gemini(
+    candidatos_in: list[tuple[str, object, str, str]],
+) -> list[tuple[str, object, str, str]]:
+    """
+    Con varios candidatos, omite binarios embebidos genericos/ligeros que suelen ser firma o logo.
+    Si el filtro dejaria la lista vacia, devuelve la lista original (un solo candidato nunca se filtra aqui).
+    """
+    if len(candidatos_in) <= 1:
+        return candidatos_in
+    out: list[tuple[str, object, str, str]] = []
+    for row in candidatos_in:
+        fn, content, mime, ob = row
+        if _es_adjunto_ruido_gemini_pagos_gmail(fn, content, ob, mime):
+            continue
+        out.append(row)
+    if not out:
+        return candidatos_in
+    n_skip = len(candidatos_in) - len(out)
+    if n_skip > 0:
+        logger.info(
+            "[PAGOS_GMAIL]   Candidatos Gemini: omitidos %d binario(s) por heuristica ruido (embebido+ligero); quedan %d",
+            n_skip,
+            len(out),
+        )
+    return out
 
 
 def _cedula_columna_desde_remitente(
@@ -1101,7 +1178,22 @@ def run_pipeline(
                     )
                     else []
                 )
-                for filename, content, mime_type, origen_binario in candidatos_loop:
+                candidatos_para_gemini = _filtrar_adjuntos_ruido_pagos_gmail_gemini(
+                    candidatos_loop
+                )
+                _body_payload_for_cedula: object = full_payload or payload
+                body_txt_cedula = ""
+                try:
+                    if isinstance(_body_payload_for_cedula, dict):
+                        body_txt_cedula = get_message_body_text(
+                            _body_payload_for_cedula
+                        )
+                except Exception:
+                    body_txt_cedula = ""
+                cedula_extra_correo_txt = extraer_cedula_desde_asunto_cuerpo_pipeline(
+                    subject, body_txt_cedula
+                )
+                for filename, content, mime_type, origen_binario in candidatos_para_gemini:
                     try:
                         body_bin = (
                             content
@@ -1233,6 +1325,26 @@ def run_pipeline(
                                         c,
                                         filename,
                                     )
+                                    if cedula_extra_correo_txt:
+                                        c_try = formatear_cedula(
+                                            cedula_extra_correo_txt
+                                        )
+                                        c_res = (
+                                            resolver_cedula_almacenada_en_clientes(
+                                                db, c_try
+                                            )
+                                            if c_try
+                                            and c_try.upper() != PAGOS_NA
+                                            else None
+                                        )
+                                        if c_res:
+                                            c = formatear_cedula(c_res)
+                                            logger.info(
+                                                "[PAGOS_GMAIL]   Plan B Binance (C): cédula desde "
+                                                "asunto/cuerpo (cliente)=%s archivo=%s",
+                                                c[:24] if c else "",
+                                                filename,
+                                            )
                                 else:
                                     any_incomplete_or_skipped = True
                                     any_cedula_lookup_failed = True
@@ -1269,6 +1381,26 @@ def run_pipeline(
                             m = _v(data.get("monto"))
                             r = normalizar_referencia(_v(data.get("numero_referencia")))
                             c = _cedula_desde_imagen_rescan_error_email(data.get("cedula"))
+                            if (
+                                plan_b_mercantil_bnc_fuera_bd
+                                and c == PAGOS_GMAIL_ERROR_CEDULA_IMAGEN
+                                and cedula_extra_correo_txt
+                            ):
+                                c_try = formatear_cedula(cedula_extra_correo_txt)
+                                c_res = (
+                                    resolver_cedula_almacenada_en_clientes(db, c_try)
+                                    if c_try and c_try.upper() != PAGOS_NA
+                                    else None
+                                )
+                                if c_res:
+                                    c = formatear_cedula(c_res)
+                                    logger.info(
+                                        "[PAGOS_GMAIL]   Plan B (sin De en clientes) (%s): cédula desde "
+                                        "asunto/cuerpo (cliente)=%s archivo=%s",
+                                        fmt,
+                                        c[:24] if c else "",
+                                        filename,
+                                    )
                             c_ok = True
                             _log_ab = (
                                 "Plan B (sin De en clientes)"
@@ -1954,7 +2086,7 @@ def run_pipeline(
                         )
 
                 fully_digitized_email = (
-                    len(candidatos) > 0
+                    len(candidatos_para_gemini) > 0
                     and not any_incomplete_or_skipped
                     and had_complete_digitalization
                 )

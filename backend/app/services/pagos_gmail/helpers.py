@@ -302,6 +302,53 @@ def formatear_cedula(cedula: Optional[str]) -> str:
     return v
 
 
+def extraer_cedula_desde_asunto_cuerpo_pipeline(
+    subject: str,
+    body_text: str,
+    *,
+    max_body_chars: int = 4000,
+) -> str:
+    """
+    Intenta extraer una cédula venezolana desde asunto y cuerpo (p. ej. «Nombre Apellido 27832913»).
+    Prioriza el asunto sobre el cuerpo. Solo acepta núcleos de 6 a 11 dígitos tras formatear_cedula.
+    """
+    blobs: list[str] = []
+    s = (subject or "").strip()
+    if s:
+        blobs.append(s)
+    b = (body_text or "").strip()
+    if b:
+        blobs.append(b[:max_body_chars])
+
+    scored: list[tuple[int, int, str]] = []
+
+    for bi, blob in enumerate(blobs):
+        prio = bi
+        for m in re.finditer(r"(?i)\b([VEGJ])[\s.\-]*(\d{5,12})\b", blob):
+            raw = f"{m.group(1).upper()}{m.group(2)}"
+            fc = formatear_cedula(raw)
+            if not fc or fc.upper() == "NA":
+                continue
+            digits = re.sub(r"\D", "", fc)
+            if 6 <= len(digits) <= 11:
+                scored.append((prio, -len(fc), fc))
+        for m in re.finditer(r"\b(\d{6,11})\b", blob):
+            dig = m.group(1) or ""
+            if len(dig) == 8 and dig[:4].isdigit() and 1900 <= int(dig[:4]) <= 2099:
+                continue
+            fc = formatear_cedula(dig)
+            if not fc or fc.upper() == "NA":
+                continue
+            digits = re.sub(r"\D", "", fc)
+            if 6 <= len(digits) <= 11:
+                scored.append((prio, -len(fc), fc))
+
+    if not scored:
+        return ""
+    scored.sort(key=lambda t: (t[0], t[1]))
+    return scored[0][2]
+
+
 def resolve_banco_para_excel_pagos_gmail(
     fmt: str,
     banco_gemini: Optional[str],

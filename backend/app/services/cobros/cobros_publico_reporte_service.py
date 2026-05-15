@@ -50,11 +50,14 @@ DUPLICADO_NUMERO_OP_VENTANA_MIN = 10
 # - eliminado_duplicado: sigue en BD pero no es un "reporte activo"; ignorarlo evita falsos
 #   "ya duplicado" cuando el listado de cobros / pestañas no lo muestra.
 # - rechazado: cobranzas rechazó el reporte; el cliente debe poder reenviar el mismo Nº de operación.
+# - importado: el reporte ya se materializó en cartera; la colisión real se decide con `pagos`
+#   (p. ej. `pago_reportado_colisiona_tabla_pagos` en escáner). Si operación borró los pagos
+#   del préstamo («reemplazar pagos») pero el reportado sigue "importado", incluirlo aquí
+#   bloqueaba reenvíos válidos en la misma ventana de minutos.
 _ESTADOS_VENTANA_DUPLICADO_NUM_OP = (
     "pendiente",
     "en_revision",
     "aprobado",
-    "importado",
 )
 
 
@@ -473,9 +476,9 @@ def crear_pago_reportado_con_referencia_o_retry(
         Ventana anti-doble-click: mismo numero_operacion en pocos minutos.
         Conserva el primer reporte (created_at/id) y elimina hermanos nuevos en estados no terminales.
 
-        Solo considera filas en estados activos o ya importados (`_ESTADOS_VENTANA_DUPLICADO_NUM_OP`).
-        No usa `eliminado_duplicado` ni `rechazado` para bloquear: evita "duplicado fantasma" respecto
-        a listados de cobros y permite reenvío tras rechazo.
+        Solo considera filas en estados activos previos a cartera (`_ESTADOS_VENTANA_DUPLICADO_NUM_OP`).
+        No usa `eliminado_duplicado`, `rechazado` ni `importado` para bloquear: evita "duplicado fantasma"
+        y permite reenvío tras rechazo o tras borrar el pago importado (reemplazo de cartera).
         """
         if not num_key:
             return None, None, 0

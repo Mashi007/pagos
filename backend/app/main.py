@@ -40,6 +40,15 @@ logging.basicConfig(
     stream=_log_stream,
     force=True,
 )
+for _noisy_logger in (
+    "httpx",
+    "httpcore",
+    "httpcore.http11",
+    "httpcore.connection",
+    "google_genai",
+    "google.genai",
+):
+    logging.getLogger(_noisy_logger).setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 # Claves cuyo valor no debe aparecer en logs (JWT en query, OTP, etc.).

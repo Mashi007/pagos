@@ -959,12 +959,16 @@ def _build_image_part_variants(
     """
     Devuelve variantes de imagen para mejorar OCR en casos difíciles.
     PDFs mantienen una sola variante (no se alteran páginas).
+    Archivos no PDF muy pequeños (<=100 KB) usan solo una JPEG (orig) para evitar ráfagas de llamadas en ruido MIME.
     """
     from google.genai import types as _gtypes
 
     is_pdf = mime == "application/pdf" or filename.lower().endswith(".pdf")
     if is_pdf:
         return [("orig_pdf", _gtypes.Part.from_bytes(data=file_content, mime_type=mime))]
+
+    # Logos/firmas pequeños: varias JPEG + pass_2 multiplican llamadas sin beneficio claro.
+    small_non_pdf = len(file_content) <= 102400
 
     _ensure_pillow_heif_opener()
     try:
@@ -991,6 +995,15 @@ def _build_image_part_variants(
             raw_jpegs.append((name, buf.getvalue()))
 
         _append_jpeg(base, "orig")
+        if small_non_pdf:
+            return [
+                (
+                    "orig",
+                    _gtypes.Part.from_bytes(
+                        data=raw_jpegs[0][1], mime_type="image/jpeg"
+                    ),
+                )
+            ]
         try:
             _append_jpeg(ImageOps.autocontrast(base, cutoff=1), "autocontrast")
         except Exception:
@@ -1656,7 +1669,17 @@ def classify_and_extract_pagos_gmail_attachment(
 
         # Pass 2 (rescate): solo una pasada extra si todo quedó en ninguno.
         rescue_variant_used: Optional[str] = None
-        if image_parts:
+        rescue_pass_done = False
+        small_non_pdf = (
+            mime != "application/pdf"
+            and not filename.lower().endswith(".pdf")
+            and len(file_content) <= 102400
+        )
+        skip_rescue_pass = small_non_pdf and (
+            (best_none_reason or "").strip() == "falto_ref"
+        )
+        if image_parts and not skip_rescue_pass:
+            rescue_pass_done = True
             rescue_pass_prompt = rescue_pass_prompt + _rescue_prompt_suffix(
                 bank_hint, best_none_reason
             )
@@ -1684,6 +1707,13 @@ def classify_and_extract_pagos_gmail_attachment(
             best_none_reason = (
                 best_none_fields.get("_diag_none_reason") if best_none_fields else None
             ) or best_none_reason
+        elif skip_rescue_pass and image_parts:
+            logger.info(
+                "[PAGOS_GMAIL] Gemini omitiendo pass=2 rescate (falto_ref, archivo pequeño "
+                "no PDF, %s bytes): %s",
+                len(file_content),
+                (filename or "")[:120],
+            )
 
         final_fields = {
             "fecha_pago": PAGOS_NA,
@@ -1693,7 +1723,7 @@ def classify_and_extract_pagos_gmail_attachment(
             "email_cliente": PAGOS_NA,
             "banco": PAGOS_NA,
             "_diag_none_reason": (best_none_reason or "sin_plantilla")[:120],
-            "_scan_pass": "pass_2" if image_parts else "pass_1",
+            "_scan_pass": "pass_2" if rescue_pass_done else "pass_1",
             "_scan_variant": rescue_variant_used
             or (image_parts[0][0] if image_parts else "orig"),
             "_scan_bank_hint": bank_hint or "",
