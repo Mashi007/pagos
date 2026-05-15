@@ -54,6 +54,8 @@ import { ExcelUploaderUI } from './ExcelUploaderUI'
 
 import { useDebounce } from '../../hooks/useDebounce'
 
+import { effectiveListSearchQuery } from '../../utils/effectiveListSearchQuery'
+
 import { useClientesStats } from '../../hooks/useClientesStats'
 
 import { useSimpleAuth } from '../../store/simpleAuthStore'
@@ -215,6 +217,7 @@ export function ClientesList() {
   }
 
   const debouncedSearch = useDebounce(searchTerm, 300)
+  const searchForApi = effectiveListSearchQuery(debouncedSearch)
 
   // Funciones para manejar acciones
 
@@ -311,7 +314,7 @@ export function ClientesList() {
 
     isRefetching,
   } = useClientes(
-    { ...filters, search: debouncedSearch },
+    { ...filters, search: searchForApi },
 
     currentPage,
 

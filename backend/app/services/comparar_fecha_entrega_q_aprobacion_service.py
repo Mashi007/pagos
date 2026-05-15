@@ -10,8 +10,10 @@ from __future__ import annotations
 import json
 import logging
 import re
+from collections import defaultdict
+from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, DefaultDict, Dict, List, Optional, Tuple
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -42,6 +44,174 @@ from app.utils.cedula_almacenamiento import normalizar_cedula_clave_cupo
 logger = logging.getLogger(__name__)
 
 _COL_Q_LETTER = "Q"
+
+FilaHojaCedula = Tuple[Dict[str, Any], Optional[str]]
+
+
+@dataclass
+class ConciliacionSheetLookupContext:
+    """
+    Snapshot de CONCILIACIÓN indexado por cédula (una lectura de ``conciliacion_sheet_rows``
+    por pasada masiva o por request con varias comparaciones).
+    """
+
+    range_raw: str
+    range_start: str
+    range_end: str
+    q_ok: bool
+    headers: List[str]
+    synced_at: Optional[str]
+    meta_synced_at: Optional[datetime]
+    hoja_sync_antigua: bool
+    hoja_sync_antigua_horas: Optional[float]
+    ced_key: Optional[str]
+    lote_key: Optional[str]
+    tf_key: Optional[str]
+    mod_key: Optional[str]
+    ncu_key: Optional[str]
+    q_header_key: Optional[str]
+    advertencias_base: List[str] = field(default_factory=list)
+    _filas_por_cedula: DefaultDict[str, List[FilaHojaCedula]] = field(
+        default_factory=lambda: defaultdict(list)
+    )
+
+    @classmethod
+    def build_from_db(cls, db: Session) -> "ConciliacionSheetLookupContext":
+        range_spec = (
+            getattr(settings, "CONCILIACION_SHEET_COLUMNS_RANGE", None) or "A:S"
+        ).strip()
+        q_ok, range_start, range_end, range_raw = _column_q_in_range(range_spec)
+
+        meta = db.get(ConciliacionSheetMeta, 1)
+        headers: List[str] = list(meta.headers) if meta and meta.headers else []
+        synced_at: Optional[str] = None
+        meta_synced_at: Optional[datetime] = None
+        hoja_sync_antigua = False
+        hoja_sync_antigua_horas: Optional[float] = None
+        if meta and getattr(meta, "synced_at", None):
+            sa = meta.synced_at
+            if isinstance(sa, datetime):
+                meta_synced_at = sa
+                synced_at = sa.isoformat()
+                now_utc = datetime.now(timezone.utc)
+                sa_utc = sa if sa.tzinfo else sa.replace(tzinfo=timezone.utc)
+                if sa_utc.tzinfo is not None and sa_utc.tzinfo != timezone.utc:
+                    sa_utc = sa_utc.astimezone(timezone.utc)
+                delta_h = (now_utc - sa_utc).total_seconds() / 3600.0
+                hoja_sync_antigua_horas = round(delta_h, 1)
+                if delta_h > float(_HORAS_SYNC_CONSIDERADA_ANTIGUA):
+                    hoja_sync_antigua = True
+
+        advertencias_base: List[str] = []
+        if hoja_sync_antigua and hoja_sync_antigua_horas is not None:
+            advertencias_base.append(
+                f"La última sincronización de la hoja fue hace ~{hoja_sync_antigua_horas} h "
+                f"(más de {_HORAS_SYNC_CONSIDERADA_ANTIGUA} h). Resincronice CONCILIACIÓN si necesita datos al día."
+            )
+        if not headers:
+            advertencias_base.append("No hay cabeceras de hoja sincronizada (CONCILIACIÓN).")
+        if not q_ok:
+            advertencias_base.append(
+                f"La columna Q no está dentro del rango configurado ({range_raw!r}; leídas {range_start!s}:{range_end!s})."
+            )
+
+        ced_key = _pick_cedula_header(headers) if headers else None
+        lote_key = _pick_lote_header(headers) if headers else None
+        tf_key = _pick_total_financiamiento_header(headers) if headers else None
+        mod_key = _pick_modalidad_pago_header(headers) if headers else None
+        ncu_key = _pick_numero_cuotas_header(headers) if headers else None
+
+        if not ced_key:
+            advertencias_base.append("No se detectó columna de cédula en la hoja.")
+        if not lote_key:
+            advertencias_base.append(
+                "No se detectó columna LOTE en la hoja (necesaria si hay varios créditos por cédula)."
+            )
+
+        q_header_key: Optional[str] = None
+        if q_ok and headers:
+            q_header_key = _header_key_for_excel_column(headers, range_start, _COL_Q_LETTER)
+
+        filas_por_cedula: DefaultDict[str, List[FilaHojaCedula]] = defaultdict(list)
+        if ced_key:
+            sheet_rows = (
+                db.execute(
+                    select(ConciliacionSheetRow).order_by(ConciliacionSheetRow.row_index)
+                )
+                .scalars()
+                .all()
+            )
+            for sr in sheet_rows:
+                cells = sr.cells or {}
+                if not isinstance(cells, dict):
+                    continue
+                c_raw = _as_text(cells.get(ced_key))
+                clave = normalizar_cedula_clave_cupo(c_raw)
+                if not clave:
+                    continue
+                ln = _norm_lote_celda(cells.get(lote_key)) if lote_key else None
+                filas_por_cedula[clave].append((cells, ln))
+
+        return cls(
+            range_raw=range_raw,
+            range_start=range_start,
+            range_end=range_end,
+            q_ok=q_ok,
+            headers=headers,
+            synced_at=synced_at,
+            meta_synced_at=meta_synced_at,
+            hoja_sync_antigua=hoja_sync_antigua,
+            hoja_sync_antigua_horas=hoja_sync_antigua_horas,
+            ced_key=ced_key,
+            lote_key=lote_key,
+            tf_key=tf_key,
+            mod_key=mod_key,
+            ncu_key=ncu_key,
+            q_header_key=q_header_key,
+            advertencias_base=list(advertencias_base),
+            _filas_por_cedula=filas_por_cedula,
+        )
+
+    def filas_para_cedula(self, clave: str) -> List[FilaHojaCedula]:
+        if not clave:
+            return []
+        return list(self._filas_por_cedula.get(clave, []))
+
+    @property
+    def total_filas_hoja_indexadas(self) -> int:
+        return sum(len(v) for v in self._filas_por_cedula.values())
+
+
+def prestamo_fecha_q_cache_vigente_y_alineado(
+    prestamo: Prestamo,
+    meta_synced_at: Optional[datetime],
+) -> bool:
+    """
+    True si el caché Q vs aprobación sigue válido tras el último sync de hoja y las fechas ya coinciden.
+    Evita releer toda la hoja en barridos masivos cuando no hay nada que corregir.
+    """
+    cache = prestamo.fecha_entrega_q_aprobacion_cache
+    cache_at = prestamo.fecha_entrega_q_aprobacion_cache_at
+    if not isinstance(cache, dict) or cache_at is None:
+        return False
+    if cache.get("puede_aplicar") is True:
+        return False
+    if meta_synced_at is not None:
+        sa_utc = (
+            meta_synced_at
+            if meta_synced_at.tzinfo
+            else meta_synced_at.replace(tzinfo=timezone.utc)
+        )
+        cat = (
+            cache_at if cache_at.tzinfo else cache_at.replace(tzinfo=timezone.utc)
+        )
+        if cat < sa_utc:
+            return False
+    norm_q = cache.get("fecha_entrega_column_q_norm_iso")
+    fa = _fecha_aprobacion_sistema_date(prestamo)
+    if not norm_q or not fa:
+        return False
+    return str(norm_q).strip()[:10] == fa.isoformat()
 
 
 def _persist_prestamo_fecha_entrega_q_cache(
@@ -249,6 +419,8 @@ def comparar_fecha_entrega_column_q_vs_aprobacion(
     prestamo_id: int,
     lote: Optional[str] = None,
     persist_cache: bool = False,
+    sheet_lookup: Optional[ConciliacionSheetLookupContext] = None,
+    lote_indice: Optional[int] = None,
 ) -> Dict[str, Any]:
     cedula_in = (cedula or "").strip()
     if not cedula_in:
@@ -265,72 +437,27 @@ def comparar_fecha_entrega_column_q_vs_aprobacion(
     if clave_param and clave_prest and clave_param != clave_prest:
         raise ValueError("La cédula no coincide con el préstamo indicado.")
 
-    range_spec = (getattr(settings, "CONCILIACION_SHEET_COLUMNS_RANGE", None) or "A:S").strip()
-    q_ok, range_start, range_end, range_raw = _column_q_in_range(range_spec)
-
-    meta = db.get(ConciliacionSheetMeta, 1)
-    headers: List[str] = list(meta.headers) if meta and meta.headers else []
-    synced_at: Optional[str] = None
-    hoja_sync_antigua = False
-    hoja_sync_antigua_horas: Optional[float] = None
-    if meta and getattr(meta, "synced_at", None):
-        sa = meta.synced_at
-        if isinstance(sa, datetime):
-            synced_at = sa.isoformat()
-            now_utc = datetime.now(timezone.utc)
-            sa_utc = sa if sa.tzinfo else sa.replace(tzinfo=timezone.utc)
-            if sa_utc.tzinfo is not None and sa_utc.tzinfo != timezone.utc:
-                sa_utc = sa_utc.astimezone(timezone.utc)
-            delta_h = (now_utc - sa_utc).total_seconds() / 3600.0
-            hoja_sync_antigua_horas = round(delta_h, 1)
-            if delta_h > float(_HORAS_SYNC_CONSIDERADA_ANTIGUA):
-                hoja_sync_antigua = True
-
-    advertencias: List[str] = []
-    if hoja_sync_antigua and hoja_sync_antigua_horas is not None:
-        advertencias.append(
-            f"La última sincronización de la hoja fue hace ~{hoja_sync_antigua_horas} h "
-            f"(más de {_HORAS_SYNC_CONSIDERADA_ANTIGUA} h). Resincronice CONCILIACIÓN si necesita datos al día."
-        )
-    if not headers:
-        advertencias.append("No hay cabeceras de hoja sincronizada (CONCILIACIÓN).")
-    if not q_ok:
-        advertencias.append(
-            f"La columna Q no está dentro del rango configurado ({range_raw!r}; leídas {range_start!s}:{range_end!s})."
-        )
-
-    ced_key = _pick_cedula_header(headers) if headers else None
-    lote_key = _pick_lote_header(headers) if headers else None
-    tf_key = _pick_total_financiamiento_header(headers) if headers else None
-    mod_key = _pick_modalidad_pago_header(headers) if headers else None
-    ncu_key = _pick_numero_cuotas_header(headers) if headers else None
-
-    if not ced_key:
-        advertencias.append("No se detectó columna de cédula en la hoja.")
-    if not lote_key:
-        advertencias.append("No se detectó columna LOTE en la hoja (necesaria si hay varios créditos por cédula).")
-
-    q_header_key: Optional[str] = None
-    if q_ok and headers:
-        q_header_key = _header_key_for_excel_column(headers, range_start, _COL_Q_LETTER)
+    lookup = sheet_lookup or ConciliacionSheetLookupContext.build_from_db(db)
+    q_ok = lookup.q_ok
+    range_raw = lookup.range_raw
+    range_start = lookup.range_start
+    synced_at = lookup.synced_at
+    hoja_sync_antigua = lookup.hoja_sync_antigua
+    hoja_sync_antigua_horas = lookup.hoja_sync_antigua_horas
+    advertencias: List[str] = list(lookup.advertencias_base)
+    ced_key = lookup.ced_key
+    lote_key = lookup.lote_key
+    tf_key = lookup.tf_key
+    mod_key = lookup.mod_key
+    ncu_key = lookup.ncu_key
+    q_header_key = lookup.q_header_key
 
     lote_filtro = _norm_lote_param(lote)
 
-    filas_por_cedula: List[Tuple[Dict[str, Any], Optional[str]]] = []
+    filas_por_cedula: List[FilaHojaCedula] = []
     if ced_key:
         clave = clave_param or normalizar_cedula_clave_cupo(cedula_in)
-        sheet_rows = db.execute(
-            select(ConciliacionSheetRow).order_by(ConciliacionSheetRow.row_index)
-        ).scalars().all()
-        for sr in sheet_rows:
-            cells = sr.cells or {}
-            if not isinstance(cells, dict):
-                continue
-            c_raw = _as_text(cells.get(ced_key))
-            if normalizar_cedula_clave_cupo(c_raw) != clave:
-                continue
-            ln = _norm_lote_celda(cells.get(lote_key)) if lote_key else None
-            filas_por_cedula.append((cells, ln))
+        filas_por_cedula = lookup.filas_para_cedula(clave)
 
     filas_prestamo: List[Dict[str, Any]] = []
     requiere_seleccion_lote = False
@@ -417,24 +544,32 @@ def comparar_fecha_entrega_column_q_vs_aprobacion(
     indicador = "si" if puede_aplicar else "no"
     tolerancia_dias = 0
 
-    logger.info(
-        "[comparar_fecha_q] cedula=%s prestamo_id=%s lote=%s filas=%s fecha_q=%s fecha_ap=%s "
-        "diff_dias=%s puede_aplicar=%s correccion_q_anterior_bd=%s",
+    correccion_q_anterior_bd = bool(
+        puede_aplicar
+        and fecha_q is not None
+        and fecha_ap is not None
+        and fecha_q < fecha_ap
+    )
+    log_msg = (
+        "[comparar_fecha_q] cedula=%s prestamo_id=%s lote=%s lote_indice=%s filas=%s "
+        "fecha_q=%s fecha_ap=%s diff_dias=%s puede_aplicar=%s correccion_q_anterior_bd=%s"
+    )
+    log_args = (
         cedula_in,
         prestamo_id,
         lote_filtro,
+        lote_indice,
         filas_coincidentes,
         fecha_q,
         fecha_ap,
         diferencia_dias,
         puede_aplicar,
-        bool(
-            puede_aplicar
-            and fecha_q is not None
-            and fecha_ap is not None
-            and fecha_q < fecha_ap
-        ),
+        correccion_q_anterior_bd,
     )
+    if puede_aplicar:
+        logger.info(log_msg, *log_args)
+    else:
+        logger.debug(log_msg, *log_args)
 
     out: Dict[str, Any] = {
         "cedula": cedula_in,
@@ -459,12 +594,7 @@ def comparar_fecha_entrega_column_q_vs_aprobacion(
         "coincide_aproximado": coincide_calendario,
         "puede_aplicar": puede_aplicar,
         "indicador": indicador,
-        "correccion_desde_q_anterior_bd": bool(
-            puede_aplicar
-            and fecha_q is not None
-            and fecha_ap is not None
-            and fecha_q < fecha_ap
-        ),
+        "correccion_desde_q_anterior_bd": correccion_q_anterior_bd,
         "tolerancia_dias": tolerancia_dias,
         "hoja_synced_at": synced_at,
         "hoja_sync_antigua": hoja_sync_antigua,

@@ -32,7 +32,7 @@ _cuentas_data: dict = {}
 logger = logging.getLogger(__name__)
 
 # Cache: evitar sync_from_db en cada get_smtp_config (tarda 0.4-4s)
-_sync_ttl_seconds = 60
+_sync_ttl_seconds = 300
 _last_sync_time = 0.0
 
 

@@ -10,6 +10,7 @@ Persiste en `prestamos.fecha_entrega_q_aprobacion_cache` la comparación columna
 from __future__ import annotations
 
 import logging
+import time
 from typing import Any, Dict
 
 from sqlalchemy import select
@@ -17,10 +18,17 @@ from sqlalchemy.orm import Session
 
 from app.models.prestamo import Prestamo
 from app.services.comparar_fecha_entrega_q_aprobacion_service import (
+    ConciliacionSheetLookupContext,
     comparar_fecha_entrega_column_q_vs_aprobacion,
+    prestamo_fecha_q_cache_vigente_y_alineado,
 )
 
 logger = logging.getLogger(__name__)
+
+# Commits cada N préstamos (menos round-trips que commit por fila).
+_LOTE_COMMIT = 100
+# Log de progreso cada N préstamos procesados (no cada fila).
+_LOG_PROGRESO_CADA = 250
 
 
 def ejecutar_refresh_fecha_entrega_q_aprobacion_cache_nightly(db: Session) -> Dict[str, Any]:
@@ -28,16 +36,29 @@ def ejecutar_refresh_fecha_entrega_q_aprobacion_cache_nightly(db: Session) -> Di
     Recalcula caché Q vs aprobación para **todos** los préstamos con cédula (sin excluir por estado:
     LIQUIDADO, DESISTIMIENTO, etc. entran igual; coherente con auditoría /notificaciones/fecha-q-auditoria-total).
     """
+    t0 = time.perf_counter()
     ok = 0
     err = 0
     skipped = 0
+    omitidos_cache_vigente = 0
+    aplicables = 0
+    lote_commit = 0
+    pendientes_commit = 0
+
     ids = list(
-        db.scalars(
-            select(Prestamo.id).order_by(Prestamo.id.asc())
-        ).all()
+        db.scalars(select(Prestamo.id).order_by(Prestamo.id.asc())).all()
     )
     total = len(ids)
-    for pid in ids:
+    sheet_lookup = ConciliacionSheetLookupContext.build_from_db(db)
+    meta_synced_at = sheet_lookup.meta_synced_at
+
+    logger.info(
+        "[fecha_q_cache_nightly] inicio total_ids=%s filas_hoja_indexadas=%s",
+        total,
+        sheet_lookup.total_filas_hoja_indexadas,
+    )
+
+    for idx, pid in enumerate(ids, start=1):
         p = db.get(Prestamo, int(pid))
         if p is None:
             skipped += 1
@@ -46,22 +67,47 @@ def ejecutar_refresh_fecha_entrega_q_aprobacion_cache_nightly(db: Session) -> Di
         if not ced:
             skipped += 1
             continue
+
+        if prestamo_fecha_q_cache_vigente_y_alineado(p, meta_synced_at):
+            omitidos_cache_vigente += 1
+            continue
+
         try:
-            comparar_fecha_entrega_column_q_vs_aprobacion(
+            out = comparar_fecha_entrega_column_q_vs_aprobacion(
                 db,
                 cedula=ced,
                 prestamo_id=int(pid),
                 lote=None,
                 persist_cache=True,
+                sheet_lookup=sheet_lookup,
+                lote_indice=(idx - 1) // _LOTE_COMMIT + 1,
             )
-            db.commit()
+            if out.get("puede_aplicar"):
+                aplicables += 1
             ok += 1
+            pendientes_commit += 1
+            if pendientes_commit >= _LOTE_COMMIT:
+                db.commit()
+                lote_commit += 1
+                pendientes_commit = 0
+                logger.info(
+                    "[fecha_q_cache_nightly] lote_commit=%s progreso=%s/%s ok=%s err=%s "
+                    "omitidos_cache=%s aplicables=%s",
+                    lote_commit,
+                    idx,
+                    total,
+                    ok,
+                    err,
+                    omitidos_cache_vigente,
+                    aplicables,
+                )
         except Exception as e:
             try:
                 db.rollback()
             except Exception:
                 pass
             err += 1
+            pendientes_commit = 0
             if err <= 8:
                 logger.warning(
                     "[fecha_q_cache_nightly] prestamo_id=%s cedula=%s: %s",
@@ -69,18 +115,44 @@ def ejecutar_refresh_fecha_entrega_q_aprobacion_cache_nightly(db: Session) -> Di
                     ced[:12],
                     e,
                 )
+
+        if idx % _LOG_PROGRESO_CADA == 0 and pendientes_commit > 0:
+            logger.info(
+                "[fecha_q_cache_nightly] progreso=%s/%s ok=%s err=%s omitidos_cache=%s aplicables=%s",
+                idx,
+                total,
+                ok,
+                err,
+                omitidos_cache_vigente,
+                aplicables,
+            )
+
+    if pendientes_commit > 0:
+        db.commit()
+        lote_commit += 1
+
+    duracion_s = round(time.perf_counter() - t0, 2)
     logger.info(
-        "[fecha_q_cache_nightly] total_ids=%s ok=%s err=%s skipped=%s",
+        "[fecha_q_cache_nightly] fin total_ids=%s ok=%s err=%s skipped=%s "
+        "omitidos_cache_vigente=%s aplicables=%s lotes_commit=%s duracion_s=%s",
         total,
         ok,
         err,
         skipped,
+        omitidos_cache_vigente,
+        aplicables,
+        lote_commit,
+        duracion_s,
     )
     return {
         "prestamos_considerados": total,
         "actualizados_ok": ok,
         "errores": err,
         "omitidos_sin_cedula": skipped,
+        "omitidos_cache_vigente": omitidos_cache_vigente,
+        "con_puede_aplicar": aplicables,
+        "lotes_commit": lote_commit,
+        "duracion_s": duracion_s,
     }
 
 

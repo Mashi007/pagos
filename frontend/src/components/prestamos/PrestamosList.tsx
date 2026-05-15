@@ -111,6 +111,8 @@ import { lineasFiniquitoColumna } from '../../utils/prestamoFiniquitoDisplay'
 
 import { extraerCaracteresCedulaPublica } from '../../utils/cedulaConsultaPublica'
 
+import { effectiveListSearchQuery } from '../../utils/effectiveListSearchQuery'
+
 import { prestamoService } from '../../services/prestamoService'
 
 import { toast } from 'sonner'
@@ -390,14 +392,18 @@ export function PrestamosList() {
   // sólo disparamos GET /prestamos?search=... cuando el usuario para de teclear.
   // Sin esto, los logs muestran ~10 requests por una sola busqueda (Backspace por Backspace).
   const debouncedSearch = useDebounce((filters.search ?? '').trim(), 350)
+  const searchForApi = useMemo(
+    () => effectiveListSearchQuery(debouncedSearch),
+    [debouncedSearch]
+  )
 
   const listFilters = useMemo(
     () => ({
       ...filters,
-      search: debouncedSearch,
+      search: searchForApi,
       prestamo_id: prestamoIdFiltro,
     }),
-    [filters, debouncedSearch, prestamoIdFiltro]
+    [filters, searchForApi, prestamoIdFiltro]
   )
 
   /**
