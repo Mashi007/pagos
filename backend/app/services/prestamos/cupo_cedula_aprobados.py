@@ -19,6 +19,38 @@ _CEDULA_NORM_SQL = (
 )
 
 
+def _db_es_postgresql(db: Session) -> bool:
+    try:
+        bind = db.get_bind()
+        dialect_name = getattr(getattr(bind, "dialect", None), "name", "")
+    except Exception:
+        return False
+    return dialect_name == "postgresql"
+
+
+def bloquear_clave_cupo_si_postgresql(db: Session, clave: str) -> None:
+    """
+    Serializa validaciones concurrentes del mismo documento en PostgreSQL.
+
+    El cupo se valida con un conteo antes de insertar/actualizar el prestamo; sin
+    un bloqueo por clave, dos transacciones paralelas pueden ver el mismo conteo
+    y aprobar ambas. El advisory lock vive hasta el fin de la transaccion.
+    """
+    if not clave or not _db_es_postgresql(db):
+        return
+    db.execute(
+        text(
+            """
+            SELECT pg_advisory_xact_lock(
+                hashtext('cupo_cedula_aprobados'),
+                hashtext(:clave)
+            )
+            """
+        ),
+        {"clave": clave},
+    )
+
+
 def contar_aprobados_misma_clave_cupo(
     db: Session,
     clave: str,
@@ -88,6 +120,7 @@ def validar_cupo_nuevo_prestamo_aprobado(
                 "(solo documentos que tras normalizar guiones/espacios empiezan por E, V o J)."
             ),
         )
+    bloquear_clave_cupo_si_postgresql(db, clave)
     n = contar_aprobados_misma_clave_cupo(db, clave, exclude_prestamo_id=exclude_prestamo_id)
     if n >= max_n:
         raise HTTPException(
