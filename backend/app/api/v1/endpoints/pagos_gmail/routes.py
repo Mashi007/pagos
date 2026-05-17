@@ -1728,9 +1728,9 @@ def limpiar_sync_items_remitente(
     """
     Limpieza explícita del módulo Actualizaciones > Gmail.
 
-    Borra únicamente la cola local del remitente fijo IT Master (`pagos_gmail_sync_item`
-    y `gmail_temporal`). No toca `pagos`, `pagos_con_errores` ni Gmail.
-    Deja la UI en cero para que la próxima corrida sea un escaneo fresco.
+    No borra filas pendientes de `pagos_gmail_sync_item`: esos correos ya pueden tener
+    etiquetas de usuario en Gmail y el pipeline los omitiría en futuras corridas, por
+    lo que una limpieza masiva haría desaparecer pagos pendientes de revisión.
     """
     correo_lc = _validate_from_email(correo)
     if not correo_lc:
@@ -1742,33 +1742,47 @@ def limpiar_sync_items_remitente(
                 f"Este módulo solo permite limpiar '{PAGOS_GMAIL_LOTE_REMITENTE_IT_MASTER}'."
             ),
         )
-    try:
-        res_si = db.execute(
-            delete(PagosGmailSyncItem).where(
+    pendientes = int(
+        db.execute(
+            select(func.count())
+            .select_from(PagosGmailSyncItem)
+            .where(
                 func.lower(PagosGmailSyncItem.correo_origen) == correo_lc
             )
+        ).scalar()
+        or 0
+    )
+    if pendientes > 0:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Hay {pendientes} fila(s) Gmail pendientes para revisar. "
+                "No se puede limpiar en bloque porque esos correos pueden quedar omitidos por etiquetas Gmail. "
+                "Guarde, edite o elimine cada fila desde la tabla."
+            ),
         )
+
+    try:
         res_gt = db.execute(
             delete(GmailTemporal).where(
                 func.lower(GmailTemporal.correo_origen) == correo_lc
             )
         )
         db.commit()
-        borrados_si = int(getattr(res_si, "rowcount", 0) or 0)
         borrados_gt = int(getattr(res_gt, "rowcount", 0) or 0)
         logger.info(
             "[PAGOS_GMAIL] limpiar-remitente correo=%s sync_items=%d gmail_temporal=%d",
             correo_lc,
-            borrados_si,
+            0,
             borrados_gt,
         )
         return {
             "ok": True,
             "correo": correo_lc,
-            "sync_items_eliminados": borrados_si,
+            "sync_items_eliminados": 0,
             "gmail_temporal_eliminados": borrados_gt,
             "mensaje": (
-                f"Limpieza completada: {borrados_si} fila(s) de resultados y "
+                f"Limpieza completada: no había filas pendientes; "
                 f"{borrados_gt} temporal(es) eliminados."
             ),
         }
