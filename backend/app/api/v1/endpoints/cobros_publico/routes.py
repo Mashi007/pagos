@@ -303,6 +303,17 @@ def _bool_from_form(value: Optional[str]) -> bool:
     return v in ("1", "true", "t", "yes", "y", "si", "sí", "on")
 
 
+def _confirmacion_humana_operador(
+    value: Optional[str],
+    *,
+    permitir_confirmacion_humana: bool,
+) -> bool:
+    """Solo los flujos internos autenticados pueden forzar confirmación humana."""
+    if not permitir_confirmacion_humana:
+        return False
+    return _bool_from_form(value)
+
+
 def _token_bearer_only(request: Request) -> Optional[str]:
     auth = (request.headers.get("Authorization") or "").strip()
     if not auth.lower().startswith("bearer "):
@@ -892,7 +903,10 @@ async def enviar_reporte_publico(
             pr.gemini_comentario = f"Error Gemini (reintentado): {str(gemini_err)[:200]}"
             coincide = False
 
-        confirmo_humano = _bool_from_form(confirmacion_humana)
+        confirmo_humano = _confirmacion_humana_operador(
+            confirmacion_humana,
+            permitir_confirmacion_humana=False,
+        )
         if confirmo_humano:
             # La revisión humana del operador prevalece sobre falsos negativos de Gemini.
             pr.gemini_coincide_exacto = "true"
@@ -1159,7 +1173,10 @@ async def enviar_reporte_infopagos(
             pr.gemini_comentario = f"Error Gemini (reintentado): {str(gemini_err)[:200]}"
             coincide = False
 
-        confirmo_humano = _bool_from_form(confirmacion_humana)
+        confirmo_humano = _confirmacion_humana_operador(
+            confirmacion_humana,
+            permitir_confirmacion_humana=True,
+        )
         if confirmo_humano:
             # La revisión humana del operador prevalece sobre falsos negativos de Gemini.
             pr.gemini_coincide_exacto = "true"
