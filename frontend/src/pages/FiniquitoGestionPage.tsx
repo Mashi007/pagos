@@ -1080,6 +1080,158 @@ function FiniquitoGestionPageInner() {
       </div>
 
       <section
+        className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-md"
+        aria-labelledby="finiquito-bandeja-titulo"
+      >
+        <div className="border-b border-slate-200 bg-slate-50/90 px-4 py-4 sm:px-5">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <div className="space-y-1">
+              <h2
+                id="finiquito-bandeja-titulo"
+                className="text-base font-bold text-[#1e3a5f]"
+              >
+                Bandeja principal
+              </h2>
+              <p className="text-xs text-slate-600 sm:text-sm">
+                Casos <strong>atrasados</strong> pendientes de aceptar o
+                rechazar. Escriba parte de la cédula para acotar (espera ~
+                {DEBOUNCE_MS / 1000} s tras dejar de escribir).
+              </p>
+            </div>
+            <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-end lg:w-auto lg:min-w-[320px]">
+              <div className="min-w-0 flex-1 space-y-1.5">
+                <Label
+                  htmlFor="finiquito-filtro-cedula-bandeja"
+                  className="text-xs font-semibold text-slate-700"
+                >
+                  Filtrar por cédula
+                </Label>
+                <div className="relative">
+                  <Search
+                    className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+                    aria-hidden
+                  />
+                  <Input
+                    id="finiquito-filtro-cedula-bandeja"
+                    type="search"
+                    autoComplete="off"
+                    placeholder="Ej. V12345678 o parte del número"
+                    value={cedulaInput}
+                    onChange={e => setCedulaInput(e.target.value)}
+                    className="h-10 border-slate-300 pl-9 pr-10 font-mono text-sm"
+                  />
+                  {cedulaInput ? (
+                    <button
+                      type="button"
+                      className="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+                      onClick={limpiarCedula}
+                      title="Limpiar filtro"
+                      aria-label="Limpiar filtro de cédula"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-10 shrink-0 border-slate-300"
+                disabled={loading}
+                onClick={() => void cargarListas()}
+              >
+                {loading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  'Recargar'
+                )}
+              </Button>
+            </div>
+          </div>
+          {cedulaBusqueda ? (
+            <p className="mt-3 text-xs text-slate-600">
+              Filtro activo (bandeja principal):{' '}
+              <span className="font-mono font-semibold text-[#1e3a5f]">
+                {cedulaBusqueda}
+              </span>
+            </p>
+          ) : null}
+        </div>
+        <div>
+          <div className="p-3 sm:p-4">
+            {loading ? (
+              <div className="flex justify-center py-14">
+                <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
+              </div>
+            ) : itemsBandeja.length === 0 ? (
+              <p className="rounded-lg border border-dashed border-slate-200 bg-slate-50/50 px-4 py-10 text-center text-sm leading-relaxed text-slate-600">
+                {cedulaBusqueda
+                  ? 'Ningún caso atrasado coincide con esa cédula. Pruebe otra subcadena o limpie el filtro.'
+                  : 'No hay casos atrasados. Use «Refrescar materializado» para traer préstamos LIQUIDADO con cuotas cubiertas a la bandeja principal.'}
+              </p>
+            ) : (
+              <>
+                {renderTabla(itemsBandeja)}
+                <FiniquitoTablaScrollHint
+                  total={totalBandeja}
+                  cargados={itemsBandeja.length}
+                  limit={BANDEJA_PRINCIPAL_FETCH_LIMIT}
+                />
+              </>
+            )}
+          </div>
+        </div>
+      </section>
+      <section
+        className={cn(
+          'overflow-hidden rounded-2xl border-2 border-dashed border-amber-400/85',
+          'bg-amber-50/40 shadow-inner'
+        )}
+        aria-labelledby="finiquito-area-revision-titulo"
+      >
+        <div className="border-b border-amber-200/90 bg-amber-100/95 px-4 py-3.5 sm:px-5">
+          <div className="flex flex-wrap items-center gap-3 text-amber-950">
+            <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-amber-300/90 bg-amber-50 shadow-sm">
+              <XCircle className="h-5 w-5 text-amber-800" aria-hidden />
+            </span>
+            <div>
+              <h2
+                id="finiquito-area-revision-titulo"
+                className="text-sm font-bold tracking-tight sm:text-base"
+              >
+                Área de revisión
+              </h2>
+              <p className="text-xs text-amber-900/85">
+                Rechazados · {totalRechazados} {subtituloRech}
+              </p>
+            </div>
+          </div>
+        </div>
+        <div>
+          <div className="p-3 sm:p-4">
+            {loading ? (
+              <div className="flex justify-center py-12">
+                <Loader2 className="h-8 w-8 animate-spin text-amber-600/70" />
+              </div>
+            ) : itemsRechazados.length === 0 ? (
+              <p className="rounded-lg border border-dashed border-amber-200/90 bg-white/50 px-4 py-10 text-center text-sm text-amber-950/85">
+                No hay casos rechazados. Aparecerán aquí al pasar un caso a
+                «Rechazado».
+              </p>
+            ) : (
+              <>
+                {renderTabla(itemsRechazados, renderAccionesRechazado)}
+                <FiniquitoTablaScrollHint
+                  total={totalRechazados}
+                  cargados={itemsRechazados.length}
+                />
+              </>
+            )}
+          </div>
+        </div>
+      </section>
+      <section
         className={cn(
           'overflow-hidden rounded-2xl border border-emerald-200/90 bg-white shadow-md',
           'ring-1 ring-emerald-100/80'
@@ -1204,161 +1356,6 @@ function FiniquitoGestionPageInner() {
           </div>
         </div>
       </section>
-
-      <section
-        className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-md"
-        aria-labelledby="finiquito-bandeja-titulo"
-      >
-        <div className="border-b border-slate-200 bg-slate-50/90 px-4 py-4 sm:px-5">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-            <div className="space-y-1">
-              <h2
-                id="finiquito-bandeja-titulo"
-                className="text-base font-bold text-[#1e3a5f]"
-              >
-                Bandeja principal
-              </h2>
-              <p className="text-xs text-slate-600 sm:text-sm">
-                Casos <strong>atrasados</strong> pendientes de aceptar o
-                rechazar. Escriba parte de la cédula para acotar (espera ~
-                {DEBOUNCE_MS / 1000} s tras dejar de escribir).
-              </p>
-            </div>
-            <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-end lg:w-auto lg:min-w-[320px]">
-              <div className="min-w-0 flex-1 space-y-1.5">
-                <Label
-                  htmlFor="finiquito-filtro-cedula-bandeja"
-                  className="text-xs font-semibold text-slate-700"
-                >
-                  Filtrar por cédula
-                </Label>
-                <div className="relative">
-                  <Search
-                    className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
-                    aria-hidden
-                  />
-                  <Input
-                    id="finiquito-filtro-cedula-bandeja"
-                    type="search"
-                    autoComplete="off"
-                    placeholder="Ej. V12345678 o parte del número"
-                    value={cedulaInput}
-                    onChange={e => setCedulaInput(e.target.value)}
-                    className="h-10 border-slate-300 pl-9 pr-10 font-mono text-sm"
-                  />
-                  {cedulaInput ? (
-                    <button
-                      type="button"
-                      className="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-800"
-                      onClick={limpiarCedula}
-                      title="Limpiar filtro"
-                      aria-label="Limpiar filtro de cédula"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
-                  ) : null}
-                </div>
-              </div>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-10 shrink-0 border-slate-300"
-                disabled={loading}
-                onClick={() => void cargarListas()}
-              >
-                {loading ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  'Recargar'
-                )}
-              </Button>
-            </div>
-          </div>
-          {cedulaBusqueda ? (
-            <p className="mt-3 text-xs text-slate-600">
-              Filtro activo (bandeja principal):{' '}
-              <span className="font-mono font-semibold text-[#1e3a5f]">
-                {cedulaBusqueda}
-              </span>
-            </p>
-          ) : null}
-        </div>
-        <div>
-          <div className="p-3 sm:p-4">
-            {loading ? (
-              <div className="flex justify-center py-14">
-                <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
-              </div>
-            ) : itemsBandeja.length === 0 ? (
-              <p className="rounded-lg border border-dashed border-slate-200 bg-slate-50/50 px-4 py-10 text-center text-sm leading-relaxed text-slate-600">
-                {cedulaBusqueda
-                  ? 'Ningún caso atrasado coincide con esa cédula. Pruebe otra subcadena o limpie el filtro.'
-                  : 'No hay casos atrasados. Use «Refrescar materializado» para traer préstamos LIQUIDADO con cuotas cubiertas a la bandeja principal.'}
-              </p>
-            ) : (
-              <>
-                {renderTabla(itemsBandeja)}
-                <FiniquitoTablaScrollHint
-                  total={totalBandeja}
-                  cargados={itemsBandeja.length}
-                  limit={BANDEJA_PRINCIPAL_FETCH_LIMIT}
-                />
-              </>
-            )}
-          </div>
-        </div>
-      </section>
-
-      <section
-        className={cn(
-          'overflow-hidden rounded-2xl border-2 border-dashed border-amber-400/85',
-          'bg-amber-50/40 shadow-inner'
-        )}
-        aria-labelledby="finiquito-area-revision-titulo"
-      >
-        <div className="border-b border-amber-200/90 bg-amber-100/95 px-4 py-3.5 sm:px-5">
-          <div className="flex flex-wrap items-center gap-3 text-amber-950">
-            <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-amber-300/90 bg-amber-50 shadow-sm">
-              <XCircle className="h-5 w-5 text-amber-800" aria-hidden />
-            </span>
-            <div>
-              <h2
-                id="finiquito-area-revision-titulo"
-                className="text-sm font-bold tracking-tight sm:text-base"
-              >
-                Área de revisión
-              </h2>
-              <p className="text-xs text-amber-900/85">
-                Rechazados · {totalRechazados} {subtituloRech}
-              </p>
-            </div>
-          </div>
-        </div>
-        <div>
-          <div className="p-3 sm:p-4">
-            {loading ? (
-              <div className="flex justify-center py-12">
-                <Loader2 className="h-8 w-8 animate-spin text-amber-600/70" />
-              </div>
-            ) : itemsRechazados.length === 0 ? (
-              <p className="rounded-lg border border-dashed border-amber-200/90 bg-white/50 px-4 py-10 text-center text-sm text-amber-950/85">
-                No hay casos rechazados. Aparecerán aquí al pasar un caso a
-                «Rechazado».
-              </p>
-            ) : (
-              <>
-                {renderTabla(itemsRechazados, renderAccionesRechazado)}
-                <FiniquitoTablaScrollHint
-                  total={totalRechazados}
-                  cargados={itemsRechazados.length}
-                />
-              </>
-            )}
-          </div>
-        </div>
-      </section>
-
       <Dialog
         open={dialogTerminado != null}
         onOpenChange={open => {
