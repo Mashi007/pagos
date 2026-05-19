@@ -48,8 +48,6 @@ import {
   DialogTitle,
 } from '../components/ui/dialog'
 
-import { FiniquitoRevisionDialog } from '../components/finiquito/FiniquitoRevisionDialog'
-
 import {
   type FiniquitoCasoItem,
   finiquitoAdminConteoRevisionNuevos,
@@ -280,8 +278,6 @@ function FiniquitoGestionPageInner() {
   const [pendingEstadoCasoId, setPendingEstadoCasoId] = useState<number | null>(
     null
   )
-  const [revisionOpen, setRevisionOpen] = useState(false)
-  const [revisionCasoId, setRevisionCasoId] = useState<number | null>(null)
   const [
     descargandoEstadoCuentaPrestamoId,
     setDescargandoEstadoCuentaPrestamoId,
@@ -539,12 +535,9 @@ function FiniquitoGestionPageInner() {
         size="icon"
         variant="outline"
         className="h-8 w-8 border-slate-300"
-        title="Ver préstamo, cuotas y pagos"
-        aria-label={`Ver préstamo, cuotas y pagos del caso ${row.id}`}
-        onClick={() => {
-          setRevisionCasoId(row.id)
-          setRevisionOpen(true)
-        }}
+        title="Abrir revisión manual del préstamo"
+        aria-label={`Abrir revisión manual del préstamo ${row.prestamo_id}`}
+        onClick={() => abrirRevisionManualPrestamo(row.prestamo_id)}
       >
         <Eye className="h-4 w-4" aria-hidden />
       </Button>
@@ -727,12 +720,9 @@ function FiniquitoGestionPageInner() {
         size="icon"
         variant="outline"
         className="h-8 w-8 border-slate-300"
-        title="Ver préstamo, cuotas y pagos"
-        aria-label={`Ver préstamo, cuotas y pagos del caso ${row.id}`}
-        onClick={() => {
-          setRevisionCasoId(row.id)
-          setRevisionOpen(true)
-        }}
+        title="Abrir revisión manual del préstamo"
+        aria-label={`Abrir revisión manual del préstamo ${row.prestamo_id}`}
+        onClick={() => abrirRevisionManualPrestamo(row.prestamo_id)}
       >
         <Eye className="h-4 w-4" aria-hidden />
       </Button>
@@ -1368,15 +1358,6 @@ function FiniquitoGestionPageInner() {
           </div>
         </div>
       </section>
-
-      <FiniquitoRevisionDialog
-        open={revisionOpen}
-        casoId={revisionCasoId}
-        onOpenChange={open => {
-          setRevisionOpen(open)
-          if (!open) setRevisionCasoId(null)
-        }}
-      />
 
       <Dialog
         open={dialogTerminado != null}

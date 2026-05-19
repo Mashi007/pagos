@@ -445,7 +445,25 @@ def _cuota_to_dict(cu: Cuota) -> dict[str, Any]:
     }
 
 
-def _build_revision_datos_payload(db: Session, caso: FiniquitoCaso) -> dict[str, Any]:
+def _user_interno_revision_datos() -> UserResponse:
+    """Usuario sintético para listar_prestamos en contexto interno (sin sesión HTTP)."""
+    return UserResponse(
+        id=0,
+        email="finiquito-interno@system",
+        nombre="Finiquito",
+        apellido="",
+        rol="admin",
+        is_active=True,
+        created_at="1970-01-01T00:00:00",
+    )
+
+
+def _build_revision_datos_payload(
+    db: Session,
+    caso: FiniquitoCaso,
+    *,
+    current_user: Optional[UserResponse] = None,
+) -> dict[str, Any]:
     """
     Datos de revisión: préstamo del caso (completo), plan de cuotas, listados
     /prestamos y /pagos por cédula; pagos sin filtrar por conciliado (tope API 100).
@@ -454,9 +472,15 @@ def _build_revision_datos_payload(db: Session, caso: FiniquitoCaso) -> dict[str,
     from app.api.v1.endpoints.prestamos import listar_prestamos
 
     cedula = (caso.cedula or "").strip()
+    panel_user = (
+        current_user
+        if isinstance(current_user, UserResponse)
+        else _user_interno_revision_datos()
+    )
     try:
         # Pasar valores reales (None/str), no omitir parametros: sus defaults son
         # objetos Query(...) y listar_* hacen .strip() → AttributeError → 500.
+        # listar_prestamos exige UserResponse (filtro DESISTIMIENTO); no omitir current_user.
         prestamos_payload = listar_prestamos(
             page=1,
             per_page=100,
@@ -471,6 +495,7 @@ def _build_revision_datos_payload(db: Session, caso: FiniquitoCaso) -> dict[str,
             modelo=None,
             search=None,
             revision_manual_estado=None,
+            current_user=panel_user,
             db=db,
         )
         pagos_payload = listar_pagos(
@@ -918,7 +943,7 @@ def finiquito_admin_conteo_revision_nuevos(
 def finiquito_admin_revision_datos(
     caso_id: int,
     db: Session = Depends(get_db),
-    _: UserResponse = Depends(require_admin_or_operator),
+    panel_user: UserResponse = Depends(require_admin_or_operator),
 ):
     """Misma carga que GET public/revision-datos (préstamo caso, cuotas, préstamos/pagos por cédula)."""
     caso = db.query(FiniquitoCaso).filter(FiniquitoCaso.id == caso_id).first()
@@ -927,7 +952,9 @@ def finiquito_admin_revision_datos(
     cedula = (caso.cedula or "").strip()
     if not cedula:
         raise HTTPException(status_code=400, detail="Caso sin cedula")
-    return jsonable_encoder(_build_revision_datos_payload(db, caso))
+    return jsonable_encoder(
+        _build_revision_datos_payload(db, caso, current_user=panel_user)
+    )
 
 
 @router.patch("/admin/casos/{caso_id}/estado", response_model=FiniquitoPatchEstadoResponse)
