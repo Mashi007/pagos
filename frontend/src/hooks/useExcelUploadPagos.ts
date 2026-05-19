@@ -76,6 +76,8 @@ import {
   mensajeEdicionManualSufijoVistoProhibida,
 } from '../utils/documentoSufijoVisto'
 
+import { chunkItems } from '../utils/batch'
+
 import { readExcelToJSON } from '../types/exceljs'
 
 const ESTADOS_PRESTAMO_ACTIVO = ['APROBADO', 'DESEMBOLSADO']
@@ -86,6 +88,8 @@ const PRESTAMO_ID_MAX = 2147483647
 
 /** Si el monto visible antes de guardar es >= este valor, se avisa verificar USD vs Bs. */
 const MONTO_MIN_ADVERTENCIA_MONEDA = 2000
+
+const PAGOS_CON_ERROR_BATCH_LIMIT = 500
 
 function montoFilaParaAdvertenciaMoneda(row: PagoExcelRow): number {
   const n = Number(row.monto_pagado)
@@ -1560,25 +1564,41 @@ export function useExcelUploadPagos({
     let ok = 0
     let fail = 0
 
-    try {
-      const res = await pagoConErrorService.createBatch(pagosPayload)
+    let processed = 0
 
-      ok = res.ok_count ?? res.results.filter(r => r.success).length
+    for (const chunk of chunkItems(pagosPayload, PAGOS_CON_ERROR_BATCH_LIMIT)) {
+      const start = processed
 
-      fail = res.fail_count ?? res.results.filter(r => !r.success).length
+      try {
+        const res = await pagoConErrorService.createBatch(chunk)
 
-      res.results.forEach((r, idx) => {
-        if (r.success && rows[idx]) {
-          setEnviadosRevisar(p => new Set([...p, rows[idx]._rowIndex]))
-          setDuplicadosPendientesRevisar(p => {
-            const n = new Set(p)
-            n.delete(rows[idx]._rowIndex)
-            return n
-          })
-        }
-      })
-    } catch {
-      fail = rows.length
+        ok += res.ok_count ?? res.results.filter(r => r.success).length
+
+        fail += res.fail_count ?? res.results.filter(r => !r.success).length
+
+        res.results.forEach((r, idx) => {
+          const row = rows[start + idx]
+
+          if (r.success && row) {
+            setEnviadosRevisar(p => new Set([...p, row._rowIndex]))
+            setDuplicadosPendientesRevisar(p => {
+              const n = new Set(p)
+              n.delete(row._rowIndex)
+              return n
+            })
+          }
+        })
+
+        setBatchProgress({
+          sent: Math.min(start + chunk.length, rows.length),
+          total: rows.length,
+        })
+
+        processed += chunk.length
+      } catch {
+        fail += rows.length - start
+        break
+      }
     }
 
     setBatchProgress({ sent: rows.length, total: rows.length })
@@ -1689,25 +1709,41 @@ export function useExcelUploadPagos({
     let ok = 0
     let fail = 0
 
-    try {
-      const res = await pagoConErrorService.createBatch(pagosPayload)
+    let processed = 0
 
-      ok = res.ok_count ?? res.results.filter(r => r.success).length
+    for (const chunk of chunkItems(pagosPayload, PAGOS_CON_ERROR_BATCH_LIMIT)) {
+      const start = processed
 
-      fail = res.fail_count ?? res.results.filter(r => !r.success).length
+      try {
+        const res = await pagoConErrorService.createBatch(chunk)
 
-      res.results.forEach((r, idx) => {
-        if (r.success && rows[idx]) {
-          setEnviadosRevisar(p => new Set([...p, rows[idx]._rowIndex]))
-          setDuplicadosPendientesRevisar(p => {
-            const n = new Set(p)
-            n.delete(rows[idx]._rowIndex)
-            return n
-          })
-        }
-      })
-    } catch {
-      fail = rows.length
+        ok += res.ok_count ?? res.results.filter(r => r.success).length
+
+        fail += res.fail_count ?? res.results.filter(r => !r.success).length
+
+        res.results.forEach((r, idx) => {
+          const row = rows[start + idx]
+
+          if (r.success && row) {
+            setEnviadosRevisar(p => new Set([...p, row._rowIndex]))
+            setDuplicadosPendientesRevisar(p => {
+              const n = new Set(p)
+              n.delete(row._rowIndex)
+              return n
+            })
+          }
+        })
+
+        setBatchProgress({
+          sent: Math.min(start + chunk.length, rows.length),
+          total: rows.length,
+        })
+
+        processed += chunk.length
+      } catch {
+        fail += rows.length - start
+        break
+      }
     }
 
     setBatchProgress({ sent: rows.length, total: rows.length })
