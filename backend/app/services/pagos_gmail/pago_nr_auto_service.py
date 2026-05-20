@@ -123,6 +123,17 @@ def crear_pago_conciliado_y_aplicar_cuotas_gmail_plantilla_nr(
     if monto_dec_in is None:
         return _fail("monto_operacion_invalido", (monto_operacion_str or "")[:80])
 
+    from app.services.pagos_gmail.plantilla_abcd_proceso_negocio import (
+        PAGOS_GMAIL_UMBRAL_REVISION_MANUAL_USD,
+        monto_gmail_sync_requiere_revision_manual_usd,
+    )
+
+    if monto_gmail_sync_requiere_revision_manual_usd(monto_operacion_str):
+        return _fail(
+            "monto_umbral_revision_manual",
+            f"Monto >= {PAGOS_GMAIL_UMBRAL_REVISION_MANUAL_USD}: requiere revision manual.",
+        )
+
     ref_raw = (numero_referencia or "").strip()
     numero_doc_norm = compose_numero_documento_almacenado(ref_raw, None)
     if not numero_doc_norm:

@@ -148,6 +148,8 @@ export interface GmailSyncItemUI {
   duplicado_en_pagos: boolean
   pago_id_existente: number | null
   prestamo_id_existente: number | null
+  /** Monto >= 1000: no autoconciliar con Guardar; usar Editar. */
+  requiere_revision_manual_monto?: boolean
 }
 
 class PagoService {

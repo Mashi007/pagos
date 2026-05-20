@@ -514,6 +514,13 @@ export default function ActualizacionesGmailPage() {
 
   const handleGuardar = useCallback(
     (item: GmailSyncItemUI) => {
+      if (item.requiere_revision_manual_monto) {
+        toast.error(
+          'Pagos de 1000 o mas requieren revision manual. Use Editar para validar y aplicar.',
+          { duration: 10000 }
+        )
+        return
+      }
       if (item.duplicado_en_pagos) {
         const ok = window.confirm(
           `El serial ${item.numero_referencia || '(s/r)'} ya existe en pagos (id ${item.pago_id_existente ?? '?'}). ` +
@@ -936,13 +943,14 @@ export default function ActualizacionesGmailPage() {
                   ) : (
                     tablaItems.map(item => {
                       const dup = item.duplicado_en_pagos
+                      const montoAlto = Boolean(item.requiere_revision_manual_monto)
                       const compUrl = urlComprobante(item.comprobante_url)
                       const guardandoEste = guardandoId === item.id
                       const migrandoEste = migrandoId === item.id
                       return (
                         <tr
                           key={item.id}
-                          className={`border-t ${dup ? 'bg-emerald-50/40' : ''}`}
+                          className={`border-t ${dup ? 'bg-emerald-50/40' : montoAlto ? 'bg-amber-50/50' : ''}`}
                         >
                           <td className="px-3 py-2 align-top text-xs tabular-nums">
                             {item.fecha_correo || '-'}
@@ -961,7 +969,17 @@ export default function ActualizacionesGmailPage() {
                             {item.fecha_pago || '-'}
                           </td>
                           <td className="px-3 py-2 text-right align-top tabular-nums">
-                            {safeMonto(item)}
+                            <div className="flex flex-col items-end gap-1">
+                              <span>{safeMonto(item)}</span>
+                              {montoAlto ? (
+                                <span
+                                  className="inline-flex w-fit items-center rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-amber-900"
+                                  title="Monto >= 1000: revision manual obligatoria (use Editar)"
+                                >
+                                  Revision manual
+                                </span>
+                              ) : null}
+                            </div>
                           </td>
                           <td className="px-3 py-2 align-top">
                             <div className="flex flex-col gap-1">
@@ -1017,9 +1035,14 @@ export default function ActualizacionesGmailPage() {
                                   ejecutandoPipeline ||
                                   guardandoEste ||
                                   eliminarMutation.isPending ||
-                                  migrandoEste
+                                  migrandoEste ||
+                                  montoAlto
                                 }
-                                title="Migrar a pagos_con_errores y aplicar mover-a-pagos (cascada cuotas)"
+                                title={
+                                  montoAlto
+                                    ? 'Monto >= 1000: use Editar (revision manual)'
+                                    : 'Migrar a pagos_con_errores y aplicar mover-a-pagos (cascada cuotas)'
+                                }
                               >
                                 {guardandoEste ? (
                                   <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />

@@ -47,6 +47,10 @@ from app.services.pagos_gmail.gmail_service import (
 )
 from app.services.pagos_gmail.helpers import format_monto_excel_pagos_gmail, formatear_cedula
 from app.services.pagos_gmail.pipeline import run_pipeline
+from app.services.pagos_gmail.plantilla_abcd_proceso_negocio import (
+    PAGOS_GMAIL_UMBRAL_REVISION_MANUAL_USD,
+    monto_gmail_sync_requiere_revision_manual_usd,
+)
 from app.utils.cedula_almacenamiento import resolver_cedula_almacenada_en_clientes
 
 logger = logging.getLogger(__name__)
@@ -1521,6 +1525,7 @@ def listar_sync_items(
         duplicado, pago_id_exist, prestamo_id_exist = _sync_item_duplicado_en_pagos(
             db, r.numero_referencia, cedula_item
         )
+        revision_monto_alto = monto_gmail_sync_requiere_revision_manual_usd(r.monto)
         items.append(
             {
                 "id": r.id,
@@ -1540,6 +1545,7 @@ def listar_sync_items(
                 "duplicado_en_pagos": duplicado,
                 "pago_id_existente": pago_id_exist,
                 "prestamo_id_existente": prestamo_id_exist,
+                "requiere_revision_manual_monto": revision_monto_alto,
             }
         )
     return {"total": total, "items": items, "limit": limit, "offset": offset}
@@ -1577,6 +1583,11 @@ def _pago_con_error_desde_sync_item(
     numero_doc_key = (numero_doc or "").strip().upper()
 
     observaciones = "Pendiente desde Gmail (guardado manual desde módulo Actualizaciones > Gmail)"
+    if monto_gmail_sync_requiere_revision_manual_usd(item.monto):
+        observaciones = (
+            f"{observaciones}; monto >= {PAGOS_GMAIL_UMBRAL_REVISION_MANUAL_USD} "
+            "(revision manual obligatoria)"
+        )[:255]
     if monto_num <= 0:
         observaciones = (
             f"{observaciones}; monto no interpretable: {(item.monto or '').strip() or 'vacío'}"
@@ -1811,6 +1822,22 @@ def guardar_sync_item(
     item = db.get(PagosGmailSyncItem, item_id)
     if item is None:
         raise HTTPException(status_code=404, detail=f"sync_item {item_id} no encontrado")
+
+    if monto_gmail_sync_requiere_revision_manual_usd(item.monto):
+        return {
+            "ok": False,
+            "movido_a_pagos": False,
+            "cuotas_aplicadas": 0,
+            "pago_con_error_pendiente": False,
+            "errores": [
+                f"Pagos de {PAGOS_GMAIL_UMBRAL_REVISION_MANUAL_USD} o mas requieren "
+                "revision manual. Use Editar para validar y aplicar con cascada."
+            ],
+            "mensaje": (
+                f"Monto >= {PAGOS_GMAIL_UMBRAL_REVISION_MANUAL_USD}: no se puede "
+                "autoconciliar con Guardar. Use Editar."
+            ),
+        }
 
     try:
         with db.begin_nested():

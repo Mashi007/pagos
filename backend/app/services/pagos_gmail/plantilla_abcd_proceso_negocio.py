@@ -58,21 +58,38 @@ Para **NR** con `monto_operacion` numérico (Gemini), invoca `pago_nr_auto_servi
 (mismas validaciones de préstamo único, documento, huella y cuotas).
 Requisito de préstamo: **un solo** crédito `APROBADO` por cédula (igual que carga masiva Excel);
 si hay 0 o varios, no se inserta `Pago` (revisión por Excel / manual).
+
+---
+
+### 4) Monto alto (>= 1000)
+
+Si el valor numérico del comprobante (columna `monto` / `monto_operacion`, sin importar
+moneda en el texto: USD, Bs, USDT, etc.) es **mayor o igual a 1000**, el ítem **no** sigue
+alta automática ni el botón **Guardar** del módulo Actualizaciones > Gmail: permanece para
+**revisión manual** (vía **Editar** → `pagos_con_errores` → modal de revisión).
+
+*Implementación:* `monto_gmail_sync_requiere_revision_manual_usd` en este módulo; usada en
+pipeline, `pago_abcd_auto_service`, `pago_nr_auto_service` y `guardar_sync_item`.
 """
 
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from decimal import Decimal
+from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy.orm import Session
 
 from app.services.pago_numero_documento import numero_documento_ya_registrado
+from app.services.pagos_gmail.helpers import format_monto_excel_pagos_gmail
 
 if TYPE_CHECKING:
     pass
 
 logger = logging.getLogger(__name__)
+
+# Umbral numerico: pagos >= este valor van a revision manual (sin distinguir moneda).
+PAGOS_GMAIL_UMBRAL_REVISION_MANUAL_USD = Decimal("1000")
 
 # Plantillas de comprobante bancario (Gemini) cubiertas por este proceso.
 PLANTILLAS_BANCO_ABCD = frozenset({"A", "B", "C", "D"})
@@ -87,6 +104,23 @@ BANCOS_PLANTILLA_ABCD = frozenset(
         "BNV",
     }
 )
+
+
+def monto_gmail_sync_requiere_revision_manual_usd(monto_str: Optional[str]) -> bool:
+    """
+    True si el valor numerico parseado del comprobante es >= 1000 (cualquier moneda en el texto).
+    """
+    raw = (monto_str or "").strip()
+    if not raw or raw.upper() in ("NA", "NR"):
+        return False
+    txt = format_monto_excel_pagos_gmail(monto_str)
+    if not txt:
+        return False
+    try:
+        v = float(txt)
+    except (TypeError, ValueError):
+        return False
+    return v >= float(PAGOS_GMAIL_UMBRAL_REVISION_MANUAL_USD)
 
 
 def es_plantilla_banco_abcd(fmt: str) -> bool:
@@ -124,7 +158,8 @@ def item_sync_nr_candidato_revision_duplicado(
 def resumen_log_linea_plantilla_abcd() -> str:
     return (
         "ABCD: autoconciliado + cascada cuotas (mismo código /pagos); "
-        "duplicado por documento → revisión manual (Excel con solo_duplicados_documento)"
+        "duplicado por documento → revisión manual (Excel con solo_duplicados_documento); "
+        f"monto >= {PAGOS_GMAIL_UMBRAL_REVISION_MANUAL_USD} → revisión manual"
     )
 
 

@@ -158,6 +158,7 @@ from app.services.pagos_gmail.plantilla_abcd_proceso_negocio import (
     es_plantilla_banco_abcd,
     item_sync_abcd_candidato_revision_duplicado,
     item_sync_nr_candidato_revision_duplicado,
+    monto_gmail_sync_requiere_revision_manual_usd,
     resumen_log_linea_plantilla_abcd,
 )
 from app.services.pagos_gmail.gmail_service import (
@@ -1719,6 +1720,24 @@ def run_pipeline(
                                                         duplicado_documento=True,
                                                         etapa_final="OMITIDO_DUPLICADO",
                                                     )
+                                                elif monto_gmail_sync_requiere_revision_manual_usd(
+                                                    p.get("m")
+                                                ):
+                                                    registrar_traza_gmail_abcd_cuotas_evento(
+                                                        db,
+                                                        sync_id=ssync,
+                                                        sync_item_id=sid,
+                                                        plantilla_fmt=fmt_row,
+                                                        cedula=p.get("c"),
+                                                        numero_referencia=p.get("r"),
+                                                        banco_excel=p.get("banco_excel"),
+                                                        archivo_adjunto=p.get("filename"),
+                                                        comprobante_imagen_id=uid,
+                                                        duplicado_documento=False,
+                                                        etapa_final="OMITIDO_NEGOCIO",
+                                                        motivo="monto_umbral_revision_manual",
+                                                        detalle="Monto >= 1000",
+                                                    )
                                                 else:
                                                     res_abcd = (
                                                         crear_pago_conciliado_y_aplicar_cuotas_gmail_plantilla_abcd(
@@ -1903,6 +1922,24 @@ def run_pipeline(
                                                             comprobante_imagen_id=uid,
                                                             duplicado_documento=True,
                                                             etapa_final="OMITIDO_DUPLICADO",
+                                                        )
+                                                    elif monto_gmail_sync_requiere_revision_manual_usd(
+                                                        m_op
+                                                    ):
+                                                        registrar_traza_gmail_abcd_cuotas_evento(
+                                                            db,
+                                                            sync_id=ssync,
+                                                            sync_item_id=sid,
+                                                            plantilla_fmt="NR",
+                                                            cedula=p.get("c"),
+                                                            numero_referencia=p.get("r"),
+                                                            banco_excel=p.get("banco_excel"),
+                                                            archivo_adjunto=p.get("filename"),
+                                                            comprobante_imagen_id=uid,
+                                                            duplicado_documento=False,
+                                                            etapa_final="OMITIDO_NEGOCIO",
+                                                            motivo="monto_umbral_revision_manual",
+                                                            detalle="Monto >= 1000",
                                                         )
                                                     else:
                                                         res_nr = (
