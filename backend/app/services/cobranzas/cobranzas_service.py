@@ -52,6 +52,41 @@ def _to_float(v) -> float:
         return 0.0
 
 
+def _texto_mensaje_acuerdo(a: CobranzaAcuerdo) -> str:
+    msg = getattr(a, "mensaje", None) or a.notas or ""
+    return str(msg).strip()
+
+
+def _cantidad_acuerdo(a: CobranzaAcuerdo) -> Optional[float]:
+    c = getattr(a, "cantidad", None)
+    if c is not None:
+        return _to_float(c)
+    if a.monto_compromiso is not None:
+        return _to_float(a.monto_compromiso)
+    return None
+
+
+def _moneda_acuerdo(a: CobranzaAcuerdo) -> str:
+    m = (getattr(a, "moneda", None) or "USD").strip().upper()
+    return m if m in ("USD", "BS") else "USD"
+
+
+def _acuerdo_to_out(a: CobranzaAcuerdo) -> CobranzaAcuerdoOut:
+    cant = _cantidad_acuerdo(a)
+    return CobranzaAcuerdoOut(
+        id=a.id,
+        caso_id=a.caso_id,
+        fecha=a.fecha_acuerdo,
+        mensaje=_texto_mensaje_acuerdo(a),
+        cantidad=cant,
+        moneda=_moneda_acuerdo(a),
+        estado=a.estado,
+        fecha_compromiso=a.fecha_compromiso,
+        creado_en=a.creado_en,
+        actualizado_en=a.actualizado_en,
+    )
+
+
 def _casos_abiertos_por_prestamo(db: Session, prestamo_ids: List[int]) -> Dict[int, CobranzaCaso]:
     if not prestamo_ids:
         return {}
@@ -325,7 +360,7 @@ def obtener_caso_detalle(
             )
             for img in imagenes
         ],
-        acuerdos=[CobranzaAcuerdoOut.model_validate(a) for a in acuerdos],
+        acuerdos=[_acuerdo_to_out(a) for a in acuerdos],
     )
 
 
@@ -337,15 +372,21 @@ def crear_acuerdo(
 ) -> CobranzaAcuerdoOut:
     caso = _caso_o_404(db, caso_id)
     estado_ini = _estado_acuerdo_automatico(
-        db, caso.prestamo_id, body.fecha_compromiso, body.fecha_acuerdo
+        db, caso.prestamo_id, body.fecha_compromiso, body.fecha
     )
+    texto = body.mensaje.strip()
+    cant = body.cantidad
+    mon = body.moneda
     acuerdo = CobranzaAcuerdo(
         caso_id=caso.id,
-        fecha_acuerdo=body.fecha_acuerdo,
+        fecha_acuerdo=body.fecha,
         fecha_compromiso=body.fecha_compromiso,
-        notas=body.notas.strip(),
+        mensaje=texto,
+        cantidad=cant,
+        moneda=mon,
+        notas=texto,
         estado=estado_ini,
-        monto_compromiso=body.monto_compromiso,
+        monto_compromiso=cant,
         user_id=user_id,
     )
     db.add(acuerdo)
@@ -353,7 +394,7 @@ def crear_acuerdo(
         caso.estado = "EN_GESTION"
     db.commit()
     db.refresh(acuerdo)
-    return CobranzaAcuerdoOut.model_validate(acuerdo)
+    return _acuerdo_to_out(acuerdo)
 
 
 def actualizar_acuerdo(
@@ -373,14 +414,18 @@ def actualizar_acuerdo(
     )
     if not acuerdo:
         raise HTTPException(status_code=404, detail="Acuerdo no encontrado.")
-    if body.fecha_acuerdo is not None:
-        acuerdo.fecha_acuerdo = body.fecha_acuerdo
+    if body.fecha is not None:
+        acuerdo.fecha_acuerdo = body.fecha
     if body.fecha_compromiso is not None:
         acuerdo.fecha_compromiso = body.fecha_compromiso
-    if body.notas is not None:
-        acuerdo.notas = body.notas.strip()
-    if body.monto_compromiso is not None:
-        acuerdo.monto_compromiso = body.monto_compromiso
+    if body.mensaje is not None:
+        acuerdo.mensaje = body.mensaje.strip()
+        acuerdo.notas = acuerdo.mensaje
+    if body.cantidad is not None:
+        acuerdo.cantidad = body.cantidad
+        acuerdo.monto_compromiso = body.cantidad
+    if body.moneda is not None:
+        acuerdo.moneda = body.moneda
     if body.estado is not None:
         if body.estado not in ESTADOS_ACUERDO:
             raise HTTPException(status_code=400, detail="Estado de acuerdo invalido.")
@@ -394,4 +439,4 @@ def actualizar_acuerdo(
         )
     db.commit()
     db.refresh(acuerdo)
-    return CobranzaAcuerdoOut.model_validate(acuerdo)
+    return _acuerdo_to_out(acuerdo)

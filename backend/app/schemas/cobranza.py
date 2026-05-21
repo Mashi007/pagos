@@ -3,7 +3,7 @@
 from datetime import date, datetime
 from typing import List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 MOTIVOS_COBRANZA = frozenset(
@@ -11,6 +11,7 @@ MOTIVOS_COBRANZA = frozenset(
 )
 ESTADOS_CASO = frozenset({"ABIERTO", "EN_GESTION", "CERRADO"})
 ESTADOS_ACUERDO = frozenset({"PENDIENTE", "CUMPLIDO", "INCUMPLIDO"})
+MONEDAS_ACUERDO = frozenset({"USD", "BS"})
 
 
 class CobranzaPrestamoResumen(BaseModel):
@@ -46,11 +47,12 @@ class CobranzaImagenMeta(BaseModel):
 class CobranzaAcuerdoOut(BaseModel):
     id: int
     caso_id: int
-    fecha_acuerdo: date
-    fecha_compromiso: Optional[date] = None
-    notas: str
+    fecha: date
+    mensaje: str
+    cantidad: Optional[float] = None
+    moneda: str
     estado: str
-    monto_compromiso: Optional[float] = None
+    fecha_compromiso: Optional[date] = None
     creado_en: Optional[datetime] = None
     actualizado_en: Optional[datetime] = None
 
@@ -98,15 +100,35 @@ class CobranzaCasoUpdate(BaseModel):
 
 
 class CobranzaAcuerdoCreate(BaseModel):
-    fecha_acuerdo: date
+    fecha: date
+    mensaje: str = Field(min_length=1)
+    cantidad: Optional[float] = Field(default=None, ge=0)
+    moneda: str = Field(default="USD")
     fecha_compromiso: Optional[date] = None
-    notas: str = Field(min_length=1)
-    monto_compromiso: Optional[float] = None
+
+    @field_validator("moneda")
+    @classmethod
+    def moneda_valida(cls, v: str) -> str:
+        m = (v or "USD").strip().upper()
+        if m not in MONEDAS_ACUERDO:
+            raise ValueError("Moneda debe ser USD o BS")
+        return m
 
 
 class CobranzaAcuerdoUpdate(BaseModel):
-    fecha_acuerdo: Optional[date] = None
+    fecha: Optional[date] = None
+    mensaje: Optional[str] = None
+    cantidad: Optional[float] = Field(default=None, ge=0)
+    moneda: Optional[str] = None
     fecha_compromiso: Optional[date] = None
-    notas: Optional[str] = None
-    monto_compromiso: Optional[float] = None
     estado: Optional[str] = None
+
+    @field_validator("moneda")
+    @classmethod
+    def moneda_valida(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return None
+        m = v.strip().upper()
+        if m not in MONEDAS_ACUERDO:
+            raise ValueError("Moneda debe ser USD o BS")
+        return m

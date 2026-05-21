@@ -41,14 +41,17 @@ export interface CobranzaImagenMeta {
   creado_en?: string | null
 }
 
+export type MonedaAcuerdoCobranza = 'USD' | 'BS'
+
 export interface CobranzaAcuerdo {
   id: number
   caso_id: number
-  fecha_acuerdo: string
-  fecha_compromiso?: string | null
-  notas: string
+  fecha: string
+  mensaje: string
+  cantidad?: number | null
+  moneda: MonedaAcuerdoCobranza
   estado: EstadoAcuerdoCobranza
-  monto_compromiso?: number | null
+  fecha_compromiso?: string | null
   creado_en?: string | null
   actualizado_en?: string | null
 }
@@ -127,10 +130,11 @@ export async function actualizarCasoCobranza(
 export async function crearAcuerdoCobranza(
   casoId: number,
   body: {
-    fecha_acuerdo: string
+    fecha: string
+    mensaje: string
+    cantidad: number
+    moneda: MonedaAcuerdoCobranza
     fecha_compromiso?: string
-    notas: string
-    monto_compromiso?: number
   }
 ): Promise<CobranzaAcuerdo> {
   return apiClient.post<CobranzaAcuerdo>(
