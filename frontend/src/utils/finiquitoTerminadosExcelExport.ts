@@ -36,12 +36,6 @@ export async function descargarTerminadosExcel(
     'Fecha aprobacion': textoFecha(row.fecha_aprobacion),
     'Fecha termino pago': textoFecha(row.fecha_termino_pago),
     'Fecha terminado': textoFecha(row.fecha_terminado),
-    'Contacto pasos siguientes':
-      row.contacto_para_siguientes == null
-        ? ''
-        : row.contacto_para_siguientes
-          ? 'Si'
-          : 'No',
     'Prestamo ID': row.prestamo_id,
     'Caso ID': row.id,
   }))

@@ -122,6 +122,7 @@ import {
   CobrosEditarPage,
   CobrosHistoricoPage,
   CobrosPagosReportadosPage,
+  CobranzasPage,
   ComunicacionesPage,
   Configuracion,
   Concesionarios,
@@ -419,6 +420,8 @@ function App() {
               path="cobros/historico-cliente"
               element={<CobrosHistoricoPage />}
             />
+
+            <Route path="cobranzas" element={<CobranzasPage />} />
 
             {/* Reportes */}
 

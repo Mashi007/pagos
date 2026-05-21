@@ -1767,7 +1767,6 @@ function FiniquitoGestionPageInner() {
                       <TableHead className={thGestion}>
                         Fecha terminado
                       </TableHead>
-                      <TableHead className={thGestion}>Contacto</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -1795,13 +1794,6 @@ function FiniquitoGestionPageInner() {
                         </TableCell>
                         <TableCell className={tdGestion}>
                           {textoFechaTabla(row.fecha_terminado)}
-                        </TableCell>
-                        <TableCell className={tdGestion}>
-                          {row.contacto_para_siguientes == null
-                            ? '-'
-                            : row.contacto_para_siguientes
-                              ? 'Sí'
-                              : 'No'}
                         </TableCell>
                       </TableRow>
                     ))}

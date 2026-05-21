@@ -16,6 +16,7 @@ const MANAGER_PREFIXES = [
   '/escaner-lote',
   '/amortizacion',
   '/cobros',
+  '/cobranzas',
   '/reportes',
   '/revision-manual',
   '/auditoria',
@@ -36,6 +37,8 @@ const OPERATOR_PREFIXES = [
   '/escaner-lote',
   /** Listado y registro de pagos (misma vista que gerente/administrador). */
   '/pagos',
+  '/cobros',
+  '/cobranzas',
   '/finiquitos',
 ]
 

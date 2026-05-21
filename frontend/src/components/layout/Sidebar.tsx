@@ -38,6 +38,7 @@ import {
   LayoutList,
   Calendar,
   FileStack,
+  Scale,
 } from 'lucide-react'
 
 import { cn } from '../../utils'
@@ -320,6 +321,14 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
       href: '/prestamos',
 
       icon: CreditCard,
+    },
+
+    {
+      title: 'Cobranzas',
+
+      href: '/cobranzas',
+
+      icon: Scale,
     },
 
     {
