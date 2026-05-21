@@ -47,9 +47,15 @@ for _noisy_logger in (
     "httpcore.connection",
     "google_genai",
     "google.genai",
+    # Access log de Uvicorn/Gunicorn duplica cada request y puede filtrar JWT en query.
+    "uvicorn.access",
+    "gunicorn.access",
 ):
     logging.getLogger(_noisy_logger).setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
+
+# Rutas que no aportan a operación (evitan ruido en Render).
+_REQUEST_LOG_SKIP_PATHS = frozenset({"/favicon.ico", "/robots.txt"})
 
 # Claves cuyo valor no debe aparecer en logs (JWT en query, OTP, etc.).
 _QUERY_KEYS_SENSIBLE_LOG = frozenset(
@@ -91,11 +97,59 @@ def _path_para_log(request: Request) -> str:
         return f"{path}?[query_omitida]"
 
 
+def _is_long_job_path(path: str) -> bool:
+    """
+    Rutas que suelen superar 5 s (Gemini, PDF, SMTP, agregados).
+    No se marcan como (slow) en logs; el umbral sigue aplicando a errores 5xx.
+    """
+    if "gmail/run-now" in path:
+        return True
+    if path.endswith("/cobros/public/digitalizar-comprobante"):
+        return True
+    if "cobros/public/enviar-reporte" in path:
+        return True
+    if "cobros/public/infopagos/enviar-reporte" in path:
+        return True
+    if "cobros/public/solicitar-codigo" in path:
+        return True
+    if "cobros/escaner/extraer-comprobante" in path:
+        return True
+    if "estado-cuenta/public/verificar-codigo" in path:
+        return True
+    if "estado-cuenta/public/solicitar-codigo" in path:
+        return True
+    if "estado-cuenta/public/comprobante-imagen" in path:
+        return True
+    if "estado-cuenta/public/recibo-cuota" in path:
+        return True
+    if "estado-cuenta/public/recibo-pago" in path:
+        return True
+    if "finiquito/admin/casos" in path:
+        return True
+    if "dashboard/pagos-inicial" in path:
+        return True
+    if "listado-y-kpis" in path:
+        return True
+    if "notificaciones-prejudicial" in path:
+        return True
+    if "pagos-reportados" in path and (
+        "comprobante" in path
+        or "recibo.pdf" in path
+        or "enviar-recibo" in path
+        or "aprobar" in path
+        or "rechazar" in path
+    ):
+        return True
+    return False
+
+
 class RequestLogMiddleware(BaseHTTPMiddleware):
     """Registra metodo, ruta, codigo de estado y tiempo para correlacionar con logs de Render."""
     async def dispatch(self, request: Request, call_next):
         start = time.perf_counter()
         path = request.url.path
+        if path in _REQUEST_LOG_SKIP_PATHS:
+            return await call_next(request)
         path_for_log = _path_para_log(request)
         request_id = (
             getattr(request.state, "request_id", None)
@@ -125,29 +179,7 @@ class RequestLogMiddleware(BaseHTTPMiddleware):
         request_id = response.headers.get("X-Request-ID") or request_id
         msg = "request method=%s path=%s status=%s elapsed_ms=%s request_id=%s client_ip=%s"
 
-        # Jobs que suelen superar 5 s (Gemini, PDF, SMTP, agregados dashboard); no marcar como slow
-        is_long_job_path = (
-            "gmail/run-now" in path
-            or "cobros/public/enviar-reporte" in path
-            or "cobros/public/infopagos/enviar-reporte" in path
-            or "cobros/public/solicitar-codigo" in path
-            or "cobros/escaner/extraer-comprobante" in path
-            or "estado-cuenta/public/verificar-codigo" in path
-            or "estado-cuenta/public/solicitar-codigo" in path
-            or "dashboard/pagos-inicial" in path
-            or "listado-y-kpis" in path
-            or "notificaciones-prejudicial" in path
-            or (
-                "pagos-reportados" in path
-                and (
-                    "comprobante" in path
-                    or "recibo.pdf" in path
-                    or "enviar-recibo" in path
-                    or "aprobar" in path
-                    or "rechazar" in path
-                )
-            )
-        )
+        is_long_job_path = _is_long_job_path(path)
         if status >= 500:
             logger.warning(msg + " (error)", request.method, path_for_log, status, elapsed_ms, request_id, client_ip)
         elif not is_long_job_path and elapsed_ms >= 5000:
@@ -239,6 +271,12 @@ app.add_middleware(
 
 # Incluir routers
 app.include_router(api_router, prefix=settings.API_V1_STR)
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon() -> PlainTextResponse:
+    """Evita 404 ruidoso en logs cuando el navegador pide favicon al API."""
+    return PlainTextResponse(status_code=204)
 
 # ========== ROUTER DE AUTENTICACION CON CSRF (FASE 1) ==========
 # Endpoints: GET /api/v1/auth/login-form, POST /api/v1/auth/login, POST /api/v1/auth/logout

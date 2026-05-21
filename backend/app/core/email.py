@@ -589,7 +589,7 @@ def send_email(
     solicitados_mask = [mask_email_for_log(x) for x in dest_solicitados_originales]
     efectivos_para_smtp = list(to_emails) + cc_list + bcc_list
     adjuntos_log = [(n, len(b)) for n, b in attachments_norm]
-    logger.info(
+    logger.debug(
         "[SMTP_ENVIO] intento modo_pruebas=%s redirigido_modo_pruebas=%s servicio=%s tipo_tab=%s "
         "respetar_destinos_manuales=%s solicitados_MASK=%s efectivos_smtp=%s asunto=%s adjuntos_n=%s adjuntos_bytes=%s smtp_host=%s",
         modo_pruebas,
@@ -757,7 +757,7 @@ def send_email(
             (subject or "")[:200],
             msg.get("From"),
         )
-        logger.info(
+        logger.debug(
             "Correo aceptado por SMTP (sendmail OK, sin rechazos): to=%s subject=%s from=%s",
             all_recipients,
             subject,

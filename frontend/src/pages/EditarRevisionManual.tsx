@@ -649,7 +649,8 @@ export function EditarRevisionManual() {
       ),
     enabled: cedulaParaPagosRealizados.length > 0,
     staleTime: 0,
-    refetchOnWindowFocus: true,
+    // Igual que detalle: evita ráfagas al volver del calendario/pestaña (logs mostraban GET /pagos duplicados).
+    refetchOnWindowFocus: false,
     refetchInterval: 60_000,
   })
 
