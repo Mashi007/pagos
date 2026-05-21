@@ -648,8 +648,8 @@ export function EditarRevisionManual() {
         }
       ),
     enabled: cedulaParaPagosRealizados.length > 0,
-    staleTime: 0,
-    // Igual que detalle: evita ráfagas al volver del calendario/pestaña (logs mostraban GET /pagos duplicados).
+    // 15 s: reduce GET /pagos duplicados al abrir detalle+listado; tras guardar, invalidate fuerza refetch.
+    staleTime: 15_000,
     refetchOnWindowFocus: false,
     refetchInterval: 60_000,
   })
@@ -766,10 +766,9 @@ export function EditarRevisionManual() {
   }, [cuotasData, soloLectura])
 
   const refrescarTrasCambioPagosRevision = useCallback(async () => {
-    // La invalidación de `revision-editar` en refrescarOrigen ya dispara un refetch (RQ v5).
+    // invalidatePagosPrestamosRevisionYCuotas ya incluye `pagos-por-cedula` → un solo refetch activo.
     await refrescarOrigenDatosTrasRevisionManual()
-    void refetchPagosRealizados()
-  }, [refetchPagosRealizados, refrescarOrigenDatosTrasRevisionManual])
+  }, [refrescarOrigenDatosTrasRevisionManual])
 
   const aplicarCascadaPagosMutation = useMutation({
     mutationFn: async () => {

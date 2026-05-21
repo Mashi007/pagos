@@ -2,6 +2,7 @@
 Aplicacion principal FastAPI
 """
 import os
+import re
 import time
 import logging
 import warnings
@@ -97,11 +98,17 @@ def _path_para_log(request: Request) -> str:
         return f"{path}?[query_omitida]"
 
 
-def _is_long_job_path(path: str) -> bool:
+_PAGOS_PUT_RE = re.compile(r"^/api/v1/pagos/\d+$")
+
+
+def _is_long_job_path(path: str, method: str = "GET") -> bool:
     """
     Rutas que suelen superar 5 s (Gemini, PDF, SMTP, agregados).
     No se marcan como (slow) en logs; el umbral sigue aplicando a errores 5xx.
     """
+    path_norm = path.rstrip("/") or "/"
+    if method == "PUT" and _PAGOS_PUT_RE.match(path_norm):
+        return True
     if "gmail/run-now" in path:
         return True
     if path.endswith("/cobros/public/digitalizar-comprobante"):
@@ -179,7 +186,7 @@ class RequestLogMiddleware(BaseHTTPMiddleware):
         request_id = response.headers.get("X-Request-ID") or request_id
         msg = "request method=%s path=%s status=%s elapsed_ms=%s request_id=%s client_ip=%s"
 
-        is_long_job_path = _is_long_job_path(path)
+        is_long_job_path = _is_long_job_path(path, request.method)
         if status >= 500:
             logger.warning(msg + " (error)", request.method, path_for_log, status, elapsed_ms, request_id, client_ip)
         elif not is_long_job_path and elapsed_ms >= 5000:

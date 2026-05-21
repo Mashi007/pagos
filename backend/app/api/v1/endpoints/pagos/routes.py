@@ -6128,6 +6128,8 @@ def actualizar_pago(pago_id: int, payload: PagoUpdate, db: Session = Depends(get
 
             ) from e
 
+        _mark_fase("response_enriquecido")
+        out = _pago_response_enriquecido(db, row)
         total_ms = round((time.perf_counter() - t0_put) * 1000.0, 2)
         logger.info(
             "[PAGOS_PUT_TIMING] pago_id=%s total_ms=%s fases_ms=%s had_cuota_pagos=%s articulacion_afectada=%s",
@@ -6137,7 +6139,7 @@ def actualizar_pago(pago_id: int, payload: PagoUpdate, db: Session = Depends(get
             had_cuota_pagos_antes,
             articulacion_afectada,
         )
-        return _pago_response_enriquecido(db, row)
+        return out
 
     # Regla: si el pago cumple validadores (prestamo_id + monto), aplicar automáticamente a cuotas en cualquier canal
 
@@ -6201,6 +6203,8 @@ def actualizar_pago(pago_id: int, payload: PagoUpdate, db: Session = Depends(get
                         pago_id,
                     )
 
+    _mark_fase("response_enriquecido")
+    out = _pago_response_enriquecido(db, row)
     total_ms = round((time.perf_counter() - t0_put) * 1000.0, 2)
     logger.info(
         "[PAGOS_PUT_TIMING] pago_id=%s total_ms=%s fases_ms=%s had_cuota_pagos=%s articulacion_afectada=%s",
@@ -6210,7 +6214,7 @@ def actualizar_pago(pago_id: int, payload: PagoUpdate, db: Session = Depends(get
         had_cuota_pagos_antes,
         articulacion_afectada,
     )
-    return _pago_response_enriquecido(db, row)
+    return out
 
 
 @router.post("/por-prestamo/{prestamo_id:int}/aplicar-pagos-cuotas", response_model=dict)
