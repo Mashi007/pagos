@@ -36,12 +36,11 @@ No FIFO en el sentido de “primer pago global”; la política es **cascada por
 
 Si el **número de documento / referencia** del comprobante Gmail (normalizado igual que
 `pagos.numero_documento`) **ya existe** en `pagos` o `pagos_con_errores`, el ítem **no**
-debe seguir el flujo automático de alta + cuotas: va a **revisión manual**, típicamente
-vía Excel.
+debe seguir el flujo automático de alta + cuotas: permanece en `gmail_temporal` y, tras
+el pipeline, pasa a **revisión manual** en `pagos_con_errores` (migración automática o
+`POST /pagos/gmail/migrar-pendientes-a-con-errores`).
 
-*Este módulo expone* `referencia_ya_registrada_como_numero_documento` *para detectar ese
-caso. El endpoint* `GET /pagos/gmail/download-excel` *admite* `solo_duplicados_documento`
-*y* `excluir_duplicados_documento` *para separar filas de revisión vs filas nuevas.*
+*Este módulo expone* `referencia_ya_registrada_como_numero_documento` *para detectar ese caso.*
 
 Los ítems que **no** están duplicados y pasan validadores siguen el proceso normal
 (conciliación + cuotas cuando la integración Gmail→`pagos` esté cableada).
@@ -57,7 +56,7 @@ invoca `pago_abcd_auto_service.crear_pago_conciliado_y_aplicar_cuotas_gmail_plan
 Para **NR** con `monto_operacion` numérico (Gemini), invoca `pago_nr_auto_service.crear_pago_conciliado_y_aplicar_cuotas_gmail_plantilla_nr`
 (mismas validaciones de préstamo único, documento, huella y cuotas).
 Requisito de préstamo: **un solo** crédito `APROBADO` por cédula (igual que carga masiva Excel);
-si hay 0 o varios, no se inserta `Pago` (revisión por Excel / manual).
+si hay 0 o varios, no se inserta `Pago` (revisión manual / `pagos_con_errores`).
 
 ---
 
@@ -155,12 +154,22 @@ def item_sync_nr_candidato_revision_duplicado(
     return referencia_ya_registrada_como_numero_documento(db, referencia)
 
 
-def resumen_log_linea_plantilla_abcd() -> str:
-    return (
-        "ABCD: autoconciliado + cascada cuotas (mismo código /pagos); "
-        "duplicado por documento → revisión manual (Excel con solo_duplicados_documento); "
-        f"monto >= {PAGOS_GMAIL_UMBRAL_REVISION_MANUAL_USD} → revisión manual"
-    )
+def resumen_log_linea_plantilla_abcd(
+    *,
+    duplicado_documento: bool = False,
+    revision_manual_monto: bool = False,
+) -> str:
+    """Texto de log por fila (no describe la ruta de filas ya conciliadas en CUOTAS_OK)."""
+    partes = ["ABCD: autoconciliado + cascada cuotas (mismo código /pagos)"]
+    if duplicado_documento:
+        partes.append("duplicado por documento → revisión manual (pagos_con_errores)")
+    if revision_manual_monto:
+        partes.append(
+            f"monto >= {PAGOS_GMAIL_UMBRAL_REVISION_MANUAL_USD} → revisión manual (pagos_con_errores)"
+        )
+    if len(partes) == 1:
+        partes.append("sin bloqueo duplicado ni umbral de monto")
+    return "; ".join(partes)
 
 
 def item_sync_abcd_candidato_revision_duplicado(

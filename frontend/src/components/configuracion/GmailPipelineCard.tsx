@@ -1,49 +1,8 @@
 /**
-
-
-
-
-
-
-
-
-
- * Card: Pipeline Gmail - estado, iniciar descarga, descargar Excel desde tabla temporal.
-
-
-
-
-
-
-
-
-
- * Muestra "Generando..." cuando last_status === 'running'.
-
-
-
-
-
-
-
-
-
- * Botón "Descargar Excel (tabla temporal)" permite descargar aunque el pipeline siga corriendo.
-
-
-
-
-
-
-
-
-
+ * Card: Pipeline Gmail - estado y refresco (sin exportación Excel).
  */
-
 import { useState, useEffect, useCallback } from 'react'
-
-import { Mail, Download, Loader2, RefreshCw } from 'lucide-react'
-
+import { Mail, Loader2, RefreshCw } from 'lucide-react'
 import {
   Card,
   CardContent,
@@ -51,40 +10,23 @@ import {
   CardTitle,
   CardDescription,
 } from '../../components/ui/card'
-
 import { Button } from '../../components/ui/button'
-
-import { toast } from 'sonner'
-
 import { apiClient } from '../../services/api'
-
-import { getBackendBaseUrl } from './InformePagosConfig'
 
 interface GmailStatus {
   last_run: string | null
-
   last_status: string | null
-
   last_emails: number
-
   last_files: number
-
   last_error: string | null
-
   next_run_approx: string | null
-
   latest_data_date: string | null
-
   last_correos_marcados_revision?: number
 }
 
 export function GmailPipelineCard() {
   const [status, setStatus] = useState<GmailStatus | null>(null)
-
   const [loadingStatus, setLoadingStatus] = useState(true)
-
-  const [downloadingExcel, setDownloadingExcel] = useState(false)
-
   const [refreshing, setRefreshing] = useState(false)
 
   const fetchStatus = useCallback(async () => {
@@ -92,11 +34,9 @@ export function GmailPipelineCard() {
       const data = await apiClient.get<GmailStatus>(
         '/api/v1/pagos/gmail/status'
       )
-
       setStatus(data)
     } catch (e) {
       console.error('Error fetching Gmail status:', e)
-
       setStatus(null)
     } finally {
       setLoadingStatus(false)
@@ -116,60 +56,6 @@ export function GmailPipelineCard() {
     }
   }
 
-  const handleDownloadExcelTemporal = async () => {
-    try {
-      setDownloadingExcel(true)
-
-      const base = getBackendBaseUrl()
-
-      const token =
-        (
-          apiClient as {
-            defaults?: { headers?: { common?: Record<string, string> } }
-          }
-        )?.defaults?.headers?.common?.Authorization ?? ''
-
-      const url = `${base}/api/v1/pagos/gmail/download-excel-temporal`
-
-      const res = await fetch(url, {
-        headers: token ? { Authorization: token } : {},
-      })
-
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}))
-
-        throw new Error(String(err.detail ?? `Error ${res.status}`))
-      }
-
-      const blob = await res.blob()
-
-      const name =
-        res.headers
-          .get('Content-Disposition')
-          ?.match(/filename="?([^";]+)"?/)?.[1] ?? 'Pagos_Gmail_temporal.xlsx'
-
-      const a = document.createElement('a')
-
-      a.href = URL.createObjectURL(blob)
-
-      a.download = name
-
-      a.click()
-
-      URL.revokeObjectURL(a.href)
-
-      toast.success('Excel descargado. La tabla temporal se ha vaciado.')
-
-      fetchStatus()
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Error al descargar'
-
-      toast.error(msg)
-    } finally {
-      setDownloadingExcel(false)
-    }
-  }
-
   const isRunning = status?.last_status === 'running'
 
   return (
@@ -179,19 +65,13 @@ export function GmailPipelineCard() {
           <Mail className="h-5 w-5 text-blue-600" />
           Pipeline Gmail - cantidad de correos y archivos procesados
         </CardTitle>
-
         <CardDescription>
-          El disparo principal es manual: Pagos → Agregar pago → Generar Excel
-          desde email → Procesar correos (toda la bandeja según criterios del
-          módulo). Además, en el servidor puede activarse un escaneo automático
-          de pendientes (todos los días, 06:30-19:30 Caracas); no sustituye el
-          botón manual. Solo se digitalizan correos cuyo remitente coincida con
-          un email en clientes; si no, solo ERROR EMAIL en Gmail. PDF
-          multipágina: etiqueta PAGINAS. Aquí ve el último resultado y puede
-          descargar Excel temporal.
+          El disparo principal es manual: Pagos → Agregar pago → Correos Gmail →
+          Procesar correos. Los autoconciliados quedan en Pagos; los pendientes
+          pasan a Pagos con errores al terminar el proceso. En el servidor puede
+          activarse un escaneo automático (06:30-19:30 Caracas).
         </CardDescription>
       </CardHeader>
-
       <CardContent className="space-y-4">
         {loadingStatus && !status ? (
           <div className="flex items-center gap-2 text-muted-foreground">
@@ -233,46 +113,20 @@ export function GmailPipelineCard() {
                 </p>
               )}
 
-            <div className="flex flex-wrap gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => void handleRefrescarEstado()}
-                disabled={refreshing}
-              >
-                {refreshing ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                  <RefreshCw className="mr-2 h-4 w-4" />
-                )}
-                Actualizar estado
-              </Button>
-
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={handleDownloadExcelTemporal}
-                disabled={downloadingExcel}
-              >
-                {downloadingExcel ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                  <Download className="mr-2 h-4 w-4" />
-                )}
-
-                {downloadingExcel
-                  ? 'Preparando…'
-                  : 'Descargar Excel (tabla temporal)'}
-              </Button>
-            </div>
-
-            <p className="text-xs text-muted-foreground">
-              Puedes descargar el Excel aunque siga «Generando…»: se incluirá lo
-              ya guardado en la tabla temporal. La tabla no se vacía al
-              descargar; use «Vaciar tabla» en Pagos si necesita limpiarla.
-            </p>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => void handleRefrescarEstado()}
+              disabled={refreshing}
+            >
+              {refreshing ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="mr-2 h-4 w-4" />
+              )}
+              Actualizar estado
+            </Button>
           </>
         ) : (
           <p className="text-sm text-muted-foreground">

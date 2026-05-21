@@ -103,8 +103,8 @@ export function CargaMasivaMenu({ onSuccess }: CargaMasivaMenuProps) {
 
           <p className="mb-2 flex items-start gap-2 px-2 text-xs text-gray-600">
             <Mail className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-            Para procesar correos use la lista Pagos: Agregar pago → Generar
-            Excel desde email → Procesar correos.
+            Para procesar correos: Pagos → Agregar pago → Correos Gmail →
+            Procesar correos.
           </p>
 
           {gmailStatus && (
@@ -169,18 +169,6 @@ export function CargaMasivaMenu({ onSuccess }: CargaMasivaMenuProps) {
         archivosProcesados={gmailStatus?.last_files}
         onElegir={async borrar => {
           const fecha = gmailStatus?.latest_data_date ?? undefined
-
-          try {
-            await pagoService.downloadGmailExcel(fecha)
-
-            toast.success('Excel descargado.')
-          } catch (e) {
-            toast.error(getErrorMessage(e))
-
-            pagoService.getGmailStatus().then(setGmailStatus)
-
-            return
-          }
 
           const result = await pagoService.confirmarDiaGmail(borrar, fecha)
 

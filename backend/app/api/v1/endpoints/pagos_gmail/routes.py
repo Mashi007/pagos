@@ -1,6 +1,6 @@
 """
 Endpoints para el pipeline Gmail -> Gemini -> BD (modulo Pagos).
-Ejecucion manual: POST /pagos/gmail/run-now desde la UI (Pagos > Agregar pago > Generar Excel desde email).
+Ejecucion manual: POST /pagos/gmail/run-now desde la UI (Pagos > Agregar pago > Correos Gmail).
 Ejecucion automatica opcional: scheduler todos los dias cada hora :30 entre 06:30 y 19:30 (America/Caracas), filtro
 pending_identification, si ENABLE_AUTOMATIC_SCHEDULED_JOBS y PAGOS_GMAIL_SCHEDULED_SCAN_ENABLED en settings.
 Manual y automatico comparten la misma regla de exclusion: no se inicia otra corrida si hay sync en estado running (ventana 2 h).
@@ -8,9 +8,8 @@ Criterio de listado Gmail: inbox + media (has:attachment o filename:imagen/PDF e
 Clasificación vigente: etiqueta final única por correo con precedencia Paso 1 (A/B), Paso 2 (C/D con remitente en clientes), Plan B fuera de BD (A/B/C) y fallback TEXTO->ERROR EMAIL->MANUAL.
 Si el mensaje ya tiene cualquier etiqueta de usuario Gmail, se omite (skip total) para evitar reetiquetar.
 - POST /pagos/gmail/run-now: ejecutar pipeline ahora
-- GET /pagos/gmail/download-excel y download-excel-temporal: descargar Excel (solo lectura; no borran BD); excluyen filas
-  ya aplicadas a cuotas (traza CUOTAS_OK con pago_id). `gmail_temporal` conserva pendientes de revisión.
-  Query opcional plantilla A–D vs duplicado `pagos.numero_documento`.
+- GET /pagos/gmail/download-excel* (descontinuado, 410): usar Pagos y Pagos con errores tras run-now.
+- POST /pagos/gmail/migrar-pendientes-a-con-errores: mueve `gmail_temporal` a revisión en app.
 - GET /pagos/gmail/status: ultima ejecucion; next_run_approx = proxima corrida programada Gmail si el scheduler tiene el job registrado
 - GET /pagos/gmail/abcd-cuotas-traza: historial plantilla A–D → pago → cuotas (post-Gemini)
 - GET /pagos/gmail/pipeline-eventos: eventos previos a fila sync (Gemini omitido, remitente inválido, etc.)
@@ -852,6 +851,13 @@ def _get_latest_date_with_data(db: Session) -> Optional[str]:
     return d.strftime("%Y-%m-%d") if d else None
 
 
+_GMAIL_EXCEL_EXPORT_DEPRECATED = (
+    "La exportación Excel del pipeline Gmail está descontinuada. "
+    "Tras procesar correos: autoconciliados en Pagos; pendientes en Pagos con errores "
+    "(migración automática al terminar run-now)."
+)
+
+
 @router.get("/download-excel")
 def download_excel(
     fecha: Optional[str] = None,
@@ -869,113 +875,9 @@ def download_excel(
     ] = False,
     db: Session = Depends(get_db),
 ):
-    """
-    Genera y devuelve un Excel con los ítems procesados (solo lectura en BD).
-    No borra ni modifica filas: el acumulado sigue en el servidor para siguientes descargas y nuevos procesamientos.
-    - Sin ?fecha: descarga el lote más reciente en BD, sin importar la fecha del correo
-      (cubre backlog de cualquier antigüedad; los correos se procesan mientras estén no leídos).
-    - Con ?fecha=YYYY-MM-DD: descarga exactamente esa fecha.
-    Si no hay datos devuelve 404 (no se genera Excel vacío).
-    Columnas: Banco, Cedula, Fecha, Monto, Serial documento, Correo Pagador.
-    No incluye filas cuya cédula sea la literal **ERROR EMAIL** (reservada para fallo de remitente en clientes).
-    No incluye comprobantes con traza CUOTAS_OK (alta + aplicación real a cuotas en BD).
-    Filtros opcionales (plantilla banco A–D, columna Banco): `solo_duplicados_documento`, `excluir_duplicados_documento`
-    (no usar ambos a la vez).
-    Para vaciar tablas usar POST /pagos/gmail/confirmar-dia con confirmado=true.
-    """
-    from openpyxl import Workbook
-    items: list = []
-    sheet_date: Optional[datetime] = None
-    if solo_duplicados_documento and excluir_duplicados_documento:
-        raise HTTPException(
-            status_code=400,
-            detail="No combine solo_duplicados_documento y excluir_duplicados_documento en la misma petición.",
-        )
-    logger.info("[PAGOS_GMAIL] [ETAPA] download-excel inicio fecha=%s", fecha or "(sin fecha = toda la bandeja)")
-
-    if fecha and fecha.strip():
-        # Fecha explícita: buscar ese día concreto
-        fecha_date = _sheet_date_from_fecha(fecha)
-        _, items = _find_sheet_by_fecha(db, fecha_date)
-        logger.info("[PAGOS_GMAIL] [ETAPA] download-excel por fecha items=%s", len(items))
-        sheet_date = fecha_date
-    else:
-        # Sin fecha: lote más reciente en BD (backlog de cualquier antigüedad)
-        logger.info("[PAGOS_GMAIL] [ETAPA] download-excel sin fecha items=%s", len(items))
-        _, sheet_date, items = _find_most_recent_data(db)
-
-    items = _excluir_filas_cedula_error_email(items)
-    items = _excluir_sync_items_alta_gmail_abcd_automatica_ok(db, items)
-    items = _filtrar_items_excel_duplicado_documento_abcd(
-        db,
-        items,
-        solo_duplicados_documento=solo_duplicados_documento,
-        excluir_duplicados_documento=excluir_duplicados_documento,
-    )
-    if not items:
-        raise HTTPException(
-            status_code=404,
-            detail=(
-                "Sin datos disponibles. "
-                "Si todo quedó en CUOTAS_OK, no quedan filas para Excel. "
-                "Pulse «Generar Excel desde Gmail» para procesar correos no leídos con adjuntos (imagen/PDF) "
-                "y vuelva a descargar. Verifique que GEMINI_API_KEY esté configurado en el servidor."
-                + (f" (buscado: {fecha})" if fecha else "")
-                + (
-                    " Si usó filtros de duplicado por documento (plantilla A–D), pruebe sin ellos."
-                    if (solo_duplicados_documento or excluir_duplicados_documento)
-                    else ""
-                )
-            ),
-        )
-
-    try:
-        wb = Workbook()
-        ws = wb.active
-        ws.title = "Pagos"
-        ws.append(
-            [
-                "Banco",
-                "Cedula",
-                "Fecha",
-                "Monto",
-                "Serial documento",
-                "Correo Pagador",
-                "Gmail message id",
-                "Gmail thread id",
-            ]
-        )
-        for it in items:  # fila 1 = cabecera
-            ws.append(
-                [
-                    it.banco or "",
-                    formatear_cedula(it.cedula or ""),
-                    it.fecha_pago or "",
-                    format_monto_excel_pagos_gmail(it.monto) or (it.monto or ""),
-                    it.numero_referencia or "",
-                    it.correo_origen or "",
-                    getattr(it, "gmail_message_id", None) or "",
-                    getattr(it, "gmail_thread_id", None) or "",
-                ]
-            )
-        buf = io.BytesIO()
-        wb.save(buf)
-        buf.seek(0)
-    except Exception as e:
-        logger.exception("[PAGOS_GMAIL] Error generando Excel: %s", e)
-        raise HTTPException(
-            status_code=500,
-            detail="Error al generar el archivo Excel. Intente de nuevo o contacte soporte.",
-        ) from e
-
-    date_str = sheet_date.strftime("%Y-%m-%d") if sheet_date else "sin-fecha"
-    filename = f"Pagos_Gmail_{date_str}.xlsx"
-    logger.info("[PAGOS_GMAIL] [ETAPA] download-excel OK filas=%s filename=%s", len(items), filename)
-    return StreamingResponse(
-        buf,
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": f"attachment; filename={filename}"},
-    )
+    """Descontinuado: revisar en Pagos / Pagos con errores."""
+    del fecha, solo_duplicados_documento, excluir_duplicados_documento, db
+    raise HTTPException(status_code=410, detail=_GMAIL_EXCEL_EXPORT_DEPRECATED)
 
 
 
@@ -995,91 +897,9 @@ def download_excel_temporal(
     ] = False,
     db: Session = Depends(get_db),
 ):
-    """
-    Genera Excel desde la tabla temporal gmail_temporal: solo filas que siguieron en tabla tras el pipeline
-    (NR, duplicados, A–D sin aplicación real a cuotas, etc.). Las filas con traza CUOTAS_OK se eliminan
-    de `gmail_temporal` al cerrar el alta en `pagos`.
-    Excluye filas con cédula **ERROR EMAIL** (no deben exportarse).
-    Filtros opcionales (misma semántica que download-excel): `solo_duplicados_documento`, `excluir_duplicados_documento`.
-    NO vacia la tabla: los datos solo se borran al usar el boton "Vaciar tabla (Generar Excel desde Gmail)". Si no hay datos devuelve 404.
-    """
-    from openpyxl import Workbook
-
-    if solo_duplicados_documento and excluir_duplicados_documento:
-        raise HTTPException(
-            status_code=400,
-            detail="No combine solo_duplicados_documento y excluir_duplicados_documento en la misma petición.",
-        )
-
-    items = db.execute(
-        select(GmailTemporal).order_by(GmailTemporal.created_at)
-    ).scalars().all()
-    items = _excluir_filas_cedula_error_email(list(items))
-    items = _filtrar_items_excel_duplicado_documento_abcd(
-        db,
-        items,
-        solo_duplicados_documento=solo_duplicados_documento,
-        excluir_duplicados_documento=excluir_duplicados_documento,
-    )
-    if not items:
-        raise HTTPException(
-            status_code=404,
-            detail=(
-                "Sin datos en tabla temporal (o todo fue autoconciliado y ya no quedan filas pendientes). "
-                "Procese correos Gmail primero; los comprobantes A–D válidos pasan a `pagos` y se omiten del Excel."
-                + (
-                    " Si usó filtros de duplicado por documento, pruebe sin ellos."
-                    if (solo_duplicados_documento or excluir_duplicados_documento)
-                    else ""
-                )
-            ),
-        )
-    try:
-        wb = Workbook()
-        ws = wb.active
-        ws.title = "Pagos"
-        ws.append(
-            [
-                "Banco",
-                "Cedula",
-                "Fecha",
-                "Monto",
-                "Serial documento",
-                "Correo Pagador",
-                "Gmail message id",
-                "Gmail thread id",
-            ]
-        )
-        for it in items:
-            ws.append(
-                [
-                    it.banco or "",
-                    formatear_cedula(it.cedula or ""),
-                    it.fecha_pago or "",
-                    format_monto_excel_pagos_gmail(it.monto) or (it.monto or ""),
-                    it.numero_referencia or "",
-                    it.correo_origen or "",
-                    getattr(it, "gmail_message_id", None) or "",
-                    getattr(it, "gmail_thread_id", None) or "",
-                ]
-            )
-        buf = io.BytesIO()
-        wb.save(buf)
-        buf.seek(0)
-    except Exception as e:
-        logger.exception("[PAGOS_GMAIL] Error generando Excel temporal: %s", e)
-        raise HTTPException(status_code=500, detail="Error al generar Excel.") from e
-
-    # No se vacia la BD aqui: solo el boton Vaciar tabla puede borrar.
-    from datetime import datetime as dt
-    date_str = dt.utcnow().strftime("%Y-%m-%d")
-    filename = f"Pagos_Gmail_temporal_{date_str}.xlsx"
-    logger.info("[PAGOS_GMAIL] download-excel-temporal OK filas=%s (tabla no se vacia)", len(items))
-    return StreamingResponse(
-        buf,
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": f"attachment; filename={filename}"},
-    )
+    """Descontinuado: pendientes en Pagos con errores tras run-now."""
+    del solo_duplicados_documento, excluir_duplicados_documento, db
+    raise HTTPException(status_code=410, detail=_GMAIL_EXCEL_EXPORT_DEPRECATED)
 
 @router.get("/diagnostico")
 def diagnostico(db: Session = Depends(get_db)):

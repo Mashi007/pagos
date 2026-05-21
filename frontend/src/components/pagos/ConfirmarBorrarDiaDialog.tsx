@@ -45,8 +45,8 @@ export function ConfirmarBorrarDiaDialog({
       : null
 
   const MENSAJE = fechaDatos
-    ? `Se descargará el Excel de pagos del ${fechaDatos}. ¿Vaciar la BD después de descargar? Sí = descarga y vacía BD. No = descarga y mantiene los datos en BD.`
-    : 'Se descargará el Excel. ¿Vaciar la BD después de descargar? Sí = descarga y vacía BD. No = descarga y mantiene los datos en BD.'
+    ? `Procesamiento Gmail del ${fechaDatos} finalizado. ¿Vaciar los datos acumulados del pipeline en el servidor? Sí = borra el lote. No = mantiene los datos para consulta. Los pendientes de revisión deben estar en Pagos con errores.`
+    : 'Procesamiento Gmail finalizado. ¿Vaciar los datos acumulados del pipeline en el servidor? Sí = borra el lote. No = mantiene los datos. Los pendientes de revisión deben estar en Pagos con errores.'
 
   const handleSí = async () => {
     await onElegir(true)

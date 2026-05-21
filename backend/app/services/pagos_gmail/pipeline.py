@@ -22,10 +22,10 @@ Orquestacion: Gmail -> Gemini/BD por **cada adjunto elegible** (remitente en cli
 - Remitente fuera de `clientes` (Plan B): A/B con cédula desde imagen; **C (Binance)** con monto+ref legibles se digitaliza con cédula **ERROR EMAIL** (sin auto CUOTAS hasta asociar cliente); D/E/F/NR no aplican.
 - `master@rapicreditca.com` se escanea con las mismas reglas A/B/C/D/E (y Plan B si no está en `clientes`); si no hay etiqueta bancaria final, fallback MANUAL.
 
-Excel de revisión y negocio:
+Revisión y negocio:
 - `pagos_gmail_sync_item` / `gmail_temporal` guardan cada comprobante válido de extracción.
 - Alta automática (A-D/NR) y cascada de cuotas se evalúan en servicios de negocio.
-- Los casos no autoconciliados permanecen para revisión manual en exportes de Gmail.
+- Los casos no autoconciliados pasan a `pagos_con_errores` (migración post-run o manual).
 """
 import hashlib
 import logging
@@ -49,7 +49,7 @@ from app.models.pagos_gmail_sync import PagosGmailSync, PagosGmailSyncItem, Gmai
 def _metricas_resumen_corrida_gmail_pagos(db: Session, sync_id: int) -> dict[str, int]:
     """
     Comprobantes insertados en esta sync vs altas automáticas exitosas (traza con pago_id).
-    Los pendientes de revisión / Excel ≈ comprobantes - válidos.
+    Los pendientes de revisión ≈ comprobantes - válidos (quedan en gmail_temporal → pagos_con_errores).
     """
     from app.models.pagos_gmail_abcd_cuotas_traza import PagosGmailAbcdCuotasTraza
 
@@ -1701,7 +1701,12 @@ def run_pipeline(
                                                     "serial_ya_en_pagos_o_pagos_con_errores=%s",
                                                     fmt_row,
                                                     p.get("filename"),
-                                                    resumen_log_linea_plantilla_abcd(),
+                                                    resumen_log_linea_plantilla_abcd(
+                                                        duplicado_documento=dup_doc,
+                                                        revision_manual_monto=monto_gmail_sync_requiere_revision_manual_usd(
+                                                            p.get("m")
+                                                        ),
+                                                    ),
                                                     dup_doc,
                                                 )
                                                 sid = getattr(si, "id", None)
@@ -1794,7 +1799,7 @@ def run_pipeline(
                                                                     db.commit()
                                                                     logger.info(
                                                                         "[PAGOS_GMAIL] [ABCD_PAGO] "
-                                                                        "gmail_temporal id=%s omitida de Excel "
+                                                                        "gmail_temporal id=%s eliminada "
                                                                         "(CUOTAS_OK, pago en BD)",
                                                                         _gt_del_id,
                                                                     )
@@ -1999,7 +2004,7 @@ def run_pipeline(
                                                                         db.commit()
                                                                         logger.info(
                                                                             "[PAGOS_GMAIL] [NR_PAGO] "
-                                                                            "gmail_temporal id=%s omitida de Excel (CUOTAS_OK)",
+                                                                            "gmail_temporal id=%s eliminada (CUOTAS_OK)",
                                                                             _gt_del_id,
                                                                         )
                                                                     except Exception as _gt_exc:
@@ -2380,7 +2385,7 @@ def run_pipeline(
         }
         logger.info(
             "[PAGOS_GMAIL] FIN pipeline: correos=%d comprobantes=%d archivos=%d | "
-            "alta_automatica_ok=%d pendientes_revision_excel=%d (sync_id=%s)",
+            "alta_automatica_ok=%d pendientes_revision=%d (sync_id=%s)",
             emails_ok,
             _pagos_metrics["comprobantes_digitados"],
             files_ok,

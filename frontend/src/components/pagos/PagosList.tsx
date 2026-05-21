@@ -190,8 +190,6 @@ function pagoElegibleConciliarAplicar(
   return true
 }
 
-/** Si false, la opción "Descargar Excel" (Gmail) no se muestra en el submenú Agregar pago. */
-const SHOW_DESCARGA_EXCEL_EN_SUBMENU = false
 const GMAIL_METRICS_SNAPSHOT_KEY = 'pagos:last_gmail_metrics_snapshot'
 
 export function PagosList() {
@@ -258,7 +256,6 @@ export function PagosList() {
   const [isImportingCobros, setIsImportingCobros] = useState(false)
   const [isExportingRevisionPagos, setIsExportingRevisionPagos] =
     useState(false)
-  const [isDescargandoGmailExcel, setIsDescargandoGmailExcel] = useState(false)
   const [showVaciarTablaGmail, setShowVaciarTablaGmail] = useState(false)
   const [isVaciarTablaGmail, setIsVaciarTablaGmail] = useState(false)
   const [showBorradoresEscanerDialog, setShowBorradoresEscanerDialog] =
@@ -2417,7 +2414,7 @@ export function PagosList() {
                   >
                     <Mail className="h-5 w-5 text-gray-600" />
                     <span className="font-medium text-gray-800">
-                      Generar Excel desde email
+                      Correos Gmail
                     </span>
                     <ChevronRight
                       className={cn(
@@ -2475,42 +2472,6 @@ export function PagosList() {
                   )}
                 </div>
 
-                {SHOW_DESCARGA_EXCEL_EN_SUBMENU && submenuGmailOpen && (
-                  <button
-                    type="button"
-                    className="ml-2 flex w-full items-center gap-3 rounded-md border-l-2 border-gray-200 px-4 py-3 pl-5 text-left hover:bg-blue-50 disabled:opacity-50"
-                    onClick={async () => {
-                      setAgregarPagoOpen(false)
-                      setIsDescargandoGmailExcel(true)
-                      try {
-                        await pagoService.downloadGmailExcel(
-                          gmailStatus?.latest_data_date ?? undefined
-                        )
-                        toast.success('Excel descargado')
-                        pagoService.getGmailStatus().then(setGmailStatus)
-                      } catch (e) {
-                        toast.error(getErrorMessage(e))
-                      } finally {
-                        setIsDescargandoGmailExcel(false)
-                      }
-                    }}
-                    disabled={
-                      isDescargandoGmailExcel || !gmailStatus?.latest_data_date
-                    }
-                  >
-                    <Download className="h-5 w-5 text-gray-600" />
-                    <span>
-                      {isDescargandoGmailExcel
-                        ? 'Descargando...'
-                        : 'Descargar Excel'}
-                    </span>
-                    {gmailStatus?.latest_data_date && (
-                      <span className="ml-auto text-xs text-gray-500">
-                        disponible: {gmailStatus.latest_data_date}
-                      </span>
-                    )}
-                  </button>
-                )}
               </div>
             </PopoverContent>
           </Popover>
