@@ -1,9 +1,16 @@
-import { useCallback, useEffect, useState, type ReactNode } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from 'react'
 
 import { useQueryClient } from '@tanstack/react-query'
 import { useLocation, useNavigate } from 'react-router-dom'
 
 import {
+  BarChart3,
   Bell,
   CheckCircle2,
   Download,
@@ -52,14 +59,18 @@ import {
   type FiniquitoCasoItem,
   finiquitoAdminConteoRevisionNuevos,
   finiquitoAdminListar,
+  finiquitoAdminListarTerminados,
   finiquitoAdminPatchEstado,
   finiquitoAdminRefreshMaterializado,
+  finiquitoAdminResumenTerminadosSemanal,
   type FiniquitoRefreshStats,
+  type FiniquitoTerminadoItem,
   FINIQUITO_HORAS_NUEVOS_REVISION_DEFAULT,
 } from '../services/finiquitoService'
+import { descargarTerminadosExcel } from '../utils/finiquitoTerminadosExcelExport'
 import { prestamoService } from '../services/prestamoService'
 
-import { cn, formatDate } from '../utils'
+import { cn, formatCurrency, formatDate } from '../utils'
 import { invalidatePrestamosQueries } from '../hooks/usePrestamos'
 import { usePermissions } from '../hooks/usePermissions'
 import { Card, CardContent } from '../components/ui/card'
@@ -185,6 +196,79 @@ function casoCoincideCedula(caso: FiniquitoCasoItem, filtro: string): boolean {
     .includes(f)
 }
 
+function textoFechaTabla(iso: string | null | undefined): string {
+  if (iso == null || String(iso).trim() === '') return '-'
+  try {
+    return formatDate(String(iso))
+  } catch {
+    return String(iso)
+  }
+}
+
+type FiltrosTerminadosTabla = {
+  nombre: string
+  total: string
+  fechaAprobacion: string
+  fechaTerminoPago: string
+  fechaTerminado: string
+}
+
+function terminadoCoincideFiltroTexto(
+  valor: string,
+  filtro: string
+): boolean {
+  const f = filtro.trim().toLowerCase()
+  if (!f) return true
+  return valor.toLowerCase().includes(f)
+}
+
+function terminadoCoincideFiltroFecha(
+  iso: string | null | undefined,
+  filtro: string
+): boolean {
+  const f = filtro.trim().toLowerCase()
+  if (!f) return true
+  if (iso == null || String(iso).trim() === '') return false
+  const raw = String(iso).toLowerCase()
+  const legible = textoFechaTabla(iso).toLowerCase()
+  return raw.includes(f) || legible.includes(f)
+}
+
+function terminadoCoincideFiltrosTabla(
+  row: FiniquitoTerminadoItem,
+  filtros: FiltrosTerminadosTabla
+): boolean {
+  if (!terminadoCoincideFiltroTexto(row.nombre, filtros.nombre)) return false
+  const t = filtros.total.trim().toLowerCase()
+  if (t) {
+    const raw = String(row.total_financiamiento).toLowerCase()
+    const fmt = formatCurrency(Number(row.total_financiamiento)).toLowerCase()
+    if (!raw.includes(t) && !fmt.includes(t)) return false
+  }
+  if (
+    !terminadoCoincideFiltroFecha(
+      row.fecha_aprobacion,
+      filtros.fechaAprobacion
+    )
+  ) {
+    return false
+  }
+  if (
+    !terminadoCoincideFiltroFecha(
+      row.fecha_termino_pago,
+      filtros.fechaTerminoPago
+    )
+  ) {
+    return false
+  }
+  if (
+    !terminadoCoincideFiltroFecha(row.fecha_terminado, filtros.fechaTerminado)
+  ) {
+    return false
+  }
+  return true
+}
+
 function reconciliarCasoEnLista(
   prev: FiniquitoCasoItem[],
   caso: FiniquitoCasoItem,
@@ -289,6 +373,26 @@ function FiniquitoGestionPageInner() {
     total: number
     ventana_horas: number
   } | null>(null)
+  const [cedulaTerminadosInput, setCedulaTerminadosInput] = useState('')
+  const [cedulaTerminadosBusqueda, setCedulaTerminadosBusqueda] = useState('')
+  const [itemsTerminados, setItemsTerminados] = useState<FiniquitoTerminadoItem[]>(
+    []
+  )
+  const [totalTerminados, setTotalTerminados] = useState(0)
+  const [resumenSemanas, setResumenSemanas] = useState<
+    { semana: string; etiqueta: string; cantidad: number }[]
+  >([])
+  const [totalTerminadosResumen, setTotalTerminadosResumen] = useState(0)
+  const [filtrosTerminados, setFiltrosTerminados] =
+    useState<FiltrosTerminadosTabla>({
+      nombre: '',
+      total: '',
+      fechaAprobacion: '',
+      fechaTerminoPago: '',
+      fechaTerminado: '',
+    })
+  const [descargandoTerminadosExcel, setDescargandoTerminadosExcel] =
+    useState(false)
 
   useEffect(() => {
     const t = window.setTimeout(
@@ -306,6 +410,14 @@ function FiniquitoGestionPageInner() {
     return () => window.clearTimeout(t)
   }, [cedulaTrabajoInput])
 
+  useEffect(() => {
+    const t = window.setTimeout(
+      () => setCedulaTerminadosBusqueda(cedulaTerminadosInput.trim()),
+      DEBOUNCE_MS
+    )
+    return () => window.clearTimeout(t)
+  }, [cedulaTerminadosInput])
+
   const cargarListas = useCallback(
     async (opts?: { silent?: boolean }) => {
       const silent = opts?.silent === true
@@ -313,31 +425,39 @@ function FiniquitoGestionPageInner() {
         setLoading(true)
       }
       try {
-        const [rTrabajo, rRech, rBandeja, rNuevos] = await Promise.all([
-          finiquitoAdminListar(
-            undefined,
-            cedulaTrabajoBusqueda || undefined,
-            'ACEPTADO,EN_PROCESO',
-            { limit: FETCH_LIMIT, offset: 0 }
-          ),
-          finiquitoAdminListar('RECHAZADO', undefined, undefined, {
-            limit: FETCH_LIMIT,
-            offset: 0,
-          }),
-          finiquitoAdminListar(
-            'REVISION',
-            cedulaBusqueda || undefined,
-            undefined,
-            {
-              limit: BANDEJA_PRINCIPAL_FETCH_LIMIT,
+        const [rTrabajo, rRech, rBandeja, rNuevos, rTerm, rSem] =
+          await Promise.all([
+            finiquitoAdminListar(
+              undefined,
+              cedulaTrabajoBusqueda || undefined,
+              'ACEPTADO,EN_PROCESO',
+              { limit: FETCH_LIMIT, offset: 0 }
+            ),
+            finiquitoAdminListar('RECHAZADO', undefined, undefined, {
+              limit: FETCH_LIMIT,
               offset: 0,
-            }
-          ),
-          finiquitoAdminConteoRevisionNuevos(
-            cedulaBusqueda || undefined,
-            FINIQUITO_HORAS_NUEVOS_REVISION_DEFAULT
-          ),
-        ])
+            }),
+            finiquitoAdminListar(
+              'REVISION',
+              cedulaBusqueda || undefined,
+              undefined,
+              {
+                limit: BANDEJA_PRINCIPAL_FETCH_LIMIT,
+                offset: 0,
+              }
+            ),
+            finiquitoAdminConteoRevisionNuevos(
+              cedulaBusqueda || undefined,
+              FINIQUITO_HORAS_NUEVOS_REVISION_DEFAULT
+            ),
+            finiquitoAdminListarTerminados(cedulaTerminadosBusqueda || undefined, {
+              limit: FETCH_LIMIT,
+              offset: 0,
+            }),
+            finiquitoAdminResumenTerminadosSemanal(
+              cedulaTerminadosBusqueda || undefined
+            ),
+          ])
         setItemsAreaTrabajo(rTrabajo.items || [])
         setTotalAreaTrabajo(rTrabajo.total ?? (rTrabajo.items || []).length)
         setItemsRechazados(rRech.items || [])
@@ -349,8 +469,16 @@ function FiniquitoGestionPageInner() {
           ventana_horas:
             rNuevos.ventana_horas ?? FINIQUITO_HORAS_NUEVOS_REVISION_DEFAULT,
         })
+        setItemsTerminados(rTerm.items || [])
+        setTotalTerminados(rTerm.total ?? (rTerm.items || []).length)
+        setResumenSemanas(rSem.semanas || [])
+        setTotalTerminadosResumen(rSem.total_terminados ?? 0)
       } catch (e: unknown) {
         setKpiNuevosRevision(null)
+        setItemsTerminados([])
+        setTotalTerminados(0)
+        setResumenSemanas([])
+        setTotalTerminadosResumen(0)
         toast.error(e instanceof Error ? e.message : 'Error al cargar')
       } finally {
         if (!silent) {
@@ -358,8 +486,21 @@ function FiniquitoGestionPageInner() {
         }
       }
     },
-    [cedulaBusqueda, cedulaTrabajoBusqueda]
+    [cedulaBusqueda, cedulaTrabajoBusqueda, cedulaTerminadosBusqueda]
   )
+
+  const itemsTerminadosFiltrados = useMemo(
+    () =>
+      itemsTerminados.filter(row =>
+        terminadoCoincideFiltrosTabla(row, filtrosTerminados)
+      ),
+    [itemsTerminados, filtrosTerminados]
+  )
+
+  const maxSemanaCantidad = useMemo(() => {
+    const vals = resumenSemanas.map(s => s.cantidad)
+    return Math.max(1, ...vals, 0)
+  }, [resumenSemanas])
 
   /** Mueve filas locales al instante con el caso devuelto por PATCH (antes del refetch). */
   const incorporarCasoActualizado = useCallback(
@@ -517,6 +658,39 @@ function FiniquitoGestionPageInner() {
   const limpiarCedulaTrabajo = () => {
     setCedulaTrabajoInput('')
     setCedulaTrabajoBusqueda('')
+  }
+
+  const limpiarCedulaTerminados = () => {
+    setCedulaTerminadosInput('')
+    setCedulaTerminadosBusqueda('')
+  }
+
+  const limpiarFiltrosTerminadosTabla = () => {
+    setFiltrosTerminados({
+      nombre: '',
+      total: '',
+      fechaAprobacion: '',
+      fechaTerminoPago: '',
+      fechaTerminado: '',
+    })
+  }
+
+  const exportarTerminadosExcel = async () => {
+    if (!itemsTerminadosFiltrados.length) {
+      toast.error('No hay filas para exportar con los filtros actuales')
+      return
+    }
+    setDescargandoTerminadosExcel(true)
+    try {
+      await descargarTerminadosExcel(itemsTerminadosFiltrados, {
+        cedulaFiltro: cedulaTerminadosBusqueda || 'todos',
+      })
+      toast.success('Excel de terminados descargado')
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'Error al exportar Excel')
+    } finally {
+      setDescargandoTerminadosExcel(false)
+    }
   }
 
   const casoTieneAccionPendiente = (casoId: number) =>
@@ -1354,6 +1528,298 @@ function FiniquitoGestionPageInner() {
               </>
             )}
           </div>
+        </div>
+      </section>
+      <section
+        className={cn(
+          'overflow-hidden rounded-2xl border border-violet-200/90 bg-white shadow-md',
+          'ring-1 ring-violet-100/80'
+        )}
+        aria-labelledby="finiquito-terminados-titulo"
+      >
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-violet-200/80 bg-gradient-to-r from-violet-900 to-violet-600 px-4 py-3.5 text-white sm:px-5">
+          <div className="flex items-center gap-3">
+            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/15 shadow-inner">
+              <CheckCircle2 className="h-5 w-5" aria-hidden />
+            </span>
+            <div>
+              <h2
+                id="finiquito-terminados-titulo"
+                className="text-sm font-bold tracking-tight sm:text-base"
+              >
+                Casos terminados
+              </h2>
+              <p className="text-xs text-violet-100">
+                Pasivos tras marcar Terminado · {totalTerminadosResumen} en total
+                {cedulaTerminadosBusqueda
+                  ? ` (filtro cédula: ${cedulaTerminadosBusqueda})`
+                  : ''}
+              </p>
+            </div>
+          </div>
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            className="h-9 shrink-0 border-white/30 bg-white/15 text-white hover:bg-white/25"
+            disabled={
+              descargandoTerminadosExcel || itemsTerminadosFiltrados.length === 0
+            }
+            onClick={() => void exportarTerminadosExcel()}
+          >
+            {descargandoTerminadosExcel ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
+            ) : (
+              <Download className="mr-2 h-4 w-4" aria-hidden />
+            )}
+            Descargar Excel
+          </Button>
+        </div>
+        <div className="border-b border-violet-200/70 bg-violet-50/40 px-4 py-4 sm:px-5">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <p className="max-w-xl text-xs text-slate-600">
+              Resumen por semana ISO (fecha en que se marcó Terminado). Use el
+              filtro de cédula para acotar el gráfico y el listado (~
+              {DEBOUNCE_MS / 1000} s de espera).
+            </p>
+            <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-end lg:w-auto lg:min-w-[320px]">
+              <div className="min-w-0 flex-1 space-y-1.5">
+                <Label
+                  htmlFor="finiquito-filtro-cedula-terminados"
+                  className="text-xs font-semibold text-slate-700"
+                >
+                  Buscar por cédula
+                </Label>
+                <div className="relative">
+                  <Search
+                    className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+                    aria-hidden
+                  />
+                  <Input
+                    id="finiquito-filtro-cedula-terminados"
+                    type="search"
+                    autoComplete="off"
+                    placeholder="Ej. V12345678"
+                    value={cedulaTerminadosInput}
+                    onChange={e => setCedulaTerminadosInput(e.target.value)}
+                    className="h-10 border-slate-300 bg-white pl-9 pr-10 font-mono text-sm"
+                  />
+                  {cedulaTerminadosInput ? (
+                    <button
+                      type="button"
+                      className="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+                      onClick={limpiarCedulaTerminados}
+                      title="Limpiar filtro"
+                      aria-label="Limpiar filtro de cédula en terminados"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+          </div>
+          {resumenSemanas.length === 0 ? (
+            <p className="mt-4 rounded-lg border border-dashed border-violet-200/90 bg-white/60 px-4 py-6 text-center text-sm text-slate-600">
+              {loading
+                ? 'Cargando resumen…'
+                : 'Sin casos terminados en el periodo mostrado.'}
+            </p>
+          ) : (
+            <div
+              className="mt-4 flex items-end gap-2 overflow-x-auto pb-2 pt-1"
+              role="img"
+              aria-label="Gráfico de casos terminados por semana"
+            >
+              <BarChart3
+                className="mb-6 h-5 w-5 shrink-0 text-violet-700"
+                aria-hidden
+              />
+              {resumenSemanas.map(s => (
+                <div
+                  key={s.semana}
+                  className="flex min-w-[3.25rem] flex-col items-center gap-1"
+                  title={`${s.etiqueta}: ${s.cantidad} caso(s)`}
+                >
+                  <span className="text-[10px] font-semibold tabular-nums text-violet-900">
+                    {s.cantidad}
+                  </span>
+                  <div
+                    className="w-10 rounded-t-md bg-violet-500/90 transition-all"
+                    style={{
+                      height: `${Math.max(12, Math.round((s.cantidad / maxSemanaCantidad) * 120))}px`,
+                    }}
+                  />
+                  <span className="max-w-[4.5rem] text-center text-[9px] leading-tight text-slate-600">
+                    {s.etiqueta}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="border-b border-violet-100 bg-slate-50/80 px-3 py-3 sm:px-4">
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+            <Input
+              placeholder="Filtrar nombre"
+              value={filtrosTerminados.nombre}
+              onChange={e =>
+                setFiltrosTerminados(prev => ({
+                  ...prev,
+                  nombre: e.target.value,
+                }))
+              }
+              className="h-9 bg-white text-sm"
+              aria-label="Filtrar por nombre"
+            />
+            <Input
+              placeholder="Filtrar total financ."
+              value={filtrosTerminados.total}
+              onChange={e =>
+                setFiltrosTerminados(prev => ({
+                  ...prev,
+                  total: e.target.value,
+                }))
+              }
+              className="h-9 bg-white text-sm"
+              aria-label="Filtrar por total de financiamiento"
+            />
+            <Input
+              placeholder="Filtrar fecha aprobación"
+              value={filtrosTerminados.fechaAprobacion}
+              onChange={e =>
+                setFiltrosTerminados(prev => ({
+                  ...prev,
+                  fechaAprobacion: e.target.value,
+                }))
+              }
+              className="h-9 bg-white text-sm"
+              aria-label="Filtrar por fecha de aprobación"
+            />
+            <Input
+              placeholder="Filtrar último pago"
+              value={filtrosTerminados.fechaTerminoPago}
+              onChange={e =>
+                setFiltrosTerminados(prev => ({
+                  ...prev,
+                  fechaTerminoPago: e.target.value,
+                }))
+              }
+              className="h-9 bg-white text-sm"
+              aria-label="Filtrar por fecha de término de pago"
+            />
+            <Input
+              placeholder="Filtrar fecha terminado"
+              value={filtrosTerminados.fechaTerminado}
+              onChange={e =>
+                setFiltrosTerminados(prev => ({
+                  ...prev,
+                  fechaTerminado: e.target.value,
+                }))
+              }
+              className="h-9 bg-white text-sm"
+              aria-label="Filtrar por fecha en que se marcó terminado"
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-9 border-slate-300 bg-white text-xs"
+              onClick={limpiarFiltrosTerminadosTabla}
+            >
+              Limpiar filtros tabla
+            </Button>
+          </div>
+        </div>
+        <div className="bg-gradient-to-b from-violet-50/40 to-white p-3 sm:p-4">
+          {loading ? (
+            <div className="flex justify-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin text-violet-600/70" />
+            </div>
+          ) : itemsTerminadosFiltrados.length === 0 ? (
+            <p className="rounded-lg border border-dashed border-violet-200/80 bg-white/60 px-4 py-10 text-center text-sm text-slate-600">
+              {itemsTerminados.length === 0
+                ? 'No hay casos terminados. Aparecerán aquí al confirmar Terminado en el área de trabajo.'
+                : 'Ningún caso coincide con los filtros de la tabla.'}
+            </p>
+          ) : (
+            <>
+              <div
+                className={cn(
+                  'overflow-auto rounded-lg border border-slate-200',
+                  TABLA_SCROLL_MAX_H_COMPACTO
+                )}
+              >
+                <Table>
+                  <TableHeader className={theadStickyClass}>
+                    <TableRow>
+                      <TableHead className={thGestion}>Cédula</TableHead>
+                      <TableHead className={thGestion}>Nombre</TableHead>
+                      <TableHead className={thGestion}>
+                        Total financ.
+                      </TableHead>
+                      <TableHead className={thGestion}>
+                        Fecha aprobación
+                      </TableHead>
+                      <TableHead className={thGestion}>
+                        Último pago
+                      </TableHead>
+                      <TableHead className={thGestion}>
+                        Fecha terminado
+                      </TableHead>
+                      <TableHead className={thGestion}>Contacto</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {itemsTerminadosFiltrados.map((row, idx) => (
+                      <TableRow
+                        key={row.id}
+                        className={idx % 2 === 0 ? trEven : trOdd}
+                      >
+                        <TableCell
+                          className={cn(tdGestion, 'font-mono text-xs')}
+                        >
+                          {row.cedula}
+                        </TableCell>
+                        <TableCell className={tdGestion}>
+                          {row.nombre || '-'}
+                        </TableCell>
+                        <TableCell className={cn(tdGestion, 'tabular-nums')}>
+                          {formatCurrency(Number(row.total_financiamiento))}
+                        </TableCell>
+                        <TableCell className={tdGestion}>
+                          {textoFechaTabla(row.fecha_aprobacion)}
+                        </TableCell>
+                        <TableCell className={tdGestion}>
+                          {textoFechaTabla(row.fecha_termino_pago)}
+                        </TableCell>
+                        <TableCell className={tdGestion}>
+                          {textoFechaTabla(row.fecha_terminado)}
+                        </TableCell>
+                        <TableCell className={tdGestion}>
+                          {row.contacto_para_siguientes == null
+                            ? '-'
+                            : row.contacto_para_siguientes
+                              ? 'Sí'
+                              : 'No'}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+              <FiniquitoTablaScrollHint
+                total={totalTerminados}
+                cargados={itemsTerminadosFiltrados.length}
+              />
+              {itemsTerminadosFiltrados.length !== itemsTerminados.length ? (
+                <p className="mt-2 text-center text-[11px] text-slate-500">
+                  Mostrando {itemsTerminadosFiltrados.length} de{' '}
+                  {itemsTerminados.length} filas cargadas (filtros de tabla).
+                </p>
+              ) : null}
+            </>
+          )}
         </div>
       </section>
       <Dialog

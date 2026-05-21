@@ -124,3 +124,46 @@ class FiniquitoDetalleResponse(BaseModel):
     caso: FiniquitoCasoOut
     prestamo: Optional[dict[str, Any]] = None
     cuotas: Optional[List[dict[str, Any]]] = None
+
+
+class FiniquitoTerminadoItemOut(BaseModel):
+    """Caso en estado TERMINADO con fechas de prestamo e historial."""
+
+    id: int
+    prestamo_id: int
+    cedula: str
+    nombre: str
+    total_financiamiento: str
+    fecha_aprobacion: Optional[str] = Field(
+        default=None,
+        description="Desde prestamos.fecha_aprobacion (ISO).",
+    )
+    fecha_termino_pago: Optional[str] = Field(
+        default=None,
+        description="Ultima fecha_pago en pagos para el prestamo (ISO date).",
+    )
+    fecha_terminado: Optional[str] = Field(
+        default=None,
+        description="Fecha en que el caso paso a TERMINADO (historial de estados).",
+    )
+    contacto_para_siguientes: Optional[bool] = None
+
+
+class FiniquitoTerminadosListaResponse(BaseModel):
+    items: List[FiniquitoTerminadoItemOut]
+    total: int
+    limit: int
+    offset: int
+
+
+class FiniquitoTerminadosSemanaOut(BaseModel):
+    """Conteo de casos terminados agrupados por semana ISO (lunes)."""
+
+    semana: str = Field(..., description="Clave ISO, ej. 2026-W20")
+    etiqueta: str = Field(..., description="Etiqueta corta para grafico, ej. Sem 20 · 2026")
+    cantidad: int = Field(..., ge=0)
+
+
+class FiniquitoTerminadosResumenSemanalResponse(BaseModel):
+    semanas: List[FiniquitoTerminadosSemanaOut]
+    total_terminados: int = Field(..., ge=0)

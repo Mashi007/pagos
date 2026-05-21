@@ -14,7 +14,8 @@ from typing import Any, List, Optional, Set, Tuple
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.conciliacion_sheet import ConciliacionSheetMeta, ConciliacionSheetRow
+from app.models.conciliacion_sheet import ConciliacionSheetRow
+from app.services.conciliacion_sheet_meta_access import get_conciliacion_sheet_meta
 from app.services.reporte_clientes_hoja import (
     _as_text,
     _norm_lote_celda,
@@ -195,7 +196,7 @@ def build_prestamos_drive_excel(
         sorted(int(x) for x in lotes_set),
     )
 
-    meta = db.get(ConciliacionSheetMeta, 1)
+    meta = get_conciliacion_sheet_meta(db)
     headers = list(meta.headers) if meta and meta.headers else []
     if not headers:
         raise ValueError(

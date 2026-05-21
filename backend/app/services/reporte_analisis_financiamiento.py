@@ -15,7 +15,8 @@ from typing import Any, Dict, List, Optional, Tuple
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.conciliacion_sheet import ConciliacionSheetMeta, ConciliacionSheetRow
+from app.models.conciliacion_sheet import ConciliacionSheetRow
+from app.services.conciliacion_sheet_meta_access import get_conciliacion_sheet_meta
 from app.models.prestamo import Prestamo
 from app.utils.cedula_almacenamiento import normalizar_cedula_almacenamiento
 
@@ -118,7 +119,7 @@ def build_analisis_financiamiento_excel(db: Session) -> Tuple[bytes, int]:
 
     logger.info("[analisis_financiamiento] build_analisis_financiamiento_excel inicio")
 
-    meta = db.get(ConciliacionSheetMeta, 1)
+    meta = get_conciliacion_sheet_meta(db)
     headers = list(meta.headers) if meta and meta.headers else []
     if not headers:
         logger.warning("[analisis_financiamiento] abort: sin cabeceras en conciliacion_sheet_meta")

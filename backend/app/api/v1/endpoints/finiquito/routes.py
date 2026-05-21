@@ -5,9 +5,10 @@ Finiquito: casos materializados solo para prestamos LIQUIDADO con cuotas = finan
 from __future__ import annotations
 
 import logging
+from collections import Counter
 from datetime import date, datetime, timedelta
 from decimal import Decimal
-from typing import Any, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.encoders import jsonable_encoder
@@ -47,6 +48,10 @@ from app.schemas.finiquito import (
     FiniquitoDetalleResponse,
     FiniquitoPatchEstadoRequest,
     FiniquitoPatchEstadoResponse,
+    FiniquitoTerminadoItemOut,
+    FiniquitoTerminadosListaResponse,
+    FiniquitoTerminadosResumenSemanalResponse,
+    FiniquitoTerminadosSemanaOut,
     FiniquitoRegistroRequest,
     FiniquitoRegistroResponse,
     FiniquitoSolicitarCodigoRequest,
@@ -221,6 +226,116 @@ def _map_finiquito_tramite_fecha_limite_por_prestamo(
         .all()
     )
     return {int(r[0]): r[1] for r in rows}
+
+
+def _map_fecha_terminado_por_caso(db: Session, caso_ids: List[int]) -> Dict[int, Any]:
+    """MAX(creado_en) en historial donde estado_nuevo = TERMINADO, por caso_id."""
+    seen: set[int] = set()
+    uniq: List[int] = []
+    for i in caso_ids:
+        if i is None:
+            continue
+        ii = int(i)
+        if ii not in seen:
+            seen.add(ii)
+            uniq.append(ii)
+    if not uniq:
+        return {}
+    rows = (
+        db.query(
+            FiniquitoEstadoHistorial.caso_id,
+            func.max(FiniquitoEstadoHistorial.creado_en).label("mx"),
+        )
+        .filter(
+            FiniquitoEstadoHistorial.caso_id.in_(uniq),
+            FiniquitoEstadoHistorial.estado_nuevo == "TERMINADO",
+        )
+        .group_by(FiniquitoEstadoHistorial.caso_id)
+        .all()
+    )
+    return {int(r.caso_id): r.mx for r in rows if r.mx is not None}
+
+
+def _map_prestamo_nombre_fecha_aprobacion(
+    db: Session, prestamo_ids: List[int]
+) -> Dict[int, Tuple[Optional[str], Optional[Any]]]:
+    seen: set[int] = set()
+    uniq: List[int] = []
+    for i in prestamo_ids:
+        if i is None:
+            continue
+        ii = int(i)
+        if ii not in seen:
+            seen.add(ii)
+            uniq.append(ii)
+    if not uniq:
+        return {}
+    rows = (
+        db.query(Prestamo.id, Prestamo.nombres, Prestamo.fecha_aprobacion)
+        .filter(Prestamo.id.in_(uniq))
+        .all()
+    )
+    return {int(r[0]): (r[1], r[2]) for r in rows}
+
+
+def _semana_iso_key(d: date) -> str:
+    y, w, _ = d.isocalendar()
+    return f"{y}-W{w:02d}"
+
+
+def _etiqueta_semana_iso(d: date) -> str:
+    y, w, _ = d.isocalendar()
+    return f"Sem {w} · {y}"
+
+
+def _terminados_items_from_casos(
+    db: Session, casos: List[FiniquitoCaso]
+) -> List[FiniquitoTerminadoItemOut]:
+    if not casos:
+        return []
+    caso_ids = [c.id for c in casos]
+    prestamo_ids = [c.prestamo_id for c in casos]
+    cliente_ids = [c.cliente_id for c in casos if c.cliente_id]
+    mp = _map_ultima_fecha_pago_por_prestamo(db, prestamo_ids)
+    ft = _map_fecha_terminado_por_caso(db, caso_ids)
+    pr = _map_prestamo_nombre_fecha_aprobacion(db, prestamo_ids)
+    clmap = _map_clientes_por_id(db, cliente_ids)
+    items: List[FiniquitoTerminadoItemOut] = []
+    for c in casos:
+        nombre = ""
+        cl = clmap.get(int(c.cliente_id)) if c.cliente_id else None
+        if cl and (cl.nombres or "").strip():
+            nombre = (cl.nombres or "").strip()
+        pr_row = pr.get(int(c.prestamo_id))
+        if not nombre and pr_row and pr_row[0]:
+            nombre = str(pr_row[0]).strip()
+        fa = _dt_iso(pr_row[1]) if pr_row else None
+        ufp_raw = mp.get(c.prestamo_id)
+        ufp = _dt_iso(ufp_raw) if ufp_raw is not None else None
+        if ufp and "T" in ufp:
+            ufp = ufp.split("T", 1)[0]
+        ft_raw = ft.get(c.id)
+        fterm = _dt_iso(ft_raw) if ft_raw is not None else None
+        cps: Optional[bool] = None
+        if finiquito_casos_has_contacto_para_siguientes(db):
+            try:
+                cps = c.contacto_para_siguientes
+            except Exception:
+                cps = None
+        items.append(
+            FiniquitoTerminadoItemOut(
+                id=c.id,
+                prestamo_id=c.prestamo_id,
+                cedula=c.cedula or "",
+                nombre=nombre,
+                total_financiamiento=str(c.total_financiamiento),
+                fecha_aprobacion=fa,
+                fecha_termino_pago=ufp,
+                fecha_terminado=fterm,
+                contacto_para_siguientes=cps,
+            )
+        )
+    return items
 
 
 def _map_fecha_liquidado_por_prestamo(db: Session, prestamo_ids: List[int]) -> dict[int, Any]:
@@ -936,6 +1051,100 @@ def finiquito_admin_conteo_revision_nuevos(
     total = int(total_raw or 0)
     return FiniquitoConteoRevisionNuevosResponse(
         total=total, ventana_horas=int(horas)
+    )
+
+
+@router.get(
+    "/admin/casos/terminados/resumen-semanal",
+    response_model=FiniquitoTerminadosResumenSemanalResponse,
+)
+def finiquito_admin_terminados_resumen_semanal(
+    semanas: int = Query(
+        16,
+        ge=4,
+        le=52,
+        description="Cantidad maxima de semanas ISO recientes a devolver en el grafico.",
+    ),
+    cedula: Optional[str] = Query(
+        None,
+        description="Subcadena de cedula (coincidencia parcial), misma regla que GET /admin/casos.",
+    ),
+    db: Session = Depends(get_db),
+    _: UserResponse = Depends(require_admin_or_operator),
+):
+    """Conteo de casos TERMINADO agrupados por semana ISO de la fecha de cierre (historial)."""
+    q = db.query(FiniquitoCaso).filter(FiniquitoCaso.estado == "TERMINADO")
+    if cedula and cedula.strip():
+        q = q.filter(FiniquitoCaso.cedula.ilike(f"%{cedula.strip()}%"))
+    casos = q.all()
+    ft = _map_fecha_terminado_por_caso(db, [c.id for c in casos])
+    ctr: Counter[str] = Counter()
+    for c in casos:
+        raw = ft.get(c.id)
+        if raw is None:
+            continue
+        d = raw.date() if hasattr(raw, "date") else raw
+        if not isinstance(d, date):
+            continue
+        ctr[_semana_iso_key(d)] += 1
+    keys_sorted = sorted(ctr.keys())
+    if len(keys_sorted) > int(semanas):
+        keys_sorted = keys_sorted[-int(semanas) :]
+    semanas_out: List[FiniquitoTerminadosSemanaOut] = []
+    for key in keys_sorted:
+        y_str, w_str = key.split("-W", 1)
+        try:
+            y_i = int(y_str)
+            w_i = int(w_str)
+            d0 = date.fromisocalendar(y_i, w_i, 1)
+            etiqueta = _etiqueta_semana_iso(d0)
+        except (ValueError, TypeError):
+            etiqueta = key
+        semanas_out.append(
+            FiniquitoTerminadosSemanaOut(
+                semana=key,
+                etiqueta=etiqueta,
+                cantidad=int(ctr[key]),
+            )
+        )
+    return FiniquitoTerminadosResumenSemanalResponse(
+        semanas=semanas_out,
+        total_terminados=len(casos),
+    )
+
+
+@router.get(
+    "/admin/casos/terminados",
+    response_model=FiniquitoTerminadosListaResponse,
+)
+def finiquito_admin_listar_terminados(
+    cedula: Optional[str] = Query(
+        None,
+        description="Subcadena de cedula (coincidencia parcial).",
+    ),
+    limit: int = Query(
+        _ADMIN_CASOS_MAX_LIMIT,
+        ge=1,
+        le=_ADMIN_CASOS_MAX_LIMIT,
+        description="Tamano de pagina (max 2000).",
+    ),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db),
+    _: UserResponse = Depends(require_admin_or_operator),
+):
+    """Listado de casos TERMINADO con fechas de aprobacion, ultimo pago y cierre."""
+    filters: List[Any] = [FiniquitoCaso.estado == "TERMINADO"]
+    if cedula and cedula.strip():
+        filters.append(FiniquitoCaso.cedula.ilike(f"%{cedula.strip()}%"))
+    count_q = db.query(func.count(FiniquitoCaso.id)).filter(*filters)
+    list_q = db.query(FiniquitoCaso).filter(*filters)
+    total = int(count_q.scalar() or 0)
+    casos = (
+        list_q.order_by(FiniquitoCaso.id.desc()).offset(offset).limit(limit).all()
+    )
+    items = _terminados_items_from_casos(db, casos)
+    return FiniquitoTerminadosListaResponse(
+        items=items, total=total, limit=limit, offset=offset
     )
 
 

@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.deps import get_current_user
-from app.models.conciliacion_sheet import ConciliacionSheetMeta
+from app.services.conciliacion_sheet_meta_access import get_conciliacion_sheet_meta
 from app.services.reporte_clientes_hoja import parse_lotes_query
 from app.services.reporte_prestamos_drive import build_prestamos_drive_excel
 
@@ -30,7 +30,7 @@ def debug_prestamos_drive_headers(
     DEBUG: Muestra las cabeceras detectadas en la hoja CONCILIACIÓN.
     Útil para diagnóstico cuando falla la detección de columnas.
     """
-    meta = db.get(ConciliacionSheetMeta, 1)
+    meta = get_conciliacion_sheet_meta(db)
     headers = list(meta.headers) if meta and meta.headers else []
     
     logger.warning(

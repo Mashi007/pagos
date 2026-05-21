@@ -1,8 +1,8 @@
 """Metadatos de cobertura de escaneo Drive (última fila + cola Google).
 
-Revision ID: 060_conciliacion_sheet_scan_coverage
-Revises: 059_pagos_gmail_abcd_cuotas_traza
-Create Date: 2026-05-20
+Revision ID: 071_conciliacion_sheet_scan_coverage
+Revises: 070_add_falla_validadores_manual
+Create Date: 2026-05-21
 """
 
 from alembic import op
@@ -10,8 +10,8 @@ import sqlalchemy as sa
 from sqlalchemy import inspect
 
 
-revision = "060_conciliacion_sheet_scan_coverage"
-down_revision = "059_pagos_gmail_abcd_cuotas_traza"
+revision = "071_conciliacion_sheet_scan_coverage"
+down_revision = "070_add_falla_validadores_manual"
 branch_labels = None
 depends_on = None
 

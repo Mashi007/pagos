@@ -19,7 +19,8 @@ from typing import Any, Dict, List, Optional, Tuple
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.models.conciliacion_sheet import ConciliacionSheetMeta, ConciliacionSheetRow
+from app.models.conciliacion_sheet import ConciliacionSheetRow
+from app.services.conciliacion_sheet_meta_access import get_conciliacion_sheet_meta
 from app.models.cuota import Cuota
 from app.models.prestamo import Prestamo
 from app.services.reporte_clientes_hoja import (
@@ -210,7 +211,7 @@ def comparar_abonos_drive_vs_cuotas(
     ).scalar_one()
     total_pagado_cuotas = _to_float_cuota_total(total_row)
 
-    meta = db.get(ConciliacionSheetMeta, 1)
+    meta = get_conciliacion_sheet_meta(db)
     headers: List[str] = list(meta.headers) if meta and meta.headers else []
     synced_at: Optional[str] = None
     hoja_sync_antigua = False
@@ -419,7 +420,7 @@ def conciliacion_sheet_sync_flags_actual(db: Session) -> Dict[str, Any]:
     Antigüedad de la última sync de CONCILIACIÓN respecto a ahora (misma regla que comparar_abonos).
     Útil para fusionar en payloads de caché servidos en listados sin recalcular toda la comparación.
     """
-    meta = db.get(ConciliacionSheetMeta, 1)
+    meta = get_conciliacion_sheet_meta(db)
     synced_at: Optional[str] = None
     hoja_sync_antigua = False
     hoja_sync_antigua_horas: Optional[float] = None

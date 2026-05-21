@@ -23,7 +23,7 @@ from typing import Any, Dict, List
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
-from app.models.conciliacion_sheet import ConciliacionSheetMeta
+from app.services.conciliacion_sheet_meta_access import get_conciliacion_sheet_meta
 from app.models.drive import DriveRow
 from app.models.prestamo_candidato_drive import PrestamoCandidatoDrive
 from app.services.prestamo_candidatos_drive_kpis import conteos_listo_guardar_y_map_por_id
@@ -69,7 +69,7 @@ def ejecutar_refresh_prestamo_candidatos_drive(
     from app.api.v1.endpoints.clientes import _normalizar_cedula_carga_masiva
     from app.api.v1.endpoints.validadores import validate_cedula
 
-    meta = db.get(ConciliacionSheetMeta, 1)
+    meta = get_conciliacion_sheet_meta(db)
     drive_synced_at = meta.synced_at if meta else None
 
     prestamo_counts = conteo_prestamos_por_cedula_norm(db)
@@ -230,7 +230,7 @@ def listar_prestamo_candidatos_drive_snapshot(
     """Último snapshot ordenado por fila de hoja; paginado y filtro opcional por cédula (normalizada)."""
     from app.api.v1.endpoints.clientes import _normalizar_cedula_carga_masiva
 
-    meta = db.get(ConciliacionSheetMeta, 1)
+    meta = get_conciliacion_sheet_meta(db)
     drive_synced_at = meta.synced_at.isoformat() if meta and meta.synced_at else None
 
     filt_norm = ""

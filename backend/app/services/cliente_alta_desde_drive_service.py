@@ -24,7 +24,7 @@ from sqlalchemy.orm import Session
 
 from app.models.auditoria_cliente_alta_desde_drive import AuditoriaClienteAltaDesdeDrive
 from app.models.cliente import Cliente
-from app.models.conciliacion_sheet import ConciliacionSheetMeta
+from app.services.conciliacion_sheet_meta_access import get_conciliacion_sheet_meta
 from app.models.drive import DriveRow
 from app.models.clientes_drive_export_excel_auditoria import ClientesDriveExportExcelAuditoria
 from app.models.drive_clientes_candidatos_cache import DriveClientesCandidatosCache
@@ -179,7 +179,7 @@ def listar_candidatos_desde_drive(db: Session) -> Dict[str, Any]:
         conteos[cmp_e] = conteos.get(cmp_e, 0) + 1
         tmp.append((r, cmp_e))
 
-    meta = db.get(ConciliacionSheetMeta, 1)
+    meta = get_conciliacion_sheet_meta(db)
     synced_at = meta.synced_at.isoformat() if meta and meta.synced_at else None
 
     pending: List[Dict[str, Any]] = []
@@ -332,7 +332,7 @@ def refrescar_cache_candidatos_drive(db: Session) -> Dict[str, Any]:
     Usado por el job diario 04:05 (scheduler) y tras importaciones para alinear la lista sin depender del usuario.
     """
     data = listar_candidatos_desde_drive(db)
-    meta = db.get(ConciliacionSheetMeta, 1)
+    meta = get_conciliacion_sheet_meta(db)
     drive_at = meta.synced_at if meta else None
     row = db.get(DriveClientesCandidatosCache, 1)
     if row is None:
@@ -360,7 +360,7 @@ def obtener_candidatos_drive_para_api(db: Session, *, forzar_calculo: bool = Fal
     Sirve GET /clientes/drive-import/candidatos: usa caché si está alineada con conciliacion_sheet_meta.synced_at;
     si no, recalcula, actualiza caché y devuelve (sin requerir acción manual del usuario).
     """
-    meta = db.get(ConciliacionSheetMeta, 1)
+    meta = get_conciliacion_sheet_meta(db)
     drive_at = meta.synced_at if meta else None
     cache = db.get(DriveClientesCandidatosCache, 1)
 

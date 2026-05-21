@@ -143,3 +143,65 @@ export async function finiquitoAdminRefreshMaterializado() {
     { timeout: 180000 }
   )
 }
+
+export type FiniquitoTerminadoItem = {
+  id: number
+  prestamo_id: number
+  cedula: string
+  nombre: string
+  total_financiamiento: string
+  fecha_aprobacion?: string | null
+  fecha_termino_pago?: string | null
+  fecha_terminado?: string | null
+  contacto_para_siguientes?: boolean | null
+}
+
+export type FiniquitoTerminadosListaResult = {
+  items: FiniquitoTerminadoItem[]
+  total: number
+  limit: number
+  offset: number
+}
+
+export type FiniquitoTerminadosSemana = {
+  semana: string
+  etiqueta: string
+  cantidad: number
+}
+
+export type FiniquitoTerminadosResumenSemanal = {
+  semanas: FiniquitoTerminadosSemana[]
+  total_terminados: number
+}
+
+export async function finiquitoAdminListarTerminados(
+  cedula?: string,
+  pagination?: { limit?: number; offset?: number }
+): Promise<FiniquitoTerminadosListaResult> {
+  const params = new URLSearchParams()
+  const ced = (cedula ?? '').trim()
+  if (ced) params.set('cedula', ced)
+  if (pagination?.limit != null) {
+    params.set('limit', String(pagination.limit))
+  }
+  if (pagination?.offset != null) {
+    params.set('offset', String(pagination.offset))
+  }
+  const q = params.toString() ? `?${params.toString()}` : ''
+  return apiClient.get<FiniquitoTerminadosListaResult>(
+    `${BASE}/admin/casos/terminados${q}`
+  )
+}
+
+export async function finiquitoAdminResumenTerminadosSemanal(
+  cedula?: string,
+  semanas = 16
+): Promise<FiniquitoTerminadosResumenSemanal> {
+  const params = new URLSearchParams()
+  params.set('semanas', String(semanas))
+  const ced = (cedula ?? '').trim()
+  if (ced) params.set('cedula', ced)
+  return apiClient.get<FiniquitoTerminadosResumenSemanal>(
+    `${BASE}/admin/casos/terminados/resumen-semanal?${params.toString()}`
+  )
+}

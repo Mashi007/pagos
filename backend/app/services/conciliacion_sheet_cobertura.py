@@ -13,8 +13,12 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.models.conciliacion_sheet import ConciliacionSheetMeta
 from app.models.drive import DriveRow
+from app.services.conciliacion_sheet_meta_access import (
+    apply_scan_coverage_fields_to_meta,
+    conciliacion_meta_scan_columns_available,
+    get_conciliacion_sheet_meta,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +47,7 @@ def _last_nonempty_sheet_row_in_column_values(
 
 def compute_scan_coverage_from_db(db: Session) -> Dict[str, Any]:
     """Métricas solo desde BD (sin llamar a Google)."""
-    meta = db.get(ConciliacionSheetMeta, 1)
+    meta = get_conciliacion_sheet_meta(db)
     header_row = int(meta.header_row_index or 1) if meta else 1
     row_count_meta = int(meta.row_count or 0) if meta else 0
     expected_last = header_row + row_count_meta if row_count_meta > 0 else header_row
@@ -62,15 +66,20 @@ def compute_scan_coverage_from_db(db: Session) -> Dict[str, Any]:
         and drive_count == row_count_meta
     )
 
-    google_tail = int(meta.google_tail_row_number) if meta and meta.google_tail_row_number else None
+    scan_cols = conciliacion_meta_scan_columns_available(db)
+    google_tail = (
+        int(meta.google_tail_row_number)
+        if scan_cols and meta and meta.google_tail_row_number
+        else None
+    )
     google_probed_at = (
         meta.google_tail_row_probed_at.isoformat()
-        if meta and meta.google_tail_row_probed_at
+        if scan_cols and meta and meta.google_tail_row_probed_at
         else None
     )
     last_data_stored = (
         int(meta.last_data_sheet_row_number)
-        if meta and meta.last_data_sheet_row_number
+        if scan_cols and meta and meta.last_data_sheet_row_number
         else None
     )
 
@@ -183,7 +192,7 @@ def probe_google_sheet_tail_row(
         raise ValueError("CONCILIACION_SHEET_SPREADSHEET_ID no está configurado.")
 
     tab_name = (getattr(settings, "CONCILIACION_SHEET_TAB_NAME", None) or "CONCILIACIÓN").strip()
-    meta = db.get(ConciliacionSheetMeta, 1)
+    meta = get_conciliacion_sheet_meta(db)
     header_row = int(meta.header_row_index or 1) if meta else 1
     hint = db.scalar(select(func.max(DriveRow.sheet_row_number)))
     hint_i = int(hint) if hint is not None else header_row + int(meta.row_count or 0) if meta else header_row
@@ -208,8 +217,12 @@ def probe_google_sheet_tail_row(
     now = datetime.now(timezone.utc)
 
     if persist_meta and meta is not None:
-        meta.google_tail_row_number = google_last
-        meta.google_tail_row_probed_at = now
+        apply_scan_coverage_fields_to_meta(
+            meta,
+            db,
+            google_tail_row_number=google_last,
+            google_tail_row_probed_at=now,
+        )
         meta.updated_at = now
         db.commit()
 
@@ -240,9 +253,13 @@ def record_last_data_row_on_meta(
     run_tail_probe: bool = True,
 ) -> Dict[str, Any]:
     """Tras sync exitoso: guarda última fila de datos e intenta verificar cola en Google."""
-    meta = db.get(ConciliacionSheetMeta, 1)
+    meta = get_conciliacion_sheet_meta(db)
     if meta is not None:
-        meta.last_data_sheet_row_number = int(last_data_sheet_row)
+        apply_scan_coverage_fields_to_meta(
+            meta,
+            db,
+            last_data_sheet_row_number=int(last_data_sheet_row),
+        )
         meta.updated_at = datetime.now(timezone.utc)
         db.flush()
 

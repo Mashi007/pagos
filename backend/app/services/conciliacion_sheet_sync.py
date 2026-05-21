@@ -22,6 +22,10 @@ from app.models.conciliacion_sheet import (
     ConciliacionSheetSyncRun,
 )
 from app.models.drive import DRIVE_COL_COUNT, DRIVE_COLUMN_NAMES, DriveRow
+from app.services.conciliacion_sheet_meta_access import (
+    apply_scan_coverage_fields_to_meta,
+    get_conciliacion_sheet_meta,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -500,7 +504,7 @@ def run_sync_to_db(db: Session) -> Dict[str, Any]:
             )
 
         now = datetime.now(timezone.utc)
-        meta = db.get(ConciliacionSheetMeta, 1)
+        meta = get_conciliacion_sheet_meta(db)
         if meta is None:
             meta = ConciliacionSheetMeta(id=1)
             db.add(meta)
@@ -556,8 +560,12 @@ def run_sync_to_db(db: Session) -> Dict[str, Any]:
 
         last_data_sheet_row = h_idx + 1 + len(data_rows) if data_rows else h_idx + 1
         if meta is not None:
-            meta.google_tail_row_number = column_a_last_row
-            meta.google_tail_row_probed_at = now
+            apply_scan_coverage_fields_to_meta(
+                meta,
+                db,
+                google_tail_row_number=column_a_last_row,
+                google_tail_row_probed_at=now,
+            )
         scan_coverage_payload: Dict[str, Any] = {}
         try:
             from app.services.conciliacion_sheet_cobertura import record_last_data_row_on_meta
@@ -619,7 +627,7 @@ def run_sync_to_db(db: Session) -> Dict[str, Any]:
             duration_ms=int((time.perf_counter() - t0) * 1000),
         )
         db.add(run)
-        meta = db.get(ConciliacionSheetMeta, 1)
+        meta = get_conciliacion_sheet_meta(db)
         if meta is None:
             meta = ConciliacionSheetMeta(id=1)
             db.add(meta)
@@ -721,7 +729,7 @@ def build_conciliacion_sheet_diagnostico(db: Session) -> Dict[str, Any]:
     if not ok_id:
         next_steps.append("Defina CONCILIACION_SHEET_SPREADSHEET_ID en el backend (.env / Render).")
 
-    meta = db.get(ConciliacionSheetMeta, 1)
+    meta = get_conciliacion_sheet_meta(db)
     checks.append(
         {
             "id": "db_conciliacion_sheet_meta",

@@ -27,7 +27,6 @@ from app.core.database import get_db
 from app.core.deps import get_current_user, require_admin_or_operator
 from app.core.config import settings
 from app.models.conciliacion_sheet import (
-    ConciliacionSheetMeta,
     ConciliacionSheetRow,
     ConciliacionSheetSyncRun,
 )
@@ -37,6 +36,7 @@ from app.services.conciliacion_sheet_cobertura import (
     compute_scan_coverage_from_db,
     probe_google_sheet_tail_row,
 )
+from app.services.conciliacion_sheet_meta_access import get_conciliacion_sheet_meta
 from app.services.conciliacion_sheet_sync import (
     build_conciliacion_sheet_diagnostico,
     run_sync_to_db,
@@ -303,7 +303,7 @@ def get_conciliacion_sheet_status(
     db: Session = Depends(get_db),
     _user: UserResponse = Depends(get_current_user),
 ) -> Dict[str, Any]:
-    meta = db.get(ConciliacionSheetMeta, 1)
+    meta = get_conciliacion_sheet_meta(db)
     last_run = db.execute(
         select(ConciliacionSheetSyncRun).order_by(desc(ConciliacionSheetSyncRun.id)).limit(1)
     ).scalars().first()

@@ -19,7 +19,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.models.conciliacion_sheet import ConciliacionSheetMeta, ConciliacionSheetRow
+from app.models.conciliacion_sheet import ConciliacionSheetRow
+from app.services.conciliacion_sheet_meta_access import get_conciliacion_sheet_meta
 from app.models.prestamo import Prestamo
 from app.services.comparar_abonos_drive_cuotas_service import (
     _HORAS_SYNC_CONSIDERADA_ANTIGUA,
@@ -82,7 +83,7 @@ class ConciliacionSheetLookupContext:
         ).strip()
         q_ok, range_start, range_end, range_raw = _column_q_in_range(range_spec)
 
-        meta = db.get(ConciliacionSheetMeta, 1)
+        meta = get_conciliacion_sheet_meta(db)
         headers: List[str] = list(meta.headers) if meta and meta.headers else []
         synced_at: Optional[str] = None
         meta_synced_at: Optional[datetime] = None
