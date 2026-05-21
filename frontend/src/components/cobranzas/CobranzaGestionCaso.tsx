@@ -1,17 +1,13 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { Loader2, RefreshCw, Upload, X } from 'lucide-react'
+import { ChevronDown, ChevronUp, Loader2, RefreshCw, Upload, X } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 import {
   actualizarCasoCobranza,
   abrirSesionNotaCobranza,
-  cobranzaNotaAdjuntoUrl,
-  ESTADO_ACUERDO_LABEL,
   guardarNotaSesionCobranza,
-  MENSAJE_SESION_ABIERTA,
   MOTIVOS_COBRANZA_LABEL,
   sincronizarAcuerdosCobranza,
-  type CobranzaAcuerdo,
   type CobranzaCasoDetalle,
   type CobranzaPrestamoResumen,
   type MonedaAcuerdoCobranza,
@@ -19,7 +15,6 @@ import {
 } from '../../services/cobranzaService'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
-import { Badge } from '../ui/badge'
 import {
   Select,
   SelectContent,
@@ -34,33 +29,6 @@ import { cn } from '../../utils'
 const MAX_ARCHIVOS_NOTA = 4
 const TIPOS_ARCHIVO_ACEPTADOS = '.pdf,.jpg,.jpeg,.png'
 
-function formatCantidadMoneda(
-  cantidad?: number | null,
-  moneda?: string
-): string {
-  if (cantidad == null || Number.isNaN(cantidad)) return '-'
-  const m = (moneda || 'USD').toUpperCase()
-  if (m === 'BS') {
-    return `Bs. ${cantidad.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-  }
-  return formatCurrency(cantidad)
-}
-
-function estadoAcuerdoBadge(estado: string) {
-  const cls =
-    estado === 'CUMPLIDO'
-      ? 'bg-green-100 text-green-800'
-      : estado === 'INCUMPLIDO'
-        ? 'bg-red-100 text-red-800'
-        : 'bg-amber-100 text-amber-800'
-  return (
-    <Badge className={cls}>
-      {ESTADO_ACUERDO_LABEL[estado as keyof typeof ESTADO_ACUERDO_LABEL] ||
-        estado}
-    </Badge>
-  )
-}
-
 function hoyIso(): string {
   return new Date().toISOString().slice(0, 10)
 }
@@ -69,14 +37,6 @@ function motivoInicial(p: CobranzaPrestamoResumen): MotivoCobranza {
   if (p.cuotas_atrasadas >= 3) return 'ATRASO_CRONICO'
   if (p.saldo_pendiente > 0) return 'NEGOCIACION'
   return 'OTRO'
-}
-
-function esNotaBorrador(a: CobranzaAcuerdo, notaSesionId: number | null): boolean {
-  return (
-    notaSesionId != null &&
-    a.id === notaSesionId &&
-    a.mensaje.trim() === MENSAJE_SESION_ABIERTA
-  )
 }
 
 export interface CobranzaGestionCasoProps {
@@ -97,6 +57,7 @@ export function CobranzaGestionCaso({
   const [notaSesionId, setNotaSesionId] = useState<number | null>(null)
   const [cargando, setCargando] = useState(false)
   const [guardando, setGuardando] = useState(false)
+  const [formularioExpandido, setFormularioExpandido] = useState(true)
   const [motivoCaso, setMotivoCaso] = useState<MotivoCobranza>(() =>
     motivoInicial(prestamo)
   )
@@ -144,9 +105,17 @@ export function CobranzaGestionCaso({
   }, [prestamo, limpiarFormularioNota, onCasoActualizado])
 
   useEffect(() => {
+    setFormularioExpandido(true)
     void iniciarSesion()
     // eslint-disable-next-line react-hooks/exhaustive-deps -- solo al abrir/fijar
   }, [prestamo.id, aperturaToken])
+
+  const expandirFormulario = async () => {
+    setFormularioExpandido(true)
+    if (!notaSesionId) {
+      await iniciarSesion()
+    }
+  }
 
   const onElegirArchivos = (e: React.ChangeEvent<HTMLInputElement>) => {
     const list = e.target.files
@@ -186,8 +155,10 @@ export function CobranzaGestionCaso({
       })
       setCaso(det)
       onCasoActualizado?.(prestamo.id, det.id)
+      setNotaSesionId(null)
+      limpiarFormularioNota()
+      setFormularioExpandido(false)
       toast.success(`Nota guardada (${formatDate(hoyIso())}).`)
-      await iniciarSesion()
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : 'Error al guardar nota')
     } finally {
@@ -217,9 +188,6 @@ export function CobranzaGestionCaso({
     }
   }
 
-  const acuerdosHistorial =
-    caso?.acuerdos.filter(a => !esNotaBorrador(a, notaSesionId)) ?? []
-
   return (
     <div className={cn('space-y-5', className)}>
       <div className="flex flex-wrap items-start justify-between gap-2 border-b border-slate-200 pb-3">
@@ -240,262 +208,247 @@ export function CobranzaGestionCaso({
         )}
       </div>
 
-      {cargando && (
+      {cargando && formularioExpandido && (
         <div className="flex items-center gap-2 py-4 text-slate-600">
           <Loader2 className="h-5 w-5 animate-spin" />
           Abriendo nueva nota en el sistema...
         </div>
       )}
 
-      <div className="rounded-lg border-2 border-dashed border-blue-200 bg-blue-50/40 p-4">
-        <p className="mb-3 text-sm font-medium text-slate-800">Nueva nota</p>
-        <p className="mb-3 text-xs text-slate-500">
-          Al abrir la negociacion se crea una nota en la base de datos con la
-          fecha de hoy ({formatDate(hoyIso())}). Al guardar se registran mensaje,
-          monto y hasta {MAX_ARCHIVOS_NOTA} respaldos (PDF, JPG o PNG) en la
-          tabla de adjuntos.
-        </p>
-
-        {!caso && !cargando && (
-          <div className="mb-3">
-            <label className="mb-1 block text-xs font-medium text-slate-600">
-              Motivo del caso (primera nota)
-            </label>
-            <Select
-              value={motivoCaso}
-              onValueChange={v => setMotivoCaso(v as MotivoCobranza)}
-            >
-              <SelectTrigger className="h-9 bg-white">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {(Object.keys(MOTIVOS_COBRANZA_LABEL) as MotivoCobranza[]).map(
-                  k => (
-                    <SelectItem key={k} value={k}>
-                      {MOTIVOS_COBRANZA_LABEL[k]}
-                    </SelectItem>
-                  )
-                )}
-              </SelectContent>
-            </Select>
-          </div>
-        )}
-
-        {caso && (
-          <div className="mb-3">
-            <label className="mb-1 block text-xs font-medium text-slate-600">
-              Motivo del caso
-            </label>
-            <Select
-              value={caso.motivo}
-              onValueChange={v => guardarMotivo(v as MotivoCobranza)}
-            >
-              <SelectTrigger className="h-9 bg-white">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {(Object.keys(MOTIVOS_COBRANZA_LABEL) as MotivoCobranza[]).map(
-                  k => (
-                    <SelectItem key={k} value={k}>
-                      {MOTIVOS_COBRANZA_LABEL[k]}
-                    </SelectItem>
-                  )
-                )}
-              </SelectContent>
-            </Select>
-          </div>
-        )}
-
-        <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
-          <div className="sm:col-span-2">
-            <label className="text-xs font-medium">Cantidad (opcional)</label>
-            <Input
-              type="number"
-              min={0}
-              step="0.01"
-              className="mt-1 bg-white"
-              placeholder="0.00"
-              value={cantidad}
-              onChange={e => setCantidad(e.target.value)}
-              disabled={cargando || !notaSesionId}
-            />
-          </div>
-          <div>
-            <label className="text-xs font-medium">Moneda</label>
-            <Select
-              value={moneda}
-              onValueChange={v => setMoneda(v as MonedaAcuerdoCobranza)}
-              disabled={cargando || !notaSesionId}
-            >
-              <SelectTrigger className="mt-1 bg-white">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="USD">USD</SelectItem>
-                <SelectItem value="BS">BS</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-
-        <div className="mb-3">
-          <label className="text-xs font-medium">Mensaje</label>
-          <Textarea
-            className="mt-1 bg-white"
-            placeholder="Detalle de la conversacion o acuerdo..."
-            value={mensaje}
-            onChange={e => setMensaje(e.target.value)}
-            rows={3}
-            disabled={cargando || !notaSesionId}
-          />
-        </div>
-
-        <div className="mb-3">
-          <p className="mb-2 text-xs font-semibold text-slate-700">
-            Respaldos de la conversacion
-          </p>
-          <div
-            className={cn(
-              'rounded-lg border-2 border-dashed p-4',
-              cargando || !notaSesionId
-                ? 'border-slate-200 bg-slate-100'
-                : 'border-blue-300 bg-white'
-            )}
-          >
-            <input
-              ref={inputArchivosRef}
-              id={idInputArchivos}
-              type="file"
-              accept={TIPOS_ARCHIVO_ACEPTADOS}
-              multiple
-              className="sr-only"
-              onChange={onElegirArchivos}
-              disabled={
-                cargando ||
-                !notaSesionId ||
-                archivos.length >= MAX_ARCHIVOS_NOTA
-              }
-            />
-            <div className="flex flex-wrap items-center gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="border-blue-400 bg-blue-50 text-blue-800 hover:bg-blue-100"
-                disabled={
-                  cargando ||
-                  !notaSesionId ||
-                  archivos.length >= MAX_ARCHIVOS_NOTA
-                }
-                onClick={() => inputArchivosRef.current?.click()}
-              >
-                <Upload className="mr-2 h-4 w-4" />
-                Seleccionar archivos
-              </Button>
-              <span className="text-sm font-medium text-slate-600">
-                {archivos.length}/{MAX_ARCHIVOS_NOTA}
-              </span>
-            </div>
-            <p className="mt-2 text-xs text-slate-500">
-              PDF, JPG o PNG · maximo {MAX_ARCHIVOS_NOTA} archivos por nota
-            </p>
-            {!notaSesionId && !cargando && (
-              <p className="mt-1 text-xs text-amber-700">
-                Espere a que se abra la sesion de la nota para adjuntar archivos.
-              </p>
-            )}
-            {archivos.length > 0 && (
-              <ul className="mt-3 space-y-1 border-t border-slate-200 pt-3">
-                {archivos.map((f, i) => (
-                  <li
-                    key={`${f.name}-${i}`}
-                    className="flex items-center justify-between rounded border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs"
-                  >
-                    <span className="truncate font-medium text-slate-800">
-                      {f.name}
-                    </span>
-                    <button
-                      type="button"
-                      className="ml-2 shrink-0 text-red-600 hover:text-red-800"
-                      onClick={() => quitarArchivo(i)}
-                      aria-label="Quitar archivo"
-                    >
-                      <X className="h-3.5 w-3.5" />
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        </div>
-
-        <Button
-          onClick={guardarNota}
-          disabled={guardando || cargando || !notaSesionId}
+      <div className="overflow-hidden rounded-lg border-2 border-dashed border-blue-200 bg-blue-50/40">
+        <button
+          type="button"
+          className="flex w-full items-center justify-between px-4 py-3 text-left hover:bg-blue-100/50"
+          onClick={() =>
+            formularioExpandido
+              ? setFormularioExpandido(false)
+              : void expandirFormulario()
+          }
         >
-          {guardando ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Guardando...
-            </>
+          <span className="text-sm font-semibold text-slate-800">Nueva nota</span>
+          {formularioExpandido ? (
+            <ChevronUp className="h-5 w-5 text-slate-500" />
           ) : (
-            'Guardar nota'
+            <ChevronDown className="h-5 w-5 text-slate-500" />
           )}
-        </Button>
-      </div>
+        </button>
 
-      {caso && !cargando && (
-        <div>
-          <h3 className="mb-2 text-sm font-semibold text-slate-800">
-            Historial de notas
-          </h3>
-          {acuerdosHistorial.length === 0 ? (
-            <p className="text-sm text-slate-500">
-              Sin notas guardadas aun. Complete y guarde la nota actual.
+        {!formularioExpandido && (
+          <div className="border-t border-blue-200 px-4 py-3">
+            <p className="text-sm text-slate-600">
+              Nota guardada. Use el icono de historial en la tabla para ver las
+              notas o expanda aqui para agregar otra.
             </p>
-          ) : (
-            <div className="space-y-3">
-              {acuerdosHistorial.map(a => (
-                <div
-                  key={a.id}
-                  className="rounded-lg border border-slate-200 bg-white p-3 text-sm shadow-sm"
+            <Button
+              type="button"
+              size="sm"
+              className="mt-2"
+              variant="outline"
+              onClick={() => void expandirFormulario()}
+            >
+              Agregar otra nota
+            </Button>
+          </div>
+        )}
+
+        {formularioExpandido && (
+          <div className="border-t border-blue-200 px-4 pb-4 pt-2">
+            <p className="mb-3 text-xs text-slate-500">
+              Al guardar se registran mensaje, monto y hasta {MAX_ARCHIVOS_NOTA}{' '}
+              respaldos (PDF, JPG o PNG). La fecha es la del dia de guardado (
+              {formatDate(hoyIso())}).
+            </p>
+
+            {!caso && !cargando && (
+              <div className="mb-3">
+                <label className="mb-1 block text-xs font-medium text-slate-600">
+                  Motivo del caso (primera nota)
+                </label>
+                <Select
+                  value={motivoCaso}
+                  onValueChange={v => setMotivoCaso(v as MotivoCobranza)}
                 >
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <span className="font-semibold text-slate-900">
-                      {formatDate(a.fecha)}
-                      {a.cantidad != null
-                        ? ` · ${formatCantidadMoneda(a.cantidad, a.moneda)}`
-                        : ''}
-                    </span>
-                    {estadoAcuerdoBadge(a.estado)}
-                  </div>
-                  <p className="mt-2 whitespace-pre-wrap text-slate-700">
-                    {a.mensaje}
-                  </p>
-                  {a.adjuntos && a.adjuntos.length > 0 && (
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      {a.adjuntos.map(adj => (
-                        <a
-                          key={adj.id}
-                          href={cobranzaNotaAdjuntoUrl(adj.id)}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="rounded border border-slate-200 bg-slate-50 px-2 py-1 text-xs text-blue-600 hover:bg-blue-50"
-                        >
-                          {adj.nombre_archivo ||
-                            (adj.content_type.includes('pdf')
-                              ? 'PDF'
-                              : 'Archivo')}
-                        </a>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ))}
+                  <SelectTrigger className="h-9 bg-white">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(
+                      Object.keys(MOTIVOS_COBRANZA_LABEL) as MotivoCobranza[]
+                    ).map(k => (
+                      <SelectItem key={k} value={k}>
+                        {MOTIVOS_COBRANZA_LABEL[k]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {caso && (
+              <div className="mb-3">
+                <label className="mb-1 block text-xs font-medium text-slate-600">
+                  Motivo del caso
+                </label>
+                <Select
+                  value={caso.motivo}
+                  onValueChange={v => guardarMotivo(v as MotivoCobranza)}
+                >
+                  <SelectTrigger className="h-9 bg-white">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(
+                      Object.keys(MOTIVOS_COBRANZA_LABEL) as MotivoCobranza[]
+                    ).map(k => (
+                      <SelectItem key={k} value={k}>
+                        {MOTIVOS_COBRANZA_LABEL[k]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
+              <div className="sm:col-span-2">
+                <label className="text-xs font-medium">Cantidad (opcional)</label>
+                <Input
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  className="mt-1 bg-white"
+                  placeholder="0.00"
+                  value={cantidad}
+                  onChange={e => setCantidad(e.target.value)}
+                  disabled={cargando || !notaSesionId}
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium">Moneda</label>
+                <Select
+                  value={moneda}
+                  onValueChange={v => setMoneda(v as MonedaAcuerdoCobranza)}
+                  disabled={cargando || !notaSesionId}
+                >
+                  <SelectTrigger className="mt-1 bg-white">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="USD">USD</SelectItem>
+                    <SelectItem value="BS">BS</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
-          )}
-        </div>
-      )}
+
+            <div className="mb-3">
+              <label className="text-xs font-medium">Mensaje</label>
+              <Textarea
+                className="mt-1 bg-white"
+                placeholder="Detalle de la conversacion o acuerdo..."
+                value={mensaje}
+                onChange={e => setMensaje(e.target.value)}
+                rows={3}
+                disabled={cargando || !notaSesionId}
+              />
+            </div>
+
+            <div className="mb-3">
+              <p className="mb-2 text-xs font-semibold text-slate-700">
+                Respaldos de la conversacion
+              </p>
+              <div
+                className={cn(
+                  'rounded-lg border-2 border-dashed p-4',
+                  cargando || !notaSesionId
+                    ? 'border-slate-200 bg-slate-100'
+                    : 'border-blue-300 bg-white'
+                )}
+              >
+                <input
+                  ref={inputArchivosRef}
+                  id={idInputArchivos}
+                  type="file"
+                  accept={TIPOS_ARCHIVO_ACEPTADOS}
+                  multiple
+                  className="sr-only"
+                  onChange={onElegirArchivos}
+                  disabled={
+                    cargando ||
+                    !notaSesionId ||
+                    archivos.length >= MAX_ARCHIVOS_NOTA
+                  }
+                />
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="border-blue-400 bg-blue-50 text-blue-800 hover:bg-blue-100"
+                    disabled={
+                      cargando ||
+                      !notaSesionId ||
+                      archivos.length >= MAX_ARCHIVOS_NOTA
+                    }
+                    onClick={() => inputArchivosRef.current?.click()}
+                  >
+                    <Upload className="mr-2 h-4 w-4" />
+                    Seleccionar archivos
+                  </Button>
+                  <span className="text-sm font-medium text-slate-600">
+                    {archivos.length}/{MAX_ARCHIVOS_NOTA}
+                  </span>
+                </div>
+                <p className="mt-2 text-xs text-slate-500">
+                  PDF, JPG o PNG · maximo {MAX_ARCHIVOS_NOTA} archivos por nota
+                </p>
+                {!notaSesionId && !cargando && (
+                  <p className="mt-1 text-xs text-amber-700">
+                    Espere a que se abra la sesion de la nota para adjuntar
+                    archivos.
+                  </p>
+                )}
+                {archivos.length > 0 && (
+                  <ul className="mt-3 space-y-1 border-t border-slate-200 pt-3">
+                    {archivos.map((f, i) => (
+                      <li
+                        key={`${f.name}-${i}`}
+                        className="flex items-center justify-between rounded border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs"
+                      >
+                        <span className="truncate font-medium text-slate-800">
+                          {f.name}
+                        </span>
+                        <button
+                          type="button"
+                          className="ml-2 shrink-0 text-red-600 hover:text-red-800"
+                          onClick={() => quitarArchivo(i)}
+                          aria-label="Quitar archivo"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+
+            <Button
+              onClick={guardarNota}
+              disabled={guardando || cargando || !notaSesionId}
+            >
+              {guardando ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Guardando...
+                </>
+              ) : (
+                'Guardar nota'
+              )}
+            </Button>
+          </div>
+        )}
+      </div>
     </div>
   )
 }

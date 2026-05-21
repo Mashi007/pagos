@@ -4,12 +4,14 @@ import {
   FileText,
   DollarSign,
   Eye,
+  History,
   Loader2,
   Search,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 import { CobranzaGestionCaso } from '../components/cobranzas/CobranzaGestionCaso'
+import { CobranzaHistorialNotasDialog } from '../components/cobranzas/CobranzaHistorialNotasDialog'
 import { CobranzaNegociacionDialog } from '../components/cobranzas/CobranzaNegociacionDialog'
 import {
   buscarCobranzasPorCedula,
@@ -66,6 +68,9 @@ export default function CobranzasPage() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [prestamoNegociacion, setPrestamoNegociacion] =
     useState<CobranzaPrestamoResumen | null>(null)
+  const [historialOpen, setHistorialOpen] = useState(false)
+  const [prestamoHistorial, setPrestamoHistorial] =
+    useState<CobranzaPrestamoResumen | null>(null)
 
   const prestamoFijado =
     resultado?.prestamos.find(p => p.id === prestamoFijadoId) ?? null
@@ -112,6 +117,11 @@ export default function CobranzasPage() {
     setDialogOpen(true)
   }
 
+  const abrirHistorial = (p: CobranzaPrestamoResumen) => {
+    setPrestamoHistorial(p)
+    setHistorialOpen(true)
+  }
+
   const verPrestamo = (p: CobranzaPrestamoResumen) => {
     navigate(`/prestamos?filtro_prestamo_id=${p.id}`)
   }
@@ -129,6 +139,9 @@ export default function CobranzasPage() {
       }
     })
     setPrestamoNegociacion(prev =>
+      prev && prev.id === prestamoId ? { ...prev, caso_id: casoId } : prev
+    )
+    setPrestamoHistorial(prev =>
       prev && prev.id === prestamoId ? { ...prev, caso_id: casoId } : prev
     )
   }
@@ -252,6 +265,15 @@ export default function CobranzasPage() {
                                 <Button
                                   variant="ghost"
                                   size="sm"
+                                  className="text-violet-600 hover:bg-violet-50"
+                                  title="Historial de notas"
+                                  onClick={() => abrirHistorial(p)}
+                                >
+                                  <History className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
                                   className="text-orange-600 hover:bg-orange-50"
                                   title="Negociacion (ventana)"
                                   onClick={() => abrirNegociacion(p)}
@@ -292,6 +314,12 @@ export default function CobranzasPage() {
         prestamo={prestamoNegociacion}
         aperturaToken={aperturaToken}
         onCasoActualizado={onCasoActualizado}
+      />
+
+      <CobranzaHistorialNotasDialog
+        open={historialOpen}
+        onOpenChange={setHistorialOpen}
+        prestamo={prestamoHistorial}
       />
     </div>
   )
