@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { Loader2, RefreshCw, X } from 'lucide-react'
+import { Loader2, RefreshCw, Upload, X } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 import {
@@ -31,7 +31,7 @@ import { Textarea } from '../ui/textarea'
 import { formatCurrency, formatDate } from '../../utils'
 import { cn } from '../../utils'
 
-const MAX_ARCHIVOS_NOTA = 3
+const MAX_ARCHIVOS_NOTA = 4
 const TIPOS_ARCHIVO_ACEPTADOS = '.pdf,.jpg,.jpeg,.png'
 
 function formatCantidadMoneda(
@@ -105,6 +105,8 @@ export function CobranzaGestionCaso({
   const [moneda, setMoneda] = useState<MonedaAcuerdoCobranza>('USD')
   const [archivos, setArchivos] = useState<File[]>([])
   const iniciandoRef = useRef(false)
+  const inputArchivosRef = useRef<HTMLInputElement>(null)
+  const idInputArchivos = `cobranza-adjuntos-${prestamo.id}`
 
   const limpiarFormularioNota = useCallback(() => {
     setMensaje('')
@@ -349,19 +351,24 @@ export function CobranzaGestionCaso({
         </div>
 
         <div className="mb-3">
-          <label
+          <p className="mb-2 text-xs font-semibold text-slate-700">
+            Respaldos de la conversacion
+          </p>
+          <div
             className={cn(
-              'text-sm',
+              'rounded-lg border-2 border-dashed p-4',
               cargando || !notaSesionId
-                ? 'cursor-not-allowed text-slate-400'
-                : 'cursor-pointer text-blue-700 hover:underline'
+                ? 'border-slate-200 bg-slate-100'
+                : 'border-blue-300 bg-white'
             )}
           >
             <input
+              ref={inputArchivosRef}
+              id={idInputArchivos}
               type="file"
               accept={TIPOS_ARCHIVO_ACEPTADOS}
               multiple
-              className="hidden"
+              className="sr-only"
               onChange={onElegirArchivos}
               disabled={
                 cargando ||
@@ -369,28 +376,57 @@ export function CobranzaGestionCaso({
                 archivos.length >= MAX_ARCHIVOS_NOTA
               }
             />
-            Adjuntar respaldos ({archivos.length}/{MAX_ARCHIVOS_NOTA})
-          </label>
-          {archivos.length > 0 && (
-            <ul className="mt-2 space-y-1">
-              {archivos.map((f, i) => (
-                <li
-                  key={`${f.name}-${i}`}
-                  className="flex items-center justify-between rounded border bg-white px-2 py-1 text-xs"
-                >
-                  <span className="truncate">{f.name}</span>
-                  <button
-                    type="button"
-                    className="ml-2 text-red-600"
-                    onClick={() => quitarArchivo(i)}
-                    aria-label="Quitar archivo"
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="border-blue-400 bg-blue-50 text-blue-800 hover:bg-blue-100"
+                disabled={
+                  cargando ||
+                  !notaSesionId ||
+                  archivos.length >= MAX_ARCHIVOS_NOTA
+                }
+                onClick={() => inputArchivosRef.current?.click()}
+              >
+                <Upload className="mr-2 h-4 w-4" />
+                Seleccionar archivos
+              </Button>
+              <span className="text-sm font-medium text-slate-600">
+                {archivos.length}/{MAX_ARCHIVOS_NOTA}
+              </span>
+            </div>
+            <p className="mt-2 text-xs text-slate-500">
+              PDF, JPG o PNG · maximo {MAX_ARCHIVOS_NOTA} archivos por nota
+            </p>
+            {!notaSesionId && !cargando && (
+              <p className="mt-1 text-xs text-amber-700">
+                Espere a que se abra la sesion de la nota para adjuntar archivos.
+              </p>
+            )}
+            {archivos.length > 0 && (
+              <ul className="mt-3 space-y-1 border-t border-slate-200 pt-3">
+                {archivos.map((f, i) => (
+                  <li
+                    key={`${f.name}-${i}`}
+                    className="flex items-center justify-between rounded border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs"
                   >
-                    <X className="h-3 w-3" />
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
+                    <span className="truncate font-medium text-slate-800">
+                      {f.name}
+                    </span>
+                    <button
+                      type="button"
+                      className="ml-2 shrink-0 text-red-600 hover:text-red-800"
+                      onClick={() => quitarArchivo(i)}
+                      aria-label="Quitar archivo"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         </div>
 
         <Button

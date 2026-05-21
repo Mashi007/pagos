@@ -1,4 +1,4 @@
--- Adjuntos por nota (acuerdo): max 3 archivos PDF/JPG/PNG por mensaje.
+-- Adjuntos por nota (acuerdo): max 4 archivos PDF/JPG/PNG por mensaje (limite en app).
 
 CREATE TABLE IF NOT EXISTS cobranza_nota_adjuntos (
     id VARCHAR(32) PRIMARY KEY,

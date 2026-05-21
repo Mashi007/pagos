@@ -7,6 +7,7 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import Response
+from sqlalchemy.exc import ProgrammingError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -35,6 +36,19 @@ from app.services.cobranzas.nota_adjunto_service import (
 from app.services.cobranzas.reportes_cache import ejecutar_actualizacion_reportes
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
+
+
+def _http_desde_error_cobranzas(exc: Exception) -> HTTPException:
+    msg = str(exc).lower()
+    if isinstance(exc, ProgrammingError) or "does not exist" in msg or "undefinedcolumn" in msg:
+        return HTTPException(
+            status_code=503,
+            detail=(
+                "Esquema de cobranzas incompleto en la base de datos. "
+                "Ejecute migracion_cobranza_acuerdos_mensaje_moneda.sql y reinicie el servicio."
+            ),
+        )
+    return HTTPException(status_code=500, detail="Error al procesar cobranzas.")
 
 
 @router.get("/buscar", response_model=CobranzaBuscarResponse)
@@ -79,12 +93,18 @@ def abrir_sesion_nota(
     user: UserResponse = Depends(get_current_user),
 ):
     """Nueva nota en BD al abrir la negociacion (fecha = hoy)."""
-    return svc.abrir_sesion_nota(
-        db,
-        prestamo_id=prestamo_id,
-        motivo=motivo,
-        user_id=user.id,
-    )
+    try:
+        return svc.abrir_sesion_nota(
+            db,
+            prestamo_id=prestamo_id,
+            motivo=motivo,
+            user_id=user.id,
+        )
+    except HTTPException:
+        raise
+    except (ProgrammingError, SQLAlchemyError) as e:
+        db.rollback()
+        raise _http_desde_error_cobranzas(e) from e
 
 
 @router.patch("/notas/{acuerdo_id}", response_model=CobranzaCasoOut)
@@ -98,16 +118,22 @@ async def guardar_nota_sesion(
     user: UserResponse = Depends(get_current_user),
 ):
     """Guarda mensaje, monto y respaldos (tabla cobranza_nota_adjuntos)."""
-    uploads = await leer_uploads_nota(archivos or [])
-    return svc.guardar_nota_sesion(
-        db,
-        acuerdo_id,
-        mensaje=mensaje,
-        cantidad=cantidad,
-        moneda=moneda,
-        archivos=uploads,
-        user_id=user.id,
-    )
+    try:
+        uploads = await leer_uploads_nota(archivos or [])
+        return svc.guardar_nota_sesion(
+            db,
+            acuerdo_id,
+            mensaje=mensaje,
+            cantidad=cantidad,
+            moneda=moneda,
+            archivos=uploads,
+            user_id=user.id,
+        )
+    except HTTPException:
+        raise
+    except (ProgrammingError, SQLAlchemyError) as e:
+        db.rollback()
+        raise _http_desde_error_cobranzas(e) from e
 
 
 @router.post("/notas", response_model=CobranzaCasoOut, status_code=201)

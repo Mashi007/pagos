@@ -55,7 +55,7 @@ CREATE TABLE IF NOT EXISTS cobranza_acuerdos (
 
 CREATE INDEX IF NOT EXISTS ix_cobranza_acuerdos_caso ON cobranza_acuerdos (caso_id);
 
--- Respaldo por nota (max 3 archivos PDF/JPG/PNG en BYTEA)
+-- Respaldo por nota (max 4 archivos PDF/JPG/PNG en BYTEA; limite en app)
 CREATE TABLE IF NOT EXISTS cobranza_nota_adjuntos (
     id VARCHAR(32) PRIMARY KEY,
     acuerdo_id INTEGER NOT NULL REFERENCES cobranza_acuerdos(id) ON DELETE CASCADE,

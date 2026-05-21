@@ -181,7 +181,7 @@ export async function guardarNotaSesionCobranza(
     form.append('cantidad', String(params.cantidad))
   }
   form.append('moneda', params.moneda)
-  const files = (params.archivos || []).slice(0, 3)
+  const files = (params.archivos || []).slice(0, 4)
   for (const f of files) {
     form.append('archivos', f)
   }
@@ -208,7 +208,7 @@ export async function guardarNotaCobranza(params: {
   }
   form.append('moneda', params.moneda)
   form.append('motivo', params.motivo || 'OTRO')
-  const files = (params.archivos || []).slice(0, 3)
+  const files = (params.archivos || []).slice(0, 4)
   for (const f of files) {
     form.append('archivos', f)
   }

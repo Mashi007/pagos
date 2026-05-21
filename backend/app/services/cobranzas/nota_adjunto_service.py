@@ -1,4 +1,4 @@
-"""Adjuntos por nota de cobranza (max 3: PDF, JPG, PNG)."""
+"""Adjuntos por nota de cobranza (max 4: PDF, JPG, PNG)."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.models.cobranza import CobranzaNotaAdjunto
 
-MAX_ADJUNTOS_POR_NOTA = 3
+MAX_ADJUNTOS_POR_NOTA = 4
 _MAX_BYTES = 10 * 1024 * 1024
 _MIME_PERMITIDOS = frozenset(
     {

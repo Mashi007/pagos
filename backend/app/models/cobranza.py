@@ -86,7 +86,7 @@ class CobranzaAcuerdo(Base):
 
 
 class CobranzaNotaAdjunto(Base):
-    """Respaldo de conversacion por nota (max 3 PDF/JPG/PNG por acuerdo)."""
+    """Respaldo de conversacion por nota (max 4 PDF/JPG/PNG por acuerdo)."""
 
     __tablename__ = "cobranza_nota_adjuntos"
 

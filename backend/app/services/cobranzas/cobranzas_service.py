@@ -544,7 +544,7 @@ def crear_nota(
     user_id: Optional[int] = None,
 ) -> CobranzaCasoOut:
     """
-    Nueva nota del dia en un solo paso: crea caso si no existe, fecha = hoy, hasta 3 adjuntos.
+    Nueva nota del dia en un solo paso: crea caso si no existe, fecha = hoy, hasta 4 adjuntos.
     archivos: [(bytes, content_type, filename), ...]
     """
     texto = (mensaje or "").strip()

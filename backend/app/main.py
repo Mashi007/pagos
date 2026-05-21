@@ -387,6 +387,13 @@ def _startup_db_with_retry(engine, max_attempts: int = 10, delay_sec: float = 3.
             except Exception as col_lc:
                 logger.warning("[DB Startup] link_comprobante (no critico): %s", col_lc)
 
+            try:
+                from app.core.cobranzas_schema_startup import ensure_cobranzas_schema
+
+                ensure_cobranzas_schema(engine)
+            except Exception as cob_err:
+                logger.warning("[DB Startup] cobranzas schema (revisar migracion): %s", cob_err)
+
             return
 
         except Exception as e:
