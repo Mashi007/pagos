@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react'
 
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 
-import { AlertTriangle, CheckCircle2, Loader2, ScanSearch } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, Loader2, Search } from 'lucide-react'
 
 import { Button } from '../ui/button'
 import { reporteService, type DriveScanCoverage } from '../../services/reporteService'
@@ -106,7 +106,7 @@ export function DriveScanCoveragePanel({ className, onAfterProbe }: Props) {
               aria-hidden
             />
           ) : (
-            <ScanSearch
+            <Search
               className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground"
               aria-hidden
             />
