@@ -23,6 +23,12 @@ _META_CORE_ATTRS = (
     ConciliacionSheetMeta.updated_at,
 )
 
+_META_SCAN_ATTRS = (
+    ConciliacionSheetMeta.last_data_sheet_row_number,
+    ConciliacionSheetMeta.google_tail_row_number,
+    ConciliacionSheetMeta.google_tail_row_probed_at,
+)
+
 
 def conciliacion_meta_scan_columns_available(db: Session) -> bool:
     """True si la BD ya tiene last_data_sheet_row_number / google_tail_*."""
@@ -37,15 +43,46 @@ def conciliacion_meta_scan_columns_available(db: Session) -> bool:
 def get_conciliacion_sheet_meta(db: Session, meta_id: int = 1) -> Optional[ConciliacionSheetMeta]:
     """
     Carga meta id=1 sin fallar si faltan columnas añadidas en 071_conciliacion_sheet_scan_coverage.
+
+    Siempre usa load_only (nunca db.get) para no disparar lazy load de columnas de scan
+    cuando aún no existen en PostgreSQL.
     """
+    attrs = _META_CORE_ATTRS
     if conciliacion_meta_scan_columns_available(db):
-        return db.get(ConciliacionSheetMeta, meta_id)
+        attrs = _META_CORE_ATTRS + _META_SCAN_ATTRS
     return (
         db.query(ConciliacionSheetMeta)
-        .options(load_only(*_META_CORE_ATTRS))
+        .options(load_only(*attrs))
         .filter(ConciliacionSheetMeta.id == meta_id)
         .first()
     )
+
+
+def meta_last_data_sheet_row_number(
+    meta: Optional[ConciliacionSheetMeta], db: Session
+) -> Optional[int]:
+    if not meta or not conciliacion_meta_scan_columns_available(db):
+        return None
+    val = meta.last_data_sheet_row_number
+    return int(val) if val is not None else None
+
+
+def meta_google_tail_row_number(
+    meta: Optional[ConciliacionSheetMeta], db: Session
+) -> Optional[int]:
+    if not meta or not conciliacion_meta_scan_columns_available(db):
+        return None
+    val = meta.google_tail_row_number
+    return int(val) if val is not None else None
+
+
+def meta_google_tail_row_probed_at_iso(
+    meta: Optional[ConciliacionSheetMeta], db: Session
+) -> Optional[str]:
+    if not meta or not conciliacion_meta_scan_columns_available(db):
+        return None
+    probed = meta.google_tail_row_probed_at
+    return probed.isoformat() if probed else None
 
 
 def apply_scan_coverage_fields_to_meta(

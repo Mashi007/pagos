@@ -16,8 +16,10 @@ from app.core.config import settings
 from app.models.drive import DriveRow
 from app.services.conciliacion_sheet_meta_access import (
     apply_scan_coverage_fields_to_meta,
-    conciliacion_meta_scan_columns_available,
     get_conciliacion_sheet_meta,
+    meta_google_tail_row_number,
+    meta_google_tail_row_probed_at_iso,
+    meta_last_data_sheet_row_number,
 )
 
 logger = logging.getLogger(__name__)
@@ -66,22 +68,9 @@ def compute_scan_coverage_from_db(db: Session) -> Dict[str, Any]:
         and drive_count == row_count_meta
     )
 
-    scan_cols = conciliacion_meta_scan_columns_available(db)
-    google_tail = (
-        int(meta.google_tail_row_number)
-        if scan_cols and meta and meta.google_tail_row_number
-        else None
-    )
-    google_probed_at = (
-        meta.google_tail_row_probed_at.isoformat()
-        if scan_cols and meta and meta.google_tail_row_probed_at
-        else None
-    )
-    last_data_stored = (
-        int(meta.last_data_sheet_row_number)
-        if scan_cols and meta and meta.last_data_sheet_row_number
-        else None
-    )
+    google_tail = meta_google_tail_row_number(meta, db)
+    google_probed_at = meta_google_tail_row_probed_at_iso(meta, db)
+    last_data_stored = meta_last_data_sheet_row_number(meta, db)
 
     cola_ok: Optional[bool] = None
     cola_mensaje: Optional[str] = None

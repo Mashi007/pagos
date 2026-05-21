@@ -36,7 +36,12 @@ from app.services.conciliacion_sheet_cobertura import (
     compute_scan_coverage_from_db,
     probe_google_sheet_tail_row,
 )
-from app.services.conciliacion_sheet_meta_access import get_conciliacion_sheet_meta
+from app.services.conciliacion_sheet_meta_access import (
+    get_conciliacion_sheet_meta,
+    meta_google_tail_row_number,
+    meta_google_tail_row_probed_at_iso,
+    meta_last_data_sheet_row_number,
+)
 from app.services.conciliacion_sheet_sync import (
     build_conciliacion_sheet_diagnostico,
     run_sync_to_db,
@@ -378,11 +383,9 @@ def get_conciliacion_sheet_status(
             "header_row_index": meta.header_row_index,
             "row_count": meta.row_count,
             "col_count": meta.col_count,
-            "last_data_sheet_row_number": meta.last_data_sheet_row_number,
-            "google_tail_row_number": meta.google_tail_row_number,
-            "google_tail_row_probed_at": meta.google_tail_row_probed_at.isoformat()
-            if meta.google_tail_row_probed_at
-            else None,
+            "last_data_sheet_row_number": meta_last_data_sheet_row_number(meta, db),
+            "google_tail_row_number": meta_google_tail_row_number(meta, db),
+            "google_tail_row_probed_at": meta_google_tail_row_probed_at_iso(meta, db),
             "headers": meta.headers,
             "synced_at": meta.synced_at.isoformat() if meta.synced_at else None,
             "last_error": meta.last_error,
