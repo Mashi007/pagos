@@ -1,11 +1,15 @@
+import { FileText } from 'lucide-react'
+
 import {
   cobranzaNotaAdjuntoUrl,
   ESTADO_ACUERDO_LABEL,
   MENSAJE_SESION_ABIERTA,
   type CobranzaAcuerdo,
+  type CobranzaNotaAdjunto,
 } from '../../services/cobranzaService'
 import { Badge } from '../ui/badge'
 import { formatCurrency, formatDate } from '../../utils'
+import { cn } from '../../utils'
 
 export function formatCantidadMoneda(
   cantidad?: number | null,
@@ -50,25 +54,103 @@ export function estadoAcuerdoBadge(estado: string) {
   )
 }
 
-export function resumenNotaLinea(a: CobranzaAcuerdo): string {
-  const monto =
-    a.cantidad != null ? ` · ${formatCantidadMoneda(a.cantidad, a.moneda)}` : ''
-  const preview = a.mensaje.trim().slice(0, 80)
-  const suf = a.mensaje.length > 80 ? '...' : ''
-  return `${formatDate(a.fecha)}${monto} — ${preview}${suf}`
+function iconoAdjunto() {
+  return <FileText className="h-3.5 w-3.5 shrink-0" />
+}
+
+export function CobranzaEvidenciasLista({
+  adjuntos,
+  compacto,
+}: {
+  adjuntos: CobranzaNotaAdjunto[]
+  compacto?: boolean
+}) {
+  if (!adjuntos.length) return null
+  return (
+    <div className={cn('flex flex-wrap gap-2', compacto && 'mt-2')}>
+      {adjuntos.map(adj => (
+        <a
+          key={adj.id}
+          href={cobranzaNotaAdjuntoUrl(adj.id)}
+          target="_blank"
+          rel="noreferrer"
+          onClick={e => e.stopPropagation()}
+          className="inline-flex items-center gap-1.5 rounded-md border border-violet-200 bg-violet-50 px-2.5 py-1 text-xs font-medium text-violet-900 hover:bg-violet-100"
+        >
+          {iconoAdjunto()}
+          <span className="max-w-[140px] truncate">
+            {adj.nombre_archivo ||
+              (adj.content_type.includes('pdf') ? 'PDF' : 'Imagen')}
+          </span>
+        </a>
+      ))}
+    </div>
+  )
+}
+
+export function CobranzaConversacionCard({
+  nota,
+  onClick,
+  activa,
+}: {
+  nota: CobranzaAcuerdo
+  onClick: () => void
+  activa?: boolean
+}) {
+  const tieneEvidencias = (nota.adjuntos?.length ?? 0) > 0
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        'w-full rounded-lg border p-4 text-left transition-colors',
+        activa
+          ? 'border-violet-400 bg-violet-50 ring-1 ring-violet-200'
+          : 'border-slate-200 bg-white hover:border-violet-300 hover:bg-violet-50/60'
+      )}
+    >
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <p className="text-sm font-semibold text-slate-900">
+            {formatDate(nota.fecha)}
+          </p>
+          {nota.cantidad != null && (
+            <p className="text-sm text-amber-800">
+              Acuerdo: {formatCantidadMoneda(nota.cantidad, nota.moneda)}
+            </p>
+          )}
+        </div>
+        {estadoAcuerdoBadge(nota.estado)}
+      </div>
+      <p className="mt-2 line-clamp-3 whitespace-pre-wrap text-sm text-slate-700">
+        {nota.mensaje}
+      </p>
+      {tieneEvidencias && (
+        <div className="mt-3 border-t border-slate-100 pt-2">
+          <p className="mb-1 text-xs font-medium text-slate-500">
+            Evidencias ({nota.adjuntos!.length})
+          </p>
+          <CobranzaEvidenciasLista adjuntos={nota.adjuntos!} compacto />
+        </div>
+      )}
+    </button>
+  )
 }
 
 export function CobranzaNotaDetallePanel({ nota }: { nota: CobranzaAcuerdo }) {
   return (
     <div className="space-y-4 text-sm">
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-3">
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-violet-50 px-4 py-3">
         <div>
+          <p className="text-xs font-medium uppercase tracking-wide text-violet-700">
+            Conversacion / acuerdo
+          </p>
           <p className="text-lg font-semibold text-slate-900">
             {formatDate(nota.fecha)}
           </p>
           {nota.cantidad != null && (
-            <p className="text-slate-600">
-              {formatCantidadMoneda(nota.cantidad, nota.moneda)}
+            <p className="text-base text-amber-800">
+              Monto acordado: {formatCantidadMoneda(nota.cantidad, nota.moneda)}
             </p>
           )}
         </div>
@@ -76,33 +158,24 @@ export function CobranzaNotaDetallePanel({ nota }: { nota: CobranzaAcuerdo }) {
       </div>
       <div>
         <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
-          Mensaje
+          Mensaje de la conversacion
         </p>
-        <p className="whitespace-pre-wrap rounded-lg border border-slate-200 bg-slate-50 p-3 text-slate-800">
+        <p className="whitespace-pre-wrap rounded-lg border border-slate-200 bg-slate-50 p-4 text-slate-800">
           {nota.mensaje}
         </p>
       </div>
-      {nota.adjuntos && nota.adjuntos.length > 0 && (
-        <div>
-          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-            Respaldos
+      <div>
+        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+          Evidencias adjuntas
+        </p>
+        {nota.adjuntos && nota.adjuntos.length > 0 ? (
+          <CobranzaEvidenciasLista adjuntos={nota.adjuntos} />
+        ) : (
+          <p className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-3 py-4 text-center text-slate-500">
+            Sin archivos de respaldo en esta nota.
           </p>
-          <div className="flex flex-wrap gap-2">
-            {nota.adjuntos.map(adj => (
-              <a
-                key={adj.id}
-                href={cobranzaNotaAdjuntoUrl(adj.id)}
-                target="_blank"
-                rel="noreferrer"
-                className="rounded border border-slate-200 bg-white px-3 py-2 text-sm text-blue-700 shadow-sm hover:bg-blue-50"
-              >
-                {adj.nombre_archivo ||
-                  (adj.content_type.includes('pdf') ? 'PDF' : 'Archivo')}
-              </a>
-            ))}
-          </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   )
 }

@@ -43,21 +43,33 @@ export interface CobranzaGestionCasoProps {
   prestamo: CobranzaPrestamoResumen
   /** Cambia cada vez que se abre/fija la negociacion para crear una nota nueva en BD. */
   aperturaToken: number
+  /** Si false, no abre sesion al montar (solo al expandir / token en modo embed). */
+  autoIniciarSesion?: boolean
+  formularioInicialExpandido?: boolean
+  mostrarCabecera?: boolean
   onCasoActualizado?: (prestamoId: number, casoId: number) => void
+  /** Tras guardar nota (p. ej. refrescar historial en el dialogo). */
+  onNotaGuardada?: () => void
   className?: string
 }
 
 export function CobranzaGestionCaso({
   prestamo,
   aperturaToken,
+  autoIniciarSesion = true,
+  formularioInicialExpandido = true,
+  mostrarCabecera = true,
   onCasoActualizado,
+  onNotaGuardada,
   className,
 }: CobranzaGestionCasoProps) {
   const [caso, setCaso] = useState<CobranzaCasoDetalle | null>(null)
   const [notaSesionId, setNotaSesionId] = useState<number | null>(null)
   const [cargando, setCargando] = useState(false)
   const [guardando, setGuardando] = useState(false)
-  const [formularioExpandido, setFormularioExpandido] = useState(true)
+  const [formularioExpandido, setFormularioExpandido] = useState(
+    formularioInicialExpandido
+  )
   const [motivoCaso, setMotivoCaso] = useState<MotivoCobranza>(() =>
     motivoInicial(prestamo)
   )
@@ -105,10 +117,11 @@ export function CobranzaGestionCaso({
   }, [prestamo, limpiarFormularioNota, onCasoActualizado])
 
   useEffect(() => {
-    setFormularioExpandido(true)
+    if (!autoIniciarSesion) return
+    setFormularioExpandido(formularioInicialExpandido)
     void iniciarSesion()
     // eslint-disable-next-line react-hooks/exhaustive-deps -- solo al abrir/fijar
-  }, [prestamo.id, aperturaToken])
+  }, [prestamo.id, aperturaToken, autoIniciarSesion])
 
   const expandirFormulario = async () => {
     setFormularioExpandido(true)
@@ -158,6 +171,7 @@ export function CobranzaGestionCaso({
       setNotaSesionId(null)
       limpiarFormularioNota()
       setFormularioExpandido(false)
+      onNotaGuardada?.()
       toast.success(`Nota guardada (${formatDate(hoyIso())}).`)
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : 'Error al guardar nota')
@@ -190,23 +204,25 @@ export function CobranzaGestionCaso({
 
   return (
     <div className={cn('space-y-5', className)}>
-      <div className="flex flex-wrap items-start justify-between gap-2 border-b border-slate-200 pb-3">
-        <div>
-          <p className="text-lg font-semibold text-slate-900">
-            Caso en gestion — Prestamo #{prestamo.id}
-          </p>
-          <p className="text-sm text-slate-600">
-            {prestamo.nombres || prestamo.cedula} · Pendiente{' '}
-            {formatCurrency(prestamo.saldo_pendiente)}
-          </p>
+      {mostrarCabecera && (
+        <div className="flex flex-wrap items-start justify-between gap-2 border-b border-slate-200 pb-3">
+          <div>
+            <p className="text-lg font-semibold text-slate-900">
+              Caso en gestion — Prestamo #{prestamo.id}
+            </p>
+            <p className="text-sm text-slate-600">
+              {prestamo.nombres || prestamo.cedula} · Pendiente{' '}
+              {formatCurrency(prestamo.saldo_pendiente)}
+            </p>
+          </div>
+          {caso && (
+            <Button variant="outline" size="sm" onClick={refrescarAcuerdos}>
+              <RefreshCw className="mr-1 h-4 w-4" />
+              Cruce con pagos
+            </Button>
+          )}
         </div>
-        {caso && (
-          <Button variant="outline" size="sm" onClick={refrescarAcuerdos}>
-            <RefreshCw className="mr-1 h-4 w-4" />
-            Cruce con pagos
-          </Button>
-        )}
-      </div>
+      )}
 
       {cargando && formularioExpandido && (
         <div className="flex items-center gap-2 py-4 text-slate-600">
@@ -236,8 +252,8 @@ export function CobranzaGestionCaso({
         {!formularioExpandido && (
           <div className="border-t border-blue-200 px-4 py-3">
             <p className="text-sm text-slate-600">
-              Nota guardada. Use el icono de historial en la tabla para ver las
-              notas o expanda aqui para agregar otra.
+              Nota guardada. Revise el historial abajo o expanda para agregar
+              otra.
             </p>
             <Button
               type="button"
