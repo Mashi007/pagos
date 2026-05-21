@@ -27,7 +27,6 @@ import {
   Menu,
   RefreshCw,
   Briefcase,
-  DollarSign,
   Clock,
   Download,
   BarChart3,
@@ -334,6 +333,12 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
         { title: 'Pagos', href: '/pagos', icon: Wallet },
 
         {
+          title: 'Pagos Reportados',
+          href: '/cobros/pagos-reportados',
+          icon: FileText,
+        },
+
+        {
           title: 'Pago Bs.',
           href: '/pagos/pago-bs',
           icon: FileSpreadsheet,
@@ -374,28 +379,6 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
       href: '/auditoria',
 
       icon: Shield,
-    },
-
-    {
-      title: 'Cobros',
-
-      icon: DollarSign,
-
-      isSubmenu: true,
-
-      children: [
-        {
-          title: 'Pagos Reportados',
-          href: '/cobros/pagos-reportados',
-          icon: FileText,
-        },
-
-        {
-          title: 'Histórico por cliente',
-          href: '/cobros/historico-cliente',
-          icon: Clock,
-        },
-      ],
     },
 
     {
