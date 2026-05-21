@@ -12,6 +12,10 @@ import {
   Trash2,
 } from 'lucide-react'
 
+import {
+  DriveScanCoveragePanel,
+  invalidateDriveScanCoverage,
+} from '../components/drive/DriveScanCoveragePanel'
 import { ModulePageHeader } from '../components/ui/ModulePageHeader'
 import { Button } from '../components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
@@ -435,12 +439,13 @@ function AccionesPorFilaCandidatoDrive({
   const iconBtn =
     'h-8 w-8 shrink-0 rounded-md border border-slate-200 bg-white p-0 shadow-sm hover:bg-slate-50 disabled:opacity-50'
   const sr = fila.sheet_row_number
-  const saveDisabled = disabled || !puedeGuardarFila || guardandoEstaFila
-  const saveTitle = puedeGuardarFila
-    ? guardandoEstaFila
-      ? `Guardando fila de hoja ${sr}…`
-      : `Guardar solo esta fila (misma validación de servidor que «Guardar válidas»).`
-    : `No se puede guardar: la fila no cumple la validación de servidor (cliente, N, R, Q, S, J, cédula, etc.).`
+  // Botón siempre clicable salvo carga global o guardado en curso; la validación corre al pulsar (onGuardarFila).
+  const saveDisabled = disabled || guardandoEstaFila
+  const saveTitle = guardandoEstaFila
+    ? `Guardando fila de hoja ${sr}…`
+    : puedeGuardarFila
+      ? `Guardar solo esta fila (misma validación de servidor que «Guardar válidas»).`
+      : `Guardar fila ${sr}: al pulsar se aplican los mismos validadores de servidor; si no cumple, verá el motivo en un mensaje.`
   const deleteDisabled = disabled || eliminandoEstaFila
 
   return (
@@ -613,13 +618,14 @@ export default function ActualizacionesPrestamosDrivePage() {
           )
         }
       }
+      await invalidateDriveScanCoverage(qc)
       await refrescarSnapshotPostAccion()
     } catch (e) {
       toast.error(getErrorMessage(e) || 'No se pudo recalcular')
     } finally {
       setManualUpdating(false)
     }
-  }, [forzarVacio, refrescarSnapshotPostAccion])
+  }, [forzarVacio, qc, refrescarSnapshotPostAccion])
 
   const onGuardarUnaFila = useCallback(
     async (sheetRowNumber: number) => {
@@ -891,9 +897,11 @@ export default function ActualizacionesPrestamosDrivePage() {
     <div className="mx-auto max-w-7xl space-y-6 p-4 md:p-6">
       <ModulePageHeader
         title="Préstamos"
-        description="Actualizaciones: cédulas en CONCILIACIÓN (columna E). V y E: sin préstamo previo. J (jurídico): puede figurar con uno o más préstamos ya en cartera. Lista paginada (100 filas por página). Job dom/mié ~04:05 Caracas. Solo administradores."
+        description="Actualizaciones: cédulas en CONCILIACIÓN (columna E). V y E: sin préstamo previo. J (jurídico): puede figurar con uno o más préstamos ya en cartera. Lista paginada (100 filas por página). Job automático diario 02:00 Caracas (columna A → sync hasta última fila → snapshot). Solo administradores."
         icon={CreditCard}
       />
+
+      <DriveScanCoveragePanel />
 
       <Card>
         <CardHeader className="space-y-3">

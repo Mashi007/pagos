@@ -1365,6 +1365,7 @@ class ApiClient {
         url.includes('/clientes/check-emails') ||
         url.includes('/clientes/check-cedulas') || // Pipeline Gmail: puede tardar si el backend es síncrono (credenciales OAuth)
         url.includes('/conciliacion-sheet/sync-now') || // Sheets API + escritura snapshot BD
+        url.includes('/conciliacion-sheet/verificar-cola') || // Lectura tramo columna A en Google
         url.includes('/prestamos/candidatos-drive/refrescar') || // Recorre drive + prestamos + reescribe snapshot
         url.includes('/prestamos/candidatos-drive/guardar-validados-100') || // Crear préstamos por cada fila válida
         url.includes('/prestamos/candidatos-drive/guardar-fila') || // Una fila + mismas validaciones que el lote

@@ -2,8 +2,8 @@
 Sincronización de la hoja CONCILIACIÓN (Google Sheets) → BD.
 
 - POST /conciliacion-sheet/sync — cron externo (p. ej. Render Cron Jobs) con header X-Conciliacion-Sheet-Sync-Secret.
-  Horario recomendado alineado al job interno: domingo y miércoles 01:20 America/Caracas (≈ 05:20 UTC, sin DST).
-  Si ENABLE_AUTOMATIC_SCHEDULED_JOBS=true, el APScheduler del backend ya ejecuta el mismo sync esos días a esa hora:
+  Horario recomendado alineado a jobs internos: 01:00 Clientes Drive y 02:00 Préstamos Drive (America/Caracas).
+  Si ENABLE_AUTOMATIC_SCHEDULED_JOBS=true, el APScheduler ejecuta sync acotado por columna A en esos horarios;
   puede omitir el cron externo o dejarlo como respaldo (evite disparos redundantes minuto a minuto).
   Tras cada sync exitoso, el backend recalcula en bloque `prestamos.fecha_entrega_q_aprobacion_cache` (columna Q vs
   `fecha_aprobacion`) para alinear listados y auditoría con el snapshot nuevo.
@@ -33,6 +33,10 @@ from app.models.conciliacion_sheet import (
 )
 from app.models.drive import DriveRow
 from app.schemas.auth import UserResponse
+from app.services.conciliacion_sheet_cobertura import (
+    compute_scan_coverage_from_db,
+    probe_google_sheet_tail_row,
+)
 from app.services.conciliacion_sheet_sync import (
     build_conciliacion_sheet_diagnostico,
     run_sync_to_db,
@@ -256,6 +260,31 @@ def _build_operator_checklist(
     return out
 
 
+@router.post("/verificar-cola")
+def post_conciliacion_sheet_verificar_cola(
+    db: Session = Depends(get_db),
+    _staff: UserResponse = Depends(require_admin_or_operator),
+) -> Dict[str, Any]:
+    """
+    Comprueba en Google (columna A) la última fila con dato cerca de la cola importada en BD.
+    No reimporta toda la hoja; útil cuando la última fila de CONCILIACIÓN cambia a diario.
+    """
+    logger.info(
+        "[conciliacion_sheet] POST /verificar-cola usuario_id=%s",
+        getattr(_staff, "id", None),
+    )
+    try:
+        return probe_google_sheet_tail_row(db, persist_meta=True)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+    except Exception as e:
+        logger.exception("post_conciliacion_sheet_verificar_cola: %s", e)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=str(e)[:500] if e else "Error al verificar cola en Google",
+        ) from e
+
+
 @router.get("/diagnostico")
 def get_conciliacion_sheet_diagnostico(
     db: Session = Depends(get_db),
@@ -326,6 +355,7 @@ def get_conciliacion_sheet_status(
         getattr(last_run, "success", None),
         getattr(last_run, "row_count", None),
     )
+    scan_coverage = compute_scan_coverage_from_db(db)
     return {
         "timezone": BUSINESS_TIMEZONE,
         "columns_range": cols_range,
@@ -333,6 +363,7 @@ def get_conciliacion_sheet_status(
         "expected_tab_name": (getattr(settings, "CONCILIACION_SHEET_TAB_NAME", None) or "CONCILIACIÓN").strip(),
         "snapshot_row_count": snapshot_row_count,
         "drive_row_count": drive_row_count,
+        "scan_coverage": scan_coverage,
         "fecha_drive_ready": fecha_drive_ready,
         "fecha_drive_blocker": blocker,
         "fecha_drive_hint": hint,
@@ -347,6 +378,11 @@ def get_conciliacion_sheet_status(
             "header_row_index": meta.header_row_index,
             "row_count": meta.row_count,
             "col_count": meta.col_count,
+            "last_data_sheet_row_number": meta.last_data_sheet_row_number,
+            "google_tail_row_number": meta.google_tail_row_number,
+            "google_tail_row_probed_at": meta.google_tail_row_probed_at.isoformat()
+            if meta.google_tail_row_probed_at
+            else None,
             "headers": meta.headers,
             "synced_at": meta.synced_at.isoformat() if meta.synced_at else None,
             "last_error": meta.last_error,

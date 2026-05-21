@@ -264,8 +264,43 @@ def _get_sheets_credentials():
         return None
 
 
+def fetch_sheet_column_a_full(
+    spreadsheet_id: str, tab_name: str
+) -> Tuple[str, List[List[Any]]]:
+    """Columna A desde fila 1 hasta la última fila con dato que devuelve la API."""
+    creds = _get_sheets_credentials()
+    if creds is None:
+        raise RuntimeError(
+            "Sin credenciales Google (Sheets). Configure Informe de pagos / cuenta de servicio "
+            "o tokens Gmail (GOOGLE_CLIENT_ID, GMAIL_TOKENS_PATH, etc.)."
+        )
+    service = _build_sheets_service(creds)
+    exact_title = _resolve_sheet_title(service, spreadsheet_id, tab_name)
+    rng = f"'{_escape_sheet_title_for_range(exact_title)}'!A1:A"
+    logger.info(
+        "[conciliacion_sheet] fetch_sheet_column_a_full rango=%r pestaña=%r",
+        rng,
+        exact_title,
+    )
+    resp = _sheets_execute(
+        service.spreadsheets()
+        .values()
+        .get(
+            spreadsheetId=spreadsheet_id,
+            range=rng,
+            majorDimension="ROWS",
+            valueRenderOption="UNFORMATTED_VALUE",
+        )
+    )
+    return exact_title, resp.get("values") or []
+
+
 def fetch_sheet_values(
-    spreadsheet_id: str, tab_name: str, columns_range: str
+    spreadsheet_id: str,
+    tab_name: str,
+    columns_range: str,
+    *,
+    end_row_1based: int | None = None,
 ) -> Tuple[str, List[List[Any]], int]:
     logger.info(
         "[conciliacion_sheet] fetch_sheet_values inicio spreadsheet=%s tab_solicitada=%r cols=%r",
@@ -288,12 +323,19 @@ def fetch_sheet_values(
     # Anclar fila 1 del sheet: usar A1:S (no A:S). Con A:S la API puede omitir filas iniciales sin
     # datos en A–S y el primer elemento deja de ser la fila 1 real; la cabecera con LOTE (p. ej. fila 11)
     # no coincide con los índices y puede leerse una fila vacía como "cabecera".
-    rng = f"'{_escape_sheet_title_for_range(exact_title)}'!{col_a}1:{col_b}"
+    end_row = int(end_row_1based) if end_row_1based is not None else None
+    if end_row is not None and end_row < 1:
+        end_row = 1
+    if end_row is not None:
+        rng = f"'{_escape_sheet_title_for_range(exact_title)}'!{col_a}1:{col_b}{end_row}"
+    else:
+        rng = f"'{_escape_sheet_title_for_range(exact_title)}'!{col_a}1:{col_b}"
     logger.info(
-        "[conciliacion_sheet] Sheets API values.get rango=%r pestaña_resuelta=%r ncols=%s",
+        "[conciliacion_sheet] Sheets API values.get rango=%r pestaña_resuelta=%r ncols=%s end_row=%s",
         rng,
         exact_title,
         ncols,
+        end_row,
     )
     resp = _sheets_execute(
         service.spreadsheets()
@@ -316,6 +358,45 @@ def fetch_sheet_values(
         len(trimmed),
     )
     return exact_title, trimmed, ncols
+
+
+def fetch_sheet_column_a_slice(
+    spreadsheet_id: str,
+    tab_name: str,
+    row_start_1based: int,
+    row_end_1based: int,
+) -> Tuple[str, List[List[Any]]]:
+    """
+    Lectura ligera de columna A entre dos filas (1-based). Sirve para verificar la cola
+    de la hoja sin descargar A:S completo.
+    """
+    if row_end_1based < row_start_1based:
+        row_start_1based, row_end_1based = row_end_1based, row_start_1based
+    creds = _get_sheets_credentials()
+    if creds is None:
+        raise RuntimeError(
+            "Sin credenciales Google (Sheets). Configure Informe de pagos / cuenta de servicio "
+            "o tokens Gmail (GOOGLE_CLIENT_ID, GMAIL_TOKENS_PATH, etc.)."
+        )
+    service = _build_sheets_service(creds)
+    exact_title = _resolve_sheet_title(service, spreadsheet_id, tab_name)
+    rng = f"'{_escape_sheet_title_for_range(exact_title)}'!A{int(row_start_1based)}:A{int(row_end_1based)}"
+    logger.info(
+        "[conciliacion_sheet] fetch_sheet_column_a_slice rango=%r pestaña=%r",
+        rng,
+        exact_title,
+    )
+    resp = _sheets_execute(
+        service.spreadsheets()
+        .values()
+        .get(
+            spreadsheetId=spreadsheet_id,
+            range=rng,
+            majorDimension="ROWS",
+            valueRenderOption="UNFORMATTED_VALUE",
+        )
+    )
+    return exact_title, resp.get("values") or []
 
 
 def run_sync_to_db(db: Session) -> Dict[str, Any]:
@@ -343,8 +424,24 @@ def run_sync_to_db(db: Session) -> Dict[str, Any]:
     )
 
     try:
+        from app.services.conciliacion_sheet_cobertura import resolve_sync_end_row_from_column_a
+
+        bounds = resolve_sync_end_row_from_column_a(
+            spreadsheet_id, tab_name, marker=marker
+        )
+        sync_end_row = int(bounds["sync_end_row"])
+        column_a_last_row = int(bounds["column_a_last_row"])
+        logger.info(
+            "[conciliacion_sheet] sync acotado por columna A: ultima_fila_a=%s importar_hasta_fila=%s",
+            column_a_last_row,
+            sync_end_row,
+        )
+
         sheet_title, values, ncols_expected = fetch_sheet_values(
-            spreadsheet_id, tab_name, columns_range
+            spreadsheet_id,
+            tab_name,
+            columns_range,
+            end_row_1based=sync_end_row,
         )
         if not values:
             logger.warning("[conciliacion_sheet] run_sync_to_db: API devolvió 0 filas")
@@ -456,12 +553,35 @@ def run_sync_to_db(db: Session) -> Dict[str, Any]:
         db.add(run)
         db.commit()
         db.refresh(run)
+
+        last_data_sheet_row = h_idx + 1 + len(data_rows) if data_rows else h_idx + 1
+        if meta is not None:
+            meta.google_tail_row_number = column_a_last_row
+            meta.google_tail_row_probed_at = now
+        scan_coverage_payload: Dict[str, Any] = {}
+        try:
+            from app.services.conciliacion_sheet_cobertura import record_last_data_row_on_meta
+
+            scan_coverage_payload = record_last_data_row_on_meta(
+                db,
+                last_data_sheet_row=last_data_sheet_row,
+                run_tail_probe=False,
+            )
+        except Exception as cov_ex:
+            logger.warning(
+                "[conciliacion_sheet] cobertura/cola tras sync: %s",
+                cov_ex,
+            )
+            scan_coverage_payload = {"error": str(cov_ex)[:500]}
+
         logger.info(
-            "[conciliacion_sheet] run_sync_to_db OK run_id=%s filas=%s cols=%s drive_filas=%s duracion_ms=%s",
+            "[conciliacion_sheet] run_sync_to_db OK run_id=%s filas=%s cols=%s drive_filas=%s "
+            "ultima_fila_datos=%s duracion_ms=%s",
             run.id,
             len(data_rows),
             col_count,
             len(data_rows),
+            last_data_sheet_row,
             run.duration_ms,
         )
         return {
@@ -472,9 +592,14 @@ def run_sync_to_db(db: Session) -> Dict[str, Any]:
             "row_count": len(data_rows),
             "col_count": col_count,
             "drive_rows": len(data_rows),
+            "last_data_sheet_row_number": last_data_sheet_row,
+            "column_a_last_row": column_a_last_row,
+            "sync_end_row": sync_end_row,
             "synced_at": now.isoformat(),
             "timezone": BUSINESS_TIMEZONE,
             "run_id": run.id,
+            "scan_coverage": scan_coverage_payload.get("scan_coverage"),
+            "tail_probe": scan_coverage_payload.get("tail_probe"),
         }
     except Exception as e:
         logger.exception(

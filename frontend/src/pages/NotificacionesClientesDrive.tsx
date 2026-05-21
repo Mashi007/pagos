@@ -15,6 +15,10 @@ import {
   User,
 } from 'lucide-react'
 
+import {
+  DriveScanCoveragePanel,
+  invalidateDriveScanCoverage,
+} from '../components/drive/DriveScanCoveragePanel'
 import { ModulePageHeader } from '../components/ui/ModulePageHeader'
 import { Button } from '../components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
@@ -398,12 +402,19 @@ export default function NotificacionesClientesDrive() {
     try {
       const syncRes = await reporteService.syncConciliacionSheetDesdeDrive()
       await clienteService.postDriveImportRefreshCache()
+      await invalidateDriveScanCoverage(qc)
       await qc.invalidateQueries({ queryKey: [...QK] })
       await qc.refetchQueries({ queryKey: [...QK] })
       const n = syncRes?.row_count
+      const ultima =
+        typeof syncRes?.last_data_sheet_row_number === 'number'
+          ? syncRes.last_data_sheet_row_number
+          : null
       const filas = typeof n === 'number' ? `${n} fila(s) en snapshot. ` : ''
+      const cola =
+        ultima != null ? `Última fila hoja: ${ultima}. ` : ''
       toast.success(
-        `${filas}Hoja CONCILIACIÓN traída desde Drive y lista de candidatos actualizada.`
+        `${filas}${cola}Hoja CONCILIACIÓN traída desde Drive y lista de candidatos actualizada.`
       )
     } catch (e) {
       toast.error(
@@ -686,6 +697,8 @@ export default function NotificacionesClientesDrive() {
           )
         }
       />
+
+      <DriveScanCoveragePanel />
 
       <Card>
         <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3 space-y-0">
@@ -1027,8 +1040,9 @@ export default function NotificacionesClientesDrive() {
                       No hay filas pendientes: todas las cédulas del Drive ya
                       existen en clientes, o el snapshot está vacío. Verifique
                       la sincronización en Configuración (Google), el job
-                      interno (sync dom/mié 02:00 y caché de lista 03:00 Caracas
-                      si ENABLE_AUTOMATIC_SCHEDULED_JOBS=true) o un cron externo
+                      interno (01:00 sync por columna A + caché Clientes Drive;
+                      02:00 snapshot Préstamos Drive si ENABLE_AUTOMATIC_SCHEDULED_JOBS=true)
+                      o un cron externo
                       alineado (POST /api/v1/conciliacion-sheet/sync con
                       secreto). Puede pulsar «Actualizar lista» para
                       materializar ahora.

@@ -42,7 +42,7 @@ def post_drive_clientes_refresh_cache(
     db: Session = Depends(get_db),
     _: UserResponse = Depends(require_admin),
 ):
-    """Útil manualmente; el job dom/mié 03:00 Caracas hace lo mismo tras el sync de la hoja."""
+    """Útil manualmente; el job 01:00 Caracas sincroniza, importa seleccionables y refresca caché."""
     return refrescar_cache_candidatos_drive(db)
 
 

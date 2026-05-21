@@ -29,9 +29,9 @@ class Settings(BaseSettings):
         default=False,
         description=(
             "Si True, el proceso lider puede iniciar APScheduler (finiquito, auditoria cartera, limpieza codigos, "
-            "hoja CONCILIACION a drive/conciliacion_sheet domingo y miércoles 01:20 Caracas, "
-            "caché lista Clientes (Drive) diario 04:05 Caracas, "
-            "snapshot candidatos préstamo desde drive diario 04:45 si aplica, "
+            "Clientes (Drive) diario 01:00 Caracas (columna A + sync CONCILIACIÓN hasta última fila + caché), "
+            "Préstamos Drive diario 02:00 Caracas (mismo sync + snapshot candidatos), "
+            "recalculo respaldo caché clientes 04:05 y snapshot préstamos 04:45, "
             "Gmail programado si aplica), liquidado diario 21:00 Caracas, refresco programado de cache del dashboard, "
             "watcher de lider y, al arrancar, marcar syncs Gmail 'running' como error (desbloqueo tras deploy). "
             "Los envíos masivos por pestaña de Notificaciones son manuales salvo crons opcionales "
@@ -100,12 +100,40 @@ class Settings(BaseSettings):
             "vuelve a ejecutar ese mismo recálculo masivo para alinear listados con el snapshot nuevo."
         ),
     )
+    # Clientes (Drive): sync nocturno + caché lista (UI /notificaciones/clientes-drive).
+    ENABLE_DRIVE_CLIENTES_NIGHTLY_0100: bool = Field(
+        default=True,
+        description=(
+            "Si True y ENABLE_AUTOMATIC_SCHEDULED_JOBS=True, cada día a las 01:00 America/Caracas: "
+            "lee columna A en Google Sheets, sincroniza CONCILIACIÓN (A:S) hasta la última fila con dato en A "
+            "y refresca drive_clientes_candidatos_cache."
+        ),
+    )
+    ENABLE_DRIVE_CLIENTES_AUTO_GUARDAR_NIGHTLY: bool = Field(
+        default=True,
+        description=(
+            "Tras el job 01:00, importa automáticamente solo filas `seleccionable` (misma regla que importación "
+            "manual en Clientes Drive). Las que no cumplen permanecen en pantalla."
+        ),
+    )
+    SCHEDULER_SYSTEM_USER_EMAIL: str = Field(
+        default="itmaster@rapicreditca.com",
+        description="Email del usuario registrado en altas/préstamos creados por jobs nocturnos Drive.",
+    )
     # Snapshot candidatos préstamo nuevo desde tabla `drive` (tras sync CONCILIACIÓN).
     ENABLE_PRESTAMO_CANDIDATOS_DRIVE_NIGHTLY: bool = Field(
         default=True,
         description=(
-            "Si True y ENABLE_AUTOMATIC_SCHEDULED_JOBS=True, cada día a las 04:45 America/Caracas "
-            "se recalcula la tabla prestamo_candidatos_drive (cédula columna E; ver servicio y scheduler)."
+            "Si True y ENABLE_AUTOMATIC_SCHEDULED_JOBS=True, cada día a las 02:00 America/Caracas: "
+            "mismo criterio columna A + sync acotado + prestamo_candidatos_drive "
+            "(UI /actualizaciones/prestamos). A las 04:45 solo recalcula snapshot sin volver a Sheets."
+        ),
+    )
+    ENABLE_PRESTAMO_CANDIDATOS_AUTO_GUARDAR_NIGHTLY: bool = Field(
+        default=True,
+        description=(
+            "Tras el job 02:00, ejecuta el mismo guardado que «Guardar préstamos validados» "
+            "(`_motivos_no_100`). Las filas que no cumplen siguen en el snapshot para revisión."
         ),
     )
 

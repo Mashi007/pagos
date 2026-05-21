@@ -1,8 +1,8 @@
 """
 Snapshot de candidatos a préstamo nuevo desde tabla `drive` (CONCILIACIÓN).
 
-Solo administradores. El refresco automático corre todos los días 04:45 (America/Caracas),
-tras el refresco de caché de clientes Drive de las 04:05.
+Solo administradores. El refresco automático corre todos los días 02:00 (America/Caracas):
+columna A en Google, sync CONCILIACIÓN hasta esa fila y snapshot; 04:45 solo recalcula sin sync.
 """
 from typing import Optional
 

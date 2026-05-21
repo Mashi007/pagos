@@ -493,6 +493,23 @@ export interface ResumenConciliacion {
   fecha_fin?: string
 }
 
+/** Métricas de cobertura del escaneo (última fila BD vs cola en Google). */
+export interface DriveScanCoverage {
+  header_row_index: number
+  data_row_count: number
+  expected_last_data_sheet_row: number | null
+  last_data_sheet_row_stored: number | null
+  drive_min_sheet_row: number | null
+  drive_max_sheet_row: number | null
+  drive_row_count: number
+  bd_internally_consistent: boolean
+  google_tail_row_number: number | null
+  google_tail_row_probed_at: string | null
+  tail_aligned_with_drive_table: boolean | null
+  tail_message: string | null
+  drive_synced_at: string | null
+}
+
 /** GET /api/v1/conciliacion-sheet/status - snapshot hoja Drive vs BD (Fecha Drive). */
 export interface ConciliacionSheetStatusResponse {
   timezone: string
@@ -507,6 +524,8 @@ export interface ConciliacionSheetStatusResponse {
 
   /** Filas en tabla drive (A..S plano); misma corrida que el snapshot JSON. */
   drive_row_count?: number
+
+  scan_coverage?: DriveScanCoverage
 
   fecha_drive_ready: boolean
 
@@ -1761,6 +1780,21 @@ class ReporteService {
     return await apiClient.get<Record<string, unknown>>(
       `${this.conciliacionSheetBaseUrl}/diagnostico`,
       { timeout: 60000 }
+    )
+  }
+
+  /** POST /conciliacion-sheet/verificar-cola — última fila con dato en columna A (sin sync completo). */
+  async verificarConciliacionSheetCola(): Promise<{
+    ok: boolean
+    google_tail_row_number: number | null
+    probed_at: string
+    probe_range?: string
+    scan_coverage?: DriveScanCoverage
+  }> {
+    return await apiClient.post(
+      `${this.conciliacionSheetBaseUrl}/verificar-cola`,
+      undefined,
+      { timeout: 120000 }
     )
   }
 }

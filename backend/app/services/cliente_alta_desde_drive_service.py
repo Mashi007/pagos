@@ -397,6 +397,41 @@ def obtener_candidatos_drive_para_api(db: Session, *, forzar_calculo: bool = Fal
     return out
 
 
+def ejecutar_importar_candidatos_drive_seleccionables_automatico(
+    db: Session,
+    *,
+    usuario_email: str,
+    comentario: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    Misma regla que el botón de importación manual: solo filas con `seleccionable=true`
+    (cédula, teléfono F, nombre D, correo G, sin duplicado en hoja). El resto permanece en la lista.
+    """
+    snap = listar_candidatos_desde_drive(db)
+    sheet_rows = [
+        int(c["sheet_row_number"])
+        for c in (snap.get("candidatos") or [])
+        if c.get("seleccionable") is True
+    ]
+    if not sheet_rows:
+        return {
+            "ok": True,
+            "filas_intentadas": 0,
+            "mensaje": "Ninguna fila seleccionable; las demás siguen en pantalla para revisión manual.",
+        }
+    res = importar_seleccion_desde_drive(
+        db,
+        usuario_email=usuario_email,
+        comentario=(
+            comentario
+            or "Importación automática nocturna: filas que cumplen validadores de la hoja (seleccionable)."
+        ),
+        sheet_rows=sheet_rows,
+    )
+    res["filas_intentadas"] = len(sheet_rows)
+    return res
+
+
 def importar_seleccion_desde_drive(
     db: Session,
     *,
