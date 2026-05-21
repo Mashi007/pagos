@@ -62,6 +62,7 @@ export default function CobranzasPage() {
   const [buscando, setBuscando] = useState(false)
   const [resultado, setResultado] = useState<CobranzaBuscarResponse | null>(null)
   const [prestamoFijadoId, setPrestamoFijadoId] = useState<number | null>(null)
+  const [aperturaToken, setAperturaToken] = useState(0)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [prestamoNegociacion, setPrestamoNegociacion] =
     useState<CobranzaPrestamoResumen | null>(null)
@@ -93,6 +94,7 @@ export default function CobranzasPage() {
   const fijarPrestamo = (p: CobranzaPrestamoResumen, fijar: boolean) => {
     if (fijar) {
       setPrestamoFijadoId(p.id)
+      setAperturaToken(Date.now())
       requestAnimationFrame(() => {
         panelGestionRef.current?.scrollIntoView({
           behavior: 'smooth',
@@ -106,6 +108,7 @@ export default function CobranzasPage() {
 
   const abrirNegociacion = (p: CobranzaPrestamoResumen) => {
     setPrestamoNegociacion(p)
+    setAperturaToken(Date.now())
     setDialogOpen(true)
   }
 
@@ -272,8 +275,8 @@ export default function CobranzasPage() {
             <Card className="border-2 border-blue-200 shadow-md">
               <CardContent className="pt-6">
                 <CobranzaGestionCaso
-                  key={prestamoFijado.id}
                   prestamo={prestamoFijado}
+                  aperturaToken={aperturaToken}
                   onCasoActualizado={onCasoActualizado}
                 />
               </CardContent>
@@ -287,6 +290,7 @@ export default function CobranzasPage() {
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         prestamo={prestamoNegociacion}
+        aperturaToken={aperturaToken}
         onCasoActualizado={onCasoActualizado}
       />
     </div>

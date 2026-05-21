@@ -1,18 +1,17 @@
-import React, { useCallback, useEffect, useState } from 'react'
-import { Loader2, RefreshCw, Trash2, Upload } from 'lucide-react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
+import { Loader2, RefreshCw, X } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 import {
-  crearAcuerdoCobranza,
-  crearCasoCobranza,
   actualizarCasoCobranza,
-  cobranzaImagenUrl,
-  eliminarImagenCobranza,
+  abrirSesionNotaCobranza,
+  cobranzaNotaAdjuntoUrl,
   ESTADO_ACUERDO_LABEL,
+  guardarNotaSesionCobranza,
+  MENSAJE_SESION_ABIERTA,
   MOTIVOS_COBRANZA_LABEL,
-  obtenerCasoCobranza,
   sincronizarAcuerdosCobranza,
-  subirImagenCobranza,
+  type CobranzaAcuerdo,
   type CobranzaCasoDetalle,
   type CobranzaPrestamoResumen,
   type MonedaAcuerdoCobranza,
@@ -31,6 +30,9 @@ import {
 import { Textarea } from '../ui/textarea'
 import { formatCurrency, formatDate } from '../../utils'
 import { cn } from '../../utils'
+
+const MAX_ARCHIVOS_NOTA = 3
+const TIPOS_ARCHIVO_ACEPTADOS = '.pdf,.jpg,.jpeg,.png'
 
 function formatCantidadMoneda(
   cantidad?: number | null,
@@ -59,78 +61,135 @@ function estadoAcuerdoBadge(estado: string) {
   )
 }
 
+function hoyIso(): string {
+  return new Date().toISOString().slice(0, 10)
+}
+
+function motivoInicial(p: CobranzaPrestamoResumen): MotivoCobranza {
+  if (p.cuotas_atrasadas >= 3) return 'ATRASO_CRONICO'
+  if (p.saldo_pendiente > 0) return 'NEGOCIACION'
+  return 'OTRO'
+}
+
+function esNotaBorrador(a: CobranzaAcuerdo, notaSesionId: number | null): boolean {
+  return (
+    notaSesionId != null &&
+    a.id === notaSesionId &&
+    a.mensaje.trim() === MENSAJE_SESION_ABIERTA
+  )
+}
+
 export interface CobranzaGestionCasoProps {
   prestamo: CobranzaPrestamoResumen
+  /** Cambia cada vez que se abre/fija la negociacion para crear una nota nueva en BD. */
+  aperturaToken: number
   onCasoActualizado?: (prestamoId: number, casoId: number) => void
   className?: string
 }
 
 export function CobranzaGestionCaso({
   prestamo,
+  aperturaToken,
   onCasoActualizado,
   className,
 }: CobranzaGestionCasoProps) {
   const [caso, setCaso] = useState<CobranzaCasoDetalle | null>(null)
+  const [notaSesionId, setNotaSesionId] = useState<number | null>(null)
   const [cargando, setCargando] = useState(false)
-  const [motivoNuevo, setMotivoNuevo] = useState<MotivoCobranza>('ATRASO_CRONICO')
-  const [obsNuevo, setObsNuevo] = useState('')
-  const [fechaMensaje, setFechaMensaje] = useState(
-    () => new Date().toISOString().slice(0, 10)
+  const [guardando, setGuardando] = useState(false)
+  const [motivoCaso, setMotivoCaso] = useState<MotivoCobranza>(() =>
+    motivoInicial(prestamo)
   )
   const [mensaje, setMensaje] = useState('')
   const [cantidad, setCantidad] = useState('')
   const [moneda, setMoneda] = useState<MonedaAcuerdoCobranza>('USD')
-  const [subiendoImg, setSubiendoImg] = useState(false)
+  const [archivos, setArchivos] = useState<File[]>([])
+  const iniciandoRef = useRef(false)
 
-  const cargarCaso = useCallback(async (casoId: number) => {
-    setCargando(true)
-    try {
-      const det = await obtenerCasoCobranza(casoId)
-      setCaso(det)
-      return det
-    } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : 'Error al cargar caso')
-      setCaso(null)
-      return null
-    } finally {
-      setCargando(false)
-    }
-  }, [])
-
-  useEffect(() => {
-    setMotivoNuevo(
-      prestamo.cuotas_atrasadas >= 3
-        ? 'ATRASO_CRONICO'
-        : prestamo.saldo_pendiente > 0
-          ? 'NEGOCIACION'
-          : 'OTRO'
-    )
-    setObsNuevo('')
+  const limpiarFormularioNota = useCallback(() => {
     setMensaje('')
     setCantidad('')
-    if (prestamo.caso_id) {
-      void cargarCaso(prestamo.caso_id)
-    } else {
-      setCaso(null)
-      setCargando(false)
-    }
-  }, [prestamo.id, prestamo.caso_id, cargarCaso, prestamo.cuotas_atrasadas, prestamo.saldo_pendiente])
+    setMoneda('USD')
+    setArchivos([])
+  }, [])
 
-  const abrirCaso = async () => {
+  const iniciarSesion = useCallback(async () => {
+    if (iniciandoRef.current) return
+    iniciandoRef.current = true
     setCargando(true)
+    limpiarFormularioNota()
+    const motivo = motivoInicial(prestamo)
+    setMotivoCaso(motivo)
     try {
-      const det = await crearCasoCobranza({
+      const sesion = await abrirSesionNotaCobranza({
         prestamo_id: prestamo.id,
-        motivo: motivoNuevo,
-        observaciones: obsNuevo.trim() || undefined,
+        motivo,
+      })
+      setCaso(sesion.caso)
+      setNotaSesionId(sesion.nota_id)
+      setMotivoCaso(sesion.caso.motivo)
+      onCasoActualizado?.(prestamo.id, sesion.caso.id)
+    } catch (e: unknown) {
+      toast.error(
+        e instanceof Error ? e.message : 'Error al abrir sesion de nota'
+      )
+      setCaso(null)
+      setNotaSesionId(null)
+    } finally {
+      setCargando(false)
+      iniciandoRef.current = false
+    }
+  }, [prestamo, limpiarFormularioNota, onCasoActualizado])
+
+  useEffect(() => {
+    void iniciarSesion()
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- solo al abrir/fijar
+  }, [prestamo.id, aperturaToken])
+
+  const onElegirArchivos = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const list = e.target.files
+    if (!list?.length) return
+    const nuevos = Array.from(list).slice(0, MAX_ARCHIVOS_NOTA)
+    if (list.length > MAX_ARCHIVOS_NOTA) {
+      toast.error(`Solo hasta ${MAX_ARCHIVOS_NOTA} archivos por nota.`)
+    }
+    setArchivos(nuevos)
+    e.target.value = ''
+  }
+
+  const quitarArchivo = (idx: number) => {
+    setArchivos(prev => prev.filter((_, i) => i !== idx))
+  }
+
+  const guardarNota = async () => {
+    if (!notaSesionId) {
+      toast.error('Espere a que se abra la sesion de la nota.')
+      return
+    }
+    if (!mensaje.trim()) {
+      toast.error('Ingrese el mensaje de la nota.')
+      return
+    }
+    setGuardando(true)
+    try {
+      const cant = cantidad.trim()
+        ? parseFloat(cantidad.replace(',', '.'))
+        : undefined
+      const det = await guardarNotaSesionCobranza(notaSesionId, {
+        mensaje: mensaje.trim(),
+        cantidad:
+          cant != null && !Number.isNaN(cant) && cant >= 0 ? cant : undefined,
+        moneda,
+        archivos,
       })
       setCaso(det)
       onCasoActualizado?.(prestamo.id, det.id)
-      toast.success('Caso de cobranza abierto.')
+      toast.success(`Nota guardada (${formatDate(hoyIso())}).`)
+      await iniciarSesion()
     } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : 'No se pudo abrir el caso')
+      toast.error(e instanceof Error ? e.message : 'Error al guardar nota')
     } finally {
-      setCargando(false)
+      setGuardando(false)
     }
   }
 
@@ -139,35 +198,9 @@ export function CobranzaGestionCaso({
     try {
       const det = await actualizarCasoCobranza(caso.id, { motivo })
       setCaso(det)
+      setMotivoCaso(motivo)
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : 'Error al guardar')
-    }
-  }
-
-  const agregarAcuerdo = async () => {
-    if (!caso || !mensaje.trim()) {
-      toast.error('Ingrese el mensaje.')
-      return
-    }
-    const cant = parseFloat(cantidad.replace(',', '.'))
-    if (!cantidad.trim() || Number.isNaN(cant) || cant < 0) {
-      toast.error('Ingrese la cantidad.')
-      return
-    }
-    try {
-      await crearAcuerdoCobranza(caso.id, {
-        fecha: fechaMensaje,
-        mensaje: mensaje.trim(),
-        cantidad: cant,
-        moneda,
-      })
-      const det = await sincronizarAcuerdosCobranza(caso.id)
-      setCaso(det)
-      setMensaje('')
-      setCantidad('')
-      toast.success('Mensaje registrado.')
-    } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : 'Error al registrar')
     }
   }
 
@@ -182,31 +215,8 @@ export function CobranzaGestionCaso({
     }
   }
 
-  const onSubirImagen = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!caso || !e.target.files?.length) return
-    const file = e.target.files[0]
-    setSubiendoImg(true)
-    try {
-      await subirImagenCobranza(caso.id, file)
-      await cargarCaso(caso.id)
-      toast.success('Imagen cargada.')
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Error al subir')
-    } finally {
-      setSubiendoImg(false)
-      e.target.value = ''
-    }
-  }
-
-  const onEliminarImagen = async (imagenId: string) => {
-    if (!caso || !window.confirm('Eliminar esta imagen?')) return
-    try {
-      await eliminarImagenCobranza(caso.id, imagenId)
-      await cargarCaso(caso.id)
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Error al eliminar')
-    }
-  }
+  const acuerdosHistorial =
+    caso?.acuerdos.filter(a => !esNotaBorrador(a, notaSesionId)) ?? []
 
   return (
     <div className={cn('space-y-5', className)}>
@@ -228,26 +238,32 @@ export function CobranzaGestionCaso({
         )}
       </div>
 
-      {cargando && !caso && (
-        <div className="flex items-center gap-2 py-6 text-slate-600">
+      {cargando && (
+        <div className="flex items-center gap-2 py-4 text-slate-600">
           <Loader2 className="h-5 w-5 animate-spin" />
-          Cargando caso...
+          Abriendo nueva nota en el sistema...
         </div>
       )}
 
-      {!cargando && !caso && (
-        <div className="space-y-4 rounded-lg border border-dashed border-slate-300 bg-slate-50/80 p-4">
-          <p className="text-sm text-slate-600">
-            Marque el prestamo con el check en la tabla y abra el caso para
-            registrar mensajes e imagenes de la negociacion.
-          </p>
-          <div>
-            <label className="mb-1 block text-sm font-medium">Motivo</label>
+      <div className="rounded-lg border-2 border-dashed border-blue-200 bg-blue-50/40 p-4">
+        <p className="mb-3 text-sm font-medium text-slate-800">Nueva nota</p>
+        <p className="mb-3 text-xs text-slate-500">
+          Al abrir la negociacion se crea una nota en la base de datos con la
+          fecha de hoy ({formatDate(hoyIso())}). Al guardar se registran mensaje,
+          monto y hasta {MAX_ARCHIVOS_NOTA} respaldos (PDF, JPG o PNG) en la
+          tabla de adjuntos.
+        </p>
+
+        {!caso && !cargando && (
+          <div className="mb-3">
+            <label className="mb-1 block text-xs font-medium text-slate-600">
+              Motivo del caso (primera nota)
+            </label>
             <Select
-              value={motivoNuevo}
-              onValueChange={v => setMotivoNuevo(v as MotivoCobranza)}
+              value={motivoCaso}
+              onValueChange={v => setMotivoCaso(v as MotivoCobranza)}
             >
-              <SelectTrigger>
+              <SelectTrigger className="h-9 bg-white">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -261,61 +277,18 @@ export function CobranzaGestionCaso({
               </SelectContent>
             </Select>
           </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium">
-              Observaciones iniciales
-            </label>
-            <Textarea
-              value={obsNuevo}
-              onChange={e => setObsNuevo(e.target.value)}
-              rows={3}
-              placeholder="Contexto: atraso cronico, sobrepago, llamada..."
-            />
-          </div>
-          <Button onClick={abrirCaso}>Iniciar gestion de cobranza</Button>
-        </div>
-      )}
+        )}
 
-      {caso && !cargando && (
-        <>
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge variant="secondary">Caso #{caso.id}</Badge>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3 rounded-lg border bg-slate-50 p-3 text-sm sm:grid-cols-4">
-            <div>
-              <span className="text-slate-500">Pendiente actual</span>
-              <p className="font-semibold text-amber-800">
-                {formatCurrency(caso.saldo_pendiente_actual ?? 0)}
-              </p>
-            </div>
-            <div>
-              <span className="text-slate-500">Cuotas en atraso</span>
-              <p className="font-medium">{caso.cuotas_atrasadas_actual ?? 0}</p>
-            </div>
-            <div>
-              <span className="text-slate-500">Modalidad</span>
-              <p className="font-medium">
-                {caso.modalidad_pago === 'MENSUAL'
-                  ? 'Mensual'
-                  : caso.modalidad_pago || '-'}
-              </p>
-            </div>
-            <div>
-              <span className="text-slate-500">Cuotas</span>
-              <p className="font-medium">{caso.numero_cuotas ?? '-'}</p>
-            </div>
-          </div>
-
-          <div>
-            <label className="mb-1 block text-xs font-medium text-slate-500">
+        {caso && (
+          <div className="mb-3">
+            <label className="mb-1 block text-xs font-medium text-slate-600">
               Motivo del caso
             </label>
             <Select
               value={caso.motivo}
               onValueChange={v => guardarMotivo(v as MotivoCobranza)}
             >
-              <SelectTrigger className="h-9">
+              <SelectTrigger className="h-9 bg-white">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -329,151 +302,163 @@ export function CobranzaGestionCaso({
               </SelectContent>
             </Select>
           </div>
+        )}
 
-          <div>
-            <h3 className="mb-2 text-sm font-semibold text-slate-800">
-              Bitacora de mensajes
-            </h3>
-            <div className="space-y-2 rounded-lg border p-3">
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                <div>
-                  <label className="text-xs font-medium">Fecha</label>
-                  <Input
-                    type="date"
-                    value={fechaMensaje}
-                    onChange={e => setFechaMensaje(e.target.value)}
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-medium">Cantidad</label>
-                  <Input
-                    type="number"
-                    min={0}
-                    step="0.01"
-                    placeholder="0.00"
-                    value={cantidad}
-                    onChange={e => setCantidad(e.target.value)}
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-medium">Moneda</label>
-                  <Select
-                    value={moneda}
-                    onValueChange={v => setMoneda(v as MonedaAcuerdoCobranza)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="USD">USD</SelectItem>
-                      <SelectItem value="BS">BS</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <div>
-                <label className="text-xs font-medium">Mensaje</label>
-                <Textarea
-                  placeholder="Detalle de la negociacion..."
-                  value={mensaje}
-                  onChange={e => setMensaje(e.target.value)}
-                  rows={3}
-                />
-              </div>
-              <Button size="sm" onClick={agregarAcuerdo}>
-                Guardar mensaje
-              </Button>
-            </div>
-            {caso.acuerdos.length > 0 && (
-              <div className="mt-3 max-h-56 space-y-2 overflow-y-auto">
-                {caso.acuerdos.map(a => (
-                  <div
-                    key={a.id}
-                    className="rounded border border-slate-200 p-2 text-sm"
-                  >
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <span className="font-medium">
-                        {formatDate(a.fecha)} ·{' '}
-                        {formatCantidadMoneda(a.cantidad, a.moneda)}
-                      </span>
-                      {estadoAcuerdoBadge(a.estado)}
-                    </div>
-                    <p className="mt-1 whitespace-pre-wrap text-slate-700">
-                      {a.mensaje}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            )}
+        <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
+          <div className="sm:col-span-2">
+            <label className="text-xs font-medium">Cantidad (opcional)</label>
+            <Input
+              type="number"
+              min={0}
+              step="0.01"
+              className="mt-1 bg-white"
+              placeholder="0.00"
+              value={cantidad}
+              onChange={e => setCantidad(e.target.value)}
+              disabled={cargando || !notaSesionId}
+            />
           </div>
-
           <div>
-            <div className="mb-2 flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-slate-800">
-                Imagenes ({caso.imagenes.length}/10)
-              </h3>
-              {caso.imagenes.length < 10 && (
-                <label className="cursor-pointer text-sm text-blue-600 hover:underline">
-                  <input
-                    type="file"
-                    accept="image/*,application/pdf"
-                    className="hidden"
-                    onChange={onSubirImagen}
-                    disabled={subiendoImg}
-                  />
-                  <span className="inline-flex items-center gap-1">
-                    {subiendoImg ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Upload className="h-4 w-4" />
-                    )}
-                    Subir
-                  </span>
-                </label>
-              )}
-            </div>
-            {caso.imagenes.length > 0 && (
-              <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
-                {caso.imagenes.map(img => {
-                  const url = cobranzaImagenUrl(img.id)
-                  const esPdf = img.content_type.includes('pdf')
-                  return (
-                    <div
-                      key={img.id}
-                      className="relative overflow-hidden rounded border"
-                    >
-                      {esPdf ? (
+            <label className="text-xs font-medium">Moneda</label>
+            <Select
+              value={moneda}
+              onValueChange={v => setMoneda(v as MonedaAcuerdoCobranza)}
+              disabled={cargando || !notaSesionId}
+            >
+              <SelectTrigger className="mt-1 bg-white">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="USD">USD</SelectItem>
+                <SelectItem value="BS">BS</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        <div className="mb-3">
+          <label className="text-xs font-medium">Mensaje</label>
+          <Textarea
+            className="mt-1 bg-white"
+            placeholder="Detalle de la conversacion o acuerdo..."
+            value={mensaje}
+            onChange={e => setMensaje(e.target.value)}
+            rows={3}
+            disabled={cargando || !notaSesionId}
+          />
+        </div>
+
+        <div className="mb-3">
+          <label
+            className={cn(
+              'text-sm',
+              cargando || !notaSesionId
+                ? 'cursor-not-allowed text-slate-400'
+                : 'cursor-pointer text-blue-700 hover:underline'
+            )}
+          >
+            <input
+              type="file"
+              accept={TIPOS_ARCHIVO_ACEPTADOS}
+              multiple
+              className="hidden"
+              onChange={onElegirArchivos}
+              disabled={
+                cargando ||
+                !notaSesionId ||
+                archivos.length >= MAX_ARCHIVOS_NOTA
+              }
+            />
+            Adjuntar respaldos ({archivos.length}/{MAX_ARCHIVOS_NOTA})
+          </label>
+          {archivos.length > 0 && (
+            <ul className="mt-2 space-y-1">
+              {archivos.map((f, i) => (
+                <li
+                  key={`${f.name}-${i}`}
+                  className="flex items-center justify-between rounded border bg-white px-2 py-1 text-xs"
+                >
+                  <span className="truncate">{f.name}</span>
+                  <button
+                    type="button"
+                    className="ml-2 text-red-600"
+                    onClick={() => quitarArchivo(i)}
+                    aria-label="Quitar archivo"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        <Button
+          onClick={guardarNota}
+          disabled={guardando || cargando || !notaSesionId}
+        >
+          {guardando ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Guardando...
+            </>
+          ) : (
+            'Guardar nota'
+          )}
+        </Button>
+      </div>
+
+      {caso && !cargando && (
+        <div>
+          <h3 className="mb-2 text-sm font-semibold text-slate-800">
+            Historial de notas
+          </h3>
+          {acuerdosHistorial.length === 0 ? (
+            <p className="text-sm text-slate-500">
+              Sin notas guardadas aun. Complete y guarde la nota actual.
+            </p>
+          ) : (
+            <div className="space-y-3">
+              {acuerdosHistorial.map(a => (
+                <div
+                  key={a.id}
+                  className="rounded-lg border border-slate-200 bg-white p-3 text-sm shadow-sm"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="font-semibold text-slate-900">
+                      {formatDate(a.fecha)}
+                      {a.cantidad != null
+                        ? ` · ${formatCantidadMoneda(a.cantidad, a.moneda)}`
+                        : ''}
+                    </span>
+                    {estadoAcuerdoBadge(a.estado)}
+                  </div>
+                  <p className="mt-2 whitespace-pre-wrap text-slate-700">
+                    {a.mensaje}
+                  </p>
+                  {a.adjuntos && a.adjuntos.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {a.adjuntos.map(adj => (
                         <a
-                          href={url}
+                          key={adj.id}
+                          href={cobranzaNotaAdjuntoUrl(adj.id)}
                           target="_blank"
                           rel="noreferrer"
-                          className="flex h-20 items-center justify-center text-xs text-blue-600"
+                          className="rounded border border-slate-200 bg-slate-50 px-2 py-1 text-xs text-blue-600 hover:bg-blue-50"
                         >
-                          PDF
+                          {adj.nombre_archivo ||
+                            (adj.content_type.includes('pdf')
+                              ? 'PDF'
+                              : 'Archivo')}
                         </a>
-                      ) : (
-                        <a href={url} target="_blank" rel="noreferrer">
-                          <img
-                            src={url}
-                            alt=""
-                            className="h-20 w-full object-cover"
-                          />
-                        </a>
-                      )}
-                      <button
-                        type="button"
-                        className="absolute right-1 top-1 rounded bg-white/90 p-0.5 text-red-600"
-                        onClick={() => onEliminarImagen(img.id)}
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </button>
+                      ))}
                     </div>
-                  )
-                })}
-              </div>
-            )}
-          </div>
-        </>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       )}
     </div>
   )

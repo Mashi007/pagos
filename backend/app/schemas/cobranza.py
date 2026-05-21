@@ -44,6 +44,13 @@ class CobranzaImagenMeta(BaseModel):
     creado_en: Optional[datetime] = None
 
 
+class CobranzaNotaAdjuntoMeta(BaseModel):
+    id: str
+    nombre_archivo: Optional[str] = None
+    content_type: str
+    creado_en: Optional[datetime] = None
+
+
 class CobranzaAcuerdoOut(BaseModel):
     id: int
     caso_id: int
@@ -53,6 +60,7 @@ class CobranzaAcuerdoOut(BaseModel):
     moneda: str
     estado: str
     fecha_compromiso: Optional[date] = None
+    adjuntos: List[CobranzaNotaAdjuntoMeta] = Field(default_factory=list)
     creado_en: Optional[datetime] = None
     actualizado_en: Optional[datetime] = None
 
@@ -87,6 +95,13 @@ class CobranzaCasoOut(BaseModel):
         from_attributes = True
 
 
+class CobranzaSesionNotaOut(BaseModel):
+    """Nueva nota creada al abrir la negociacion (sesion del dia)."""
+
+    nota_id: int
+    caso: CobranzaCasoOut
+
+
 class CobranzaCasoCreate(BaseModel):
     prestamo_id: int
     motivo: str = Field(default="OTRO")
@@ -100,7 +115,7 @@ class CobranzaCasoUpdate(BaseModel):
 
 
 class CobranzaAcuerdoCreate(BaseModel):
-    fecha: date
+    fecha: Optional[date] = None
     mensaje: str = Field(min_length=1)
     cantidad: Optional[float] = Field(default=None, ge=0)
     moneda: str = Field(default="USD")

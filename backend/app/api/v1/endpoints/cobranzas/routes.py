@@ -3,7 +3,7 @@ API modulo Cobranzas: busqueda por cedula, casos, imagenes y bitacora de acuerdo
 """
 from __future__ import annotations
 
-from typing import Optional
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import Response
@@ -21,11 +21,16 @@ from app.schemas.cobranza import (
     CobranzaCasoCreate,
     CobranzaCasoOut,
     CobranzaCasoUpdate,
+    CobranzaSesionNotaOut,
 )
 from app.services.cobranzas import cobranzas_service as svc
 from app.services.cobranzas.imagen_service import (
     leer_imagen_cobranza,
     persistir_imagen_cobranza,
+)
+from app.services.cobranzas.nota_adjunto_service import (
+    leer_adjunto_nota,
+    leer_uploads_nota,
 )
 from app.services.cobranzas.reportes_cache import ejecutar_actualizacion_reportes
 
@@ -64,6 +69,83 @@ def actualizar_caso(
     db: Session = Depends(get_db),
 ):
     return svc.actualizar_caso(db, caso_id, body)
+
+
+@router.post("/notas/sesion", response_model=CobranzaSesionNotaOut, status_code=201)
+def abrir_sesion_nota(
+    prestamo_id: int = Form(...),
+    motivo: str = Form("OTRO"),
+    db: Session = Depends(get_db),
+    user: UserResponse = Depends(get_current_user),
+):
+    """Nueva nota en BD al abrir la negociacion (fecha = hoy)."""
+    return svc.abrir_sesion_nota(
+        db,
+        prestamo_id=prestamo_id,
+        motivo=motivo,
+        user_id=user.id,
+    )
+
+
+@router.patch("/notas/{acuerdo_id}", response_model=CobranzaCasoOut)
+async def guardar_nota_sesion(
+    acuerdo_id: int,
+    mensaje: str = Form(...),
+    cantidad: Optional[float] = Form(None),
+    moneda: str = Form("USD"),
+    archivos: Optional[List[UploadFile]] = File(None),
+    db: Session = Depends(get_db),
+    user: UserResponse = Depends(get_current_user),
+):
+    """Guarda mensaje, monto y respaldos (tabla cobranza_nota_adjuntos)."""
+    uploads = await leer_uploads_nota(archivos or [])
+    return svc.guardar_nota_sesion(
+        db,
+        acuerdo_id,
+        mensaje=mensaje,
+        cantidad=cantidad,
+        moneda=moneda,
+        archivos=uploads,
+        user_id=user.id,
+    )
+
+
+@router.post("/notas", response_model=CobranzaCasoOut, status_code=201)
+async def crear_nota(
+    prestamo_id: int = Form(...),
+    mensaje: str = Form(...),
+    cantidad: Optional[float] = Form(None),
+    moneda: str = Form("USD"),
+    motivo: str = Form("OTRO"),
+    archivos: Optional[List[UploadFile]] = File(None),
+    db: Session = Depends(get_db),
+    user: UserResponse = Depends(get_current_user),
+):
+    uploads = await leer_uploads_nota(archivos or [])
+    return svc.crear_nota(
+        db,
+        prestamo_id=prestamo_id,
+        mensaje=mensaje,
+        cantidad=cantidad,
+        moneda=moneda,
+        motivo=motivo,
+        archivos=uploads,
+        user_id=user.id,
+    )
+
+
+@router.get("/notas-adjuntos/{adjunto_id}")
+def descargar_adjunto_nota(
+    adjunto_id: str,
+    db: Session = Depends(get_db),
+):
+    body, ct, nombre = leer_adjunto_nota(db, adjunto_id)
+    if not body:
+        raise HTTPException(status_code=404, detail="Archivo no encontrado.")
+    headers = {}
+    if nombre:
+        headers["Content-Disposition"] = f'inline; filename="{nombre}"'
+    return Response(content=body, media_type=ct or "application/octet-stream", headers=headers)
 
 
 @router.post(

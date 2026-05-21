@@ -43,6 +43,13 @@ export interface CobranzaImagenMeta {
 
 export type MonedaAcuerdoCobranza = 'USD' | 'BS'
 
+export interface CobranzaNotaAdjunto {
+  id: string
+  nombre_archivo?: string | null
+  content_type: string
+  creado_en?: string | null
+}
+
 export interface CobranzaAcuerdo {
   id: number
   caso_id: number
@@ -52,8 +59,17 @@ export interface CobranzaAcuerdo {
   moneda: MonedaAcuerdoCobranza
   estado: EstadoAcuerdoCobranza
   fecha_compromiso?: string | null
+  adjuntos?: CobranzaNotaAdjunto[]
   creado_en?: string | null
   actualizado_en?: string | null
+}
+
+/** Mensaje temporal en BD al abrir negociacion (se reemplaza al guardar). */
+export const MENSAJE_SESION_ABIERTA = 'Sesion de negociacion abierta.'
+
+export interface CobranzaSesionNota {
+  nota_id: number
+  caso: CobranzaCasoDetalle
 }
 
 export interface CobranzaCasoDetalle {
@@ -79,6 +95,15 @@ export interface CobranzaCasoDetalle {
 }
 
 const base = '/api/v1/cobranzas'
+
+export function cobranzaNotaAdjuntoUrl(adjuntoId: string): string {
+  const path = buildUrl(`${base}/notas-adjuntos/${adjuntoId}`)
+  const apiBase = (env.API_URL || '').replace(/\/$/, '')
+  if (apiBase && path.startsWith('/')) {
+    return `${apiBase}${path}`
+  }
+  return path
+}
 
 export function cobranzaImagenUrl(imagenId: string): string {
   const path = buildUrl(`${base}/imagenes/${imagenId}`)
@@ -125,6 +150,71 @@ export async function actualizarCasoCobranza(
     buildUrl(`${base}/casos/${casoId}`),
     body
   )
+}
+
+export async function abrirSesionNotaCobranza(params: {
+  prestamo_id: number
+  motivo?: MotivoCobranza
+}): Promise<CobranzaSesionNota> {
+  const form = new FormData()
+  form.append('prestamo_id', String(params.prestamo_id))
+  form.append('motivo', params.motivo || 'OTRO')
+  return apiClient.post<CobranzaSesionNota>(
+    buildUrl(`${base}/notas/sesion`),
+    form,
+    { headers: { 'Content-Type': 'multipart/form-data' } }
+  )
+}
+
+export async function guardarNotaSesionCobranza(
+  notaId: number,
+  params: {
+    mensaje: string
+    cantidad?: number
+    moneda: MonedaAcuerdoCobranza
+    archivos?: File[]
+  }
+): Promise<CobranzaCasoDetalle> {
+  const form = new FormData()
+  form.append('mensaje', params.mensaje.trim())
+  if (params.cantidad != null && !Number.isNaN(params.cantidad)) {
+    form.append('cantidad', String(params.cantidad))
+  }
+  form.append('moneda', params.moneda)
+  const files = (params.archivos || []).slice(0, 3)
+  for (const f of files) {
+    form.append('archivos', f)
+  }
+  return apiClient.patch<CobranzaCasoDetalle>(
+    buildUrl(`${base}/notas/${notaId}`),
+    form,
+    { headers: { 'Content-Type': 'multipart/form-data' } }
+  )
+}
+
+export async function guardarNotaCobranza(params: {
+  prestamo_id: number
+  mensaje: string
+  cantidad?: number
+  moneda: MonedaAcuerdoCobranza
+  motivo?: MotivoCobranza
+  archivos?: File[]
+}): Promise<CobranzaCasoDetalle> {
+  const form = new FormData()
+  form.append('prestamo_id', String(params.prestamo_id))
+  form.append('mensaje', params.mensaje.trim())
+  if (params.cantidad != null && !Number.isNaN(params.cantidad)) {
+    form.append('cantidad', String(params.cantidad))
+  }
+  form.append('moneda', params.moneda)
+  form.append('motivo', params.motivo || 'OTRO')
+  const files = (params.archivos || []).slice(0, 3)
+  for (const f of files) {
+    form.append('archivos', f)
+  }
+  return apiClient.post<CobranzaCasoDetalle>(buildUrl(`${base}/notas`), form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
 }
 
 export async function crearAcuerdoCobranza(

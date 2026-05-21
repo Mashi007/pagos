@@ -83,3 +83,22 @@ class CobranzaAcuerdo(Base):
     actualizado_en = Column(
         DateTime(timezone=False), nullable=False, server_default=func.now(), onupdate=func.now()
     )
+
+
+class CobranzaNotaAdjunto(Base):
+    """Respaldo de conversacion por nota (max 3 PDF/JPG/PNG por acuerdo)."""
+
+    __tablename__ = "cobranza_nota_adjuntos"
+
+    id = Column(String(32), primary_key=True)
+    acuerdo_id = Column(
+        Integer,
+        ForeignKey("cobranza_acuerdos.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    nombre_archivo = Column(String(255), nullable=True)
+    content_type = Column(String(80), nullable=False)
+    archivo_data = Column(LargeBinary, nullable=False)
+    user_id = Column(Integer, ForeignKey("usuarios.id", ondelete="SET NULL"), nullable=True)
+    creado_en = Column(DateTime(timezone=True), server_default=func.now())

@@ -12,7 +12,12 @@ from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.orm import Session
 
 from app.models.cliente import Cliente
-from app.models.cobranza import CobranzaAcuerdo, CobranzaCaso, CobranzaImagen
+from app.models.cobranza import (
+    CobranzaAcuerdo,
+    CobranzaCaso,
+    CobranzaImagen,
+    CobranzaNotaAdjunto,
+)
 from app.models.pago import Pago
 from app.models.prestamo import Prestamo
 from app.schemas.cobranza import (
@@ -27,9 +32,12 @@ from app.schemas.cobranza import (
     CobranzaCasoOut,
     CobranzaCasoUpdate,
     CobranzaImagenMeta,
+    CobranzaNotaAdjuntoMeta,
     CobranzaPrestamoResumen,
+    CobranzaSesionNotaOut,
 )
 from app.services.cobranzas.imagen_service import url_cobranza_imagen_api
+from app.services.cobranzas.nota_adjunto_service import persistir_adjuntos_nota
 from app.services.notificacion_service import (
     contar_cuotas_atraso_por_prestamos,
     sum_saldo_pendiente_cuotas_tabla_amortizacion_ui,
@@ -71,7 +79,28 @@ def _moneda_acuerdo(a: CobranzaAcuerdo) -> str:
     return m if m in ("USD", "BS") else "USD"
 
 
-def _acuerdo_to_out(a: CobranzaAcuerdo) -> CobranzaAcuerdoOut:
+def _adjuntos_meta_acuerdo(db: Session, acuerdo_id: int) -> List[CobranzaNotaAdjuntoMeta]:
+    try:
+        rows = (
+            db.query(CobranzaNotaAdjunto)
+            .filter(CobranzaNotaAdjunto.acuerdo_id == acuerdo_id)
+            .order_by(CobranzaNotaAdjunto.creado_en.asc())
+            .all()
+        )
+    except ProgrammingError:
+        return []
+    return [
+        CobranzaNotaAdjuntoMeta(
+            id=r.id,
+            nombre_archivo=r.nombre_archivo,
+            content_type=r.content_type,
+            creado_en=r.creado_en,
+        )
+        for r in rows
+    ]
+
+
+def _acuerdo_to_out(db: Session, a: CobranzaAcuerdo) -> CobranzaAcuerdoOut:
     cant = _cantidad_acuerdo(a)
     return CobranzaAcuerdoOut(
         id=a.id,
@@ -82,8 +111,20 @@ def _acuerdo_to_out(a: CobranzaAcuerdo) -> CobranzaAcuerdoOut:
         moneda=_moneda_acuerdo(a),
         estado=a.estado,
         fecha_compromiso=a.fecha_compromiso,
+        adjuntos=_adjuntos_meta_acuerdo(db, a.id),
         creado_en=a.creado_en,
         actualizado_en=a.actualizado_en,
+    )
+
+
+def _caso_activo_prestamo(db: Session, prestamo_id: int) -> Optional[CobranzaCaso]:
+    return (
+        db.query(CobranzaCaso)
+        .filter(
+            CobranzaCaso.prestamo_id == prestamo_id,
+            CobranzaCaso.estado.in_(("ABIERTO", "EN_GESTION")),
+        )
+        .first()
     )
 
 
@@ -360,8 +401,176 @@ def obtener_caso_detalle(
             )
             for img in imagenes
         ],
-        acuerdos=[_acuerdo_to_out(a) for a in acuerdos],
+        acuerdos=[_acuerdo_to_out(db, a) for a in acuerdos],
     )
+
+
+MENSAJE_SESION_ABIERTA = "Sesion de negociacion abierta."
+
+
+def _asegurar_caso_gestion(
+    db: Session,
+    prestamo: Prestamo,
+    motivo: str,
+    user_id: Optional[int],
+) -> CobranzaCaso:
+    if motivo not in MOTIVOS_COBRANZA:
+        raise HTTPException(status_code=400, detail="Motivo invalido.")
+    caso = _caso_activo_prestamo(db, prestamo.id)
+    if not caso:
+        saldo, atraso = _snapshot_prestamo(db, prestamo)
+        caso = CobranzaCaso(
+            prestamo_id=prestamo.id,
+            cliente_id=prestamo.cliente_id,
+            cedula=prestamo.cedula or "",
+            nombres=prestamo.nombres,
+            motivo=motivo,
+            estado="EN_GESTION",
+            monto_financiamiento=prestamo.total_financiamiento,
+            saldo_pendiente_snapshot=saldo,
+            cuotas_atrasadas_snapshot=atraso,
+            user_id=user_id,
+        )
+        db.add(caso)
+        db.flush()
+    elif caso.estado == "ABIERTO":
+        caso.estado = "EN_GESTION"
+    return caso
+
+
+def _crear_acuerdo_nota(
+    db: Session,
+    caso: CobranzaCaso,
+    prestamo_id: int,
+    *,
+    mensaje: str,
+    cantidad: Optional[float],
+    moneda: str,
+    user_id: Optional[int],
+) -> CobranzaAcuerdo:
+    hoy = date.today()
+    estado_ini = _estado_acuerdo_automatico(db, prestamo_id, None, hoy)
+    acuerdo = CobranzaAcuerdo(
+        caso_id=caso.id,
+        fecha_acuerdo=hoy,
+        fecha_compromiso=None,
+        mensaje=mensaje,
+        cantidad=cantidad,
+        moneda=moneda,
+        notas=mensaje,
+        estado=estado_ini,
+        monto_compromiso=cantidad,
+        user_id=user_id,
+    )
+    db.add(acuerdo)
+    db.flush()
+    return acuerdo
+
+
+def abrir_sesion_nota(
+    db: Session,
+    *,
+    prestamo_id: int,
+    motivo: str = "OTRO",
+    user_id: Optional[int] = None,
+) -> CobranzaSesionNotaOut:
+    """Al abrir negociacion: nueva fila en cobranza_acuerdos (fecha = hoy)."""
+    prestamo = _prestamo_o_404(db, prestamo_id)
+    caso = _asegurar_caso_gestion(db, prestamo, motivo, user_id)
+    acuerdo = _crear_acuerdo_nota(
+        db,
+        caso,
+        prestamo.id,
+        mensaje=MENSAJE_SESION_ABIERTA,
+        cantidad=None,
+        moneda="USD",
+        user_id=user_id,
+    )
+    db.commit()
+    detalle = obtener_caso_detalle(db, caso.id, sincronizar_acuerdos=True)
+    return CobranzaSesionNotaOut(nota_id=acuerdo.id, caso=detalle)
+
+
+def guardar_nota_sesion(
+    db: Session,
+    acuerdo_id: int,
+    *,
+    mensaje: str,
+    cantidad: Optional[float],
+    moneda: str,
+    archivos: Optional[List[tuple]] = None,
+    user_id: Optional[int] = None,
+) -> CobranzaCasoOut:
+    """
+    Completa la nota de la sesion: fecha = hoy, mensaje/monto y adjuntos en BD.
+    archivos: [(bytes, content_type, filename), ...] -> cobranza_nota_adjuntos
+    """
+    texto = (mensaje or "").strip()
+    if not texto:
+        raise HTTPException(status_code=400, detail="El mensaje es obligatorio.")
+    mon = (moneda or "USD").strip().upper()
+    if mon not in ("USD", "BS"):
+        raise HTTPException(status_code=400, detail="Moneda debe ser USD o BS.")
+
+    acuerdo = db.get(CobranzaAcuerdo, acuerdo_id)
+    if not acuerdo:
+        raise HTTPException(status_code=404, detail="Nota no encontrada.")
+    caso = _caso_o_404(db, acuerdo.caso_id)
+    hoy = date.today()
+    acuerdo.fecha_acuerdo = hoy
+    acuerdo.mensaje = texto
+    acuerdo.notas = texto
+    acuerdo.cantidad = cantidad
+    acuerdo.monto_compromiso = cantidad
+    acuerdo.moneda = mon
+    acuerdo.estado = _estado_acuerdo_automatico(
+        db, caso.prestamo_id, acuerdo.fecha_compromiso, hoy
+    )
+    if archivos:
+        persistir_adjuntos_nota(db, acuerdo.id, archivos, user_id=user_id)
+    db.commit()
+    return obtener_caso_detalle(db, caso.id, sincronizar_acuerdos=True)
+
+
+def crear_nota(
+    db: Session,
+    *,
+    prestamo_id: int,
+    mensaje: str,
+    cantidad: Optional[float],
+    moneda: str,
+    motivo: str = "OTRO",
+    archivos: Optional[List[tuple]] = None,
+    user_id: Optional[int] = None,
+) -> CobranzaCasoOut:
+    """
+    Nueva nota del dia en un solo paso: crea caso si no existe, fecha = hoy, hasta 3 adjuntos.
+    archivos: [(bytes, content_type, filename), ...]
+    """
+    texto = (mensaje or "").strip()
+    if not texto:
+        raise HTTPException(status_code=400, detail="El mensaje es obligatorio.")
+    mon = (moneda or "USD").strip().upper()
+    if mon not in ("USD", "BS"):
+        raise HTTPException(status_code=400, detail="Moneda debe ser USD o BS.")
+
+    prestamo = _prestamo_o_404(db, prestamo_id)
+    caso = _asegurar_caso_gestion(db, prestamo, motivo, user_id)
+    acuerdo = _crear_acuerdo_nota(
+        db,
+        caso,
+        prestamo.id,
+        mensaje=texto,
+        cantidad=cantidad,
+        moneda=mon,
+        user_id=user_id,
+    )
+
+    if archivos:
+        persistir_adjuntos_nota(db, acuerdo.id, archivos, user_id=user_id)
+
+    db.commit()
+    return obtener_caso_detalle(db, caso.id, sincronizar_acuerdos=True)
 
 
 def crear_acuerdo(
@@ -371,15 +580,17 @@ def crear_acuerdo(
     user_id: Optional[int],
 ) -> CobranzaAcuerdoOut:
     caso = _caso_o_404(db, caso_id)
+    hoy = date.today()
+    fecha_nota = body.fecha if body.fecha else hoy
     estado_ini = _estado_acuerdo_automatico(
-        db, caso.prestamo_id, body.fecha_compromiso, body.fecha
+        db, caso.prestamo_id, body.fecha_compromiso, fecha_nota
     )
     texto = body.mensaje.strip()
     cant = body.cantidad
     mon = body.moneda
     acuerdo = CobranzaAcuerdo(
         caso_id=caso.id,
-        fecha_acuerdo=body.fecha,
+        fecha_acuerdo=fecha_nota,
         fecha_compromiso=body.fecha_compromiso,
         mensaje=texto,
         cantidad=cant,
@@ -394,7 +605,7 @@ def crear_acuerdo(
         caso.estado = "EN_GESTION"
     db.commit()
     db.refresh(acuerdo)
-    return _acuerdo_to_out(acuerdo)
+    return _acuerdo_to_out(db, acuerdo)
 
 
 def actualizar_acuerdo(
@@ -439,4 +650,4 @@ def actualizar_acuerdo(
         )
     db.commit()
     db.refresh(acuerdo)
-    return _acuerdo_to_out(acuerdo)
+    return _acuerdo_to_out(db, acuerdo)

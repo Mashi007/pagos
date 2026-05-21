@@ -53,7 +53,12 @@ from app.models.finiquito import (
     FiniquitoLoginCodigo,
     FiniquitoUsuarioAcceso,
 )
-from app.models.cobranza import CobranzaAcuerdo, CobranzaCaso, CobranzaImagen
+from app.models.cobranza import (
+    CobranzaAcuerdo,
+    CobranzaCaso,
+    CobranzaImagen,
+    CobranzaNotaAdjunto,
+)
 from app.models.conciliacion_sheet import (
     ConciliacionSheetMeta,
     ConciliacionSheetRow,
@@ -122,6 +127,7 @@ __all__ = [
     "CobranzaCaso",
     "CobranzaImagen",
     "CobranzaAcuerdo",
+    "CobranzaNotaAdjunto",
     "ConciliacionSheetMeta",
     "ConciliacionSheetRow",
     "ConciliacionSheetSyncRun",

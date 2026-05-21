@@ -12,6 +12,7 @@ export interface CobranzaNegociacionDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   prestamo: CobranzaPrestamoResumen | null
+  aperturaToken: number
   onCasoActualizado?: CobranzaGestionCasoProps['onCasoActualizado']
 }
 
@@ -19,6 +20,7 @@ export function CobranzaNegociacionDialog({
   open,
   onOpenChange,
   prestamo,
+  aperturaToken,
   onCasoActualizado,
 }: CobranzaNegociacionDialogProps) {
   return (
@@ -35,6 +37,7 @@ export function CobranzaNegociacionDialog({
         {prestamo && open ? (
           <CobranzaGestionCaso
             prestamo={prestamo}
+            aperturaToken={aperturaToken}
             onCasoActualizado={onCasoActualizado}
           />
         ) : null}
