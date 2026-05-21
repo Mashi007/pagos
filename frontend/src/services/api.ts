@@ -92,8 +92,10 @@ function looksLikeHtmlErrorBody(text: string): boolean {
   return (
     t.includes('<html') ||
     t.includes('<!doctype html') ||
-    t.includes('cloudflare') ||
-    t.includes('bad request')
+    t.includes('</html>') ||
+    (t.includes('cloudflare') && t.includes('<')) ||
+    (t.includes('bad request') &&
+      (t.includes('<html') || t.includes('<!doctype') || t.includes('<body')))
   )
 }
 
@@ -306,6 +308,19 @@ class ApiClient {
             }
 
             config.headers.Authorization = `Bearer ${token}`
+          }
+        }
+
+        // FormData/multipart: quitar Content-Type por defecto (application/json).
+        // Si no, el proxy o FastAPI reciben cuerpo inválido y devuelven 400 con HTML en ~10–50 ms.
+        if (
+          typeof FormData !== 'undefined' &&
+          config.data instanceof FormData
+        ) {
+          if (config.headers) {
+            const hdrs = config.headers as Record<string, unknown>
+            delete hdrs['Content-Type']
+            delete hdrs['content-type']
           }
         }
 
