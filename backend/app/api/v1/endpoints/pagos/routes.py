@@ -6731,7 +6731,7 @@ def conciliar_y_aplicar_pagos_batch(
     - abre `estado="PAGADO"` (cumple `chk_pagos_conciliado_pendiente_inconsistente`)
     - dispara la cascada `_aplicar_pago_a_cuotas_interno`
 
-    Aislamiento por fila (try/except + rollback parcial): un fallo puntual no tumba el lote;
+    Aislamiento por fila (try/except + commit por fila): un fallo puntual no tumba el lote;
     devuelve resumen con `procesados`, `cuotas_aplicadas` y `errores[]` para los que no entraron.
     Saltos no son error: pagos ya conciliados, sin préstamo, monto<=0, ya aplicados a cuotas, etc.
     """
@@ -6797,6 +6797,7 @@ def conciliar_y_aplicar_pagos_batch(
                     cambios = True
                 if cambios:
                     db.flush()
+                    db.commit()
                     procesados += 1
                 else:
                     saltados += 1
@@ -6814,6 +6815,7 @@ def conciliar_y_aplicar_pagos_batch(
             db.flush()
 
             cc, cp = _aplicar_pago_a_cuotas_interno(pago, db)
+            db.commit()
             cuotas_aplicadas += int(cc) + int(cp)
             procesados += 1
         except Exception as e_row:

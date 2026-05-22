@@ -978,8 +978,8 @@ def mover_a_pagos_normales(
 
         logger.debug(f"mover_a_pagos_normales: procesando pago {idx}/{len(ids)} (id={pid}, cedula={row.cedula_cliente}, monto={row.monto_pagado})")
 
-        # Aislar el procesamiento de cada fila: si una explota (constraint, cascada, etc.) hacemos
-        # rollback parcial y seguimos con las demás, evitando 500 por toda la lista.
+        # Aislar el procesamiento de cada fila: si una explota (constraint, cascada, etc.) se
+        # revierte solo esa fila; las filas ya confirmadas no deben perderse por un fallo posterior.
         try:
 
             # Prechequeo estricto: si el documento ya está aplicado a cuotas con misma cédula y
@@ -1004,6 +1004,7 @@ def mover_a_pagos_normales(
                 )
                 db.delete(row)
                 db.flush()
+                db.commit()
                 continue
 
             # Validar que no exista duplicado en tabla pagos (caso menos estricto: doc igual sin
@@ -1093,7 +1094,6 @@ def mover_a_pagos_normales(
 
                     if cc > 0 or cp > 0:
                         pago.estado = "PAGADO"
-                        cuotas_aplicadas += cc + cp
                         logger.info(
                             f"mover_a_pagos_normales: pago id={nuevo_pago_id} aplicado a {cc} cuota(s) completa(s), {cp} parcial(es)"
                         )
@@ -1106,7 +1106,7 @@ def mover_a_pagos_normales(
                         f"mover_a_pagos_normales: error aplicando pago id={nuevo_pago_id} a cuotas: {str(e)}",
                         exc_info=True,
                     )
-                    errores_procesamiento.append(f"Pago {pid}: cuotas: {str(e)}")
+                    raise RuntimeError(f"cuotas: {str(e)}") from e
 
             db.delete(row)
             logger.debug(
@@ -1114,6 +1114,8 @@ def mover_a_pagos_normales(
             )
 
             db.flush()
+            db.commit()
+            cuotas_aplicadas += cc_aplicadas + cp_aplicadas
             movidos += 1
 
         except Exception as e_row:
