@@ -7,11 +7,11 @@ from datetime import datetime
 from decimal import Decimal
 from types import SimpleNamespace
 
-from app.api.v1.endpoints.pagos import (
+from app.api.v1.endpoints.pagos import routes as pagos_routes
+from app.api.v1.endpoints.pagos.routes import (
     ConciliarAplicarBatchBody,
     conciliar_y_aplicar_pagos_batch,
 )
-from app.api.v1.endpoints import pagos as pagos_routes
 from app.api.v1.endpoints.pagos_con_errores import routes as pce_routes
 from app.api.v1.endpoints.pagos_con_errores.routes import (
     EliminarPorDescargaBody,
