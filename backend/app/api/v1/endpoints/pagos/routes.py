@@ -79,7 +79,12 @@ from app.core.documento import (
     normalize_documento,
     split_numero_documento_almacenado,
 )
-from app.utils.cedula_almacenamiento import alinear_cedulas_clientes_existentes, normalizar_cedula_almacenamiento
+from app.utils.cedula_almacenamiento import (
+    CedulaPagoFkError,
+    asegurar_cedula_pago_para_fk,
+    alinear_cedulas_clientes_existentes,
+    normalizar_cedula_almacenamiento,
+)
 from app.services.pago_numero_documento import (
     numero_documento_ya_registrado,
     primer_pago_cartera_por_documento,
@@ -5444,27 +5449,16 @@ def crear_pago(payload: PagoCreate, db: Session = Depends(get_db), current_user:
             )
 
 
-    # Validar que cedula existe en clientes si se proporciona y hay prestamo_id
+    try:
+        cedula_fk_crear = asegurar_cedula_pago_para_fk(
+            db,
+            cedula_raw=cedula_normalizada or None,
+            prestamo_id=payload.prestamo_id,
+        )
+    except CedulaPagoFkError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
 
-    if cedula_normalizada and payload.prestamo_id:
-
-        cliente = db.execute(
-
-            select(Cliente).where(func.upper(Cliente.cedula) == cedula_normalizada)
-
-        ).scalars().first()
-
-        if not cliente:
-
-            raise HTTPException(
-
-                status_code=404,
-
-                detail=f"No existe cliente con cedula {cedula_normalizada}"
-
-            )
-
-
+    cedula_normalizada = (cedula_fk_crear or "").strip().upper()
 
     # Validar monto (mismo criterio que carga Excel y guardar-fila-editable)
 
@@ -5475,12 +5469,6 @@ def crear_pago(payload: PagoCreate, db: Session = Depends(get_db), current_user:
     if not es_valido:
 
         raise HTTPException(status_code=400, detail=err_msg)
-
-
-
-    if cedula_normalizada:
-
-        alinear_cedulas_clientes_existentes(db, [cedula_normalizada])
 
 
 
@@ -5516,7 +5504,7 @@ def crear_pago(payload: PagoCreate, db: Session = Depends(get_db), current_user:
 
         row = Pago(
 
-            cedula_cliente=cedula_normalizada,
+            cedula_cliente=cedula_fk_crear,
 
             prestamo_id=payload.prestamo_id,
 
@@ -5982,6 +5970,18 @@ def actualizar_pago(pago_id: int, payload: PagoUpdate, db: Session = Depends(get
     _mark_fase("huella_funcional")
 
     try:
+        row.cedula_cliente = asegurar_cedula_pago_para_fk(
+            db,
+            cedula_raw=row.cedula_cliente,
+            prestamo_id=row.prestamo_id,
+        )
+    except CedulaPagoFkError as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+    _mark_fase("cedula_fk")
+
+    try:
 
         db.commit()
 
@@ -6031,6 +6031,17 @@ def actualizar_pago(pago_id: int, payload: PagoUpdate, db: Session = Depends(get
                     "La base de datos rechazó la combinación estado/conciliación del pago "
                     f"(restricción: {cname or 'CHECK'}). "
                     "Pruebe de nuevo tras recargar; si quitó validación cartera, el estado debe pasar a Pendiente."
+                ),
+            )
+
+        if pgcode == "23503" and "fk_pagos_cedula" in (cname or ""):
+
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "La cédula del pago no coincide con ningún cliente en el sistema "
+                    f"(restricción {cname}). "
+                    "Recargue la página, verifique el crédito asociado o corrija el documento del cliente en CRM."
                 ),
             )
 

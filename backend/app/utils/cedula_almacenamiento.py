@@ -124,6 +124,72 @@ def resolver_cedula_almacenada_en_clientes(
     return None
 
 
+class CedulaPagoFkError(ValueError):
+    """Cédula de pago no resoluble contra `clientes` (FK fk_pagos_cedula)."""
+
+
+def asegurar_cedula_pago_para_fk(
+    db: Session,
+    *,
+    cedula_raw: Optional[str],
+    prestamo_id: Optional[int],
+) -> Optional[str]:
+    """
+    Devuelve la cédula exacta en `clientes` para `pagos.cedula` (FK fk_pagos_cedula).
+
+    Con `prestamo_id`, prioriza la del préstamo/cliente. Vacío sin préstamo → None.
+    Si hay valor que no existe en clientes, lanza CedulaPagoFkError.
+    """
+    from app.models.cliente import Cliente
+    from app.models.prestamo import Prestamo
+
+    cedula_solicitada = normalizar_cedula_almacenamiento(cedula_raw)
+
+    if prestamo_id:
+        prestamo = db.get(Prestamo, prestamo_id)
+        if prestamo:
+            cli_cedula: Optional[str] = None
+            if prestamo.cliente_id:
+                cli = db.get(Cliente, prestamo.cliente_id)
+                if cli and (cli.cedula or "").strip():
+                    cli_cedula = (cli.cedula or "").strip()
+            for candidato in (
+                (prestamo.cedula or "").strip() or None,
+                cli_cedula,
+            ):
+                if not candidato:
+                    continue
+                res = resolver_cedula_almacenada_en_clientes(db, candidato)
+                if res:
+                    return res
+                existente = db.execute(
+                    select(Cliente.cedula).where(Cliente.cedula == candidato).limit(1)
+                ).scalar_one_or_none()
+                if existente:
+                    return existente
+
+    if not cedula_solicitada:
+        return None
+
+    alinear_cedulas_clientes_existentes(db, [cedula_solicitada])
+    res = resolver_cedula_almacenada_en_clientes(db, cedula_solicitada)
+    if res:
+        return res
+
+    cli_row = db.execute(
+        select(Cliente.cedula)
+        .where(func.upper(Cliente.cedula) == cedula_solicitada)
+        .limit(1)
+    ).scalar_one_or_none()
+    if cli_row:
+        return cli_row
+
+    raise CedulaPagoFkError(
+        f"La cédula «{cedula_solicitada}» no existe en clientes. "
+        "Asigne un crédito válido o corrija el documento del cliente en CRM."
+    )
+
+
 def alinear_cedulas_clientes_existentes(db: Session, cedulas: Iterable[Optional[str]]) -> None:
     """
     Pone clientes.cedula en mayusculas cuando coincide en mayusculas con la clave canonica.
