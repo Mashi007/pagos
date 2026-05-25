@@ -9,6 +9,7 @@ from __future__ import annotations
 import logging
 from datetime import date, datetime
 from decimal import Decimal
+from time import perf_counter
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
@@ -24,6 +25,10 @@ from app.services.prestamo_db_compat import prestamos_tiene_columna_fecha_liquid
 from app.services.cuota_transiciones_pago import validar_transicion_estado_cuota
 
 logger = logging.getLogger(__name__)
+
+
+def _elapsed_ms(start_perf: float) -> float:
+    return round((perf_counter() - start_perf) * 1000, 2)
 
 
 def _estado_cuota_por_cobertura(total_pagado: float, monto_cuota: float, fecha_vencimiento: date) -> str:
@@ -129,6 +134,7 @@ def _aplicar_pago_a_cuotas_interno(pago: Pago, db: Session) -> tuple[int, int]:
 
     Retorna (cuotas_completadas, cuotas_parciales). No hace commit.
     """
+    started_total = perf_counter()
     prestamo_id = pago.prestamo_id
 
     if not prestamo_id:
@@ -159,6 +165,7 @@ def _aplicar_pago_a_cuotas_interno(pago: Pago, db: Session) -> tuple[int, int]:
     hoy = hoy_negocio()
 
     with db.begin_nested():
+        carga_cuotas_started = perf_counter()
         cuotas_stmt = (
             select(Cuota)
             .where(
@@ -170,10 +177,12 @@ def _aplicar_pago_a_cuotas_interno(pago: Pago, db: Session) -> tuple[int, int]:
         )
 
         cuotas_pendientes = db.execute(cuotas_stmt).scalars().all()
+        carga_cuotas_ms = _elapsed_ms(carga_cuotas_started)
 
         cuotas_completadas = 0
         cuotas_parciales = 0
         orden_aplicacion = 0
+        aplicacion_started = perf_counter()
 
         for c in cuotas_pendientes:
             monto_cuota = float(c.monto) if c.monto is not None else 0
@@ -273,7 +282,11 @@ def _aplicar_pago_a_cuotas_interno(pago: Pago, db: Session) -> tuple[int, int]:
 
             monto_restante -= a_aplicar
 
+        aplicacion_ms = _elapsed_ms(aplicacion_started)
+
+        liquidacion_started = perf_counter()
         _marcar_prestamo_liquidado_si_corresponde(prestamo_id, db)
+        liquidacion_ms = _elapsed_ms(liquidacion_started)
 
         if cuotas_completadas == 0 and cuotas_parciales == 0:
             num_cuotas = db.scalar(
@@ -289,7 +302,27 @@ def _aplicar_pago_a_cuotas_interno(pago: Pago, db: Session) -> tuple[int, int]:
                     num_cuotas,
                 )
 
+        flush_started = perf_counter()
         db.flush()
+        flush_ms = _elapsed_ms(flush_started)
+        integridad_started = perf_counter()
         validar_suma_aplicada_vs_monto_pago(db, pago.id, pago.monto_pagado)
+        integridad_ms = _elapsed_ms(integridad_started)
 
+    logger.info(
+        "[PAGO_CASCADA_TIMING] pago_id=%s prestamo_id=%s cuotas_pendientes=%s cuotas_completadas=%s "
+        "cuotas_parciales=%s carga_cuotas_ms=%s aplicacion_ms=%s liquidacion_ms=%s flush_ms=%s "
+        "integridad_ms=%s total_ms=%s",
+        pago.id,
+        prestamo_id,
+        len(cuotas_pendientes),
+        cuotas_completadas,
+        cuotas_parciales,
+        carga_cuotas_ms,
+        aplicacion_ms,
+        liquidacion_ms,
+        flush_ms,
+        integridad_ms,
+        _elapsed_ms(started_total),
+    )
     return cuotas_completadas, cuotas_parciales

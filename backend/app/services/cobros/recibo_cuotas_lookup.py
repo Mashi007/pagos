@@ -56,15 +56,11 @@ def _fmt_capital_monto(pr: PagoReportado, saldo: float) -> str:
     return f"{_formato_monto_venezolano(float(saldo))} {sym}"
 
 
-def texto_cuotas_aplicadas_pago_reportado(db: Session, pr: PagoReportado) -> str:
-    """
-    Texto corto para recibo / API (cuotas tocadas por el pago enlazado).
-    Cadena vacia si no hay pago o sin filas en cuota_pagos: el PDF usa el texto de revision por defecto.
-    """
-    pid = _pago_id_vinculado_para_cuotas(db, pr)
-    if not pid:
+def _texto_cuotas_aplicadas_desde_pago_id(db: Session, pago_id: Optional[int]) -> str:
+    """Texto corto a partir de un `pago_id` ya resuelto."""
+    if not pago_id:
         return ""
-    desglose = desglose_aplicacion_cuotas_por_pago(db, pid)
+    desglose = desglose_aplicacion_cuotas_por_pago(db, int(pago_id))
     if not desglose:
         return ""
     partes: List[str] = []
@@ -76,6 +72,23 @@ def texto_cuotas_aplicadas_pago_reportado(db: Session, pr: PagoReportado) -> str
         elif n > 0:
             partes.append(f"cuota {n}")
     return ", ".join(partes) if partes else ""
+
+
+def texto_cuotas_aplicadas_pago_id(db: Session, pago_id: Optional[int]) -> str:
+    """
+    Texto corto para recibo / API cuando el llamador ya conoce el `pago_id`.
+    Evita la consulta extra de resolver el vínculo por `numero_documento`.
+    """
+    return _texto_cuotas_aplicadas_desde_pago_id(db, int(pago_id) if pago_id else None)
+
+
+def texto_cuotas_aplicadas_pago_reportado(db: Session, pr: PagoReportado) -> str:
+    """
+    Texto corto para recibo / API (cuotas tocadas por el pago enlazado).
+    Cadena vacia si no hay pago o sin filas en cuota_pagos: el PDF usa el texto de revision por defecto.
+    """
+    pid = _pago_id_vinculado_para_cuotas(db, pr)
+    return _texto_cuotas_aplicadas_desde_pago_id(db, pid)
 
 
 def obtener_saldos_cuota_aplicada(

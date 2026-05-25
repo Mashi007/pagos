@@ -13,6 +13,7 @@ import random
 import re
 import string
 from datetime import date, datetime, timedelta, timezone
+from time import perf_counter
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Request, Query, BackgroundTasks
@@ -48,7 +49,10 @@ from app.services.cobros.recibo_pdf import (
     WHATSAPP_LINK,
 )
 from app.services.documentos_cliente_centro import generar_recibo_pdf_desde_pago_reportado
-from app.services.cobros.recibo_cuotas_lookup import texto_cuotas_aplicadas_pago_reportado
+from app.services.cobros.recibo_cuotas_lookup import (
+    texto_cuotas_aplicadas_pago_id,
+    texto_cuotas_aplicadas_pago_reportado,
+)
 from app.services.cobros import cobros_publico_reporte_service as cpr
 from app.services.cobros import infopagos_escaner_borrador_service as ieb
 from app.core.email import cobros_recibo_attachments_or_oversize_note, send_email
@@ -61,6 +65,10 @@ from app.utils.cliente_emails import emails_destino_desde_objeto, unir_destinata
 from app.api.v1.endpoints.cobros.routes import reportado_falla_validadores_cobros, actualizar_flag_falla_validadores
 
 logger = logging.getLogger(__name__)
+
+
+def _elapsed_ms(start_perf: float) -> float:
+    return round((perf_counter() - start_perf) * 1000, 2)
 
 router = APIRouter(dependencies=[])
 
@@ -1102,7 +1110,42 @@ async def enviar_reporte_infopagos(
         if err_file:
             return EnviarReporteInfopagosResponse(ok=False, error=err_file)
 
+    request_started = perf_counter()
+    phase_ms: dict[str, float] = {}
+    confirmo_humano = False
+    auto_import_result = cpr.AutoImportResultado()
+
+    def _log_infopagos_timing(respuesta_estado: str, referencia_log: str, pr_ref: Optional[PagoReportado]) -> None:
+        logger.info(
+            "[INFOPAGOS_TIMING] ref=%s respuesta_estado=%s estado_modelo=%s borrador=%s confirmacion_humana=%s "
+            "crear_reportado_ms=%s gemini_ms=%s validadores_ms=%s commit_estado_ms=%s "
+            "marcar_borrador_ms=%s autoimport_ms=%s autoimport_lookup_ms=%s autoimport_importar_pago_ms=%s "
+            "autoimport_cascada_ms=%s autoimport_commit_ms=%s cuotas_lookup_ms=%s background_task_ms=%s "
+            "token_ms=%s final_commit_ms=%s total_ms=%s",
+            referencia_log,
+            respuesta_estado,
+            (getattr(pr_ref, "estado", None) or "").strip() if pr_ref is not None else "",
+            bool(borrador_efectivo),
+            confirmo_humano,
+            phase_ms.get("crear_reportado_ms", 0.0),
+            phase_ms.get("gemini_ms", 0.0),
+            phase_ms.get("validadores_ms", 0.0),
+            phase_ms.get("commit_estado_ms", 0.0),
+            phase_ms.get("marcar_borrador_ms", 0.0),
+            phase_ms.get("autoimport_ms", 0.0),
+            getattr(auto_import_result, "lookup_ms", 0.0),
+            getattr(auto_import_result, "importar_pago_ms", 0.0),
+            getattr(auto_import_result, "cascada_ms", 0.0),
+            getattr(auto_import_result, "commit_ms", 0.0),
+            phase_ms.get("cuotas_lookup_ms", 0.0),
+            phase_ms.get("background_task_ms", 0.0),
+            phase_ms.get("token_ms", 0.0),
+            phase_ms.get("final_commit_ms", 0.0),
+            _elapsed_ms(request_started),
+        )
+
     try:
+        crear_reportado_started = perf_counter()
         pr, referencia, err_crear = cpr.crear_pago_reportado_con_referencia_o_retry(
             db,
             content=content,
@@ -1123,6 +1166,7 @@ async def enviar_reporte_infopagos(
             fuente_tasa_cambio=fuente_tasa_cambio,
             comprobante_imagen_id_existente=comprobante_imagen_id_existente,
         )
+        phase_ms["crear_reportado_ms"] = _elapsed_ms(crear_reportado_started)
         if err_crear or pr is None or referencia is None:
             return EnviarReporteInfopagosResponse(ok=False, error=err_crear or "No se pudo registrar el reporte.")
 
@@ -1144,6 +1188,7 @@ async def enviar_reporte_infopagos(
         else:
             logger.info("[INFOPAGOS] GEMINI_API_KEY no configurado: ref=%s irá a revisión manual", referencia)
 
+        gemini_started = perf_counter()
         try:
             gemini_result = compare_form_with_image(form_data, content, filename)
             coincide = gemini_result.get("coincide_exacto", False)
@@ -1158,6 +1203,7 @@ async def enviar_reporte_infopagos(
             pr.gemini_coincide_exacto = "error"
             pr.gemini_comentario = f"Error Gemini (reintentado): {str(gemini_err)[:200]}"
             coincide = False
+        phase_ms["gemini_ms"] = _elapsed_ms(gemini_started)
 
         confirmo_humano = _bool_from_form(confirmacion_humana)
         if confirmo_humano:
@@ -1166,12 +1212,17 @@ async def enviar_reporte_infopagos(
             pr.gemini_comentario = ""
         # Si hubo confirmación humana explícita desde escáner/operador,
         # no forzamos revisión manual por validadores automáticos.
+        validadores_started = perf_counter()
         falla_validadores = False if confirmo_humano else reportado_falla_validadores_cobros(db, pr)
+        phase_ms["validadores_ms"] = _elapsed_ms(validadores_started)
         pr.estado = "en_revision" if falla_validadores else "aprobado"
         pr.falla_validadores_manual = falla_validadores
+        commit_estado_started = perf_counter()
         db.commit()
+        phase_ms["commit_estado_ms"] = _elapsed_ms(commit_estado_started)
 
         if borrador_efectivo:
+            marcar_borrador_started = perf_counter()
             try:
                 ieb.marcar_borrador_confirmado(db, borrador_efectivo, int(pr.id))
                 db.commit()
@@ -1186,13 +1237,23 @@ async def enviar_reporte_infopagos(
                     db.rollback()
                 except Exception:
                     pass
+            phase_ms["marcar_borrador_ms"] = _elapsed_ms(marcar_borrador_started)
+        else:
+            phase_ms["marcar_borrador_ms"] = 0.0
 
         if not falla_validadores:
-            cpr.intentar_importar_reportado_automatico(db, pr, referencia, "INFOPAGOS")
-            db.refresh(pr)
+            autoimport_started = perf_counter()
+            auto_import_result = cpr.intentar_importar_reportado_automatico(db, pr, referencia, "INFOPAGOS")
+            phase_ms["autoimport_ms"] = _elapsed_ms(autoimport_started)
             if (pr.estado or "").strip() == "importado":
                 pr.falla_validadores_manual = False
-            cuotas_display = texto_cuotas_aplicadas_pago_reportado(db, pr)
+            cuotas_lookup_started = perf_counter()
+            if auto_import_result.pago_id:
+                cuotas_display = texto_cuotas_aplicadas_pago_id(db, auto_import_result.pago_id)
+            else:
+                cuotas_display = texto_cuotas_aplicadas_pago_reportado(db, pr)
+            phase_ms["cuotas_lookup_ms"] = _elapsed_ms(cuotas_lookup_started)
+            background_started = perf_counter()
             background_tasks.add_task(
                 _procesar_recibo_y_correo_aprobado_background,
                 int(pr.id),
@@ -1200,9 +1261,14 @@ async def enviar_reporte_infopagos(
                 int(cliente.id),
                 "INFOPAGOS",
             )
-
+            phase_ms["background_task_ms"] = _elapsed_ms(background_started)
+            token_started = perf_counter()
             recibo_token = create_recibo_infopagos_token(pr.id, expire_hours=2)
+            phase_ms["token_ms"] = _elapsed_ms(token_started)
+            final_commit_started = perf_counter()
             db.commit()
+            phase_ms["final_commit_ms"] = _elapsed_ms(final_commit_started)
+            _log_infopagos_timing("aprobado", referencia, pr)
             return EnviarReporteInfopagosResponse(
                 ok=True,
                 referencia_interna=referencia,
@@ -1214,6 +1280,7 @@ async def enviar_reporte_infopagos(
                 recibo_listo=False,
             )
 
+        _log_infopagos_timing("en_revision", referencia, pr)
         return EnviarReporteInfopagosResponse(
             ok=True,
             referencia_interna=referencia,

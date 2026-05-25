@@ -11,6 +11,7 @@ import os
 import re
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
+from time import perf_counter
 from typing import Optional, Tuple
 
 from sqlalchemy import select, text, update
@@ -30,6 +31,10 @@ from app.services.tasa_cambio_service import (
 from app.services.cobros.cedula_reportar_bs_service import cedula_autorizada_para_bs
 
 logger = logging.getLogger(__name__)
+
+
+def _elapsed_ms(start_perf: float) -> float:
+    return round((perf_counter() - start_perf) * 1000, 2)
 
 ALLOWED_COMPROBANTE_TYPES = frozenset(
     {
@@ -143,13 +148,18 @@ def intentar_importar_reportado_automatico(
     pr: PagoReportado,
     referencia: str,
     log_tag: str,
-) -> None:
+) -> AutoImportResultado:
     """
     Si el reporte quedó en estado aprobado: crea Pago (mismas reglas que importar-desde-cobros),
     aplica a cuotas y marca el reporte como importado. Fallos solo en log (no rompe la respuesta al cliente).
     """
+    started_total = perf_counter()
     if pr is None or getattr(pr, "estado", None) != "aprobado":
-        return
+        return AutoImportResultado(total_ms=_elapsed_ms(started_total))
+    lookup_ms = 0.0
+    importar_pago_ms = 0.0
+    cascada_ms = 0.0
+    commit_ms = 0.0
     try:
         from app.models.pago import Pago
         from app.api.v1.endpoints.pagos import importar_un_pago_reportado_a_pagos, _aplicar_pago_a_cuotas_interno
@@ -158,19 +168,40 @@ def intentar_importar_reportado_automatico(
             pago_reportado_colisiona_tabla_pagos,
         )
 
+        lookup_started = perf_counter()
         db.refresh(pr)
         if pago_reportado_colisiona_tabla_pagos(db, pr):
+            lookup_ms = _elapsed_ms(lookup_started)
             pr.estado = "importado"
             pr.falla_validadores_manual = False
             db.add(pr)
+            commit_started = perf_counter()
             db.commit()
+            commit_ms = _elapsed_ms(commit_started)
+            result = AutoImportResultado(
+                ya_existia_en_pagos=True,
+                lookup_ms=lookup_ms,
+                commit_ms=commit_ms,
+                total_ms=_elapsed_ms(started_total),
+            )
             logger.info(
                 "[%s] Reportado marcado importado ref=%s: ya existe un pago con el mismo comprobante "
                 "(no se duplica fila en pagos).",
                 log_tag,
                 referencia,
             )
-            return
+            logger.info(
+                "[%s_TIMING] ref=%s autoimport=colision_existente lookup_ms=%s importar_pago_ms=%s "
+                "cascada_ms=%s commit_ms=%s total_ms=%s",
+                log_tag,
+                referencia,
+                result.lookup_ms,
+                result.importar_pago_ms,
+                result.cascada_ms,
+                result.commit_ms,
+                result.total_ms,
+            )
+            return result
         claves_pr = claves_documento_pago_para_reportado(pr)
         docs_bd: set[str] = set()
         if claves_pr:
@@ -178,9 +209,11 @@ def intentar_importar_reportado_automatico(
                 select(Pago.numero_documento).where(Pago.numero_documento.in_(claves_pr))
             ).scalars().all()
             docs_bd = {str(x) for x in rows if x}
+        lookup_ms = _elapsed_ms(lookup_started)
 
         usuario = "infopagos@rapicredit" if log_tag == "INFOPAGOS" else "cobros-publico@rapicredit"
 
+        importar_started = perf_counter()
         res = importar_un_pago_reportado_a_pagos(
             db,
             pr,
@@ -189,24 +222,75 @@ def intentar_importar_reportado_automatico(
             docs_en_lote=set(),
             registrar_error_en_tabla=False,
         )
+        importar_pago_ms = _elapsed_ms(importar_started)
         if not res.get("ok"):
+            result = AutoImportResultado(
+                error=res.get("error"),
+                lookup_ms=lookup_ms,
+                importar_pago_ms=importar_pago_ms,
+                total_ms=_elapsed_ms(started_total),
+            )
             logger.warning("[%s] Auto-import ref=%s omitido: %s", log_tag, referencia, res.get("error"))
-            return
+            logger.info(
+                "[%s_TIMING] ref=%s autoimport=omitido lookup_ms=%s importar_pago_ms=%s "
+                "cascada_ms=%s commit_ms=%s total_ms=%s",
+                log_tag,
+                referencia,
+                result.lookup_ms,
+                result.importar_pago_ms,
+                result.cascada_ms,
+                result.commit_ms,
+                result.total_ms,
+            )
+            return result
 
         pago = res["pago"]
+        cascada_started = perf_counter()
         cc, cp = _aplicar_pago_a_cuotas_interno(pago, db)
+        cascada_ms = _elapsed_ms(cascada_started)
         if cc > 0 or cp > 0:
             pago.estado = "PAGADO"
         pr.estado = "importado"
         pr.falla_validadores_manual = False
+        commit_started = perf_counter()
         db.commit()
+        commit_ms = _elapsed_ms(commit_started)
+        result = AutoImportResultado(
+            pago_id=getattr(pago, "id", None),
+            lookup_ms=lookup_ms,
+            importar_pago_ms=importar_pago_ms,
+            cascada_ms=cascada_ms,
+            commit_ms=commit_ms,
+            total_ms=_elapsed_ms(started_total),
+        )
         logger.info("[%s] Auto-import OK ref=%s pago_id=%s", log_tag, referencia, getattr(pago, "id", None))
+        logger.info(
+            "[%s_TIMING] ref=%s autoimport=ok pago_id=%s lookup_ms=%s importar_pago_ms=%s "
+            "cascada_ms=%s commit_ms=%s total_ms=%s",
+            log_tag,
+            referencia,
+            result.pago_id,
+            result.lookup_ms,
+            result.importar_pago_ms,
+            result.cascada_ms,
+            result.commit_ms,
+            result.total_ms,
+        )
+        return result
     except Exception as e:
         logger.warning("[%s] Auto-import fallo ref=%s: %s", log_tag, referencia, e)
         try:
             db.rollback()
         except Exception:
             pass
+        return AutoImportResultado(
+            error=str(e),
+            lookup_ms=lookup_ms,
+            importar_pago_ms=importar_pago_ms,
+            cascada_ms=cascada_ms,
+            commit_ms=commit_ms,
+            total_ms=_elapsed_ms(started_total),
+        )
 
 
 def inferir_mime_comprobante_desde_extension(filename_raw: str) -> Optional[str]:
@@ -362,6 +446,18 @@ class MonedaObservacionNormalizados:
     moneda_upper: str
     moneda_guardar: str
     observacion: Optional[str]
+
+
+@dataclass(frozen=True)
+class AutoImportResultado:
+    pago_id: Optional[int] = None
+    ya_existia_en_pagos: bool = False
+    error: Optional[str] = None
+    lookup_ms: float = 0.0
+    importar_pago_ms: float = 0.0
+    cascada_ms: float = 0.0
+    commit_ms: float = 0.0
+    total_ms: float = 0.0
 
 
 def normalizar_y_validar_campos_formulario(
