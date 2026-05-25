@@ -84,6 +84,7 @@ from app.utils.cedula_almacenamiento import (
     asegurar_cedula_pago_para_fk,
     alinear_cedulas_clientes_existentes,
     normalizar_cedula_almacenamiento,
+    resolver_cedula_almacenada_en_clientes,
 )
 from app.services.pago_numero_documento import (
     numero_documento_ya_registrado,
@@ -4907,37 +4908,15 @@ def crear_pagos_batch(
 
             valid_cedulas_prestamo = {(r or "").strip().replace("-", "").upper() for r in ced_rows if r}
 
-        todas_cedulas_upper = list(
-
-            {
-
-                (p.cedula_cliente or "").strip().upper()
-
-                for p in pagos_list
-
-                if (p.cedula_cliente or "").strip()
-
-            }
-
-        )
-
-        valid_cedulas: set[str] = set()
-
-        if todas_cedulas_upper:
-
-            ced_rows_c = db.execute(
-
-                select(Cliente.cedula).where(func.upper(Cliente.cedula).in_(todas_cedulas_upper))
-
-            ).scalars().all()
-
-            valid_cedulas = {(r or "").strip().upper() for r in ced_rows_c if r}
-
         # Fase 1: validacion (sin insertar). Errores por indice; las filas validas se insertan en fase 2.
 
         errors_by_index: dict[int, dict] = {}
 
         resolved_prestamo_id_by_index: dict[int, int] = {}
+
+        resolved_cedula_fk_by_index: dict[int, str] = {}
+
+        monto_val_by_index: dict[int, float] = {}
 
         docs_added_in_batch: set[str] = set()
 
@@ -4975,7 +4954,15 @@ def crear_pagos_batch(
 
             ced_norm_prest = (payload.cedula_cliente or "").strip().replace("-", "").upper()
 
-            if ced_norm_prest and ced_norm_prest not in valid_cedulas_prestamo:
+            raw_pid = getattr(payload, "prestamo_id", None)
+
+            raw_pid_int: Optional[int] = None
+
+            if raw_pid is not None and int(raw_pid) > 0:
+
+                raw_pid_int = int(raw_pid)
+
+            if ced_norm_prest and raw_pid_int is None and ced_norm_prest not in valid_cedulas_prestamo:
 
                 errors_by_index[idx] = {
 
@@ -4991,11 +4978,9 @@ def crear_pagos_batch(
 
             effective_prestamo_id: Optional[int] = None
 
-            raw_pid = getattr(payload, "prestamo_id", None)
+            if raw_pid_int is not None:
 
-            if raw_pid is not None and int(raw_pid) > 0:
-
-                effective_prestamo_id = int(raw_pid)
+                effective_prestamo_id = raw_pid_int
 
             elif len(activos_ced) == 1:
 
@@ -5055,13 +5040,69 @@ def crear_pagos_batch(
 
                 continue
 
-            if cedula_normalizada and cedula_normalizada not in valid_cedulas:
+            es_valido_b, monto_val_b, err_msg_b = _validar_monto(payload.monto_pagado)
 
-                errors_by_index[idx] = {"error": f"No existe cliente con cedula {cedula_normalizada}", "status_code": 404}
+            if not es_valido_b:
+
+                errors_by_index[idx] = {"error": err_msg_b, "status_code": 400}
 
                 continue
 
+            try:
+
+                cedula_fk_batch = asegurar_cedula_pago_para_fk(
+                    db,
+                    cedula_raw=cedula_normalizada or None,
+                    prestamo_id=effective_prestamo_id,
+                )
+
+            except CedulaPagoFkError as e:
+
+                errors_by_index[idx] = {"error": str(e), "status_code": 400}
+
+                continue
+
+            if not cedula_fk_batch:
+
+                errors_by_index[idx] = {"error": "Cedula del cliente no disponible en BD.", "status_code": 400}
+
+                continue
+
+            if cedula_normalizada:
+
+                cedula_payload_resuelta = resolver_cedula_almacenada_en_clientes(db, cedula_normalizada)
+
+                if not cedula_payload_resuelta:
+
+                    cedula_payload_resuelta = db.execute(
+                        select(Cliente.cedula)
+                        .where(func.upper(Cliente.cedula) == cedula_normalizada)
+                        .limit(1)
+                    ).scalar_one_or_none()
+
+                if not cedula_payload_resuelta:
+
+                    errors_by_index[idx] = {"error": f"No existe cliente con cedula {cedula_normalizada}", "status_code": 404}
+
+                    continue
+
+                if cedula_payload_resuelta.strip().upper() != cedula_fk_batch.strip().upper():
+
+                    errors_by_index[idx] = {
+                        "error": (
+                            "La cedula no coincide con la del cliente del prestamo "
+                            f"(en BD: {cedula_fk_batch})."
+                        ),
+                        "status_code": 400,
+                    }
+
+                    continue
+
             resolved_prestamo_id_by_index[idx] = effective_prestamo_id
+
+            resolved_cedula_fk_by_index[idx] = cedula_fk_batch
+
+            monto_val_by_index[idx] = monto_val_b
 
             if num_doc:
 
@@ -5082,9 +5123,9 @@ def crear_pagos_batch(
             return {"results": results, "ok_count": 0, "fail_count": len(results)}
 
         cedulas_lote = {
-            (pagos_list[i].cedula_cliente or "").strip().upper()
+            (resolved_cedula_fk_by_index.get(i) or "").strip().upper()
             for i in range(len(pagos_list))
-            if i not in errors_by_index and (pagos_list[i].cedula_cliente or "").strip()
+            if i not in errors_by_index and (resolved_cedula_fk_by_index.get(i) or "").strip()
         }
 
         alinear_cedulas_clientes_existentes(db, cedulas_lote)
@@ -5153,13 +5194,11 @@ def crear_pagos_batch(
 
                 conciliado = payload.conciliado if payload.conciliado is not None else True
 
-                cedula_normalizada = (payload.cedula_cliente or "").strip().upper()
-
-                es_valido_b, monto_val_b, err_msg_b = _validar_monto(payload.monto_pagado)
-
-                if not es_valido_b:
-
-                    raise HTTPException(status_code=400, detail=f"Lote fila {idx + 1}: {err_msg_b}")
+                cedula_fk_batch = resolved_cedula_fk_by_index.get(idx)
+                cedula_normalizada = (cedula_fk_batch or "").strip().upper()
+                monto_val_b = monto_val_by_index.get(idx)
+                if not cedula_fk_batch or monto_val_b is None:
+                    raise HTTPException(status_code=500, detail=f"Lote fila {idx + 1}: faltan datos resueltos (error interno).")
 
                 try:
 
@@ -5205,7 +5244,7 @@ def crear_pagos_batch(
 
                 row = Pago(
 
-                    cedula_cliente=cedula_normalizada,
+                    cedula_cliente=cedula_fk_batch,
 
                     prestamo_id=_pid_res,
 
