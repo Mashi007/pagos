@@ -1,6 +1,7 @@
 """Tests unitarios para `cobros_publico_reporte_service` (validación de formulario y comprobante)."""
 import os
 import sys
+from types import SimpleNamespace
 
 os.environ.setdefault("DATABASE_URL", "sqlite:///./test.db")
 os.environ.setdefault("SECRET_KEY", "test-secret-key-with-32-chars-123456")
@@ -202,3 +203,42 @@ class TestReferenciaDisplay:
 
     def test_vacio_es_guion(self):
         assert cpr.referencia_display("  ") == "-"
+
+
+def test_autoimport_no_marca_importado_si_no_aplica_cuotas(monkeypatch):
+    class FakeDb:
+        committed = False
+        rolled_back = False
+
+        def refresh(self, _obj):
+            return None
+
+        def rollback(self):
+            self.rolled_back = True
+
+        def commit(self):
+            self.committed = True
+
+    from app.api.v1.endpoints import pagos as pagos_routes
+    from app.services.cobros import pago_reportado_documento as doc_service
+
+    pago = SimpleNamespace(id=123, estado="PENDIENTE")
+    pr = SimpleNamespace(estado="aprobado", falla_validadores_manual=True)
+    db = FakeDb()
+
+    monkeypatch.setattr(doc_service, "pago_reportado_colisiona_tabla_pagos", lambda _db, _pr: False)
+    monkeypatch.setattr(doc_service, "claves_documento_pago_para_reportado", lambda _pr: [])
+    monkeypatch.setattr(
+        pagos_routes,
+        "importar_un_pago_reportado_a_pagos",
+        lambda *_args, **_kwargs: {"ok": True, "pago": pago},
+    )
+    monkeypatch.setattr(pagos_routes, "_aplicar_pago_a_cuotas_interno", lambda _pago, _db: (0, 0))
+
+    result = cpr.intentar_importar_reportado_automatico(db, pr, "RPC-TEST", "COBROS_PUBLIC")
+
+    assert result.error
+    assert pr.estado == "aprobado"
+    assert pago.estado == "PENDIENTE"
+    assert db.rolled_back is True
+    assert db.committed is False

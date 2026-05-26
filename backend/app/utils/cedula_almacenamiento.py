@@ -145,6 +145,18 @@ def asegurar_cedula_pago_para_fk(
 
     cedula_solicitada = normalizar_cedula_almacenamiento(cedula_raw)
 
+    def _cedula_cliente_alineada(candidato: Optional[str]) -> Optional[str]:
+        cedula_norm = normalizar_cedula_almacenamiento(candidato)
+        if not cedula_norm:
+            return None
+        alinear_cedulas_clientes_existentes(db, [cedula_norm])
+        res = resolver_cedula_almacenada_en_clientes(db, cedula_norm)
+        if res:
+            return res
+        return db.execute(
+            select(Cliente.cedula).where(Cliente.cedula == cedula_norm).limit(1)
+        ).scalar_one_or_none()
+
     if prestamo_id:
         prestamo = db.get(Prestamo, prestamo_id)
         if prestamo:
@@ -159,14 +171,9 @@ def asegurar_cedula_pago_para_fk(
             ):
                 if not candidato:
                     continue
-                res = resolver_cedula_almacenada_en_clientes(db, candidato)
+                res = _cedula_cliente_alineada(candidato)
                 if res:
                     return res
-                existente = db.execute(
-                    select(Cliente.cedula).where(Cliente.cedula == candidato).limit(1)
-                ).scalar_one_or_none()
-                if existente:
-                    return existente
 
     if not cedula_solicitada:
         return None

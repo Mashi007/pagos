@@ -4894,6 +4894,23 @@ def crear_pagos_batch(
 
             prestamo_estado_por_id = {int(r[0]): (r[1] or "") for r in er_rows if r[0] is not None}
 
+        prestamo_cedula_cliente_por_id: dict[int, str] = {}
+
+        if all_pids_batch:
+
+            owner_rows = db.execute(
+                select(Prestamo.id, Cliente.cedula)
+                .select_from(Prestamo)
+                .join(Cliente, Prestamo.cliente_id == Cliente.id)
+                .where(Prestamo.id.in_(all_pids_batch))
+            ).all()
+
+            prestamo_cedula_cliente_por_id = {
+                int(r[0]): (normalizar_cedula_almacenamiento(r[1]) or "")
+                for r in owner_rows
+                if r[0] is not None
+            }
+
 
         # Preload: cédulas que tienen al menos un préstamo (normalizadas)
 
@@ -4906,6 +4923,12 @@ def crear_pagos_batch(
             ced_rows = db.execute(select(pc).where(pc.in_(cedulas_payload)).distinct()).scalars().all()
 
             valid_cedulas_prestamo = {(r or "").strip().replace("-", "").upper() for r in ced_rows if r}
+
+        valid_cedulas_prestamo.update(
+            (c or "").strip().replace("-", "").upper()
+            for c in prestamo_cedula_cliente_por_id.values()
+            if (c or "").strip()
+        )
 
         todas_cedulas_upper = list(
 
@@ -4938,6 +4961,8 @@ def crear_pagos_batch(
         errors_by_index: dict[int, dict] = {}
 
         resolved_prestamo_id_by_index: dict[int, int] = {}
+
+        resolved_cedula_cliente_by_index: dict[int, str] = {}
 
         docs_added_in_batch: set[str] = set()
 
@@ -5055,6 +5080,36 @@ def crear_pagos_batch(
 
                 continue
 
+            cedula_cliente_prestamo = prestamo_cedula_cliente_por_id.get(effective_prestamo_id)
+
+            if not cedula_cliente_prestamo:
+
+                errors_by_index[idx] = {
+
+                    "error": "El prestamo no tiene cliente asociado en BD; no se puede registrar el pago.",
+
+                    "status_code": 400,
+
+                }
+
+                continue
+
+            cedula_payload_cmp = (normalizar_cedula_almacenamiento(payload.cedula_cliente) or "").replace("-", "").upper()
+
+            cedula_prestamo_cmp = cedula_cliente_prestamo.replace("-", "").upper()
+
+            if cedula_payload_cmp and cedula_payload_cmp != cedula_prestamo_cmp:
+
+                errors_by_index[idx] = {
+
+                    "error": f"La cédula no coincide con la del préstamo #{effective_prestamo_id} (en BD: {cedula_cliente_prestamo}).",
+
+                    "status_code": 400,
+
+                }
+
+                continue
+
             if cedula_normalizada and cedula_normalizada not in valid_cedulas:
 
                 errors_by_index[idx] = {"error": f"No existe cliente con cedula {cedula_normalizada}", "status_code": 404}
@@ -5062,6 +5117,8 @@ def crear_pagos_batch(
                 continue
 
             resolved_prestamo_id_by_index[idx] = effective_prestamo_id
+
+            resolved_cedula_cliente_by_index[idx] = cedula_cliente_prestamo
 
             if num_doc:
 
@@ -5153,7 +5210,7 @@ def crear_pagos_batch(
 
                 conciliado = payload.conciliado if payload.conciliado is not None else True
 
-                cedula_normalizada = (payload.cedula_cliente or "").strip().upper()
+                cedula_normalizada = resolved_cedula_cliente_by_index.get(idx) or (payload.cedula_cliente or "").strip().upper()
 
                 es_valido_b, monto_val_b, err_msg_b = _validar_monto(payload.monto_pagado)
 
