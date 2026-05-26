@@ -248,8 +248,33 @@ def intentar_importar_reportado_automatico(
         cascada_started = perf_counter()
         cc, cp = _aplicar_pago_a_cuotas_interno(pago, db)
         cascada_ms = _elapsed_ms(cascada_started)
-        if cc > 0 or cp > 0:
-            pago.estado = "PAGADO"
+        if cc <= 0 and cp <= 0:
+            db.rollback()
+            error = "El pago no se aplicó a ninguna cuota; el reporte queda aprobado para revisión."
+            result = AutoImportResultado(
+                pago_id=getattr(pago, "id", None),
+                error=error,
+                lookup_ms=lookup_ms,
+                importar_pago_ms=importar_pago_ms,
+                cascada_ms=cascada_ms,
+                total_ms=_elapsed_ms(started_total),
+            )
+            logger.warning("[%s] Auto-import ref=%s sin cuotas aplicadas: %s", log_tag, referencia, error)
+            logger.info(
+                "[%s_TIMING] ref=%s autoimport=sin_cuotas pago_id=%s lookup_ms=%s importar_pago_ms=%s "
+                "cascada_ms=%s commit_ms=%s total_ms=%s",
+                log_tag,
+                referencia,
+                result.pago_id,
+                result.lookup_ms,
+                result.importar_pago_ms,
+                result.cascada_ms,
+                result.commit_ms,
+                result.total_ms,
+            )
+            return result
+
+        pago.estado = "PAGADO"
         pr.estado = "importado"
         pr.falla_validadores_manual = False
         commit_started = perf_counter()
