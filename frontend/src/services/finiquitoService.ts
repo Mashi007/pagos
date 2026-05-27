@@ -67,6 +67,17 @@ export type FiniquitoConteoRevisionNuevos = {
   ventana_horas: number
 }
 
+export type FiniquitoResumenEstado = {
+  total: number
+  revision: number
+  aceptado: number
+  rechazado: number
+  en_proceso: number
+  terminado: number
+  max_ultimo_refresh_utc: string | null
+  max_creado_en_utc: string | null
+}
+
 /** Casos en REVISION materializados recientemente (alarma de nuevos liquidados en finiquito). */
 export async function finiquitoAdminConteoRevisionNuevos(
   cedula?: string,
@@ -82,6 +93,20 @@ export async function finiquitoAdminConteoRevisionNuevos(
   return apiClient.get<FiniquitoConteoRevisionNuevos>(
     `${BASE}/admin/casos/conteo-revision-nuevos${q}`
   )
+}
+
+/**
+ * Snapshot ligero para polling: detecta cambios de estado/refresh sin traer listas.
+ * Si cambia este digest, el frontend puede recargar las tablas en modo silencioso.
+ */
+export async function finiquitoAdminResumenEstado(
+  cedula?: string
+): Promise<FiniquitoResumenEstado> {
+  const params = new URLSearchParams()
+  const ced = (cedula ?? '').trim()
+  if (ced) params.set('cedula', ced)
+  const q = params.toString() ? `?${params.toString()}` : ''
+  return apiClient.get<FiniquitoResumenEstado>(`${BASE}/admin/casos/resumen-estado${q}`)
 }
 
 export async function finiquitoAdminListar(

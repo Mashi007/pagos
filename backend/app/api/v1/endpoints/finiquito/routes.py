@@ -42,6 +42,7 @@ from app.models.finiquito import (
 from app.models.prestamo import Prestamo
 from app.schemas.auth import UserResponse
 from app.schemas.finiquito import (
+    FiniquitoAdminResumenEstadoResponse,
     FiniquitoConteoRevisionNuevosResponse,
     FiniquitoCasoListaResponse,
     FiniquitoCasoOut,
@@ -1051,6 +1052,48 @@ def finiquito_admin_conteo_revision_nuevos(
     total = int(total_raw or 0)
     return FiniquitoConteoRevisionNuevosResponse(
         total=total, ventana_horas=int(horas)
+    )
+
+
+@router.get(
+    "/admin/casos/resumen-estado",
+    response_model=FiniquitoAdminResumenEstadoResponse,
+)
+def finiquito_admin_resumen_estado(
+    cedula: Optional[str] = Query(
+        None,
+        description=(
+            "Subcadena de cedula (coincidencia parcial), misma regla que GET /admin/casos. "
+            "Se usa para polling liviano sin cargar listas completas."
+        ),
+    ),
+    db: Session = Depends(get_db),
+    _: UserResponse = Depends(require_admin_or_operator),
+):
+    q = db.query(FiniquitoCaso)
+    if cedula and cedula.strip():
+        q = q.filter(FiniquitoCaso.cedula.ilike(f"%{cedula.strip()}%"))
+
+    rows = (
+        q.with_entities(FiniquitoCaso.estado, func.count(FiniquitoCaso.id))
+        .group_by(FiniquitoCaso.estado)
+        .all()
+    )
+    counts: Dict[str, int] = {str(r[0] or "").upper(): int(r[1] or 0) for r in rows}
+    total = int(sum(counts.values()))
+
+    max_refresh = q.with_entities(func.max(FiniquitoCaso.ultimo_refresh_utc)).scalar()
+    max_creado = q.with_entities(func.max(FiniquitoCaso.creado_en)).scalar()
+
+    return FiniquitoAdminResumenEstadoResponse(
+        total=total,
+        revision=int(counts.get("REVISION", 0)),
+        aceptado=int(counts.get("ACEPTADO", 0)),
+        rechazado=int(counts.get("RECHAZADO", 0)),
+        en_proceso=int(counts.get("EN_PROCESO", 0)),
+        terminado=int(counts.get("TERMINADO", 0)),
+        max_ultimo_refresh_utc=max_refresh.isoformat() if max_refresh else None,
+        max_creado_en_utc=max_creado.isoformat() if max_creado else None,
     )
 
 

@@ -88,6 +88,25 @@ class FiniquitoConteoRevisionNuevosResponse(BaseModel):
     )
 
 
+class FiniquitoAdminResumenEstadoResponse(BaseModel):
+    """Snapshot liviano para detectar cambios sin recargar listas completas."""
+
+    total: int = Field(..., ge=0)
+    revision: int = Field(..., ge=0)
+    aceptado: int = Field(..., ge=0)
+    rechazado: int = Field(..., ge=0)
+    en_proceso: int = Field(..., ge=0)
+    terminado: int = Field(..., ge=0)
+    max_ultimo_refresh_utc: Optional[str] = Field(
+        default=None,
+        description="MAX(ultimo_refresh_utc) de la vista filtrada.",
+    )
+    max_creado_en_utc: Optional[str] = Field(
+        default=None,
+        description="MAX(creado_en) de la vista filtrada.",
+    )
+
+
 class FiniquitoCasoListaResponse(BaseModel):
     items: List[FiniquitoCasoOut]
     total: int = Field(

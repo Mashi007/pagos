@@ -2,6 +2,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react'
@@ -62,8 +63,10 @@ import {
   finiquitoAdminListarTerminados,
   finiquitoAdminPatchEstado,
   finiquitoAdminRefreshMaterializado,
+  finiquitoAdminResumenEstado,
   finiquitoAdminResumenTerminadosSemanal,
   type FiniquitoRefreshStats,
+  type FiniquitoResumenEstado,
   type FiniquitoTerminadoItem,
   FINIQUITO_HORAS_NUEVOS_REVISION_DEFAULT,
 } from '../services/finiquitoService'
@@ -183,10 +186,24 @@ function textoToastRefresco(r: FiniquitoRefreshStats): {
 }
 
 const DEBOUNCE_MS = 420
+const AUTO_REFRESH_POLL_MS = 60_000
 
 /** Coincide con backend `_ADMIN_CASOS_MAX_LIMIT` para bandejas pequeñas. */
 const FETCH_LIMIT = 2000
 const BANDEJA_PRINCIPAL_FETCH_LIMIT = 100
+
+function buildResumenDigest(snapshot: FiniquitoResumenEstado): string {
+  return [
+    snapshot.total,
+    snapshot.revision,
+    snapshot.aceptado,
+    snapshot.rechazado,
+    snapshot.en_proceso,
+    snapshot.terminado,
+    snapshot.max_ultimo_refresh_utc ?? '',
+    snapshot.max_creado_en_utc ?? '',
+  ].join('|')
+}
 
 function casoCoincideCedula(caso: FiniquitoCasoItem, filtro: string): boolean {
   const f = filtro.trim().toLowerCase()
@@ -393,6 +410,8 @@ function FiniquitoGestionPageInner() {
     })
   const [descargandoTerminadosExcel, setDescargandoTerminadosExcel] =
     useState(false)
+  const resumenDigestRef = useRef<string | null>(null)
+  const resumenPollingBusyRef = useRef(false)
 
   useEffect(() => {
     const t = window.setTimeout(
@@ -545,6 +564,42 @@ function FiniquitoGestionPageInner() {
   useEffect(() => {
     void cargarListas()
   }, [cargarListas])
+
+  useEffect(() => {
+    resumenDigestRef.current = null
+  }, [cedulaBusqueda, cedulaTrabajoBusqueda, cedulaTerminadosBusqueda])
+
+  useEffect(() => {
+    const tick = async () => {
+      if (document.hidden || refreshing || resumenPollingBusyRef.current) {
+        return
+      }
+      resumenPollingBusyRef.current = true
+      try {
+        const snapshot = await finiquitoAdminResumenEstado()
+        const digest = buildResumenDigest(snapshot)
+        if (resumenDigestRef.current == null) {
+          resumenDigestRef.current = digest
+          return
+        }
+        if (digest !== resumenDigestRef.current) {
+          resumenDigestRef.current = digest
+          void invalidatePrestamosQueries(queryClient)
+          await cargarListas({ silent: true })
+        }
+      } catch {
+        // Polling silencioso: no interrumpir la gestión por fallos transitorios.
+      } finally {
+        resumenPollingBusyRef.current = false
+      }
+    }
+
+    const intervalId = window.setInterval(() => {
+      void tick()
+    }, AUTO_REFRESH_POLL_MS)
+    void tick()
+    return () => window.clearInterval(intervalId)
+  }, [cargarListas, queryClient, refreshing])
 
   const onRefreshJob = async () => {
     setRefreshing(true)

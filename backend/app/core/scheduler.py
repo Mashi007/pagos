@@ -5,7 +5,7 @@ Solo se registra e inicia si en el arranque ENABLE_AUTOMATIC_SCHEDULED_JOBS=true
 Por defecto esta desactivado: ningun cron en servidor; la pantalla Configuracion no dispara estos jobs.
 
 Cuando esta activo:
-- lunes a sabado 01:00 y 13:00  Finiquito: refrescar tabla finiquito_casos.
+- finiquito: refresco automatico periodico cada N minutos (configurable) y ventanas de respaldo 00:45 + 13:00 lun-sab.
 - todos los dias 01:00  Clientes (Drive): columna A, sync, import automático filas seleccionable; resto en pantalla (ENABLE_DRIVE_CLIENTES_NIGHTLY_0100 / AUTO_GUARDAR).
 - todos los dias 02:00  Préstamos Drive: columna A, sync, snapshot, guardar automático al 100% (_motivos_no_100); resto en pantalla (ENABLE_PRESTAMO_CANDIDATOS_DRIVE_NIGHTLY / AUTO_GUARDAR).
 - 03:00  Auditoria cartera: evaluacion de prestamos y metadatos en configuracion.
@@ -34,6 +34,7 @@ from typing import Any, Callable, Dict, Optional
 from apscheduler.executors.pool import ThreadPoolExecutor
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
+from apscheduler.triggers.interval import IntervalTrigger
 
 from app.core.config import settings
 from app.core.database import SessionLocal
@@ -500,7 +501,21 @@ def start_scheduler() -> None:
 
     # --- Registro en orden cronológico típico (Caracas) ---
 
-    # 00:45 lun-sab — finiquito (medio; antes del sync Drive 01:00)
+    # Finiquito cada N minutos (operativo): mantiene la bandeja fresca sin esperar horarios fijos.
+    if getattr(settings, "ENABLE_FINIQUITO_REFRESH_INTERVAL", True):
+        _minutes = int(getattr(settings, "FINIQUITO_REFRESH_INTERVAL_MINUTES", 15) or 15)
+        _minutes = max(5, min(_minutes, 180))
+        _scheduler.add_job(
+            _wrap_job_with_timing("finiquito_refresh_interval", _job_finiquito_refresh),
+            IntervalTrigger(
+                minutes=_minutes,
+                timezone=SCHEDULER_TZ,
+            ),
+            id="finiquito_refresh_interval",
+            name=f"Finiquito: refresco periodico cada {_minutes} min",
+        )
+
+    # 00:45 lun-sab — finiquito (respaldo nocturno; antes del sync Drive 01:00)
     _scheduler.add_job(
         _wrap_job_with_timing("finiquito_refresh_lun_sab_0045", _job_finiquito_refresh),
         CronTrigger(
@@ -623,7 +638,7 @@ def start_scheduler() -> None:
             name="Notificaciones: caché Q vs fecha_aprobacion jueves 04:00",
         )
 
-    # 13:00 lun-sab — finiquito (segunda pasada)
+    # 13:00 lun-sab — finiquito (respaldo mediodia)
     _scheduler.add_job(
         _wrap_job_with_timing("finiquito_refresh_lun_sab_1300", _job_finiquito_refresh),
         CronTrigger(

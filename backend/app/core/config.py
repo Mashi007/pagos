@@ -136,6 +136,23 @@ class Settings(BaseSettings):
             "(`_motivos_no_100`). Las filas que no cumplen siguen en el snapshot para revisión."
         ),
     )
+    ENABLE_FINIQUITO_REFRESH_INTERVAL: bool = Field(
+        default=True,
+        description=(
+            "Si True y ENABLE_AUTOMATIC_SCHEDULED_JOBS=True, registra un job de refresco incremental "
+            "de finiquito cada N minutos durante todo el dia para que los LIQUIDADO elegibles entren "
+            "automaticamente sin esperar a ventanas horarias fijas."
+        ),
+    )
+    FINIQUITO_REFRESH_INTERVAL_MINUTES: int = Field(
+        default=15,
+        ge=5,
+        le=180,
+        description=(
+            "Frecuencia en minutos del refresco automatico de finiquito cuando "
+            "ENABLE_FINIQUITO_REFRESH_INTERVAL=True."
+        ),
+    )
 
     # ============================================
     # Base de Datos
