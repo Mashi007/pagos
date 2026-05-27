@@ -1,7 +1,7 @@
 """
 Refresco de finiquito_casos: antes de materializar, persiste como LIQUIDADO los
 préstamos APROBADO que ya están efectivamente cubiertos por cuotas. Luego toma
-solo préstamos LIQUIDADO donde la suma de cuotas.total_pagado cuadra con
+préstamos LIQUIDADO o FINIQUITO donde la suma de cuotas.total_pagado cuadra con
 total_financiamiento con tolerancia 0.02 (alineado con redondeos y cuadre
 pagos/cuotas en cartera).
 
@@ -109,7 +109,7 @@ def refrescar_finiquito_caso_prestamo_si_aplica(db: Session, prestamo_id: int) -
         FROM prestamos p
         INNER JOIN cuotas c ON c.prestamo_id = p.id
         WHERE p.id = :pid
-          AND UPPER(TRIM(COALESCE(p.estado, ''))) = 'LIQUIDADO'
+          AND UPPER(TRIM(COALESCE(p.estado, ''))) IN ('LIQUIDADO', 'FINIQUITO')
         GROUP BY p.id, p.cliente_id, p.cedula, p.total_financiamiento
         HAVING ABS(
             COALESCE(SUM(COALESCE(c.total_pagado, 0)), 0) - COALESCE(p.total_financiamiento, 0)
@@ -168,7 +168,7 @@ def refrescar_finiquito_caso_prestamo_si_aplica(db: Session, prestamo_id: int) -
 
 def ejecutar_refresh_finiquito_casos(db: Session) -> dict[str, Any]:
     """
-    - Inserta nuevos casos en REVISION (bandeja principal) para prestamos LIQUIDADO que cumplen la regla.
+    - Inserta nuevos casos en REVISION (bandeja principal) para prestamos LIQUIDADO/FINIQUITO que cumplen la regla.
     - Actualiza sum_total_pagado / totales en casos existentes.
     - Elimina casos cuyo prestamo ya no califica (dejo de ser LIQUIDADO, cuotas sin cuadrar, etc.),
       en cualquier estado del caso (REVISION, ACEPTADO, area de trabajo, etc.).
@@ -184,7 +184,7 @@ def ejecutar_refresh_finiquito_casos(db: Session) -> dict[str, Any]:
                COALESCE(SUM(COALESCE(c.total_pagado, 0)), 0) AS sum_tp
         FROM prestamos p
         INNER JOIN cuotas c ON c.prestamo_id = p.id
-        WHERE UPPER(TRIM(COALESCE(p.estado, ''))) = 'LIQUIDADO'
+        WHERE UPPER(TRIM(COALESCE(p.estado, ''))) IN ('LIQUIDADO', 'FINIQUITO')
         GROUP BY p.id, p.cliente_id, p.cedula, p.total_financiamiento
         HAVING ABS(
             COALESCE(SUM(COALESCE(c.total_pagado, 0)), 0) - COALESCE(p.total_financiamiento, 0)
