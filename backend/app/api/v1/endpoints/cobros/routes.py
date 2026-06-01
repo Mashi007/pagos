@@ -67,10 +67,11 @@ from app.services.tasa_cambio_service import (
     tasa_y_equivalente_usd_excel,
     valor_tasa_para_fuente,
 )
-from app.services.pagos_gmail.gemini_service import (
-    compare_form_with_image,
-    extract_infopagos_campos_desde_comprobante,
+from app.services.pagos_gmail.gemini_async import (
+    compare_form_with_image_async,
+    extract_infopagos_campos_desde_comprobante_async,
 )
+from app.services.pagos_gmail.gemini_service import compare_form_with_image
 from app.services.cobros import cobros_publico_reporte_service as cpr
 from app.utils.cedula_almacenamiento import expr_cedula_normalizada_para_comparar
 from app.services.pagos_gmail.comprobante_bd import url_comprobante_imagen_absoluta
@@ -4204,7 +4205,7 @@ async def escaner_extraer_comprobante_infopagos(
 
     plantilla = (institucion_plantilla or "").strip() or None
     t_gemini0 = time.perf_counter()
-    gem = extract_infopagos_campos_desde_comprobante(
+    gem = await extract_infopagos_campos_desde_comprobante_async(
         ctx_ced, content, filename, institucion_plantilla=plantilla
     )
     gemini_ms = int((time.perf_counter() - t_gemini0) * 1000)
@@ -4667,7 +4668,9 @@ async def escaner_lote_drive_digitalizar(
                 }
             )
         else:
-            gem = extract_infopagos_campos_desde_comprobante(ctx_ced, content, filename)
+            gem = await extract_infopagos_campos_desde_comprobante_async(
+                ctx_ced, content, filename
+            )
             if not gem.get("ok"):
                 _base_escaner_lote = (
                     "Gemini no pudo digitalizar el comprobante con consistencia. "

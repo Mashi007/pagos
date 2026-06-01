@@ -40,9 +40,9 @@ from app.services.cobros.cedula_reportar_bs_service import (
     obtener_fuente_tasa_lista_bs,
 )
 from app.services.tasa_cambio_service import normalizar_fuente_tasa
-from app.services.pagos_gmail.gemini_service import (
-    compare_form_with_image,
-    extract_infopagos_campos_desde_comprobante,
+from app.services.pagos_gmail.gemini_async import (
+    compare_form_with_image_async,
+    extract_infopagos_campos_desde_comprobante_async,
 )
 from app.services.cobros.recibo_pdf import (
     RECIBO_TEXTO_CUOTA_EN_REVISION_CLIENTE,
@@ -735,7 +735,7 @@ async def digitalizar_comprobante_publico(
     numero = (numero_cedula or "").strip()
     ctx_ced = f"{tipo}{numero}".replace("-", "")
 
-    gem = extract_infopagos_campos_desde_comprobante(ctx_ced, content, filename)
+    gem = await extract_infopagos_campos_desde_comprobante_async(ctx_ced, content, filename)
     if not gem.get("ok"):
         return DigitalizarComprobanteResponse(
             ok=False,
@@ -886,7 +886,7 @@ async def enviar_reporte_publico(
             logger.info("[COBROS_PUBLIC] GEMINI_API_KEY no configurado: ref=%s irá a revisión manual", referencia)
 
         try:
-            gemini_result = compare_form_with_image(form_data, content, filename)
+            gemini_result = await compare_form_with_image_async(form_data, content, filename)
             coincide = gemini_result.get("coincide_exacto", False)
             pr.gemini_coincide_exacto = "true" if coincide else "false"
             pr.gemini_comentario = gemini_result.get("comentario")
@@ -1190,7 +1190,7 @@ async def enviar_reporte_infopagos(
 
         gemini_started = perf_counter()
         try:
-            gemini_result = compare_form_with_image(form_data, content, filename)
+            gemini_result = await compare_form_with_image_async(form_data, content, filename)
             coincide = gemini_result.get("coincide_exacto", False)
             pr.gemini_coincide_exacto = "true" if coincide else "false"
             pr.gemini_comentario = gemini_result.get("comentario")
