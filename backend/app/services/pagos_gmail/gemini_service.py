@@ -38,6 +38,23 @@ logger = logging.getLogger(__name__)
 
 PAGOS_NA = "NA"
 
+# Reglas OCR compartidas: Gmail (A–F), escáner Infopagos, compare_form (cobros público), cobranza.
+GEMINI_REGLAS_MONTO_FECHA_OCR = """
+REGLAS MONTO Y FECHA (OCR — aplican al extraer o comparar monto/cantidad y fecha de operación):
+
+MONTO — coma venezolana y asteriscos de cajero; NO concatenar decimales al entero:
+  - Mercantil DEPÓSITO DIVISAS / tira RECAUDACIÓN: `***********96,00 USD` → **96.00** (coma = decimal). Prohibido `969`, `965`, `960`, `980`: son errores OCR de `96,00` / `98,00`.
+  - `98,00 USD` → **98.00**, nunca `980` ni `9800`.
+  - Prioriza línea **Monto** de la **tira/sello del validador** sobre casilla manuscrita si difieren.
+  - BNC cajero: `**********122.00` o `*****96.00` → 122.00 / 96.00 sin asteriscos.
+  - En JSON de monto usa número decimal con **punto** (96.00), sin separador de miles.
+
+FECHA — Venezuela DD/MM/YYYY; no confundir con MM/DD ni inventar desde metadata:
+  - Mercantil A1: fecha operación = **YYYYMMDD** del bloque guionado (ej. `9824-20250703-151620-DCME-…` → **2025-07-03**).
+  - Pie **PDP 056(09-02-2021)** o fecha manuscrita distinta = lote del formulario, **no** sustituye la fecha del depósito si la tira trae YYYYMMDD.
+  - Conflicto manuscrito vs tira impresa → **tira manda** (fecha, monto, serial/referencia).
+""".strip()
+
 PagosGmailFormato = Literal["A", "B", "C", "D", "E", "F", "NR", "ninguno"]
 
 # Apéndice al prompt cuando scan_filter=error_email_rescan (re-lectura A/B con cédula en JSON).
@@ -54,7 +71,8 @@ MODO ESPECIAL — RE-ESCANEO (solo esta peticion; el backend usa scan_filter **e
   FORMATOS **C**, **D**, **E**, **F**, **NR** y **ninguno**: **"cedula":"NA"** (este modo no cambia la regla de cedula en C/D/E/F/NR).
 """
 
-GEMINI_PAGOS_GMAIL_FORMATO_Y_EXTRACCION = """
+GEMINI_PAGOS_GMAIL_FORMATO_Y_EXTRACCION = (
+"""
 Eres un clasificador estricto. Entrada: una sola imagen o PDF extraida del mensaje (incrustada en cuerpo, adjunto con nombre,
 o comprobante dentro de un correo reenviado .eml). No uses asunto del correo ni texto del cuerpo para clasificar ni rellenar campos del JSON
 salvo cuando este prompt autorice explicitamente otro criterio. La **cedula** jamas se obtiene del asunto, cuerpo, imagen ni PDF (REGLA CEDULA).
@@ -374,7 +392,7 @@ DISCRIMINADOR CEDULA / MONTO — imagen 1 (A) vs imagen 2 (B):
   VARIANTE MERCANTIL (A) — patrones visibles **solo para clasificar** A vs B (JSON cedula siempre "NA"): la cedula puede estar en varias zonas: (1) impreso "Cedula Dep." / "Cédula Dep" con solo digitos (ej. 0028424570);
     (2) manuscrito en casillas "Nro. de Cédula" con puntos miles (ej. 28.424.570);
     (3) nombre del depositante puede ir manuscrito en "Depositante" e impreso en mayusculas abreviada en la tira del cajero — refuerza que es comprobante Mercantil papel, no BNC.
-  En Mercantil DEPOSITO DIVISAS el monto en USD puede ir con asteriscos en la tira impresa (ej. ***********96,00 USD) usando COMA como decimal venezolano; extrae 96.00 USD. Puede coexistir monto manuscrito "96" o "96$" o "114" en casilla — **prioriza siempre** la linea **Monto** de la **tira/sello del validador** (asteriscos + NN,00 USD) cuando sea legible; el manuscrito es la peticion del cliente, la tira es el registro operativo del banco.
+  En Mercantil DEPOSITO DIVISAS el monto en USD puede ir con asteriscos en la tira impresa (ej. ***********96,00 USD) usando COMA como decimal venezolano; extrae 96.00 USD (**nunca** 969, 965, 960 ni 980 por OCR de la coma/ceros). Puede coexistir monto manuscrito "96" o "96$" o "114" en casilla — **prioriza siempre** la linea **Monto** de la **tira/sello del validador** (asteriscos + NN,00 USD) cuando sea legible; el manuscrito es la peticion del cliente, la tira es el registro operativo del banco.
   REGLA A1 — **manuscrito vs tira termica (conflicto)**: en papeleta **DEPOSITO DIVISAS** suele haber **dos capas**: casillas **manuscritas** (fecha, monto, titular RAPICREDIT / RAPI - CREDIT C.A, depositante, CI con puntos, etc.) y **bloque termico impreso** a la izquierda (**Cédula Dep.**, nombre abreviado, **Serial:** largo, **Monto** con asteriscos, **Fondos**, **RAPI-CREDIT, C.A.**). Si **cualquier** dato operativo **contradice** entre manuscrito e impreso (ej. distinta cédula/nombre en casilla vs **Cédula Dep.** en tira; distinto monto casilla vs tira; fechas distintas), para **`fecha_pago`**, **`monto`** y **`numero_referencia`** usa **exclusivamente la tira/sello del validador** salvo que la tira este **ilegible** y el manuscrito sea la unica fuente clara. El campo JSON **`cedula`** sigue siendo **"NA"** (REGLA CEDULA); las discrepancias de depositante **no** invalidan **A** si el nucleo Mercantil+0105+RAPI+USD+tira es claro.
   IMAGEN 2 / B (recibo BNC): El MONTO en **dolares** del deposito en **cajero** casi SIEMPRE aparece con ASTERISCOS (*) inmediatamente antes
     del valor numerico con decimales, ej. **********122.00 o *****96.00 (cantidad de asteriscos variable). Es señal fuerte de plantilla B.
@@ -547,6 +565,9 @@ Salida: solo JSON, sin markdown.
   NR: {"formato":"NR","fecha_pago":"...|NA","cedula":"NA","monto":"NR","monto_operacion":"123.45"|"NA","numero_referencia":"...|NA","email_cliente":"NA","banco":"..."}
   ninguno: {"formato":"ninguno","fecha_pago":"NA","cedula":"NA","monto":"NA","numero_referencia":"NA","email_cliente":"NA","banco":"NA"}
 """.strip()
+    + "\n\n"
+    + GEMINI_REGLAS_MONTO_FECHA_OCR
+)
 
 # Estos formatos pasan a BD/etiquetas Gmail MERCANTIL + BNC + BINANCE + BNV (D = BDV) + BANCAMIGA (E) + TESORO (F); cedula en Excel por remitente De en clientes.
 # NR = comprobante bancario reconocible pero NO a favor de RapiCredit (Excel: monto literal "NR").
@@ -590,7 +611,8 @@ GEMINI_PROMPT = (
     "Usa 'NA' solo cuando el dato NO aparezca en ninguna de las fuentes (asunto, cuerpo, imágenes). "
     "Si solo recibes asunto y/o cuerpo (sin imagen), extrae del texto. Si solo recibes imagen(es), extrae de la(s) imagen(es). "
     "No inventes datos. Si el contenido no es un comprobante ni un mensaje de pago (solo logo, firma, publicidad), devuelve los cuatro campos con 'NA'. "
-    "FORMATO: Responde ÚNICAMENTE con un objeto JSON válido, sin texto antes ni después, sin markdown (no uses ```json). Responde SOLO el JSON."
+    "FORMATO: Responde ÚNICAMENTE con un objeto JSON válido, sin texto antes ni después, sin markdown (no uses ```json). Responde SOLO el JSON.\n\n"
+    + GEMINI_REGLAS_MONTO_FECHA_OCR
 )
 
 
@@ -1844,7 +1866,8 @@ GEMINI_COBRANZA_PROMPT = (
     '"numero_documento" (número de documento, recibo o comprobante de venta), '
     '"cantidad" (monto total en números, ej. 150.00 o 1.234,56), '
     '"aceptable" (true si el documento es claramente un comprobante de pago legible; false si está ilegible o no es comprobante). '
-    "Responde SOLO con el JSON, sin texto adicional ni markdown."
+    "Responde SOLO con el JSON, sin texto adicional ni markdown. "
+    + GEMINI_REGLAS_MONTO_FECHA_OCR
 )
 
 
@@ -2144,7 +2167,7 @@ def _extract_retry_seconds(exc: Exception) -> int:
 
 # ── Cobros: comparar datos del formulario con la imagen del comprobante ─────
 
-GEMINI_COMPARAR_PROMPT_PREFIX = """Eres un revisor de comprobantes de pago. Recibes:
+GEMINI_COMPARAR_PROMPT_PREFIX = ("""Eres un revisor de comprobantes de pago. Recibes:
 1) Los datos que una persona ingresó manualmente en un formulario (cada campo listado abajo).
 2) Una imagen o PDF del comprobante de pago (recibo bancario, transferencia, Pago Móvil, etc.).
 
@@ -2192,6 +2215,9 @@ Paso 3 — Decidir:
 Responde ÚNICAMENTE con un JSON válido, sin markdown ni texto antes o después:
 {"coincide_exacto": true o false, "requiere_revision_humana": true o false, "comentario": "solo nombres de columnas separados por coma: Cédula, Banco, Fecha pago, Nº operación, Monto, Moneda"}
 """
+    + "\n\n"
+    + GEMINI_REGLAS_MONTO_FECHA_OCR
+)
 
 
 def _comentario_solo_columna_moneda(comentario: str) -> bool:
@@ -2361,7 +2387,8 @@ def compare_form_with_image(
 
 # ── Cobros / Infopagos: escáner (solo imagen → sugerencia de campos del formulario) ──
 
-GEMINI_ESCANER_INFOPAGOS_PROMPT = """Eres un asistente de lectura de comprobantes de pago (Venezuela: bancos, Pago Móvil, Zelle, Binance Pay, recibos de ventanilla, etc.).
+GEMINI_ESCANER_INFOPAGOS_PROMPT = (
+"""Eres un asistente de lectura de comprobantes de pago (Venezuela: bancos, Pago Móvil, Zelle, Binance Pay, recibos de ventanilla, etc.).
 
 CONTEXTO (cédula del DEUDOR en el sistema — el cliente al que se le registra el pago; NO la confundas con la del depositante en el papel):
   "{cedula_deudor}"
@@ -2373,7 +2400,7 @@ TAREA: Lee la imagen o PDF adjunto y extrae SOLO lo que aparezca con claridad en
   - fecha_pago: fecha de la operación en el comprobante. Devuélvela como cadena en formato **YYYY-MM-DD** si puedes inferir año/mes/día; si solo hay día/mes sin año razonable, deja fecha_pago vacía "".
   - institucion_financiera: nombre corto del banco o entidad. **Obligatorio** si reconoces una plantilla conocida (ver bloque PLANTILLAS). Valores preferidos: **Mercantil**, **BNC**, **Banco de Venezuela**, **BINANCE**, **Recibos** (ventanilla sin banco claro). Máximo 100 caracteres. No dejes vacío si el diseño del comprobante coincide con Mercantil (0105/RAPI), BNC (0191/cajero BNC), BDV (0102), Binance Pay, etc.
   - numero_operacion: número o código que identifica la transacción (Serial, Ref, Nº operación, referencia, código, ID de orden en Binance, etc.). Sin etiquetas largas: solo el valor. Máximo 100 caracteres.
-  - monto: importe **exacto** del pago principal (Total, Monto Bs., Monto USD, Efectivo). En JSON usa **solo número decimal con punto** (sin separadores de miles): impreso `1.500,00` → `1500.00`; `150,50` → `150.50`; `US$ 20,00` → `20.00`. No redondees ni cambies cifras. Si no es legible, `null`.
+  - monto: importe **exacto** del pago principal (Total, Monto Bs., Monto USD, Efectivo). En JSON usa **solo número decimal con punto** (sin separadores de miles): impreso `1.500,00` → `1500.00`; `150,50` → `150.50`; `US$ 20,00` → `20.00`; tira Mercantil `***********96,00 USD` → `96.00` (**nunca** `969`, `965`, `980`). No redondees ni cambies cifras. Si no es legible, `null`.
   - moneda: exactamente **BS** o **USD** (USDT, $ en contexto divisa fuerte, "Dólares", Binance Pay en USDT → USD).
   - cedula_pagador_en_comprobante: secuencia numérica del **depositante** (no la del deudor del contexto). Si en el comprobante aparece claramente la línea/casilla del depositante, devuélvela **solo con dígitos** (sin letra V/E/J/G ni puntos de miles). Mercantil (misma lógica visual que formato **A** del clasificador del sistema): casillas **DP:V-/DP:E-/DP:J-**, **Cédula Dep.**, **Nro. de Cédula de Identidad del Depositante**, bloques RECAUDACIÓN / DEPÓSITO DIVISAS con cuenta 0105. BNC (misma lógica que formato **B**): línea **DP:V-/E-/J-** + dígitos en recibo cajero BNC. No inventes dígitos; si la línea no es legible o hay duda, "". El backend validador concatena prefijos V/E/J/G con esos dígitos (6–11 cifras); si tras quitar no-dígitos no quedan entre 6 y 11 cifras, deja "".
   - notas: una frase corta opcional sobre calidad de lectura o ambigüedades (máx 300 caracteres); puede ser "".
@@ -2391,13 +2418,14 @@ REGLAS:
   fecha_pago, institucion_financiera, numero_operacion, monto, moneda, cedula_pagador_en_comprobante, notas
   - SALIDA OBLIGATORIA: solo el objeto JSON; ningún párrafo ni razonamiento antes ni después. Sin fences markdown ni texto extra.
 """
+    + "\n\n"
+    + GEMINI_REGLAS_MONTO_FECHA_OCR
+)
 
 # Siempre se añade al escáner: clasificación visual → institucion_financiera (sin elegir banco a mano).
 GEMINI_ESCANER_PLANTILLAS_AUTO_BLOQUE = """
 PLANTILLAS CONOCIDAS (misma lógica que clasificación Gmail A/B/C/D; **obligatorio** rellenar `institucion_financiera`):
-  - **Mercantil** → formato **A**: DEPÓSITO DIVISAS, RECAUDACIÓN, cuenta **0105**, RAPI-CREDIT, logo/texto Mercantil, tira validador Mercantil.
-    Monto en tira: `***********96,00 USD` → JSON `96.00` (coma decimal venezolana; no concatenar ceros ni la coma como `969`).
-    Fecha operación: prioriza **YYYYMMDD** del bloque guionado (ej. `9824-20250703-151620-DCME-…` → `2025-07-03`); el pie **PDP 056(09-02-…)** suele ser lote del formulario, no la fecha del depósito.
+  - **Mercantil** → formato **A**: DEPÓSITO DIVISAS, RECAUDACIÓN, cuenta **0105**, RAPI-CREDIT, logo/texto Mercantil, tira validador Mercantil (monto/fecha: ver REGLAS MONTO Y FECHA OCR del prompt).
   - **BNC** → formato **B**: recibo cajero **BNC**, cuenta **0191**, línea RAPI, logo BNC, bloque Depósito US$.
   - **Banco de Venezuela** → formato **D**: **0102**, SECUENCIAL, Total Efectivo/Depósito, logo BDV.
   - **BINANCE** → formato **C**: Binance Pay, USDT, Id de orden / Pay ID.
