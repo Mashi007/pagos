@@ -19,6 +19,15 @@ def test_parse_monto_comprobante_miles_venezolanos():
     assert parse_monto_comprobante("150.25") == 150.25
 
 
+def test_parse_monto_comprobante_mercantil_asteriscos_y_ocr():
+    assert parse_monto_comprobante("***********96,00 USD") == 96.0
+    assert parse_monto_comprobante("***********98,00 USD") == 98.0
+    assert parse_monto_comprobante("969") == 96.0
+    assert parse_monto_comprobante("965") == 96.0
+    assert parse_monto_comprobante("980") == 98.0
+    assert parse_monto_comprobante("150") == 150.0
+
+
 def test_parse_fecha_comprobante():
     assert parse_fecha_comprobante("31/05/2026", REF) == date(2026, 5, 31)
     assert parse_fecha_comprobante("31/05/26", REF) == date(2026, 5, 31)
@@ -27,6 +36,10 @@ def test_parse_fecha_comprobante():
         "fecha operacion 21/04/2025 sello", REF
     ) == date(2025, 4, 21)
     assert parse_fecha_comprobante("310526", REF) == date(2026, 5, 31)
+    assert parse_fecha_comprobante("09-02-2025", REF) == date(2025, 2, 9)
+    assert parse_fecha_comprobante(
+        "9824-20250703-151620-DCME-4279-A", REF
+    ) == date(2025, 7, 3)
     assert parse_fecha_comprobante("2027-01-01", REF) is None
     assert parse_fecha_comprobante("", REF) is None
 

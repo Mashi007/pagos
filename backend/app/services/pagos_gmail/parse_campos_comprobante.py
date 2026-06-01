@@ -10,13 +10,30 @@ from typing import Any, Dict, List, Optional
 PAGOS_NA = "NA"
 
 
+def _corregir_monto_ocr_tres_digitos(n: float) -> float:
+    """
+    Mercantil / ventanilla: OCR a veces lee ``96,00`` como ``969`` o ``965`` (coma+ceros).
+    Solo aplica a enteros de 3 cifras con cola 0/5/9 y base XX plausible de cuota (30-250).
+    """
+    if n != int(n) or n < 100 or n >= 1000:
+        return n
+    s = str(int(n))
+    if len(s) != 3 or s[2] not in "059":
+        return n
+    base = int(s[:2])
+    if 30 <= base <= 250:
+        return float(base)
+    return n
+
+
 def parse_monto_comprobante(val: Any) -> Optional[float]:
     if val is None:
         return None
     if isinstance(val, (int, float)):
         if isinstance(val, float) and (val != val or val == float("inf")):
             return None
-        return round(float(val), 2)
+        n = round(float(val), 2)
+        return round(_corregir_monto_ocr_tres_digitos(n), 2)
     s = str(val).strip()
     s = re.sub(
         r"(?i)\s*(usd|usdt|u\$s|us\$|bs\.?|bss|bolivar(?:es)?|ves)\s*$",
@@ -29,6 +46,7 @@ def parse_monto_comprobante(val: Any) -> Optional[float]:
         s,
     ).strip()
     s = re.sub(r"(?i)\b(bs\.?|usd|usdt|u\$s|\$|ves)\b", "", s)
+    s = re.sub(r"[*#]+", "", s)
     s = s.replace(" ", "")
     if not s or s.lower() in ("na", "n/a", "-"):
         return None
@@ -56,6 +74,7 @@ def parse_monto_comprobante(val: Any) -> Optional[float]:
         n = float(s)
         if n != n or n == float("inf"):
             return None
+        n = _corregir_monto_ocr_tres_digitos(n)
         return round(n, 2)
     except (TypeError, ValueError):
         return None
@@ -77,7 +96,8 @@ def _pick_fecha_candidata(candidates: List[Optional[date]], ref_hoy: date) -> Op
     valid = [c for c in candidates if c is not None and fecha_plausible(c, ref_hoy)]
     if not valid:
         return None
-    return min(valid, key=lambda d: abs((ref_hoy - d).days))
+    # Venezuela: DD/MM/YYYY primero; no elegir MM/DD por cercania al dia de hoy.
+    return valid[0]
 
 
 def _parse_fecha_dmy_parts(d: int, mo: int, y: int, ref_hoy: date) -> Optional[date]:
@@ -157,6 +177,16 @@ def parse_fecha_comprobante(val: Any, ref_hoy: Optional[date] = None) -> Optiona
     if m_iso:
         parsed = _parse_fecha_dmy_parts(
             int(m_iso.group(3)), int(m_iso.group(2)), int(m_iso.group(1)), ref_hoy
+        )
+        if parsed:
+            return parsed
+    m_merc_ref = re.search(r"-(\d{4})(\d{2})(\d{2})-", s)
+    if m_merc_ref:
+        parsed = _parse_fecha_dmy_parts(
+            int(m_merc_ref.group(3)),
+            int(m_merc_ref.group(2)),
+            int(m_merc_ref.group(1)),
+            ref_hoy,
         )
         if parsed:
             return parsed

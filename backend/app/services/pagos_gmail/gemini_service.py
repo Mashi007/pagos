@@ -2396,6 +2396,8 @@ REGLAS:
 GEMINI_ESCANER_PLANTILLAS_AUTO_BLOQUE = """
 PLANTILLAS CONOCIDAS (misma lógica que clasificación Gmail A/B/C/D; **obligatorio** rellenar `institucion_financiera`):
   - **Mercantil** → formato **A**: DEPÓSITO DIVISAS, RECAUDACIÓN, cuenta **0105**, RAPI-CREDIT, logo/texto Mercantil, tira validador Mercantil.
+    Monto en tira: `***********96,00 USD` → JSON `96.00` (coma decimal venezolana; no concatenar ceros ni la coma como `969`).
+    Fecha operación: prioriza **YYYYMMDD** del bloque guionado (ej. `9824-20250703-151620-DCME-…` → `2025-07-03`); el pie **PDP 056(09-02-…)** suele ser lote del formulario, no la fecha del depósito.
   - **BNC** → formato **B**: recibo cajero **BNC**, cuenta **0191**, línea RAPI, logo BNC, bloque Depósito US$.
   - **Banco de Venezuela** → formato **D**: **0102**, SECUENCIAL, Total Efectivo/Depósito, logo BDV.
   - **BINANCE** → formato **C**: Binance Pay, USDT, Id de orden / Pay ID.
