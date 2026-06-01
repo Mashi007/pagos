@@ -17,7 +17,7 @@ export type FiniquitoCasoItem = {
   cliente_nombres?: string | null
   cliente_email?: string | null
   cliente_telefono?: string | null
-  /** ISO date: plazo 25 dias calendario al pasar a En proceso (prestamos.finiquito_tramite_fecha_limite). */
+  /** ISO date: fin del ciclo (dia 30 desde alta del caso; prestamos.finiquito_tramite_fecha_limite). */
   finiquito_tramite_fecha_limite?: string | null
   /** ISO date: fecha en que el préstamo fue declarado LIQUIDADO. */
   fecha_liquidado?: string | null
@@ -25,6 +25,8 @@ export type FiniquitoCasoItem = {
   creado_en?: string | null
   /** ISO datetime: ultimo paso a EN_PROCESO (area de trabajo). */
   fecha_entrada_en_proceso?: string | null
+  /** ISO datetime: ultimo paso a ACEPTADO (area de revision). */
+  fecha_entrada_aceptado?: string | null
 }
 
 export type FiniquitoRevisionDatosResponse = {

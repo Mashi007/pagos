@@ -403,6 +403,9 @@ def _admin_casos_to_items(db: Session, casos: List[FiniquitoCaso]) -> List[Finiq
     fepmap = _map_fecha_estado_historial_por_caso(
         db, [c.id for c in casos], "EN_PROCESO"
     )
+    famap = _map_fecha_estado_historial_por_caso(
+        db, [c.id for c in casos], "ACEPTADO"
+    )
     clmap = _map_clientes_por_id(db, [c.cliente_id for c in casos if c.cliente_id])
     items: List[FiniquitoCasoOut] = []
     for c in casos:
@@ -413,6 +416,7 @@ def _admin_casos_to_items(db: Session, casos: List[FiniquitoCaso]) -> List[Finiq
             finiquito_tramite_fecha_limite=flmap.get(c.prestamo_id),
             fecha_liquidado=fmap.get(c.prestamo_id),
             fecha_entrada_en_proceso=fepmap.get(c.id),
+            fecha_entrada_aceptado=famap.get(c.id),
         )
         cl = clmap.get(int(c.cliente_id)) if c.cliente_id else None
         items.append(
@@ -435,6 +439,7 @@ def _caso_to_out(
     finiquito_tramite_fecha_limite: Optional[Any] = None,
     fecha_liquidado: Optional[Any] = None,
     fecha_entrada_en_proceso: Optional[Any] = None,
+    fecha_entrada_aceptado: Optional[Any] = None,
 ) -> FiniquitoCasoOut:
     ufp: Optional[str] = None
     if ultima_fecha_pago is not None:
@@ -455,6 +460,10 @@ def _caso_to_out(
     if fecha_entrada_en_proceso is not None:
         v = fecha_entrada_en_proceso
         fep = v.isoformat() if hasattr(v, "isoformat") else str(v)
+    fea: Optional[str] = None
+    if fecha_entrada_aceptado is not None:
+        v = fecha_entrada_aceptado
+        fea = v.isoformat() if hasattr(v, "isoformat") else str(v)
     creado_iso: Optional[str] = None
     if c.creado_en is not None:
         creado_iso = (
@@ -483,6 +492,7 @@ def _caso_to_out(
         fecha_liquidado=flq,
         creado_en=creado_iso,
         fecha_entrada_en_proceso=fep,
+        fecha_entrada_aceptado=fea,
     )
 
 

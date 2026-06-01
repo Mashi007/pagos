@@ -23,7 +23,6 @@ import {
   Search,
   Trash2,
   X,
-  XCircle,
 } from 'lucide-react'
 
 import { toast } from 'sonner'
@@ -84,76 +83,154 @@ function textoUltimoPago(iso: string | null | undefined): string {
   }
 }
 
-/** Plazo en bandeja principal (estado REVISION), dias calendario. */
-const DIAS_PLAZO_BANDEJA = 5
-/** Plazo en area de trabajo (estado EN_PROCESO), dias calendario. */
-const DIAS_PLAZO_AREA_TRABAJO = 25
+/** Ciclo finiquito desde entrada a bandeja (dia 1 = alta del caso). */
+const PLAZO_CICLO_DIAS = 30
+/** Dias 1-2 en bandeja; desde dia 3 = atrasado si sigue en REVISION. */
+const BANDEJA_DIA_ATRASADO = 3
+/** Fase area revision: hasta 5 dias; dia 6 = atrasado. */
+const AREA_REVISION_DIAS_MAX = 5
 
-function diasDesdeIsoDate(iso: string | null | undefined) {
+function parseIsoDate(iso: string | null | undefined): Date | null {
   if (iso == null || String(iso).trim() === '') return null
   const d = new Date(`${String(iso).slice(0, 10)}T00:00:00`)
-  if (Number.isNaN(d.getTime())) return null
+  return Number.isNaN(d.getTime()) ? null : d
+}
+
+function hoyMedianoche(): Date {
   const hoy = new Date()
   hoy.setHours(0, 0, 0, 0)
-  return Math.floor((hoy.getTime() - d.getTime()) / 86_400_000)
+  return hoy
 }
 
-function anchorBandeja(caso: FiniquitoCasoItem): string | null {
-  return caso.fecha_liquidado ?? caso.creado_en ?? null
+function diasDesdeIsoDate(iso: string | null | undefined) {
+  const d = parseIsoDate(iso)
+  if (d == null) return null
+  return Math.floor((hoyMedianoche().getTime() - d.getTime()) / 86_400_000)
 }
 
-function anchorAreaTrabajo(caso: FiniquitoCasoItem): string | null {
-  return (
-    caso.fecha_entrada_en_proceso ??
-    caso.finiquito_tramite_fecha_limite ??
-    null
-  )
+function sumarDiasCalendario(iso: string, dias: number): string {
+  const d = parseIsoDate(iso)
+  if (d == null) return iso
+  const out = new Date(d.getTime())
+  out.setDate(out.getDate() + dias)
+  return out.toISOString().slice(0, 10)
 }
 
-function diasRestantesDesdeAnchor(
-  anchor: string | null | undefined,
-  plazo: number
-): number | null {
-  const dias = diasDesdeIsoDate(anchor)
+function maxIsoDate(a: string | null | undefined, b: string | null | undefined) {
+  const da = parseIsoDate(a)
+  const db = parseIsoDate(b)
+  if (da == null) return b ?? null
+  if (db == null) return a ?? null
+  return da.getTime() >= db.getTime() ? a! : b!
+}
+
+/** Alta en finiquito (entrada a bandeja principal). */
+function anchorCiclo(caso: FiniquitoCasoItem): string | null {
+  return caso.creado_en ?? caso.fecha_liquidado ?? null
+}
+
+function diaOperativoCiclo(caso: FiniquitoCasoItem): number | null {
+  const dias = diasDesdeIsoDate(anchorCiclo(caso))
   if (dias == null) return null
-  return plazo - dias
+  return dias + 1
+}
+
+function finCicloIso(caso: FiniquitoCasoItem): string | null {
+  const anchor = anchorCiclo(caso)
+  if (anchor == null) return caso.finiquito_tramite_fecha_limite ?? null
+  return sumarDiasCalendario(anchor.slice(0, 10), PLAZO_CICLO_DIAS - 1)
+}
+
+function diasRestantesHastaFinCiclo(caso: FiniquitoCasoItem): number | null {
+  const fin = finCicloIso(caso)
+  if (fin == null) return null
+  const dFin = parseIsoDate(fin)
+  if (dFin == null) return null
+  return Math.floor((dFin.getTime() - hoyMedianoche().getTime()) / 86_400_000)
+}
+
+function bandejaAtrasado(caso: FiniquitoCasoItem): boolean {
+  if (caso.estado !== 'REVISION') return false
+  const dia = diaOperativoCiclo(caso)
+  return dia != null && dia >= BANDEJA_DIA_ATRASADO
+}
+
+function inicioFaseAreaRevision(caso: FiniquitoCasoItem): string | null {
+  const anchor = anchorCiclo(caso)
+  if (anchor == null) return caso.fecha_entrada_aceptado ?? null
+  const dia3 = sumarDiasCalendario(anchor.slice(0, 10), BANDEJA_DIA_ATRASADO - 1)
+  return maxIsoDate(dia3, caso.fecha_entrada_aceptado)
+}
+
+function areaRevisionAtrasado(caso: FiniquitoCasoItem): boolean {
+  if (caso.estado !== 'ACEPTADO') return false
+  const dias = diasDesdeIsoDate(inicioFaseAreaRevision(caso))
+  return dias != null && dias >= AREA_REVISION_DIAS_MAX
+}
+
+function casoAtrasado(caso: FiniquitoCasoItem): boolean {
+  return bandejaAtrasado(caso) || areaRevisionAtrasado(caso)
 }
 
 function diasRestantesBandeja(caso: FiniquitoCasoItem): number | null {
   if (caso.estado !== 'REVISION') return null
-  return diasRestantesDesdeAnchor(anchorBandeja(caso), DIAS_PLAZO_BANDEJA)
+  const dia = diaOperativoCiclo(caso)
+  if (dia == null) return null
+  if (dia >= BANDEJA_DIA_ATRASADO) return 0
+  return BANDEJA_DIA_ATRASADO - dia
+}
+
+function diasRestantesAreaRevision(caso: FiniquitoCasoItem): number | null {
+  if (caso.estado !== 'ACEPTADO') return null
+  const dias = diasDesdeIsoDate(inicioFaseAreaRevision(caso))
+  if (dias == null) return null
+  if (dias >= AREA_REVISION_DIAS_MAX) return 0
+  return AREA_REVISION_DIAS_MAX - dias
 }
 
 function diasRestantesAreaTrabajo(caso: FiniquitoCasoItem): number | null {
   if (caso.estado !== 'EN_PROCESO') return null
-  const porHistorial = diasRestantesDesdeAnchor(
-    caso.fecha_entrada_en_proceso,
-    DIAS_PLAZO_AREA_TRABAJO
-  )
-  if (porHistorial != null) return porHistorial
-  const limite = caso.finiquito_tramite_fecha_limite
-  if (limite == null || String(limite).trim() === '') return null
-  const fin = new Date(`${String(limite).slice(0, 10)}T00:00:00`)
-  if (Number.isNaN(fin.getTime())) return null
-  const hoy = new Date()
-  hoy.setHours(0, 0, 0, 0)
-  return Math.floor((fin.getTime() - hoy.getTime()) / 86_400_000)
+  return diasRestantesHastaFinCiclo(caso)
 }
 
-function textoCuentaRegresiva(dias: number | null): string {
-  if (dias == null) return '-'
-  if (dias <= 0) return 'Vencido'
-  return `${dias} ${dias === 1 ? 'dia' : 'dias'}`
+function textoTiempoLimiteBandeja(caso: FiniquitoCasoItem): string {
+  if (bandejaAtrasado(caso)) return 'Atrasado'
+  const d = diasRestantesBandeja(caso)
+  if (d == null) return '-'
+  if (d <= 0) return 'Atrasado'
+  return `D${diaOperativoCiclo(caso) ?? '?'} · ${d}d`
 }
 
-function claseCuentaRegresiva(dias: number | null): string {
-  if (dias == null) return 'bg-slate-100 text-slate-700'
-  if (dias <= 0) return 'bg-red-100 text-red-950'
-  if (dias <= 2) return 'bg-amber-100 text-amber-950'
+function textoTiempoLimiteAreaRevision(caso: FiniquitoCasoItem): string {
+  if (areaRevisionAtrasado(caso)) return 'Atrasado'
+  const d = diasRestantesAreaRevision(caso)
+  const ciclo = diasRestantesHastaFinCiclo(caso)
+  if (d == null) return '-'
+  const parte = d <= 0 ? 'Atrasado' : `${d}d fase`
+  if (ciclo == null) return parte
+  return `${parte} · ${ciclo}d a D${PLAZO_CICLO_DIAS}`
+}
+
+function textoTiempoLimiteAreaTrabajo(caso: FiniquitoCasoItem): string {
+  const d = diasRestantesAreaTrabajo(caso)
+  if (d == null) return '-'
+  if (d <= 0) return 'Vencido'
+  return `${d}d a dia ${PLAZO_CICLO_DIAS}`
+}
+
+function claseTiempoLimite(
+  dias: number | null,
+  atrasado: boolean
+): string {
+  if (atrasado || (dias != null && dias <= 0)) {
+    return 'bg-red-100 text-red-950'
+  }
+  if (dias != null && dias <= 2) return 'bg-amber-100 text-amber-950'
   return 'bg-emerald-100 text-emerald-950'
 }
 
 function estadoEtiquetaVisible(caso: FiniquitoCasoItem): string {
+  if (casoAtrasado(caso)) return 'Atrasado'
   const map: Record<string, string> = {
     REVISION: 'Revision',
     ACEPTADO: 'Validado',
@@ -165,6 +242,7 @@ function estadoEtiquetaVisible(caso: FiniquitoCasoItem): string {
 }
 
 function estadoBadgeClassName(caso: FiniquitoCasoItem): string {
+  if (casoAtrasado(caso)) return 'bg-red-100 text-red-950'
   switch (caso.estado) {
     case 'REVISION':
       return 'bg-sky-100 text-sky-950'
@@ -392,10 +470,6 @@ function FiniquitoGestionPageInner() {
   const [dialogTerminado, setDialogTerminado] = useState<{
     casoId: number
   } | null>(null)
-  const [itemsRechazados, setItemsRechazados] = useState<FiniquitoCasoItem[]>(
-    []
-  )
-  const [totalRechazados, setTotalRechazados] = useState(0)
   const [itemsBandeja, setItemsBandeja] = useState<FiniquitoCasoItem[]>([])
   const [totalBandeja, setTotalBandeja] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -474,7 +548,7 @@ function FiniquitoGestionPageInner() {
         setLoading(true)
       }
       try {
-        const [rRevision, rTrabajo, rRech, rBandeja, rNuevos, rTerm, rSem] =
+        const [rRevision, rTrabajo, rBandeja, rNuevos, rTerm, rSem] =
           await Promise.all([
             finiquitoAdminListar('ACEPTADO', undefined, undefined, {
               limit: FETCH_LIMIT,
@@ -486,10 +560,6 @@ function FiniquitoGestionPageInner() {
               undefined,
               { limit: FETCH_LIMIT, offset: 0 }
             ),
-            finiquitoAdminListar('RECHAZADO', undefined, undefined, {
-              limit: FETCH_LIMIT,
-              offset: 0,
-            }),
             finiquitoAdminListar(
               'REVISION',
               cedulaBusqueda || undefined,
@@ -517,8 +587,6 @@ function FiniquitoGestionPageInner() {
         )
         setItemsAreaTrabajo(rTrabajo.items || [])
         setTotalAreaTrabajo(rTrabajo.total ?? (rTrabajo.items || []).length)
-        setItemsRechazados(rRech.items || [])
-        setTotalRechazados(rRech.total ?? (rRech.items || []).length)
         setItemsBandeja(rBandeja.items || [])
         setTotalBandeja(rBandeja.total ?? (rBandeja.items || []).length)
         setKpiNuevosRevision({
@@ -568,12 +636,9 @@ function FiniquitoGestionPageInner() {
         casoCoincideCedula(caso, cedulaTrabajoBusqueda)
       const debeBandeja =
         caso.estado === 'REVISION' && casoCoincideCedula(caso, cedulaBusqueda)
-      const debeRechazados = caso.estado === 'RECHAZADO'
-
       const estabaAreaRevision = itemsAreaRevision.some(r => r.id === caso.id)
       const estabaAreaTrabajo = itemsAreaTrabajo.some(r => r.id === caso.id)
       const estabaBandeja = itemsBandeja.some(r => r.id === caso.id)
-      const estabaRechazados = itemsRechazados.some(r => r.id === caso.id)
 
       setItemsAreaRevision(prev =>
         reconciliarCasoEnLista(prev, caso, debeAreaRevision)
@@ -591,12 +656,6 @@ function FiniquitoGestionPageInner() {
       setTotalBandeja(prev =>
         totalTrasMovimiento(prev, estabaBandeja, debeBandeja)
       )
-      setItemsRechazados(prev =>
-        reconciliarCasoEnLista(prev, caso, debeRechazados)
-      )
-      setTotalRechazados(prev =>
-        totalTrasMovimiento(prev, estabaRechazados, debeRechazados)
-      )
     },
     [
       cedulaBusqueda,
@@ -604,7 +663,6 @@ function FiniquitoGestionPageInner() {
       itemsAreaRevision,
       itemsAreaTrabajo,
       itemsBandeja,
-      itemsRechazados,
     ]
   )
 
@@ -867,7 +925,6 @@ function FiniquitoGestionPageInner() {
 
   const renderAcciones = (row: FiniquitoCasoItem) => (
     <div className="flex flex-wrap items-center justify-end gap-2">
-      {botonesFilaOperativos(row)}
       <Button
         type="button"
         size="sm"
@@ -952,25 +1009,10 @@ function FiniquitoGestionPageInner() {
     </div>
   )
 
-  const renderAccionesRechazado = (row: FiniquitoCasoItem) => (
-    <div className="flex flex-wrap items-center justify-end gap-2">
-      {botonesFilaOperativos(row)}
-      <Button
-        type="button"
-        size="sm"
-        variant="outline"
-        className="h-8 border-slate-300 text-xs"
-        disabled={casoTieneAccionPendiente(row.id)}
-        onClick={() => void cambiarEstado(row.id, 'REVISION')}
-      >
-        Volver a bandeja
-      </Button>
-    </div>
-  )
-
   const renderTabla = (
     items: FiniquitoCasoItem[],
-    renderAccionesFila: (row: FiniquitoCasoItem) => ReactNode = renderAcciones
+    renderAccionesFila: (row: FiniquitoCasoItem) => ReactNode = renderAcciones,
+    modoTiempo: 'bandeja' | 'revision' = 'bandeja'
   ) => (
     <div
       className={cn(
@@ -1005,7 +1047,7 @@ function FiniquitoGestionPageInner() {
                 'max-w-[9rem] whitespace-normal leading-tight'
               )}
               scope="col"
-              title={`Cuenta regresiva de ${DIAS_PLAZO_BANDEJA} dias en bandeja`}
+              title={`Ciclo ${PLAZO_CICLO_DIAS}d: dias 1-2 en bandeja; dia ${BANDEJA_DIA_ATRASADO}+ atrasado`}
             >
               Tiempo limite
             </TableHead>
@@ -1019,7 +1061,18 @@ function FiniquitoGestionPageInner() {
         </TableHeader>
         <TableBody>
           {items.map((row, idx) => {
-            const diasBandeja = diasRestantesBandeja(row)
+            const atrasado =
+              modoTiempo === 'bandeja'
+                ? bandejaAtrasado(row)
+                : areaRevisionAtrasado(row)
+            const diasRest =
+              modoTiempo === 'bandeja'
+                ? diasRestantesBandeja(row)
+                : diasRestantesAreaRevision(row)
+            const textoTiempo =
+              modoTiempo === 'bandeja'
+                ? textoTiempoLimiteBandeja(row)
+                : textoTiempoLimiteAreaRevision(row)
             return (
             <TableRow key={row.id} className={idx % 2 === 0 ? trEven : trOdd}>
               <TableCell className={cn(tdGestion, 'font-mono text-xs')}>
@@ -1045,10 +1098,10 @@ function FiniquitoGestionPageInner() {
                 <span
                   className={cn(
                     'rounded px-1.5 py-0.5 text-xs font-medium',
-                    claseCuentaRegresiva(diasBandeja)
+                    claseTiempoLimite(diasRest, atrasado)
                   )}
                 >
-                  {textoCuentaRegresiva(diasBandeja)}
+                  {textoTiempo}
                 </span>
               </TableCell>
               <TableCell className={tdGestion}>
@@ -1105,7 +1158,7 @@ function FiniquitoGestionPageInner() {
                 'max-w-[9rem] whitespace-normal leading-tight'
               )}
               scope="col"
-              title={`Cuenta regresiva de ${DIAS_PLAZO_AREA_TRABAJO} dias en area de trabajo`}
+              title={`Resto del ciclo hasta dia ${PLAZO_CICLO_DIAS}`}
             >
               Tiempo limite
             </TableHead>
@@ -1155,10 +1208,13 @@ function FiniquitoGestionPageInner() {
                 <span
                   className={cn(
                     'rounded px-1.5 py-0.5 text-xs font-medium',
-                    claseCuentaRegresiva(diasRestantesAreaTrabajo(row))
+                    claseTiempoLimite(
+                      diasRestantesAreaTrabajo(row),
+                      (diasRestantesAreaTrabajo(row) ?? 1) <= 0
+                    )
                   )}
                 >
-                  {textoCuentaRegresiva(diasRestantesAreaTrabajo(row))}
+                  {textoTiempoLimiteAreaTrabajo(row)}
                 </span>
               </TableCell>
               <TableCell className={cn(tdGestion, 'max-w-[200px]')}>
@@ -1210,11 +1266,10 @@ function FiniquitoGestionPageInner() {
 
   const subtituloTrabajo = totalAreaTrabajo === 1 ? 'registro' : 'registros'
   const subtituloRevision = totalAreaRevision === 1 ? 'registro' : 'registros'
-  const subtituloRech = totalRechazados === 1 ? 'registro' : 'registros'
 
   return (
     <FiniquitoWorkspaceShell
-      description="Flujo: bandeja en Revision (5 dias) → validar (Validar / Rechazar / Eliminar) → area de revision (informacion) → area de trabajo (25 dias) → Terminado."
+      description={`Ciclo ${PLAZO_CICLO_DIAS} dias: bandeja (dias 1-2, atrasado desde dia ${BANDEJA_DIA_ATRASADO}) → area revision (hasta ${AREA_REVISION_DIAS_MAX}d) → area de trabajo (hasta dia ${PLAZO_CICLO_DIAS}).`}
       actions={
         <Button
           size="sm"
@@ -1232,7 +1287,7 @@ function FiniquitoGestionPageInner() {
         </Button>
       }
     >
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <Card className="border-slate-200 shadow-sm">
           <CardContent className="space-y-1 p-4">
             <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
@@ -1242,7 +1297,7 @@ function FiniquitoGestionPageInner() {
               {loading ? '-' : totalBandeja}
             </p>
             <p className="text-xs text-slate-500">
-              Plazo {DIAS_PLAZO_BANDEJA} dias
+              Dias 1-2 · atrasado desde dia {BANDEJA_DIA_ATRASADO}
               {cedulaBusqueda ? ' (filtro cedula)' : ''}
             </p>
           </CardContent>
@@ -1297,7 +1352,7 @@ function FiniquitoGestionPageInner() {
               {loading ? '-' : totalAreaRevision}
             </p>
             <p className="text-xs text-slate-500">
-              Validados (antes del trabajo)
+              Hasta {AREA_REVISION_DIAS_MAX}d · atrasado dia 6 de fase
             </p>
           </CardContent>
         </Card>
@@ -1310,21 +1365,8 @@ function FiniquitoGestionPageInner() {
               {loading ? '-' : totalAreaTrabajo}
             </p>
             <p className="text-xs text-slate-500">
-              En proceso · plazo {DIAS_PLAZO_AREA_TRABAJO} dias
+              Hasta dia {PLAZO_CICLO_DIAS} del ciclo
               {cedulaTrabajoBusqueda ? ' (filtro cedula)' : ''}
-            </p>
-          </CardContent>
-        </Card>
-        <Card className="border-slate-200 shadow-sm">
-          <CardContent className="space-y-1 p-4">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-              Rechazados
-            </p>
-            <p className="text-2xl font-bold tabular-nums text-rose-900">
-              {loading ? '-' : totalRechazados}
-            </p>
-            <p className="text-xs text-slate-500">
-              Casos rechazados desde bandeja principal
             </p>
           </CardContent>
         </Card>
@@ -1344,10 +1386,10 @@ function FiniquitoGestionPageInner() {
                 Bandeja principal
               </h2>
               <p className="text-xs text-slate-600 sm:text-sm">
-                Estado inicial <strong>Revision</strong>. Valide la informacion
-                (Validar / Rechazar / Eliminar). Cuenta regresiva de{' '}
-                {DIAS_PLAZO_BANDEJA} dias. Filtro por cedula (~
-                {DEBOUNCE_MS / 1000} s).
+                Solo <strong>Validar</strong>, <strong>Rechazar</strong> o{' '}
+                <strong>Eliminar</strong>. Dias 1-2 en bandeja; desde dia{' '}
+                {BANDEJA_DIA_ATRASADO} el estado pasa a atrasado. Ciclo total{' '}
+                {PLAZO_CICLO_DIAS} dias.
               </p>
             </div>
             <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-end lg:w-auto lg:min-w-[320px]">
@@ -1455,8 +1497,8 @@ function FiniquitoGestionPageInner() {
                 Area de revision
               </h2>
               <p className="text-xs text-amber-900/85">
-                Validados · {totalAreaRevision} {subtituloRevision} · espacio de
-                validacion antes del trabajo
+                {totalAreaRevision} {subtituloRevision} · validacion (fase desde
+                dia {BANDEJA_DIA_ATRASADO} o desde Validar)
               </p>
             </div>
           </div>
@@ -1474,7 +1516,11 @@ function FiniquitoGestionPageInner() {
               </p>
             ) : (
               <>
-                {renderTabla(itemsAreaRevision, renderAccionesAreaRevision)}
+                {renderTabla(
+                  itemsAreaRevision,
+                  renderAccionesAreaRevision,
+                  'revision'
+                )}
                 <FiniquitoTablaScrollHint
                   total={totalAreaRevision}
                   cargados={itemsAreaRevision.length}
@@ -1482,46 +1528,6 @@ function FiniquitoGestionPageInner() {
               </>
             )}
           </div>
-        </div>
-      </section>
-      <section
-        className="overflow-hidden rounded-2xl border border-rose-200/90 bg-rose-50/30 shadow-sm"
-        aria-labelledby="finiquito-rechazados-titulo"
-      >
-        <div className="border-b border-rose-200/80 bg-rose-100/60 px-4 py-3 sm:px-5">
-          <div className="flex flex-wrap items-center gap-3 text-rose-950">
-            <XCircle className="h-5 w-5 shrink-0" aria-hidden />
-            <div>
-              <h2
-                id="finiquito-rechazados-titulo"
-                className="text-sm font-bold tracking-tight"
-              >
-                Rechazados
-              </h2>
-              <p className="text-xs text-rose-900/85">
-                {totalRechazados} {subtituloRech} · solo rechazo desde bandeja
-              </p>
-            </div>
-          </div>
-        </div>
-        <div className="p-3 sm:p-4">
-          {loading ? (
-            <div className="flex justify-center py-10">
-              <Loader2 className="h-8 w-8 animate-spin text-rose-400" />
-            </div>
-          ) : itemsRechazados.length === 0 ? (
-            <p className="rounded-lg border border-dashed border-rose-200/90 bg-white/60 px-4 py-8 text-center text-sm text-rose-950/85">
-              No hay casos rechazados.
-            </p>
-          ) : (
-            <>
-              {renderTabla(itemsRechazados, renderAccionesRechazado)}
-              <FiniquitoTablaScrollHint
-                total={totalRechazados}
-                cargados={itemsRechazados.length}
-              />
-            </>
-          )}
         </div>
       </section>
       <section
@@ -1544,8 +1550,8 @@ function FiniquitoGestionPageInner() {
                 Área de trabajo
               </h2>
               <p className="text-xs text-emerald-100">
-                En proceso · {totalAreaTrabajo} {subtituloTrabajo} · plazo{' '}
-                {DIAS_PLAZO_AREA_TRABAJO} dias
+                En proceso · {totalAreaTrabajo} {subtituloTrabajo} · hasta dia{' '}
+                {PLAZO_CICLO_DIAS}
               </p>
             </div>
           </div>
@@ -1982,8 +1988,8 @@ function FiniquitoGestionPageInner() {
           <DialogHeader>
             <DialogTitle>Rechazar caso</DialogTitle>
             <DialogDescription className="text-base text-slate-800">
-              ¿Confirma <strong>rechazar</strong> este caso desde la bandeja?
-              Podra devolverlo a Revision desde la seccion Rechazados.
+              ¿Confirma <strong>rechazar</strong> este caso? Dejara de mostrarse
+              en las bandejas activas.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2 sm:gap-0">

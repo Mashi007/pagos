@@ -62,7 +62,7 @@ class FiniquitoCasoOut(BaseModel):
     finiquito_tramite_fecha_limite: Optional[str] = Field(
         default=None,
         description=(
-            "Desde prestamos: fecha limite del tramite (25 dias calendario al pasar a EN_PROCESO), ISO date."
+            "Desde prestamos: fin del ciclo finiquito (dia 30 desde creado_en del caso), ISO date."
         ),
     )
     fecha_liquidado: Optional[str] = Field(
@@ -77,6 +77,12 @@ class FiniquitoCasoOut(BaseModel):
         default=None,
         description=(
             "Desde historial: ultima vez que el caso paso a EN_PROCESO (area de trabajo), ISO datetime."
+        ),
+    )
+    fecha_entrada_aceptado: Optional[str] = Field(
+        default=None,
+        description=(
+            "Desde historial: ultima vez que el caso paso a ACEPTADO (area de revision), ISO datetime."
         ),
     )
 
