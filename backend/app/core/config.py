@@ -485,7 +485,7 @@ class Settings(BaseSettings):
         ),
     )
     PAGOS_GMAIL_GEMINI_IMG_MIN_LONG_EDGE: int = Field(
-        default=1600,
+        default=1920,
         ge=800,
         le=4096,
         description=(

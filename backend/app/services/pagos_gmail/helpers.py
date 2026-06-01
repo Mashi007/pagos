@@ -2,7 +2,7 @@
 Helpers: nombre de carpeta por fecha, mime types, extracción de email del remitente.
 """
 import re
-from datetime import datetime
+from datetime import date, datetime
 from typing import Optional
 
 MESES_ES = [
@@ -124,23 +124,36 @@ def sender_acceptable_for_pipeline(sender: Optional[str], allowed_prefixes: Opti
     return False
 
 
-def normalizar_fecha_pago(fecha: Optional[str]) -> str:
+def normalizar_fecha_pago(fecha: Optional[str], ref_hoy: Optional[date] = None) -> str:
     """
     Normaliza cualquier formato de fecha a DD/MM/YYYY.
     Soporta: DD/MM/YYYY, YYYY/MM/DD, DD-MM-YYYY, YYYY-MM-DD,
              DD MMM YYYY (inglés/español, con o sin punto: '06 MAR. 2026', '05 MAY 2026').
+    Rechaza fechas futuras o demasiado antiguas respecto a ref_hoy (Caracas por defecto).
     Si no se puede parsear devuelve el valor original sin modificar.
     """
+    from datetime import date as _date
     from datetime import datetime as _dt
+
+    from app.services.pagos_gmail.parse_campos_comprobante import (
+        fecha_plausible,
+        parse_fecha_comprobante,
+    )
+
+    if ref_hoy is None:
+        from app.services.tasa_cambio_service import fecha_hoy_caracas
+
+        ref_hoy = fecha_hoy_caracas()
     if not fecha:
         return fecha or ""
     v = fecha.strip()
     if not v or v.upper() == "NA":
         return v
 
-    # Formatos numéricos directos.
-    # Regla de negocio: entradas numéricas ambiguas (ej. 04-07-2026) se tratan como DD/MM/YYYY.
-    # Nunca interpretar automáticamente en formato mes/día para evitar cruces 04/07 <-> 07/04.
+    parsed = parse_fecha_comprobante(v, ref_hoy)
+    if parsed:
+        return parsed.strftime("%d/%m/%Y")
+
     for fmt in (
         "%d/%m/%Y",
         "%Y/%m/%d",
@@ -150,31 +163,42 @@ def normalizar_fecha_pago(fecha: Optional[str]) -> str:
         "%d-%m-%y",
     ):
         try:
-            return _dt.strptime(v, fmt).strftime("%d/%m/%Y")
+            d = _dt.strptime(v, fmt).date()
+            if fecha_plausible(d, ref_hoy):
+                return d.strftime("%d/%m/%Y")
         except ValueError:
             pass
 
-    # Formatos con nombre de mes abreviado (inglés y español)
-    # Normalizar: quitar puntos, colapsar espacios, pasar a minúsculas
     MESES_ABBR = {
-        # español
-        "ene": 1, "feb": 2, "mar": 3, "abr": 4, "may": 5, "jun": 6,
-        "jul": 7, "ago": 8, "sep": 9, "oct": 10, "nov": 11, "dic": 12,
-        # inglés
-        "jan": 1, "apr": 4, "aug": 8, "dec": 12,
+        "ene": 1,
+        "feb": 2,
+        "mar": 3,
+        "abr": 4,
+        "may": 5,
+        "jun": 6,
+        "jul": 7,
+        "ago": 8,
+        "sep": 9,
+        "oct": 10,
+        "nov": 11,
+        "dic": 12,
+        "jan": 1,
+        "apr": 4,
+        "aug": 8,
+        "dec": 12,
     }
     clean = re.sub(r"\.", "", v).strip()
     parts = re.split(r"[\s/\-]+", clean)
     if len(parts) == 3:
-        # Intentar DD MMM YYYY o YYYY MMM DD
         for i, j, k in [(0, 1, 2), (2, 1, 0)]:
             mes_key = parts[j].lower()[:3]
             if mes_key in MESES_ABBR:
                 try:
                     day = int(parts[i])
                     year = int(parts[k])
-                    month = MESES_ABBR[mes_key]
-                    return _dt(year, month, day).strftime("%d/%m/%Y")
+                    d = _date(year, MESES_ABBR[mes_key], day)
+                    if fecha_plausible(d, ref_hoy):
+                        return d.strftime("%d/%m/%Y")
                 except (ValueError, TypeError):
                     pass
 
@@ -231,9 +255,11 @@ def normalizar_referencia(ref: Optional[str]) -> str:
 def format_monto_excel_pagos_gmail(monto: Optional[str]) -> str:
     """
     Columna Excel «Monto» (export Gmail): entero o decimal con punto y exactamente dos cifras decimales, sin unidad.
-    Ej.: '96.00 USD' -> '96.00', '122 USDT' -> '122.00', '96,00' -> '96.00'.
+    Ej.: '96.00 USD' -> '96.00', '122 USDT' -> '122.00', '96,00' -> '96.00', '1.500' -> '1500.00'.
     Valor literal **NR** (no RapiCredit) se conserva tal cual.
     """
+    from app.services.pagos_gmail.parse_campos_comprobante import monto_comprobante_a_excel
+
     if monto is None:
         return ""
     s = str(monto).strip()
@@ -253,30 +279,7 @@ def format_monto_excel_pagos_gmail(monto: Optional[str]) -> str:
         t,
         flags=re.IGNORECASE,
     ).strip()
-    t = t.replace("$", "").replace(" ", "")
-    if not t:
-        return ""
-    if "," in t and "." in t:
-        if t.rfind(",") > t.rfind("."):
-            t = t.replace(".", "").replace(",", ".")
-        else:
-            t = t.replace(",", "")
-    elif "," in t:
-        parts = t.split(",")
-        if len(parts) == 2 and len(parts[1]) <= 2 and parts[1].isdigit():
-            t = parts[0].replace(".", "") + "." + parts[1]
-        else:
-            t = t.replace(",", ".")
-    m = re.search(r"[-+]?\d+(?:\.\d+)?", t)
-    if not m:
-        return ""
-    try:
-        v = float(m.group(0))
-        if v != v:  # NaN
-            return ""
-        return f"{v:.2f}"
-    except ValueError:
-        return ""
+    return monto_comprobante_a_excel(t if t else s)
 
 
 def formatear_cedula(cedula: Optional[str]) -> str:

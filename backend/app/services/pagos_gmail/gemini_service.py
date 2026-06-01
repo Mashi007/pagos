@@ -28,6 +28,11 @@ GEMINI_SERVER_ERROR_MAX_RETRIES = 4  # Máximo 4 reintentos para 503
 
 from app.core.config import settings
 from app.services.pagos_gmail.helpers import get_mime_type
+from app.services.pagos_gmail.parse_campos_comprobante import (
+    normalizar_campos_gemini_gmail,
+    parse_fecha_comprobante as _parse_fecha_escaner_desde_gemini,
+    parse_monto_comprobante as _parse_monto_escaner,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -651,7 +656,7 @@ def _pagos_gmail_img_heuristic_trim_threshold() -> int:
 
 def _pagos_gmail_img_heuristic_long_edges() -> tuple[int, int]:
     """(min_long_edge, max_long_edge) con min <= max."""
-    min_l = int(getattr(settings, "PAGOS_GMAIL_GEMINI_IMG_MIN_LONG_EDGE", 1600))
+    min_l = int(getattr(settings, "PAGOS_GMAIL_GEMINI_IMG_MIN_LONG_EDGE", 1920))
     max_l = int(getattr(settings, "PAGOS_GMAIL_GEMINI_IMG_MAX_LONG_EDGE", 3072))
     if min_l > max_l:
         return max_l, min_l
@@ -757,6 +762,25 @@ def _pagos_gmail_normalize_long_edge_pil(img: Any, filename: str) -> Any:
     return out
 
 
+def _pagos_gmail_boost_dark_image_pil(img: Any, filename: str) -> Any:
+    """Sube brillo en fotos oscuras para mejorar OCR de monto/fecha (Gmail y envío simple)."""
+    try:
+        from PIL import ImageEnhance
+        from PIL import ImageStat
+
+        mean_luma = float(ImageStat.Stat(img.convert("L")).mean[0])
+        if mean_luma < 105:
+            img = ImageEnhance.Brightness(img).enhance(1.14)
+            logger.debug(
+                "[PAGOS_GMAIL] Brillo elevado (luma=%.1f) para OCR: %s",
+                mean_luma,
+                filename,
+            )
+    except Exception:
+        pass
+    return img
+
+
 def _pick_rescue_image_part(
     image_parts: list[tuple[str, object]],
     bank_hint: Optional[str],
@@ -821,6 +845,7 @@ def _build_image_part(
         except Exception:
             pass
         img = _pil_image_to_rgb_for_jpeg(img)
+        img = _pagos_gmail_boost_dark_image_pil(img, filename)
         if max_long_edge and max_long_edge > 0:
             w, h = img.size
             longest = max(w, h)
@@ -1049,6 +1074,7 @@ def _build_image_part_variants(
         base = _pil_image_to_rgb_for_jpeg(base)
         base = _pagos_gmail_trim_soft_margins_pil(base, filename)
         base = _pagos_gmail_normalize_long_edge_pil(base, filename)
+        base = _pagos_gmail_boost_dark_image_pil(base, filename)
 
         jpeg_q = _pagos_gmail_gemini_jpeg_quality()
         raw_jpegs: list[tuple[str, bytes]] = []
@@ -1552,6 +1578,7 @@ def _parse_formato_y_pagos_json(
             ),
             "banco": _normalize_banco_gemini_field(data.get("banco", PAGOS_NA)),
         }
+        fields = normalizar_campos_gemini_gmail(fields)
         na_fields = {
             "fecha_pago": PAGOS_NA,
             "cedula": PAGOS_NA,
@@ -2033,12 +2060,13 @@ def _parse_gemini_json(text: str) -> Dict[str, str]:
             json_str = match.group(0) if match else None
         if json_str:
             data = json.loads(json_str)
-            return {
+            result = {
                 "fecha_pago": _normalize_to_na(data.get("fecha_pago", default["fecha_pago"])),
                 "cedula": _normalize_to_na(data.get("cedula", default["cedula"])),
                 "monto": _normalize_to_na(data.get("monto", default["monto"])),
                 "numero_referencia": _normalize_to_na(data.get("numero_referencia", default["numero_referencia"])),
             }
+            return normalizar_campos_gemini_gmail(result)
     except json.JSONDecodeError:
         pass
     return default.copy()
@@ -2510,180 +2538,6 @@ def _extra_prompt_plantilla_escaner(institucion_plantilla: str) -> str:
         + "\n".join(f"- {c}" for c in chunks)
         + f"\n- Si el nombre del banco no es legible en la imagen, use en `institucion_financiera` exactamente: «{canon}»."
     )
-
-
-def _parse_monto_escaner(val: Any) -> Optional[float]:
-    if val is None:
-        return None
-    if isinstance(val, (int, float)):
-        if isinstance(val, float) and (val != val or val == float("inf")):  # NaN / inf
-            return None
-        return round(float(val), 2)
-    s = str(val).strip()
-    s = re.sub(r"(?i)\b(bs\.?|usd|us\$|\$)\b", "", s)
-    s = s.replace(" ", "")
-    if not s or s.lower() in ("na", "n/a", "-"):
-        return None
-    # Formato latino 1.234,56 o 150,50
-    if "," in s and "." in s:
-        if s.rfind(",") > s.rfind("."):
-            s = s.replace(".", "").replace(",", ".")
-        else:
-            s = s.replace(",", "")
-    elif "," in s:
-        parts = s.split(",")
-        if len(parts) == 2 and len(parts[1]) <= 2 and parts[0].replace(".", "").isdigit():
-            s = parts[0].replace(".", "") + "." + parts[1]
-        else:
-            s = s.replace(",", ".")
-    elif "." in s:
-        parts = s.split(".")
-        if len(parts) > 1 and all(p.isdigit() for p in parts):
-            if len(parts[-1]) == 3:
-                # 1.500 / 15.000.250 → miles con punto
-                s = "".join(parts)
-            elif len(parts) == 2 and len(parts[1]) <= 2:
-                s = parts[0] + "." + parts[1]
-            else:
-                s = "".join(parts)
-    try:
-        n = float(s)
-        if n != n or n == float("inf"):
-            return None
-        return round(n, 2)
-    except (TypeError, ValueError):
-        return None
-
-
-def _year_from_two_digits(yy: int) -> int:
-    return 2000 + yy if yy < 70 else 1900 + yy
-
-
-def _fecha_escaner_plausible(f: date, ref_hoy: date) -> bool:
-    if f > ref_hoy:
-        return False
-    if f.year < ref_hoy.year - 4:
-        return False
-    return True
-
-
-def _pick_fecha_escaner_candidata(candidates: List[Optional[date]], ref_hoy: date) -> Optional[date]:
-    valid = [c for c in candidates if c is not None and _fecha_escaner_plausible(c, ref_hoy)]
-    if not valid:
-        return None
-    return min(valid, key=lambda d: abs((ref_hoy - d).days))
-
-
-def _parse_fecha_dmy_parts(d: int, mo: int, y: int, ref_hoy: date) -> Optional[date]:
-    opts: List[Optional[date]] = []
-    try:
-        opts.append(date(y, mo, d))
-    except ValueError:
-        pass
-    if d != mo and d <= 12 and mo <= 12:
-        try:
-            opts.append(date(y, d, mo))
-        except ValueError:
-            pass
-    return _pick_fecha_escaner_candidata(opts, ref_hoy)
-
-
-def _parse_fecha_compacta_6(digits: str, ref_hoy: date) -> Optional[date]:
-    if len(digits) != 6 or not digits.isdigit():
-        return None
-    dd, mm, yy = int(digits[0:2]), int(digits[2:4]), int(digits[4:6])
-    cand_ddmmyy = _parse_fecha_dmy_parts(dd, mm, _year_from_two_digits(yy), ref_hoy)
-    yy2, mo2, d2 = int(digits[0:2]), int(digits[2:4]), int(digits[4:6])
-    cand_yymmdd: Optional[date] = None
-    try:
-        cand_yymmdd = date(_year_from_two_digits(yy2), mo2, d2)
-    except ValueError:
-        cand_yymmdd = None
-    if cand_yymmdd and not _fecha_escaner_plausible(cand_yymmdd, ref_hoy):
-        cand_yymmdd = None
-    return _pick_fecha_escaner_candidata([cand_ddmmyy, cand_yymmdd], ref_hoy)
-
-
-def _parse_fecha_escaner(val: Any, ref_hoy: Optional[date] = None) -> Optional[date]:
-    if ref_hoy is None:
-        from app.services.tasa_cambio_service import fecha_hoy_caracas
-
-        ref_hoy = fecha_hoy_caracas()
-    if val is None:
-        return None
-    s = str(val).strip()
-    if not s or s.lower() in ("na", "n/a", "-", ""):
-        return None
-    # ISO 8601 con hora: 2026-04-21T15:01:44 o ...Z
-    if "T" in s[:29] and re.match(r"^\d{4}-\d{2}-\d{2}T", s):
-        s = s.split("T", 1)[0].strip()
-    # YYYY-MM-DD o YYYY/MM/DD (primeros 10 caracteres)
-    s10 = s[:10]
-    try:
-        if len(s10) >= 10 and s10[4] in "-/" and s10[7] in "-/" and s10[4] == s10[7]:
-            y, m, d = int(s10[0:4]), int(s10[5:7]), int(s10[8:10])
-            parsed = _parse_fecha_dmy_parts(d, m, y, ref_hoy)
-            if parsed:
-                return parsed
-    except (ValueError, TypeError):
-        pass
-    # dd/mm/yyyy o dd-mm-yyyy (año 4 cifras al final)
-    m = re.match(r"^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$", s)
-    if m:
-        parsed = _parse_fecha_dmy_parts(
-            int(m.group(1)), int(m.group(2)), int(m.group(3)), ref_hoy
-        )
-        if parsed:
-            return parsed
-    # dd.mm.yy o dd/mm/yy (año 2 cifras)
-    m2 = re.match(r"^(\d{1,2})[/.-](\d{1,2})[/.-](\d{2})$", s)
-    if m2:
-        parsed = _parse_fecha_dmy_parts(
-            int(m2.group(1)),
-            int(m2.group(2)),
-            _year_from_two_digits(int(m2.group(3))),
-            ref_hoy,
-        )
-        if parsed:
-            return parsed
-    # 6 dígitos compactos (191226 → 19/12/26)
-    digits_only = re.sub(r"\D", "", s)
-    if len(digits_only) == 6:
-        parsed = _parse_fecha_compacta_6(digits_only, ref_hoy)
-        if parsed:
-            return parsed
-    return None
-
-
-def _parse_fecha_escaner_desde_gemini(val: Any, ref_hoy: Optional[date] = None) -> Optional[date]:
-    """Valida fecha del JSON Gemini; si el parseo estricto falla, reintenta sobre el texto crudo."""
-    if ref_hoy is None:
-        from app.services.tasa_cambio_service import fecha_hoy_caracas
-
-        ref_hoy = fecha_hoy_caracas()
-    parsed = _parse_fecha_escaner(val, ref_hoy)
-    if parsed is not None:
-        return parsed
-    if val is None:
-        return None
-    s = str(val).strip()
-    if not s:
-        return None
-    m_iso = re.search(r"(\d{4})-(\d{2})-(\d{2})", s)
-    if m_iso:
-        parsed = _parse_fecha_dmy_parts(
-            int(m_iso.group(3)), int(m_iso.group(2)), int(m_iso.group(1)), ref_hoy
-        )
-        if parsed:
-            return parsed
-    m_lat = re.search(r"(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})", s)
-    if m_lat:
-        parsed = _parse_fecha_dmy_parts(
-            int(m_lat.group(1)), int(m_lat.group(2)), int(m_lat.group(3)), ref_hoy
-        )
-        if parsed:
-            return parsed
-    return None
 
 
 def extract_infopagos_campos_desde_comprobante(

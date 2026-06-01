@@ -484,7 +484,7 @@ def test_parse_formato_c_binance_ok():
     fmt, fields = _parse_formato_y_pagos_json(j)
     assert fmt == "C"
     assert fields["email_cliente"] == "NA"
-    assert fields["monto"] == "122 USDT"
+    assert fields["monto"] == "122.00"
 
 
 def test_parse_formato_b_incluye_banco():
@@ -701,7 +701,7 @@ def test_parse_formato_e_bancamiga_cedula_siempre_na():
     fmt, fields = _parse_formato_y_pagos_json(j)
     assert fmt == "E"
     assert fields["cedula"] == "NA"
-    assert "43.223" in (fields.get("monto") or "")
+    assert fields["monto"] == "43223.15"
     assert (fields.get("numero_referencia") or "").strip() == "18987898"
 
 
@@ -713,7 +713,7 @@ def test_parse_formato_f_tesoro_cedula_siempre_na():
     fmt, fields = _parse_formato_y_pagos_json(j)
     assert fmt == "F"
     assert fields["cedula"] == "NA"
-    assert "64.810" in (fields.get("monto") or "") or "64810" in (fields.get("monto") or "")
+    assert fields["monto"] == "64810.14"
     assert (fields.get("numero_referencia") or "").strip() == "01834361"
 
 
