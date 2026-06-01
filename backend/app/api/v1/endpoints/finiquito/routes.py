@@ -12,7 +12,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.encoders import jsonable_encoder
-from sqlalchemy import func
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 from sqlalchemy.sql.expression import false as sql_false
 
@@ -1435,7 +1435,7 @@ def finiquito_admin_pasar_a_trabajo(
     panel_user: UserResponse = Depends(require_admin_or_operator),
 ):
     """
-    X o Visto final: pasa a EN_PROCESO y elimina reserva temporal (no borra Drive).
+    Boton X en area de revision: pasa a EN_PROCESO y elimina reserva temporal.
   """
     caso = db.query(FiniquitoCaso).filter(FiniquitoCaso.id == caso_id).first()
     if not caso:
@@ -1628,3 +1628,98 @@ def finiquito_admin_refresh_manual(
     from app.services.finiquito_refresh import ejecutar_refresh_finiquito_casos
 
     return ejecutar_refresh_finiquito_casos(db)
+
+
+@router.post("/admin/refresh-materializado-cedula")
+def finiquito_admin_refresh_por_cedula(
+    cedula: str = Query(..., min_length=1, max_length=20),
+    db: Session = Depends(get_db),
+    _: UserResponse = Depends(require_admin_or_operator),
+):
+    """
+    Recuperacion operativa: liquida prestamos elegibles de una cedula y materializa
+    finiquito_casos solo para esos prestamo_id (no borra casos de otras cedulas).
+    """
+    from app.services.finiquito_refresh import (
+        persistir_liquidaciones_efectivas_para_finiquito,
+        refrescar_finiquito_caso_prestamo_si_aplica,
+    )
+
+    cedula_norm = cedula.strip().upper()
+    persistir_liquidaciones_efectivas_para_finiquito(db)
+    prestamos = (
+        db.execute(
+            select(Prestamo).where(func.upper(func.trim(Prestamo.cedula)) == cedula_norm)
+        )
+        .scalars()
+        .all()
+    )
+    if not prestamos:
+        raise HTTPException(status_code=404, detail=f"Sin prestamos para cedula {cedula_norm}")
+
+    detalle: List[dict[str, Any]] = []
+    insertados = 0
+    actualizados = 0
+    eliminados = 0
+    for p in prestamos:
+        r = refrescar_finiquito_caso_prestamo_si_aplica(db, int(p.id))
+        detalle.append(r)
+        acc = (r.get("accion") or "").strip()
+        if acc == "insertado":
+            insertados += 1
+        elif acc == "actualizado":
+            actualizados += 1
+        elif acc == "eliminado":
+            eliminados += 1
+
+    db.commit()
+    casos = (
+        db.query(FiniquitoCaso)
+        .filter(func.upper(func.trim(FiniquitoCaso.cedula)) == cedula_norm)
+        .order_by(FiniquitoCaso.id.asc())
+        .all()
+    )
+    return {
+        "cedula": cedula_norm,
+        "prestamos": len(prestamos),
+        "insertados": insertados,
+        "actualizados": actualizados,
+        "eliminados": eliminados,
+        "detalle": detalle,
+        "casos_actuales": [
+            {
+                "id": c.id,
+                "prestamo_id": c.prestamo_id,
+                "estado": c.estado,
+            }
+            for c in casos
+        ],
+    }
+
+
+@router.post("/admin/reconciliar-gestion-cedula")
+def finiquito_admin_reconciliar_gestion_cedula(
+    cedula: str = Query(..., min_length=1, max_length=20),
+    promover_caso_a_trabajo: bool = Query(
+        False,
+        description=(
+            "False (default): el caso manda; baja prestamo si quedo EN_PROCESO sin terminar revision. "
+            "True: sube caso a EN_PROCESO solo si el prestamo ya esta en trabajo."
+        ),
+    ),
+    db: Session = Depends(get_db),
+    _: UserResponse = Depends(require_admin_or_operator),
+):
+    """
+    Alinea finiquito_casos.estado con prestamos.estado_gestion_finiquito cuando quedaron
+    desincronizados.
+    """
+    from app.services.finiquito_prestamo_gestion_sync import (
+        reconciliar_gestion_finiquito_por_cedula,
+    )
+
+    out = reconciliar_gestion_finiquito_por_cedula(
+        db, cedula, promover_caso_a_trabajo=promover_caso_a_trabajo
+    )
+    db.commit()
+    return out

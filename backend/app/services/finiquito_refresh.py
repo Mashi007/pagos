@@ -21,6 +21,8 @@ from app.services.finiquito_caso_cleanup import eliminar_finiquito_casos_por_pre
 from app.services.finiquito_db_schema import finiquito_casos_has_contacto_para_siguientes
 from app.services.finiquito_prestamo_gestion_sync import (
     limpiar_estado_gestion_finiquito_prestamos,
+    reconciliar_caso_y_prestamo_gestion_finiquito,
+    sincronizar_prestamo_estado_gestion_finiquito,
 )
 
 logger = logging.getLogger(__name__)
@@ -160,19 +162,31 @@ def refrescar_finiquito_caso_prestamo_si_aplica(db: Session, prestamo_id: int) -
         now=now,
         caso_existente=caso,
     )
+    caso_actual = (
+        db.query(FiniquitoCaso).filter(FiniquitoCaso.prestamo_id == pid).first()
+    )
+    if caso_actual:
+        sincronizar_prestamo_estado_gestion_finiquito(
+            db, pid, (caso_actual.estado or "").strip() or None
+        )
+        recon = reconciliar_caso_y_prestamo_gestion_finiquito(db, pid)
+    else:
+        recon = {"accion": "sin_caso"}
 
     logger.info(
-        "finiquito_refresh(prestamo): prestamo_id=%s accion=%s sum_tp=%s total_fin=%s",
+        "finiquito_refresh(prestamo): prestamo_id=%s accion=%s sum_tp=%s total_fin=%s recon=%s",
         pid,
         accion,
         sum_tp,
         total_fin,
+        recon.get("accion"),
     )
     return {
         "prestamo_id": pid,
         "accion": accion,
         "sum_total_pagado": str(sum_tp) if sum_tp is not None else None,
         "total_financiamiento": str(total_fin) if total_fin is not None else None,
+        "reconciliacion_gestion": recon,
     }
 
 

@@ -5,6 +5,7 @@ Diagnostico y recuperacion parcial de casos finiquito por cedula (p. ej. V314604
 Uso (desde backend/, con DATABASE_URL en .env):
   python scripts/diagnostico_finiquito_cedula.py V31460458
   python scripts/diagnostico_finiquito_cedula.py V31460458 --refrescar
+  python scripts/diagnostico_finiquito_cedula.py V31460458 --recuperar
 """
 from __future__ import annotations
 
@@ -34,6 +35,11 @@ def main() -> int:
         action="store_true",
         help="Llama refrescar_finiquito_caso_prestamo_si_aplica por cada prestamo de la cedula",
     )
+    parser.add_argument(
+        "--recuperar",
+        action="store_true",
+        help="actualizar_prestamos_a_liquidado_automatico + refrescar por prestamo (commit)",
+    )
     args = parser.parse_args()
     cedula = args.cedula.strip().upper()
 
@@ -47,10 +53,18 @@ def main() -> int:
     from app.models.finiquito_conciliacion_reserva import FiniquitoConciliacionReserva
     from app.models.pago import Pago
     from app.models.prestamo import Prestamo
-    from app.services.finiquito_refresh import refrescar_finiquito_caso_prestamo_si_aplica
+    from app.services.finiquito_refresh import (
+        persistir_liquidaciones_efectivas_para_finiquito,
+        refrescar_finiquito_caso_prestamo_si_aplica,
+    )
 
     db = SessionLocal()
     try:
+        if args.recuperar:
+            print("Ejecutando actualizar_prestamos_a_liquidado_automatico()...")
+            persistir_liquidaciones_efectivas_para_finiquito(db)
+            db.commit()
+            print("Listo.\n")
         prestamos = (
             db.execute(
                 select(Prestamo)
@@ -76,6 +90,11 @@ def main() -> int:
                     Cuota.prestamo_id == pid
                 )
             )
+            total_fin = Decimal(str(p.total_financiamiento or 0))
+            sum_dec = Decimal(str(sum_tp or 0))
+            diff = abs(sum_dec - total_fin)
+            est = (p.estado or "").strip().upper()
+            elegible = est in ("LIQUIDADO", "FINIQUITO") and diff <= Decimal("0.02")
             caso = db.query(FiniquitoCaso).filter(FiniquitoCaso.prestamo_id == pid).first()
             n_reserva = int(
                 db.scalar(
@@ -101,7 +120,10 @@ def main() -> int:
                 ).fetchall()
 
             print(f"--- prestamo_id={pid} estado={p.estado} total_fin={p.total_financiamiento}")
-            print(f"    pagos={n_pagos} sum(cuotas.total_pagado)={sum_tp} reserva_filas={n_reserva}")
+            print(
+                f"    pagos={n_pagos} sum(cuotas)={sum_tp} diff={diff} "
+                f"elegible_finiquito={elegible} reserva={n_reserva}"
+            )
             if caso:
                 print(
                     f"    finiquito_caso id={caso.id} estado={caso.estado} "
@@ -125,7 +147,7 @@ def main() -> int:
                 )
             print()
 
-            if args.refrescar:
+            if args.refrescar or args.recuperar:
                 db.flush()
                 r = refrescar_finiquito_caso_prestamo_si_aplica(db, pid)
                 db.commit()
