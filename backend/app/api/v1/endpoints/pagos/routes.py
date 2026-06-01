@@ -1831,6 +1831,14 @@ async def upload_excel_pagos(
 
                 documentos_ya_en_bd_excel.update(str(d) for d in _ex if d)
 
+                _ex_pe = db.execute(
+                    select(PagoConError.numero_documento).where(
+                        PagoConError.numero_documento.in_(_ch)
+                    )
+                ).scalars().all()
+
+                documentos_ya_en_bd_excel.update(str(d) for d in _ex_pe if d)
+
         numeros_doc_en_lote_excel: set[str] = set()
 
         registros = 0
@@ -6385,6 +6393,9 @@ def eliminar_todos_pagos_por_prestamo(
     """
 
     Elimina todos los pagos asociados al préstamo, limpia dependencias y reinicia totales en cuotas.
+
+    También elimina filas en `pagos_con_errores` del mismo préstamo (y pendientes huérfanos
+    de la misma cédula) para que al volver a cargar Excel no falle por «Ya existe» en comprobante+código.
 
     Solo préstamos en estado APROBADO (flujo «reemplazar pagos» antes de carga masiva desde Excel).
 

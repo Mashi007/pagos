@@ -472,6 +472,7 @@ class PagoService {
     prestamo_id: number
     pagos_eliminados: number
     cuota_pagos_eliminadas?: number
+    pagos_con_errores_eliminados?: number
   }> {
     return await apiClient.delete(
       `${this.baseUrl}/por-prestamo/${prestamoId}/todos`

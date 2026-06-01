@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import logging
 from decimal import Decimal
-from typing import Any
+from typing import Any, Optional
 
 from sqlalchemy import delete, func, or_, select, text
 from sqlalchemy.orm import Session
@@ -23,6 +23,7 @@ from app.models.auditoria_conciliacion_manual import AuditoriaConciliacionManual
 from app.models.cuota import Cuota
 from app.models.cuota_pago import CuotaPago
 from app.models.pago import Pago
+from app.models.pago_con_error import PagoConError
 from app.models.prestamo import Prestamo
 from app.models.reporte_contable_cache import ReporteContableCache
 from app.models.revisar_pago import RevisarPago
@@ -212,12 +213,16 @@ def eliminar_todos_pagos_prestamo(db: Session, prestamo_id: int) -> dict[str, An
     )
 
     if n_pagos_antes == 0:
+        pagos_con_errores_eliminados = _eliminar_pagos_con_errores_reemplazo_prestamo(
+            db, prestamo_id, prestamo.cedula
+        )
         _marcar_prestamo_liquidado_si_corresponde(prestamo_id, db)
         return {
             "ok": True,
             "prestamo_id": prestamo_id,
             "pagos_eliminados": 0,
             "cuota_pagos_eliminadas": 0,
+            "pagos_con_errores_eliminados": pagos_con_errores_eliminados,
         }
 
     cuotas = db.execute(
@@ -256,6 +261,10 @@ def eliminar_todos_pagos_prestamo(db: Session, prestamo_id: int) -> dict[str, An
     if pagos_eliminados < 0:
         pagos_eliminados = n_pagos_antes
 
+    pagos_con_errores_eliminados = _eliminar_pagos_con_errores_reemplazo_prestamo(
+        db, prestamo_id, prestamo.cedula
+    )
+
     _marcar_prestamo_liquidado_si_corresponde(prestamo_id, db)
 
     return {
@@ -263,7 +272,38 @@ def eliminar_todos_pagos_prestamo(db: Session, prestamo_id: int) -> dict[str, An
         "prestamo_id": prestamo_id,
         "pagos_eliminados": pagos_eliminados,
         "cuota_pagos_eliminadas": cuota_pagos_eliminadas,
+        "pagos_con_errores_eliminados": pagos_con_errores_eliminados,
     }
+
+
+def _eliminar_pagos_con_errores_reemplazo_prestamo(
+    db: Session,
+    prestamo_id: int,
+    cedula_prestamo: Optional[str],
+) -> int:
+    """
+    Quita filas de `pagos_con_errores` que bloquean re-cargar el mismo comprobante+código
+    tras «Reemplazar pagos» (numero_documento_ya_registrado consulta pagos y pagos_con_errores).
+    """
+    from app.utils.cedula_almacenamiento import normalizar_cedula_almacenamiento
+
+    condiciones = [PagoConError.prestamo_id == prestamo_id]
+    ced_norm = normalizar_cedula_almacenamiento(cedula_prestamo or "")
+    if ced_norm:
+        pc = func.upper(func.replace(func.coalesce(PagoConError.cedula_cliente, ""), "-", ""))
+        condiciones.append(
+            (PagoConError.prestamo_id.is_(None)) & (pc == ced_norm.replace("-", "").upper())
+        )
+    r = db.execute(delete(PagoConError).where(or_(*condiciones)))
+    n = int(getattr(r, "rowcount", 0) or 0)
+    if n:
+        logger.info(
+            "[REEMPLAZAR_PAGOS] pagos_con_errores eliminados=%s prestamo_id=%s cedula=%s",
+            n,
+            prestamo_id,
+            (ced_norm or "")[:20],
+        )
+    return n
 
 
 def reset_y_reaplicar_cascada_prestamo(db: Session, prestamo_id: int) -> dict[str, Any]:

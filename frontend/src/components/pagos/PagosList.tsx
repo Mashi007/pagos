@@ -2070,7 +2070,11 @@ export function PagosList() {
       const r =
         await pagoService.deleteTodosPagosPorPrestamo(prestamoIdReemplazo)
       toast.success(
-        `Se eliminaron ${r.pagos_eliminados} pago(s). Cargue el Excel con los nuevos pagos.`
+        `Se eliminaron ${r.pagos_eliminados} pago(s)${
+          r.pagos_con_errores_eliminados
+            ? ` y ${r.pagos_con_errores_eliminados} pendiente(s) en revisión`
+            : ''
+        }. Cargue el Excel con los nuevos pagos.`
       )
       cerrarReemplazarPagos()
       setShowCargaMasivaPagos(true)
