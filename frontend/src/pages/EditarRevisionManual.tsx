@@ -3243,8 +3243,8 @@ export function EditarRevisionManual() {
                       notificaciones general
                     </Link>
                     . Luego recree pagos desde la reserva temporal y aplique
-                    cascada. Al terminar use Visto o X en el area de revision
-                    de finiquitos.
+                    cascada. Al terminar use la X en el area de revision de
+                    finiquitos para pasar a area de trabajo.
                   </p>
                 </CardHeader>
                 <CardContent className="flex flex-wrap gap-2 pt-0">

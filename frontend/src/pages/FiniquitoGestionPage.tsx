@@ -1056,24 +1056,24 @@ function FiniquitoGestionPageInner() {
           disabled={casoTieneAccionPendiente(row.id)}
           title={
             vistoActivo
-              ? 'Cerrar conciliacion y pasar a area de trabajo'
-              : 'Iniciar conciliacion (reserva comprobantes)'
+              ? 'Seguir conciliacion en revision manual (el caso sigue aqui)'
+              : 'Iniciar: reserva comprobantes, borra pagos y abre revision manual'
           }
           onClick={() =>
             void (vistoActivo
-              ? pasarATrabajo(row.id)
+              ? abrirRevisionManualPrestamo(row.prestamo_id, row.id)
               : vistoIniciarConciliacion(row))
           }
         >
           <CheckCircle2 className="h-3.5 w-3.5" aria-hidden />
-          Visto
+          {vistoActivo ? 'Continuar' : 'Visto'}
         </Button>
         <Button
           type="button"
           size="icon"
           variant="outline"
           className="h-8 w-8 border-slate-300"
-          title="Pasar a area de trabajo sin cerrar conciliacion"
+          title="Cerrar conciliacion y pasar a area de trabajo"
           aria-label={`Pasar caso ${row.id} a area de trabajo`}
           disabled={casoTieneAccionPendiente(row.id)}
           onClick={() => void pasarATrabajo(row.id)}
