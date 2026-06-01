@@ -92,6 +92,11 @@ const BANDEJA_DIA_ATRASADO = 3
 /** Fase area revision: hasta 5 dias; dia 6 = atrasado. */
 const AREA_REVISION_DIAS_MAX = 5
 
+/** Nomenclatura tiempo limite: F1 bandeja, F2 revision, F3 trabajo. */
+const FASE_TIEMPO_BANDEJA = 'F1'
+const FASE_TIEMPO_REVISION = 'F2'
+const FASE_TIEMPO_TRABAJO = 'F3'
+
 function parseIsoDate(iso: string | null | undefined): Date | null {
   if (iso == null || String(iso).trim() === '') return null
   const d = new Date(`${String(iso).slice(0, 10)}T00:00:00`)
@@ -195,29 +200,55 @@ function diasRestantesAreaTrabajo(caso: FiniquitoCasoItem): number | null {
   return diasRestantesHastaFinCiclo(caso)
 }
 
+function formatoTiempoFase(
+  fase: string,
+  restantes: number | null,
+  total: number,
+  etiquetaVencido: string
+): string {
+  if (restantes == null) return '-'
+  if (restantes <= 0) return `${fase} - ${etiquetaVencido}`
+  return `${fase} - ${restantes} de ${total} días`
+}
+
 function textoTiempoLimiteBandeja(caso: FiniquitoCasoItem): string {
-  if (bandejaAtrasado(caso)) return 'Atrasado'
-  const d = diasRestantesBandeja(caso)
-  if (d == null) return '-'
-  if (d <= 0) return 'Atrasado'
-  return `D${diaOperativoCiclo(caso) ?? '?'} · ${d}d`
+  if (bandejaAtrasado(caso)) return `${FASE_TIEMPO_BANDEJA} - Atrasado`
+  return formatoTiempoFase(
+    FASE_TIEMPO_BANDEJA,
+    diasRestantesBandeja(caso),
+    BANDEJA_DIA_ATRASADO,
+    'Atrasado'
+  )
 }
 
 function textoTiempoLimiteAreaRevision(caso: FiniquitoCasoItem): string {
-  if (areaRevisionAtrasado(caso)) return 'Atrasado'
-  const d = diasRestantesAreaRevision(caso)
-  const ciclo = diasRestantesHastaFinCiclo(caso)
-  if (d == null) return '-'
-  const parte = d <= 0 ? 'Atrasado' : `${d}d fase`
-  if (ciclo == null) return parte
-  return `${parte} · ${ciclo}d a D${PLAZO_CICLO_DIAS}`
+  if (areaRevisionAtrasado(caso)) return `${FASE_TIEMPO_REVISION} - Atrasado`
+  return formatoTiempoFase(
+    FASE_TIEMPO_REVISION,
+    diasRestantesAreaRevision(caso),
+    AREA_REVISION_DIAS_MAX,
+    'Atrasado'
+  )
+}
+
+function totalDiasFaseTrabajo(caso: FiniquitoCasoItem): number | null {
+  const restantes = diasRestantesAreaTrabajo(caso)
+  if (restantes == null) return null
+  const desdeEntrada = diasDesdeIsoDate(caso.fecha_entrada_en_proceso)
+  if (desdeEntrada == null) return Math.max(restantes, 1)
+  return Math.max(desdeEntrada + restantes, 1)
 }
 
 function textoTiempoLimiteAreaTrabajo(caso: FiniquitoCasoItem): string {
-  const d = diasRestantesAreaTrabajo(caso)
-  if (d == null) return '-'
-  if (d <= 0) return 'Vencido'
-  return `${d}d a dia ${PLAZO_CICLO_DIAS}`
+  const restantes = diasRestantesAreaTrabajo(caso)
+  const total = totalDiasFaseTrabajo(caso)
+  if (restantes == null || total == null) return '-'
+  return formatoTiempoFase(
+    FASE_TIEMPO_TRABAJO,
+    restantes,
+    total,
+    'Vencido'
+  )
 }
 
 function claseTiempoLimite(
@@ -1116,7 +1147,11 @@ function FiniquitoGestionPageInner() {
                 'max-w-[9rem] whitespace-normal leading-tight'
               )}
               scope="col"
-              title={`Ciclo ${PLAZO_CICLO_DIAS}d: dias 1-2 en bandeja; dia ${BANDEJA_DIA_ATRASADO}+ atrasado`}
+              title={
+                modoTiempo === 'bandeja'
+                  ? `${FASE_TIEMPO_BANDEJA}: dias restantes de ${BANDEJA_DIA_ATRASADO} en bandeja (atrasado desde dia ${BANDEJA_DIA_ATRASADO} del ciclo)`
+                  : `${FASE_TIEMPO_REVISION}: dias restantes de ${AREA_REVISION_DIAS_MAX} en area de revision`
+              }
             >
               Tiempo limite
             </TableHead>
@@ -1227,7 +1262,7 @@ function FiniquitoGestionPageInner() {
                 'max-w-[9rem] whitespace-normal leading-tight'
               )}
               scope="col"
-              title={`Resto del ciclo hasta dia ${PLAZO_CICLO_DIAS}`}
+              title={`${FASE_TIEMPO_TRABAJO}: dias restantes de la fase hasta el dia ${PLAZO_CICLO_DIAS} del ciclo`}
             >
               Tiempo limite
             </TableHead>
