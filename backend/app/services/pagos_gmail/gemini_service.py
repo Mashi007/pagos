@@ -855,11 +855,56 @@ def _build_image_part(
         return _gtypes.Part.from_bytes(data=file_content, mime_type=mime)
 
 
+def _escaner_infopagos_img_long_edges() -> tuple[int, int]:
+    """Borde largo objetivo del escáner: más resolución que Gmail para texto pequeño (monto/fecha)."""
+    min_l = int(getattr(settings, "ESCANER_GEMINI_IMG_MIN_LONG_EDGE", 1920))
+    max_l = int(getattr(settings, "ESCANER_GEMINI_IMG_MAX_LONG_EDGE", 3072))
+    min_l = max(1200, min(min_l, 4096))
+    max_l = max(min_l, min(max_l, 4096))
+    return min_l, max_l
+
+
+def _escaner_normalize_long_edge_pil(img: Any, filename: str) -> Any:
+    """Escala escáner Infopagos (min 1920 px borde largo por defecto)."""
+    from PIL import Image as _PIL
+
+    w, h = img.size
+    long = max(w, h)
+    if long <= 0:
+        return img
+    min_edge, max_edge = _escaner_infopagos_img_long_edges()
+    target: Optional[float] = None
+    if long < min_edge:
+        target = float(min_edge)
+    elif long > max_edge:
+        target = float(max_edge)
+    else:
+        return img
+    scale = target / float(long)
+    nw = max(1, int(round(w * scale)))
+    nh = max(1, int(round(h * scale)))
+    try:
+        resample = _PIL.Resampling.LANCZOS  # type: ignore[attr-defined]
+    except AttributeError:
+        resample = _PIL.LANCZOS  # type: ignore[attr-defined]
+    out = img.resize((nw, nh), resample)
+    logger.debug(
+        "[ESCANER] Escala borde largo: %s %sx%s -> %sx%s (objetivo %s)",
+        filename,
+        w,
+        h,
+        nw,
+        nh,
+        int(target),
+    )
+    return out
+
+
 def _build_image_part_escaner_infopagos(
     file_content: bytes,
     filename: str,
     mime: str,
-    max_long_edge: int = 2400,
+    max_long_edge: int = 0,
 ):
     """
     Part de Gemini para **solo** el escáner Infopagos (personal): prepara la imagen antes del OCR.
@@ -892,12 +937,14 @@ def _build_image_part_escaner_infopagos(
         w0, h0 = img.size
 
         img = _pagos_gmail_trim_soft_margins_pil(img, filename)
-        img = _pagos_gmail_normalize_long_edge_pil(img, filename)
+        img = _escaner_normalize_long_edge_pil(img, filename)
 
         w, h = img.size
         longest = max(w, h)
-        if max_long_edge and max_long_edge > 0 and longest > max_long_edge:
-            scale = max_long_edge / float(longest)
+        _, max_edge_cfg = _escaner_infopagos_img_long_edges()
+        cap = int(max_long_edge) if max_long_edge and max_long_edge > 0 else max_edge_cfg
+        if cap and longest > cap:
+            scale = cap / float(longest)
             nw = max(1, int(round(w * scale)))
             nh = max(1, int(round(h * scale)))
             try:
@@ -907,7 +954,7 @@ def _build_image_part_escaner_infopagos(
             img = img.resize((nw, nh), resample)
             logger.debug(
                 "[ESCANER] Imagen reescalada (tope borde largo=%s): %s %sx%s -> %sx%s",
-                max_long_edge,
+                cap,
                 filename,
                 w,
                 h,
@@ -916,16 +963,33 @@ def _build_image_part_escaner_infopagos(
             )
 
         try:
-            img = ImageOps.autocontrast(img, cutoff=1)
+            from PIL import ImageStat
+
+            mean_luma = float(ImageStat.Stat(img.convert("L")).mean[0])
+            if mean_luma < 105:
+                img = ImageEnhance.Brightness(img).enhance(1.14)
+                logger.debug(
+                    "[ESCANER] Brillo elevado (luma=%.1f) para OCR monto/fecha: %s",
+                    mean_luma,
+                    filename,
+                )
         except Exception:
             pass
         try:
-            img = ImageEnhance.Sharpness(img).enhance(1.28)
+            img = ImageOps.autocontrast(img, cutoff=0)
+        except Exception:
+            pass
+        try:
+            img = ImageEnhance.Contrast(img).enhance(1.08)
+        except Exception:
+            pass
+        try:
+            img = ImageEnhance.Sharpness(img).enhance(1.12)
         except Exception:
             pass
         try:
             img = img.filter(
-                ImageFilter.UnsharpMask(radius=1.5, percent=120, threshold=2)
+                ImageFilter.UnsharpMask(radius=1.2, percent=95, threshold=3)
             )
         except Exception:
             pass
@@ -2279,9 +2343,9 @@ REFERENCIA DE CALENDARIO (solo coherencia; no inventes fechas que no estén en e
 
 TAREA: Lee la imagen o PDF adjunto y extrae SOLO lo que aparezca con claridad en el comprobante para rellenar un formulario de "Infopagos" con estos campos:
   - fecha_pago: fecha de la operación en el comprobante. Devuélvela como cadena en formato **YYYY-MM-DD** si puedes inferir año/mes/día; si solo hay día/mes sin año razonable, deja fecha_pago vacía "".
-  - institucion_financiera: nombre corto del banco o entidad (ej. BNC, Mercantil, Banesco, BDV, BINANCE, Pago Móvil). Máximo 100 caracteres.
+  - institucion_financiera: nombre corto del banco o entidad. **Obligatorio** si reconoces una plantilla conocida (ver bloque PLANTILLAS). Valores preferidos: **Mercantil**, **BNC**, **Banco de Venezuela**, **BINANCE**, **Recibos** (ventanilla sin banco claro). Máximo 100 caracteres. No dejes vacío si el diseño del comprobante coincide con Mercantil (0105/RAPI), BNC (0191/cajero BNC), BDV (0102), Binance Pay, etc.
   - numero_operacion: número o código que identifica la transacción (Serial, Ref, Nº operación, referencia, código, ID de orden en Binance, etc.). Sin etiquetas largas: solo el valor. Máximo 100 caracteres.
-  - monto: número decimal con punto como separador decimal (ej. 150.25). Si hay varios montos, el del pago principal al beneficiario. Si no es legible, usa null.
+  - monto: importe **exacto** del pago principal (Total, Monto Bs., Monto USD, Efectivo). En JSON usa **solo número decimal con punto** (sin separadores de miles): impreso `1.500,00` → `1500.00`; `150,50` → `150.50`; `US$ 20,00` → `20.00`. No redondees ni cambies cifras. Si no es legible, `null`.
   - moneda: exactamente **BS** o **USD** (USDT, $ en contexto divisa fuerte, "Dólares", Binance Pay en USDT → USD).
   - cedula_pagador_en_comprobante: secuencia numérica del **depositante** (no la del deudor del contexto). Si en el comprobante aparece claramente la línea/casilla del depositante, devuélvela **solo con dígitos** (sin letra V/E/J/G ni puntos de miles). Mercantil (misma lógica visual que formato **A** del clasificador del sistema): casillas **DP:V-/DP:E-/DP:J-**, **Cédula Dep.**, **Nro. de Cédula de Identidad del Depositante**, bloques RECAUDACIÓN / DEPÓSITO DIVISAS con cuenta 0105. BNC (misma lógica que formato **B**): línea **DP:V-/E-/J-** + dígitos en recibo cajero BNC. No inventes dígitos; si la línea no es legible o hay duda, "". El backend validador concatena prefijos V/E/J/G con esos dígitos (6–11 cifras); si tras quitar no-dígitos no quedan entre 6 y 11 cifras, deja "".
   - notas: una frase corta opcional sobre calidad de lectura o ambigüedades (máx 300 caracteres); puede ser "".
@@ -2289,7 +2353,7 @@ TAREA: Lee la imagen o PDF adjunto y extrae SOLO lo que aparezca con claridad en
 REGLAS:
   - No inventes datos: si un campo no está legible, usa "" o null según el tipo.
   - No copies el correo ni datos que no estén en el comprobante.
-  - FECHA OBLIGATORIA DESDE IMAGEN/PDF: `fecha_pago` debe salir del propio comprobante (línea Fecha, Fecha/Hora, fecha del bloque de transacción).
+  - FECHA OBLIGATORIA DESDE IMAGEN/PDF: `fecha_pago` debe ser la fecha **impresa** en el comprobante (Fechar, Fecha/Hora, sello de operación). Devuélvela en **YYYY-MM-DD** copiando día, mes y **año de 4 cifras** tal como aparecen (si el papel muestra 2025, no uses 2026). Usa {fecha_hoy_iso} solo para descartar fechas futuras imposibles, **no** para inventar el día.
   - Prohibido usar fecha del correo, asunto, metadata del archivo, nombre del archivo o contexto externo para `fecha_pago`.
   - Si hay dos fechas en el comprobante (ej. sello y fecha transacción), prioriza la fecha del bloque principal de la operación/transferencia.
   - FORMATO VENEZOLANO / AMBIGÜEDAD: en boletos y apps locales casi siempre verás **día/mes/año** (o día-mes-año). Si ves **6 dígitos seguidos sin separadores** (ej. 191226), no asumas YYMMDD si con ello la operación quedaría **años incoherentes** respecto a otras fechas visibles del mismo boleto (sello, vigencia, año impreso, texto “202x”) o **en el futuro** respecto a {fecha_hoy_iso}. En ese caso prefiere la lectura **DDMMYY** (día/mes/año de dos dígitos) cuando encaje con el resto del comprobante; si sigue habiendo duda razonable, devuelve `fecha_pago` "" y explica en `notas`.
@@ -2299,6 +2363,101 @@ REGLAS:
   fecha_pago, institucion_financiera, numero_operacion, monto, moneda, cedula_pagador_en_comprobante, notas
   - SALIDA OBLIGATORIA: solo el objeto JSON; ningún párrafo ni razonamiento antes ni después. Sin fences markdown ni texto extra.
 """
+
+# Siempre se añade al escáner: clasificación visual → institucion_financiera (sin elegir banco a mano).
+GEMINI_ESCANER_PLANTILLAS_AUTO_BLOQUE = """
+PLANTILLAS CONOCIDAS (misma lógica que clasificación Gmail A/B/C/D; **obligatorio** rellenar `institucion_financiera`):
+  - **Mercantil** → formato **A**: DEPÓSITO DIVISAS, RECAUDACIÓN, cuenta **0105**, RAPI-CREDIT, logo/texto Mercantil, tira validador Mercantil.
+  - **BNC** → formato **B**: recibo cajero **BNC**, cuenta **0191**, línea RAPI, logo BNC, bloque Depósito US$.
+  - **Banco de Venezuela** → formato **D**: **0102**, SECUENCIAL, Total Efectivo/Depósito, logo BDV.
+  - **BINANCE** → formato **C**: Binance Pay, USDT, Id de orden / Pay ID.
+  - **Recibos** → ventanilla genérica sin logo de banco identificable (solo texto Recibo/ventanilla).
+  - Otros bancos (Banesco, Bancamiga, Tesoro, Pago Móvil): nombre corto tal como aparece en el comprobante.
+REGLA: Si clasificas la imagen en A/B/C/D o reconoces Mercantil/BNC/BDV/Binance por diseño, **`institucion_financiera` no puede quedar vacía**. En `notas` puedes indicar la plantilla (ej. "plantilla A Mercantil") si ayuda.
+"""
+
+
+_INSTITUCION_ESCANER_CANONICAL: List[Tuple[str, str]] = [
+    ("binance", "BINANCE"),
+    ("bnc", "BNC"),
+    ("banco de venezuela", "Banco de Venezuela"),
+    ("bdv", "Banco de Venezuela"),
+    ("mercantil", "Mercantil"),
+    ("recibo", "Recibos"),
+]
+
+
+def _canonical_institucion_escaner(nombre: Optional[str]) -> str:
+    """Alinea texto Gemini/plantilla con valores del formulario Infopagos."""
+    t = (nombre or "").strip()
+    if not t:
+        return ""
+    low = t.lower()
+    for needle, canon in _INSTITUCION_ESCANER_CANONICAL:
+        if needle in low:
+            return canon
+    return t[:100]
+
+
+def _inferir_institucion_heuristica_escaner(texto: str) -> str:
+    """
+    Respaldo si Gemini dejó institucion_financiera vacía: inferir desde notas/texto
+    usando los mismos marcadores visuales que las plantillas Gmail (A/B/C/D).
+    """
+    low = (texto or "").lower()
+    if not low.strip():
+        return ""
+    if "plantilla a" in low or "formato a" in low:
+        return "Mercantil"
+    if "plantilla b" in low or "formato b" in low:
+        return "BNC"
+    if "plantilla c" in low or "formato c" in low or "binance pay" in low:
+        return "BINANCE"
+    if "plantilla d" in low or "formato d" in low:
+        return "Banco de Venezuela"
+    if "banco de venezuela" in low or re.search(r"\b0102\b", low) or re.search(r"\bbdv\b", low):
+        return "Banco de Venezuela"
+    if (
+        "mercantil" in low
+        or "0105" in low
+        or "rapi-credit" in low
+        or "deposito divisas" in low
+        or "depósito divisas" in low
+        or "recaudaci" in low
+    ):
+        return "Mercantil"
+    if re.search(r"\b0191\b", low) or (
+        ("bnc" in low or "bnv" in low) and "venezuela" not in low
+    ):
+        return "BNC"
+    if "binance" in low or "usdt" in low:
+        return "BINANCE"
+    if "recibo" in low or "ventanilla" in low:
+        return "Recibos"
+    return ""
+
+
+def _resolver_institucion_escaner(
+    institucion_gemini: Optional[str],
+    institucion_plantilla: Optional[str] = None,
+    notas: Optional[str] = None,
+    numero_operacion: Optional[str] = None,
+) -> str:
+    """
+    1) Texto explícito de Gemini (normalizado).
+    2) Heurística sobre notas / número (plantilla A/B, 0105, 0191, etc.).
+    3) Solo si el operador envió institucion_plantilla (re-escaneo manual opcional).
+    """
+    inst = _canonical_institucion_escaner(institucion_gemini)
+    if inst:
+        return inst
+    ctx_heur = f"{notas or ''} {numero_operacion or ''}"
+    inst = _inferir_institucion_heuristica_escaner(ctx_heur)
+    if inst:
+        if not (institucion_gemini or "").strip():
+            logger.info("[ESCANER] institucion_financiera inferida por plantilla/heuristica: %s", inst)
+        return inst
+    return _canonical_institucion_escaner(institucion_plantilla)
 
 
 def _extra_prompt_plantilla_escaner(institucion_plantilla: str) -> str:
@@ -2345,9 +2504,11 @@ def _extra_prompt_plantilla_escaner(institucion_plantilla: str) -> str:
         chunks.append(
             f"El operador indicó emisor «{t[:80]}»: aplique patrones habituales de ese banco sin inventar datos."
         )
+    canon = _canonical_institucion_escaner(t) or t[:80]
     return (
         "\n\nPLANTILLA / EMISOR INDICADO POR EL USUARIO (solo guía; todo debe basarse en la imagen):\n"
         + "\n".join(f"- {c}" for c in chunks)
+        + f"\n- Si el nombre del banco no es legible en la imagen, use en `institucion_financiera` exactamente: «{canon}»."
     )
 
 
@@ -2357,11 +2518,13 @@ def _parse_monto_escaner(val: Any) -> Optional[float]:
     if isinstance(val, (int, float)):
         if isinstance(val, float) and (val != val or val == float("inf")):  # NaN / inf
             return None
-        return float(val)
-    s = str(val).strip().replace(" ", "").replace("Bs.", "").replace("Bs", "").replace("USD", "").replace("US$", "").replace("$", "")
+        return round(float(val), 2)
+    s = str(val).strip()
+    s = re.sub(r"(?i)\b(bs\.?|usd|us\$|\$)\b", "", s)
+    s = s.replace(" ", "")
     if not s or s.lower() in ("na", "n/a", "-"):
         return None
-    # Formato latino 1.234,56
+    # Formato latino 1.234,56 o 150,50
     if "," in s and "." in s:
         if s.rfind(",") > s.rfind("."):
             s = s.replace(".", "").replace(",", ".")
@@ -2369,10 +2532,20 @@ def _parse_monto_escaner(val: Any) -> Optional[float]:
             s = s.replace(",", "")
     elif "," in s:
         parts = s.split(",")
-        if len(parts) == 2 and len(parts[1]) <= 2:
+        if len(parts) == 2 and len(parts[1]) <= 2 and parts[0].replace(".", "").isdigit():
             s = parts[0].replace(".", "") + "." + parts[1]
         else:
             s = s.replace(",", ".")
+    elif "." in s:
+        parts = s.split(".")
+        if len(parts) > 1 and all(p.isdigit() for p in parts):
+            if len(parts[-1]) == 3:
+                # 1.500 / 15.000.250 → miles con punto
+                s = "".join(parts)
+            elif len(parts) == 2 and len(parts[1]) <= 2:
+                s = parts[0] + "." + parts[1]
+            else:
+                s = "".join(parts)
     try:
         n = float(s)
         if n != n or n == float("inf"):
@@ -2382,7 +2555,60 @@ def _parse_monto_escaner(val: Any) -> Optional[float]:
         return None
 
 
-def _parse_fecha_escaner(val: Any) -> Optional[date]:
+def _year_from_two_digits(yy: int) -> int:
+    return 2000 + yy if yy < 70 else 1900 + yy
+
+
+def _fecha_escaner_plausible(f: date, ref_hoy: date) -> bool:
+    if f > ref_hoy:
+        return False
+    if f.year < ref_hoy.year - 4:
+        return False
+    return True
+
+
+def _pick_fecha_escaner_candidata(candidates: List[Optional[date]], ref_hoy: date) -> Optional[date]:
+    valid = [c for c in candidates if c is not None and _fecha_escaner_plausible(c, ref_hoy)]
+    if not valid:
+        return None
+    return min(valid, key=lambda d: abs((ref_hoy - d).days))
+
+
+def _parse_fecha_dmy_parts(d: int, mo: int, y: int, ref_hoy: date) -> Optional[date]:
+    opts: List[Optional[date]] = []
+    try:
+        opts.append(date(y, mo, d))
+    except ValueError:
+        pass
+    if d != mo and d <= 12 and mo <= 12:
+        try:
+            opts.append(date(y, d, mo))
+        except ValueError:
+            pass
+    return _pick_fecha_escaner_candidata(opts, ref_hoy)
+
+
+def _parse_fecha_compacta_6(digits: str, ref_hoy: date) -> Optional[date]:
+    if len(digits) != 6 or not digits.isdigit():
+        return None
+    dd, mm, yy = int(digits[0:2]), int(digits[2:4]), int(digits[4:6])
+    cand_ddmmyy = _parse_fecha_dmy_parts(dd, mm, _year_from_two_digits(yy), ref_hoy)
+    yy2, mo2, d2 = int(digits[0:2]), int(digits[2:4]), int(digits[4:6])
+    cand_yymmdd: Optional[date] = None
+    try:
+        cand_yymmdd = date(_year_from_two_digits(yy2), mo2, d2)
+    except ValueError:
+        cand_yymmdd = None
+    if cand_yymmdd and not _fecha_escaner_plausible(cand_yymmdd, ref_hoy):
+        cand_yymmdd = None
+    return _pick_fecha_escaner_candidata([cand_ddmmyy, cand_yymmdd], ref_hoy)
+
+
+def _parse_fecha_escaner(val: Any, ref_hoy: Optional[date] = None) -> Optional[date]:
+    if ref_hoy is None:
+        from app.services.tasa_cambio_service import fecha_hoy_caracas
+
+        ref_hoy = fecha_hoy_caracas()
     if val is None:
         return None
     s = str(val).strip()
@@ -2396,26 +2622,67 @@ def _parse_fecha_escaner(val: Any) -> Optional[date]:
     try:
         if len(s10) >= 10 and s10[4] in "-/" and s10[7] in "-/" and s10[4] == s10[7]:
             y, m, d = int(s10[0:4]), int(s10[5:7]), int(s10[8:10])
-            return date(y, m, d)
+            parsed = _parse_fecha_dmy_parts(d, m, y, ref_hoy)
+            if parsed:
+                return parsed
     except (ValueError, TypeError):
         pass
     # dd/mm/yyyy o dd-mm-yyyy (año 4 cifras al final)
     m = re.match(r"^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$", s)
     if m:
-        try:
-            d, mo, y = int(m.group(1)), int(m.group(2)), int(m.group(3))
-            return date(y, mo, d)
-        except ValueError:
-            return None
-    # dd.mm.yy o dd/mm/yy (año 2 cifras): heurística 20xx si yy < 70, si no 19xx
+        parsed = _parse_fecha_dmy_parts(
+            int(m.group(1)), int(m.group(2)), int(m.group(3)), ref_hoy
+        )
+        if parsed:
+            return parsed
+    # dd.mm.yy o dd/mm/yy (año 2 cifras)
     m2 = re.match(r"^(\d{1,2})[/.-](\d{1,2})[/.-](\d{2})$", s)
     if m2:
-        try:
-            d, mo, yy = int(m2.group(1)), int(m2.group(2)), int(m2.group(3))
-            y = 2000 + yy if yy < 70 else 1900 + yy
-            return date(y, mo, d)
-        except ValueError:
-            return None
+        parsed = _parse_fecha_dmy_parts(
+            int(m2.group(1)),
+            int(m2.group(2)),
+            _year_from_two_digits(int(m2.group(3))),
+            ref_hoy,
+        )
+        if parsed:
+            return parsed
+    # 6 dígitos compactos (191226 → 19/12/26)
+    digits_only = re.sub(r"\D", "", s)
+    if len(digits_only) == 6:
+        parsed = _parse_fecha_compacta_6(digits_only, ref_hoy)
+        if parsed:
+            return parsed
+    return None
+
+
+def _parse_fecha_escaner_desde_gemini(val: Any, ref_hoy: Optional[date] = None) -> Optional[date]:
+    """Valida fecha del JSON Gemini; si el parseo estricto falla, reintenta sobre el texto crudo."""
+    if ref_hoy is None:
+        from app.services.tasa_cambio_service import fecha_hoy_caracas
+
+        ref_hoy = fecha_hoy_caracas()
+    parsed = _parse_fecha_escaner(val, ref_hoy)
+    if parsed is not None:
+        return parsed
+    if val is None:
+        return None
+    s = str(val).strip()
+    if not s:
+        return None
+    m_iso = re.search(r"(\d{4})-(\d{2})-(\d{2})", s)
+    if m_iso:
+        parsed = _parse_fecha_dmy_parts(
+            int(m_iso.group(3)), int(m_iso.group(2)), int(m_iso.group(1)), ref_hoy
+        )
+        if parsed:
+            return parsed
+    m_lat = re.search(r"(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})", s)
+    if m_lat:
+        parsed = _parse_fecha_dmy_parts(
+            int(m_lat.group(1)), int(m_lat.group(2)), int(m_lat.group(3)), ref_hoy
+        )
+        if parsed:
+            return parsed
     return None
 
 
@@ -2451,9 +2718,11 @@ def extract_infopagos_campos_desde_comprobante(
     from app.services.tasa_cambio_service import fecha_hoy_caracas
 
     hoy_iso = fecha_hoy_caracas().isoformat()
+    ref_hoy = fecha_hoy_caracas()
     prompt = (
         GEMINI_ESCANER_INFOPAGOS_PROMPT.replace("{cedula_deudor}", ctx)
         .replace("{fecha_hoy_iso}", hoy_iso)
+        + GEMINI_ESCANER_PLANTILLAS_AUTO_BLOQUE
     )
     extra_plantilla = _extra_prompt_plantilla_escaner(
         (institucion_plantilla or "").strip()
@@ -2470,7 +2739,7 @@ def extract_infopagos_campos_desde_comprobante(
         client = _gemini_client(key)
         # Escáner: recorte de márgenes, escala heurística, contraste/nitidez y tope de tamaño (PDF intacto).
         image_part = _build_image_part_escaner_infopagos(
-            image_bytes, filename, mime, max_long_edge=2400
+            image_bytes, filename, mime
         )
         _max_gemini_attempts = max(GEMINI_RATE_LIMIT_MAX_RETRIES, GEMINI_SERVER_ERROR_MAX_RETRIES) + 1
         last_error: Optional[Exception] = None
@@ -2524,10 +2793,23 @@ def extract_infopagos_campos_desde_comprobante(
                 else:
                     mon_norm = "BS"
 
-                inst = str(data.get("institucion_financiera") or "").strip()[:100]
+                notas = str(data.get("notas") or "").strip()[:300]
                 num_op = str(data.get("numero_operacion") or "").strip()[:100]
-                fecha = _parse_fecha_escaner(data.get("fecha_pago"))
+
+                inst = _resolver_institucion_escaner(
+                    str(data.get("institucion_financiera") or "").strip(),
+                    institucion_plantilla,
+                    notas,
+                    num_op,
+                )
+                fecha = _parse_fecha_escaner_desde_gemini(data.get("fecha_pago"), ref_hoy)
                 monto = _parse_monto_escaner(data.get("monto"))
+                if data.get("fecha_pago") and fecha is None:
+                    logger.info(
+                        "[ESCANER] fecha_pago descartada (ilegible/futura/lejana): raw=%r ref=%s",
+                        str(data.get("fecha_pago"))[:40],
+                        ref_hoy.isoformat(),
+                    )
                 ced_raw = str(data.get("cedula_pagador_en_comprobante") or "").strip()
                 # Solo dígitos; alineado con validate_cedula (6–11 cifras numéricas tras prefijo en BD).
                 ced_digits = re.sub(r"\D", "", ced_raw)

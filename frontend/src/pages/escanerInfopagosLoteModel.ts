@@ -134,6 +134,27 @@ export function mapColision(
   }
 }
 
+export function resolverInstitucionDesdeExtraccion(
+  geminiInst: string,
+  prevInst: string,
+  prevOtro: string
+): { institucion: string; otroInstitucion: string } {
+  const inst =
+    (geminiInst || '').trim() ||
+    (prevInst || '').trim() ||
+    (prevOtro || '').trim()
+  const enLista = INSTITUCIONES_FINANCIERAS.includes(
+    inst as (typeof INSTITUCIONES_FINANCIERAS)[number]
+  )
+  if (!inst) {
+    return { institucion: '', otroInstitucion: '' }
+  }
+  if (enLista) {
+    return { institucion: inst, otroInstitucion: '' }
+  }
+  return { institucion: inst, otroInstitucion: inst }
+}
+
 export function filaTrasExtraccion(
   base: FilaLote,
   res: EscanerInfopagosExtraerResponse
@@ -149,10 +170,10 @@ export function filaTrasExtraccion(
   const s = res.sugerencia
   const fechaExtraida = (s.fecha_pago || '').trim()
   const tieneFechaDetectada = Boolean(fechaExtraida)
-  const hoy = fechaLocalHoyISO()
-  const inst = (s.institucion_financiera || '').trim()
-  const enLista = INSTITUCIONES_FINANCIERAS.includes(
-    inst as (typeof INSTITUCIONES_FINANCIERAS)[number]
+  const { institucion, otroInstitucion } = resolverInstitucionDesdeExtraccion(
+    s.institucion_financiera || '',
+    base.institucion,
+    base.otroInstitucion
   )
   const mon = s.moneda === 'BS' ? 'BS' : 'USD'
   let montoStr = ''
@@ -167,12 +188,12 @@ export function filaTrasExtraccion(
     ...base,
     extract: 'listo',
     errorExtraccion: undefined,
-    fechaPago: tieneFechaDetectada ? fechaExtraida : hoy,
+    fechaPago: tieneFechaDetectada ? fechaExtraida : '',
     fechaDetectada: tieneFechaDetectada ? fechaExtraida : '',
     confirmaFechaDetectada: tieneFechaDetectada ? 'si' : null,
     confirmaFechaManual: !tieneFechaDetectada,
-    institucion: enLista ? inst : inst,
-    otroInstitucion: enLista ? '' : inst,
+    institucion,
+    otroInstitucion,
     numeroOperacion: s.numero_operacion || '',
     montoStr,
     moneda: mon,

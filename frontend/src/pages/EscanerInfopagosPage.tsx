@@ -40,7 +40,10 @@ import {
   normalizarFuenteTasaCambio,
   type FuenteTasaCambio,
 } from '../constants/fuenteTasaCambio'
-import { fechaLocalHoyISO } from './escanerInfopagosLoteModel'
+import {
+  fechaLocalHoyISO,
+  resolverInstitucionDesdeExtraccion,
+} from './escanerInfopagosLoteModel'
 import { searchParamsRevisionPagosDesdeNumeroDocumento } from '../utils/linkRevisionPagosDesdeEscaner'
 
 type Fase = 'cedula' | 'imagen' | 'formulario' | 'exito'
@@ -480,22 +483,17 @@ export default function EscanerInfopagosPage() {
         setFechaPago(fechaExtraida)
         setFechaDetectada(fechaExtraida)
       } else {
-        const hoy = fechaLocalHoyISO()
-        setFechaPago(hoy)
+        setFechaPago('')
         setFechaDetectada('')
       }
-      const inst = (s.institucion_financiera || '').trim()
-      if (
-        INSTITUCIONES_FINANCIERAS.includes(
-          inst as (typeof INSTITUCIONES_FINANCIERAS)[number]
+      const { institucion: inst, otroInstitucion: otroInst } =
+        resolverInstitucionDesdeExtraccion(
+          s.institucion_financiera || '',
+          '',
+          ''
         )
-      ) {
-        setInstitucion(inst)
-        setOtroInstitucion('')
-      } else {
-        setInstitucion(inst)
-        setOtroInstitucion(inst)
-      }
+      setInstitucion(inst)
+      setOtroInstitucion(otroInst)
       setNumeroOperacion(s.numero_operacion || '')
       setMoneda(s.moneda === 'BS' ? 'BS' : 'USD')
       if (s.monto != null && Number.isFinite(s.monto)) {
