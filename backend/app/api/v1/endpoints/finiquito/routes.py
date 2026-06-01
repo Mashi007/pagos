@@ -1359,17 +1359,24 @@ def finiquito_admin_conciliacion_visto_iniciar(
     db: Session = Depends(get_db),
     panel_user: UserResponse = Depends(require_admin_or_operator),
 ):
-    """Primer Visto: reserva pagos con comprobante en BD temporal (antes de pasos manuales)."""
-    r = iniciar_visto_reserva(db, caso_id)
-    if not r.get("ok"):
-        return FiniquitoConciliacionVistoIniciarResponse(
-            ok=False, error=str(r.get("error") or "Error")
-        )
-    db.commit()
+    """Primer Visto: reserva comprobantes en temporal y luego borra todos los pagos del prestamo."""
+    try:
+        r = iniciar_visto_reserva(db, caso_id)
+        if not r.get("ok"):
+            db.rollback()
+            return FiniquitoConciliacionVistoIniciarResponse(
+                ok=False, error=str(r.get("error") or "Error")
+            )
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        logger.exception("visto-iniciar caso_id=%s: %s", caso_id, e)
+        raise HTTPException(status_code=500, detail=str(e)[:300]) from e
     return FiniquitoConciliacionVistoIniciarResponse(
         ok=True,
         ya_iniciado=bool(r.get("ya_iniciado")),
         reservas=int(r.get("reservas") or 0),
+        pagos_eliminados=r.get("pagos_eliminados"),
         mensaje=str(r.get("mensaje") or ""),
     )
 

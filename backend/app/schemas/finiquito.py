@@ -221,6 +221,7 @@ class FiniquitoConciliacionVistoIniciarResponse(BaseModel):
     error: Optional[str] = None
     ya_iniciado: Optional[bool] = None
     reservas: Optional[int] = None
+    pagos_eliminados: Optional[int] = None
     mensaje: Optional[str] = None
 
 

@@ -3234,8 +3234,8 @@ export function EditarRevisionManual() {
                     Conciliacion finiquito (Visto)
                   </CardTitle>
                   <p className="text-sm text-amber-900/90">
-                    Pasos manuales: ajustar datos, borrar todos los pagos del
-                    credito, conciliar en{' '}
+                    Tras el primer Visto el sistema ya reservo comprobantes y
+                    borro los pagos del credito. Siga con conciliacion en{' '}
                     <Link
                       to="/pagos/notificaciones/general"
                       className="font-medium underline"

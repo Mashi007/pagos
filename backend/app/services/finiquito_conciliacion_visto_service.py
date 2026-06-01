@@ -25,6 +25,7 @@ from app.utils.cedula_almacenamiento import CedulaPagoFkError, asegurar_cedula_p
 from app.services.cuota_estado import TZ_NEGOCIO
 from app.services.pago_huella_funcional import conflicto_huella_para_creacion
 from app.services.pago_registro_moneda import resolver_monto_registro_pago
+from app.services.pagos_cuotas_reaplicacion import eliminar_todos_pagos_prestamo
 from app.services.pagos.migracion_comprobante_drive_a_bd import (
     descargar_archivo_drive_con_api,
     descargar_archivo_drive_uc_export,
@@ -172,11 +173,28 @@ def iniciar_visto_reserva(db: Session, caso_id: int) -> Dict[str, Any]:
             )
         )
     db.flush()
+
+    # Reserva persistida en la misma transaccion antes de borrar pagos (excepcion LIQUIDADO).
+    del_res = eliminar_todos_pagos_prestamo(db, int(caso.prestamo_id))
+    if not del_res.get("ok"):
+        return {
+            "ok": False,
+            "error": (
+                del_res.get("error")
+                or "No se pudieron eliminar los pagos del prestamo tras la reserva."
+            ),
+        }
+
+    n_del = int(del_res.get("pagos_eliminados") or 0)
     return {
         "ok": True,
         "ya_iniciado": False,
         "reservas": len(con_img),
-        "mensaje": f"Reservados {len(con_img)} pago(s) con comprobante.",
+        "pagos_eliminados": n_del,
+        "mensaje": (
+            f"Reservados {len(con_img)} comprobante(s) en temporal; "
+            f"eliminados {n_del} pago(s) del prestamo."
+        ),
     }
 
 

@@ -153,6 +153,7 @@ export async function finiquitoAdminVistoIniciar(casoId: number) {
     error?: string
     ya_iniciado?: boolean
     reservas?: number
+    pagos_eliminados?: number
     mensaje?: string
   }>(`${BASE}/admin/casos/${casoId}/conciliacion/visto-iniciar`, undefined, {
     timeout: 120000,
