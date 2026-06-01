@@ -54,6 +54,24 @@ def _tiene_comprobante(p: Pago) -> bool:
     return False
 
 
+def _reserva_tiene_imagen_guardada(reserva: FiniquitoConciliacionReserva) -> bool:
+    data = reserva.comprobante_imagen_data
+    return bool(data) and len(data) > 0
+
+
+def _bytes_y_nombre_ocr_desde_reserva(
+    reserva: FiniquitoConciliacionReserva,
+) -> Tuple[Optional[bytes], str, str]:
+    """
+    Solo bytes persistidos en la reserva (flujo Visto).
+    No re-lee Drive ni pago_comprobante_imagen en recrear-ocr.
+    """
+    if not _reserva_tiene_imagen_guardada(reserva):
+        return None, "", "sin_imagen_guardada_en_reserva"
+    fn = (reserva.comprobante_nombre_archivo or "comprobante.jpg").strip() or "comprobante.jpg"
+    return bytes(reserva.comprobante_imagen_data), fn, ""
+
+
 def caso_tiene_reserva_activa(db: Session, caso_id: int) -> bool:
     n = int(
         db.scalar(
@@ -160,8 +178,28 @@ def iniciar_visto_reserva(db: Session, caso_id: int) -> Dict[str, Any]:
         }
 
     orden = 0
+    omitidos_sin_bytes: List[str] = []
     for p in con_img:
+        body, filename, err_bytes = cargar_bytes_comprobante(
+            db,
+            link_comprobante=p.link_comprobante,
+            documento_ruta=p.documento_ruta,
+        )
+        if not body:
+            ref = (p.numero_documento or p.referencia_pago or str(p.id or "")).strip()
+            omitidos_sin_bytes.append(ref or f"pago_id={p.id}")
+            logger.warning(
+                "visto reserva: no se guardo comprobante pago_id=%s prestamo_id=%s: %s",
+                p.id,
+                caso.prestamo_id,
+                err_bytes or "sin_bytes",
+            )
+            continue
         orden += 1
+        ct = mime_efectivo_comprobante_web(
+            "",
+            (filename or "comprobante.jpg").strip() or "comprobante.jpg",
+        )
         db.add(
             FiniquitoConciliacionReserva(
                 caso_id=caso.id,
@@ -176,6 +214,9 @@ def iniciar_visto_reserva(db: Session, caso_id: int) -> Dict[str, Any]:
                 institucion_bancaria=p.institucion_bancaria,
                 link_comprobante=p.link_comprobante,
                 documento_ruta=p.documento_ruta,
+                comprobante_imagen_data=body,
+                comprobante_content_type=(ct or "image/jpeg")[:80],
+                comprobante_nombre_archivo=(filename or "comprobante.jpg")[:255],
                 moneda_registro=p.moneda_registro,
                 monto_bs_original=p.monto_bs_original,
                 tasa_cambio_bs_usd=p.tasa_cambio_bs_usd,
@@ -183,6 +224,22 @@ def iniciar_visto_reserva(db: Session, caso_id: int) -> Dict[str, Any]:
                 notas=p.notas,
             )
         )
+
+    if orden == 0:
+        det = (
+            f" ({len(omitidos_sin_bytes)} con link pero sin poder guardar imagen)"
+            if omitidos_sin_bytes
+            else ""
+        )
+        return {
+            "ok": False,
+            "error": (
+                "No se pudo guardar ningun comprobante en la reserva temporal"
+                + det
+                + ". Revise BD/Drive antes de Visto."
+            ),
+        }
+
     db.flush()
 
     # Reserva persistida en la misma transaccion antes de borrar pagos (excepcion LIQUIDADO).
@@ -197,15 +254,18 @@ def iniciar_visto_reserva(db: Session, caso_id: int) -> Dict[str, Any]:
         }
 
     n_del = int(del_res.get("pagos_eliminados") or 0)
+    msg = (
+        f"Guardados {orden} comprobante(s) en reserva (imagen en BD temporal); "
+        f"eliminados {n_del} pago(s) del prestamo."
+    )
+    if omitidos_sin_bytes:
+        msg += f" Omitidos sin imagen guardada: {len(omitidos_sin_bytes)}."
     return {
         "ok": True,
         "ya_iniciado": False,
-        "reservas": len(con_img),
+        "reservas": orden,
         "pagos_eliminados": n_del,
-        "mensaje": (
-            f"Reservados {len(con_img)} comprobante(s) en temporal; "
-            f"eliminados {n_del} pago(s) del prestamo."
-        ),
+        "mensaje": msg,
     }
 
 
@@ -398,19 +458,19 @@ async def _ocr_fila_reserva(
             "pago_id": reserva.pago_id_recriado,
         }
 
-    body, filename, err_bytes = cargar_bytes_comprobante(
-        db,
-        link_comprobante=reserva.link_comprobante,
-        documento_ruta=reserva.documento_ruta,
-    )
+    body, filename, err_bytes = _bytes_y_nombre_ocr_desde_reserva(reserva)
     if not body:
         reserva.ocr_ok = False
-        reserva.ocr_error = (err_bytes or "sin_imagen")[:2000]
+        reserva.ocr_error = (err_bytes or "sin_imagen_guardada")[:2000]
         return {
             "reserva_id": reserva.id,
             "ok": False,
-            "error": err_bytes or "No se pudo cargar comprobante",
+            "error": (
+                "Sin imagen guardada en reserva Visto; "
+                "inicie Visto de nuevo para guardar el comprobante."
+            ),
             "pago_id": pago.id if pago else None,
+            "ocr_omitido": True,
         }
 
     ctx_ced = normalizar_cedula_almacenamiento(
@@ -483,9 +543,23 @@ async def recrear_pagos_y_ocr_lote(
         .all()
     )
 
+    filas_con_imagen = [r for r in filas if _reserva_tiene_imagen_guardada(r)]
+    sin_imagen = len(filas) - len(filas_con_imagen)
+
     detalle: List[Dict[str, Any]] = []
     ok_n = 0
     for reserva in filas:
+        if not _reserva_tiene_imagen_guardada(reserva):
+            detalle.append(
+                {
+                    "reserva_id": reserva.id,
+                    "ok": False,
+                    "error": "sin_imagen_guardada_en_reserva",
+                    "pago_id": reserva.pago_id_recriado,
+                    "ocr_omitido": True,
+                }
+            )
+            continue
         item = await _ocr_fila_reserva(db, reserva, caso, usuario_registro)
         detalle.append(item)
         if item.get("ok"):
@@ -493,11 +567,15 @@ async def recrear_pagos_y_ocr_lote(
 
     return {
         "ok": ok_n > 0,
-        "total": len(filas),
+        "total": len(filas_con_imagen),
         "ocr_ok": ok_n,
-        "ocr_fallidos": len(filas) - ok_n,
+        "ocr_fallidos": len(filas_con_imagen) - ok_n,
+        "ocr_omitidos_sin_imagen_guardada": sin_imagen,
         "detalle": detalle,
-        "mensaje": f"OCR completado: {ok_n}/{len(filas)}.",
+        "mensaje": (
+            f"OCR (solo imagenes guardadas en Visto): {ok_n}/{len(filas_con_imagen)}."
+            + (f" {sin_imagen} fila(s) sin imagen en reserva." if sin_imagen else "")
+        ),
     }
 
 

@@ -3234,16 +3234,18 @@ export function EditarRevisionManual() {
                     Conciliacion finiquito (Visto)
                   </CardTitle>
                   <p className="text-sm text-amber-900/90">
-                    Tras el primer Visto el sistema ya reservo comprobantes y
-                    borro los pagos del credito. Siga con conciliacion en{' '}
+                    Tras el primer Visto el sistema guardo la imagen de cada
+                    comprobante en la reserva temporal y borro los pagos del
+                    credito. Siga con conciliacion en{' '}
                     <Link
                       to="/pagos/notificaciones/general"
                       className="font-medium underline"
                     >
                       notificaciones general
                     </Link>
-                    . Luego recree pagos desde la reserva temporal y aplique
-                    cascada. Al terminar use la X en el area de revision de
+                    . Luego use el boton de abajo: recrea pagos y aplica OCR
+                    Gemini solo sobre esas imagenes guardadas; despues cascada.
+                    Al terminar use la X en el area de revision de
                     finiquitos para pasar a area de trabajo.
                   </p>
                 </CardHeader>
@@ -3278,7 +3280,7 @@ export function EditarRevisionManual() {
                     ) : (
                       <RefreshCw className="mr-2 h-4 w-4" />
                     )}
-                    Recrear pagos y OCR (lote)
+                    Recrear pagos y OCR (reserva guardada)
                   </Button>
                 </CardContent>
               </Card>

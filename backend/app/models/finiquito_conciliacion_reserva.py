@@ -6,6 +6,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Integer,
+    LargeBinary,
     Numeric,
     String,
     Text,
@@ -19,6 +20,7 @@ from app.core.database import Base
 class FiniquitoConciliacionReserva(Base):
     """
     Snapshot de pagos con comprobante antes de borrar pagos del prestamo.
+    Incluye bytes del comprobante para re-OCR sin volver a Drive/BD externa.
     Se elimina al pasar el caso a EN_PROCESO (Visto final o X).
     """
 
@@ -48,6 +50,9 @@ class FiniquitoConciliacionReserva(Base):
     institucion_bancaria = Column(String(255), nullable=True)
     link_comprobante = Column(Text, nullable=True)
     documento_ruta = Column(String(255), nullable=True)
+    comprobante_imagen_data = Column(LargeBinary, nullable=True)
+    comprobante_content_type = Column(String(80), nullable=True)
+    comprobante_nombre_archivo = Column(String(255), nullable=True)
     moneda_registro = Column(String(10), nullable=True)
     monto_bs_original = Column(Numeric(15, 2), nullable=True)
     tasa_cambio_bs_usd = Column(Numeric(15, 6), nullable=True)
