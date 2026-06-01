@@ -120,6 +120,16 @@ def refrescar_finiquito_caso_prestamo_si_aplica(db: Session, prestamo_id: int) -
     now = datetime.utcnow()
 
     if not row:
+        from app.services.finiquito_conciliacion_visto_service import (
+            prestamo_tiene_reserva_finiquito_activa,
+        )
+
+        if prestamo_tiene_reserva_finiquito_activa(db, pid):
+            return {
+                "prestamo_id": pid,
+                "accion": "omitido_conciliacion_visto",
+                "filas_borradas": 0,
+            }
         deleted = eliminar_finiquito_casos_por_prestamo(db, pid)
         out: dict[str, Any] = {
             "prestamo_id": pid,
@@ -245,12 +255,18 @@ def ejecutar_refresh_finiquito_casos(db: Session) -> dict[str, Any]:
         else:
             insertados += 1
 
+    from app.services.finiquito_conciliacion_visto_service import (
+        prestamo_ids_conciliacion_visto_protegidos,
+    )
+
+    protegidos_visto = prestamo_ids_conciliacion_visto_protegidos(db)
     pids_borrar = [
         int(r[0])
         for r in db.query(FiniquitoCaso.prestamo_id)
         .filter(~FiniquitoCaso.prestamo_id.in_(qualifying_ids))
         .distinct()
         .all()
+        if int(r[0]) not in protegidos_visto
     ]
     limpiar_estado_gestion_finiquito_prestamos(db, pids_borrar)
     eliminados = (

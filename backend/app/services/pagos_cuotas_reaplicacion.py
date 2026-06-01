@@ -193,8 +193,6 @@ def eliminar_todos_pagos_prestamo(db: Session, prestamo_id: int) -> dict[str, An
 
     Solo préstamos en estado APROBADO (alineado con el flujo «reemplazar pagos» en UI).
     """
-    from app.api.v1.endpoints.pagos import _marcar_prestamo_liquidado_si_corresponde
-
     prestamo = db.get(Prestamo, prestamo_id)
     if not prestamo:
         return {"ok": False, "error": "Prestamo no encontrado", "prestamo_id": prestamo_id}
@@ -224,7 +222,7 @@ def eliminar_todos_pagos_prestamo(db: Session, prestamo_id: int) -> dict[str, An
         pagos_con_errores_eliminados = _eliminar_pagos_con_errores_reemplazo_prestamo(
             db, prestamo_id, prestamo.cedula
         )
-        _marcar_prestamo_liquidado_si_corresponde(prestamo_id, db)
+        _marcar_liquidado_tras_eliminar_pagos(db, prestamo_id)
         return {
             "ok": True,
             "prestamo_id": prestamo_id,
@@ -273,7 +271,7 @@ def eliminar_todos_pagos_prestamo(db: Session, prestamo_id: int) -> dict[str, An
         db, prestamo_id, prestamo.cedula
     )
 
-    _marcar_prestamo_liquidado_si_corresponde(prestamo_id, db)
+    _marcar_liquidado_tras_eliminar_pagos(db, prestamo_id)
 
     return {
         "ok": True,
@@ -282,6 +280,27 @@ def eliminar_todos_pagos_prestamo(db: Session, prestamo_id: int) -> dict[str, An
         "cuota_pagos_eliminadas": cuota_pagos_eliminadas,
         "pagos_con_errores_eliminados": pagos_con_errores_eliminados,
     }
+
+
+def _marcar_liquidado_tras_eliminar_pagos(db: Session, prestamo_id: int) -> None:
+    """
+    Tras borrar pagos, recalcula LIQUIDADO/APROBADO.
+    Si hay conciliacion Visto activa (reserva temporal), no tocar: evita borrar finiquito_casos.
+    """
+    from app.services.finiquito_conciliacion_visto_service import (
+        prestamo_tiene_reserva_finiquito_activa,
+    )
+
+    if prestamo_tiene_reserva_finiquito_activa(db, prestamo_id):
+        logger.info(
+            "eliminar_todos_pagos: omitido recalculo liquidado/finiquito prestamo_id=%s "
+            "(conciliacion Visto activa)",
+            prestamo_id,
+        )
+        return
+    from app.api.v1.endpoints.pagos import _marcar_prestamo_liquidado_si_corresponde
+
+    _marcar_prestamo_liquidado_si_corresponde(prestamo_id, db)
 
 
 def _eliminar_pagos_con_errores_reemplazo_prestamo(

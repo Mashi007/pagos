@@ -83,6 +83,17 @@ def prestamo_tiene_reserva_finiquito_activa(db: Session, prestamo_id: int) -> bo
     return n > 0
 
 
+def prestamo_ids_conciliacion_visto_protegidos(db: Session) -> set[int]:
+    """Prestamos con reserva temporal en flujo Visto (no borrar finiquito_casos al refrescar)."""
+    rows = db.execute(
+        select(FiniquitoConciliacionReserva.prestamo_id)
+        .join(FiniquitoCaso, FiniquitoCaso.id == FiniquitoConciliacionReserva.caso_id)
+        .where(FiniquitoCaso.estado == "ACEPTADO")
+        .distinct()
+    ).all()
+    return {int(r[0]) for r in rows if r[0] is not None}
+
+
 def purgar_reserva_conciliacion_caso(db: Session, caso_id: int) -> int:
     r = db.execute(
         delete(FiniquitoConciliacionReserva).where(
