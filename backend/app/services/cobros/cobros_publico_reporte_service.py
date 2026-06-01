@@ -362,15 +362,41 @@ def validate_file_magic(content: bytes, content_type: str) -> bool:
     return False
 
 
+def _max_secuencial_referencia_dia(db: Session, hoy_str: str) -> int:
+    """Maximo XXXXX ya persistido en pagos_reportados para RPC-{hoy_str}-XXXXX."""
+    prefix = f"RPC-{hoy_str}-%"
+    row = db.execute(
+        text(
+            """
+            SELECT COALESCE(MAX(CAST(SUBSTRING(referencia_interna FROM 14 FOR 5) AS INTEGER)), 0)
+            FROM pagos_reportados
+            WHERE referencia_interna LIKE :prefix
+            """
+        ),
+        {"prefix": prefix},
+    ).scalar_one()
+    return int(row or 0)
+
+
 def generar_referencia_interna(db: Session) -> str:
-    """Formato RPC-YYYYMMDD-XXXXX con XXXXX secuencial del dia (atomico por tabla)."""
+    """
+    Formato RPC-YYYYMMDD-XXXXX con XXXXX secuencial del dia (America/Caracas).
+
+    La secuencia en BD se alinea con MAX(pagos_reportados) en cada llamada para
+    tolerar rollback tras UniqueViolation y evitar desfase UTC vs Caracas.
+    """
+    hoy = fecha_hoy_caracas()
+    hoy_str = hoy.strftime("%Y%m%d")
+    hoy_iso = hoy.isoformat()
+    max_existente = _max_secuencial_referencia_dia(db, hoy_str)
+
     try:
         db.execute(
             text(
                 """
             CREATE TABLE IF NOT EXISTS secuencia_referencia_cobros (
                 fecha DATE PRIMARY KEY,
-                siguiente INTEGER NOT NULL DEFAULT 1
+                siguiente INTEGER NOT NULL DEFAULT 0
             )
         """
             )
@@ -383,30 +409,40 @@ def generar_referencia_interna(db: Session) -> str:
             text(
                 """
             INSERT INTO secuencia_referencia_cobros (fecha, siguiente)
-            SELECT CURRENT_DATE, COALESCE((
-                SELECT MAX(CAST(SUBSTRING(referencia_interna FROM 14 FOR 5) AS INTEGER))
-                FROM pagos_reportados
-                WHERE referencia_interna LIKE 'RPC-' || TO_CHAR(CURRENT_DATE, 'YYYYMMDD') || '-%'
-            ), 0)
+            VALUES (:fecha, :max_existente)
             ON CONFLICT (fecha) DO NOTHING
         """
-            )
+            ),
+            {"fecha": hoy_iso, "max_existente": max_existente},
         )
+        db.execute(
+            text(
+                """
+            UPDATE secuencia_referencia_cobros
+            SET siguiente = CASE
+                WHEN siguiente >= :max_existente THEN siguiente
+                ELSE :max_existente
+            END
+            WHERE fecha = :fecha
+        """
+            ),
+            {"fecha": hoy_iso, "max_existente": max_existente},
+        )
+        row = db.execute(
+            text(
+                """
+            UPDATE secuencia_referencia_cobros
+            SET siguiente = siguiente + 1
+            WHERE fecha = :fecha
+            RETURNING siguiente
+        """
+            ),
+            {"fecha": hoy_iso},
+        ).scalar_one()
     except Exception:
         db.rollback()
         raise
-    row = db.execute(
-        text(
-            """
-        INSERT INTO secuencia_referencia_cobros (fecha, siguiente)
-        VALUES (CURRENT_DATE, 1)
-        ON CONFLICT (fecha) DO UPDATE SET siguiente = secuencia_referencia_cobros.siguiente + 1
-        RETURNING siguiente
-    """
-        )
-    ).scalar_one()
-    hoy = fecha_hoy_caracas().strftime("%Y%m%d")
-    return f"RPC-{hoy}-{row:05d}"
+    return f"RPC-{hoy_str}-{int(row):05d}"
 
 
 def validar_adjunto_comprobante_bytes(
@@ -553,7 +589,7 @@ def crear_pago_reportado_con_referencia_o_retry(
     comprobante_imagen_id_existente: Optional[str] = None,
 ) -> Tuple[Optional[PagoReportado], Optional[str], Optional[str]]:
     """
-    Intenta hasta 2 veces ante colisión de referencia_interna.
+    Intenta hasta 4 veces ante colisión de referencia_interna.
 
     Returns:
         (pr, referencia, error) — si error, pr y referencia son None.

@@ -202,3 +202,41 @@ class TestReferenciaDisplay:
 
     def test_vacio_es_guion(self):
         assert cpr.referencia_display("  ") == "-"
+
+
+class TestGenerarReferenciaInterna:
+    def test_formato_referencia(self):
+        from unittest.mock import MagicMock
+
+        from app.services.tasa_cambio_service import fecha_hoy_caracas
+
+        db = MagicMock()
+        db.execute.side_effect = [
+            MagicMock(scalar_one=lambda: 0),  # max existente
+            MagicMock(),  # create table
+            MagicMock(),  # insert seed
+            MagicMock(),  # resync update
+            MagicMock(scalar_one=lambda: 1),  # increment returning
+        ]
+        ref = cpr.generar_referencia_interna(db)
+        assert ref.startswith("RPC-")
+        assert ref.endswith("-00001")
+        hoy = fecha_hoy_caracas().strftime("%Y%m%d")
+        assert ref == f"RPC-{hoy}-00001"
+
+    def test_salta_secuencial_tras_max_existente(self):
+        from unittest.mock import MagicMock
+
+        from app.services.tasa_cambio_service import fecha_hoy_caracas
+
+        db = MagicMock()
+        db.execute.side_effect = [
+            MagicMock(scalar_one=lambda: 1),  # ya existe 00001
+            MagicMock(),
+            MagicMock(),
+            MagicMock(),
+            MagicMock(scalar_one=lambda: 2),
+        ]
+        ref = cpr.generar_referencia_interna(db)
+        hoy = fecha_hoy_caracas().strftime("%Y%m%d")
+        assert ref == f"RPC-{hoy}-00002"
