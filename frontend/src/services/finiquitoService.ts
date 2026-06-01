@@ -27,6 +27,8 @@ export type FiniquitoCasoItem = {
   fecha_entrada_en_proceso?: string | null
   /** ISO datetime: ultimo paso a ACEPTADO (area de revision). */
   fecha_entrada_aceptado?: string | null
+  /** Reserva temporal activa (flujo Visto conciliacion). */
+  conciliacion_visto_activa?: boolean | null
 }
 
 export type FiniquitoRevisionDatosResponse = {
@@ -143,6 +145,48 @@ export async function finiquitoAdminEliminarCaso(casoId: number) {
   return apiClient.delete<{ ok: boolean; error?: string }>(
     `${BASE}/admin/casos/${casoId}`
   )
+}
+
+export async function finiquitoAdminVistoIniciar(casoId: number) {
+  return apiClient.post<{
+    ok: boolean
+    error?: string
+    ya_iniciado?: boolean
+    reservas?: number
+    mensaje?: string
+  }>(`${BASE}/admin/casos/${casoId}/conciliacion/visto-iniciar`, undefined, {
+    timeout: 120000,
+  })
+}
+
+export async function finiquitoAdminRecrearOcr(casoId: number) {
+  return apiClient.post<{
+    ok: boolean
+    error?: string
+    total?: number
+    ocr_ok?: number
+    ocr_fallidos?: number
+    mensaje?: string
+    detalle?: Array<{
+      reserva_id: number
+      ok: boolean
+      error?: string
+      pago_id?: number
+    }>
+  }>(`${BASE}/admin/casos/${casoId}/conciliacion/recrear-ocr`, undefined, {
+    timeout: 300000,
+  })
+}
+
+export async function finiquitoAdminPasarATrabajo(casoId: number) {
+  return apiClient.post<{
+    ok: boolean
+    error?: string
+    caso?: FiniquitoCasoItem
+    reservas_eliminadas?: number
+  }>(`${BASE}/admin/casos/${casoId}/pasar-a-trabajo`, undefined, {
+    timeout: 120000,
+  })
 }
 
 export async function finiquitoAdminPatchEstado(

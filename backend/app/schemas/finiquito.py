@@ -85,6 +85,10 @@ class FiniquitoCasoOut(BaseModel):
             "Desde historial: ultima vez que el caso paso a ACEPTADO (area de revision), ISO datetime."
         ),
     )
+    conciliacion_visto_activa: Optional[bool] = Field(
+        default=None,
+        description="True si hay reserva temporal de comprobantes (flujo Visto en curso).",
+    )
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -210,3 +214,35 @@ class FiniquitoTerminadosSemanaOut(BaseModel):
 class FiniquitoTerminadosResumenSemanalResponse(BaseModel):
     semanas: List[FiniquitoTerminadosSemanaOut]
     total_terminados: int = Field(..., ge=0)
+
+
+class FiniquitoConciliacionVistoIniciarResponse(BaseModel):
+    ok: bool
+    error: Optional[str] = None
+    ya_iniciado: Optional[bool] = None
+    reservas: Optional[int] = None
+    mensaje: Optional[str] = None
+
+
+class FiniquitoConciliacionRecrearOcrItem(BaseModel):
+    reserva_id: int
+    ok: bool
+    error: Optional[str] = None
+    pago_id: Optional[int] = None
+
+
+class FiniquitoConciliacionRecrearOcrResponse(BaseModel):
+    ok: bool
+    error: Optional[str] = None
+    total: Optional[int] = None
+    ocr_ok: Optional[int] = None
+    ocr_fallidos: Optional[int] = None
+    mensaje: Optional[str] = None
+    detalle: Optional[List[FiniquitoConciliacionRecrearOcrItem]] = None
+
+
+class FiniquitoConciliacionPasarATrabajoResponse(BaseModel):
+    ok: bool
+    error: Optional[str] = None
+    caso: Optional[FiniquitoCasoOut] = None
+    reservas_eliminadas: Optional[int] = None

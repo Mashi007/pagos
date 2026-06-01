@@ -9,7 +9,7 @@ import {
 
 import { flushSync } from 'react-dom'
 
-import { useParams, useNavigate, useLocation } from 'react-router-dom'
+import { useParams, useNavigate, useLocation, Link } from 'react-router-dom'
 
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
 
@@ -72,6 +72,7 @@ import { toast } from 'sonner'
 import { formatDate } from '../utils'
 
 import { revisionManualService } from '../services/revisionManualService'
+import { finiquitoAdminRecrearOcr } from '../services/finiquitoService'
 
 import {
   pagoService,
@@ -180,6 +181,15 @@ export function EditarRevisionManual() {
   const vieneDesdeFiniquitos =
     returnToRevision === RUTA_RETORNO_FINIQUITOS_GESTION ||
     Boolean(returnToRevision?.startsWith(`${RUTA_RETORNO_FINIQUITOS_GESTION}?`))
+
+  const finiquitoCasoId = useMemo(() => {
+    const raw = (location.state as { finiquitoCasoId?: unknown } | null)
+      ?.finiquitoCasoId
+    const n = typeof raw === 'number' ? raw : parseInt(String(raw ?? ''), 10)
+    return Number.isFinite(n) && n > 0 ? n : null
+  }, [location.state])
+
+  const [recreandoOcrFiniquito, setRecreandoOcrFiniquito] = useState(false)
 
   const irAListaPrestamos = () => {
     const scrollPosition = window.scrollY
@@ -3216,6 +3226,63 @@ export function EditarRevisionManual() {
                 </div>
               </CardContent>
             </Card>
+
+            {finiquitoCasoId != null ? (
+              <Card className="border-amber-200 bg-amber-50/80">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base text-amber-950">
+                    Conciliacion finiquito (Visto)
+                  </CardTitle>
+                  <p className="text-sm text-amber-900/90">
+                    Pasos manuales: ajustar datos, borrar todos los pagos del
+                    credito, conciliar en{' '}
+                    <Link
+                      to="/pagos/notificaciones/general"
+                      className="font-medium underline"
+                    >
+                      notificaciones general
+                    </Link>
+                    . Luego recree pagos desde la reserva temporal y aplique
+                    cascada. Al terminar use Visto o X en el area de revision
+                    de finiquitos.
+                  </p>
+                </CardHeader>
+                <CardContent className="flex flex-wrap gap-2 pt-0">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    disabled={soloLectura || recreandoOcrFiniquito}
+                    onClick={async () => {
+                      setRecreandoOcrFiniquito(true)
+                      try {
+                        const r = await finiquitoAdminRecrearOcr(finiquitoCasoId)
+                        if (!r.ok) {
+                          toast.error(r.error || 'No se pudo recrear pagos / OCR')
+                          return
+                        }
+                        toast.success(
+                          r.mensaje ||
+                            `OCR: ${r.ocr_ok ?? 0}/${r.total ?? 0} comprobante(s)`
+                        )
+                        await refrescarTrasCambioPagosRevision()
+                      } catch (err: unknown) {
+                        toast.error(getErrorMessage(err))
+                      } finally {
+                        setRecreandoOcrFiniquito(false)
+                      }
+                    }}
+                  >
+                    {recreandoOcrFiniquito ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <RefreshCw className="mr-2 h-4 w-4" />
+                    )}
+                    Recrear pagos y OCR (lote)
+                  </Button>
+                </CardContent>
+              </Card>
+            ) : null}
 
             {/* Pagos reales en tabla pagos (mismo origen que carga masiva / módulo Pagos) */}
             {cedulaParaPagosRealizados ? (

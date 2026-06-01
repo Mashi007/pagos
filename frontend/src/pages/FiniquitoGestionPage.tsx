@@ -57,8 +57,10 @@ import {
   finiquitoAdminEliminarCaso,
   finiquitoAdminListar,
   finiquitoAdminListarTerminados,
+  finiquitoAdminPasarATrabajo,
   finiquitoAdminPatchEstado,
   finiquitoAdminRefreshMaterializado,
+  finiquitoAdminVistoIniciar,
   finiquitoAdminResumenEstado,
   finiquitoAdminResumenTerminadosSemanal,
   type FiniquitoRefreshStats,
@@ -874,10 +876,57 @@ function FiniquitoGestionPageInner() {
   const casoTieneAccionPendiente = (casoId: number) =>
     pendingEstadoCasoId === casoId
 
-  const abrirRevisionManualPrestamo = (prestamoId: number) => {
+  const abrirRevisionManualPrestamo = (
+    prestamoId: number,
+    finiquitoCasoId?: number
+  ) => {
     navigate(`/revision-manual/editar/${prestamoId}`, {
-      state: { returnTo: `${location.pathname}${location.search}` },
+      state: {
+        returnTo: `${location.pathname}${location.search}`,
+        finiquitoCasoId: finiquitoCasoId ?? undefined,
+      },
     })
+  }
+
+  const pasarATrabajo = async (casoId: number) => {
+    if (pendingEstadoCasoId != null) return
+    setPendingEstadoCasoId(casoId)
+    try {
+      const r = await finiquitoAdminPasarATrabajo(casoId)
+      if (!r.ok) {
+        toast.error(r.error || 'No se pudo pasar a area de trabajo')
+        return
+      }
+      if (r.caso) {
+        incorporarCasoActualizado(r.caso)
+      }
+      toast.success('Caso en area de trabajo')
+      void invalidatePrestamosQueries(queryClient)
+      await cargarListas({ silent: true })
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'Error')
+    } finally {
+      setPendingEstadoCasoId(null)
+    }
+  }
+
+  const vistoIniciarConciliacion = async (row: FiniquitoCasoItem) => {
+    if (pendingEstadoCasoId != null) return
+    setPendingEstadoCasoId(row.id)
+    try {
+      const r = await finiquitoAdminVistoIniciar(row.id)
+      if (!r.ok) {
+        toast.error(r.error || 'No se pudo iniciar Visto')
+        return
+      }
+      toast.success(r.mensaje || 'Reserva de comprobantes creada')
+      await cargarListas({ silent: true })
+      abrirRevisionManualPrestamo(row.prestamo_id, row.id)
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'Error')
+    } finally {
+      setPendingEstadoCasoId(null)
+    }
   }
 
   const botonesFilaOperativos = (row: FiniquitoCasoItem) => (
@@ -889,7 +938,12 @@ function FiniquitoGestionPageInner() {
         className="h-8 w-8 border-slate-300"
         title="Revision manual del prestamo"
         aria-label={`Revision manual del prestamo ${row.prestamo_id}`}
-        onClick={() => abrirRevisionManualPrestamo(row.prestamo_id)}
+        onClick={() =>
+          abrirRevisionManualPrestamo(
+            row.prestamo_id,
+            row.estado === 'ACEPTADO' ? row.id : undefined
+          )
+        }
       >
         <Eye className="h-4 w-4" aria-hidden />
       </Button>
@@ -959,30 +1013,45 @@ function FiniquitoGestionPageInner() {
     </div>
   )
 
-  const renderAccionesAreaRevision = (row: FiniquitoCasoItem) => (
-    <div className="flex flex-wrap items-center justify-end gap-2">
-      {botonesFilaOperativos(row)}
-      <Button
-        type="button"
-        size="sm"
-        className="h-8 bg-emerald-700 text-xs hover:bg-emerald-800"
-        disabled={casoTieneAccionPendiente(row.id)}
-        onClick={() => void cambiarEstado(row.id, 'EN_PROCESO')}
-      >
-        Pasar a area de trabajo
-      </Button>
-      <Button
-        type="button"
-        size="sm"
-        variant="outline"
-        className="h-8 border-slate-300 text-xs"
-        disabled={casoTieneAccionPendiente(row.id)}
-        onClick={() => void cambiarEstado(row.id, 'REVISION')}
-      >
-        Volver a bandeja
-      </Button>
-    </div>
-  )
+  const renderAccionesAreaRevision = (row: FiniquitoCasoItem) => {
+    const vistoActivo = Boolean(row.conciliacion_visto_activa)
+    return (
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        {botonesFilaOperativos(row)}
+        <Button
+          type="button"
+          size="sm"
+          className="h-8 gap-1 bg-emerald-700 text-xs hover:bg-emerald-800"
+          disabled={casoTieneAccionPendiente(row.id)}
+          title={
+            vistoActivo
+              ? 'Cerrar conciliacion y pasar a area de trabajo'
+              : 'Iniciar conciliacion (reserva comprobantes)'
+          }
+          onClick={() =>
+            void (vistoActivo
+              ? pasarATrabajo(row.id)
+              : vistoIniciarConciliacion(row))
+          }
+        >
+          <CheckCircle2 className="h-3.5 w-3.5" aria-hidden />
+          Visto
+        </Button>
+        <Button
+          type="button"
+          size="icon"
+          variant="outline"
+          className="h-8 w-8 border-slate-300"
+          title="Pasar a area de trabajo sin cerrar conciliacion"
+          aria-label={`Pasar caso ${row.id} a area de trabajo`}
+          disabled={casoTieneAccionPendiente(row.id)}
+          onClick={() => void pasarATrabajo(row.id)}
+        >
+          <X className="h-4 w-4" aria-hidden />
+        </Button>
+      </div>
+    )
+  }
 
   const renderAccionesAreaTrabajo = (row: FiniquitoCasoItem) => (
     <div className="flex flex-wrap items-center justify-end gap-2">

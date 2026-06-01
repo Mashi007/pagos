@@ -53,6 +53,7 @@ from app.models.finiquito import (
     FiniquitoLoginCodigo,
     FiniquitoUsuarioAcceso,
 )
+from app.models.finiquito_conciliacion_reserva import FiniquitoConciliacionReserva
 from app.models.cobranza import (
     CobranzaAcuerdo,
     CobranzaCaso,
@@ -124,6 +125,7 @@ __all__ = [
     "FiniquitoEstadoHistorial",
     "FiniquitoLoginCodigo",
     "FiniquitoUsuarioAcceso",
+    "FiniquitoConciliacionReserva",
     "CobranzaCaso",
     "CobranzaImagen",
     "CobranzaAcuerdo",

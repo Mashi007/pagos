@@ -43,6 +43,10 @@ from app.models.prestamo import Prestamo
 from app.schemas.auth import UserResponse
 from app.schemas.finiquito import (
     FiniquitoAdminResumenEstadoResponse,
+    FiniquitoConciliacionPasarATrabajoResponse,
+    FiniquitoConciliacionRecrearOcrItem,
+    FiniquitoConciliacionRecrearOcrResponse,
+    FiniquitoConciliacionVistoIniciarResponse,
     FiniquitoConteoRevisionNuevosResponse,
     FiniquitoCasoListaResponse,
     FiniquitoCasoOut,
@@ -60,6 +64,12 @@ from app.schemas.finiquito import (
     FiniquitoSolicitarCodigoResponse,
     FiniquitoVerificarCodigoRequest,
     FiniquitoVerificarCodigoResponse,
+)
+from app.services.finiquito_conciliacion_visto_service import (
+    iniciar_visto_reserva,
+    map_conciliacion_visto_activa_por_caso,
+    purgar_reserva_conciliacion_caso,
+    recrear_pagos_y_ocr_lote,
 )
 from app.services.finiquito_prestamo_gestion_sync import (
     limpiar_estado_gestion_finiquito_prestamos,
@@ -407,6 +417,7 @@ def _admin_casos_to_items(db: Session, casos: List[FiniquitoCaso]) -> List[Finiq
         db, [c.id for c in casos], "ACEPTADO"
     )
     clmap = _map_clientes_por_id(db, [c.cliente_id for c in casos if c.cliente_id])
+    visto_map = map_conciliacion_visto_activa_por_caso(db, [c.id for c in casos])
     items: List[FiniquitoCasoOut] = []
     for c in casos:
         base = _caso_to_out(
@@ -417,6 +428,7 @@ def _admin_casos_to_items(db: Session, casos: List[FiniquitoCaso]) -> List[Finiq
             fecha_liquidado=fmap.get(c.prestamo_id),
             fecha_entrada_en_proceso=fepmap.get(c.id),
             fecha_entrada_aceptado=famap.get(c.id),
+            conciliacion_visto_activa=visto_map.get(c.id, False),
         )
         cl = clmap.get(int(c.cliente_id)) if c.cliente_id else None
         items.append(
@@ -440,6 +452,7 @@ def _caso_to_out(
     fecha_liquidado: Optional[Any] = None,
     fecha_entrada_en_proceso: Optional[Any] = None,
     fecha_entrada_aceptado: Optional[Any] = None,
+    conciliacion_visto_activa: Optional[bool] = None,
 ) -> FiniquitoCasoOut:
     ufp: Optional[str] = None
     if ultima_fecha_pago is not None:
@@ -493,6 +506,7 @@ def _caso_to_out(
         creado_en=creado_iso,
         fecha_entrada_en_proceso=fep,
         fecha_entrada_aceptado=fea,
+        conciliacion_visto_activa=conciliacion_visto_activa,
     )
 
 
@@ -1294,6 +1308,168 @@ def finiquito_admin_eliminar_caso(
     return FiniquitoEliminarCasoResponse(ok=True)
 
 
+def _usuario_registro_panel(panel_user: UserResponse) -> str:
+    return (
+        (getattr(panel_user, "email", None) or getattr(panel_user, "username", None) or "admin")
+    )[:255]
+
+
+def _admin_pasar_caso_a_en_proceso(
+    db: Session,
+    caso: FiniquitoCaso,
+    panel_user: UserResponse,
+    *,
+    estado_anterior: str,
+) -> Tuple[FiniquitoCasoOut, int]:
+    """Transicion ACEPTADO -> EN_PROCESO y purga reserva temporal."""
+    purgadas = purgar_reserva_conciliacion_caso(db, caso.id)
+    caso.estado = "EN_PROCESO"
+    if finiquito_casos_has_contacto_para_siguientes(db):
+        caso.contacto_para_siguientes = None
+    _registrar_historial(
+        db,
+        caso=caso,
+        estado_anterior=estado_anterior,
+        estado_nuevo="EN_PROCESO",
+        actor_tipo="admin",
+        user_id=panel_user.id,
+    )
+    if finiquito_has_area_trabajo_auditoria_table(db):
+        _registrar_auditoria_area_trabajo(
+            db,
+            caso_id=caso.id,
+            accion="EN_PROCESO",
+            estado_anterior=estado_anterior,
+            estado_nuevo="EN_PROCESO",
+            contacto_para_siguientes=None,
+            user_id=panel_user.id,
+        )
+    sincronizar_prestamo_estado_gestion_finiquito(db, caso.prestamo_id, caso.estado)
+    db.commit()
+    db.refresh(caso)
+    return _admin_casos_to_items(db, [caso])[0], purgadas
+
+
+@router.post(
+    "/admin/casos/{caso_id}/conciliacion/visto-iniciar",
+    response_model=FiniquitoConciliacionVistoIniciarResponse,
+)
+def finiquito_admin_conciliacion_visto_iniciar(
+    caso_id: int,
+    db: Session = Depends(get_db),
+    panel_user: UserResponse = Depends(require_admin_or_operator),
+):
+    """Primer Visto: reserva pagos con comprobante en BD temporal (antes de pasos manuales)."""
+    r = iniciar_visto_reserva(db, caso_id)
+    if not r.get("ok"):
+        return FiniquitoConciliacionVistoIniciarResponse(
+            ok=False, error=str(r.get("error") or "Error")
+        )
+    db.commit()
+    return FiniquitoConciliacionVistoIniciarResponse(
+        ok=True,
+        ya_iniciado=bool(r.get("ya_iniciado")),
+        reservas=int(r.get("reservas") or 0),
+        mensaje=str(r.get("mensaje") or ""),
+    )
+
+
+@router.post(
+    "/admin/casos/{caso_id}/conciliacion/recrear-ocr",
+    response_model=FiniquitoConciliacionRecrearOcrResponse,
+)
+async def finiquito_admin_conciliacion_recrear_ocr(
+    caso_id: int,
+    db: Session = Depends(get_db),
+    panel_user: UserResponse = Depends(require_admin_or_operator),
+):
+    """Paso 4: recrea pagos desde reserva y OCR en lote (motor Gmail/Gemini)."""
+    usuario = _usuario_registro_panel(panel_user)
+    try:
+        r = await recrear_pagos_y_ocr_lote(db, caso_id, usuario)
+        if not r.get("ok") and r.get("error"):
+            db.rollback()
+            return FiniquitoConciliacionRecrearOcrResponse(
+                ok=False, error=str(r.get("error"))
+            )
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        logger.exception("recrear-ocr finiquito caso_id=%s: %s", caso_id, e)
+        raise HTTPException(status_code=500, detail=str(e)[:300]) from e
+
+    detalle_raw = r.get("detalle") or []
+    detalle = [
+        FiniquitoConciliacionRecrearOcrItem(
+            reserva_id=int(d.get("reserva_id") or 0),
+            ok=bool(d.get("ok")),
+            error=d.get("error"),
+            pago_id=d.get("pago_id"),
+        )
+        for d in detalle_raw
+    ]
+    return FiniquitoConciliacionRecrearOcrResponse(
+        ok=bool(r.get("ok")),
+        total=r.get("total"),
+        ocr_ok=r.get("ocr_ok"),
+        ocr_fallidos=r.get("ocr_fallidos"),
+        mensaje=r.get("mensaje"),
+        detalle=detalle,
+    )
+
+
+@router.post(
+    "/admin/casos/{caso_id}/pasar-a-trabajo",
+    response_model=FiniquitoConciliacionPasarATrabajoResponse,
+)
+def finiquito_admin_pasar_a_trabajo(
+    caso_id: int,
+    db: Session = Depends(get_db),
+    panel_user: UserResponse = Depends(require_admin_or_operator),
+):
+    """
+    X o Visto final: pasa a EN_PROCESO y elimina reserva temporal (no borra Drive).
+  """
+    caso = db.query(FiniquitoCaso).filter(FiniquitoCaso.id == caso_id).first()
+    if not caso:
+        raise HTTPException(status_code=404, detail="Caso no encontrado")
+    anterior = (caso.estado or "").upper().strip()
+    if anterior == "EN_PROCESO":
+        purgadas = purgar_reserva_conciliacion_caso(db, caso.id)
+        db.commit()
+        caso_out = _admin_casos_to_items(db, [caso])[0]
+        return FiniquitoConciliacionPasarATrabajoResponse(
+            ok=True,
+            caso=caso_out,
+            reservas_eliminadas=purgadas,
+        )
+    if anterior != "ACEPTADO":
+        return FiniquitoConciliacionPasarATrabajoResponse(
+            ok=False,
+            error="Solo desde area de revision (ACEPTADO) o ya en area de trabajo.",
+        )
+    if not finiquito_casos_has_contacto_para_siguientes(db):
+        return FiniquitoConciliacionPasarATrabajoResponse(
+            ok=False,
+            error=(
+                "Aplique la migracion de finiquito area de trabajo en la base de datos."
+            ),
+        )
+    try:
+        caso_out, purgadas = _admin_pasar_caso_a_en_proceso(
+            db, caso, panel_user, estado_anterior=anterior
+        )
+    except Exception as e:
+        db.rollback()
+        logger.exception("pasar-a-trabajo caso_id=%s: %s", caso_id, e)
+        raise HTTPException(status_code=500, detail=str(e)[:300]) from e
+    return FiniquitoConciliacionPasarATrabajoResponse(
+        ok=True,
+        caso=caso_out,
+        reservas_eliminadas=purgadas,
+    )
+
+
 @router.patch("/admin/casos/{caso_id}/estado", response_model=FiniquitoPatchEstadoResponse)
 def finiquito_admin_patch_estado(
     caso_id: int,
@@ -1389,6 +1565,7 @@ def finiquito_admin_patch_estado(
                 ok=False,
                 error="En proceso solo desde el area de revision (caso validado).",
             )
+        purgar_reserva_conciliacion_caso(db, caso.id)
 
     caso.estado = nuevo
     if finiquito_casos_has_contacto_para_siguientes(db):

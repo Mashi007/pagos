@@ -201,12 +201,20 @@ def eliminar_todos_pagos_prestamo(db: Session, prestamo_id: int) -> dict[str, An
 
     est = (prestamo.estado or "").strip().upper()
     if est != "APROBADO":
-        return {
-            "ok": False,
-            "error": "Solo se pueden reemplazar pagos en préstamos en estado APROBADO.",
-            "prestamo_id": prestamo_id,
-            "estado_actual": prestamo.estado,
-        }
+        from app.services.finiquito_conciliacion_visto_service import (
+            prestamo_tiene_reserva_finiquito_activa,
+        )
+
+        if not prestamo_tiene_reserva_finiquito_activa(db, prestamo_id):
+            return {
+                "ok": False,
+                "error": (
+                    "Solo se pueden reemplazar pagos en préstamos APROBADO, "
+                    "o en finiquito con reserva Visto activa (area de revision)."
+                ),
+                "prestamo_id": prestamo_id,
+                "estado_actual": prestamo.estado,
+            }
 
     n_pagos_antes = int(
         db.scalar(select(func.count()).select_from(Pago).where(Pago.prestamo_id == prestamo_id)) or 0
