@@ -5,32 +5,10 @@ del backend compartan los mismos límites por IP. Si no hay Redis, se usa
 el diccionario en memoria (comportamiento por proceso).
 """
 import logging
-import time
-from typing import Optional
+
+from app.core.redis_client import get_redis_client
 
 logger = logging.getLogger(__name__)
-
-_redis_client: Optional["Redis"] = None
-
-
-def get_redis_client():  # noqa: ANN201
-    """Devuelve cliente Redis si REDIS_URL está configurada y la conexión funciona."""
-    global _redis_client
-    if _redis_client is not None:
-        return _redis_client
-    try:
-        from app.core.config import settings
-        if not (getattr(settings, "REDIS_URL", None) or "").strip():
-            return None
-        import redis
-        client = redis.from_url(settings.REDIS_URL, decode_responses=True)
-        client.ping()
-        _redis_client = client
-        logger.info("Rate limit: usando Redis para límites distribuidos.")
-        return _redis_client
-    except Exception as e:
-        logger.debug("Rate limit: Redis no disponible (%s), usando memoria.", e)
-        return None
 
 
 def check_rate_limit_redis(
@@ -48,6 +26,7 @@ def check_rate_limit_redis(
     Retorna False si no hay cliente Redis (el caller debe usar fallback en memoria).
     """
     from fastapi import HTTPException
+
     client = get_redis_client()
     if not client:
         return False

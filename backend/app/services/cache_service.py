@@ -24,17 +24,19 @@ MEMORY_CACHE: Dict[str, tuple] = {}  # {key: (value, expiry_time)}
 
 class CacheService:
     """Servicio de caché con Redis fallback a memoria."""
-    
+
     def __init__(self, redis_url: Optional[str] = None):
         self.redis_client = None
         self.use_redis = False
-        
+
         if REDIS_AVAILABLE and redis_url:
             try:
-                self.redis_client = redis.from_url(redis_url)
-                self.redis_client.ping()
-                self.use_redis = True
-                logger.info("✅ Redis conectado para caché")
+                from app.core.redis_client import get_redis_client
+
+                client = get_redis_client()
+                if client is not None:
+                    self.redis_client = client
+                    self.use_redis = True
             except Exception as e:
                 logger.warning("Redis no disponible, usando caché en memoria: %s", e)
                 self.use_redis = False

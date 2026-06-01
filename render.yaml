@@ -44,6 +44,12 @@
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.0
+      # URL interna Valkey (misma región). No usar External URL ni abrir ipAllowList salvo dev local.
+      - key: REDIS_URL
+        fromService:
+          name: pagos-redis
+          type: keyvalue
+          property: connectionString
     # NOTA: Las variables de entorno sensibles (WHATSAPP_ACCESS_TOKEN, etc.)
     # deben configurarse manualmente en Render Dashboard por seguridad
 
