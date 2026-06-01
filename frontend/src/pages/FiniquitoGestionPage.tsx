@@ -18,8 +18,10 @@ import {
   Eye,
   Loader2,
   Lock,
+  Pencil,
   RefreshCw,
   Search,
+  Trash2,
   X,
   XCircle,
 } from 'lucide-react'
@@ -29,15 +31,9 @@ import { toast } from 'sonner'
 import { Button } from '../components/ui/button'
 
 import { FiniquitoWorkspaceShell } from '../components/finiquito/FiniquitoWorkspaceShell'
+import { FiniquitoRevisionDialog } from '../components/finiquito/FiniquitoRevisionDialog'
 import { Input } from '../components/ui/input'
 import { Label } from '../components/ui/label'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '../components/ui/select'
 import {
   Table,
   TableBody,
@@ -59,6 +55,7 @@ import {
 import {
   type FiniquitoCasoItem,
   finiquitoAdminConteoRevisionNuevos,
+  finiquitoAdminEliminarCaso,
   finiquitoAdminListar,
   finiquitoAdminListarTerminados,
   finiquitoAdminPatchEstado,
@@ -87,73 +84,98 @@ function textoUltimoPago(iso: string | null | undefined): string {
   }
 }
 
-const DIAS_REVISION_SIN_ATRASO = 3
-const DIAS_LIMITE_AREA_TRABAJO = 30
+/** Plazo en bandeja principal (estado REVISION), dias calendario. */
+const DIAS_PLAZO_BANDEJA = 5
+/** Plazo en area de trabajo (estado EN_PROCESO), dias calendario. */
+const DIAS_PLAZO_AREA_TRABAJO = 25
 
-function diasDesdeFechaLiquidado(fechaLiquidado: string | null | undefined) {
-  if (fechaLiquidado == null || String(fechaLiquidado).trim() === '') {
-    return null
-  }
-  const d = new Date(`${String(fechaLiquidado).slice(0, 10)}T00:00:00`)
+function diasDesdeIsoDate(iso: string | null | undefined) {
+  if (iso == null || String(iso).trim() === '') return null
+  const d = new Date(`${String(iso).slice(0, 10)}T00:00:00`)
   if (Number.isNaN(d.getTime())) return null
   const hoy = new Date()
   hoy.setHours(0, 0, 0, 0)
   return Math.floor((hoy.getTime() - d.getTime()) / 86_400_000)
 }
 
-function casoRevisionAtrasado(caso: FiniquitoCasoItem): boolean {
-  if (caso.estado !== 'REVISION') return false
-  const dias = diasDesdeFechaLiquidado(caso.fecha_liquidado)
-  return dias != null && dias > DIAS_REVISION_SIN_ATRASO
+function anchorBandeja(caso: FiniquitoCasoItem): string | null {
+  return caso.fecha_liquidado ?? caso.creado_en ?? null
+}
+
+function anchorAreaTrabajo(caso: FiniquitoCasoItem): string | null {
+  return (
+    caso.fecha_entrada_en_proceso ??
+    caso.finiquito_tramite_fecha_limite ??
+    null
+  )
+}
+
+function diasRestantesDesdeAnchor(
+  anchor: string | null | undefined,
+  plazo: number
+): number | null {
+  const dias = diasDesdeIsoDate(anchor)
+  if (dias == null) return null
+  return plazo - dias
+}
+
+function diasRestantesBandeja(caso: FiniquitoCasoItem): number | null {
+  if (caso.estado !== 'REVISION') return null
+  return diasRestantesDesdeAnchor(anchorBandeja(caso), DIAS_PLAZO_BANDEJA)
 }
 
 function diasRestantesAreaTrabajo(caso: FiniquitoCasoItem): number | null {
-  const diasTranscurridos = diasDesdeFechaLiquidado(caso.ultima_fecha_pago)
-  if (diasTranscurridos == null) return null
-  return DIAS_LIMITE_AREA_TRABAJO - diasTranscurridos
+  if (caso.estado !== 'EN_PROCESO') return null
+  const porHistorial = diasRestantesDesdeAnchor(
+    caso.fecha_entrada_en_proceso,
+    DIAS_PLAZO_AREA_TRABAJO
+  )
+  if (porHistorial != null) return porHistorial
+  const limite = caso.finiquito_tramite_fecha_limite
+  if (limite == null || String(limite).trim() === '') return null
+  const fin = new Date(`${String(limite).slice(0, 10)}T00:00:00`)
+  if (Number.isNaN(fin.getTime())) return null
+  const hoy = new Date()
+  hoy.setHours(0, 0, 0, 0)
+  return Math.floor((fin.getTime() - hoy.getTime()) / 86_400_000)
 }
 
-function textoTiempoLimiteAreaTrabajo(caso: FiniquitoCasoItem): string {
-  const dias = diasRestantesAreaTrabajo(caso)
+function textoCuentaRegresiva(dias: number | null): string {
   if (dias == null) return '-'
-  if (dias <= 0) return 'Atrasado'
-  return `${dias} ${dias === 1 ? 'día' : 'días'}`
+  if (dias <= 0) return 'Vencido'
+  return `${dias} ${dias === 1 ? 'dia' : 'dias'}`
 }
 
-function tiempoLimiteAreaTrabajoClassName(caso: FiniquitoCasoItem): string {
-  const dias = diasRestantesAreaTrabajo(caso)
+function claseCuentaRegresiva(dias: number | null): string {
   if (dias == null) return 'bg-slate-100 text-slate-700'
   if (dias <= 0) return 'bg-red-100 text-red-950'
-  if (dias <= 3) return 'bg-amber-100 text-amber-950'
+  if (dias <= 2) return 'bg-amber-100 text-amber-950'
   return 'bg-emerald-100 text-emerald-950'
 }
 
 function estadoEtiquetaVisible(caso: FiniquitoCasoItem): string {
-  const estado = caso.estado
-  if (casoRevisionAtrasado(caso)) return 'Atrasado'
   const map: Record<string, string> = {
-    REVISION: 'Revisión',
-    ACEPTADO: 'Aceptado',
+    REVISION: 'Revision',
+    ACEPTADO: 'Validado',
     RECHAZADO: 'Rechazado',
     EN_PROCESO: 'En proceso',
     TERMINADO: 'Terminado',
   }
-  return map[estado] ?? estado.replace(/_/g, ' ')
+  return map[caso.estado] ?? caso.estado.replace(/_/g, ' ')
 }
 
 function estadoBadgeClassName(caso: FiniquitoCasoItem): string {
-  if (casoRevisionAtrasado(caso)) return 'bg-red-100 text-red-950'
   switch (caso.estado) {
     case 'REVISION':
       return 'bg-sky-100 text-sky-950'
     case 'ACEPTADO':
-      return 'bg-slate-100 text-slate-800'
+      return 'bg-amber-100 text-amber-950'
     case 'RECHAZADO':
       return 'bg-rose-100 text-rose-950'
     case 'EN_PROCESO':
-      return 'bg-amber-100 text-amber-950'
-    case 'TERMINADO':
       return 'bg-emerald-100 text-emerald-950'
+    case 'TERMINADO':
+      return 'bg-violet-100 text-violet-950'
     default:
       return 'bg-slate-100 text-slate-800'
   }
@@ -359,14 +381,16 @@ function FiniquitoGestionPageInner() {
   const [cedulaBusqueda, setCedulaBusqueda] = useState('')
   const [cedulaTrabajoInput, setCedulaTrabajoInput] = useState('')
   const [cedulaTrabajoBusqueda, setCedulaTrabajoBusqueda] = useState('')
+  const [itemsAreaRevision, setItemsAreaRevision] = useState<FiniquitoCasoItem[]>(
+    []
+  )
+  const [totalAreaRevision, setTotalAreaRevision] = useState(0)
   const [itemsAreaTrabajo, setItemsAreaTrabajo] = useState<FiniquitoCasoItem[]>(
     []
   )
   const [totalAreaTrabajo, setTotalAreaTrabajo] = useState(0)
   const [dialogTerminado, setDialogTerminado] = useState<{
     casoId: number
-    /** Si true, exige Si/No (contacto para pasos siguientes); si false, Terminado directo desde Aceptado. */
-    preguntarContactoCliente: boolean
   } | null>(null)
   const [itemsRechazados, setItemsRechazados] = useState<FiniquitoCasoItem[]>(
     []
@@ -384,6 +408,12 @@ function FiniquitoGestionPageInner() {
     setDescargandoEstadoCuentaPrestamoId,
   ] = useState<number | null>(null)
   const [pendingRechazoCasoId, setPendingRechazoCasoId] = useState<
+    number | null
+  >(null)
+  const [pendingEliminarCasoId, setPendingEliminarCasoId] = useState<
+    number | null
+  >(null)
+  const [revisionDialogCasoId, setRevisionDialogCasoId] = useState<
     number | null
   >(null)
   const [kpiNuevosRevision, setKpiNuevosRevision] = useState<{
@@ -444,12 +474,16 @@ function FiniquitoGestionPageInner() {
         setLoading(true)
       }
       try {
-        const [rTrabajo, rRech, rBandeja, rNuevos, rTerm, rSem] =
+        const [rRevision, rTrabajo, rRech, rBandeja, rNuevos, rTerm, rSem] =
           await Promise.all([
+            finiquitoAdminListar('ACEPTADO', undefined, undefined, {
+              limit: FETCH_LIMIT,
+              offset: 0,
+            }),
             finiquitoAdminListar(
-              undefined,
+              'EN_PROCESO',
               cedulaTrabajoBusqueda || undefined,
-              'ACEPTADO,EN_PROCESO',
+              undefined,
               { limit: FETCH_LIMIT, offset: 0 }
             ),
             finiquitoAdminListar('RECHAZADO', undefined, undefined, {
@@ -477,6 +511,10 @@ function FiniquitoGestionPageInner() {
               cedulaTerminadosBusqueda || undefined
             ),
           ])
+        setItemsAreaRevision(rRevision.items || [])
+        setTotalAreaRevision(
+          rRevision.total ?? (rRevision.items || []).length
+        )
         setItemsAreaTrabajo(rTrabajo.items || [])
         setTotalAreaTrabajo(rTrabajo.total ?? (rTrabajo.items || []).length)
         setItemsRechazados(rRech.items || [])
@@ -524,17 +562,25 @@ function FiniquitoGestionPageInner() {
   /** Mueve filas locales al instante con el caso devuelto por PATCH (antes del refetch). */
   const incorporarCasoActualizado = useCallback(
     (caso: FiniquitoCasoItem) => {
+      const debeAreaRevision = caso.estado === 'ACEPTADO'
       const debeAreaTrabajo =
-        ['ACEPTADO', 'EN_PROCESO'].includes(caso.estado) &&
+        caso.estado === 'EN_PROCESO' &&
         casoCoincideCedula(caso, cedulaTrabajoBusqueda)
       const debeBandeja =
         caso.estado === 'REVISION' && casoCoincideCedula(caso, cedulaBusqueda)
       const debeRechazados = caso.estado === 'RECHAZADO'
 
+      const estabaAreaRevision = itemsAreaRevision.some(r => r.id === caso.id)
       const estabaAreaTrabajo = itemsAreaTrabajo.some(r => r.id === caso.id)
       const estabaBandeja = itemsBandeja.some(r => r.id === caso.id)
       const estabaRechazados = itemsRechazados.some(r => r.id === caso.id)
 
+      setItemsAreaRevision(prev =>
+        reconciliarCasoEnLista(prev, caso, debeAreaRevision)
+      )
+      setTotalAreaRevision(prev =>
+        totalTrasMovimiento(prev, estabaAreaRevision, debeAreaRevision)
+      )
       setItemsAreaTrabajo(prev =>
         reconciliarCasoEnLista(prev, caso, debeAreaTrabajo)
       )
@@ -555,6 +601,7 @@ function FiniquitoGestionPageInner() {
     [
       cedulaBusqueda,
       cedulaTrabajoBusqueda,
+      itemsAreaRevision,
       itemsAreaTrabajo,
       itemsBandeja,
       itemsRechazados,
@@ -642,10 +689,12 @@ function FiniquitoGestionPageInner() {
       if (r.caso) {
         incorporarCasoActualizado(r.caso)
       }
-      if (estado === 'EN_PROCESO') {
-        toast.success('En proceso')
+      if (estado === 'ACEPTADO') {
+        toast.success('Caso validado: pasa al area de revision')
+      } else if (estado === 'EN_PROCESO') {
+        toast.success('Caso en area de trabajo')
       } else if (estado === 'REVISION') {
-        toast.success('Caso en bandeja principal (Atrasado)')
+        toast.success('Caso devuelto a bandeja principal')
       } else {
         toast.success('Estado actualizado')
       }
@@ -658,14 +707,6 @@ function FiniquitoGestionPageInner() {
     }
   }
 
-  const onSeleccionarEstadoBandeja = (row: FiniquitoCasoItem, v: string) => {
-    if (v === 'RECHAZADO') {
-      setPendingRechazoCasoId(row.id)
-      return
-    }
-    void cambiarEstado(row.id, v)
-  }
-
   const confirmarRechazo = async () => {
     if (pendingRechazoCasoId == null) return
     const id = pendingRechazoCasoId
@@ -673,10 +714,34 @@ function FiniquitoGestionPageInner() {
     await cambiarEstado(id, 'RECHAZADO')
   }
 
+  const confirmarEliminar = async () => {
+    if (pendingEliminarCasoId == null) return
+    const id = pendingEliminarCasoId
+    setPendingEliminarCasoId(null)
+    if (pendingEstadoCasoId != null) return
+    setPendingEstadoCasoId(id)
+    try {
+      const r = await finiquitoAdminEliminarCaso(id)
+      if (!r.ok) {
+        toast.error(r.error || 'No se pudo eliminar')
+        return
+      }
+      setItemsBandeja(prev => prev.filter(row => row.id !== id))
+      setTotalBandeja(prev => Math.max(0, prev - 1))
+      toast.success('Caso eliminado de la bandeja')
+      void invalidatePrestamosQueries(queryClient)
+      await cargarListas({ silent: true })
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'Error al eliminar')
+    } finally {
+      setPendingEstadoCasoId(null)
+    }
+  }
+
   const confirmarTerminado = async (contactoParaSiguientes?: boolean) => {
     if (dialogTerminado == null) return
-    const { casoId, preguntarContactoCliente } = dialogTerminado
-    if (preguntarContactoCliente && contactoParaSiguientes === undefined) {
+    const { casoId } = dialogTerminado
+    if (contactoParaSiguientes === undefined) {
       return
     }
     if (pendingEstadoCasoId != null) return
@@ -685,7 +750,7 @@ function FiniquitoGestionPageInner() {
       const r = await finiquitoAdminPatchEstado(
         casoId,
         'TERMINADO',
-        preguntarContactoCliente ? contactoParaSiguientes : undefined
+        contactoParaSiguientes
       )
       if (!r.ok) {
         toast.error(r.error || 'No se pudo actualizar')
@@ -757,219 +822,97 @@ function FiniquitoGestionPageInner() {
     })
   }
 
+  const botonesFilaOperativos = (row: FiniquitoCasoItem) => (
+    <>
+      <Button
+        type="button"
+        size="icon"
+        variant="outline"
+        className="h-8 w-8 border-slate-300"
+        title="Revision manual del prestamo"
+        aria-label={`Revision manual del prestamo ${row.prestamo_id}`}
+        onClick={() => abrirRevisionManualPrestamo(row.prestamo_id)}
+      >
+        <Eye className="h-4 w-4" aria-hidden />
+      </Button>
+      <Button
+        type="button"
+        size="icon"
+        variant="outline"
+        className="h-8 w-8 border-slate-300"
+        title="Edicion y datos del caso"
+        aria-label={`Edicion del caso ${row.id}`}
+        onClick={() => setRevisionDialogCasoId(row.id)}
+      >
+        <Pencil className="h-4 w-4" aria-hidden />
+      </Button>
+      <Button
+        type="button"
+        size="icon"
+        variant="outline"
+        className="h-8 w-8 border-slate-300"
+        title="Escaneo: estado de cuenta PDF"
+        aria-label={`Escaneo PDF del prestamo ${row.prestamo_id}`}
+        disabled={descargandoEstadoCuentaPrestamoId === row.prestamo_id}
+        onClick={() => descargarEstadoCuenta(row.prestamo_id)}
+      >
+        {descargandoEstadoCuentaPrestamoId === row.prestamo_id ? (
+          <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+        ) : (
+          <Download className="h-4 w-4" aria-hidden />
+        )}
+      </Button>
+    </>
+  )
+
   const renderAcciones = (row: FiniquitoCasoItem) => (
     <div className="flex flex-wrap items-center justify-end gap-2">
+      {botonesFilaOperativos(row)}
       <Button
         type="button"
-        size="icon"
-        variant="outline"
-        className="h-8 w-8 border-slate-300"
-        title="Abrir revisión manual del préstamo"
-        aria-label={`Abrir revisión manual del préstamo ${row.prestamo_id}`}
-        onClick={() => abrirRevisionManualPrestamo(row.prestamo_id)}
-      >
-        <Eye className="h-4 w-4" aria-hidden />
-      </Button>
-      <Button
-        type="button"
-        size="icon"
-        variant="outline"
-        className="h-8 w-8 border-slate-300"
-        title="Descargar estado de cuenta (PDF)"
-        aria-label={`Descargar estado de cuenta PDF del préstamo ${row.prestamo_id}`}
-        disabled={descargandoEstadoCuentaPrestamoId === row.prestamo_id}
-        onClick={() => descargarEstadoCuenta(row.prestamo_id)}
-      >
-        {descargandoEstadoCuentaPrestamoId === row.prestamo_id ? (
-          <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-        ) : (
-          <Download className="h-4 w-4" aria-hidden />
-        )}
-      </Button>
-      <Select
-        key={`estado-sel-${row.id}-${row.estado}`}
-        value={row.estado === 'REVISION' ? 'REVISION' : undefined}
+        size="sm"
+        className="h-8 bg-emerald-700 text-xs hover:bg-emerald-800"
         disabled={casoTieneAccionPendiente(row.id)}
-        onValueChange={v => onSeleccionarEstadoBandeja(row, v)}
+        onClick={() => void cambiarEstado(row.id, 'ACEPTADO')}
       >
-        <SelectTrigger
-          className={cn(
-            'h-8 min-w-[158px] max-w-[200px] text-xs',
-            casoRevisionAtrasado(row)
-              ? 'border-red-200 bg-red-50 text-red-900'
-              : row.estado === 'REVISION' &&
-                  'border-sky-200 bg-sky-50 text-sky-900'
-          )}
-          aria-label={`Cambiar estado del caso ${row.id}`}
-        >
-          <SelectValue placeholder="Estado..." />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="REVISION" disabled>
-            {casoRevisionAtrasado(row) ? 'Atrasado' : 'Revisión'}
-          </SelectItem>
-          <SelectItem value="ACEPTADO">Aceptado</SelectItem>
-          <SelectItem value="RECHAZADO">Rechazado</SelectItem>
-        </SelectContent>
-      </Select>
+        Validar
+      </Button>
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        className="h-8 border-rose-300 text-xs text-rose-900"
+        disabled={casoTieneAccionPendiente(row.id)}
+        onClick={() => setPendingRechazoCasoId(row.id)}
+      >
+        Rechazar
+      </Button>
+      <Button
+        type="button"
+        size="icon"
+        variant="outline"
+        className="h-8 w-8 border-slate-300 text-rose-800"
+        title="Eliminar caso de la bandeja"
+        aria-label={`Eliminar caso ${row.id}`}
+        disabled={casoTieneAccionPendiente(row.id)}
+        onClick={() => setPendingEliminarCasoId(row.id)}
+      >
+        <Trash2 className="h-4 w-4" aria-hidden />
+      </Button>
     </div>
   )
 
-  const renderAccionesAreaTrabajo = (row: FiniquitoCasoItem) => (
+  const renderAccionesAreaRevision = (row: FiniquitoCasoItem) => (
     <div className="flex flex-wrap items-center justify-end gap-2">
+      {botonesFilaOperativos(row)}
       <Button
         type="button"
-        size="icon"
-        variant="outline"
-        className="h-8 w-8 border-slate-300"
-        title="Abrir revisión manual del préstamo"
-        aria-label={`Abrir revisión manual del préstamo ${row.prestamo_id}`}
-        onClick={() => abrirRevisionManualPrestamo(row.prestamo_id)}
+        size="sm"
+        className="h-8 bg-emerald-700 text-xs hover:bg-emerald-800"
+        disabled={casoTieneAccionPendiente(row.id)}
+        onClick={() => void cambiarEstado(row.id, 'EN_PROCESO')}
       >
-        <Eye className="h-4 w-4" aria-hidden />
-      </Button>
-      <Button
-        type="button"
-        size="icon"
-        variant="outline"
-        className="h-8 w-8 border-slate-300"
-        title="Descargar estado de cuenta (PDF)"
-        aria-label={`Descargar estado de cuenta PDF del préstamo ${row.prestamo_id}`}
-        disabled={descargandoEstadoCuentaPrestamoId === row.prestamo_id}
-        onClick={() => descargarEstadoCuenta(row.prestamo_id)}
-      >
-        {descargandoEstadoCuentaPrestamoId === row.prestamo_id ? (
-          <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-        ) : (
-          <Download className="h-4 w-4" aria-hidden />
-        )}
-      </Button>
-      {row.estado === 'ACEPTADO' || row.estado === 'EN_PROCESO' ? (
-        <>
-          <Select
-            key={`proceso-revision-${row.id}-${row.estado}`}
-            disabled={casoTieneAccionPendiente(row.id)}
-            value={row.estado === 'EN_PROCESO' ? 'EN_PROCESO' : undefined}
-            onValueChange={v => {
-              if (v === 'REVISION') {
-                void cambiarEstado(row.id, 'REVISION')
-                return
-              }
-              if (v === 'EN_PROCESO') {
-                if (row.estado === 'EN_PROCESO') return
-                void cambiarEstado(row.id, 'EN_PROCESO')
-              }
-            }}
-          >
-            <SelectTrigger
-              className="h-8 min-w-[168px] max-w-[200px] text-xs"
-              aria-label={`En proceso o revisión, caso ${row.id}`}
-            >
-              <SelectValue placeholder="En proceso / Revisión" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="EN_PROCESO">En proceso</SelectItem>
-              <SelectItem value="REVISION">Revisión</SelectItem>
-            </SelectContent>
-          </Select>
-          {row.estado === 'ACEPTADO' ? (
-            <Button
-              type="button"
-              size="sm"
-              className="h-8 bg-emerald-700 text-xs hover:bg-emerald-800"
-              disabled={casoTieneAccionPendiente(row.id)}
-              onClick={() =>
-                setDialogTerminado({
-                  casoId: row.id,
-                  preguntarContactoCliente: false,
-                })
-              }
-            >
-              Terminado
-            </Button>
-          ) : null}
-        </>
-      ) : null}
-      {row.estado === 'EN_PROCESO' ? (
-        <>
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            className="h-8 border-slate-300 text-xs"
-            disabled={casoTieneAccionPendiente(row.id)}
-            onClick={() => cambiarEstado(row.id, 'ACEPTADO')}
-          >
-            Volver a aceptado
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            className="h-8 bg-emerald-700 text-xs hover:bg-emerald-800"
-            disabled={casoTieneAccionPendiente(row.id)}
-            onClick={() =>
-              setDialogTerminado({
-                casoId: row.id,
-                preguntarContactoCliente: true,
-              })
-            }
-          >
-            Terminado
-          </Button>
-        </>
-      ) : null}
-      {row.estado === 'TERMINADO' ? (
-        <Select
-          key={`solo-revision-${row.id}`}
-          disabled={casoTieneAccionPendiente(row.id)}
-          onValueChange={v => {
-            if (v === 'REVISION') void cambiarEstado(row.id, 'REVISION')
-          }}
-        >
-          <SelectTrigger
-            className="h-8 min-w-[168px] max-w-[200px] text-xs"
-            aria-label={`Volver a bandeja principal, caso ${row.id}`}
-          >
-            <SelectValue placeholder="Volver a Revisión…" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="REVISION">
-              Revisión (bandeja principal)
-            </SelectItem>
-          </SelectContent>
-        </Select>
-      ) : null}
-    </div>
-  )
-
-  const renderAccionesRechazado = (row: FiniquitoCasoItem) => (
-    <div className="flex flex-wrap items-center justify-end gap-2">
-      <Button
-        type="button"
-        size="icon"
-        variant="outline"
-        className="h-8 w-8 border-slate-300"
-        title="Abrir revisión manual del préstamo"
-        aria-label={`Abrir revisión manual del préstamo ${row.prestamo_id}`}
-        onClick={() => abrirRevisionManualPrestamo(row.prestamo_id)}
-      >
-        <Eye className="h-4 w-4" aria-hidden />
-      </Button>
-      <Button
-        type="button"
-        size="icon"
-        variant="outline"
-        className="h-8 w-8 border-slate-300"
-        title="Descargar estado de cuenta (PDF)"
-        aria-label={`Descargar estado de cuenta PDF del préstamo ${row.prestamo_id}`}
-        disabled={descargandoEstadoCuentaPrestamoId === row.prestamo_id}
-        onClick={() => descargarEstadoCuenta(row.prestamo_id)}
-      >
-        {descargandoEstadoCuentaPrestamoId === row.prestamo_id ? (
-          <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-        ) : (
-          <Download className="h-4 w-4" aria-hidden />
-        )}
+        Pasar a area de trabajo
       </Button>
       <Button
         type="button"
@@ -977,9 +920,50 @@ function FiniquitoGestionPageInner() {
         variant="outline"
         className="h-8 border-slate-300 text-xs"
         disabled={casoTieneAccionPendiente(row.id)}
-        onClick={() => cambiarEstado(row.id, 'REVISION')}
+        onClick={() => void cambiarEstado(row.id, 'REVISION')}
       >
-        Volver a revisión
+        Volver a bandeja
+      </Button>
+    </div>
+  )
+
+  const renderAccionesAreaTrabajo = (row: FiniquitoCasoItem) => (
+    <div className="flex flex-wrap items-center justify-end gap-2">
+      {botonesFilaOperativos(row)}
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        className="h-8 border-slate-300 text-xs"
+        disabled={casoTieneAccionPendiente(row.id)}
+        onClick={() => void cambiarEstado(row.id, 'ACEPTADO')}
+      >
+        Volver a validacion
+      </Button>
+      <Button
+        type="button"
+        size="sm"
+        className="h-8 bg-emerald-700 text-xs hover:bg-emerald-800"
+        disabled={casoTieneAccionPendiente(row.id)}
+        onClick={() => setDialogTerminado({ casoId: row.id })}
+      >
+        Terminado
+      </Button>
+    </div>
+  )
+
+  const renderAccionesRechazado = (row: FiniquitoCasoItem) => (
+    <div className="flex flex-wrap items-center justify-end gap-2">
+      {botonesFilaOperativos(row)}
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        className="h-8 border-slate-300 text-xs"
+        disabled={casoTieneAccionPendiente(row.id)}
+        onClick={() => void cambiarEstado(row.id, 'REVISION')}
+      >
+        Volver a bandeja
       </Button>
     </div>
   )
@@ -1015,6 +999,16 @@ function FiniquitoGestionPageInner() {
             >
               Último pago
             </TableHead>
+            <TableHead
+              className={cn(
+                thGestion,
+                'max-w-[9rem] whitespace-normal leading-tight'
+              )}
+              scope="col"
+              title={`Cuenta regresiva de ${DIAS_PLAZO_BANDEJA} dias en bandeja`}
+            >
+              Tiempo limite
+            </TableHead>
             <TableHead className={thGestion} scope="col">
               Estado
             </TableHead>
@@ -1024,7 +1018,9 @@ function FiniquitoGestionPageInner() {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {items.map((row, idx) => (
+          {items.map((row, idx) => {
+            const diasBandeja = diasRestantesBandeja(row)
+            return (
             <TableRow key={row.id} className={idx % 2 === 0 ? trEven : trOdd}>
               <TableCell className={cn(tdGestion, 'font-mono text-xs')}>
                 {row.id}
@@ -1040,10 +1036,20 @@ function FiniquitoGestionPageInner() {
                 title={
                   row.ultima_fecha_pago
                     ? `Desde pagos: ${row.ultima_fecha_pago}`
-                    : 'Sin pagos con préstamo vinculado'
+                    : 'Sin pagos con prestamo vinculado'
                 }
               >
                 {textoUltimoPago(row.ultima_fecha_pago)}
+              </TableCell>
+              <TableCell className={cn(tdGestion, 'whitespace-nowrap')}>
+                <span
+                  className={cn(
+                    'rounded px-1.5 py-0.5 text-xs font-medium',
+                    claseCuentaRegresiva(diasBandeja)
+                  )}
+                >
+                  {textoCuentaRegresiva(diasBandeja)}
+                </span>
               </TableCell>
               <TableCell className={tdGestion}>
                 <span
@@ -1059,7 +1065,7 @@ function FiniquitoGestionPageInner() {
                 {renderAccionesFila(row)}
               </TableCell>
             </TableRow>
-          ))}
+          )})}
         </TableBody>
       </Table>
     </div>
@@ -1099,9 +1105,9 @@ function FiniquitoGestionPageInner() {
                 'max-w-[9rem] whitespace-normal leading-tight'
               )}
               scope="col"
-              title="Tiempo límite: cuenta regresiva de 30 días desde la liquidación o último pago"
+              title={`Cuenta regresiva de ${DIAS_PLAZO_AREA_TRABAJO} dias en area de trabajo`}
             >
-              Tiempo límite
+              Tiempo limite
             </TableHead>
             <TableHead className={cn(thGestion, 'min-w-[140px]')} scope="col">
               Contacto
@@ -1139,18 +1145,20 @@ function FiniquitoGestionPageInner() {
               <TableCell
                 className={cn(tdGestion, 'whitespace-nowrap text-slate-800')}
                 title={
-                  row.ultima_fecha_pago
-                    ? `Cuenta regresiva de 30 días desde último pago: ${row.ultima_fecha_pago}`
-                    : 'Sin último pago'
+                  row.fecha_entrada_en_proceso
+                    ? `Desde EN_PROCESO: ${row.fecha_entrada_en_proceso}`
+                    : row.finiquito_tramite_fecha_limite
+                      ? `Limite: ${row.finiquito_tramite_fecha_limite}`
+                      : 'Sin fecha de inicio en area de trabajo'
                 }
               >
                 <span
                   className={cn(
                     'rounded px-1.5 py-0.5 text-xs font-medium',
-                    tiempoLimiteAreaTrabajoClassName(row)
+                    claseCuentaRegresiva(diasRestantesAreaTrabajo(row))
                   )}
                 >
-                  {textoTiempoLimiteAreaTrabajo(row)}
+                  {textoCuentaRegresiva(diasRestantesAreaTrabajo(row))}
                 </span>
               </TableCell>
               <TableCell className={cn(tdGestion, 'max-w-[200px]')}>
@@ -1201,11 +1209,12 @@ function FiniquitoGestionPageInner() {
   )
 
   const subtituloTrabajo = totalAreaTrabajo === 1 ? 'registro' : 'registros'
+  const subtituloRevision = totalAreaRevision === 1 ? 'registro' : 'registros'
   const subtituloRech = totalRechazados === 1 ? 'registro' : 'registros'
 
   return (
     <FiniquitoWorkspaceShell
-      description="Los créditos LIQUIDADO con cuotas cubiertas (= financiamiento) entran automáticamente a la bandeja principal. Desde acciones se aceptan para pasar al área de trabajo o se rechazan al área de revisión."
+      description="Flujo: bandeja en Revision (5 dias) → validar (Validar / Rechazar / Eliminar) → area de revision (informacion) → area de trabajo (25 dias) → Terminado."
       actions={
         <Button
           size="sm"
@@ -1223,18 +1232,18 @@ function FiniquitoGestionPageInner() {
         </Button>
       }
     >
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-5">
         <Card className="border-slate-200 shadow-sm">
           <CardContent className="space-y-1 p-4">
             <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-              Atrasados (bandeja)
+              Bandeja (Revision)
             </p>
             <p className="text-2xl font-bold tabular-nums text-[#1e3a5f]">
               {loading ? '-' : totalBandeja}
             </p>
             <p className="text-xs text-slate-500">
-              Pendientes sin aceptar/rechazar
-              {cedulaBusqueda ? ' (filtro cédula)' : ''}
+              Plazo {DIAS_PLAZO_BANDEJA} dias
+              {cedulaBusqueda ? ' (filtro cedula)' : ''}
             </p>
           </CardContent>
         </Card>
@@ -1282,14 +1291,27 @@ function FiniquitoGestionPageInner() {
         <Card className="border-slate-200 shadow-sm">
           <CardContent className="space-y-1 p-4">
             <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-              Área de trabajo
+              Area de revision
+            </p>
+            <p className="text-2xl font-bold tabular-nums text-amber-900">
+              {loading ? '-' : totalAreaRevision}
+            </p>
+            <p className="text-xs text-slate-500">
+              Validados (antes del trabajo)
+            </p>
+          </CardContent>
+        </Card>
+        <Card className="border-slate-200 shadow-sm">
+          <CardContent className="space-y-1 p-4">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+              Area de trabajo
             </p>
             <p className="text-2xl font-bold tabular-nums text-emerald-900">
               {loading ? '-' : totalAreaTrabajo}
             </p>
             <p className="text-xs text-slate-500">
-              Aceptado / En proceso
-              {cedulaTrabajoBusqueda ? ' (filtro cédula)' : ''}
+              En proceso · plazo {DIAS_PLAZO_AREA_TRABAJO} dias
+              {cedulaTrabajoBusqueda ? ' (filtro cedula)' : ''}
             </p>
           </CardContent>
         </Card>
@@ -1322,9 +1344,10 @@ function FiniquitoGestionPageInner() {
                 Bandeja principal
               </h2>
               <p className="text-xs text-slate-600 sm:text-sm">
-                Casos <strong>atrasados</strong> pendientes de aceptar o
-                rechazar. Escriba parte de la cédula para acotar (espera ~
-                {DEBOUNCE_MS / 1000} s tras dejar de escribir).
+                Estado inicial <strong>Revision</strong>. Valide la informacion
+                (Validar / Rechazar / Eliminar). Cuenta regresiva de{' '}
+                {DIAS_PLAZO_BANDEJA} dias. Filtro por cedula (~
+                {DEBOUNCE_MS / 1000} s).
               </p>
             </div>
             <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-end lg:w-auto lg:min-w-[320px]">
@@ -1396,8 +1419,8 @@ function FiniquitoGestionPageInner() {
             ) : itemsBandeja.length === 0 ? (
               <p className="rounded-lg border border-dashed border-slate-200 bg-slate-50/50 px-4 py-10 text-center text-sm leading-relaxed text-slate-600">
                 {cedulaBusqueda
-                  ? 'Ningún caso atrasado coincide con esa cédula. Pruebe otra subcadena o limpie el filtro.'
-                  : 'No hay casos atrasados. Use «Refrescar materializado» para traer préstamos LIQUIDADO con cuotas cubiertas a la bandeja principal.'}
+                  ? 'Ningun caso en Revision coincide con esa cedula.'
+                  : 'No hay casos en Revision. Use «Refrescar materializado» para traer prestamos LIQUIDADO elegibles.'}
               </p>
             ) : (
               <>
@@ -1422,17 +1445,18 @@ function FiniquitoGestionPageInner() {
         <div className="border-b border-amber-200/90 bg-amber-100/95 px-4 py-3.5 sm:px-5">
           <div className="flex flex-wrap items-center gap-3 text-amber-950">
             <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-amber-300/90 bg-amber-50 shadow-sm">
-              <XCircle className="h-5 w-5 text-amber-800" aria-hidden />
+              <CheckCircle2 className="h-5 w-5 text-amber-800" aria-hidden />
             </span>
             <div>
               <h2
                 id="finiquito-area-revision-titulo"
                 className="text-sm font-bold tracking-tight sm:text-base"
               >
-                Área de revisión
+                Area de revision
               </h2>
               <p className="text-xs text-amber-900/85">
-                Rechazados · {totalRechazados} {subtituloRech}
+                Validados · {totalAreaRevision} {subtituloRevision} · espacio de
+                validacion antes del trabajo
               </p>
             </div>
           </div>
@@ -1443,21 +1467,61 @@ function FiniquitoGestionPageInner() {
               <div className="flex justify-center py-12">
                 <Loader2 className="h-8 w-8 animate-spin text-amber-600/70" />
               </div>
-            ) : itemsRechazados.length === 0 ? (
+            ) : itemsAreaRevision.length === 0 ? (
               <p className="rounded-lg border border-dashed border-amber-200/90 bg-white/50 px-4 py-10 text-center text-sm text-amber-950/85">
-                No hay casos rechazados. Aparecerán aquí al pasar un caso a
-                «Rechazado».
+                No hay casos validados pendientes. Al pulsar Validar en la
+                bandeja principal aparecen aqui.
               </p>
             ) : (
               <>
-                {renderTabla(itemsRechazados, renderAccionesRechazado)}
+                {renderTabla(itemsAreaRevision, renderAccionesAreaRevision)}
                 <FiniquitoTablaScrollHint
-                  total={totalRechazados}
-                  cargados={itemsRechazados.length}
+                  total={totalAreaRevision}
+                  cargados={itemsAreaRevision.length}
                 />
               </>
             )}
           </div>
+        </div>
+      </section>
+      <section
+        className="overflow-hidden rounded-2xl border border-rose-200/90 bg-rose-50/30 shadow-sm"
+        aria-labelledby="finiquito-rechazados-titulo"
+      >
+        <div className="border-b border-rose-200/80 bg-rose-100/60 px-4 py-3 sm:px-5">
+          <div className="flex flex-wrap items-center gap-3 text-rose-950">
+            <XCircle className="h-5 w-5 shrink-0" aria-hidden />
+            <div>
+              <h2
+                id="finiquito-rechazados-titulo"
+                className="text-sm font-bold tracking-tight"
+              >
+                Rechazados
+              </h2>
+              <p className="text-xs text-rose-900/85">
+                {totalRechazados} {subtituloRech} · solo rechazo desde bandeja
+              </p>
+            </div>
+          </div>
+        </div>
+        <div className="p-3 sm:p-4">
+          {loading ? (
+            <div className="flex justify-center py-10">
+              <Loader2 className="h-8 w-8 animate-spin text-rose-400" />
+            </div>
+          ) : itemsRechazados.length === 0 ? (
+            <p className="rounded-lg border border-dashed border-rose-200/90 bg-white/60 px-4 py-8 text-center text-sm text-rose-950/85">
+              No hay casos rechazados.
+            </p>
+          ) : (
+            <>
+              {renderTabla(itemsRechazados, renderAccionesRechazado)}
+              <FiniquitoTablaScrollHint
+                total={totalRechazados}
+                cargados={itemsRechazados.length}
+              />
+            </>
+          )}
         </div>
       </section>
       <section
@@ -1480,7 +1544,8 @@ function FiniquitoGestionPageInner() {
                 Área de trabajo
               </h2>
               <p className="text-xs text-emerald-100">
-                Aceptados y en proceso · {totalAreaTrabajo} {subtituloTrabajo}
+                En proceso · {totalAreaTrabajo} {subtituloTrabajo} · plazo{' '}
+                {DIAS_PLAZO_AREA_TRABAJO} dias
               </p>
             </div>
           </div>
@@ -1567,9 +1632,8 @@ function FiniquitoGestionPageInner() {
                   </>
                 ) : (
                   <>
-                    No hay casos en esta bandeja. Los aceptados aparecen aquí;
-                    puede usar «En proceso» o «Terminado» para dejar el caso en
-                    pasivo y sacarlo de la pantalla operativa.
+                    No hay casos en area de trabajo. Paselos desde el area de
+                    revision con «Pasar a area de trabajo».
                   </>
                 )}
               </p>
@@ -1878,16 +1942,9 @@ function FiniquitoGestionPageInner() {
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Marcar como terminado</DialogTitle>
-            {dialogTerminado?.preguntarContactoCliente ? (
-              <DialogDescription className="text-base text-slate-800">
-                ¿Usted ha contactado al cliente para pasos siguientes?
-              </DialogDescription>
-            ) : (
-              <DialogDescription className="text-base text-slate-800">
-                El caso pasará a <strong>Terminado</strong> (pasivo). Solo un
-                administrador puede cambiar el estado después.
-              </DialogDescription>
-            )}
+            <DialogDescription className="text-base text-slate-800">
+              ¿Usted ha contactado al cliente para pasos siguientes?
+            </DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2 sm:gap-0">
             <Button
@@ -1897,32 +1954,20 @@ function FiniquitoGestionPageInner() {
             >
               Cancelar
             </Button>
-            {dialogTerminado?.preguntarContactoCliente ? (
-              <>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={() => void confirmarTerminado(false)}
-                >
-                  No
-                </Button>
-                <Button
-                  type="button"
-                  className="bg-emerald-700 hover:bg-emerald-800"
-                  onClick={() => void confirmarTerminado(true)}
-                >
-                  Sí
-                </Button>
-              </>
-            ) : (
-              <Button
-                type="button"
-                className="bg-emerald-700 hover:bg-emerald-800"
-                onClick={() => void confirmarTerminado()}
-              >
-                Confirmar
-              </Button>
-            )}
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => void confirmarTerminado(false)}
+            >
+              No
+            </Button>
+            <Button
+              type="button"
+              className="bg-emerald-700 hover:bg-emerald-800"
+              onClick={() => void confirmarTerminado(true)}
+            >
+              Si
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -1937,8 +1982,8 @@ function FiniquitoGestionPageInner() {
           <DialogHeader>
             <DialogTitle>Rechazar caso</DialogTitle>
             <DialogDescription className="text-base text-slate-800">
-              ¿Confirma pasar este caso a <strong>Rechazado</strong>? Podrá
-              revertirlo desde el área de revisión cambiando el estado.
+              ¿Confirma <strong>rechazar</strong> este caso desde la bandeja?
+              Podra devolverlo a Revision desde la seccion Rechazados.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2 sm:gap-0">
@@ -1959,6 +2004,47 @@ function FiniquitoGestionPageInner() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <Dialog
+        open={pendingEliminarCasoId != null}
+        onOpenChange={open => {
+          if (!open) setPendingEliminarCasoId(null)
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Eliminar caso</DialogTitle>
+            <DialogDescription className="text-base text-slate-800">
+              Quita el caso de finiquito (solo en Revision). El prestamo sigue
+              LIQUIDADO; puede volver con «Refrescar materializado» si aplica.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setPendingEliminarCasoId(null)}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={() => void confirmarEliminar()}
+            >
+              Eliminar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <FiniquitoRevisionDialog
+        open={revisionDialogCasoId != null}
+        casoId={revisionDialogCasoId ?? 0}
+        onOpenChange={open => {
+          if (!open) setRevisionDialogCasoId(null)
+        }}
+      />
     </FiniquitoWorkspaceShell>
   )
 }

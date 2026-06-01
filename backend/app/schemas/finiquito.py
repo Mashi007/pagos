@@ -62,12 +62,22 @@ class FiniquitoCasoOut(BaseModel):
     finiquito_tramite_fecha_limite: Optional[str] = Field(
         default=None,
         description=(
-            "Desde prestamos: fecha limite del tramite (15 dias laborales al pasar a EN_PROCESO), ISO date."
+            "Desde prestamos: fecha limite del tramite (25 dias calendario al pasar a EN_PROCESO), ISO date."
         ),
     )
     fecha_liquidado: Optional[str] = Field(
         default=None,
         description="Desde prestamos: fecha calendario en que el prestamo paso a LIQUIDADO.",
+    )
+    creado_en: Optional[str] = Field(
+        default=None,
+        description="Alta del caso en finiquito_casos (materializacion), ISO datetime UTC.",
+    )
+    fecha_entrada_en_proceso: Optional[str] = Field(
+        default=None,
+        description=(
+            "Desde historial: ultima vez que el caso paso a EN_PROCESO (area de trabajo), ISO datetime."
+        ),
     )
 
     model_config = ConfigDict(from_attributes=True)
@@ -120,10 +130,18 @@ class FiniquitoCasoListaResponse(BaseModel):
     offset: int = Field(..., description="Desplazamiento desde el mas reciente (orden id desc).")
 
 
+class FiniquitoEliminarCasoResponse(BaseModel):
+    ok: bool
+    error: Optional[str] = None
+
+
 class FiniquitoPatchEstadoRequest(BaseModel):
     estado: str = Field(
         ...,
-        description="REVISION | ACEPTADO | RECHAZADO | EN_PROCESO | TERMINADO",
+        description=(
+            "REVISION (bandeja) | ACEPTADO (validado, area de revision) | "
+            "RECHAZADO | EN_PROCESO (area de trabajo) | TERMINADO"
+        ),
     )
     contacto_para_siguientes: Optional[bool] = Field(
         None,

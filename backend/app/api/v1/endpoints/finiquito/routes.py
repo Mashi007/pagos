@@ -47,6 +47,7 @@ from app.schemas.finiquito import (
     FiniquitoCasoListaResponse,
     FiniquitoCasoOut,
     FiniquitoDetalleResponse,
+    FiniquitoEliminarCasoResponse,
     FiniquitoPatchEstadoRequest,
     FiniquitoPatchEstadoResponse,
     FiniquitoTerminadoItemOut,
@@ -61,6 +62,7 @@ from app.schemas.finiquito import (
     FiniquitoVerificarCodigoResponse,
 )
 from app.services.finiquito_prestamo_gestion_sync import (
+    limpiar_estado_gestion_finiquito_prestamos,
     sincronizar_prestamo_estado_gestion_finiquito,
 )
 from app.services.finiquito_db_schema import (
@@ -229,6 +231,39 @@ def _map_finiquito_tramite_fecha_limite_por_prestamo(
     return {int(r[0]): r[1] for r in rows}
 
 
+def _map_fecha_estado_historial_por_caso(
+    db: Session, caso_ids: List[int], estado_nuevo: str
+) -> Dict[int, Any]:
+    """MAX(creado_en) en historial para un estado_nuevo dado, por caso_id."""
+    target = (estado_nuevo or "").strip().upper()
+    if not target:
+        return {}
+    seen: set[int] = set()
+    uniq: List[int] = []
+    for i in caso_ids:
+        if i is None:
+            continue
+        ii = int(i)
+        if ii not in seen:
+            seen.add(ii)
+            uniq.append(ii)
+    if not uniq:
+        return {}
+    rows = (
+        db.query(
+            FiniquitoEstadoHistorial.caso_id,
+            func.max(FiniquitoEstadoHistorial.creado_en).label("mx"),
+        )
+        .filter(
+            FiniquitoEstadoHistorial.caso_id.in_(uniq),
+            FiniquitoEstadoHistorial.estado_nuevo == target,
+        )
+        .group_by(FiniquitoEstadoHistorial.caso_id)
+        .all()
+    )
+    return {int(r.caso_id): r.mx for r in rows if r.mx is not None}
+
+
 def _map_fecha_terminado_por_caso(db: Session, caso_ids: List[int]) -> Dict[int, Any]:
     """MAX(creado_en) en historial donde estado_nuevo = TERMINADO, por caso_id."""
     seen: set[int] = set()
@@ -365,6 +400,9 @@ def _admin_casos_to_items(db: Session, casos: List[FiniquitoCaso]) -> List[Finiq
         db, [c.prestamo_id for c in casos]
     )
     fmap = _map_fecha_liquidado_por_prestamo(db, [c.prestamo_id for c in casos])
+    fepmap = _map_fecha_estado_historial_por_caso(
+        db, [c.id for c in casos], "EN_PROCESO"
+    )
     clmap = _map_clientes_por_id(db, [c.cliente_id for c in casos if c.cliente_id])
     items: List[FiniquitoCasoOut] = []
     for c in casos:
@@ -374,6 +412,7 @@ def _admin_casos_to_items(db: Session, casos: List[FiniquitoCaso]) -> List[Finiq
             db,
             finiquito_tramite_fecha_limite=flmap.get(c.prestamo_id),
             fecha_liquidado=fmap.get(c.prestamo_id),
+            fecha_entrada_en_proceso=fepmap.get(c.id),
         )
         cl = clmap.get(int(c.cliente_id)) if c.cliente_id else None
         items.append(
@@ -395,6 +434,7 @@ def _caso_to_out(
     *,
     finiquito_tramite_fecha_limite: Optional[Any] = None,
     fecha_liquidado: Optional[Any] = None,
+    fecha_entrada_en_proceso: Optional[Any] = None,
 ) -> FiniquitoCasoOut:
     ufp: Optional[str] = None
     if ultima_fecha_pago is not None:
@@ -411,6 +451,17 @@ def _caso_to_out(
     if fecha_liquidado is not None:
         v = fecha_liquidado
         flq = v.isoformat() if hasattr(v, "isoformat") else str(v)
+    fep: Optional[str] = None
+    if fecha_entrada_en_proceso is not None:
+        v = fecha_entrada_en_proceso
+        fep = v.isoformat() if hasattr(v, "isoformat") else str(v)
+    creado_iso: Optional[str] = None
+    if c.creado_en is not None:
+        creado_iso = (
+            c.creado_en.isoformat()
+            if hasattr(c.creado_en, "isoformat")
+            else str(c.creado_en)
+        )
     cps: Optional[bool] = None
     if db is not None and finiquito_casos_has_contacto_para_siguientes(db):
         try:
@@ -430,6 +481,8 @@ def _caso_to_out(
         contacto_para_siguientes=cps,
         finiquito_tramite_fecha_limite=ftl,
         fecha_liquidado=flq,
+        creado_en=creado_iso,
+        fecha_entrada_en_proceso=fep,
     )
 
 
@@ -1209,6 +1262,28 @@ def finiquito_admin_revision_datos(
     )
 
 
+@router.delete("/admin/casos/{caso_id}", response_model=FiniquitoEliminarCasoResponse)
+def finiquito_admin_eliminar_caso(
+    caso_id: int,
+    db: Session = Depends(get_db),
+    _: UserResponse = Depends(require_admin_or_operator),
+):
+    """Quita el caso de finiquito desde la bandeja principal (solo estado REVISION)."""
+    caso = db.query(FiniquitoCaso).filter(FiniquitoCaso.id == caso_id).first()
+    if not caso:
+        raise HTTPException(status_code=404, detail="Caso no encontrado")
+    if (caso.estado or "").upper().strip() != "REVISION":
+        return FiniquitoEliminarCasoResponse(
+            ok=False,
+            error="Solo puede eliminar casos en Revision (bandeja principal).",
+        )
+    prestamo_id = int(caso.prestamo_id)
+    db.delete(caso)
+    limpiar_estado_gestion_finiquito_prestamos(db, [prestamo_id])
+    db.commit()
+    return FiniquitoEliminarCasoResponse(ok=True)
+
+
 @router.patch("/admin/casos/{caso_id}/estado", response_model=FiniquitoPatchEstadoResponse)
 def finiquito_admin_patch_estado(
     caso_id: int,
@@ -1268,7 +1343,7 @@ def finiquito_admin_patch_estado(
         if anterior not in ("REVISION", "EN_PROCESO"):
             return FiniquitoPatchEstadoResponse(
                 ok=False,
-                error="Aceptado solo desde Revision o En proceso.",
+                error="Validado (Aceptado) solo desde Revision o al volver desde En proceso.",
             )
 
     if nuevo == "RECHAZADO":
@@ -1288,12 +1363,12 @@ def finiquito_admin_patch_estado(
         )
 
     if nuevo == "TERMINADO":
-        if anterior not in ("EN_PROCESO", "ACEPTADO"):
+        if anterior != "EN_PROCESO":
             return FiniquitoPatchEstadoResponse(
                 ok=False,
-                error="Terminado solo desde Aceptado o En proceso.",
+                error="Terminado solo desde En proceso (area de trabajo).",
             )
-        if anterior == "EN_PROCESO" and body.contacto_para_siguientes is None:
+        if body.contacto_para_siguientes is None:
             return FiniquitoPatchEstadoResponse(
                 ok=False,
                 error="Debe indicar si contacto al cliente para pasos siguientes (Si o No).",
@@ -1302,16 +1377,13 @@ def finiquito_admin_patch_estado(
         if anterior != "ACEPTADO":
             return FiniquitoPatchEstadoResponse(
                 ok=False,
-                error="Solo puede marcar En proceso desde Aceptado.",
+                error="En proceso solo desde el area de revision (caso validado).",
             )
 
     caso.estado = nuevo
     if finiquito_casos_has_contacto_para_siguientes(db):
         if nuevo == "TERMINADO":
-            cps = body.contacto_para_siguientes
-            if cps is None and anterior == "ACEPTADO":
-                cps = False
-            caso.contacto_para_siguientes = cps
+            caso.contacto_para_siguientes = body.contacto_para_siguientes
         else:
             caso.contacto_para_siguientes = None
 
@@ -1336,8 +1408,6 @@ def finiquito_admin_patch_estado(
             )
         elif nuevo == "TERMINADO":
             _cps_aud = body.contacto_para_siguientes
-            if _cps_aud is None and anterior == "ACEPTADO":
-                _cps_aud = False
             _registrar_auditoria_area_trabajo(
                 db,
                 caso_id=caso.id,

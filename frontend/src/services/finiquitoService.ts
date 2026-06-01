@@ -17,10 +17,14 @@ export type FiniquitoCasoItem = {
   cliente_nombres?: string | null
   cliente_email?: string | null
   cliente_telefono?: string | null
-  /** ISO date: plazo 15 días laborales al pasar a En proceso (prestamos.finiquito_tramite_fecha_limite). */
+  /** ISO date: plazo 25 dias calendario al pasar a En proceso (prestamos.finiquito_tramite_fecha_limite). */
   finiquito_tramite_fecha_limite?: string | null
   /** ISO date: fecha en que el préstamo fue declarado LIQUIDADO. */
   fecha_liquidado?: string | null
+  /** ISO datetime: alta del caso materializado. */
+  creado_en?: string | null
+  /** ISO datetime: ultimo paso a EN_PROCESO (area de trabajo). */
+  fecha_entrada_en_proceso?: string | null
 }
 
 export type FiniquitoRevisionDatosResponse = {
@@ -131,6 +135,12 @@ export async function finiquitoAdminListar(
   }
   const q = params.toString() ? `?${params.toString()}` : ''
   return apiClient.get<FiniquitoAdminListaResult>(`${BASE}/admin/casos${q}`)
+}
+
+export async function finiquitoAdminEliminarCaso(casoId: number) {
+  return apiClient.delete<{ ok: boolean; error?: string }>(
+    `${BASE}/admin/casos/${casoId}`
+  )
 }
 
 export async function finiquitoAdminPatchEstado(

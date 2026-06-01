@@ -2,20 +2,18 @@
 Refleja en prestamos.estado_gestion_finiquito la fase finiquito visible para todos
 (REVISION, EN_PROCESO, TERMINADO). No sustituye prestamos.estado (LIQUIDADO, etc.).
 
-En EN_PROCESO fija finiquito_tramite_fecha_limite = 15 dias laborales (lun-vie,
-America/Caracas) desde la fecha del cambio. En otros estados la limpia.
+En EN_PROCESO fija finiquito_tramite_fecha_limite = 25 dias calendario (America/Caracas)
+desde la fecha del cambio. En otros estados la limpia.
 """
 from __future__ import annotations
 
+from datetime import timedelta
 from typing import Iterable
 
 from sqlalchemy.orm import Session
 
 from app.models.prestamo import Prestamo
-from app.utils.dias_laborales_caracas import (
-    fecha_hoy_caracas,
-    sumar_dias_laborales_lun_vie,
-)
+from app.utils.dias_laborales_caracas import fecha_hoy_caracas
 
 _VALORES_GESTION_EN_PRESTAMO = frozenset({"REVISION", "EN_PROCESO", "TERMINADO"})
 
@@ -31,7 +29,7 @@ def sincronizar_prestamo_estado_gestion_finiquito(
     if fe == "EN_PROCESO":
         p.estado_gestion_finiquito = "EN_PROCESO"
         anchor = fecha_hoy_caracas()
-        p.finiquito_tramite_fecha_limite = sumar_dias_laborales_lun_vie(anchor, 15)
+        p.finiquito_tramite_fecha_limite = anchor + timedelta(days=25)
     elif fe in _VALORES_GESTION_EN_PRESTAMO:
         p.estado_gestion_finiquito = fe
         p.finiquito_tramite_fecha_limite = None
