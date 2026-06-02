@@ -2725,9 +2725,12 @@ def extract_infopagos_campos_desde_comprobante(
                     time.sleep(delay)
                 else:
                     raise
+        from app.services.pagos_gmail.gemini_errors import mensaje_error_gemini_para_usuario
+
+        err_msg = mensaje_error_gemini_para_usuario(last_error) if last_error else "Error desconocido."
         return {
             "ok": False,
-            "error": str(last_error)[:500] if last_error else "Error desconocido.",
+            "error": err_msg,
             "fecha_pago": None,
             "institucion_financiera": "",
             "numero_operacion": "",
@@ -2737,10 +2740,12 @@ def extract_infopagos_campos_desde_comprobante(
             "notas": "",
         }
     except Exception as e:
+        from app.services.pagos_gmail.gemini_errors import mensaje_error_gemini_para_usuario
+
         logger.exception("[ESCANER] extract_infopagos_campos_desde_comprobante: %s", e)
         return {
             "ok": False,
-            "error": "No se pudo procesar el comprobante en este momento. Intente de nuevo.",
+            "error": mensaje_error_gemini_para_usuario(e),
             "fecha_pago": None,
             "institucion_financiera": "",
             "numero_operacion": "",

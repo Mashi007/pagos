@@ -4,6 +4,7 @@ Endpoints de health check para monitoreo y debugging de la aplicación.
 GET /health/                        - Health check básico
 GET /health/db                      - Verifica conexión a BD y tablas críticas
 GET /health/cobros                  - Módulo Cobros: BD, GEMINI_API_KEY y SMTP configurados (sin exponer secretos)
+GET /health/gemini-live             - Prueba real a la API Gemini (facturacion / permisos; sin exponer la clave)
 GET /health/clientes-stats-diagnostico - Diagnóstico KPI nuevos_este_mes (público, sin auth)
 GET /health/detailed                - Reporte completo (solo dev)
 GET /health/integrity               - Integridad préstamos/cuotas/pagos (cédula en clientes, cuotas con prestamo_id, pagos con prestamo_id, préstamos sin cuotas)
@@ -232,6 +233,19 @@ async def health_check_cobros(db: Session = Depends(get_db)):
         logger.info("[Health/cobros] Resultado: ok (todas las fases OK)")
 
     return result
+
+
+@router.get("/gemini-live")
+async def health_gemini_live():
+    """
+    Llama a Gemini con un prompt minimo. Sirve para saber si Google ya desbloqueo la cuenta
+    tras pagar facturacion (el /health/cobros solo comprueba que exista GEMINI_API_KEY).
+    """
+    from app.services.pagos_gmail.gemini_probe import probe_gemini_live
+
+    probe = probe_gemini_live()
+    status = "ok" if probe.get("ok") else "error"
+    return {"status": status, **probe}
 
 
 @router.get("/integrity")
