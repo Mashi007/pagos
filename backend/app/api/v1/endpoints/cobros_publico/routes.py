@@ -908,6 +908,12 @@ async def enviar_reporte_publico(
         # Si hubo confirmación humana explícita desde escáner/operador,
         # no forzamos revisión manual por validadores automáticos.
         falla_validadores = False if confirmo_humano else reportado_falla_validadores_cobros(db, pr)
+        if cpr.aplicar_revision_manual_por_monto_alto_en_reportado(
+            monto=monto,
+            moneda_upper=mon_norm.moneda_upper,
+            pr=pr,
+        ):
+            falla_validadores = True
         pr.estado = "en_revision" if falla_validadores else "aprobado"
         pr.falla_validadores_manual = falla_validadores
         db.commit()
@@ -1214,6 +1220,12 @@ async def enviar_reporte_infopagos(
         # no forzamos revisión manual por validadores automáticos.
         validadores_started = perf_counter()
         falla_validadores = False if confirmo_humano else reportado_falla_validadores_cobros(db, pr)
+        if cpr.aplicar_revision_manual_por_monto_alto_en_reportado(
+            monto=monto,
+            moneda_upper=mon_norm.moneda_upper,
+            pr=pr,
+        ):
+            falla_validadores = True
         phase_ms["validadores_ms"] = _elapsed_ms(validadores_started)
         pr.estado = "en_revision" if falla_validadores else "aprobado"
         pr.falla_validadores_manual = falla_validadores

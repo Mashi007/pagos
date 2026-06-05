@@ -28,6 +28,39 @@ def test_parse_monto_comprobante_mercantil_asteriscos_y_ocr():
     assert parse_monto_comprobante("150") == 150.0
 
 
+def test_parse_monto_comprobante_bnc_usd_decimal_ocr():
+    assert parse_monto_comprobante("135.00") == 135.0
+    assert parse_monto_comprobante("***********135.00") == 135.0
+    assert parse_monto_comprobante("135.00 USD") == 135.0
+    assert parse_monto_comprobante("135.000", moneda="USD") == 135.0
+    assert parse_monto_comprobante("135000", moneda="USD") == 135.0
+    assert parse_monto_comprobante("13500", moneda="USD") == 135.0
+    assert parse_monto_comprobante("1.350.00", moneda="USD") == 1350.0
+    assert parse_monto_comprobante(135000, moneda="USD") == 135.0
+
+
+def test_parse_monto_comprobante_no_corregir_bs_miles():
+    assert parse_monto_comprobante("15.000", moneda="BS") == 15000.0
+    assert parse_monto_comprobante("135000", moneda="BS") == 135000.0
+
+
+def test_monto_requiere_revision_manual_umbral():
+    from app.services.pagos_gmail.parse_campos_comprobante import (
+        MONTO_UMBRAL_REVISION_MANUAL,
+        fusionar_validacion_reglas_monto_alto_escaneo,
+        monto_requiere_revision_manual,
+    )
+
+    assert MONTO_UMBRAL_REVISION_MANUAL == 3000.0
+    assert not monto_requiere_revision_manual(3000)
+    assert monto_requiere_revision_manual(3000.01)
+    assert monto_requiere_revision_manual(3500, moneda="BS")
+    assert monto_requiere_revision_manual(3500, moneda="USD")
+    msg = fusionar_validacion_reglas_monto_alto_escaneo(None, 3500, moneda="USD")
+    assert msg is not None
+    assert "3,000" in msg or "3000" in msg
+
+
 def test_parse_fecha_comprobante():
     assert parse_fecha_comprobante("31/05/2026", REF) == date(2026, 5, 31)
     assert parse_fecha_comprobante("31/05/26", REF) == date(2026, 5, 31)

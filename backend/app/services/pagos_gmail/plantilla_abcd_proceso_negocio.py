@@ -60,10 +60,10 @@ si hay 0 o varios, no se inserta `Pago` (revisión manual / `pagos_con_errores`)
 
 ---
 
-### 4) Monto alto (>= 1000)
+### 4) Monto alto (> 3000)
 
 Si el valor numérico del comprobante (columna `monto` / `monto_operacion`, sin importar
-moneda en el texto: USD, Bs, USDT, etc.) es **mayor o igual a 1000**, el ítem **no** sigue
+moneda en el texto: USD, Bs, USDT, etc.) es **mayor a 3000**, el ítem **no** sigue
 alta automática ni el botón **Guardar** del módulo Actualizaciones > Gmail: permanece para
 **revisión manual** (vía **Editar** → `pagos_con_errores` → modal de revisión).
 
@@ -81,14 +81,18 @@ from sqlalchemy.orm import Session
 
 from app.services.pago_numero_documento import numero_documento_ya_registrado
 from app.services.pagos_gmail.helpers import format_monto_excel_pagos_gmail
+from app.services.pagos_gmail.parse_campos_comprobante import (
+    MONTO_UMBRAL_REVISION_MANUAL,
+    monto_requiere_revision_manual,
+)
 
 if TYPE_CHECKING:
     pass
 
 logger = logging.getLogger(__name__)
 
-# Umbral numerico: pagos >= este valor van a revision manual (sin distinguir moneda).
-PAGOS_GMAIL_UMBRAL_REVISION_MANUAL_USD = Decimal("1000")
+# Umbral numerico: pagos > este valor van a revision manual (sin distinguir moneda).
+PAGOS_GMAIL_UMBRAL_REVISION_MANUAL_USD = Decimal(str(MONTO_UMBRAL_REVISION_MANUAL))
 
 # Plantillas de comprobante bancario (Gemini) cubiertas por este proceso.
 PLANTILLAS_BANCO_ABCD = frozenset({"A", "B", "C", "D"})
@@ -107,19 +111,15 @@ BANCOS_PLANTILLA_ABCD = frozenset(
 
 def monto_gmail_sync_requiere_revision_manual_usd(monto_str: Optional[str]) -> bool:
     """
-    True si el valor numerico parseado del comprobante es >= 1000 (cualquier moneda en el texto).
+    True si el valor numerico parseado del comprobante es > 3000 (cualquier moneda en el texto).
     """
     raw = (monto_str or "").strip()
     if not raw or raw.upper() in ("NA", "NR"):
         return False
     txt = format_monto_excel_pagos_gmail(monto_str)
-    if not txt:
-        return False
-    try:
-        v = float(txt)
-    except (TypeError, ValueError):
-        return False
-    return v >= float(PAGOS_GMAIL_UMBRAL_REVISION_MANUAL_USD)
+    if txt:
+        return monto_requiere_revision_manual(txt)
+    return monto_requiere_revision_manual(monto_str)
 
 
 def es_plantilla_banco_abcd(fmt: str) -> bool:
@@ -165,7 +165,7 @@ def resumen_log_linea_plantilla_abcd(
         partes.append("duplicado por documento → revisión manual (pagos_con_errores)")
     if revision_manual_monto:
         partes.append(
-            f"monto >= {PAGOS_GMAIL_UMBRAL_REVISION_MANUAL_USD} → revisión manual (pagos_con_errores)"
+            f"monto > {PAGOS_GMAIL_UMBRAL_REVISION_MANUAL_USD} → revisión manual (pagos_con_errores)"
         )
     if len(partes) == 1:
         partes.append("sin bloqueo duplicado ni umbral de monto")

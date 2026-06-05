@@ -1405,7 +1405,7 @@ def _pago_con_error_desde_sync_item(
     observaciones = "Pendiente desde Gmail (guardado manual desde módulo Actualizaciones > Gmail)"
     if monto_gmail_sync_requiere_revision_manual_usd(item.monto):
         observaciones = (
-            f"{observaciones}; monto >= {PAGOS_GMAIL_UMBRAL_REVISION_MANUAL_USD} "
+            f"{observaciones}; monto > {PAGOS_GMAIL_UMBRAL_REVISION_MANUAL_USD} "
             "(revision manual obligatoria)"
         )[:255]
     if monto_num <= 0:
@@ -1650,11 +1650,11 @@ def guardar_sync_item(
             "cuotas_aplicadas": 0,
             "pago_con_error_pendiente": False,
             "errores": [
-                f"Pagos de {PAGOS_GMAIL_UMBRAL_REVISION_MANUAL_USD} o mas requieren "
+                f"Pagos mayores a {PAGOS_GMAIL_UMBRAL_REVISION_MANUAL_USD} requieren "
                 "revision manual. Use Editar para validar y aplicar con cascada."
             ],
             "mensaje": (
-                f"Monto >= {PAGOS_GMAIL_UMBRAL_REVISION_MANUAL_USD}: no se puede "
+                f"Monto > {PAGOS_GMAIL_UMBRAL_REVISION_MANUAL_USD}: no se puede "
                 "autoconciliar con Guardar. Use Editar."
             ),
         }

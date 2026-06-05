@@ -131,7 +131,7 @@ def crear_pago_conciliado_y_aplicar_cuotas_gmail_plantilla_nr(
     if monto_gmail_sync_requiere_revision_manual_usd(monto_operacion_str):
         return _fail(
             "monto_umbral_revision_manual",
-            f"Monto >= {PAGOS_GMAIL_UMBRAL_REVISION_MANUAL_USD}: requiere revision manual.",
+            f"Monto > {PAGOS_GMAIL_UMBRAL_REVISION_MANUAL_USD}: requiere revision manual.",
         )
 
     ref_raw = (numero_referencia or "").strip()

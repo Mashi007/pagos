@@ -4324,6 +4324,10 @@ async def escaner_extraer_comprobante_infopagos(
     elif not num_op.strip():
         validacion_reglas = "Complete el número de operación o referencia."
 
+    validacion_reglas = cpr.fusionar_validacion_reglas_monto_alto_escaneo(
+        validacion_reglas, monto, moneda=moneda
+    )
+
     sugerencia = {
         "fecha_pago": fecha_iso,
         "institucion_financiera": inst,
@@ -4787,6 +4791,10 @@ async def escaner_lote_drive_digitalizar(
                     validacion_reglas = "Complete la institución financiera."
                 elif not num_op.strip():
                     validacion_reglas = "Complete el número de operación o referencia."
+
+                validacion_reglas = cpr.fusionar_validacion_reglas_monto_alto_escaneo(
+                    validacion_reglas, monto, moneda=moneda
+                )
 
                 duplicado_en_pagos = False
                 pago_existente_id: Optional[int] = None

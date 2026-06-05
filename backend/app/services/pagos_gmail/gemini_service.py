@@ -46,7 +46,7 @@ MONTO — coma venezolana y asteriscos de cajero; NO concatenar decimales al ent
   - Mercantil DEPÓSITO DIVISAS / tira RECAUDACIÓN: `***********96,00 USD` → **96.00** (coma = decimal). Prohibido `969`, `965`, `960`, `980`: son errores OCR de `96,00` / `98,00`.
   - `98,00 USD` → **98.00**, nunca `980` ni `9800`.
   - Prioriza línea **Monto** de la **tira/sello del validador** sobre casilla manuscrita si difieren.
-  - BNC cajero: `**********122.00` o `*****96.00` → 122.00 / 96.00 sin asteriscos.
+  - BNC cajero: `**********122.00`, `*****96.00` o `***********135.00` → 122.00 / 96.00 / **135.00** sin asteriscos. Prohibido `135000`, `135.000`, `13500` o `1.350.00`: son errores OCR de `135.00`.
   - En JSON de monto usa número decimal con **punto** (96.00), sin separador de miles.
 
 FECHA — Venezuela DD/MM/YYYY; no confundir con MM/DD ni inventar desde metadata:
@@ -2687,7 +2687,7 @@ def extract_infopagos_campos_desde_comprobante(
                     num_op,
                 )
                 fecha = _parse_fecha_escaner_desde_gemini(data.get("fecha_pago"), ref_hoy)
-                monto = _parse_monto_escaner(data.get("monto"))
+                monto = _parse_monto_escaner(data.get("monto"), moneda=mon_norm)
                 if data.get("fecha_pago") and fecha is None:
                     logger.info(
                         "[ESCANER] fecha_pago descartada (ilegible/futura/lejana): raw=%r ref=%s",

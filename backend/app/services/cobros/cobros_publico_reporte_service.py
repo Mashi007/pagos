@@ -29,6 +29,9 @@ from app.services.tasa_cambio_service import (
     valor_tasa_para_fuente,
 )
 from app.services.cobros.cedula_reportar_bs_service import cedula_autorizada_para_bs
+from app.services.pagos_gmail.parse_campos_comprobante import (
+    fusionar_validacion_reglas_monto_alto_escaneo,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -84,6 +87,29 @@ ERROR_BS_NO_AUTORIZADO = (
 
 MIN_MONTO_BS_REPORTAR = 1.0
 MAX_MONTO_BS_REPORTAR = 10_000_000.0
+
+
+def aplicar_revision_manual_por_monto_alto_en_reportado(
+    *,
+    monto: float,
+    moneda_upper: str,
+    pr: PagoReportado,
+) -> bool:
+    """
+    Si el monto supera el umbral global de escaneo, anota el reporte y devuelve True
+    (el caller debe forzar estado en_revision / falla_validadores).
+    """
+    from app.services.pagos_gmail.parse_campos_comprobante import (
+        mensaje_monto_revision_manual,
+        monto_requiere_revision_manual,
+    )
+
+    if not monto_requiere_revision_manual(monto, moneda=moneda_upper):
+        return False
+    extra = mensaje_monto_revision_manual(monto, moneda=moneda_upper)
+    prev = (getattr(pr, "gemini_comentario", None) or "").strip()
+    pr.gemini_comentario = (f"{prev} {extra}".strip() if prev else extra)[:500]
+    return True
 
 
 def validar_monto_reporte_publico(monto: float, moneda_upper: str) -> Optional[str]:

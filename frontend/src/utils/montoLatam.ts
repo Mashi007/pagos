@@ -32,6 +32,13 @@ export function parseMontoLatam(texto: string): number {
       const frac = parts[1]
       if (frac.length <= 2 && /^\d+$/.test(frac)) {
         normalized = s
+      } else if (frac.length === 3 && frac === '000') {
+        const intPart = parseInt(parts[0], 10)
+        if (Number.isFinite(intPart) && intPart >= 30) {
+          normalized = `${parts[0]}.${frac.slice(0, 2)}`
+        } else {
+          normalized = parts[0] + frac
+        }
       } else {
         normalized = parts[0] + parts[1]
       }
