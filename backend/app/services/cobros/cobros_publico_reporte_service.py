@@ -28,7 +28,10 @@ from app.services.tasa_cambio_service import (
     obtener_tasa_por_fecha,
     valor_tasa_para_fuente,
 )
-from app.services.cobros.cedula_reportar_bs_service import cedula_autorizada_para_bs
+from app.services.cobros.cedula_reportar_bs_service import (
+    cedula_autorizada_para_bs,
+    fuente_tasa_bs_efectiva_para_cedula,
+)
 from app.services.pagos_gmail.parse_campos_comprobante import (
     fusionar_validacion_reglas_monto_alto_escaneo,
 )
@@ -553,6 +556,19 @@ def normalizar_y_validar_campos_formulario(
     )
 
 
+def resolver_fuente_tasa_reporte_publico(
+    db: Session,
+    *,
+    cedula_lookup: str,
+    moneda_upper: str,
+    fuente_tasa_cambio: Optional[str] = None,
+) -> Optional[str]:
+    """Bs.: solo la tasa de cedulas_reportar_bs; el cliente no elige fuente."""
+    if (moneda_upper or "").upper() == "BS":
+        return fuente_tasa_bs_efectiva_para_cedula(db, cedula_lookup)
+    return normalizar_fuente_tasa(fuente_tasa_cambio)
+
+
 def validar_reglas_bs_tasa_monto_fecha(
     db: Session,
     *,
@@ -566,7 +582,17 @@ def validar_reglas_bs_tasa_monto_fecha(
     if mon.moneda_upper == "BS":
         if not cedula_autorizada_para_bs(db, cedula_lookup):
             return ERROR_BS_NO_AUTORIZADO
-        fuente = normalizar_fuente_tasa(fuente_tasa_cambio)
+        fuente = resolver_fuente_tasa_reporte_publico(
+            db,
+            cedula_lookup=cedula_lookup,
+            moneda_upper=mon.moneda_upper,
+            fuente_tasa_cambio=fuente_tasa_cambio,
+        )
+        if not fuente:
+            return (
+                "No hay tasa de cambio configurada para esta cédula en bolívares. "
+                "Contacte al administrador."
+            )
         row = obtener_tasa_por_fecha(db, fecha_pago)
         if row is None:
             return ERROR_TASA_BS_NO_REGISTRADA.format(fp=fecha_pago.strftime("%d/%m/%Y"))
@@ -746,6 +772,26 @@ def crear_pago_reportado_con_referencia_o_retry(
                         "No se pudo almacenar el comprobante. Use PDF o imagen JPEG, PNG, HEIC o WebP válida.",
                     )
                 img_id, _url = stored
+            cedula_lookup = (
+                f"{(tipo_cedula or '').strip().upper()}{(numero_cedula or '').strip()}"
+                .replace("-", "")
+                .replace(" ", "")
+            )
+            moneda_upper = (moneda_guardar or "").strip().upper()
+            if moneda_upper == "BS":
+                fuente_guardar = resolver_fuente_tasa_reporte_publico(
+                    db,
+                    cedula_lookup=cedula_lookup,
+                    moneda_upper="BS",
+                )
+                if not fuente_guardar:
+                    return (
+                        None,
+                        None,
+                        "No hay tasa de cambio configurada para esta cédula en bolívares.",
+                    )
+            else:
+                fuente_guardar = normalizar_fuente_tasa(fuente_tasa_cambio)
             pr = PagoReportado(
                 referencia_interna=referencia,
                 nombres=nombres,
@@ -764,7 +810,7 @@ def crear_pago_reportado_con_referencia_o_retry(
                 correo_enviado_a=correo_enviado_a,
                 estado="pendiente",
                 canal_ingreso=canal_ingreso,
-                fuente_tasa_cambio=normalizar_fuente_tasa(fuente_tasa_cambio),
+                fuente_tasa_cambio=fuente_guardar,
             )
             db.add(pr)
             db.commit()

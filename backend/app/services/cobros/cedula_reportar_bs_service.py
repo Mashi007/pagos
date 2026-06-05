@@ -116,6 +116,24 @@ def obtener_fuente_tasa_lista_bs(db: Session, cedula_sin_guion: str) -> Optional
     return None
 
 
+def fuente_tasa_bs_efectiva_para_cedula(
+    db: Session,
+    cedula_sin_guion: str,
+    *,
+    fuente_almacenada: Optional[str] = None,
+) -> Optional[str]:
+    """
+    Fuente Bs.→USD efectiva: prioriza cedulas_reportar_bs (config admin al alta de cédula).
+    Si no hay fila en lista, usa fuente_almacenada (p. ej. pagos_reportados ya guardados).
+    """
+    lista = obtener_fuente_tasa_lista_bs(db, cedula_sin_guion)
+    if lista:
+        return lista
+    if fuente_almacenada:
+        return normalizar_fuente_tasa(fuente_almacenada)
+    return None
+
+
 def normalize_cedula_para_almacenar_lista_bs(cedula: str) -> Optional[str]:
     """
     Normaliza cédula para guardar en cedulas_reportar_bs (clave canónica).

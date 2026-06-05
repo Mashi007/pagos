@@ -58,6 +58,7 @@ from app.services.cobros.pago_reportado_documento import (
 from app.services.cobros.cedula_reportar_bs_service import (
     load_autorizados_bs_claves,
     cedula_coincide_autorizados_bs,
+    fuente_tasa_bs_efectiva_para_cedula,
 )
 from app.services.tasa_cambio_service import (
     convertir_bs_a_usd,
@@ -2896,7 +2897,21 @@ def _crear_pago_desde_reportado_y_aplicar_cuotas(db: Session, pr: PagoReportado,
                     f"{pr.fecha_pago.isoformat()}. Registre la tasa antes de aprobar pagos en bolívares."
                 ),
             )
-        fuente = normalizar_fuente_tasa(getattr(pr, "fuente_tasa_cambio", None))
+        fuente = fuente_tasa_bs_efectiva_para_cedula(
+            db,
+            f"{(pr.tipo_cedula or '').strip().upper()}{(pr.numero_cedula or '').strip()}".replace(
+                "-", ""
+            ).replace(" ", ""),
+            fuente_almacenada=getattr(pr, "fuente_tasa_cambio", None),
+        )
+        if not fuente:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "No hay tasa de cambio configurada para esta cédula en bolívares. "
+                    "Verifique Pago Bs. antes de aprobar."
+                ),
+            )
         tasa_res = valor_tasa_para_fuente(tasa_obj, fuente)
         if tasa_res is None or float(tasa_res) <= 0:
             raise HTTPException(

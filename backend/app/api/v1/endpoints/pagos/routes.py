@@ -195,6 +195,8 @@ from app.services.cobros.cedula_reportar_bs_service import (
 
     obtener_fuente_tasa_lista_bs,
 
+    fuente_tasa_bs_efectiva_para_cedula,
+
 )
 
 from app.services.tasa_cambio_service import normalizar_fuente_tasa
@@ -2601,7 +2603,17 @@ def importar_un_pago_reportado_a_pagos(
 
             )
 
-        fuente = normalizar_fuente_tasa(getattr(pr, "fuente_tasa_cambio", None))
+        fuente = fuente_tasa_bs_efectiva_para_cedula(
+            db,
+            cedula_raw.replace("-", "").replace(" ", ""),
+            fuente_almacenada=getattr(pr, "fuente_tasa_cambio", None),
+        )
+        if not fuente:
+            return _err_con_pce(
+                "No hay tasa de cambio configurada para esta cédula en bolívares",
+                cedula_cliente=cedula_raw,
+                prestamo_id=prestamo_id,
+            )
         tasa_res = valor_tasa_para_fuente(tasa_obj, fuente)
         if tasa_res is None or float(tasa_res) <= 0:
             return _err_con_pce(
