@@ -3250,21 +3250,6 @@ export function EditarRevisionManual() {
                         <CreditCard className="h-5 w-5" />
                         Pagos registrados en cartera
                       </CardTitle>
-                      <p className="mt-1 text-sm text-muted-foreground">
-                        Cédula {cedulaParaPagosRealizados}: fecha, monto (USD),
-                        banco, documento y crédito asociado. Cada alta o edición
-                        exige URL de comprobante en el formulario y respeta los
-                        validadores del módulo Pagos (clave única comprobante +
-                        código opcional). Si la misma clave aparece dos veces en
-                        esta página se resalta en la tabla. Use «Agregar pago»,
-                        «Editar» o «Eliminar»; «Aplicar a cuotas (cascada)»
-                        adjudica en la BD los pagos elegibles de este crédito a
-                        las cuotas en orden de vencimiento (cascada por número
-                        de cuota; pagos ordenados por fecha). Solo entran pagos
-                        conciliados, verificados o en estado Pagado, sin filas
-                        en cuota_pagos. La tabla se actualiza al guardar y
-                        también al volver a la pestaña o cada minuto.
-                      </p>
                     </div>
                     <div className="flex shrink-0 flex-wrap items-center gap-2">
                       <Button
@@ -4061,13 +4046,6 @@ export function EditarRevisionManual() {
                     Verificar: Pagado = Monto
                   </Button>
                 </div>
-                <p className="text-sm text-muted-foreground">
-                  La cantidad de filas sigue el campo «Número de cuotas» del
-                  préstamo (condiciones): si indica 12, se muestran las cuotas 1
-                  a 12; las que aún no existen en BD aparecen en blanco hasta
-                  guardar o reconstruir. El calendario depende de fechas de
-                  aprobación y reglas de amortización.
-                </p>
               </CardHeader>
 
               <CardContent>
