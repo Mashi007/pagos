@@ -132,7 +132,6 @@ import {
   COHERENCIA_USD_TOL,
   PER_PAGE_PAGOS_REGISTRADOS,
   RUTA_LISTA_PRESTAMOS,
-  badgeEstadoPagoRegistrado,
   descripcionDiagnosticoCascada,
   ejecutarEnLotes,
   firmaSoloCliente,
@@ -143,10 +142,7 @@ import {
   mergeCuotasParaMostrar,
   opcionesSelectCuotaRevision,
   opcionesSelectEstadoPrestamoRevision,
-  pagoCarteraRevisionBloquearToggleCerrado,
-  pagoEstadoExcluyeToggleConciliadoRevision,
   pagoRowAPagoCreateInicial,
-  pagoValidadoCarteraRevisionRow,
   timestampOrdenFechaPago,
   type ClienteData,
   type CuotaData,
@@ -252,10 +248,6 @@ export function EditarRevisionManual() {
   >(undefined)
 
   const [eliminandoPagoId, setEliminandoPagoId] = useState<number | null>(null)
-
-  const [conciliandoPagoId, setConciliandoPagoId] = useState<number | null>(
-    null
-  )
 
   /** Fecha de aprobación original cargada desde BD - para detectar si cambió */
   const [fechaAprobacionOriginal, setFechaAprobacionOriginal] = useState<
@@ -918,44 +910,6 @@ export function EditarRevisionManual() {
       toast.error(msg || 'No se pudo eliminar el pago')
     } finally {
       setEliminandoPagoId(null)
-    }
-  }
-
-  const toggleConciliadoPagoRevision = async (pago: Pago, checked: boolean) => {
-    if (soloLectura) return
-    if (!checked && pagoCarteraRevisionBloquearToggleCerrado(pago)) {
-      toast.error(
-        'Este pago ya está aplicado a cuotas con cartera validada (Pagado). No se puede quitar desde aquí.'
-      )
-      return
-    }
-    if (pagoEstadoExcluyeToggleConciliadoRevision(pago.estado)) {
-      toast.error(
-        'No se puede cambiar conciliación en pagos anulados, rechazados o duplicado declarado.'
-      )
-      return
-    }
-    setConciliandoPagoId(pago.id)
-    try {
-      if (checked) {
-        await pagoService.updateConciliado(pago.id, true)
-      } else {
-        await pagoService.updatePago(pago.id, {
-          conciliado: false,
-          verificado_concordancia: 'NO',
-        })
-      }
-      toast.success(
-        checked
-          ? 'Pago validado para cartera (conciliado / verificado). Use «Aplicar pagos a cuotas» si aún no hay cuota_pagos.'
-          : 'Validación de cartera quitada (conciliado no, verificado NO).'
-      )
-      await refrescarTrasCambioPagosRevision()
-      setRevisionOperativaSucia(true)
-    } catch (err: unknown) {
-      toast.error(getErrorMessage(err) || 'No se pudo actualizar conciliación')
-    } finally {
-      setConciliandoPagoId(null)
     }
   }
 
@@ -3430,15 +3384,6 @@ export function EditarRevisionManual() {
                                 <TableHead className="whitespace-nowrap">
                                   Crédito
                                 </TableHead>
-                                <TableHead className="whitespace-nowrap">
-                                  Estado
-                                </TableHead>
-                                <TableHead
-                                  className="whitespace-nowrap text-center"
-                                  title="Marca validación para cartera (conciliado o verificado Sí en BD), elegible para «Aplicar pagos a cuotas». Tras guardar, si no hubo abono en cuotas el servidor puede dejar verificado Sí y conciliado no: el casillero sigue marcado."
-                                >
-                                  Cartera
-                                </TableHead>
                                 <TableHead>Notas</TableHead>
                                 <TableHead className="min-w-[88px] whitespace-nowrap text-right">
                                   Acciones
@@ -3537,57 +3482,6 @@ export function EditarRevisionManual() {
                                       {pago.prestamo_id != null
                                         ? pago.prestamo_id
                                         : '-'}
-                                    </TableCell>
-                                    <TableCell>
-                                      {badgeEstadoPagoRegistrado(
-                                        (
-                                          pago.estado || 'PENDIENTE'
-                                        ).toUpperCase()
-                                      )}
-                                    </TableCell>
-                                    <TableCell className="text-center align-middle">
-                                      <input
-                                        type="checkbox"
-                                        className="h-4 w-4 cursor-pointer rounded border-input accent-primary disabled:cursor-not-allowed disabled:opacity-50"
-                                        checked={pagoValidadoCarteraRevisionRow(
-                                          pago
-                                        )}
-                                        disabled={
-                                          soloLectura ||
-                                          conciliandoPagoId === pago.id ||
-                                          eliminandoPagoId === pago.id ||
-                                          pagoEstadoExcluyeToggleConciliadoRevision(
-                                            pago.estado
-                                          ) ||
-                                          pagoCarteraRevisionBloquearToggleCerrado(
-                                            pago
-                                          )
-                                        }
-                                        title={
-                                          soloLectura
-                                            ? 'Revisión cerrada: solo lectura'
-                                            : pagoCarteraRevisionBloquearToggleCerrado(
-                                                  pago
-                                                )
-                                              ? 'Pago aplicado a cuotas con cartera validada (Pagado): no se puede quitar la validación aquí'
-                                              : pagoEstadoExcluyeToggleConciliadoRevision(
-                                                    pago.estado
-                                                  )
-                                                ? 'Estado del pago no admite cambiar validación aquí'
-                                                : pagoValidadoCarteraRevisionRow(
-                                                      pago
-                                                    )
-                                                  ? 'Quitar validación cartera (conciliado no, verificado NO)'
-                                                  : 'Validar para cartera (conciliado; si no abona cuotas puede quedar verificado Sí)'
-                                        }
-                                        onChange={e => {
-                                          void toggleConciliadoPagoRevision(
-                                            pago,
-                                            e.target.checked
-                                          )
-                                        }}
-                                        aria-label={`Validación cartera pago ${pago.id}`}
-                                      />
                                     </TableCell>
                                     <TableCell className="max-w-[220px] truncate text-sm text-muted-foreground">
                                       {pago.notas?.trim() ? pago.notas : '-'}
@@ -3870,7 +3764,7 @@ export function EditarRevisionManual() {
                         }
                         if (pendN > 0 && estadoPrestamoNorm === 'APROBADO') {
                           sugerencias.push(
-                            `Hay ${pendN} pago(s) en estado Pendiente por ${pendSum.toFixed(2)} USD; valide cartera y luego cascada si corresponde.`
+                            `Hay ${pendN} pago(s) sin aplicar a cuotas por ${pendSum.toFixed(2)} USD; valide cartera y luego cascada si corresponde.`
                           )
                         }
                         if (
@@ -3924,7 +3818,7 @@ export function EditarRevisionManual() {
                                 <dl className="mt-3 space-y-1.5 border-t border-slate-100 pt-3 text-xs">
                                   <div className="flex justify-between gap-2">
                                     <dt className="text-muted-foreground">
-                                      Pendiente (estado)
+                                      Sin aplicar a cuotas
                                     </dt>
                                     <dd className="font-medium tabular-nums">
                                       {pendN} · ${pendSum.toFixed(2)}
@@ -3932,7 +3826,7 @@ export function EditarRevisionManual() {
                                   </div>
                                   <div className="flex justify-between gap-2">
                                     <dt className="text-muted-foreground">
-                                      Pagado (estado)
+                                      Con abono en cuotas
                                     </dt>
                                     <dd className="font-medium tabular-nums">
                                       {pagN} · ${pagSum.toFixed(2)}
