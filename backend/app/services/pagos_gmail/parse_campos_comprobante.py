@@ -643,16 +643,21 @@ def normalizar_campos_gemini_gmail(fields: Dict[str, str]) -> Dict[str, str]:
 
     ref = fecha_hoy_caracas()
     out = dict(fields)
-    fp = (out.get("fecha_pago") or "").strip()
-    if fp and fp.upper() != PAGOS_NA:
-        norm = fecha_comprobante_a_ddmmyyyy(fp, ref)
-        out["fecha_pago"] = norm if norm else PAGOS_NA
-    mo = (out.get("monto") or "").strip()
-    if mo and mo.upper() not in (PAGOS_NA, "NR"):
-        fm = monto_comprobante_a_excel(mo)
-        out["monto"] = fm if fm else PAGOS_NA
     nr = (out.get("numero_referencia") or "").strip()
     if nr and nr.upper() != PAGOS_NA:
         cleaned = sanitizar_numero_operacion_comprobante(nr)
         out["numero_referencia"] = cleaned if cleaned else PAGOS_NA
+        nr = out["numero_referencia"]
+    fp = (out.get("fecha_pago") or "").strip()
+    if fp and fp.upper() != PAGOS_NA:
+        norm = fecha_comprobante_a_ddmmyyyy(fp, ref)
+        out["fecha_pago"] = norm if norm else PAGOS_NA
+    elif (not fp or fp.upper() == PAGOS_NA) and nr and nr.upper() != PAGOS_NA:
+        inferida = fecha_comprobante_a_ddmmyyyy(nr, ref)
+        if inferida:
+            out["fecha_pago"] = inferida
+    mo = (out.get("monto") or "").strip()
+    if mo and mo.upper() not in (PAGOS_NA, "NR"):
+        fm = monto_comprobante_a_excel(mo)
+        out["monto"] = fm if fm else PAGOS_NA
     return out

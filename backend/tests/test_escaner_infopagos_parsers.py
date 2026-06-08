@@ -103,6 +103,27 @@ def test_normalizar_campos_gemini_gmail_fecha_futura():
     assert out["monto"] == "10.00"
 
 
+def test_normalizar_campos_gemini_gmail_fecha_desde_serial_mercantil():
+    out = normalizar_campos_gemini_gmail(
+        {
+            "fecha_pago": "NA",
+            "monto": "96.00",
+            "cedula": "NA",
+            "numero_referencia": "740087452690993",
+        }
+    )
+    assert out["fecha_pago"] == "NA" or out["fecha_pago"] == ""
+    out2 = normalizar_campos_gemini_gmail(
+        {
+            "fecha_pago": "",
+            "monto": "96.00",
+            "cedula": "NA",
+            "numero_referencia": "9824-20250703-151620-DCME-4279-A",
+        }
+    )
+    assert out2["fecha_pago"] == "03/07/2025"
+
+
 def test_normalizar_campos_gemini_gmail():
     out = normalizar_campos_gemini_gmail(
         {

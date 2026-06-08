@@ -1369,10 +1369,12 @@ def _pagos_gmail_ab_campos_imagen_completos_error_email_ab(fields: Dict[str, str
 
 
 def _pagos_gmail_format_c_complete(fields: Dict[str, str]) -> bool:
-    """Formato C: monto y referencia desde imagen; fecha, cedula y email_cliente NA (cliente/cédula por remitente en backend)."""
+    """Formato C: monto y referencia desde imagen; fecha/cédula del JSON deben estar vacías o NA."""
     fp = (fields.get("fecha_pago") or "").strip().upper()
     ce = (fields.get("cedula") or "").strip().upper()
-    if fp != PAGOS_NA or ce != PAGOS_NA:
+    if fp and fp != PAGOS_NA:
+        return False
+    if ce and ce != PAGOS_NA:
         return False
     for k in ("monto", "numero_referencia"):
         s = (fields.get(k) or "").strip()
@@ -1549,8 +1551,8 @@ def _rescue_prompt_suffix(bank_hint: Optional[str], none_reason: Optional[str] =
         )
         extra_falto_fecha = (
             "\nRefuerzo por `falto_fecha`: en app BNC movil la **fecha de la operacion** puede no aparecer en la captura; "
-            "si **Referencia** + **Monto/Total Bs.** son legibles, devuelve **fecha_pago** = **NA** (literal) y manten **formato B**; "
-            "el backend asigna la fecha operativa desde la fecha del correo."
+            "si **Referencia** + **Monto/Total Bs.** son legibles, devuelve **formato B** con **fecha_pago** = **NA** (literal); "
+            "no inventes fecha desde metadata del correo."
             if reason == "falto_fecha"
             else ""
         )
