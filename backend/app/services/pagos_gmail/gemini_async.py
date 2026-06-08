@@ -15,6 +15,7 @@ from typing import Any, Callable, Dict, Optional, TypeVar
 from app.services.pagos_gmail.gemini_service import (
     compare_form_with_image,
     extract_infopagos_campos_desde_comprobante,
+    extract_infopagos_campos_desde_comprobante_con_rescate_plantilla,
 )
 
 logger = logging.getLogger(__name__)
@@ -49,6 +50,23 @@ async def extract_infopagos_campos_desde_comprobante_async(
 ) -> Dict[str, Any]:
     return await run_blocking_gemini(
         extract_infopagos_campos_desde_comprobante,
+        cedula_deudor_contexto,
+        image_bytes,
+        filename,
+        api_key,
+        institucion_plantilla,
+    )
+
+
+async def extract_infopagos_campos_desde_comprobante_con_rescate_plantilla_async(
+    cedula_deudor_contexto: str,
+    image_bytes: bytes,
+    filename: str = "comprobante.jpg",
+    api_key: Optional[str] = None,
+    institucion_plantilla: Optional[str] = None,
+) -> Dict[str, Any]:
+    return await run_blocking_gemini(
+        extract_infopagos_campos_desde_comprobante_con_rescate_plantilla,
         cedula_deudor_contexto,
         image_bytes,
         filename,

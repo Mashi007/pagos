@@ -41,7 +41,6 @@ import {
   type FuenteTasaCambio,
 } from '../constants/fuenteTasaCambio'
 import {
-  fechaLocalHoyISO,
   resolverInstitucionDesdeExtraccion,
 } from './escanerInfopagosLoteModel'
 import { searchParamsRevisionPagosDesdeNumeroDocumento } from '../utils/linkRevisionPagosDesdeEscaner'
@@ -380,9 +379,7 @@ export default function EscanerInfopagosPage() {
   const fechaComparacionDup = useMemo(() => {
     const m = fechaPago.trim()
     if (m) return m
-    const d = fechaDetectada.trim()
-    if (d) return d
-    return fechaLocalHoyISO()
+    return fechaDetectada.trim()
   }, [fechaPago, fechaDetectada])
 
   const prestamoDuplicadoEsObjetivoEscaneer = useMemo(() => {
@@ -761,7 +758,13 @@ export default function EscanerInfopagosPage() {
       return
     }
     const fechaPagoEnvio =
-      fechaPago.trim() || fechaDetectada.trim() || fechaLocalHoyISO()
+      fechaPago.trim() || fechaDetectada.trim()
+    if (!fechaPagoEnvio) {
+      toast.error(
+        'Indique la fecha de pago (no se detectó con claridad en el comprobante).'
+      )
+      return
+    }
     const vF = validarFechaPago(fechaPagoEnvio)
     if (!vF.valido) {
       toast.error(vF.error || 'Fecha inválida.')
@@ -1282,9 +1285,8 @@ export default function EscanerInfopagosPage() {
                       </p>
                     ) : (
                       <p className="text-xs text-amber-800">
-                        No se detectó fecha clara en la imagen: el campo quedó
-                        con la fecha de hoy; cámbiela si el comprobante
-                        corresponde a otro día.
+                        Sin fecha clara en la imagen: indique la fecha del
+                        comprobante antes de guardar.
                       </p>
                     )}
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-end">

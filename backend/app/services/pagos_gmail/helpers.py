@@ -354,6 +354,28 @@ def extraer_cedula_desde_asunto_cuerpo_pipeline(
     return scored[0][2]
 
 
+def extraer_fecha_desde_asunto_pipeline(subject: str) -> str:
+    """
+    Fecha explícita en el asunto (p. ej. «pago mes 14/06/2026»), no la fecha del correo.
+    Devuelve cadena DD/MM/YYYY o vacío.
+    """
+    s = (subject or "").strip()
+    if not s:
+        return ""
+    m = re.search(r"\b(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})\b", s)
+    if m:
+        dd, mm, yyyy = int(m.group(1)), int(m.group(2)), int(m.group(3))
+        if 1 <= dd <= 31 and 1 <= mm <= 12 and 2000 <= yyyy <= 2099:
+            return f"{dd:02d}/{mm:02d}/{yyyy}"
+    m2 = re.search(r"\b(\d{1,2})[/.-](\d{1,2})[/.-](\d{2})\b", s)
+    if m2:
+        dd, mm, yy = int(m2.group(1)), int(m2.group(2)), int(m2.group(3))
+        yyyy = 2000 + yy if yy <= 69 else 1900 + yy
+        if 1 <= dd <= 31 and 1 <= mm <= 12:
+            return f"{dd:02d}/{mm:02d}/{yyyy}"
+    return ""
+
+
 def resolve_banco_para_excel_pagos_gmail(
     fmt: str,
     banco_gemini: Optional[str],

@@ -12,8 +12,8 @@ Orquestacion: Gmail -> Gemini/BD por **cada adjunto elegible** (remitente en cli
 
 **Regla de decisión actual (sin ambigüedad):**
 - Paso 1: si en el correo hay plantilla A/B con **CUOTAS_OK**, etiqueta final = MERCANTIL o BNC; si no hubo CUOTAS_OK pero sí comprobante A/B digitalizado en BD (p. ej. duplicado), misma etiqueta MERCANTIL/BNC (prioridad A sobre B).
-- Paso 2: si no hubo A/B (ni por cuotas ni por digitalizado) y el remitente está en `clientes`, C/D/E/F con **CUOTAS_OK** → BINANCE/BNV/BANCAMIGA/TESORO (solo C/D tienen alta automática de cuotas hoy; **E/F** usan la misma prioridad de **etiqueta Gmail** al digitalizar); si solo hay C/D/E/F digitalizado sin cuotas, misma etiqueta de banco (prioridad **C** sobre **D** sobre **E** sobre **F** cuando hay mezcla).
-- Paso 2b (Plan B, De no en clientes): si todo el correo digitalizó OK y hay plantilla **C**, etiqueta final = BINANCE (cédula columna ERROR EMAIL; sin CUOTAS_OK automático).
+- Paso 2: si no hubo A/B (ni por cuotas ni por digitalizado/clasificado) y el remitente está en `clientes`, C/D/E/F con **CUOTAS_OK** → BINANCE/BNV/BANCAMIGA/TESORO; si solo hay C/D/E/F digitalizado o clasificado sin cuotas, misma etiqueta de banco.
+- Paso 2b (Plan B, De no en clientes): solo **A/B/C** (nunca D/E/F por hint); Binance **C** clasificado o digitalizado → BINANCE; A/B clasificado → MERCANTIL/BNC sin fila si Gemini reconoció plantilla pero no hubo guardado.
 - Paso 3 (fallback): si no aplica ninguna regla bancaria previa, usar orden TEXTO -> ERROR EMAIL -> MANUAL.
 - Solo se aplica **una** etiqueta final por correo (set permitido arriba): al fijarla en Gmail se **quitan** las demás de ese mismo set si existen (re-etiquetado). No se usan etiquetas Gmail fuera de ese conjunto. Las plantillas **E** (Bancamiga) y **F** (Banco del Tesoro) digitalizan fila Excel/comprobante pero **no** disparan alta automática A–D en `pagos` (fuera de `es_plantilla_banco_abcd`).
 
@@ -199,6 +199,7 @@ from app.services.pagos_gmail.pdf_pages import expand_pipeline_pdf_tuples
 from app.services.pagos_gmail.helpers import (
     extract_sender_email,
     extraer_cedula_desde_asunto_cuerpo_pipeline,
+    extraer_fecha_desde_asunto_pipeline,
     formatear_cedula,
     get_sheet_name_for_date,
     normalizar_fecha_pago,
@@ -498,6 +499,188 @@ def _fmt_desde_bank_hint_escaneo(hint: str) -> Optional[str]:
     if h in _GMAIL_BANK_HINT_F_FMT or "TESORO" in h:
         return "F"
     return None
+
+
+def _etiqueta_gmail_por_plantilla_fmt(fmt: str) -> Optional[str]:
+    f = (fmt or "").strip().upper()
+    if f == "A":
+        return PAGOS_GMAIL_LABEL_IMAGEN_1
+    if f == "B":
+        return PAGOS_GMAIL_LABEL_IMAGEN_2
+    if f == "C":
+        return PAGOS_GMAIL_LABEL_IMAGEN_3
+    if f == "D":
+        return PAGOS_GMAIL_LABEL_IMAGEN_4
+    if f == "E":
+        return PAGOS_GMAIL_LABEL_BANCAMIGA
+    if f == "F":
+        return PAGOS_GMAIL_LABEL_TESORO
+    return None
+
+
+# Plan B (De no en clientes): solo A/B/C en Gmail; D/E/F/NR no aplican (sin fila ni etiqueta de esos bancos).
+_PLAN_B_FORMATOS_ETIQUETA = frozenset({"A", "B", "C"})
+
+
+def _fmts_para_etiqueta_banco_gmail(
+    bank_fmts_digitized: list[str],
+    bank_fmts_classified: list[str],
+    *,
+    plan_b_activo: bool = False,
+) -> list[str]:
+    """Prioriza digitalizado; si no hay, usa clasificado. En Plan B descarta D/E/F/NR."""
+    fmts = bank_fmts_digitized or bank_fmts_classified
+    if not plan_b_activo:
+        return fmts
+    return [f for f in fmts if f in _PLAN_B_FORMATOS_ETIQUETA]
+
+
+def resolver_etiqueta_final_gmail(
+    *,
+    tiene_candidatos: bool,
+    remitente_en_clientes: bool,
+    plan_b_mercantil_bnc_fuera_bd: bool,
+    remitente_solo_master: bool,
+    fully_digitized_email: bool,
+    bank_fmts_digitized: list[str],
+    bank_fmts_classified: list[str],
+    bank_fmts_cuotas_ok: list[str],
+    message_scan_bank_hint: str = "",
+) -> tuple[Optional[str], str]:
+    """
+    Matriz pura de etiqueta final Gmail (una por correo). No altera BD ni CUOTAS_OK.
+
+    Invariantes de regresión:
+    - Sin imagen/PDF escaneable -> TEXTO (salvo master@ sin digitalización completa -> MANUAL).
+    - Remitente fuera de clientes (Plan B): A/B/C por plantilla o hint; D/E/F nunca; si no aplica -> ERROR EMAIL.
+    - Remitente en clientes con media sin plantilla ni hint -> MANUAL (no TEXTO).
+    - CUOTAS_OK sigue siendo criterio de negocio; esta función solo elige etiqueta Gmail.
+    """
+    tipos_digitados = {
+        f for f in bank_fmts_digitized if f in ("A", "B", "C", "D", "E", "F", "NR")
+    }
+    tipos_clasificados = {
+        f for f in bank_fmts_classified if f in ("A", "B", "C", "D", "E", "F", "NR")
+    }
+    fmts_etiqueta = _fmts_para_etiqueta_banco_gmail(
+        bank_fmts_digitized,
+        bank_fmts_classified,
+        plan_b_activo=plan_b_mercantil_bnc_fuera_bd,
+    )
+
+    final_label_name: Optional[str] = None
+    final_label_reason = "none"
+
+    label_prioridad_paso_1 = next(
+        (f for f in bank_fmts_cuotas_ok if f in ("A", "B")),
+        None,
+    )
+    if not label_prioridad_paso_1:
+        for _pref_ab in ("A", "B"):
+            if any(f == _pref_ab for f in fmts_etiqueta):
+                label_prioridad_paso_1 = _pref_ab
+                break
+    if label_prioridad_paso_1:
+        final_label_name = (
+            PAGOS_GMAIL_LABEL_IMAGEN_1
+            if label_prioridad_paso_1 == "A"
+            else PAGOS_GMAIL_LABEL_IMAGEN_2
+        )
+        final_label_reason = (
+            f"paso_1_{label_prioridad_paso_1.lower()}"
+            if label_prioridad_paso_1 in bank_fmts_digitized
+            or label_prioridad_paso_1 in bank_fmts_cuotas_ok
+            else f"clasificado_{label_prioridad_paso_1.lower()}"
+        )
+    elif remitente_en_clientes:
+        label_prioridad_paso_2 = next(
+            (f for f in bank_fmts_cuotas_ok if f in ("C", "D", "E", "F")),
+            None,
+        )
+        if not label_prioridad_paso_2:
+            for _pref_cd in ("C", "D", "E", "F"):
+                if any(f == _pref_cd for f in fmts_etiqueta):
+                    label_prioridad_paso_2 = _pref_cd
+                    break
+        if label_prioridad_paso_2 == "C":
+            final_label_name = PAGOS_GMAIL_LABEL_IMAGEN_3
+            final_label_reason = (
+                "paso_2_c"
+                if label_prioridad_paso_2 in bank_fmts_digitized
+                or label_prioridad_paso_2 in bank_fmts_cuotas_ok
+                else "clasificado_c"
+            )
+        elif label_prioridad_paso_2 == "D":
+            final_label_name = PAGOS_GMAIL_LABEL_IMAGEN_4
+            final_label_reason = (
+                "paso_2_d"
+                if label_prioridad_paso_2 in bank_fmts_digitized
+                or label_prioridad_paso_2 in bank_fmts_cuotas_ok
+                else "clasificado_d"
+            )
+        elif label_prioridad_paso_2 == "E":
+            final_label_name = PAGOS_GMAIL_LABEL_BANCAMIGA
+            final_label_reason = (
+                "paso_2_e"
+                if label_prioridad_paso_2 in bank_fmts_digitized
+                or label_prioridad_paso_2 in bank_fmts_cuotas_ok
+                else "clasificado_e"
+            )
+        elif label_prioridad_paso_2 == "F":
+            final_label_name = PAGOS_GMAIL_LABEL_TESORO
+            final_label_reason = (
+                "paso_2_f"
+                if label_prioridad_paso_2 in bank_fmts_digitized
+                or label_prioridad_paso_2 in bank_fmts_cuotas_ok
+                else "clasificado_f"
+            )
+    elif plan_b_mercantil_bnc_fuera_bd and "C" in (tipos_digitados | tipos_clasificados):
+        final_label_name = PAGOS_GMAIL_LABEL_IMAGEN_3
+        final_label_reason = (
+            "plan_b_binance_digitalizado"
+            if "C" in tipos_digitados and fully_digitized_email
+            else "plan_b_binance_clasificado"
+        )
+
+    if not final_label_name:
+        if remitente_solo_master and not fully_digitized_email:
+            final_label_name = PAGOS_GMAIL_LABEL_MANUAL
+            final_label_reason = "fallback_manual"
+        elif not tiene_candidatos:
+            final_label_name = PAGOS_GMAIL_LABEL_TEXTO
+            final_label_reason = "fallback_texto"
+        elif not remitente_en_clientes:
+            final_label_name = PAGOS_GMAIL_LABEL_ERROR_EMAIL
+            final_label_reason = "fallback_error_email"
+        elif tiene_candidatos:
+            _hint_fmt_fb = _fmt_desde_bank_hint_escaneo(message_scan_bank_hint)
+            if not _hint_fmt_fb and bank_fmts_classified:
+                _ult = bank_fmts_classified[-1]
+                if not plan_b_mercantil_bnc_fuera_bd or _ult in _PLAN_B_FORMATOS_ETIQUETA:
+                    _hint_fmt_fb = _ult
+            _lbl_hint = (
+                _etiqueta_gmail_por_plantilla_fmt(_hint_fmt_fb)
+                if _hint_fmt_fb
+                else None
+            )
+            if _lbl_hint:
+                final_label_name = _lbl_hint
+                final_label_reason = f"hint_{(_hint_fmt_fb or '').lower()}"
+            else:
+                final_label_name = PAGOS_GMAIL_LABEL_MANUAL
+                final_label_reason = "fallback_manual_media"
+
+    return final_label_name, final_label_reason
+
+
+def _completar_fecha_pago_desde_asunto(fecha: str, subject: str) -> str:
+    """Solo usa fecha explícita en asunto (p. ej. 14/06/2026), no la del encabezado Date."""
+    if (fecha or "").strip():
+        return fecha
+    f_asunto = extraer_fecha_desde_asunto_pipeline(subject)
+    if not f_asunto:
+        return fecha
+    return normalizar_fecha_pago(f_asunto) or f_asunto
 
 
 def run_pipeline(
@@ -1229,6 +1412,7 @@ def run_pipeline(
 
                 pending: list[dict] = []
                 committed_comprobante_rows = False
+                message_scan_bank_hint = ""
                 candidatos_loop = (
                     candidatos
                     if (
@@ -1299,6 +1483,9 @@ def run_pipeline(
                             origen_binario=origen_binario,
                             modo_error_email_ab=usar_extraccion_cedula_imagen_ab,
                         )
+                        _scan_hint = (data.get("_scan_bank_hint") or "").strip()
+                        if _scan_hint:
+                            message_scan_bank_hint = _scan_hint
                         _gem_ms = int((perf_counter() - _t0_gem) * 1000)
                         run_stats["gemini_calls_total"] = int(
                             run_stats.get("gemini_calls_total", 0) or 0
@@ -1337,7 +1524,10 @@ def run_pipeline(
                             _none_reason = (data.get("_diag_none_reason") or "sin_detalle").strip()
                             _hint = (data.get("_scan_bank_hint") or "").strip().upper()
                             _hint_fmt = _fmt_desde_bank_hint_escaneo(_hint)
-                            if _hint_fmt:
+                            if _hint_fmt and (
+                                not plan_b_mercantil_bnc_fuera_bd
+                                or _hint_fmt in _PLAN_B_FORMATOS_ETIQUETA
+                            ):
                                 bank_fmts_classified.append(_hint_fmt)
                             none_reason_counts[_none_reason] = (
                                 int(none_reason_counts.get(_none_reason, 0)) + 1
@@ -1445,7 +1635,10 @@ def run_pipeline(
                                     filename,
                                 )
                         elif usar_extraccion_cedula_imagen_ab and fmt in ("A", "B"):
-                            f = normalizar_fecha_pago(_v(data.get("fecha_pago")))
+                            f = _completar_fecha_pago_desde_asunto(
+                                normalizar_fecha_pago(_v(data.get("fecha_pago"))),
+                                subject,
+                            )
                             m = _v(data.get("monto"))
                             r = normalizar_referencia(_v(data.get("numero_referencia")))
                             c = _cedula_desde_imagen_rescan_error_email(data.get("cedula"))
@@ -1483,7 +1676,10 @@ def run_pipeline(
                                 filename,
                             )
                         else:
-                            f = normalizar_fecha_pago(_v(data.get("fecha_pago")))
+                            f = _completar_fecha_pago_desde_asunto(
+                                normalizar_fecha_pago(_v(data.get("fecha_pago"))),
+                                subject,
+                            )
                             m = _v(data.get("monto"))
                             r = normalizar_referencia(_v(data.get("numero_referencia")))
                             c, c_ok = _cedula_columna_gmail_pipeline(
@@ -2223,108 +2419,17 @@ def run_pipeline(
                     and not any_incomplete_or_skipped
                     and had_complete_digitalization
                 )
-                tipos_digitados_distintos = {
-                    f for f in bank_fmts_digitized if f in ("A", "B", "C", "D", "E", "F", "NR")
-                }
-                tipos_clasificados_distintos = {
-                    f
-                    for f in bank_fmts_classified
-                    if f in ("A", "B", "C", "D", "E", "F", "NR")
-                }
-                fmts_para_etiqueta_banco = bank_fmts_digitized or bank_fmts_classified
-
-                final_label_name: Optional[str] = None
-                final_label_reason = "none"
-                # Paso 1 (A/B): prioridad filas con CUOTAS_OK; si ninguna, comprobante reconocido y en BD
-                # (p. ej. duplicado / sin aplicación cuotas) para no forzar MANUAL en Gmail cuando ya hay plantilla clara.
-                label_prioridad_paso_1 = next(
-                    (f for f in bank_fmts_cuotas_ok if f in ("A", "B")),
-                    None,
+                final_label_name, final_label_reason = resolver_etiqueta_final_gmail(
+                    tiene_candidatos=bool(candidatos),
+                    remitente_en_clientes=remitente_en_clientes,
+                    plan_b_mercantil_bnc_fuera_bd=plan_b_mercantil_bnc_fuera_bd,
+                    remitente_solo_master=remitente_solo_master,
+                    fully_digitized_email=fully_digitized_email,
+                    bank_fmts_digitized=bank_fmts_digitized,
+                    bank_fmts_classified=bank_fmts_classified,
+                    bank_fmts_cuotas_ok=bank_fmts_cuotas_ok,
+                    message_scan_bank_hint=message_scan_bank_hint,
                 )
-                if not label_prioridad_paso_1:
-                    for _pref_ab in ("A", "B"):
-                        if any(f == _pref_ab for f in fmts_para_etiqueta_banco):
-                            label_prioridad_paso_1 = _pref_ab
-                            break
-                if label_prioridad_paso_1:
-                    final_label_name = (
-                        PAGOS_GMAIL_LABEL_IMAGEN_1
-                        if label_prioridad_paso_1 == "A"
-                        else PAGOS_GMAIL_LABEL_IMAGEN_2
-                    )
-                    final_label_reason = (
-                        f"paso_1_{label_prioridad_paso_1.lower()}"
-                        if label_prioridad_paso_1 in bank_fmts_digitized
-                        else f"clasificado_{label_prioridad_paso_1.lower()}"
-                    )
-                elif remitente_en_clientes or tipos_clasificados_distintos:
-                    label_prioridad_paso_2 = next(
-                        (f for f in bank_fmts_cuotas_ok if f in ("C", "D", "E", "F")),
-                        None,
-                    )
-                    if not label_prioridad_paso_2:
-                        for _pref_cd in ("C", "D", "E", "F"):
-                            if any(f == _pref_cd for f in fmts_para_etiqueta_banco):
-                                label_prioridad_paso_2 = _pref_cd
-                                break
-                    if label_prioridad_paso_2 == "C":
-                        final_label_name = PAGOS_GMAIL_LABEL_IMAGEN_3
-                        final_label_reason = (
-                            "paso_2_c"
-                            if label_prioridad_paso_2 in bank_fmts_digitized
-                            else "clasificado_c"
-                        )
-                    elif label_prioridad_paso_2 == "D":
-                        final_label_name = PAGOS_GMAIL_LABEL_IMAGEN_4
-                        final_label_reason = (
-                            "paso_2_d"
-                            if label_prioridad_paso_2 in bank_fmts_digitized
-                            else "clasificado_d"
-                        )
-                    elif label_prioridad_paso_2 == "E":
-                        final_label_name = PAGOS_GMAIL_LABEL_BANCAMIGA
-                        final_label_reason = (
-                            "paso_2_e"
-                            if label_prioridad_paso_2 in bank_fmts_digitized
-                            else "clasificado_e"
-                        )
-                    elif label_prioridad_paso_2 == "F":
-                        final_label_name = PAGOS_GMAIL_LABEL_TESORO
-                        final_label_reason = (
-                            "paso_2_f"
-                            if label_prioridad_paso_2 in bank_fmts_digitized
-                            else "clasificado_f"
-                        )
-
-                if not final_label_name:
-                    # master@: sin digitalización completa del correo (p. ej. fallos de adjuntos) -> revisión humana.
-                    if remitente_solo_master and not fully_digitized_email:
-                        final_label_name = PAGOS_GMAIL_LABEL_MANUAL
-                        final_label_reason = "fallback_manual"
-                    # Sin candidatos imagen/PDF (solo texto u otros adjuntos no elegibles).
-                    elif not candidatos:
-                        final_label_name = PAGOS_GMAIL_LABEL_TEXTO
-                        final_label_reason = "fallback_texto"
-                    elif (
-                        plan_b_mercantil_bnc_fuera_bd
-                        and fully_digitized_email
-                        and "C" in tipos_digitados_distintos
-                    ):
-                        final_label_name = PAGOS_GMAIL_LABEL_IMAGEN_3
-                        final_label_reason = "plan_b_binance_digitalizado"
-                    elif (
-                        plan_b_mercantil_bnc_fuera_bd
-                        and "C" in tipos_clasificados_distintos
-                    ):
-                        final_label_name = PAGOS_GMAIL_LABEL_IMAGEN_3
-                        final_label_reason = "plan_b_binance_clasificado"
-                    elif not remitente_en_clientes:
-                        final_label_name = PAGOS_GMAIL_LABEL_ERROR_EMAIL
-                        final_label_reason = "fallback_error_email"
-                    elif candidatos:
-                        # Con imagen/PDF escaneable nunca TEXTO: comprobante reconocido o revisión humana.
-                        final_label_name = PAGOS_GMAIL_LABEL_MANUAL
-                        final_label_reason = "fallback_manual_media"
 
                 if final_label_name and final_label_name in PAGOS_GMAIL_ETIQUETAS_FINALES_PERMITIDAS:
                     if final_label_name not in plantilla_label_cache:

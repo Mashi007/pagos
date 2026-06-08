@@ -13,7 +13,7 @@ import {
   useSyncExternalStore,
 } from 'react'
 
-import { Link } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 
 import {
   AlertTriangle,
@@ -42,6 +42,7 @@ import {
 import {
   eliminarPagoReportado,
   escanerInfopagosExtraerComprobante,
+  escanerInfopagosLoteContextoRevision,
   escanerInfopagosLoteDesdeDrive,
   enviarReporteInfopagos,
   getReciboInfopagos,
@@ -70,6 +71,7 @@ import {
 import {
   filaVaciaDesdeArchivo,
   filaTrasExtraccion,
+  filaDesdeRevisionPago,
   fechaPagoEfectivaParaGuardar,
   hayDuplicadoFila,
   type FilaLote,
@@ -255,6 +257,9 @@ function validarMonto(
 type Fase = 'cedula' | 'archivos' | 'revision'
 
 export default function EscanerInfopagosLotePage() {
+  const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const revisionPagosCargadoRef = useRef(false)
   const honeypotRef = useRef<HTMLInputElement>(null)
   const tokensSufijoUsadosRef = useRef<Set<string>>(new Set())
   const guardarActivoRef = useRef<Set<string>>(new Set())
@@ -404,6 +409,108 @@ export default function EscanerInfopagosLotePage() {
     },
     []
   )
+
+  useEffect(() => {
+    if (revisionPagosCargadoRef.current) return
+    if (searchParams.get('from') !== 'pagos') return
+    const idsRaw = (searchParams.get('ids') || '').trim()
+    if (!idsRaw) return
+    revisionPagosCargadoRef.current = true
+
+    const ids = idsRaw
+      .split(',')
+      .map(s => parseInt(s.trim(), 10))
+      .filter(n => Number.isFinite(n) && n > 0)
+      .slice(0, MAX_REESCAN_LOTE_PANTALLA)
+
+    if (!ids.length) {
+      toast.error('IDs de pago inválidos en la URL.')
+      return
+    }
+
+    void (async () => {
+      try {
+        const res = await escanerInfopagosLoteContextoRevision(ids)
+        if (!res.ok) {
+          toast.error('No se pudo cargar el contexto de revisión.')
+          return
+        }
+        if (res.cedulas_distintas) {
+          toast(
+            'Los pagos seleccionados tienen cédulas distintas; se usará una sola cédula deudor.'
+          )
+        }
+        const okItems = res.items.filter(
+          i => i.ok && (i.archivo_b64 || '').trim()
+        )
+        if (!okItems.length) {
+          toast.error('Ningún pago trae comprobante en BD para re-escanear.')
+          return
+        }
+        const cedula = (res.cedula_comun || okItems[0]?.cedula || '').trim()
+        if (!cedula) {
+          toast.error('No se pudo determinar la cédula del deudor.')
+          return
+        }
+        const nombre = (res.nombre_cliente || '').trim()
+        setCedulaRaw(cedula)
+        setNombreCliente(nombre)
+        setFuenteTasa(FUENTE_TASA_DEFAULT)
+
+        const filasRev: FilaLote[] = []
+        const archivosRev: File[] = []
+        for (const item of okItems) {
+          const f = fileDesdeBase64(
+            item.archivo_b64!,
+            item.nombre_archivo || `pago_${item.pago_id}.jpg`,
+            item.mime_type || 'image/jpeg'
+          )
+          archivosRev.push(f)
+          filasRev.push(filaDesdeRevisionPago(f, item))
+        }
+        for (const bad of res.items.filter(i => !i.ok)) {
+          toast.error(
+            `Pago #${bad.pago_id}: ${bad.error || 'sin comprobante'}`,
+            { duration: 6000 }
+          )
+        }
+        filasRef.current = filasRev
+        setFilas(filasRev)
+        setArchivos(archivosRev)
+        setFase('revision')
+        navigate('/escaner-lote', { replace: true })
+        toast.success(
+          `${String(filasRev.length)} comprobante(s) cargados desde revisión de pagos.`
+        )
+
+        const norm = normalizarCedulaParaProcesar(
+          extraerCaracteresCedulaPublica(cedula)
+        )
+        if (norm.valido && norm.valorParaEnviar) {
+          const tipo = norm.valorParaEnviar.charAt(0).toUpperCase()
+          const numero = norm.valorParaEnviar.slice(1).replace(/\D/g, '')
+          void runDigitacionLoteEnSegundoPlano(
+            filasRev,
+            tipo,
+            numero,
+            tokens => {
+              for (const t of tokens) {
+                tokensSufijoUsadosRef.current.add(t)
+              }
+            },
+            { cedulaRaw: cedula, nombreCliente: nombre },
+            FUENTE_TASA_DEFAULT
+          )
+        }
+      } catch (e: unknown) {
+        toast.error(
+          e instanceof Error
+            ? e.message
+            : 'Error al cargar revisión desde pagos.'
+        )
+      }
+    })()
+  }, [searchParams, navigate, fileDesdeBase64])
 
   const handleCargarDesdeDrive = useCallback(async () => {
     if (!cedulaNormalizada.valido || !cedulaNormalizada.valorParaEnviar) {
@@ -738,6 +845,12 @@ export default function EscanerInfopagosLotePage() {
         return
       }
       const fechaPagoEnvio = fechaPagoEfectivaParaGuardar(fila)
+      if (!fechaPagoEnvio) {
+        toast.error(
+          'Indique la fecha de pago (no se detectó con claridad en el comprobante).'
+        )
+        return
+      }
       const vF = validarFechaPago(fechaPagoEnvio)
       if (!vF.valido) {
         toast.error(vF.error || 'Fecha inválida.')
@@ -1315,9 +1428,8 @@ export default function EscanerInfopagosLotePage() {
                               </p>
                             ) : (
                               <p className="text-xs text-amber-800">
-                                Sin fecha clara en la imagen: se rellenó con la
-                                fecha de hoy; ajústela si el comprobante
-                                corresponde a otro día.
+                                Sin fecha clara en la imagen: indique la fecha del
+                                comprobante antes de guardar.
                               </p>
                             )}
                             <div className="flex flex-col gap-3 sm:flex-row sm:items-end">

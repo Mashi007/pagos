@@ -764,3 +764,114 @@ def test_pagos_gmail_label_exclusions_query_incluye_etiquetas_clasificacion():
     assert f'-label:"{PAGOS_GMAIL_LABEL_TEXTO}"' in q
 
 
+def _resolver_etiqueta(**kwargs):
+    from app.services.pagos_gmail.pipeline import resolver_etiqueta_final_gmail
+
+    defaults = dict(
+        tiene_candidatos=True,
+        remitente_en_clientes=True,
+        plan_b_mercantil_bnc_fuera_bd=False,
+        remitente_solo_master=False,
+        fully_digitized_email=False,
+        bank_fmts_digitized=[],
+        bank_fmts_classified=[],
+        bank_fmts_cuotas_ok=[],
+        message_scan_bank_hint="",
+    )
+    defaults.update(kwargs)
+    return resolver_etiqueta_final_gmail(**defaults)
+
+
+def test_resolver_etiqueta_solo_texto_sin_candidatos():
+    from app.services.pagos_gmail.gmail_service import PAGOS_GMAIL_LABEL_TEXTO
+
+    lbl, reason = _resolver_etiqueta(tiene_candidatos=False)
+    assert lbl == PAGOS_GMAIL_LABEL_TEXTO
+    assert reason == "fallback_texto"
+
+
+def test_resolver_etiqueta_cliente_media_sin_plantilla_manual():
+    from app.services.pagos_gmail.gmail_service import PAGOS_GMAIL_LABEL_MANUAL
+
+    lbl, reason = _resolver_etiqueta(
+        tiene_candidatos=True,
+        remitente_en_clientes=True,
+    )
+    assert lbl == PAGOS_GMAIL_LABEL_MANUAL
+    assert reason == "fallback_manual_media"
+
+
+def test_resolver_etiqueta_mercantil_clasificado_sin_cuotas_ok():
+    from app.services.pagos_gmail.gmail_service import PAGOS_GMAIL_LABEL_IMAGEN_1
+
+    lbl, reason = _resolver_etiqueta(
+        bank_fmts_classified=["A"],
+    )
+    assert lbl == PAGOS_GMAIL_LABEL_IMAGEN_1
+    assert reason == "clasificado_a"
+
+
+def test_resolver_etiqueta_cuotas_ok_prioriza_sobre_clasificado():
+    from app.services.pagos_gmail.gmail_service import PAGOS_GMAIL_LABEL_IMAGEN_2
+
+    lbl, reason = _resolver_etiqueta(
+        bank_fmts_digitized=["A"],
+        bank_fmts_cuotas_ok=["B"],
+    )
+    assert lbl == PAGOS_GMAIL_LABEL_IMAGEN_2
+    assert reason == "paso_1_b"
+
+
+def test_resolver_etiqueta_plan_b_hint_d_no_etiqueta_bnv():
+    from app.services.pagos_gmail.gmail_service import PAGOS_GMAIL_LABEL_ERROR_EMAIL
+
+    lbl, reason = _resolver_etiqueta(
+        remitente_en_clientes=False,
+        plan_b_mercantil_bnc_fuera_bd=True,
+        bank_fmts_classified=["D"],
+    )
+    assert lbl == PAGOS_GMAIL_LABEL_ERROR_EMAIL
+    assert reason == "fallback_error_email"
+
+
+def test_resolver_etiqueta_plan_b_binance_clasificado():
+    from app.services.pagos_gmail.gmail_service import PAGOS_GMAIL_LABEL_IMAGEN_3
+
+    lbl, reason = _resolver_etiqueta(
+        remitente_en_clientes=False,
+        plan_b_mercantil_bnc_fuera_bd=True,
+        bank_fmts_classified=["C"],
+    )
+    assert lbl == PAGOS_GMAIL_LABEL_IMAGEN_3
+    assert reason == "plan_b_binance_clasificado"
+
+
+def test_resolver_etiqueta_plan_b_mercantil_hint_sin_cliente():
+    from app.services.pagos_gmail.gmail_service import PAGOS_GMAIL_LABEL_IMAGEN_1
+
+    lbl, reason = _resolver_etiqueta(
+        remitente_en_clientes=False,
+        plan_b_mercantil_bnc_fuera_bd=True,
+        bank_fmts_classified=["A"],
+    )
+    assert lbl == PAGOS_GMAIL_LABEL_IMAGEN_1
+    assert reason == "clasificado_a"
+
+
+def test_resolver_etiqueta_cliente_hint_mercantil_en_fallback():
+    from app.services.pagos_gmail.gmail_service import PAGOS_GMAIL_LABEL_IMAGEN_1
+
+    lbl, reason = _resolver_etiqueta(
+        bank_fmts_classified=["A"],
+        message_scan_bank_hint="MERCANTIL",
+    )
+    assert lbl == PAGOS_GMAIL_LABEL_IMAGEN_1
+    assert reason in ("clasificado_a", "hint_a")
+
+
+def test_fmts_para_etiqueta_plan_b_filtra_def():
+    from app.services.pagos_gmail.pipeline import _fmts_para_etiqueta_banco_gmail
+
+    assert _fmts_para_etiqueta_banco_gmail([], ["D", "A"], plan_b_activo=True) == ["A"]
+    assert _fmts_para_etiqueta_banco_gmail([], ["D"], plan_b_activo=False) == ["D"]
+

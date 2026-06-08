@@ -71,8 +71,13 @@ from app.services.tasa_cambio_service import (
 from app.services.pagos_gmail.gemini_async import (
     compare_form_with_image_async,
     extract_infopagos_campos_desde_comprobante_async,
+    extract_infopagos_campos_desde_comprobante_con_rescate_plantilla_async,
 )
-from app.services.pagos_gmail.gemini_service import compare_form_with_image
+from app.services.pagos_gmail.gemini_service import (
+    _canonical_institucion_escaner,
+    compare_form_with_image,
+)
+from app.services.pagos.comprobante_adjunto_pago import comprobante_blob_para_pdf_desde_pago
 from app.services.cobros import cobros_publico_reporte_service as cpr
 from app.utils.cedula_almacenamiento import expr_cedula_normalizada_para_comparar
 from app.services.pagos_gmail.comprobante_bd import url_comprobante_imagen_absoluta
@@ -4306,7 +4311,7 @@ async def escaner_extraer_comprobante_infopagos(
 
     plantilla = (institucion_plantilla or "").strip() or None
     t_gemini0 = time.perf_counter()
-    gem = await extract_infopagos_campos_desde_comprobante_async(
+    gem = await extract_infopagos_campos_desde_comprobante_con_rescate_plantilla_async(
         ctx_ced, content, filename, institucion_plantilla=plantilla
     )
     gemini_ms = int((time.perf_counter() - t_gemini0) * 1000)
@@ -4619,6 +4624,119 @@ def _extraer_folder_id_drive(raw: str) -> str:
     return ""
 
 
+@router.get("/escaner/lote/contexto-revision")
+def escaner_lote_contexto_revision(
+    db: Session = Depends(get_db),
+    ids: str = Query(..., description="IDs de pagos en revisión, separados por coma (máx. 10)"),
+):
+    """
+    Precarga escáner lote desde /pagos (revisión): comprobante en BD + metadatos del pago.
+    No llama a Gemini; la digitalización sigue en el cliente vía /escaner/extraer-comprobante.
+    """
+    raw_ids = [x.strip() for x in (ids or "").split(",") if x.strip()]
+    pago_ids: list[int] = []
+    for x in raw_ids[:10]:
+        try:
+            pago_ids.append(int(x))
+        except (TypeError, ValueError):
+            continue
+    if not pago_ids:
+        raise HTTPException(status_code=400, detail="Indique al menos un ID de pago válido.")
+
+    pagos = (
+        db.execute(select(Pago).where(Pago.id.in_(pago_ids))).scalars().all()
+    )
+    by_id = {int(p.id): p for p in pagos if p is not None}
+    items: list[dict] = []
+    cedulas: set[str] = set()
+
+    for pid in pago_ids:
+        p = by_id.get(pid)
+        if not p:
+            items.append(
+                {
+                    "pago_id": pid,
+                    "ok": False,
+                    "error": "Pago no encontrado.",
+                }
+            )
+            continue
+        ced = (getattr(p, "cedula_cliente", None) or "").strip()
+        if ced:
+            cedulas.add(ced.replace("-", ""))
+        blob, ctype, nombre = comprobante_blob_para_pdf_desde_pago(db, p)
+        if not blob:
+            items.append(
+                {
+                    "pago_id": pid,
+                    "ok": False,
+                    "error": "Sin comprobante en BD para este pago.",
+                    "cedula": ced,
+                    "prestamo_id": getattr(p, "prestamo_id", None),
+                    "numero_documento": (getattr(p, "numero_documento", None) or "").strip(),
+                    "fecha_pago": (
+                        p.fecha_pago.date().isoformat()
+                        if getattr(p, "fecha_pago", None)
+                        else None
+                    ),
+                    "monto_usd": float(p.monto_pagado) if p.monto_pagado is not None else None,
+                    "institucion_bancaria": (
+                        _canonical_institucion_escaner(
+                            (getattr(p, "institucion_bancaria", None) or "").strip()
+                        )
+                        or (getattr(p, "institucion_bancaria", None) or "").strip()
+                    ),
+                }
+            )
+            continue
+        fn = (nombre or f"comprobante_pago_{pid}.jpg").strip()
+        inst = (getattr(p, "institucion_bancaria", None) or "").strip()
+        inst_canon = _canonical_institucion_escaner(inst) or inst
+        items.append(
+            {
+                "pago_id": pid,
+                "ok": True,
+                "error": None,
+                "cedula": ced,
+                "prestamo_id": getattr(p, "prestamo_id", None),
+                "numero_documento": (getattr(p, "numero_documento", None) or "").strip(),
+                "fecha_pago": (
+                    p.fecha_pago.date().isoformat()
+                    if getattr(p, "fecha_pago", None)
+                    else None
+                ),
+                "monto_usd": float(p.monto_pagado) if p.monto_pagado is not None else None,
+                "institucion_bancaria": inst_canon,
+                "nombre_archivo": fn,
+                "mime_type": (ctype or "application/octet-stream").split(";")[0],
+                "archivo_b64": base64.b64encode(blob).decode("ascii"),
+            }
+        )
+
+    cedula_comun = ""
+    if len(cedulas) == 1:
+        cedula_comun = next(iter(cedulas))
+    nombre_cliente = ""
+    if cedula_comun:
+        cli = db.execute(
+            select(Cliente).where(
+                expr_cedula_normalizada_para_comparar(Cliente.cedula) == cedula_comun
+            )
+        ).scalars().first()
+        if cli:
+            nombre_cliente = (
+                f"{getattr(cli, 'nombre', '') or ''} {getattr(cli, 'apellido', '') or ''}"
+            ).strip()
+
+    return {
+        "ok": True,
+        "items": items,
+        "cedula_comun": cedula_comun,
+        "nombre_cliente": nombre_cliente,
+        "cedulas_distintas": len(cedulas) > 1,
+    }
+
+
 @router.post("/escaner/lote/drive-digitalizar")
 async def escaner_lote_drive_digitalizar(
     request: Request,
@@ -4773,7 +4891,7 @@ async def escaner_lote_drive_digitalizar(
                 }
             )
         else:
-            gem = await extract_infopagos_campos_desde_comprobante_async(
+            gem = await extract_infopagos_campos_desde_comprobante_con_rescate_plantilla_async(
                 ctx_ced, content, filename
             )
             if not gem.get("ok"):

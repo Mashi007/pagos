@@ -59,6 +59,8 @@ export type FilaLote = {
   descargandoRecibo: boolean
   /** Borrador en BD (escáner); enviar al guardar el reporte si existe. */
   borradorId?: string | null
+  /** Origen revisión /pagos (re-escaneo masivo). */
+  pagoRevisionId?: number | null
 }
 
 export function newClientId(): string {
@@ -80,13 +82,11 @@ export function fechaLocalHoyISO(): string {
   return `${y}-${mo}-${da}`
 }
 
-/** Valor a enviar: campo manual, o detectada, o hoy si no hubo lectura clara. */
+/** Valor a enviar al guardar: solo fecha explícita (campo o detectada por IA/serial); nunca «hoy». */
 export function fechaPagoEfectivaParaGuardar(f: FilaLote): string {
   const m = f.fechaPago.trim()
   if (m) return m
-  const d = f.fechaDetectada.trim()
-  if (d) return d
-  return fechaLocalHoyISO()
+  return f.fechaDetectada.trim()
 }
 
 export function filaVaciaDesdeArchivo(archivo: File): FilaLote {
@@ -113,6 +113,59 @@ export function filaVaciaDesdeArchivo(archivo: File): FilaLote {
     editando: false,
     descargandoRecibo: false,
     borradorId: null,
+    pagoRevisionId: null,
+  }
+}
+
+export type EscanerLoteRevisionContextoItem = {
+  pago_id: number
+  ok: boolean
+  error?: string | null
+  cedula?: string
+  prestamo_id?: number | null
+  numero_documento?: string
+  fecha_pago?: string | null
+  monto_usd?: number | null
+  institucion_bancaria?: string
+  nombre_archivo?: string
+  mime_type?: string
+  archivo_b64?: string
+}
+
+export function filaDesdeRevisionPago(
+  archivo: File,
+  item: EscanerLoteRevisionContextoItem
+): FilaLote {
+  const base = filaVaciaDesdeArchivo(archivo)
+  const fecha = (item.fecha_pago || '').trim()
+  const { institucion, otroInstitucion } = resolverInstitucionDesdeExtraccion(
+    item.institucion_bancaria || '',
+    '',
+    ''
+  )
+  let montoStr = ''
+  if (item.monto_usd != null && Number.isFinite(item.monto_usd)) {
+    montoStr = formatoMontoParaMostrar(item.monto_usd, 'USD')
+  }
+  return {
+    ...base,
+    extract: 'pendiente',
+    fechaPago: fecha,
+    fechaDetectada: fecha,
+    confirmaFechaDetectada: fecha ? 'si' : null,
+    confirmaFechaManual: !fecha,
+    institucion,
+    otroInstitucion,
+    numeroOperacion: (item.numero_documento || '').trim(),
+    montoStr,
+    moneda: 'USD',
+    pagoRevisionId: item.pago_id,
+    escanerColision: {
+      duplicado_en_pagos: false,
+      pago_existente_id: item.pago_id,
+      prestamo_existente_id: item.prestamo_id ?? null,
+      prestamo_objetivo_id: item.prestamo_id ?? null,
+    },
   }
 }
 

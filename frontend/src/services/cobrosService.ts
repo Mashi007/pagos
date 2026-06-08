@@ -686,6 +686,39 @@ export async function escanerInfopagosExtraerComprobante(
   )
 }
 
+export interface EscanerLoteContextoRevisionItem {
+  pago_id: number
+  ok: boolean
+  error?: string | null
+  cedula?: string
+  prestamo_id?: number | null
+  numero_documento?: string
+  fecha_pago?: string | null
+  monto_usd?: number | null
+  institucion_bancaria?: string
+  nombre_archivo?: string
+  mime_type?: string
+  archivo_b64?: string
+}
+
+export interface EscanerLoteContextoRevisionResponse {
+  ok: boolean
+  items: EscanerLoteContextoRevisionItem[]
+  cedula_comun: string
+  nombre_cliente: string
+  cedulas_distintas: boolean
+}
+
+/** Precarga comprobantes desde pagos en revisión (?from=pagos&ids=). */
+export async function escanerInfopagosLoteContextoRevision(
+  pagoIds: number[]
+): Promise<EscanerLoteContextoRevisionResponse> {
+  const ids = pagoIds.filter(n => Number.isFinite(n) && n > 0).slice(0, 10)
+  return apiClient.get<EscanerLoteContextoRevisionResponse>(
+    `${BASE_COBROS}/escaner/lote/contexto-revision?ids=${ids.join(',')}`
+  )
+}
+
 /** Listado de borradores con validación pendiente (mismo usuario autenticado). */
 export interface InfopagosBorradorListItem {
   id: string

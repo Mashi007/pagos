@@ -29,6 +29,7 @@ GEMINI_SERVER_ERROR_MAX_RETRIES = 4  # Máximo 4 reintentos para 503
 from app.core.config import settings
 from app.services.pagos_gmail.helpers import get_mime_type
 from app.services.pagos_gmail.parse_campos_comprobante import (
+    inferir_fecha_pago_desde_numero_operacion,
     normalizar_campos_gemini_gmail,
     parse_fecha_comprobante as _parse_fecha_escaner_desde_gemini,
     parse_monto_comprobante as _parse_monto_escaner,
@@ -54,7 +55,8 @@ FECHA — Venezuela DD/MM/YYYY; no confundir con MM/DD ni inventar desde metadat
   - Mercantil A1: fecha operación = **YYYYMMDD** del bloque guionado (ej. `9824-20250703-151620-DCME-…` → **2025-07-03**).
   - Pie **PDP 056(09-02-2021)** o fecha manuscrita distinta = lote del formulario, **no** sustituye la fecha del depósito si la tira trae YYYYMMDD.
   - Conflicto manuscrito vs tira impresa → **tira manda** (fecha, monto, serial/referencia).
-  - Prohibido usar fecha del correo, asunto, metadata del archivo o nombre del archivo para rellenar fecha.
+  - Prohibido usar fecha del correo (cabecera Date), metadata del archivo o nombre del archivo para rellenar fecha.
+  - El modelo no usa el asunto; si falta fecha en imagen A/B/D/E/F, el **backend** puede completar solo con DD/MM/YYYY **explícito** en el asunto del correo (no inventa desde Date).
 """.strip()
 
 # Reglas compartidas Serial/Ref (escáner Infopagos, compare formulario vs imagen).
@@ -1344,10 +1346,23 @@ def _pagos_gmail_ab_campos_imagen_completos(fields: Dict[str, str]) -> bool:
     return True
 
 
+def _pagos_gmail_a_campos_imagen_minimos(fields: Dict[str, str]) -> bool:
+    """
+    Mercantil A: basta monto + serial/ref legibles en la tira o formulario.
+    La fecha manuscrita puede fallar en OCR; el pipeline puede completarla desde asunto.
+    """
+    for k in ("monto", "numero_referencia"):
+        s = (fields.get(k) or "").strip()
+        if not s or s.upper() == PAGOS_NA:
+            return False
+    return True
+
+
 def _pagos_gmail_bef_campos_imagen_minimos(fields: Dict[str, str]) -> bool:
     """
     B/E/F: capturas de app a veces no muestran fecha en pantalla.
-    Exige monto + referencia para clasificar; si no hay fecha legible, el pipeline no rellena desde el correo.
+    Exige monto + referencia para clasificar; si falta fecha en imagen, el pipeline puede completarla
+    solo con DD/MM/YYYY explícito en el asunto (misma regla que Mercantil A).
     """
     for k in ("monto", "numero_referencia"):
         s = (fields.get(k) or "").strip()
@@ -1526,7 +1541,9 @@ def _guess_bank_hint_from_text(
         )
     ):
         return "D"
-    if any(k in s for k in ("mercantil", "deposito divisas", "0105-", "recaudacion", "dcme")):
+    if any(k in s for k in ("mercantil", "deposito divisas", "depósito divisas", "0105-", "0105", "recaudacion", "recaudación", "dcme", "rapi-credit", "rapicredit")):
+        return "A"
+    if re.search(r"\b7400\d{9,}\b", s):
         return "A"
     return None
 
@@ -1690,10 +1707,19 @@ def _parse_formato_y_pagos_json(
             if not _pagos_gmail_bef_campos_imagen_minimos(fields):
                 _out = na_fields.copy()
                 _out["_diag_none_reason"] = _diag_none_reason_pagos(fmt_raw, fields, text)
+                _out["_scan_bank_hint"] = fmt
+                return "ninguno", _out
+        elif fmt == "A":
+            if not _pagos_gmail_a_campos_imagen_minimos(fields):
+                _out = na_fields.copy()
+                _out["_diag_none_reason"] = _diag_none_reason_pagos(fmt_raw, fields, text)
+                _out["_scan_bank_hint"] = "A"
                 return "ninguno", _out
         elif not _pagos_gmail_ab_campos_imagen_completos(fields):
             _out = na_fields.copy()
             _out["_diag_none_reason"] = _diag_none_reason_pagos(fmt_raw, fields, text)
+            if fmt in ("A", "B", "C", "D", "E", "F"):
+                _out["_scan_bank_hint"] = fmt
             return "ninguno", _out
         fields["email_cliente"] = PAGOS_NA
         return fmt, fields
@@ -2740,6 +2766,10 @@ def extract_infopagos_campos_desde_comprobante(
                     num_op,
                 )
                 fecha = _parse_fecha_escaner_desde_gemini(data.get("fecha_pago"), ref_hoy)
+                if fecha is None and num_op:
+                    f_inf = inferir_fecha_pago_desde_numero_operacion(num_op, ref_hoy)
+                    if f_inf:
+                        fecha = _parse_fecha_escaner_desde_gemini(f_inf, ref_hoy)
                 monto = _parse_monto_escaner(data.get("monto"), moneda=mon_norm)
                 if data.get("fecha_pago") and fecha is None:
                     logger.info(
@@ -2807,4 +2837,70 @@ def extract_infopagos_campos_desde_comprobante(
             "cedula_pagador_en_comprobante": "",
             "notas": "",
         }
+
+
+def _escaner_gem_resultado_mas_completo(
+    prim: Dict[str, Any],
+    seg: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Prefiere ok; si ambos ok, el que trae fecha_pago."""
+    if seg.get("ok") and not prim.get("ok"):
+        return seg
+    if prim.get("ok") and not seg.get("ok"):
+        return prim
+    if prim.get("ok") and seg.get("ok"):
+        if seg.get("fecha_pago") and not prim.get("fecha_pago"):
+            return seg
+        return prim
+    score_prim = sum(
+        1
+        for k in ("institucion_financiera", "numero_operacion", "monto", "fecha_pago")
+        if prim.get(k)
+    )
+    score_seg = sum(
+        1
+        for k in ("institucion_financiera", "numero_operacion", "monto", "fecha_pago")
+        if seg.get(k)
+    )
+    return seg if score_seg > score_prim else prim
+
+
+def extract_infopagos_campos_desde_comprobante_con_rescate_plantilla(
+    cedula_deudor_contexto: str,
+    image_bytes: bytes,
+    filename: str = "comprobante.jpg",
+    api_key: Optional[str] = None,
+    institucion_plantilla: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    Escáner Infopagos: extracción + rescate opcional con plantilla bancaria inferida.
+    Segunda pasada solo si hay institución canónica y la primera falló o no trajo fecha.
+    """
+    gem = extract_infopagos_campos_desde_comprobante(
+        cedula_deudor_contexto,
+        image_bytes,
+        filename,
+        api_key=api_key,
+        institucion_plantilla=institucion_plantilla,
+    )
+    inst_hint = (gem.get("institucion_financiera") or "").strip()
+    if not inst_hint:
+        inst_hint = _inferir_institucion_heuristica_escaner(
+            f"{filename}\n{gem.get('notas') or ''}\n{gem.get('numero_operacion') or ''}"
+        )
+    inst_canon = _canonical_institucion_escaner(inst_hint)
+    if not inst_canon or inst_canon == _canonical_institucion_escaner(
+        (institucion_plantilla or "").strip()
+    ):
+        return gem
+    if gem.get("ok") and gem.get("fecha_pago") is not None:
+        return gem
+    gem2 = extract_infopagos_campos_desde_comprobante(
+        cedula_deudor_contexto,
+        image_bytes,
+        filename,
+        api_key=api_key,
+        institucion_plantilla=inst_canon,
+    )
+    return _escaner_gem_resultado_mas_completo(gem, gem2)
 

@@ -346,6 +346,20 @@ def fecha_comprobante_a_ddmmyyyy(val: Any, ref_hoy: Optional[date] = None) -> st
     return ""
 
 
+def inferir_fecha_pago_desde_numero_operacion(
+    num_op: Any,
+    ref_hoy: Optional[date] = None,
+) -> str:
+    """
+    Infiere fecha solo desde patrones embebidos en serial/ref (p. ej. DCME …-YYYYMMDD-…).
+    No inventa fechas desde contexto externo ni serial 7400… sin bloque de fecha.
+    """
+    nr = (str(num_op).strip() if num_op is not None else "")
+    if not nr or nr.upper() == PAGOS_NA:
+        return ""
+    return fecha_comprobante_a_ddmmyyyy(nr, ref_hoy)
+
+
 _LABEL_NUM_OP_PREFIX_RE = re.compile(
     r"^(?:(?:serial|ref(?:\.|\s|:)?|referencia|operaci[oó]n|secuencial|"
     r"n[ºo°°]\.?\s*(?:operaci[oó]n|documento|control|ref)?)\s*[:.]?\s*)+",
@@ -653,7 +667,7 @@ def normalizar_campos_gemini_gmail(fields: Dict[str, str]) -> Dict[str, str]:
         norm = fecha_comprobante_a_ddmmyyyy(fp, ref)
         out["fecha_pago"] = norm if norm else PAGOS_NA
     elif (not fp or fp.upper() == PAGOS_NA) and nr and nr.upper() != PAGOS_NA:
-        inferida = fecha_comprobante_a_ddmmyyyy(nr, ref)
+        inferida = inferir_fecha_pago_desde_numero_operacion(nr, ref)
         if inferida:
             out["fecha_pago"] = inferida
     mo = (out.get("monto") or "").strip()

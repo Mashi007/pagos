@@ -103,6 +103,28 @@ def test_normalizar_campos_gemini_gmail_fecha_futura():
     assert out["monto"] == "10.00"
 
 
+def test_extraer_fecha_desde_asunto_pipeline():
+    from app.services.pagos_gmail.helpers import extraer_fecha_desde_asunto_pipeline
+
+    assert extraer_fecha_desde_asunto_pipeline("Eberso Figueroa pago mes 14/06/2026") == "14/06/2026"
+    assert extraer_fecha_desde_asunto_pipeline("sin fecha") == ""
+
+
+def test_pagos_gmail_a_campos_imagen_minimos():
+    from app.services.pagos_gmail.gemini_service import _pagos_gmail_a_campos_imagen_minimos
+
+    assert _pagos_gmail_a_campos_imagen_minimos(
+        {
+            "fecha_pago": "NA",
+            "monto": "107.00",
+            "numero_referencia": "740009403001332",
+        }
+    )
+    assert not _pagos_gmail_a_campos_imagen_minimos(
+        {"fecha_pago": "NA", "monto": "NA", "numero_referencia": "740009403001332"}
+    )
+
+
 def test_normalizar_campos_gemini_gmail_fecha_desde_serial_mercantil():
     out = normalizar_campos_gemini_gmail(
         {
@@ -174,7 +196,28 @@ def test_normalizar_referencia_conserva_ceros():
     assert normalizar_referencia("Serial: 113907166") == "113907166"
 
 
-def test_numeros_operacion_coinciden_o_evasion():
+def test_inferir_fecha_pago_desde_numero_operacion_dcme():
+    from app.services.pagos_gmail.parse_campos_comprobante import (
+        inferir_fecha_pago_desde_numero_operacion,
+    )
+
+    assert (
+        inferir_fecha_pago_desde_numero_operacion(
+            "9824-20250703-151620-DCME-4279-A", REF
+        )
+        == "03/07/2025"
+    )
+    assert inferir_fecha_pago_desde_numero_operacion("740087452690993", REF) == ""
+
+
+def test_escaner_gem_resultado_mas_completo_prefiere_fecha():
+    from app.services.pagos_gmail.gemini_service import _escaner_gem_resultado_mas_completo
+    from datetime import date
+
+    prim = {"ok": True, "fecha_pago": None, "numero_operacion": "123"}
+    seg = {"ok": True, "fecha_pago": date(2025, 7, 3), "numero_operacion": "123"}
+    out = _escaner_gem_resultado_mas_completo(prim, seg)
+    assert out is seg
     assert numeros_operacion_coinciden_o_evasion(
         "740087452690993", "0993"
     )
