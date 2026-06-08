@@ -190,4 +190,10 @@ def item_sync_abcd_candidato_revision_duplicado(
         return False
     if not es_banco_columna_plantilla_abcd(banco_excel):
         return False
-    return referencia_ya_registrada_como_numero_documento(db, referencia)
+    if referencia_ya_registrada_como_numero_documento(db, referencia):
+        return True
+    from app.services.cobros.pago_reportado_documento import (
+        numero_operacion_colisiona_reportado_activo,
+    )
+
+    return numero_operacion_colisiona_reportado_activo(db, referencia)

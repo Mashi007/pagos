@@ -1063,20 +1063,27 @@ def _rechazar_aprobacion_si_documento_ya_en_pagos(db: Session, pr: PagoReportado
 
 def _numero_operacion_canonico(raw: Optional[str]) -> str:
     """Normaliza solo `numero_operacion` para regla estricta de duplicado."""
-    op = (raw or "").strip()
-    if not op:
-        return ""
-    return normalize_documento(op) or op
+    from app.services.pagos_gmail.parse_campos_comprobante import (
+        clave_numero_operacion_canonico,
+    )
+
+    return clave_numero_operacion_canonico(raw)
 
 
 def _primer_id_por_numero_operacion_para_where(db: Session, wh: List[Any]) -> Dict[str, int]:
     """
-    Mapa numero_operacion_canonico -> primer id por created_at/id dentro del WHERE dado.
-    Regla estricta: duplicado solo por numero_operacion (no por referencia interna).
+    Mapa clave -> primer id por created_at/id dentro del WHERE dado.
+    Agrupa por evasión (sufijo/prefijo), no solo igualdad canónica exacta.
     """
+    from app.services.pagos_gmail.parse_campos_comprobante import (
+        clave_numero_operacion_canonico,
+        numeros_operacion_coinciden_o_evasion,
+    )
+
     if not wh:
         return {}
     first: Dict[str, int] = {}
+    grupos: list[tuple[int, str]] = []
     stmt = (
         select(PagoReportado.id, PagoReportado.numero_operacion)
         .where(*wh)
@@ -1088,10 +1095,23 @@ def _primer_id_por_numero_operacion_para_where(db: Session, wh: List[Any]) -> Di
         if not block:
             break
         for pid, numero_operacion in block:
-            k = _numero_operacion_canonico(numero_operacion)
-            if not k or k in first:
+            ipid = int(pid)
+            rop = (numero_operacion or "").strip()
+            if not rop:
                 continue
-            first[k] = int(pid)
+            lider_id: Optional[int] = None
+            for gid, gop in grupos:
+                if numeros_operacion_coinciden_o_evasion(rop, gop):
+                    lider_id = gid
+                    break
+            if lider_id is None:
+                grupos.append((ipid, rop))
+                lider_id = ipid
+            k = clave_numero_operacion_canonico(rop)
+            if k and k not in first:
+                first[k] = lider_id
+            if rop not in first:
+                first[rop] = lider_id
     return first
 
 
@@ -1117,14 +1137,22 @@ def _numeros_operacion_presentes_en_pagos(db: Session, keys: Set[str]) -> Set[st
 def _duplicados_reportados_por_numero_operacion(
     db: Session,
     *,
-    numero_key: str,
+    numero_operacion: str,
     excluir_id: Optional[int] = None,
 ) -> List[Tuple[int, str, str]]:
     """
-    Devuelve reportados (id, referencia, estado) que comparten el mismo numero_operacion canonico.
-    Regla estricta basada solo en numero_operacion.
+    Devuelve reportados (id, referencia, estado) con el mismo numero_operacion
+    (exacto, sufijo truncado o prefijo OCR). Prefiltra con LIKE antes de comparar.
     """
-    if not numero_key:
+    from app.services.pagos_gmail.parse_campos_comprobante import (
+        _condiciones_sql_numero_operacion,
+        numeros_operacion_coinciden_o_evasion,
+    )
+    op = (numero_operacion or "").strip()
+    if not op:
+        return []
+    conds = _condiciones_sql_numero_operacion(PagoReportado.numero_operacion, op)
+    if not conds:
         return []
     stmt = (
         select(
@@ -1133,17 +1161,26 @@ def _duplicados_reportados_por_numero_operacion(
             PagoReportado.estado,
             PagoReportado.numero_operacion,
         )
-        .where(PagoReportado.estado.in_(("pendiente", "en_revision", "aprobado", "rechazado")))
+        .where(
+            PagoReportado.estado.in_(("pendiente", "en_revision", "aprobado", "rechazado")),
+            or_(*conds),
+        )
         .order_by(PagoReportado.created_at.asc(), PagoReportado.id.asc())
+        .limit(200)
     )
+    if excluir_id is not None:
+        stmt = stmt.where(PagoReportado.id != excluir_id)
     rows = db.execute(stmt).all()
     out: List[Tuple[int, str, str]] = []
+    seen: set[int] = set()
     for rid, rref, rstate, rnum in rows:
-        if excluir_id is not None and int(rid) == int(excluir_id):
+        ipid = int(rid)
+        if ipid in seen:
             continue
-        if _numero_operacion_canonico(rnum) != numero_key:
+        if not numeros_operacion_coinciden_o_evasion(op, rnum):
             continue
-        out.append((int(rid), str(rref or ""), str(rstate or "")))
+        seen.add(ipid)
+        out.append((ipid, str(rref or ""), str(rstate or "")))
     return out
 
 
@@ -1206,6 +1243,14 @@ def _observacion_reglas_carga(
         if moneda == "BS" and cedula_norm and not cedula_coincide_autorizados_bs(cedula_norm, cedulas_bolivares):
             partes.append("No pag Bs.")
         dup_pagos = reportado_toca_claves_canonicas_en_pagos(r, claves_doc_en_pagos)
+        if not dup_pagos and (getattr(r, "numero_operacion", None) or "").strip():
+            from app.services.pago_numero_documento import documento_colisiona_evasion_registrado
+
+            dup_pagos = documento_colisiona_evasion_registrado(
+                db,
+                r.numero_operacion,
+                incluir_reportados_activos=False,
+            )
         n_doc_eff = documento_numero_desde_pago_reportado(r)[1]
         dup_entre_reportados = False
         if n_doc_eff:
@@ -1214,6 +1259,34 @@ def _observacion_reglas_carga(
                 dup_entre_reportados = r.id != pid
             elif conteo_norm_en_pagina.get(n_doc_eff, 0) > 1:
                 dup_entre_reportados = True
+        if not dup_entre_reportados and (getattr(r, "numero_operacion", None) or "").strip():
+            from app.services.pagos_gmail.parse_campos_comprobante import (
+                numeros_operacion_coinciden_o_evasion,
+            )
+
+            op_r = r.numero_operacion
+            for other in rows:
+                if other.id == r.id:
+                    continue
+                other_ced = _normalize_cedula_for_client_lookup(
+                    ((other.tipo_cedula or "") + (other.numero_cedula or ""))
+                    .replace("-", "")
+                    .replace(" ", "")
+                    .strip()
+                    .upper()
+                )
+                if numeros_operacion_coinciden_o_evasion(
+                    op_r,
+                    other.numero_operacion,
+                    monto_a=getattr(r, "monto", None),
+                    monto_b=getattr(other, "monto", None),
+                    cedula_a=cedula_norm,
+                    cedula_b=other_ced,
+                    fecha_a=getattr(r, "fecha_pago", None),
+                    fecha_b=getattr(other, "fecha_pago", None),
+                ):
+                    dup_entre_reportados = True
+                    break
         if dup_pagos or dup_entre_reportados:
             partes.append("DUPLICADO")
         result.append(partes)
@@ -2178,10 +2251,14 @@ def _list_pagos_reportados_payload(
             pagos_info_acum=pagos_info_acum,
         ):
             num_key = _numero_operacion_canonico(getattr(it, "numero_operacion", None))
+            num_raw = (getattr(it, "numero_operacion", None) or "").strip()
+            first_id = None
             if num_key:
                 first_id = primer_num_op.get(num_key)
-                if first_id is not None and int(it.id) != int(first_id):
-                    continue
+            if first_id is None and num_raw:
+                first_id = primer_num_op.get(num_raw)
+            if first_id is not None and int(it.id) != int(first_id):
+                continue
             if not _item_falla_validadores_cola_manual(it):
                 continue
             total += 1
@@ -3058,7 +3135,7 @@ def aprobar_pago_reportado(
         if num_key:
             _lock_numero_operacion_canonico(db, num_key)
             hermanos = _duplicados_reportados_por_numero_operacion(
-                db, numero_key=num_key, excluir_id=pr.id
+                db, numero_operacion=getattr(pr, "numero_operacion", "") or "", excluir_id=pr.id
             )
             if hermanos:
                 first_id = min([pr.id] + [rid for rid, _rref, _st in hermanos])
@@ -3083,7 +3160,9 @@ def aprobar_pago_reportado(
             num_key = _numero_operacion_canonico(getattr(pr, "numero_operacion", None))
             if num_key:
                 dup_rows = _duplicados_reportados_por_numero_operacion(
-                    db, numero_key=num_key, excluir_id=pr.id
+                    db,
+                    numero_operacion=getattr(pr, "numero_operacion", "") or "",
+                    excluir_id=pr.id,
                 )
                 n_dup, dup_refs = _marcar_reportados_como_eliminado_duplicado(
                     db,
@@ -3675,7 +3754,12 @@ def editar_pago_reportado(
         if body.institucion_financiera is not None:
             pr.institucion_financiera = (body.institucion_financiera or "").strip()[:100] or pr.institucion_financiera
         if body.numero_operacion is not None:
-            pr.numero_operacion = (body.numero_operacion or "").strip()[:100] or pr.numero_operacion
+            from app.services.pagos_gmail.parse_campos_comprobante import (
+                sanitizar_numero_operacion_comprobante,
+            )
+
+            limpio = sanitizar_numero_operacion_comprobante(body.numero_operacion)
+            pr.numero_operacion = limpio[:100] if limpio else pr.numero_operacion
         if body.monto is not None:
             if body.monto < 0:
                 raise HTTPException(status_code=400, detail="El monto no puede ser negativo.")
@@ -3780,7 +3864,7 @@ def cambiar_estado_pago(
         if num_key:
             _lock_numero_operacion_canonico(db, num_key)
             hermanos = _duplicados_reportados_por_numero_operacion(
-                db, numero_key=num_key, excluir_id=pr.id
+                db, numero_operacion=getattr(pr, "numero_operacion", "") or "", excluir_id=pr.id
             )
             if hermanos:
                 first_id = min([pr.id] + [rid for rid, _rref, _st in hermanos])
@@ -3822,7 +3906,9 @@ def cambiar_estado_pago(
             num_key = _numero_operacion_canonico(getattr(pr, "numero_operacion", None))
             if num_key:
                 dup_rows = _duplicados_reportados_por_numero_operacion(
-                    db, numero_key=num_key, excluir_id=pr.id
+                    db,
+                    numero_operacion=getattr(pr, "numero_operacion", "") or "",
+                    excluir_id=pr.id,
                 )
                 n_dup, dup_refs = _marcar_reportados_como_eliminado_duplicado(
                     db,

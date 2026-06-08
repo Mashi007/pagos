@@ -17,7 +17,13 @@ from app.core.documento import normalize_documento
 from app.models.pago_reportado import PagoReportado
 from app.models.pagos_gmail_sync import PagosGmailSyncItem
 from app.services.cobros.pago_reportado_documento import claves_documento_pago_para_reportado
-from app.services.pagos_gmail.helpers import normalizar_referencia
+from app.services.pagos_gmail.parse_campos_comprobante import (
+    clave_numero_operacion_canonico,
+    digitos_operacion_compacto,
+    numeros_operacion_coinciden_o_evasion,
+    sanitizar_numero_operacion_comprobante,
+)
+from app.services.pago_numero_documento import _candidatos_evasion_columna
 
 
 def drive_raw_a_url(dlink: Any) -> str:
@@ -114,8 +120,8 @@ def enriquecer_items_link_comprobante_desde_gmail(db: Session, items: list) -> N
             n = normalize_documento(ref_s)
             if n and n not in by_norm:
                 by_norm[n] = url
-            # Pipeline guarda referencia con ceros recortados (solo digitos); Excel puede traer ceros a la izquierda.
-            n2 = normalize_documento(normalizar_referencia(ref_s))
+            # Clave canónica (ceros a la izquierda) alinea Gmail con Infopagos.
+            n2 = clave_numero_operacion_canonico(ref_s)
             if n2 and n2 not in by_norm:
                 by_norm[n2] = url
 
@@ -126,7 +132,7 @@ def enriquecer_items_link_comprobante_desde_gmail(db: Session, items: list) -> N
         missing_norms.add(nd)
         doc_raw = (it.get("numero_documento") or "").strip()
         if doc_raw:
-            na = normalize_documento(normalizar_referencia(doc_raw))
+            na = clave_numero_operacion_canonico(doc_raw)
             if na:
                 missing_norms.add(na)
     if missing_norms:
@@ -147,16 +153,46 @@ def enriquecer_items_link_comprobante_desde_gmail(db: Session, items: list) -> N
             n = normalize_documento(ref_s)
             if n and n in missing_norms and n not in by_norm:
                 by_norm[n] = url
-            n2 = normalize_documento(normalizar_referencia(ref_s))
+            n2 = clave_numero_operacion_canonico(ref_s)
             if n2 and n2 in missing_norms and n2 not in by_norm:
                 by_norm[n2] = url
 
     for it, nd in need:
         doc_raw = (it.get("numero_documento") or "").strip()
-        nd_alt = normalize_documento(normalizar_referencia(doc_raw)) if doc_raw else None
+        nd_alt = clave_numero_operacion_canonico(doc_raw) if doc_raw else None
         url = by_norm.get(nd) or (by_norm.get(nd_alt) if nd_alt else None)
         if url:
             it["link_comprobante"] = url
+            continue
+        compact = digitos_operacion_compacto(doc_raw)
+        if not compact:
+            continue
+        evasion_rows: list[tuple[Any, Any]] = []
+        for cond, _tag in _candidatos_evasion_columna(
+            PagosGmailSyncItem.numero_referencia, compact
+        ):
+            evasion_rows.extend(
+                db.execute(
+                    select(
+                        PagosGmailSyncItem.numero_referencia,
+                        PagosGmailSyncItem.drive_link,
+                    )
+                    .where(
+                        cond,
+                        PagosGmailSyncItem.drive_link.isnot(None),
+                        PagosGmailSyncItem.drive_link != "",
+                    )
+                    .order_by(PagosGmailSyncItem.id.desc())
+                    .limit(80)
+                ).all()
+            )
+        for ref, dlink in evasion_rows:
+            if not numeros_operacion_coinciden_o_evasion(doc_raw, ref):
+                continue
+            url = drive_raw_a_url(dlink)
+            if url:
+                it["link_comprobante"] = url
+                break
 
 
 def enriquecer_items_link_comprobante_desde_pago_reportado(db: Session, items: list) -> None:

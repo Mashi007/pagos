@@ -3,9 +3,12 @@ from datetime import date
 
 from app.services.pagos_gmail.helpers import format_monto_excel_pagos_gmail, normalizar_fecha_pago
 from app.services.pagos_gmail.parse_campos_comprobante import (
+    clave_numero_operacion_canonico,
     normalizar_campos_gemini_gmail,
+    numeros_operacion_coinciden_o_evasion,
     parse_fecha_comprobante,
     parse_monto_comprobante,
+    sanitizar_numero_operacion_comprobante,
 )
 
 REF = date(2026, 5, 31)
@@ -111,3 +114,62 @@ def test_normalizar_campos_gemini_gmail():
     )
     assert out["monto"] == "1500.00"
     assert out["fecha_pago"] == "31/05/2026"
+
+
+def test_sanitizar_numero_operacion_comprobante():
+    assert sanitizar_numero_operacion_comprobante("113907169113907169") == "113907169"
+    assert sanitizar_numero_operacion_comprobante("113907169113907166") == "113907169"
+    assert sanitizar_numero_operacion_comprobante("Serial: 113907166") == "113907166"
+    assert sanitizar_numero_operacion_comprobante("0000091316488") == "0000091316488"
+    assert sanitizar_numero_operacion_comprobante("113907169 113907169") == "113907169"
+    assert sanitizar_numero_operacion_comprobante("113907169 113907166") == "113907169"
+
+
+def test_clave_numero_operacion_canonico():
+    assert clave_numero_operacion_canonico("0000091316488") == "91316488"
+    assert clave_numero_operacion_canonico("91316488") == "91316488"
+    assert clave_numero_operacion_canonico("0000091316488") == clave_numero_operacion_canonico(
+        "91316488"
+    )
+    assert clave_numero_operacion_canonico("ABC-123") == "ABC-123"
+
+
+def test_normalizar_referencia_conserva_ceros():
+    from app.services.pagos_gmail.helpers import normalizar_referencia
+
+    assert normalizar_referencia("0000091316488") == "0000091316488"
+    assert normalizar_referencia("Serial: 113907166") == "113907166"
+
+
+def test_numeros_operacion_coinciden_o_evasion():
+    assert numeros_operacion_coinciden_o_evasion(
+        "740087452690993", "0993"
+    )
+    assert numeros_operacion_coinciden_o_evasion(
+        "0993", "740087452690993"
+    )
+    assert numeros_operacion_coinciden_o_evasion(
+        "7400874101194", "740087410119497"
+    )
+    assert numeros_operacion_coinciden_o_evasion(
+        "740087410119497", "7400874101194"
+    )
+    assert not numeros_operacion_coinciden_o_evasion(
+        "123456789012345", "6789"
+    )
+    assert not numeros_operacion_coinciden_o_evasion(
+        "7400874101194", "7400874101195"
+    )
+    assert not numeros_operacion_coinciden_o_evasion("12345", "678912345")
+    assert not numeros_operacion_coinciden_o_evasion(
+        "0993",
+        "740087452690993",
+        monto_a=135.0,
+        monto_b=96.0,
+    )
+    assert numeros_operacion_coinciden_o_evasion(
+        "0993",
+        "740087452690993",
+        monto_a=135.0,
+        monto_b=135.0,
+    )

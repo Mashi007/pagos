@@ -16,7 +16,9 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
-from app.core.documento import compose_numero_documento_almacenado
+from app.services.pagos_gmail.parse_campos_comprobante import (
+    sanitizar_numero_operacion_comprobante,
+)
 from app.models.finiquito import FiniquitoCaso
 from app.models.finiquito_conciliacion_reserva import FiniquitoConciliacionReserva
 from app.models.pago import Pago
@@ -337,7 +339,7 @@ def _aplicar_ocr_a_pago(
     inst = (gem.get("institucion_financiera") or "").strip()
     if inst:
         pago.institucion_bancaria = inst[:255]
-    num_op = (gem.get("numero_operacion") or "").strip()
+    num_op = sanitizar_numero_operacion_comprobante(gem.get("numero_operacion"))
     if num_op:
         compuesto = compose_numero_documento_almacenado(num_op, None)
         if compuesto:

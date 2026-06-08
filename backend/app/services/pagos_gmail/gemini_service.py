@@ -32,6 +32,7 @@ from app.services.pagos_gmail.parse_campos_comprobante import (
     normalizar_campos_gemini_gmail,
     parse_fecha_comprobante as _parse_fecha_escaner_desde_gemini,
     parse_monto_comprobante as _parse_monto_escaner,
+    sanitizar_numero_operacion_comprobante,
 )
 
 logger = logging.getLogger(__name__)
@@ -2399,7 +2400,7 @@ REFERENCIA DE CALENDARIO (solo coherencia; no inventes fechas que no estén en e
 TAREA: Lee la imagen o PDF adjunto y extrae SOLO lo que aparezca con claridad en el comprobante para rellenar un formulario de "Infopagos" con estos campos:
   - fecha_pago: fecha de la operación en el comprobante. Devuélvela como cadena en formato **YYYY-MM-DD** si puedes inferir año/mes/día; si solo hay día/mes sin año razonable, deja fecha_pago vacía "".
   - institucion_financiera: nombre corto del banco o entidad. **Obligatorio** si reconoces una plantilla conocida (ver bloque PLANTILLAS). Valores preferidos: **Mercantil**, **BNC**, **Banco de Venezuela**, **BINANCE**, **Recibos** (ventanilla sin banco claro). Máximo 100 caracteres. No dejes vacío si el diseño del comprobante coincide con Mercantil (0105/RAPI), BNC (0191/cajero BNC), BDV (0102), Binance Pay, etc.
-  - numero_operacion: número o código que identifica la transacción (Serial, Ref, Nº operación, referencia, código, ID de orden en Binance, etc.). Sin etiquetas largas: solo el valor. Máximo 100 caracteres.
+  - numero_operacion: número o código que identifica la transacción (Serial, Ref, Nº operación, referencia, código, ID de orden en Binance, etc.). Sin etiquetas largas: solo el valor. Máximo 100 caracteres. **Un solo valor**: no concatenes Ref y Serial (BNC); si hay Ref legible úsalo; si Ref está ilegible y Serial sí, usa Serial. No repitas el mismo número dos veces (ej. 113907169113907169). Conserva ceros a la izquierda tal como en el papel.
   - monto: importe **exacto** del pago principal (Total, Monto Bs., Monto USD, Efectivo). En JSON usa **solo número decimal con punto** (sin separadores de miles): impreso `1.500,00` → `1500.00`; `150,50` → `150.50`; `US$ 20,00` → `20.00`; tira Mercantil `***********96,00 USD` → `96.00` (**nunca** `969`, `965`, `980`). No redondees ni cambies cifras. Si no es legible, `null`.
   - moneda: exactamente **BS** o **USD** (USDT, $ en contexto divisa fuerte, "Dólares", Binance Pay en USDT → USD).
   - cedula_pagador_en_comprobante: secuencia numérica del **depositante** (no la del deudor del contexto). Si en el comprobante aparece claramente la línea/casilla del depositante, devuélvela **solo con dígitos** (sin letra V/E/J/G ni puntos de miles). Mercantil (misma lógica visual que formato **A** del clasificador del sistema): casillas **DP:V-/DP:E-/DP:J-**, **Cédula Dep.**, **Nro. de Cédula de Identidad del Depositante**, bloques RECAUDACIÓN / DEPÓSITO DIVISAS con cuenta 0105. BNC (misma lógica que formato **B**): línea **DP:V-/E-/J-** + dígitos en recibo cajero BNC. No inventes dígitos; si la línea no es legible o hay duda, "". El backend validador concatena prefijos V/E/J/G con esos dígitos (6–11 cifras); si tras quitar no-dígitos no quedan entre 6 y 11 cifras, deja "".
@@ -2678,7 +2679,9 @@ def extract_infopagos_campos_desde_comprobante(
                     mon_norm = "BS"
 
                 notas = str(data.get("notas") or "").strip()[:300]
-                num_op = str(data.get("numero_operacion") or "").strip()[:100]
+                num_op = sanitizar_numero_operacion_comprobante(
+                    data.get("numero_operacion")
+                )[:100]
 
                 inst = _resolver_institucion_escaner(
                     str(data.get("institucion_financiera") or "").strip(),

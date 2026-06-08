@@ -33,7 +33,9 @@ from app.services.cobros.cedula_reportar_bs_service import (
     fuente_tasa_bs_efectiva_para_cedula,
 )
 from app.services.pagos_gmail.parse_campos_comprobante import (
+    clave_numero_operacion_canonico,
     fusionar_validacion_reglas_monto_alto_escaneo,
+    sanitizar_numero_operacion_comprobante,
 )
 
 logger = logging.getLogger(__name__)
@@ -651,7 +653,8 @@ def crear_pago_reportado_con_referencia_o_retry(
 
     pr: Optional[PagoReportado] = None
     referencia: Optional[str] = None
-    num_key = normalize_documento((numero_operacion or "").strip()) or (numero_operacion or "").strip()
+    numero_operacion_limpio = sanitizar_numero_operacion_comprobante(numero_operacion)
+    num_key = clave_numero_operacion_canonico(numero_operacion_limpio)
     now_local = datetime.now()
     ventana_desde = now_local - timedelta(minutes=DUPLICADO_NUMERO_OP_VENTANA_MIN)
 
@@ -664,6 +667,10 @@ def crear_pago_reportado_con_referencia_o_retry(
         No usa `eliminado_duplicado`, `rechazado` ni `importado` para bloquear: evita "duplicado fantasma"
         y permite reenvío tras rechazo o tras borrar el pago importado (reemplazo de cartera).
         """
+        from app.services.pagos_gmail.parse_campos_comprobante import (
+            numeros_operacion_coinciden_o_evasion,
+        )
+
         if not num_key:
             return None, None, 0
         rows = db.execute(
@@ -672,6 +679,7 @@ def crear_pago_reportado_con_referencia_o_retry(
                 PagoReportado.referencia_interna,
                 PagoReportado.estado,
                 PagoReportado.numero_operacion,
+                PagoReportado.monto,
                 PagoReportado.created_at,
             )
             .where(
@@ -681,9 +689,17 @@ def crear_pago_reportado_con_referencia_o_retry(
             .order_by(PagoReportado.created_at.asc(), PagoReportado.id.asc())
         ).all()
         same: list[tuple[int, str, str]] = []
-        for rid, rref, rstate, rop, _rc in rows:
-            k = normalize_documento((rop or "").strip()) or (rop or "").strip()
+        for rid, rref, rstate, rop, rmonto, _rc in rows:
+            k = clave_numero_operacion_canonico(rop)
             if k == num_key:
+                same.append((int(rid), str(rref or ""), str(rstate or "")))
+                continue
+            if numeros_operacion_coinciden_o_evasion(
+                numero_operacion_limpio,
+                rop,
+                monto_a=monto,
+                monto_b=rmonto,
+            ):
                 same.append((int(rid), str(rref or ""), str(rstate or "")))
         if not same:
             return None, None, 0
@@ -800,7 +816,7 @@ def crear_pago_reportado_con_referencia_o_retry(
                 numero_cedula=numero_cedula.strip(),
                 fecha_pago=fecha_pago,
                 institucion_financiera=institucion_financiera.strip()[:100],
-                numero_operacion=numero_operacion.strip()[:100],
+                numero_operacion=numero_operacion_limpio[:100],
                 monto=monto,
                 moneda=moneda_guardar[:10],
                 comprobante_imagen_id=img_id,

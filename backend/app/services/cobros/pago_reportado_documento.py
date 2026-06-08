@@ -304,7 +304,43 @@ def pago_reportado_colisiona_tabla_pagos(db: "Session", pr: PagoReportado) -> bo
         return True
     if db.execute(select(Pago.id).where(Pago.referencia_pago.in_(list(claves_raw))).limit(1)).first():
         return True
+    op = (getattr(pr, "numero_operacion", None) or "").strip()
+    if op:
+        from app.services.pago_numero_documento import documento_colisiona_evasion_registrado
+
+        if documento_colisiona_evasion_registrado(
+            db, op, incluir_reportados_activos=False
+        ):
+            return True
     return False
+
+
+def numero_operacion_colisiona_reportado_activo(
+    db: "Session",
+    numero_operacion: Optional[str],
+    *,
+    excluir_id: Optional[int] = None,
+) -> bool:
+    """
+    True si un ``pagos_reportados`` activo (pendiente/en_revision/aprobado) coincide
+    por número de operación exacto o evasión (sufijo/prefijo).
+    """
+    from app.models.pago_reportado import PagoReportado
+    from app.services.pago_numero_documento import _documento_colisiona_evasion_en_modelo
+
+    op = (numero_operacion or "").strip()
+    if not op:
+        return False
+
+    estados = ("pendiente", "en_revision", "aprobado")
+    return _documento_colisiona_evasion_en_modelo(
+        db,
+        PagoReportado,
+        op,
+        exclude_id=excluir_id,
+        value_column=PagoReportado.numero_operacion,
+        extra_where=(PagoReportado.estado.in_(estados),),
+    )
 
 
 def reportado_toca_claves_canonicas_en_pagos(

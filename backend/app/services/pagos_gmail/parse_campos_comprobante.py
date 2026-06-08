@@ -346,8 +346,275 @@ def fecha_comprobante_a_ddmmyyyy(val: Any, ref_hoy: Optional[date] = None) -> st
     return ""
 
 
+_LABEL_NUM_OP_PREFIX_RE = re.compile(
+    r"^(?:(?:serial|ref(?:\.|\s|:)?|referencia|operaci[oó]n|secuencial|"
+    r"n[ºo°°]\.?\s*(?:operaci[oó]n|documento|control|ref)?)\s*[:.]?\s*)+",
+    re.IGNORECASE,
+)
+
+
+def sanitizar_numero_operacion_comprobante(raw: Any) -> str:
+    """
+    Limpia OCR/Gemini sin inventar dígitos: quita etiquetas, deduplica repeticiones
+    obvias y evita concatenar Ref+Serial; conserva ceros a la izquierda del comprobante.
+    """
+    from app.core.documento import normalize_documento
+
+    s = normalize_documento(raw) or (str(raw or "")).strip()
+    s = re.sub(r"[\u200B-\u200D\uFEFF\r\n\t]", "", s).strip()
+    if not s or s.upper() in ("NA", "N/A", "NONE"):
+        return ""
+
+    parts = [p.strip() for p in re.split(r"[\s,;|/]+", s) if p.strip()]
+    if len(parts) >= 2 and len(set(parts)) == 1:
+        s = parts[0]
+    elif len(parts) >= 2:
+        digit_parts = [p for p in parts if re.fullmatch(r"\d+", p)]
+        if len(digit_parts) >= 2 and all(8 <= len(p) <= 13 for p in digit_parts[:2]):
+            s = digit_parts[0]
+
+    s2 = _LABEL_NUM_OP_PREFIX_RE.sub("", s).strip()
+    if s2:
+        s = s2
+
+    compact = s.replace(" ", "")
+    digits_only = re.sub(r"\D", "", compact)
+    if digits_only and len(digits_only) % 2 == 0:
+        half = len(digits_only) // 2
+        left, right = digits_only[:half], digits_only[half:]
+        if left == right:
+            s = left if re.fullmatch(r"\d+", compact) else s[: max(half, len(s) // 2)]
+        elif 8 <= half <= 13 and left.isdigit() and right.isdigit() and left != right:
+            s = left if re.fullmatch(r"\d+", compact) else s[:half]
+
+    return s[:100]
+
+
+def clave_numero_operacion_canonico(raw: Any) -> str:
+    """
+    Clave para anti-duplicado entre Infopagos, Gmail y cartera.
+    Normaliza espacios; en referencias solo numéricas ignora ceros a la izquierda.
+    """
+    from app.core.documento import normalize_documento
+
+    s = sanitizar_numero_operacion_comprobante(raw)
+    if not s:
+        return ""
+    norm = normalize_documento(s) or s
+    compact = norm.replace(" ", "")
+    if re.fullmatch(r"\d+", compact):
+        d = compact.lstrip("0") or compact[-1:]
+        return d
+    return norm
+
+
+def digitos_operacion_compacto(raw: Any) -> str:
+    """Solo dígitos del comprobante, conservando ceros a la izquierda (sin inventar)."""
+    s = sanitizar_numero_operacion_comprobante(raw).replace(" ", "")
+    return s if s.isdigit() else ""
+
+
+def _montos_coherentes_duplicado(a: Any, b: Any) -> bool:
+    """False solo si ambos montos son parseables y difieren."""
+    ma = parse_monto_comprobante(a)
+    mb = parse_monto_comprobante(b)
+    if ma is None or mb is None:
+        return True
+    return abs(ma - mb) < 0.015
+
+
+def _cedulas_coherentes_duplicado(a: Any, b: Any) -> bool:
+    """False solo si ambas cédulas tienen dígitos y difieren."""
+    da = re.sub(r"\D", "", str(a or ""))
+    db = re.sub(r"\D", "", str(b or ""))
+    if not da or not db:
+        return True
+    na = da.lstrip("0") or da
+    nb = db.lstrip("0") or db
+    return na == nb
+
+
+def _condiciones_sql_numero_operacion(column: Any, numero_operacion: str) -> list[Any]:
+    """OR de condiciones SQL acotadas para prefiltrar candidatos a duplicado."""
+    from app.services.pago_numero_documento import _candidatos_evasion_columna
+
+    op = (numero_operacion or "").strip()
+    compact = digitos_operacion_compacto(op)
+    conds: list[Any] = []
+    if op:
+        conds.append(column == op)
+    if compact:
+        for cond, _tag in _candidatos_evasion_columna(column, compact):
+            conds.append(cond)
+    return conds
+
+
+def _fechas_coherentes_duplicado(a: Any, b: Any) -> bool:
+    fa = (str(a or "").strip()[:10] if a else "")
+    fb = (str(b or "").strip()[:10] if b else "")
+    if not fa or not fb:
+        return True
+    return fa == fb
+
+
+def _contexto_coherente_duplicado(
+    *,
+    monto_a: Any = None,
+    monto_b: Any = None,
+    cedula_a: Any = None,
+    cedula_b: Any = None,
+    fecha_a: Any = None,
+    fecha_b: Any = None,
+) -> bool:
+    if not _montos_coherentes_duplicado(monto_a, monto_b):
+        return False
+    if not _cedulas_coherentes_duplicado(cedula_a, cedula_b):
+        return False
+    if not _fechas_coherentes_duplicado(fecha_a, fecha_b):
+        return False
+    return True
+
+
+def numeros_operacion_coinciden_o_evasion(
+    a: Any,
+    b: Any,
+    *,
+    monto_a: Any = None,
+    monto_b: Any = None,
+    cedula_a: Any = None,
+    cedula_b: Any = None,
+    fecha_a: Any = None,
+    fecha_b: Any = None,
+    exigir_contexto_sufijo_corto: bool = True,
+) -> bool:
+    """
+    True si es el mismo comprobante: igualdad, sufijo truncado (0993 vs …0993)
+    o prefijo/sufijo largo (7400874101194 vs 740087410119497).
+
+    Para sufijos cortos (≤6 dígitos) exige coherencia de monto/cédula/fecha cuando
+    ambos lados aportan el dato (reduce falsos positivos).
+    """
+    ca = digitos_operacion_compacto(a)
+    cb = digitos_operacion_compacto(b)
+    if ca and cb:
+        if ca == cb:
+            return _contexto_coherente_duplicado(
+                monto_a=monto_a,
+                monto_b=monto_b,
+                cedula_a=cedula_a,
+                cedula_b=cedula_b,
+                fecha_a=fecha_a,
+                fecha_b=fecha_b,
+            )
+        ca_canon = ca.lstrip("0") or ca[-1:]
+        cb_canon = cb.lstrip("0") or cb[-1:]
+        if ca_canon == cb_canon:
+            return _contexto_coherente_duplicado(
+                monto_a=monto_a,
+                monto_b=monto_b,
+                cedula_a=cedula_a,
+                cedula_b=cedula_b,
+                fecha_a=fecha_a,
+                fecha_b=fecha_b,
+            )
+        short, long = (ca, cb) if len(ca) <= len(cb) else (cb, ca)
+        short_c, long_c = (
+            (ca_canon, cb_canon) if len(ca_canon) <= len(cb_canon) else (cb_canon, ca_canon)
+        )
+        matched = False
+        if len(short) < len(long):
+            min_suffix = 4 if len(long) >= 12 else 5
+            if (
+                len(short) >= min_suffix
+                and len(short) <= len(long) - 6
+                and long.endswith(short)
+            ):
+                matched = True
+            elif (
+                len(long) >= 12
+                and len(short) >= 3
+                and len(short) <= len(long) - 6
+                and long_c.endswith(short_c)
+            ):
+                matched = True
+            elif len(short) >= 10 and (
+                long.startswith(short) or long_c.startswith(short_c)
+            ):
+                matched = True
+        if matched:
+            if (
+                exigir_contexto_sufijo_corto
+                and len(short) <= 6
+                and not _contexto_coherente_duplicado(
+                    monto_a=monto_a,
+                    monto_b=monto_b,
+                    cedula_a=cedula_a,
+                    cedula_b=cedula_b,
+                    fecha_a=fecha_a,
+                    fecha_b=fecha_b,
+                )
+            ):
+                return False
+            return True
+        return False
+    ka = clave_numero_operacion_canonico(a)
+    kb = clave_numero_operacion_canonico(b)
+    if not (ka and kb and ka == kb):
+        return False
+    return _contexto_coherente_duplicado(
+        monto_a=monto_a,
+        monto_b=monto_b,
+        cedula_a=cedula_a,
+        cedula_b=cedula_b,
+        fecha_a=fecha_a,
+        fecha_b=fecha_b,
+    )
+
+
+def referencia_duplicada_en_memoria_o_bd(
+    referencia: str,
+    *,
+    monto: Any = None,
+    cedula: Any = None,
+    fecha: Any = None,
+    lote_previo: Optional[list[dict]] = None,
+    db: Any = None,
+) -> bool:
+    """
+    True si la referencia ya apareció en el lote en curso (evasión) o en cartera/reportados.
+    ``lote_previo`` es lista de dicts con claves r, m, c, f.
+    """
+    ref = (referencia or "").strip()
+    if not ref:
+        return False
+    for prev in lote_previo or []:
+        if numeros_operacion_coinciden_o_evasion(
+            ref,
+            prev.get("r"),
+            monto_a=monto,
+            monto_b=prev.get("m"),
+            cedula_a=cedula,
+            cedula_b=prev.get("c"),
+            fecha_a=fecha,
+            fecha_b=prev.get("f"),
+        ):
+            return True
+    if db is not None:
+        from app.services.pago_numero_documento import numero_documento_ya_registrado
+
+        if numero_documento_ya_registrado(db, ref):
+            return True
+        from app.services.cobros.pago_reportado_documento import (
+            numero_operacion_colisiona_reportado_activo,
+        )
+
+        if numero_operacion_colisiona_reportado_activo(db, ref):
+            return True
+    return False
+
+
 def normalizar_campos_gemini_gmail(fields: Dict[str, str]) -> Dict[str, str]:
-    """Normaliza monto/fecha extraidos por Gemini antes de validar plantillas Gmail."""
+    """Normaliza monto/fecha/referencia extraidos por Gemini antes de validar plantillas Gmail."""
     from app.services.tasa_cambio_service import fecha_hoy_caracas
 
     ref = fecha_hoy_caracas()
@@ -360,4 +627,8 @@ def normalizar_campos_gemini_gmail(fields: Dict[str, str]) -> Dict[str, str]:
     if mo and mo.upper() not in (PAGOS_NA, "NR"):
         fm = monto_comprobante_a_excel(mo)
         out["monto"] = fm if fm else PAGOS_NA
+    nr = (out.get("numero_referencia") or "").strip()
+    if nr and nr.upper() != PAGOS_NA:
+        cleaned = sanitizar_numero_operacion_comprobante(nr)
+        out["numero_referencia"] = cleaned if cleaned else PAGOS_NA
     return out

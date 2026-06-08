@@ -598,6 +598,8 @@ def run_pipeline(
     # o un mensaje puede tener el comprobante adjunto e inline a la vez). Sin esto, se generaban
     # dos filas idénticas en `pagos_gmail_sync_item` con el mismo `numero_referencia` y monto.
     _sha256_pending_seen_in_run: set[str] = set()
+    # Referencias ya empaquetadas en esta corrida (evita duplicados por sufijo/prefijo truncado).
+    _refs_registradas_corrida: list[dict] = []
     # IDs de gmail_temporal cuyo delete inmediato falló tras alta automática OK; se reintenta antes de cerrar cada mensaje.
     pending_gmail_temporal_delete_ids: set[int] = set()
     # Métricas para GET /pagos/gmail/status → last_run_summary (diagnóstico en toast UI).
@@ -1503,6 +1505,28 @@ def run_pipeline(
                         # cubre TODAS las plantillas (A/B/C/D/E/F/NR) sin tocar el resto del flujo.
                         if _cedula_forzada_lote:
                             c = _cedula_forzada_lote
+                        from app.services.pagos_gmail.parse_campos_comprobante import (
+                            referencia_duplicada_en_memoria_o_bd,
+                        )
+
+                        if referencia_duplicada_en_memoria_o_bd(
+                            r,
+                            monto=m,
+                            cedula=c,
+                            fecha=f,
+                            lote_previo=_refs_registradas_corrida,
+                            db=db,
+                        ):
+                            logger.info(
+                                "[PAGOS_GMAIL]   Skip duplicado intra-corrida por referencia "
+                                "(evasión sufijo/prefijo o ya en cartera/reportados): ref=%s monto=%s "
+                                "archivo=%s msg=%s",
+                                (r or "")[:24],
+                                (m or "")[:16],
+                                filename,
+                                msg_id,
+                            )
+                            continue
                         pending.append(
                             {
                                 "fmt": fmt,
@@ -1517,6 +1541,9 @@ def run_pipeline(
                                 "mime_type": mime_type,
                                 "sha256": file_digest,
                             }
+                        )
+                        _refs_registradas_corrida.append(
+                            {"r": r, "m": m, "c": c, "f": f}
                         )
                         _sha256_pending_seen_in_run.add(file_digest)
                     except Exception as e:

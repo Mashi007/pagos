@@ -6,7 +6,7 @@ mismo número “visible” del banco es que el **valor almacenado** difiera por
 `compose_numero_documento_almacenado`), p. ej. revisión manual con token A####/P####.
 """
 
-from typing import Optional
+from typing import Any, Iterator, Optional, Type
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -15,6 +15,89 @@ from app.core.documento import normalize_documento
 from app.models.pago import Pago
 from app.models.pago_con_error import PagoConError
 from app.utils.cedula_almacenamiento import normalizar_cedula_almacenamiento
+
+
+def _candidatos_evasion_columna(column: Any, compact: str) -> Iterator[tuple[Any, str]]:
+    """Consultas LIKE acotadas para encontrar posibles duplicados por sufijo/prefijo."""
+    if not compact.isdigit() or len(compact) < 3:
+        return
+    if len(compact) <= 10:
+        yield column.like(f"%{compact}"), "suffix"
+    if len(compact) >= 10:
+        yield column.like(f"{compact}%"), "prefix_new"
+        yield column.like(f"{compact[:10]}%"), "prefix10"
+        # Serial almacenado más corto (prefijo del nuevo): ej. 7400874101194 vs …119497
+        if len(compact) > 10:
+            yield column.like(f"{compact[:12]}%"), "prefix12"
+
+
+def _candidatos_evasion_documento(model: Type[Any], compact: str) -> Iterator[tuple[Any, str]]:
+    yield from _candidatos_evasion_columna(model.numero_documento, compact)
+
+
+def _documento_colisiona_evasion_en_modelo(
+    db: Session,
+    model: Type[Any],
+    numero_documento: Optional[str],
+    *,
+    exclude_id: Optional[int] = None,
+    value_column: Any = None,
+    extra_where: Optional[tuple[Any, ...]] = None,
+) -> bool:
+    from app.services.pagos_gmail.parse_campos_comprobante import (
+        digitos_operacion_compacto,
+        numeros_operacion_coinciden_o_evasion,
+    )
+
+    compact = digitos_operacion_compacto(numero_documento)
+    if not compact:
+        return False
+    col = value_column if value_column is not None else model.numero_documento
+    seen_ids: set[int] = set()
+    for cond, _tag in _candidatos_evasion_columna(col, compact):
+        q = select(model.id, col).where(cond).limit(150)
+        if extra_where:
+            q = q.where(*extra_where)
+        if exclude_id is not None:
+            q = q.where(model.id != exclude_id)
+        for pid, stored in db.execute(q):
+            ipid = int(pid)
+            if ipid in seen_ids:
+                continue
+            seen_ids.add(ipid)
+            if numeros_operacion_coinciden_o_evasion(compact, stored):
+                return True
+    return False
+
+
+def documento_colisiona_evasion_registrado(
+    db: Session,
+    numero_documento: Optional[str],
+    *,
+    exclude_pago_id: Optional[int] = None,
+    exclude_pago_con_error_id: Optional[int] = None,
+    incluir_reportados_activos: bool = True,
+) -> bool:
+    """True si otro pago/pago_con_error (y opcionalmente reportado activo) coincide por evasión."""
+    if _documento_colisiona_evasion_en_modelo(
+        db, Pago, numero_documento, exclude_id=exclude_pago_id
+    ):
+        return True
+    if _documento_colisiona_evasion_en_modelo(
+        db,
+        PagoConError,
+        numero_documento,
+        exclude_id=exclude_pago_con_error_id,
+    ):
+        return True
+    if incluir_reportados_activos:
+        from app.services.cobros.pago_reportado_documento import (
+            numero_operacion_colisiona_reportado_activo,
+        )
+
+        if numero_operacion_colisiona_reportado_activo(db, numero_documento):
+            return True
+    return False
 
 
 def primer_pago_cartera_por_documento(
@@ -38,11 +121,43 @@ def primer_pago_cartera_por_documento(
         q = q.where(Pago.id != exclude_pago_id)
     q = q.order_by(Pago.id.asc()).limit(1)
     row = db.execute(q).first()
-    if row is None:
+    if row is not None:
+        pid = int(row[0])
+        prid = row[1]
+        return pid, (int(prid) if prid is not None else None)
+    pid, prid = _primer_pago_cartera_por_evasion(
+        db, numero_documento, exclude_pago_id=exclude_pago_id
+    )
+    return pid, prid
+
+
+def _primer_pago_cartera_por_evasion(
+    db: Session,
+    numero_documento: Optional[str],
+    *,
+    exclude_pago_id: Optional[int] = None,
+) -> tuple[Optional[int], Optional[int]]:
+    from app.services.pagos_gmail.parse_campos_comprobante import (
+        digitos_operacion_compacto,
+        numeros_operacion_coinciden_o_evasion,
+    )
+
+    compact = digitos_operacion_compacto(numero_documento)
+    if not compact:
         return None, None
-    pid = int(row[0])
-    prid = row[1]
-    return pid, (int(prid) if prid is not None else None)
+    seen_ids: set[int] = set()
+    for cond, _tag in _candidatos_evasion_documento(Pago, compact):
+        q = select(Pago.id, Pago.prestamo_id, Pago.numero_documento).where(cond).limit(150)
+        if exclude_pago_id is not None:
+            q = q.where(Pago.id != exclude_pago_id)
+        for pid, prid, stored in db.execute(q):
+            ipid = int(pid)
+            if ipid in seen_ids:
+                continue
+            seen_ids.add(ipid)
+            if numeros_operacion_coinciden_o_evasion(compact, stored):
+                return ipid, (int(prid) if prid is not None else None)
+    return None, None
 
 
 def documento_ya_en_tabla_pagos(db: Session, numero_documento: Optional[str]) -> bool:
@@ -88,7 +203,15 @@ def numero_documento_ya_registrado(
     if exclude_pago_con_error_id is not None:
         qe = qe.where(PagoConError.id != exclude_pago_con_error_id)
     qe = qe.limit(1)
-    return db.scalar(qe) is not None
+    if db.scalar(qe) is not None:
+        return True
+
+    return documento_colisiona_evasion_registrado(
+        db,
+        numero_documento,
+        exclude_pago_id=exclude_pago_id,
+        exclude_pago_con_error_id=exclude_pago_con_error_id,
+    )
 
 
 def pago_con_error_ya_cargado_estricto(

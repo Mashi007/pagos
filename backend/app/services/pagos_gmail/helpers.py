@@ -239,17 +239,19 @@ def fecha_drive_texto_y_clave(raw_fecha_drive: Optional[str]) -> tuple[str, Opti
 
 def normalizar_referencia(ref: Optional[str]) -> str:
     """
-    Elimina ceros iniciales de la referencia.
-    '000130611935' → '130611935', '001234' → '1234'.
-    NA, vacío o valor no numérico → devuelve sin modificar.
+    Valor almacenado de referencia/serial: copia fiel del comprobante tras limpieza OCR
+    (sin quitar ceros a la izquierda). Para comparar duplicados use
+    `clave_numero_operacion_canonico`.
     """
+    from app.services.pagos_gmail.parse_campos_comprobante import (
+        sanitizar_numero_operacion_comprobante,
+    )
+
     v = (ref or "").strip()
     if not v or v.upper() == "NA":
         return v
-    if re.match(r"^\d+$", v):
-        return v.lstrip("0") or v[-1]  # si todo eran ceros, conservar el último
-    # Alfanumérico (letras + números): no tocar
-    return v
+    cleaned = sanitizar_numero_operacion_comprobante(v)
+    return cleaned if cleaned else v
 
 
 def format_monto_excel_pagos_gmail(monto: Optional[str]) -> str:
