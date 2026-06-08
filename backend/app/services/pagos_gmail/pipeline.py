@@ -1102,11 +1102,17 @@ def run_pipeline(
                         detalle=f"de={sender_lc[:120]} adjuntos={len(candidatos)}",
                     )
 
-                def _campos_completos(fecha: str, cedula: str, monto: str, ref: str) -> bool:
+                def _campos_completos_plantilla(
+                    formato: str, fecha: str, cedula: str, monto: str, ref: str
+                ) -> bool:
                     def ok(val: str) -> bool:
                         s = (val or "").strip()
                         return bool(s) and s.upper() != PAGOS_NA
 
+                    fmt_u = (formato or "").strip().upper()
+                    # Binance (C): la pantalla no trae fecha; no rellenar desde el correo.
+                    if fmt_u == "C":
+                        return ok(cedula) and ok(monto) and ok(ref)
                     return ok(fecha) and ok(cedula) and ok(monto) and ok(ref)
 
                 def _campos_completos_nr(cedula: str, monto: str) -> bool:
@@ -1314,7 +1320,8 @@ def run_pipeline(
                             continue
 
                         if fmt == "C":
-                            f = normalizar_fecha_pago(msg_date.strftime("%d/%m/%Y"))
+                            f_raw = _v(data.get("fecha_pago"))
+                            f = normalizar_fecha_pago(f_raw) if f_raw else ""
                             m = _v(data.get("monto"))
                             r = normalizar_referencia(_v(data.get("numero_referencia")))
                             c, c_ok = _cedula_columna_desde_remitente(db, sender_lc)
@@ -1373,14 +1380,6 @@ def run_pipeline(
                                 )
                         elif usar_extraccion_cedula_imagen_ab and fmt in ("A", "B"):
                             f = normalizar_fecha_pago(_v(data.get("fecha_pago")))
-                            if (not f or not str(f).strip()) and fmt in (
-                                "B",
-                                "E",
-                                "F",
-                            ):
-                                f = normalizar_fecha_pago(
-                                    msg_date.strftime("%d/%m/%Y")
-                                )
                             m = _v(data.get("monto"))
                             r = normalizar_referencia(_v(data.get("numero_referencia")))
                             c = _cedula_desde_imagen_rescan_error_email(data.get("cedula"))
@@ -1419,14 +1418,6 @@ def run_pipeline(
                             )
                         else:
                             f = normalizar_fecha_pago(_v(data.get("fecha_pago")))
-                            if (not f or not str(f).strip()) and fmt in (
-                                "B",
-                                "E",
-                                "F",
-                            ):
-                                f = normalizar_fecha_pago(
-                                    msg_date.strftime("%d/%m/%Y")
-                                )
                             m = _v(data.get("monto"))
                             r = normalizar_referencia(_v(data.get("numero_referencia")))
                             c, c_ok = _cedula_columna_desde_remitente(db, sender_lc)
@@ -1466,7 +1457,7 @@ def run_pipeline(
                                     detalle="NR",
                                 )
                                 continue
-                        elif not _campos_completos(f, c, m, r):
+                        elif not _campos_completos_plantilla(fmt, f, c, m, r):
                             any_incomplete_or_skipped = True
                             any_skipped_not_plantilla_o_campos = True
                             logger.warning(

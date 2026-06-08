@@ -3,7 +3,7 @@ Gemini: enviar imagen o PDF, extraer datos de comprobantes.
 Usa el paquete google-genai (google.genai) — sucesor de google-generativeai.
 Configuración única para todo el sistema: GEMINI_API_KEY y GEMINI_MODEL (app.core.config.settings).
 
-- Pagos (Gmail): fecha_pago, cedula, monto, numero_referencia (extract_payment_data).
+- Pagos (Gmail): fecha_pago, cedula, monto, numero_referencia (classify_and_extract_pagos_gmail_attachment).
 - Cobranza (papeleta/informe): fecha_deposito, nombre_banco, etc. (extract_cobranza_from_image).
 - Cobros (reporte público): comparar datos del formulario vs imagen del comprobante (compare_form_with_image).
 - Cobros (escáner Infopagos, personal autenticado): extraer sugerencia de campos desde solo la imagen
@@ -54,6 +54,17 @@ FECHA — Venezuela DD/MM/YYYY; no confundir con MM/DD ni inventar desde metadat
   - Mercantil A1: fecha operación = **YYYYMMDD** del bloque guionado (ej. `9824-20250703-151620-DCME-…` → **2025-07-03**).
   - Pie **PDP 056(09-02-2021)** o fecha manuscrita distinta = lote del formulario, **no** sustituye la fecha del depósito si la tira trae YYYYMMDD.
   - Conflicto manuscrito vs tira impresa → **tira manda** (fecha, monto, serial/referencia).
+  - Prohibido usar fecha del correo, asunto, metadata del archivo o nombre del archivo para rellenar fecha.
+""".strip()
+
+# Reglas compartidas Serial/Ref (escáner Infopagos, compare formulario vs imagen).
+GEMINI_REGLAS_NUMERO_OPERACION_OCR = """
+NÚMERO DE OPERACIÓN / SERIAL / REFERENCIA (copiar del comprobante — no inventar):
+  - Un solo valor: no concatenes Ref y Serial (BNC); si hay Ref legible úsalo; si Ref está ilegible y Serial sí, usa Serial.
+  - No repitas el mismo número dos veces (ej. 113907169113907169 → solo 113907169).
+  - Conserva ceros a la izquierda tal como en el papel (ej. 0000091316488).
+  - Mercantil: si coexisten línea **Serial:** larga (7400…, 13+ dígitos) y código con guiones **DCME**, prioriza el **Serial** largo; no uses cuenta 0105 ni RIF del banco.
+  - BNC: prioriza **Ref** sobre **Serial** cuando ambos sean legibles; nunca la cuenta 0191 ni el RIF del banco.
 """.strip()
 
 PagosGmailFormato = Literal["A", "B", "C", "D", "E", "F", "NR", "ninguno"]
@@ -575,6 +586,8 @@ Salida: solo JSON, sin markdown.
 PAGOS_GMAIL_FORMATOS_PLANTILLA: frozenset[str] = frozenset({"A", "B", "C", "D", "E", "F", "NR"})
 
 
+# DEPRECATED: no usar en producción. El pipeline Gmail usa GEMINI_PAGOS_GMAIL_FORMATO_Y_EXTRACCION
+# (solo imagen/PDF, sin asunto ni cuerpo). Se conserva solo por scripts de mantenimiento históricos.
 GEMINI_PROMPT = (
     "[EN] You MUST review ALL available information: email SUBJECT, message BODY, and ATTACHMENTS (images/PDFs). Extract the 4 fields from any source or combination. Respond ONLY with valid JSON. [ES] DEBES revisar TODA la informacion: ASUNTO, CUERPO y ADJUNTOS. Extrae los 4 campos de cualquier fuente o combinacion. Responde UNICAMENTE con JSON. "
     "Eres un asistente especializado en extraer datos de pagos venezolanos. "
@@ -1190,12 +1203,35 @@ def extract_payment_data(
     api_key: Optional[str] = None,
 ) -> Dict[str, str]:
     """
-    Extrae fecha_pago, cedula, monto, numero_referencia de asunto, cuerpo, imagen/PDF o combinación.
-    - subject: asunto del correo (opcional; a menudo trae referencia, monto o identificación).
-    - body_text: cuerpo del correo en texto plano (opcional).
-    - file_content + filename: imagen o PDF (comprobante).
-    - Si solo hay texto (asunto/cuerpo), extrae del texto. Si hay imagen(es), puede combinar todas las fuentes.
+    DEPRECATED — usar classify_and_extract_pagos_gmail_attachment (solo imagen/PDF, sin inventar desde correo).
+
+    Extraía fecha_pago, cedula, monto, numero_referencia de asunto, cuerpo, imagen/PDF o combinación.
+    Conservada por compatibilidad con scripts viejos; el pipeline Gmail ya no la invoca.
     """
+    import warnings
+
+    warnings.warn(
+        "extract_payment_data está obsoleto; use classify_and_extract_pagos_gmail_attachment",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    logger.warning(
+        "[PAGOS_GMAIL] extract_payment_data DEPRECATED — use classify_and_extract_pagos_gmail_attachment"
+    )
+    if file_content and filename and not (body_text and body_text.strip()) and not (
+        subject and subject.strip()
+    ):
+        fmt, fields = classify_and_extract_pagos_gmail_attachment(
+            file_content, filename, api_key=api_key
+        )
+        if fmt in PAGOS_GMAIL_FORMATOS_PLANTILLA:
+            return {
+                "fecha_pago": fields.get("fecha_pago") or PAGOS_NA,
+                "cedula": fields.get("cedula") or PAGOS_NA,
+                "monto": fields.get("monto") or PAGOS_NA,
+                "numero_referencia": fields.get("numero_referencia") or PAGOS_NA,
+            }
+        return _empty_result(PAGOS_NA)
     key = api_key or getattr(settings, "GEMINI_API_KEY", None)
     if not key:
         logger.warning(
@@ -1310,8 +1346,8 @@ def _pagos_gmail_ab_campos_imagen_completos(fields: Dict[str, str]) -> bool:
 
 def _pagos_gmail_bef_campos_imagen_minimos(fields: Dict[str, str]) -> bool:
     """
-    B/E/F: capturas de app suelen no mostrar fecha de operacion en pantalla.
-    Exige monto + referencia; la fecha la completa el pipeline con la cabecera Date / internalDate del correo.
+    B/E/F: capturas de app a veces no muestran fecha en pantalla.
+    Exige monto + referencia para clasificar; si no hay fecha legible, el pipeline no rellena desde el correo.
     """
     for k in ("monto", "numero_referencia"):
         s = (fields.get(k) or "").strip()
@@ -2181,6 +2217,7 @@ REGLAS DEL VALIDADOR DE CÉDULA (aplicar siempre; alineado con el sistema):
 
 NÚMERO DE OPERACIÓN (igual que Serial / Referencia en el comprobante):
 - En el formulario el campo se llama "Número de operación". En el comprobante puede aparecer con OTRO nombre: "Serial", "Serial:", "Nº operación", "Número de operación", "Referencia", "Nº de referencia", "Código", "Número de transacción", etc. Todos son el mismo concepto: el número o código que identifica la transacción. Si en el recibo ves "Serial: 740087401612580", ese valor 740087401612580 ES el número de operación. Compáralo con lo que la persona ingresó en el formulario; si los dígitos coinciden (ignorando espacios o guiones), COINCIDE. No marques "Nº operación" como divergencia solo porque en el comprobante dice "Serial" en vez de "Número de operación".
+- Al leer numero_operacion de la imagen aplica las mismas reglas anti-concatenación y anti-repetición que en el escáner Infopagos (un solo valor; Ref antes que Serial en BNC; Serial largo 7400… antes que código DCME en Mercantil).
 
 EXCEPCIÓN BANCO = BINANCE (aplicar siempre y solo en este caso):
 - Si la columna Banco (institucion_financiera) es BINANCE (o Binance), IGNORAR siempre el error de fecha. En el formato de imagen para Banco = BINANCE no hay fecha que comprobar; no incluyas "Fecha pago" en el comentario por diferencia de fecha cuando el banco sea BINANCE.
@@ -2216,6 +2253,8 @@ Paso 3 — Decidir:
 Responde ÚNICAMENTE con un JSON válido, sin markdown ni texto antes o después:
 {"coincide_exacto": true o false, "requiere_revision_humana": true o false, "comentario": "solo nombres de columnas separados por coma: Cédula, Banco, Fecha pago, Nº operación, Monto, Moneda"}
 """
+    + "\n\n"
+    + GEMINI_REGLAS_NUMERO_OPERACION_OCR
     + "\n\n"
     + GEMINI_REGLAS_MONTO_FECHA_OCR
 )
@@ -2267,23 +2306,30 @@ def compare_form_with_image(
         logger.warning("[COBROS] GEMINI_API_KEY no configurado para comparar formulario vs imagen.")
         return default_result
     
-    cached_result = cache_get(image_bytes, form_data)
+    form_compare = dict(form_data)
+    num_op_form = sanitizar_numero_operacion_comprobante(
+        form_data.get("numero_operacion")
+    )
+    if num_op_form:
+        form_compare["numero_operacion"] = num_op_form
+
+    cached_result = cache_get(image_bytes, form_compare)
     if cached_result:
         logger.info("[COBROS] Gemini: resultado desde caché (SHA256 imagen + form_data)")
         return cached_result
     # Cédula: formato estándar sin guión (tipo + dígitos); normalizar número sin ceros a la izquierda para comparar
-    tipo_c = (form_data.get("tipo_cedula") or "").strip().upper()
-    num_c = (form_data.get("numero_cedula") or "").strip()
+    tipo_c = (form_compare.get("tipo_cedula") or "").strip().upper()
+    num_c = (form_compare.get("numero_cedula") or "").strip()
     num_sin_ceros = num_c.lstrip("0") or "0"  # 0025677920 -> 25677920; 0 -> 0
-    cedula_estandar = f"{tipo_c}{num_c}" if (tipo_c and num_c) else (form_data.get("tipo_cedula") or "") + (form_data.get("numero_cedula") or "")
-    _fm = (form_data.get("moneda") or "BS").strip().upper()
+    cedula_estandar = f"{tipo_c}{num_c}" if (tipo_c and num_c) else (form_compare.get("tipo_cedula") or "") + (form_compare.get("numero_cedula") or "")
+    _fm = (form_compare.get("moneda") or "BS").strip().upper()
     _fm_label = "USD" if _fm in ("USD", "USDT") else _fm
     text_data = (
         "Valores ingresados manualmente en el formulario (compara cada uno con lo que leas en la imagen):\n"
-        f"- fecha_pago: {form_data.get('fecha_pago')}\n"
-        f"- institucion_financiera: {form_data.get('institucion_financiera')}\n"
-        f"- numero_operacion: {form_data.get('numero_operacion')}\n"
-        f"- monto: {form_data.get('monto')} {_fm_label}"
+        f"- fecha_pago: {form_compare.get('fecha_pago')}\n"
+        f"- institucion_financiera: {form_compare.get('institucion_financiera')}\n"
+        f"- numero_operacion: {form_compare.get('numero_operacion')}\n"
+        f"- monto: {form_compare.get('monto')} {_fm_label}"
         + (" (USDT equivale a USD; si el comprobante dice USDT y aquí USD, es la misma moneda)\n" if _fm_label == "USD" else "\n")
         + f"- cedula (tipo + número): {cedula_estandar}. Ejemplo en comprobante: DP:V-015989899 → V15989899 (ignorar guión; nunca contar ceros después de la letra). Número normalizado para comparar: {tipo_c or 'V'}{num_sin_ceros}. Si tipo y ese número coinciden, NO incluyas Cédula en comentario.\n"
     )
@@ -2328,7 +2374,7 @@ def compare_form_with_image(
                             logger.info("[COBROS] Gemini: divergencia solo por formato cédula; ignorada.")
                     # USDT = USD: si solo lista "Moneda" y el pago es en dólares, no rechazar
                     if not coincide and comentario:
-                        form_mon = (form_data.get("moneda") or "BS").strip().upper()
+                        form_mon = (form_compare.get("moneda") or "BS").strip().upper()
                         form_mon_norm = "USD" if form_mon in ("USD", "USDT") else form_mon
                         if form_mon_norm == "USD" and _comentario_solo_columna_moneda(comentario):
                             coincide = True
@@ -2344,7 +2390,9 @@ def compare_form_with_image(
                                 for k in ("cédula", "cedula", "fecha", "operación", "operacion", "monto", "moneda")
                             )
                         )
-                        if solo_banco and _is_recibo_alias(form_data.get("institucion_financiera")):
+                        if solo_banco and _is_recibo_alias(
+                            form_compare.get("institucion_financiera")
+                        ):
                             coincide = True
                             comentario = ""
                             logger.info("[COBROS] Gemini: divergencia solo Banco con Recibo/Recibos; ignorada.")
@@ -2353,14 +2401,14 @@ def compare_form_with_image(
                         "requiere_revision_humana": not coincide,
                         "comentario": comentario,
                     }
-                    cache_set(image_bytes, form_data, result)
+                    cache_set(image_bytes, form_compare, result)
                     return result
                 result = {
                     "coincide_exacto": coincide,
                     "requiere_revision_humana": not coincide,
                     "comentario": comentario,
                 }
-                cache_set(image_bytes, form_data, result)
+                cache_set(image_bytes, form_compare, result)
                 return result
             except Exception as e:
                 last_error = e

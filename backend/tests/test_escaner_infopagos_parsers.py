@@ -125,6 +125,18 @@ def test_sanitizar_numero_operacion_comprobante():
     assert sanitizar_numero_operacion_comprobante("113907169 113907166") == "113907169"
 
 
+def test_sanitizar_preferir_serial_mercantil_sobre_dcme():
+    assert sanitizar_numero_operacion_comprobante(
+        "9213-20260331-151620-DCME-3122-A 740087452690993"
+    ) == "740087452690993"
+    assert sanitizar_numero_operacion_comprobante(
+        "Serial: 740087401612580"
+    ) == "740087401612580"
+    assert sanitizar_numero_operacion_comprobante(
+        "9213-20260331-151620-DCME-3122-A"
+    ) == "9213-20260331-151620-DCME-3122-A"
+
+
 def test_clave_numero_operacion_canonico():
     assert clave_numero_operacion_canonico("0000091316488") == "91316488"
     assert clave_numero_operacion_canonico("91316488") == "91316488"

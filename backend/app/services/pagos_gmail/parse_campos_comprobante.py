@@ -352,6 +352,26 @@ _LABEL_NUM_OP_PREFIX_RE = re.compile(
     re.IGNORECASE,
 )
 
+_MERCANTIL_SERIAL_LARGO_RE = re.compile(r"7400\d{9,}")
+
+
+def _preferir_serial_mercantil_largo(s: str) -> str:
+    """
+    Si coexisten código DCME guionado y Serial largo 7400…, prioriza el Serial (regla Gmail A1).
+    Sin Serial 7400… visible, conserva el valor original (p. ej. solo código DCME).
+    """
+    if not s:
+        return s
+    compact_digits = re.sub(r"\D", "", s)
+    serial_runs = _MERCANTIL_SERIAL_LARGO_RE.findall(compact_digits)
+    if not serial_runs:
+        return s
+    best = max(serial_runs, key=len)
+    low = s.lower()
+    if "dcme" in low or re.search(r"\d{4}-\d{8}-", s):
+        return best
+    return s
+
 
 def sanitizar_numero_operacion_comprobante(raw: Any) -> str:
     """
@@ -379,7 +399,10 @@ def sanitizar_numero_operacion_comprobante(raw: Any) -> str:
 
     compact = s.replace(" ", "")
     digits_only = re.sub(r"\D", "", compact)
-    if digits_only and len(digits_only) % 2 == 0:
+    es_codigo_guionado = bool(
+        re.search(r"[A-Za-z]", compact) or "dcme" in s.lower()
+    )
+    if digits_only and not es_codigo_guionado and len(digits_only) % 2 == 0:
         half = len(digits_only) // 2
         left, right = digits_only[:half], digits_only[half:]
         if left == right:
@@ -387,6 +410,7 @@ def sanitizar_numero_operacion_comprobante(raw: Any) -> str:
         elif 8 <= half <= 13 and left.isdigit() and right.isdigit() and left != right:
             s = left if re.fullmatch(r"\d+", compact) else s[:half]
 
+    s = _preferir_serial_mercantil_largo(s)
     return s[:100]
 
 
