@@ -18,7 +18,7 @@
 
  */
 
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
 
 import { useParams, useNavigate } from 'react-router-dom'
 
@@ -29,6 +29,8 @@ import {
   updatePagoReportado,
   eliminarPagoReportado,
   diagnosticoDuplicadoPagoReportado,
+  escanerInfopagosExtraerComprobante,
+  type EscanerInfopagosExtraerResponse,
   type PagoReportadoDetalleResponse,
   type PagoReportadoDuplicadoDiagnostico,
 } from '../services/cobrosService'
@@ -49,7 +51,9 @@ import {
 
 import toast from 'react-hot-toast'
 
-import { Loader2, Eye } from 'lucide-react'
+import { Loader2, Eye, Brain } from 'lucide-react'
+import { FUENTE_TASA_DEFAULT } from '../constants/fuenteTasaCambio'
+import { resolverInstitucionDesdeExtraccion } from './escanerInfopagosLoteModel'
 import {
   aplicarSufijoVistoADocumento,
   collectTokensSufijoVistoArchivoDesdeFilas,
@@ -129,6 +133,10 @@ export default function CobrosEditarPage() {
   const [vistoAyudaOpen, setVistoAyudaOpen] = useState(false)
 
   const ultimoErrorVistoRef = useRef('')
+
+  const escanearActivoRef = useRef(false)
+
+  const [escaneando, setEscaneando] = useState(false)
 
   /** Vista previa local del comprobante (blob URL); se revoca al desmontar o al recargar. */
   const [comprobanteObjectUrl, setComprobanteObjectUrl] = useState<
@@ -423,6 +431,128 @@ export default function CobrosEditarPage() {
     }
   }, [])
 
+  const aplicarExtraccionAlFormulario = useCallback(
+    (res: EscanerInfopagosExtraerResponse) => {
+      const s = res.sugerencia
+      if (!s) return false
+      const { institucion: inst, otroInstitucion: otroInst } =
+        resolverInstitucionDesdeExtraccion(
+          s.institucion_financiera || '',
+          form.institucion_financiera,
+          otroInstitucion
+        )
+      const mon = s.moneda === 'BS' ? 'BS' : 'USD'
+      const fechaExtraida = (s.fecha_pago || '').trim()
+      setForm(prev => ({
+        ...prev,
+        fecha_pago: fechaExtraida || prev.fecha_pago,
+        institucion_financiera: inst || prev.institucion_financiera,
+        numero_operacion: (s.numero_operacion || '').trim() || prev.numero_operacion,
+        monto:
+          s.monto != null && Number.isFinite(s.monto)
+            ? String(s.monto)
+            : prev.monto,
+        moneda: mon,
+      }))
+      setOtroInstitucion(otroInst)
+      if (s.numero_operacion) {
+        tokensSufijoUsadosRef.current =
+          collectTokensSufijoVistoArchivoDesdeFilas([
+            { numero_documento: s.numero_operacion },
+          ])
+      }
+      if (res.duplicado_en_pagos) {
+        setDuplicadoDiagnostico({
+          duplicado_en_pagos: true,
+          pago_existente_id: res.pago_existente_id ?? null,
+          prestamo_existente_id: res.prestamo_existente_id ?? null,
+          prestamo_objetivo_id: res.prestamo_objetivo_id ?? null,
+          prestamo_objetivo_multiple: detalle?.prestamo_objetivo_multiple,
+          prestamo_duplicado_es_objetivo: detalle?.prestamo_duplicado_es_objetivo,
+        })
+      }
+      return true
+    },
+    [detalle, form.institucion_financiera, otroInstitucion]
+  )
+
+  const handleReescanear = useCallback(async () => {
+    if (!id || !detalle?.tiene_comprobante) {
+      toast.error('Este reporte no tiene comprobante para escanear.')
+      return
+    }
+    const tipo = (form.tipo_cedula || 'V').trim().toUpperCase()
+    const numero = (form.numero_cedula || '').trim().replace(/\D/g, '')
+    if (!numero) {
+      toast.error('Indique la cédula del cliente antes de escanear.')
+      return
+    }
+    if (escanearActivoRef.current) return
+    escanearActivoRef.current = true
+    setEscaneando(true)
+    try {
+      const blob = await getPagoReportadoComprobanteBlob(Number(id))
+      const extGuess = blob.type?.includes('pdf')
+        ? 'pdf'
+        : blob.type?.includes('png')
+          ? 'png'
+          : blob.type?.includes('webp')
+            ? 'webp'
+            : 'jpg'
+      let archivo = new File(
+        [blob],
+        `comprobante-reporte-${id}.${extGuess}`,
+        { type: blob.type || 'application/octet-stream' }
+      )
+      try {
+        const { normalizarComprobanteArchivoParaEscaneo } = await import(
+          '../utils/normalizarComprobanteArchivo'
+        )
+        archivo = await normalizarComprobanteArchivoParaEscaneo(archivo)
+      } catch (convErr) {
+        toast.error(
+          convErr instanceof Error
+            ? convErr.message
+            : 'No se pudo preparar el comprobante para escanear.'
+        )
+        return
+      }
+      const fd = new FormData()
+      fd.append('tipo_cedula', tipo)
+      fd.append('numero_cedula', numero)
+      fd.append('fuente_tasa_cambio', FUENTE_TASA_DEFAULT)
+      fd.append('comprobante', archivo)
+      const instHint = (form.institucion_financiera || '').trim()
+      if (instHint && INSTITUCIONES_FINANCIERAS.includes(instHint)) {
+        fd.append('institucion_plantilla', instHint)
+      }
+      const res = await escanerInfopagosExtraerComprobante(fd)
+      if (!res.ok) {
+        toast.error(
+          res.validacion_reglas ||
+            res.validacion_campos ||
+            res.error ||
+            'No se pudo digitalizar el comprobante.'
+        )
+        return
+      }
+      if (!aplicarExtraccionAlFormulario(res)) {
+        toast.error('Sin sugerencias del modelo.')
+        return
+      }
+      const aviso =
+        res.validacion_campos || res.validacion_reglas
+          ? ' Datos sugeridos con observaciones: revise antes de guardar.'
+          : ''
+      toast.success(`Comprobante re-escaneado.${aviso}`)
+    } catch {
+      /* apiClient ya muestra toast en errores HTTP */
+    } finally {
+      escanearActivoRef.current = false
+      setEscaneando(false)
+    }
+  }, [aplicarExtraccionAlFormulario, detalle, form, id])
+
   const handleEliminarReporteDuplicado = async () => {
     if (!id) return
     if (
@@ -535,12 +665,42 @@ export default function CobrosEditarPage() {
         <aside className="flex min-h-[min(42vh,380px)] min-w-0 flex-col bg-slate-100 lg:h-full lg:max-h-full lg:min-h-0 lg:overflow-y-auto lg:overscroll-y-contain">
           <Card className="flex h-full min-h-0 flex-col rounded-none border-0 shadow-none">
             <CardHeader className="shrink-0 border-b border-slate-200/80 px-3 pb-2 pt-3 lg:pl-3 lg:pr-3">
-              <CardTitle className="text-base">Comprobante</CardTitle>
-              <p className="text-xs text-muted-foreground">
-                Pantalla ancha: comprobante a la izquierda y formulario de
-                revisión manual a la derecha, usando todo el ancho del área de
-                trabajo.
-              </p>
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div className="min-w-0 flex-1">
+                  <CardTitle className="text-base">Comprobante</CardTitle>
+                  <p className="text-xs text-muted-foreground">
+                    Pantalla ancha: comprobante a la izquierda y formulario de
+                    revisión manual a la derecha.
+                  </p>
+                </div>
+                {detalle.tiene_comprobante ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    className="shrink-0"
+                    disabled={
+                      escaneando ||
+                      comprobantePreviewLoading ||
+                      saving ||
+                      vistoSaving
+                    }
+                    onClick={() => void handleReescanear()}
+                  >
+                    {escaneando ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Escaneando…
+                      </>
+                    ) : (
+                      <>
+                        <Brain className="mr-2 h-4 w-4" />
+                        Escanear
+                      </>
+                    )}
+                  </Button>
+                ) : null}
+              </div>
             </CardHeader>
             <CardContent className="flex min-h-0 flex-1 flex-col space-y-2 overflow-hidden p-2 sm:p-3 lg:pl-0 lg:pr-2">
               {!detalle.tiene_comprobante ? (
