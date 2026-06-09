@@ -8,6 +8,7 @@ import asyncio
 import json
 import logging
 import re
+import uuid
 from datetime import date, datetime, time as dt_time
 from decimal import Decimal
 from typing import Any, Dict, List, Optional, Tuple
@@ -34,6 +35,7 @@ from app.services.pagos.migracion_comprobante_drive_a_bd import (
     descargar_archivo_drive_uc_export,
     extraer_google_drive_file_id,
 )
+from app.services.pagos_gmail.comprobante_bd import url_comprobante_imagen_absoluta
 from app.services.pagos_gmail.gemini_async import extract_infopagos_campos_desde_comprobante_async
 from app.services.cobros.cobros_publico_reporte_service import (
     mime_efectivo_comprobante_web,
@@ -48,6 +50,8 @@ _RE_COMPROBANTE_ID = re.compile(
     r"/pagos/comprobante-imagen/([0-9a-fA-F]{32})\b",
     re.IGNORECASE,
 )
+
+_MAX_COMPROBANTE_RESERVA_BYTES = 10 * 1024 * 1024
 
 
 def _tiene_comprobante(p: Pago) -> bool:
@@ -284,6 +288,57 @@ def _extraer_comprobante_id_hex(link: Optional[str], documento_ruta: Optional[st
     return None
 
 
+def _comprobante_imagen_bd_accesible(db: Session, imagen_id_hex: Optional[str]) -> bool:
+    cid = (imagen_id_hex or "").strip().lower()
+    if not cid:
+        return False
+    row = db.get(PagoComprobanteImagen, cid)
+    return bool(row and row.imagen_data)
+
+
+def _vincular_comprobante_reserva_al_pago(
+    db: Session,
+    reserva: FiniquitoConciliacionReserva,
+    pago: Pago,
+) -> None:
+    """
+    Tras recrear un pago desde la reserva Visto, expone el comprobante vía
+    `pago_comprobante_imagen` para que el staff pueda verlo con sesión (GET autenticado).
+    La reserva guarda bytes al primer Visto; sin este paso el link puede seguir en Drive
+    o apuntar a un id inexistente y la UI no carga la imagen.
+    """
+    if not _reserva_tiene_imagen_guardada(reserva):
+        return
+
+    for cid in (
+        _extraer_comprobante_id_hex(pago.link_comprobante, pago.documento_ruta),
+        _extraer_comprobante_id_hex(reserva.link_comprobante, reserva.documento_ruta),
+    ):
+        if _comprobante_imagen_bd_accesible(db, cid):
+            pago.link_comprobante = url_comprobante_imagen_absoluta(cid)
+            pago.documento_ruta = None
+            return
+
+    body = bytes(reserva.comprobante_imagen_data)
+    if len(body) > _MAX_COMPROBANTE_RESERVA_BYTES:
+        logger.warning(
+            "visto recrear: comprobante reserva_id=%s demasiado grande (%s bytes)",
+            reserva.id,
+            len(body),
+        )
+        return
+
+    ct = (
+        (reserva.comprobante_content_type or "image/jpeg").split(";")[0].strip()
+        or "image/jpeg"
+    )
+    uid = uuid.uuid4().hex
+    db.add(PagoComprobanteImagen(id=uid, content_type=ct, imagen_data=body))
+    db.flush()
+    pago.link_comprobante = url_comprobante_imagen_absoluta(uid)
+    pago.documento_ruta = None
+
+
 def cargar_bytes_comprobante(
     db: Session,
     *,
@@ -461,6 +516,10 @@ async def _ocr_fila_reserva(
             "error": err_crear,
             "pago_id": reserva.pago_id_recriado,
         }
+
+    if pago is not None:
+        _vincular_comprobante_reserva_al_pago(db, reserva, pago)
+        db.flush()
 
     body, filename, err_bytes = _bytes_y_nombre_ocr_desde_reserva(reserva)
     if not body:
