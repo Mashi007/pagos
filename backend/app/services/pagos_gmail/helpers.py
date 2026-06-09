@@ -17,6 +17,7 @@ MIME_BY_EXT = {
     "gif": "image/gif",
     "webp": "image/webp",
     "heic": "image/heic",
+    "heif": "image/heif",
     "pdf": "application/pdf",
 }
 

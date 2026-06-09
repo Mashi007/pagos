@@ -31,6 +31,23 @@ def test_parse_monto_comprobante_mercantil_asteriscos_y_ocr():
     assert parse_monto_comprobante("150") == 150.0
 
 
+def test_parse_monto_comprobante_bnc_asteriscos_114_no_14():
+    assert parse_monto_comprobante("**************114.00", moneda="USD") == 114.0
+    assert parse_monto_comprobante("*******14.00", moneda="USD") == 114.0
+    assert parse_monto_comprobante("*****96.00", moneda="USD") == 96.0
+    assert parse_monto_comprobante(14, moneda="USD", institucion="BNC") == 114.0
+    assert parse_monto_comprobante(14, moneda="USD", institucion="Mercantil") == 14.0
+    assert parse_monto_comprobante(96, moneda="USD", institucion="BNC") == 96.0
+
+
+def test_parse_monto_comprobante_binance_usdt_no_truncar_cientos():
+    """Binance Pay: 580 USDT es monto real; no aplicar heurística Mercantil 580→58."""
+    assert parse_monto_comprobante("580", moneda="USD") == 580.0
+    assert parse_monto_comprobante("580 USDT", moneda="USD") == 580.0
+    assert parse_monto_comprobante("580.00", moneda="USD") == 580.0
+    assert parse_monto_comprobante(580, moneda="USD") == 580.0
+
+
 def test_parse_monto_comprobante_bnc_usd_decimal_ocr():
     assert parse_monto_comprobante("135.00") == 135.0
     assert parse_monto_comprobante("***********135.00") == 135.0
@@ -168,6 +185,12 @@ def test_sanitizar_numero_operacion_comprobante():
     assert sanitizar_numero_operacion_comprobante("113907169 113907166") == "113907169"
 
 
+def test_sanitizar_numero_operacion_binance_id_completo():
+    """ID de orden Binance (18 dígitos) no debe truncarse como Ref+Serial BNC."""
+    assert sanitizar_numero_operacion_comprobante("436166756159873024") == "436166756159873024"
+    assert sanitizar_numero_operacion_comprobante("436166756") == "436166756"
+
+
 def test_sanitizar_preferir_serial_mercantil_sobre_dcme():
     assert sanitizar_numero_operacion_comprobante(
         "9213-20260331-151620-DCME-3122-A 740087452690993"
@@ -178,6 +201,40 @@ def test_sanitizar_preferir_serial_mercantil_sobre_dcme():
     assert sanitizar_numero_operacion_comprobante(
         "9213-20260331-151620-DCME-3122-A"
     ) == "9213-20260331-151620-DCME-3122-A"
+
+
+def test_corregir_numero_operacion_mercantil_serial_740087():
+    from app.services.pagos_gmail.parse_campos_comprobante import (
+        corregir_numero_operacion_mercantil,
+    )
+
+    dcme = "9276-20260424-140259-DCME-7819-A"
+    serial = "740087408543435"
+    assert corregir_numero_operacion_mercantil(
+        dcme,
+        institucion="Mercantil",
+        texto_auxiliar=f"Serial: {serial}",
+    ) == serial
+    assert corregir_numero_operacion_mercantil(dcme, institucion="Mercantil") == ""
+    assert corregir_numero_operacion_mercantil(
+        f"{dcme} {serial}",
+        institucion="Mercantil",
+    ) == serial
+    assert corregir_numero_operacion_mercantil(serial, institucion="Mercantil") == serial
+
+
+def test_normalizar_campos_gemini_descarta_dcme_sin_serial():
+    out = normalizar_campos_gemini_gmail(
+        {
+            "fecha_pago": "",
+            "monto": "100.00",
+            "cedula": "NA",
+            "numero_referencia": "9824-20250703-151620-DCME-4279-A",
+            "banco": "Mercantil",
+        }
+    )
+    assert out["numero_referencia"] == "NA"
+    assert out["fecha_pago"] == "03/07/2025"
 
 
 def test_clave_numero_operacion_canonico():

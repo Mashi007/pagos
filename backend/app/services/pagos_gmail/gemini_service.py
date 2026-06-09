@@ -29,8 +29,11 @@ GEMINI_SERVER_ERROR_MAX_RETRIES = 4  # Máximo 4 reintentos para 503
 from app.core.config import settings
 from app.services.pagos_gmail.helpers import get_mime_type
 from app.services.pagos_gmail.parse_campos_comprobante import (
+    corregir_numero_operacion_mercantil,
+    extraer_serial_mercantil_7400,
     inferir_fecha_pago_desde_numero_operacion,
     normalizar_campos_gemini_gmail,
+    numero_operacion_mercantil_solo_dcme,
     parse_fecha_comprobante as _parse_fecha_escaner_desde_gemini,
     parse_monto_comprobante as _parse_monto_escaner,
     sanitizar_numero_operacion_comprobante,
@@ -49,6 +52,7 @@ MONTO — coma venezolana y asteriscos de cajero; NO concatenar decimales al ent
   - `98,00 USD` → **98.00**, nunca `980` ni `9800`.
   - Prioriza línea **Monto** de la **tira/sello del validador** sobre casilla manuscrita si difieren.
   - BNC cajero: `**********122.00`, `*****96.00` o `***********135.00` → 122.00 / 96.00 / **135.00** sin asteriscos. Prohibido `135000`, `135.000`, `13500` o `1.350.00`: son errores OCR de `135.00`.
+  - BNC cajero — **no pierdas el primer dígito** tras asteriscos: `**************114.00` → **114.00**, nunca **14.00** (el `1` inicial va pegado al último `*`).
   - En JSON de monto usa número decimal con **punto** (96.00), sin separador de miles.
 
 FECHA — Venezuela DD/MM/YYYY; no confundir con MM/DD ni inventar desde metadata:
@@ -65,7 +69,7 @@ NÚMERO DE OPERACIÓN / SERIAL / REFERENCIA (copiar del comprobante — no inven
   - Un solo valor: no concatenes Ref y Serial (BNC); si hay Ref legible úsalo; si Ref está ilegible y Serial sí, usa Serial.
   - No repitas el mismo número dos veces (ej. 113907169113907169 → solo 113907169).
   - Conserva ceros a la izquierda tal como en el papel (ej. 0000091316488).
-  - Mercantil: si coexisten línea **Serial:** larga (7400…, 13+ dígitos) y código con guiones **DCME**, prioriza el **Serial** largo; no uses cuenta 0105 ni RIF del banco.
+  - Mercantil DEPÓSITO DIVISAS / RECAUDACIÓN: el número de operación es **siempre** la línea **Serial:** con ristra larga que **empieza por 740087** (15 dígitos típicos, ej. 740087408543435). **Prohibido** usar como `numero_operacion` el código guionado del validador (ej. `9276-20260424-140259-DCME-7819-A`): ese bloque DCME solo sirve para inferir fecha, no es el serial del depósito. Si coexisten DCME y Serial 740087…, copia **solo** el Serial completo.
   - BNC: prioriza **Ref** sobre **Serial** cuando ambos sean legibles; nunca la cuenta 0191 ni el RIF del banco.
 """.strip()
 
@@ -1070,6 +1074,17 @@ def _build_image_part_escaner_infopagos(
         )
         return _gtypes.Part.from_bytes(data=out_b, mime_type="image/jpeg")
     except Exception as exc:
+        fn_low = (filename or "").lower()
+        if fn_low.endswith((".heic", ".heif")) or mime in ("image/heic", "image/heif"):
+            logger.error(
+                "[ESCANER] No se pudo decodificar HEIC/HEIF (%s): %s",
+                filename,
+                exc,
+            )
+            raise ValueError(
+                "No se pudo leer el archivo HEIC/HEIF. Convierta la foto a JPEG o PNG "
+                "y vuelva a escanear (en iPhone: Ajustes > Cámara > Formatos > Más compatible)."
+            ) from exc
         logger.warning(
             "[ESCANER] Preproceso PIL falló (%s); fallback a envío simple para %s",
             exc,
@@ -2476,8 +2491,8 @@ REFERENCIA DE CALENDARIO (solo coherencia; no inventes fechas que no estén en e
 TAREA: Lee la imagen o PDF adjunto y extrae SOLO lo que aparezca con claridad en el comprobante para rellenar un formulario de "Infopagos" con estos campos:
   - fecha_pago: fecha de la operación en el comprobante. Devuélvela como cadena en formato **YYYY-MM-DD** si puedes inferir año/mes/día; si solo hay día/mes sin año razonable, deja fecha_pago vacía "".
   - institucion_financiera: nombre corto del banco o entidad. **Obligatorio** si reconoces una plantilla conocida (ver bloque PLANTILLAS). Valores preferidos: **Mercantil**, **BNC**, **Banco de Venezuela**, **BINANCE**, **Recibos** (ventanilla sin banco claro). Máximo 100 caracteres. No dejes vacío si el diseño del comprobante coincide con Mercantil (0105/RAPI), BNC (0191/cajero BNC), BDV (0102), Binance Pay, etc.
-  - numero_operacion: número o código que identifica la transacción (Serial, Ref, Nº operación, referencia, código, ID de orden en Binance, etc.). Sin etiquetas largas: solo el valor. Máximo 100 caracteres. **Un solo valor**: no concatenes Ref y Serial (BNC); si hay Ref legible úsalo; si Ref está ilegible y Serial sí, usa Serial. No repitas el mismo número dos veces (ej. 113907169113907169). Conserva ceros a la izquierda tal como en el papel.
-  - monto: importe **exacto** del pago principal (Total, Monto Bs., Monto USD, Efectivo). En JSON usa **solo número decimal con punto** (sin separadores de miles): impreso `1.500,00` → `1500.00`; `150,50` → `150.50`; `US$ 20,00` → `20.00`; tira Mercantil `***********96,00 USD` → `96.00` (**nunca** `969`, `965`, `980`). No redondees ni cambies cifras. Si no es legible, `null`.
+  - numero_operacion: número o código que identifica la transacción (Serial, Ref, Nº operación, referencia, código, ID de orden en Binance, etc.). Sin etiquetas largas: solo el valor. Máximo 100 caracteres. **Un solo valor**: no concatenes Ref y Serial (BNC); si hay Ref legible úsalo; si Ref está ilegible y Serial sí, usa Serial. No repitas el mismo número dos veces (ej. 113907169113907169). Conserva ceros a la izquierda tal como en el papel. **Mercantil** (DEPÓSITO DIVISAS / tira 0105): copia **solo** el **Serial:** largo que empieza por **740087** (todos los dígitos visibles, ej. 740087408543435). **Nunca** uses el código guionado DCME del validador (ej. 9276-20260424-140259-DCME-7819-A) como numero_operacion. **BINANCE Pay**: copia el **Id. de orden / Order ID completo** (típicamente **15-19 dígitos**, a menudo **18**); no trunques ni uses solo el inicio (prohibido devolver 436166756 si en pantalla es 436166756159873024).
+  - monto: importe **exacto** del pago principal (Total, Monto Bs., Monto USD, Efectivo). En JSON usa **solo número decimal con punto** (sin separadores de miles): impreso `1.500,00` → `1500.00`; `150,50` → `150.50`; `US$ 20,00` → `20.00`; tira Mercantil `***********96,00 USD` → `96.00` (**nunca** `969`, `965`, `980`). **BINANCE Pay**: copia el monto grande tal cual (ej. `580 USDT` → `580`, no `58`). No redondees ni cambies cifras. Si no es legible, `null`.
   - moneda: exactamente **BS** o **USD** (USDT, $ en contexto divisa fuerte, "Dólares", Binance Pay en USDT → USD).
   - cedula_pagador_en_comprobante: secuencia numérica del **depositante** (no la del deudor del contexto). Si en el comprobante aparece claramente la línea/casilla del depositante, devuélvela **solo con dígitos** (sin letra V/E/J/G ni puntos de miles). Mercantil (misma lógica visual que formato **A** del clasificador del sistema): casillas **DP:V-/DP:E-/DP:J-**, **Cédula Dep.**, **Nro. de Cédula de Identidad del Depositante**, bloques RECAUDACIÓN / DEPÓSITO DIVISAS con cuenta 0105. BNC (misma lógica que formato **B**): línea **DP:V-/E-/J-** + dígitos en recibo cajero BNC. No inventes dígitos; si la línea no es legible o hay duda, "". El backend validador concatena prefijos V/E/J/G con esos dígitos (6–11 cifras); si tras quitar no-dígitos no quedan entre 6 y 11 cifras, deja "".
   - notas: una frase corta opcional sobre calidad de lectura o ambigüedades (máx 300 caracteres); puede ser "".
@@ -2505,7 +2520,7 @@ PLANTILLAS CONOCIDAS (misma lógica que clasificación Gmail A/B/C/D; **obligato
   - **Mercantil** → formato **A**: DEPÓSITO DIVISAS, RECAUDACIÓN, cuenta **0105**, RAPI-CREDIT, logo/texto Mercantil, tira validador Mercantil (monto/fecha: ver REGLAS MONTO Y FECHA OCR del prompt).
   - **BNC** → formato **B**: recibo cajero **BNC**, cuenta **0191**, línea RAPI, logo BNC, bloque Depósito US$.
   - **Banco de Venezuela** → formato **D**: **0102**, SECUENCIAL, Total Efectivo/Depósito, logo BDV.
-  - **BINANCE** → formato **C**: Binance Pay, USDT, Id de orden / Pay ID.
+  - **BINANCE** → formato **C**: Binance Pay, USDT, **Id. de orden completo** (15-19 dígitos; no truncar).
   - **Recibos** → ventanilla genérica sin logo de banco identificable (solo texto Recibo/ventanilla).
   - Otros bancos (Banesco, Bancamiga, Tesoro, Pago Móvil): nombre corto tal como aparece en el comprobante.
 REGLA: Si clasificas la imagen en A/B/C/D o reconoces Mercantil/BNC/BDV/Binance por diseño, **`institucion_financiera` no puede quedar vacía**. En `notas` puedes indicar la plantilla (ej. "plantilla A Mercantil") si ayuda.
@@ -2608,9 +2623,11 @@ def _extra_prompt_plantilla_escaner(institucion_plantilla: str) -> str:
     if "mercantil" in low:
         chunks.append(
             "MERCANTIL (mismos patrones que clasificación **A** en el pipeline Gmail): "
-            "DEPÓSITO DIVISAS / RECAUDACIÓN / tira 0105 RAPI; para `cedula_pagador_en_comprobante` "
-            "use solo dígitos leídos en DP:V-/E-/J-, Cédula Dep., Nro. de Cédula del Depositante "
-            "(sin inventar). Referencia/serial/monto como en el papel."
+            "DEPÓSITO DIVISAS / RECAUDACIÓN / tira 0105 RAPI; para `numero_operacion` use "
+            "exclusivamente la línea **Serial:** con ristra larga **740087…** (copie todos los dígitos). "
+            "Ignore el código guionado DCME del validador (ej. …-DCME-…-A). Para "
+            "`cedula_pagador_en_comprobante` use solo dígitos en DP:V-/E-/J-, Cédula Dep., "
+            "Nro. de Cédula del Depositante (sin inventar). Monto desde la tira con asteriscos."
         )
     if ("bnc" in low or "bnv" in low) and "venezuela" not in low:
         chunks.append(
@@ -2755,9 +2772,8 @@ def extract_infopagos_campos_desde_comprobante(
                     mon_norm = "BS"
 
                 notas = str(data.get("notas") or "").strip()[:300]
-                num_op = sanitizar_numero_operacion_comprobante(
-                    data.get("numero_operacion")
-                )[:100]
+                raw_num_op = str(data.get("numero_operacion") or "").strip()
+                num_op = sanitizar_numero_operacion_comprobante(raw_num_op)[:100]
 
                 inst = _resolver_institucion_escaner(
                     str(data.get("institucion_financiera") or "").strip(),
@@ -2765,12 +2781,22 @@ def extract_infopagos_campos_desde_comprobante(
                     notas,
                     num_op,
                 )
+                num_op = corregir_numero_operacion_mercantil(
+                    num_op,
+                    institucion=inst,
+                    texto_auxiliar=f"{raw_num_op}\n{notas}",
+                )[:100]
                 fecha = _parse_fecha_escaner_desde_gemini(data.get("fecha_pago"), ref_hoy)
-                if fecha is None and num_op:
-                    f_inf = inferir_fecha_pago_desde_numero_operacion(num_op, ref_hoy)
+                num_op_fecha = num_op or raw_num_op
+                if fecha is None and num_op_fecha:
+                    f_inf = inferir_fecha_pago_desde_numero_operacion(num_op_fecha, ref_hoy)
                     if f_inf:
                         fecha = _parse_fecha_escaner_desde_gemini(f_inf, ref_hoy)
-                monto = _parse_monto_escaner(data.get("monto"), moneda=mon_norm)
+                monto = _parse_monto_escaner(
+                    data.get("monto"),
+                    moneda=mon_norm,
+                    institucion=inst,
+                )
                 if data.get("fecha_pago") and fecha is None:
                     logger.info(
                         "[ESCANER] fecha_pago descartada (ilegible/futura/lejana): raw=%r ref=%s",
@@ -2839,16 +2865,31 @@ def extract_infopagos_campos_desde_comprobante(
         }
 
 
+def _escaner_puntaje_serial_mercantil(gem: Dict[str, Any]) -> int:
+    """Mayor = mejor numero_operacion (Serial 740087… > otro > solo DCME)."""
+    n = (gem.get("numero_operacion") or "").strip()
+    if extraer_serial_mercantil_7400(n):
+        return 2
+    if numero_operacion_mercantil_solo_dcme(n):
+        return 0
+    return 1
+
+
 def _escaner_gem_resultado_mas_completo(
     prim: Dict[str, Any],
     seg: Dict[str, Any],
 ) -> Dict[str, Any]:
-    """Prefiere ok; si ambos ok, el que trae fecha_pago."""
+    """Prefiere ok; si ambos ok, Serial Mercantil 740087… y luego fecha_pago."""
     if seg.get("ok") and not prim.get("ok"):
         return seg
     if prim.get("ok") and not seg.get("ok"):
         return prim
     if prim.get("ok") and seg.get("ok"):
+        sp, ss = _escaner_puntaje_serial_mercantil(prim), _escaner_puntaje_serial_mercantil(seg)
+        if ss > sp:
+            return seg
+        if sp > ss:
+            return prim
         if seg.get("fecha_pago") and not prim.get("fecha_pago"):
             return seg
         return prim
@@ -2889,11 +2930,18 @@ def extract_infopagos_campos_desde_comprobante_con_rescate_plantilla(
             f"{filename}\n{gem.get('notas') or ''}\n{gem.get('numero_operacion') or ''}"
         )
     inst_canon = _canonical_institucion_escaner(inst_hint)
-    if not inst_canon or inst_canon == _canonical_institucion_escaner(
-        (institucion_plantilla or "").strip()
-    ):
+    plantilla_prev = _canonical_institucion_escaner((institucion_plantilla or "").strip())
+    mercantil_solo_dcme = (
+        inst_canon == "Mercantil" and numero_operacion_mercantil_solo_dcme(
+            (gem.get("numero_operacion") or "").strip()
+        )
+    )
+    falta_fecha = bool(gem.get("ok") and gem.get("fecha_pago") is None)
+    if not inst_canon:
         return gem
-    if gem.get("ok") and gem.get("fecha_pago") is not None:
+    if gem.get("ok") and not falta_fecha and not mercantil_solo_dcme:
+        return gem
+    if plantilla_prev == inst_canon and not mercantil_solo_dcme:
         return gem
     gem2 = extract_infopagos_campos_desde_comprobante(
         cedula_deudor_contexto,

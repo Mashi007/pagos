@@ -616,12 +616,28 @@ export default function EscanerInfopagosPage() {
     escanearActivoRef.current = true
     const tipo = cedulaNormalizada.valorParaEnviar.charAt(0).toUpperCase()
     const numero = cedulaNormalizada.valorParaEnviar.slice(1).replace(/\D/g, '')
+    setEscaneando(true)
+    let archivoEnvio: File
+    try {
+      const { normalizarComprobanteArchivoParaEscaneo } = await import(
+        '../utils/normalizarComprobanteArchivo'
+      )
+      archivoEnvio = await normalizarComprobanteArchivoParaEscaneo(archivo!)
+    } catch (convErr) {
+      escanearActivoRef.current = false
+      setEscaneando(false)
+      toast.error(
+        convErr instanceof Error
+          ? convErr.message
+          : 'No se pudo convertir HEIC. Use JPEG o PNG.'
+      )
+      return
+    }
     const fd = new FormData()
     fd.append('tipo_cedula', tipo)
     fd.append('numero_cedula', numero)
     fd.append('fuente_tasa_cambio', fuenteTasa)
-    fd.append('comprobante', archivo!)
-    setEscaneando(true)
+    fd.append('comprobante', archivoEnvio)
     setValidacionCampos(null)
     setValidacionReglas(null)
     setEscanerColision(null)
@@ -819,7 +835,22 @@ export default function EscanerInfopagosPage() {
       form.append('borrador_id', borradorId)
     }
     if (archivo) {
-      form.append('comprobante', archivo)
+      try {
+        const { normalizarComprobanteArchivoParaEscaneo } = await import(
+          '../utils/normalizarComprobanteArchivo'
+        )
+        form.append(
+          'comprobante',
+          await normalizarComprobanteArchivoParaEscaneo(archivo)
+        )
+      } catch (convErr) {
+        toast.error(
+          convErr instanceof Error
+            ? convErr.message
+            : 'No se pudo convertir HEIC. Use JPEG o PNG.'
+        )
+        return
+      }
     } else if (!borradorId) {
       toast.error(
         'Adjunte el comprobante o recupere un borrador con comprobante en servidor.'

@@ -173,11 +173,34 @@ export async function runDigitacionLoteEnSegundoPlano(
       pushFilas(working, contexto)
       await yieldToMain()
 
+      let archivoEnvio = filaActual.archivo
+      try {
+        const { normalizarComprobanteArchivoParaEscaneo } = await import(
+          '../utils/normalizarComprobanteArchivo'
+        )
+        archivoEnvio = await normalizarComprobanteArchivoParaEscaneo(
+          filaActual.archivo
+        )
+      } catch {
+        working = working.map(f =>
+          f.clientId === clientId
+            ? {
+                ...f,
+                extract: 'error',
+                errorExtraccion:
+                  'No se pudo convertir HEIC a JPEG. Use JPG o PNG.',
+              }
+            : f
+        )
+        pushFilas(working, contexto)
+        continue
+      }
+
       const fd = new FormData()
       fd.append('tipo_cedula', tipo)
       fd.append('numero_cedula', numero)
       fd.append('fuente_tasa_cambio', fuenteTasaCambio)
-      fd.append('comprobante', filaActual.archivo)
+      fd.append('comprobante', archivoEnvio)
       const plantilla = institucionPlantillaParaFila(filaActual)
       if (plantilla) {
         fd.append('institucion_plantilla', plantilla)

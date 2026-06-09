@@ -88,24 +88,74 @@ def _corregir_monto_ocr_exceso_digitos(
     return n
 
 
+_ASTERISCO_MONTO_BNC_RE = re.compile(r"([*#]{4,})(\d+)\.(\d{2})\b")
+
+
+def _corregir_monto_linea_asteriscos_bnc(s: str) -> Optional[str]:
+    """
+    BNC cajero (Depósito US$): la línea ``****114.00`` a veces llega como ``****14.00``
+    porque el primer dígito queda pegado a los asteriscos. Solo corrige con patrón visible.
+    """
+    compact = (s or "").replace(" ", "")
+    m = _ASTERISCO_MONTO_BNC_RE.search(compact)
+    if not m:
+        return None
+    stars, int_part, frac = m.group(1), m.group(2), m.group(3)
+    n_stars = len(stars)
+    if len(int_part) >= 3:
+        return f"{int_part}.{frac}"
+    if len(int_part) == 2 and 10 <= int(int_part) <= 19 and n_stars >= 6:
+        return f"1{int_part}.{frac}"
+    if len(int_part) == 2 and 20 <= int(int_part) <= 99 and n_stars >= 12:
+        return f"1{int_part}.{frac}"
+    return f"{int_part}.{frac}"
+
+
+def _corregir_monto_bnc_usd_entero_perdio_cientos(
+    n: float, *, institucion: Optional[str] = None, ctx_usd: bool = False
+) -> float:
+    """
+    Respaldo cuando Gemini devuelve solo el entero (14) sin asteriscos en el string,
+    pero la institución ya es BNC y el depósito en USD suele ser 1XX.
+    Solo 10-19 → 110-119; no tocar 96, 135 parseados correctamente, etc.
+    """
+    if not ctx_usd or "BNC" not in (institucion or "").upper():
+        return n
+    if n != int(n):
+        return n
+    ni = int(n)
+    if 10 <= ni <= 19:
+        return float(100 + ni)
+    return n
+
+
 def _corregir_monto_ocr_tres_digitos(n: float) -> float:
     """
     Mercantil / ventanilla: OCR a veces lee ``96,00`` como ``969`` o ``965`` (coma+ceros).
-    Solo aplica a enteros de 3 cifras con cola 0/5/9 y base XX plausible de cuota (30-250).
+    Cola 5/9: corrige si la base XX (30-250) es plausible de cuota.
+    Cola 0: solo si n>=900 (ej. ``980``→``98``); no tocar montos reales como ``580`` USDT Binance.
     """
     if n != int(n) or n < 100 or n >= 1000:
         return n
     s = str(int(n))
-    if len(s) != 3 or s[2] not in "059":
+    if len(s) != 3:
         return n
     base = int(s[:2])
-    if 30 <= base <= 250:
+    if not (30 <= base <= 250):
+        return n
+    trailing = s[2]
+    if trailing in "59":
+        return float(base)
+    if trailing == "0" and n >= 900:
         return float(base)
     return n
 
 
 def parse_monto_comprobante(
-    val: Any, *, moneda: Optional[str] = None
+    val: Any,
+    *,
+    moneda: Optional[str] = None,
+    institucion: Optional[str] = None,
 ) -> Optional[float]:
     if val is None:
         return None
@@ -122,9 +172,13 @@ def parse_monto_comprobante(
         n = round(float(val), 2)
         n = _corregir_monto_ocr_tres_digitos(n)
         n = _corregir_monto_ocr_exceso_digitos(n, ctx_usd=ctx_usd, moneda=moneda)
+        n = _corregir_monto_bnc_usd_entero_perdio_cientos(
+            n, institucion=institucion, ctx_usd=ctx_usd
+        )
         return round(n, 2)
 
-    s = raw
+    aster_monto = _corregir_monto_linea_asteriscos_bnc(raw)
+    s = aster_monto if aster_monto else raw
     s = re.sub(
         r"(?i)\s*(usd|usdt|u\$s|us\$|bs\.?|bss|bolivar(?:es)?|ves)\s*$",
         "",
@@ -159,6 +213,9 @@ def parse_monto_comprobante(
             return None
         n = _corregir_monto_ocr_tres_digitos(n)
         n = _corregir_monto_ocr_exceso_digitos(n, ctx_usd=ctx_usd, moneda=moneda)
+        n = _corregir_monto_bnc_usd_entero_perdio_cientos(
+            n, institucion=institucion, ctx_usd=ctx_usd
+        )
         return round(n, 2)
     except (TypeError, ValueError):
         return None
@@ -367,6 +424,96 @@ _LABEL_NUM_OP_PREFIX_RE = re.compile(
 )
 
 _MERCANTIL_SERIAL_LARGO_RE = re.compile(r"7400\d{9,}")
+_MERCANTIL_DCME_GUIONADO_RE = re.compile(
+    r"^\d{3,5}-\d{8}-\d{6}-DCME-\d{3,5}-[A-Z]$",
+    re.IGNORECASE,
+)
+
+
+def _es_institucion_mercantil(institucion: str) -> bool:
+    return "mercantil" in (institucion or "").strip().lower()
+
+
+def es_codigo_dcme_mercantil(s: str) -> bool:
+    """Código de validador Mercantil (ej. 9276-20260424-140259-DCME-7819-A), no es el Serial."""
+    t = (s or "").strip()
+    if not t:
+        return False
+    if _MERCANTIL_DCME_GUIONADO_RE.match(t):
+        return True
+    return bool(re.search(r"-\d{8}-\d{6}-DCME-", t, re.IGNORECASE))
+
+
+def extraer_serial_mercantil_7400(texto: str) -> str:
+    """Serial largo Mercantil (740087…, 15 dígitos típicos) desde cualquier fragmento OCR."""
+    if not texto:
+        return ""
+    runs = _MERCANTIL_SERIAL_LARGO_RE.findall(re.sub(r"\D", "", texto))
+    if not runs:
+        return ""
+    return max(runs, key=len)
+
+
+def numero_operacion_mercantil_solo_dcme(num_op: str) -> bool:
+    """True si el valor parece solo código DCME guionado, sin Serial 7400…."""
+    t = (num_op or "").strip()
+    if not t:
+        return False
+    if extraer_serial_mercantil_7400(t):
+        return False
+    return es_codigo_dcme_mercantil(t)
+
+
+def corregir_numero_operacion_mercantil(
+    num_op: str,
+    *,
+    institucion: str = "",
+    texto_auxiliar: str = "",
+) -> str:
+    """
+    Mercantil DEPÓSITO DIVISAS: el número de operación es el Serial largo 740087…
+    (etiqueta «Serial:» en la tira), no el código guionado DCME del validador.
+    """
+    blob = f"{num_op}\n{texto_auxiliar}"
+    op_norm = sanitizar_numero_operacion_comprobante(num_op) if num_op else ""
+    serial = extraer_serial_mercantil_7400(blob)
+    if serial and (not op_norm or op_norm != serial):
+        return serial[:100]
+    if op_norm and numero_operacion_mercantil_solo_dcme(op_norm):
+        return ""
+    return op_norm if op_norm else num_op
+
+
+def _prefijo_comun_digitos(a: str, b: str) -> int:
+    n = 0
+    for x, y in zip(a, b):
+        if x == y:
+            n += 1
+        else:
+            break
+    return n
+
+
+def _parecen_ref_serial_bnc_concatenados(digits_only: str) -> bool:
+    """
+    True si parece Ref+Serial BNC pegados por OCR (ej. 113907169113907166).
+    No aplica a IDs largos únicos (Binance Pay suele 15-19 dígitos sin prefijo común).
+    """
+    if len(digits_only) % 2 != 0:
+        return False
+    half = len(digits_only) // 2
+    if not (16 <= len(digits_only) <= 18):
+        return False
+    left, right = digits_only[:half], digits_only[half:]
+    if not (left.isdigit() and right.isdigit()):
+        return False
+    if not (8 <= len(left) <= 9 and 8 <= len(right) <= 9):
+        return False
+    if left == right:
+        return True
+    common = _prefijo_comun_digitos(left, right)
+    min_len = min(len(left), len(right))
+    return common >= 6 and common >= min_len - 3
 
 
 def _preferir_serial_mercantil_largo(s: str) -> str:
@@ -421,7 +568,7 @@ def sanitizar_numero_operacion_comprobante(raw: Any) -> str:
         left, right = digits_only[:half], digits_only[half:]
         if left == right:
             s = left if re.fullmatch(r"\d+", compact) else s[: max(half, len(s) // 2)]
-        elif 8 <= half <= 13 and left.isdigit() and right.isdigit() and left != right:
+        elif _parecen_ref_serial_bnc_concatenados(digits_only):
             s = left if re.fullmatch(r"\d+", compact) else s[:half]
 
     s = _preferir_serial_mercantil_largo(s)
@@ -658,16 +805,24 @@ def normalizar_campos_gemini_gmail(fields: Dict[str, str]) -> Dict[str, str]:
     ref = fecha_hoy_caracas()
     out = dict(fields)
     nr = (out.get("numero_referencia") or "").strip()
+    nr_raw_para_fecha = nr
     if nr and nr.upper() != PAGOS_NA:
+        banco = (out.get("banco") or "").strip()
+        inst = "" if banco.upper() == PAGOS_NA else banco
         cleaned = sanitizar_numero_operacion_comprobante(nr)
+        cleaned = corregir_numero_operacion_mercantil(
+            cleaned,
+            institucion=inst,
+            texto_auxiliar=nr,
+        )
         out["numero_referencia"] = cleaned if cleaned else PAGOS_NA
         nr = out["numero_referencia"]
     fp = (out.get("fecha_pago") or "").strip()
     if fp and fp.upper() != PAGOS_NA:
         norm = fecha_comprobante_a_ddmmyyyy(fp, ref)
         out["fecha_pago"] = norm if norm else PAGOS_NA
-    elif (not fp or fp.upper() == PAGOS_NA) and nr and nr.upper() != PAGOS_NA:
-        inferida = inferir_fecha_pago_desde_numero_operacion(nr, ref)
+    elif (not fp or fp.upper() == PAGOS_NA) and nr_raw_para_fecha and nr_raw_para_fecha.upper() != PAGOS_NA:
+        inferida = inferir_fecha_pago_desde_numero_operacion(nr_raw_para_fecha, ref)
         if inferida:
             out["fecha_pago"] = inferida
     mo = (out.get("monto") or "").strip()
