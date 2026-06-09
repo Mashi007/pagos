@@ -29,7 +29,7 @@ def test_crear_pago_desde_reserva_compone_numero_documento(monkeypatch) -> None:
     monkeypatch.setattr(
         service,
         "asegurar_cedula_pago_para_fk",
-        lambda _db, cedula_raw, _prestamo_id: cedula_raw,
+        lambda _db, cedula_raw, _prestamo_id=None, **_kwargs: cedula_raw,
     )
     monkeypatch.setattr(
         service,
