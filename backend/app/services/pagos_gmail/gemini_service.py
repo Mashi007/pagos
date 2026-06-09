@@ -92,7 +92,7 @@ Plantilla **G** cuando el documento es un **RECIBO** impreso a mano o pre-impres
 - **Prohibido** usar el RIF de la empresa emisora (J504951129) como cedula del pagador.
 """.strip()
 
-PagosGmailFormato = Literal["A", "B", "C", "D", "E", "F", "NR", "ninguno"]
+PagosGmailFormato = Literal["A", "B", "C", "D", "E", "F", "G", "NR", "ninguno"]
 
 # Apéndice al prompt cuando scan_filter=error_email_rescan (re-lectura A/B con cédula en JSON).
 GEMINI_PAGOS_GMAIL_MODO_ERROR_EMAIL_AB = """
@@ -1460,6 +1460,18 @@ def _pagos_gmail_nr_campos_completos(fields: Dict[str, str]) -> bool:
     return m == "NR"
 
 
+def _pagos_gmail_g_campos_completos(fields: Dict[str, str]) -> bool:
+    """G (Recibo TORO): fecha, monto, numero recibo y CI/RIF del pagador desde la imagen."""
+    for k in ("fecha_pago", "cedula", "monto", "numero_referencia"):
+        s = (fields.get(k) or "").strip()
+        if not s or s.upper() == PAGOS_NA:
+            return False
+    b = (fields.get("banco") or "").strip()
+    if b and b.upper() != PAGOS_NA and "recibo" not in b.lower():
+        return False
+    return True
+
+
 def _is_na_pagos(v: Optional[str]) -> bool:
     s = (v or "").strip().upper()
     return (not s) or s == PAGOS_NA
@@ -1503,6 +1515,26 @@ def _diag_none_reason_pagos(
     if fmt_u == "NR":
         if (fields.get("monto") or "").strip().upper() != "NR":
             return "nr_monto_invalido"
+    if fmt_u == "G":
+        miss = []
+        if _is_na_pagos(fields.get("fecha_pago")):
+            miss.append("fecha")
+        if _is_na_pagos(fields.get("cedula")):
+            miss.append("cedula")
+        if _is_na_pagos(fields.get("monto")):
+            miss.append("monto")
+        if _is_na_pagos(fields.get("numero_referencia")):
+            miss.append("ref")
+        if miss:
+            if miss == ["ref"]:
+                return "falto_ref"
+            if miss == ["monto"]:
+                return "falto_monto"
+            if miss == ["fecha"]:
+                return "falto_fecha"
+            if miss == ["cedula"]:
+                return "falto_cedula"
+            return "campos_incompletos_g"
     if any(k in raw_lc for k in ("borros", "ilegib", "desenfo", "bajo contraste", "contraste")):
         return "bajo_contraste_ilegible"
     if "refer" in raw_lc or " ref" in raw_lc:
@@ -1511,7 +1543,7 @@ def _diag_none_reason_pagos(
         return "falto_monto"
     if "fecha" in raw_lc:
         return "falto_fecha"
-    if fmt_u in ("A", "B", "C", "D", "E", "F", "NR"):
+    if fmt_u in ("A", "B", "C", "D", "E", "F", "G", "NR"):
         return f"fmt_{fmt_u.lower()}_invalido"
     return "sin_plantilla"
 
@@ -1522,7 +1554,24 @@ def _guess_bank_hint_from_text(
     reason: str,
 ) -> Optional[str]:
     s = f"{raw_text}\n{filename}\n{reason}".lower()
-    # Bancamiga (E): solo anclas fuertes. Cadenas genéricas ("numero de referencia",
+    if any(
+        k in s
+        for k in (
+            "toro motorcycles",
+            "guigue 2 ruedas",
+            "inversiones guigue",
+            "cuota rapi-credit",
+            "cuota rapi credit",
+            '"formato":"g"',
+            '"formato": "g"',
+        )
+    ):
+        return "G"
+    if "recibo" in s and any(
+        k in s for k in ("№", "nº", "c.i. / rif", "c.i./rif", "por:", "j 504951129")
+    ):
+        return "G"
+    # Bancamiga (E): solo anclas fuertes.
     # "cuenta a debitar", "monto de la operación") aparecen en muchos bancos y
     # orientaban mal el rescate hacia E.
     if "bancamiga" in s:
@@ -1662,6 +1711,13 @@ def _rescue_prompt_suffix(bank_hint: Optional[str], none_reason: Optional[str] =
             "\n**No** uses **E**: E es Bancamiga con debito **0172** y **Transacción procesada**."
             "\nAnclas léxicas: **Banco del Tesoro**, **Resumen de la operación**, **Nombre del titular**, **Cuenta debitada**, **Monto Bs.**, **Número de Referencia**, **0163**, **Resultado**."
         )
+    if bank_hint == "G":
+        return (
+            "\n\nMODO RESCATE G (Recibo TORO MOTORCYCLES): prioriza titulo **RECIBO** + **№** numero recibo (00972, conservar ceros) + cajas **Día/Mes/Año** + linea **C.I. / RIF:** del pagador + caja **Por:** con monto numerico (**200 $** → monto **200**, USD)."
+            "\nSi la cantidad esta en letras (**Doscientos Exactos**), usa el valor numerico de la caja **Por:** si existe; no inventes cifras."
+            "\n**banco** = **Recibo**; **cedula** = CI/RIF pagador (18231931), no RIF empresa J504951129."
+            "\nAnclas: **TORO MOTORCYCLES**, **INVERSIONES GUIGUE 2 RUEDAS**, **RECIBO**, **Cuota Rapi-Credit**, **PAGADO**."
+        )
     return (
         "\n\nMODO RESCATE GENERAL: imagen difícil; no inventar datos, pero intenta recuperar campos visibles con máxima tolerancia OCR."
         "\nAnclas genéricas: líneas con **Ref**/**Serial**/**Operacion**/**Monto**/**Total**/**Fecha** cerca del bloque de comprobante (no del chrome del correo)."
@@ -1697,6 +1753,8 @@ def _parse_formato_y_pagos_json(
             fmt = "E"
         elif fmt_raw == "F":
             fmt = "F"
+        elif fmt_raw == "G":
+            fmt = "G"
         elif fmt_raw == "NR":
             fmt = "NR"
         else:
@@ -1745,6 +1803,18 @@ def _parse_formato_y_pagos_json(
                 _out["_diag_none_reason"] = _diag_none_reason_pagos(fmt_raw, fields, text)
                 return "ninguno", _out
             return fmt, fields
+        if fmt == "G":
+            fields["email_cliente"] = PAGOS_NA
+            if not (fields.get("banco") or "").strip() or (
+                fields.get("banco") or ""
+            ).strip().upper() == PAGOS_NA:
+                fields["banco"] = "Recibo"
+            if not _pagos_gmail_g_campos_completos(fields):
+                _out = na_fields.copy()
+                _out["_diag_none_reason"] = _diag_none_reason_pagos(fmt_raw, fields, text)
+                _out["_scan_bank_hint"] = "G"
+                return "ninguno", _out
+            return fmt, fields
         if fmt in ("A", "B") and modo_error_email_ab:
             ce = (fields.get("cedula") or "").strip()
             if (not ce) or ce.upper() == PAGOS_NA:
@@ -1774,7 +1844,7 @@ def _parse_formato_y_pagos_json(
         elif not _pagos_gmail_ab_campos_imagen_completos(fields):
             _out = na_fields.copy()
             _out["_diag_none_reason"] = _diag_none_reason_pagos(fmt_raw, fields, text)
-            if fmt in ("A", "B", "C", "D", "E", "F"):
+            if fmt in ("A", "B", "C", "D", "E", "F", "G"):
                 _out["_scan_bank_hint"] = fmt
             return "ninguno", _out
         fields["email_cliente"] = PAGOS_NA

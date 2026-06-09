@@ -1,6 +1,6 @@
 """
 Gmail: listar correos con adjunto o parte con nombre de imagen/PDF (has:attachment OR filename:png|jpg|...).
-Pipeline Pagos: extrae candidatos imagen/PDF (adjunto, cuerpo, .eml); **Gemini solo si el remitente está en tabla clientes**
+Pipeline Pagos: extrae candidatos imagen/PDF o Word (.docx con foto embebida) (adjunto, cuerpo, .eml); **Gemini solo si el remitente está en tabla clientes**
 (email o email_secundario). Cada imagen es un candidato; cada **página** de un PDF también (PDF multipágina se parte en varios candidatos, **una fila** por página digitalizada).
 La etiqueta final del hilo la decide el pipeline (p. ej. TEXTO / ERROR EMAIL / MANUAL según reglas).
 Plantilla A/B/C/D/E/F la decide Gemini por binario (imagen o PDF de una página).
@@ -17,6 +17,8 @@ from app.services.pagos_gmail.helpers import (
     extract_sender_email,
     ext_for_mime,
     is_allowed_attachment,
+    is_vision_attachment_candidate,
+    is_word_docx_attachment,
     MIME_IMAGE_OR_PDF,
 )
 
@@ -254,6 +256,8 @@ def payload_has_media_candidate(payload: Optional[dict]) -> bool:
     for part in _payload_iter_parts(payload):
         mt = (part.get("mimeType") or "").lower()
         if mt in MIME_IMAGE_OR_PDF:
+            return True
+        if is_word_docx_attachment(mt, fname):
             return True
         if mt == "message/rfc822":
             return True
@@ -506,6 +510,8 @@ def _message_has_extractable_content(payload: dict) -> bool:
         mime = (part.get("mimeType") or "").strip().lower()
         if mime in MIME_IMAGE_OR_PDF:
             return True
+        if is_word_docx_attachment(mime, filename):
+            return True
         # Correo reenviado (Fwd:): el comprobante está dentro del mensaje adjunto
         if mime == "message/rfc822":
             return True
@@ -519,10 +525,9 @@ def _is_image_pdf_part_candidate(mime: str, filename: str) -> bool:
     """
     Permite candidatos por MIME o por extension de archivo.
     Algunos proveedores adjuntan PDF con MIME generico `application/octet-stream`.
+    Incluye .docx (foto del recibo en word/media/).
     """
-    m = (mime or "").strip().lower()
-    fn = (filename or "").strip()
-    return (m in MIME_IMAGE_OR_PDF) or (bool(fn) and is_allowed_attachment(fn))
+    return is_vision_attachment_candidate(mime, filename)
 
 
 # Máximo de segundos que esperamos en un reintento ante 429 (evita bloquear el worker ~15 min).
@@ -1024,6 +1029,45 @@ def _dedupe_image_pdf_by_content(items: List[Tuple[str, bytes, str]]) -> List[Tu
     return out
 
 
+def _expand_word_docx_pipeline_candidates(
+    items: List[Tuple[str, bytes, str, str]],
+) -> List[Tuple[str, bytes, str, str]]:
+    """
+    Convierte adjuntos .docx en imagen embebida (word/media/) lista para Gemini.
+    Si la extracción falla, se omite el candidato (Gemini no lee .docx directamente).
+    """
+    import os
+
+    from app.services.cobros.comprobante_docx import (
+        es_mime_word,
+        extraer_imagen_comprobante_desde_docx,
+    )
+
+    out: List[Tuple[str, bytes, str, str]] = []
+    for fname, raw, mime, origen in items:
+        if not es_mime_word(mime, fname):
+            out.append((fname, raw, mime, origen))
+            continue
+        try:
+            img_bytes, img_fn, img_mime = extraer_imagen_comprobante_desde_docx(raw)
+            stem = os.path.splitext(fname)[0] or "comprobante"
+            out_name = f"{stem}_{img_fn}"
+            out.append((out_name, img_bytes, img_mime, f"{origen}_docx"))
+            logger.info(
+                "[PAGOS_GMAIL] Word '%s': imagen extraida (%s, %d bytes) -> candidato Gemini",
+                fname,
+                img_mime,
+                len(img_bytes),
+            )
+        except ValueError as exc:
+            logger.warning(
+                "[PAGOS_GMAIL] Word '%s': no se pudo extraer imagen (%s); se omite candidato",
+                fname,
+                exc,
+            )
+    return out
+
+
 def _dedupe_pipeline_candidates(
     items: List[Tuple[str, bytes, str, str]],
 ) -> List[Tuple[str, bytes, str, str]]:
@@ -1224,7 +1268,8 @@ def _get_images_from_rfc822_parts(
             embedded_msg = email_lib.message_from_bytes(raw)
             for j, subpart in enumerate(embedded_msg.walk()):
                 ct = (subpart.get_content_type() or "").lower()
-                if ct not in MIME_IMAGE_OR_PDF:
+                fn_sub = subpart.get_filename() or ""
+                if ct not in MIME_IMAGE_OR_PDF and not is_word_docx_attachment(ct, fn_sub):
                     continue
                 payload_bytes = subpart.get_payload(decode=True)
                 if not payload_bytes:
@@ -1315,6 +1360,7 @@ def get_pagos_gmail_image_pdf_files_for_pipeline(
     merged.extend((a[0], a[1], a[2], "reenvio_eml") for a in rfc822_parts)
     merged.extend((a[0], a[1], a[2], "reenvio_eml") for a in eml_inner_parts)
     merged.extend((a[0], a[1], a[2], "mime_recorrido") for a in mime_walk)
+    merged = _expand_word_docx_pipeline_candidates(merged)
     unique = _dedupe_pipeline_candidates(merged)
     logger.debug(
         "[PAGOS_GMAIL] msg %s candidatos (pre-dedupe): incrustados=%d adjuntos=%d rfc822=%d mime_completo=%d -> unicos=%d",
@@ -1904,7 +1950,7 @@ def parse_eml_bytes(eml_bytes: bytes) -> Tuple[Dict[str, str], List[Tuple[str, b
                 continue
             mime = (part.get_content_type() or "").strip().lower()
             fn = part.get_filename() or ""
-            allowed_by_mime = mime in MIME_IMAGE_OR_PDF
+            allowed_by_mime = mime in MIME_IMAGE_OR_PDF or is_word_docx_attachment(mime, fn)
             allowed_by_fn = bool(fn) and is_allowed_attachment(fn)
             if not (allowed_by_mime or allowed_by_fn):
                 continue

@@ -44,3 +44,29 @@ def test_pagos_gmail_formatos_incluye_g():
     from app.services.pagos_gmail.gemini_service import PAGOS_GMAIL_FORMATOS_PLANTILLA
 
     assert "G" in PAGOS_GMAIL_FORMATOS_PLANTILLA
+
+
+def test_parse_formato_g_no_se_descarta_como_ninguno():
+    from app.services.pagos_gmail.gemini_service import _parse_formato_y_pagos_json
+
+    raw = """
+    {"formato":"G","fecha_pago":"08/06/2024","cedula":"18231931","monto":"200",
+     "numero_referencia":"00972","email_cliente":"NA","banco":"Recibo"}
+    """
+    fmt, fields = _parse_formato_y_pagos_json(raw)
+    assert fmt == "G"
+    assert fields["numero_referencia"] == "00972"
+    assert fields["cedula"] == "18231931"
+    assert fields["monto"] == "200.00"
+    assert fields["banco"] == "Recibo"
+
+
+def test_guess_bank_hint_toro_recibo():
+    from app.services.pagos_gmail.gemini_service import _guess_bank_hint_from_text
+
+    hint = _guess_bank_hint_from_text(
+        '{"formato":"ninguno","banco":"Recibo"} TORO MOTORCYCLES RECIBO',
+        "recibo.jpg",
+        "campos_incompletos_g",
+    )
+    assert hint == "G"

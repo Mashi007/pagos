@@ -8,7 +8,7 @@ Orquestacion: Gmail -> Gemini/BD por **cada adjunto elegible** (remitente en cli
 
 **Regla (1 binario = 1 petición Gemini):** imágenes tal cual; cada **página** de un PDF es un candidato (los PDF multipágina se parten en N PDFs de 1 pág.). Todas las plantillas A/B/C/D/E/F se evalúan igual sobre cada binario. Con **varios** candidatos imagen/PDF, se omiten heurísticamente firmas/logos embebidos muy pequeños (p. ej. `image.png`) antes de llamar a Gemini.
 
-**Solo texto:** si no hay candidatos imagen/PDF (`candidatos` vacío: solo cuerpo u otros adjuntos no imagen/PDF) y no aplica **MANUAL** por `master@`, la etiqueta final de Gmail es **TEXTO**. Si hay imagen/PDF escaneable, no se usa TEXTO (etiqueta bancaria por clasificación Gemini o **MANUAL**).
+**Solo texto:** si no hay candidatos imagen/PDF/Word escaneable (`candidatos` vacío: solo cuerpo u otros adjuntos no procesables) y no aplica **MANUAL** por `master@`, la etiqueta final de Gmail es **TEXTO**. Si hay imagen/PDF/.docx con foto escaneable, no se usa TEXTO (etiqueta bancaria por clasificación Gemini o **MANUAL**).
 
 **Regla de decisión actual (sin ambigüedad):**
 - Paso 1: si en el correo hay plantilla A/B con **CUOTAS_OK**, etiqueta final = MERCANTIL o BNC; si no hubo CUOTAS_OK pero sí comprobante A/B digitalizado en BD (p. ej. duplicado), misma etiqueta MERCANTIL/BNC (prioridad A sobre B).

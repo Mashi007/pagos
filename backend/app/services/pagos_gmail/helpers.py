@@ -19,6 +19,7 @@ MIME_BY_EXT = {
     "heic": "image/heic",
     "heif": "image/heif",
     "pdf": "application/pdf",
+    "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
 }
 
 EXTENSIONS_ALLOWED = set(MIME_BY_EXT.keys())
@@ -28,6 +29,28 @@ MIME_IMAGE_OR_PDF = {
     "image/jpeg", "image/png", "image/gif", "image/webp", "image/heic",
     "application/pdf",
 }
+
+MIME_WORD_DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+
+
+def is_word_docx_attachment(mime: str, filename: str = "") -> bool:
+    """True si el adjunto es Word .docx (foto del recibo embebida en word/media/)."""
+    base = (mime or "").split(";")[0].strip().lower()
+    if base == MIME_WORD_DOCX:
+        return True
+    ext = filename.rsplit(".", 1)[-1].lower() if "." in (filename or "") else ""
+    return ext == "docx"
+
+
+def is_vision_attachment_candidate(mime: str, filename: str = "") -> bool:
+    """Imagen, PDF o .docx con comprobante embebido (misma regla que pipeline Gmail)."""
+    m = (mime or "").strip().lower()
+    fn = (filename or "").strip()
+    if m in MIME_IMAGE_OR_PDF:
+        return True
+    if is_word_docx_attachment(m, fn):
+        return True
+    return bool(fn) and is_allowed_attachment(fn)
 
 def ext_for_mime(mime: str) -> str:
     """Extensión por defecto para un mime type (para nombres de archivo inline)."""
