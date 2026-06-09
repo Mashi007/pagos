@@ -103,3 +103,78 @@ def aplicar_pagos_pendientes_prestamo(prestamo_id: int, db: Session) -> int:
     No hace commit. Retorna el número de pagos a los que se les aplicó algo (cc o cp > 0).
     """
     return int(aplicar_pagos_pendientes_prestamo_con_diagnostico(prestamo_id, db)["pagos_con_aplicacion"])
+
+
+def aplicar_cascada_prestamo_pipeline(prestamo_id: int, db: Session) -> dict[str, Any]:
+    """
+    Pipeline de cascada reutilizable (POST aplicar-pagos-cuotas, finiquito Visto recrear-ocr).
+
+    1) aplicar_pagos_pendientes_prestamo_con_diagnostico
+    2) Si hace falta, reset_y_reaplicar_cascada_prestamo
+    3) Reglas habituales de LIQUIDADO vía cascada / reset (no hace commit).
+    """
+    from app.services.pagos_cascada_mensajes import _mensaje_sin_aplicacion_cascada
+    from app.services.pagos_cuotas_reaplicacion import (
+        prestamo_requiere_correccion_cascada,
+        reset_y_reaplicar_cascada_prestamo,
+    )
+
+    prestamo = db.get(Prestamo, prestamo_id)
+    if not prestamo:
+        return {
+            "ok": False,
+            "prestamo_id": prestamo_id,
+            "error": "Prestamo no encontrado",
+        }
+
+    res_primera = aplicar_pagos_pendientes_prestamo_con_diagnostico(prestamo_id, db)
+    n = int(res_primera.get("pagos_con_aplicacion") or 0)
+    diagnostico = dict(res_primera.get("diagnostico") or {})
+    reaplicacion_completa = False
+    detalle_reaplicacion: dict[str, Any] | None = None
+
+    if n == 0 and prestamo_requiere_correccion_cascada(db, prestamo_id):
+        detalle_reaplicacion = reset_y_reaplicar_cascada_prestamo(db, prestamo_id)
+        reaplicacion_completa = True
+        if not detalle_reaplicacion.get("ok"):
+            return {
+                "ok": False,
+                "prestamo_id": prestamo_id,
+                "pagos_con_aplicacion": 0,
+                "reaplicacion_completa": True,
+                "detalle_reaplicacion": detalle_reaplicacion,
+                "diagnostico": diagnostico,
+                "error": str(
+                    detalle_reaplicacion.get("error")
+                    or "No se pudo reconstruir la cascada de cuotas."
+                ),
+            }
+        n = int(detalle_reaplicacion.get("pagos_reaplicados") or 0)
+
+    if n > 0:
+        if reaplicacion_completa:
+            mensaje = (
+                f"Amortización recalculada: se reinició la aplicación a cuotas y "
+                f"{n} pago(s) quedaron distribuidos (cascada)."
+            )
+        else:
+            mensaje = f"Cascada aplicada: {n} pago(s) con abono efectivo en cuotas."
+    elif reaplicacion_completa:
+        mensaje = (
+            "Tabla de amortización reiniciada; no había pagos elegibles para volver a aplicar "
+            "(conciliado / verificado / PAGADO, monto > 0). Revise la conciliación de los pagos."
+        )
+    else:
+        mensaje = _mensaje_sin_aplicacion_cascada(diagnostico)
+
+    db.refresh(prestamo)
+    return {
+        "ok": True,
+        "prestamo_id": prestamo_id,
+        "pagos_con_aplicacion": n,
+        "reaplicacion_completa": reaplicacion_completa,
+        "detalle_reaplicacion": detalle_reaplicacion,
+        "diagnostico": diagnostico,
+        "mensaje": mensaje,
+        "prestamo_estado": (prestamo.estado or "").strip().upper(),
+    }

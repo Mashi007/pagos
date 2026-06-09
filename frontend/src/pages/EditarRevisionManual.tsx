@@ -3188,19 +3188,13 @@ export function EditarRevisionManual() {
                     Conciliacion finiquito (Visto)
                   </CardTitle>
                   <p className="text-sm text-amber-900/90">
-                    Tras el primer Visto el sistema guardo la imagen de cada
-                    comprobante en la reserva temporal y borro los pagos del
-                    credito. Siga con conciliacion en{' '}
-                    <Link
-                      to="/pagos/notificaciones/general"
-                      className="font-medium underline"
-                    >
-                      notificaciones general
-                    </Link>
-                    . Luego use el boton de abajo: recrea pagos y aplica OCR
-                    Gemini solo sobre esas imagenes guardadas; despues cascada.
-                    Al terminar use la X en el area de revision de
-                    finiquitos para pasar a area de trabajo.
+                    Tras el primer Visto el sistema guardó la imagen de cada
+                    comprobante en la reserva temporal y borró los pagos del
+                    crédito. Use el botón de abajo para el pipeline completo:
+                    recrea pagos, OCR Gemini sobre esas imágenes, cascada a
+                    cuotas y LIQUIDADO si cuadra (mismas reglas que revisión
+                    manual). Al terminar use la X en el área de revisión de
+                    finiquitos para pasar a área de trabajo.
                   </p>
                 </CardHeader>
                 <CardContent className="flex flex-wrap gap-2 pt-0">
@@ -3214,13 +3208,21 @@ export function EditarRevisionManual() {
                       try {
                         const r = await finiquitoAdminRecrearOcr(finiquitoCasoId)
                         if (!r.ok) {
-                          toast.error(r.error || 'No se pudo recrear pagos / OCR')
+                          toast.error(r.error || 'No se pudo ejecutar el pipeline Visto')
                           return
                         }
-                        toast.success(
+                        const cascadaOk = r.cascada?.ok !== false
+                        const msg =
                           r.mensaje ||
-                            `OCR: ${r.ocr_ok ?? 0}/${r.total ?? 0} comprobante(s)`
-                        )
+                          `Pipeline: OCR ${r.ocr_ok ?? 0}/${r.total ?? 0}` +
+                            (r.cascada?.prestamo_estado
+                              ? ` · Préstamo ${r.cascada.prestamo_estado}`
+                              : '')
+                        if (cascadaOk) {
+                          toast.success(msg)
+                        } else {
+                          toast.warning(msg)
+                        }
                         await refrescarTrasCambioPagosRevision()
                       } catch (err: unknown) {
                         toast.error(getErrorMessage(err))
@@ -3234,7 +3236,7 @@ export function EditarRevisionManual() {
                     ) : (
                       <RefreshCw className="mr-2 h-4 w-4" />
                     )}
-                    Recrear pagos y OCR (reserva guardada)
+                    Recrear pagos, OCR y cascada
                   </Button>
                 </CardContent>
               </Card>

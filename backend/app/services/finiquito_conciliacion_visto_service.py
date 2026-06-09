@@ -1,6 +1,6 @@
 """
 Flujo conciliacion Visto (finiquito area revision):
-reserva comprobantes -> borrado manual pagos -> conciliacion hoja -> recrear pagos + OCR Gemini -> cascada.
+reserva comprobantes -> borrado pagos -> recrear pagos + OCR Gemini -> cascada (pipeline) -> LIQUIDADO si cuadra.
 """
 from __future__ import annotations
 
@@ -551,6 +551,7 @@ async def recrear_pagos_y_ocr_lote(
 
     detalle: List[Dict[str, Any]] = []
     ok_n = 0
+    pagos_recriados = 0
     for reserva in filas:
         if not _reserva_tiene_imagen_guardada(reserva):
             detalle.append(
@@ -567,6 +568,33 @@ async def recrear_pagos_y_ocr_lote(
         detalle.append(item)
         if item.get("ok"):
             ok_n += 1
+        if reserva.pago_id_recriado:
+            pagos_recriados += 1
+
+    cascada: Dict[str, Any] | None = None
+    if pagos_recriados > 0:
+        from app.services.pagos_aplicacion_prestamo import aplicar_cascada_prestamo_pipeline
+
+        cascada = aplicar_cascada_prestamo_pipeline(int(caso.prestamo_id), db)
+
+    ocr_msg = (
+        f"OCR (imagenes en reserva Visto): {ok_n}/{len(filas_con_imagen)}."
+        + (f" {sin_imagen} fila(s) sin imagen en reserva." if sin_imagen else "")
+    )
+    if cascada is not None:
+        if cascada.get("ok"):
+            cascada_msg = str(cascada.get("mensaje") or "Cascada aplicada.")
+            estado = cascada.get("prestamo_estado")
+            if estado:
+                cascada_msg += f" Estado prestamo: {estado}."
+            mensaje = f"{ocr_msg} {cascada_msg}"
+        else:
+            mensaje = (
+                f"{ocr_msg} Cascada no aplicada: "
+                f"{cascada.get('error') or 'error desconocido'}."
+            )
+    else:
+        mensaje = ocr_msg
 
     return {
         "ok": ok_n > 0,
@@ -574,11 +602,10 @@ async def recrear_pagos_y_ocr_lote(
         "ocr_ok": ok_n,
         "ocr_fallidos": len(filas_con_imagen) - ok_n,
         "ocr_omitidos_sin_imagen_guardada": sin_imagen,
+        "pagos_recriados": pagos_recriados,
+        "cascada": cascada,
         "detalle": detalle,
-        "mensaje": (
-            f"OCR (solo imagenes guardadas en Visto): {ok_n}/{len(filas_con_imagen)}."
-            + (f" {sin_imagen} fila(s) sin imagen en reserva." if sin_imagen else "")
-        ),
+        "mensaje": mensaje,
     }
 
 

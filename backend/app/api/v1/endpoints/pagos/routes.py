@@ -6289,39 +6289,29 @@ def aplicar_pagos_pendientes_cuotas_por_prestamo(
 
     try:
 
-        res_primera = aplicar_pagos_pendientes_prestamo_con_diagnostico(prestamo_id, db)
+        from app.services.pagos_aplicacion_prestamo import aplicar_cascada_prestamo_pipeline
 
-        n = int(res_primera.get("pagos_con_aplicacion") or 0)
+        pipeline = aplicar_cascada_prestamo_pipeline(prestamo_id, db)
 
-        diagnostico = dict(res_primera.get("diagnostico") or {})
+        if not pipeline.get("ok"):
 
-        reaplicacion_completa = False
+            raise HTTPException(
 
-        detalle_reaplicacion: Optional[dict] = None
+                status_code=400,
 
-        if n == 0 and prestamo_requiere_correccion_cascada(db, prestamo_id):
+                detail=str(pipeline.get("error") or "No se pudo aplicar la cascada de cuotas."),
 
-            detalle_reaplicacion = reset_y_reaplicar_cascada_prestamo(db, prestamo_id)
+            )
 
-            reaplicacion_completa = True
+        n = int(pipeline.get("pagos_con_aplicacion") or 0)
 
-            if not detalle_reaplicacion.get("ok"):
+        diagnostico = dict(pipeline.get("diagnostico") or {})
 
-                raise HTTPException(
+        reaplicacion_completa = bool(pipeline.get("reaplicacion_completa"))
 
-                    status_code=400,
+        detalle_reaplicacion = pipeline.get("detalle_reaplicacion")
 
-                    detail=str(
-
-                        detalle_reaplicacion.get("error")
-
-                        or "No se pudo reconstruir la cascada de cuotas."
-
-                    ),
-
-                )
-
-            n = int(detalle_reaplicacion.get("pagos_reaplicados") or 0)
+        mensaje = str(pipeline.get("mensaje") or "")
 
         db.commit()
 
@@ -6352,36 +6342,6 @@ def aplicar_pagos_pendientes_cuotas_por_prestamo(
             detail=f"Error al aplicar pagos a cuotas: {str(e)}",
 
         ) from e
-
-    if n > 0:
-
-        if reaplicacion_completa:
-
-            mensaje = (
-
-                f"Amortización recalculada: se reinició la aplicación a cuotas y "
-
-                f"{n} pago(s) quedaron distribuidos (cascada)."
-
-            )
-
-        else:
-
-            mensaje = f"Cascada aplicada: {n} pago(s) con abono efectivo en cuotas."
-
-    elif reaplicacion_completa:
-
-        mensaje = (
-
-            "Tabla de amortización reiniciada; no había pagos elegibles para volver a aplicar "
-
-            "(conciliado / verificado / PAGADO, monto > 0). Revise la conciliación de los pagos."
-
-        )
-
-    else:
-
-        mensaje = _mensaje_sin_aplicacion_cascada(diagnostico)
 
     return {
 

@@ -1390,7 +1390,7 @@ async def finiquito_admin_conciliacion_recrear_ocr(
     db: Session = Depends(get_db),
     panel_user: UserResponse = Depends(require_admin_or_operator),
 ):
-    """Paso 4: recrea pagos desde reserva y OCR en lote (motor Gmail/Gemini)."""
+    """Paso 4: recrea pagos desde reserva, OCR Gemini y cascada (reglas habituales + LIQUIDADO)."""
     usuario = _usuario_registro_panel(panel_user)
     try:
         r = await recrear_pagos_y_ocr_lote(db, caso_id, usuario)
@@ -1420,8 +1420,10 @@ async def finiquito_admin_conciliacion_recrear_ocr(
         total=r.get("total"),
         ocr_ok=r.get("ocr_ok"),
         ocr_fallidos=r.get("ocr_fallidos"),
+        pagos_recriados=r.get("pagos_recriados"),
         mensaje=r.get("mensaje"),
         detalle=detalle,
+        cascada=r.get("cascada"),
     )
 
 

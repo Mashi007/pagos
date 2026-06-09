@@ -167,7 +167,15 @@ export async function finiquitoAdminRecrearOcr(casoId: number) {
     total?: number
     ocr_ok?: number
     ocr_fallidos?: number
+    pagos_recriados?: number
     mensaje?: string
+    cascada?: {
+      ok?: boolean
+      pagos_con_aplicacion?: number
+      prestamo_estado?: string
+      mensaje?: string
+      error?: string
+    }
     detalle?: Array<{
       reserva_id: number
       ok: boolean

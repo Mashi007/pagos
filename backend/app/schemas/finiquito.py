@@ -238,8 +238,10 @@ class FiniquitoConciliacionRecrearOcrResponse(BaseModel):
     total: Optional[int] = None
     ocr_ok: Optional[int] = None
     ocr_fallidos: Optional[int] = None
+    pagos_recriados: Optional[int] = None
     mensaje: Optional[str] = None
     detalle: Optional[List[FiniquitoConciliacionRecrearOcrItem]] = None
+    cascada: Optional[dict[str, Any]] = None
 
 
 class FiniquitoConciliacionPasarATrabajoResponse(BaseModel):
