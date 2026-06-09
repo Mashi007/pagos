@@ -16,6 +16,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
+from app.core.documento import compose_numero_documento_almacenado
 from app.services.pagos_gmail.parse_campos_comprobante import (
     sanitizar_numero_operacion_comprobante,
 )
