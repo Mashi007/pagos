@@ -178,11 +178,36 @@ def test_normalizar_campos_gemini_gmail():
 
 def test_sanitizar_numero_operacion_comprobante():
     assert sanitizar_numero_operacion_comprobante("113907169113907169") == "113907169"
-    assert sanitizar_numero_operacion_comprobante("113907169113907166") == "113907169"
+    assert sanitizar_numero_operacion_comprobante("113907169113907166") == "113907166"
     assert sanitizar_numero_operacion_comprobante("Serial: 113907166") == "113907166"
     assert sanitizar_numero_operacion_comprobante("0000091316488") == "0000091316488"
     assert sanitizar_numero_operacion_comprobante("113907169 113907169") == "113907169"
-    assert sanitizar_numero_operacion_comprobante("113907169 113907166") == "113907169"
+    assert sanitizar_numero_operacion_comprobante("113907169 113907166") == "113907166"
+
+
+def test_sanitizar_bnc_preferir_serial_sobre_ref():
+    assert sanitizar_numero_operacion_comprobante(
+        "Ref: 105137683 Serial: 105137674"
+    ) == "105137674"
+    assert sanitizar_numero_operacion_comprobante(
+        "105137683 105137674"
+    ) == "105137674"
+
+
+def test_corregir_numero_operacion_bnc_serial():
+    from app.services.pagos_gmail.parse_campos_comprobante import (
+        corregir_numero_operacion_bnc,
+    )
+
+    assert corregir_numero_operacion_bnc(
+        "105137683",
+        institucion="BNC",
+        texto_auxiliar="Ref: 105137683 Serial: 105137674",
+    ) == "105137674"
+    assert corregir_numero_operacion_bnc(
+        "105137674",
+        institucion="BNC",
+    ) == "105137674"
 
 
 def test_sanitizar_numero_operacion_binance_id_completo():

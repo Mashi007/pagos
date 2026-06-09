@@ -29,7 +29,10 @@ GEMINI_SERVER_ERROR_MAX_RETRIES = 4  # Máximo 4 reintentos para 503
 from app.core.config import settings
 from app.services.pagos_gmail.helpers import get_mime_type
 from app.services.pagos_gmail.parse_campos_comprobante import (
+    corregir_numero_operacion_bnc,
     corregir_numero_operacion_mercantil,
+    extraer_ref_etiquetado_bnc,
+    extraer_serial_etiquetado_bnc,
     extraer_serial_mercantil_7400,
     inferir_fecha_pago_desde_numero_operacion,
     normalizar_campos_gemini_gmail,
@@ -66,11 +69,11 @@ FECHA — Venezuela DD/MM/YYYY; no confundir con MM/DD ni inventar desde metadat
 # Reglas compartidas Serial/Ref (escáner Infopagos, compare formulario vs imagen).
 GEMINI_REGLAS_NUMERO_OPERACION_OCR = """
 NÚMERO DE OPERACIÓN / SERIAL / REFERENCIA (copiar del comprobante — no inventar):
-  - Un solo valor: no concatenes Ref y Serial (BNC); si hay Ref legible úsalo; si Ref está ilegible y Serial sí, usa Serial.
+  - Un solo valor: no concatenes Ref y Serial (BNC); en recibo **cajero BNC** con ambas etiquetas, copia **solo Serial:** (nunca Ref).
   - No repitas el mismo número dos veces (ej. 113907169113907169 → solo 113907169).
   - Conserva ceros a la izquierda tal como en el papel (ej. 0000091316488).
   - Mercantil DEPÓSITO DIVISAS / RECAUDACIÓN: el número de operación es **siempre** la línea **Serial:** con ristra larga que **empieza por 740087** (15 dígitos típicos, ej. 740087408543435). **Prohibido** usar como `numero_operacion` el código guionado del validador (ej. `9276-20260424-140259-DCME-7819-A`): ese bloque DCME solo sirve para inferir fecha, no es el serial del depósito. Si coexisten DCME y Serial 740087…, copia **solo** el Serial completo.
-  - BNC: prioriza **Ref** sobre **Serial** cuando ambos sean legibles; nunca la cuenta 0191 ni el RIF del banco.
+  - BNC **cajero** (papel, Depósito US$, asteriscos): si coexisten **Ref:** y **Serial:**, usa **solo Serial:** (ej. Ref 105137683 y Serial 105137674 → 105137674). **App BNC** (Bs., sin Serial): usa **Referencia**/**Ref**. Nunca cuenta 0191 ni RIF del banco.
 """.strip()
 
 PagosGmailFormato = Literal["A", "B", "C", "D", "E", "F", "NR", "ninguno"]
@@ -225,8 +228,8 @@ PASO 2 - Prioridad B (imagen 2) si el nucleo B se cumple **y no** aplico el nucl
     - **Sello azul** "Banco Nacional de Credito/Crédito", **RECIBIDO**, agencia, "Deposito Us$", cajero — refuerza **B**; no es comprobante BDV (D) ni Mercantil (0105).
     - **Correo digitalizado / captura con varias imagenes**: el backend puede enviar **esta** pieza sola (adjunto o recorte). Si aqui ves un recibo BNC **completo** aunque el borde muestre parte de otra foto o UI, aplica VARIANTE B y la regla de MEZCLA arriba: extrae **solo** del ticket BNC; no supongas datos de otra miniatura que no se vea en este binario.
     - **RIF del banco en cabecera** (**Rif. Nº J309841327**, **RIF.: J-30984132-7**, variantes con guiones/espacios): identifica al **emisor BNC** del papel; **no** es `numero_referencia`, **no** es la cuenta **0191/...**; no lo confundas con **Ref** ni con **Serial**.
-    - **Ref vs Serial (recibos reales)**: suelen aparecer **dos** numeros enteros **cercanos** (misma longitud tipica **8 a 9 digitos**, ej. Ref **113907169** y Serial **113907166**). **No** hay regla fija de cual es mayor; usa **siempre** la **etiqueta impresa**: valor junto a **Ref:** / **Ref.** / **Ref.** como **primera** opcion para `numero_referencia`; si **Ref** esta borroso o tapado por sello/firma pero **Serial:** es nitido, usa **Serial** (regla ya indicada abajo).
-    - **Ticket BNC compacto con sello en el centro** (foto de pared/mesa): logo **BNC** arriba izquierda, **Ref:** arriba derecha, **Serial:** debajo, bloque izquierdo con **Agencia/Terminal/Cuenta 0191/.../RAPI-CREDIT/DP:V-...** y monto de deposito en la parte baja (a veces **asteriscos + 100.00**). Aunque el sello azul/firma tape "Deposito Us$" o parte del centro, si **Ref** o **Serial** son legibles junto a ese nucleo, clasifica **B** y toma `numero_referencia` desde **Ref** (o **Serial** si Ref no se lee).
+    - **Ref vs Serial (recibos cajero reales)**: suelen aparecer **dos** numeros enteros **cercanos** (misma longitud tipica **8 a 9 digitos**, ej. Ref **105137683** y Serial **105137674**). Para `numero_referencia` usa **siempre** el valor junto a **Serial:**; **nunca** el de **Ref:** si ambos son legibles.
+    - **Ticket BNC compacto con sello en el centro** (foto de pared/mesa): logo **BNC** arriba izquierda, **Ref:** arriba derecha, **Serial:** debajo, bloque izquierdo con **Agencia/Terminal/Cuenta 0191/.../RAPI-CREDIT/DP:V-...** y monto de deposito en la parte baja (a veces **asteriscos + 100.00**). Clasifica **B** y toma `numero_referencia` desde **Serial:** (no Ref).
     - **Numero largo arriba a la derecha** sin la palabra Ref en la misma linea: si en la zona tipica de cabecera BNC hay un bloque de digitos y mas abajo existe **Serial: NNN** coherente con recibo cajero, el numero superior **puede** ser la **Ref** de control — usalo solo si encaja con layout BNC y **no** sustituyas por el RIF ni por trozos de **Cuenta 0191/...**.
     - **Fondo de seguridad** (conchas/abanico repetido), **franja vertical azul** en el borde izquierdo, papel **azul muy claro** o blanco con matriz: patrones **muy frecuentes** en BNC; manten **B** aunque el OCR mezcle letras con el patron de fondo (no bajes a ninguno solo por "ruido" del agua).
     - **Foto con pliegue / doblez** en el centro: tratalo como **un solo** recibo BNC; une mentalmente columna izquierda (Agencia, Terminal, Cuenta, RAPI, DP) con derecha (fecha/hora, Serial, Ref, monto).
@@ -396,7 +399,7 @@ DISCRIMINADOR SERIAL — imagen 1 (A) vs imagen 2 (B) (aplica ademas de RAPI-CRE
     Si coexisten (1) cadena con guiones y 2do bloque YYYYMMDD tipo 9213-20260331-143046-DCME-0154-A y (2) Serial: 7400... largo, prefiere el Serial largo (digitos) como numero_referencia para esta variante Mercantil, salvo que solo uno sea legible.
   IMAGEN 2 / B — identificadores en **recibo BNC**, apps **BNC**, **app BDV/BNV origen** hacia BNC, y documentos BNC formales (no Mercantil):
     Lo habitual es **Serial:** u otra etiqueta seguida de **solo digitos** (frecuentemente **8-9 cifras**, ej. 141810434, 150927684) o **Ref:** / **Ref.** con numero de control (a veces **cercano** al Serial pero distinto en las ultimas cifras).
-    Prioridad para **numero_referencia**: (1) valor junto a **Ref:** / **Ref.** / **Referencia** / **Ref.N°.** / **Ref.Nº** (incl. app con tipografia de color) si esta claro como control de operacion; (1b) en **app BDV** "Comprobante de operacion" + destino **0191**, usa **Operación**/**Operacion** (cadena larga, ej. 13 digitos); (2) si no, **Serial:**; (3) variantes **Ref: NF 000001327** o con prefijos — copia la cadena **completa** legible (incl. NF y ceros si aporta unicidad).
+    Prioridad para **numero_referencia** en **cajero BNC** (papel, asteriscos+US$): (1) valor junto a **Serial:** (ej. 105137674); **prohibido** usar **Ref:** (ej. 105137683) si Serial es legible. En **app BNC**/**app BDV origen**/**NOTA**: (1) **Referencia**/**Ref**/**Operación** segun canal; (2) **Serial:** solo si no hay Ref/Referencia. Variantes **Ref: NF 000001327**: cadena completa legible.
     Alguna pieza BNC trae **ademas** ristra muy larga solo digitos que empieza en **7** (>12 cifras) en margen; si es el unico id largo y va con BNC+0191+RAPI, usala como numero_referencia; si coexisten Ref corto y ristra 7400... larga, prefiere **Ref** o **Serial** etiquetados en el cuerpo del recibo cuando identifiquen la operacion.
   Si el comprobante cumple criterios de A (terminal) y la linea serial sigue el patron guiones+fecha en 2do bloque -> A.
   Si cumple BNC (no Mercantil DEPOSITO DIVISAS) con Serial/Ref tipico de cajero -> **B**; no exijas ristra >12 digitos para clasificar B.
@@ -515,9 +518,9 @@ Prioriza la plantilla BNC: **cajero** (papel, asteriscos+US$), **app BNC** (Bs.,
   Normalizacion practica para OCR BNC: acepta variantes como "Deposi to Us$", "BancoNacionaldeCredito", "RAPI-CREDI", "RAPI-CREDIT C.A" y espacios/guiones inconsistentes
   como equivalentes del mismo campo, sin bajar formato a ninguno cuando el contexto estructural sea claramente BNC.
   **RIF cabecera** (J309841327, J-30984132-7, etc.): es identidad fiscal **del banco** en el recibo; **nunca** lo pongas en `numero_referencia`.
-  numero_referencia: (1) Si aparece **Ref:** / **Ref.** / **Referencia** (app; a veces en color distinto) / **Ref.N°.** / **Ref.Nº** / **Ref.N** con numero de control claro, usalo como primera opcion (ej. 113907169, 133454281, 00548457, 132248954 — longitud variable **6 a 12+ digitos** segun canal; conserva **ceros a la izquierda** si el comprobante los muestra).
+  numero_referencia — **cajero BNC** (papel, Deposito Us$, asteriscos): (1) **Serial:** (ej. 105137674, 113907166); **prohibido** usar **Ref:** si Serial es legible. **App BNC / BDV origen / NOTA**: (1) **Referencia**/**Ref**/**Ref.N°**/**Operación** segun canal; (2) **Serial:** solo si no hay Ref/Referencia legible.
   (1b) En **app BDV/BNV origen** con destino BNC (VARIANTE BDV app origen), la referencia operativa es la linea **Operación** / **Operacion** (ej. 3701197089205 — suele ser **13 digitos**); **no** uses el numero de **Origen**/**Destino** enmascarado como referencia completa.
-  (2) Si no hay Ref legible, usa el valor junto a **Serial:** (ej. 113907166, 130030998 — misma longitud que Ref en muchos tickets; **no** mezcles digitos de Ref y Serial en un solo campo inventado).
+  No mezcles digitos de Ref y Serial en un solo campo inventado.
   (3) Si hay **Ref: NF 000001327** u otro formato con prefijos, copia la cadena completa legible.
   (4) Solo si ninguno de los anteriores es usable y hay una ristra **muy larga** solo digitos (>12) en contexto BNC, usala.
   Si hay doble lectura de Ref (impreso tenue + trazo mas oscuro/manuscrito encima), usa la lectura mas nítida; no combines digitos de ambas.
@@ -2260,7 +2263,7 @@ REGLAS DEL VALIDADOR DE CÉDULA (aplicar siempre; alineado con el sistema):
 
 NÚMERO DE OPERACIÓN (igual que Serial / Referencia en el comprobante):
 - En el formulario el campo se llama "Número de operación". En el comprobante puede aparecer con OTRO nombre: "Serial", "Serial:", "Nº operación", "Número de operación", "Referencia", "Nº de referencia", "Código", "Número de transacción", etc. Todos son el mismo concepto: el número o código que identifica la transacción. Si en el recibo ves "Serial: 740087401612580", ese valor 740087401612580 ES el número de operación. Compáralo con lo que la persona ingresó en el formulario; si los dígitos coinciden (ignorando espacios o guiones), COINCIDE. No marques "Nº operación" como divergencia solo porque en el comprobante dice "Serial" en vez de "Número de operación".
-- Al leer numero_operacion de la imagen aplica las mismas reglas anti-concatenación y anti-repetición que en el escáner Infopagos (un solo valor; Ref antes que Serial en BNC; Serial largo 7400… antes que código DCME en Mercantil).
+- Al leer numero_operacion de la imagen aplica las mismas reglas anti-concatenación y anti-repetición que en el escáner Infopagos (un solo valor; en BNC cajero **Serial:** antes que Ref; Serial largo 7400… antes que código DCME en Mercantil).
 
 EXCEPCIÓN BANCO = BINANCE (aplicar siempre y solo en este caso):
 - Si la columna Banco (institucion_financiera) es BINANCE (o Binance), IGNORAR siempre el error de fecha. En el formato de imagen para Banco = BINANCE no hay fecha que comprobar; no incluyas "Fecha pago" en el comentario por diferencia de fecha cuando el banco sea BINANCE.
@@ -2491,7 +2494,7 @@ REFERENCIA DE CALENDARIO (solo coherencia; no inventes fechas que no estén en e
 TAREA: Lee la imagen o PDF adjunto y extrae SOLO lo que aparezca con claridad en el comprobante para rellenar un formulario de "Infopagos" con estos campos:
   - fecha_pago: fecha de la operación en el comprobante. Devuélvela como cadena en formato **YYYY-MM-DD** si puedes inferir año/mes/día; si solo hay día/mes sin año razonable, deja fecha_pago vacía "".
   - institucion_financiera: nombre corto del banco o entidad. **Obligatorio** si reconoces una plantilla conocida (ver bloque PLANTILLAS). Valores preferidos: **Mercantil**, **BNC**, **Banco de Venezuela**, **BINANCE**, **Recibos** (ventanilla sin banco claro). Máximo 100 caracteres. No dejes vacío si el diseño del comprobante coincide con Mercantil (0105/RAPI), BNC (0191/cajero BNC), BDV (0102), Binance Pay, etc.
-  - numero_operacion: número o código que identifica la transacción (Serial, Ref, Nº operación, referencia, código, ID de orden en Binance, etc.). Sin etiquetas largas: solo el valor. Máximo 100 caracteres. **Un solo valor**: no concatenes Ref y Serial (BNC); si hay Ref legible úsalo; si Ref está ilegible y Serial sí, usa Serial. No repitas el mismo número dos veces (ej. 113907169113907169). Conserva ceros a la izquierda tal como en el papel. **Mercantil** (DEPÓSITO DIVISAS / tira 0105): copia **solo** el **Serial:** largo que empieza por **740087** (todos los dígitos visibles, ej. 740087408543435). **Nunca** uses el código guionado DCME del validador (ej. 9276-20260424-140259-DCME-7819-A) como numero_operacion. **BINANCE Pay**: copia el **Id. de orden / Order ID completo** (típicamente **15-19 dígitos**, a menudo **18**); no trunques ni uses solo el inicio (prohibido devolver 436166756 si en pantalla es 436166756159873024).
+  - numero_operacion: número o código que identifica la transacción (Serial, Ref, Nº operación, referencia, código, ID de orden en Binance, etc.). Sin etiquetas largas: solo el valor. Máximo 100 caracteres. **Un solo valor**: no concatenes Ref y Serial (BNC). **BNC cajero** (papel, Depósito US$): copia **solo** el valor de **Serial:** (ej. 105137674); **nunca** Ref: (ej. 105137683) ni RIF. **App BNC** (Bs., sin línea Serial): usa Referencia/Ref. No repitas el mismo número dos veces (ej. 113907169113907169). Conserva ceros a la izquierda tal como en el papel. **Mercantil** (DEPÓSITO DIVISAS / tira 0105): copia **solo** el **Serial:** largo que empieza por **740087** (todos los dígitos visibles, ej. 740087408543435). **Nunca** uses el código guionado DCME del validador (ej. 9276-20260424-140259-DCME-7819-A) como numero_operacion. **BINANCE Pay**: copia el **Id. de orden / Order ID completo** (típicamente **15-19 dígitos**, a menudo **18**); no trunques ni uses solo el inicio (prohibido devolver 436166756 si en pantalla es 436166756159873024).
   - monto: importe **exacto** del pago principal (Total, Monto Bs., Monto USD, Efectivo). En JSON usa **solo número decimal con punto** (sin separadores de miles): impreso `1.500,00` → `1500.00`; `150,50` → `150.50`; `US$ 20,00` → `20.00`; tira Mercantil `***********96,00 USD` → `96.00` (**nunca** `969`, `965`, `980`). **BINANCE Pay**: copia el monto grande tal cual (ej. `580 USDT` → `580`, no `58`). No redondees ni cambies cifras. Si no es legible, `null`.
   - moneda: exactamente **BS** o **USD** (USDT, $ en contexto divisa fuerte, "Dólares", Binance Pay en USDT → USD).
   - cedula_pagador_en_comprobante: secuencia numérica del **depositante** (no la del deudor del contexto). Si en el comprobante aparece claramente la línea/casilla del depositante, devuélvela **solo con dígitos** (sin letra V/E/J/G ni puntos de miles). Mercantil (misma lógica visual que formato **A** del clasificador del sistema): casillas **DP:V-/DP:E-/DP:J-**, **Cédula Dep.**, **Nro. de Cédula de Identidad del Depositante**, bloques RECAUDACIÓN / DEPÓSITO DIVISAS con cuenta 0105. BNC (misma lógica que formato **B**): línea **DP:V-/E-/J-** + dígitos en recibo cajero BNC. No inventes dígitos; si la línea no es legible o hay duda, "". El backend validador concatena prefijos V/E/J/G con esos dígitos (6–11 cifras); si tras quitar no-dígitos no quedan entre 6 y 11 cifras, deja "".
@@ -2632,9 +2635,9 @@ def _extra_prompt_plantilla_escaner(institucion_plantilla: str) -> str:
     if ("bnc" in low or "bnv" in low) and "venezuela" not in low:
         chunks.append(
             "BNC / BNV (mismos patrones que clasificación **B** en el pipeline Gmail): "
-            "recibo cajero BNC; línea DP:V-/E-/J- + dígitos del depositante; "
-            "`cedula_pagador_en_comprobante` solo dígitos visibles (sin inventar). "
-            "Serial/ref/monto según bloque del ticket."
+            "recibo cajero BNC; para `numero_operacion` use **exclusivamente Serial:** "
+            "(todos los dígitos; ej. 105137674), nunca Ref: ni RIF. "
+            "Línea DP:V-/E-/J- + dígitos del depositante en `cedula_pagador_en_comprobante`."
         )
     if "banco de venezuela" in low or re.search(r"\bbdv\b", low):
         chunks.append(
@@ -2782,6 +2785,11 @@ def extract_infopagos_campos_desde_comprobante(
                     num_op,
                 )
                 num_op = corregir_numero_operacion_mercantil(
+                    num_op,
+                    institucion=inst,
+                    texto_auxiliar=f"{raw_num_op}\n{notas}",
+                )[:100]
+                num_op = corregir_numero_operacion_bnc(
                     num_op,
                     institucion=inst,
                     texto_auxiliar=f"{raw_num_op}\n{notas}",
@@ -2936,12 +2944,24 @@ def extract_infopagos_campos_desde_comprobante_con_rescate_plantilla(
             (gem.get("numero_operacion") or "").strip()
         )
     )
+    gem_blob = f"{gem.get('numero_operacion') or ''}\n{gem.get('notas') or ''}"
+    bnc_ref_en_lugar_serial = False
+    if inst_canon == "BNC":
+        ref_bnc = extraer_ref_etiquetado_bnc(gem_blob)
+        serial_bnc = extraer_serial_etiquetado_bnc(gem_blob)
+        num_gem = (gem.get("numero_operacion") or "").strip()
+        bnc_ref_en_lugar_serial = bool(
+            ref_bnc
+            and num_gem == ref_bnc
+            and (not serial_bnc or serial_bnc != num_gem)
+        )
     falta_fecha = bool(gem.get("ok") and gem.get("fecha_pago") is None)
+    necesita_rescate = falta_fecha or mercantil_solo_dcme or bnc_ref_en_lugar_serial
     if not inst_canon:
         return gem
-    if gem.get("ok") and not falta_fecha and not mercantil_solo_dcme:
+    if gem.get("ok") and not necesita_rescate:
         return gem
-    if plantilla_prev == inst_canon and not mercantil_solo_dcme:
+    if plantilla_prev == inst_canon and not mercantil_solo_dcme and not bnc_ref_en_lugar_serial:
         return gem
     gem2 = extract_infopagos_campos_desde_comprobante(
         cedula_deudor_contexto,

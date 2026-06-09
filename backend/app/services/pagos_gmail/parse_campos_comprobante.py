@@ -424,6 +424,8 @@ _LABEL_NUM_OP_PREFIX_RE = re.compile(
 )
 
 _MERCANTIL_SERIAL_LARGO_RE = re.compile(r"7400\d{9,}")
+_SERIAL_ETIQUETADO_RE = re.compile(r"(?i)\bserial\s*[:.]?\s*(\d{6,18})")
+_REF_ETIQUETADO_RE = re.compile(r"(?i)\bref(?:\.|\s|:)?\s*(\d{6,18})")
 _MERCANTIL_DCME_GUIONADO_RE = re.compile(
     r"^\d{3,5}-\d{8}-\d{6}-DCME-\d{3,5}-[A-Z]$",
     re.IGNORECASE,
@@ -442,6 +444,46 @@ def es_codigo_dcme_mercantil(s: str) -> bool:
     if _MERCANTIL_DCME_GUIONADO_RE.match(t):
         return True
     return bool(re.search(r"-\d{8}-\d{6}-DCME-", t, re.IGNORECASE))
+
+
+def extraer_serial_etiquetado_bnc(texto: str) -> str:
+    """Valor junto a «Serial:» en recibo BNC cajero (ej. 105137674)."""
+    m = _SERIAL_ETIQUETADO_RE.search(texto or "")
+    return m.group(1) if m else ""
+
+
+def extraer_ref_etiquetado_bnc(texto: str) -> str:
+    """Valor junto a «Ref:» en recibo BNC (no usar si hay Serial legible)."""
+    m = _REF_ETIQUETADO_RE.search(texto or "")
+    return m.group(1) if m else ""
+
+
+def _es_institucion_bnc(institucion: str) -> bool:
+    t = (institucion or "").strip().lower()
+    return t == "bnc" or "banco nacional" in t or t.startswith("bnc ")
+
+
+def corregir_numero_operacion_bnc(
+    num_op: str,
+    *,
+    institucion: str = "",
+    texto_auxiliar: str = "",
+) -> str:
+    """
+    Recibo BNC cajero: el número de operación es el valor de **Serial:**,
+    no Ref ni RIF ni cuenta 0191.
+    """
+    blob = f"{num_op}\n{texto_auxiliar}"
+    serial = extraer_serial_etiquetado_bnc(blob)
+    if not serial:
+        return num_op
+    op_norm = sanitizar_numero_operacion_comprobante(num_op) if num_op else ""
+    if op_norm == serial:
+        return op_norm
+    ref_lbl = extraer_ref_etiquetado_bnc(blob)
+    if not op_norm or op_norm == ref_lbl or op_norm != serial:
+        return serial[:100]
+    return op_norm
 
 
 def extraer_serial_mercantil_7400(texto: str) -> str:
@@ -546,13 +588,22 @@ def sanitizar_numero_operacion_comprobante(raw: Any) -> str:
     if not s or s.upper() in ("NA", "N/A", "NONE"):
         return ""
 
+    serial_etiquetado = extraer_serial_etiquetado_bnc(s)
+    if serial_etiquetado and re.search(r"(?i)\bserial\b", s):
+        return serial_etiquetado[:100]
+
     parts = [p.strip() for p in re.split(r"[\s,;|/]+", s) if p.strip()]
     if len(parts) >= 2 and len(set(parts)) == 1:
         s = parts[0]
     elif len(parts) >= 2:
         digit_parts = [p for p in parts if re.fullmatch(r"\d+", p)]
         if len(digit_parts) >= 2 and all(8 <= len(p) <= 13 for p in digit_parts[:2]):
-            s = digit_parts[0]
+            a, b = digit_parts[0], digit_parts[1]
+            pref = min(len(a), len(b), 7)
+            if a[:pref] == b[:pref]:
+                s = b
+            else:
+                s = a
 
     s2 = _LABEL_NUM_OP_PREFIX_RE.sub("", s).strip()
     if s2:
@@ -569,7 +620,7 @@ def sanitizar_numero_operacion_comprobante(raw: Any) -> str:
         if left == right:
             s = left if re.fullmatch(r"\d+", compact) else s[: max(half, len(s) // 2)]
         elif _parecen_ref_serial_bnc_concatenados(digits_only):
-            s = left if re.fullmatch(r"\d+", compact) else s[:half]
+            s = right if re.fullmatch(r"\d+", compact) else s[half:]
 
     s = _preferir_serial_mercantil_largo(s)
     return s[:100]
@@ -811,6 +862,11 @@ def normalizar_campos_gemini_gmail(fields: Dict[str, str]) -> Dict[str, str]:
         inst = "" if banco.upper() == PAGOS_NA else banco
         cleaned = sanitizar_numero_operacion_comprobante(nr)
         cleaned = corregir_numero_operacion_mercantil(
+            cleaned,
+            institucion=inst,
+            texto_auxiliar=nr,
+        )
+        cleaned = corregir_numero_operacion_bnc(
             cleaned,
             institucion=inst,
             texto_auxiliar=nr,
