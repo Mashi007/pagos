@@ -29,7 +29,7 @@ class Settings(BaseSettings):
         default=False,
         description=(
             "Si True, el proceso lider puede iniciar APScheduler (finiquito, auditoria cartera, limpieza codigos, "
-            "Clientes (Drive) diario 01:00 Caracas (columna A + sync CONCILIACIÓN hasta última fila + caché), "
+            "Clientes (Drive) diario 01:00 Caracas (sync CONCILIACIÓN A:S hasta última fila con dato + caché), "
             "Préstamos Drive diario 02:00 Caracas (mismo sync + snapshot candidatos), "
             "recalculo respaldo caché clientes 04:05 y snapshot préstamos 04:45, "
             "Gmail programado si aplica), liquidado diario 21:00 Caracas, refresco programado de cache del dashboard, "
@@ -105,7 +105,7 @@ class Settings(BaseSettings):
         default=True,
         description=(
             "Si True y ENABLE_AUTOMATIC_SCHEDULED_JOBS=True, cada día a las 01:00 America/Caracas: "
-            "lee columna A en Google Sheets, sincroniza CONCILIACIÓN (A:S) hasta la última fila con dato en A "
+            "sincroniza CONCILIACIÓN (A:S) hasta la última fila con dato en cualquier columna del rango "
             "y refresca drive_clientes_candidatos_cache."
         ),
     )
@@ -125,7 +125,7 @@ class Settings(BaseSettings):
         default=True,
         description=(
             "Si True y ENABLE_AUTOMATIC_SCHEDULED_JOBS=True, cada día a las 02:00 America/Caracas: "
-            "mismo criterio columna A + sync acotado + prestamo_candidatos_drive "
+            "mismo sync A:S + prestamo_candidatos_drive "
             "(UI /actualizaciones/prestamos). A las 04:45 solo recalcula snapshot sin volver a Sheets."
         ),
     )

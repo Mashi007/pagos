@@ -6,8 +6,8 @@ Por defecto esta desactivado: ningun cron en servidor; la pantalla Configuracion
 
 Cuando esta activo:
 - finiquito: refresco automatico periodico cada N minutos (configurable) y ventanas de respaldo 00:45 + 13:00 lun-sab.
-- todos los dias 01:00  Clientes (Drive): columna A, sync, import automático filas seleccionable; resto en pantalla (ENABLE_DRIVE_CLIENTES_NIGHTLY_0100 / AUTO_GUARDAR).
-- todos los dias 02:00  Préstamos Drive: columna A, sync, snapshot, guardar automático al 100% (_motivos_no_100); resto en pantalla (ENABLE_PRESTAMO_CANDIDATOS_DRIVE_NIGHTLY / AUTO_GUARDAR).
+- todos los dias 01:00  Clientes (Drive): sync A:S, import automático filas seleccionable; resto en pantalla (ENABLE_DRIVE_CLIENTES_NIGHTLY_0100 / AUTO_GUARDAR).
+- todos los dias 02:00  Préstamos Drive: sync A:S, snapshot, guardar automático al 100% (_motivos_no_100); resto en pantalla (ENABLE_PRESTAMO_CANDIDATOS_DRIVE_NIGHTLY / AUTO_GUARDAR).
 - 03:00  Auditoria cartera: evaluacion de prestamos y metadatos en configuracion.
 - 04:00  Limpieza codigos estado de cuenta.
 - todos los dias 04:05  Caché lista «Clientes (Drive)» solo recalculo (sin sync Sheets; respaldo tras auditoría).
@@ -239,7 +239,7 @@ def _job_auditoria_cartera_prestamos() -> None:
 
 
 def _job_hoja_drive_conciliacion_sync() -> None:
-    """Sync CONCILIACIÓN (columna A define última fila; importa A:S hasta ahí). Usado por jobs 01:00 y 02:00."""
+    """Sync CONCILIACIÓN (rango A:S hasta última fila con dato en cualquier columna). Usado por jobs 01:00 y 02:00."""
     db = SessionLocal()
     try:
         from app.services.conciliacion_sheet_sync import run_sync_to_db
@@ -266,7 +266,7 @@ def _job_hoja_drive_conciliacion_sync() -> None:
 
 
 def _job_drive_clientes_noche_0100() -> None:
-    """01:00 Caracas: columna A, sync, caché; importa automático filas seleccionable (resto en pantalla)."""
+    """01:00 Caracas: sync A:S hasta cola real, caché; importa automático filas seleccionable (resto en pantalla)."""
     if not getattr(settings, "ENABLE_DRIVE_CLIENTES_NIGHTLY_0100", True):
         return
     db = SessionLocal()
@@ -310,7 +310,7 @@ def _job_drive_clientes_noche_0100() -> None:
 
 
 def _job_prestamo_candidatos_noche_0200() -> None:
-    """02:00 Caracas: columna A, sync, snapshot; guarda automático filas al 100% (resto en pantalla)."""
+    """02:00 Caracas: sync A:S, snapshot; guarda automático filas al 100% (resto en pantalla)."""
     if not getattr(settings, "ENABLE_PRESTAMO_CANDIDATOS_DRIVE_NIGHTLY", True):
         return
     db = SessionLocal()
@@ -528,7 +528,7 @@ def start_scheduler() -> None:
         name="Finiquito: refrescar casos lun-sab 00:45",
     )
 
-    # 01:00 todos los días — Clientes (Drive): columna A + sync acotado + caché
+    # 01:00 todos los días — Clientes (Drive): sync A:S + caché
     if getattr(settings, "ENABLE_DRIVE_CLIENTES_NIGHTLY_0100", True):
         _scheduler.add_job(
             _wrap_job_with_timing("drive_clientes_noche_0100", _job_drive_clientes_noche_0100),
@@ -539,10 +539,10 @@ def start_scheduler() -> None:
                 timezone=SCHEDULER_TZ,
             ),
             id="drive_clientes_noche_0100",
-            name="Clientes Drive: columna A + sync + caché 01:00 (todos los días)",
+            name="Clientes Drive: sync A:S + caché 01:00 (todos los días)",
         )
 
-    # 02:00 todos los días — Préstamos candidatos Drive: columna A + sync + snapshot
+    # 02:00 todos los días — Préstamos candidatos Drive: sync A:S + snapshot
     if getattr(settings, "ENABLE_PRESTAMO_CANDIDATOS_DRIVE_NIGHTLY", True):
         _scheduler.add_job(
             _wrap_job_with_timing(
@@ -555,7 +555,7 @@ def start_scheduler() -> None:
                 timezone=SCHEDULER_TZ,
             ),
             id="prestamo_candidatos_noche_0200",
-            name="Prestamos Drive: columna A + sync + snapshot 02:00 (todos los días)",
+            name="Prestamos Drive: sync A:S + snapshot 02:00 (todos los días)",
         )
 
     # 03:00 todo — auditoría cartera (muy pesado)
@@ -709,10 +709,10 @@ def start_scheduler() -> None:
         _caches_notif_log += "; caché Q vs aprobación lunes y jueves 04:00"
     _drive_night_log = ""
     if getattr(settings, "ENABLE_DRIVE_CLIENTES_NIGHTLY_0100", True):
-        _drive_night_log += "; Clientes Drive 01:00 (columna A + sync + caché)"
+        _drive_night_log += "; Clientes Drive 01:00 (sync A:S + caché)"
     _prest_cand_log = ""
     if getattr(settings, "ENABLE_PRESTAMO_CANDIDATOS_DRIVE_NIGHTLY", True):
-        _prest_cand_log = "; Prestamos Drive 02:00 (columna A + sync + snapshot); recalculo 04:45"
+        _prest_cand_log = "; Prestamos Drive 02:00 (sync A:S + snapshot); recalculo 04:45"
     logger.info(
         "Scheduler iniciado: finiquito lun-sab 00:45 y 13:00%s; auditoria 03:00%s%s; "
         "caché Clientes Drive respaldo 04:05; limpieza estado_cuenta_codigos 4:00%s (%s).",

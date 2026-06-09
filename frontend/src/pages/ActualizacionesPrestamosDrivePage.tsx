@@ -28,6 +28,7 @@ import {
   postPrestamosCandidatosDriveRefrescar,
   type PrestamoCandidatoDriveFila,
 } from '../services/prestamosCandidatosDriveService'
+import { reporteService } from '../services/reporteService'
 import { toast } from 'sonner'
 import { getErrorMessage } from '../types/errors'
 
@@ -597,31 +598,43 @@ export default function ActualizacionesPrestamosDrivePage() {
   const onRecalcular = useCallback(async () => {
     setManualUpdating(true)
     try {
+      const syncRes = await reporteService.syncConciliacionSheetDesdeDrive()
       const res = await postPrestamosCandidatosDriveRefrescar({
         forzar: forzarVacio,
       })
+      const n = syncRes?.row_count
+      const ultima =
+        typeof syncRes?.last_data_sheet_row_number === 'number'
+          ? syncRes.last_data_sheet_row_number
+          : null
+      const filasSync = typeof n === 'number' ? `${n} fila(s) importadas. ` : ''
+      const cola = ultima != null ? `Última fila hoja (A:S): ${ultima}. ` : ''
       if (res?.omitido === true) {
         toast.message(
-          (res.motivo as string) === 'tabla_drive_sin_filas'
-            ? 'No se recalculó: la tabla drive está vacía (se mantiene el snapshot anterior). Marque «Forzar…» para vaciar el snapshot.'
-            : 'Recálculo omitido.'
+          `${filasSync}${cola}${
+            (res.motivo as string) === 'tabla_drive_sin_filas'
+              ? 'No se recalculó el snapshot: la tabla drive quedó vacía (se mantiene el anterior). Marque «Forzar…» para vaciarlo.'
+              : 'Recálculo del snapshot omitido.'
+          }`
         )
       } else {
         const motivo = res?.motivo as string | undefined
         if (motivo === 'forzar_con_drive_vacio') {
           toast.success(
-            'Snapshot vaciado (drive sin filas, recálculo forzado).'
+            `${filasSync}${cola}Snapshot vaciado (drive sin filas, recálculo forzado).`
           )
         } else {
           toast.success(
-            `Snapshot actualizado: ${Number(res.candidatos_insertados ?? 0)} candidato(s).`
+            `${filasSync}${cola}Snapshot actualizado: ${Number(res.candidatos_insertados ?? 0)} candidato(s).`
           )
         }
       }
       await invalidateDriveScanCoverage(qc)
       await refrescarSnapshotPostAccion()
     } catch (e) {
-      toast.error(getErrorMessage(e) || 'No se pudo recalcular')
+      toast.error(
+        getErrorMessage(e) || 'No se pudo sincronizar la hoja desde Google'
+      )
     } finally {
       setManualUpdating(false)
     }
@@ -897,7 +910,7 @@ export default function ActualizacionesPrestamosDrivePage() {
     <div className="mx-auto max-w-7xl space-y-6 p-4 md:p-6">
       <ModulePageHeader
         title="Préstamos"
-        description="Actualizaciones: cédulas en CONCILIACIÓN (columna E). V y E: sin préstamo previo. J (jurídico): puede figurar con uno o más préstamos ya en cartera. Lista paginada (100 filas por página). Job automático diario 02:00 Caracas (columna A → sync hasta última fila → snapshot). Solo administradores."
+        description="Actualizaciones: cédulas en CONCILIACIÓN (columna E). V y E: sin préstamo previo. J (jurídico): puede figurar con uno o más préstamos ya en cartera. Lista paginada (100 filas por página). Job automático diario 02:00 Caracas (sync rango A:S hasta última fila con dato → snapshot). Solo administradores."
         icon={CreditCard}
       />
 
@@ -1042,7 +1055,7 @@ export default function ActualizacionesPrestamosDrivePage() {
               size="sm"
               onClick={() => void onRecalcular()}
               disabled={accionesGlobalesDeshabilitadas}
-              title="Sincroniza manualmente contra Drive y recalcula snapshot de candidatos."
+              title="Trae CONCILIACIÓN desde Google (rango A:S hasta la cola real) y recalcula el snapshot de candidatos."
             >
               <RefreshCw
                 className={`mr-2 h-4 w-4 ${manualUpdating ? 'animate-spin' : ''}`}
@@ -1358,9 +1371,10 @@ export default function ActualizacionesPrestamosDrivePage() {
                         No hay candidatos: para V/E suele significar que ya
                         tienen préstamo en cartera; el snapshot está vacío, o no
                         hay filas que cumplan el criterio. Verifique
-                        CONCILIACIÓN en Configuración (Google) y el job
-                        automático (dom/mié 04:00 sync + 04:05 snapshot si está
-                        activo en servidor).
+                        CONCILIACIÓN en Configuración (Google), use
+                        «Sincronización manual con Drive» o el job automático
+                        diario 02:00 Caracas (sync A:S + snapshot; recálculo
+                        respaldo 04:45 si ENABLE_AUTOMATIC_SCHEDULED_JOBS=true).
                         {cedulaDebounced
                           ? ' Pruebe otro filtro de cédula.'
                           : ''}

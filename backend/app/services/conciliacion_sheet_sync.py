@@ -403,6 +403,52 @@ def fetch_sheet_column_a_slice(
     return exact_title, resp.get("values") or []
 
 
+def fetch_sheet_values_slice(
+    spreadsheet_id: str,
+    tab_name: str,
+    columns_range: str,
+    row_start_1based: int,
+    row_end_1based: int,
+) -> Tuple[str, List[List[Any]], int]:
+    """
+    Lectura parcial del rango configurado (p. ej. A5000:S5200) para verificar cola sin
+    descargar toda la hoja.
+    """
+    if row_end_1based < row_start_1based:
+        row_start_1based, row_end_1based = row_end_1based, row_start_1based
+    creds = _get_sheets_credentials()
+    if creds is None:
+        raise RuntimeError(
+            "Sin credenciales Google (Sheets). Configure Informe de pagos / cuenta de servicio "
+            "o tokens Gmail (GOOGLE_CLIENT_ID, GMAIL_TOKENS_PATH, etc.)."
+        )
+    col_a, col_b, ncols = _parse_columns_range(columns_range)
+    service = _build_sheets_service(creds)
+    exact_title = _resolve_sheet_title(service, spreadsheet_id, tab_name)
+    rng = (
+        f"'{_escape_sheet_title_for_range(exact_title)}'!"
+        f"{col_a}{int(row_start_1based)}:{col_b}{int(row_end_1based)}"
+    )
+    logger.info(
+        "[conciliacion_sheet] fetch_sheet_values_slice rango=%r pestaña=%r",
+        rng,
+        exact_title,
+    )
+    resp = _sheets_execute(
+        service.spreadsheets()
+        .values()
+        .get(
+            spreadsheetId=spreadsheet_id,
+            range=rng,
+            majorDimension="ROWS",
+            valueRenderOption="UNFORMATTED_VALUE",
+        )
+    )
+    values = resp.get("values") or []
+    trimmed = [_trim_row_width(row, ncols) for row in values]
+    return exact_title, trimmed, ncols
+
+
 def run_sync_to_db(db: Session) -> Dict[str, Any]:
     """
     Descarga la pestaña configurada y reemplaza conciliacion_sheet_rows.
@@ -431,22 +477,35 @@ def run_sync_to_db(db: Session) -> Dict[str, Any]:
         from app.services.conciliacion_sheet_cobertura import resolve_sync_end_row_from_column_a
 
         bounds = resolve_sync_end_row_from_column_a(
-            spreadsheet_id, tab_name, marker=marker
+            spreadsheet_id, tab_name, marker=marker, columns_range=columns_range
         )
         sync_end_row = int(bounds["sync_end_row"])
         column_a_last_row = int(bounds["column_a_last_row"])
-        logger.info(
-            "[conciliacion_sheet] sync acotado por columna A: ultima_fila_a=%s importar_hasta_fila=%s",
-            column_a_last_row,
-            sync_end_row,
-        )
-
-        sheet_title, values, ncols_expected = fetch_sheet_values(
-            spreadsheet_id,
-            tab_name,
-            columns_range,
-            end_row_1based=sync_end_row,
-        )
+        prefetched = bounds.get("prefetched_values")
+        if isinstance(prefetched, list) and prefetched:
+            sheet_title = str(bounds.get("sheet_title") or tab_name)
+            values = prefetched
+            _, _, ncols_expected = _parse_columns_range(columns_range)
+            logger.info(
+                "[conciliacion_sheet] sync usando snapshot %s ya descargado: ultima_fila_a=%s importar_hasta_fila=%s filas=%s",
+                columns_range,
+                column_a_last_row,
+                sync_end_row,
+                len(values),
+            )
+        else:
+            logger.info(
+                "[conciliacion_sheet] sync acotado por rango %s: ultima_fila_a=%s importar_hasta_fila=%s",
+                columns_range,
+                column_a_last_row,
+                sync_end_row,
+            )
+            sheet_title, values, ncols_expected = fetch_sheet_values(
+                spreadsheet_id,
+                tab_name,
+                columns_range,
+                end_row_1based=sync_end_row,
+            )
         if not values:
             logger.warning("[conciliacion_sheet] run_sync_to_db: API devolvió 0 filas")
             raise ValueError("La hoja devolvió 0 filas.")
@@ -563,7 +622,7 @@ def run_sync_to_db(db: Session) -> Dict[str, Any]:
             apply_scan_coverage_fields_to_meta(
                 meta,
                 db,
-                google_tail_row_number=column_a_last_row,
+                google_tail_row_number=sync_end_row,
                 google_tail_row_probed_at=now,
             )
         scan_coverage_payload: Dict[str, Any] = {}

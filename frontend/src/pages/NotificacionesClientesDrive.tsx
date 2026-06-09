@@ -1040,8 +1040,9 @@ export default function NotificacionesClientesDrive() {
                       No hay filas pendientes: todas las cédulas del Drive ya
                       existen en clientes, o el snapshot está vacío. Verifique
                       la sincronización en Configuración (Google), el job
-                      interno (01:00 sync por columna A + caché Clientes Drive;
-                      02:00 snapshot Préstamos Drive si ENABLE_AUTOMATIC_SCHEDULED_JOBS=true)
+                      interno (01:00 sync rango A:S + caché Clientes Drive;
+                      02:00 sync A:S + snapshot Préstamos Drive si
+                      ENABLE_AUTOMATIC_SCHEDULED_JOBS=true)
                       o un cron externo
                       alineado (POST /api/v1/conciliacion-sheet/sync con
                       secreto). Puede pulsar «Actualizar lista» para

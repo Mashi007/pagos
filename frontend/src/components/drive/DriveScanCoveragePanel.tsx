@@ -153,7 +153,7 @@ export function DriveScanCoveragePanel({ className, onAfterProbe }: Props) {
                   )}
                 </li>
                 <li>
-                  Cola en Google (columna A):{' '}
+                  Cola en Google (rango A:S):{' '}
                   <strong className="tabular-nums text-foreground">
                     {cov?.google_tail_row_number ?? 'sin verificar'}
                   </strong>
@@ -176,8 +176,9 @@ export function DriveScanCoveragePanel({ className, onAfterProbe }: Props) {
                 )}
                 <li className="text-xs">
                   Sync hoja: {fmtCaracas(cov?.drive_synced_at ?? null)}. Jobs 01:00 / 02:00 Caracas
-                  (si ENABLE_AUTOMATIC_SCHEDULED_JOBS): columna A → sync hasta última fila → guardado
-                  automático solo de filas que cumplen validadores; el resto queda en pantalla.
+                  (si ENABLE_AUTOMATIC_SCHEDULED_JOBS): lee A:S hasta la última fila con dato en
+                  cualquier columna del rango (no solo A) → guardado automático solo de filas que
+                  cumplen validadores; el resto queda en pantalla.
                 </li>
               </ul>
             )}
@@ -190,7 +191,7 @@ export function DriveScanCoveragePanel({ className, onAfterProbe }: Props) {
           className="shrink-0"
           disabled={probing || statusQuery.isFetching}
           onClick={() => void onVerificarCola()}
-          title="Lee solo un tramo de la columna A cerca de la última fila importada y compara con la BD."
+          title="Lee un tramo del rango A:S cerca de la última fila importada y compara con la BD."
         >
           <Loader2
             className={cn('mr-2 h-4 w-4', probing && 'animate-spin')}
