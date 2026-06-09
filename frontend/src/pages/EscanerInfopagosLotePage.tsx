@@ -95,7 +95,7 @@ const INSTITUCIONES_FINANCIERAS = [
   'BNC',
   'Banco de Venezuela',
   'Mercantil',
-  'Recibos',
+  'Recibo',
 ] as const
 
 const ALLOWED_FILE_TYPES = [
@@ -1102,14 +1102,14 @@ export default function EscanerInfopagosLotePage() {
             ) : null}
             <div className="space-y-2">
               <Label htmlFor="archivos-lote">
-                Añadir comprobantes (PDF, imágenes; 10 MB c/u; hasta{' '}
+                Añadir comprobantes (PDF, imágenes, Word .docx; 10 MB c/u; hasta{' '}
                 {String(MAX_ARCHIVOS)} en total)
               </Label>
               <Input
                 id="archivos-lote"
                 type="file"
                 multiple
-                accept=".pdf,.jpg,.jpeg,.png,.webp,.heic,.heif"
+                accept=".pdf,.jpg,.jpeg,.png,.webp,.heic,.heif,.docx"
                 onChange={e => {
                   onPickArchivos(e.target.files)
                   e.target.value = ''

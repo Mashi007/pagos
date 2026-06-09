@@ -424,7 +424,7 @@ _LABEL_NUM_OP_PREFIX_RE = re.compile(
 )
 
 _MERCANTIL_SERIAL_LARGO_RE = re.compile(r"7400\d{9,}")
-_SERIAL_ETIQUETADO_RE = re.compile(r"(?i)\bserial\s*[:.]?\s*(\d{6,18})")
+_SERIAL_ETIQUETADO_RE = re.compile(r"(?i)\bserial\s*[:.]?\s*(\d{6,30})")
 _REF_ETIQUETADO_RE = re.compile(r"(?i)\bref(?:\.|\s|:)?\s*(\d{6,18})")
 _MERCANTIL_DCME_GUIONADO_RE = re.compile(
     r"^\d{3,5}-\d{8}-\d{6}-DCME-\d{3,5}-[A-Z]$",
@@ -446,10 +446,34 @@ def es_codigo_dcme_mercantil(s: str) -> bool:
     return bool(re.search(r"-\d{8}-\d{6}-DCME-", t, re.IGNORECASE))
 
 
+def _deduplicar_digitos_repetidos(digits: str) -> str:
+    """OCR/Gemini a veces repite el mismo serial pegado (740087…740087…)."""
+    d = (digits or "").strip()
+    while len(d) >= 12 and len(d) % 2 == 0:
+        half = len(d) // 2
+        if d[:half] == d[half:]:
+            d = d[:half]
+        else:
+            break
+    return d
+
+
+def _normalizar_serial_tras_etiqueta(captured: str) -> str:
+    t = (captured or "").strip()
+    if not t:
+        return ""
+    if t.startswith("7400"):
+        merc = extraer_serial_mercantil_7400(t)
+        return merc or t[:15]
+    return t[:18]
+
+
 def extraer_serial_etiquetado_bnc(texto: str) -> str:
-    """Valor junto a «Serial:» en recibo BNC cajero (ej. 105137674)."""
+    """Valor junto a «Serial:» en recibo BNC cajero o Mercantil (ej. 105137674 / 740087…)."""
     m = _SERIAL_ETIQUETADO_RE.search(texto or "")
-    return m.group(1) if m else ""
+    if not m:
+        return ""
+    return _normalizar_serial_tras_etiqueta(m.group(1))
 
 
 def extraer_ref_etiquetado_bnc(texto: str) -> str:
@@ -487,13 +511,26 @@ def corregir_numero_operacion_bnc(
 
 
 def extraer_serial_mercantil_7400(texto: str) -> str:
-    """Serial largo Mercantil (740087…, 15 dígitos típicos) desde cualquier fragmento OCR."""
+    """Serial Mercantil (740087…, 15 dígitos típicos) desde cualquier fragmento OCR."""
     if not texto:
         return ""
-    runs = _MERCANTIL_SERIAL_LARGO_RE.findall(re.sub(r"\D", "", texto))
+    compact = _deduplicar_digitos_repetidos(re.sub(r"\D", "", texto))
+    if not compact:
+        return ""
+    runs = _MERCANTIL_SERIAL_LARGO_RE.findall(compact)
     if not runs:
         return ""
-    return max(runs, key=len)
+    quince = [r for r in runs if len(r) == 15]
+    if quince:
+        return quince[0]
+    candidatos: List[str] = []
+    for r in sorted(set(runs), key=len):
+        norm = _deduplicar_digitos_repetidos(r)
+        if norm and norm not in candidatos:
+            candidatos.append(norm)
+    if not candidatos:
+        return ""
+    return min(candidatos, key=len)
 
 
 def numero_operacion_mercantil_solo_dcme(num_op: str) -> bool:
@@ -516,10 +553,16 @@ def corregir_numero_operacion_mercantil(
     Mercantil DEPÓSITO DIVISAS: el número de operación es el Serial largo 740087…
     (etiqueta «Serial:» en la tira), no el código guionado DCME del validador.
     """
-    blob = f"{num_op}\n{texto_auxiliar}"
     op_norm = sanitizar_numero_operacion_comprobante(num_op) if num_op else ""
-    serial = extraer_serial_mercantil_7400(blob)
+    serial_op = extraer_serial_mercantil_7400(op_norm) if op_norm else ""
+    serial_aux = extraer_serial_mercantil_7400(texto_auxiliar) if texto_auxiliar else ""
+    serial = serial_op or serial_aux
+    if serial_op and serial_aux and len(serial_aux) > len(serial_op):
+        if _deduplicar_digitos_repetidos(serial_aux) == serial_op:
+            serial = serial_op
     if serial and (not op_norm or op_norm != serial):
+        if op_norm and serial_op == op_norm:
+            return op_norm
         return serial[:100]
     if op_norm and numero_operacion_mercantil_solo_dcme(op_norm):
         return ""
@@ -561,17 +604,21 @@ def _parecen_ref_serial_bnc_concatenados(digits_only: str) -> bool:
 def _preferir_serial_mercantil_largo(s: str) -> str:
     """
     Si coexisten código DCME guionado y Serial largo 7400…, prioriza el Serial (regla Gmail A1).
-    Sin Serial 7400… visible, conserva el valor original (p. ej. solo código DCME).
+    Si el OCR repite el mismo serial pegado, deja una sola copia.
     """
     if not s:
         return s
     compact_digits = re.sub(r"\D", "", s)
+    if compact_digits.startswith("7400") and len(compact_digits) > 15:
+        canon = extraer_serial_mercantil_7400(compact_digits)
+        if canon:
+            return canon
     serial_runs = _MERCANTIL_SERIAL_LARGO_RE.findall(compact_digits)
     if not serial_runs:
         return s
-    best = max(serial_runs, key=len)
+    best = extraer_serial_mercantil_7400(compact_digits)
     low = s.lower()
-    if "dcme" in low or re.search(r"\d{4}-\d{8}-", s):
+    if "dcme" in low or re.search(r"\d{4}-\d{8}-", s) or len(compact_digits) > 15:
         return best
     return s
 

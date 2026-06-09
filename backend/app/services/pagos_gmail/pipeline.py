@@ -185,6 +185,7 @@ from app.services.pagos_gmail.gmail_service import (
     PAGOS_GMAIL_LABEL_IMAGEN_4,
     PAGOS_GMAIL_LABEL_BANCAMIGA,
     PAGOS_GMAIL_LABEL_TESORO,
+    PAGOS_GMAIL_LABEL_RECIBO,
     PAGOS_GMAIL_LABEL_TEXTO,
     PAGOS_GMAIL_LABEL_CONCILIACION,
     PAGOS_GMAIL_LOTE_REMITENTE_IT_MASTER,
@@ -266,6 +267,7 @@ PAGOS_GMAIL_BANCO_IMAGEN_3 = "BINANCE"
 PAGOS_GMAIL_BANCO_IMAGEN_4 = "BDV"
 PAGOS_GMAIL_BANCO_BANCAMIGA = "Bancamiga"
 PAGOS_GMAIL_BANCO_TESORO = "Banco del Tesoro"
+PAGOS_GMAIL_BANCO_RECIBO = "Recibo"
 
 # Columna Cedula en Excel cuando no se puede resolver por remitente (max 50 chars en modelo).
 PAGOS_GMAIL_ERROR_CEDULA_EMAIL = "ERROR EMAIL"  # sin fila en clientes o fallo al consultar tabla clientes
@@ -282,6 +284,7 @@ PAGOS_GMAIL_ETIQUETAS_FINALES_PERMITIDAS = frozenset(
         PAGOS_GMAIL_LABEL_IMAGEN_4,
         PAGOS_GMAIL_LABEL_BANCAMIGA,
         PAGOS_GMAIL_LABEL_TESORO,
+        PAGOS_GMAIL_LABEL_RECIBO,
         PAGOS_GMAIL_LABEL_ERROR_EMAIL,
         PAGOS_GMAIL_LABEL_MANUAL,
         PAGOS_GMAIL_LABEL_TEXTO,
@@ -480,6 +483,7 @@ _GMAIL_BANK_HINT_C_FMT = frozenset({"C", "BINANCE", "USDT"})
 _GMAIL_BANK_HINT_D_FMT = frozenset({"D", "BDV", "BNV", "0102"})
 _GMAIL_BANK_HINT_E_FMT = frozenset({"E", "BANCAMIGA", "0172"})
 _GMAIL_BANK_HINT_F_FMT = frozenset({"F", "TESORO", "0163"})
+_GMAIL_BANK_HINT_G_FMT = frozenset({"G", "RECIBO", "TORO"})
 
 
 def _fmt_desde_bank_hint_escaneo(hint: str) -> Optional[str]:
@@ -498,6 +502,8 @@ def _fmt_desde_bank_hint_escaneo(hint: str) -> Optional[str]:
         return "E"
     if h in _GMAIL_BANK_HINT_F_FMT or "TESORO" in h:
         return "F"
+    if h in _GMAIL_BANK_HINT_G_FMT or "TORO MOTORCYCLES" in h or h == "RECIBO":
+        return "G"
     return None
 
 
@@ -515,6 +521,8 @@ def _etiqueta_gmail_por_plantilla_fmt(fmt: str) -> Optional[str]:
         return PAGOS_GMAIL_LABEL_BANCAMIGA
     if f == "F":
         return PAGOS_GMAIL_LABEL_TESORO
+    if f == "G":
+        return PAGOS_GMAIL_LABEL_RECIBO
     return None
 
 
@@ -557,10 +565,10 @@ def resolver_etiqueta_final_gmail(
     - CUOTAS_OK sigue siendo criterio de negocio; esta función solo elige etiqueta Gmail.
     """
     tipos_digitados = {
-        f for f in bank_fmts_digitized if f in ("A", "B", "C", "D", "E", "F", "NR")
+        f for f in bank_fmts_digitized if f in ("A", "B", "C", "D", "E", "F", "G", "NR")
     }
     tipos_clasificados = {
-        f for f in bank_fmts_classified if f in ("A", "B", "C", "D", "E", "F", "NR")
+        f for f in bank_fmts_classified if f in ("A", "B", "C", "D", "E", "F", "G", "NR")
     }
     fmts_etiqueta = _fmts_para_etiqueta_banco_gmail(
         bank_fmts_digitized,
@@ -594,11 +602,11 @@ def resolver_etiqueta_final_gmail(
         )
     elif remitente_en_clientes:
         label_prioridad_paso_2 = next(
-            (f for f in bank_fmts_cuotas_ok if f in ("C", "D", "E", "F")),
+            (f for f in bank_fmts_cuotas_ok if f in ("C", "D", "E", "F", "G")),
             None,
         )
         if not label_prioridad_paso_2:
-            for _pref_cd in ("C", "D", "E", "F"):
+            for _pref_cd in ("C", "D", "E", "F", "G"):
                 if any(f == _pref_cd for f in fmts_etiqueta):
                     label_prioridad_paso_2 = _pref_cd
                     break
@@ -633,6 +641,14 @@ def resolver_etiqueta_final_gmail(
                 if label_prioridad_paso_2 in bank_fmts_digitized
                 or label_prioridad_paso_2 in bank_fmts_cuotas_ok
                 else "clasificado_f"
+            )
+        elif label_prioridad_paso_2 == "G":
+            final_label_name = PAGOS_GMAIL_LABEL_RECIBO
+            final_label_reason = (
+                "paso_2_g"
+                if label_prioridad_paso_2 in bank_fmts_digitized
+                or label_prioridad_paso_2 in bank_fmts_cuotas_ok
+                else "clasificado_g"
             )
     elif plan_b_mercantil_bnc_fuera_bd and "C" in (tipos_digitados | tipos_clasificados):
         final_label_name = PAGOS_GMAIL_LABEL_IMAGEN_3
@@ -1634,6 +1650,34 @@ def run_pipeline(
                                     sender_lc[:72],
                                     filename,
                                 )
+                        elif fmt == "G":
+                            f = _completar_fecha_pago_desde_asunto(
+                                normalizar_fecha_pago(_v(data.get("fecha_pago"))),
+                                subject,
+                            )
+                            m = _v(data.get("monto"))
+                            r = normalizar_referencia(_v(data.get("numero_referencia")))
+                            c_img = _cedula_desde_imagen_rescan_error_email(data.get("cedula"))
+                            c_res = (
+                                resolver_cedula_almacenada_en_clientes(db, c_img)
+                                if c_img
+                                and c_img
+                                not in (
+                                    PAGOS_GMAIL_ERROR_CEDULA_IMAGEN,
+                                    PAGOS_GMAIL_ERROR_CEDULA_EMAIL,
+                                )
+                                else None
+                            )
+                            if c_res:
+                                c = formatear_cedula(c_res)
+                            else:
+                                c = c_img
+                            c_ok = bool((c or "").strip()) and (c or "").strip().upper() != PAGOS_NA
+                            logger.info(
+                                "[PAGOS_GMAIL]   Recibo (G): columna Cedula desde CI/RIF=%s archivo=%s",
+                                (c or "")[:24],
+                                filename,
+                            )
                         elif usar_extraccion_cedula_imagen_ab and fmt in ("A", "B"):
                             f = _completar_fecha_pago_desde_asunto(
                                 normalizar_fecha_pago(_v(data.get("fecha_pago"))),
@@ -1750,6 +1794,7 @@ def run_pipeline(
                             default_d=PAGOS_GMAIL_BANCO_IMAGEN_4,
                             default_e=PAGOS_GMAIL_BANCO_BANCAMIGA,
                             default_f=PAGOS_GMAIL_BANCO_TESORO,
+                            default_g=PAGOS_GMAIL_BANCO_RECIBO,
                         )
                         # Re-escaneo A/B (solo_error / redig / error_email_rescan): cédula ilegible -> literal "ERROR".
                         # _campos_completos acepta "ERROR" como texto no vacío; sin esto, fully_digitized_email=True
@@ -1908,7 +1953,7 @@ def run_pipeline(
                                 gt.drive_link = link_url or None
                                 gt.drive_email_link = None
                                 fmt = p["fmt"]
-                                id_a, id_b, id_c, id_d, id_e, id_f = get_or_create_pagos_gmail_plantilla_label_ids(
+                                id_a, id_b, id_c, id_d, id_e, id_f, id_g = get_or_create_pagos_gmail_plantilla_label_ids(
                                     gmail_svc, plantilla_label_cache
                                 )
                                 if fmt == "A":
@@ -1929,6 +1974,9 @@ def run_pipeline(
                                 elif fmt == "F":
                                     label_id = id_f
                                     etiqueta_nombre = PAGOS_GMAIL_LABEL_TESORO
+                                elif fmt == "G":
+                                    label_id = id_g
+                                    etiqueta_nombre = PAGOS_GMAIL_LABEL_RECIBO
                                 elif fmt == "NR":
                                     label_id = None
                                     etiqueta_nombre = "NR"

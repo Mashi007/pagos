@@ -231,10 +231,13 @@ def test_sanitizar_preferir_serial_mercantil_sobre_dcme():
 def test_corregir_numero_operacion_mercantil_serial_740087():
     from app.services.pagos_gmail.parse_campos_comprobante import (
         corregir_numero_operacion_mercantil,
+        extraer_serial_mercantil_7400,
     )
 
     dcme = "9276-20260424-140259-DCME-7819-A"
     serial = "740087408543435"
+    assert extraer_serial_mercantil_7400(f"{serial}{serial}") == serial
+    assert extraer_serial_mercantil_7400(f"Serial: {serial}{serial}") == serial
     assert corregir_numero_operacion_mercantil(
         dcme,
         institucion="Mercantil",
@@ -246,6 +249,15 @@ def test_corregir_numero_operacion_mercantil_serial_740087():
         institucion="Mercantil",
     ) == serial
     assert corregir_numero_operacion_mercantil(serial, institucion="Mercantil") == serial
+    assert corregir_numero_operacion_mercantil(
+        serial,
+        institucion="Mercantil",
+        texto_auxiliar=f"{serial}{serial}",
+    ) == serial
+    assert sanitizar_numero_operacion_comprobante(
+        f"Serial: {serial}{serial}"
+    ) == serial
+    assert sanitizar_numero_operacion_comprobante(f"{serial}{serial}") == serial
 
 
 def test_normalizar_campos_gemini_descarta_dcme_sin_serial():

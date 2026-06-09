@@ -76,7 +76,7 @@ const INSTITUCIONES_FINANCIERAS = [
 
   'Mercantil',
 
-  'Recibos',
+  'Recibo',
 ]
 
 function baseYTokenNumeroOperacion(raw: string): {

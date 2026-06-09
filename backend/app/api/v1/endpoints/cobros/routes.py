@@ -4289,7 +4289,7 @@ async def escaner_extraer_comprobante_infopagos(
     content = await comprobante.read()
     fn_comp = comprobante.filename or "comprobante"
     ctype = cpr.mime_efectivo_comprobante_web(comprobante.content_type or "", fn_comp)
-    err_file, filename = cpr.validar_adjunto_comprobante_bytes(
+    err_file, content, filename, ctype = cpr.preparar_adjunto_comprobante_para_vision(
         content,
         ctype,
         fn_comp,
@@ -4865,13 +4865,13 @@ async def escaner_lote_drive_digitalizar(
             continue
 
         ctype = cpr.mime_efectivo_comprobante_web(mime_drive, fname)
-        archivo_b64 = base64.b64encode(content).decode("ascii")
-        err_file, filename = cpr.validar_adjunto_comprobante_bytes(
+        err_file, content, filename, ctype = cpr.preparar_adjunto_comprobante_para_vision(
             content,
             ctype,
             fname,
             mensaje_excel_largo=False,
         )
+        archivo_b64 = base64.b64encode(content).decode("ascii")
         if err_file:
             items.append(
                 {

@@ -722,7 +722,7 @@ async def digitalizar_comprobante_publico(
     content = await comprobante.read()
     fn_comp = comprobante.filename or "comprobante"
     ctype = cpr.mime_efectivo_comprobante_web(comprobante.content_type or "", fn_comp)
-    err_file, filename = cpr.validar_adjunto_comprobante_bytes(
+    err_file, content, filename, ctype = cpr.preparar_adjunto_comprobante_para_vision(
         content,
         ctype,
         fn_comp,
@@ -835,7 +835,7 @@ async def enviar_reporte_publico(
     content = await comprobante.read()
     fn_comp = comprobante.filename or "comprobante"
     ctype = cpr.mime_efectivo_comprobante_web(comprobante.content_type or "", fn_comp)
-    err_file, filename = cpr.validar_adjunto_comprobante_bytes(
+    err_file, content, filename, ctype = cpr.preparar_adjunto_comprobante_para_vision(
         content,
         ctype,
         fn_comp,
@@ -1089,7 +1089,8 @@ async def enviar_reporte_infopagos(
         )
         if err_bd:
             return EnviarReporteInfopagosResponse(ok=False, error=err_bd)
-        err_file, filename = cpr.validar_adjunto_comprobante_bytes(
+        ctype_orig = ctype
+        err_file, content, filename, ctype = cpr.preparar_adjunto_comprobante_para_vision(
             content,
             ctype,
             fn_comp,
@@ -1097,17 +1098,21 @@ async def enviar_reporte_infopagos(
         )
         if err_file:
             return EnviarReporteInfopagosResponse(ok=False, error=err_file)
-        comprobante_imagen_id_existente = img_reu
+        from app.services.cobros.comprobante_docx import es_mime_word
+
+        comprobante_imagen_id_existente = (
+            None if es_mime_word(ctype_orig, fn_comp) else img_reu
+        )
     else:
         if comprobante is None:
             return EnviarReporteInfopagosResponse(
                 ok=False,
-                error="Adjunte el comprobante de pago (imagen o PDF).",
+                error="Adjunte el comprobante de pago (imagen, PDF o Word con foto del recibo).",
             )
         content = await comprobante.read()
         fn_comp = comprobante.filename or "comprobante"
         ctype = cpr.mime_efectivo_comprobante_web(comprobante.content_type or "", fn_comp)
-        err_file, filename = cpr.validar_adjunto_comprobante_bytes(
+        err_file, content, filename, ctype = cpr.preparar_adjunto_comprobante_para_vision(
             content,
             ctype,
             fn_comp,

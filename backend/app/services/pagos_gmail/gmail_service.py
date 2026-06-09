@@ -272,13 +272,14 @@ class PagosGmailGmailListError(RuntimeError):
     """
 
 
-# Etiquetas de usuario (A = MERCANTIL, B = BNC, C = BINANCE, D = BNV / BDV, E = Bancamiga, F = Banco del Tesoro). Se crean si no existen.
+# Etiquetas de usuario (A = MERCANTIL, B = BNC, C = BINANCE, D = BNV / BDV, E = Bancamiga, F = TESORO, G = RECIBO). Se crean si no existen.
 PAGOS_GMAIL_LABEL_IMAGEN_1 = "MERCANTIL"
 PAGOS_GMAIL_LABEL_IMAGEN_2 = "BNC"
 PAGOS_GMAIL_LABEL_IMAGEN_3 = "BINANCE"
 PAGOS_GMAIL_LABEL_IMAGEN_4 = "BNV"
 PAGOS_GMAIL_LABEL_BANCAMIGA = "BANCAMIGA"
 PAGOS_GMAIL_LABEL_TESORO = "TESORO"
+PAGOS_GMAIL_LABEL_RECIBO = "RECIBO"
 # Remitente (De) sin fila en clientes.email (o fallo BD): misma leyenda que columna Cedula del Excel.
 PAGOS_GMAIL_LABEL_ERROR_EMAIL = "ERROR EMAIL"
 # Ninguna plantilla A/B/C/D/E/F reconocida (o no se aplico otra etiqueta de clasificacion).
@@ -311,6 +312,7 @@ def pagos_gmail_label_exclusions_query() -> str:
         f'-label:"{PAGOS_GMAIL_LABEL_IMAGEN_4}" '
         f'-label:"{PAGOS_GMAIL_LABEL_BANCAMIGA}" '
         f'-label:"{PAGOS_GMAIL_LABEL_TESORO}" '
+        f'-label:"{PAGOS_GMAIL_LABEL_RECIBO}" '
         f'-label:"{PAGOS_GMAIL_LABEL_ERROR_EMAIL}" '
         f'-label:"{PAGOS_GMAIL_LABEL_MANUAL}" '
         f'-label:"{PAGOS_GMAIL_LABEL_TEXTO}"'
@@ -1521,18 +1523,27 @@ def ensure_user_label_id(service: Any, label_name: str) -> Optional[str]:
 
 def get_or_create_pagos_gmail_plantilla_label_ids(
     service: Any, cache: Optional[Dict[str, Optional[str]]] = None
-) -> Tuple[Optional[str], Optional[str], Optional[str], Optional[str], Optional[str], Optional[str]]:
+) -> Tuple[
+    Optional[str],
+    Optional[str],
+    Optional[str],
+    Optional[str],
+    Optional[str],
+    Optional[str],
+    Optional[str],
+]:
     """
-    Resuelve ids para MERCANTIL (A) / BNC (B) / BINANCE (C) / BNV (D) / BANCAMIGA (E) / TESORO (F) con cache opcional por nombre.
+    Resuelve ids para MERCANTIL (A) / BNC (B) / BINANCE (C) / BNV (D) / BANCAMIGA (E) / TESORO (F) / RECIBO (G) con cache opcional por nombre.
     """
     c = cache if cache is not None else {}
-    k1, k2, k3, k4, k5, k6 = (
+    k1, k2, k3, k4, k5, k6, k7 = (
         PAGOS_GMAIL_LABEL_IMAGEN_1,
         PAGOS_GMAIL_LABEL_IMAGEN_2,
         PAGOS_GMAIL_LABEL_IMAGEN_3,
         PAGOS_GMAIL_LABEL_IMAGEN_4,
         PAGOS_GMAIL_LABEL_BANCAMIGA,
         PAGOS_GMAIL_LABEL_TESORO,
+        PAGOS_GMAIL_LABEL_RECIBO,
     )
     if k1 not in c:
         c[k1] = ensure_user_label_id(service, k1)
@@ -1546,7 +1557,9 @@ def get_or_create_pagos_gmail_plantilla_label_ids(
         c[k5] = ensure_user_label_id(service, k5)
     if k6 not in c:
         c[k6] = ensure_user_label_id(service, k6)
-    return c[k1], c[k2], c[k3], c[k4], c[k5], c[k6]
+    if k7 not in c:
+        c[k7] = ensure_user_label_id(service, k7)
+    return c[k1], c[k2], c[k3], c[k4], c[k5], c[k6], c[k7]
 
 
 def add_message_star_and_user_labels(

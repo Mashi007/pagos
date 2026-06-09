@@ -36,6 +36,7 @@ from app.services.pagos.migracion_comprobante_drive_a_bd import (
 from app.services.pagos_gmail.gemini_async import extract_infopagos_campos_desde_comprobante_async
 from app.services.cobros.cobros_publico_reporte_service import (
     mime_efectivo_comprobante_web,
+    preparar_adjunto_comprobante_para_vision,
     validar_adjunto_comprobante_bytes,
 )
 from app.utils.cedula_almacenamiento import normalizar_cedula_almacenamiento
@@ -314,7 +315,7 @@ def cargar_bytes_comprobante(
                 name = name or f"drive_{fid[:8]}"
         if body:
             fn = (name or f"drive_{fid[:8]}").strip() or "comprobante.jpg"
-            err_file, fn_ok = validar_adjunto_comprobante_bytes(
+            err_file, body, fn_ok, _mime_ok = preparar_adjunto_comprobante_para_vision(
                 body,
                 mime_efectivo_comprobante_web(mime or "", fn),
                 fn,

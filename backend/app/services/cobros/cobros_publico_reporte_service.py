@@ -53,6 +53,8 @@ ALLOWED_COMPROBANTE_TYPES = frozenset(
         "image/heic",
         "image/heif",
         "application/pdf",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/msword",
     }
 )
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
@@ -338,6 +340,8 @@ def inferir_mime_comprobante_desde_extension(filename_raw: str) -> Optional[str]
         "heic": "image/heic",
         "heif": "image/heif",
         "pdf": "application/pdf",
+        "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "doc": "application/msword",
     }.get(ext)
 
 
@@ -390,6 +394,12 @@ def validate_file_magic(content: bytes, content_type: str) -> bool:
         return _magic_heic_o_heif(content)
     if "gif" in ctype:
         return content[:6] in (b"GIF87a", b"GIF89a")
+    if "wordprocessingml" in ctype or "msword" in ctype:
+        from app.services.cobros.comprobante_docx import es_doc_ole_bytes, es_docx_bytes
+
+        if es_doc_ole_bytes(content):
+            return True
+        return es_docx_bytes(content)
     return False
 
 
@@ -500,12 +510,63 @@ def validar_adjunto_comprobante_bytes(
         return msg, sanitize_filename(filename_raw)
     if ctype not in ALLOWED_COMPROBANTE_TYPES:
         return (
-            "Solo se permiten archivos PDF, JPEG, JPG, PNG, HEIC, HEIF o WebP.",
+            "Solo se permiten PDF, imagen (JPEG, PNG, HEIC, WebP) o Word (.docx con foto del recibo).",
             sanitize_filename(filename_raw),
         )
     if not validate_file_magic(content, ctype):
-        return "El archivo no corresponde a una imagen o PDF válido.", sanitize_filename(filename_raw)
+        return "El archivo no corresponde a una imagen, PDF o Word válido.", sanitize_filename(filename_raw)
     return None, sanitize_filename(filename_raw)
+
+
+def preparar_adjunto_comprobante_para_vision(
+    content: bytes,
+    content_type: str,
+    filename_raw: str,
+    *,
+    mensaje_excel_largo: bool,
+) -> Tuple[Optional[str], bytes, str, str]:
+    """
+    Valida el adjunto y, si es Word (.docx), extrae la imagen embebida para Gemini/BD.
+
+    Returns:
+        (error o None, bytes_listos, nombre_archivo, content_type_efectivo)
+    """
+    err, filename = validar_adjunto_comprobante_bytes(
+        content,
+        content_type,
+        filename_raw,
+        mensaje_excel_largo=mensaje_excel_largo,
+    )
+    if err:
+        return err, content, sanitize_filename(filename_raw), content_type
+
+    ctype = mime_efectivo_comprobante_web(content_type or "", filename_raw)
+    from app.services.cobros.comprobante_docx import es_mime_word, extraer_imagen_comprobante_desde_docx
+
+    if not es_mime_word(ctype, filename_raw):
+        return None, content, filename, ctype
+
+    try:
+        img_bytes, img_fn, img_mime = extraer_imagen_comprobante_desde_docx(content)
+    except ValueError as exc:
+        return str(exc), content, filename, ctype
+
+    err_img, img_fn_ok = validar_adjunto_comprobante_bytes(
+        img_bytes,
+        img_mime,
+        img_fn,
+        mensaje_excel_largo=mensaje_excel_largo,
+    )
+    if err_img:
+        return (
+            "La imagen dentro del Word no es válida para escaneo. Suba JPG, PNG o PDF.",
+            content,
+            filename,
+            ctype,
+        )
+    stem = os.path.splitext(filename)[0] or "comprobante"
+    out_fn = sanitize_filename(f"{stem}_{img_fn_ok}")
+    return None, img_bytes, out_fn, img_mime
 
 
 @dataclass(frozen=True)

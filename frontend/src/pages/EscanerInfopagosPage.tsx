@@ -115,7 +115,7 @@ const INSTITUCIONES_FINANCIERAS = [
   'BNC',
   'Banco de Venezuela',
   'Mercantil',
-  'Recibos',
+  'Recibo',
 ] as const
 
 const ALLOWED_FILE_TYPES = [
@@ -1110,11 +1110,11 @@ export default function EscanerInfopagosPage() {
               </p>
             ) : null}
             <div className="space-y-2">
-              <Label htmlFor="archivo-escaner">Imagen o PDF (máx. 10 MB)</Label>
+              <Label htmlFor="archivo-escaner">Imagen, PDF o Word (.docx) con foto del recibo (máx. 10 MB)</Label>
               <Input
                 id="archivo-escaner"
                 type="file"
-                accept=".pdf,.jpg,.jpeg,.png,.webp,.heic,.heif"
+                accept=".pdf,.jpg,.jpeg,.png,.webp,.heic,.heif,.docx"
                 onChange={e => {
                   const f = e.target.files?.[0] ?? null
                   setArchivo(f)

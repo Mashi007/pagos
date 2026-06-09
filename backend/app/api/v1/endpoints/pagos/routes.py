@@ -211,6 +211,7 @@ from .payload_models import (
 )
 from app.services.cobros.cobros_publico_reporte_service import (
     mime_efectivo_comprobante_web,
+    preparar_adjunto_comprobante_para_vision,
     validate_file_magic,
 )
 
@@ -279,12 +280,20 @@ async def upload_pago_comprobante_imagen(
     Sube imagen o PDF de comprobante. Devuelve URL absoluta para persistir en pagos.link_comprobante.
     """
     ct_raw = mime_efectivo_comprobante_web(file.content_type or "", file.filename or "")
+    data = await file.read()
+    err_prep, data, fn_ok, ct_raw = preparar_adjunto_comprobante_para_vision(
+        data,
+        ct_raw,
+        file.filename or "comprobante",
+        mensaje_excel_largo=False,
+    )
+    if err_prep:
+        raise HTTPException(status_code=400, detail=err_prep)
     if ct_raw not in _COMPROBANTE_IMG_CT:
         raise HTTPException(
             status_code=400,
-            detail="Solo se permiten PDF, JPEG, PNG, HEIC, HEIF, WebP o GIF.",
+            detail="Solo se permiten PDF, JPEG, PNG, HEIC, HEIF, WebP, GIF o Word (.docx con foto).",
         )
-    data = await file.read()
     if not validate_file_magic(data, ct_raw):
         raise HTTPException(
             status_code=400,

@@ -9,7 +9,7 @@ const INSTITUCIONES_FINANCIERAS = [
   'BNC',
   'Banco de Venezuela',
   'Mercantil',
-  'Recibos',
+  'Recibo',
 ] as const
 
 function formatoMontoParaMostrar(num: number, moneda: 'BS' | 'USD'): string {

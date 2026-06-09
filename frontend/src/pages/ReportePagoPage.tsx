@@ -623,7 +623,7 @@ const INSTITUCIONES = [
 
   'Mercantil',
 
-  'Recibos',
+  'Recibo',
 ]
 
 const WHATSAPP_LINK = 'https://wa.me/584244579934'
@@ -1625,7 +1625,7 @@ export default function ReportePagoPage({
                   <Input
                     type="file"
                     className="min-h-[48px] touch-manipulation file:mr-3 file:rounded-lg file:border-0 file:bg-slate-900 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-slate-800"
-                    accept=".pdf,.jpg,.jpeg,.png,.heic,.heif,.webp,.gif,application/pdf,image/jpeg,image/png,image/heic,image/heif,image/webp,image/gif"
+                    accept=".pdf,.jpg,.jpeg,.png,.heic,.heif,.webp,.gif,.docx,application/pdf,image/jpeg,image/png,image/heic,image/heif,image/webp,image/gif,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                     onChange={e => setArchivo(e.target.files?.[0] || null)}
                   />
                 )}
@@ -2264,7 +2264,7 @@ export default function ReportePagoPage({
                 <Input
                   type="file"
                   className="min-h-[48px] touch-manipulation file:mr-3 file:rounded-lg file:border-0 file:bg-slate-900 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-slate-800"
-                  accept=".pdf,.jpg,.jpeg,.png,.heic,.heif,.webp,.gif,application/pdf,image/jpeg,image/png,image/heic,image/heif,image/webp,image/gif"
+                  accept=".pdf,.jpg,.jpeg,.png,.heic,.heif,.webp,.gif,.docx,application/pdf,image/jpeg,image/png,image/heic,image/heif,image/webp,image/gif,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                   onChange={e => setArchivo(e.target.files?.[0] || null)}
                 />
               )}
