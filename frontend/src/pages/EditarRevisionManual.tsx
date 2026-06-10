@@ -84,6 +84,7 @@ import {
 } from '../services/pagoService'
 
 import { RegistrarPagoForm } from '../components/pagos/RegistrarPagoForm'
+import { ConciliarCarteraRevisionManualButton } from '../components/pagos/ConciliarCarteraRevisionManualButton'
 
 import { prestamoService } from '../services/prestamoService'
 
@@ -749,7 +750,7 @@ export function EditarRevisionManual() {
     .toString()
     .toLowerCase()
 
-  const { revisionManualFullEdit } = usePermissions()
+  const { revisionManualFullEdit, isAdmin } = usePermissions()
 
   const soloLectura = estadoRevision === 'revisado' && !revisionManualFullEdit
 
@@ -3418,6 +3419,19 @@ export function EditarRevisionManual() {
                         />
                         Actualizar
                       </Button>
+                      {isAdmin &&
+                      prestamoData.prestamo_id != null &&
+                      Number(prestamoData.prestamo_id) > 0 ? (
+                        <ConciliarCarteraRevisionManualButton
+                          prestamoId={Number(prestamoData.prestamo_id)}
+                          cedula={cedulaParaPagosRealizados}
+                          disabled={soloLectura}
+                          onExito={async () => {
+                            await refrescarTrasCambioPagosRevision()
+                            setRevisionOperativaSucia(true)
+                          }}
+                        />
+                      ) : null}
                     </div>
                   </CardHeader>
                   <CardContent>

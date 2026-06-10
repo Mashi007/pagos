@@ -443,6 +443,116 @@ def conciliacion_sheet_sync_flags_actual(db: Session) -> Dict[str, Any]:
     }
 
 
+def referencia_abonos_notificaciones_general(
+    db: Session,
+    prestamo_id: int,
+    *,
+    lote: Optional[str] = None,
+    persist_cache_si_resuelve_lote: bool = False,
+) -> Dict[str, Any]:
+    """
+    Misma fuente que la columna «Diferencia abono» en Notificaciones → General:
+    `prestamos.abonos_drive_cuotas_cache` (job domingo 04:35 Caracas o Recalcular en esa pantalla).
+
+    No consulta Google Drive en vivo; lee el snapshot ya persistido en BD.
+    Solo actualiza en memoria el total pagado en cuotas con el valor actual de BD.
+    Si hace falta elegir LOTE, puede resolverlo con el snapshot de hoja en BD (no API Drive).
+    """
+    if prestamo_id <= 0:
+        raise ValueError("Indique un préstamo válido.")
+
+    prestamo = db.get(Prestamo, prestamo_id)
+    if prestamo is None:
+        raise ValueError("Préstamo no encontrado.")
+
+    cedula_in = (prestamo.cedula or "").strip()
+    total_row = db.execute(
+        select(func.coalesce(func.sum(Cuota.total_pagado), 0)).where(
+            Cuota.prestamo_id == prestamo_id
+        )
+    ).scalar_one()
+    total_pagado_cuotas = _to_float_cuota_total(total_row)
+
+    raw_cache = prestamo.abonos_drive_cuotas_cache
+    cache_at = getattr(prestamo, "abonos_drive_cuotas_cache_at", None)
+    cache_at_iso: Optional[str] = None
+    if isinstance(cache_at, datetime):
+        cache_at_iso = cache_at.isoformat()
+
+    lote_norm = _norm_lote_param(lote)
+
+    tiene_cache_valido = isinstance(raw_cache, dict) and (
+        raw_cache.get("abonos_drive") is not None
+        or bool(raw_cache.get("requiere_seleccion_lote"))
+        or bool(raw_cache.get("opciones_lote"))
+    )
+
+    if lote_norm:
+        if not tiene_cache_valido:
+            return {
+                "cedula": cedula_in,
+                "prestamo_id": prestamo_id,
+                "abonos_drive": None,
+                "total_pagado_cuotas": round(total_pagado_cuotas, 2),
+                "diferencia": None,
+                "requiere_seleccion_lote": False,
+                "opciones_lote": [],
+                "advertencias": [
+                    "Sin caché ABONOS en BD para este préstamo. "
+                    "Use «Recalcular» en Notificaciones → General (o espere el job semanal) "
+                    "y vuelva a conciliar."
+                ],
+                "fuente": "notificaciones_general_cache_ausente",
+                "cache_at": cache_at_iso,
+                "sin_cache": True,
+                "umbral_doble_confirmacion_abonos_usd": UMBRAL_CONFIRMO_ABONOS_USD,
+            }
+        snap = comparar_abonos_drive_vs_cuotas(
+            db,
+            cedula=cedula_in,
+            prestamo_id=prestamo_id,
+            lote=lote_norm,
+            persist_cache=persist_cache_si_resuelve_lote,
+        )
+        snap["fuente"] = "notificaciones_general_cache_lote"
+        snap["cache_at"] = cache_at_iso
+        snap["sin_cache"] = False
+        return snap
+
+    if not tiene_cache_valido:
+        return {
+            "cedula": cedula_in,
+            "prestamo_id": prestamo_id,
+            "abonos_drive": None,
+            "total_pagado_cuotas": round(total_pagado_cuotas, 2),
+            "diferencia": None,
+            "requiere_seleccion_lote": False,
+            "opciones_lote": [],
+            "advertencias": [
+                "Sin caché ABONOS en BD para este préstamo. "
+                "Use «Recalcular» en Notificaciones → General (o espere el job semanal) "
+                "y vuelva a conciliar."
+            ],
+            "fuente": "notificaciones_general_cache_ausente",
+            "cache_at": cache_at_iso,
+            "sin_cache": True,
+            "umbral_doble_confirmacion_abonos_usd": UMBRAL_CONFIRMO_ABONOS_USD,
+        }
+
+    out = refrescar_cache_comparar_abonos_totales_cuotas_bd(raw_cache, total_pagado_cuotas)
+    if not isinstance(out, dict):
+        out = dict(raw_cache) if isinstance(raw_cache, dict) else {}
+    out.update(conciliacion_sheet_sync_flags_actual(db))
+    out["cedula"] = cedula_in
+    out["prestamo_id"] = prestamo_id
+    out["fuente"] = "notificaciones_general_cache"
+    out["cache_at"] = cache_at_iso
+    out["sin_cache"] = False
+    if "umbral_doble_confirmacion_abonos_usd" not in out:
+        out["umbral_doble_confirmacion_abonos_usd"] = UMBRAL_CONFIRMO_ABONOS_USD
+    return out
+
+
 def refrescar_cache_comparar_abonos_totales_cuotas_bd(
     cache: Any,
     total_pagado_cuotas: float,

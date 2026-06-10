@@ -2531,3 +2531,119 @@ def descartar_borrador_revision(
         )
         raise HTTPException(status_code=500, detail="Error al descartar borrador") from exc
 
+
+@router.get("/prestamos/{prestamo_id}/referencia-abonos-notificaciones")
+def get_referencia_abonos_notificaciones_revision(
+    prestamo_id: int,
+    lote: Optional[str] = Query(None, description="Lote si la caché exige selección"),
+    db: Session = Depends(get_db),
+    current_user: Any = Depends(get_current_user),
+):
+    """
+    Misma fuente que «Diferencia abono» en Notificaciones → General (caché en BD, no Drive en vivo).
+    """
+    if not _usuario_es_admin_revision_manual(current_user):
+        raise HTTPException(
+            status_code=403,
+            detail="Solo administradores pueden consultar la referencia ABONOS.",
+        )
+    from app.services.comparar_abonos_drive_cuotas_service import (
+        referencia_abonos_notificaciones_general,
+    )
+
+    try:
+        return referencia_abonos_notificaciones_general(
+            db,
+            prestamo_id,
+            lote=(lote or "").strip() or None,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+
+class ConciliarCarteraRevisionBody(BaseModel):
+    """Conciliar cartera: reserva comprobantes, ABONOS Notificaciones→General, OCR, cascada (solo admin)."""
+
+    lote: Optional[str] = Field(
+        None,
+        description="Lote si la caché de Notificaciones → General exige selección.",
+    )
+    confirmacion_montos_altos: Optional[str] = Field(
+        None,
+        description="Escriba CONFIRMO si ABONOS (Notificaciones → General) supera el umbral.",
+    )
+
+
+@router.post("/prestamos/{prestamo_id}/conciliar-cartera")
+async def conciliar_cartera_revision_manual(
+    prestamo_id: int,
+    body: ConciliarCarteraRevisionBody = Body(default_factory=ConciliarCarteraRevisionBody),
+    db: Session = Depends(get_db),
+    current_user: Any = Depends(get_current_user),
+):
+    """
+    Admin: reserva comprobantes, toma ABONOS de caché Notificaciones→General,
+    borra pagos solo de este préstamo, re-OCR imágenes reservadas, cascada a cuotas.
+    """
+    if not _usuario_es_admin_revision_manual(current_user):
+        raise HTTPException(
+            status_code=403,
+            detail="Solo administradores pueden conciliar cartera en revisión manual.",
+        )
+
+    actor = _actor_revision_manual(current_user)
+    from app.services.revision_manual_conciliacion_cartera_service import (
+        ejecutar_conciliar_cartera_revision_manual,
+    )
+
+    try:
+        r = await ejecutar_conciliar_cartera_revision_manual(
+            db,
+            prestamo_id,
+            actor,
+            lote=(body.lote or "").strip() or None,
+            confirmacion_montos_altos=body.confirmacion_montos_altos,
+        )
+        if not r.get("ok"):
+            if r.get("requiere_seleccion_lote") or r.get("requiere_confirmacion_montos_altos"):
+                db.rollback()
+                return r
+            db.rollback()
+            if r.get("conciliacion_en_curso"):
+                raise HTTPException(
+                    status_code=409,
+                    detail=str(r.get("error") or "Conciliación en curso para este préstamo.")[
+                        :500
+                    ],
+                )
+            raise HTTPException(
+                status_code=400,
+                detail=str(r.get("error") or "No se pudo conciliar cartera")[:500],
+            )
+        db.commit()
+    except HTTPException:
+        raise
+    except Exception as exc:
+        db.rollback()
+        logger.exception(
+            "revision_manual CONCILIAR_CARTERA_FALLIDO prestamo_id=%s actor=%s",
+            prestamo_id,
+            actor,
+        )
+        raise HTTPException(status_code=500, detail=str(exc)[:300]) from exc
+
+    logger.info(
+        "revision_manual CONCILIAR_CARTERA prestamo_id=%s actor=%s pagos_recriados=%s "
+        "ocr_ok=%s/%s abonos_drive=%s diferencia_drive_ocr=%s estado_final=%s parcial=%s",
+        prestamo_id,
+        actor,
+        r.get("pagos_recriados"),
+        r.get("ocr_ok"),
+        r.get("ocr_total"),
+        r.get("abonos_drive"),
+        r.get("diferencia_drive_ocr_usd"),
+        r.get("prestamo_estado_final"),
+        r.get("advertencia_parcial"),
+    )
+    return r
+

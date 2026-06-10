@@ -186,19 +186,37 @@ def prestamo_requiere_correccion_cascada(db: Session, prestamo_id: int) -> bool:
     return False
 
 
-def eliminar_todos_pagos_prestamo(db: Session, prestamo_id: int) -> dict[str, Any]:
+def eliminar_todos_pagos_prestamo(
+    db: Session,
+    prestamo_id: int,
+    *,
+    contexto_revision_conciliar: bool = False,
+) -> dict[str, Any]:
     """
     Borra todos los pagos de un préstamo y deja las cuotas sin aplicación (como tras un reset de cascada
     sin reaplicar). Misma limpieza que eliminar_pago por dependencias, más reinicio de totales en cuotas.
 
-    Solo préstamos en estado APROBADO (alineado con el flujo «reemplazar pagos» en UI).
+    Por defecto solo préstamos APROBADO (alineado con el flujo «reemplazar pagos» en UI).
+    Con contexto_revision_conciliar=True (admin, botón Conciliar) también permite LIQUIDADO.
     """
     prestamo = db.get(Prestamo, prestamo_id)
     if not prestamo:
         return {"ok": False, "error": "Prestamo no encontrado", "prestamo_id": prestamo_id}
 
     est = (prestamo.estado or "").strip().upper()
-    if est != "APROBADO":
+    estados_ok_conciliar = frozenset({"APROBADO", "LIQUIDADO"})
+    if contexto_revision_conciliar:
+        if est not in estados_ok_conciliar:
+            return {
+                "ok": False,
+                "error": (
+                    f"Conciliar cartera solo en préstamos APROBADO o LIQUIDADO "
+                    f"(estado actual: {prestamo.estado or 'sin estado'})."
+                ),
+                "prestamo_id": prestamo_id,
+                "estado_actual": prestamo.estado,
+            }
+    elif est != "APROBADO":
         from app.services.finiquito_conciliacion_visto_service import (
             prestamo_tiene_reserva_finiquito_activa,
         )

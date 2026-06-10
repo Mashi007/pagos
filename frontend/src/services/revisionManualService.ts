@@ -471,6 +471,87 @@ class RevisionManualService {
       { headers: { 'Content-Type': 'application/json' } }
     )
   }
+
+  /**
+   * Solo admin: ABONOS de caché Notificaciones → General (misma fuente que «Diferencia abono»).
+   */
+  async getReferenciaAbonosNotificaciones(
+    prestamoId: number,
+    lote?: string
+  ): Promise<CompararAbonosNotificacionesReferencia> {
+    const params = new URLSearchParams()
+    if (lote?.trim()) params.set('lote', lote.trim())
+    const qs = params.toString()
+    return await apiClient.get(
+      `${this.baseUrl}/prestamos/${prestamoId}/referencia-abonos-notificaciones${qs ? `?${qs}` : ''}`
+    )
+  }
+
+  /** Solo admin: reserva comprobantes, ABONOS Notificaciones→General, OCR, cascada. */
+  async conciliarCarteraPrestamo(
+    prestamoId: number,
+    payload?: { lote?: string; confirmacion_montos_altos?: string }
+  ): Promise<ConciliarCarteraRevisionResponse> {
+    return await apiClient.post<ConciliarCarteraRevisionResponse>(
+      `${this.baseUrl}/prestamos/${prestamoId}/conciliar-cartera`,
+      payload ?? {},
+      { headers: { 'Content-Type': 'application/json' } }
+    )
+  }
+}
+
+export type CompararAbonosNotificacionesReferencia = {
+  cedula?: string
+  prestamo_id?: number
+  abonos_drive?: number | null
+  total_pagado_cuotas?: number | null
+  diferencia?: number | null
+  requiere_seleccion_lote?: boolean
+  opciones_lote?: Array<{ lote: string; abonos?: number }>
+  lote_aplicado?: string | null
+  advertencias?: string[]
+  fuente?: string
+  cache_at?: string | null
+  sin_cache?: boolean
+  umbral_doble_confirmacion_abonos_usd?: number
+}
+
+export type ConciliarCarteraRevisionResponse = {
+  ok: boolean
+  error?: string
+  conciliacion_en_curso?: boolean
+  mensaje?: string
+  prestamo_id?: number
+  reservas?: number
+  reservas_sin_imagen?: number
+  pagos_eliminados?: number
+  ocr_ok?: number
+  ocr_total?: number
+  ocr_fallidos?: number
+  advertencia_parcial?: boolean
+  pagos_recriados?: number
+  total_pagos_recriados_usd?: number
+  abonos_drive?: number | null
+  diferencia_drive_ocr_usd?: number | null
+  diferencia_referencia_ocr_usd?: number | null
+  abonos_referencia_notificaciones?: number | null
+  prestamo_estado_final?: string
+  prestamo_estado_previo?: string
+  requiere_seleccion_lote?: boolean
+  requiere_confirmacion_montos_altos?: boolean
+  umbral_usd?: number
+  opciones_lote?: Array<{ lote: string; abonos?: number }>
+  cascada?: { ok?: boolean; mensaje?: string; prestamo_estado?: string; error?: string }
+  referencia_abonos?: CompararAbonosNotificacionesReferencia
+  /** @deprecated use referencia_abonos */
+  drive?: Record<string, unknown>
+  detalle?: Array<{
+    reserva_id: number
+    ok: boolean
+    error?: string | null
+    pago_id?: number | null
+    ocr_omitido_sin_imagen?: boolean
+  }>
 }
 
 export const revisionManualService = new RevisionManualService()
