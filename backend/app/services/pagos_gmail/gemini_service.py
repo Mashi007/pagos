@@ -2931,8 +2931,10 @@ def extract_infopagos_campos_desde_comprobante(
                         ref_hoy.isoformat(),
                     )
                 ced_raw = str(data.get("cedula_pagador_en_comprobante") or "").strip()
-                # Solo dígitos; alineado con validate_cedula (6–11 cifras numéricas tras prefijo en BD).
+                # Solo dígitos; sin ceros a la izquierda (OCR: 0006832631 → 6832631).
                 ced_digits = re.sub(r"\D", "", ced_raw)
+                if ced_digits:
+                    ced_digits = ced_digits.lstrip("0") or "0"
                 if ced_digits and (len(ced_digits) < 6 or len(ced_digits) > 11):
                     ced_digits = ""
                 ced_pag = ced_digits[:30]

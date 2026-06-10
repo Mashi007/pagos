@@ -23,12 +23,30 @@ export function extraerCaracteresCedulaPublica(raw: string): string {
     .replace(/[^VEGJ0-9]/g, '')
 }
 
+/**
+ * Quita ceros a la izquierda del bloque numérico (OCR/comprobantes: 0006832631 → 6832631).
+ * Alineado con backend `normalize_cedula_lookup_key`.
+ */
+export function quitarCerosIzquierdaNumeroCedula(digits: string): string {
+  const d = String(digits || '').replace(/\D/g, '')
+  if (!d) return ''
+  return d.replace(/^0+/, '') || '0'
+}
+
+function canonizarDigitosCedula(s: string): string {
+  const m = /^([VEGJ]?)(\d+)$/i.exec(s)
+  if (!m) return s
+  const pref = (m[1] || '').toUpperCase()
+  const num = quitarCerosIzquierdaNumeroCedula(m[2])
+  return pref + num
+}
+
 export function normalizarCedulaParaProcesar(val: string): {
   valido: boolean
   valorParaEnviar?: string
   error?: string
 } {
-  const s = extraerCaracteresCedulaPublica(val)
+  const s = canonizarDigitosCedula(extraerCaracteresCedulaPublica(val))
 
   if (!s) return { valido: false, error: 'Ingrese el número de cédula.' }
 

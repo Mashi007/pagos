@@ -106,6 +106,7 @@ import {
 import {
   extraerCaracteresCedulaPublica,
   normalizarCedulaParaProcesar,
+  quitarCerosIzquierdaNumeroCedula,
 } from '../../utils/cedulaConsultaPublica'
 
 import { apiClient } from '../../services/api'
@@ -338,13 +339,15 @@ function descomponerCedula(
   if (!clean) return null
   const m = /^([VEJPG])?(\d{5,12})$/.exec(clean)
   if (!m) return null
-  return { tipo: m[1] || 'V', numero: m[2] }
+  const numero = quitarCerosIzquierdaNumeroCedula(m[2])
+  if (!numero || numero === '0') return null
+  return { tipo: m[1] || 'V', numero }
 }
 
 /** OCR suele devolver solo dígitos; BD usa V/E/J + dígitos. Si coinciden los números, es la misma persona. */
 function cedulasMismaPersonaParaPrestamo(a: string, b: string): boolean {
-  const da = String(a || '').replace(/\D/g, '')
-  const db = String(b || '').replace(/\D/g, '')
+  const da = quitarCerosIzquierdaNumeroCedula(String(a || ''))
+  const db = quitarCerosIzquierdaNumeroCedula(String(b || ''))
   if (da.length >= 6 && db.length >= 6 && da === db) return true
   const norm = (s: string) =>
     String(s || '')
@@ -658,6 +661,54 @@ export function RegistrarPagoForm({
     !String(formData.codigo_documento ?? '').trim() &&
     !bloquearCambioComprobanteCodigo
 
+  const prestamoIdConflictoCartera =
+    conflictoDocApi?.prestamo_id != null &&
+    Number.isFinite(Number(conflictoDocApi.prestamo_id)) &&
+    Number(conflictoDocApi.prestamo_id) > 0
+      ? Math.trunc(Number(conflictoDocApi.prestamo_id))
+      : null
+
+  const prestamoIdFormulario =
+    formData.prestamo_id != null &&
+    Number.isFinite(Number(formData.prestamo_id)) &&
+    Number(formData.prestamo_id) > 0
+      ? Math.trunc(Number(formData.prestamo_id))
+      : null
+
+  /** Mismo serial en cartera en un pago huérfano; el formulario sí tiene crédito elegido. */
+  const conflictoDocOrfanoCarteraConPrestamoEnFormulario =
+    conflictoDocumentoSerial &&
+    prestamoIdConflictoCartera == null &&
+    prestamoIdFormulario != null
+
+  const motivoBotonGuardarDeshabilitado = useMemo(() => {
+    if (bloquearCambioComprobanteCodigo) return null
+    if (conflictoHuellaSerial) {
+      const hid = conflictoDocApi?.huella_pago_id
+      return hid != null
+        ? `Duplicado por huella funcional (conflicto con pago ID ${hid}). Cambie préstamo, fecha, monto o referencia.`
+        : 'Duplicado por huella funcional: mismo préstamo, fecha, monto y referencia que un pago en cartera.'
+    }
+    if (!conflictoSerialBloqueaGuardar) return null
+    if (conflictoDocOrfanoCarteraConPrestamoEnFormulario) {
+      const dupId = conflictoDocApi?.pago_id
+      return (
+        `El serial ya figura en otro pago de cartera${dupId != null ? ` (ID ${dupId}, sin préstamo)` : ' (sin préstamo)'}. ` +
+        `Al guardar y procesar, este pago sí se aplicará al crédito ${prestamoIdFormulario} del formulario. ` +
+        'Pulse Visto para asignar un código y desbloquear el guardado.'
+      )
+    }
+    return 'Serial o comprobante duplicado en cartera. Pulse Visto para asignar código o corrija el Nº documento.'
+  }, [
+    bloquearCambioComprobanteCodigo,
+    conflictoHuellaSerial,
+    conflictoSerialBloqueaGuardar,
+    conflictoDocOrfanoCarteraConPrestamoEnFormulario,
+    conflictoDocApi?.huella_pago_id,
+    conflictoDocApi?.pago_id,
+    prestamoIdFormulario,
+  ])
+
   const mismoDocQueInicial =
     debouncedClaveDocumentoConflicto === claveDocumentoInicial
 
@@ -791,8 +842,11 @@ export function RegistrarPagoForm({
       let nextCedula = formData.cedula_cliente
       const cedulaExtraida = (s.cedula_pagador_en_comprobante || '').trim()
       if (cedulaExtraida) {
-        // Gemini retorna solo dígitos; el validador busca con prefijos V/E/J/G
-        nextCedula = cedulaExtraida
+        const norm = normalizarCedulaParaProcesar(cedulaExtraida)
+        nextCedula =
+          norm.valido && norm.valorParaEnviar
+            ? norm.valorParaEnviar
+            : extraerCaracteresCedulaPublica(cedulaExtraida)
       }
 
       setFormData(prev => {
@@ -851,7 +905,7 @@ export function RegistrarPagoForm({
 
       if (cedulaExtraida) {
         toast.success(
-          `Campos actualizados desde el comprobante. Cédula detectada: ${cedulaExtraida}`
+          `Campos actualizados desde el comprobante. Cédula detectada: ${nextCedula}`
         )
       } else {
         toast.success('Campos actualizados desde el comprobante.')
@@ -2397,14 +2451,49 @@ export function RegistrarPagoForm({
                           ) : conflictoDocumentoSerial ? (
                             <span>
                               <span className="font-semibold text-amber-900">
-                                Documento ya registrado
+                                Serial ya registrado en cartera
                               </span>
-                              {conflictoDocApi?.prestamo_id != null ? (
+                              {conflictoDocOrfanoCarteraConPrestamoEnFormulario ? (
+                                <>
+                                  : otro pago
+                                  {conflictoDocApi?.pago_id != null ? (
+                                    <>
+                                      {' '}
+                                      (ID{' '}
+                                      <span className="font-mono">
+                                        {conflictoDocApi.pago_id}
+                                      </span>
+                                      )
+                                    </>
+                                  ) : null}{' '}
+                                  sin préstamo. Este formulario aplicará al
+                                  crédito{' '}
+                                  <span className="font-mono font-semibold">
+                                    #{prestamoIdFormulario}
+                                  </span>{' '}
+                                  al procesar; el serial debe ser único: use{' '}
+                                  <strong>Visto</strong> para asignar{' '}
+                                  <strong>Código</strong>.
+                                </>
+                              ) : conflictoDocApi?.prestamo_id != null ? (
                                 <>
                                   : en préstamo{' '}
                                   <span className="font-mono font-semibold">
                                     #{conflictoDocApi.prestamo_id}
                                   </span>
+                                  {conflictoDocApi.pago_id != null ? (
+                                    <>
+                                      {' '}
+                                      (pago ID{' '}
+                                      <span className="font-mono">
+                                        {conflictoDocApi.pago_id}
+                                      </span>
+                                      )
+                                    </>
+                                  ) : null}
+                                  . Use <strong>Visto</strong> para asignar un{' '}
+                                  <strong>Código</strong> distinto o corrija el
+                                  Nº documento.
                                 </>
                               ) : conflictoDocApi?.pago_con_error_id != null ? (
                                 <>
@@ -2412,24 +2501,27 @@ export function RegistrarPagoForm({
                                   <span className="font-mono">
                                     {conflictoDocApi.pago_con_error_id}
                                   </span>
-                                  )
+                                  ). Use <strong>Visto</strong> para asignar un{' '}
+                                  <strong>Código</strong> distinto.
                                 </>
                               ) : (
-                                ': en otro pago de cartera'
-                              )}
-                              {conflictoDocApi?.pago_id != null ? (
                                 <>
-                                  {' '}
-                                  (pago ID{' '}
-                                  <span className="font-mono">
-                                    {conflictoDocApi.pago_id}
-                                  </span>
-                                  )
+                                  : en otro pago de cartera
+                                  {conflictoDocApi?.pago_id != null ? (
+                                    <>
+                                      {' '}
+                                      (pago ID{' '}
+                                      <span className="font-mono">
+                                        {conflictoDocApi.pago_id}
+                                      </span>
+                                      )
+                                    </>
+                                  ) : null}
+                                  . Use <strong>Visto</strong> para asignar un{' '}
+                                  <strong>Código</strong> distinto o corrija el
+                                  Nº documento.
                                 </>
-                              ) : null}
-                              . Use <strong>Visto</strong> para asignar un{' '}
-                              <strong>Código</strong> distinto o corrija el Nº
-                              documento.
+                              )}
                             </span>
                           ) : (
                             <span>
@@ -2675,7 +2767,7 @@ export function RegistrarPagoForm({
                   !archivoComprobante ? (
                     <div className="space-y-2 rounded border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800">
                       <p className="font-medium text-slate-900">
-                        Comprobante ya registrado
+                        Comprobante enlazado
                       </p>
                       {vistaPreviaComprobante.cargando ? (
                         <div className="flex items-center gap-2 text-slate-600">
@@ -2761,9 +2853,25 @@ export function RegistrarPagoForm({
                         </div>
                       ) : null}
                       <div className="mt-2 space-y-2 border-t border-slate-200 pt-2 text-xs text-slate-700">
+                        {conflictoDocOrfanoCarteraConPrestamoEnFormulario ? (
+                          <p className="rounded border border-amber-200 bg-amber-50 px-2 py-1.5 text-amber-950">
+                            El mismo serial ya existe en otro pago de cartera
+                            {conflictoDocApi?.pago_id != null ? (
+                              <>
+                                {' '}
+                                (ID {conflictoDocApi.pago_id})
+                              </>
+                            ) : null}{' '}
+                            sin crédito asignado. Eso no impide aplicar este
+                            pago al crédito del formulario; solo exige un
+                            código distinto (<strong>Visto</strong>) porque el
+                            número de documento debe ser único en la base de
+                            datos.
+                          </p>
+                        ) : null}
                         <p>
                           <span className="font-medium text-slate-900">
-                            Préstamo donde ya está este Nº documento (cartera):
+                            Otro pago en cartera con este Nº documento:
                           </span>{' '}
                           {conflictoDocError ? (
                             <span className="text-red-600">
@@ -3008,7 +3116,17 @@ export function RegistrarPagoForm({
               ) : null}
             </div>
 
-            <div className="flex shrink-0 flex-wrap items-center justify-end gap-3 border-t bg-white px-6 py-4">
+            <div className="flex shrink-0 flex-col gap-2 border-t bg-white px-6 py-4">
+              {motivoBotonGuardarDeshabilitado ? (
+                <p
+                  className="text-xs text-amber-800"
+                  role="status"
+                  aria-live="polite"
+                >
+                  {motivoBotonGuardarDeshabilitado}
+                </p>
+              ) : null}
+              <div className="flex flex-wrap items-center justify-end gap-3">
               <Button
                 type="button"
                 variant="outline"
@@ -3071,6 +3189,7 @@ export function RegistrarPagoForm({
                   </>
                 )}
               </Button>
+              </div>
             </div>
           </form>
 
