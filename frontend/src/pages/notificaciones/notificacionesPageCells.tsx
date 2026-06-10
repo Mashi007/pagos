@@ -477,15 +477,17 @@ export function RevisionManualNotifCell({
   )
 }
 
-export function umbralConfirmaAbonosUsd(
-  data: CompararAbonosDriveCuotasResponse | null
-): number {
+export type UmbralConfirmoAbonosSource = {
+  umbral_doble_confirmacion_abonos_usd?: number | null
+} | null
+
+export function umbralConfirmaAbonosUsd(data: UmbralConfirmoAbonosSource): number {
   const u = data?.umbral_doble_confirmacion_abonos_usd
   return u != null && Number.isFinite(Number(u)) ? Number(u) : 5000
 }
 
 export function abonosSuperanUmbralConfirmo(
-  data: CompararAbonosDriveCuotasResponse | null,
+  data: UmbralConfirmoAbonosSource,
   abonos: number | null | undefined
 ): boolean {
   if (abonos == null || Number.isNaN(Number(abonos))) return false
