@@ -9,8 +9,9 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Any, Dict, Optional
 
+from fastapi import HTTPException
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
@@ -159,6 +160,120 @@ def primer_id_conflicto_huella_funcional(
     if not row or row[0] is None:
         return None
     return int(row[0])
+
+
+HTTP_409_DETAIL_DOCUMENTO_DUPLICADO = (
+    "Ya existe un pago o registro en revisión con la misma combinación comprobante + código."
+)
+
+
+def rechazar_si_pago_con_error_serial_duplicado(
+    db: Session,
+    row: "PagoConError",
+    *,
+    exclude_pago_con_error_id: Optional[int] = None,
+) -> None:
+    """
+    Impide guardar/mover si el serial (documento+código) o la huella funcional ya existen en BD.
+    """
+    num = (getattr(row, "numero_documento", None) or "").strip()
+    if num:
+        from app.services.pago_numero_documento import numero_documento_ya_registrado
+
+        if numero_documento_ya_registrado(
+            db,
+            num,
+            exclude_pago_con_error_id=exclude_pago_con_error_id,
+        ):
+            raise HTTPException(
+                status_code=409,
+                detail=HTTP_409_DETAIL_DOCUMENTO_DUPLICADO,
+            )
+    hid = pago_con_error_conflicto_huella_existente(db, row)
+    if hid is not None:
+        raise HTTPException(
+            status_code=409,
+            detail=mensaje_409_huella_funcional_con_id(hid),
+        )
+
+
+def conflicto_serial_para_formulario(
+    db: Session,
+    *,
+    numero_documento: str,
+    prestamo_id: Optional[int] = None,
+    fecha_pago: Optional[date] = None,
+    monto_pagado: Optional[float] = None,
+    referencia_pago: Optional[str] = None,
+    exclude_pago_id: Optional[int] = None,
+    exclude_pago_con_error_id: Optional[int] = None,
+) -> Dict[str, Any]:
+    """
+    Prechequeo para UI: documento en pagos/pagos_con_errores y huella en pagos.
+    """
+    from app.core.documento import normalize_documento
+    from app.services.pago_numero_documento import (
+        numero_documento_ya_registrado,
+        primer_pago_cartera_por_documento,
+    )
+
+    doc = (numero_documento or "").strip()
+    clave_buscada = normalize_documento(doc)
+    documento_conflicto = False
+    pago_id: Optional[int] = None
+    prestamo_id_doc: Optional[int] = None
+    pago_con_error_id: Optional[int] = None
+
+    if doc:
+        documento_conflicto = numero_documento_ya_registrado(
+            db,
+            doc,
+            exclude_pago_id=exclude_pago_id,
+            exclude_pago_con_error_id=exclude_pago_con_error_id,
+        )
+        pago_id, prestamo_id_doc = primer_pago_cartera_por_documento(
+            db, doc, exclude_pago_id=exclude_pago_id
+        )
+        if documento_conflicto and pago_id is None:
+            from sqlalchemy import func, select
+
+            from app.models.pago_con_error import PagoConError
+
+            nu = doc.upper()
+            q = select(PagoConError.id).where(
+                func.upper(func.trim(PagoConError.numero_documento)) == nu
+            )
+            if exclude_pago_con_error_id is not None:
+                q = q.where(PagoConError.id != exclude_pago_con_error_id)
+            peid = db.scalar(q.limit(1))
+            if peid is not None:
+                pago_con_error_id = int(peid)
+
+    huella_conflicto = False
+    huella_pago_id: Optional[int] = None
+    if prestamo_id and fecha_pago is not None and monto_pagado is not None:
+        rn = ref_norm_desde_campos(doc, referencia_pago or doc).strip()
+        if rn:
+            huella_pago_id = primer_id_conflicto_huella_funcional(
+                db,
+                prestamo_id=int(prestamo_id),
+                fecha_pago=fecha_pago,
+                monto_pagado=Decimal(str(round(float(monto_pagado), 2))),
+                ref_norm=rn,
+                exclude_pago_id=exclude_pago_id,
+            )
+            huella_conflicto = huella_pago_id is not None
+
+    return {
+        "conflicto": documento_conflicto or huella_conflicto,
+        "documento_conflicto": documento_conflicto,
+        "huella_conflicto": huella_conflicto,
+        "pago_id": pago_id,
+        "prestamo_id": prestamo_id_doc,
+        "pago_con_error_id": pago_con_error_id,
+        "huella_pago_id": huella_pago_id,
+        "clave_buscada": clave_buscada,
+    }
 
 
 def pago_con_error_conflicto_huella_existente(

@@ -1123,6 +1123,18 @@ def get_conflicto_documento_cartera(
 
     exclude_pago_id: Optional[int] = Query(None),
 
+    exclude_pago_con_error_id: Optional[int] = Query(None),
+
+    prestamo_id: Optional[int] = Query(None),
+
+    fecha_pago: Optional[str] = Query(
+        None, description="YYYY-MM-DD; con prestamo y monto activa chequeo de huella funcional"
+    ),
+
+    monto_pagado: Optional[float] = Query(None),
+
+    referencia_pago: Optional[str] = Query(None),
+
     db: Session = Depends(get_db),
 
     current_user: UserResponse = Depends(get_current_user),
@@ -1131,35 +1143,33 @@ def get_conflicto_documento_cartera(
 
     """
 
-    Otro pago en tabla `pagos` con el mismo Nº documento (valor normalizado).
-
-    `exclude_pago_id`: al editar un pago, excluir su id para detectar duplicidad contra *otros* registros.
-
-    Devuelve además `clave_buscada` (valor normalizado que se comparó contra `pagos.numero_documento`)
-
-    para que la UI muestre exactamente qué texto fue cotejado y se pueda verificar en BD.
+    Conflicto de serial en cartera: mismo Nº documento (pagos o pagos_con_errores) y,
+    si se envían prestamo_id + fecha_pago + monto_pagado, huella funcional en `pagos`.
 
     """
 
-    pid, prid = primer_pago_cartera_por_documento(
+    from app.services.pago_huella_funcional import conflicto_serial_para_formulario
 
-        db, numero_documento, exclude_pago_id=exclude_pago_id
+    fecha_date = None
+    if fecha_pago and fecha_pago.strip():
+        try:
+            fecha_date = date.fromisoformat(fecha_pago.strip()[:10])
+        except ValueError:
+            raise HTTPException(
+                status_code=400,
+                detail="fecha_pago debe ser YYYY-MM-DD.",
+            ) from None
 
+    return conflicto_serial_para_formulario(
+        db,
+        numero_documento=numero_documento,
+        prestamo_id=prestamo_id,
+        fecha_pago=fecha_date,
+        monto_pagado=monto_pagado,
+        referencia_pago=referencia_pago,
+        exclude_pago_id=exclude_pago_id,
+        exclude_pago_con_error_id=exclude_pago_con_error_id,
     )
-
-    clave_buscada = normalize_documento(numero_documento)
-
-    return {
-
-        "conflicto": pid is not None,
-
-        "pago_id": pid,
-
-        "prestamo_id": prid,
-
-        "clave_buscada": clave_buscada,
-
-    }
 
 
 

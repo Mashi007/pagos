@@ -273,10 +273,19 @@ class PagoService {
   async getConflictoDocumentoCartera(params: {
     numero_documento: string
     exclude_pago_id?: number
+    exclude_pago_con_error_id?: number
+    prestamo_id?: number | null
+    fecha_pago?: string | null
+    monto_pagado?: number | null
+    referencia_pago?: string | null
   }): Promise<{
     conflicto: boolean
+    documento_conflicto?: boolean
+    huella_conflicto?: boolean
     pago_id: number | null
     prestamo_id: number | null
+    pago_con_error_id?: number | null
+    huella_pago_id?: number | null
     /** Texto exacto cotejado contra `pagos.numero_documento` (puede incluir `§CD:` y código). */
     clave_buscada?: string | null
   }> {
@@ -287,6 +296,34 @@ class PagoService {
       Number.isFinite(params.exclude_pago_id)
     ) {
       qs.set('exclude_pago_id', String(Math.trunc(params.exclude_pago_id)))
+    }
+    if (
+      params.exclude_pago_con_error_id != null &&
+      Number.isFinite(params.exclude_pago_con_error_id)
+    ) {
+      qs.set(
+        'exclude_pago_con_error_id',
+        String(Math.trunc(params.exclude_pago_con_error_id))
+      )
+    }
+    if (
+      params.prestamo_id != null &&
+      Number.isFinite(params.prestamo_id) &&
+      params.prestamo_id > 0
+    ) {
+      qs.set('prestamo_id', String(Math.trunc(params.prestamo_id)))
+    }
+    if (params.fecha_pago?.trim()) {
+      qs.set('fecha_pago', params.fecha_pago.trim().slice(0, 10))
+    }
+    if (
+      params.monto_pagado != null &&
+      Number.isFinite(params.monto_pagado)
+    ) {
+      qs.set('monto_pagado', String(params.monto_pagado))
+    }
+    if (params.referencia_pago?.trim()) {
+      qs.set('referencia_pago', params.referencia_pago.trim())
     }
     return await apiClient.get(
       `${this.baseUrl}/conflicto-documento-cartera?${qs.toString()}`

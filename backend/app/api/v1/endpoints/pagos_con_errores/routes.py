@@ -42,7 +42,11 @@ from app.core.documento import (
     normalize_documento,
     split_numero_documento_almacenado,
 )
-from app.services.pago_huella_funcional import pago_con_error_conflicto_huella_existente
+from app.services.pago_huella_funcional import (
+    mensaje_409_huella_funcional_con_id,
+    pago_con_error_conflicto_huella_existente,
+    rechazar_si_pago_con_error_serial_duplicado,
+)
 from app.services.pago_numero_documento import (
     numero_documento_ya_registrado,
     pago_con_error_ya_cargado_estricto,
@@ -991,10 +995,6 @@ def mover_a_pagos_normales(
             # tener que ir a borrar manualmente filas duplicadas que ya pasaron al préstamo.
             pago_existente_id = pago_con_error_ya_cargado_estricto(db, row)
             motivo_ya_cargado = "estricto"
-            if pago_existente_id is None:
-                pago_existente_id = pago_con_error_conflicto_huella_existente(db, row)
-                if pago_existente_id is not None:
-                    motivo_ya_cargado = "huella_funcional"
             if pago_existente_id is not None:
                 ya_cargado_eliminados.append(
                     {
@@ -1032,6 +1032,13 @@ def mover_a_pagos_normales(
                     logger.warning(f"mover_a_pagos_normales: pago {pid} tiene documento duplicado en tabla pagos: {numero_documento_normalizado}")
                     errores_procesamiento.append(f"Pago {pid}: documento '{numero_documento_normalizado}' ya existe en tabla pagos")
                     continue  # Saltar este pago, no mover
+
+            pago_huella_id = pago_con_error_conflicto_huella_existente(db, row)
+            if pago_huella_id is not None:
+                errores_procesamiento.append(
+                    f"Pago {pid}: {mensaje_409_huella_funcional_con_id(pago_huella_id)}"
+                )
+                continue
 
             # Resolver la cédula EXACTA como está almacenada en `clientes` (FK fk_pagos_cedula).
             # El origen suele traer solo dígitos (`22621583`) mientras `clientes.cedula` está
@@ -1213,21 +1220,7 @@ def actualizar_pago_con_error(pago_id: int, payload: PagoConErrorUpdate, db: Ses
     # redundante. La eliminamos en silencio en lugar de aceptar la edición y devolvemos
     # `ya_cargado_eliminado=True` para que el frontend cierre el formulario sin alarma.
     pago_existente_id = pago_con_error_ya_cargado_estricto(db, row)
-    motivo_ya_cargado = "estricto"
-    if pago_existente_id is None:
-        pago_existente_id = pago_con_error_conflicto_huella_existente(db, row)
-        if pago_existente_id is not None:
-            motivo_ya_cargado = "huella_funcional"
     if pago_existente_id is not None:
-        mensaje_redundante = (
-            "Este pago ya estaba cargado y aplicado a cuotas en cartera; "
-            "se eliminó de revisión por ser redundante."
-            if motivo_ya_cargado == "estricto"
-            else (
-                "Este pago ya existe en cartera con la misma huella "
-                "(préstamo, fecha, monto y referencia); se eliminó de revisión por duplicado."
-            )
-        )
         info = {
             "ya_cargado_eliminado": True,
             "pago_con_error_id": pago_id,
@@ -1235,14 +1228,16 @@ def actualizar_pago_con_error(pago_id: int, payload: PagoConErrorUpdate, db: Ses
             "cedula": row.cedula_cliente,
             "prestamo_id": row.prestamo_id,
             "numero_documento": row.numero_documento,
-            "motivo": motivo_ya_cargado,
-            "mensaje": mensaje_redundante,
+            "motivo": "estricto",
+            "mensaje": (
+                "Este pago ya estaba cargado y aplicado a cuotas en cartera; "
+                "se eliminó de revisión por ser redundante."
+            ),
         }
         logger.info(
-            "actualizar_pago_con_error: pago_con_error_id=%s ya cargado en pago_id=%s (%s); eliminado por redundante",
+            "actualizar_pago_con_error: pago_con_error_id=%s ya cargado en pago_id=%s; eliminado por redundante",
             pago_id,
             pago_existente_id,
-            motivo_ya_cargado,
         )
         db.delete(row)
         db.commit()
@@ -1369,6 +1364,10 @@ def actualizar_pago_con_error(pago_id: int, payload: PagoConErrorUpdate, db: Ses
     if "observaciones" in data:
 
         row.observaciones = (data["observaciones"] or "").strip() or None
+
+    rechazar_si_pago_con_error_serial_duplicado(
+        db, row, exclude_pago_con_error_id=pago_id
+    )
 
     db.commit()
 

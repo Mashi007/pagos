@@ -1,13 +1,19 @@
-"""Huella funcional al mover PagoConError → pagos."""
+"""Huella funcional y bloqueo de serial duplicado en PagoConError."""
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from types import SimpleNamespace
 
+import pytest
+from fastapi import HTTPException
+
 from app.services.pago_huella_funcional import (
+    HTTP_409_DETAIL_DOCUMENTO_DUPLICADO,
+    conflicto_serial_para_formulario,
     pago_con_error_conflicto_huella_existente,
+    rechazar_si_pago_con_error_serial_duplicado,
     ref_norm_desde_campos,
 )
 
@@ -62,3 +68,70 @@ def test_pago_con_error_detecta_conflicto_huella() -> None:
         referencia_pago="164458244",
     )
     assert pago_con_error_conflicto_huella_existente(_FakeDb(501), row) == 501
+
+
+def test_rechazar_si_documento_duplicado(monkeypatch) -> None:
+    row = SimpleNamespace(
+        prestamo_id=1443,
+        fecha_pago=datetime(2025, 8, 11),
+        monto_pagado=Decimal("96.00"),
+        numero_documento="164458244",
+        referencia_pago="164458244",
+    )
+
+    def _doc_dup(*_a, **_k):
+        return True
+
+    monkeypatch.setattr(
+        "app.services.pago_numero_documento.numero_documento_ya_registrado",
+        _doc_dup,
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        rechazar_si_pago_con_error_serial_duplicado(_FakeDb(None), row, exclude_pago_con_error_id=1)
+    assert exc.value.status_code == 409
+    assert exc.value.detail == HTTP_409_DETAIL_DOCUMENTO_DUPLICADO
+
+
+def test_rechazar_si_huella_duplicada(monkeypatch) -> None:
+    row = SimpleNamespace(
+        prestamo_id=1443,
+        fecha_pago=datetime(2025, 8, 11),
+        monto_pagado=Decimal("96.00"),
+        numero_documento="164458244",
+        referencia_pago="164458244",
+    )
+
+    monkeypatch.setattr(
+        "app.services.pago_numero_documento.numero_documento_ya_registrado",
+        lambda *_a, **_k: False,
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        rechazar_si_pago_con_error_serial_duplicado(_FakeDb(501), row)
+    assert exc.value.status_code == 409
+    assert "pagos.id=501" in str(exc.value.detail)
+
+
+def test_conflicto_serial_para_formulario_huella(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "app.services.pago_numero_documento.numero_documento_ya_registrado",
+        lambda *_a, **_k: False,
+    )
+    monkeypatch.setattr(
+        "app.services.pago_numero_documento.primer_pago_cartera_por_documento",
+        lambda *_a, **_k: (None, None),
+    )
+
+    out = conflicto_serial_para_formulario(
+        _FakeDb(88),
+        numero_documento="164458244",
+        prestamo_id=1443,
+        fecha_pago=date(2025, 8, 11),
+        monto_pagado=96.0,
+        referencia_pago="164458244",
+    )
+    assert out["documento_conflicto"] is False
+    assert out["huella_conflicto"] is True
+    assert out["conflicto"] is True
+    assert out["huella_pago_id"] == 88

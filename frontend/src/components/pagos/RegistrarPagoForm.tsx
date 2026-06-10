@@ -603,11 +603,20 @@ export function RegistrarPagoForm({
   const excludeIdConflicto =
     isEditing && !esPagoConError && pagoId ? pagoId : undefined
 
+  const excludePagoConErrorIdConflicto =
+    isEditing && esPagoConError && pagoId ? pagoId : undefined
+
   /** En revisión manual el usuario debe ver siempre el estado del Nº doc.; no exigir comprobante enlazado. */
   const conflictoDocQueryEnabled =
     debouncedClaveDocumentoConflicto.length > 0 &&
     (mostrarCampoCodigoDocumento ||
+      esPagoConError ||
       (isEditing && Boolean(linkComprobanteParaVista && !archivoComprobante)))
+
+  const prestamoIdConflicto =
+    formData.prestamo_id != null && Number(formData.prestamo_id) > 0
+      ? Number(formData.prestamo_id)
+      : undefined
 
   const {
     data: conflictoDocApi,
@@ -618,15 +627,36 @@ export function RegistrarPagoForm({
       'conflicto-documento-cartera',
       debouncedClaveDocumentoConflicto,
       excludeIdConflicto,
+      excludePagoConErrorIdConflicto,
+      prestamoIdConflicto,
+      formData.fecha_pago,
+      formData.monto_pagado,
     ],
     queryFn: () =>
       pagoService.getConflictoDocumentoCartera({
         numero_documento: debouncedClaveDocumentoConflicto,
         exclude_pago_id: excludeIdConflicto,
+        exclude_pago_con_error_id: excludePagoConErrorIdConflicto,
+        prestamo_id: prestamoIdConflicto,
+        fecha_pago: formData.fecha_pago || null,
+        monto_pagado: formData.monto_pagado,
+        referencia_pago: debouncedClaveDocumentoConflicto,
       }),
     enabled: conflictoDocQueryEnabled,
     staleTime: 15_000,
   })
+
+  const conflictoDocumentoSerial = Boolean(
+    conflictoDocApi?.documento_conflicto ??
+      (conflictoDocApi?.conflicto && !conflictoDocApi?.huella_conflicto)
+  )
+
+  const conflictoHuellaSerial = Boolean(conflictoDocApi?.huella_conflicto)
+
+  const conflictoSerialBloqueaGuardar =
+    (conflictoDocumentoSerial || conflictoHuellaSerial) &&
+    !String(formData.codigo_documento ?? '').trim() &&
+    !bloquearCambioComprobanteCodigo
 
   const mismoDocQueInicial =
     debouncedClaveDocumentoConflicto === claveDocumentoInicial
@@ -1175,21 +1205,43 @@ export function RegistrarPagoForm({
     }
 
     if (
-      modoGuardarYProcesar &&
-      esPagoConError &&
-      mostrarCampoCodigoDocumento &&
-      revisionManualFullEdit &&
-      conflictoDocApi?.conflicto &&
+      conflictoHuellaSerial &&
+      !bloquearCambioComprobanteCodigo
+    ) {
+      const hid = conflictoDocApi?.huella_pago_id
+      setErrors({
+        general:
+          (hid != null
+            ? `${DUPLICADO_HUELLA_UI} Conflicto con pago ID ${hid}.`
+            : DUPLICADO_HUELLA_UI) +
+          ' No se puede guardar: ya existe un abono con el mismo préstamo, fecha, monto y referencia.',
+        numero_documento: DUPLICADO_HUELLA_UI,
+      })
+      return
+    }
+
+    if (
+      conflictoDocumentoSerial &&
       !String(fd.codigo_documento ?? '').trim() &&
       !bloquearCambioComprobanteCodigo
     ) {
+      const msgDoc =
+        modoGuardarYProcesar && esPagoConError && revisionManualFullEdit
+          ? 'Comprobante duplicado en cartera: pulse Visto para asignar un Código automático antes de guardar y procesar.'
+          : 'Este comprobante o serial ya está registrado en la base de datos. Use Visto para asignar un código distinto o corrija el número de documento.'
       setErrors(prev => ({
         ...prev,
-        general:
-          'Comprobante duplicado en cartera: pulse Visto para asignar un Código automático antes de guardar y procesar.',
+        general: msgDoc,
+        numero_documento: DUPLICADO_DOCUMENTO_UI,
       }))
-      setVistoRevisionManualOpen(true)
-      window.setTimeout(() => codigoDocumentoInputRef.current?.focus(), 0)
+      if (
+        mostrarCampoCodigoDocumento &&
+        revisionManualFullEdit &&
+        modoGuardarYProcesar
+      ) {
+        setVistoRevisionManualOpen(true)
+        window.setTimeout(() => codigoDocumentoInputRef.current?.focus(), 0)
+      }
       return
     }
 
@@ -2325,22 +2377,47 @@ export function RegistrarPagoForm({
                             <span className="text-slate-500">
                               Consultando unicidad en cartera…
                             </span>
-                          ) : conflictoDocApi?.conflicto ? (
+                          ) : conflictoHuellaSerial ? (
+                            <span>
+                              <span className="font-semibold text-red-800">
+                                {DUPLICADO_HUELLA_UI}
+                              </span>
+                              {conflictoDocApi?.huella_pago_id != null ? (
+                                <>
+                                  {' '}
+                                  Conflicto con pago ID{' '}
+                                  <span className="font-mono">
+                                    {conflictoDocApi.huella_pago_id}
+                                  </span>
+                                </>
+                              ) : null}
+                              . No se puede guardar hasta cambiar préstamo,
+                              fecha, monto o referencia.
+                            </span>
+                          ) : conflictoDocumentoSerial ? (
                             <span>
                               <span className="font-semibold text-amber-900">
                                 Documento ya registrado
                               </span>
-                              {conflictoDocApi.prestamo_id != null ? (
+                              {conflictoDocApi?.prestamo_id != null ? (
                                 <>
                                   : en préstamo{' '}
                                   <span className="font-mono font-semibold">
                                     #{conflictoDocApi.prestamo_id}
                                   </span>
                                 </>
+                              ) : conflictoDocApi?.pago_con_error_id != null ? (
+                                <>
+                                  : en revisión (pago con error ID{' '}
+                                  <span className="font-mono">
+                                    {conflictoDocApi.pago_con_error_id}
+                                  </span>
+                                  )
+                                </>
                               ) : (
                                 ': en otro pago de cartera'
                               )}
-                              {conflictoDocApi.pago_id != null ? (
+                              {conflictoDocApi?.pago_id != null ? (
                                 <>
                                   {' '}
                                   (pago ID{' '}
@@ -2350,13 +2427,9 @@ export function RegistrarPagoForm({
                                   )
                                 </>
                               ) : null}
-                              . Se pretende aplicar este pago al préstamo{' '}
-                              <span className="font-mono font-semibold">
-                                {formData.prestamo_id != null
-                                  ? `#${formData.prestamo_id}`
-                                  : '- (sin préstamo)'}
-                              </span>
-                              .
+                              . Use <strong>Visto</strong> para asignar un{' '}
+                              <strong>Código</strong> distinto o corrija el Nº
+                              documento.
                             </span>
                           ) : (
                             <span>
@@ -2967,7 +3040,15 @@ export function RegistrarPagoForm({
                 </Button>
               ) : null}
 
-              <Button type="submit" disabled={isSubmitting || isDeleting}>
+              <Button
+                type="submit"
+                disabled={
+                  isSubmitting ||
+                  isDeleting ||
+                  conflictoSerialBloqueaGuardar ||
+                  (conflictoHuellaSerial && !bloquearCambioComprobanteCodigo)
+                }
+              >
                 {isSubmitting ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
