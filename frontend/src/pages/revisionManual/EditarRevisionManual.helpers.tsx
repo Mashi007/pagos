@@ -3,6 +3,12 @@ import {
   type Pago,
   type PagoInicialRegistrar,
 } from '../../services/pagoService'
+import type { EscanerInfopagosSugerencia } from '../../services/cobrosService'
+import {
+  extraerCaracteresCedulaPublica,
+  normalizarCedulaParaProcesar,
+  quitarCerosIzquierdaNumeroCedula,
+} from '../../utils/cedulaConsultaPublica'
 import { codigoEstadoCuotaParaUi } from '../../utils/cuotaEstadoDisplay'
 
 /** Estados de negocio del préstamo (tabla prestamos.estado); alineado con backend y fechas obligatorias. */
@@ -536,4 +542,63 @@ export function descripcionDiagnosticoCascada(d: {
   }
   if (partes.length === 0) return undefined
   return partes.join(' ')
+}
+
+/** Partes de cédula para FormData del escáner (misma lógica que RegistrarPagoForm). */
+export function partesCedulaParaEscaneoRevision(
+  cedulaRaw: string
+): { tipo: string; numero: string } | null {
+  const clean = String(cedulaRaw || '')
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '')
+  if (!clean) return null
+  const m = /^([VEJPG])?(\d{5,12})$/.exec(clean)
+  if (!m) return null
+  const numero = quitarCerosIzquierdaNumeroCedula(m[2])
+  if (!numero || numero === '0') return null
+  return { tipo: m[1] || 'V', numero }
+}
+
+/** Hidrata el modal de agregar pago tras escanear un comprobante en revisión manual. */
+export function pagoInicialDesdeSugerenciaEscaneoRevision(
+  cedulaPagina: string,
+  prestamoId: number | null | undefined,
+  sugerencia: EscanerInfopagosSugerencia
+): PagoInicialRegistrar {
+  const moneda = sugerencia.moneda === 'BS' ? 'BS' : 'USD'
+  const montoRaw =
+    sugerencia.monto != null && Number.isFinite(Number(sugerencia.monto))
+      ? Number(sugerencia.monto)
+      : 0
+
+  let cedula = cedulaPagina.trim()
+  const cedulaExtraida = (sugerencia.cedula_pagador_en_comprobante || '').trim()
+  if (cedulaExtraida) {
+    const norm = normalizarCedulaParaProcesar(cedulaExtraida)
+    cedula =
+      norm.valido && norm.valorParaEnviar
+        ? norm.valorParaEnviar
+        : extraerCaracteresCedulaPublica(cedulaExtraida)
+  }
+
+  const pid =
+    prestamoId != null && Number(prestamoId) > 0 ? Number(prestamoId) : null
+
+  const base: PagoInicialRegistrar = {
+    cedula_cliente: cedula,
+    prestamo_id: pid,
+    fecha_pago:
+      (sugerencia.fecha_pago || '').trim() || new Date().toISOString().slice(0, 10),
+    numero_documento: (sugerencia.numero_operacion || '').trim(),
+    institucion_bancaria:
+      (sugerencia.institucion_financiera || '').trim() || null,
+    notas: (sugerencia.notas_modelo || '').trim() || null,
+    link_comprobante: null,
+    moneda_registro: moneda,
+  }
+
+  if (moneda === 'BS') {
+    return { ...base, monto_bs_original: montoRaw, monto_pagado: 0 }
+  }
+  return { ...base, monto_pagado: montoRaw }
 }

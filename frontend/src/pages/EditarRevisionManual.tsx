@@ -5,6 +5,7 @@ import {
   useEffect,
   useCallback,
   useMemo,
+  type ChangeEvent,
 } from 'react'
 
 import { flushSync } from 'react-dom'
@@ -52,6 +53,7 @@ import {
   Trash2,
   BarChart3,
   CheckSquare,
+  Upload,
 } from 'lucide-react'
 
 import { Input } from '../components/ui/input'
@@ -127,6 +129,10 @@ import {
 
 import { validadoresService } from '../services/validadoresService'
 
+import { escanerInfopagosExtraerComprobante } from '../services/cobrosService'
+
+import { normalizarComprobanteArchivoParaEscaneo } from '../utils/normalizarComprobanteArchivo'
+
 import {
   CUOTAS_REVISION_PUT_CONCURRENCY,
   COHERENCIA_USD_TOL,
@@ -142,6 +148,8 @@ import {
   mergeCuotasParaMostrar,
   opcionesSelectCuotaRevision,
   opcionesSelectEstadoPrestamoRevision,
+  pagoInicialDesdeSugerenciaEscaneoRevision,
+  partesCedulaParaEscaneoRevision,
   pagoRowAPagoCreateInicial,
   timestampOrdenFechaPago,
   type ClienteData,
@@ -246,6 +254,14 @@ export function EditarRevisionManual() {
   const [pagoModalInicial, setPagoModalInicial] = useState<
     PagoInicialRegistrar | undefined
   >(undefined)
+
+  const [pagoModalComprobanteInicial, setPagoModalComprobanteInicial] =
+    useState<File | null>(null)
+
+  const [escaneandoComprobanteAgregarPago, setEscaneandoComprobanteAgregarPago] =
+    useState(false)
+
+  const escaneoComprobanteAgregarPagoRef = useRef<HTMLInputElement>(null)
 
   const [eliminandoPagoId, setEliminandoPagoId] = useState<number | null>(null)
 
@@ -917,12 +933,14 @@ export function EditarRevisionManual() {
     setPagoModalAbierto(false)
     setPagoModalId(undefined)
     setPagoModalInicial(undefined)
+    setPagoModalComprobanteInicial(null)
   }
 
   const abrirAgregarPagoRevision = () => {
     if (soloLectura) return
     const ced = cedulaParaPagosRealizados
     const pid = prestamoData.prestamo_id
+    setPagoModalComprobanteInicial(null)
     setPagoModalId(undefined)
     setPagoModalInicial({
       cedula_cliente: ced,
@@ -935,6 +953,74 @@ export function EditarRevisionManual() {
       link_comprobante: null,
     })
     setPagoModalAbierto(true)
+  }
+
+  const abrirSelectorEscaneoComprobanteAgregarPago = () => {
+    if (soloLectura || escaneandoComprobanteAgregarPago) return
+    escaneoComprobanteAgregarPagoRef.current?.click()
+  }
+
+  const handleArchivoEscaneoComprobanteAgregarPago = async (
+    event: ChangeEvent<HTMLInputElement>
+  ) => {
+    const input = event.target
+    const fileRaw = input.files?.[0]
+    input.value = ''
+    if (!fileRaw || soloLectura) return
+
+    const ced = cedulaParaPagosRealizados
+    let cedulaPartes = partesCedulaParaEscaneoRevision(ced)
+    let extraccionSinCliente = false
+    if (!cedulaPartes) {
+      cedulaPartes = { tipo: 'V', numero: '12345678' }
+      extraccionSinCliente = true
+    }
+
+    setEscaneandoComprobanteAgregarPago(true)
+    try {
+      const archivo = await normalizarComprobanteArchivoParaEscaneo(fileRaw)
+      const fd = new FormData()
+      fd.append('tipo_cedula', cedulaPartes.tipo)
+      fd.append('numero_cedula', cedulaPartes.numero)
+      if (extraccionSinCliente) {
+        fd.append('extraccion_sin_cliente', 'true')
+      }
+      fd.append('comprobante', archivo)
+      fd.append('fuente_tasa_cambio', 'euro')
+
+      const res = await escanerInfopagosExtraerComprobante(fd)
+      if (!res.ok || !res.sugerencia) {
+        toast.error(
+          res.validacion_reglas ||
+            res.validacion_campos ||
+            res.error ||
+            'No se pudo digitalizar el comprobante en este momento.'
+        )
+        return
+      }
+
+      const pid = prestamoData.prestamo_id
+      setPagoModalId(undefined)
+      setPagoModalComprobanteInicial(archivo)
+      setPagoModalInicial(
+        pagoInicialDesdeSugerenciaEscaneoRevision(ced, pid, res.sugerencia)
+      )
+      setPagoModalAbierto(true)
+
+      const aviso =
+        res.validacion_campos || res.validacion_reglas
+          ? ' Revise los datos sugeridos antes de guardar.'
+          : ''
+      toast.success(`Comprobante escaneado.${aviso}`)
+    } catch (convErr) {
+      toast.error(
+        convErr instanceof Error
+          ? convErr.message
+          : 'No se pudo preparar el comprobante para escanear.'
+      )
+    } finally {
+      setEscaneandoComprobanteAgregarPago(false)
+    }
   }
 
   const abrirEditarPagoRevision = (pago: Pago) => {
@@ -3301,6 +3387,28 @@ export function EditarRevisionManual() {
                         size="sm"
                         className="gap-2"
                         disabled={
+                          soloLectura || escaneandoComprobanteAgregarPago
+                        }
+                        onClick={abrirSelectorEscaneoComprobanteAgregarPago}
+                        title={
+                          soloLectura
+                            ? 'Revision cerrada: solo lectura'
+                            : 'Subir imagen o PDF del comprobante para llenar el formulario de pago'
+                        }
+                      >
+                        {escaneandoComprobanteAgregarPago ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Upload className="h-4 w-4" />
+                        )}
+                        Escanear comprobante
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="gap-2"
+                        disabled={
                           loadingPagosRealizados || fetchingPagosRealizados
                         }
                         onClick={() => void refetchPagosRealizados()}
@@ -3323,18 +3431,36 @@ export function EditarRevisionManual() {
                         <p className="text-sm text-muted-foreground">
                           No hay filas en la tabla de pagos para esta cédula
                           todavía. Puede registrar el primero con «Agregar
-                          pago».
+                          pago» o escanear un comprobante para llenar el
+                          formulario.
                         </p>
                         {!soloLectura && (
-                          <Button
-                            type="button"
-                            size="sm"
-                            className="gap-2"
-                            onClick={abrirAgregarPagoRevision}
-                          >
-                            <Plus className="h-4 w-4" />
-                            Agregar pago
-                          </Button>
+                          <div className="flex flex-wrap gap-2">
+                            <Button
+                              type="button"
+                              size="sm"
+                              className="gap-2"
+                              onClick={abrirAgregarPagoRevision}
+                            >
+                              <Plus className="h-4 w-4" />
+                              Agregar pago
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="gap-2"
+                              disabled={escaneandoComprobanteAgregarPago}
+                              onClick={abrirSelectorEscaneoComprobanteAgregarPago}
+                            >
+                              {escaneandoComprobanteAgregarPago ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Upload className="h-4 w-4" />
+                              )}
+                              Escanear comprobante
+                            </Button>
+                          </div>
                         )}
                       </div>
                     ) : (
@@ -4297,6 +4423,14 @@ export function EditarRevisionManual() {
         </div>
       </div>
 
+      <input
+        ref={escaneoComprobanteAgregarPagoRef}
+        type="file"
+        accept="image/*,application/pdf"
+        className="hidden"
+        onChange={e => void handleArchivoEscaneoComprobanteAgregarPago(e)}
+      />
+
       {pagoModalAbierto && pagoModalInicial != null && (
         <RegistrarPagoForm
           onClose={cerrarModalPagoRevision}
@@ -4305,6 +4439,7 @@ export function EditarRevisionManual() {
           pagoId={pagoModalId}
           modoGuardarYProcesar
           mostrarCampoCodigoDocumento
+          comprobanteArchivoInicial={pagoModalComprobanteInicial}
           prestamoContextoRevisionManualId={
             prestamoData.prestamo_id != null &&
             Number(prestamoData.prestamo_id) > 0

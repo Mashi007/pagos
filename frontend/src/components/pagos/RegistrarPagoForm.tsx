@@ -448,6 +448,9 @@ interface RegistrarPagoFormProps {
 
   /** Si true, al editar bloquea imagen de comprobante y código, pero permite corregir el Nº de documento. */
   bloquearCambioComprobanteCodigo?: boolean
+
+  /** Archivo de comprobante precargado al abrir (p. ej. escaneo desde revisión manual). */
+  comprobanteArchivoInicial?: File | null
 }
 
 export function RegistrarPagoForm({
@@ -463,6 +466,7 @@ export function RegistrarPagoForm({
   mostrarCampoCodigoDocumento = false,
   claveDocumentoPagosTablaRevision,
   bloquearCambioComprobanteCodigo = false,
+  comprobanteArchivoInicial = null,
 }: RegistrarPagoFormProps) {
   const isEditing = !!pagoId
 
@@ -477,8 +481,14 @@ export function RegistrarPagoForm({
   )
 
   const [archivoComprobante, setArchivoComprobante] = useState<File | null>(
-    null
+    () => comprobanteArchivoInicial ?? null
   )
+
+  useEffect(() => {
+    if (comprobanteArchivoInicial) {
+      setArchivoComprobante(comprobanteArchivoInicial)
+    }
+  }, [comprobanteArchivoInicial])
 
   const archivoNuevoComprobanteEsPdf = useMemo(
     () =>
