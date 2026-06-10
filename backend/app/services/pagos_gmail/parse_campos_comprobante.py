@@ -106,8 +106,6 @@ def _corregir_monto_linea_asteriscos_bnc(s: str) -> Optional[str]:
         return f"{int_part}.{frac}"
     if len(int_part) == 2 and 10 <= int(int_part) <= 19 and n_stars >= 6:
         return f"1{int_part}.{frac}"
-    if len(int_part) == 2 and 20 <= int(int_part) <= 99 and n_stars >= 12:
-        return f"1{int_part}.{frac}"
     return f"{int_part}.{frac}"
 
 
@@ -115,17 +113,9 @@ def _corregir_monto_bnc_usd_entero_perdio_cientos(
     n: float, *, institucion: Optional[str] = None, ctx_usd: bool = False
 ) -> float:
     """
-    Respaldo cuando Gemini devuelve solo el entero (14) sin asteriscos en el string,
-    pero la institución ya es BNC y el depósito en USD suele ser 1XX.
-    Solo 10-19 → 110-119; no tocar 96, 135 parseados correctamente, etc.
+    Sin una línea de asteriscos visible no hay evidencia para reconstruir centenas.
+    Conservar el entero evita inflar depósitos BNC USD legítimos de 10-19.
     """
-    if not ctx_usd or "BNC" not in (institucion or "").upper():
-        return n
-    if n != int(n):
-        return n
-    ni = int(n)
-    if 10 <= ni <= 19:
-        return float(100 + ni)
     return n
 
 
