@@ -5,6 +5,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 from app.services.finiquito_conciliacion_visto_service import (
+    _aplicar_ocr_a_pago,
     _extraer_comprobante_id_hex,
     _vincular_comprobante_reserva_al_pago,
 )
@@ -68,3 +69,49 @@ def test_vincular_inserta_nueva_imagen_si_link_es_drive() -> None:
     assert len(db.added) == 1
     assert "comprobante-imagen" in (pago.link_comprobante or "")
     assert pago.documento_ruta is None
+
+
+def test_aplicar_ocr_no_sobrescribe_monto_reserva_con_delta_grande() -> None:
+    pago = SimpleNamespace(
+        institucion_bancaria=None,
+        numero_documento=None,
+        referencia_pago=None,
+        fecha_pago=None,
+        monto_pagado=15.0,
+    )
+
+    _aplicar_ocr_a_pago(
+        _FakeDb({}),
+        pago,
+        {
+            "ok": True,
+            "institucion_financiera": "BNC",
+            "numero_operacion": "105137674",
+            "monto": 115.0,
+        },
+    )
+
+    assert pago.institucion_bancaria == "BNC"
+    assert pago.numero_documento == "105137674"
+    assert pago.monto_pagado == 15.0
+
+
+def test_aplicar_ocr_actualiza_monto_si_coincide_con_reserva() -> None:
+    pago = SimpleNamespace(
+        institucion_bancaria=None,
+        numero_documento=None,
+        referencia_pago=None,
+        fecha_pago=None,
+        monto_pagado=15.0,
+    )
+
+    _aplicar_ocr_a_pago(
+        _FakeDb({}),
+        pago,
+        {
+            "ok": True,
+            "monto": 15.004,
+        },
+    )
+
+    assert str(pago.monto_pagado) == "15.0"

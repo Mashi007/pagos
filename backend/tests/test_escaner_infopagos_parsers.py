@@ -35,7 +35,9 @@ def test_parse_monto_comprobante_bnc_asteriscos_114_no_14():
     assert parse_monto_comprobante("**************114.00", moneda="USD") == 114.0
     assert parse_monto_comprobante("*******14.00", moneda="USD") == 114.0
     assert parse_monto_comprobante("*****96.00", moneda="USD") == 96.0
-    assert parse_monto_comprobante(14, moneda="USD", institucion="BNC") == 114.0
+    assert parse_monto_comprobante("************96.00", moneda="USD", institucion="BNC") == 96.0
+    assert parse_monto_comprobante(14, moneda="USD", institucion="BNC") == 14.0
+    assert parse_monto_comprobante(15, moneda="USD", institucion="BNC") == 15.0
     assert parse_monto_comprobante(14, moneda="USD", institucion="Mercantil") == 14.0
     assert parse_monto_comprobante(96, moneda="USD", institucion="BNC") == 96.0
 

@@ -10,7 +10,7 @@ import logging
 import re
 import uuid
 from datetime import date, datetime, time as dt_time
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from typing import Any, Dict, List, Optional, Tuple
 from zoneinfo import ZoneInfo
 
@@ -52,6 +52,19 @@ _RE_COMPROBANTE_ID = re.compile(
 )
 
 _MAX_COMPROBANTE_RESERVA_BYTES = 10 * 1024 * 1024
+
+
+def _monto_ocr_compatible_con_pago(pago: Pago, monto_ocr: Decimal) -> bool:
+    monto_actual = getattr(pago, "monto_pagado", None)
+    if monto_actual is None:
+        return True
+    try:
+        monto_actual_dec = Decimal(str(monto_actual))
+    except (InvalidOperation, TypeError, ValueError):
+        return True
+    if monto_actual_dec <= Decimal("0"):
+        return True
+    return abs(monto_actual_dec - monto_ocr) <= Decimal("0.01")
 
 
 def _tiene_comprobante(p: Pago) -> bool:
@@ -408,9 +421,11 @@ def _aplicar_ocr_a_pago(
     monto = gem.get("monto")
     if monto is not None:
         try:
-            pago.monto_pagado = Decimal(str(round(float(monto), 2)))
+            monto_ocr = Decimal(str(round(float(monto), 2)))
         except (TypeError, ValueError):
-            pass
+            return
+        if _monto_ocr_compatible_con_pago(pago, monto_ocr):
+            pago.monto_pagado = monto_ocr
 
 
 def _crear_o_actualizar_pago_desde_reserva(
