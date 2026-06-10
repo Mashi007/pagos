@@ -290,6 +290,7 @@ class PagoService {
     prestamo_id: number | null
     pago_con_error_id?: number | null
     huella_pago_id?: number | null
+    huella_prestamo_id?: number | null
     /** Texto exacto cotejado contra `pagos.numero_documento` (puede incluir `§CD:` y código). */
     clave_buscada?: string | null
   }> {

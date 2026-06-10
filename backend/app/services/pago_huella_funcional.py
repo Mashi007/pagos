@@ -284,6 +284,7 @@ def conflicto_serial_para_formulario(
 
     huella_conflicto = False
     huella_pago_id: Optional[int] = None
+    huella_prestamo_id: Optional[int] = None
     if prestamo_id and fecha_pago is not None and monto_pagado is not None:
         rn = ref_norm_desde_campos(doc, referencia_pago or doc).strip()
         if rn:
@@ -296,6 +297,8 @@ def conflicto_serial_para_formulario(
                 exclude_pago_id=exclude_pago_id,
             )
             huella_conflicto = huella_pago_id is not None
+            if huella_conflicto:
+                huella_prestamo_id = int(prestamo_id)
 
     documento_bloquea = documento_conflicto and not puede_adoptar_pago_huerfano
 
@@ -310,6 +313,7 @@ def conflicto_serial_para_formulario(
         "prestamo_id": prestamo_id_doc,
         "pago_con_error_id": pago_con_error_id,
         "huella_pago_id": huella_pago_id,
+        "huella_prestamo_id": huella_prestamo_id,
         "clave_buscada": clave_buscada,
     }
 

@@ -132,28 +132,38 @@ const DUPLICADO_DOCUMENTO_UI =
 const DUPLICADO_HUELLA_UI =
   'Ya existe un abono igual en cartera (mismo crédito, fecha, monto y referencia).'
 
-function mensajeDuplicadoHuellaDetalle(pagoId?: number | null): string {
-  const ref =
-    pagoId != null
-      ? ` Coincide con el abono n.º ${pagoId} en la lista de pagos.`
-      : ''
-  return (
-    'Ya hay un pago registrado con el mismo crédito, la misma fecha, el mismo monto y el mismo número de operación.' +
-    ref +
-    ' Si es el mismo comprobante, no hace falta cargarlo otra vez. Si son dos transferencias distintas, cambie la fecha, el monto o el número de documento.'
-  )
-}
+type TipoConflictoGuardarUsuario = 'huella' | 'documento' | 'adoptar'
 
-function mensajeDuplicadoHuellaBotonDeshabilitado(pagoId?: number | null): string {
-  if (pagoId != null) {
+function mensajeConflictoGuardarUsuario(opts: {
+  tipo: TipoConflictoGuardarUsuario
+  pagoIdCartera?: number | null
+  prestamoCarteraTexto: string
+  prestamoFormularioTexto: string
+  mismosCredito?: boolean
+}): string {
+  const abono =
+    opts.pagoIdCartera != null
+      ? `Abono en cartera: n.º ${opts.pagoIdCartera}`
+      : 'Abono en cartera'
+  const en = `${abono} (${opts.prestamoCarteraTexto}).`
+  const aplica = `Este formulario aplica a ${opts.prestamoFormularioTexto}.`
+
+  if (opts.tipo === 'adoptar') {
+    return `${en} ${aplica} Al guardar se asignará ese crédito al abono existente. No hace falta Visto.`
+  }
+  if (opts.tipo === 'huella') {
     return (
-      `Este abono parece repetido: ya está en cartera con los mismos datos (abono n.º ${pagoId}). ` +
-      'Revise si el comprobante ya fue cargado o corrija fecha, monto o número de operación.'
+      `${en} ${aplica} Misma fecha, monto y referencia: parece el mismo pago cargado dos veces. ` +
+      'No use Visto; busque ese abono en Pagos o corrija fecha, monto o número de operación.'
+    )
+  }
+  if (opts.mismosCredito) {
+    return (
+      `${en} ${aplica} Mismo comprobante en el mismo crédito: pulse Visto para asignar un código distinto.`
     )
   }
   return (
-    'Este abono parece repetido: ya hay uno en cartera con el mismo crédito, fecha, monto y referencia. ' +
-    'Revise el comprobante o corrija los datos.'
+    `${en} ${aplica} El comprobante ya está registrado en otro crédito (o sin crédito): pulse Visto para asignar un código y poder guardar.`
   )
 }
 
@@ -718,42 +728,6 @@ export function RegistrarPagoForm({
     puedeAdoptarPagoHuerfano &&
     prestamoIdFormulario != null
 
-  const motivoBotonGuardarDeshabilitado = useMemo(() => {
-    if (bloquearCambioComprobanteCodigo) return null
-    if (puedeAdoptarPagoHuerfano && prestamoIdFormulario) {
-      return null
-    }
-    if (conflictoHuellaSerial) {
-      return mensajeDuplicadoHuellaBotonDeshabilitado(
-        conflictoDocApi?.huella_pago_id
-      )
-    }
-    if (!conflictoSerialBloqueaGuardar) return null
-    if (conflictoDocOrfanoCarteraConPrestamoEnFormulario) {
-      const dupId =
-        conflictoDocApi?.adoptar_pago_huerfano_id ?? conflictoDocApi?.pago_id
-      return (
-        `El serial ya figura en otro pago de cartera${dupId != null ? ` (ID ${dupId}, sin préstamo)` : ' (sin préstamo)'}. ` +
-        `Al guardar y procesar, este pago sí se aplicará al crédito ${prestamoIdFormulario} del formulario. ` +
-        'Pulse Visto para asignar un código y desbloquear el guardado.'
-      )
-    }
-    return (
-      'Este número de comprobante ya está en cartera. Pulse Visto para asignar un código automático ' +
-      'o corrija el número de documento.'
-    )
-  }, [
-    bloquearCambioComprobanteCodigo,
-    conflictoHuellaSerial,
-    conflictoSerialBloqueaGuardar,
-    puedeAdoptarPagoHuerfano,
-    conflictoDocOrfanoCarteraConPrestamoEnFormulario,
-    conflictoDocApi?.huella_pago_id,
-    conflictoDocApi?.pago_id,
-    conflictoDocApi?.adoptar_pago_huerfano_id,
-    prestamoIdFormulario,
-  ])
-
   const mismoDocQueInicial =
     debouncedClaveDocumentoConflicto === claveDocumentoInicial
 
@@ -770,6 +744,79 @@ export function RegistrarPagoForm({
   const { data: prestamoConflictoDetalle } = usePrestamo(
     pidConflictoParaDetalle
   )
+
+  const prestamoIdHuellaCartera =
+    conflictoDocApi?.huella_prestamo_id != null &&
+    Number.isFinite(Number(conflictoDocApi.huella_prestamo_id)) &&
+    Number(conflictoDocApi.huella_prestamo_id) > 0
+      ? Math.trunc(Number(conflictoDocApi.huella_prestamo_id))
+      : prestamoIdFormulario
+
+  const { data: prestamoHuellaDetalle } = usePrestamo(
+    conflictoHuellaSerial && prestamoIdHuellaCartera ? prestamoIdHuellaCartera : 0
+  )
+
+  const etiquetaPrestamoFormulario = useMemo(
+    () => etiquetaPrestamoLinea(prestamoIdFormulario, prestamoSeleccionado),
+    [prestamoIdFormulario, prestamoSeleccionado]
+  )
+
+  const etiquetaPrestamoCarteraDocumento = useMemo(
+    () =>
+      etiquetaPrestamoLinea(prestamoIdConflictoCartera, prestamoConflictoDetalle),
+    [prestamoIdConflictoCartera, prestamoConflictoDetalle]
+  )
+
+  const etiquetaPrestamoCarteraHuella = useMemo(
+    () =>
+      etiquetaPrestamoLinea(prestamoIdHuellaCartera, prestamoHuellaDetalle),
+    [prestamoIdHuellaCartera, prestamoHuellaDetalle]
+  )
+
+  const motivoBotonGuardarDeshabilitado = useMemo(() => {
+    if (bloquearCambioComprobanteCodigo) return null
+    if (puedeAdoptarPagoHuerfano && prestamoIdFormulario) {
+      return mensajeConflictoGuardarUsuario({
+        tipo: 'adoptar',
+        pagoIdCartera:
+          conflictoDocApi?.adoptar_pago_huerfano_id ?? conflictoDocApi?.pago_id,
+        prestamoCarteraTexto: 'sin crédito asignado',
+        prestamoFormularioTexto: etiquetaPrestamoFormulario,
+      })
+    }
+    if (conflictoHuellaSerial) {
+      return mensajeConflictoGuardarUsuario({
+        tipo: 'huella',
+        pagoIdCartera: conflictoDocApi?.huella_pago_id,
+        prestamoCarteraTexto: etiquetaPrestamoCarteraHuella,
+        prestamoFormularioTexto: etiquetaPrestamoFormulario,
+      })
+    }
+    if (!conflictoSerialBloqueaGuardar) return null
+    return mensajeConflictoGuardarUsuario({
+      tipo: 'documento',
+      pagoIdCartera: conflictoDocApi?.pago_id,
+      prestamoCarteraTexto: etiquetaPrestamoCarteraDocumento,
+      prestamoFormularioTexto: etiquetaPrestamoFormulario,
+      mismosCredito:
+        prestamoIdConflictoCartera != null &&
+        prestamoIdFormulario != null &&
+        prestamoIdConflictoCartera === prestamoIdFormulario,
+    })
+  }, [
+    bloquearCambioComprobanteCodigo,
+    conflictoHuellaSerial,
+    conflictoSerialBloqueaGuardar,
+    puedeAdoptarPagoHuerfano,
+    conflictoDocApi?.huella_pago_id,
+    conflictoDocApi?.pago_id,
+    conflictoDocApi?.adoptar_pago_huerfano_id,
+    prestamoIdFormulario,
+    prestamoIdConflictoCartera,
+    etiquetaPrestamoFormulario,
+    etiquetaPrestamoCarteraDocumento,
+    etiquetaPrestamoCarteraHuella,
+  ])
 
   const handleReescanearDesdeComprobanteActual = async () => {
     if (
@@ -1308,7 +1355,12 @@ export function RegistrarPagoForm({
       !bloquearCambioComprobanteCodigo
     ) {
       setErrors({
-        general: mensajeDuplicadoHuellaDetalle(conflictoDocApi?.huella_pago_id),
+        general: mensajeConflictoGuardarUsuario({
+          tipo: 'huella',
+          pagoIdCartera: conflictoDocApi?.huella_pago_id,
+          prestamoCarteraTexto: etiquetaPrestamoCarteraHuella,
+          prestamoFormularioTexto: etiquetaPrestamoFormulario,
+        }),
         numero_documento: DUPLICADO_HUELLA_UI,
       })
       return
@@ -1638,9 +1690,12 @@ export function RegistrarPagoForm({
             String(detail || '').match(/pagos\.id=(\d+)/i) ||
             String(detail || '').match(/pago\s*id[:\s]*(\d+)/i)
           const pidConf = m ? Number(m[1]) : conflictoDocApi?.huella_pago_id
-          errorMessage = mensajeDuplicadoHuellaDetalle(
-            Number.isFinite(pidConf) ? pidConf : null
-          )
+          errorMessage = mensajeConflictoGuardarUsuario({
+            tipo: 'huella',
+            pagoIdCartera: Number.isFinite(pidConf) ? pidConf : null,
+            prestamoCarteraTexto: etiquetaPrestamoCarteraHuella,
+            prestamoFormularioTexto: etiquetaPrestamoFormulario,
+          })
         } else if (
           status === 409 &&
           detailLower.includes('no se permite cambiar') &&
@@ -2483,9 +2538,14 @@ export function RegistrarPagoForm({
                                 Abono repetido
                               </span>
                               {' — '}
-                              {mensajeDuplicadoHuellaDetalle(
-                                conflictoDocApi?.huella_pago_id
-                              )}
+                              {mensajeConflictoGuardarUsuario({
+                                tipo: 'huella',
+                                pagoIdCartera: conflictoDocApi?.huella_pago_id,
+                                prestamoCarteraTexto:
+                                  etiquetaPrestamoCarteraHuella,
+                                prestamoFormularioTexto:
+                                  etiquetaPrestamoFormulario,
+                              })}
                             </span>
                           ) : puedeAdoptarPagoHuerfano ? (
                             <span>
