@@ -126,10 +126,36 @@ import {
 } from '../../utils/montoLatam'
 
 const DUPLICADO_DOCUMENTO_UI =
-  'Este comprobante ya fue registrado. Verifique el numero_documento.'
+  'Este comprobante ya fue registrado. Verifique el número de documento.'
 
+/** Texto corto para etiquetas y comparaciones en diálogos. */
 const DUPLICADO_HUELLA_UI =
-  'Pago duplicado detectado para este prestamo, fecha, monto y referencia.'
+  'Ya existe un abono igual en cartera (mismo crédito, fecha, monto y referencia).'
+
+function mensajeDuplicadoHuellaDetalle(pagoId?: number | null): string {
+  const ref =
+    pagoId != null
+      ? ` Coincide con el abono n.º ${pagoId} en la lista de pagos.`
+      : ''
+  return (
+    'Ya hay un pago registrado con el mismo crédito, la misma fecha, el mismo monto y el mismo número de operación.' +
+    ref +
+    ' Si es el mismo comprobante, no hace falta cargarlo otra vez. Si son dos transferencias distintas, cambie la fecha, el monto o el número de documento.'
+  )
+}
+
+function mensajeDuplicadoHuellaBotonDeshabilitado(pagoId?: number | null): string {
+  if (pagoId != null) {
+    return (
+      `Este abono parece repetido: ya está en cartera con los mismos datos (abono n.º ${pagoId}). ` +
+      'Revise si el comprobante ya fue cargado o corrija fecha, monto o número de operación.'
+    )
+  }
+  return (
+    'Este abono parece repetido: ya hay uno en cartera con el mismo crédito, fecha, monto y referencia. ' +
+    'Revise el comprobante o corrija los datos.'
+  )
+}
 
 function etiquetaPrestamoLinea(
   prestamoId: number | null | undefined,
@@ -698,10 +724,9 @@ export function RegistrarPagoForm({
       return null
     }
     if (conflictoHuellaSerial) {
-      const hid = conflictoDocApi?.huella_pago_id
-      return hid != null
-        ? `Duplicado por huella funcional (conflicto con pago ID ${hid}). Cambie préstamo, fecha, monto o referencia.`
-        : 'Duplicado por huella funcional: mismo préstamo, fecha, monto y referencia que un pago en cartera.'
+      return mensajeDuplicadoHuellaBotonDeshabilitado(
+        conflictoDocApi?.huella_pago_id
+      )
     }
     if (!conflictoSerialBloqueaGuardar) return null
     if (conflictoDocOrfanoCarteraConPrestamoEnFormulario) {
@@ -713,7 +738,10 @@ export function RegistrarPagoForm({
         'Pulse Visto para asignar un código y desbloquear el guardado.'
       )
     }
-    return 'Serial o comprobante duplicado en cartera. Pulse Visto para asignar código o corrija el Nº documento.'
+    return (
+      'Este número de comprobante ya está en cartera. Pulse Visto para asignar un código automático ' +
+      'o corrija el número de documento.'
+    )
   }, [
     bloquearCambioComprobanteCodigo,
     conflictoHuellaSerial,
@@ -1279,13 +1307,8 @@ export function RegistrarPagoForm({
       conflictoHuellaSerial &&
       !bloquearCambioComprobanteCodigo
     ) {
-      const hid = conflictoDocApi?.huella_pago_id
       setErrors({
-        general:
-          (hid != null
-            ? `${DUPLICADO_HUELLA_UI} Conflicto con pago ID ${hid}.`
-            : DUPLICADO_HUELLA_UI) +
-          ' No se puede guardar: ya existe un abono con el mismo préstamo, fecha, monto y referencia.',
+        general: mensajeDuplicadoHuellaDetalle(conflictoDocApi?.huella_pago_id),
         numero_documento: DUPLICADO_HUELLA_UI,
       })
       return
@@ -1611,7 +1634,13 @@ export function RegistrarPagoForm({
         const detailLower = (detail || '').toLowerCase()
 
         if (status === 409 && detailLower.includes('huella funcional')) {
-          errorMessage = DUPLICADO_HUELLA_UI
+          const m =
+            String(detail || '').match(/pagos\.id=(\d+)/i) ||
+            String(detail || '').match(/pago\s*id[:\s]*(\d+)/i)
+          const pidConf = m ? Number(m[1]) : conflictoDocApi?.huella_pago_id
+          errorMessage = mensajeDuplicadoHuellaDetalle(
+            Number.isFinite(pidConf) ? pidConf : null
+          )
         } else if (
           status === 409 &&
           detailLower.includes('no se permite cambiar') &&
@@ -1842,8 +1871,8 @@ export function RegistrarPagoForm({
                       imagen obligatoria. No puede repetirse la misma
                       combinación comprobante + código; use el campo «Código»
                       para distinguir pagos con el mismo texto de referencia
-                      bancaria. La huella funcional sigue evitando el mismo pago
-                      (crédito, fecha, monto y ref. normalizada).
+                      bancaria. El sistema también evita cargar dos veces el
+                      mismo abono (mismo crédito, fecha, monto y referencia).
                     </p>
                   </div>
                 )}
@@ -2449,21 +2478,14 @@ export function RegistrarPagoForm({
                               Consultando unicidad en cartera…
                             </span>
                           ) : conflictoHuellaSerial ? (
-                            <span>
-                              <span className="font-semibold text-red-800">
-                                {DUPLICADO_HUELLA_UI}
+                            <span className="text-red-800">
+                              <span className="font-semibold">
+                                Abono repetido
                               </span>
-                              {conflictoDocApi?.huella_pago_id != null ? (
-                                <>
-                                  {' '}
-                                  Conflicto con pago ID{' '}
-                                  <span className="font-mono">
-                                    {conflictoDocApi.huella_pago_id}
-                                  </span>
-                                </>
-                              ) : null}
-                              . No se puede guardar hasta cambiar préstamo,
-                              fecha, monto o referencia.
+                              {' — '}
+                              {mensajeDuplicadoHuellaDetalle(
+                                conflictoDocApi?.huella_pago_id
+                              )}
                             </span>
                           ) : puedeAdoptarPagoHuerfano ? (
                             <span>
