@@ -632,6 +632,7 @@ export function RegistrarPagoForm({
       excludeIdConflicto,
       excludePagoConErrorIdConflicto,
       prestamoIdConflicto,
+      cedulaCanonicaBusqueda,
       formData.fecha_pago,
       formData.monto_pagado,
     ],
@@ -641,6 +642,7 @@ export function RegistrarPagoForm({
         exclude_pago_id: excludeIdConflicto,
         exclude_pago_con_error_id: excludePagoConErrorIdConflicto,
         prestamo_id: prestamoIdConflicto,
+        cedula_cliente: cedulaCanonicaBusqueda || formData.cedula_cliente || null,
         fecha_pago: formData.fecha_pago || null,
         monto_pagado: formData.monto_pagado,
         referencia_pago: debouncedClaveDocumentoConflicto,
@@ -656,8 +658,18 @@ export function RegistrarPagoForm({
 
   const conflictoHuellaSerial = Boolean(conflictoDocApi?.huella_conflicto)
 
+  const puedeAdoptarPagoHuerfano = Boolean(
+    conflictoDocApi?.puede_adoptar_pago_huerfano
+  )
+
+  const conflictoDocumentoBloquea =
+    Boolean(
+      conflictoDocApi?.documento_bloquea_guardar ??
+        (conflictoDocumentoSerial && !puedeAdoptarPagoHuerfano)
+    )
+
   const conflictoSerialBloqueaGuardar =
-    (conflictoDocumentoSerial || conflictoHuellaSerial) &&
+    (conflictoDocumentoBloquea || conflictoHuellaSerial) &&
     !String(formData.codigo_documento ?? '').trim() &&
     !bloquearCambioComprobanteCodigo
 
@@ -677,12 +689,14 @@ export function RegistrarPagoForm({
 
   /** Mismo serial en cartera en un pago huérfano; el formulario sí tiene crédito elegido. */
   const conflictoDocOrfanoCarteraConPrestamoEnFormulario =
-    conflictoDocumentoSerial &&
-    prestamoIdConflictoCartera == null &&
+    puedeAdoptarPagoHuerfano &&
     prestamoIdFormulario != null
 
   const motivoBotonGuardarDeshabilitado = useMemo(() => {
     if (bloquearCambioComprobanteCodigo) return null
+    if (puedeAdoptarPagoHuerfano && prestamoIdFormulario) {
+      return null
+    }
     if (conflictoHuellaSerial) {
       const hid = conflictoDocApi?.huella_pago_id
       return hid != null
@@ -691,7 +705,8 @@ export function RegistrarPagoForm({
     }
     if (!conflictoSerialBloqueaGuardar) return null
     if (conflictoDocOrfanoCarteraConPrestamoEnFormulario) {
-      const dupId = conflictoDocApi?.pago_id
+      const dupId =
+        conflictoDocApi?.adoptar_pago_huerfano_id ?? conflictoDocApi?.pago_id
       return (
         `El serial ya figura en otro pago de cartera${dupId != null ? ` (ID ${dupId}, sin préstamo)` : ' (sin préstamo)'}. ` +
         `Al guardar y procesar, este pago sí se aplicará al crédito ${prestamoIdFormulario} del formulario. ` +
@@ -703,9 +718,11 @@ export function RegistrarPagoForm({
     bloquearCambioComprobanteCodigo,
     conflictoHuellaSerial,
     conflictoSerialBloqueaGuardar,
+    puedeAdoptarPagoHuerfano,
     conflictoDocOrfanoCarteraConPrestamoEnFormulario,
     conflictoDocApi?.huella_pago_id,
     conflictoDocApi?.pago_id,
+    conflictoDocApi?.adoptar_pago_huerfano_id,
     prestamoIdFormulario,
   ])
 
@@ -1275,7 +1292,7 @@ export function RegistrarPagoForm({
     }
 
     if (
-      conflictoDocumentoSerial &&
+      conflictoDocumentoBloquea &&
       !String(fd.codigo_documento ?? '').trim() &&
       !bloquearCambioComprobanteCodigo
     ) {
@@ -2448,6 +2465,23 @@ export function RegistrarPagoForm({
                               . No se puede guardar hasta cambiar préstamo,
                               fecha, monto o referencia.
                             </span>
+                          ) : puedeAdoptarPagoHuerfano ? (
+                            <span>
+                              <span className="font-semibold text-green-800">
+                                Mismo serial en cartera (sin crédito)
+                              </span>
+                              : pago ID{' '}
+                              <span className="font-mono">
+                                {conflictoDocApi?.adoptar_pago_huerfano_id ??
+                                  conflictoDocApi?.pago_id}
+                              </span>
+                              . Al <strong>Guardar y Procesar</strong> se
+                              asignará el crédito{' '}
+                              <span className="font-mono font-semibold">
+                                #{prestamoIdFormulario}
+                              </span>{' '}
+                              del formulario a ese abono (no hace falta Visto).
+                            </span>
                           ) : conflictoDocumentoSerial ? (
                             <span>
                               <span className="font-semibold text-amber-900">
@@ -2853,25 +2887,22 @@ export function RegistrarPagoForm({
                         </div>
                       ) : null}
                       <div className="mt-2 space-y-2 border-t border-slate-200 pt-2 text-xs text-slate-700">
-                        {conflictoDocOrfanoCarteraConPrestamoEnFormulario ? (
-                          <p className="rounded border border-amber-200 bg-amber-50 px-2 py-1.5 text-amber-950">
-                            El mismo serial ya existe en otro pago de cartera
-                            {conflictoDocApi?.pago_id != null ? (
-                              <>
-                                {' '}
-                                (ID {conflictoDocApi.pago_id})
-                              </>
-                            ) : null}{' '}
-                            sin crédito asignado. Eso no impide aplicar este
-                            pago al crédito del formulario; solo exige un
-                            código distinto (<strong>Visto</strong>) porque el
-                            número de documento debe ser único en la base de
-                            datos.
+                        {puedeAdoptarPagoHuerfano && prestamoIdFormulario ? (
+                          <p className="rounded border border-green-200 bg-green-50 px-2 py-1.5 text-green-900">
+                            El serial ya está en el pago ID{' '}
+                            {conflictoDocApi?.adoptar_pago_huerfano_id ??
+                              conflictoDocApi?.pago_id}{' '}
+                            (sin crédito en cartera). Este formulario sí tiene
+                            préstamo{' '}
+                            <strong>#{prestamoIdFormulario}</strong>: al guardar
+                            se asignará ese crédito al abono existente.
                           </p>
                         ) : null}
                         <p>
                           <span className="font-medium text-slate-900">
-                            Otro pago en cartera con este Nº documento:
+                            {puedeAdoptarPagoHuerfano
+                              ? 'Abono en cartera con este serial (se actualizará):'
+                              : 'Otro pago en cartera con este Nº documento:'}
                           </span>{' '}
                           {conflictoDocError ? (
                             <span className="text-red-600">
@@ -2908,6 +2939,16 @@ export function RegistrarPagoForm({
                                 {' '}
                                 · Verificando…
                               </span>
+                            </>
+                          ) : puedeAdoptarPagoHuerfano ? (
+                            <>
+                              Pago ID{' '}
+                              <span className="font-mono">
+                                {conflictoDocApi?.adoptar_pago_huerfano_id ??
+                                  conflictoDocApi?.pago_id}
+                              </span>{' '}
+                              (sin crédito → se asignará #
+                              {prestamoIdFormulario})
                             </>
                           ) : conflictoDocApi?.conflicto ? (
                             <>

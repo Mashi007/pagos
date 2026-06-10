@@ -278,9 +278,13 @@ class PagoService {
     fecha_pago?: string | null
     monto_pagado?: number | null
     referencia_pago?: string | null
+    cedula_cliente?: string | null
   }): Promise<{
     conflicto: boolean
     documento_conflicto?: boolean
+    documento_bloquea_guardar?: boolean
+    puede_adoptar_pago_huerfano?: boolean
+    adoptar_pago_huerfano_id?: number | null
     huella_conflicto?: boolean
     pago_id: number | null
     prestamo_id: number | null
@@ -324,6 +328,9 @@ class PagoService {
     }
     if (params.referencia_pago?.trim()) {
       qs.set('referencia_pago', params.referencia_pago.trim())
+    }
+    if (params.cedula_cliente?.trim()) {
+      qs.set('cedula_cliente', params.cedula_cliente.trim())
     }
     return await apiClient.get(
       `${this.baseUrl}/conflicto-documento-cartera?${qs.toString()}`

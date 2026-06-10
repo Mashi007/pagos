@@ -1135,6 +1135,11 @@ def get_conflicto_documento_cartera(
 
     referencia_pago: Optional[str] = Query(None),
 
+    cedula_cliente: Optional[str] = Query(
+        None,
+        description="Cédula del formulario; con préstamo permite adoptar pago huérfano en cartera",
+    ),
+
     db: Session = Depends(get_db),
 
     current_user: UserResponse = Depends(get_current_user),
@@ -1164,6 +1169,7 @@ def get_conflicto_documento_cartera(
         db,
         numero_documento=numero_documento,
         prestamo_id=prestamo_id,
+        cedula_cliente=cedula_cliente,
         fecha_pago=fecha_date,
         monto_pagado=monto_pagado,
         referencia_pago=referencia_pago,

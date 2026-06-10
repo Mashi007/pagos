@@ -178,9 +178,21 @@ def rechazar_si_pago_con_error_serial_duplicado(
     """
     num = (getattr(row, "numero_documento", None) or "").strip()
     if num:
-        from app.services.pago_numero_documento import numero_documento_ya_registrado
+        from app.services.pago_numero_documento import (
+            numero_documento_ya_registrado,
+            pago_huerfano_adoptable_por_documento,
+        )
 
-        if numero_documento_ya_registrado(
+        prestamo_dest = getattr(row, "prestamo_id", None)
+        adoptable = None
+        if prestamo_dest and int(prestamo_dest) > 0:
+            adoptable = pago_huerfano_adoptable_por_documento(
+                db,
+                num,
+                prestamo_id_destino=int(prestamo_dest),
+                cedula_cliente=getattr(row, "cedula_cliente", None),
+            )
+        if adoptable is None and numero_documento_ya_registrado(
             db,
             num,
             exclude_pago_con_error_id=exclude_pago_con_error_id,
@@ -202,6 +214,7 @@ def conflicto_serial_para_formulario(
     *,
     numero_documento: str,
     prestamo_id: Optional[int] = None,
+    cedula_cliente: Optional[str] = None,
     fecha_pago: Optional[date] = None,
     monto_pagado: Optional[float] = None,
     referencia_pago: Optional[str] = None,
@@ -214,6 +227,7 @@ def conflicto_serial_para_formulario(
     from app.core.documento import normalize_documento
     from app.services.pago_numero_documento import (
         numero_documento_ya_registrado,
+        pago_huerfano_adoptable_por_documento,
         primer_pago_cartera_por_documento,
     )
 
@@ -223,6 +237,8 @@ def conflicto_serial_para_formulario(
     pago_id: Optional[int] = None
     prestamo_id_doc: Optional[int] = None
     pago_con_error_id: Optional[int] = None
+    puede_adoptar_pago_huerfano = False
+    adoptar_pago_huerfano_id: Optional[int] = None
 
     if doc:
         documento_conflicto = numero_documento_ya_registrado(
@@ -234,6 +250,23 @@ def conflicto_serial_para_formulario(
         pago_id, prestamo_id_doc = primer_pago_cartera_por_documento(
             db, doc, exclude_pago_id=exclude_pago_id
         )
+        if (
+            documento_conflicto
+            and prestamo_id
+            and int(prestamo_id) > 0
+            and (cedula_cliente or "").strip()
+        ):
+            adoptar_pago_huerfano_id = pago_huerfano_adoptable_por_documento(
+                db,
+                doc,
+                prestamo_id_destino=int(prestamo_id),
+                cedula_cliente=cedula_cliente,
+                exclude_pago_id=exclude_pago_id,
+            )
+            if adoptar_pago_huerfano_id is not None:
+                puede_adoptar_pago_huerfano = True
+                pago_id = adoptar_pago_huerfano_id
+                prestamo_id_doc = None
         if documento_conflicto and pago_id is None:
             from sqlalchemy import func, select
 
@@ -264,9 +297,14 @@ def conflicto_serial_para_formulario(
             )
             huella_conflicto = huella_pago_id is not None
 
+    documento_bloquea = documento_conflicto and not puede_adoptar_pago_huerfano
+
     return {
-        "conflicto": documento_conflicto or huella_conflicto,
+        "conflicto": documento_bloquea or huella_conflicto,
         "documento_conflicto": documento_conflicto,
+        "documento_bloquea_guardar": documento_bloquea,
+        "puede_adoptar_pago_huerfano": puede_adoptar_pago_huerfano,
+        "adoptar_pago_huerfano_id": adoptar_pago_huerfano_id,
         "huella_conflicto": huella_conflicto,
         "pago_id": pago_id,
         "prestamo_id": prestamo_id_doc,

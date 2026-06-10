@@ -86,6 +86,10 @@ def test_rechazar_si_documento_duplicado(monkeypatch) -> None:
         "app.services.pago_numero_documento.numero_documento_ya_registrado",
         _doc_dup,
     )
+    monkeypatch.setattr(
+        "app.services.pago_numero_documento.pago_huerfano_adoptable_por_documento",
+        lambda *_a, **_k: None,
+    )
 
     with pytest.raises(HTTPException) as exc:
         rechazar_si_pago_con_error_serial_duplicado(_FakeDb(None), row, exclude_pago_con_error_id=1)
@@ -106,11 +110,42 @@ def test_rechazar_si_huella_duplicada(monkeypatch) -> None:
         "app.services.pago_numero_documento.numero_documento_ya_registrado",
         lambda *_a, **_k: False,
     )
+    monkeypatch.setattr(
+        "app.services.pago_numero_documento.pago_huerfano_adoptable_por_documento",
+        lambda *_a, **_k: None,
+    )
 
     with pytest.raises(HTTPException) as exc:
         rechazar_si_pago_con_error_serial_duplicado(_FakeDb(501), row)
     assert exc.value.status_code == 409
     assert "pagos.id=501" in str(exc.value.detail)
+
+
+def test_conflicto_serial_adopta_huerfano(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "app.services.pago_numero_documento.numero_documento_ya_registrado",
+        lambda *_a, **_k: True,
+    )
+    monkeypatch.setattr(
+        "app.services.pago_numero_documento.primer_pago_cartera_por_documento",
+        lambda *_a, **_k: (77, None),
+    )
+    monkeypatch.setattr(
+        "app.services.pago_numero_documento.pago_huerfano_adoptable_por_documento",
+        lambda *_a, **_k: 77,
+    )
+
+    out = conflicto_serial_para_formulario(
+        _FakeDb(None),
+        numero_documento="103328178",
+        prestamo_id=1443,
+        cedula_cliente="V17037221",
+    )
+    assert out["documento_conflicto"] is True
+    assert out["puede_adoptar_pago_huerfano"] is True
+    assert out["adoptar_pago_huerfano_id"] == 77
+    assert out["documento_bloquea_guardar"] is False
+    assert out["conflicto"] is False
 
 
 def test_conflicto_serial_para_formulario_huella(monkeypatch) -> None:

@@ -6,6 +6,7 @@ mismo número “visible” del banco es que el **valor almacenado** difiera por
 `compose_numero_documento_almacenado`), p. ej. revisión manual con token A####/P####.
 """
 
+import re
 from typing import Any, Iterator, Optional, Type
 
 from sqlalchemy import func, select
@@ -14,7 +15,10 @@ from sqlalchemy.orm import Session
 from app.core.documento import normalize_documento
 from app.models.pago import Pago
 from app.models.pago_con_error import PagoConError
-from app.utils.cedula_almacenamiento import normalizar_cedula_almacenamiento
+from app.utils.cedula_almacenamiento import (
+    normalizar_cedula_almacenamiento,
+    texto_cedula_comparable_bd,
+)
 
 
 def _candidatos_evasion_columna(column: Any, compact: str) -> Iterator[tuple[Any, str]]:
@@ -98,6 +102,51 @@ def documento_colisiona_evasion_registrado(
         if numero_operacion_colisiona_reportado_activo(db, numero_documento):
             return True
     return False
+
+
+def cedulas_compatibles_adopcion_huerfano(
+    cedula_a: Optional[str],
+    cedula_b: Optional[str],
+) -> bool:
+    """Misma persona (V/E/J + dígitos, tolera ceros a la izquierda en el número)."""
+    ca = texto_cedula_comparable_bd(cedula_a)
+    cb = texto_cedula_comparable_bd(cedula_b)
+    if not ca or not cb:
+        return False
+    if ca == cb:
+        return True
+    da = re.sub(r"\D", "", ca).lstrip("0") or "0"
+    db = re.sub(r"\D", "", cb).lstrip("0") or "0"
+    return len(da) >= 6 and len(db) >= 6 and da == db
+
+
+def pago_huerfano_adoptable_por_documento(
+    db: Session,
+    numero_documento: Optional[str],
+    *,
+    prestamo_id_destino: int,
+    cedula_cliente: Optional[str],
+    exclude_pago_id: Optional[int] = None,
+) -> Optional[int]:
+    """
+    Si el duplicado en cartera es un único `Pago` sin préstamo y la cédula cuadra,
+    devuelve su id para asignar el crédito del formulario (evita segundo insert con mismo serial).
+    """
+    if not prestamo_id_destino or int(prestamo_id_destino) <= 0:
+        return None
+    pid, prid = primer_pago_cartera_por_documento(
+        db, numero_documento, exclude_pago_id=exclude_pago_id
+    )
+    if pid is None or prid is not None:
+        return None
+    pago = db.get(Pago, int(pid))
+    if pago is None:
+        return None
+    if not cedulas_compatibles_adopcion_huerfano(
+        getattr(pago, "cedula_cliente", None), cedula_cliente
+    ):
+        return None
+    return int(pid)
 
 
 def primer_pago_cartera_por_documento(

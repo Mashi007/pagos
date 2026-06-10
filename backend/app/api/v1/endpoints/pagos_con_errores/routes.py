@@ -50,6 +50,7 @@ from app.services.pago_huella_funcional import (
 from app.services.pago_numero_documento import (
     numero_documento_ya_registrado,
     pago_con_error_ya_cargado_estricto,
+    pago_huerfano_adoptable_por_documento,
     primer_pago_cartera_por_documento,
 )
 from app.services.pagos_gmail.gmail_service import extract_lote_it_master_cedula_from_subject
@@ -1016,35 +1017,9 @@ def mover_a_pagos_normales(
                 db.flush()
                 continue
 
-            # Validar que no exista duplicado en tabla pagos (caso menos estricto: doc igual sin
-            # cuota_pagos aplicado o sin cliente/préstamo confirmado): no se mueve, queda en
-            # revisión para que el usuario desambigüe con código.
             numero_documento_normalizado = row.numero_documento or ""
-            duplicado_existe = False
-
-            if numero_documento_normalizado:
-                duplicado_existe = numero_documento_ya_registrado(
-                    db,
-                    numero_documento_normalizado,
-                    exclude_pago_con_error_id=pid,
-                )
-                if duplicado_existe:
-                    logger.warning(f"mover_a_pagos_normales: pago {pid} tiene documento duplicado en tabla pagos: {numero_documento_normalizado}")
-                    errores_procesamiento.append(f"Pago {pid}: documento '{numero_documento_normalizado}' ya existe en tabla pagos")
-                    continue  # Saltar este pago, no mover
-
-            pago_huella_id = pago_con_error_conflicto_huella_existente(db, row)
-            if pago_huella_id is not None:
-                errores_procesamiento.append(
-                    f"Pago {pid}: {mensaje_409_huella_funcional_con_id(pago_huella_id)}"
-                )
-                continue
 
             # Resolver la cédula EXACTA como está almacenada en `clientes` (FK fk_pagos_cedula).
-            # El origen suele traer solo dígitos (`22621583`) mientras `clientes.cedula` está
-            # con prefijo (`V22621583`); el helper prueba candidatos V/E/J/G y devuelve la
-            # cédula tal cual está en la BD. Si no existe el cliente, registramos un error
-            # legible y dejamos la fila en revisión (no la borramos: requiere acción humana).
             cedula_resuelta = resolver_cedula_almacenada_en_clientes(db, row.cedula_cliente)
             if not cedula_resuelta:
                 cedula_norm_orig = (
@@ -1060,6 +1035,39 @@ def mover_a_pagos_normales(
                     "Registre/ajuste la cédula del cliente y reintente."
                 )
                 continue  # No insertar: violaría fk_pagos_cedula.
+
+            adopt_pago_id = None
+            if numero_documento_normalizado and row.prestamo_id:
+                adopt_pago_id = pago_huerfano_adoptable_por_documento(
+                    db,
+                    numero_documento_normalizado,
+                    prestamo_id_destino=int(row.prestamo_id),
+                    cedula_cliente=cedula_resuelta,
+                )
+
+            if adopt_pago_id is None and numero_documento_normalizado:
+                duplicado_existe = numero_documento_ya_registrado(
+                    db,
+                    numero_documento_normalizado,
+                    exclude_pago_con_error_id=pid,
+                )
+                if duplicado_existe:
+                    logger.warning(
+                        "mover_a_pagos_normales: pago %s documento duplicado en pagos: %s",
+                        pid,
+                        numero_documento_normalizado,
+                    )
+                    errores_procesamiento.append(
+                        f"Pago {pid}: documento '{numero_documento_normalizado}' ya existe en tabla pagos"
+                    )
+                    continue
+
+            pago_huella_id = pago_con_error_conflicto_huella_existente(db, row)
+            if pago_huella_id is not None and adopt_pago_id != pago_huella_id:
+                errores_procesamiento.append(
+                    f"Pago {pid}: {mensaje_409_huella_funcional_con_id(pago_huella_id)}"
+                )
+                continue
 
             # «Guardar y procesar» = intención explícita de pasar a cartera. Si hay préstamo y monto,
             # forzamos validación cartera (conciliado + verificado SI) para que la columna Cartera y la
@@ -1079,24 +1087,55 @@ def mover_a_pagos_normales(
             if conciliado and estado_inicial == "PENDIENTE":
                 estado_inicial = "PAGADO"
 
-            pago = Pago(
-                cedula_cliente=cedula_resuelta,
-                prestamo_id=row.prestamo_id,
-                fecha_pago=row.fecha_pago,
-                monto_pagado=row.monto_pagado,
-                numero_documento=row.numero_documento or "",
-                institucion_bancaria=row.institucion_bancaria,
-                estado=estado_inicial,
-                conciliado=conciliado,
-                fecha_conciliacion=ahora,
-                verificado_concordancia="SI" if conciliado else "",
-                notas=row.notas,
-                referencia_pago=row.referencia_pago or row.numero_documento or "N/A",
-            )
+            if adopt_pago_id is not None:
+                pago = db.get(Pago, int(adopt_pago_id))
+                if pago is None:
+                    errores_procesamiento.append(
+                        f"Pago {pid}: no se encontró pago huérfano id={adopt_pago_id} para adoptar"
+                    )
+                    continue
+                logger.info(
+                    "mover_a_pagos_normales: adoptando pago huérfano id=%s con datos de pago_con_error id=%s",
+                    adopt_pago_id,
+                    pid,
+                )
+            else:
+                pago = Pago(
+                    cedula_cliente=cedula_resuelta,
+                    prestamo_id=row.prestamo_id,
+                    fecha_pago=row.fecha_pago,
+                    monto_pagado=row.monto_pagado,
+                    numero_documento=row.numero_documento or "",
+                    institucion_bancaria=row.institucion_bancaria,
+                    estado=estado_inicial,
+                    conciliado=conciliado,
+                    fecha_conciliacion=ahora,
+                    verificado_concordancia="SI" if conciliado else "",
+                    notas=row.notas,
+                    referencia_pago=row.referencia_pago or row.numero_documento or "N/A",
+                )
+                db.add(pago)
+                db.flush()
+                db.refresh(pago)
 
-            db.add(pago)
-            db.flush()
-            db.refresh(pago)
+            if adopt_pago_id is not None:
+                pago.cedula_cliente = cedula_resuelta
+                pago.prestamo_id = row.prestamo_id
+                pago.fecha_pago = row.fecha_pago
+                pago.monto_pagado = row.monto_pagado
+                if row.institucion_bancaria:
+                    pago.institucion_bancaria = row.institucion_bancaria
+                pago.estado = estado_inicial
+                pago.conciliado = conciliado
+                pago.fecha_conciliacion = ahora
+                pago.verificado_concordancia = "SI" if conciliado else ""
+                if row.notas:
+                    pago.notas = row.notas
+                pago.referencia_pago = (
+                    row.referencia_pago or row.numero_documento or pago.referencia_pago or "N/A"
+                )
+                db.flush()
+                db.refresh(pago)
 
             nuevo_pago_id = pago.id
             cc_aplicadas = 0
