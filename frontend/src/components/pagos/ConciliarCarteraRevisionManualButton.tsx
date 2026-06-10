@@ -632,6 +632,58 @@ export function ConciliarCarteraRevisionManualButton({
 
               </ul>
 
+              <div className="rounded border border-sky-200 bg-sky-50 p-3 text-sky-950">
+
+                <p className="font-medium">¿Por qué la tabla puede verse igual?</p>
+
+                <p className="mt-1 text-muted-foreground">
+
+                  Conciliar <strong>no reemplaza</strong> los montos por ABONOS de
+
+                  General. Recrea cada pago con el OCR del comprobante. Si cada
+
+                  imagen sigue leyendo el mismo monto (p. ej. $177.00), la lista
+
+                  se verá igual aunque en BD sí cambió: se borraron{' '}
+
+                  <strong>{resultado.pagos_eliminados ?? '—'}</strong> pago(s) y se
+
+                  crearon <strong>{resultado.ocr_ok ?? '—'}</strong> filas nuevas
+
+                  {resultado.detalle?.length
+
+                    ? ` (ID ${resultado.detalle
+
+                        .filter(d => d.ok && d.pago_id)
+
+                        .map(d => d.pago_id)
+
+                        .join(', ')})`
+
+                    : ''}
+
+                  , con cascada reaplicada a cuotas.
+
+                </p>
+
+                {diffResultado != null && Math.abs(diffResultado) > 0.02 ? (
+
+                  <p className="mt-2 text-amber-900">
+
+                    ABONOS en General ({fmt(abonosResultado)}) ≠ total OCR (
+
+                    {fmt(resultado.total_pagos_recriados_usd)}). Esa diferencia (
+
+                    {fmtDiff(diffResultado)}) requiere <strong>cuadre manual</strong>{' '}
+
+                    en revisión; Conciliar no ajusta montos sola.
+
+                  </p>
+
+                ) : null}
+
+              </div>
+
               {resultado.advertencia_parcial ? (
 
                 <p className="flex items-start gap-2 text-amber-900">
