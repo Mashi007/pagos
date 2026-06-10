@@ -9,13 +9,16 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.models.pago import _normalizar_referencia_pago
 from app.services.prestamo_cartera_auditoria import _sql_fragment_pago_excluido_cartera
+
+if TYPE_CHECKING:
+    from app.models.pago_con_error import PagoConError
 
 # Misma redaccion que POST /pagos (crear) para 409 por huella.
 HTTP_409_DETAIL_HUELLA_FUNCIONAL = (
@@ -156,6 +159,45 @@ def primer_id_conflicto_huella_funcional(
     if not row or row[0] is None:
         return None
     return int(row[0])
+
+
+def pago_con_error_conflicto_huella_existente(
+    db: Session,
+    perr: "PagoConError",
+) -> Optional[int]:
+    """
+    ID del `Pago` operativo que comparte huella con este `PagoConError`, o None.
+
+    Cubre duplicados donde `numero_documento` difiere en texto (p. ej. BNC/164… vs 164…)
+    pero `ref_norm` coincide con el índice `ux_pagos_fingerprint_activos`.
+    """
+    if perr is None:
+        return None
+    prestamo_id = getattr(perr, "prestamo_id", None)
+    if not prestamo_id:
+        return None
+    fp = getattr(perr, "fecha_pago", None)
+    if fp is None:
+        return None
+    fecha = fp.date() if hasattr(fp, "date") else fp
+    if not isinstance(fecha, date):
+        return None
+    monto = getattr(perr, "monto_pagado", None)
+    if monto is None:
+        return None
+    rn = ref_norm_desde_campos(
+        getattr(perr, "numero_documento", None),
+        getattr(perr, "referencia_pago", None),
+    ).strip()
+    if not rn:
+        return None
+    return primer_id_conflicto_huella_funcional(
+        db,
+        prestamo_id=int(prestamo_id),
+        fecha_pago=fecha,
+        monto_pagado=Decimal(str(round(float(monto), 2))),
+        ref_norm=rn,
+    )
 
 
 def existe_otro_pago_misma_huella_funcional(
