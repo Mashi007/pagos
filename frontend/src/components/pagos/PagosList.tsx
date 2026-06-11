@@ -2178,28 +2178,12 @@ export function PagosList() {
                   </div>
                 </>
               ) : staffComprobantePreview.blobUrl ? (
-                <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 rounded-md border border-slate-200/80 bg-slate-50 p-4 text-center text-sm text-slate-700 lg:rounded-l-none lg:border-l-0">
-                  <FileText className="h-10 w-10 text-slate-500" aria-hidden />
-                  <p>
-                    Comprobante PDF. Ábralo en una pestaña para revisarlo (evita
-                    bloqueos de seguridad del visor embebido).
-                  </p>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="gap-1.5"
-                    onClick={() => {
-                      window.open(
-                        staffComprobantePreview.blobUrl!,
-                        '_blank',
-                        'noopener,noreferrer'
-                      )
-                    }}
-                  >
-                    <Eye className="h-4 w-4" aria-hidden />
-                    Abrir PDF
-                  </Button>
+                <div className="min-h-0 flex-1 overflow-auto rounded-md border border-slate-200/80 bg-white lg:rounded-l-none lg:border-l-0">
+                  <iframe
+                    title={staffComprobantePreview.label || 'Comprobante PDF'}
+                    src={staffComprobantePreview.blobUrl}
+                    className="h-[min(36vh,320px)] min-h-[200px] w-full border-0 lg:h-full lg:min-h-[min(50vh,520px)]"
+                  />
                 </div>
               ) : (
                 <p className="text-sm text-muted-foreground">

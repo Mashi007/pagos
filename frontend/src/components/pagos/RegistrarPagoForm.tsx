@@ -115,9 +115,11 @@ import { apiClient } from '../../services/api'
 import {
   abrirStaffComprobanteDesdeHref,
   esUrlComprobanteImagenConAuth,
+  blobComprobanteAFileParaEscaneo,
   fetchStaffComprobanteBlobWithDisplayMime,
   pathApiComprobanteImagenDesdeHref,
 } from '../../utils/comprobanteImagenAuth'
+import { normalizarComprobanteArchivoParaEscaneo } from '../../utils/normalizarComprobanteArchivo'
 import { escanerInfopagosExtraerComprobante } from '../../services/cobrosService'
 import { eliminarPagoRevisionOConError } from '../../utils/eliminarPagoRevision'
 
@@ -309,23 +311,28 @@ function VistaEmbebidaComprobante({
 }) {
   if (kind === 'pdf') {
     return (
-      <div
-        className={`flex flex-col items-center justify-center gap-2 rounded border border-slate-200 bg-slate-50 p-4 text-center text-sm text-slate-700 ${classNamePdf}`}
-      >
-        <FileText className="h-8 w-8 text-slate-500" aria-hidden />
-        <p>Comprobante PDF listo. Ábralo en una pestaña para revisarlo.</p>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="gap-1.5"
-          onClick={() => {
-            window.open(src, '_blank', 'noopener,noreferrer')
-          }}
-        >
-          <Eye className="h-4 w-4" aria-hidden />
-          Abrir PDF
-        </Button>
+      <div className={`flex min-h-0 flex-col gap-2 ${classNamePdf}`}>
+        <div className="min-h-0 flex-1 overflow-hidden rounded border border-slate-200 bg-white">
+          <iframe
+            src={src}
+            title="Vista del comprobante PDF"
+            className="h-full min-h-[12rem] w-full border-0"
+          />
+        </div>
+        <div className="flex shrink-0 justify-center">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="gap-1.5"
+            onClick={() => {
+              window.open(src, '_blank', 'noopener,noreferrer')
+            }}
+          >
+            <Eye className="h-4 w-4" aria-hidden />
+            Abrir en pestaña
+          </Button>
+        </div>
       </div>
     )
   }
@@ -896,8 +903,15 @@ export function RegistrarPagoForm({
 
     setIsRescanning(true)
     try {
-      let fileToScan: File | null = archivoComprobante
-      if (!fileToScan) {
+      let fileToScan: File | null = null
+      if (archivoComprobante) {
+        fileToScan = await normalizarComprobanteArchivoParaEscaneo(
+          await blobComprobanteAFileParaEscaneo(
+            archivoComprobante,
+            archivoComprobante.type
+          )
+        )
+      } else {
         const href = (linkComprobanteParaVista || '').trim()
         if (!href) {
           toast.error('No hay comprobante disponible para escanear.')
@@ -919,24 +933,13 @@ export function RegistrarPagoForm({
         }
 
         try {
-          const { blob, contentType } =
-            await fetchStaffComprobanteBlobWithDisplayMime(href)
-          const ext =
-            contentType === 'image/png'
-              ? 'png'
-              : contentType === 'image/gif'
-                ? 'gif'
-                : contentType === 'image/webp'
-                  ? 'webp'
-                  : contentType === 'application/pdf'
-                    ? 'pdf'
-                    : 'jpg'
-          fileToScan = new File([blob], `comprobante.${ext}`, {
-            type: contentType || 'application/octet-stream',
-          })
+          const { blob } = await fetchStaffComprobanteBlobWithDisplayMime(href)
+          fileToScan = await normalizarComprobanteArchivoParaEscaneo(blob)
         } catch (fetchErr) {
           toast.error(
-            'No se pudo acceder al comprobante guardado. Adjunte la imagen nuevamente.'
+            fetchErr instanceof Error
+              ? fetchErr.message
+              : 'No se pudo acceder al comprobante guardado. Adjunte la imagen nuevamente.'
           )
           setIsRescanning(false)
           return
@@ -1261,6 +1264,13 @@ export function RegistrarPagoForm({
 
   /** Validación + POST/PUT usando el snapshot `fd` (p. ej. Visto rellena código y guarda sin esperar re-render). */
   const submitPago = async (fd: PagoCreate) => {
+    if (usarApiPagosConErrores && pagoCarteraIdTrasMover != null) {
+      toast.info(
+        'Este pago ya fue movido a cartera. Cierre el formulario y actualice la tabla de revisión.'
+      )
+      return
+    }
+
     const newErrors: Record<string, string> = {}
 
     const hoyCaracas = hoyYmdCaracas()
@@ -1777,12 +1787,13 @@ export function RegistrarPagoForm({
           esDocumentoDuplicado = true
         } else if (
           status === 404 &&
-          esRevisionManualPagosCartera &&
+          (esRevisionManualPagosCartera || usarApiPagosConErrores) &&
           (detailLower.includes('pago no encontrado') ||
             detailLower.includes('pago con error no encontrado'))
         ) {
-          errorMessage =
-            'Este pago ya no existe en la tabla (p. ej. tras Conciliar cartera). Pulse Actualizar en la tabla de pagos y vuelva a abrir el registro recreado.'
+          errorMessage = usarApiPagosConErrores
+            ? 'Este pago ya no está en revisión (probablemente ya fue procesado y movido a cartera). Actualice la tabla y ábralo de nuevo si aún aparece.'
+            : 'Este pago ya no existe en la tabla (p. ej. tras Conciliar cartera). Pulse Actualizar en la tabla de pagos y vuelva a abrir el registro recreado.'
         } else if (detail) {
           errorMessage = detail
         }

@@ -34,8 +34,19 @@ export async function fetchStaffComprobanteBlobFromHref(
   return apiClient.getBlob(path)
 }
 
+function sniffHeicHeifFromHead(u: Uint8Array): 'image/heic' | 'image/heif' | null {
+  if (u.length < 16) return null
+  if (u[4] !== 0x66 || u[5] !== 0x74 || u[6] !== 0x79 || u[7] !== 0x70) {
+    return null
+  }
+  const marca = String.fromCharCode(...u.slice(8, Math.min(48, u.length))).toLowerCase()
+  if (/heic|heix|hevc|hevx/.test(marca)) return 'image/heic'
+  if (/mif1|msf1/.test(marca)) return 'image/heif'
+  return null
+}
+
 /** Primeros bytes del archivo para cuando `Blob.type` viene vacío u octet-stream. */
-function sniffComprobanteMimeFromHead(u: Uint8Array): string | null {
+export function sniffComprobanteMimeFromHead(u: Uint8Array): string | null {
   if (u.length < 4) return null
   if (u[0] === 0xff && u[1] === 0xd8 && u[2] === 0xff) return 'image/jpeg'
   if (u[0] === 0x89 && u[1] === 0x50 && u[2] === 0x4e && u[3] === 0x47)
@@ -57,7 +68,54 @@ function sniffComprobanteMimeFromHead(u: Uint8Array): string | null {
   ) {
     return 'image/webp'
   }
-  return null
+  return sniffHeicHeifFromHead(u)
+}
+
+function extensionDesdeMimeComprobante(mime: string): string {
+  switch (mime) {
+    case 'image/png':
+      return 'png'
+    case 'image/gif':
+      return 'gif'
+    case 'image/webp':
+      return 'webp'
+    case 'application/pdf':
+      return 'pdf'
+    case 'image/heic':
+      return 'heic'
+    case 'image/heif':
+      return 'heif'
+    default:
+      return 'jpg'
+  }
+}
+
+/**
+ * Arma un `File` con MIME y extensión coherentes con el contenido real (OCR / escáner).
+ * Evita enviar `application/octet-stream` o `.jpg` cuando el blob guardado es PDF/HEIC.
+ */
+export async function blobComprobanteAFileParaEscaneo(
+  blob: Blob,
+  contentTypeHint = ''
+): Promise<File> {
+  const buf = await blob.arrayBuffer()
+  const head = new Uint8Array(buf.slice(0, Math.min(48, buf.byteLength)))
+  let mime = (contentTypeHint || blob.type || '').split(';')[0].trim().toLowerCase()
+  if (
+    !mime ||
+    mime === 'application/octet-stream' ||
+    mime === 'binary/octet-stream'
+  ) {
+    mime = sniffComprobanteMimeFromHead(head) || ''
+  }
+  if (!mime) {
+    throw new Error(
+      'No se pudo identificar el tipo del comprobante. Use «Elegir imagen» y vuelva a escanear.'
+    )
+  }
+  if (mime === 'image/jpg') mime = 'image/jpeg'
+  const ext = extensionDesdeMimeComprobante(mime)
+  return new File([buf], `comprobante.${ext}`, { type: mime })
 }
 
 /**
@@ -67,19 +125,8 @@ export async function fetchStaffComprobanteBlobWithDisplayMime(
   href: string
 ): Promise<{ blob: Blob; contentType: string }> {
   const raw = await fetchStaffComprobanteBlobFromHref(href)
-  let ct = (raw.type || '').trim()
-  if (!ct || ct === 'application/octet-stream') {
-    const head = new Uint8Array(await raw.slice(0, 24).arrayBuffer())
-    const sniffed = sniffComprobanteMimeFromHead(head)
-    if (sniffed) {
-      const buf = await raw.arrayBuffer()
-      return { blob: new Blob([buf], { type: sniffed }), contentType: sniffed }
-    }
-  }
-  return {
-    blob: raw,
-    contentType: ct || 'application/octet-stream',
-  }
+  const file = await blobComprobanteAFileParaEscaneo(raw, raw.type)
+  return { blob: file, contentType: file.type }
 }
 
 export async function abrirStaffComprobanteDesdeHref(
