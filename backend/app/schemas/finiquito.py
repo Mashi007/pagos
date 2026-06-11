@@ -145,6 +145,16 @@ class FiniquitoEliminarCasoResponse(BaseModel):
     error: Optional[str] = None
 
 
+class FiniquitoLiberarProcesosNormalesResponse(BaseModel):
+    ok: bool
+    error: Optional[str] = None
+    prestamo_id: Optional[int] = None
+    estado_prestamo_antes: Optional[str] = None
+    estado_prestamo_despues: Optional[str] = None
+    forzado_aprobado: Optional[bool] = None
+    mensaje: Optional[str] = None
+
+
 class FiniquitoPatchEstadoRequest(BaseModel):
     estado: str = Field(
         ...,

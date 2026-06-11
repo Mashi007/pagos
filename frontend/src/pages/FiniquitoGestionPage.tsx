@@ -5,6 +5,7 @@ import {
   useRef,
   useState,
   type ReactNode,
+  type RefObject,
 } from 'react'
 
 import { useQueryClient } from '@tanstack/react-query'
@@ -22,6 +23,7 @@ import {
   RefreshCw,
   Search,
   Trash2,
+  Undo2,
   X,
 } from 'lucide-react'
 
@@ -55,6 +57,7 @@ import {
   type FiniquitoCasoItem,
   finiquitoAdminConteoRevisionNuevos,
   finiquitoAdminEliminarCaso,
+  finiquitoAdminLiberarProcesosNormales,
   finiquitoAdminListar,
   finiquitoAdminListarTerminados,
   finiquitoAdminPasarATrabajo,
@@ -324,6 +327,22 @@ const AUTO_REFRESH_POLL_MS = 60_000
 const FETCH_LIMIT = 2000
 const BANDEJA_PRINCIPAL_FETCH_LIMIT = 100
 
+type FiniquitoAreaId = 'bandeja' | 'revision' | 'trabajo' | 'terminados'
+
+const AREAS_CARGADAS_INICIAL: Record<FiniquitoAreaId, boolean> = {
+  bandeja: false,
+  revision: false,
+  trabajo: false,
+  terminados: false,
+}
+
+const AREAS_LOADING_INICIAL: Record<FiniquitoAreaId, boolean> = {
+  bandeja: false,
+  revision: false,
+  trabajo: false,
+  terminados: false,
+}
+
 function buildResumenDigest(snapshot: FiniquitoResumenEstado): string {
   return [
     snapshot.total,
@@ -505,7 +524,16 @@ function FiniquitoGestionPageInner() {
   } | null>(null)
   const [itemsBandeja, setItemsBandeja] = useState<FiniquitoCasoItem[]>([])
   const [totalBandeja, setTotalBandeja] = useState(0)
-  const [loading, setLoading] = useState(true)
+  const [resumenEstado, setResumenEstado] = useState<FiniquitoResumenEstado | null>(
+    null
+  )
+  const [loadingResumen, setLoadingResumen] = useState(true)
+  const [areasCargadas, setAreasCargadas] = useState(AREAS_CARGADAS_INICIAL)
+  const [areasLoading, setAreasLoading] = useState(AREAS_LOADING_INICIAL)
+  const areasCargadasRef = useRef(areasCargadas)
+  const revisionSectionRef = useRef<HTMLElement>(null)
+  const trabajoSectionRef = useRef<HTMLElement>(null)
+  const terminadosSectionRef = useRef<HTMLElement>(null)
   const [refreshing, setRefreshing] = useState(false)
   const [pendingEstadoCasoId, setPendingEstadoCasoId] = useState<number | null>(
     null
@@ -520,6 +548,8 @@ function FiniquitoGestionPageInner() {
   const [pendingEliminarCasoId, setPendingEliminarCasoId] = useState<
     number | null
   >(null)
+  const [pendingLiberarCaso, setPendingLiberarCaso] =
+    useState<FiniquitoCasoItem | null>(null)
   const [revisionDialogCasoId, setRevisionDialogCasoId] = useState<
     number | null
   >(null)
@@ -577,52 +607,61 @@ function FiniquitoGestionPageInner() {
     return () => window.clearTimeout(t)
   }, [cedulaTerminadosInput])
 
-  const cargarListas = useCallback(
+  useEffect(() => {
+    areasCargadasRef.current = areasCargadas
+  }, [areasCargadas])
+
+  const marcarAreaCargada = useCallback((area: FiniquitoAreaId) => {
+    setAreasCargadas(prev =>
+      prev[area] ? prev : { ...prev, [area]: true }
+    )
+  }, [])
+
+  const setAreaLoadingFlag = useCallback(
+    (area: FiniquitoAreaId, value: boolean) => {
+      setAreasLoading(prev =>
+        prev[area] === value ? prev : { ...prev, [area]: value }
+      )
+    },
+    []
+  )
+
+  const cargarResumenKpis = useCallback(async (opts?: { silent?: boolean }) => {
+    const silent = opts?.silent === true
+    if (!silent) setLoadingResumen(true)
+    try {
+      const snapshot = await finiquitoAdminResumenEstado()
+      setResumenEstado(snapshot)
+      resumenDigestRef.current = buildResumenDigest(snapshot)
+    } catch {
+      if (!silent) {
+        toast.error('No se pudo cargar el resumen de finiquitos')
+      }
+    } finally {
+      if (!silent) setLoadingResumen(false)
+    }
+  }, [])
+
+  const cargarBandeja = useCallback(
     async (opts?: { silent?: boolean }) => {
       const silent = opts?.silent === true
-      if (!silent) {
-        setLoading(true)
-      }
+      if (!silent) setAreaLoadingFlag('bandeja', true)
       try {
-        const [rRevision, rTrabajo, rBandeja, rNuevos, rTerm, rSem] =
-          await Promise.all([
-            finiquitoAdminListar('ACEPTADO', undefined, undefined, {
-              limit: FETCH_LIMIT,
+        const [rBandeja, rNuevos] = await Promise.all([
+          finiquitoAdminListar(
+            'REVISION',
+            cedulaBusqueda || undefined,
+            undefined,
+            {
+              limit: BANDEJA_PRINCIPAL_FETCH_LIMIT,
               offset: 0,
-            }),
-            finiquitoAdminListar(
-              'EN_PROCESO',
-              cedulaTrabajoBusqueda || undefined,
-              undefined,
-              { limit: FETCH_LIMIT, offset: 0 }
-            ),
-            finiquitoAdminListar(
-              'REVISION',
-              cedulaBusqueda || undefined,
-              undefined,
-              {
-                limit: BANDEJA_PRINCIPAL_FETCH_LIMIT,
-                offset: 0,
-              }
-            ),
-            finiquitoAdminConteoRevisionNuevos(
-              cedulaBusqueda || undefined,
-              FINIQUITO_HORAS_NUEVOS_REVISION_DEFAULT
-            ),
-            finiquitoAdminListarTerminados(cedulaTerminadosBusqueda || undefined, {
-              limit: FETCH_LIMIT,
-              offset: 0,
-            }),
-            finiquitoAdminResumenTerminadosSemanal(
-              cedulaTerminadosBusqueda || undefined
-            ),
-          ])
-        setItemsAreaRevision(rRevision.items || [])
-        setTotalAreaRevision(
-          rRevision.total ?? (rRevision.items || []).length
-        )
-        setItemsAreaTrabajo(rTrabajo.items || [])
-        setTotalAreaTrabajo(rTrabajo.total ?? (rTrabajo.items || []).length)
+            }
+          ),
+          finiquitoAdminConteoRevisionNuevos(
+            cedulaBusqueda || undefined,
+            FINIQUITO_HORAS_NUEVOS_REVISION_DEFAULT
+          ),
+        ])
         setItemsBandeja(rBandeja.items || [])
         setTotalBandeja(rBandeja.total ?? (rBandeja.items || []).length)
         setKpiNuevosRevision({
@@ -630,24 +669,125 @@ function FiniquitoGestionPageInner() {
           ventana_horas:
             rNuevos.ventana_horas ?? FINIQUITO_HORAS_NUEVOS_REVISION_DEFAULT,
         })
+        marcarAreaCargada('bandeja')
+      } catch (e: unknown) {
+        if (!silent) {
+          toast.error(e instanceof Error ? e.message : 'Error al cargar bandeja')
+        }
+      } finally {
+        if (!silent) setAreaLoadingFlag('bandeja', false)
+      }
+    },
+    [cedulaBusqueda, marcarAreaCargada, setAreaLoadingFlag]
+  )
+
+  const cargarAreaRevision = useCallback(
+    async (opts?: { silent?: boolean }) => {
+      const silent = opts?.silent === true
+      if (!silent) setAreaLoadingFlag('revision', true)
+      try {
+        const rRevision = await finiquitoAdminListar(
+          'ACEPTADO',
+          undefined,
+          undefined,
+          { limit: FETCH_LIMIT, offset: 0 }
+        )
+        setItemsAreaRevision(rRevision.items || [])
+        setTotalAreaRevision(
+          rRevision.total ?? (rRevision.items || []).length
+        )
+        marcarAreaCargada('revision')
+      } catch (e: unknown) {
+        if (!silent) {
+          toast.error(
+            e instanceof Error ? e.message : 'Error al cargar área de revisión'
+          )
+        }
+      } finally {
+        if (!silent) setAreaLoadingFlag('revision', false)
+      }
+    },
+    [marcarAreaCargada, setAreaLoadingFlag]
+  )
+
+  const cargarAreaTrabajo = useCallback(
+    async (opts?: { silent?: boolean }) => {
+      const silent = opts?.silent === true
+      if (!silent) setAreaLoadingFlag('trabajo', true)
+      try {
+        const rTrabajo = await finiquitoAdminListar(
+          'EN_PROCESO',
+          cedulaTrabajoBusqueda || undefined,
+          undefined,
+          { limit: FETCH_LIMIT, offset: 0 }
+        )
+        setItemsAreaTrabajo(rTrabajo.items || [])
+        setTotalAreaTrabajo(rTrabajo.total ?? (rTrabajo.items || []).length)
+        marcarAreaCargada('trabajo')
+      } catch (e: unknown) {
+        if (!silent) {
+          toast.error(
+            e instanceof Error ? e.message : 'Error al cargar área de trabajo'
+          )
+        }
+      } finally {
+        if (!silent) setAreaLoadingFlag('trabajo', false)
+      }
+    },
+    [cedulaTrabajoBusqueda, marcarAreaCargada, setAreaLoadingFlag]
+  )
+
+  const cargarTerminados = useCallback(
+    async (opts?: { silent?: boolean }) => {
+      const silent = opts?.silent === true
+      if (!silent) setAreaLoadingFlag('terminados', true)
+      try {
+        const [rTerm, rSem] = await Promise.all([
+          finiquitoAdminListarTerminados(cedulaTerminadosBusqueda || undefined, {
+            limit: FETCH_LIMIT,
+            offset: 0,
+          }),
+          finiquitoAdminResumenTerminadosSemanal(
+            cedulaTerminadosBusqueda || undefined
+          ),
+        ])
         setItemsTerminados(rTerm.items || [])
         setTotalTerminados(rTerm.total ?? (rTerm.items || []).length)
         setResumenSemanas(rSem.semanas || [])
         setTotalTerminadosResumen(rSem.total_terminados ?? 0)
+        marcarAreaCargada('terminados')
       } catch (e: unknown) {
-        setKpiNuevosRevision(null)
-        setItemsTerminados([])
-        setTotalTerminados(0)
-        setResumenSemanas([])
-        setTotalTerminadosResumen(0)
-        toast.error(e instanceof Error ? e.message : 'Error al cargar')
-      } finally {
         if (!silent) {
-          setLoading(false)
+          toast.error(
+            e instanceof Error ? e.message : 'Error al cargar terminados'
+          )
         }
+      } finally {
+        if (!silent) setAreaLoadingFlag('terminados', false)
       }
     },
-    [cedulaBusqueda, cedulaTrabajoBusqueda, cedulaTerminadosBusqueda]
+    [cedulaTerminadosBusqueda, marcarAreaCargada, setAreaLoadingFlag]
+  )
+
+  /** Recarga solo las áreas que el usuario ya abrió (polling / tras acciones). */
+  const cargarAreasVisibles = useCallback(
+    async (opts?: { silent?: boolean }) => {
+      const silent = opts?.silent === true
+      const cargadas = areasCargadasRef.current
+      const tasks: Promise<void>[] = [cargarResumenKpis({ silent: true })]
+      if (cargadas.bandeja) tasks.push(cargarBandeja({ silent: true }))
+      if (cargadas.revision) tasks.push(cargarAreaRevision({ silent: true }))
+      if (cargadas.trabajo) tasks.push(cargarAreaTrabajo({ silent: true }))
+      if (cargadas.terminados) tasks.push(cargarTerminados({ silent: true }))
+      await Promise.all(tasks)
+    },
+    [
+      cargarAreaRevision,
+      cargarAreaTrabajo,
+      cargarBandeja,
+      cargarResumenKpis,
+      cargarTerminados,
+    ]
   )
 
   const itemsTerminadosFiltrados = useMemo(
@@ -703,12 +843,62 @@ function FiniquitoGestionPageInner() {
   )
 
   useEffect(() => {
-    void cargarListas()
-  }, [cargarListas])
+    void cargarResumenKpis()
+    void cargarBandeja()
+  }, [cargarBandeja, cargarResumenKpis])
 
   useEffect(() => {
-    resumenDigestRef.current = null
-  }, [cedulaBusqueda, cedulaTrabajoBusqueda, cedulaTerminadosBusqueda])
+    if (!areasCargadas.trabajo) return
+    void cargarAreaTrabajo()
+  }, [areasCargadas.trabajo, cedulaTrabajoBusqueda, cargarAreaTrabajo])
+
+  useEffect(() => {
+    if (!areasCargadas.terminados) return
+    void cargarTerminados()
+  }, [areasCargadas.terminados, cedulaTerminadosBusqueda, cargarTerminados])
+
+  useEffect(() => {
+    const secciones: {
+      ref: RefObject<HTMLElement | null>
+      area: FiniquitoAreaId
+      cargar: () => void
+    }[] = [
+      {
+        ref: revisionSectionRef,
+        area: 'revision',
+        cargar: () => void cargarAreaRevision(),
+      },
+      {
+        ref: trabajoSectionRef,
+        area: 'trabajo',
+        cargar: () => void cargarAreaTrabajo(),
+      },
+      {
+        ref: terminadosSectionRef,
+        area: 'terminados',
+        cargar: () => void cargarTerminados(),
+      },
+    ]
+
+    const observer = new IntersectionObserver(
+      entries => {
+        for (const entry of entries) {
+          if (!entry.isIntersecting) continue
+          const match = secciones.find(s => s.ref.current === entry.target)
+          if (!match) continue
+          if (areasCargadasRef.current[match.area]) continue
+          match.cargar()
+        }
+      },
+      { root: null, rootMargin: '160px 0px', threshold: 0.01 }
+    )
+
+    for (const s of secciones) {
+      if (s.ref.current) observer.observe(s.ref.current)
+    }
+
+    return () => observer.disconnect()
+  }, [cargarAreaRevision, cargarAreaTrabajo, cargarTerminados])
 
   useEffect(() => {
     const tick = async () => {
@@ -719,6 +909,7 @@ function FiniquitoGestionPageInner() {
       try {
         const snapshot = await finiquitoAdminResumenEstado()
         const digest = buildResumenDigest(snapshot)
+        setResumenEstado(snapshot)
         if (resumenDigestRef.current == null) {
           resumenDigestRef.current = digest
           return
@@ -726,7 +917,7 @@ function FiniquitoGestionPageInner() {
         if (digest !== resumenDigestRef.current) {
           resumenDigestRef.current = digest
           void invalidatePrestamosQueries(queryClient)
-          await cargarListas({ silent: true })
+          await cargarAreasVisibles({ silent: true })
         }
       } catch {
         // Polling silencioso: no interrumpir la gestión por fallos transitorios.
@@ -740,7 +931,7 @@ function FiniquitoGestionPageInner() {
     }, AUTO_REFRESH_POLL_MS)
     void tick()
     return () => window.clearInterval(intervalId)
-  }, [cargarListas, queryClient, refreshing])
+  }, [cargarAreasVisibles, queryClient, refreshing])
 
   const onRefreshJob = async () => {
     setRefreshing(true)
@@ -749,7 +940,7 @@ function FiniquitoGestionPageInner() {
       const { titulo, descripcion } = textoToastRefresco(r)
       toast.success(titulo, { description: descripcion })
       void invalidatePrestamosQueries(queryClient)
-      await cargarListas({ silent: true })
+      await cargarAreasVisibles({ silent: true })
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : 'Error al refrescar')
     } finally {
@@ -808,7 +999,7 @@ function FiniquitoGestionPageInner() {
         toast.success('Estado actualizado')
       }
       void invalidatePrestamosQueries(queryClient)
-      await cargarListas({ silent: true })
+      await cargarAreasVisibles({ silent: true })
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : 'Error')
     } finally {
@@ -821,6 +1012,36 @@ function FiniquitoGestionPageInner() {
     const id = pendingRechazoCasoId
     setPendingRechazoCasoId(null)
     await cambiarEstado(id, 'RECHAZADO')
+  }
+
+  const confirmarLiberarProcesosNormales = async () => {
+    if (pendingLiberarCaso == null) return
+    const row = pendingLiberarCaso
+    setPendingLiberarCaso(null)
+    if (pendingEstadoCasoId != null) return
+    setPendingEstadoCasoId(row.id)
+    try {
+      const r = await finiquitoAdminLiberarProcesosNormales(row.id)
+      if (!r.ok) {
+        toast.error(r.error || 'No se pudo liberar el préstamo')
+        return
+      }
+      setItemsBandeja(prev => prev.filter(c => c.id !== row.id))
+      setTotalBandeja(prev => Math.max(0, prev - 1))
+      setItemsAreaRevision(prev => prev.filter(c => c.id !== row.id))
+      setTotalAreaRevision(prev => Math.max(0, prev - 1))
+      toast.success(
+        r.mensaje ||
+          `Préstamo #${r.prestamo_id ?? row.prestamo_id} en procesos normales (cartera).`
+      )
+      void invalidatePrestamosQueries(queryClient)
+      await cargarResumenKpis({ silent: true })
+      await cargarAreasVisibles({ silent: true })
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'Error al liberar')
+    } finally {
+      setPendingEstadoCasoId(null)
+    }
   }
 
   const confirmarEliminar = async () => {
@@ -839,7 +1060,7 @@ function FiniquitoGestionPageInner() {
       setTotalBandeja(prev => Math.max(0, prev - 1))
       toast.success('Caso eliminado de la bandeja')
       void invalidatePrestamosQueries(queryClient)
-      await cargarListas({ silent: true })
+      await cargarAreasVisibles({ silent: true })
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : 'Error al eliminar')
     } finally {
@@ -871,7 +1092,7 @@ function FiniquitoGestionPageInner() {
         incorporarCasoActualizado(r.caso)
       }
       void invalidatePrestamosQueries(queryClient)
-      await cargarListas({ silent: true })
+      await cargarAreasVisibles({ silent: true })
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : 'Error')
     } finally {
@@ -957,7 +1178,7 @@ function FiniquitoGestionPageInner() {
       }
       toast.success('Caso en area de trabajo')
       void invalidatePrestamosQueries(queryClient)
-      await cargarListas({ silent: true })
+      await cargarAreasVisibles({ silent: true })
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : 'Error')
     } finally {
@@ -1025,6 +1246,21 @@ function FiniquitoGestionPageInner() {
     </>
   )
 
+  const botonProcesosNormales = (row: FiniquitoCasoItem) => (
+    <Button
+      type="button"
+      size="sm"
+      variant="outline"
+      className="h-8 gap-1 border-sky-600 text-xs text-sky-950 hover:bg-sky-50"
+      title="Quitar de finiquito y continuar en cartera (pagos, cuotas)"
+      disabled={casoTieneAccionPendiente(row.id)}
+      onClick={() => setPendingLiberarCaso(row)}
+    >
+      <Undo2 className="h-3.5 w-3.5 shrink-0" aria-hidden />
+      Procesos normales
+    </Button>
+  )
+
   const renderAcciones = (row: FiniquitoCasoItem) => (
     <div className="flex flex-wrap items-center justify-end gap-2">
       {canTrasladarFiniquitoBandejas ? (
@@ -1048,6 +1284,7 @@ function FiniquitoGestionPageInner() {
       >
         Rechazar
       </Button>
+      {botonProcesosNormales(row)}
       <Button
         type="button"
         size="icon"
@@ -1078,6 +1315,7 @@ function FiniquitoGestionPageInner() {
           <CheckCircle2 className="h-3.5 w-3.5" aria-hidden />
           Visto
         </Button>
+        {botonProcesosNormales(row)}
         {canTrasladarFiniquitoBandejas ? (
           <Button
             type="button"
@@ -1384,6 +1622,46 @@ function FiniquitoGestionPageInner() {
   const subtituloTrabajo = totalAreaTrabajo === 1 ? 'registro' : 'registros'
   const subtituloRevision = totalAreaRevision === 1 ? 'registro' : 'registros'
 
+  const kpiCargando = loadingResumen && resumenEstado == null
+  const displayTotalBandeja = cedulaBusqueda
+    ? totalBandeja
+    : (resumenEstado?.revision ?? totalBandeja)
+  const displayTotalRevision = resumenEstado?.aceptado ?? totalAreaRevision
+  const displayTotalTrabajo = cedulaTrabajoBusqueda
+    ? totalAreaTrabajo
+    : (resumenEstado?.en_proceso ?? totalAreaTrabajo)
+  const algunaAreaCargando = Object.values(areasLoading).some(Boolean)
+
+  const renderContenidoAreaPendiente = (
+    area: FiniquitoAreaId,
+    etiqueta: string,
+    cargar: () => void
+  ) => (
+    <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-slate-200 bg-slate-50/60 px-4 py-12 text-center">
+      <p className="max-w-md text-sm text-slate-600">
+        <strong>{etiqueta}</strong> se carga al llegar a esta sección para
+        agilizar la apertura de la página.
+      </p>
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        className="border-slate-300"
+        disabled={areasLoading[area]}
+        onClick={() => void cargar()}
+      >
+        {areasLoading[area] ? (
+          <>
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
+            Cargando…
+          </>
+        ) : (
+          'Cargar ahora'
+        )}
+      </Button>
+    </div>
+  )
+
   return (
     <FiniquitoWorkspaceShell
       description={`Ciclo ${PLAZO_CICLO_DIAS} dias: bandeja (dias 1-2, atrasado desde dia ${BANDEJA_DIA_ATRASADO}) → area revision (hasta ${AREA_REVISION_DIAS_MAX}d) → area de trabajo (hasta dia ${PLAZO_CICLO_DIAS}).`}
@@ -1391,7 +1669,7 @@ function FiniquitoGestionPageInner() {
         <Button
           size="sm"
           variant="outline"
-          disabled={refreshing || loading}
+          disabled={refreshing || algunaAreaCargando}
           onClick={onRefreshJob}
           className="shrink-0 gap-2"
         >
@@ -1411,7 +1689,7 @@ function FiniquitoGestionPageInner() {
               Bandeja (Revision)
             </p>
             <p className="text-2xl font-bold tabular-nums text-[#1e3a5f]">
-              {loading ? '-' : totalBandeja}
+              {kpiCargando ? '-' : displayTotalBandeja}
             </p>
             <p className="text-xs text-slate-500">
               Dias 1-2 · atrasado desde dia {BANDEJA_DIA_ATRASADO}
@@ -1422,7 +1700,7 @@ function FiniquitoGestionPageInner() {
         <Card
           className={cn(
             'border-slate-200 shadow-sm',
-            !loading &&
+            !kpiCargando &&
               (kpiNuevosRevision?.total ?? 0) > 0 &&
               'border-amber-300/90 bg-amber-50/40 ring-1 ring-amber-200/80'
           )}
@@ -1432,7 +1710,7 @@ function FiniquitoGestionPageInner() {
               <Bell
                 className={cn(
                   'h-3.5 w-3.5 shrink-0',
-                  !loading && (kpiNuevosRevision?.total ?? 0) > 0
+                  !kpiCargando && (kpiNuevosRevision?.total ?? 0) > 0
                     ? 'text-amber-700'
                     : 'text-slate-400'
                 )}
@@ -1445,12 +1723,14 @@ function FiniquitoGestionPageInner() {
             <p
               className={cn(
                 'text-2xl font-bold tabular-nums',
-                !loading && (kpiNuevosRevision?.total ?? 0) > 0
+                !kpiCargando && (kpiNuevosRevision?.total ?? 0) > 0
                   ? 'text-amber-950'
                   : 'text-slate-800'
               )}
             >
-              {loading ? '-' : (kpiNuevosRevision?.total ?? 0)}
+              {areasLoading.bandeja && kpiNuevosRevision == null
+                ? '-'
+                : (kpiNuevosRevision?.total ?? 0)}
             </p>
             <p className="text-xs text-slate-500">
               Creados hace ≤{' '}
@@ -1466,7 +1746,7 @@ function FiniquitoGestionPageInner() {
               Area de revision
             </p>
             <p className="text-2xl font-bold tabular-nums text-amber-900">
-              {loading ? '-' : totalAreaRevision}
+              {kpiCargando ? '-' : displayTotalRevision}
             </p>
             <p className="text-xs text-slate-500">
               Hasta {AREA_REVISION_DIAS_MAX}d · atrasado dia 6 de fase
@@ -1479,7 +1759,7 @@ function FiniquitoGestionPageInner() {
               Area de trabajo
             </p>
             <p className="text-2xl font-bold tabular-nums text-emerald-900">
-              {loading ? '-' : totalAreaTrabajo}
+              {kpiCargando ? '-' : displayTotalTrabajo}
             </p>
             <p className="text-xs text-slate-500">
               Hasta dia {PLAZO_CICLO_DIAS} del ciclo
@@ -1504,8 +1784,10 @@ function FiniquitoGestionPageInner() {
               </h2>
               <p className="text-xs text-slate-600 sm:text-sm">
                 <strong>Validar</strong> (pasa al área de revisión) solo
-                administrador; <strong>Rechazar</strong> o <strong>Eliminar</strong>{' '}
-                para todos los perfiles con acceso. Días 1-2 en bandeja; desde día{' '}
+                administrador; <strong>Procesos normales</strong> saca el crédito de
+                finiquito si Conciliar confirma que no está liquidado;{' '}
+                <strong>Rechazar</strong> o <strong>Eliminar</strong> para todos los
+                perfiles con acceso. Días 1-2 en bandeja; desde día{' '}
                 {BANDEJA_DIA_ATRASADO} el estado pasa a atrasado. Ciclo total{' '}
                 {PLAZO_CICLO_DIAS} días.
               </p>
@@ -1550,10 +1832,10 @@ function FiniquitoGestionPageInner() {
                 variant="outline"
                 size="sm"
                 className="h-10 shrink-0 border-slate-300"
-                disabled={loading}
-                onClick={() => void cargarListas()}
+                disabled={areasLoading.bandeja}
+                onClick={() => void cargarBandeja()}
               >
-                {loading ? (
+                {areasLoading.bandeja ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
                   'Recargar'
@@ -1572,7 +1854,7 @@ function FiniquitoGestionPageInner() {
         </div>
         <div>
           <div className="p-3 sm:p-4">
-            {loading ? (
+            {areasLoading.bandeja && itemsBandeja.length === 0 ? (
               <div className="flex justify-center py-14">
                 <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
               </div>
@@ -1596,6 +1878,7 @@ function FiniquitoGestionPageInner() {
         </div>
       </section>
       <section
+        ref={revisionSectionRef}
         className={cn(
           'overflow-hidden rounded-2xl border-2 border-dashed border-amber-400/85',
           'bg-amber-50/40 shadow-inner'
@@ -1615,15 +1898,22 @@ function FiniquitoGestionPageInner() {
                 Area de revision
               </h2>
               <p className="text-xs text-amber-900/85">
-                {totalAreaRevision} {subtituloRevision} · Visto abre revisión
-                manual → Conciliar; «Área trabajo» solo administrador
+                {displayTotalRevision} {subtituloRevision} · Visto → Conciliar;{' '}
+                <strong>Procesos normales</strong> si no está liquidado; «Área
+                trabajo» solo administrador
               </p>
             </div>
           </div>
         </div>
         <div>
           <div className="p-3 sm:p-4">
-            {loading ? (
+            {!areasCargadas.revision ? (
+              renderContenidoAreaPendiente(
+                'revision',
+                'Área de revisión',
+                () => void cargarAreaRevision()
+              )
+            ) : areasLoading.revision && itemsAreaRevision.length === 0 ? (
               <div className="flex justify-center py-12">
                 <Loader2 className="h-8 w-8 animate-spin text-amber-600/70" />
               </div>
@@ -1649,6 +1939,7 @@ function FiniquitoGestionPageInner() {
         </div>
       </section>
       <section
+        ref={trabajoSectionRef}
         className={cn(
           'overflow-hidden rounded-2xl border border-emerald-200/90 bg-white shadow-md',
           'ring-1 ring-emerald-100/80'
@@ -1668,7 +1959,7 @@ function FiniquitoGestionPageInner() {
                 Área de trabajo
               </h2>
               <p className="text-xs text-emerald-100">
-                En proceso · {totalAreaTrabajo} {subtituloTrabajo} · hasta dia{' '}
+                En proceso · {displayTotalTrabajo} {subtituloTrabajo} · hasta dia{' '}
                 {PLAZO_CICLO_DIAS}
               </p>
             </div>
@@ -1721,10 +2012,10 @@ function FiniquitoGestionPageInner() {
                 variant="outline"
                 size="sm"
                 className="h-10 shrink-0 border-slate-300 bg-white"
-                disabled={loading}
-                onClick={() => void cargarListas()}
+                disabled={areasLoading.trabajo}
+                onClick={() => void cargarAreaTrabajo()}
               >
-                {loading ? (
+                {areasLoading.trabajo ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
                   'Recargar'
@@ -1743,7 +2034,13 @@ function FiniquitoGestionPageInner() {
         </div>
         <div className="bg-gradient-to-b from-emerald-50/50 to-white">
           <div className="p-3 sm:p-4">
-            {loading ? (
+            {!areasCargadas.trabajo ? (
+              renderContenidoAreaPendiente(
+                'trabajo',
+                'Área de trabajo',
+                () => void cargarAreaTrabajo()
+              )
+            ) : areasLoading.trabajo && itemsAreaTrabajo.length === 0 ? (
               <div className="flex justify-center py-12">
                 <Loader2 className="h-8 w-8 animate-spin text-emerald-600/70" />
               </div>
@@ -1774,6 +2071,7 @@ function FiniquitoGestionPageInner() {
         </div>
       </section>
       <section
+        ref={terminadosSectionRef}
         className={cn(
           'overflow-hidden rounded-2xl border border-violet-200/90 bg-white shadow-md',
           'ring-1 ring-violet-100/80'
@@ -1862,9 +2160,14 @@ function FiniquitoGestionPageInner() {
               </div>
             </div>
           </div>
-          {resumenSemanas.length === 0 ? (
+          {!areasCargadas.terminados ? (
             <p className="mt-4 rounded-lg border border-dashed border-violet-200/90 bg-white/60 px-4 py-6 text-center text-sm text-slate-600">
-              {loading
+              Baje hasta el listado o pulse «Cargar ahora» para traer el gráfico
+              semanal y los terminados.
+            </p>
+          ) : resumenSemanas.length === 0 ? (
+            <p className="mt-4 rounded-lg border border-dashed border-violet-200/90 bg-white/60 px-4 py-6 text-center text-sm text-slate-600">
+              {areasLoading.terminados
                 ? 'Cargando resumen…'
                 : 'Sin casos terminados en el periodo mostrado.'}
             </p>
@@ -1975,7 +2278,13 @@ function FiniquitoGestionPageInner() {
           </div>
         </div>
         <div className="bg-gradient-to-b from-violet-50/40 to-white p-3 sm:p-4">
-          {loading ? (
+          {!areasCargadas.terminados ? (
+            renderContenidoAreaPendiente(
+              'terminados',
+              'Casos terminados',
+              () => void cargarTerminados()
+            )
+          ) : areasLoading.terminados && itemsTerminados.length === 0 ? (
             <div className="flex justify-center py-12">
               <Loader2 className="h-8 w-8 animate-spin text-violet-600/70" />
             </div>
@@ -2133,6 +2442,51 @@ function FiniquitoGestionPageInner() {
               onClick={confirmarVistoRevisionManual}
             >
               Abrir revisión manual
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={pendingLiberarCaso != null}
+        onOpenChange={open => {
+          if (!open) setPendingLiberarCaso(null)
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Volver a procesos normales</DialogTitle>
+            <DialogDescription asChild>
+              <div className="space-y-2 text-base text-slate-800">
+                <p>
+                  Préstamo{' '}
+                  <strong>#{pendingLiberarCaso?.prestamo_id ?? '—'}</strong>{' '}
+                  (caso {pendingLiberarCaso?.id ?? '—'}) saldrá del flujo
+                  finiquito.
+                </p>
+                <p>
+                  Use esto cuando <strong>Conciliar</strong> confirme que el
+                  crédito <strong>no está liquidado</strong>: el préstamo vuelve a
+                  cartera operativa (pagos, cuotas, revisión manual habitual).
+                </p>
+              </div>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setPendingLiberarCaso(null)}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              className="bg-sky-700 hover:bg-sky-800"
+              disabled={pendingEstadoCasoId != null}
+              onClick={() => void confirmarLiberarProcesosNormales()}
+            >
+              Procesos normales
             </Button>
           </DialogFooter>
         </DialogContent>

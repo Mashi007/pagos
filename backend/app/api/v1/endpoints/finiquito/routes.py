@@ -54,6 +54,7 @@ from app.schemas.finiquito import (
     FiniquitoCasoOut,
     FiniquitoDetalleResponse,
     FiniquitoEliminarCasoResponse,
+    FiniquitoLiberarProcesosNormalesResponse,
     FiniquitoPatchEstadoRequest,
     FiniquitoPatchEstadoResponse,
     FiniquitoTerminadoItemOut,
@@ -1308,6 +1309,54 @@ def finiquito_admin_eliminar_caso(
     limpiar_estado_gestion_finiquito_prestamos(db, [prestamo_id])
     db.commit()
     return FiniquitoEliminarCasoResponse(ok=True)
+
+
+@router.post(
+    "/admin/casos/{caso_id}/liberar-procesos-normales",
+    response_model=FiniquitoLiberarProcesosNormalesResponse,
+)
+def finiquito_admin_liberar_procesos_normales(
+    caso_id: int,
+    db: Session = Depends(get_db),
+    _: UserResponse = Depends(require_admin_or_operator),
+):
+    """
+    Quita el caso de finiquito y deja el préstamo en cartera operativa (pagos, cuotas).
+    Bandeja principal (REVISION) o área de revisión (ACEPTADO), p. ej. tras Conciliar.
+    """
+    from app.services.finiquito_liberar_procesos_normales_service import (
+        ejecutar_liberar_finiquito_a_procesos_normales,
+    )
+
+    try:
+        r = ejecutar_liberar_finiquito_a_procesos_normales(db, caso_id)
+        if not r.get("ok"):
+            status = int(r.get("http_status") or 400)
+            if status == 404:
+                raise HTTPException(status_code=404, detail=str(r.get("error")))
+            return FiniquitoLiberarProcesosNormalesResponse(
+                ok=False,
+                error=str(r.get("error") or "No se pudo liberar"),
+            )
+        db.commit()
+        return FiniquitoLiberarProcesosNormalesResponse(
+            ok=True,
+            prestamo_id=r.get("prestamo_id"),
+            estado_prestamo_antes=r.get("estado_prestamo_antes"),
+            estado_prestamo_despues=r.get("estado_prestamo_despues"),
+            forzado_aprobado=r.get("forzado_aprobado"),
+            mensaje=r.get("mensaje"),
+        )
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception:
+        db.rollback()
+        logger.exception("liberar-procesos-normales caso_id=%s", caso_id)
+        return FiniquitoLiberarProcesosNormalesResponse(
+            ok=False,
+            error="Error interno al liberar el préstamo",
+        )
 
 
 def _usuario_registro_panel(panel_user: UserResponse) -> str:

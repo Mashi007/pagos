@@ -147,6 +147,19 @@ export async function finiquitoAdminEliminarCaso(casoId: number) {
   )
 }
 
+/** Bandeja / área revisión: saca el caso de finiquito y deja el préstamo en cartera operativa. */
+export async function finiquitoAdminLiberarProcesosNormales(casoId: number) {
+  return apiClient.post<{
+    ok: boolean
+    error?: string
+    prestamo_id?: number
+    estado_prestamo_antes?: string | null
+    estado_prestamo_despues?: string | null
+    forzado_aprobado?: boolean
+    mensaje?: string
+  }>(`${BASE}/admin/casos/${casoId}/liberar-procesos-normales`)
+}
+
 export async function finiquitoAdminVistoIniciar(
   casoId: number,
   opts?: { confirmar_sin_comprobantes?: boolean }
