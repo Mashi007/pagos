@@ -2523,36 +2523,21 @@ def importar_un_pago_reportado_a_pagos(
 
 
 
-    prestamos = db.execute(
+    from app.services.cobros.cobros_publico_reporte_service import (
+        error_si_no_puede_reportar_en_web,
+        prestamos_aprobados_del_cliente,
+    )
 
-        select(Prestamo)
+    prestamo_ids = prestamos_aprobados_del_cliente(db, cliente.id)
+    err_pres = error_si_no_puede_reportar_en_web(prestamo_ids)
+    if err_pres:
+        return _err_con_pce(err_pres, cedula_cliente=cedula_raw)
 
-        .where(Prestamo.cliente_id == cliente.id, Prestamo.estado == "APROBADO")
+    prestamo_sel = db.get(Prestamo, int(prestamo_ids[0]))
+    if prestamo_sel is None:
+        return _err_con_pce("Crédito operativo no encontrado", cedula_cliente=cedula_raw)
 
-        .order_by(Prestamo.id)
-
-    ).scalars().all()
-
-    prestamos = [p for p in prestamos if p is not None]
-
-    if len(prestamos) == 0:
-
-        return _err_con_pce("Sin crédito activo (APROBADO)", cedula_cliente=cedula_raw)
-
-    if len(prestamos) > 1:
-
-        return _err_con_pce(
-
-            f"Cédula con {len(prestamos)} préstamos; indique ID del crédito",
-
-            cedula_cliente=cedula_raw,
-
-        )
-
-
-
-    prestamo_id = prestamos[0].id
-    prestamo_sel = prestamos[0]
+    prestamo_id = prestamo_sel.id
     cedula_prestamo = (
         (getattr(prestamo_sel, "cedula", "") or "")
         .replace("-", "")

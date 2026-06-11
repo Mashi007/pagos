@@ -661,7 +661,7 @@ def validar_cedula_publico(
     prestamos_aprob = cpr.prestamos_aprobados_del_cliente(db, cliente.id)
     err_pres = cpr.error_si_no_puede_reportar_en_web(prestamos_aprob)
     if err_pres:
-        return ValidarCedulaResponse(ok=False, error="No fue posible validar los datos. Verifique e intente nuevamente.")
+        return ValidarCedulaResponse(ok=False, error=err_pres)
 
     puede_bs = cedula_autorizada_para_bs(db, cedula_lookup)
     fuente_lb = (

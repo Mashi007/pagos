@@ -14,7 +14,7 @@ from datetime import date, datetime, timedelta
 from time import perf_counter
 from typing import Optional, Tuple
 
-from sqlalchemy import select, text, update
+from sqlalchemy import func, select, text, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -143,34 +143,46 @@ def referencia_display(referencia_interna: str) -> str:
 
 def prestamos_aprobados_del_cliente(db: Session, cliente_id: int) -> list:
     """
-    Misma regla que importar reportados a pagos: solo préstamos en estado APROBADO.
+    Préstamo(s) destino para reporte web / Infopagos / importación desde cobros.
 
-    Usa solo la columna id vía Core (Prestamo.__table__) para no disparar SELECT del mapper
-    completo; si en BD no existe prestamos.fecha_liquidado (migracion pendiente), ORM fallaria.
-    Los llamadores solo usan len() de la lista.
+    Regla:
+    - Si hay uno o más en APROBADO → devuelve todos los APROBADO (0, 1 o >1; el caller valida).
+    - Si no hay APROBADO y hay exactamente uno en LIQUIDADO → devuelve ese id (cartera con saldo
+      mal marcada como liquidada sigue pudiendo reportar un único pago en línea).
+    - Si no hay APROBADO y hay varios LIQUIDADO → devuelve la lista LIQUIDADO (>1 → error en caller).
+
+    Usa solo columnas vía Core (Prestamo.__table__) para no disparar SELECT del mapper completo.
     """
     t = Prestamo.__table__
-    stmt = (
-        select(t.c.id)
-        .where(t.c.cliente_id == cliente_id, t.c.estado == "APROBADO")
+    est_norm = func.upper(func.trim(func.coalesce(t.c.estado, "")))
+    rows = db.execute(
+        select(t.c.id, est_norm.label("est"))
+        .where(
+            t.c.cliente_id == cliente_id,
+            est_norm.in_(("APROBADO", "LIQUIDADO")),
+        )
         .order_by(t.c.id)
-    )
-    return [row[0] for row in db.execute(stmt).all()]
+    ).all()
+    aprob = [int(r[0]) for r in rows if (r[1] or "") == "APROBADO"]
+    if aprob:
+        return aprob
+    return [int(r[0]) for r in rows if (r[1] or "") == "LIQUIDADO"]
 
 
 def error_si_no_puede_reportar_en_web(prestamos_aprobados: list) -> Optional[str]:
     """
-    El formulario web asigna el pago a un único préstamo APROBADO. Si hay 0 o >1, coherente
-    con importación a pagos.
+    El formulario web asigna el pago a un único préstamo operativo (APROBADO o, si no hay,
+    un solo LIQUIDADO). Si hay 0 o >1, coherente con importación a pagos.
     """
     if len(prestamos_aprobados) == 0:
         return (
-            "No tiene un crédito en estado APROBADO para reportar pagos en línea. "
-            "Si su crédito está en otro estado o ya fue liquidado, contacte a cobranza."
+            "No tiene un crédito activo (Aprobado o Liquidado) para reportar pagos en línea. "
+            "Si su cédula tiene varios créditos o está en otro estado, contacte a cobranza."
         )
     if len(prestamos_aprobados) > 1:
         return (
-            "Su cédula tiene más de un crédito aprobado activo; el reporte en línea no está disponible. "
+            "Su cédula tiene más de un crédito activo (Aprobado o Liquidado); "
+            "el reporte en línea no está disponible. "
             "Contacte a RapiCredit / cobranza para indicar a qué crédito corresponde el pago."
         )
     return None

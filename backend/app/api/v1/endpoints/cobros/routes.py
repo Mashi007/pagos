@@ -2935,16 +2935,20 @@ def _crear_pago_desde_reportado_y_aplicar_cuotas(db: Session, pr: PagoReportado,
             status_code=400,
             detail="No se encontró cliente con la cédula indicada. Verifique la cédula o registre al cliente para que el estado de cuenta se actualice.",
         )
-    prestamo = db.execute(
-        select(Prestamo)
-        .where(Prestamo.cliente_id == cliente.id, func.upper(Prestamo.estado) == "APROBADO")
-        .order_by(Prestamo.id.desc())
-        .limit(1)
-    ).scalars().first()
+    from app.services.cobros.cobros_publico_reporte_service import (
+        error_si_no_puede_reportar_en_web,
+        prestamos_aprobados_del_cliente,
+    )
+
+    prestamo_ids = prestamos_aprobados_del_cliente(db, cliente.id)
+    err_pres = error_si_no_puede_reportar_en_web(prestamo_ids)
+    if err_pres:
+        raise HTTPException(status_code=400, detail=err_pres)
+    prestamo = db.get(Prestamo, int(prestamo_ids[0]))
     if not prestamo:
         raise HTTPException(
             status_code=400,
-            detail="El cliente no tiene un préstamo APROBADO activo. No se puede actualizar estado de cuenta.",
+            detail="No se encontró el crédito operativo del cliente.",
         )
     num_doc_raw, num_doc = documento_numero_desde_pago_reportado(pr)
     ya = primer_pago_id_si_existe_para_claves_reportado(db, pr)
