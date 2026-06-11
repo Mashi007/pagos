@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 
@@ -22,6 +22,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Input } from '../components/ui/input'
 import {
   getPrestamosCandidatosDriveSnapshot,
+  postPrestamosCandidatosDriveActualizarFechaQ,
   postPrestamosCandidatosDriveEliminarSeleccionados,
   postPrestamosCandidatosDriveGuardarFila,
   postPrestamosCandidatosDriveGuardarValidados100,
@@ -214,6 +215,11 @@ function colQFechaIsoDisplay(p: PrestamoCandidatoDriveFila['payload']): string {
   const m = String(d.getMonth() + 1).padStart(2, '0')
   const day = String(d.getDate()).padStart(2, '0')
   return `${y}-${m}-${day}`
+}
+
+/** Valor para `<input type="date">` (YYYY-MM-DD). */
+function fechaQInputValue(p: PrestamoCandidatoDriveFila['payload']): string {
+  return colQFechaIsoDisplay(p)
 }
 
 /** Segunda parte de Q = aprobación si hay separador; si no, una sola fecha cuenta para ambas. */
@@ -428,6 +434,7 @@ function AccionesPorFilaCandidatoDrive({
   eliminandoEstaFila,
   onGuardarFila,
   onEliminarFila,
+  onEditarFecha,
 }: {
   fila: PrestamoCandidatoDriveFila
   disabled: boolean
@@ -436,6 +443,7 @@ function AccionesPorFilaCandidatoDrive({
   eliminandoEstaFila: boolean
   onGuardarFila: (sheetRowNumber: number) => void
   onEliminarFila: (filaId: number, sheetRowNumber: number) => void
+  onEditarFecha: (filaId: number) => void
 }) {
   const iconBtn =
     'h-8 w-8 shrink-0 rounded-md border border-slate-200 bg-white p-0 shadow-sm hover:bg-slate-50 disabled:opacity-50'
@@ -456,14 +464,10 @@ function AccionesPorFilaCandidatoDrive({
         variant="outline"
         size="icon"
         className={iconBtn}
-        title={`Para editar esta fila modifique la hoja Drive (CONCILIACIÓN, fila ${sr}) y use «Sincronización manual con Drive» para que el snapshot la recalcule.`}
-        aria-label={`Editar fila ${sr}`}
+        title={`Editar fecha (Q) de la fila ${sr} en pantalla (también actualiza el snapshot local y la tabla drive).`}
+        aria-label={`Editar fecha fila ${sr}`}
         disabled={disabled}
-        onClick={() =>
-          toast.info(
-            `Edición: ajuste la fila ${sr} en la hoja Drive (CONCILIACIÓN) y luego use «Sincronización manual con Drive». El snapshot se vuelve a calcular automáticamente.`
-          )
-        }
+        onClick={() => onEditarFecha(fila.id)}
       >
         <Edit2
           className="h-3.5 w-3.5 text-foreground"
@@ -540,6 +544,10 @@ export default function ActualizacionesPrestamosDrivePage() {
     null
   )
   const [eliminandoFilaId, setEliminandoFilaId] = useState<number | null>(null)
+  const [actualizandoFechaId, setActualizandoFechaId] = useState<number | null>(
+    null
+  )
+  const fechaQInputRefs = useRef<Record<number, HTMLInputElement | null>>({})
   const [page, setPage] = useState(1)
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
 
@@ -752,6 +760,47 @@ export default function ActualizacionesPrestamosDrivePage() {
     [refrescarSnapshotPostAccion]
   )
 
+  const onActualizarFechaQ = useCallback(
+    async (filaId: number, fechaQ: string, sheetRowNumber: number) => {
+      const valor = fechaQ.trim()
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(valor)) {
+        toast.error('Use una fecha válida (YYYY-MM-DD).')
+        return
+      }
+      setActualizandoFechaId(filaId)
+      try {
+        const res = await postPrestamosCandidatosDriveActualizarFechaQ(
+          filaId,
+          valor
+        )
+        toast.success(
+          res.mensaje ||
+            `Fecha (Q) actualizada en fila ${sheetRowNumber}.`
+        )
+        await refrescarSnapshotPostAccion()
+      } catch (e) {
+        toast.error(getErrorMessage(e) || 'No se pudo actualizar la fecha (Q)')
+      } finally {
+        setActualizandoFechaId(null)
+      }
+    },
+    [refrescarSnapshotPostAccion]
+  )
+
+  const enfocarFechaQFila = useCallback((filaId: number) => {
+    const el = fechaQInputRefs.current[filaId]
+    if (!el) {
+      toast.message('Use el campo Fecha (Q) en la fila para corregir la fecha.')
+      return
+    }
+    el.focus()
+    try {
+      el.showPicker?.()
+    } catch {
+      /* showPicker no disponible en todos los navegadores */
+    }
+  }, [])
+
   const onEliminarSeleccionados = useCallback(async () => {
     const ids = Array.from(selectedIds)
     if (ids.length === 0) {
@@ -890,6 +939,7 @@ export default function ActualizacionesPrestamosDrivePage() {
     eliminandoSeleccionados ||
     guardandoFilaSheet !== null ||
     eliminandoFilaId !== null ||
+    actualizandoFechaId !== null ||
     isBusy
   const huellaNoComparableTotal =
     typeof data?.kpis_huella_no_comparable === 'number'
@@ -910,7 +960,7 @@ export default function ActualizacionesPrestamosDrivePage() {
     <div className="mx-auto max-w-7xl space-y-6 p-4 md:p-6">
       <ModulePageHeader
         title="Préstamos"
-        description="Actualizaciones: cédulas en CONCILIACIÓN (columna E). V y E: sin préstamo previo. J (jurídico): puede figurar con uno o más préstamos ya en cartera. Lista paginada (100 filas por página). Job automático diario 02:00 Caracas (sync rango A:S hasta última fila con dato → snapshot). Solo administradores."
+        description="Actualizaciones: cédulas en CONCILIACIÓN (columna E). V y E: sin préstamo previo. J (jurídico): puede figurar con uno o más préstamos ya en cartera. Puede corregir la fecha (Q) en pantalla (YYYY-MM-DD); se guarda en snapshot y tabla drive local. Lista paginada (100 filas por página). Job automático diario 02:00 Caracas (sync rango A:S hasta última fila con dato → snapshot). Solo administradores."
         icon={CreditCard}
       />
 
@@ -1293,16 +1343,50 @@ export default function ActualizacionesPrestamosDrivePage() {
                         >
                           {strPayload(r.payload, 'col_s_modalidad_pago')}
                         </td>
-                        <td
-                          className="whitespace-nowrap px-2 py-2 align-middle"
-                          title={
-                            colQFechaIsoDisplay(r.payload)
-                              ? `Hoja (Q): ${strPayload(r.payload, 'col_q_fecha')}`
-                              : strPayload(r.payload, 'col_q_fecha')
-                          }
-                        >
-                          {colQFechaIsoDisplay(r.payload) ||
-                            strPayload(r.payload, 'col_q_fecha')}
+                        <td className="whitespace-nowrap px-2 py-2 align-middle">
+                          <div className="flex min-w-[8.5rem] flex-col gap-0.5">
+                            <Input
+                              ref={el => {
+                                fechaQInputRefs.current[r.id] = el
+                              }}
+                              type="date"
+                              className="h-8 px-1.5 text-xs"
+                              value={fechaQInputValue(r.payload)}
+                              disabled={
+                                accionesGlobalesDeshabilitadas ||
+                                actualizandoFechaId === r.id
+                              }
+                              title={
+                                colQFechaIsoDisplay(r.payload)
+                                  ? `Hoja original (Q): ${strPayload(r.payload, 'col_q_fecha')}`
+                                  : 'Corrija la fecha de aprobación (columna Q)'
+                              }
+                              onChange={e => {
+                                const next = e.target.value
+                                const prev = fechaQInputValue(r.payload)
+                                if (next && next !== prev) {
+                                  void onActualizarFechaQ(
+                                    r.id,
+                                    next,
+                                    r.sheet_row_number
+                                  )
+                                }
+                              }}
+                            />
+                            {actualizandoFechaId === r.id ? (
+                              <span className="text-[10px] text-muted-foreground">
+                                Guardando…
+                              </span>
+                            ) : strPayload(r.payload, 'col_q_fecha') !==
+                                fechaQInputValue(r.payload) ? (
+                              <span
+                                className="max-w-[8.5rem] truncate text-[10px] text-muted-foreground"
+                                title={strPayload(r.payload, 'col_q_fecha')}
+                              >
+                                Hoja: {strPayload(r.payload, 'col_q_fecha')}
+                              </span>
+                            ) : null}
+                          </div>
                         </td>
                         <td className="px-2 py-2 text-center align-middle tabular-nums">
                           {strPayload(r.payload, 'col_r_numero_cuotas')}
@@ -1355,6 +1439,7 @@ export default function ActualizacionesPrestamosDrivePage() {
                             onEliminarFila={(id, sr) =>
                               void onEliminarUnaFila(id, sr)
                             }
+                            onEditarFecha={enfocarFechaQFila}
                           />
                         </td>
                       </tr>

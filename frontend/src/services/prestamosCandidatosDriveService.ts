@@ -106,6 +106,27 @@ export async function postPrestamosCandidatosDriveGuardarFila(
   )
 }
 
+export type PrestamoCandidatosDriveActualizarFechaQResponse = {
+  ok: boolean
+  id: number
+  sheet_row_number: number
+  col_q_fecha: string
+  col_q_fecha_iso: string
+  huella_no_comparable: boolean
+  mensaje: string
+}
+
+/** Corrige fecha columna Q (YYYY-MM-DD) en snapshot y tabla drive local. */
+export async function postPrestamosCandidatosDriveActualizarFechaQ(
+  id: number,
+  fechaQ: string
+): Promise<PrestamoCandidatosDriveActualizarFechaQResponse> {
+  return apiClient.post<PrestamoCandidatosDriveActualizarFechaQResponse>(
+    `${BASE}/actualizar-fecha-q`,
+    { id, fecha_q: fechaQ }
+  )
+}
+
 export type PrestamoCandidatosDriveEliminarSeleccionadosResponse = {
   eliminados: number
   seleccionados: number
