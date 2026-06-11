@@ -12,7 +12,7 @@ from typing import Any, Iterator, Optional, Type
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.core.documento import normalize_documento
+from app.core.documento import normalize_documento, split_numero_documento_almacenado
 from app.models.pago import Pago
 from app.models.pago_con_error import PagoConError
 from app.utils.cedula_almacenamiento import (
@@ -149,6 +149,16 @@ def pago_huerfano_adoptable_por_documento(
     return int(pid)
 
 
+def documento_almacenado_tiene_codigo_desambiguacion(
+    numero_documento: Optional[str],
+) -> bool:
+    """True si el valor incluye sufijo §CD: (código Visto / revisión manual)."""
+    if not numero_documento:
+        return False
+    _, codigo = split_numero_documento_almacenado(numero_documento)
+    return bool((codigo or "").strip())
+
+
 def primer_pago_cartera_por_documento(
     db: Session,
     numero_documento: Optional[str],
@@ -174,6 +184,8 @@ def primer_pago_cartera_por_documento(
         pid = int(row[0])
         prid = row[1]
         return pid, (int(prid) if prid is not None else None)
+    if documento_almacenado_tiene_codigo_desambiguacion(num):
+        return None, None
     pid, prid = _primer_pago_cartera_por_evasion(
         db, numero_documento, exclude_pago_id=exclude_pago_id
     )
@@ -254,6 +266,9 @@ def numero_documento_ya_registrado(
     qe = qe.limit(1)
     if db.scalar(qe) is not None:
         return True
+
+    if documento_almacenado_tiene_codigo_desambiguacion(num):
+        return False
 
     return documento_colisiona_evasion_registrado(
         db,

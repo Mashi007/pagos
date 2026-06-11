@@ -740,9 +740,20 @@ export function RegistrarPagoForm({
         (conflictoDocumentoSerial && !puedeAdoptarPagoHuerfano)
     )
 
+  const tieneCodigoDocumentoDesambiguacion = Boolean(
+    String(formData.codigo_documento ?? '').trim()
+  )
+
+  /** Con código Visto asignado, el serial base puede repetirse en otro pago; no mostrar bloqueo por duplicado. */
+  const conflictoDocumentoSerialVisible =
+    conflictoDocumentoSerial && !tieneCodigoDocumentoDesambiguacion
+
+  const conflictoDocumentoBloqueaEfectivo =
+    conflictoDocumentoBloquea && !tieneCodigoDocumentoDesambiguacion
+
   const conflictoSerialBloqueaGuardar =
-    (conflictoDocumentoBloquea || conflictoHuellaSerial) &&
-    !String(formData.codigo_documento ?? '').trim() &&
+    (conflictoDocumentoBloqueaEfectivo || conflictoHuellaSerial) &&
+    !tieneCodigoDocumentoDesambiguacion &&
     !bloquearCambioComprobanteCodigo
 
   const prestamoIdConflictoCartera =
@@ -2651,7 +2662,19 @@ export function RegistrarPagoForm({
                               </span>{' '}
                               del formulario a ese abono (no hace falta Visto).
                             </span>
-                          ) : conflictoDocumentoSerial ? (
+                          ) : tieneCodigoDocumentoDesambiguacion ? (
+                            <span className="text-green-800">
+                              <span className="font-semibold">
+                                Código asignado
+                              </span>{' '}
+                              (
+                              <span className="font-mono">
+                                {formData.codigo_documento}
+                              </span>
+                              ): el comprobante queda único en cartera. Puede
+                              usar <strong>Guardar y Procesar</strong>.
+                            </span>
+                          ) : conflictoDocumentoSerialVisible ? (
                             <span>
                               <span className="font-semibold text-amber-900">
                                 Serial ya registrado en cartera
