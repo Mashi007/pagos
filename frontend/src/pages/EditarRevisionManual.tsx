@@ -85,6 +85,11 @@ import {
 
 import { RegistrarPagoForm } from '../components/pagos/RegistrarPagoForm'
 import { ConciliarCarteraRevisionManualButton } from '../components/pagos/ConciliarCarteraRevisionManualButton'
+import {
+  ConciliarCarteraPagosProgreso,
+  type ConciliarCarteraFaseTabla,
+} from '../components/pagos/ConciliarCarteraPagosProgreso'
+import type { ConciliarCarteraRevisionResponse } from '../services/revisionManualService'
 
 import { prestamoService } from '../services/prestamoService'
 
@@ -265,6 +270,18 @@ export function EditarRevisionManual() {
   const escaneoComprobanteAgregarPagoRef = useRef<HTMLInputElement>(null)
 
   const [eliminandoPagoId, setEliminandoPagoId] = useState<number | null>(null)
+
+  /** Progreso visible en tabla «Pagos registrados» durante Conciliar */
+  const [conciliarTablaUi, setConciliarTablaUi] = useState<{
+    fase: ConciliarCarteraFaseTabla
+    pagosAntes: number
+    idsRecreados?: number[]
+    ocrOk?: number
+    ocrTotal?: number
+  } | null>(null)
+  const conciliarListoTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  )
 
   /** Fecha de aprobación original cargada desde BD - para detectar si cambió */
   const [fechaAprobacionOriginal, setFechaAprobacionOriginal] = useState<
@@ -714,6 +731,30 @@ export function EditarRevisionManual() {
     })
   }, [pagosRealizadosData?.pagos])
 
+  const contarPagosPrestamoEnTabla = useCallback(() => {
+    const pid = Number(prestamoData.prestamo_id)
+    if (!Number.isFinite(pid) || pid <= 0) return 0
+    return (pagosRealizadosData?.pagos ?? []).filter(
+      p => Number(p.prestamo_id) === pid
+    ).length
+  }, [pagosRealizadosData?.pagos, prestamoData.prestamo_id])
+
+  useEffect(() => {
+    return () => {
+      if (conciliarListoTimeoutRef.current) {
+        clearTimeout(conciliarListoTimeoutRef.current)
+      }
+    }
+  }, [])
+
+  const limpiarConciliarTablaUi = useCallback(() => {
+    if (conciliarListoTimeoutRef.current) {
+      clearTimeout(conciliarListoTimeoutRef.current)
+      conciliarListoTimeoutRef.current = null
+    }
+    setConciliarTablaUi(null)
+  }, [])
+
   /** Claves comprobante+código en la página actual; excluye la fila abierta en el modal de edición. */
   const claveDocumentoPagosTablaRevision = useMemo(() => {
     const s = new Set<string>()
@@ -788,6 +829,40 @@ export function EditarRevisionManual() {
     // invalidatePagosPrestamosRevisionYCuotas ya incluye `pagos-por-cedula` → un solo refetch activo.
     await refrescarOrigenDatosTrasRevisionManual()
   }, [refrescarOrigenDatosTrasRevisionManual])
+
+  const manejarConciliarExito = useCallback(
+    async (res: ConciliarCarteraRevisionResponse) => {
+      const ids =
+        res.detalle
+          ?.filter(d => d.ok && d.pago_id != null)
+          .map(d => Number(d.pago_id)) ?? []
+      setConciliarTablaUi(prev => ({
+        fase: 'recargando',
+        pagosAntes: prev?.pagosAntes ?? 0,
+        idsRecreados: ids,
+        ocrOk: res.ocr_ok,
+        ocrTotal: res.ocr_total,
+      }))
+      await refrescarTrasCambioPagosRevision()
+      await refetchPagosRealizados()
+      setConciliarTablaUi(prev => ({
+        fase: 'listo',
+        pagosAntes: prev?.pagosAntes ?? 0,
+        idsRecreados: ids,
+        ocrOk: res.ocr_ok,
+        ocrTotal: res.ocr_total,
+      }))
+      if (conciliarListoTimeoutRef.current) {
+        clearTimeout(conciliarListoTimeoutRef.current)
+      }
+      conciliarListoTimeoutRef.current = setTimeout(() => {
+        setConciliarTablaUi(null)
+        conciliarListoTimeoutRef.current = null
+      }, 12_000)
+      setRevisionOperativaSucia(true)
+    },
+    [refrescarTrasCambioPagosRevision, refetchPagosRealizados]
+  )
 
   const aplicarCascadaPagosMutation = useMutation({
     mutationFn: async () => {
@@ -3425,17 +3500,38 @@ export function EditarRevisionManual() {
                         <ConciliarCarteraRevisionManualButton
                           prestamoId={Number(prestamoData.prestamo_id)}
                           cedula={cedulaParaPagosRealizados}
-                          disabled={soloLectura}
-                          onExito={async () => {
-                            await refrescarTrasCambioPagosRevision()
-                            setRevisionOperativaSucia(true)
+                          disabled={soloLectura || conciliarTablaUi != null}
+                          onEjecutarInicio={() => {
+                            setConciliarTablaUi({
+                              fase: 'borrando',
+                              pagosAntes: contarPagosPrestamoEnTabla(),
+                            })
                           }}
+                          onProgresoTabla={fase => {
+                            setConciliarTablaUi(prev =>
+                              prev
+                                ? { ...prev, fase }
+                                : { fase, pagosAntes: contarPagosPrestamoEnTabla() }
+                            )
+                          }}
+                          onEjecutarError={limpiarConciliarTablaUi}
+                          onExito={manejarConciliarExito}
                         />
                       ) : null}
                     </div>
                   </CardHeader>
                   <CardContent>
-                    {loadingPagosRealizados && !pagosRealizadosData ? (
+                    {conciliarTablaUi &&
+                    conciliarTablaUi.fase !== 'listo' ? (
+                      <ConciliarCarteraPagosProgreso
+                        fase={conciliarTablaUi.fase}
+                        prestamoId={Number(prestamoData.prestamo_id)}
+                        pagosAntes={conciliarTablaUi.pagosAntes}
+                        idsRecreados={conciliarTablaUi.idsRecreados}
+                        ocrOk={conciliarTablaUi.ocrOk}
+                        ocrTotal={conciliarTablaUi.ocrTotal}
+                      />
+                    ) : loadingPagosRealizados && !pagosRealizadosData ? (
                       <div className="flex items-center gap-2 py-8 text-muted-foreground">
                         <Loader2 className="h-5 w-5 animate-spin" />
                         Cargando pagos…
@@ -3479,6 +3575,18 @@ export function EditarRevisionManual() {
                       </div>
                     ) : (
                       <>
+                        {conciliarTablaUi?.fase === 'listo' ? (
+                          <div className="mb-3">
+                            <ConciliarCarteraPagosProgreso
+                              fase="listo"
+                              prestamoId={Number(prestamoData.prestamo_id)}
+                              pagosAntes={conciliarTablaUi.pagosAntes}
+                              idsRecreados={conciliarTablaUi.idsRecreados}
+                              ocrOk={conciliarTablaUi.ocrOk}
+                              ocrTotal={conciliarTablaUi.ocrTotal}
+                            />
+                          </div>
+                        ) : null}
                         {pagosRealizadosData.sum_monto_pagado_cedula !=
                           null && (
                           <p className="mb-3 text-sm font-medium text-foreground">
@@ -3528,8 +3636,18 @@ export function EditarRevisionManual() {
                                   !!docKey &&
                                   (conteoDocumentoPagosRevision.get(docKey) ||
                                     0) > 1
+                                const recienConciliado = (
+                                  conciliarTablaUi?.idsRecreados ?? []
+                                ).includes(Number(pago.id))
                                 return (
-                                  <TableRow key={pago.id}>
+                                  <TableRow
+                                    key={pago.id}
+                                    className={
+                                      recienConciliado
+                                        ? 'bg-green-50 ring-1 ring-inset ring-green-200 animate-in fade-in duration-500'
+                                        : undefined
+                                    }
+                                  >
                                     <TableCell className="font-mono text-xs">
                                       {pago.id}
                                     </TableCell>

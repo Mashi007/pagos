@@ -46,6 +46,8 @@ import {
 
 } from '../../pages/notificaciones/notificacionesPageCells'
 
+import type { ConciliarCarteraFaseTabla } from './ConciliarCarteraPagosProgreso'
+
 
 
 type Props = {
@@ -56,7 +58,13 @@ type Props = {
 
   disabled?: boolean
 
-  onExito?: () => void | Promise<void>
+  onEjecutarInicio?: () => void
+
+  onProgresoTabla?: (fase: ConciliarCarteraFaseTabla) => void
+
+  onEjecutarError?: () => void
+
+  onExito?: (res: ConciliarCarteraRevisionResponse) => void | Promise<void>
 
 }
 
@@ -73,6 +81,12 @@ export function ConciliarCarteraRevisionManualButton({
   cedula,
 
   disabled,
+
+  onEjecutarInicio,
+
+  onProgresoTabla,
+
+  onEjecutarError,
 
   onExito,
 
@@ -276,6 +290,14 @@ export function ConciliarCarteraRevisionManualButton({
 
     setEjecutando(true)
 
+    onEjecutarInicio?.()
+
+    onProgresoTabla?.('borrando')
+
+    const tOcr = window.setTimeout(() => onProgresoTabla?.('ocr'), 4000)
+
+    const tCascada = window.setTimeout(() => onProgresoTabla?.('cascada'), 12000)
+
     try {
 
       const needConf =
@@ -299,6 +321,8 @@ export function ConciliarCarteraRevisionManualButton({
 
 
       if (res.requiere_seleccion_lote) {
+
+        onEjecutarError?.()
 
         const ref = res.referencia_abonos ?? res.drive
 
@@ -326,6 +350,8 @@ export function ConciliarCarteraRevisionManualButton({
 
       if (res.requiere_confirmacion_montos_altos) {
 
+        onEjecutarError?.()
+
         setPaso('confirmar')
 
         toast.warning(
@@ -343,6 +369,8 @@ export function ConciliarCarteraRevisionManualButton({
 
 
       if (!res.ok) {
+
+        onEjecutarError?.()
 
         toast.error(res.error || res.mensaje || 'No se pudo conciliar cartera.')
 
@@ -378,9 +406,11 @@ export function ConciliarCarteraRevisionManualButton({
 
 
 
-      await onExito?.()
+      await onExito?.(res)
 
     } catch (e) {
+
+      onEjecutarError?.()
 
       const status = (e as { response?: { status?: number } })?.response?.status
 
@@ -403,6 +433,10 @@ export function ConciliarCarteraRevisionManualButton({
       }
 
     } finally {
+
+      window.clearTimeout(tOcr)
+
+      window.clearTimeout(tCascada)
 
       setEjecutando(false)
 
