@@ -64,6 +64,15 @@ export function usePermissions() {
   }
 
   /**
+   * Trasladar casos entre bandeja principal, área de revisión y área de trabajo
+   * (Validar / pasar a trabajo). Solo administrador; el resto del módulo sigue
+   * disponible para gerente y operario (Visto, área de trabajo, etc.).
+   */
+  const canTrasladarFiniquitoBandejas = (): boolean => {
+    return isAdmin()
+  }
+
+  /**
    * Misma lista blanca que el guard de rutas (config/roleRoutes.ts).
    */
 
@@ -374,6 +383,8 @@ export function usePermissions() {
     revisionManualFullEdit,
 
     isFiniquitador: isFiniquitador(),
+
+    canTrasladarFiniquitoBandejas: canTrasladarFiniquitoBandejas(),
 
     canAccessPath,
 

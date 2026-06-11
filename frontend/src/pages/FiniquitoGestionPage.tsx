@@ -487,6 +487,7 @@ function FiniquitoGestionPageInner() {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   const location = useLocation()
+  const { canTrasladarFiniquitoBandejas } = usePermissions()
 
   const [cedulaInput, setCedulaInput] = useState('')
   const [cedulaBusqueda, setCedulaBusqueda] = useState('')
@@ -770,6 +771,21 @@ function FiniquitoGestionPageInner() {
 
   const cambiarEstado = async (id: number, estado: string) => {
     if (pendingEstadoCasoId != null) return
+    const row =
+      itemsBandeja.find(r => r.id === id) ??
+      itemsAreaRevision.find(r => r.id === id) ??
+      itemsAreaTrabajo.find(r => r.id === id)
+    if (
+      !canTrasladarFiniquitoBandejas &&
+      row &&
+      ((estado === 'ACEPTADO' && row.estado === 'REVISION') ||
+        (estado === 'EN_PROCESO' && row.estado === 'ACEPTADO'))
+    ) {
+      toast.error(
+        'Solo administradores pueden trasladar casos entre bandeja principal, área de revisión y área de trabajo.'
+      )
+      return
+    }
     setPendingEstadoCasoId(id)
     try {
       const r = await finiquitoAdminPatchEstado(id, estado)
@@ -921,6 +937,12 @@ function FiniquitoGestionPageInner() {
 
   const pasarATrabajo = async (casoId: number) => {
     if (pendingEstadoCasoId != null) return
+    if (!canTrasladarFiniquitoBandejas) {
+      toast.error(
+        'Solo administradores pueden pasar casos del área de revisión al área de trabajo.'
+      )
+      return
+    }
     setPendingEstadoCasoId(casoId)
     try {
       const r = await finiquitoAdminPasarATrabajo(casoId)
@@ -1010,15 +1032,17 @@ function FiniquitoGestionPageInner() {
 
   const renderAcciones = (row: FiniquitoCasoItem) => (
     <div className="flex flex-wrap items-center justify-end gap-2">
-      <Button
-        type="button"
-        size="sm"
-        className="h-8 bg-emerald-700 text-xs hover:bg-emerald-800"
-        disabled={casoTieneAccionPendiente(row.id)}
-        onClick={() => void cambiarEstado(row.id, 'ACEPTADO')}
-      >
-        Validar
-      </Button>
+      {canTrasladarFiniquitoBandejas ? (
+        <Button
+          type="button"
+          size="sm"
+          className="h-8 bg-emerald-700 text-xs hover:bg-emerald-800"
+          disabled={casoTieneAccionPendiente(row.id)}
+          onClick={() => void cambiarEstado(row.id, 'ACEPTADO')}
+        >
+          Validar
+        </Button>
+      ) : null}
       <Button
         type="button"
         size="sm"
@@ -1068,18 +1092,20 @@ function FiniquitoGestionPageInner() {
           <CheckCircle2 className="h-3.5 w-3.5" aria-hidden />
           {vistoActivo ? 'Continuar' : 'Visto'}
         </Button>
-        <Button
-          type="button"
-          size="icon"
-          variant="outline"
-          className="h-8 w-8 border-slate-300"
-          title="Cerrar conciliacion y pasar a area de trabajo"
-          aria-label={`Pasar caso ${row.id} a area de trabajo`}
-          disabled={casoTieneAccionPendiente(row.id)}
-          onClick={() => void pasarATrabajo(row.id)}
-        >
-          <X className="h-4 w-4" aria-hidden />
-        </Button>
+        {canTrasladarFiniquitoBandejas ? (
+          <Button
+            type="button"
+            size="icon"
+            variant="outline"
+            className="h-8 w-8 border-slate-300"
+            title="Cerrar conciliacion y pasar a area de trabajo"
+            aria-label={`Pasar caso ${row.id} a area de trabajo`}
+            disabled={casoTieneAccionPendiente(row.id)}
+            onClick={() => void pasarATrabajo(row.id)}
+          >
+            <X className="h-4 w-4" aria-hidden />
+          </Button>
+        ) : null}
       </div>
     )
   }
@@ -1490,10 +1516,11 @@ function FiniquitoGestionPageInner() {
                 Bandeja principal
               </h2>
               <p className="text-xs text-slate-600 sm:text-sm">
-                Solo <strong>Validar</strong>, <strong>Rechazar</strong> o{' '}
-                <strong>Eliminar</strong>. Dias 1-2 en bandeja; desde dia{' '}
+                <strong>Validar</strong> (pasa al área de revisión) solo
+                administrador; <strong>Rechazar</strong> o <strong>Eliminar</strong>{' '}
+                para todos los perfiles con acceso. Días 1-2 en bandeja; desde día{' '}
                 {BANDEJA_DIA_ATRASADO} el estado pasa a atrasado. Ciclo total{' '}
-                {PLAZO_CICLO_DIAS} dias.
+                {PLAZO_CICLO_DIAS} días.
               </p>
             </div>
             <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-end lg:w-auto lg:min-w-[320px]">
@@ -1601,8 +1628,8 @@ function FiniquitoGestionPageInner() {
                 Area de revision
               </h2>
               <p className="text-xs text-amber-900/85">
-                {totalAreaRevision} {subtituloRevision} · validacion (fase desde
-                dia {BANDEJA_DIA_ATRASADO} o desde Validar)
+                {totalAreaRevision} {subtituloRevision} · Visto y conciliación
+                para todos; pasar al área de trabajo solo administrador
               </p>
             </div>
           </div>
@@ -1663,9 +1690,9 @@ function FiniquitoGestionPageInner() {
         <div className="border-b border-emerald-200/70 bg-emerald-50/30 px-4 py-3.5 sm:px-5">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
             <p className="max-w-xl text-xs text-slate-600">
-              Escriba parte de la cédula para acotar el área de trabajo (espera
-              ~{DEBOUNCE_MS / 1000} s tras dejar de escribir). Independiente del
-              filtro de la bandeja principal.
+              Todos los perfiles con acceso pueden operar aquí (Terminado,
+              revisión manual, etc.). Escriba parte de la cédula para acotar el
+              listado (~{DEBOUNCE_MS / 1000} s tras dejar de escribir).
             </p>
             <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-end lg:w-auto lg:min-w-[320px]">
               <div className="min-w-0 flex-1 space-y-1.5">

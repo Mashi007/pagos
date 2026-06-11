@@ -40,6 +40,7 @@ from app.models.finiquito import (
     FiniquitoUsuarioAcceso,
 )
 from app.models.prestamo import Prestamo
+from app.core.user_utils import user_is_administrator
 from app.schemas.auth import UserResponse
 from app.schemas.finiquito import (
     FiniquitoAdminResumenEstadoResponse,
@@ -1314,6 +1315,32 @@ def _usuario_registro_panel(panel_user: UserResponse) -> str:
     )[:255]
 
 
+def _traslado_finiquito_requiere_admin(estado_anterior: str, estado_nuevo: str) -> bool:
+    """Bandeja principal -> revision (ACEPTADO) o revision -> trabajo (EN_PROCESO)."""
+    ant = (estado_anterior or "").upper().strip()
+    nue = (estado_nuevo or "").upper().strip()
+    if nue == "ACEPTADO" and ant == "REVISION":
+        return True
+    if nue == "EN_PROCESO" and ant == "ACEPTADO":
+        return True
+    return False
+
+
+def _error_traslado_finiquito_si_no_admin(
+    panel_user: UserResponse,
+    estado_anterior: str,
+    estado_nuevo: str,
+) -> Optional[str]:
+    if not _traslado_finiquito_requiere_admin(estado_anterior, estado_nuevo):
+        return None
+    if user_is_administrator(panel_user):
+        return None
+    return (
+        "Solo administradores pueden trasladar casos entre bandeja principal, "
+        "area de revision y area de trabajo."
+    )
+
+
 def _admin_pasar_caso_a_en_proceso(
     db: Session,
     caso: FiniquitoCaso,
@@ -1457,6 +1484,9 @@ def finiquito_admin_pasar_a_trabajo(
             ok=False,
             error="Solo desde area de revision (ACEPTADO) o ya en area de trabajo.",
         )
+    err_perm = _error_traslado_finiquito_si_no_admin(panel_user, anterior, "EN_PROCESO")
+    if err_perm:
+        return FiniquitoConciliacionPasarATrabajoResponse(ok=False, error=err_perm)
     if not finiquito_casos_has_contacto_para_siguientes(db):
         return FiniquitoConciliacionPasarATrabajoResponse(
             ok=False,
@@ -1497,6 +1527,10 @@ def finiquito_admin_patch_estado(
     if nuevo == anterior:
         caso_out = _admin_casos_to_items(db, [caso])[0]
         return FiniquitoPatchEstadoResponse(ok=True, caso=caso_out)
+
+    err_perm = _error_traslado_finiquito_si_no_admin(panel_user, anterior, nuevo)
+    if err_perm:
+        return FiniquitoPatchEstadoResponse(ok=False, error=err_perm)
 
     if nuevo == "REVISION":
         if anterior not in ("ACEPTADO", "EN_PROCESO", "TERMINADO", "RECHAZADO"):
