@@ -18,6 +18,7 @@ import {
   Info,
   Eye,
   Trash2,
+  Brain,
 } from 'lucide-react'
 
 import { toast } from 'sonner'
@@ -2845,6 +2846,28 @@ export function RegistrarPagoForm({
                       <Upload className="h-4 w-4" aria-hidden />
                       Elegir imagen
                     </Button>
+                    {isEditing ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        disabled={
+                          isSubmitting ||
+                          isRescanning ||
+                          bloquearCambioComprobanteCodigo
+                        }
+                        className="gap-2"
+                        onClick={() =>
+                          void handleReescanearDesdeComprobanteActual()
+                        }
+                      >
+                        {isRescanning ? (
+                          <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                        ) : (
+                          <Brain className="h-4 w-4" aria-hidden />
+                        )}
+                        {isRescanning ? 'Escaneando...' : 'Escanear'}
+                      </Button>
+                    ) : null}
                     {archivoComprobante ? (
                       <Button
                         type="button"
