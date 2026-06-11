@@ -121,16 +121,14 @@ def _marcar_prestamo_liquidado_si_corresponde(prestamo_id: int, db: Session) -> 
 
         logger.info("Prestamo id=%s vuelto a APROBADO (quedan cuotas con saldo pendiente).", prestamo_id)
 
-        from app.services.finiquito_conciliacion_visto_service import (
-            prestamo_tiene_reserva_finiquito_activa,
-        )
         from app.services.finiquito_caso_cleanup import eliminar_finiquito_casos_por_prestamo
+        from app.services.finiquito_caso_proteccion import prestamo_tiene_finiquito_caso_protegido
 
-        if not prestamo_tiene_reserva_finiquito_activa(db, prestamo_id):
+        if not prestamo_tiene_finiquito_caso_protegido(db, prestamo_id):
             eliminar_finiquito_casos_por_prestamo(db, prestamo_id)
         else:
             logger.info(
-                "Prestamo id=%s: no se elimina finiquito_casos (conciliacion Visto activa)",
+                "Prestamo id=%s: no se elimina finiquito_casos (caso en flujo activo o conciliacion)",
                 prestamo_id,
             )
 

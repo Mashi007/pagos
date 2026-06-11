@@ -44,4 +44,14 @@ def eliminar_finiquito_casos_si_prestamo_no_liquidado(
     """
     if (estado_prestamo or "").strip().upper() == "LIQUIDADO":
         return 0
+
+    from app.services.finiquito_caso_proteccion import prestamo_tiene_finiquito_caso_protegido
+
+    if prestamo_tiene_finiquito_caso_protegido(db, prestamo_id):
+        logger.info(
+            "finiquito_cleanup: omitido prestamo_id=%s (caso en flujo activo o conciliacion)",
+            prestamo_id,
+        )
+        return 0
+
     return eliminar_finiquito_casos_por_prestamo(db, prestamo_id)

@@ -122,14 +122,12 @@ def refrescar_finiquito_caso_prestamo_si_aplica(db: Session, prestamo_id: int) -
     now = datetime.utcnow()
 
     if not row:
-        from app.services.finiquito_conciliacion_visto_service import (
-            prestamo_tiene_reserva_finiquito_activa,
-        )
+        from app.services.finiquito_caso_proteccion import prestamo_tiene_finiquito_caso_protegido
 
-        if prestamo_tiene_reserva_finiquito_activa(db, pid):
+        if prestamo_tiene_finiquito_caso_protegido(db, pid):
             return {
                 "prestamo_id": pid,
-                "accion": "omitido_conciliacion_visto",
+                "accion": "omitido_flujo_activo",
                 "filas_borradas": 0,
             }
         deleted = eliminar_finiquito_casos_por_prestamo(db, pid)
@@ -223,16 +221,28 @@ def ejecutar_refresh_finiquito_casos(db: Session) -> dict[str, Any]:
     actualizados = 0
 
     if not qualifying_ids:
+        from app.services.finiquito_caso_proteccion import (
+            prestamo_ids_finiquito_protegidos_contra_auto_limpieza,
+        )
+
+        protegidos = prestamo_ids_finiquito_protegidos_contra_auto_limpieza(db)
         pids_borrar = [
             int(r[0])
             for r in db.query(FiniquitoCaso.prestamo_id).distinct().all()
+            if int(r[0]) not in protegidos
         ]
         limpiar_estado_gestion_finiquito_prestamos(db, pids_borrar)
-        eliminados = db.query(FiniquitoCaso).delete(synchronize_session=False)
+        q_sin_elegibles = db.query(FiniquitoCaso)
+        if protegidos:
+            q_sin_elegibles = q_sin_elegibles.filter(
+                ~FiniquitoCaso.prestamo_id.in_(protegidos)
+            )
+        eliminados = q_sin_elegibles.delete(synchronize_session=False)
         db.commit()
         logger.info(
-            "finiquito_refresh: sin prestamos elegibles; eliminados=%s",
+            "finiquito_refresh: sin prestamos elegibles; eliminados=%s protegidos=%s",
             eliminados,
+            len(protegidos),
         )
         return {
             "elegibles": 0,
@@ -269,25 +279,24 @@ def ejecutar_refresh_finiquito_casos(db: Session) -> dict[str, Any]:
         else:
             insertados += 1
 
-    from app.services.finiquito_conciliacion_visto_service import (
-        prestamo_ids_conciliacion_visto_protegidos,
+    from app.services.finiquito_caso_proteccion import (
+        prestamo_ids_finiquito_protegidos_contra_auto_limpieza,
     )
 
-    protegidos_visto = prestamo_ids_conciliacion_visto_protegidos(db)
+    protegidos = prestamo_ids_finiquito_protegidos_contra_auto_limpieza(db)
     pids_borrar = [
         int(r[0])
         for r in db.query(FiniquitoCaso.prestamo_id)
         .filter(~FiniquitoCaso.prestamo_id.in_(qualifying_ids))
         .distinct()
         .all()
-        if int(r[0]) not in protegidos_visto
+        if int(r[0]) not in protegidos
     ]
     limpiar_estado_gestion_finiquito_prestamos(db, pids_borrar)
-    eliminados = (
-        db.query(FiniquitoCaso)
-        .filter(~FiniquitoCaso.prestamo_id.in_(qualifying_ids))
-        .delete(synchronize_session=False)
-    )
+    q_delete = db.query(FiniquitoCaso).filter(~FiniquitoCaso.prestamo_id.in_(qualifying_ids))
+    if protegidos:
+        q_delete = q_delete.filter(~FiniquitoCaso.prestamo_id.in_(protegidos))
+    eliminados = q_delete.delete(synchronize_session=False)
 
     db.commit()
     logger.info(
