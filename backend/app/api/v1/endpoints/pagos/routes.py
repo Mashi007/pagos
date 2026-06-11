@@ -72,6 +72,7 @@ from app.core.deps import (
     require_admin,
     require_operator_or_higher,
 )
+from app.core.rol_normalization import canonical_rol
 
 from app.core.documento import (
     compose_numero_documento_almacenado,
@@ -5673,7 +5674,12 @@ def crear_pago(payload: PagoCreate, db: Session = Depends(get_db), current_user:
 
 @router.put("/{pago_id:int}", response_model=dict)
 
-def actualizar_pago(pago_id: int, payload: PagoUpdate, db: Session = Depends(get_db)):
+def actualizar_pago(
+    pago_id: int,
+    payload: PagoUpdate,
+    db: Session = Depends(get_db),
+    current_user: UserResponse = Depends(get_current_user),
+):
 
     """Actualiza un pago en la tabla pagos. Mismo texto de documento puede existir en otros pagos.
 
@@ -5750,18 +5756,17 @@ def actualizar_pago(pago_id: int, payload: PagoUpdate, db: Session = Depends(get
         codigo_cambio = (nc or "") != (codigo_anterior or "")
 
         if codigo_cambio and (
-
-            bool(row.conciliado) or str(row.estado or "").upper() in ("PAGADO", "PAGO_ADELANTADO")
-
+            bool(row.conciliado)
+            or str(row.estado or "").upper() in ("PAGADO", "PAGO_ADELANTADO")
         ):
-
-            raise HTTPException(
-
-                status_code=409,
-
-                detail="No se permite cambiar código en pagos conciliados o pagados.",
-
-            )
+            if canonical_rol(getattr(current_user, "rol", None)) != "admin":
+                raise HTTPException(
+                    status_code=409,
+                    detail=(
+                        "No se permite cambiar código en pagos conciliados o pagados. "
+                        "Solo administración puede hacerlo."
+                    ),
+                )
 
         if new_stored and numero_documento_ya_registrado(db, new_stored, exclude_pago_id=pago_id):
 
@@ -5803,15 +5808,17 @@ def actualizar_pago(pago_id: int, payload: PagoUpdate, db: Session = Depends(get
 
         elif k == "conciliado" and v is not None:
 
-            row.conciliado = bool(v)
-
-            row.fecha_conciliacion = datetime.now(ZoneInfo(TZ_NEGOCIO)) if v else None
-
-            row.verificado_concordancia = "SI" if v else "NO"
-
             aplicar_conciliado = bool(v)
 
-            _alinear_estado_si_toggle_conciliado_actualizar_pago(row, bool(v))
+            if aplicar_conciliado:
+                from app.services.pago_autoconciliacion import marcar_pago_autoconciliado
+
+                marcar_pago_autoconciliado(row)
+            else:
+                row.conciliado = False
+                row.fecha_conciliacion = None
+                row.verificado_concordancia = "NO"
+                _alinear_estado_si_toggle_conciliado_actualizar_pago(row, False)
 
         elif k == "verificado_concordancia" and v is not None:
 
@@ -6133,6 +6140,10 @@ def actualizar_pago(pago_id: int, payload: PagoUpdate, db: Session = Depends(get
 
         try:
 
+            from app.services.pagos_aplicacion_prestamo import (
+                _restaurar_autoconciliacion_pagos_prestamo,
+            )
+
             for pid in sorted({p for p in (old_prestamo_id, row.prestamo_id) if p}):
 
                 r = reset_y_reaplicar_cascada_prestamo(db, pid)
@@ -6152,6 +6163,13 @@ def actualizar_pago(pago_id: int, payload: PagoUpdate, db: Session = Depends(get
                         ),
 
                     )
+
+                _restaurar_autoconciliacion_pagos_prestamo(int(pid), db)
+
+            if bool(row.conciliado) and row.prestamo_id and float(row.monto_pagado or 0) > 0:
+                from app.services.pago_autoconciliacion import marcar_pago_autoconciliado
+
+                marcar_pago_autoconciliado(row)
 
             db.commit()
 
@@ -6207,6 +6225,11 @@ def actualizar_pago(pago_id: int, payload: PagoUpdate, db: Session = Depends(get
 
             # Misma regla que crear_pago: alinear estado y conciliado si no hubo abono en cuotas.
             row.estado = _estado_conciliacion_post_cascada(row, cuotas_completadas, cuotas_parciales)
+
+            if bool(row.conciliado) and row.prestamo_id and float(row.monto_pagado or 0) > 0:
+                from app.services.pago_autoconciliacion import marcar_pago_autoconciliado
+
+                marcar_pago_autoconciliado(row)
 
             db.commit()
 

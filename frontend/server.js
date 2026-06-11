@@ -939,6 +939,15 @@ app.get('/reportes/*', (req, res) => {
   res.redirect(302, FRONTEND_BASE + '/reportes' + subpath + qs(req))
 })
 
+// Ruta pública: reporte de pago (cobros) sin base -> /pagos/rapicredit-cobros
+app.get('/rapicredit-cobros', (req, res) => {
+  res.redirect(302, FRONTEND_BASE + '/rapicredit-cobros' + qs(req))
+})
+app.get('/rapicredit-cobros/*', (req, res) => {
+  const subpath = req.path.slice('/rapicredit-cobros'.length)
+  res.redirect(302, FRONTEND_BASE + '/rapicredit-cobros' + subpath + qs(req))
+})
+
 // Ruta pública: estado de cuenta sin base -> redirigir a /pagos/rapicredit-estadocuenta
 app.get('/rapicredit-estadocuenta', (req, res) => {
   res.redirect(302, FRONTEND_BASE + '/rapicredit-estadocuenta' + qs(req))

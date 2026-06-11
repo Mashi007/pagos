@@ -492,7 +492,12 @@ export function RegistrarPagoForm({
   const usarApiPagosConErrores =
     Boolean(esPagoConError) && !esRevisionManualPagosCartera
 
-  const { revisionManualFullEdit } = usePermissions()
+  const { revisionManualFullEdit, isAdmin } = usePermissions()
+
+  const puedeVistoRevisionManual =
+    mostrarCampoCodigoDocumento &&
+    revisionManualFullEdit &&
+    (!isEditing || !bloquearCambioComprobanteCodigo || isAdmin())
 
   const codigoDocumentoInputRef = useRef<HTMLInputElement>(null)
 
@@ -1492,6 +1497,9 @@ export function RegistrarPagoForm({
 
       if (fd.prestamo_id && fd.monto_pagado > 0) {
         datosEnvio.conciliado = true // ✅ AUTOCONCILIAR si hay préstamo y monto
+        ;(
+          datosEnvio as PagoCreate & { verificado_concordancia?: string }
+        ).verificado_concordancia = 'SI'
       }
 
       let idPagoParaProcesar: number | undefined = pagoId
@@ -1642,6 +1650,34 @@ export function RegistrarPagoForm({
             onSuccess(false)
 
             return
+          }
+        } else if (
+          esRevisionManualPagosCartera &&
+          isEditing &&
+          fd.prestamo_id != null &&
+          Number(fd.prestamo_id) > 0
+        ) {
+          // Revisión manual: reconstruir cascada del crédito (LIQUIDADO/conciliado incluidos).
+          try {
+            const lote = await pagoService.aplicarPagosPendientesCuotasPorPrestamo(
+              Number(fd.prestamo_id)
+            )
+            const nAplic = Number(lote.pagos_con_aplicacion ?? 0)
+            toast.success(
+              lote.mensaje?.trim() ||
+                (nAplic > 0
+                  ? `Cascada reconstruida: ${nAplic} pago(s) distribuidos en cuotas.`
+                  : 'Pago guardado y conciliado; revise la amortización si no hubo abono en cuotas.'),
+              { duration: 6500 }
+            )
+          } catch (applyErr) {
+            toast.warning(
+              'Pago guardado pero no se pudo reconstruir la cascada del préstamo. Use «Aplicar a cuotas (cascada)» en esta pantalla.',
+              { duration: 7000 }
+            )
+            if (import.meta.env.DEV) {
+              console.warn('cascada revision manual tras editar:', applyErr)
+            }
           }
         } else {
           try {
@@ -1906,11 +1942,7 @@ export function RegistrarPagoForm({
 
   /** Visto (revisión manual): desambigua con código A####/P#### en el campo Código y guarda (BD almacena comprobante + §CD: + código). */
   const handleVistoRellenarCodigoYGuardar = async () => {
-    if (
-      isSubmitting ||
-      !mostrarCampoCodigoDocumento ||
-      !revisionManualFullEdit
-    ) {
+    if (isSubmitting || !puedeVistoRevisionManual) {
       return
     }
 
@@ -2040,9 +2072,9 @@ export function RegistrarPagoForm({
                   <div className="rounded border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
                     <p className="font-semibold">Pago ya conciliado/pagado.</p>
                     <p className="mt-1 text-xs">
-                      Se bloquean la imagen del comprobante y el código. Puede
-                      corregir el Nº de documento y otros campos permitidos; la
-                      validación de duplicados sigue activa.
+                      {esRevisionManualPagosCartera
+                        ? 'Puede corregir monto, fecha y Nº de documento. Código, comprobante y Visto quedan reservados a administración.'
+                        : 'Se bloquean la imagen del comprobante y el código. Puede corregir el Nº de documento y otros campos permitidos; la validación de duplicados sigue activa.'}
                     </p>
                   </div>
                 ) : null}
@@ -2859,7 +2891,7 @@ export function RegistrarPagoForm({
                   ) : null}
                 </div>
 
-                {mostrarCampoCodigoDocumento && revisionManualFullEdit ? (
+                {puedeVistoRevisionManual ? (
                   <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-violet-200/70 bg-violet-50 px-3 py-2">
                     <p className="min-w-0 flex-1 text-xs text-violet-900">
                       <span className="font-medium">Revisión manual:</span>{' '}

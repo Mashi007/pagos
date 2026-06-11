@@ -254,6 +254,9 @@ export function EditarRevisionManual() {
   const [pagoModalComprobanteInicial, setPagoModalComprobanteInicial] =
     useState<File | null>(null)
 
+  const [pagoModalConciliadoPagado, setPagoModalConciliadoPagado] =
+    useState(false)
+
   const [escaneandoComprobanteAgregarPago, setEscaneandoComprobanteAgregarPago] =
     useState(false)
 
@@ -1009,11 +1012,18 @@ export function EditarRevisionManual() {
     }
   }
 
+  const pagoEstaConciliadoOPagado = (pago: Pago) =>
+    Boolean(pago.conciliado) ||
+    ['PAGADO', 'PAGO_ADELANTADO'].includes(
+      String(pago.estado ?? '').toUpperCase()
+    )
+
   const cerrarModalPagoRevision = () => {
     setPagoModalAbierto(false)
     setPagoModalId(undefined)
     setPagoModalInicial(undefined)
     setPagoModalComprobanteInicial(null)
+    setPagoModalConciliadoPagado(false)
   }
 
   const abrirAgregarPagoRevision = () => {
@@ -1106,6 +1116,7 @@ export function EditarRevisionManual() {
   const abrirEditarPagoRevision = (pago: Pago) => {
     if (soloLectura) return
     setPagoModalId(pago.id)
+    setPagoModalConciliadoPagado(pagoEstaConciliadoOPagado(pago))
     setPagoModalInicial(pagoRowAPagoCreateInicial(pago))
     setPagoModalAbierto(true)
   }
@@ -3712,7 +3723,10 @@ export function EditarRevisionManual() {
                                           title={
                                             soloLectura
                                               ? 'Revision cerrada: solo lectura'
-                                              : 'Editar pago'
+                                              : pagoEstaConciliadoOPagado(pago) &&
+                                                  !isAdmin()
+                                                ? 'Editar pago conciliado (monto, fecha y Nº documento; código/comprobante solo administrador)'
+                                                : 'Editar pago'
                                           }
                                           aria-label="Editar pago"
                                         >
@@ -4539,6 +4553,9 @@ export function EditarRevisionManual() {
           modoGuardarYProcesar
           esPagoConError={false}
           mostrarCampoCodigoDocumento
+          bloquearCambioComprobanteCodigo={
+            !isAdmin() && pagoModalConciliadoPagado
+          }
           comprobanteArchivoInicial={pagoModalComprobanteInicial}
           prestamoContextoRevisionManualId={
             prestamoData.prestamo_id != null &&
