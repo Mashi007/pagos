@@ -305,17 +305,26 @@ def _enriquecer_documento_columna_pagos_realizados(db: Session, filas: List[dict
 
 
 def listar_pagos_realizados_estado_cuenta(db: Session, prestamo_ids: List[int]) -> List[dict]:
-    """Pagos PAGADO en tabla pagos; subtotal_usd = monto_pagado (USD cartera)."""
+    """
+    Pagos operativos del préstamo en tabla ``pagos`` (misma elegibilidad que cascada/cartera).
+
+    Incluye asientos Conciliar ABONOS aunque queden PENDIENTE sin filas en cuota_pagos
+    (p. ej. exceso sobre cupo de cuotas tras comprobantes OCR). Antes solo entraba estado=PAGADO
+    y el asiento ABONOS-NOTIF-* desaparecía del PDF frente a «Pagos registrados en cartera».
+  """
     if not prestamo_ids:
         return []
     ids = sorted({int(x) for x in prestamo_ids if x is not None})
     if not ids:
         return []
+    from app.services.pagos_sql_where import _where_pago_elegible_reaplicacion_cascada
+
     rows = db.execute(
         select(Pago)
         .where(
             Pago.prestamo_id.in_(ids),
-            func.upper(func.coalesce(Pago.estado, "")) == "PAGADO",
+            Pago.monto_pagado > 0,
+            _where_pago_elegible_reaplicacion_cascada(),
         )
         .order_by(Pago.fecha_pago.desc(), Pago.id.desc())
     ).scalars().all()

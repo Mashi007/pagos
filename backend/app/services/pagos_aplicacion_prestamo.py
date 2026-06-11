@@ -12,6 +12,10 @@ from sqlalchemy.orm import Session
 from app.models.cuota_pago import CuotaPago
 from app.models.pago import Pago
 from app.models.prestamo import Prestamo
+from app.services.pago_autoconciliacion import (
+    marcar_pago_autoconciliado,
+    pago_preserva_autoconciliacion_sin_cuotas,
+)
 from app.services.pagos_cascada_aplicacion import _aplicar_pago_a_cuotas_interno
 from app.services.pagos_sql_where import (
     _where_pago_elegible_reaplicacion_cascada,
@@ -106,6 +110,8 @@ def aplicar_pagos_pendientes_prestamo_con_diagnostico(
             if cc > 0 or cp > 0:
                 pago.estado = "PAGADO"
                 n += 1
+            elif pago_preserva_autoconciliacion_sin_cuotas(pago):
+                marcar_pago_autoconciliado(pago)
             else:
                 sin_abono.append(int(pago.id))
         except Exception as e:
@@ -218,6 +224,8 @@ def aplicar_cascada_prestamo_pipeline(prestamo_id: int, db: Session) -> dict[str
     else:
         mensaje = _mensaje_sin_aplicacion_cascada(diagnostico)
 
+    _restaurar_autoconciliacion_pagos_prestamo(prestamo_id, db)
+
     db.refresh(prestamo)
     return {
         "ok": True,
@@ -229,3 +237,21 @@ def aplicar_cascada_prestamo_pipeline(prestamo_id: int, db: Session) -> dict[str
         "mensaje": mensaje,
         "prestamo_estado": (prestamo.estado or "").strip().upper(),
     }
+
+
+def _restaurar_autoconciliacion_pagos_prestamo(prestamo_id: int, db: Session) -> int:
+    """Tras cascada: reafirma autoconciliación en ABONOS y asientos Conciliar sin cuota_pagos."""
+    pagos = db.execute(
+        select(Pago).where(Pago.prestamo_id == prestamo_id, Pago.monto_pagado > 0)
+    ).scalars().all()
+    n = 0
+    for pago in pagos:
+        if not pago_preserva_autoconciliacion_sin_cuotas(pago):
+            continue
+        prev = bool(pago.conciliado), str(pago.estado or "").strip().upper()
+        marcar_pago_autoconciliado(pago)
+        if (not prev[0]) or prev[1] != "PAGADO":
+            n += 1
+    if n:
+        db.flush()
+    return n
