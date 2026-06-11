@@ -23,7 +23,7 @@ import {
   RefreshCw,
   Search,
   Trash2,
-  Undo2,
+  RotateCcw,
   X,
 } from 'lucide-react'
 
@@ -1256,7 +1256,7 @@ function FiniquitoGestionPageInner() {
       disabled={casoTieneAccionPendiente(row.id)}
       onClick={() => setPendingLiberarCaso(row)}
     >
-      <Undo2 className="h-3.5 w-3.5 shrink-0" aria-hidden />
+      <RotateCcw className="h-3.5 w-3.5 shrink-0" aria-hidden />
       Procesos normales
     </Button>
   )
@@ -2456,20 +2456,17 @@ function FiniquitoGestionPageInner() {
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Volver a procesos normales</DialogTitle>
-            <DialogDescription asChild>
-              <div className="space-y-2 text-base text-slate-800">
-                <p>
-                  Préstamo{' '}
-                  <strong>#{pendingLiberarCaso?.prestamo_id ?? '—'}</strong>{' '}
-                  (caso {pendingLiberarCaso?.id ?? '—'}) saldrá del flujo
-                  finiquito.
-                </p>
-                <p>
-                  Use esto cuando <strong>Conciliar</strong> confirme que el
-                  crédito <strong>no está liquidado</strong>: el préstamo vuelve a
-                  cartera operativa (pagos, cuotas, revisión manual habitual).
-                </p>
-              </div>
+            <DialogDescription className="space-y-2 text-base text-slate-800">
+              <span className="block">
+                Préstamo{' '}
+                <strong>#{pendingLiberarCaso?.prestamo_id ?? '—'}</strong> (caso{' '}
+                {pendingLiberarCaso?.id ?? '—'}) saldrá del flujo finiquito.
+              </span>
+              <span className="block">
+                Use esto cuando <strong>Conciliar</strong> confirme que el crédito{' '}
+                <strong>no está liquidado</strong>: el préstamo vuelve a cartera
+                operativa (pagos, cuotas, revisión manual habitual).
+              </span>
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2 sm:gap-0">
