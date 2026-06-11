@@ -526,6 +526,10 @@ function FiniquitoGestionPageInner() {
   } | null>(null)
   const [itemsBandeja, setItemsBandeja] = useState<FiniquitoCasoItem[]>([])
   const [totalBandeja, setTotalBandeja] = useState(0)
+  const [selectedBandejaIds, setSelectedBandejaIds] = useState<Set<number>>(
+    () => new Set()
+  )
+  const [validandoBandejaLote, setValidandoBandejaLote] = useState(false)
   const [resumenEstado, setResumenEstado] = useState<FiniquitoResumenEstado | null>(
     null
   )
@@ -1167,7 +1171,87 @@ function FiniquitoGestionPageInner() {
   }
 
   const casoTieneAccionPendiente = (casoId: number) =>
-    pendingEstadoCasoId === casoId
+    pendingEstadoCasoId === casoId || validandoBandejaLote
+
+  useEffect(() => {
+    setSelectedBandejaIds(prev => {
+      if (prev.size === 0) return prev
+      const visibles = new Set(itemsBandeja.map(r => r.id))
+      const next = new Set(Array.from(prev).filter(id => visibles.has(id)))
+      return next.size === prev.size ? prev : next
+    })
+  }, [itemsBandeja])
+
+  const idsBandejaSeleccionables = useMemo(
+    () =>
+      itemsBandeja
+        .filter(r => (r.estado || '').toUpperCase() === 'REVISION')
+        .map(r => r.id),
+    [itemsBandeja]
+  )
+
+  const todosBandejaSeleccionados =
+    idsBandejaSeleccionables.length > 0 &&
+    idsBandejaSeleccionables.every(id => selectedBandejaIds.has(id))
+
+  const algunBandejaSeleccionado =
+    !todosBandejaSeleccionados &&
+    idsBandejaSeleccionables.some(id => selectedBandejaIds.has(id))
+
+  const validarBandejaEnLote = async () => {
+    if (!canTrasladarFiniquitoBandejas || validandoBandejaLote) return
+    const ids = idsBandejaSeleccionables.filter(id => selectedBandejaIds.has(id))
+    if (ids.length === 0) {
+      toast.message('Seleccione al menos un caso en la bandeja principal.')
+      return
+    }
+    const confirmado = window.confirm(
+      `¿Validar ${ids.length} caso(s)? Pasarán al área de revisión (no procesa datos ni concilia).`
+    )
+    if (!confirmado) return
+
+    setValidandoBandejaLote(true)
+    let ok = 0
+    let fail = 0
+    const errores: string[] = []
+    try {
+      for (const id of ids) {
+        try {
+          const r = await finiquitoAdminPatchEstado(id, 'ACEPTADO')
+          if (r.ok && r.caso) {
+            incorporarCasoActualizado(r.caso)
+            ok += 1
+          } else {
+            fail += 1
+            errores.push(`Caso ${id}: ${r.error || 'no se pudo validar'}`)
+          }
+        } catch (e: unknown) {
+          fail += 1
+          errores.push(
+            `Caso ${id}: ${e instanceof Error ? e.message : 'error de red'}`
+          )
+        }
+      }
+      setSelectedBandejaIds(new Set())
+      void invalidatePrestamosQueries(queryClient)
+      await cargarAreasVisibles({ silent: true })
+      if (fail === 0) {
+        toast.success(
+          `${ok} caso(s) validados: pasan al área de revisión.`
+        )
+      } else if (ok > 0) {
+        toast.warning(
+          `${ok} validados, ${fail} con error. ${errores.slice(0, 2).join(' · ')}`
+        )
+      } else {
+        toast.error(
+          errores.slice(0, 3).join(' · ') || 'No se pudo validar ningún caso.'
+        )
+      }
+    } finally {
+      setValidandoBandejaLote(false)
+    }
+  }
 
   const abrirRevisionManualPrestamo = (
     prestamoId: number,
@@ -1386,7 +1470,15 @@ function FiniquitoGestionPageInner() {
   const renderTabla = (
     items: FiniquitoCasoItem[],
     renderAccionesFila: (row: FiniquitoCasoItem) => ReactNode = renderAcciones,
-    modoTiempo: 'bandeja' | 'revision' = 'bandeja'
+    modoTiempo: 'bandeja' | 'revision' = 'bandeja',
+    seleccionBandeja?: {
+      selectedIds: Set<number>
+      onToggleRow: (id: number, checked: boolean) => void
+      onToggleAll: (checked: boolean) => void
+      disabled: boolean
+      todosSeleccionados: boolean
+      algunSeleccionado: boolean
+    }
   ) => (
     <div
       className={cn(
@@ -1400,6 +1492,25 @@ function FiniquitoGestionPageInner() {
       >
         <TableHeader className={theadStickyClass}>
           <TableRow className="border-0 hover:bg-transparent">
+            {seleccionBandeja ? (
+              <TableHead className={cn(thGestion, 'w-10 text-center')} scope="col">
+                <input
+                  type="checkbox"
+                  aria-label="Seleccionar todos los casos visibles en bandeja"
+                  className="h-4 w-4 rounded border-slate-300"
+                  checked={seleccionBandeja.todosSeleccionados}
+                  ref={el => {
+                    if (el) {
+                      el.indeterminate = seleccionBandeja.algunSeleccionado
+                    }
+                  }}
+                  disabled={seleccionBandeja.disabled}
+                  onChange={e =>
+                    seleccionBandeja.onToggleAll(e.target.checked)
+                  }
+                />
+              </TableHead>
+            ) : null}
             <TableHead className={thGestion} scope="col">
               ID caso
             </TableHead>
@@ -1451,8 +1562,27 @@ function FiniquitoGestionPageInner() {
               modoTiempo === 'bandeja'
                 ? textoTiempoLimiteBandeja(row)
                 : textoTiempoLimiteAreaRevision(row)
+            const puedeSeleccionar =
+              seleccionBandeja &&
+              (row.estado || '').toUpperCase() === 'REVISION'
             return (
             <TableRow key={row.id} className={idx % 2 === 0 ? trEven : trOdd}>
+              {seleccionBandeja ? (
+                <TableCell className={cn(tdGestion, 'text-center')}>
+                  <input
+                    type="checkbox"
+                    aria-label={`Seleccionar caso ${row.id}`}
+                    className="h-4 w-4 rounded border-slate-300"
+                    checked={seleccionBandeja.selectedIds.has(row.id)}
+                    disabled={
+                      seleccionBandeja.disabled || !puedeSeleccionar
+                    }
+                    onChange={e =>
+                      seleccionBandeja.onToggleRow(row.id, e.target.checked)
+                    }
+                  />
+                </TableCell>
+              ) : null}
               <TableCell className={cn(tdGestion, 'font-mono text-xs')}>
                 {row.id}
               </TableCell>
@@ -1809,8 +1939,10 @@ function FiniquitoGestionPageInner() {
                 Bandeja principal
               </h2>
               <p className="text-xs text-slate-600 sm:text-sm">
-                <strong>Validar</strong> (pasa al área de revisión) solo
-                administrador; <strong>Procesos normales</strong> saca el crédito de
+                <strong>Validar</strong> (pasa al área de revisión, sin procesar
+                datos) solo administrador; puede seleccionar varios y usar{' '}
+                <strong>Validar seleccionados</strong>;{' '}
+                <strong>Procesos normales</strong> saca el crédito de
                 finiquito si Conciliar confirma que no está liquidado;{' '}
                 <strong>Rechazar</strong> o <strong>Eliminar</strong> para todos los
                 perfiles con acceso. Días 1-2 en bandeja; desde día{' '}
@@ -1853,12 +1985,31 @@ function FiniquitoGestionPageInner() {
                   ) : null}
                 </div>
               </div>
+              {canTrasladarFiniquitoBandejas ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  className="h-10 shrink-0 bg-emerald-700 hover:bg-emerald-800"
+                  disabled={
+                    areasLoading.bandeja ||
+                    validandoBandejaLote ||
+                    selectedBandejaIds.size === 0
+                  }
+                  onClick={() => void validarBandejaEnLote()}
+                >
+                  {validandoBandejaLote ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    `Validar seleccionados (${selectedBandejaIds.size})`
+                  )}
+                </Button>
+              ) : null}
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
                 className="h-10 shrink-0 border-slate-300"
-                disabled={areasLoading.bandeja}
+                disabled={areasLoading.bandeja || validandoBandejaLote}
                 onClick={() => void cargarBandeja()}
               >
                 {areasLoading.bandeja ? (
@@ -1892,7 +2043,34 @@ function FiniquitoGestionPageInner() {
               </p>
             ) : (
               <>
-                {renderTabla(itemsBandeja)}
+                {renderTabla(
+                  itemsBandeja,
+                  renderAcciones,
+                  'bandeja',
+                  canTrasladarFiniquitoBandejas
+                    ? {
+                        selectedIds: selectedBandejaIds,
+                        onToggleRow: (id, checked) => {
+                          setSelectedBandejaIds(prev => {
+                            const next = new Set(prev)
+                            if (checked) next.add(id)
+                            else next.delete(id)
+                            return next
+                          })
+                        },
+                        onToggleAll: checked => {
+                          setSelectedBandejaIds(() => {
+                            if (!checked) return new Set()
+                            return new Set(idsBandejaSeleccionables)
+                          })
+                        },
+                        disabled:
+                          validandoBandejaLote || pendingEstadoCasoId != null,
+                        todosSeleccionados: todosBandejaSeleccionados,
+                        algunSeleccionado: algunBandejaSeleccionado,
+                      }
+                    : undefined
+                )}
                 <FiniquitoTablaScrollHint
                   total={totalBandeja}
                   cargados={itemsBandeja.length}
