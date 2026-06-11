@@ -18,7 +18,9 @@ from app.services.prestamo_candidatos_drive_guardar import (
     _fechas_desde_col_q,
     _motivos_no_100,
 )
-from app.services.prestamo_candidatos_drive_validadores import conteo_prestamos_por_cedula_norm
+from app.services.prestamo_candidatos_drive_validadores import (
+    conteo_prestamos_aprobados_por_cedula_norm,
+)
 
 
 def _cell(v: Any) -> str:
@@ -66,7 +68,11 @@ def _tabla_ve_ok(payload: Dict[str, Any], cedula_cmp_fila: str, n_prest: int, es
             return True
         if t is False:
             return False
-    return not (es_ve and n_prest >= 2)
+    try:
+        n_aprob = int(payload.get("prestamos_aprobados_misma_cedula_norm_count") or 0)
+    except (TypeError, ValueError):
+        n_aprob = n_prest
+    return not (es_ve and n_aprob >= 1)
 
 
 def fila_payload_grilla_verde(payload: Dict[str, Any], cedula_cmp_fila: str) -> bool:
@@ -88,7 +94,11 @@ def fila_payload_grilla_verde(payload: Dict[str, Any], cedula_cmp_fila: str) -> 
         _, ap_d = fechas
         red_fecha = (date.today() - ap_d).days > MAX_DIAS_APROBACION_DRIVE
 
-    red_ve = es_ve and n_prest >= 2
+    try:
+        n_aprob = int(payload.get("prestamos_aprobados_misma_cedula_norm_count") or 0)
+    except (TypeError, ValueError):
+        n_aprob = n_prest
+    red_ve = es_ve and n_aprob >= 1
     if not formato_ok or red_ve or red_fecha:
         return False
     dup = payload.get("duplicada_en_hoja") is True
@@ -108,7 +118,7 @@ def conteos_listo_guardar_y_map_por_id(
     - devuelve mapa `id` → cumple validación previa al crear préstamo (para la UI por fila);
     - devuelve mapa `id` → motivos de no-guardable (lista vacía si guardable), para mostrar en UI.
     """
-    prestamo_counts = conteo_prestamos_por_cedula_norm(db)
+    prestamo_counts_aprob = conteo_prestamos_aprobados_por_cedula_norm(db)
     stmt = select(PrestamoCandidatoDrive.id, PrestamoCandidatoDrive.payload, PrestamoCandidatoDrive.cedula_cmp)
     q = (cedula_cmp_contains or "").strip()
     if q:
@@ -119,7 +129,7 @@ def conteos_listo_guardar_y_map_por_id(
     apr = 0
     for rid, payload, cmp in rows:
         pl = payload if isinstance(payload, dict) else {}
-        ok, motivos, pc = _motivos_no_100(pl, db, prestamo_counts)
+        ok, motivos, pc = _motivos_no_100(pl, db, prestamo_counts_aprob)
         v = bool(ok and pc is not None)
         listo_map[int(rid)] = v
         motivos_map[int(rid)] = [] if v else list(motivos)

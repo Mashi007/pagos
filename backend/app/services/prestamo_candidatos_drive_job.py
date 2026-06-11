@@ -38,6 +38,7 @@ from app.services.prestamo_candidatos_drive_validadores import (
     cedula_cmp_es_tipo_j,
     cedula_cmp_es_tipo_v_o_e,
     cedula_cmp_es_tipo_venezolano_v,
+    conteo_prestamos_aprobados_por_cedula_norm,
     conteo_prestamos_por_cedula_norm,
 )
 
@@ -72,7 +73,8 @@ def ejecutar_refresh_prestamo_candidatos_drive(
     meta = get_conciliacion_sheet_meta(db)
     drive_synced_at = meta.synced_at if meta else None
 
-    prestamo_counts = conteo_prestamos_por_cedula_norm(db)
+    prestamo_counts_total = conteo_prestamos_por_cedula_norm(db)
+    prestamo_counts_aprob = conteo_prestamos_aprobados_por_cedula_norm(db)
 
     drive_rows: List[DriveRow] = list(
         db.execute(select(DriveRow).order_by(DriveRow.sheet_row_number.asc())).scalars().all()
@@ -126,22 +128,24 @@ def ejecutar_refresh_prestamo_candidatos_drive(
     to_insert: List[PrestamoCandidatoDrive] = []
 
     for r, cmp_e in tmp:
-        n_prest = int(prestamo_counts.get(cmp_e, 0) or 0)
+        n_prest_total = int(prestamo_counts_total.get(cmp_e, 0) or 0)
+        n_prest_aprob = int(prestamo_counts_aprob.get(cmp_e, 0) or 0)
         es_v = cedula_cmp_es_tipo_venezolano_v(cmp_e)
         es_ve = cedula_cmp_es_tipo_v_o_e(cmp_e)
         es_e = bool(es_ve and not es_v)
         es_j = cedula_cmp_es_tipo_j(cmp_e)
-        if es_ve and n_prest >= 1:
+        # V/E: solo bloquea si ya hay un APROBADO (no cuenta LIQUIDADO ni otros estados).
+        if es_ve and n_prest_aprob >= 1:
             continue
-        if not es_ve and not es_j and n_prest >= 1:
+        if not es_ve and not es_j and n_prest_aprob >= 1:
             continue
         raw_e = _cell(getattr(r, "col_e", None))
         dup_sheet = conteos.get(cmp_e, 0) > 1
         vced = validate_cedula(raw_e)
         cedula_valida = bool(vced.get("valido"))
         cedula_error = None if cedula_valida else (vced.get("error") or "Cédula inválida")
-        # V y E: máximo un préstamo; dos o más con la misma cédula normalizada no cumplen.
-        validador_ve_max_un_prestamo_ok = not (es_ve and n_prest >= 2)
+        # V y E: máximo un APROBADO; J puede tener varios (validador siempre true en UI).
+        validador_ve_max_un_prestamo_ok = not (es_ve and n_prest_aprob >= 1)
         validador_v_max_un_prestamo_ok = validador_ve_max_un_prestamo_ok
 
         q_raw = _cell(getattr(r, "col_q", None)) or None
@@ -173,7 +177,8 @@ def ejecutar_refresh_prestamo_candidatos_drive(
             "cedula_valida": cedula_valida,
             "cedula_error": cedula_error,
             "duplicada_en_hoja": dup_sheet,
-            "prestamos_misma_cedula_norm_count": n_prest,
+            "prestamos_misma_cedula_norm_count": n_prest_total,
+            "prestamos_aprobados_misma_cedula_norm_count": n_prest_aprob,
             "cedula_es_tipo_v_venezolano": es_v,
             "cedula_es_tipo_e": es_e,
             "cedula_es_tipo_ve": es_ve,

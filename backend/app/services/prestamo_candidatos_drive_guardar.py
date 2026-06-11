@@ -22,8 +22,9 @@ from app.models.cliente import Cliente
 from app.models.prestamo_candidato_drive import PrestamoCandidatoDrive
 from app.schemas.auth import UserResponse
 from app.services.prestamo_candidatos_drive_validadores import (
+    cedula_cmp_es_tipo_j,
     cedula_cmp_es_tipo_v_o_e,
-    conteo_prestamos_por_cedula_norm,
+    conteo_prestamos_aprobados_por_cedula_norm,
 )
 from app.services.prestamo_candidatos_drive_normalizacion import (
     normalizar_modalidad_drive,
@@ -177,7 +178,7 @@ def _cliente_id_por_cedula_normalizada(db: Session, cedula_cmp: str) -> Optional
 def _motivos_no_100(
     payload: Dict[str, Any],
     db: Session,
-    prestamo_counts: Dict[str, int],
+    prestamo_counts_aprob: Dict[str, int],
 ) -> Tuple[bool, List[str], Optional[PrestamoCreate]]:
     """Devuelve (ok, lista_motivos_si_no_ok, prestamo_create_si_ok)."""
     from app.api.v1.endpoints.validadores import validate_cedula
@@ -192,11 +193,15 @@ def _motivos_no_100(
     if not ced_cmp:
         motivos.append("sin clave de cédula normalizada")
 
-    n_live = int(prestamo_counts.get(ced_cmp, 0) or 0) if ced_cmp else 0
-    if cedula_cmp_es_tipo_v_o_e(ced_cmp) and n_live >= 1:
+    n_aprob = int(prestamo_counts_aprob.get(ced_cmp, 0) or 0) if ced_cmp else 0
+    if (
+        cedula_cmp_es_tipo_v_o_e(ced_cmp)
+        and not cedula_cmp_es_tipo_j(ced_cmp)
+        and n_aprob >= 1
+    ):
         motivos.append(
-            "cédula tipo V o E: máximo un préstamo en cartera (innegociable). "
-            f"Hay {n_live} préstamo(s) en tabla con esta cédula normalizada."
+            "cédula tipo V o E: máximo un préstamo APROBADO (innegociable). "
+            f"Hay {n_aprob} préstamo(s) APROBADO con esta cédula normalizada."
         )
     cliente_id = _cliente_id_por_cedula_normalizada(db, ced_cmp) if ced_cmp else None
     if cliente_id is None:
@@ -290,7 +295,7 @@ def ejecutar_guardar_candidatos_drive_validados_100(
     """
     from app.api.v1.endpoints.prestamos import crear_prestamo_servicio_interno
 
-    prestamo_counts = conteo_prestamos_por_cedula_norm(db)
+    prestamo_counts_aprob = conteo_prestamos_aprobados_por_cedula_norm(db)
 
     rows = list(
         db.execute(select(PrestamoCandidatoDrive).order_by(PrestamoCandidatoDrive.sheet_row_number.asc()))
@@ -305,7 +310,7 @@ def ejecutar_guardar_candidatos_drive_validados_100(
 
     for r in rows:
         payload = r.payload if isinstance(r.payload, dict) else {}
-        ok, motivos, pc = _motivos_no_100(payload, db, prestamo_counts)
+        ok, motivos, pc = _motivos_no_100(payload, db, prestamo_counts_aprob)
         if not ok or pc is None:
             omitidos.append(
                 {
@@ -322,7 +327,9 @@ def ejecutar_guardar_candidatos_drive_validados_100(
             insertados += 1
             cmp_upd = (_cell_str(payload.get("cedula_cmp")) or (r.cedula_cmp or "")).strip()
             if cmp_upd:
-                prestamo_counts[cmp_upd] = int(prestamo_counts.get(cmp_upd, 0) or 0) + 1
+                prestamo_counts_aprob[cmp_upd] = int(
+                    prestamo_counts_aprob.get(cmp_upd, 0) or 0
+                ) + 1
         except HTTPException as he:
             db.rollback()
             msg = str(he.detail) if he.detail else str(he)
@@ -386,7 +393,7 @@ def ejecutar_guardar_candidatos_drive_una_fila(
     """
     from app.api.v1.endpoints.prestamos import crear_prestamo_servicio_interno
 
-    prestamo_counts = conteo_prestamos_por_cedula_norm(db)
+    prestamo_counts_aprob = conteo_prestamos_aprobados_por_cedula_norm(db)
     r = db.scalar(
         select(PrestamoCandidatoDrive)
         .where(PrestamoCandidatoDrive.sheet_row_number == int(sheet_row_number))
@@ -403,7 +410,7 @@ def ejecutar_guardar_candidatos_drive_una_fila(
         }
 
     payload = r.payload if isinstance(r.payload, dict) else {}
-    ok, motivos, pc = _motivos_no_100(payload, db, prestamo_counts)
+    ok, motivos, pc = _motivos_no_100(payload, db, prestamo_counts_aprob)
     if not ok or pc is None:
         return {
             "ok": False,

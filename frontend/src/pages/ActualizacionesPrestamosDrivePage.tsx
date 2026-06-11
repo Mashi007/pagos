@@ -115,6 +115,9 @@ function validadoresTresFlags(p: PrestamoCandidatoDriveFila['payload']) {
     (p.validador_sin_duplicado_en_hoja_ok ?? p.duplicada_en_hoja !== true) ===
     true
   const nPrest = Number(p.prestamos_misma_cedula_norm_count ?? 0)
+  const nAprob = Number(
+    p.prestamos_aprobados_misma_cedula_norm_count ?? nPrest ?? 0
+  )
   const esV = p.cedula_es_tipo_v_venezolano === true
   const esVe = cedulaEsTipoVeFromPayload(p)
   const esJ = cedulaEsTipoJFromPayload(p)
@@ -122,8 +125,8 @@ function validadoresTresFlags(p: PrestamoCandidatoDriveFila['payload']) {
     ? true
     : (p.validador_ve_max_un_prestamo_ok ??
         p.validador_v_max_un_prestamo_ok ??
-        !(esVe && nPrest >= 2)) === true
-  return { formatoOk, tablaVOk, hojaOk, nPrest, esV, esVe, esJ }
+        !(esVe && nAprob >= 1)) === true
+  return { formatoOk, tablaVOk, hojaOk, nPrest, nAprob, esV, esVe, esJ }
 }
 
 /** Parseo ligero alineado a columna Q (DD/MM/YYYY, YYYY-MM-DD o serial Sheets/Excel). */
@@ -302,17 +305,18 @@ type FilaTablaTono = FilaCandidatoDriveTono | 'partial'
 function filaCandidatoDriveTono(
   p: PrestamoCandidatoDriveFila['payload']
 ): FilaCandidatoDriveTono {
-  const { formatoOk, tablaVOk, hojaOk, nPrest, esVe } = validadoresTresFlags(p)
+  const { formatoOk, tablaVOk, hojaOk, nAprob, esVe, esJ } =
+    validadoresTresFlags(p)
   const dup = p.duplicada_en_hoja === true
 
   const redInvalida = !formatoOk
-  const redVeDosOMasCreditos = esVe && Number.isFinite(nPrest) && nPrest >= 2
+  const redVeCupoAprobado = !esJ && esVe && Number.isFinite(nAprob) && nAprob >= 1
   const redFechaAntigua = aprobacionFueraVentanaFromPayload(p)
   const redHuellaNoComparable = p.huella_no_comparable === true
 
   if (
     redInvalida ||
-    redVeDosOMasCreditos ||
+    redVeCupoAprobado ||
     redFechaAntigua ||
     redHuellaNoComparable
   )
@@ -651,10 +655,8 @@ export default function ActualizacionesPrestamosDrivePage() {
   const onGuardarUnaFila = useCallback(
     async (sheetRowNumber: number) => {
       const fila = rows.find(r => r.sheet_row_number === sheetRowNumber)
-      if (!fila || !filaCumpleCienParaGuardar(fila)) {
-        toast.error(
-          'Solo se puede guardar una fila que cumpla la validación de servidor (la misma que usa «Guardar válidas»).'
-        )
+      if (!fila) {
+        toast.error(`No se encontró la fila ${sheetRowNumber} en esta página.`)
         return
       }
       setGuardandoFilaSheet(sheetRowNumber)
@@ -890,7 +892,7 @@ export default function ActualizacionesPrestamosDrivePage() {
     if (!tablaVOk) {
       return (
         <span className="text-red-600">
-          (2) Cédula V o E: máximo un préstamo en tabla (innegociable). J puede
+          (2) Cédula V o E: ya tiene un préstamo APROBADO (máximo uno). J puede
           tener varios.
         </span>
       )

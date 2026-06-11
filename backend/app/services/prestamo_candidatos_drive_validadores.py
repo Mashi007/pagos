@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import Dict
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.prestamo import Prestamo
@@ -41,14 +41,34 @@ def cedula_cmp_es_tipo_v_o_e(cmp_e: str) -> bool:
     return bool(u) and u[0] in ("V", "E")
 
 
-def conteo_prestamos_por_cedula_norm(db: Session) -> Dict[str, int]:
-    """Número de filas en `prestamos` por cédula normalizada (misma regla que check-cédulas)."""
+def _conteo_prestamos_por_cedula_norm_filtrado(
+    db: Session,
+    *,
+    solo_aprobado: bool,
+) -> Dict[str, int]:
+    """Conteo por cédula normalizada (misma regla que check-cédulas / carga masiva)."""
     from app.api.v1.endpoints.clientes import _normalizar_cedula_carga_masiva
 
+    stmt = select(Prestamo.cedula)
+    if solo_aprobado:
+        stmt = stmt.where(func.upper(func.trim(func.coalesce(Prestamo.estado, ""))) == "APROBADO")
     out: Dict[str, int] = {}
-    for cel in db.execute(select(Prestamo.cedula)).scalars().all() or []:
+    for cel in db.execute(stmt).scalars().all() or []:
         n = _normalizar_cedula_carga_masiva(cel or "")
         if not n:
             continue
         out[n] = out.get(n, 0) + 1
     return out
+
+
+def conteo_prestamos_por_cedula_norm(db: Session) -> Dict[str, int]:
+    """Total de filas en `prestamos` por cédula (cualquier estado)."""
+    return _conteo_prestamos_por_cedula_norm_filtrado(db, solo_aprobado=False)
+
+
+def conteo_prestamos_aprobados_por_cedula_norm(db: Session) -> Dict[str, int]:
+    """
+    Préstamos en estado APROBADO por cédula normalizada.
+    Regla V/E en Drive: máximo un APROBADO activo; LIQUIDADO u otros no bloquean un nuevo alta.
+    """
+    return _conteo_prestamos_por_cedula_norm_filtrado(db, solo_aprobado=True)
