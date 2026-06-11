@@ -225,6 +225,10 @@ class PagoConErrorService {
   async moverAPagosNormales(ids: number[]): Promise<{
     movidos: number
     cuotas_aplicadas?: number
+    movidos_detalle?: Array<{
+      pago_con_error_id: number
+      pago_id: number
+    }>
     errores?: string[]
     /** Filas eliminadas en silencio porque ya estaban cargadas y aplicadas en cartera. */
     ya_cargado_eliminados?: Array<{

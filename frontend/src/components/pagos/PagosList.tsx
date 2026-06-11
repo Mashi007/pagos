@@ -88,6 +88,7 @@ import {
 import { PagosListResumen } from './PagosListResumen'
 import { toast } from 'sonner'
 import { getErrorMessage, isAxiosError } from '../../types/errors'
+import { eliminarPagoRevisionOConError } from '../../utils/eliminarPagoRevision'
 import { Link, useSearchParams, useNavigate } from 'react-router-dom'
 import { SEGMENTO_INFOPAGOS } from '../../constants/rutasIngresoPago'
 import { BASE_PATH } from '../../config/env'
@@ -1404,10 +1405,17 @@ export function PagosList() {
 
     setIsBulkDeletingRevision(true)
     try {
-      // Ejecutar eliminaciones en paralelo
-      await Promise.all(ids.map(id => pagoConErrorService.delete(id)))
+      const resultados = await Promise.all(
+        ids.map(id => eliminarPagoRevisionOConError({ idConError: id }))
+      )
+      const omitidos = resultados.filter(r => r === 'ya_ausente').length
+      const eliminados = resultados.length - omitidos
 
-      toast.success(`✅ ${ids.length} pago(s) eliminados de la BD`)
+      toast.success(
+        omitidos > 0
+          ? `✅ ${eliminados} pago(s) eliminados; ${omitidos} ya no estaban en revisión (procesados antes).`
+          : `✅ ${eliminados} pago(s) eliminados de la BD`
+      )
       setSelectedRevisionIds(new Set())
 
       // Refrescar tabla
@@ -1926,10 +1934,14 @@ export function PagosList() {
 
     setDeletingRevisionId(id)
     try {
-      // Enviar DELETE a backend
-      await pagoConErrorService.delete(id)
-
-      toast.success('✅ Pago pendiente eliminado de la BD')
+      const resultado = await eliminarPagoRevisionOConError({
+        idConError: id,
+      })
+      toast.success(
+        resultado === 'ya_ausente'
+          ? 'El pago ya no estaba en revisión (probablemente ya fue procesado y movido a cartera).'
+          : '✅ Pago pendiente eliminado de la BD'
+      )
 
       // Refrescar tabla desde servidor
       await invalidatePagosPrestamosRevisionYCuotas(queryClient)
@@ -2166,12 +2178,28 @@ export function PagosList() {
                   </div>
                 </>
               ) : staffComprobantePreview.blobUrl ? (
-                <div className="min-h-0 flex-1 overflow-auto rounded-md border border-slate-200/80 bg-white lg:rounded-l-none lg:border-l-0">
-                  <iframe
-                    title={staffComprobantePreview.label || 'Comprobante'}
-                    src={staffComprobantePreview.blobUrl}
-                    className="h-[min(36vh,320px)] min-h-[200px] w-full border-0 lg:h-full lg:min-h-[min(50vh,520px)]"
-                  />
+                <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 rounded-md border border-slate-200/80 bg-slate-50 p-4 text-center text-sm text-slate-700 lg:rounded-l-none lg:border-l-0">
+                  <FileText className="h-10 w-10 text-slate-500" aria-hidden />
+                  <p>
+                    Comprobante PDF. Ábralo en una pestaña para revisarlo (evita
+                    bloqueos de seguridad del visor embebido).
+                  </p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5"
+                    onClick={() => {
+                      window.open(
+                        staffComprobantePreview.blobUrl!,
+                        '_blank',
+                        'noopener,noreferrer'
+                      )
+                    }}
+                  >
+                    <Eye className="h-4 w-4" aria-hidden />
+                    Abrir PDF
+                  </Button>
                 </div>
               ) : (
                 <p className="text-sm text-muted-foreground">
@@ -4513,17 +4541,27 @@ export function PagosList() {
                                                   ) {
                                                     try {
                                                       if (esRevisarPagos) {
-                                                        await pagoConErrorService.delete(
-                                                          pago.id
+                                                        const resultado =
+                                                          await eliminarPagoRevisionOConError(
+                                                            {
+                                                              idConError:
+                                                                pago.id,
+                                                            }
+                                                          )
+                                                        toast.success(
+                                                          resultado ===
+                                                            'ya_ausente'
+                                                            ? 'El pago ya no estaba en revisión (probablemente ya fue procesado).'
+                                                            : 'Pago eliminado exitosamente'
                                                         )
                                                       } else {
                                                         await pagoService.deletePago(
                                                           pago.id
                                                         )
+                                                        toast.success(
+                                                          'Pago eliminado exitosamente'
+                                                        )
                                                       }
-                                                      toast.success(
-                                                        'Pago eliminado exitosamente'
-                                                      )
                                                       await invalidatePagosPrestamosRevisionYCuotas(
                                                         queryClient
                                                       )
@@ -4832,13 +4870,24 @@ export function PagosList() {
                   } else {
                     try {
                       if (esRevisarPagos || activeTab === 'revision') {
-                        await pagoConErrorService.delete(pagoIdEliminado)
+                        const resultado =
+                          await eliminarPagoRevisionOConError({
+                            idConError: pagoIdEliminado,
+                            idCartera: meta?.pagoCarteraId,
+                          })
+                        toast.success(
+                          resultado === 'ya_ausente'
+                            ? 'Pago guardado, conciliado y aplicado (ya no estaba en revisión).'
+                            : resultado === 'cartera'
+                              ? 'Pago guardado, conciliado, aplicado y eliminado de cartera.'
+                              : 'Pago guardado, conciliado, aplicado y eliminado de la lista.'
+                        )
                       } else {
                         await pagoService.deletePago(pagoIdEliminado)
+                        toast.success(
+                          'Pago guardado, conciliado, aplicado y eliminado de la lista.'
+                        )
                       }
-                      toast.success(
-                        'Pago guardado, conciliado, aplicado y eliminado de la lista.'
-                      )
                     } catch (deleteErr) {
                       if (import.meta.env.DEV) {
                         console.warn('Error eliminando fila:', deleteErr)

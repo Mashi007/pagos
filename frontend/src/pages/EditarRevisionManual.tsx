@@ -4599,6 +4599,7 @@ export function EditarRevisionManual() {
           pagoInicial={pagoModalInicial}
           pagoId={pagoModalId}
           modoGuardarYProcesar
+          esPagoConError={false}
           mostrarCampoCodigoDocumento
           comprobanteArchivoInicial={pagoModalComprobanteInicial}
           prestamoContextoRevisionManualId={

@@ -18,24 +18,7 @@ export function archivoEsHeicHeif(file: File): boolean {
 export async function normalizarComprobanteArchivoParaEscaneo(
   file: File
 ): Promise<File> {
-  if (!archivoEsHeicHeif(file)) {
-    return file
-  }
-  const mod = await import('heic2any')
-  const heic2any = mod.default
-  const out = await heic2any({
-    blob: file,
-    toType: 'image/jpeg',
-    quality: 0.92,
-  })
-  const jpegBlob = Array.isArray(out) ? out[0] : out
-  if (!(jpegBlob instanceof Blob)) {
-    throw new Error('No se pudo convertir HEIC a JPEG.')
-  }
-  const base =
-    file.name.replace(/\.(heic|heif)$/i, '').trim() || 'comprobante'
-  return new File([jpegBlob], `${base}.jpg`, {
-    type: 'image/jpeg',
-    lastModified: file.lastModified,
-  })
+  // HEIC/HEIF: el backend (pillow-heif) convierte antes de OCR. Evitamos heic2any en el
+  // navegador porque usa eval/Function y la CSP de producción (script-src 'self') lo bloquea.
+  return file
 }

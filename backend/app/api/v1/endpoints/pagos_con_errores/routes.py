@@ -969,6 +969,7 @@ def mover_a_pagos_normales(
     # Filas eliminadas en silencio porque ya están cargadas y aplicadas en cartera
     # (mismo doc + cuota_pagos + cliente/préstamo): redundantes, no se mueven.
     ya_cargado_eliminados: list[dict[str, Any]] = []
+    movidos_detalle: list[dict[str, Any]] = []
 
     for idx, pid in enumerate(ids, start=1):
 
@@ -1171,6 +1172,12 @@ def mover_a_pagos_normales(
 
             db.flush()
             movidos += 1
+            movidos_detalle.append(
+                {
+                    "pago_con_error_id": pid,
+                    "pago_id": nuevo_pago_id,
+                }
+            )
 
         except Exception as e_row:
             db.rollback()
@@ -1212,6 +1219,7 @@ def mover_a_pagos_normales(
     respuesta: dict[str, Any] = {
         "movidos": movidos,
         "cuotas_aplicadas": cuotas_aplicadas,
+        "movidos_detalle": movidos_detalle,
         "ya_cargado_eliminados": ya_cargado_eliminados,
         "ya_cargado_eliminados_count": len(ya_cargado_eliminados),
         "mensaje": mensaje,

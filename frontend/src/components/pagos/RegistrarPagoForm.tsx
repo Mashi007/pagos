@@ -119,6 +119,7 @@ import {
   pathApiComprobanteImagenDesdeHref,
 } from '../../utils/comprobanteImagenAuth'
 import { escanerInfopagosExtraerComprobante } from '../../services/cobrosService'
+import { eliminarPagoRevisionOConError } from '../../utils/eliminarPagoRevision'
 
 import {
   formatMontoBsVe,
@@ -308,11 +309,24 @@ function VistaEmbebidaComprobante({
 }) {
   if (kind === 'pdf') {
     return (
-      <iframe
-        src={src}
-        title="Vista del comprobante"
-        className={classNamePdf}
-      />
+      <div
+        className={`flex flex-col items-center justify-center gap-2 rounded border border-slate-200 bg-slate-50 p-4 text-center text-sm text-slate-700 ${classNamePdf}`}
+      >
+        <FileText className="h-8 w-8 text-slate-500" aria-hidden />
+        <p>Comprobante PDF listo. Ábralo en una pestaña para revisarlo.</p>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="gap-1.5"
+          onClick={() => {
+            window.open(src, '_blank', 'noopener,noreferrer')
+          }}
+        >
+          <Eye className="h-4 w-4" aria-hidden />
+          Abrir PDF
+        </Button>
+      </div>
     )
   }
   return <img src={src} alt="Comprobante" className={classNameImg} />
@@ -398,6 +412,7 @@ function cedulasMismaPersonaParaPrestamo(a: string, b: string): boolean {
 /** Meta opcional para el padre (p. ej. evitar DELETE duplicado tras mover-a-pagos). */
 export type RegistrarPagoOnSuccessMeta = {
   skipDeleteConError?: boolean
+  pagoCarteraId?: number
 }
 
 interface RegistrarPagoFormProps {
@@ -471,6 +486,13 @@ export function RegistrarPagoForm({
 }: RegistrarPagoFormProps) {
   const isEditing = !!pagoId
 
+  /** Revisión manual del préstamo: tabla operativa `pagos`, no `pagos_con_errores`. */
+  const esRevisionManualPagosCartera = Boolean(
+    prestamoContextoRevisionManualId && mostrarCampoCodigoDocumento
+  )
+  const usarApiPagosConErrores =
+    Boolean(esPagoConError) && !esRevisionManualPagosCartera
+
   const { revisionManualFullEdit } = usePermissions()
 
   const codigoDocumentoInputRef = useRef<HTMLInputElement>(null)
@@ -484,6 +506,11 @@ export function RegistrarPagoForm({
   const [archivoComprobante, setArchivoComprobante] = useState<File | null>(
     () => comprobanteArchivoInicial ?? null
   )
+
+  /** Tras mover-a-pagos: ID en tabla `pagos` (la fila con_errores ya no existe). */
+  const [pagoCarteraIdTrasMover, setPagoCarteraIdTrasMover] = useState<
+    number | null
+  >(null)
 
   useEffect(() => {
     if (comprobanteArchivoInicial) {
@@ -651,10 +678,10 @@ export function RegistrarPagoForm({
   }, [pagoInicial])
 
   const excludeIdConflicto =
-    isEditing && !esPagoConError && pagoId ? pagoId : undefined
+    isEditing && !usarApiPagosConErrores && pagoId ? pagoId : undefined
 
   const excludePagoConErrorIdConflicto =
-    isEditing && esPagoConError && pagoId ? pagoId : undefined
+    isEditing && usarApiPagosConErrores && pagoId ? pagoId : undefined
 
   /** En revisión manual el usuario debe ver siempre el estado del Nº doc.; no exigir comprobante enlazado. */
   const conflictoDocQueryEnabled =
@@ -829,8 +856,15 @@ export function RegistrarPagoForm({
     etiquetaPrestamoCarteraHuella,
   ])
 
+  const mostrarBotonEscanearJuntoImagen =
+    !bloquearCambioComprobanteCodigo &&
+    (mostrarCampoCodigoDocumento ||
+      Boolean(archivoComprobante) ||
+      Boolean(isEditing && linkComprobanteParaVista))
+
   const handleReescanearDesdeComprobanteActual = async () => {
     if (
+      isEditing &&
       !window.confirm(
         'Escanear reemplazara los campos actuales (fecha, banco, numero, monto y moneda). Desea continuar?'
       )
@@ -1459,7 +1493,7 @@ export function RegistrarPagoForm({
       let idPagoParaProcesar: number | undefined = pagoId
 
       if (isEditing && idPagoParaProcesar) {
-        if (esPagoConError) {
+        if (usarApiPagosConErrores) {
           const respUpd = await pagoConErrorService.update(
             idPagoParaProcesar,
             datosEnvio
@@ -1511,7 +1545,7 @@ export function RegistrarPagoForm({
       // aplicar-cuotas por ID solo existe en la tabla `pagos`.
       if (modoGuardarYProcesar && fd.prestamo_id && fd.monto_pagado > 0) {
         const moverDesdeConErrores = Boolean(
-          esPagoConError && isEditing && pagoId
+          usarApiPagosConErrores && isEditing && pagoId
         )
 
         if (moverDesdeConErrores && pagoId != null) {
@@ -1575,7 +1609,26 @@ export function RegistrarPagoForm({
               )
             }
 
-            metaExito = { skipDeleteConError: true }
+            const detalleMovido =
+              resultMover.movidos_detalle?.find(
+                d => d.pago_con_error_id === idConError
+              ) ??
+              resultMover.ya_cargado_eliminados?.find(
+                d => d.pago_con_error_id === idConError
+              )
+            const pagoCarteraId =
+              detalleMovido?.pago_id != null
+                ? Number(detalleMovido.pago_id)
+                : null
+            if (pagoCarteraId != null && Number.isFinite(pagoCarteraId)) {
+              setPagoCarteraIdTrasMover(pagoCarteraId)
+            }
+            metaExito = {
+              skipDeleteConError: true,
+              ...(pagoCarteraId != null && Number.isFinite(pagoCarteraId)
+                ? { pagoCarteraId }
+                : {}),
+            }
           } catch (moverErr: unknown) {
             toast.warning(
               getErrorMessage(moverErr) ||
@@ -1722,6 +1775,14 @@ export function RegistrarPagoForm({
         ) {
           errorMessage = DUPLICADO_DOCUMENTO_UI
           esDocumentoDuplicado = true
+        } else if (
+          status === 404 &&
+          esRevisionManualPagosCartera &&
+          (detailLower.includes('pago no encontrado') ||
+            detailLower.includes('pago con error no encontrado'))
+        ) {
+          errorMessage =
+            'Este pago ya no existe en la tabla (p. ej. tras Conciliar cartera). Pulse Actualizar en la tabla de pagos y vuelva a abrir el registro recreado.'
         } else if (detail) {
           errorMessage = detail
         }
@@ -1780,21 +1841,37 @@ export function RegistrarPagoForm({
 
   const handleEliminarPago = async () => {
     if (!isEditing || !pagoId) return
+    const eliminarDeCartera =
+      usarApiPagosConErrores && pagoCarteraIdTrasMover != null
     if (
       !window.confirm(
-        '¿Eliminar este pago de forma permanente? Si tiene préstamo asociado, se actualizarán las cuotas.'
+        eliminarDeCartera
+          ? 'Este pago ya fue movido a cartera. ¿Eliminarlo también de la tabla de pagos operativos? Se actualizarán las cuotas del préstamo.'
+          : '¿Eliminar este pago de forma permanente? Si tiene préstamo asociado, se actualizarán las cuotas.'
       )
     ) {
       return
     }
     setIsDeleting(true)
     try {
-      if (esPagoConError) {
-        await pagoConErrorService.delete(pagoId)
+      if (usarApiPagosConErrores) {
+        const resultado = await eliminarPagoRevisionOConError({
+          idConError: pagoId,
+          idCartera: pagoCarteraIdTrasMover,
+        })
+        if (resultado === 'cartera') {
+          toast.success('Pago eliminado de cartera.')
+        } else if (resultado === 'ya_ausente') {
+          toast.success(
+            'El pago ya no estaba en revisión (probablemente ya fue procesado y movido a cartera).'
+          )
+        } else {
+          toast.success('Pago eliminado de revisión.')
+        }
       } else {
         await pagoService.deletePago(pagoId)
+        toast.success('Pago eliminado.')
       }
-      toast.success('Pago eliminado.')
       onSuccess(false)
       onClose()
     } catch (error: unknown) {
@@ -2846,15 +2923,11 @@ export function RegistrarPagoForm({
                       <Upload className="h-4 w-4" aria-hidden />
                       Elegir imagen
                     </Button>
-                    {isEditing ? (
+                    {mostrarBotonEscanearJuntoImagen ? (
                       <Button
                         type="button"
                         variant="outline"
-                        disabled={
-                          isSubmitting ||
-                          isRescanning ||
-                          bloquearCambioComprobanteCodigo
-                        }
+                        disabled={isSubmitting || isRescanning}
                         className="gap-2"
                         onClick={() =>
                           void handleReescanearDesdeComprobanteActual()
