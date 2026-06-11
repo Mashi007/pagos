@@ -66,6 +66,8 @@ import {
 import { normalizarNumeroDocumento } from '../utils/pagoExcelValidation'
 
 import { DuplicadoPrestamosComparacion } from '../components/cobros/DuplicadoPrestamosComparacion'
+import { blobComprobanteAFileParaEscaneo } from '../utils/comprobanteImagenAuth'
+import { normalizarComprobanteArchivoParaEscaneo } from '../utils/normalizarComprobanteArchivo'
 
 const INSTITUCIONES_FINANCIERAS = [
   'BINANCE',
@@ -492,23 +494,11 @@ export default function CobrosEditarPage() {
     setEscaneando(true)
     try {
       const blob = await getPagoReportadoComprobanteBlob(Number(id))
-      const extGuess = blob.type?.includes('pdf')
-        ? 'pdf'
-        : blob.type?.includes('png')
-          ? 'png'
-          : blob.type?.includes('webp')
-            ? 'webp'
-            : 'jpg'
-      let archivo = new File(
-        [blob],
-        `comprobante-reporte-${id}.${extGuess}`,
-        { type: blob.type || 'application/octet-stream' }
-      )
+      let archivo: File
       try {
-        const { normalizarComprobanteArchivoParaEscaneo } = await import(
-          '../utils/normalizarComprobanteArchivo'
+        archivo = await normalizarComprobanteArchivoParaEscaneo(
+          await blobComprobanteAFileParaEscaneo(blob, blob.type)
         )
-        archivo = await normalizarComprobanteArchivoParaEscaneo(archivo)
       } catch (convErr) {
         toast.error(
           convErr instanceof Error
@@ -690,12 +680,12 @@ export default function CobrosEditarPage() {
                     {escaneando ? (
                       <>
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Escaneando…
+                        Reescaneando…
                       </>
                     ) : (
                       <>
                         <Brain className="mr-2 h-4 w-4" />
-                        Escanear
+                        Reescanear
                       </>
                     )}
                   </Button>
@@ -882,18 +872,45 @@ export default function CobrosEditarPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle>
-                Editar reporte{' '}
-                {detalle.referencia_interna?.startsWith('#')
-                  ? detalle.referencia_interna
-                  : `#${detalle.referencia_interna}`}
-              </CardTitle>
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0 flex-1 space-y-1">
+                  <CardTitle>
+                    Editar reporte{' '}
+                    {detalle.referencia_interna?.startsWith('#')
+                      ? detalle.referencia_interna
+                      : `#${detalle.referencia_interna}`}
+                  </CardTitle>
 
-              <p className="text-sm text-muted-foreground">
-                Los datos se cargan al abrir la página o con «Recargar datos».
-                Al guardar se pasa al <strong>detalle del reporte</strong>{' '}
-                (siguiente paso: aprobar, rechazar o revisar comprobante).
-              </p>
+                  <p className="text-sm text-muted-foreground">
+                    Los datos se cargan al abrir la página o con «Recargar
+                    datos». Al guardar se pasa al{' '}
+                    <strong>detalle del reporte</strong> (siguiente paso:
+                    aprobar, rechazar o revisar comprobante).
+                  </p>
+                </div>
+                {detalle.tiene_comprobante ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="shrink-0 gap-2"
+                    disabled={
+                      escaneando ||
+                      comprobantePreviewLoading ||
+                      saving ||
+                      vistoSaving
+                    }
+                    onClick={() => void handleReescanear()}
+                  >
+                    {escaneando ? (
+                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                    ) : (
+                      <Brain className="h-4 w-4" aria-hidden />
+                    )}
+                    {escaneando ? 'Reescaneando…' : 'Reescanear'}
+                  </Button>
+                ) : null}
+              </div>
             </CardHeader>
 
             <CardContent>
