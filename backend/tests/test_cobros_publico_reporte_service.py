@@ -128,15 +128,31 @@ class TestValidarAdjuntoComprobanteBytes:
         )
         assert err == "El archivo está vacío o no es válido."
 
-    def test_magic_no_coincide_con_declarado(self):
+    def test_magic_corregido_si_declarado_no_coincide(self):
+        """PDF guardado con Content-Type image/jpeg (BD) debe validar por firma real."""
         body = _bytes_pdf_minimo()
+        err, name = cpr.validar_adjunto_comprobante_bytes(
+            body, "image/jpeg", "x.jpg", mensaje_excel_largo=True
+        )
+        assert err is None
+        assert name == "x.jpg"
+
+    def test_png_declarado_como_jpeg_se_acepta(self):
+        body = _bytes_png_minimo()
+        err, _name = cpr.validar_adjunto_comprobante_bytes(
+            body, "image/jpeg", "comprobante.jpg", mensaje_excel_largo=False
+        )
+        assert err is None
+
+    def test_contenido_aleatorio_rechazado(self):
+        body = b"\x00\x01\x02\x03\x04\x05\x06\x07"
         err, _name = cpr.validar_adjunto_comprobante_bytes(
             body, "image/jpeg", "x.jpg", mensaje_excel_largo=True
         )
-        assert err == "El archivo no corresponde a una imagen o PDF válido."
+        assert err == "El archivo no corresponde a una imagen, PDF o Word válido."
 
     def test_excel_mensaje_largo_vs_corto(self):
-        body = _bytes_pdf_minimo()
+        body = b"\x00\x01\x02\x03\x04\x05\x06\x07"
         mime = "application/vnd.ms-excel"
         err_l, _ = cpr.validar_adjunto_comprobante_bytes(
             body, mime, "x.xls", mensaje_excel_largo=True
@@ -149,7 +165,7 @@ class TestValidarAdjuntoComprobanteBytes:
         assert "Excel" not in (err_c or "")
 
     def test_mime_no_permitido(self):
-        body = _bytes_pdf_minimo()
+        body = b"GIF89a" + b"\x00" * 4
         err, _name = cpr.validar_adjunto_comprobante_bytes(
             body, "image/gif", "anim.gif", mensaje_excel_largo=True
         )

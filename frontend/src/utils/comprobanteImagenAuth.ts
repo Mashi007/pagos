@@ -100,13 +100,17 @@ export async function blobComprobanteAFileParaEscaneo(
 ): Promise<File> {
   const buf = await blob.arrayBuffer()
   const head = new Uint8Array(buf.slice(0, Math.min(48, buf.byteLength)))
+  const sniffed = sniffComprobanteMimeFromHead(head)
   let mime = (contentTypeHint || blob.type || '').split(';')[0].trim().toLowerCase()
   if (
     !mime ||
     mime === 'application/octet-stream' ||
     mime === 'binary/octet-stream'
   ) {
-    mime = sniffComprobanteMimeFromHead(head) || ''
+    mime = sniffed || ''
+  } else if (sniffed && sniffed !== mime) {
+    // BD o navegador pueden declarar image/jpeg sobre HEIC/PNG real; priorizar firma.
+    mime = sniffed
   }
   if (!mime) {
     throw new Error(

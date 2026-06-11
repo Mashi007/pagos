@@ -389,19 +389,52 @@ def _magic_heic_o_heif(content: bytes) -> bool:
     return any(m in blob for m in (b"heic", b"heix", b"hevc", b"hevx", b"mif1", b"msf1"))
 
 
+def inferir_mime_desde_magic(content: bytes) -> Optional[str]:
+    """Detecta MIME por firma de archivo (sin confiar en Content-Type ni extensión)."""
+    if len(content) < 4:
+        return None
+    if content[:3] == MAGIC_JPEG:
+        return "image/jpeg"
+    if len(content) >= 8 and content[:8] == MAGIC_PNG:
+        return "image/png"
+    if content[:4] == MAGIC_PDF:
+        return "application/pdf"
+    if (
+        len(content) >= 12
+        and content[:4] == MAGIC_WEBP
+        and content[8:12] == b"WEBP"
+    ):
+        return "image/webp"
+    if _magic_heic_o_heif(content):
+        return "image/heic"
+    if content[:6] in (b"GIF87a", b"GIF89a"):
+        return "image/gif"
+    from app.services.cobros.comprobante_docx import es_doc_ole_bytes, es_docx_bytes
+
+    if es_doc_ole_bytes(content):
+        return "application/msword"
+    if es_docx_bytes(content):
+        return "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    return None
+
+
 def validate_file_magic(content: bytes, content_type: str) -> bool:
     """Verifica que el contenido coincida con el tipo declarado (anti-spoofing)."""
-    if len(content) < 8:
+    if len(content) < 4:
         return False
     ctype = (content_type or "").lower()
     if "jpeg" in ctype or "jpg" in ctype:
         return content[:3] == MAGIC_JPEG
     if "png" in ctype:
-        return content[:8] == MAGIC_PNG
+        return len(content) >= 8 and content[:8] == MAGIC_PNG
     if "pdf" in ctype:
         return content[:4] == MAGIC_PDF
     if "webp" in ctype:
-        return len(content) >= 12 and content[:4] == MAGIC_WEBP and content[8:12] == b"WEBP"
+        return (
+            len(content) >= 12
+            and content[:4] == MAGIC_WEBP
+            and content[8:12] == b"WEBP"
+        )
     if "heic" in ctype or "heif" in ctype:
         return _magic_heic_o_heif(content)
     if "gif" in ctype:
@@ -413,6 +446,24 @@ def validate_file_magic(content: bytes, content_type: str) -> bool:
             return True
         return es_docx_bytes(content)
     return False
+
+
+def mime_efectivo_con_firma_archivo(
+    content: bytes,
+    content_type: str,
+    filename_raw: str,
+) -> str:
+    """
+    MIME declarado (tipo + extensión) corregido por firma real si no cuadran.
+    Evita fallos al re-escanear comprobantes guardados con Content-Type erróneo en BD.
+    """
+    declarado = mime_efectivo_comprobante_web(content_type or "", filename_raw)
+    if validate_file_magic(content, declarado):
+        return declarado
+    inferido = inferir_mime_desde_magic(content)
+    if inferido and validate_file_magic(content, inferido):
+        return inferido
+    return declarado
 
 
 def _max_secuencial_referencia_dia(db: Session, hoy_str: str) -> int:
@@ -512,7 +563,7 @@ def validar_adjunto_comprobante_bytes(
         return "El comprobante no puede superar 10 MB.", sanitize_filename(filename_raw)
     if len(content) < 4:
         return "El archivo está vacío o no es válido.", sanitize_filename(filename_raw)
-    ctype = mime_efectivo_comprobante_web(content_type or "", filename_raw)
+    ctype = mime_efectivo_con_firma_archivo(content, content_type or "", filename_raw)
     if "excel" in ctype or "spreadsheet" in ctype or "xls" in ctype:
         msg = (
             "El comprobante debe ser PDF o imagen (JPEG, PNG, HEIC, WebP). No se permiten archivos Excel."

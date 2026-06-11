@@ -129,6 +129,7 @@ import {
 
 import {
   abrirStaffComprobanteDesdeHref,
+  blobComprobanteAFileParaEscaneo,
   esUrlComprobanteImagenConAuth,
 } from '../utils/comprobanteImagenAuth'
 
@@ -1068,7 +1069,9 @@ export function EditarRevisionManual() {
 
     setEscaneandoComprobanteAgregarPago(true)
     try {
-      const archivo = await normalizarComprobanteArchivoParaEscaneo(fileRaw)
+      const archivo = await normalizarComprobanteArchivoParaEscaneo(
+        await blobComprobanteAFileParaEscaneo(fileRaw, fileRaw.type)
+      )
       const fd = new FormData()
       fd.append('tipo_cedula', cedulaPartes.tipo)
       fd.append('numero_cedula', cedulaPartes.numero)

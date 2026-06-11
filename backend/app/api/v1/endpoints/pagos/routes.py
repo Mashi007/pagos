@@ -212,6 +212,7 @@ from .payload_models import (
 )
 from app.services.cobros.cobros_publico_reporte_service import (
     mime_efectivo_comprobante_web,
+    mime_efectivo_con_firma_archivo,
     preparar_adjunto_comprobante_para_vision,
     validate_file_magic,
 )
@@ -341,9 +342,15 @@ def get_pago_comprobante_imagen(
                 status_code=403,
                 detail="No tiene permiso para este comprobante.",
             )
+    data = row.imagen_data or b""
+    media_type = mime_efectivo_con_firma_archivo(
+        data,
+        row.content_type or "",
+        f"comprobante.{(row.content_type or '').split('/')[-1] or 'bin'}",
+    )
     return Response(
-        content=row.imagen_data,
-        media_type=(row.content_type or "application/octet-stream"),
+        content=data,
+        media_type=media_type or "application/octet-stream",
         headers={
             "Cache-Control": "private, no-store",
             "Pragma": "no-cache",
