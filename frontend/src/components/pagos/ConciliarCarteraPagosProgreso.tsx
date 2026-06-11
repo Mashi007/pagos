@@ -23,8 +23,12 @@ const PASOS: Array<{
   icon: typeof Trash2
 }> = [
   { id: 'borrando', label: 'Borrando pagos del préstamo', icon: Trash2 },
-  { id: 'ocr', label: 'Reescaneando comprobantes (OCR)', icon: Upload },
-  { id: 'cascada', label: 'Aplicando cascada a cuotas', icon: DollarSign },
+  {
+    id: 'ocr',
+    label: 'Total ABONOS + imágenes reservadas (reescaneo OCR)',
+    icon: Upload,
+  },
+  { id: 'cascada', label: 'Cascada a cuotas', icon: DollarSign },
   { id: 'recargando', label: 'Recargando pagos en cartera', icon: Loader2 },
 ]
 
@@ -74,9 +78,9 @@ export function ConciliarCarteraPagosProgreso({
           </p>
         )}
         <p className="mt-1 text-xs text-muted-foreground">
-          Los montos pueden verse iguales si el OCR leyó los mismos valores en cada
-          comprobante ({pagosAntes > 0 ? `${pagosAntes} pago(s)` : 'cartera'}{' '}
-          recreados).
+          Los montos en cartera salen del total ABONOS (Notificaciones → General),
+          repartido entre {pagosAntes > 0 ? `${pagosAntes} comprobante(s)` : 'los'}{' '}
+          reescaneados; fecha y documento los aporta el OCR.
         </p>
         {ocrOk != null && ocrTotal != null ? (
           <p className="text-xs text-muted-foreground">

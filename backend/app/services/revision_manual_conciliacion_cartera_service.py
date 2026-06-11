@@ -1,10 +1,11 @@
 """
 Conciliar cartera en revisión manual (solo admin):
-1) Reserva comprobantes del préstamo en tabla temporal.
-2) Lee ABONOS de caché Notificaciones → General (prestamos.abonos_drive_cuotas_cache).
-3) Borra pagos del préstamo (no otros créditos de la cédula).
-4) Re-OCR cada imagen reservada → pagos normales (conciliado/visto).
-5) Elimina filas temporales procesadas.
+1) Lee total ABONOS de caché Notificaciones → General (ej. $531).
+2) Reserva solo bytes de comprobante (sin metadatos de pagos).
+3) Borra pagos del préstamo.
+4) Por cada imagen reservada: asigna su parte del total ABONOS → incorpora imagen
+   → reescanea (OCR fecha/documento/banco; el monto NO sale del OCR).
+5) Verifica que la suma en cartera = total ABONOS.
 6) Cascada a cuotas.
 """
 from __future__ import annotations
@@ -14,7 +15,7 @@ import json
 import logging
 import uuid
 from datetime import date, datetime, time as dt_time
-from decimal import Decimal
+from decimal import Decimal, ROUND_DOWN
 from typing import Any, Dict, List, Optional, Tuple
 from zoneinfo import ZoneInfo
 
@@ -50,6 +51,7 @@ logger = logging.getLogger(__name__)
 
 # Namespace pg_advisory_xact_lock (key1); key2 = prestamo_id. Libera al commit/rollback.
 _LOCK_NS_REVISION_CONCILIAR_CARTERA = 887766560
+_TOL_CUADRE_ABONOS_USD = 0.02
 
 
 def _intentar_lock_conciliar_prestamo(db: Session, prestamo_id: int) -> Optional[str]:
@@ -89,6 +91,24 @@ def _tiene_comprobante(p: Pago) -> bool:
 def _reserva_tiene_imagen_guardada(reserva: RevisionManualConciliacionReserva) -> bool:
     data = reserva.comprobante_imagen_data
     return bool(data) and len(data) > 0
+
+
+def _distribuir_monto_abonos_entre_comprobantes(abonos_usd: float, n: int) -> List[Decimal]:
+    """Reparte el total ABONOS entre N comprobantes; la suma coincide con abonos_usd."""
+    if n <= 0:
+        return []
+    total = Decimal(str(round(float(abonos_usd), 2)))
+    base = (total / Decimal(n)).quantize(Decimal("0.01"), rounding=ROUND_DOWN)
+    partes = [base] * n
+    faltante = total - sum(partes)
+    centavos = int((faltante * 100).to_integral_value())
+    for i in range(min(centavos, n)):
+        partes[i] += Decimal("0.01")
+    return partes
+
+
+def _placeholder_fecha_reserva() -> datetime:
+    return datetime.now(ZoneInfo(TZ_NEGOCIO))
 
 
 def purgar_reserva_conciliacion_prestamo(db: Session, prestamo_id: int) -> int:
@@ -140,20 +160,13 @@ def _crear_pago_desde_reserva(
     reserva: RevisionManualConciliacionReserva,
     prestamo: Prestamo,
     usuario_registro: str,
+    *,
+    monto_abonos_usd: Decimal,
+    abonos_total_usd: float,
 ) -> Tuple[Optional[Pago], Optional[str]]:
-    num = (reserva.numero_documento or "").strip()
-    if not num:
-        num = (reserva.referencia_pago or f"REV-CONC-{reserva.id}")[:100]
-    num_stored = compose_numero_documento_almacenado(num, None) or num[:100]
-    ref = (reserva.referencia_pago or num_stored or "N/A")[:100]
-
-    fecha_date = (
-        reserva.fecha_pago.date()
-        if hasattr(reserva.fecha_pago, "date")
-        else reserva.fecha_pago
-    )
-    if not isinstance(fecha_date, date):
-        fecha_date = datetime.now(ZoneInfo(TZ_NEGOCIO)).date()
+    """Alta inicial: monto desde ABONOS; documento/fecha se completan con OCR."""
+    ref_tmp = f"CONC-ABONOS-{prestamo.id}-{reserva.orden}-{uuid.uuid4().hex[:8]}"[:100]
+    fecha_date = _placeholder_fecha_reserva().date()
 
     try:
         cedula_fk = asegurar_cedula_pago_para_fk(
@@ -164,13 +177,12 @@ def _crear_pago_desde_reserva(
     except CedulaPagoFkError as e:
         return None, str(e)
 
-    monto_dec = Decimal(str(round(float(reserva.monto_pagado or 0), 2)))
     monto_usd, moneda_fin, monto_bs_o, tasa_o, fecha_tasa_o = resolver_monto_registro_pago(
         db,
         cedula_normalizada=(cedula_fk or "").strip().upper(),
         fecha_pago=fecha_date,
-        monto_pagado=monto_dec,
-        moneda_registro=(reserva.moneda_registro or "USD"),
+        monto_pagado=monto_abonos_usd,
+        moneda_registro="USD",
         tasa_cambio_manual=None,
     )
 
@@ -179,29 +191,29 @@ def _crear_pago_desde_reserva(
         prestamo_id=prestamo.id,
         fecha_pago=fecha_date,
         monto_pagado=monto_usd,
-        numero_documento=num_stored,
-        referencia_pago=ref,
+        numero_documento=ref_tmp,
+        referencia_pago=ref_tmp,
     )
     if msg_h:
         return None, msg_h
 
-    fecha_pago_ts = (
-        reserva.fecha_pago
-        if isinstance(reserva.fecha_pago, datetime)
-        else datetime.combine(fecha_date, dt_time.min)
-    )
+    fecha_pago_ts = datetime.combine(fecha_date, dt_time.min)
     ahora = datetime.now(ZoneInfo(TZ_NEGOCIO))
+    nota_abonos = (
+        f"Conciliar cartera: monto desde ABONOS Notificaciones → General "
+        f"(${float(abonos_total_usd):.2f} repartido entre comprobantes)."
+    )
 
     pago = Pago(
         cedula_cliente=cedula_fk,
         prestamo_id=prestamo.id,
         fecha_pago=fecha_pago_ts,
         monto_pagado=monto_usd,
-        numero_documento=num_stored,
-        institucion_bancaria=(reserva.institucion_bancaria or "")[:255] or None,
+        numero_documento=ref_tmp,
+        institucion_bancaria=None,
         estado="PAGADO",
-        notas=reserva.notas,
-        referencia_pago=ref,
+        notas=nota_abonos,
+        referencia_pago=ref_tmp,
         conciliado=True,
         fecha_conciliacion=ahora,
         verificado_concordancia="SI",
@@ -210,8 +222,8 @@ def _crear_pago_desde_reserva(
         monto_bs_original=monto_bs_o,
         tasa_cambio_bs_usd=tasa_o,
         fecha_tasa_referencia=fecha_tasa_o,
-        link_comprobante=(reserva.link_comprobante or "").strip() or None,
-        documento_ruta=(reserva.documento_ruta or "").strip() or None,
+        link_comprobante=None,
+        documento_ruta=None,
     )
     db.add(pago)
     db.flush()
@@ -224,9 +236,35 @@ async def _ocr_fila_reserva_revision(
     reserva: RevisionManualConciliacionReserva,
     prestamo: Prestamo,
     usuario_registro: str,
+    *,
+    monto_abonos_usd: Decimal,
+    abonos_total_usd: float,
 ) -> Dict[str, Any]:
+    """
+    Por comprobante: (1) monto desde total ABONOS, (2) imagen reservada al pago,
+    (3) reescaneo OCR (sin tocar monto).
+    """
     reserva_id = reserva.id
-    pago, err_crear = _crear_pago_desde_reserva(db, reserva, prestamo, usuario_registro)
+    body, filename, err_bytes = _bytes_y_nombre_ocr_desde_reserva(reserva)
+    if not body:
+        reserva.ocr_ok = False
+        reserva.ocr_error = (err_bytes or "sin_imagen_guardada_en_reserva")[:2000]
+        return {
+            "reserva_id": reserva_id,
+            "ok": False,
+            "error": reserva.ocr_error,
+            "pago_id": None,
+        }
+
+    # 1) Pegar monto (parte del total ABONOS de Notificaciones → General).
+    pago, err_crear = _crear_pago_desde_reserva(
+        db,
+        reserva,
+        prestamo,
+        usuario_registro,
+        monto_abonos_usd=monto_abonos_usd,
+        abonos_total_usd=abonos_total_usd,
+    )
     if err_crear:
         reserva.ocr_ok = False
         reserva.ocr_error = err_crear[:2000]
@@ -237,30 +275,12 @@ async def _ocr_fila_reserva_revision(
             "pago_id": reserva.pago_id_recriado,
         }
 
+    # 2) Incorporar imagen guardada en reserva al pago nuevo.
     if pago is not None:
         _vincular_comprobante_reserva_al_pago(db, reserva, pago)
         db.flush()
 
-    body, filename, err_bytes = _bytes_y_nombre_ocr_desde_reserva(reserva)
-    metadata_sin_imagen = not body
-
-    if metadata_sin_imagen:
-        reserva.ocr_ok = True
-        reserva.ocr_error = None
-        reserva.ocr_sugerencia_json = None
-        db.flush()
-        ok = pago is not None
-        if ok and pago is not None:
-            db.delete(reserva)
-            db.flush()
-        return {
-            "reserva_id": reserva_id,
-            "ok": ok,
-            "error": None if ok else "No se pudo recrear el pago sin comprobante.",
-            "pago_id": pago.id if pago else None,
-            "ocr_omitido_sin_imagen": True,
-        }
-
+    # 3) Reescanear imagen (fecha, banco, documento); monto permanece del ABONOS.
     ctx_ced = normalizar_cedula_almacenamiento(
         (reserva.cedula_cliente or prestamo.cedula or "").strip()
     ) or ""
@@ -268,10 +288,24 @@ async def _ocr_fila_reserva_revision(
         ctx_ced,
         body,
         filename,
-        institucion_plantilla=(reserva.institucion_bancaria or "").strip() or None,
+        institucion_plantilla=None,
     )
     if pago is not None:
-        _aplicar_ocr_a_pago(db, pago, gem)
+        monto_abonos_fijado, _, _, _, _ = resolver_monto_registro_pago(
+            db,
+            cedula_normalizada=(pago.cedula_cliente or "").strip().upper(),
+            fecha_pago=(
+                pago.fecha_pago.date()
+                if hasattr(pago.fecha_pago, "date")
+                else _placeholder_fecha_reserva().date()
+            ),
+            monto_pagado=monto_abonos_usd,
+            moneda_registro="USD",
+            tasa_cambio_manual=None,
+        )
+        _aplicar_ocr_a_pago(db, pago, gem, aplicar_monto=False)
+        pago.monto_pagado = monto_abonos_fijado
+        db.flush()
 
     reserva.ocr_ok = bool(gem.get("ok"))
     reserva.ocr_error = None if gem.get("ok") else (str(gem.get("error") or "OCR fallido"))[:2000]
@@ -310,7 +344,7 @@ async def _ocr_fila_reserva_revision(
         "ok": ok,
         "error": reserva.ocr_error if not ok else None,
         "pago_id": pago.id if pago else None,
-        "ocr_omitido_sin_imagen": metadata_sin_imagen,
+        "monto_abonos_usd": float(monto_abonos_usd),
     }
 
 
@@ -318,6 +352,7 @@ def _reservar_comprobantes_prestamo(
     db: Session,
     prestamo: Prestamo,
 ) -> Dict[str, Any]:
+    """Solo bytes de comprobante; no copia montos, documentos ni fechas del pago origen."""
     pagos = (
         db.execute(
             select(Pago)
@@ -330,15 +365,14 @@ def _reservar_comprobantes_prestamo(
     if not pagos:
         return {
             "ok": False,
-            "error": "No hay pagos en este préstamo para reservar.",
+            "error": "No hay pagos en este préstamo para reservar comprobantes.",
         }
 
     con_img = [p for p in pagos if _tiene_comprobante(p)]
-    sin_img = [p for p in pagos if not _tiene_comprobante(p)]
-
-    orden = 0
-    reservas_sin_imagen = 0
     omitidos_sin_bytes: List[str] = []
+    placeholder_fecha = _placeholder_fecha_reserva()
+    orden = 0
+
     for p in con_img:
         body, filename, err_bytes = cargar_bytes_comprobante(
             db,
@@ -354,31 +388,8 @@ def _reservar_comprobantes_prestamo(
                 prestamo.id,
                 err_bytes or "sin_bytes",
             )
-            orden += 1
-            db.add(
-                RevisionManualConciliacionReserva(
-                    prestamo_id=int(prestamo.id),
-                    orden=orden,
-                    pago_id_origen=p.id,
-                    cedula_cliente=p.cedula_cliente,
-                    monto_pagado=p.monto_pagado,
-                    fecha_pago=p.fecha_pago,
-                    numero_documento=p.numero_documento,
-                    referencia_pago=p.referencia_pago or "",
-                    institucion_bancaria=p.institucion_bancaria,
-                    link_comprobante=p.link_comprobante,
-                    documento_ruta=p.documento_ruta,
-                    comprobante_imagen_data=None,
-                    comprobante_content_type=None,
-                    comprobante_nombre_archivo=None,
-                    moneda_registro=p.moneda_registro,
-                    monto_bs_original=p.monto_bs_original,
-                    tasa_cambio_bs_usd=p.tasa_cambio_bs_usd,
-                    conciliado=bool(p.conciliado),
-                    notas=p.notas,
-                )
-            )
             continue
+
         orden += 1
         ct = mime_efectivo_comprobante_web(
             "",
@@ -389,77 +400,48 @@ def _reservar_comprobantes_prestamo(
                 prestamo_id=int(prestamo.id),
                 orden=orden,
                 pago_id_origen=p.id,
-                cedula_cliente=p.cedula_cliente,
-                monto_pagado=p.monto_pagado,
-                fecha_pago=p.fecha_pago,
-                numero_documento=p.numero_documento,
-                referencia_pago=p.referencia_pago or "",
-                institucion_bancaria=p.institucion_bancaria,
-                link_comprobante=p.link_comprobante,
-                documento_ruta=p.documento_ruta,
+                cedula_cliente=(prestamo.cedula or p.cedula_cliente or "").strip() or None,
+                monto_pagado=Decimal("0"),
+                fecha_pago=placeholder_fecha,
+                numero_documento=None,
+                referencia_pago="",
+                institucion_bancaria=None,
+                link_comprobante=None,
+                documento_ruta=None,
                 comprobante_imagen_data=body,
                 comprobante_content_type=(ct or "image/jpeg")[:80],
                 comprobante_nombre_archivo=(filename or "comprobante.jpg")[:255],
-                moneda_registro=p.moneda_registro,
-                monto_bs_original=p.monto_bs_original,
-                tasa_cambio_bs_usd=p.tasa_cambio_bs_usd,
-                conciliado=bool(p.conciliado),
-                notas=p.notas,
-            )
-        )
-
-    for p in sin_img:
-        orden += 1
-        reservas_sin_imagen += 1
-        db.add(
-            RevisionManualConciliacionReserva(
-                prestamo_id=int(prestamo.id),
-                orden=orden,
-                pago_id_origen=p.id,
-                cedula_cliente=p.cedula_cliente,
-                monto_pagado=p.monto_pagado,
-                fecha_pago=p.fecha_pago,
-                numero_documento=p.numero_documento,
-                referencia_pago=p.referencia_pago or "",
-                institucion_bancaria=p.institucion_bancaria,
-                link_comprobante=p.link_comprobante,
-                documento_ruta=p.documento_ruta,
-                comprobante_imagen_data=None,
-                comprobante_content_type=None,
-                comprobante_nombre_archivo=None,
-                moneda_registro=p.moneda_registro,
-                monto_bs_original=p.monto_bs_original,
-                tasa_cambio_bs_usd=p.tasa_cambio_bs_usd,
-                conciliado=bool(p.conciliado),
-                notas=p.notas,
+                moneda_registro=None,
+                monto_bs_original=None,
+                tasa_cambio_bs_usd=None,
+                conciliado=False,
+                notas=None,
             )
         )
 
     if orden == 0:
         det = (
-            f" ({len(omitidos_sin_bytes)} con enlace pero sin poder guardar imagen)"
+            f" ({len(omitidos_sin_bytes)} con enlace pero sin imagen descargable)"
             if omitidos_sin_bytes
             else ""
         )
         return {
             "ok": False,
             "error": (
-                "No se pudo guardar ningún pago en la reserva temporal"
+                "No se pudo reservar ningún comprobante con imagen"
                 + det
-                + "."
+                + ". Suba o repare los comprobantes antes de conciliar."
             ),
         }
 
     db.flush()
-    msg = f"Reservados {orden} pago(s) en tabla temporal."
-    if reservas_sin_imagen:
-        msg += f" {reservas_sin_imagen} sin comprobante (solo metadatos)."
+    msg = f"Reservadas {orden} imagen(es) de comprobante en tabla temporal (sin metadatos de pago)."
     if omitidos_sin_bytes:
-        msg += f" Omitidos con enlace roto: {len(omitidos_sin_bytes)}."
+        msg += f" Omitidos sin bytes: {len(omitidos_sin_bytes)}."
     return {
         "ok": True,
         "reservas": orden,
-        "reservas_sin_imagen": reservas_sin_imagen,
+        "reservas_sin_imagen": 0,
         "omitidos_sin_bytes": len(omitidos_sin_bytes),
         "mensaje": msg,
     }
@@ -530,12 +512,22 @@ async def ejecutar_conciliar_cartera_revision_manual(
             "referencia_abonos": snap,
         }
 
+    abonos_f: Optional[float] = None
     if abonos_drive is not None:
         try:
             abonos_f = float(abonos_drive)
         except (TypeError, ValueError):
             abonos_f = None
-        if abonos_f is not None and abonos_f > UMBRAL_CONFIRMO_ABONOS_USD:
+        if abonos_f is None or abonos_f <= 0:
+            return {
+                "ok": False,
+                "error": (
+                    "ABONOS en caché (Notificaciones → General) debe ser un monto positivo. "
+                    "Recalcule en General y vuelva a intentar."
+                ),
+                "referencia_abonos": snap,
+            }
+        if abonos_f > UMBRAL_CONFIRMO_ABONOS_USD:
             conf = (confirmacion_montos_altos or "").strip().upper()
             if conf != "CONFIRMO":
                 return {
@@ -580,11 +572,24 @@ async def ejecutar_conciliar_cartera_revision_manual(
         .all()
     )
 
+    montos_abonos = _distribuir_monto_abonos_entre_comprobantes(
+        float(abonos_f or abonos_drive or 0),
+        len(filas),
+    )
+
     detalle: List[Dict[str, Any]] = []
     ok_n = 0
     pagos_recriados = 0
-    for reserva in filas:
-        item = await _ocr_fila_reserva_revision(db, reserva, prestamo, usuario_registro)
+    for idx, reserva in enumerate(filas):
+        monto_fila = montos_abonos[idx] if idx < len(montos_abonos) else Decimal("0")
+        item = await _ocr_fila_reserva_revision(
+            db,
+            reserva,
+            prestamo,
+            usuario_registro,
+            monto_abonos_usd=monto_fila,
+            abonos_total_usd=float(abonos_f or abonos_drive or 0),
+        )
         detalle.append(item)
         if item.get("ok"):
             ok_n += 1
@@ -610,12 +615,6 @@ async def ejecutar_conciliar_cartera_revision_manual(
     ocr_fallidos = len(filas) - ok_n
     advertencia_parcial = ocr_fallidos > 0
 
-    cascada: Dict[str, Any] | None = None
-    if ok_n > 0:
-        from app.services.pagos_aplicacion_prestamo import aplicar_cascada_prestamo_pipeline
-
-        cascada = aplicar_cascada_prestamo_pipeline(int(prestamo_id), db)
-
     total_pagos_usd = float(
         db.scalar(
             select(func.coalesce(func.sum(Pago.monto_pagado), 0)).where(
@@ -625,16 +624,46 @@ async def ejecutar_conciliar_cartera_revision_manual(
         or 0
     )
 
+    abonos_total_objetivo = float(abonos_f or abonos_drive or 0)
     diferencia_drive_ocr: Optional[float] = None
-    drive_msg = ""
+    abonos_cuadra_total = False
     if abonos_drive is not None:
         try:
             diferencia_drive_ocr = round(total_pagos_usd - float(abonos_drive), 2)
+            abonos_cuadra_total = abs(diferencia_drive_ocr) <= _TOL_CUADRE_ABONOS_USD
+        except (TypeError, ValueError):
+            diferencia_drive_ocr = None
+
+    if advertencia_parcial and not abonos_cuadra_total:
+        advertencia_parcial = True
+    elif not abonos_cuadra_total and ok_n > 0:
+        advertencia_parcial = True
+
+    # 4) Cascada solo tras alta de pagos (total ABONOS + imágenes reescaneadas).
+    cascada: Dict[str, Any] | None = None
+    if ok_n > 0:
+        from app.services.pagos_aplicacion_prestamo import aplicar_cascada_prestamo_pipeline
+
+        logger.info(
+            "revision conciliar cascada prestamo_id=%s abonos_objetivo=%.2f total_cartera=%.2f ocr_ok=%s/%s",
+            prestamo_id,
+            abonos_total_objetivo,
+            total_pagos_usd,
+            ok_n,
+            len(filas),
+        )
+        cascada = aplicar_cascada_prestamo_pipeline(int(prestamo_id), db)
+
+    drive_msg = ""
+    if abonos_drive is not None:
+        try:
             drive_msg = (
-                f" ABONOS (Notificaciones → General): ${float(abonos_drive):.2f}; "
-                f"total pagos recreados (OCR): ${total_pagos_usd:.2f}; "
-                f"diferencia: ${diferencia_drive_ocr:.2f}."
+                f" Total ABONOS aplicado: ${float(abonos_drive):.2f}; "
+                f"suma cartera recreada: ${total_pagos_usd:.2f}; "
+                f"diferencia: ${(diferencia_drive_ocr if diferencia_drive_ocr is not None else 0):.2f}."
             )
+            if abonos_cuadra_total:
+                drive_msg += " Cuadre ABONOS: OK."
         except (TypeError, ValueError):
             drive_msg = f" ABONOS (Notificaciones → General): {abonos_drive}."
 
@@ -645,7 +674,10 @@ async def ejecutar_conciliar_cartera_revision_manual(
             "revise filas pendientes en reserva temporal."
         )
 
-    ocr_msg = f"Recreados: {ok_n}/{len(filas)} pago(s) en cartera."
+    ocr_msg = (
+        f"Recreados: {ok_n}/{len(filas)} pago(s): total ABONOS "
+        f"${abonos_total_objetivo:.2f} + imágenes reescaneadas."
+    )
     if cascada is not None:
         if cascada.get("ok"):
             cascada_msg = str(cascada.get("mensaje") or "Cascada aplicada.")
@@ -679,6 +711,9 @@ async def ejecutar_conciliar_cartera_revision_manual(
         "pagos_recriados": pagos_recriados,
         "total_pagos_recriados_usd": round(total_pagos_usd, 2),
         "abonos_drive": abonos_drive,
+        "abonos_total_aplicado_usd": round(abonos_total_objetivo, 2),
+        "abonos_cuadra_total": abonos_cuadra_total,
+        "montos_abonos_distribuidos": [float(m) for m in montos_abonos],
         "diferencia_drive_ocr_usd": diferencia_drive_ocr,
         "diferencia_referencia_ocr_usd": diferencia_drive_ocr,
         "prestamo_estado_final": prestamo_estado_final,

@@ -390,6 +390,8 @@ def _aplicar_ocr_a_pago(
     db: Session,
     pago: Pago,
     gem: Dict[str, Any],
+    *,
+    aplicar_monto: bool = True,
 ) -> None:
     if not gem.get("ok"):
         return
@@ -405,12 +407,13 @@ def _aplicar_ocr_a_pago(
     fecha_d = gem.get("fecha_pago")
     if isinstance(fecha_d, date) and not isinstance(fecha_d, datetime):
         pago.fecha_pago = datetime.combine(fecha_d, dt_time.min)
-    monto = gem.get("monto")
-    if monto is not None:
-        try:
-            pago.monto_pagado = Decimal(str(round(float(monto), 2)))
-        except (TypeError, ValueError):
-            pass
+    if aplicar_monto:
+        monto = gem.get("monto")
+        if monto is not None:
+            try:
+                pago.monto_pagado = Decimal(str(round(float(monto), 2)))
+            except (TypeError, ValueError):
+                pass
 
 
 def _crear_o_actualizar_pago_desde_reserva(
