@@ -123,7 +123,7 @@ export async function blobComprobanteAFileParaEscaneo(
  */
 export async function fetchStaffComprobanteBlobWithDisplayMime(
   href: string
-): Promise<{ blob: Blob; contentType: string }> {
+): Promise<{ blob: File; contentType: string }> {
   const raw = await fetchStaffComprobanteBlobFromHref(href)
   const file = await blobComprobanteAFileParaEscaneo(raw, raw.type)
   return { blob: file, contentType: file.type }
