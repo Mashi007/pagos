@@ -6307,7 +6307,11 @@ def aplicar_pagos_pendientes_cuotas_por_prestamo(
 
         from app.services.pagos_aplicacion_prestamo import aplicar_cascada_prestamo_pipeline
 
-        pipeline = aplicar_cascada_prestamo_pipeline(prestamo_id, db)
+        pipeline = aplicar_cascada_prestamo_pipeline(
+            prestamo_id,
+            db,
+            reconstruir_completa=True,
+        )
 
         if not pipeline.get("ok"):
 
@@ -6464,6 +6468,13 @@ def eliminar_pago(pago_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Pago no encontrado")
 
     prestamo_id_previo = row.prestamo_id
+    n_cuota_pagos_articuladas = int(
+        db.scalar(
+            text("SELECT COUNT(*) FROM cuota_pagos WHERE pago_id = :pid"),
+            {"pid": pago_id},
+        )
+        or 0
+    )
 
     try:
         db.execute(text("DELETE FROM auditoria_conciliacion_manual WHERE pago_id = :pid"), {"pid": pago_id})
@@ -6481,19 +6492,22 @@ def eliminar_pago(pago_id: int, db: Session = Depends(get_db)):
                 reset_y_reaplicar_cascada_prestamo,
             )
 
-            r = realinear_cuotas_prestamo_desde_cuota_pagos(db, prestamo_id_previo)
-            if not r.get("ok"):
-                raise HTTPException(
-                    status_code=500,
-                    detail=(r.get("error") or "No se pudo realinear cuotas tras eliminar el pago")[:400],
-                )
-            if r.get("requiere_reset_cascada"):
+            if n_cuota_pagos_articuladas > 0:
                 r = reset_y_reaplicar_cascada_prestamo(db, prestamo_id_previo)
+            else:
+                r = realinear_cuotas_prestamo_desde_cuota_pagos(db, prestamo_id_previo)
                 if not r.get("ok"):
                     raise HTTPException(
                         status_code=500,
-                        detail=(r.get("error") or "No se pudo alinear cuotas tras eliminar el pago")[:400],
+                        detail=(r.get("error") or "No se pudo realinear cuotas tras eliminar el pago")[:400],
                     )
+                if r.get("requiere_reset_cascada"):
+                    r = reset_y_reaplicar_cascada_prestamo(db, prestamo_id_previo)
+            if not r.get("ok"):
+                raise HTTPException(
+                    status_code=500,
+                    detail=(r.get("error") or "No se pudo alinear cuotas tras eliminar el pago")[:400],
+                )
 
         db.commit()
     except HTTPException:

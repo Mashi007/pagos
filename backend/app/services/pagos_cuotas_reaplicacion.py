@@ -125,11 +125,48 @@ def integridad_cuotas_prestamo(db: Session, prestamo_id: int) -> dict[str, Any]:
     }
 
 
+def prestamo_tiene_hueco_cascada_cuotas(db: Session, prestamo_id: int, tol: float = TOL_INTEGRIDAD) -> bool:
+    """
+    True si una cuota anterior tiene saldo y hay cuota_pagos en cuotas posteriores.
+
+    Ocurre al borrar un pago intermedio sin reconstruir la cascada: los pagos
+    siguientes quedan articulados en cuotas «más adelante» y se salta el hueco.
+    """
+    cuotas = db.execute(
+        select(Cuota.id, Cuota.numero_cuota, Cuota.monto, Cuota.total_pagado)
+        .where(Cuota.prestamo_id == prestamo_id)
+        .order_by(Cuota.numero_cuota.asc())
+    ).all()
+    if len(cuotas) < 2:
+        return False
+
+    for idx, c_early in enumerate(cuotas):
+        saldo = float(c_early.monto or 0) - float(c_early.total_pagado or 0)
+        if saldo <= tol:
+            continue
+        ids_later = [int(c.id) for c in cuotas[idx + 1 :] if c.id is not None]
+        if not ids_later:
+            return False
+        n_cp = int(
+            db.scalar(
+                select(func.count())
+                .select_from(CuotaPago)
+                .where(CuotaPago.cuota_id.in_(ids_later))
+            )
+            or 0
+        )
+        if n_cp > 0:
+            return True
+    return False
+
+
 def prestamo_requiere_correccion_cascada(db: Session, prestamo_id: int) -> bool:
     """True si hace falta reaplicar en cascada: integridad rota u orfano en pagos conciliados sin cuota_pagos."""
     prestamo = db.get(Prestamo, prestamo_id)
     if not prestamo:
         return False
+    if prestamo_tiene_hueco_cascada_cuotas(db, prestamo_id):
+        return True
     n_cuotas = int(
         db.scalar(select(func.count()).select_from(Cuota).where(Cuota.prestamo_id == prestamo_id)) or 0
     )
