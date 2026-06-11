@@ -25,7 +25,7 @@ const PASOS: Array<{
   { id: 'borrando', label: 'Borrando pagos del préstamo', icon: Trash2 },
   {
     id: 'ocr',
-    label: 'Total ABONOS + imágenes reservadas (reescaneo OCR)',
+    label: 'Asientos comprobante (reescaneo OCR; ABONOS ya creado)',
     icon: Upload,
   },
   { id: 'cascada', label: 'Cascada a cuotas', icon: DollarSign },
@@ -78,9 +78,8 @@ export function ConciliarCarteraPagosProgreso({
           </p>
         )}
         <p className="mt-1 text-xs text-muted-foreground">
-          Los montos en cartera salen del total ABONOS (Notificaciones → General),
-          repartido entre {pagosAntes > 0 ? `${pagosAntes} comprobante(s)` : 'los'}{' '}
-          reescaneados; fecha y documento los aporta el OCR.
+          Tras conciliar: 1 fila ABONOS (total General) + 1 fila por comprobante OCR
+          ({pagosAntes > 0 ? `${pagosAntes} imagen(es)` : 'imágenes'} reservadas).
         </p>
         {ocrOk != null && ocrTotal != null ? (
           <p className="text-xs text-muted-foreground">

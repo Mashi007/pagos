@@ -534,7 +534,8 @@ export type ConciliarCarteraRevisionResponse = {
   abonos_drive?: number | null
   abonos_total_aplicado_usd?: number
   abonos_cuadra_total?: boolean
-  montos_abonos_distribuidos?: number[]
+  pago_id_abonos?: number
+  total_imagenes_ocr_usd?: number
   diferencia_drive_ocr_usd?: number | null
   diferencia_referencia_ocr_usd?: number | null
   abonos_referencia_notificaciones?: number | null

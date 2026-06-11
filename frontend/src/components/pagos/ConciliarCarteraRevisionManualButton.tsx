@@ -623,17 +623,19 @@ export function ConciliarCarteraRevisionManualButton({
 
                 <li>
 
-                  <span className="text-muted-foreground">
-
-                    Total ABONOS aplicado (Notificaciones → General):
-
-                  </span>{' '}
+                  <span className="text-muted-foreground">Asiento ABONOS (sin imagen):</span>{' '}
 
                   <strong>{fmt(resultado.abonos_total_aplicado_usd ?? abonosResultado)}</strong>
 
-                  {resultado.abonos_cuadra_total ? (
+                  {resultado.pago_id_abonos != null ? (
 
-                    <span className="ml-1 text-green-800">✓ cuadra con cartera</span>
+                    <span className="text-muted-foreground">
+
+                      {' '}
+
+                      (pago #{resultado.pago_id_abonos})
+
+                    </span>
 
                   ) : null}
 
@@ -641,15 +643,25 @@ export function ConciliarCarteraRevisionManualButton({
 
                 <li>
 
-                  <span className="text-muted-foreground">Suma cartera recreada:</span>{' '}
+                  <span className="text-muted-foreground">Asientos comprobante (OCR):</span>{' '}
 
-                  <strong>{fmt(resultado.total_pagos_recriados_usd)}</strong>
+                  <strong>
+
+                    {fmt(
+
+                      resultado.total_imagenes_ocr_usd ??
+
+                        (diffResultado != null ? diffResultado : null)
+
+                    )}
+
+                  </strong>
 
                   <span className="text-muted-foreground">
 
                     {' '}
 
-                    ({resultado.ocr_ok}/{resultado.ocr_total} comprobantes)
+                    ({resultado.ocr_ok}/{resultado.ocr_total} imágenes)
 
                   </span>
 
@@ -657,25 +669,9 @@ export function ConciliarCarteraRevisionManualButton({
 
                 <li className="text-base">
 
-                  <span className="text-muted-foreground">Diferencia total − ABONOS:</span>{' '}
+                  <span className="text-muted-foreground">Total cartera:</span>{' '}
 
-                  <strong
-
-                    className={
-
-                      diffResultado != null && Math.abs(diffResultado) > 0.02
-
-                        ? 'text-amber-800'
-
-                        : 'text-green-800'
-
-                    }
-
-                  >
-
-                    {fmtDiff(diffResultado)}
-
-                  </strong>
+                  <strong>{fmt(resultado.total_pagos_recriados_usd)}</strong>
 
                 </li>
 
@@ -727,11 +723,11 @@ export function ConciliarCarteraRevisionManualButton({
 
                     : ''}
 
-                  . Los montos salen del total ABONOS ({fmt(abonosResultado)})
+                  . Asiento ABONOS ({fmt(abonosResultado)}) sin imagen, más un
 
-                  repartido entre las imágenes reservadas; fecha y documento los
+                  asiento por cada comprobante con monto OCR (ej. $177) e imagen
 
-                  aporta el OCR de cada comprobante.
+                  adjunta.
 
                 </p>
 
@@ -903,15 +899,13 @@ export function ConciliarCarteraRevisionManualButton({
 
               <p className="text-muted-foreground">
 
-                <strong>Notificaciones → General define el total ABONOS</strong>{' '}
+                <strong>Siempre</strong> se crean: (1) <strong>un</strong> asiento
 
-                (misma caché que «Diferencia abono» en BD). Solo se reservan las{' '}
+                ABONOS (total General, sea cual sea, sin imagen); (2) <strong>un
 
-                <strong>imágenes</strong> de comprobante (no montos ni documentos
+                asiento por cada imagen</strong> guardada y reescaneada (monto OCR,
 
-                viejos). Los pagos nuevos usan ese total ABONOS repartido entre
-
-                las imágenes; el OCR completa fecha, banco y número de operación.
+                ej. $177, con comprobante adjunto).
 
               </p>
 
@@ -921,11 +915,9 @@ export function ConciliarCarteraRevisionManualButton({
 
                 <li>Borra pagos solo de este préstamo</li>
 
-                <li>Recrea pagos con montos desde ABONOS + OCR de identificación</li>
+                <li>Asiento ABONOS (total General) + asientos comprobante (OCR)</li>
 
                 <li>Cascada a cuotas</li>
-
-                <li>Verifica que el total recreado coincida con ABONOS</li>
 
               </ol>
 
@@ -959,7 +951,7 @@ export function ConciliarCarteraRevisionManualButton({
 
                       {' '}
 
-                      (este total se aplicará completo en cartera)
+                      (asiento 1: pago aparte sin comprobante)
 
                     </span>
 

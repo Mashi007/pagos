@@ -3,10 +3,12 @@ Conciliar cartera en revisión manual (solo admin):
 1) Lee total ABONOS de caché Notificaciones → General (ej. $531).
 2) Reserva solo bytes de comprobante (sin metadatos de pagos).
 3) Borra pagos del préstamo.
-4) Por cada imagen reservada: asigna su parte del total ABONOS → incorpora imagen
-   → reescanea (OCR fecha/documento/banco; el monto NO sale del OCR).
-5) Verifica que la suma en cartera = total ABONOS.
+4) **Siempre** un asiento ABONOS (total General, sea cual sea el monto, sin comprobante).
+5) **Siempre** un asiento por cada imagen guardada y reescaneada (monto OCR + imagen).
 6) Cascada a cuotas.
+
+Fórmula: 1 ABONOS + N comprobantes OCR → N+1 asientos.
+Ejemplo (1 imagen): $531 ABONOS + $177 OCR = 2 asientos.
 """
 from __future__ import annotations
 
@@ -15,7 +17,7 @@ import json
 import logging
 import uuid
 from datetime import date, datetime, time as dt_time
-from decimal import Decimal, ROUND_DOWN
+from decimal import Decimal
 from typing import Any, Dict, List, Optional, Tuple
 from zoneinfo import ZoneInfo
 
@@ -93,20 +95,6 @@ def _reserva_tiene_imagen_guardada(reserva: RevisionManualConciliacionReserva) -
     return bool(data) and len(data) > 0
 
 
-def _distribuir_monto_abonos_entre_comprobantes(abonos_usd: float, n: int) -> List[Decimal]:
-    """Reparte el total ABONOS entre N comprobantes; la suma coincide con abonos_usd."""
-    if n <= 0:
-        return []
-    total = Decimal(str(round(float(abonos_usd), 2)))
-    base = (total / Decimal(n)).quantize(Decimal("0.01"), rounding=ROUND_DOWN)
-    partes = [base] * n
-    faltante = total - sum(partes)
-    centavos = int((faltante * 100).to_integral_value())
-    for i in range(min(centavos, n)):
-        partes[i] += Decimal("0.01")
-    return partes
-
-
 def _placeholder_fecha_reserva() -> datetime:
     return datetime.now(ZoneInfo(TZ_NEGOCIO))
 
@@ -155,18 +143,111 @@ def _vincular_comprobante_reserva_al_pago(
     pago.documento_ruta = None
 
 
-def _crear_pago_desde_reserva(
+def _crear_pago_asiento_abonos_general(
+    db: Session,
+    prestamo: Prestamo,
+    usuario_registro: str,
+    *,
+    abonos_total_usd: float,
+    lote_aplicado: Optional[str] = None,
+) -> Tuple[Optional[Pago], Optional[str]]:
+    """Asiento 1: total ABONOS de Notificaciones → General, sin comprobante adjunto."""
+    fecha_date = _placeholder_fecha_reserva().date()
+    try:
+        cedula_fk = asegurar_cedula_pago_para_fk(
+            db,
+            cedula_raw=(prestamo.cedula or "").strip() or None,
+            prestamo_id=prestamo.id,
+        )
+    except CedulaPagoFkError as e:
+        return None, str(e)
+
+    monto_dec = Decimal(str(round(float(abonos_total_usd), 2)))
+    ref = f"ABONOS-NOTIF-{prestamo.id}-{uuid.uuid4().hex[:8].upper()}"[:100]
+
+    monto_usd, moneda_fin, monto_bs_o, tasa_o, fecha_tasa_o = resolver_monto_registro_pago(
+        db,
+        cedula_normalizada=(cedula_fk or "").strip().upper(),
+        fecha_pago=fecha_date,
+        monto_pagado=monto_dec,
+        moneda_registro="USD",
+        tasa_cambio_manual=None,
+    )
+
+    msg_h = conflicto_huella_para_creacion(
+        db,
+        prestamo_id=prestamo.id,
+        fecha_pago=fecha_date,
+        monto_pagado=monto_usd,
+        numero_documento=ref,
+        referencia_pago=ref,
+    )
+    if msg_h:
+        return None, msg_h
+
+    ahora = datetime.now(ZoneInfo(TZ_NEGOCIO))
+    nota = (
+        "Conciliar cartera: asiento ABONOS (Notificaciones → General). "
+        f"Monto hoja/caché: ${float(abonos_total_usd):.2f}."
+    )
+    lote_txt = (lote_aplicado or "").strip()
+    if lote_txt:
+        nota += f" Lote: {lote_txt}."
+
+    pago = Pago(
+        cedula_cliente=cedula_fk,
+        prestamo_id=prestamo.id,
+        fecha_pago=datetime.combine(fecha_date, dt_time.min),
+        monto_pagado=monto_usd,
+        numero_documento=ref,
+        institucion_bancaria=None,
+        estado="PAGADO",
+        notas=nota,
+        referencia_pago=ref,
+        conciliado=True,
+        fecha_conciliacion=ahora,
+        verificado_concordancia="SI",
+        usuario_registro=usuario_registro,
+        moneda_registro=moneda_fin,
+        monto_bs_original=monto_bs_o,
+        tasa_cambio_bs_usd=tasa_o,
+        fecha_tasa_referencia=fecha_tasa_o,
+        link_comprobante=None,
+        documento_ruta=None,
+    )
+    db.add(pago)
+    db.flush()
+    return pago, None
+
+
+def _crear_pago_asiento_imagen_ocr(
     db: Session,
     reserva: RevisionManualConciliacionReserva,
     prestamo: Prestamo,
     usuario_registro: str,
-    *,
-    monto_abonos_usd: Decimal,
-    abonos_total_usd: float,
+    gem: Dict[str, Any],
 ) -> Tuple[Optional[Pago], Optional[str]]:
-    """Alta inicial: monto desde ABONOS; documento/fecha se completan con OCR."""
-    ref_tmp = f"CONC-ABONOS-{prestamo.id}-{reserva.orden}-{uuid.uuid4().hex[:8]}"[:100]
-    fecha_date = _placeholder_fecha_reserva().date()
+    """Asiento 2+: pago desde OCR del comprobante (monto de la imagen, no ABONOS)."""
+    monto_raw = gem.get("monto")
+    if monto_raw is None:
+        return None, "OCR sin monto en el comprobante."
+    try:
+        monto_dec = Decimal(str(round(float(monto_raw), 2)))
+    except (TypeError, ValueError):
+        return None, "OCR devolvió un monto inválido."
+
+    if monto_dec <= 0:
+        return None, "OCR devolvió monto cero o negativo."
+
+    fecha_date = gem.get("fecha_pago")
+    if isinstance(fecha_date, datetime):
+        fecha_date = fecha_date.date()
+    if not isinstance(fecha_date, date):
+        fecha_date = _placeholder_fecha_reserva().date()
+
+    num_op = sanitizar_numero_operacion_comprobante(gem.get("numero_operacion"))
+    ref_tmp = f"CONC-IMG-{prestamo.id}-{reserva.orden}-{uuid.uuid4().hex[:6]}"[:100]
+    num_stored = compose_numero_documento_almacenado(num_op, None) if num_op else ref_tmp
 
     try:
         cedula_fk = asegurar_cedula_pago_para_fk(
@@ -181,8 +262,8 @@ def _crear_pago_desde_reserva(
         db,
         cedula_normalizada=(cedula_fk or "").strip().upper(),
         fecha_pago=fecha_date,
-        monto_pagado=monto_abonos_usd,
-        moneda_registro="USD",
+        monto_pagado=monto_dec,
+        moneda_registro=(str(gem.get("moneda") or "USD").strip().upper()[:10] or "USD"),
         tasa_cambio_manual=None,
     )
 
@@ -191,29 +272,25 @@ def _crear_pago_desde_reserva(
         prestamo_id=prestamo.id,
         fecha_pago=fecha_date,
         monto_pagado=monto_usd,
-        numero_documento=ref_tmp,
-        referencia_pago=ref_tmp,
+        numero_documento=num_stored,
+        referencia_pago=(num_stored or ref_tmp)[:100],
     )
     if msg_h:
         return None, msg_h
 
-    fecha_pago_ts = datetime.combine(fecha_date, dt_time.min)
+    inst = (gem.get("institucion_financiera") or "").strip() or None
     ahora = datetime.now(ZoneInfo(TZ_NEGOCIO))
-    nota_abonos = (
-        f"Conciliar cartera: monto desde ABONOS Notificaciones → General "
-        f"(${float(abonos_total_usd):.2f} repartido entre comprobantes)."
-    )
 
     pago = Pago(
         cedula_cliente=cedula_fk,
         prestamo_id=prestamo.id,
-        fecha_pago=fecha_pago_ts,
+        fecha_pago=datetime.combine(fecha_date, dt_time.min),
         monto_pagado=monto_usd,
-        numero_documento=ref_tmp,
-        institucion_bancaria=None,
+        numero_documento=num_stored[:100],
+        institucion_bancaria=inst[:255] if inst else None,
         estado="PAGADO",
-        notas=nota_abonos,
-        referencia_pago=ref_tmp,
+        notas="Conciliar cartera: asiento comprobante (monto y datos del reescaneo OCR).",
+        referencia_pago=(num_stored or ref_tmp)[:100],
         conciliado=True,
         fecha_conciliacion=ahora,
         verificado_concordancia="SI",
@@ -236,14 +313,8 @@ async def _ocr_fila_reserva_revision(
     reserva: RevisionManualConciliacionReserva,
     prestamo: Prestamo,
     usuario_registro: str,
-    *,
-    monto_abonos_usd: Decimal,
-    abonos_total_usd: float,
 ) -> Dict[str, Any]:
-    """
-    Por comprobante: (1) monto desde total ABONOS, (2) imagen reservada al pago,
-    (3) reescaneo OCR (sin tocar monto).
-    """
+    """Asiento comprobante: reescanea imagen reservada y crea pago con monto OCR (ej. $177)."""
     reserva_id = reserva.id
     body, filename, err_bytes = _bytes_y_nombre_ocr_desde_reserva(reserva)
     if not body:
@@ -254,33 +325,9 @@ async def _ocr_fila_reserva_revision(
             "ok": False,
             "error": reserva.ocr_error,
             "pago_id": None,
+            "tipo_asiento": "comprobante_ocr",
         }
 
-    # 1) Pegar monto (parte del total ABONOS de Notificaciones → General).
-    pago, err_crear = _crear_pago_desde_reserva(
-        db,
-        reserva,
-        prestamo,
-        usuario_registro,
-        monto_abonos_usd=monto_abonos_usd,
-        abonos_total_usd=abonos_total_usd,
-    )
-    if err_crear:
-        reserva.ocr_ok = False
-        reserva.ocr_error = err_crear[:2000]
-        return {
-            "reserva_id": reserva_id,
-            "ok": False,
-            "error": err_crear,
-            "pago_id": reserva.pago_id_recriado,
-        }
-
-    # 2) Incorporar imagen guardada en reserva al pago nuevo.
-    if pago is not None:
-        _vincular_comprobante_reserva_al_pago(db, reserva, pago)
-        db.flush()
-
-    # 3) Reescanear imagen (fecha, banco, documento); monto permanece del ABONOS.
     ctx_ced = normalizar_cedula_almacenamiento(
         (reserva.cedula_cliente or prestamo.cedula or "").strip()
     ) or ""
@@ -290,22 +337,6 @@ async def _ocr_fila_reserva_revision(
         filename,
         institucion_plantilla=None,
     )
-    if pago is not None:
-        monto_abonos_fijado, _, _, _, _ = resolver_monto_registro_pago(
-            db,
-            cedula_normalizada=(pago.cedula_cliente or "").strip().upper(),
-            fecha_pago=(
-                pago.fecha_pago.date()
-                if hasattr(pago.fecha_pago, "date")
-                else _placeholder_fecha_reserva().date()
-            ),
-            monto_pagado=monto_abonos_usd,
-            moneda_registro="USD",
-            tasa_cambio_manual=None,
-        )
-        _aplicar_ocr_a_pago(db, pago, gem, aplicar_monto=False)
-        pago.monto_pagado = monto_abonos_fijado
-        db.flush()
 
     reserva.ocr_ok = bool(gem.get("ok"))
     reserva.ocr_error = None if gem.get("ok") else (str(gem.get("error") or "OCR fallido"))[:2000]
@@ -327,24 +358,51 @@ async def _ocr_fila_reserva_revision(
     except Exception:
         reserva.ocr_sugerencia_json = None
 
-    db.flush()
+    if not gem.get("ok"):
+        db.flush()
+        return {
+            "reserva_id": reserva_id,
+            "ok": False,
+            "error": reserva.ocr_error,
+            "pago_id": None,
+            "tipo_asiento": "comprobante_ocr",
+        }
 
-    ocr_exitoso = bool(gem.get("ok"))
-    ok = pago is not None and ocr_exitoso
-    if ok and pago is not None:
+    pago, err_crear = _crear_pago_asiento_imagen_ocr(
+        db, reserva, prestamo, usuario_registro, gem
+    )
+    if err_crear:
+        reserva.ocr_ok = False
+        reserva.ocr_error = err_crear[:2000]
+        db.flush()
+        return {
+            "reserva_id": reserva_id,
+            "ok": False,
+            "error": err_crear,
+            "pago_id": None,
+            "tipo_asiento": "comprobante_ocr",
+        }
+
+    if pago is not None:
+        _vincular_comprobante_reserva_al_pago(db, reserva, pago)
+        db.flush()
         db.delete(reserva)
         db.flush()
-    elif pago is not None:
-        db.delete(pago)
-        reserva.pago_id_recriado = None
-        db.flush()
+
+    monto_ocr: Optional[float] = None
+    try:
+        if pago is not None and pago.monto_pagado is not None:
+            monto_ocr = float(pago.monto_pagado)
+    except (TypeError, ValueError):
+        monto_ocr = None
 
     return {
         "reserva_id": reserva_id,
-        "ok": ok,
-        "error": reserva.ocr_error if not ok else None,
+        "ok": True,
+        "error": None,
         "pago_id": pago.id if pago else None,
-        "monto_abonos_usd": float(monto_abonos_usd),
+        "tipo_asiento": "comprobante_ocr",
+        "monto_ocr_usd": monto_ocr,
     }
 
 
@@ -562,6 +620,35 @@ async def ejecutar_conciliar_cartera_revision_manual(
         prestamo.estado = "APROBADO"
         db.flush()
 
+    abonos_total_objetivo = float(abonos_f or abonos_drive or 0)
+    lote_snap = (snap.get("lote_aplicado") or lote or "").strip() or None
+
+    pago_abonos, err_abonos = _crear_pago_asiento_abonos_general(
+        db,
+        prestamo,
+        usuario_registro,
+        abonos_total_usd=abonos_total_objetivo,
+        lote_aplicado=lote_snap,
+    )
+    if err_abonos or pago_abonos is None:
+        return {
+            "ok": False,
+            "error": err_abonos or "No se pudo crear el asiento ABONOS.",
+            "prestamo_id": prestamo_id,
+            "reservas": int(reserva_out.get("reservas") or 0),
+            "pagos_eliminados": int(del_res.get("pagos_eliminados") or 0),
+            "referencia_abonos": snap,
+        }
+
+    detalle: List[Dict[str, Any]] = [
+        {
+            "ok": True,
+            "tipo_asiento": "abonos_general",
+            "pago_id": pago_abonos.id,
+            "monto_abonos_usd": abonos_total_objetivo,
+        }
+    ]
+
     filas = list(
         db.execute(
             select(RevisionManualConciliacionReserva)
@@ -572,48 +659,17 @@ async def ejecutar_conciliar_cartera_revision_manual(
         .all()
     )
 
-    montos_abonos = _distribuir_monto_abonos_entre_comprobantes(
-        float(abonos_f or abonos_drive or 0),
-        len(filas),
-    )
-
-    detalle: List[Dict[str, Any]] = []
-    ok_n = 0
-    pagos_recriados = 0
-    for idx, reserva in enumerate(filas):
-        monto_fila = montos_abonos[idx] if idx < len(montos_abonos) else Decimal("0")
-        item = await _ocr_fila_reserva_revision(
-            db,
-            reserva,
-            prestamo,
-            usuario_registro,
-            monto_abonos_usd=monto_fila,
-            abonos_total_usd=float(abonos_f or abonos_drive or 0),
-        )
+    ocr_ok_n = 0
+    for reserva in filas:
+        item = await _ocr_fila_reserva_revision(db, reserva, prestamo, usuario_registro)
         detalle.append(item)
         if item.get("ok"):
-            ok_n += 1
-            if item.get("pago_id"):
-                pagos_recriados += 1
+            ocr_ok_n += 1
 
-    if ok_n == 0:
-        return {
-            "ok": False,
-            "error": (
-                "Ningún pago se pudo recrear (OCR fallido o sin datos). "
-                "No se aplicó cascada; la operación debe reintentarse."
-            ),
-            "prestamo_id": prestamo_id,
-            "reservas": int(reserva_out.get("reservas") or 0),
-            "pagos_eliminados": int(del_res.get("pagos_eliminados") or 0),
-            "ocr_ok": 0,
-            "ocr_total": len(filas),
-            "referencia_abonos": snap,
-            "detalle": detalle,
-        }
-
-    ocr_fallidos = len(filas) - ok_n
+    ocr_fallidos = len(filas) - ocr_ok_n
     advertencia_parcial = ocr_fallidos > 0
+    if len(filas) > 0 and ocr_ok_n == 0:
+        advertencia_parcial = True
 
     total_pagos_usd = float(
         db.scalar(
@@ -624,59 +680,43 @@ async def ejecutar_conciliar_cartera_revision_manual(
         or 0
     )
 
-    abonos_total_objetivo = float(abonos_f or abonos_drive or 0)
-    diferencia_drive_ocr: Optional[float] = None
-    abonos_cuadra_total = False
-    if abonos_drive is not None:
-        try:
-            diferencia_drive_ocr = round(total_pagos_usd - float(abonos_drive), 2)
-            abonos_cuadra_total = abs(diferencia_drive_ocr) <= _TOL_CUADRE_ABONOS_USD
-        except (TypeError, ValueError):
-            diferencia_drive_ocr = None
+    total_imagenes_ocr_usd = round(
+        max(0.0, total_pagos_usd - abonos_total_objetivo),
+        2,
+    )
+    pagos_recriados = 1 + ocr_ok_n
 
-    if advertencia_parcial and not abonos_cuadra_total:
-        advertencia_parcial = True
-    elif not abonos_cuadra_total and ok_n > 0:
-        advertencia_parcial = True
-
-    # 4) Cascada solo tras alta de pagos (total ABONOS + imágenes reescaneadas).
+    # Cascada tras asiento ABONOS + asientos comprobante (OCR).
     cascada: Dict[str, Any] | None = None
-    if ok_n > 0:
-        from app.services.pagos_aplicacion_prestamo import aplicar_cascada_prestamo_pipeline
+    from app.services.pagos_aplicacion_prestamo import aplicar_cascada_prestamo_pipeline
 
-        logger.info(
-            "revision conciliar cascada prestamo_id=%s abonos_objetivo=%.2f total_cartera=%.2f ocr_ok=%s/%s",
-            prestamo_id,
-            abonos_total_objetivo,
-            total_pagos_usd,
-            ok_n,
-            len(filas),
-        )
-        cascada = aplicar_cascada_prestamo_pipeline(int(prestamo_id), db)
+    logger.info(
+        "revision conciliar cascada prestamo_id=%s abonos=%.2f imagenes_ocr=%.2f total=%.2f ocr_ok=%s/%s",
+        prestamo_id,
+        abonos_total_objetivo,
+        total_imagenes_ocr_usd,
+        total_pagos_usd,
+        ocr_ok_n,
+        len(filas),
+    )
+    cascada = aplicar_cascada_prestamo_pipeline(int(prestamo_id), db)
 
-    drive_msg = ""
-    if abonos_drive is not None:
-        try:
-            drive_msg = (
-                f" Total ABONOS aplicado: ${float(abonos_drive):.2f}; "
-                f"suma cartera recreada: ${total_pagos_usd:.2f}; "
-                f"diferencia: ${(diferencia_drive_ocr if diferencia_drive_ocr is not None else 0):.2f}."
-            )
-            if abonos_cuadra_total:
-                drive_msg += " Cuadre ABONOS: OK."
-        except (TypeError, ValueError):
-            drive_msg = f" ABONOS (Notificaciones → General): {abonos_drive}."
+    drive_msg = (
+        f" Asiento ABONOS: ${abonos_total_objetivo:.2f} (pago #{pago_abonos.id}); "
+        f"asientos comprobante OCR: {ocr_ok_n}/{len(filas)} "
+        f"(${total_imagenes_ocr_usd:.2f}); total cartera: ${total_pagos_usd:.2f}."
+    )
 
     parcial_msg = ""
     if advertencia_parcial:
         parcial_msg = (
-            f" Atención: {ocr_fallidos} pago(s) no se recrearon; "
-            "revise filas pendientes en reserva temporal."
+            f" Atención: {ocr_fallidos} comprobante(s) no generaron asiento OCR; "
+            "solo quedó el asiento ABONOS si no hubo error previo."
         )
 
     ocr_msg = (
-        f"Recreados: {ok_n}/{len(filas)} pago(s): total ABONOS "
-        f"${abonos_total_objetivo:.2f} + imágenes reescaneadas."
+        f"Creados {pagos_recriados} asiento(s): 1 ABONOS (${abonos_total_objetivo:.2f}) + "
+        f"{ocr_ok_n} comprobante(s) reescaneado(s)."
     )
     if cascada is not None:
         if cascada.get("ok"):
@@ -704,18 +744,19 @@ async def ejecutar_conciliar_cartera_revision_manual(
         "reservas": int(reserva_out.get("reservas") or 0),
         "reservas_sin_imagen": int(reserva_out.get("reservas_sin_imagen") or 0),
         "pagos_eliminados": int(del_res.get("pagos_eliminados") or 0),
-        "ocr_ok": ok_n,
+        "ocr_ok": ocr_ok_n,
         "ocr_total": len(filas),
         "ocr_fallidos": ocr_fallidos,
         "advertencia_parcial": advertencia_parcial,
         "pagos_recriados": pagos_recriados,
+        "pago_id_abonos": pago_abonos.id,
         "total_pagos_recriados_usd": round(total_pagos_usd, 2),
+        "total_imagenes_ocr_usd": total_imagenes_ocr_usd,
         "abonos_drive": abonos_drive,
         "abonos_total_aplicado_usd": round(abonos_total_objetivo, 2),
-        "abonos_cuadra_total": abonos_cuadra_total,
-        "montos_abonos_distribuidos": [float(m) for m in montos_abonos],
-        "diferencia_drive_ocr_usd": diferencia_drive_ocr,
-        "diferencia_referencia_ocr_usd": diferencia_drive_ocr,
+        "abonos_cuadra_total": False,
+        "diferencia_drive_ocr_usd": round(total_imagenes_ocr_usd, 2),
+        "diferencia_referencia_ocr_usd": round(total_imagenes_ocr_usd, 2),
         "prestamo_estado_final": prestamo_estado_final,
         "prestamo_estado_previo": est_previo,
         "referencia_abonos": snap,
