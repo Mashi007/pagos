@@ -351,8 +351,98 @@ def _eliminar_pagos_con_errores_reemplazo_prestamo(
     return n
 
 
+def realinear_cuotas_prestamo_desde_cuota_pagos(db: Session, prestamo_id: int) -> dict[str, Any]:
+    """
+    Recalcula total_pagado y metadatos de cuotas desde cuota_pagos existentes.
+
+    Camino liviano tras eliminar un solo pago: no borra ni reaplica todos los pagos del crédito.
+    """
+    from app.services.cuota_estado import (
+        dias_retraso_desde_vencimiento,
+        hoy_negocio,
+        sincronizar_columna_estado_cuotas,
+    )
+    from app.services.pagos_cascada_aplicacion import _marcar_prestamo_liquidado_si_corresponde
+
+    prestamo = db.get(Prestamo, prestamo_id)
+    if not prestamo:
+        return {"ok": False, "error": "Prestamo no encontrado", "prestamo_id": prestamo_id}
+
+    cuotas = db.execute(
+        select(Cuota).where(Cuota.prestamo_id == prestamo_id).order_by(Cuota.numero_cuota.asc())
+    ).scalars().all()
+    if not cuotas:
+        return {"ok": False, "error": "El prestamo no tiene cuotas", "prestamo_id": prestamo_id}
+
+    cuota_ids = [c.id for c in cuotas if c.id is not None]
+    if cuota_ids:
+        db.execute(delete(ReporteContableCache).where(ReporteContableCache.cuota_id.in_(cuota_ids)))
+
+    hoy = hoy_negocio()
+    for c in cuotas:
+        sum_aplicado = float(
+            db.scalar(
+                select(func.coalesce(func.sum(CuotaPago.monto_aplicado), 0)).where(
+                    CuotaPago.cuota_id == c.id
+                )
+            )
+            or 0
+        )
+        c.total_pagado = Decimal(str(round(sum_aplicado, 2)))
+
+        ultimo_cp = db.execute(
+            select(CuotaPago.pago_id, CuotaPago.es_pago_completo, CuotaPago.fecha_aplicacion)
+            .where(CuotaPago.cuota_id == c.id)
+            .order_by(CuotaPago.orden_aplicacion.desc(), CuotaPago.id.desc())
+            .limit(1)
+        ).first()
+        c.pago_id = int(ultimo_cp[0]) if ultimo_cp and ultimo_cp[0] is not None else None
+
+        monto_cuota = float(c.monto or 0)
+        nuevo_total = float(c.total_pagado or 0)
+        fecha_venc = c.fecha_vencimiento
+        if fecha_venc is not None and hasattr(fecha_venc, "date"):
+            fecha_venc = fecha_venc.date()
+        fecha_venc = fecha_venc or hoy
+
+        if nuevo_total >= monto_cuota - 0.01 and monto_cuota > 0:
+            fecha_pago_row = None
+            if c.pago_id is not None:
+                fecha_pago_row = db.scalar(
+                    select(Pago.fecha_pago).where(Pago.id == c.pago_id)
+                )
+            if fecha_pago_row is not None and hasattr(fecha_pago_row, "date"):
+                c.fecha_pago = fecha_pago_row.date()
+            elif fecha_pago_row is not None:
+                c.fecha_pago = fecha_pago_row
+            else:
+                c.fecha_pago = None
+            c.dias_mora = 0
+            c.dias_morosidad = 0
+        else:
+            c.fecha_pago = None
+            c.dias_mora = dias_retraso_desde_vencimiento(fecha_venc, hoy) if nuevo_total > 0 else None
+            c.dias_morosidad = c.dias_mora
+
+    sincronizar_columna_estado_cuotas(db, list(cuotas), commit=False)
+    db.flush()
+    _marcar_prestamo_liquidado_si_corresponde(prestamo_id, db)
+
+    integ = integridad_cuotas_prestamo(db, prestamo_id)
+    return {
+        "ok": True,
+        "prestamo_id": prestamo_id,
+        "cuotas": len(cuotas),
+        "integridad_ok": bool(integ.get("integridad_ok")),
+        "requiere_reset_cascada": prestamo_requiere_correccion_cascada(db, prestamo_id),
+    }
+
+
 def reset_y_reaplicar_cascada_prestamo(db: Session, prestamo_id: int) -> dict[str, Any]:
-    from app.services.pagos_aplicacion_prestamo import aplicar_pagos_pendientes_prestamo
+    from app.services.pagos_aplicacion_prestamo import (
+        aplicar_pagos_pendientes_prestamo,
+        detalle_excepcion_db,
+    )
     from app.services.pagos_cascada_aplicacion import _marcar_prestamo_liquidado_si_corresponde
 
     prestamo = db.get(Prestamo, prestamo_id)
@@ -370,55 +460,68 @@ def reset_y_reaplicar_cascada_prestamo(db: Session, prestamo_id: int) -> dict[st
     cuota_pagos_eliminadas = -1
     cache_eliminadas = -1
 
-    if cuota_ids:
-        cuota_pagos_eliminadas = _delete_cuota_pagos_por_prestamo_sql(db, prestamo_id)
-        r2 = db.execute(delete(ReporteContableCache).where(ReporteContableCache.cuota_id.in_(cuota_ids)))
-        cache_eliminadas = int(getattr(r2, "rowcount", -1) or -1)
+    try:
+        if cuota_ids:
+            cuota_pagos_eliminadas = _delete_cuota_pagos_por_prestamo_sql(db, prestamo_id)
+            r2 = db.execute(delete(ReporteContableCache).where(ReporteContableCache.cuota_id.in_(cuota_ids)))
+            cache_eliminadas = int(getattr(r2, "rowcount", -1) or -1)
+            db.flush()
+
+        for c in cuotas:
+            c.total_pagado = Decimal("0")
+            c.fecha_pago = None
+            c.pago_id = None
+            c.dias_mora = None
+
+        sincronizar_columna_estado_cuotas(db, list(cuotas), commit=False)
         db.flush()
 
-    for c in cuotas:
-        c.total_pagado = Decimal("0")
-        c.fecha_pago = None
-        c.pago_id = None
-        c.dias_mora = None
-
-    sincronizar_columna_estado_cuotas(db, list(cuotas), commit=False)
-    db.flush()
-
-    restantes = db.scalar(
-        select(func.count())
-        .select_from(CuotaPago)
-        .join(Cuota, CuotaPago.cuota_id == Cuota.id)
-        .where(Cuota.prestamo_id == prestamo_id)
-    )
-    if restantes and int(restantes) > 0:
-        logger.warning(
-            "reset_cascada: quedan %s filas cuota_pagos tras DELETE SQL; reintento prestamo_id=%s",
-            int(restantes),
-            prestamo_id,
-        )
-        db.execute(_SQL_DELETE_CUOTA_PAGOS_POR_PRESTAMO, {"pid": prestamo_id})
-        db.flush()
         restantes = db.scalar(
             select(func.count())
             .select_from(CuotaPago)
             .join(Cuota, CuotaPago.cuota_id == Cuota.id)
             .where(Cuota.prestamo_id == prestamo_id)
         )
-    if restantes and int(restantes) > 0:
+        if restantes and int(restantes) > 0:
+            logger.warning(
+                "reset_cascada: quedan %s filas cuota_pagos tras DELETE SQL; reintento prestamo_id=%s",
+                int(restantes),
+                prestamo_id,
+            )
+            db.execute(_SQL_DELETE_CUOTA_PAGOS_POR_PRESTAMO, {"pid": prestamo_id})
+            db.flush()
+            restantes = db.scalar(
+                select(func.count())
+                .select_from(CuotaPago)
+                .join(Cuota, CuotaPago.cuota_id == Cuota.id)
+                .where(Cuota.prestamo_id == prestamo_id)
+            )
+        if restantes and int(restantes) > 0:
+            return {
+                "ok": False,
+                "error": f"Aun quedan {restantes} filas en cuota_pagos tras DELETE; abortar.",
+                "prestamo_id": prestamo_id,
+            }
+
+        pagos_reaplicados = aplicar_pagos_pendientes_prestamo(
+            prestamo_id,
+            db,
+            fail_fast=True,
+            marcar_liquidado=False,
+        )
+
+        cuotas_despues = db.execute(
+            select(Cuota).where(Cuota.prestamo_id == prestamo_id).order_by(Cuota.numero_cuota.asc())
+        ).scalars().all()
+        sincronizar_columna_estado_cuotas(db, list(cuotas_despues), commit=False)
+        _marcar_prestamo_liquidado_si_corresponde(prestamo_id, db)
+    except Exception as exc:
+        logger.exception("reset_y_reaplicar_cascada_prestamo prestamo_id=%s", prestamo_id)
         return {
             "ok": False,
-            "error": f"Aun quedan {restantes} filas en cuota_pagos tras DELETE; abortar.",
+            "error": detalle_excepcion_db(exc),
             "prestamo_id": prestamo_id,
         }
-
-    pagos_reaplicados = aplicar_pagos_pendientes_prestamo(prestamo_id, db)
-
-    cuotas_despues = db.execute(
-        select(Cuota).where(Cuota.prestamo_id == prestamo_id).order_by(Cuota.numero_cuota.asc())
-    ).scalars().all()
-    sincronizar_columna_estado_cuotas(db, list(cuotas_despues), commit=False)
-    _marcar_prestamo_liquidado_si_corresponde(prestamo_id, db)
 
     return {
         "ok": True,

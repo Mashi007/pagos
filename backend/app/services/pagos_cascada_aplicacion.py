@@ -133,7 +133,12 @@ def _marcar_prestamo_liquidado_si_corresponde(prestamo_id: int, db: Session) -> 
             )
 
 
-def _aplicar_pago_a_cuotas_interno(pago: Pago, db: Session) -> tuple[int, int]:
+def _aplicar_pago_a_cuotas_interno(
+    pago: Pago,
+    db: Session,
+    *,
+    marcar_liquidado: bool = True,
+) -> tuple[int, int]:
     """
     Aplica el monto del pago a cuotas del préstamo. Reglas de negocio.
 
@@ -292,7 +297,8 @@ def _aplicar_pago_a_cuotas_interno(pago: Pago, db: Session) -> tuple[int, int]:
         aplicacion_ms = _elapsed_ms(aplicacion_started)
 
         liquidacion_started = perf_counter()
-        _marcar_prestamo_liquidado_si_corresponde(prestamo_id, db)
+        if marcar_liquidado:
+            _marcar_prestamo_liquidado_si_corresponde(prestamo_id, db)
         liquidacion_ms = _elapsed_ms(liquidacion_started)
 
         if cuotas_completadas == 0 and cuotas_parciales == 0:

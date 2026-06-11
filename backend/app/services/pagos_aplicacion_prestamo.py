@@ -6,6 +6,7 @@ import logging
 from typing import Any
 
 from sqlalchemy import and_, func, not_, select
+from sqlalchemy.exc import PendingRollbackError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.models.cuota_pago import CuotaPago
@@ -20,7 +21,40 @@ from app.services.pagos_sql_where import (
 logger = logging.getLogger(__name__)
 
 
-def aplicar_pagos_pendientes_prestamo_con_diagnostico(prestamo_id: int, db: Session) -> dict[str, Any]:
+def detalle_excepcion_db(exc: BaseException, max_len: int = 300) -> str:
+    """Mensaje legible para UI/logs; prioriza la causa raíz psycopg/SQLAlchemy."""
+    causa: BaseException | None = exc
+    while getattr(causa, "__cause__", None) is not None:
+        causa = causa.__cause__  # type: ignore[assignment]
+    raiz = str(causa or exc).strip()
+    envoltorio = str(exc).strip()
+    if raiz and raiz != envoltorio and "rolled back" in envoltorio.lower():
+        msg = f"{envoltorio[:100]} | Causa: {raiz}"
+    else:
+        msg = raiz or envoltorio
+    return msg[:max_len]
+
+
+def _db_error_aborta_transaccion(exc: BaseException) -> bool:
+    """True si la sesión quedó inválida y no debe seguirse en la misma transacción."""
+    if isinstance(exc, PendingRollbackError):
+        return True
+    if isinstance(exc, SQLAlchemyError):
+        return True
+    msg = str(exc).lower()
+    if "rolled back" in msg and "previous exception" in msg:
+        return True
+    causa = getattr(exc, "__cause__", None)
+    return isinstance(causa, SQLAlchemyError)
+
+
+def aplicar_pagos_pendientes_prestamo_con_diagnostico(
+    prestamo_id: int,
+    db: Session,
+    *,
+    fail_fast: bool = False,
+    marcar_liquidado: bool = True,
+) -> dict[str, Any]:
     """
     Igual que aplicar_pagos_pendientes_prestamo pero devuelve diagnóstico para UI y soporte.
 
@@ -66,7 +100,9 @@ def aplicar_pagos_pendientes_prestamo_con_diagnostico(prestamo_id: int, db: Sess
 
     for pago in rows:
         try:
-            cc, cp = _aplicar_pago_a_cuotas_interno(pago, db)
+            cc, cp = _aplicar_pago_a_cuotas_interno(
+                pago, db, marcar_liquidado=marcar_liquidado
+            )
             if cc > 0 or cp > 0:
                 pago.estado = "PAGADO"
                 n += 1
@@ -79,6 +115,8 @@ def aplicar_pagos_pendientes_prestamo_con_diagnostico(prestamo_id: int, db: Sess
                 pago.id,
                 e,
             )
+            if fail_fast or _db_error_aborta_transaccion(e):
+                raise
             errores.append({"pago_id": int(pago.id), "error": str(e)})
 
     return {
@@ -93,7 +131,13 @@ def aplicar_pagos_pendientes_prestamo_con_diagnostico(prestamo_id: int, db: Sess
     }
 
 
-def aplicar_pagos_pendientes_prestamo(prestamo_id: int, db: Session) -> int:
+def aplicar_pagos_pendientes_prestamo(
+    prestamo_id: int,
+    db: Session,
+    *,
+    fail_fast: bool = False,
+    marcar_liquidado: bool = True,
+) -> int:
     """
     Aplica a cuotas los pagos del préstamo que aún no tienen enlaces en cuota_pagos.
 
@@ -102,7 +146,14 @@ def aplicar_pagos_pendientes_prestamo(prestamo_id: int, db: Session) -> int:
 
     No hace commit. Retorna el número de pagos a los que se les aplicó algo (cc o cp > 0).
     """
-    return int(aplicar_pagos_pendientes_prestamo_con_diagnostico(prestamo_id, db)["pagos_con_aplicacion"])
+    return int(
+        aplicar_pagos_pendientes_prestamo_con_diagnostico(
+            prestamo_id,
+            db,
+            fail_fast=fail_fast,
+            marcar_liquidado=marcar_liquidado,
+        )["pagos_con_aplicacion"]
+    )
 
 
 def aplicar_cascada_prestamo_pipeline(prestamo_id: int, db: Session) -> dict[str, Any]:

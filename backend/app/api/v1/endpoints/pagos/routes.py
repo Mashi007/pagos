@@ -6467,6 +6467,7 @@ def eliminar_pago(pago_id: int, db: Session = Depends(get_db)):
 
     try:
         db.execute(text("DELETE FROM auditoria_conciliacion_manual WHERE pago_id = :pid"), {"pid": pago_id})
+        db.execute(text("DELETE FROM auditoria_pago_control5_visto WHERE pago_id = :pid"), {"pid": pago_id})
         db.execute(text("DELETE FROM cuota_pagos WHERE pago_id = :pid"), {"pid": pago_id})
         db.execute(text("UPDATE cuotas SET pago_id = NULL WHERE pago_id = :pid"), {"pid": pago_id})
         db.execute(text("DELETE FROM revisar_pagos WHERE pago_id = :pid"), {"pid": pago_id})
@@ -6475,14 +6476,24 @@ def eliminar_pago(pago_id: int, db: Session = Depends(get_db)):
         db.flush()
 
         if prestamo_id_previo:
-            from app.services.pagos_cuotas_reaplicacion import reset_y_reaplicar_cascada_prestamo
+            from app.services.pagos_cuotas_reaplicacion import (
+                realinear_cuotas_prestamo_desde_cuota_pagos,
+                reset_y_reaplicar_cascada_prestamo,
+            )
 
-            r = reset_y_reaplicar_cascada_prestamo(db, prestamo_id_previo)
+            r = realinear_cuotas_prestamo_desde_cuota_pagos(db, prestamo_id_previo)
             if not r.get("ok"):
                 raise HTTPException(
                     status_code=500,
-                    detail=(r.get("error") or "No se pudo alinear cuotas tras eliminar el pago")[:300],
+                    detail=(r.get("error") or "No se pudo realinear cuotas tras eliminar el pago")[:400],
                 )
+            if r.get("requiere_reset_cascada"):
+                r = reset_y_reaplicar_cascada_prestamo(db, prestamo_id_previo)
+                if not r.get("ok"):
+                    raise HTTPException(
+                        status_code=500,
+                        detail=(r.get("error") or "No se pudo alinear cuotas tras eliminar el pago")[:400],
+                    )
 
         db.commit()
     except HTTPException:
@@ -6491,10 +6502,12 @@ def eliminar_pago(pago_id: int, db: Session = Depends(get_db)):
     except Exception as e:
         db.rollback()
         import logging
+        from app.services.pagos_aplicacion_prestamo import detalle_excepcion_db
+
         logging.getLogger(__name__).error("Error eliminando pago %s: %s", pago_id, e)
         raise HTTPException(
             status_code=500,
-            detail=f"Error al eliminar pago {pago_id}: {str(e)[:200]}"
+            detail=f"Error al eliminar pago {pago_id}: {detalle_excepcion_db(e, max_len=400)}",
         ) from e
 
     return None

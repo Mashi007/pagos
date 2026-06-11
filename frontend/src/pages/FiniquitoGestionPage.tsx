@@ -509,6 +509,8 @@ function FiniquitoGestionPageInner() {
 
   const [cedulaInput, setCedulaInput] = useState('')
   const [cedulaBusqueda, setCedulaBusqueda] = useState('')
+  const [cedulaRevisionInput, setCedulaRevisionInput] = useState('')
+  const [cedulaRevisionBusqueda, setCedulaRevisionBusqueda] = useState('')
   const [cedulaTrabajoInput, setCedulaTrabajoInput] = useState('')
   const [cedulaTrabajoBusqueda, setCedulaTrabajoBusqueda] = useState('')
   const [itemsAreaRevision, setItemsAreaRevision] = useState<FiniquitoCasoItem[]>(
@@ -590,6 +592,14 @@ function FiniquitoGestionPageInner() {
     )
     return () => window.clearTimeout(t)
   }, [cedulaInput])
+
+  useEffect(() => {
+    const t = window.setTimeout(
+      () => setCedulaRevisionBusqueda(cedulaRevisionInput.trim()),
+      DEBOUNCE_MS
+    )
+    return () => window.clearTimeout(t)
+  }, [cedulaRevisionInput])
 
   useEffect(() => {
     const t = window.setTimeout(
@@ -688,7 +698,7 @@ function FiniquitoGestionPageInner() {
       try {
         const rRevision = await finiquitoAdminListar(
           'ACEPTADO',
-          undefined,
+          cedulaRevisionBusqueda || undefined,
           undefined,
           { limit: FETCH_LIMIT, offset: 0 }
         )
@@ -707,7 +717,7 @@ function FiniquitoGestionPageInner() {
         if (!silent) setAreaLoadingFlag('revision', false)
       }
     },
-    [marcarAreaCargada, setAreaLoadingFlag]
+    [cedulaRevisionBusqueda, marcarAreaCargada, setAreaLoadingFlag]
   )
 
   const cargarAreaTrabajo = useCallback(
@@ -806,7 +816,9 @@ function FiniquitoGestionPageInner() {
   /** Mueve filas locales al instante con el caso devuelto por PATCH (antes del refetch). */
   const incorporarCasoActualizado = useCallback(
     (caso: FiniquitoCasoItem) => {
-      const debeAreaRevision = caso.estado === 'ACEPTADO'
+      const debeAreaRevision =
+        caso.estado === 'ACEPTADO' &&
+        casoCoincideCedula(caso, cedulaRevisionBusqueda)
       const debeAreaTrabajo =
         caso.estado === 'EN_PROCESO' &&
         casoCoincideCedula(caso, cedulaTrabajoBusqueda)
@@ -835,6 +847,7 @@ function FiniquitoGestionPageInner() {
     },
     [
       cedulaBusqueda,
+      cedulaRevisionBusqueda,
       cedulaTrabajoBusqueda,
       itemsAreaRevision,
       itemsAreaTrabajo,
@@ -846,6 +859,11 @@ function FiniquitoGestionPageInner() {
     void cargarResumenKpis()
     void cargarBandeja()
   }, [cargarBandeja, cargarResumenKpis])
+
+  useEffect(() => {
+    if (!areasCargadas.revision) return
+    void cargarAreaRevision()
+  }, [areasCargadas.revision, cedulaRevisionBusqueda, cargarAreaRevision])
 
   useEffect(() => {
     if (!areasCargadas.trabajo) return
@@ -1103,6 +1121,11 @@ function FiniquitoGestionPageInner() {
   const limpiarCedula = () => {
     setCedulaInput('')
     setCedulaBusqueda('')
+  }
+
+  const limpiarCedulaRevision = () => {
+    setCedulaRevisionInput('')
+    setCedulaRevisionBusqueda('')
   }
 
   const limpiarCedulaTrabajo = () => {
@@ -1626,7 +1649,9 @@ function FiniquitoGestionPageInner() {
   const displayTotalBandeja = cedulaBusqueda
     ? totalBandeja
     : (resumenEstado?.revision ?? totalBandeja)
-  const displayTotalRevision = resumenEstado?.aceptado ?? totalAreaRevision
+  const displayTotalRevision = cedulaRevisionBusqueda
+    ? totalAreaRevision
+    : (resumenEstado?.aceptado ?? totalAreaRevision)
   const displayTotalTrabajo = cedulaTrabajoBusqueda
     ? totalAreaTrabajo
     : (resumenEstado?.en_proceso ?? totalAreaTrabajo)
@@ -1750,6 +1775,7 @@ function FiniquitoGestionPageInner() {
             </p>
             <p className="text-xs text-slate-500">
               Hasta {AREA_REVISION_DIAS_MAX}d · atrasado dia 6 de fase
+              {cedulaRevisionBusqueda ? ' (filtro cedula)' : ''}
             </p>
           </CardContent>
         </Card>
@@ -1905,6 +1931,71 @@ function FiniquitoGestionPageInner() {
             </div>
           </div>
         </div>
+        <div className="border-b border-amber-200/70 bg-amber-50/40 px-4 py-3.5 sm:px-5">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+            <p className="max-w-xl text-xs text-amber-950/85">
+              Filtro propio de esta área (independiente de bandeja y trabajo).
+              Escriba parte de la cédula (~{DEBOUNCE_MS / 1000} s tras dejar de
+              escribir).
+            </p>
+            <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-end lg:w-auto lg:min-w-[320px]">
+              <div className="min-w-0 flex-1 space-y-1.5">
+                <Label
+                  htmlFor="finiquito-filtro-cedula-revision"
+                  className="text-xs font-semibold text-amber-950"
+                >
+                  Filtrar por cédula
+                </Label>
+                <div className="relative">
+                  <Search
+                    className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-amber-700/70"
+                    aria-hidden
+                  />
+                  <Input
+                    id="finiquito-filtro-cedula-revision"
+                    type="search"
+                    autoComplete="off"
+                    placeholder="Ej. V17037221 o parte del número"
+                    value={cedulaRevisionInput}
+                    onChange={e => setCedulaRevisionInput(e.target.value)}
+                    className="h-10 border-amber-200 bg-white pl-9 pr-10 font-mono text-sm"
+                  />
+                  {cedulaRevisionInput ? (
+                    <button
+                      type="button"
+                      className="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md text-amber-800 hover:bg-amber-100"
+                      onClick={limpiarCedulaRevision}
+                      title="Limpiar filtro"
+                      aria-label="Limpiar filtro de cédula en área de revisión"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-10 shrink-0 border-amber-300 bg-white"
+                disabled={areasLoading.revision}
+                onClick={() => void cargarAreaRevision()}
+              >
+                {areasLoading.revision ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  'Recargar'
+                )}
+              </Button>
+            </div>
+          </div>
+          {cedulaRevisionBusqueda ? (
+            <p className="mt-3 text-xs text-amber-950/85">
+              Filtro activo (área de revisión):{' '}
+              <span className="font-mono font-semibold">{cedulaRevisionBusqueda}</span>
+            </p>
+          ) : null}
+        </div>
         <div>
           <div className="p-3 sm:p-4">
             {!areasCargadas.revision ? (
@@ -1919,8 +2010,9 @@ function FiniquitoGestionPageInner() {
               </div>
             ) : itemsAreaRevision.length === 0 ? (
               <p className="rounded-lg border border-dashed border-amber-200/90 bg-white/50 px-4 py-10 text-center text-sm text-amber-950/85">
-                No hay casos validados pendientes. Al pulsar Validar en la
-                bandeja principal aparecen aqui.
+                {cedulaRevisionBusqueda
+                  ? 'Ningún caso en el área de revisión coincide con esa cédula.'
+                  : 'No hay casos validados pendientes. Al pulsar Validar en la bandeja principal aparecen aqui.'}
               </p>
             ) : (
               <>
