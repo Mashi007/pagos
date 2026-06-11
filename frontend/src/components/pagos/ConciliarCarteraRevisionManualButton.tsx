@@ -46,7 +46,10 @@ import {
 
 } from '../../pages/notificaciones/notificacionesPageCells'
 
-import type { ConciliarCarteraFaseTabla } from './ConciliarCarteraPagosProgreso'
+import {
+  ConciliarCarteraPagosProgreso,
+  type ConciliarCarteraFaseTabla,
+} from './ConciliarCarteraPagosProgreso'
 
 
 
@@ -57,6 +60,12 @@ type Props = {
   cedula: string
 
   disabled?: boolean
+
+  faseTabla?: ConciliarCarteraFaseTabla | null
+
+  idsAnterioresTabla?: number[]
+
+  pagosAntesTabla?: number
 
   onEjecutarInicio?: () => void
 
@@ -81,6 +90,12 @@ export function ConciliarCarteraRevisionManualButton({
   cedula,
 
   disabled,
+
+  faseTabla,
+
+  idsAnterioresTabla = [],
+
+  pagosAntesTabla = 0,
 
   onEjecutarInicio,
 
@@ -588,6 +603,22 @@ export function ConciliarCarteraRevisionManualButton({
 
               </div>
 
+              {idsAnterioresTabla.length > 0 ? (
+                <p className="rounded border border-sky-200 bg-sky-50 p-3 text-sm text-sky-950">
+                  <span className="line-through text-muted-foreground">
+                    ID eliminados: {idsAnterioresTabla.join(', ')}
+                  </span>
+                  <span className="mx-2">→</span>
+                  <span className="font-semibold">
+                    ID nuevos:{' '}
+                    {resultado.detalle
+                      ?.filter(d => d.ok && d.pago_id)
+                      .map(d => d.pago_id)
+                      .join(', ') || '—'}
+                  </span>
+                </p>
+              ) : null}
+
               <ul className="space-y-2 rounded border bg-slate-50 p-3">
 
                 <li>
@@ -741,6 +772,34 @@ export function ConciliarCarteraRevisionManualButton({
               <Loader2 className="h-5 w-5 animate-spin" />
 
               Leyendo ABONOS (Notificaciones → General)…
+
+            </div>
+
+          ) : ejecutando && faseTabla && faseTabla !== 'listo' ? (
+
+            <div className="space-y-3">
+
+              <ConciliarCarteraPagosProgreso
+
+                fase={faseTabla}
+
+                prestamoId={pid}
+
+                pagosAntes={pagosAntesTabla}
+
+                idsAnteriores={idsAnterioresTabla}
+
+              />
+
+              <p className="text-xs text-muted-foreground">
+
+                La sección «Pagos registrados en cartera» (debajo) también muestra
+
+                este progreso. Los montos pueden repetirse; los <strong>ID</strong>{' '}
+
+                serán distintos tras recargar.
+
+              </p>
 
             </div>
 

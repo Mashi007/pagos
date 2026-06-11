@@ -275,10 +275,12 @@ export function EditarRevisionManual() {
   const [conciliarTablaUi, setConciliarTablaUi] = useState<{
     fase: ConciliarCarteraFaseTabla
     pagosAntes: number
+    idsAnteriores?: number[]
     idsRecreados?: number[]
     ocrOk?: number
     ocrTotal?: number
   } | null>(null)
+  const pagosRegistradosCardRef = useRef<HTMLDivElement>(null)
   const conciliarListoTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
     null
   )
@@ -731,13 +733,19 @@ export function EditarRevisionManual() {
     })
   }, [pagosRealizadosData?.pagos])
 
-  const contarPagosPrestamoEnTabla = useCallback(() => {
+  const idsPagosPrestamoEnTabla = useCallback((): number[] => {
     const pid = Number(prestamoData.prestamo_id)
-    if (!Number.isFinite(pid) || pid <= 0) return 0
-    return (pagosRealizadosData?.pagos ?? []).filter(
-      p => Number(p.prestamo_id) === pid
-    ).length
+    if (!Number.isFinite(pid) || pid <= 0) return []
+    return (pagosRealizadosData?.pagos ?? [])
+      .filter(p => Number(p.prestamo_id) === pid)
+      .map(p => Number(p.id))
+      .filter(id => Number.isFinite(id) && id > 0)
   }, [pagosRealizadosData?.pagos, prestamoData.prestamo_id])
+
+  const contarPagosPrestamoEnTabla = useCallback(
+    () => idsPagosPrestamoEnTabla().length,
+    [idsPagosPrestamoEnTabla]
+  )
 
   useEffect(() => {
     return () => {
@@ -839,6 +847,7 @@ export function EditarRevisionManual() {
       setConciliarTablaUi(prev => ({
         fase: 'recargando',
         pagosAntes: prev?.pagosAntes ?? 0,
+        idsAnteriores: prev?.idsAnteriores ?? [],
         idsRecreados: ids,
         ocrOk: res.ocr_ok,
         ocrTotal: res.ocr_total,
@@ -848,10 +857,15 @@ export function EditarRevisionManual() {
       setConciliarTablaUi(prev => ({
         fase: 'listo',
         pagosAntes: prev?.pagosAntes ?? 0,
+        idsAnteriores: prev?.idsAnteriores ?? [],
         idsRecreados: ids,
         ocrOk: res.ocr_ok,
         ocrTotal: res.ocr_total,
       }))
+      pagosRegistradosCardRef.current?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'nearest',
+      })
       if (conciliarListoTimeoutRef.current) {
         clearTimeout(conciliarListoTimeoutRef.current)
       }
@@ -3407,7 +3421,7 @@ export function EditarRevisionManual() {
             {/* Pagos reales en tabla pagos (mismo origen que carga masiva / módulo Pagos) */}
             {cedulaParaPagosRealizados ? (
               <>
-                <Card>
+                <Card ref={pagosRegistradosCardRef}>
                   <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-2 space-y-0 pb-2">
                     <div>
                       <CardTitle className="flex items-center gap-2 text-base">
@@ -3501,17 +3515,30 @@ export function EditarRevisionManual() {
                           prestamoId={Number(prestamoData.prestamo_id)}
                           cedula={cedulaParaPagosRealizados}
                           disabled={soloLectura || conciliarTablaUi != null}
+                          faseTabla={conciliarTablaUi?.fase ?? null}
+                          idsAnterioresTabla={conciliarTablaUi?.idsAnteriores ?? []}
+                          pagosAntesTabla={conciliarTablaUi?.pagosAntes ?? 0}
                           onEjecutarInicio={() => {
+                            const idsAnt = idsPagosPrestamoEnTabla()
                             setConciliarTablaUi({
                               fase: 'borrando',
-                              pagosAntes: contarPagosPrestamoEnTabla(),
+                              pagosAntes: idsAnt.length,
+                              idsAnteriores: idsAnt,
+                            })
+                            pagosRegistradosCardRef.current?.scrollIntoView({
+                              behavior: 'smooth',
+                              block: 'start',
                             })
                           }}
                           onProgresoTabla={fase => {
                             setConciliarTablaUi(prev =>
                               prev
                                 ? { ...prev, fase }
-                                : { fase, pagosAntes: contarPagosPrestamoEnTabla() }
+                                : {
+                                    fase,
+                                    pagosAntes: contarPagosPrestamoEnTabla(),
+                                    idsAnteriores: idsPagosPrestamoEnTabla(),
+                                  }
                             )
                           }}
                           onEjecutarError={limpiarConciliarTablaUi}
@@ -3527,6 +3554,7 @@ export function EditarRevisionManual() {
                         fase={conciliarTablaUi.fase}
                         prestamoId={Number(prestamoData.prestamo_id)}
                         pagosAntes={conciliarTablaUi.pagosAntes}
+                        idsAnteriores={conciliarTablaUi.idsAnteriores}
                         idsRecreados={conciliarTablaUi.idsRecreados}
                         ocrOk={conciliarTablaUi.ocrOk}
                         ocrTotal={conciliarTablaUi.ocrTotal}
@@ -3581,6 +3609,7 @@ export function EditarRevisionManual() {
                               fase="listo"
                               prestamoId={Number(prestamoData.prestamo_id)}
                               pagosAntes={conciliarTablaUi.pagosAntes}
+                              idsAnteriores={conciliarTablaUi.idsAnteriores}
                               idsRecreados={conciliarTablaUi.idsRecreados}
                               ocrOk={conciliarTablaUi.ocrOk}
                               ocrTotal={conciliarTablaUi.ocrTotal}

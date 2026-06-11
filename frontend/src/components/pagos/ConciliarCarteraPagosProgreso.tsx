@@ -11,6 +11,7 @@ type Props = {
   fase: ConciliarCarteraFaseTabla
   prestamoId: number
   pagosAntes?: number
+  idsAnteriores?: number[]
   idsRecreados?: number[]
   ocrOk?: number
   ocrTotal?: number
@@ -37,6 +38,7 @@ export function ConciliarCarteraPagosProgreso({
   fase,
   prestamoId,
   pagosAntes = 0,
+  idsAnteriores = [],
   idsRecreados = [],
   ocrOk,
   ocrTotal,
@@ -51,19 +53,36 @@ export function ConciliarCarteraPagosProgreso({
           Pagos recreados y cargados en la tabla
         </p>
         <p className="text-sm text-green-800">
-          Préstamo <strong>{prestamoId}</strong>: se borraron los pagos anteriores
-          {pagosAntes > 0 ? ` (${pagosAntes})` : ''} y se cargaron{' '}
-          <strong>{idsRecreados.length || ocrOk || '—'}</strong> fila(s) nueva(s)
-          {idsRecreados.length > 0
-            ? ` (ID ${idsRecreados.join(', ')})`
-            : ''}
-          .
-          {ocrOk != null && ocrTotal != null ? (
-            <span className="block mt-1 text-muted-foreground">
-              OCR: {ocrOk}/{ocrTotal} correctos.
-            </span>
-          ) : null}
+          Préstamo <strong>{prestamoId}</strong>: la cartera se reconstruyó en BD.
         </p>
+        {idsAnteriores.length > 0 ? (
+          <p className="mt-2 text-sm text-green-900">
+            <span className="text-muted-foreground line-through">
+              ID borrados: {idsAnteriores.join(', ')}
+            </span>
+            <span className="mx-2">→</span>
+            <span className="font-semibold">
+              ID nuevos: {idsRecreados.length > 0 ? idsRecreados.join(', ') : '—'}
+            </span>
+          </p>
+        ) : (
+          <p className="mt-2 text-sm text-green-800">
+            Nuevos pagos:{' '}
+            <strong>
+              {idsRecreados.length > 0 ? idsRecreados.join(', ') : ocrOk ?? '—'}
+            </strong>
+          </p>
+        )}
+        <p className="mt-1 text-xs text-muted-foreground">
+          Los montos pueden verse iguales si el OCR leyó los mismos valores en cada
+          comprobante ({pagosAntes > 0 ? `${pagosAntes} pago(s)` : 'cartera'}{' '}
+          recreados).
+        </p>
+        {ocrOk != null && ocrTotal != null ? (
+          <p className="text-xs text-muted-foreground">
+            OCR: {ocrOk}/{ocrTotal} correctos.
+          </p>
+        ) : null}
       </div>
     )
   }
@@ -106,9 +125,20 @@ export function ConciliarCarteraPagosProgreso({
           )
         })}
       </ul>
+      {idsAnteriores.length > 0 ? (
+        <p className="rounded border border-red-200 bg-red-50/90 px-3 py-2 text-xs text-red-900">
+          Desapareciendo de la tabla:{' '}
+          <span className="font-mono line-through">{idsAnteriores.join(', ')}</span>
+        </p>
+      ) : null}
       {fase === 'borrando' ? (
         <p className="text-xs text-amber-900/80 animate-pulse">
-          La lista de pagos se vacía mientras se procesa en el servidor…
+          La lista de pagos se oculta mientras el servidor borra y recrea en BD…
+        </p>
+      ) : null}
+      {fase === 'recargando' ? (
+        <p className="text-xs text-amber-900/80">
+          Cargando filas nuevas en la tabla (ID distintos a los anteriores)…
         </p>
       ) : null}
     </div>
