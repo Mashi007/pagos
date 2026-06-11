@@ -2572,6 +2572,13 @@ class ConciliarCarteraRevisionBody(BaseModel):
         None,
         description="Escriba CONFIRMO si ABONOS (Notificaciones → General) supera el umbral.",
     )
+    confirmar_sin_comprobantes: bool = Field(
+        False,
+        description=(
+            "Tras confirmación del usuario: continuar aunque no haya comprobantes "
+            "reservables (solo asiento ABONOS + cascada)."
+        ),
+    )
 
 
 @router.post("/prestamos/{prestamo_id}/conciliar-cartera")
@@ -2603,6 +2610,7 @@ async def conciliar_cartera_revision_manual(
             actor,
             lote=(body.lote or "").strip() or None,
             confirmacion_montos_altos=body.confirmacion_montos_altos,
+            confirmar_sin_comprobantes=bool(body.confirmar_sin_comprobantes),
         )
         if not r.get("ok"):
             if r.get("requiere_seleccion_lote") or r.get("requiere_confirmacion_montos_altos"):

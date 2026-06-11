@@ -143,7 +143,12 @@ def map_conciliacion_visto_activa_por_caso(
     return {cid: activos.get(cid, False) for cid in caso_ids}
 
 
-def iniciar_visto_reserva(db: Session, caso_id: int) -> Dict[str, Any]:
+def iniciar_visto_reserva(
+    db: Session,
+    caso_id: int,
+    *,
+    confirmar_sin_comprobantes: bool = False,
+) -> Dict[str, Any]:
     caso = db.get(FiniquitoCaso, caso_id)
     if not caso:
         return {"ok": False, "error": "Caso no encontrado"}
@@ -179,11 +184,6 @@ def iniciar_visto_reserva(db: Session, caso_id: int) -> Dict[str, Any]:
         .all()
     )
     con_img = [p for p in pagos if _tiene_comprobante(p)]
-    if not con_img:
-        return {
-            "ok": False,
-            "error": "No hay pagos con comprobante (link o documento) para reservar.",
-        }
 
     orden = 0
     omitidos_sin_bytes: List[str] = []
@@ -233,7 +233,20 @@ def iniciar_visto_reserva(db: Session, caso_id: int) -> Dict[str, Any]:
             )
         )
 
-    if orden == 0:
+    sin_imagenes_reservables = orden == 0
+    if sin_imagenes_reservables and not confirmar_sin_comprobantes:
+        if not pagos:
+            return {
+                "ok": False,
+                "error": "No hay pagos en este préstamo para reservar comprobantes.",
+                "requiere_confirmacion_sin_comprobantes": True,
+            }
+        if not con_img:
+            return {
+                "ok": False,
+                "error": "No hay pagos con comprobante (link o documento) para reservar.",
+                "requiere_confirmacion_sin_comprobantes": True,
+            }
         det = (
             f" ({len(omitidos_sin_bytes)} con link pero sin poder guardar imagen)"
             if omitidos_sin_bytes
@@ -244,11 +257,13 @@ def iniciar_visto_reserva(db: Session, caso_id: int) -> Dict[str, Any]:
             "error": (
                 "No se pudo guardar ningun comprobante en la reserva temporal"
                 + det
-                + ". Revise BD/Drive antes de Visto."
+                + ". Revise BD/Drive o confirme para continuar sin reserva."
             ),
+            "requiere_confirmacion_sin_comprobantes": True,
         }
 
-    db.flush()
+    if orden > 0:
+        db.flush()
 
     # Reserva persistida en la misma transaccion antes de borrar pagos (excepcion LIQUIDADO).
     del_res = eliminar_todos_pagos_prestamo(db, int(caso.prestamo_id))
@@ -262,12 +277,19 @@ def iniciar_visto_reserva(db: Session, caso_id: int) -> Dict[str, Any]:
         }
 
     n_del = int(del_res.get("pagos_eliminados") or 0)
-    msg = (
-        f"Guardados {orden} comprobante(s) en reserva (imagen en BD temporal); "
-        f"eliminados {n_del} pago(s) del prestamo."
-    )
-    if omitidos_sin_bytes:
-        msg += f" Omitidos sin imagen guardada: {len(omitidos_sin_bytes)}."
+    if sin_imagenes_reservables:
+        msg = (
+            f"Sin comprobantes reservados (confirmado); eliminados {n_del} pago(s) del prestamo."
+            if n_del
+            else "Sin comprobantes ni pagos en cartera; continuando segun confirmacion."
+        )
+    else:
+        msg = (
+            f"Guardados {orden} comprobante(s) en reserva (imagen en BD temporal); "
+            f"eliminados {n_del} pago(s) del prestamo."
+        )
+        if omitidos_sin_bytes:
+            msg += f" Omitidos sin imagen guardada: {len(omitidos_sin_bytes)}."
     return {
         "ok": True,
         "ya_iniciado": False,

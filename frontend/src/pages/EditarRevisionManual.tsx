@@ -74,7 +74,6 @@ import { toast } from 'sonner'
 import { formatDate } from '../utils'
 
 import { revisionManualService } from '../services/revisionManualService'
-import { finiquitoAdminRecrearOcr } from '../services/finiquitoService'
 
 import {
   pagoService,
@@ -191,15 +190,6 @@ export function EditarRevisionManual() {
   const vieneDesdeFiniquitos =
     returnToRevision === RUTA_RETORNO_FINIQUITOS_GESTION ||
     Boolean(returnToRevision?.startsWith(`${RUTA_RETORNO_FINIQUITOS_GESTION}?`))
-
-  const finiquitoCasoId = useMemo(() => {
-    const raw = (location.state as { finiquitoCasoId?: unknown } | null)
-      ?.finiquitoCasoId
-    const n = typeof raw === 'number' ? raw : parseInt(String(raw ?? ''), 10)
-    return Number.isFinite(n) && n > 0 ? n : null
-  }, [location.state])
-
-  const [recreandoOcrFiniquito, setRecreandoOcrFiniquito] = useState(false)
 
   const irAListaPrestamos = () => {
     const scrollPosition = window.scrollY
@@ -3357,67 +3347,6 @@ export function EditarRevisionManual() {
               </CardContent>
             </Card>
 
-            {finiquitoCasoId != null ? (
-              <Card className="border-amber-200 bg-amber-50/80">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-base text-amber-950">
-                    Conciliacion finiquito (Visto)
-                  </CardTitle>
-                  <p className="text-sm text-amber-900/90">
-                    Tras el primer Visto el sistema guardó la imagen de cada
-                    comprobante en la reserva temporal y borró los pagos del
-                    crédito. Use el botón de abajo para el pipeline completo:
-                    recrea pagos, OCR Gemini sobre esas imágenes, cascada a
-                    cuotas y LIQUIDADO si cuadra (mismas reglas que revisión
-                    manual). Al terminar use la X en el área de revisión de
-                    finiquitos para pasar a área de trabajo.
-                  </p>
-                </CardHeader>
-                <CardContent className="flex flex-wrap gap-2 pt-0">
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    disabled={soloLectura || recreandoOcrFiniquito}
-                    onClick={async () => {
-                      setRecreandoOcrFiniquito(true)
-                      try {
-                        const r = await finiquitoAdminRecrearOcr(finiquitoCasoId)
-                        if (!r.ok) {
-                          toast.error(r.error || 'No se pudo ejecutar el pipeline Visto')
-                          return
-                        }
-                        const cascadaOk = r.cascada?.ok !== false
-                        const msg =
-                          r.mensaje ||
-                          `Pipeline: OCR ${r.ocr_ok ?? 0}/${r.total ?? 0}` +
-                            (r.cascada?.prestamo_estado
-                              ? ` · Préstamo ${r.cascada.prestamo_estado}`
-                              : '')
-                        if (cascadaOk) {
-                          toast.success(msg)
-                        } else {
-                          toast.warning(msg)
-                        }
-                        await refrescarTrasCambioPagosRevision()
-                      } catch (err: unknown) {
-                        toast.error(getErrorMessage(err))
-                      } finally {
-                        setRecreandoOcrFiniquito(false)
-                      }
-                    }}
-                  >
-                    {recreandoOcrFiniquito ? (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    ) : (
-                      <RefreshCw className="mr-2 h-4 w-4" />
-                    )}
-                    Recrear pagos, OCR y cascada
-                  </Button>
-                </CardContent>
-              </Card>
-            ) : null}
-
             {/* Pagos reales en tabla pagos (mismo origen que carga masiva / módulo Pagos) */}
             {cedulaParaPagosRealizados ? (
               <>
@@ -3428,6 +3357,15 @@ export function EditarRevisionManual() {
                         <CreditCard className="h-5 w-5" />
                         Pagos registrados en cartera
                       </CardTitle>
+                      {vieneDesdeFiniquitos ? (
+                        <p className="mt-1 max-w-2xl text-xs text-muted-foreground">
+                          Desde finiquitos: use solo{' '}
+                          <strong className="text-amber-950">Conciliar</strong>{' '}
+                          (reserva comprobantes, ABONOS de Notificaciones →
+                          General, OCR y cascada). Al terminar, vuelva a
+                          finiquitos y pase el caso al área de trabajo.
+                        </p>
+                      ) : null}
                     </div>
                     <div className="flex shrink-0 flex-wrap items-center gap-2">
                       <Button

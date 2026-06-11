@@ -30,14 +30,6 @@ import { Input } from '../../components/ui/input'
 import { Textarea } from '../../components/ui/textarea'
 
 import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '../../components/ui/dialog'
-
-import {
   Select,
   SelectContent,
   SelectItem,
@@ -551,7 +543,6 @@ export function RegistrarPagoForm({
     }
   }, [archivoComprobante])
 
-  const [vistoRevisionManualOpen, setVistoRevisionManualOpen] = useState(false)
   const [isRescanning, setIsRescanning] = useState(false)
 
   const [formData, setFormData] = useState<PagoCreate>({
@@ -1428,21 +1419,13 @@ export function RegistrarPagoForm({
     ) {
       const msgDoc =
         modoGuardarYProcesar && esPagoConError && revisionManualFullEdit
-          ? 'Comprobante duplicado en cartera: pulse Visto para asignar un Código automático antes de guardar y procesar.'
-          : 'Este comprobante o serial ya está registrado en la base de datos. Use Visto para asignar un código distinto o corrija el número de documento.'
+          ? 'Comprobante duplicado en cartera. Pulse Visto (abajo) una sola vez; asigna el código y guarda.'
+          : 'Comprobante duplicado. Pulse Visto (abajo) una sola vez o corrija el número de documento.'
       setErrors(prev => ({
         ...prev,
         general: msgDoc,
         numero_documento: DUPLICADO_DOCUMENTO_UI,
       }))
-      if (
-        mostrarCampoCodigoDocumento &&
-        revisionManualFullEdit &&
-        modoGuardarYProcesar
-      ) {
-        setVistoRevisionManualOpen(true)
-        window.setTimeout(() => codigoDocumentoInputRef.current?.focus(), 0)
-      }
       return
     }
 
@@ -1579,19 +1562,16 @@ export function RegistrarPagoForm({
               setErrors(prev => ({
                 ...prev,
                 general: dupDocumentoCartera
-                  ? 'Comprobante duplicado en cartera: ese comprobante ya está registrado en pagos. Pulse «Visto» para asignar un código (sufijo) distinto y guarde de nuevo; sin código distinto «Guardar y procesar» no puede mover el pago.'
+                  ? 'Comprobante duplicado en cartera. Pulse Visto (abajo) una sola vez y vuelva a «Guardar y procesar».'
                   : detalle,
               }))
 
-              toast.error(detalle, { duration: 7000 })
-
-              if (
-                dupDocumentoCartera &&
-                mostrarCampoCodigoDocumento &&
-                revisionManualFullEdit
-              ) {
-                setVistoRevisionManualOpen(true)
-              }
+              toast.error(
+                dupDocumentoCartera
+                  ? 'Duplicado en cartera: use Visto una vez (barra morada).'
+                  : detalle,
+                { duration: 7000 }
+              )
 
               onSuccess(false)
 
@@ -1824,20 +1804,15 @@ export function RegistrarPagoForm({
         return
       }
 
-      if (
-        esDocumentoDuplicado &&
-        mostrarCampoCodigoDocumento &&
-        revisionManualFullEdit &&
-        !bloquearCambioComprobanteCodigo
-      ) {
-        setVistoRevisionManualOpen(true)
-        window.setTimeout(() => codigoDocumentoInputRef.current?.focus(), 0)
-      }
-
       setErrors({
         general:
-          errorMessage ||
-          `Error al ${isEditing ? 'actualizar' : 'registrar'} el pago`,
+          esDocumentoDuplicado &&
+          mostrarCampoCodigoDocumento &&
+          revisionManualFullEdit &&
+          !bloquearCambioComprobanteCodigo
+            ? 'Comprobante duplicado. Pulse Visto (abajo) una sola vez.'
+            : errorMessage ||
+              `Error al ${isEditing ? 'actualizar' : 'registrar'} el pago`,
       })
     } finally {
       setIsSubmitting(false)
@@ -1892,6 +1867,32 @@ export function RegistrarPagoForm({
     }
   }
 
+  const limpiarAvisosDuplicadoDocumento = () => {
+    setErrors(prev => {
+      const next = { ...prev }
+      delete next.numero_documento
+      const g = next.general
+      if (
+        g === DUPLICADO_DOCUMENTO_UI ||
+        g === DUPLICADO_HUELLA_UI ||
+        (g &&
+          (g.toLowerCase().includes('comprobante') ||
+            g.toLowerCase().includes('documento') ||
+            g.toLowerCase().includes('duplicado')))
+      ) {
+        delete next.general
+      }
+      return next
+    })
+  }
+
+  const autorizarSinCambiarDocumento = () => {
+    limpiarAvisosDuplicadoDocumento()
+    toast.success(
+      'Avisos de duplicado quitados. Si al guardar sigue el conflicto, use Visto una vez.'
+    )
+  }
+
   /** Visto (revisión manual): desambigua con código A####/P#### en el campo Código y guarda (BD almacena comprobante + §CD: + código). */
   const handleVistoRellenarCodigoYGuardar = async () => {
     if (
@@ -1927,20 +1928,7 @@ export function RegistrarPagoForm({
     }
 
     setFormData(fd)
-
-    setErrors(prev => {
-      const next = { ...prev }
-      delete next.numero_documento
-      delete next.codigo_documento
-      const g = next.general
-      if (
-        g === DUPLICADO_DOCUMENTO_UI ||
-        (g && g.toLowerCase().includes('documento'))
-      ) {
-        delete next.general
-      }
-      return next
-    })
+    limpiarAvisosDuplicadoDocumento()
 
     await submitPago(fd)
   }
@@ -2852,15 +2840,17 @@ export function RegistrarPagoForm({
                   <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-violet-200/70 bg-violet-50 px-3 py-2">
                     <p className="min-w-0 flex-1 text-xs text-violet-900">
                       <span className="font-medium">Revisión manual:</span>{' '}
-                      Visto pone el código y guarda.
+                      si hay duplicado, pulse{' '}
+                      <strong>Visto</strong> una vez (asigna código A####/P####
+                      y guarda). No repita el paso si ya asignó código.
                     </p>
                     <div className="flex shrink-0 items-center gap-2">
                       <button
                         type="button"
                         className="text-[11px] font-medium text-violet-700 underline underline-offset-2 hover:text-violet-950"
-                        onClick={() => setVistoRevisionManualOpen(true)}
+                        onClick={autorizarSinCambiarDocumento}
                       >
-                        Sin cambiar doc.
+                        Quitar aviso
                       </button>
                       <Button
                         type="button"
@@ -3432,86 +3422,6 @@ export function RegistrarPagoForm({
               </div>
             </div>
           </form>
-
-          <Dialog
-            open={vistoRevisionManualOpen}
-            onOpenChange={setVistoRevisionManualOpen}
-          >
-            <DialogContent className="max-w-md">
-              <DialogHeader>
-                <DialogTitle>
-                  Comprobante duplicado (revisión manual)
-                </DialogTitle>
-                <div className="space-y-2 text-sm text-gray-600">
-                  <p>
-                    El botón principal <strong>Visto</strong> rellena el campo{' '}
-                    <strong>Código</strong> con un token <strong>A####</strong>{' '}
-                    / <strong>P####</strong> y guarda: el comprobante del banco
-                    puede quedar igual. No está permitido escribir{' '}
-                    <code className="rounded bg-gray-100 px-1">_A####</code> ni{' '}
-                    <code className="rounded bg-gray-100 px-1">_P####</code> a
-                    mano en el Nº de documento.
-                  </p>
-                  <ul className="list-inside list-disc space-y-1 text-xs">
-                    <li>
-                      <strong>Autorizar sin cambiar</strong>: quita avisos de
-                      duplicado en pantalla. Si al guardar sigue fallando la
-                      unicidad, use <strong>Visto</strong> para asignar{' '}
-                      <strong>Código</strong> automáticamente (no se escribe en
-                      la caja).
-                    </li>
-                  </ul>
-                </div>
-              </DialogHeader>
-              <DialogFooter className="flex flex-col gap-2 sm:flex-col sm:justify-stretch">
-                <button
-                  type="button"
-                  className="w-full rounded-md bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700 disabled:opacity-50"
-                  disabled={isSubmitting || bloquearCambioComprobanteCodigo}
-                  onClick={() => {
-                    setVistoRevisionManualOpen(false)
-                    void handleVistoRellenarCodigoYGuardar()
-                  }}
-                >
-                  Asignar Código y guardar
-                </button>
-                <button
-                  type="button"
-                  className="w-full rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50"
-                  onClick={() => {
-                    setErrors(prev => {
-                      const next = { ...prev }
-                      delete next.numero_documento
-                      const g = next.general
-                      if (
-                        g === DUPLICADO_DOCUMENTO_UI ||
-                        g === DUPLICADO_HUELLA_UI ||
-                        (g &&
-                          (g.toLowerCase().includes('comprobante') ||
-                            g.toLowerCase().includes('documento')))
-                      ) {
-                        delete next.general
-                      }
-                      return next
-                    })
-                    toast.success(
-                      'Autorizado sin modificar el comprobante. Si persiste duplicado al guardar, use Visto para asignar Código.'
-                    )
-                    setVistoRevisionManualOpen(false)
-                  }}
-                >
-                  Autorizar sin cambiar el documento
-                </button>
-                <button
-                  type="button"
-                  className="w-full rounded-md px-4 py-2 text-sm text-gray-600 hover:bg-gray-100"
-                  onClick={() => setVistoRevisionManualOpen(false)}
-                >
-                  Cancelar
-                </button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
         </motion.div>
       </motion.div>
     </AnimatePresence>

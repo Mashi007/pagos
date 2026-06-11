@@ -409,6 +409,8 @@ async def _ocr_fila_reserva_revision(
 def _reservar_comprobantes_prestamo(
     db: Session,
     prestamo: Prestamo,
+    *,
+    permitir_sin_comprobantes: bool = False,
 ) -> Dict[str, Any]:
     """Solo bytes de comprobante; no copia montos, documentos ni fechas del pago origen."""
     pagos = (
@@ -421,9 +423,18 @@ def _reservar_comprobantes_prestamo(
         .all()
     )
     if not pagos:
+        if permitir_sin_comprobantes:
+            return {
+                "ok": True,
+                "reservas": 0,
+                "reservas_sin_imagen": 0,
+                "omitidos_sin_bytes": 0,
+                "mensaje": "Sin pagos en cartera; continuando solo con asiento ABONOS.",
+            }
         return {
             "ok": False,
             "error": "No hay pagos en este préstamo para reservar comprobantes.",
+            "requiere_confirmacion_sin_comprobantes": True,
         }
 
     con_img = [p for p in pagos if _tiene_comprobante(p)]
@@ -478,6 +489,23 @@ def _reservar_comprobantes_prestamo(
         )
 
     if orden == 0:
+        if permitir_sin_comprobantes:
+            det = (
+                f" ({len(omitidos_sin_bytes)} con enlace pero sin imagen descargable)"
+                if omitidos_sin_bytes
+                else ""
+            )
+            return {
+                "ok": True,
+                "reservas": 0,
+                "reservas_sin_imagen": len(con_img),
+                "omitidos_sin_bytes": len(omitidos_sin_bytes),
+                "mensaje": (
+                    "Sin comprobantes con imagen reservables"
+                    + det
+                    + "; continuando solo con asiento ABONOS."
+                ),
+            }
         det = (
             f" ({len(omitidos_sin_bytes)} con enlace pero sin imagen descargable)"
             if omitidos_sin_bytes
@@ -490,6 +518,7 @@ def _reservar_comprobantes_prestamo(
                 + det
                 + ". Suba o repare los comprobantes antes de conciliar."
             ),
+            "requiere_confirmacion_sin_comprobantes": True,
         }
 
     db.flush()
@@ -512,6 +541,7 @@ async def ejecutar_conciliar_cartera_revision_manual(
     *,
     lote: Optional[str] = None,
     confirmacion_montos_altos: Optional[str] = None,
+    confirmar_sin_comprobantes: bool = False,
 ) -> Dict[str, Any]:
     prestamo = db.get(Prestamo, prestamo_id)
     if not prestamo:
@@ -600,7 +630,11 @@ async def ejecutar_conciliar_cartera_revision_manual(
                     "referencia_abonos": snap,
                 }
 
-    reserva_out = _reservar_comprobantes_prestamo(db, prestamo)
+    reserva_out = _reservar_comprobantes_prestamo(
+        db,
+        prestamo,
+        permitir_sin_comprobantes=confirmar_sin_comprobantes,
+    )
     if not reserva_out.get("ok"):
         return {**reserva_out, "referencia_abonos": snap}
 
@@ -774,6 +808,7 @@ def ejecutar_conciliar_cartera_revision_manual_sync(
     *,
     lote: Optional[str] = None,
     confirmacion_montos_altos: Optional[str] = None,
+    confirmar_sin_comprobantes: bool = False,
 ) -> Dict[str, Any]:
     return asyncio.run(
         ejecutar_conciliar_cartera_revision_manual(
@@ -782,5 +817,6 @@ def ejecutar_conciliar_cartera_revision_manual_sync(
             usuario_registro,
             lote=lote,
             confirmacion_montos_altos=confirmacion_montos_altos,
+            confirmar_sin_comprobantes=confirmar_sin_comprobantes,
         )
     )

@@ -490,7 +490,11 @@ class RevisionManualService {
   /** Solo admin: reserva comprobantes, ABONOS Notificaciones→General, OCR, cascada. */
   async conciliarCarteraPrestamo(
     prestamoId: number,
-    payload?: { lote?: string; confirmacion_montos_altos?: string }
+    payload?: {
+      lote?: string
+      confirmacion_montos_altos?: string
+      confirmar_sin_comprobantes?: boolean
+    }
   ): Promise<ConciliarCarteraRevisionResponse> {
     return await apiClient.post<ConciliarCarteraRevisionResponse>(
       `${this.baseUrl}/prestamos/${prestamoId}/conciliar-cartera`,

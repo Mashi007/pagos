@@ -147,7 +147,10 @@ export async function finiquitoAdminEliminarCaso(casoId: number) {
   )
 }
 
-export async function finiquitoAdminVistoIniciar(casoId: number) {
+export async function finiquitoAdminVistoIniciar(
+  casoId: number,
+  opts?: { confirmar_sin_comprobantes?: boolean }
+) {
   return apiClient.post<{
     ok: boolean
     error?: string
@@ -155,9 +158,16 @@ export async function finiquitoAdminVistoIniciar(casoId: number) {
     reservas?: number
     pagos_eliminados?: number
     mensaje?: string
-  }>(`${BASE}/admin/casos/${casoId}/conciliacion/visto-iniciar`, undefined, {
-    timeout: 120000,
-  })
+    requiere_confirmacion_sin_comprobantes?: boolean
+  }>(
+    `${BASE}/admin/casos/${casoId}/conciliacion/visto-iniciar`,
+    {
+      confirmar_sin_comprobantes: opts?.confirmar_sin_comprobantes === true,
+    },
+    {
+      timeout: 120000,
+    }
+  )
 }
 
 export async function finiquitoAdminRecrearOcr(casoId: number) {

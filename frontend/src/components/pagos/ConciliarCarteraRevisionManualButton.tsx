@@ -331,6 +331,8 @@ export function ConciliarCarteraRevisionManualButton({
 
             : {}),
 
+          confirmar_sin_comprobantes: true,
+
         })
 
 
@@ -813,9 +815,11 @@ export function ConciliarCarteraRevisionManualButton({
 
                 recrearán con el <strong>total ABONOS</strong> de General más las
 
-                imágenes reservadas (reescaneo OCR). Esta acción no se puede deshacer
+                imágenes reservadas (reescaneo OCR). Si no hay comprobantes con
 
-                con un clic.
+                imagen, tras confirmar continuará solo con el asiento ABONOS. Esta
+
+                acción no se puede deshacer con un clic.
 
               </p>
 

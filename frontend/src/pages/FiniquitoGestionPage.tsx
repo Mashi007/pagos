@@ -60,7 +60,6 @@ import {
   finiquitoAdminPasarATrabajo,
   finiquitoAdminPatchEstado,
   finiquitoAdminRefreshMaterializado,
-  finiquitoAdminVistoIniciar,
   finiquitoAdminResumenEstado,
   finiquitoAdminResumenTerminadosSemanal,
   type FiniquitoRefreshStats,
@@ -524,6 +523,9 @@ function FiniquitoGestionPageInner() {
   const [revisionDialogCasoId, setRevisionDialogCasoId] = useState<
     number | null
   >(null)
+  const [pendingVistoRow, setPendingVistoRow] = useState<FiniquitoCasoItem | null>(
+    null
+  )
   const [kpiNuevosRevision, setKpiNuevosRevision] = useState<{
     total: number
     ventana_horas: number
@@ -963,23 +965,16 @@ function FiniquitoGestionPageInner() {
     }
   }
 
-  const vistoIniciarConciliacion = async (row: FiniquitoCasoItem) => {
+  const solicitarVistoRevisionManual = (row: FiniquitoCasoItem) => {
     if (pendingEstadoCasoId != null) return
-    setPendingEstadoCasoId(row.id)
-    try {
-      const r = await finiquitoAdminVistoIniciar(row.id)
-      if (!r.ok) {
-        toast.error(r.error || 'No se pudo iniciar Visto')
-        return
-      }
-      toast.success(r.mensaje || 'Reserva de comprobantes creada')
-      await cargarListas({ silent: true })
-      abrirRevisionManualPrestamo(row.prestamo_id, row.id)
-    } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : 'Error')
-    } finally {
-      setPendingEstadoCasoId(null)
-    }
+    setPendingVistoRow(row)
+  }
+
+  const confirmarVistoRevisionManual = () => {
+    if (pendingVistoRow == null) return
+    const row = pendingVistoRow
+    setPendingVistoRow(null)
+    abrirRevisionManualPrestamo(row.prestamo_id, row.id)
   }
 
   const botonesFilaOperativos = (row: FiniquitoCasoItem) => (
@@ -1069,7 +1064,6 @@ function FiniquitoGestionPageInner() {
   )
 
   const renderAccionesAreaRevision = (row: FiniquitoCasoItem) => {
-    const vistoActivo = Boolean(row.conciliacion_visto_activa)
     return (
       <div className="flex flex-wrap items-center justify-end gap-2">
         {botonesFilaOperativos(row)}
@@ -1078,32 +1072,25 @@ function FiniquitoGestionPageInner() {
           size="sm"
           className="h-8 gap-1 bg-emerald-700 text-xs hover:bg-emerald-800"
           disabled={casoTieneAccionPendiente(row.id)}
-          title={
-            vistoActivo
-              ? 'Seguir conciliacion en revision manual (el caso sigue aqui)'
-              : 'Iniciar: reserva comprobantes, borra pagos y abre revision manual'
-          }
-          onClick={() =>
-            void (vistoActivo
-              ? abrirRevisionManualPrestamo(row.prestamo_id, row.id)
-              : vistoIniciarConciliacion(row))
-          }
+          title="Abrir revisión manual y usar Conciliar (mismo flujo que revisión manual estándar)"
+          onClick={() => solicitarVistoRevisionManual(row)}
         >
           <CheckCircle2 className="h-3.5 w-3.5" aria-hidden />
-          {vistoActivo ? 'Continuar' : 'Visto'}
+          Visto
         </Button>
         {canTrasladarFiniquitoBandejas ? (
           <Button
             type="button"
-            size="icon"
+            size="sm"
             variant="outline"
-            className="h-8 w-8 border-slate-300"
-            title="Cerrar conciliacion y pasar a area de trabajo"
-            aria-label={`Pasar caso ${row.id} a area de trabajo`}
+            className="h-8 gap-1 border-emerald-600 text-xs text-emerald-900 hover:bg-emerald-50"
+            title="Solo administrador: cierra conciliación y pasa el caso directo al área de trabajo"
+            aria-label={`Pasar caso ${row.id} directo al área de trabajo`}
             disabled={casoTieneAccionPendiente(row.id)}
             onClick={() => void pasarATrabajo(row.id)}
           >
-            <X className="h-4 w-4" aria-hidden />
+            <X className="h-3.5 w-3.5 shrink-0" aria-hidden />
+            Área trabajo
           </Button>
         ) : null}
       </div>
@@ -1628,8 +1615,8 @@ function FiniquitoGestionPageInner() {
                 Area de revision
               </h2>
               <p className="text-xs text-amber-900/85">
-                {totalAreaRevision} {subtituloRevision} · Visto y conciliación
-                para todos; pasar al área de trabajo solo administrador
+                {totalAreaRevision} {subtituloRevision} · Visto abre revisión
+                manual → Conciliar; «Área trabajo» solo administrador
               </p>
             </div>
           </div>
@@ -2104,6 +2091,48 @@ function FiniquitoGestionPageInner() {
               onClick={() => void confirmarTerminado(true)}
             >
               Si
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={pendingVistoRow != null}
+        onOpenChange={open => {
+          if (!open) setPendingVistoRow(null)
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Abrir revisión para conciliar</DialogTitle>
+            <DialogDescription className="space-y-2 text-base text-slate-800">
+              <span className="block">
+                Préstamo <strong>{pendingVistoRow?.prestamo_id ?? '—'}</strong>:
+                se abrirá revisión manual. La conciliación se hace solo con el
+                botón <strong>Conciliar</strong> (ABONOS, comprobantes, OCR y
+                cascada), igual que en cualquier revisión manual.
+              </span>
+              <span className="block text-sm text-slate-600">
+                No hay pasos intermedios de reserva Visto ni «Recrear OCR» por
+                separado.
+              </span>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setPendingVistoRow(null)}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              className="bg-emerald-700 hover:bg-emerald-800"
+              disabled={pendingEstadoCasoId != null}
+              onClick={confirmarVistoRevisionManual}
+            >
+              Abrir revisión manual
             </Button>
           </DialogFooter>
         </DialogContent>

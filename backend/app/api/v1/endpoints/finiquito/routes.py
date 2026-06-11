@@ -10,7 +10,7 @@ from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Any, Dict, List, Optional, Tuple
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 from fastapi.encoders import jsonable_encoder
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -47,6 +47,7 @@ from app.schemas.finiquito import (
     FiniquitoConciliacionPasarATrabajoResponse,
     FiniquitoConciliacionRecrearOcrItem,
     FiniquitoConciliacionRecrearOcrResponse,
+    FiniquitoConciliacionVistoIniciarRequest,
     FiniquitoConciliacionVistoIniciarResponse,
     FiniquitoConteoRevisionNuevosResponse,
     FiniquitoCasoListaResponse,
@@ -1383,12 +1384,19 @@ def _admin_pasar_caso_a_en_proceso(
 )
 def finiquito_admin_conciliacion_visto_iniciar(
     caso_id: int,
+    body: FiniquitoConciliacionVistoIniciarRequest = Body(
+        default_factory=FiniquitoConciliacionVistoIniciarRequest
+    ),
     db: Session = Depends(get_db),
     panel_user: UserResponse = Depends(require_admin_or_operator),
 ):
     """Primer Visto: reserva comprobantes en temporal y luego borra todos los pagos del prestamo."""
     try:
-        r = iniciar_visto_reserva(db, caso_id)
+        r = iniciar_visto_reserva(
+            db,
+            caso_id,
+            confirmar_sin_comprobantes=bool(body.confirmar_sin_comprobantes),
+        )
         if not r.get("ok"):
             db.rollback()
             return FiniquitoConciliacionVistoIniciarResponse(

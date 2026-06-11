@@ -216,6 +216,16 @@ class FiniquitoTerminadosResumenSemanalResponse(BaseModel):
     total_terminados: int = Field(..., ge=0)
 
 
+class FiniquitoConciliacionVistoIniciarRequest(BaseModel):
+    confirmar_sin_comprobantes: bool = Field(
+        False,
+        description=(
+            "Si no hay comprobantes reservables, continuar tras confirmación del usuario "
+            "(borra pagos si existen y abre revisión manual)."
+        ),
+    )
+
+
 class FiniquitoConciliacionVistoIniciarResponse(BaseModel):
     ok: bool
     error: Optional[str] = None
