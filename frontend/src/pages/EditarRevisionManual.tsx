@@ -3727,7 +3727,7 @@ export function EditarRevisionManual() {
                                             soloLectura
                                               ? 'Revision cerrada: solo lectura'
                                               : pagoEstaConciliadoOPagado(pago) &&
-                                                  !isAdmin()
+                                                  !isAdmin
                                                 ? 'Editar pago conciliado (monto, fecha y Nº documento; código/comprobante solo administrador)'
                                                 : 'Editar pago'
                                           }
@@ -4557,7 +4557,7 @@ export function EditarRevisionManual() {
           esPagoConError={false}
           mostrarCampoCodigoDocumento
           bloquearCambioComprobanteCodigo={
-            !isAdmin() && pagoModalConciliadoPagado
+            !isAdmin && pagoModalConciliadoPagado
           }
           comprobanteArchivoInicial={pagoModalComprobanteInicial}
           prestamoContextoRevisionManualId={

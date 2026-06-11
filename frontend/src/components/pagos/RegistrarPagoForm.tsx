@@ -497,7 +497,7 @@ export function RegistrarPagoForm({
   const puedeVistoRevisionManual =
     mostrarCampoCodigoDocumento &&
     revisionManualFullEdit &&
-    (!isEditing || !bloquearCambioComprobanteCodigo || isAdmin())
+    (!isEditing || !bloquearCambioComprobanteCodigo || isAdmin)
 
   const codigoDocumentoInputRef = useRef<HTMLInputElement>(null)
 
