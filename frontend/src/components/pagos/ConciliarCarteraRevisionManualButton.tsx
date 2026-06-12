@@ -133,6 +133,10 @@ export function ConciliarCarteraRevisionManualButton({
 
   const [aceptaDestructivo, setAceptaDestructivo] = useState(false)
 
+  const [aceptaComprobantesOmitidos, setAceptaComprobantesOmitidos] =
+
+    useState(false)
+
 
 
   const ced = cedula.trim()
@@ -158,6 +162,8 @@ export function ConciliarCarteraRevisionManualButton({
     setConfirmacionPrestamoId('')
 
     setAceptaDestructivo(false)
+
+    setAceptaComprobantesOmitidos(false)
 
   }, [])
 
@@ -243,6 +249,8 @@ export function ConciliarCarteraRevisionManualButton({
 
     setAceptaDestructivo(false)
 
+    setAceptaComprobantesOmitidos(false)
+
     void cargarPreview()
 
   }
@@ -277,6 +285,8 @@ export function ConciliarCarteraRevisionManualButton({
 
     setAceptaDestructivo(false)
 
+    setAceptaComprobantesOmitidos(false)
+
   }
 
 
@@ -301,6 +311,18 @@ export function ConciliarCarteraRevisionManualButton({
 
     }
 
+    if (hayComprobantesOmitidos && !aceptaComprobantesOmitidos) {
+
+      toast.error(
+
+        'Marque la casilla que indica que acepta perder los comprobantes no reservables.'
+
+      )
+
+      return
+
+    }
+
 
 
     setEjecutando(true)
@@ -319,6 +341,20 @@ export function ConciliarCarteraRevisionManualButton({
 
         preview != null && abonosSuperanUmbralConfirmo(preview, preview.abonos_drive)
 
+      const diagComp = preview?.comprobantes_conciliar
+
+      const sinReservables =
+
+        (diagComp?.pagos_reservables ?? 0) === 0 &&
+
+        (diagComp?.pagos_con_enlace ?? 0) > 0
+
+      const hayOmitidos = Boolean(
+
+        diagComp?.requiere_confirmacion_comprobantes_omitidos
+
+      )
+
       const res: ConciliarCarteraRevisionResponse =
 
         await revisionManualService.conciliarCarteraPrestamo(pid, {
@@ -331,7 +367,17 @@ export function ConciliarCarteraRevisionManualButton({
 
             : {}),
 
-          confirmar_sin_comprobantes: true,
+          ...(sinReservables && aceptaDestructivo
+
+            ? { confirmar_sin_comprobantes: true }
+
+            : {}),
+
+          ...(hayOmitidos && aceptaComprobantesOmitidos
+
+            ? { confirmar_comprobantes_omitidos: true }
+
+            : {}),
 
         })
 
@@ -376,6 +422,42 @@ export function ConciliarCarteraRevisionManualButton({
           res.error ||
 
             `ABONOS elevado (>${res.umbral_usd ?? umbralConfirmaAbonosUsd(preview)} USD). Escriba CONFIRMO.`
+
+        )
+
+        return
+
+      }
+
+      if (res.requiere_confirmacion_comprobantes_omitidos) {
+
+        onEjecutarError?.()
+
+        setPaso('confirmar')
+
+        toast.warning(
+
+          res.error ||
+
+            'Algunos comprobantes no tienen imagen en el sistema. Confirme para continuar sin ellos.'
+
+        )
+
+        return
+
+      }
+
+      if (res.requiere_confirmacion_sin_comprobantes) {
+
+        onEjecutarError?.()
+
+        setPaso('confirmar')
+
+        toast.warning(
+
+          res.error ||
+
+            'Ningún comprobante tiene imagen reservable. Confirme para continuar solo con ABONOS.'
 
         )
 
@@ -476,6 +558,20 @@ export function ConciliarCarteraRevisionManualButton({
   const needConfirmo =
 
     preview != null && abonosSuperanUmbralConfirmo(preview, preview.abonos_drive)
+
+  const diagComprobantes = preview?.comprobantes_conciliar
+
+  const hayComprobantesOmitidos = Boolean(
+
+    diagComprobantes?.requiere_confirmacion_comprobantes_omitidos
+
+  )
+
+  const sinComprobantesReservables = Boolean(
+
+    diagComprobantes?.sin_comprobantes_reservables
+
+  )
 
 
 
@@ -847,6 +943,42 @@ export function ConciliarCarteraRevisionManualButton({
 
               </label>
 
+              {hayComprobantesOmitidos ? (
+
+                <label className="flex items-start gap-2 rounded border border-amber-300 bg-amber-50 p-3 text-amber-950">
+
+                  <input
+
+                    type="checkbox"
+
+                    className="mt-1"
+
+                    checked={aceptaComprobantesOmitidos}
+
+                    onChange={e => setAceptaComprobantesOmitidos(e.target.checked)}
+
+                  />
+
+                  <span>
+
+                    Acepto que{' '}
+
+                    <strong>
+
+                      {diagComprobantes?.pagos_omitidos_sin_bytes ?? '—'}
+
+                    </strong>{' '}
+
+                    pago(s) con enlace pero sin imagen en el sistema se borrarán y{' '}
+
+                    <strong>no</strong> se recrearán tras conciliar.
+
+                  </span>
+
+                </label>
+
+              ) : null}
+
               <div>
 
                 <label className="mb-1 block font-medium">
@@ -988,6 +1120,114 @@ export function ConciliarCarteraRevisionManualButton({
                   ) : null}
 
                 </ul>
+
+              ) : null}
+
+              {preview?.comprobantes_conciliar ? (
+
+                <div
+
+                  className={`rounded border p-3 ${
+
+                    hayComprobantesOmitidos || sinComprobantesReservables
+
+                      ? 'border-amber-300 bg-amber-50 text-amber-950'
+
+                      : 'border-slate-200 bg-white'
+
+                  }`}
+
+                >
+
+                  <p className="font-medium">Comprobantes en cartera (este préstamo)</p>
+
+                  <ul className="mt-2 space-y-1 text-muted-foreground">
+
+                    <li>
+
+                      Pagos en tabla cartera con enlace:{' '}
+
+                      <strong>{preview.comprobantes_conciliar.pagos_con_enlace ?? 0}</strong>
+
+                    </li>
+
+                    <li>
+
+                      Fuentes totales (cartera + errores + Gmail):{' '}
+
+                      <strong>
+
+                        {preview.comprobantes_conciliar.fuentes_comprobante_total ??
+
+                          preview.comprobantes_conciliar.pagos_con_enlace ??
+
+                          0}
+
+                      </strong>
+
+                      {(preview.comprobantes_conciliar.fuentes_gmail_sync ?? 0) > 0 ||
+
+                      (preview.comprobantes_conciliar.fuentes_pago_con_error ?? 0) > 0 ? (
+
+                        <span className="text-xs">
+
+                          {' '}
+
+                          (Gmail:{' '}
+
+                          {preview.comprobantes_conciliar.fuentes_gmail_sync ?? 0}, errores:{' '}
+
+                          {preview.comprobantes_conciliar.fuentes_pago_con_error ?? 0})
+
+                        </span>
+
+                      ) : null}
+
+                    </li>
+
+                    <li>
+
+                      Imágenes reservables al conciliar:{' '}
+
+                      <strong>{preview.comprobantes_conciliar.pagos_reservables ?? 0}</strong>
+
+                    </li>
+
+                    {(preview.comprobantes_conciliar.pagos_omitidos_sin_bytes ?? 0) >
+
+                    0 ? (
+
+                      <li className="text-amber-900">
+
+                        Sin imagen en el sistema (se perderán si concilia):{' '}
+
+                        <strong>
+
+                          {preview.comprobantes_conciliar.pagos_omitidos_sin_bytes}
+
+                        </strong>
+
+                      </li>
+
+                    ) : null}
+
+                  </ul>
+
+                  {hayComprobantesOmitidos ? (
+
+                    <p className="mt-2 text-xs text-amber-900">
+
+                      Suba cada comprobante con «Escanear comprobante» + «Guardar y
+
+                      procesar» antes de conciliar. Los pagos cuyo ícono de ojo está
+
+                      deshabilitado no tienen imagen en BD.
+
+                    </p>
+
+                  ) : null}
+
+                </div>
 
               ) : null}
 

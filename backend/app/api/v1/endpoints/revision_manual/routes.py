@@ -2552,11 +2552,19 @@ def get_referencia_abonos_notificaciones_revision(
     )
 
     try:
-        return referencia_abonos_notificaciones_general(
+        snap = referencia_abonos_notificaciones_general(
             db,
             prestamo_id,
             lote=(lote or "").strip() or None,
         )
+        from app.services.revision_manual_conciliacion_cartera_service import (
+            diagnostico_comprobantes_conciliar_prestamo,
+        )
+
+        diag = diagnostico_comprobantes_conciliar_prestamo(db, prestamo_id)
+        if isinstance(snap, dict) and diag.get("ok"):
+            snap = {**snap, "comprobantes_conciliar": diag}
+        return snap
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
 
@@ -2577,6 +2585,13 @@ class ConciliarCarteraRevisionBody(BaseModel):
         description=(
             "Tras confirmación del usuario: continuar aunque no haya comprobantes "
             "reservables (solo asiento ABONOS + cascada)."
+        ),
+    )
+    confirmar_comprobantes_omitidos: bool = Field(
+        False,
+        description=(
+            "Tras confirmación del usuario: continuar aunque algunos pagos con enlace "
+            "no tengan imagen descargable (esos pagos se borrarán sin recrearse)."
         ),
     )
 
@@ -2611,9 +2626,15 @@ async def conciliar_cartera_revision_manual(
             lote=(body.lote or "").strip() or None,
             confirmacion_montos_altos=body.confirmacion_montos_altos,
             confirmar_sin_comprobantes=bool(body.confirmar_sin_comprobantes),
+            confirmar_comprobantes_omitidos=bool(body.confirmar_comprobantes_omitidos),
         )
         if not r.get("ok"):
-            if r.get("requiere_seleccion_lote") or r.get("requiere_confirmacion_montos_altos"):
+            if (
+                r.get("requiere_seleccion_lote")
+                or r.get("requiere_confirmacion_montos_altos")
+                or r.get("requiere_confirmacion_sin_comprobantes")
+                or r.get("requiere_confirmacion_comprobantes_omitidos")
+            ):
                 db.rollback()
                 return r
             db.rollback()

@@ -13,20 +13,23 @@ Ejemplo (1 imagen): $531 ABONOS + $177 OCR = 2 asientos.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import logging
 import uuid
+from dataclasses import dataclass
 from datetime import date, datetime, time as dt_time
 from decimal import Decimal
 from typing import Any, Dict, List, Optional, Tuple
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import delete, func, select, text
+from sqlalchemy import and_, delete, func, or_, select, text
 from sqlalchemy.orm import Session
 
 from app.core.documento import compose_numero_documento_almacenado
 from app.models.pago import Pago
-from app.models.pago_comprobante_imagen import PagoComprobanteImagen
+from app.models.pago_con_error import PagoConError
+from app.models.pagos_gmail_sync import PagosGmailSyncItem
 from app.models.prestamo import Prestamo
 from app.models.revision_manual_conciliacion_reserva import RevisionManualConciliacionReserva
 from app.services.comparar_abonos_drive_cuotas_service import (
@@ -36,14 +39,17 @@ from app.services.comparar_abonos_drive_cuotas_service import (
 from app.services.cobros.cobros_publico_reporte_service import mime_efectivo_comprobante_web
 from app.services.cuota_estado import TZ_NEGOCIO
 from app.services.finiquito_conciliacion_visto_service import (
-    _MAX_COMPROBANTE_RESERVA_BYTES,
-    _aplicar_ocr_a_pago,
+    _extraer_comprobante_id_hex,
+    _vincular_comprobante_reserva_al_pago,
     cargar_bytes_comprobante,
 )
 from app.services.pago_huella_funcional import conflicto_huella_para_creacion
 from app.services.pago_registro_moneda import resolver_monto_registro_pago
+from app.services.pagos.comprobante_link_desde_gmail import (
+    drive_raw_a_url,
+    enriquecer_items_link_comprobante_desde_gmail,
+)
 from app.services.pagos_cuotas_reaplicacion import eliminar_todos_pagos_prestamo
-from app.services.pagos_gmail.comprobante_bd import url_comprobante_imagen_absoluta
 from app.services.pagos_gmail.gemini_async import extract_infopagos_campos_desde_comprobante_async
 from app.services.pagos_gmail.parse_campos_comprobante import sanitizar_numero_operacion_comprobante
 from app.utils.cedula_almacenamiento import CedulaPagoFkError, asegurar_cedula_pago_para_fk
@@ -99,6 +105,190 @@ def _placeholder_fecha_reserva() -> datetime:
     return datetime.now(ZoneInfo(TZ_NEGOCIO))
 
 
+@dataclass(frozen=True)
+class _FuenteComprobanteConciliar:
+    """Origen de un comprobante candidato a reserva temporal (Conciliar cartera)."""
+
+    fuente: str  # pago | pago_con_error | gmail_sync
+    fuente_id: int
+    link_comprobante: Optional[str]
+    documento_ruta: Optional[str]
+    referencia: str
+    cedula_cliente: Optional[str]
+
+
+def _cedula_sql_norm(col) -> Any:
+    return func.upper(func.replace(func.coalesce(col, ""), "-", ""))
+
+
+def _cedula_param_norm(cedula: Optional[str]) -> str:
+    return (normalizar_cedula_almacenamiento(cedula or "") or "").replace("-", "").upper()
+
+
+def _clave_enlace_comprobante(link: Optional[str], documento_ruta: Optional[str]) -> str:
+    for raw in (link, documento_ruta):
+        cid = _extraer_comprobante_id_hex(raw, None)
+        if cid:
+            return f"bd:{cid}"
+        s = (raw or "").strip().lower()
+        if s:
+            return f"url:{s}"
+    return ""
+
+
+def _iter_fuentes_comprobante_conciliar_revision(
+    db: Session,
+    prestamo: Prestamo,
+) -> List[_FuenteComprobanteConciliar]:
+    """
+    Pagos en cartera + pagos_con_errores (misma cédula) + ítems Gmail con drive_link.
+    Conciliar debe reservar todas las imágenes disponibles, no solo filas ya en `pagos`.
+    """
+    out: List[_FuenteComprobanteConciliar] = []
+    seen_enlaces: set[str] = set()
+    ced_norm = _cedula_param_norm(prestamo.cedula)
+
+    def _append(
+        fuente: str,
+        fuente_id: int,
+        link: Optional[str],
+        documento_ruta: Optional[str],
+        referencia: str,
+        cedula_cliente: Optional[str],
+    ) -> None:
+        if not (link or "").strip() and not (documento_ruta or "").strip():
+            return
+        clave = _clave_enlace_comprobante(link, documento_ruta)
+        if not clave or clave in seen_enlaces:
+            return
+        seen_enlaces.add(clave)
+        out.append(
+            _FuenteComprobanteConciliar(
+                fuente=fuente,
+                fuente_id=int(fuente_id),
+                link_comprobante=(link or "").strip() or None,
+                documento_ruta=(documento_ruta or "").strip() or None,
+                referencia=(referencia or "").strip() or f"{fuente}:{fuente_id}",
+                cedula_cliente=(cedula_cliente or prestamo.cedula or "").strip() or None,
+            )
+        )
+
+    pagos = (
+        db.execute(
+            select(Pago)
+            .where(Pago.prestamo_id == prestamo.id)
+            .order_by(Pago.fecha_pago.asc(), Pago.id.asc())
+        )
+        .scalars()
+        .all()
+    )
+    for p in pagos:
+        if not _tiene_comprobante(p):
+            continue
+        ref = (p.numero_documento or p.referencia_pago or str(p.id or "")).strip()
+        _append(
+            "pago",
+            int(p.id or 0),
+            p.link_comprobante,
+            p.documento_ruta,
+            ref or f"pago_id={p.id}",
+            getattr(p, "cedula_cliente", None),
+        )
+
+    if ced_norm:
+        cond_pce = [PagoConError.prestamo_id == prestamo.id]
+        pc = _cedula_sql_norm(PagoConError.cedula_cliente)
+        cond_pce.append(
+            and_(PagoConError.prestamo_id.is_(None), pc == ced_norm)
+        )
+        pces = (
+            db.execute(
+                select(PagoConError)
+                .where(or_(*cond_pce))
+                .order_by(PagoConError.id.asc())
+            )
+            .scalars()
+            .all()
+        )
+        for pce in pces:
+            item: Dict[str, Any] = {
+                "numero_documento": pce.numero_documento,
+                "link_comprobante": None,
+                "documento_ruta": pce.documento_ruta,
+            }
+            enriquecer_items_link_comprobante_desde_gmail(db, [item])
+            ref = (pce.numero_documento or pce.referencia_pago or str(pce.id or "")).strip()
+            _append(
+                "pago_con_error",
+                int(pce.id or 0),
+                item.get("link_comprobante"),
+                item.get("documento_ruta"),
+                ref or f"pago_con_error_id={pce.id}",
+                pce.cedula_cliente,
+            )
+
+        gsi_rows = (
+            db.execute(
+                select(PagosGmailSyncItem)
+                .where(
+                    _cedula_sql_norm(PagosGmailSyncItem.cedula) == ced_norm,
+                    PagosGmailSyncItem.drive_link.isnot(None),
+                    PagosGmailSyncItem.drive_link != "",
+                )
+                .order_by(PagosGmailSyncItem.id.asc())
+            )
+            .scalars()
+            .all()
+        )
+        for gsi in gsi_rows:
+            url = drive_raw_a_url(gsi.drive_link)
+            ref = (gsi.numero_referencia or f"gmail-sync-{gsi.id}").strip()
+            _append(
+                "gmail_sync",
+                int(gsi.id or 0),
+                url,
+                None,
+                ref,
+                gsi.cedula,
+            )
+
+    return out
+
+
+def _evaluar_fuentes_comprobante_reserva(
+    db: Session,
+    fuentes: List[_FuenteComprobanteConciliar],
+) -> Tuple[List[Tuple[_FuenteComprobanteConciliar, bytes, str]], List[Dict[str, Any]]]:
+    """Carga bytes por fuente; deduplica por hash de imagen (misma foto en varias filas)."""
+    reservables: List[Tuple[_FuenteComprobanteConciliar, bytes, str]] = []
+    omitidos: List[Dict[str, Any]] = []
+    seen_hashes: set[str] = set()
+
+    for fuente in fuentes:
+        body, filename, err_bytes = cargar_bytes_comprobante(
+            db,
+            link_comprobante=fuente.link_comprobante,
+            documento_ruta=fuente.documento_ruta,
+        )
+        base = {
+            "fuente": fuente.fuente,
+            "fuente_id": fuente.fuente_id,
+            "referencia": fuente.referencia,
+            "link_en_bd": "/comprobante-imagen/" in (fuente.link_comprobante or "").lower(),
+        }
+        if not body:
+            omitidos.append({**base, "error": (err_bytes or "sin_bytes")[:500]})
+            continue
+        img_hash = hashlib.sha256(body).hexdigest()
+        if img_hash in seen_hashes:
+            continue
+        seen_hashes.add(img_hash)
+        fn = (filename or "comprobante.jpg").strip() or "comprobante.jpg"
+        reservables.append((fuente, body, fn))
+
+    return reservables, omitidos
+
+
 def purgar_reserva_conciliacion_prestamo(db: Session, prestamo_id: int) -> int:
     r = db.execute(
         delete(RevisionManualConciliacionReserva).where(
@@ -117,30 +307,62 @@ def _bytes_y_nombre_ocr_desde_reserva(
     return bytes(reserva.comprobante_imagen_data), fn, ""
 
 
-def _vincular_comprobante_reserva_al_pago(
+def diagnostico_comprobantes_conciliar_prestamo(
     db: Session,
-    reserva: RevisionManualConciliacionReserva,
-    pago: Pago,
-) -> None:
-    if not _reserva_tiene_imagen_guardada(reserva):
-        return
-    body = bytes(reserva.comprobante_imagen_data)
-    if len(body) > _MAX_COMPROBANTE_RESERVA_BYTES:
-        logger.warning(
-            "revision conciliar: comprobante reserva_id=%s demasiado grande (%s bytes)",
-            reserva.id,
-            len(body),
+    prestamo_id: int,
+) -> Dict[str, Any]:
+    """
+    Cuenta comprobantes reservables antes de Conciliar (pagos + con_errores + Gmail).
+    No modifica BD.
+    """
+    prestamo = db.get(Prestamo, prestamo_id)
+    if not prestamo:
+        return {"ok": False, "error": "Préstamo no encontrado"}
+
+    pagos = (
+        db.execute(
+            select(Pago)
+            .where(Pago.prestamo_id == prestamo_id)
+            .order_by(Pago.fecha_pago.asc(), Pago.id.asc())
         )
-        return
-    ct = (
-        (reserva.comprobante_content_type or "image/jpeg").split(";")[0].strip()
-        or "image/jpeg"
+        .scalars()
+        .all()
     )
-    uid = uuid.uuid4().hex
-    db.add(PagoComprobanteImagen(id=uid, content_type=ct, imagen_data=body))
-    db.flush()
-    pago.link_comprobante = url_comprobante_imagen_absoluta(uid)
-    pago.documento_ruta = None
+    fuentes = _iter_fuentes_comprobante_conciliar_revision(db, prestamo)
+    reservables_raw, omitidos = _evaluar_fuentes_comprobante_reserva(db, fuentes)
+
+    reservables = [
+        {
+            "fuente": f.fuente,
+            "fuente_id": f.fuente_id,
+            "pago_id": f.fuente_id if f.fuente == "pago" else None,
+            "referencia": f.referencia,
+            "link_en_bd": "/comprobante-imagen/" in (f.link_comprobante or "").lower(),
+        }
+        for f, _body, _fn in reservables_raw
+    ]
+
+    n_fuentes = len(fuentes)
+    n_res = len(reservables)
+    n_omit = len(omitidos)
+    n_pagos_enlace = sum(1 for p in pagos if _tiene_comprobante(p))
+
+    return {
+        "ok": True,
+        "prestamo_id": prestamo_id,
+        "total_pagos": len(pagos),
+        "pagos_con_enlace": n_pagos_enlace,
+        "fuentes_comprobante_total": n_fuentes,
+        "fuentes_pago_cartera": sum(1 for f in fuentes if f.fuente == "pago"),
+        "fuentes_pago_con_error": sum(1 for f in fuentes if f.fuente == "pago_con_error"),
+        "fuentes_gmail_sync": sum(1 for f in fuentes if f.fuente == "gmail_sync"),
+        "pagos_reservables": n_res,
+        "pagos_omitidos_sin_bytes": n_omit,
+        "reservables": reservables,
+        "omitidos": omitidos,
+        "requiere_confirmacion_comprobantes_omitidos": n_omit > 0,
+        "sin_comprobantes_reservables": n_res == 0 and n_fuentes > 0,
+    }
 
 
 def _crear_pago_asiento_abonos_general(
@@ -276,7 +498,30 @@ def _crear_pago_asiento_imagen_ocr(
         referencia_pago=(num_stored or ref_tmp)[:100],
     )
     if msg_h:
-        return None, msg_h
+        num_stored = ref_tmp
+        ref_use = ref_tmp
+        msg_h_alt = conflicto_huella_para_creacion(
+            db,
+            prestamo_id=prestamo.id,
+            fecha_pago=fecha_date,
+            monto_pagado=monto_usd,
+            numero_documento=num_stored,
+            referencia_pago=ref_use[:100],
+        )
+        if msg_h_alt:
+            ref_use = f"CONC-IMG-{prestamo.id}-{reserva.orden}-{uuid.uuid4().hex[:12]}"[:100]
+            num_stored = ref_use
+            msg_h_alt2 = conflicto_huella_para_creacion(
+                db,
+                prestamo_id=prestamo.id,
+                fecha_pago=fecha_date,
+                monto_pagado=monto_usd,
+                numero_documento=num_stored,
+                referencia_pago=ref_use[:100],
+            )
+            if msg_h_alt2:
+                return None, msg_h
+        ref_tmp = ref_use
 
     inst = (gem.get("institucion_financiera") or "").strip() or None
     ahora = datetime.now(ZoneInfo(TZ_NEGOCIO))
@@ -411,8 +656,9 @@ def _reservar_comprobantes_prestamo(
     prestamo: Prestamo,
     *,
     permitir_sin_comprobantes: bool = False,
+    confirmar_comprobantes_omitidos: bool = False,
 ) -> Dict[str, Any]:
-    """Solo bytes de comprobante; no copia montos, documentos ni fechas del pago origen."""
+    """Bytes de comprobante desde pagos, pagos_con_errores (cédula) e ítems Gmail."""
     pagos = (
         db.execute(
             select(Pago)
@@ -422,58 +668,45 @@ def _reservar_comprobantes_prestamo(
         .scalars()
         .all()
     )
-    if not pagos:
+    fuentes = _iter_fuentes_comprobante_conciliar_revision(db, prestamo)
+
+    if not pagos and not fuentes:
         if permitir_sin_comprobantes:
             return {
                 "ok": True,
                 "reservas": 0,
                 "reservas_sin_imagen": 0,
                 "omitidos_sin_bytes": 0,
-                "mensaje": "Sin pagos en cartera; continuando solo con asiento ABONOS.",
+                "mensaje": "Sin pagos ni comprobantes en cartera; continuando solo con asiento ABONOS.",
             }
         return {
             "ok": False,
-            "error": "No hay pagos en este préstamo para reservar comprobantes.",
+            "error": "No hay pagos ni comprobantes Gmail/errores para reservar.",
             "requiere_confirmacion_sin_comprobantes": True,
         }
 
-    con_img = [p for p in pagos if _tiene_comprobante(p)]
-    omitidos_sin_bytes: List[str] = []
-    placeholder_fecha = _placeholder_fecha_reserva()
+    reservables, omitidos_detalle = _evaluar_fuentes_comprobante_reserva(db, fuentes)
+    omitidos_sin_bytes = [str(o.get("referencia") or o.get("fuente_id") or "") for o in omitidos_detalle]
     orden = 0
+    placeholder_fecha = _placeholder_fecha_reserva()
 
-    for p in con_img:
-        body, filename, err_bytes = cargar_bytes_comprobante(
-            db,
-            link_comprobante=p.link_comprobante,
-            documento_ruta=p.documento_ruta,
-        )
-        if not body:
-            ref = (p.numero_documento or p.referencia_pago or str(p.id or "")).strip()
-            omitidos_sin_bytes.append(ref or f"pago_id={p.id}")
-            logger.warning(
-                "revision conciliar reserva: sin bytes pago_id=%s prestamo_id=%s: %s",
-                p.id,
-                prestamo.id,
-                err_bytes or "sin_bytes",
-            )
-            continue
-
+    for fuente, body, filename in reservables:
         orden += 1
         ct = mime_efectivo_comprobante_web(
             "",
             (filename or "comprobante.jpg").strip() or "comprobante.jpg",
         )
+        pago_id_origen = fuente.fuente_id if fuente.fuente == "pago" else None
         db.add(
             RevisionManualConciliacionReserva(
                 prestamo_id=int(prestamo.id),
                 orden=orden,
-                pago_id_origen=p.id,
-                cedula_cliente=(prestamo.cedula or p.cedula_cliente or "").strip() or None,
+                pago_id_origen=pago_id_origen,
+                cedula_cliente=(prestamo.cedula or fuente.cedula_cliente or "").strip() or None,
                 monto_pagado=Decimal("0"),
                 fecha_pago=placeholder_fecha,
                 numero_documento=None,
-                referencia_pago="",
+                referencia_pago=fuente.referencia[:100],
                 institucion_bancaria=None,
                 link_comprobante=None,
                 documento_ruta=None,
@@ -484,9 +717,11 @@ def _reservar_comprobantes_prestamo(
                 monto_bs_original=None,
                 tasa_cambio_bs_usd=None,
                 conciliado=False,
-                notas=None,
+                notas=f"fuente={fuente.fuente}:{fuente.fuente_id}"[:500],
             )
         )
+
+    n_fuentes = len(fuentes)
 
     if orden == 0:
         if permitir_sin_comprobantes:
@@ -498,8 +733,10 @@ def _reservar_comprobantes_prestamo(
             return {
                 "ok": True,
                 "reservas": 0,
-                "reservas_sin_imagen": len(con_img),
+                "reservas_sin_imagen": n_fuentes,
                 "omitidos_sin_bytes": len(omitidos_sin_bytes),
+                "omitidos_detalle": omitidos_sin_bytes,
+                "fuentes_comprobante_total": n_fuentes,
                 "mensaje": (
                     "Sin comprobantes con imagen reservables"
                     + det
@@ -519,10 +756,31 @@ def _reservar_comprobantes_prestamo(
                 + ". Suba o repare los comprobantes antes de conciliar."
             ),
             "requiere_confirmacion_sin_comprobantes": True,
+            "omitidos_sin_bytes": len(omitidos_sin_bytes),
+            "omitidos_detalle": omitidos_sin_bytes,
+            "fuentes_comprobante_total": n_fuentes,
+        }
+
+    if omitidos_sin_bytes and not confirmar_comprobantes_omitidos:
+        return {
+            "ok": False,
+            "error": (
+                f"Solo se reservaron {orden} de {n_fuentes} comprobante(s) con imagen. "
+                f"{len(omitidos_sin_bytes)} fuente(s) tienen enlace pero la imagen no está en el "
+                "sistema. Si continúa, esos comprobantes no se recrearán."
+            ),
+            "requiere_confirmacion_comprobantes_omitidos": True,
+            "reservas": orden,
+            "omitidos_sin_bytes": len(omitidos_sin_bytes),
+            "omitidos_detalle": omitidos_sin_bytes,
+            "fuentes_comprobante_total": n_fuentes,
         }
 
     db.flush()
-    msg = f"Reservadas {orden} imagen(es) de comprobante en tabla temporal (sin metadatos de pago)."
+    msg = (
+        f"Reservadas {orden} imagen(es) de comprobante en tabla temporal "
+        f"(fuentes: {n_fuentes} pagos/Gmail/errores)."
+    )
     if omitidos_sin_bytes:
         msg += f" Omitidos sin bytes: {len(omitidos_sin_bytes)}."
     return {
@@ -530,6 +788,8 @@ def _reservar_comprobantes_prestamo(
         "reservas": orden,
         "reservas_sin_imagen": 0,
         "omitidos_sin_bytes": len(omitidos_sin_bytes),
+        "omitidos_detalle": omitidos_sin_bytes,
+        "fuentes_comprobante_total": n_fuentes,
         "mensaje": msg,
     }
 
@@ -542,6 +802,7 @@ async def ejecutar_conciliar_cartera_revision_manual(
     lote: Optional[str] = None,
     confirmacion_montos_altos: Optional[str] = None,
     confirmar_sin_comprobantes: bool = False,
+    confirmar_comprobantes_omitidos: bool = False,
 ) -> Dict[str, Any]:
     prestamo = db.get(Prestamo, prestamo_id)
     if not prestamo:
@@ -634,6 +895,7 @@ async def ejecutar_conciliar_cartera_revision_manual(
         db,
         prestamo,
         permitir_sin_comprobantes=confirmar_sin_comprobantes,
+        confirmar_comprobantes_omitidos=confirmar_comprobantes_omitidos,
     )
     if not reserva_out.get("ok"):
         return {**reserva_out, "referencia_abonos": snap}
@@ -809,6 +1071,7 @@ def ejecutar_conciliar_cartera_revision_manual_sync(
     lote: Optional[str] = None,
     confirmacion_montos_altos: Optional[str] = None,
     confirmar_sin_comprobantes: bool = False,
+    confirmar_comprobantes_omitidos: bool = False,
 ) -> Dict[str, Any]:
     return asyncio.run(
         ejecutar_conciliar_cartera_revision_manual(
@@ -818,5 +1081,6 @@ def ejecutar_conciliar_cartera_revision_manual_sync(
             lote=lote,
             confirmacion_montos_altos=confirmacion_montos_altos,
             confirmar_sin_comprobantes=confirmar_sin_comprobantes,
+            confirmar_comprobantes_omitidos=confirmar_comprobantes_omitidos,
         )
     )

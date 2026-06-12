@@ -718,14 +718,18 @@ export function EditarRevisionManual() {
 
   /** Tabla «Pagos registrados»: siempre por fecha de pago descendente (más cercana a hoy arriba). */
   const pagosRegistradosOrdenados = useMemo(() => {
-    const rows = pagosRealizadosData?.pagos ?? []
+    const pid = Number(prestamoData.prestamo_id)
+    const rows = (pagosRealizadosData?.pagos ?? []).filter(p => {
+      if (!Number.isFinite(pid) || pid <= 0) return true
+      return Number(p.prestamo_id) === pid
+    })
     return [...rows].sort((a, b) => {
       const tb = timestampOrdenFechaPago(b.fecha_pago)
       const ta = timestampOrdenFechaPago(a.fecha_pago)
       if (tb !== ta) return tb - ta
       return (b.id ?? 0) - (a.id ?? 0)
     })
-  }, [pagosRealizadosData?.pagos])
+  }, [pagosRealizadosData?.pagos, prestamoData.prestamo_id])
 
   const idsPagosPrestamoEnTabla = useCallback((): number[] => {
     const pid = Number(prestamoData.prestamo_id)
@@ -1118,6 +1122,7 @@ export function EditarRevisionManual() {
 
   const abrirEditarPagoRevision = (pago: Pago) => {
     if (soloLectura) return
+    setPagoModalComprobanteInicial(null)
     setPagoModalId(pago.id)
     setPagoModalConciliadoPagado(pagoEstaConciliadoOPagado(pago))
     setPagoModalInicial(pagoRowAPagoCreateInicial(pago))

@@ -494,6 +494,7 @@ class RevisionManualService {
       lote?: string
       confirmacion_montos_altos?: string
       confirmar_sin_comprobantes?: boolean
+      confirmar_comprobantes_omitidos?: boolean
     }
   ): Promise<ConciliarCarteraRevisionResponse> {
     return await apiClient.post<ConciliarCarteraRevisionResponse>(
@@ -518,6 +519,30 @@ export type CompararAbonosNotificacionesReferencia = {
   cache_at?: string | null
   sin_cache?: boolean
   umbral_doble_confirmacion_abonos_usd?: number
+  comprobantes_conciliar?: ComprobantesConciliarDiagnostico
+}
+
+export type ComprobantesConciliarDiagnostico = {
+  ok?: boolean
+  prestamo_id?: number
+  total_pagos?: number
+  pagos_con_enlace?: number
+  fuentes_comprobante_total?: number
+  fuentes_pago_cartera?: number
+  fuentes_pago_con_error?: number
+  fuentes_gmail_sync?: number
+  pagos_reservables?: number
+  pagos_omitidos_sin_bytes?: number
+  requiere_confirmacion_comprobantes_omitidos?: boolean
+  sin_comprobantes_reservables?: boolean
+  omitidos?: Array<{
+    fuente?: string
+    fuente_id?: number
+    pago_id?: number
+    referencia?: string
+    link_en_bd?: boolean
+    error?: string
+  }>
 }
 
 export type ConciliarCarteraRevisionResponse = {
@@ -547,6 +572,9 @@ export type ConciliarCarteraRevisionResponse = {
   prestamo_estado_previo?: string
   requiere_seleccion_lote?: boolean
   requiere_confirmacion_montos_altos?: boolean
+  requiere_confirmacion_sin_comprobantes?: boolean
+  requiere_confirmacion_comprobantes_omitidos?: boolean
+  omitidos_sin_bytes?: number
   umbral_usd?: number
   opciones_lote?: Array<{ lote: string; abonos?: number }>
   cascada?: { ok?: boolean; mensaje?: string; prestamo_estado?: string; error?: string }
