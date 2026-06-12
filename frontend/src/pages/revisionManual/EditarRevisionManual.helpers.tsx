@@ -573,13 +573,13 @@ export function pagoTieneComprobanteInsertado(
 export function patchPagoDesdeOcrReescaneoCartera(
   pago: Pago,
   sugerencia: EscanerInfopagosSugerencia
-): Partial<PagoCreate> {
+): Partial<PagoCreate> & { monto_bs_original?: number | null } {
   const base = pagoInicialDesdeSugerenciaEscaneoRevision(
     pago.cedula_cliente || '',
     pago.prestamo_id,
     sugerencia
   )
-  const patch: Partial<PagoCreate> = {
+  const patch: Partial<PagoCreate> & { monto_bs_original?: number | null } = {
     cedula_cliente: pago.cedula_cliente,
     prestamo_id: pago.prestamo_id ?? null,
     fecha_pago: base.fecha_pago,
