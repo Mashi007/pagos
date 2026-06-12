@@ -1011,6 +1011,7 @@ export function EditarRevisionManual() {
     setEliminandoPagoId(pago.id)
     try {
       await pagoService.deletePago(pago.id)
+      quitarAlertaReescaneoPago(Number(pago.id))
       toast.success('Pago eliminado')
       await refrescarTrasCambioPagosRevision()
       setRevisionOperativaSucia(true)
@@ -1041,6 +1042,16 @@ export function EditarRevisionManual() {
     setPagoModalComprobanteInicial(null)
     setPagoModalConciliadoPagado(false)
   }
+
+  const quitarAlertaReescaneoPago = useCallback((pagoId: number) => {
+    if (!Number.isFinite(pagoId) || pagoId <= 0) return
+    setAlertasReescaneoPorPagoId(prev => {
+      if (!prev[pagoId]?.length) return prev
+      const next = { ...prev }
+      delete next[pagoId]
+      return next
+    })
+  }, [])
 
   const abrirAgregarPagoRevision = () => {
     if (soloLectura) return
@@ -1227,8 +1238,12 @@ export function EditarRevisionManual() {
 
   const onExitoModalPagoRevision = async () => {
     const fueEdicion = pagoModalId != null
+    const idEditado = pagoModalId
     cerrarModalPagoRevision()
     toast.success(fueEdicion ? 'Pago actualizado' : 'Pago registrado')
+    if (fueEdicion && idEditado != null) {
+      quitarAlertaReescaneoPago(idEditado)
+    }
     await refrescarTrasCambioPagosRevision()
     setRevisionOperativaSucia(true)
   }
