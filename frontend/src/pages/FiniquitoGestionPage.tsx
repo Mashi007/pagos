@@ -356,6 +356,26 @@ function buildResumenDigest(snapshot: FiniquitoResumenEstado): string {
   ].join('|')
 }
 
+function textoUbicacionOtrasAreasFiniquito(
+  resumen: FiniquitoResumenEstado
+): string | null {
+  const partes: string[] = []
+  if (resumen.aceptado > 0) {
+    partes.push(`${resumen.aceptado} en área de revisión`)
+  }
+  if (resumen.en_proceso > 0) {
+    partes.push(`${resumen.en_proceso} en área de trabajo`)
+  }
+  if (resumen.terminado > 0) {
+    partes.push(`${resumen.terminado} terminado(s)`)
+  }
+  if (resumen.rechazado > 0) {
+    partes.push(`${resumen.rechazado} rechazado(s)`)
+  }
+  if (partes.length === 0) return null
+  return partes.join(' · ')
+}
+
 function casoCoincideCedula(caso: FiniquitoCasoItem, filtro: string): boolean {
   const f = filtro.trim().toLowerCase()
   if (!f) return true
@@ -533,6 +553,10 @@ function FiniquitoGestionPageInner() {
   const [resumenEstado, setResumenEstado] = useState<FiniquitoResumenEstado | null>(
     null
   )
+  const [resumenBandejaPorCedula, setResumenBandejaPorCedula] =
+    useState<FiniquitoResumenEstado | null>(null)
+  const [cargandoResumenBandejaPorCedula, setCargandoResumenBandejaPorCedula] =
+    useState(false)
   const [loadingResumen, setLoadingResumen] = useState(true)
   const [areasCargadas, setAreasCargadas] = useState(AREAS_CARGADAS_INICIAL)
   const [areasLoading, setAreasLoading] = useState(AREAS_LOADING_INICIAL)
@@ -918,6 +942,37 @@ function FiniquitoGestionPageInner() {
   }, [cedulaBusqueda, cargarBandeja])
 
   useEffect(() => {
+    const cedula = cedulaBusqueda.trim()
+    if (!cedula) {
+      setResumenBandejaPorCedula(null)
+      setCargandoResumenBandejaPorCedula(false)
+      return
+    }
+    if (areasLoading.bandeja || itemsBandejaVisibles.length > 0) {
+      setResumenBandejaPorCedula(null)
+      setCargandoResumenBandejaPorCedula(false)
+      return
+    }
+
+    let cancelled = false
+    setCargandoResumenBandejaPorCedula(true)
+    void finiquitoAdminResumenEstado(cedula)
+      .then(snapshot => {
+        if (!cancelled) setResumenBandejaPorCedula(snapshot)
+      })
+      .catch(() => {
+        if (!cancelled) setResumenBandejaPorCedula(null)
+      })
+      .finally(() => {
+        if (!cancelled) setCargandoResumenBandejaPorCedula(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [cedulaBusqueda, itemsBandejaVisibles.length, areasLoading.bandeja])
+
+  useEffect(() => {
     if (!areasCargadas.revision) return
     void cargarAreaRevision()
   }, [areasCargadas.revision, cedulaRevisionBusqueda, cargarAreaRevision])
@@ -1193,6 +1248,20 @@ function FiniquitoGestionPageInner() {
   const limpiarCedulaTerminados = () => {
     setCedulaTerminadosInput('')
     setCedulaTerminadosBusqueda('')
+  }
+
+  const buscarCedulaEnTerminados = (cedula: string) => {
+    const c = cedula.trim()
+    if (!c) return
+    setCedulaTerminadosInput(c)
+    setCedulaTerminadosBusqueda(c)
+    void cargarTerminados()
+    window.setTimeout(() => {
+      terminadosSectionRef.current?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      })
+    }, 80)
   }
 
   const limpiarFiltrosTerminadosTabla = () => {
@@ -2091,11 +2160,62 @@ function FiniquitoGestionPageInner() {
                 <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
               </div>
             ) : itemsBandejaVisibles.length === 0 ? (
-              <p className="rounded-lg border border-dashed border-slate-200 bg-slate-50/50 px-4 py-10 text-center text-sm leading-relaxed text-slate-600">
-                {cedulaBusqueda
-                  ? 'Ningun caso en Revision coincide con esa cedula.'
-                  : 'No hay casos en Revision. Use «Refrescar materializado» para traer prestamos LIQUIDADO elegibles.'}
-              </p>
+              <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50/50 px-4 py-10 text-center text-sm leading-relaxed text-slate-600">
+                {cedulaBusqueda ? (
+                  <>
+                    <p>
+                      Ningún caso en <strong>Revisión</strong> (bandeja principal)
+                      coincide con esa cédula.
+                    </p>
+                    <p className="mt-2 text-xs text-slate-500">
+                      La bandeja solo muestra créditos recién ingresados a finiquito.
+                      Si en Préstamos figura <strong>Liquidado / Terminado</strong>,
+                      el caso ya cerró el flujo y está en{' '}
+                      <strong>Casos terminados</strong> (más abajo), no aquí.
+                    </p>
+                    {cargandoResumenBandejaPorCedula ? (
+                      <p className="mt-3 flex items-center justify-center gap-2 text-xs text-slate-500">
+                        <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                        Buscando en otras áreas…
+                      </p>
+                    ) : resumenBandejaPorCedula ? (
+                      <>
+                        {textoUbicacionOtrasAreasFiniquito(
+                          resumenBandejaPorCedula
+                        ) ? (
+                          <p className="mt-3 text-xs font-medium text-[#1e3a5f]">
+                            Para{' '}
+                            <span className="font-mono">{cedulaBusqueda}</span>:{' '}
+                            {textoUbicacionOtrasAreasFiniquito(
+                              resumenBandejaPorCedula
+                            )}
+                            .
+                          </p>
+                        ) : (
+                          <p className="mt-3 text-xs text-amber-900">
+                            No hay casos finiquito materializados para esta cédula.
+                            Use «Refrescar materializado» si el préstamo está
+                            LIQUIDADO y las cuotas cuadran con el financiamiento.
+                          </p>
+                        )}
+                        {resumenBandejaPorCedula.terminado > 0 ? (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="mt-4 border-slate-300"
+                            onClick={() => buscarCedulaEnTerminados(cedulaBusqueda)}
+                          >
+                            Ver en Casos terminados
+                          </Button>
+                        ) : null}
+                      </>
+                    ) : null}
+                  </>
+                ) : (
+                  'No hay casos en Revision. Use «Refrescar materializado» para traer prestamos LIQUIDADO elegibles.'
+                )}
+              </div>
             ) : (
               <>
                 {renderTabla(
