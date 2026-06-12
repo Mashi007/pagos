@@ -37,8 +37,8 @@ function sessionStorageKey(key: string): string {
 }
 
 function readSessionIndex(): string[] {
-  const raw = safeGetSessionItem<string[]>(SESSION_INDEX_KEY, [])
-  return Array.isArray(raw) ? raw : []
+  const raw = safeGetSessionItem(SESSION_INDEX_KEY, [])
+  return Array.isArray(raw) ? (raw as string[]) : []
 }
 
 function writeSessionIndex(keys: string[]): void {
@@ -46,14 +46,11 @@ function writeSessionIndex(keys: string[]): void {
 }
 
 function readSessionEntry(key: string): FiniquitoTerminadosCacheEntry | null {
-  const raw = safeGetSessionItem<FiniquitoTerminadosCacheEntry | null>(
-    sessionStorageKey(key),
-    null
-  )
+  const raw = safeGetSessionItem(sessionStorageKey(key), null)
   if (!raw || typeof raw !== 'object' || typeof raw.fetchedAt !== 'number') {
     return null
   }
-  return raw
+  return raw as FiniquitoTerminadosCacheEntry
 }
 
 function writeSessionEntry(key: string, entry: FiniquitoTerminadosCacheEntry): void {
