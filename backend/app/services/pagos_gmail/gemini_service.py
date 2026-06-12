@@ -2670,9 +2670,13 @@ def _inferir_institucion_heuristica_escaner(texto: str) -> str:
     Respaldo si Gemini dejó institucion_financiera vacía: inferir desde notas/texto
     usando los mismos marcadores visuales que las plantillas Gmail (A/B/C/D).
     """
-    low = (texto or "").lower()
-    if not low.strip():
+    raw = (texto or "").strip()
+    if not raw:
         return ""
+    # Plantilla A / Mercantil: Serial largo 740087… (típ. 15 dígitos).
+    if extraer_serial_mercantil_7400(raw):
+        return "Mercantil"
+    low = raw.lower()
     if "plantilla a" in low or "formato a" in low:
         return "Mercantil"
     if "plantilla b" in low or "formato b" in low:
@@ -2782,7 +2786,8 @@ def _extra_prompt_plantilla_escaner(institucion_plantilla: str) -> str:
     return (
         "\n\nPLANTILLA / EMISOR INDICADO POR EL USUARIO (solo guía; todo debe basarse en la imagen):\n"
         + "\n".join(f"- {c}" for c in chunks)
-        + f"\n- Si el nombre del banco no es legible en la imagen, use en `institucion_financiera` exactamente: «{canon}»."
+        + f"\n- Solo use «{canon}» en `institucion_financiera` si el diseño del comprobante coincide con esa plantilla; "
+        "si no hay evidencia visual, deje vacío (no invente el banco)."
     )
 
 

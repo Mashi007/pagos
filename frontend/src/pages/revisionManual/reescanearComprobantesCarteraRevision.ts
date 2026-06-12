@@ -1,3 +1,7 @@
+/**
+ * Re-escaneo cartera: misma API/prompts que lote Infopagos (extraer-comprobante +
+ * rescate_plantilla Gmail A/B/C/D/G). Solo persiste lo devuelto por OCR; no inventa desde BD.
+ */
 import {
   escanerInfopagosExtraerComprobante,
   escanerInfopagosLoteContextoRevision,
@@ -8,11 +12,15 @@ import { normalizarComprobanteArchivoParaEscaneo } from '../../utils/normalizarC
 import { hayDuplicadoFila, filaDesdeRevisionPago } from '../escanerInfopagosLoteModel'
 import {
   esInstitucionBinanceReescaneo,
+  institucionDesdeSugerenciaOcrReescaneo,
   institucionEfectivaReescaneoCartera,
+  institucionPlantillaConfirmadaReescaneo,
   omitirValidacionFechaBinanceReescaneo,
+  omitirValidacionInstitucionReescaneoCartera,
   patchPagoDesdeOcrReescaneoCartera,
   partesCedulaParaEscaneoRevision,
   pagoTieneComprobanteInsertado,
+  sugerenciaOcrCompletaParaReescaneoCartera,
 } from './EditarRevisionManual.helpers'
 
 const CHUNK_CONTEXTO_REVISION = 10
@@ -56,9 +64,14 @@ function validacionReescaneoEfectiva(
   pago: Pago,
   res: EscanerInfopagosExtraerResponse
 ): { campos: string | null; reglas: string | null } {
-  const inst = institucionEfectivaReescaneoCartera(pago, res)
+  const instOcr = institucionDesdeSugerenciaOcrReescaneo(res.sugerencia ?? null)
   let campos = res.validacion_campos?.trim() || null
   let reglas = res.validacion_reglas?.trim() || null
+  if (instOcr) {
+    campos = omitirValidacionInstitucionReescaneoCartera(campos)
+    reglas = omitirValidacionInstitucionReescaneoCartera(reglas)
+  }
+  const inst = instOcr || institucionEfectivaReescaneoCartera(pago, res)
   if (esInstitucionBinanceReescaneo(inst)) {
     campos = omitirValidacionFechaBinanceReescaneo(campos)
     reglas = omitirValidacionFechaBinanceReescaneo(reglas)
@@ -114,6 +127,7 @@ export function evaluarAlertaReescaneoCartera(
 
   if (!res.ok || !res.sugerencia) {
     const inst = institucionEfectivaReescaneoCartera(pago, res)
+    const instOcr = institucionDesdeSugerenciaOcrReescaneo(res.sugerencia ?? null)
     let msg =
       res.validacion_reglas?.trim() ||
       res.validacion_campos?.trim() ||
@@ -124,6 +138,9 @@ export function evaluarAlertaReescaneoCartera(
         omitirValidacionFechaBinanceReescaneo(msg) ||
         omitirValidacionFechaBinanceReescaneo(res.error) ||
         ''
+    }
+    if (instOcr) {
+      msg = omitirValidacionInstitucionReescaneoCartera(msg) || ''
     }
     if (msg) motivos.push(msg)
     return motivos
@@ -146,6 +163,9 @@ export function puedeActualizarPagoDesdeOcrReescaneo(
   res: EscanerInfopagosExtraerResponse
 ): boolean {
   if (!res.ok || !res.sugerencia) return false
+  if (!sugerenciaOcrCompletaParaReescaneoCartera(pago, res.sugerencia)) {
+    return false
+  }
   const validacion = validacionReescaneoEfectiva(pago, res)
   if (validacion.campos) return false
   if (validacion.reglas) return false
@@ -252,12 +272,8 @@ export async function reescanearComprobantesCarteraPrestamo(opts: {
       fd.append('numero_cedula', partes.numero)
       fd.append('fuente_tasa_cambio', 'euro')
       fd.append('comprobante', archivo)
-      const inst = (
-        pago.institucion_bancaria ||
-        item.institucion_bancaria ||
-        ''
-      ).trim()
-      if (inst) fd.append('institucion_plantilla', inst)
+      const instHint = institucionPlantillaConfirmadaReescaneo(pago)
+      if (instHint) fd.append('institucion_plantilla', instHint)
 
       try {
         const res = await escanerInfopagosExtraerComprobante(fd)

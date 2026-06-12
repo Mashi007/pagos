@@ -591,14 +591,90 @@ function esValidacionSoloFechaReescaneo(texto: string): boolean {
   return false
 }
 
+function esValidacionSoloInstitucionReescaneo(texto: string): boolean {
+  const t = texto.trim()
+  if (!t) return false
+  if (/^Complete la instituci[oó]n financiera\.?$/i.test(t)) return true
+  if (/^Indique la instituci[oó]n\b/i.test(t)) return true
+  if (/instituci[oó]n financiera.*no se detect/i.test(t)) return true
+  if (/no se detect.*instituci[oó]n financiera/i.test(t)) return true
+  return false
+}
+
+/** Si ya hay banco inferido (OCR o serial 740087…), no bloquear por aviso de institución vacía. */
+export function omitirValidacionInstitucionReescaneoCartera(
+  msg: string | null | undefined
+): string | null {
+  const raw = String(msg ?? '').trim()
+  if (!raw) return null
+  const partes = raw
+    .split(/(?<=[.!?])\s+|\n+/)
+    .map(p => p.trim())
+    .filter(Boolean)
+    .filter(p => !esValidacionSoloInstitucionReescaneo(p))
+  if (!partes.length) return null
+  return partes.join(' ').trim() || null
+}
+
 export function institucionEfectivaReescaneoCartera(
-  pago: Pick<Pago, 'institucion_bancaria'>,
-  res?: { sugerencia?: { institucion_financiera?: string } | null } | null
+  pago: Pick<Pago, 'institucion_bancaria' | 'numero_documento'>,
+  res?: {
+    sugerencia?: Pick<
+      EscanerInfopagosSugerencia,
+      'institucion_financiera' | 'numero_operacion'
+    > | null
+  } | null
 ): string {
   return (
-    (pago.institucion_bancaria || '').trim() ||
-    (res?.sugerencia?.institucion_financiera || '').trim()
+    institucionDesdeSugerenciaOcrReescaneo(res?.sugerencia ?? null) ||
+    normalizarInstitucionBancoReescaneo((pago.institucion_bancaria || '').trim()) ||
+    ''
   )
+}
+
+/** Serial Mercantil 740087… (misma regla que plantilla A / pipeline Gmail). */
+export function esSerialMercantil740087(digitsOnly: string): boolean {
+  return /^740087\d{6,}$/.test(digitsOnly)
+}
+
+/**
+ * Banco inferido solo desde la respuesta OCR de esta pasada (Gemini + post-proceso backend).
+ * Serial 740087… solo si vino en numero_operacion del OCR, nunca desde BD previa.
+ */
+export function institucionDesdeSugerenciaOcrReescaneo(
+  sugerencia: Pick<
+    EscanerInfopagosSugerencia,
+    'institucion_financiera' | 'numero_operacion'
+  > | null
+): string | null {
+  const ocr = normalizarInstitucionBancoReescaneo(
+    (sugerencia?.institucion_financiera || '').trim()
+  )
+  if (ocr) return ocr
+
+  const numOcr = (sugerencia?.numero_operacion || '').replace(/\D/g, '')
+  if (esSerialMercantil740087(numOcr)) return 'Mercantil'
+  return null
+}
+
+/** Plantilla opcional pre-OCR: solo banco ya confirmado en cartera (igual que lote Infopagos). */
+export function institucionPlantillaConfirmadaReescaneo(
+  pago: Pick<Pago, 'institucion_bancaria'>
+): string | null {
+  return normalizarInstitucionBancoReescaneo(
+    (pago.institucion_bancaria || '').trim()
+  )
+}
+
+function normalizarInstitucionBancoReescaneo(raw: string): string | null {
+  const t = (raw || '').trim()
+  if (!t) return null
+  if (/^binance$/i.test(t)) return 'Binance'
+  if (/^bnc$/i.test(t) || /^bnv$/i.test(t)) return 'BNC'
+  if (/mercantil/i.test(t)) return 'Mercantil'
+  if (/^recibo/i.test(t)) return 'Recibo'
+  if (/banco de venezuela|^bdv$/i.test(t)) return 'Banco de Venezuela'
+  return t
 }
 
 /** Pago con enlace o ruta de comprobante ya insertado en cartera. */
@@ -610,36 +686,56 @@ export function pagoTieneComprobanteInsertado(
   )
 }
 
-/** Actualiza monto/fecha/documento desde OCR; conserva imagen, código y notas. */
+/** Actualiza monto/fecha/documento/banco solo desde OCR; conserva cédula, imagen y notas. */
 export function patchPagoDesdeOcrReescaneoCartera(
   pago: Pago,
   sugerencia: EscanerInfopagosSugerencia
 ): Partial<PagoCreate> & { monto_bs_original?: number | null } {
-  const base = pagoInicialDesdeSugerenciaEscaneoRevision(
-    pago.cedula_cliente || '',
-    pago.prestamo_id,
-    sugerencia
-  )
-  const instEfectiva =
-    (base.institucion_bancaria || pago.institucion_bancaria || '').trim()
+  const inst = institucionDesdeSugerenciaOcrReescaneo(sugerencia)
+  const moneda = sugerencia.moneda === 'BS' ? 'BS' : 'USD'
+  const monto =
+    sugerencia.monto != null && Number.isFinite(Number(sugerencia.monto))
+      ? Number(sugerencia.monto)
+      : null
+  const numero = (sugerencia.numero_operacion || '').trim()
+  const fechaOcr = (sugerencia.fecha_pago || '').trim()
+
   const patch: Partial<PagoCreate> & { monto_bs_original?: number | null } = {
     cedula_cliente: pago.cedula_cliente,
     prestamo_id: pago.prestamo_id ?? null,
-    fecha_pago: esInstitucionBinanceReescaneo(instEfectiva)
+    fecha_pago: esInstitucionBinanceReescaneo(inst || '')
       ? fechaPagoPagoRowParaInput(pago)
-      : base.fecha_pago,
-    numero_documento: base.numero_documento,
-    institucion_bancaria: base.institucion_bancaria,
-    moneda_registro: base.moneda_registro,
+      : fechaOcr,
+    numero_documento: numero,
+    institucion_bancaria: inst,
+    moneda_registro: moneda,
     link_comprobante: pago.link_comprobante ?? null,
     notas: pago.notas ?? null,
   }
-  if (base.moneda_registro === 'BS') {
-    patch.monto_bs_original = base.monto_bs_original ?? null
+  if (moneda === 'BS') {
+    patch.monto_bs_original = monto
   } else {
-    patch.monto_pagado = base.monto_pagado
+    patch.monto_pagado = monto ?? undefined
   }
   return patch
+}
+
+/** Campos mínimos exigidos en sugerencia OCR antes de persistir (no rellenar desde BD). */
+export function sugerenciaOcrCompletaParaReescaneoCartera(
+  pago: Pick<Pago, 'institucion_bancaria'>,
+  sugerencia: EscanerInfopagosSugerencia
+): boolean {
+  const inst = institucionDesdeSugerenciaOcrReescaneo(sugerencia)
+  if (!inst) return false
+  if (!(sugerencia.numero_operacion || '').trim()) return false
+  const monto = sugerencia.monto
+  if (monto == null || !Number.isFinite(Number(monto)) || Number(monto) <= 0) {
+    return false
+  }
+  if (!esInstitucionBinanceReescaneo(inst) && !(sugerencia.fecha_pago || '').trim()) {
+    return false
+  }
+  return true
 }
 
 /** Hidrata el modal de agregar pago tras escanear un comprobante en revisión manual. */

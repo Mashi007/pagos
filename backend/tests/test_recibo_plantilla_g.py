@@ -15,6 +15,15 @@ def test_inferir_institucion_recibo_toro():
     assert _inferir_institucion_heuristica_escaner("plantilla G Recibo TORO MOTORCYCLES") == "Recibo"
 
 
+def test_inferir_institucion_mercantil_serial_740087():
+    from app.services.pagos_gmail.gemini_service import _inferir_institucion_heuristica_escaner
+
+    assert (
+        _inferir_institucion_heuristica_escaner("740087401050039")
+        == "Mercantil"
+    )
+
+
 def test_resolve_banco_excel_formato_g():
     from app.services.pagos_gmail.helpers import resolve_banco_para_excel_pagos_gmail
 
