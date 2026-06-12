@@ -287,6 +287,21 @@ export type FiniquitoTerminadosResumenSemanal = {
   total_terminados: number
 }
 
+export type FiniquitoTerminadosDia = {
+  fecha: string
+  etiqueta: string
+  cantidad: number
+}
+
+export type FiniquitoTerminadosResumenDiario = {
+  dias: FiniquitoTerminadosDia[]
+  total_terminados: number
+  total_en_ventana: number
+}
+
+/** Ventana por defecto: hoy + 30 dias anteriores (calendario Caracas). */
+export const FINIQUITO_TERMINADOS_RESUMEN_DIAS_DEFAULT = 31
+
 export async function finiquitoAdminListarTerminados(
   cedula?: string,
   pagination?: { limit?: number; offset?: number }
@@ -303,6 +318,19 @@ export async function finiquitoAdminListarTerminados(
   const q = params.toString() ? `?${params.toString()}` : ''
   return apiClient.get<FiniquitoTerminadosListaResult>(
     `${BASE}/admin/casos/terminados${q}`
+  )
+}
+
+export async function finiquitoAdminResumenTerminadosDiario(
+  cedula?: string,
+  dias = FINIQUITO_TERMINADOS_RESUMEN_DIAS_DEFAULT
+): Promise<FiniquitoTerminadosResumenDiario> {
+  const params = new URLSearchParams()
+  params.set('dias', String(dias))
+  const ced = (cedula ?? '').trim()
+  if (ced) params.set('cedula', ced)
+  return apiClient.get<FiniquitoTerminadosResumenDiario>(
+    `${BASE}/admin/casos/terminados/resumen-diario?${params.toString()}`
   )
 }
 

@@ -64,11 +64,12 @@ import {
   finiquitoAdminPatchEstado,
   finiquitoAdminRefreshMaterializado,
   finiquitoAdminResumenEstado,
-  finiquitoAdminResumenTerminadosSemanal,
+  finiquitoAdminResumenTerminadosDiario,
   type FiniquitoRefreshStats,
   type FiniquitoResumenEstado,
   type FiniquitoTerminadoItem,
   FINIQUITO_HORAS_NUEVOS_REVISION_DEFAULT,
+  FINIQUITO_TERMINADOS_RESUMEN_DIAS_DEFAULT,
 } from '../services/finiquitoService'
 import { descargarTerminadosExcel } from '../utils/finiquitoTerminadosExcelExport'
 import { prestamoService } from '../services/prestamoService'
@@ -596,9 +597,10 @@ function FiniquitoGestionPageInner() {
     []
   )
   const [totalTerminados, setTotalTerminados] = useState(0)
-  const [resumenSemanas, setResumenSemanas] = useState<
-    { semana: string; etiqueta: string; cantidad: number }[]
+  const [resumenDias, setResumenDias] = useState<
+    { fecha: string; etiqueta: string; cantidad: number }[]
   >([])
+  const [totalTerminadosEnVentana, setTotalTerminadosEnVentana] = useState(0)
   const [totalTerminadosResumen, setTotalTerminadosResumen] = useState(0)
   const [filtrosTerminados, setFiltrosTerminados] =
     useState<FiltrosTerminadosTabla>({
@@ -809,14 +811,16 @@ function FiniquitoGestionPageInner() {
             limit: FETCH_LIMIT,
             offset: 0,
           }),
-          finiquitoAdminResumenTerminadosSemanal(
-            cedulaFiltro || undefined
+          finiquitoAdminResumenTerminadosDiario(
+            cedulaFiltro || undefined,
+            FINIQUITO_TERMINADOS_RESUMEN_DIAS_DEFAULT
           ),
         ])
         if (gen !== terminadosFetchGenRef.current) return
         setItemsTerminados(rTerm.items || [])
         setTotalTerminados(rTerm.total ?? (rTerm.items || []).length)
-        setResumenSemanas(rSem.semanas || [])
+        setResumenDias(rSem.dias || [])
+        setTotalTerminadosEnVentana(rSem.total_en_ventana ?? 0)
         setTotalTerminadosResumen(rSem.total_terminados ?? 0)
         marcarAreaCargada('terminados')
       } catch (e: unknown) {
@@ -886,10 +890,10 @@ function FiniquitoGestionPageInner() {
     [itemsTerminados, filtrosTerminados]
   )
 
-  const maxSemanaCantidad = useMemo(() => {
-    const vals = resumenSemanas.map(s => s.cantidad)
+  const maxDiaCantidad = useMemo(() => {
+    const vals = resumenDias.map(d => d.cantidad)
     return Math.max(1, ...vals, 0)
-  }, [resumenSemanas])
+  }, [resumenDias])
 
   /** Mueve filas locales al instante con el caso devuelto por PATCH (antes del refetch). */
   const incorporarCasoActualizado = useCallback(
@@ -2568,9 +2572,10 @@ function FiniquitoGestionPageInner() {
         <div className="border-b border-violet-200/70 bg-violet-50/40 px-4 py-4 sm:px-5">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <p className="max-w-xl text-xs text-slate-600">
-              Resumen por semana ISO (fecha en que se marcó Terminado). Use el
-              filtro de cédula para acotar el gráfico y el listado (~
-              {DEBOUNCE_MS / 1000} s de espera).
+              Resumen por día (fecha en que se marcó Terminado, calendario
+              Caracas): hoy y los {FINIQUITO_TERMINADOS_RESUMEN_DIAS_DEFAULT - 1}{' '}
+              días anteriores. Use el filtro de cédula para acotar el gráfico y
+              el listado (~{DEBOUNCE_MS / 1000} s de espera).
             </p>
             <div className="flex w-full shrink-0 flex-col gap-3 sm:min-w-[min(100%,280px)] lg:w-full lg:max-w-sm xl:max-w-md">
               <div className="space-y-1.5">
@@ -2612,45 +2617,61 @@ function FiniquitoGestionPageInner() {
           {!areasCargadas.terminados ? (
             <p className="mt-4 rounded-lg border border-dashed border-violet-200/90 bg-white/60 px-4 py-6 text-center text-sm text-slate-600">
               Baje hasta el listado o pulse «Cargar ahora» para traer el gráfico
-              semanal y los terminados.
+              diario y los terminados.
             </p>
-          ) : resumenSemanas.length === 0 ? (
+          ) : areasLoading.terminados && resumenDias.length === 0 ? (
             <p className="mt-4 rounded-lg border border-dashed border-violet-200/90 bg-white/60 px-4 py-6 text-center text-sm text-slate-600">
-              {areasLoading.terminados
-                ? 'Cargando resumen…'
-                : 'Sin casos terminados en el periodo mostrado.'}
+              Cargando resumen…
             </p>
           ) : (
-            <div
-              className="mt-4 flex items-end gap-2 overflow-x-auto pb-2 pt-1"
-              role="img"
-              aria-label="Gráfico de casos terminados por semana"
-            >
-              <BarChart3
-                className="mb-6 h-5 w-5 shrink-0 text-violet-700"
-                aria-hidden
-              />
-              {resumenSemanas.map(s => (
-                <div
-                  key={s.semana}
-                  className="flex min-w-[3.25rem] flex-col items-center gap-1"
-                  title={`${s.etiqueta}: ${s.cantidad} caso(s)`}
-                >
-                  <span className="text-[10px] font-semibold tabular-nums text-violet-900">
-                    {s.cantidad}
-                  </span>
+            <>
+              <p className="mt-3 text-[11px] text-slate-500">
+                {totalTerminadosEnVentana} terminado(s) en los últimos{' '}
+                {FINIQUITO_TERMINADOS_RESUMEN_DIAS_DEFAULT} días
+                {cedulaTerminadosBusqueda
+                  ? ` (filtro: ${cedulaTerminadosBusqueda})`
+                  : ''}
+                .
+              </p>
+              <div
+                className="mt-2 flex items-end gap-1 overflow-x-auto pb-2 pt-1"
+                role="img"
+                aria-label="Gráfico de casos terminados por día"
+              >
+                <BarChart3
+                  className="mb-6 h-5 w-5 shrink-0 text-violet-700"
+                  aria-hidden
+                />
+                {resumenDias.map(d => (
                   <div
-                    className="w-10 rounded-t-md bg-violet-500/90 transition-all"
-                    style={{
-                      height: `${Math.max(12, Math.round((s.cantidad / maxSemanaCantidad) * 120))}px`,
-                    }}
-                  />
-                  <span className="max-w-[4.5rem] text-center text-[9px] leading-tight text-slate-600">
-                    {s.etiqueta}
-                  </span>
-                </div>
-              ))}
-            </div>
+                    key={d.fecha}
+                    className="flex min-w-[2.35rem] flex-col items-center gap-1"
+                    title={`${d.etiqueta} (${d.fecha}): ${d.cantidad} caso(s)`}
+                  >
+                    <span className="text-[10px] font-semibold tabular-nums text-violet-900">
+                      {d.cantidad > 0 ? d.cantidad : ''}
+                    </span>
+                    <div
+                      className={cn(
+                        'w-7 rounded-t-md transition-all',
+                        d.cantidad > 0
+                          ? 'bg-violet-500/90'
+                          : 'bg-violet-200/60'
+                      )}
+                      style={{
+                        height: `${Math.max(
+                          d.cantidad > 0 ? 12 : 4,
+                          Math.round((d.cantidad / maxDiaCantidad) * 120)
+                        )}px`,
+                      }}
+                    />
+                    <span className="max-w-[2.75rem] text-center text-[8px] leading-tight text-slate-600">
+                      {d.etiqueta}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </>
           )}
         </div>
         <div className="border-b border-violet-100 bg-slate-50/80 px-3 py-3 sm:px-4">

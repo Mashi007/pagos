@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import logging
 from collections import Counter
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -59,7 +59,9 @@ from app.schemas.finiquito import (
     FiniquitoPatchEstadoResponse,
     FiniquitoTerminadoItemOut,
     FiniquitoTerminadosListaResponse,
+    FiniquitoTerminadosResumenDiarioResponse,
     FiniquitoTerminadosResumenSemanalResponse,
+    FiniquitoTerminadosDiaOut,
     FiniquitoTerminadosSemanaOut,
     FiniquitoRegistroRequest,
     FiniquitoRegistroResponse,
@@ -78,6 +80,7 @@ from app.services.finiquito_prestamo_gestion_sync import (
     limpiar_estado_gestion_finiquito_prestamos,
     sincronizar_prestamo_estado_gestion_finiquito,
 )
+from app.utils.dias_laborales_caracas import TZ_CARACAS, fecha_hoy_caracas
 from app.services.finiquito_db_schema import (
     finiquito_casos_has_contacto_para_siguientes,
     finiquito_has_area_trabajo_auditoria_table,
@@ -335,6 +338,27 @@ def _semana_iso_key(d: date) -> str:
 def _etiqueta_semana_iso(d: date) -> str:
     y, w, _ = d.isocalendar()
     return f"Sem {w} · {y}"
+
+
+def _fecha_historial_a_date_caracas(raw: Any) -> date | None:
+    if raw is None:
+        return None
+    if isinstance(raw, datetime):
+        dt = raw
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(TZ_CARACAS).date()
+    if isinstance(raw, date):
+        return raw
+    return None
+
+
+def _etiqueta_dia_terminado(d: date, hoy: date) -> str:
+    if d == hoy:
+        return "Hoy"
+    if d == hoy - timedelta(days=1):
+        return "Ayer"
+    return d.strftime("%d/%m")
 
 
 def _terminados_items_from_casos(
@@ -1233,6 +1257,64 @@ def finiquito_admin_terminados_resumen_semanal(
     return FiniquitoTerminadosResumenSemanalResponse(
         semanas=semanas_out,
         total_terminados=len(casos),
+    )
+
+
+@router.get(
+    "/admin/casos/terminados/resumen-diario",
+    response_model=FiniquitoTerminadosResumenDiarioResponse,
+)
+def finiquito_admin_terminados_resumen_diario(
+    dias: int = Query(
+        31,
+        ge=2,
+        le=90,
+        description=(
+            "Ventana en dias calendario Caracas: incluye hoy y (dias - 1) dias anteriores. "
+            "Por defecto 31 = hoy + 30 dias previos."
+        ),
+    ),
+    cedula: Optional[str] = Query(
+        None,
+        description="Subcadena de cedula (coincidencia parcial), misma regla que GET /admin/casos.",
+    ),
+    db: Session = Depends(get_db),
+    _: UserResponse = Depends(require_admin_or_operator),
+):
+    """Conteo de casos TERMINADO por dia (fecha en historial), ventana fija hacia atras desde hoy Caracas."""
+    hoy = fecha_hoy_caracas()
+    inicio = hoy - timedelta(days=int(dias) - 1)
+
+    q = db.query(FiniquitoCaso).filter(FiniquitoCaso.estado == "TERMINADO")
+    if cedula and cedula.strip():
+        q = q.filter(FiniquitoCaso.cedula.ilike(f"%{cedula.strip()}%"))
+    casos = q.all()
+    ft = _map_fecha_terminado_por_caso(db, [c.id for c in casos])
+    ctr: Counter[str] = Counter()
+    for c in casos:
+        d = _fecha_historial_a_date_caracas(ft.get(c.id))
+        if d is None or d < inicio or d > hoy:
+            continue
+        ctr[d.isoformat()] += 1
+
+    dias_out: List[FiniquitoTerminadosDiaOut] = []
+    cur = inicio
+    while cur <= hoy:
+        key = cur.isoformat()
+        dias_out.append(
+            FiniquitoTerminadosDiaOut(
+                fecha=key,
+                etiqueta=_etiqueta_dia_terminado(cur, hoy),
+                cantidad=int(ctr.get(key, 0)),
+            )
+        )
+        cur += timedelta(days=1)
+
+    total_en_ventana = sum(d.cantidad for d in dias_out)
+    return FiniquitoTerminadosResumenDiarioResponse(
+        dias=dias_out,
+        total_terminados=len(casos),
+        total_en_ventana=total_en_ventana,
     )
 
 

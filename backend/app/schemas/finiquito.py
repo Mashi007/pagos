@@ -226,6 +226,28 @@ class FiniquitoTerminadosResumenSemanalResponse(BaseModel):
     total_terminados: int = Field(..., ge=0)
 
 
+class FiniquitoTerminadosDiaOut(BaseModel):
+    """Conteo de casos terminados agrupados por dia calendario (America/Caracas)."""
+
+    fecha: str = Field(..., description="YYYY-MM-DD en calendario Caracas")
+    etiqueta: str = Field(..., description="Etiqueta corta para grafico, ej. Hoy, Ayer, 12/06")
+    cantidad: int = Field(..., ge=0)
+
+
+class FiniquitoTerminadosResumenDiarioResponse(BaseModel):
+    dias: List[FiniquitoTerminadosDiaOut]
+    total_terminados: int = Field(
+        ...,
+        ge=0,
+        description="Total casos TERMINADO que coinciden con el filtro de cedula (sin acotar ventana).",
+    )
+    total_en_ventana: int = Field(
+        ...,
+        ge=0,
+        description="Suma de cantidades en la ventana diaria devuelta.",
+    )
+
+
 class FiniquitoConciliacionVistoIniciarRequest(BaseModel):
     confirmar_sin_comprobantes: bool = Field(
         False,
