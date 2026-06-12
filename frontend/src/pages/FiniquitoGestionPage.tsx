@@ -588,6 +588,10 @@ function FiniquitoGestionPageInner() {
     useState(false)
   const resumenDigestRef = useRef<string | null>(null)
   const resumenPollingBusyRef = useRef(false)
+  const bandejaFetchGenRef = useRef(0)
+  const revisionFetchGenRef = useRef(0)
+  const trabajoFetchGenRef = useRef(0)
+  const terminadosFetchGenRef = useRef(0)
 
   useEffect(() => {
     const t = window.setTimeout(
@@ -659,12 +663,14 @@ function FiniquitoGestionPageInner() {
   const cargarBandeja = useCallback(
     async (opts?: { silent?: boolean }) => {
       const silent = opts?.silent === true
+      const gen = ++bandejaFetchGenRef.current
+      const cedulaFiltro = cedulaBusqueda
       if (!silent) setAreaLoadingFlag('bandeja', true)
       try {
         const [rBandeja, rNuevos] = await Promise.all([
           finiquitoAdminListar(
             'REVISION',
-            cedulaBusqueda || undefined,
+            cedulaFiltro || undefined,
             undefined,
             {
               limit: BANDEJA_PRINCIPAL_FETCH_LIMIT,
@@ -672,10 +678,11 @@ function FiniquitoGestionPageInner() {
             }
           ),
           finiquitoAdminConteoRevisionNuevos(
-            cedulaBusqueda || undefined,
+            cedulaFiltro || undefined,
             FINIQUITO_HORAS_NUEVOS_REVISION_DEFAULT
           ),
         ])
+        if (gen !== bandejaFetchGenRef.current) return
         setItemsBandeja(rBandeja.items || [])
         setTotalBandeja(rBandeja.total ?? (rBandeja.items || []).length)
         setKpiNuevosRevision({
@@ -685,11 +692,14 @@ function FiniquitoGestionPageInner() {
         })
         marcarAreaCargada('bandeja')
       } catch (e: unknown) {
+        if (gen !== bandejaFetchGenRef.current) return
         if (!silent) {
           toast.error(e instanceof Error ? e.message : 'Error al cargar bandeja')
         }
       } finally {
-        if (!silent) setAreaLoadingFlag('bandeja', false)
+        if (gen === bandejaFetchGenRef.current && !silent) {
+          setAreaLoadingFlag('bandeja', false)
+        }
       }
     },
     [cedulaBusqueda, marcarAreaCargada, setAreaLoadingFlag]
@@ -698,27 +708,33 @@ function FiniquitoGestionPageInner() {
   const cargarAreaRevision = useCallback(
     async (opts?: { silent?: boolean }) => {
       const silent = opts?.silent === true
+      const gen = ++revisionFetchGenRef.current
+      const cedulaFiltro = cedulaRevisionBusqueda
       if (!silent) setAreaLoadingFlag('revision', true)
       try {
         const rRevision = await finiquitoAdminListar(
           'ACEPTADO',
-          cedulaRevisionBusqueda || undefined,
+          cedulaFiltro || undefined,
           undefined,
           { limit: FETCH_LIMIT, offset: 0 }
         )
+        if (gen !== revisionFetchGenRef.current) return
         setItemsAreaRevision(rRevision.items || [])
         setTotalAreaRevision(
           rRevision.total ?? (rRevision.items || []).length
         )
         marcarAreaCargada('revision')
       } catch (e: unknown) {
+        if (gen !== revisionFetchGenRef.current) return
         if (!silent) {
           toast.error(
             e instanceof Error ? e.message : 'Error al cargar área de revisión'
           )
         }
       } finally {
-        if (!silent) setAreaLoadingFlag('revision', false)
+        if (gen === revisionFetchGenRef.current && !silent) {
+          setAreaLoadingFlag('revision', false)
+        }
       }
     },
     [cedulaRevisionBusqueda, marcarAreaCargada, setAreaLoadingFlag]
@@ -727,25 +743,31 @@ function FiniquitoGestionPageInner() {
   const cargarAreaTrabajo = useCallback(
     async (opts?: { silent?: boolean }) => {
       const silent = opts?.silent === true
+      const gen = ++trabajoFetchGenRef.current
+      const cedulaFiltro = cedulaTrabajoBusqueda
       if (!silent) setAreaLoadingFlag('trabajo', true)
       try {
         const rTrabajo = await finiquitoAdminListar(
           'EN_PROCESO',
-          cedulaTrabajoBusqueda || undefined,
+          cedulaFiltro || undefined,
           undefined,
           { limit: FETCH_LIMIT, offset: 0 }
         )
+        if (gen !== trabajoFetchGenRef.current) return
         setItemsAreaTrabajo(rTrabajo.items || [])
         setTotalAreaTrabajo(rTrabajo.total ?? (rTrabajo.items || []).length)
         marcarAreaCargada('trabajo')
       } catch (e: unknown) {
+        if (gen !== trabajoFetchGenRef.current) return
         if (!silent) {
           toast.error(
             e instanceof Error ? e.message : 'Error al cargar área de trabajo'
           )
         }
       } finally {
-        if (!silent) setAreaLoadingFlag('trabajo', false)
+        if (gen === trabajoFetchGenRef.current && !silent) {
+          setAreaLoadingFlag('trabajo', false)
+        }
       }
     },
     [cedulaTrabajoBusqueda, marcarAreaCargada, setAreaLoadingFlag]
@@ -754,30 +776,36 @@ function FiniquitoGestionPageInner() {
   const cargarTerminados = useCallback(
     async (opts?: { silent?: boolean }) => {
       const silent = opts?.silent === true
+      const gen = ++terminadosFetchGenRef.current
+      const cedulaFiltro = cedulaTerminadosBusqueda
       if (!silent) setAreaLoadingFlag('terminados', true)
       try {
         const [rTerm, rSem] = await Promise.all([
-          finiquitoAdminListarTerminados(cedulaTerminadosBusqueda || undefined, {
+          finiquitoAdminListarTerminados(cedulaFiltro || undefined, {
             limit: FETCH_LIMIT,
             offset: 0,
           }),
           finiquitoAdminResumenTerminadosSemanal(
-            cedulaTerminadosBusqueda || undefined
+            cedulaFiltro || undefined
           ),
         ])
+        if (gen !== terminadosFetchGenRef.current) return
         setItemsTerminados(rTerm.items || [])
         setTotalTerminados(rTerm.total ?? (rTerm.items || []).length)
         setResumenSemanas(rSem.semanas || [])
         setTotalTerminadosResumen(rSem.total_terminados ?? 0)
         marcarAreaCargada('terminados')
       } catch (e: unknown) {
+        if (gen !== terminadosFetchGenRef.current) return
         if (!silent) {
           toast.error(
             e instanceof Error ? e.message : 'Error al cargar terminados'
           )
         }
       } finally {
-        if (!silent) setAreaLoadingFlag('terminados', false)
+        if (gen === terminadosFetchGenRef.current && !silent) {
+          setAreaLoadingFlag('terminados', false)
+        }
       }
     },
     [cedulaTerminadosBusqueda, marcarAreaCargada, setAreaLoadingFlag]
@@ -802,6 +830,28 @@ function FiniquitoGestionPageInner() {
       cargarResumenKpis,
       cargarTerminados,
     ]
+  )
+
+  const itemsBandejaVisibles = useMemo(
+    () =>
+      itemsBandeja.filter(row => casoCoincideCedula(row, cedulaBusqueda)),
+    [itemsBandeja, cedulaBusqueda]
+  )
+
+  const itemsAreaRevisionVisibles = useMemo(
+    () =>
+      itemsAreaRevision.filter(row =>
+        casoCoincideCedula(row, cedulaRevisionBusqueda)
+      ),
+    [itemsAreaRevision, cedulaRevisionBusqueda]
+  )
+
+  const itemsAreaTrabajoVisibles = useMemo(
+    () =>
+      itemsAreaTrabajo.filter(row =>
+        casoCoincideCedula(row, cedulaTrabajoBusqueda)
+      ),
+    [itemsAreaTrabajo, cedulaTrabajoBusqueda]
   )
 
   const itemsTerminadosFiltrados = useMemo(
@@ -861,8 +911,11 @@ function FiniquitoGestionPageInner() {
 
   useEffect(() => {
     void cargarResumenKpis()
+  }, [cargarResumenKpis])
+
+  useEffect(() => {
     void cargarBandeja()
-  }, [cargarBandeja, cargarResumenKpis])
+  }, [cedulaBusqueda, cargarBandeja])
 
   useEffect(() => {
     if (!areasCargadas.revision) return
@@ -1176,18 +1229,18 @@ function FiniquitoGestionPageInner() {
   useEffect(() => {
     setSelectedBandejaIds(prev => {
       if (prev.size === 0) return prev
-      const visibles = new Set(itemsBandeja.map(r => r.id))
+      const visibles = new Set(itemsBandejaVisibles.map(r => r.id))
       const next = new Set(Array.from(prev).filter(id => visibles.has(id)))
       return next.size === prev.size ? prev : next
     })
-  }, [itemsBandeja])
+  }, [itemsBandejaVisibles])
 
   const idsBandejaSeleccionables = useMemo(
     () =>
-      itemsBandeja
+      itemsBandejaVisibles
         .filter(r => (r.estado || '').toUpperCase() === 'REVISION')
         .map(r => r.id),
-    [itemsBandeja]
+    [itemsBandejaVisibles]
   )
 
   const todosBandejaSeleccionados =
@@ -2033,11 +2086,11 @@ function FiniquitoGestionPageInner() {
         </div>
         <div>
           <div className="p-3 sm:p-4">
-            {areasLoading.bandeja && itemsBandeja.length === 0 ? (
+            {areasLoading.bandeja && itemsBandejaVisibles.length === 0 ? (
               <div className="flex justify-center py-14">
                 <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
               </div>
-            ) : itemsBandeja.length === 0 ? (
+            ) : itemsBandejaVisibles.length === 0 ? (
               <p className="rounded-lg border border-dashed border-slate-200 bg-slate-50/50 px-4 py-10 text-center text-sm leading-relaxed text-slate-600">
                 {cedulaBusqueda
                   ? 'Ningun caso en Revision coincide con esa cedula.'
@@ -2046,7 +2099,7 @@ function FiniquitoGestionPageInner() {
             ) : (
               <>
                 {renderTabla(
-                  itemsBandeja,
+                  itemsBandejaVisibles,
                   renderAcciones,
                   'bandeja',
                   canTrasladarFiniquitoBandejas
@@ -2075,7 +2128,7 @@ function FiniquitoGestionPageInner() {
                 )}
                 <FiniquitoTablaScrollHint
                   total={totalBandeja}
-                  cargados={itemsBandeja.length}
+                  cargados={itemsBandejaVisibles.length}
                   limit={BANDEJA_PRINCIPAL_FETCH_LIMIT}
                 />
               </>
@@ -2186,11 +2239,11 @@ function FiniquitoGestionPageInner() {
                 'Área de revisión',
                 () => void cargarAreaRevision()
               )
-            ) : areasLoading.revision && itemsAreaRevision.length === 0 ? (
+            ) : areasLoading.revision && itemsAreaRevisionVisibles.length === 0 ? (
               <div className="flex justify-center py-12">
                 <Loader2 className="h-8 w-8 animate-spin text-amber-600/70" />
               </div>
-            ) : itemsAreaRevision.length === 0 ? (
+            ) : itemsAreaRevisionVisibles.length === 0 ? (
               <p className="rounded-lg border border-dashed border-amber-200/90 bg-white/50 px-4 py-10 text-center text-sm text-amber-950/85">
                 {cedulaRevisionBusqueda
                   ? 'Ningún caso en el área de revisión coincide con esa cédula.'
@@ -2199,13 +2252,13 @@ function FiniquitoGestionPageInner() {
             ) : (
               <>
                 {renderTabla(
-                  itemsAreaRevision,
+                  itemsAreaRevisionVisibles,
                   renderAccionesAreaRevision,
                   'revision'
                 )}
                 <FiniquitoTablaScrollHint
                   total={totalAreaRevision}
-                  cargados={itemsAreaRevision.length}
+                  cargados={itemsAreaRevisionVisibles.length}
                 />
               </>
             )}
@@ -2316,11 +2369,11 @@ function FiniquitoGestionPageInner() {
                 'Área de trabajo',
                 () => void cargarAreaTrabajo()
               )
-            ) : areasLoading.trabajo && itemsAreaTrabajo.length === 0 ? (
+            ) : areasLoading.trabajo && itemsAreaTrabajoVisibles.length === 0 ? (
               <div className="flex justify-center py-12">
                 <Loader2 className="h-8 w-8 animate-spin text-emerald-600/70" />
               </div>
-            ) : itemsAreaTrabajo.length === 0 ? (
+            ) : itemsAreaTrabajoVisibles.length === 0 ? (
               <p className="rounded-lg border border-dashed border-emerald-200/80 bg-white/60 px-4 py-10 text-center text-sm text-slate-600">
                 {cedulaTrabajoBusqueda ? (
                   <>
@@ -2336,10 +2389,10 @@ function FiniquitoGestionPageInner() {
               </p>
             ) : (
               <>
-                {renderTablaAreaTrabajo(itemsAreaTrabajo)}
+                {renderTablaAreaTrabajo(itemsAreaTrabajoVisibles)}
                 <FiniquitoTablaScrollHint
                   total={totalAreaTrabajo}
-                  cargados={itemsAreaTrabajo.length}
+                  cargados={itemsAreaTrabajoVisibles.length}
                 />
               </>
             )}
