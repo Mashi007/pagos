@@ -164,6 +164,7 @@ import {
   type FirmaCargaRevision,
   type PrestamoData,
 } from './revisionManual/EditarRevisionManual.helpers'
+import { reescanearComprobantesCarteraPrestamo } from './revisionManual/reescanearComprobantesCarteraRevision'
 
 export function EditarRevisionManual() {
   const { prestamoId } = useParams()
@@ -260,6 +261,16 @@ export function EditarRevisionManual() {
 
   const [escaneandoComprobanteAgregarPago, setEscaneandoComprobanteAgregarPago] =
     useState(false)
+
+  const [reescaneandoCartera, setReescaneandoCartera] = useState(false)
+  const [reescaneoCarteraProgreso, setReescaneoCarteraProgreso] = useState<{
+    hecho: number
+    total: number
+    fase: 'ocr' | 'cascada'
+  } | null>(null)
+  const [alertasReescaneoPorPagoId, setAlertasReescaneoPorPagoId] = useState<
+    Record<number, string[]>
+  >({})
 
   const escaneoComprobanteAgregarPagoRef = useRef<HTMLInputElement>(null)
 
@@ -1054,6 +1065,91 @@ export function EditarRevisionManual() {
     if (soloLectura || escaneandoComprobanteAgregarPago) return
     escaneoComprobanteAgregarPagoRef.current?.click()
   }
+
+  const ejecutarReescaneoCartera = useCallback(async () => {
+    if (soloLectura || reescaneandoCartera) return
+    const ced = cedulaParaPagosRealizados
+    const pid = Number(prestamoData.prestamo_id)
+    if (!ced || !Number.isFinite(pid) || pid <= 0) {
+      toast.error('Falta cédula o préstamo para re-escanear comprobantes.')
+      return
+    }
+    setReescaneandoCartera(true)
+    setReescaneoCarteraProgreso(null)
+    try {
+      const resultado = await reescanearComprobantesCarteraPrestamo({
+        cedula: ced,
+        prestamoId: pid,
+        onProgreso: p => setReescaneoCarteraProgreso(p),
+      })
+      setAlertasReescaneoPorPagoId(resultado.alertas)
+
+      if (resultado.escaneados === 0) {
+        toast.info(
+          resultado.omitidosSinImagen > 0
+            ? `No hay comprobantes insertados en este préstamo (${resultado.omitidosSinImagen} pago(s) sin imagen se mantienen igual).`
+            : 'No hay pagos en cartera para re-escanear.'
+        )
+        return
+      }
+
+      await refrescarTrasCambioPagosRevision()
+      await refetchPagosRealizados()
+
+      setReescaneoCarteraProgreso({
+        hecho: resultado.escaneados,
+        total: resultado.escaneados,
+        fase: 'cascada',
+      })
+
+      try {
+        await aplicarCascadaPagosMutation.mutateAsync()
+      } catch (cascadaErr) {
+        toast.warning(
+          cascadaErr instanceof Error
+            ? cascadaErr.message
+            : 'Re-escaneo listo; revise la cascada manualmente.'
+        )
+      }
+
+      const nAlertas = Object.keys(resultado.alertas).length
+      const partesMsg = [
+        `${resultado.actualizados}/${resultado.escaneados} comprobante(s) actualizado(s) desde OCR.`,
+        resultado.omitidosSinImagen > 0
+          ? `${resultado.omitidosSinImagen} pago(s) sin imagen no se modificaron.`
+          : null,
+        nAlertas > 0
+          ? `${nAlertas} requieren revisión manual (⚠).`
+          : null,
+      ]
+        .filter(Boolean)
+        .join(' ')
+
+      if (nAlertas > 0) {
+        toast.warning(partesMsg)
+      } else {
+        toast.success(partesMsg)
+      }
+      setRevisionOperativaSucia(true)
+    } catch (e) {
+      toast.error(
+        e instanceof Error
+          ? e.message
+          : 'Error al re-escanear comprobantes de cartera.'
+      )
+    } finally {
+      setReescaneandoCartera(false)
+      setReescaneoCarteraProgreso(null)
+    }
+  }, [
+    soloLectura,
+    reescaneandoCartera,
+    cedulaParaPagosRealizados,
+    prestamoData.prestamo_id,
+    refrescarTrasCambioPagosRevision,
+    refetchPagosRealizados,
+    aplicarCascadaPagosMutation,
+  ])
 
   const handleArchivoEscaneoComprobanteAgregarPago = async (
     event: ChangeEvent<HTMLInputElement>
@@ -3454,6 +3550,35 @@ export function EditarRevisionManual() {
                         type="button"
                         variant="outline"
                         size="sm"
+                        className="gap-2 border-violet-300 bg-violet-50 text-violet-950 hover:bg-violet-100"
+                        disabled={
+                          soloLectura ||
+                          reescaneandoCartera ||
+                          !prestamoData.prestamo_id ||
+                          Number(prestamoData.prestamo_id) <= 0
+                        }
+                        onClick={() => void ejecutarReescaneoCartera()}
+                        title={
+                          soloLectura
+                            ? 'Revision cerrada: solo lectura'
+                            : 'Re-escanea todas las imagenes ya guardadas en este prestamo (OCR), actualiza monto/fecha/documento si el OCR es limpio, marca ⚠ si requiere Visto o revision manual, deja intactos los pagos sin imagen y luego aplica cascada.'
+                        }
+                      >
+                        {reescaneandoCartera ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <RefreshCw className="h-4 w-4" />
+                        )}
+                        {reescaneoCarteraProgreso
+                          ? reescaneoCarteraProgreso.fase === 'cascada'
+                            ? 'Aplicando cascada…'
+                            : `Reescaneando ${reescaneoCarteraProgreso.hecho}/${reescaneoCarteraProgreso.total}`
+                          : 'Reescanear'}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
                         className="gap-2"
                         disabled={
                           loadingPagosRealizados || fetchingPagosRealizados
@@ -3625,6 +3750,9 @@ export function EditarRevisionManual() {
                                 const recienConciliado = (
                                   conciliarTablaUi?.idsRecreados ?? []
                                 ).includes(Number(pago.id))
+                                const alertasReescaneo =
+                                  alertasReescaneoPorPagoId[Number(pago.id)] ??
+                                  []
                                 return (
                                   <TableRow
                                     key={pago.id}
@@ -3707,6 +3835,15 @@ export function EditarRevisionManual() {
                                         >
                                           <Eye className="h-4 w-4" />
                                         </Button>
+                                        {alertasReescaneo.length > 0 ? (
+                                          <span
+                                            className="inline-flex shrink-0 text-amber-600"
+                                            title={alertasReescaneo.join('\n')}
+                                            aria-label="Requiere revision manual tras re-escaneo"
+                                          >
+                                            <AlertTriangle className="h-4 w-4" />
+                                          </span>
+                                        ) : null}
                                       </div>
                                     </TableCell>
                                     <TableCell className="whitespace-nowrap">

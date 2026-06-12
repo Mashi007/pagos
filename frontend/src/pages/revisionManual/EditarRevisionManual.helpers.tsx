@@ -1,6 +1,7 @@
 import { Badge } from '../../components/ui/badge'
 import {
   type Pago,
+  type PagoCreate,
   type PagoInicialRegistrar,
 } from '../../services/pagoService'
 import type { EscanerInfopagosSugerencia } from '../../services/cobrosService'
@@ -557,6 +558,43 @@ export function partesCedulaParaEscaneoRevision(
   const numero = quitarCerosIzquierdaNumeroCedula(m[2])
   if (!numero || numero === '0') return null
   return { tipo: m[1] || 'V', numero }
+}
+
+/** Pago con enlace o ruta de comprobante ya insertado en cartera. */
+export function pagoTieneComprobanteInsertado(
+  pago: Pick<Pago, 'link_comprobante' | 'documento_ruta'>
+): boolean {
+  return Boolean(
+    (pago.link_comprobante || '').trim() || (pago.documento_ruta || '').trim()
+  )
+}
+
+/** Actualiza monto/fecha/documento desde OCR; conserva imagen, código y notas. */
+export function patchPagoDesdeOcrReescaneoCartera(
+  pago: Pago,
+  sugerencia: EscanerInfopagosSugerencia
+): Partial<PagoCreate> {
+  const base = pagoInicialDesdeSugerenciaEscaneoRevision(
+    pago.cedula_cliente || '',
+    pago.prestamo_id,
+    sugerencia
+  )
+  const patch: Partial<PagoCreate> = {
+    cedula_cliente: pago.cedula_cliente,
+    prestamo_id: pago.prestamo_id ?? null,
+    fecha_pago: base.fecha_pago,
+    numero_documento: base.numero_documento,
+    institucion_bancaria: base.institucion_bancaria,
+    moneda_registro: base.moneda_registro,
+    link_comprobante: pago.link_comprobante ?? null,
+    notas: pago.notas ?? null,
+  }
+  if (base.moneda_registro === 'BS') {
+    patch.monto_bs_original = base.monto_bs_original ?? null
+  } else {
+    patch.monto_pagado = base.monto_pagado
+  }
+  return patch
 }
 
 /** Hidrata el modal de agregar pago tras escanear un comprobante en revisión manual. */

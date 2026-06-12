@@ -1,0 +1,269 @@
+import {
+  escanerInfopagosExtraerComprobante,
+  escanerInfopagosLoteContextoRevision,
+  type EscanerInfopagosExtraerResponse,
+} from '../../services/cobrosService'
+import { pagoService, type Pago } from '../../services/pagoService'
+import { normalizarComprobanteArchivoParaEscaneo } from '../../utils/normalizarComprobanteArchivo'
+import { hayDuplicadoFila, filaDesdeRevisionPago } from '../escanerInfopagosLoteModel'
+import {
+  patchPagoDesdeOcrReescaneoCartera,
+  partesCedulaParaEscaneoRevision,
+  pagoTieneComprobanteInsertado,
+} from './EditarRevisionManual.helpers'
+
+const CHUNK_CONTEXTO_REVISION = 10
+
+function fileDesdeBase64(b64: string, fileName: string, mimeType: string): File {
+  const bin = atob(b64)
+  const bytes = new Uint8Array(bin.length)
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
+  return new File([bytes], fileName || 'comprobante', {
+    type: mimeType || 'application/octet-stream',
+  })
+}
+
+async function listarPagosPrestamo(
+  cedula: string,
+  prestamoId: number
+): Promise<Pago[]> {
+  const all: Pago[] = []
+  let page = 1
+  let totalPages = 1
+  do {
+    const res = await pagoService.getAllPagos(page, 100, {
+      cedula,
+      prestamo_cartera: 'todos',
+      prestamo_id: prestamoId,
+    })
+    all.push(...res.pagos)
+    totalPages = res.total_pages
+    page++
+  } while (page <= totalPages)
+  return all.filter(p => Number(p.prestamo_id) === prestamoId)
+}
+
+function yieldToMain(): Promise<void> {
+  return new Promise(resolve => {
+    setTimeout(resolve, 0)
+  })
+}
+
+function duplicadoBloqueaReescaneo(
+  pagoId: number,
+  res: EscanerInfopagosExtraerResponse
+): boolean {
+  const fila = filaDesdeRevisionPago(new File([], 'x'), {
+    pago_id: pagoId,
+    ok: true,
+  })
+  const filaTras = {
+    ...fila,
+    validacionCampos: res.validacion_campos ?? null,
+    validacionReglas: res.validacion_reglas ?? null,
+    escanerColision: {
+      duplicado_en_pagos: Boolean(res.duplicado_en_pagos),
+      pago_existente_id:
+        typeof res.pago_existente_id === 'number' ? res.pago_existente_id : null,
+      prestamo_existente_id:
+        typeof res.prestamo_existente_id === 'number'
+          ? res.prestamo_existente_id
+          : null,
+      prestamo_objetivo_id:
+        typeof res.prestamo_objetivo_id === 'number'
+          ? res.prestamo_objetivo_id
+          : null,
+    },
+  }
+  if (!hayDuplicadoFila(filaTras)) return false
+  const existId = res.pago_existente_id
+  return existId == null || Number(existId) !== pagoId
+}
+
+/** Motivos de alerta (Visto, escritura, duplicado, OCR fallido). */
+export function evaluarAlertaReescaneoCartera(
+  pagoId: number,
+  res: EscanerInfopagosExtraerResponse,
+  contextoError?: string | null
+): string[] {
+  const motivos: string[] = []
+
+  if (contextoError?.trim()) {
+    motivos.push(contextoError.trim())
+    return motivos
+  }
+
+  if (!res.ok || !res.sugerencia) {
+    motivos.push(
+      res.validacion_reglas?.trim() ||
+        res.validacion_campos?.trim() ||
+        res.error?.trim() ||
+        'No se pudo digitalizar el comprobante; revise manualmente.'
+    )
+    return motivos
+  }
+
+  if (res.validacion_campos?.trim()) {
+    motivos.push(res.validacion_campos.trim())
+  }
+  if (res.validacion_reglas?.trim()) {
+    motivos.push(res.validacion_reglas.trim())
+  }
+  if (duplicadoBloqueaReescaneo(pagoId, res)) {
+    motivos.push(
+      'Posible duplicado en cartera; revise y use Visto si corresponde.'
+    )
+  }
+
+  return [...new Set(motivos.map(m => m.trim()).filter(Boolean))]
+}
+
+export function puedeActualizarPagoDesdeOcrReescaneo(
+  pagoId: number,
+  res: EscanerInfopagosExtraerResponse
+): boolean {
+  if (!res.ok || !res.sugerencia) return false
+  if (res.validacion_campos?.trim()) return false
+  if (res.validacion_reglas?.trim()) return false
+  if (duplicadoBloqueaReescaneo(pagoId, res)) return false
+  return true
+}
+
+export type ReescaneoCarteraProgreso = {
+  hecho: number
+  total: number
+  fase: 'ocr' | 'cascada'
+}
+
+export type ReescaneoCarteraResultado = {
+  alertas: Record<number, string[]>
+  escaneados: number
+  actualizados: number
+  omitidosSinImagen: number
+}
+
+/**
+ * Re-escanea solo comprobantes ya insertados en el préstamo (OCR + actualización).
+ * Pagos sin imagen no se tocan. Tras OCR limpio actualiza el pago en BD.
+ */
+export async function reescanearComprobantesCarteraPrestamo(opts: {
+  cedula: string
+  prestamoId: number
+  onProgreso?: (progreso: ReescaneoCarteraProgreso) => void
+}): Promise<ReescaneoCarteraResultado> {
+  const partes = partesCedulaParaEscaneoRevision(opts.cedula)
+  if (!partes) {
+    throw new Error('Cédula inválida para re-escanear comprobantes.')
+  }
+
+  const pagos = await listarPagosPrestamo(opts.cedula, opts.prestamoId)
+  const pagosConImagen = pagos.filter(pagoTieneComprobanteInsertado)
+  const omitidosSinImagen = pagos.length - pagosConImagen.length
+
+  const ids = pagosConImagen
+    .map(p => Number(p.id))
+    .filter(id => Number.isFinite(id) && id > 0)
+
+  if (!ids.length) {
+    return {
+      alertas: {},
+      escaneados: 0,
+      actualizados: 0,
+      omitidosSinImagen,
+    }
+  }
+
+  const pagoById = new Map(pagosConImagen.map(p => [Number(p.id), p]))
+  const alertas: Record<number, string[]> = {}
+  let hecho = 0
+  let actualizados = 0
+  const total = ids.length
+  opts.onProgreso?.({ hecho: 0, total, fase: 'ocr' })
+
+  for (let i = 0; i < ids.length; i += CHUNK_CONTEXTO_REVISION) {
+    const chunkIds = ids.slice(i, i + CHUNK_CONTEXTO_REVISION)
+    const ctx = await escanerInfopagosLoteContextoRevision(chunkIds)
+
+    for (const item of ctx.items) {
+      const pago = pagoById.get(item.pago_id)
+      if (!pago) {
+        hecho++
+        opts.onProgreso?.({ hecho, total, fase: 'ocr' })
+        continue
+      }
+
+      if (!item.ok || !(item.archivo_b64 || '').trim()) {
+        const motivos = evaluarAlertaReescaneoCartera(
+          item.pago_id,
+          { ok: false, sugerencia: null },
+          item.error ||
+            'No se pudo cargar el comprobante guardado para re-escanear.'
+        )
+        if (motivos.length) alertas[item.pago_id] = motivos
+        hecho++
+        opts.onProgreso?.({ hecho, total, fase: 'ocr' })
+        await yieldToMain()
+        continue
+      }
+
+      let archivo = fileDesdeBase64(
+        item.archivo_b64!,
+        item.nombre_archivo || `pago_${item.pago_id}.jpg`,
+        item.mime_type || 'image/jpeg'
+      )
+      try {
+        archivo = await normalizarComprobanteArchivoParaEscaneo(archivo)
+      } catch {
+        alertas[item.pago_id] = [
+          'No se pudo preparar el comprobante para escanear (HEIC/PDF).',
+        ]
+        hecho++
+        opts.onProgreso?.({ hecho, total, fase: 'ocr' })
+        await yieldToMain()
+        continue
+      }
+
+      const fd = new FormData()
+      fd.append('tipo_cedula', partes.tipo)
+      fd.append('numero_cedula', partes.numero)
+      fd.append('fuente_tasa_cambio', 'euro')
+      fd.append('comprobante', archivo)
+      const inst = (
+        pago.institucion_bancaria ||
+        item.institucion_bancaria ||
+        ''
+      ).trim()
+      if (inst) fd.append('institucion_plantilla', inst)
+
+      try {
+        const res = await escanerInfopagosExtraerComprobante(fd)
+        if (puedeActualizarPagoDesdeOcrReescaneo(item.pago_id, res)) {
+          const patch = patchPagoDesdeOcrReescaneoCartera(
+            pago,
+            res.sugerencia!
+          )
+          await pagoService.updatePago(item.pago_id, patch)
+          actualizados++
+        } else {
+          const motivos = evaluarAlertaReescaneoCartera(item.pago_id, res)
+          if (motivos.length) alertas[item.pago_id] = motivos
+        }
+      } catch {
+        alertas[item.pago_id] = [
+          'Error de red o del servidor al digitalizar el comprobante.',
+        ]
+      }
+
+      hecho++
+      opts.onProgreso?.({ hecho, total, fase: 'ocr' })
+      await yieldToMain()
+    }
+  }
+
+  return {
+    alertas,
+    escaneados: total,
+    actualizados,
+    omitidosSinImagen,
+  }
+}

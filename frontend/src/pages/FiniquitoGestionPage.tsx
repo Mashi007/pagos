@@ -618,6 +618,7 @@ function FiniquitoGestionPageInner() {
   const revisionFetchGenRef = useRef(0)
   const trabajoFetchGenRef = useRef(0)
   const terminadosFetchGenRef = useRef(0)
+  const terminadosGraficoScrollRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const t = window.setTimeout(
@@ -990,6 +991,18 @@ function FiniquitoGestionPageInner() {
     if (!areasCargadas.terminados) return
     void cargarTerminados()
   }, [areasCargadas.terminados, cedulaTerminadosBusqueda, cargarTerminados])
+
+  /** Al cargar o actualizar datos, el scroll queda al final (Hoy / Ayer visibles). */
+  useEffect(() => {
+    const el = terminadosGraficoScrollRef.current
+    if (!el || resumenDias.length === 0) return
+    const scrollAlFinal = () => {
+      el.scrollLeft = el.scrollWidth
+    }
+    scrollAlFinal()
+    const raf = requestAnimationFrame(scrollAlFinal)
+    return () => cancelAnimationFrame(raf)
+  }, [resumenDias, cedulaTerminadosBusqueda])
 
   useEffect(() => {
     const secciones: {
@@ -2600,8 +2613,10 @@ function FiniquitoGestionPageInner() {
             <p className="max-w-xl text-xs text-slate-600">
               Resumen por día (fecha en que se marcó Terminado, calendario
               Caracas): hoy y los {FINIQUITO_TERMINADOS_RESUMEN_DIAS_DEFAULT - 1}{' '}
-              días anteriores. Use el filtro de cédula para acotar el gráfico y
-              el listado (~{DEBOUNCE_MS / 1000} s de espera).
+              días anteriores. El gráfico abre mostrando <strong>Hoy</strong> y{' '}
+              <strong>Ayer</strong>; desplácese a la izquierda para ver días
+              anteriores. Use el filtro de cédula para acotar el gráfico y el
+              listado (~{DEBOUNCE_MS / 1000} s de espera).
             </p>
             <div className="flex w-full shrink-0 flex-col gap-3 sm:min-w-[min(100%,280px)] lg:w-full lg:max-w-sm xl:max-w-md">
               <div className="space-y-1.5">
@@ -2660,42 +2675,65 @@ function FiniquitoGestionPageInner() {
                 .
               </p>
               <div
-                className="mt-2 flex items-end gap-1 overflow-x-auto pb-2 pt-1"
+                ref={terminadosGraficoScrollRef}
+                className="mt-2 flex items-end gap-1 overflow-x-auto pb-2 pt-1 scroll-smooth"
                 role="img"
-                aria-label="Gráfico de casos terminados por día"
+                aria-label="Gráfico de casos terminados por día (vista inicial: Hoy)"
               >
                 <BarChart3
                   className="mb-6 h-5 w-5 shrink-0 text-violet-700"
                   aria-hidden
                 />
-                {resumenDias.map(d => (
-                  <div
-                    key={d.fecha}
-                    className="flex min-w-[2.35rem] flex-col items-center gap-1"
-                    title={`${d.etiqueta} (${d.fecha}): ${d.cantidad} caso(s)`}
-                  >
-                    <span className="text-[10px] font-semibold tabular-nums text-violet-900">
-                      {d.cantidad > 0 ? d.cantidad : ''}
-                    </span>
+                {resumenDias.map(d => {
+                  const esHoy = d.etiqueta === 'Hoy'
+                  const esAyer = d.etiqueta === 'Ayer'
+                  return (
                     <div
+                      key={d.fecha}
                       className={cn(
-                        'w-7 rounded-t-md transition-all',
-                        d.cantidad > 0
-                          ? 'bg-violet-500/90'
-                          : 'bg-violet-200/60'
+                        'flex min-w-[2.35rem] flex-col items-center gap-1 rounded-t-md px-0.5',
+                        esHoy && 'bg-violet-100/80 ring-1 ring-violet-400/70'
                       )}
-                      style={{
-                        height: `${Math.max(
-                          d.cantidad > 0 ? 12 : 4,
-                          Math.round((d.cantidad / maxDiaCantidad) * 120)
-                        )}px`,
-                      }}
-                    />
-                    <span className="max-w-[2.75rem] text-center text-[8px] leading-tight text-slate-600">
-                      {d.etiqueta}
-                    </span>
-                  </div>
-                ))}
+                      title={`${d.etiqueta} (${d.fecha}): ${d.cantidad} caso(s)`}
+                    >
+                      <span
+                        className={cn(
+                          'text-[10px] font-semibold tabular-nums text-violet-900',
+                          esHoy && 'text-violet-950'
+                        )}
+                      >
+                        {d.cantidad > 0 ? d.cantidad : esHoy || esAyer ? '0' : ''}
+                      </span>
+                      <div
+                        className={cn(
+                          'w-7 rounded-t-md transition-all',
+                          d.cantidad > 0
+                            ? esHoy
+                              ? 'bg-violet-700'
+                              : 'bg-violet-500/90'
+                            : esHoy
+                              ? 'bg-violet-300/80'
+                              : 'bg-violet-200/60'
+                        )}
+                        style={{
+                          height: `${Math.max(
+                            d.cantidad > 0 ? 12 : 4,
+                            Math.round((d.cantidad / maxDiaCantidad) * 120)
+                          )}px`,
+                        }}
+                      />
+                      <span
+                        className={cn(
+                          'max-w-[2.75rem] text-center text-[8px] leading-tight text-slate-600',
+                          esHoy && 'font-bold text-violet-900',
+                          esAyer && 'font-semibold text-violet-800'
+                        )}
+                      >
+                        {d.etiqueta}
+                      </span>
+                    </div>
+                  )
+                })}
               </div>
             </>
           )}
