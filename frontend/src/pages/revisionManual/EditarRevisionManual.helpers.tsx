@@ -560,6 +560,47 @@ export function partesCedulaParaEscaneoRevision(
   return { tipo: m[1] || 'V', numero }
 }
 
+/** Re-escaneo cartera: institución Binance (Pay / P2P). */
+export function esInstitucionBinanceReescaneo(inst: string | null | undefined): boolean {
+  return /\bbinance\b/i.test(String(inst ?? '').trim())
+}
+
+/** Binance en re-escaneo cartera: omitir avisos que solo exigen/cuestionan la fecha. */
+export function omitirValidacionFechaBinanceReescaneo(
+  msg: string | null | undefined
+): string | null {
+  const raw = String(msg ?? '').trim()
+  if (!raw) return null
+  const partes = raw
+    .split(/(?<=[.!?])\s+|\n+/)
+    .map(p => p.trim())
+    .filter(Boolean)
+    .filter(p => !esValidacionSoloFechaReescaneo(p))
+  if (!partes.length) return null
+  return partes.join(' ').trim() || null
+}
+
+function esValidacionSoloFechaReescaneo(texto: string): boolean {
+  const t = texto.trim()
+  if (!t) return false
+  if (/^Indique la fecha de pago\b/i.test(t)) return true
+  if (/^La fecha de pago no puede ser futura\.?$/i.test(t)) return true
+  if (/^Complete la fecha de pago\b/i.test(t)) return true
+  if (/fecha de pago.*no se detect/i.test(t)) return true
+  if (/no se detect.*fecha de pago/i.test(t)) return true
+  return false
+}
+
+export function institucionEfectivaReescaneoCartera(
+  pago: Pick<Pago, 'institucion_bancaria'>,
+  res?: { sugerencia?: { institucion_financiera?: string } | null } | null
+): string {
+  return (
+    (pago.institucion_bancaria || '').trim() ||
+    (res?.sugerencia?.institucion_financiera || '').trim()
+  )
+}
+
 /** Pago con enlace o ruta de comprobante ya insertado en cartera. */
 export function pagoTieneComprobanteInsertado(
   pago: Pick<Pago, 'link_comprobante' | 'documento_ruta'>
@@ -579,10 +620,14 @@ export function patchPagoDesdeOcrReescaneoCartera(
     pago.prestamo_id,
     sugerencia
   )
+  const instEfectiva =
+    (base.institucion_bancaria || pago.institucion_bancaria || '').trim()
   const patch: Partial<PagoCreate> & { monto_bs_original?: number | null } = {
     cedula_cliente: pago.cedula_cliente,
     prestamo_id: pago.prestamo_id ?? null,
-    fecha_pago: base.fecha_pago,
+    fecha_pago: esInstitucionBinanceReescaneo(instEfectiva)
+      ? fechaPagoPagoRowParaInput(pago)
+      : base.fecha_pago,
     numero_documento: base.numero_documento,
     institucion_bancaria: base.institucion_bancaria,
     moneda_registro: base.moneda_registro,

@@ -7,6 +7,9 @@ import { pagoService, type Pago } from '../../services/pagoService'
 import { normalizarComprobanteArchivoParaEscaneo } from '../../utils/normalizarComprobanteArchivo'
 import { hayDuplicadoFila, filaDesdeRevisionPago } from '../escanerInfopagosLoteModel'
 import {
+  esInstitucionBinanceReescaneo,
+  institucionEfectivaReescaneoCartera,
+  omitirValidacionFechaBinanceReescaneo,
   patchPagoDesdeOcrReescaneoCartera,
   partesCedulaParaEscaneoRevision,
   pagoTieneComprobanteInsertado,
@@ -49,9 +52,24 @@ function yieldToMain(): Promise<void> {
   })
 }
 
+function validacionReescaneoEfectiva(
+  pago: Pago,
+  res: EscanerInfopagosExtraerResponse
+): { campos: string | null; reglas: string | null } {
+  const inst = institucionEfectivaReescaneoCartera(pago, res)
+  let campos = res.validacion_campos?.trim() || null
+  let reglas = res.validacion_reglas?.trim() || null
+  if (esInstitucionBinanceReescaneo(inst)) {
+    campos = omitirValidacionFechaBinanceReescaneo(campos)
+    reglas = omitirValidacionFechaBinanceReescaneo(reglas)
+  }
+  return { campos, reglas }
+}
+
 function duplicadoBloqueaReescaneo(
   pagoId: number,
-  res: EscanerInfopagosExtraerResponse
+  res: EscanerInfopagosExtraerResponse,
+  validacion: { campos: string | null; reglas: string | null }
 ): boolean {
   const fila = filaDesdeRevisionPago(new File([], 'x'), {
     pago_id: pagoId,
@@ -59,8 +77,8 @@ function duplicadoBloqueaReescaneo(
   })
   const filaTras = {
     ...fila,
-    validacionCampos: res.validacion_campos ?? null,
-    validacionReglas: res.validacion_reglas ?? null,
+    validacionCampos: validacion.campos,
+    validacionReglas: validacion.reglas,
     escanerColision: {
       duplicado_en_pagos: Boolean(res.duplicado_en_pagos),
       pago_existente_id:
@@ -82,10 +100,11 @@ function duplicadoBloqueaReescaneo(
 
 /** Motivos de alerta (Visto, escritura, duplicado, OCR fallido). */
 export function evaluarAlertaReescaneoCartera(
-  pagoId: number,
+  pago: Pago,
   res: EscanerInfopagosExtraerResponse,
   contextoError?: string | null
 ): string[] {
+  const pagoId = Number(pago.id)
   const motivos: string[] = []
 
   if (contextoError?.trim()) {
@@ -94,22 +113,26 @@ export function evaluarAlertaReescaneoCartera(
   }
 
   if (!res.ok || !res.sugerencia) {
-    motivos.push(
+    const inst = institucionEfectivaReescaneoCartera(pago, res)
+    let msg =
       res.validacion_reglas?.trim() ||
-        res.validacion_campos?.trim() ||
-        res.error?.trim() ||
-        'No se pudo digitalizar el comprobante; revise manualmente.'
-    )
+      res.validacion_campos?.trim() ||
+      res.error?.trim() ||
+      'No se pudo digitalizar el comprobante; revise manualmente.'
+    if (esInstitucionBinanceReescaneo(inst)) {
+      msg =
+        omitirValidacionFechaBinanceReescaneo(msg) ||
+        omitirValidacionFechaBinanceReescaneo(res.error) ||
+        ''
+    }
+    if (msg) motivos.push(msg)
     return motivos
   }
 
-  if (res.validacion_campos?.trim()) {
-    motivos.push(res.validacion_campos.trim())
-  }
-  if (res.validacion_reglas?.trim()) {
-    motivos.push(res.validacion_reglas.trim())
-  }
-  if (duplicadoBloqueaReescaneo(pagoId, res)) {
+  const validacion = validacionReescaneoEfectiva(pago, res)
+  if (validacion.campos) motivos.push(validacion.campos)
+  if (validacion.reglas) motivos.push(validacion.reglas)
+  if (duplicadoBloqueaReescaneo(pagoId, res, validacion)) {
     motivos.push(
       'Posible duplicado en cartera; revise y use Visto si corresponde.'
     )
@@ -119,13 +142,14 @@ export function evaluarAlertaReescaneoCartera(
 }
 
 export function puedeActualizarPagoDesdeOcrReescaneo(
-  pagoId: number,
+  pago: Pago,
   res: EscanerInfopagosExtraerResponse
 ): boolean {
   if (!res.ok || !res.sugerencia) return false
-  if (res.validacion_campos?.trim()) return false
-  if (res.validacion_reglas?.trim()) return false
-  if (duplicadoBloqueaReescaneo(pagoId, res)) return false
+  const validacion = validacionReescaneoEfectiva(pago, res)
+  if (validacion.campos) return false
+  if (validacion.reglas) return false
+  if (duplicadoBloqueaReescaneo(Number(pago.id), res, validacion)) return false
   return true
 }
 
@@ -194,7 +218,7 @@ export async function reescanearComprobantesCarteraPrestamo(opts: {
 
       if (!item.ok || !(item.archivo_b64 || '').trim()) {
         const motivos = evaluarAlertaReescaneoCartera(
-          item.pago_id,
+          pago,
           { ok: false, sugerencia: null },
           item.error ||
             'No se pudo cargar el comprobante guardado para re-escanear.'
@@ -237,7 +261,7 @@ export async function reescanearComprobantesCarteraPrestamo(opts: {
 
       try {
         const res = await escanerInfopagosExtraerComprobante(fd)
-        if (puedeActualizarPagoDesdeOcrReescaneo(item.pago_id, res)) {
+        if (puedeActualizarPagoDesdeOcrReescaneo(pago, res)) {
           const patch = patchPagoDesdeOcrReescaneoCartera(
             pago,
             res.sugerencia!
@@ -245,8 +269,10 @@ export async function reescanearComprobantesCarteraPrestamo(opts: {
           await pagoService.updatePago(item.pago_id, patch)
           actualizados++
         } else {
-          const motivos = evaluarAlertaReescaneoCartera(item.pago_id, res)
-          if (motivos.length) alertas[item.pago_id] = motivos
+          const motivos = evaluarAlertaReescaneoCartera(pago, res)
+          if (motivos.length) {
+            alertas[item.pago_id] = motivos
+          }
         }
       } catch {
         alertas[item.pago_id] = [
