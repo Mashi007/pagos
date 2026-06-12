@@ -324,6 +324,10 @@ function textoToastRefresco(r: FiniquitoRefreshStats): {
 const DEBOUNCE_MS = 420
 const AUTO_REFRESH_POLL_MS = 60_000
 
+/** Tope visual del gráfico diario de terminados (outliers no comprimen el resto). */
+const TERMINADOS_GRAFICO_ESCALA_MAX = 25
+const TERMINADOS_GRAFICO_ALTURA_PX = 120
+
 /** Coincide con backend `_ADMIN_CASOS_MAX_LIMIT` para bandejas pequeñas. */
 const FETCH_LIMIT = 2000
 const BANDEJA_PRINCIPAL_FETCH_LIMIT = 100
@@ -891,10 +895,25 @@ function FiniquitoGestionPageInner() {
     [itemsTerminados, filtrosTerminados]
   )
 
-  const maxDiaCantidad = useMemo(() => {
-    const vals = resumenDias.map(d => d.cantidad)
-    return Math.max(1, ...vals, 0)
+  const escalaMaxTerminadosGrafico = useMemo(() => {
+    const vals = resumenDias.map(d => d.cantidad).filter(c => c > 0)
+    const dataMax = vals.length ? Math.max(...vals) : 0
+    return Math.min(
+      TERMINADOS_GRAFICO_ESCALA_MAX,
+      Math.max(1, dataMax)
+    )
   }, [resumenDias])
+
+  const alturaBarraTerminados = (cantidad: number) => {
+    if (cantidad <= 0) return 4
+    const paraEscala = Math.min(cantidad, TERMINADOS_GRAFICO_ESCALA_MAX)
+    return Math.max(
+      12,
+      Math.round(
+        (paraEscala / escalaMaxTerminadosGrafico) * TERMINADOS_GRAFICO_ALTURA_PX
+      )
+    )
+  }
 
   /** Mueve filas locales al instante con el caso devuelto por PATCH (antes del refetch). */
   const incorporarCasoActualizado = useCallback(
@@ -2672,7 +2691,8 @@ function FiniquitoGestionPageInner() {
                 {cedulaTerminadosBusqueda
                   ? ` (filtro: ${cedulaTerminadosBusqueda})`
                   : ''}
-                .
+                . Escala del gráfico: máx. {TERMINADOS_GRAFICO_ESCALA_MAX}{' '}
+                casos/día (cifras mayores se muestran arriba de la barra).
               </p>
               <div
                 ref={terminadosGraficoScrollRef}
@@ -2687,6 +2707,8 @@ function FiniquitoGestionPageInner() {
                 {resumenDias.map(d => {
                   const esHoy = d.etiqueta === 'Hoy'
                   const esAyer = d.etiqueta === 'Ayer'
+                  const fueraDeEscala =
+                    d.cantidad > TERMINADOS_GRAFICO_ESCALA_MAX
                   return (
                     <div
                       key={d.fecha}
@@ -2694,12 +2716,17 @@ function FiniquitoGestionPageInner() {
                         'flex min-w-[2.35rem] flex-col items-center gap-1 rounded-t-md px-0.5',
                         esHoy && 'bg-violet-100/80 ring-1 ring-violet-400/70'
                       )}
-                      title={`${d.etiqueta} (${d.fecha}): ${d.cantidad} caso(s)`}
+                      title={
+                        fueraDeEscala
+                          ? `${d.etiqueta} (${d.fecha}): ${d.cantidad} caso(s) — barra limitada a escala ${TERMINADOS_GRAFICO_ESCALA_MAX}/día`
+                          : `${d.etiqueta} (${d.fecha}): ${d.cantidad} caso(s)`
+                      }
                     >
                       <span
                         className={cn(
                           'text-[10px] font-semibold tabular-nums text-violet-900',
-                          esHoy && 'text-violet-950'
+                          esHoy && 'text-violet-950',
+                          fueraDeEscala && 'text-amber-900'
                         )}
                       >
                         {d.cantidad > 0 ? d.cantidad : esHoy || esAyer ? '0' : ''}
@@ -2708,18 +2735,17 @@ function FiniquitoGestionPageInner() {
                         className={cn(
                           'w-7 rounded-t-md transition-all',
                           d.cantidad > 0
-                            ? esHoy
-                              ? 'bg-violet-700'
-                              : 'bg-violet-500/90'
+                            ? fueraDeEscala
+                              ? 'bg-violet-600 ring-1 ring-amber-400/90'
+                              : esHoy
+                                ? 'bg-violet-700'
+                                : 'bg-violet-500/90'
                             : esHoy
                               ? 'bg-violet-300/80'
                               : 'bg-violet-200/60'
                         )}
                         style={{
-                          height: `${Math.max(
-                            d.cantidad > 0 ? 12 : 4,
-                            Math.round((d.cantidad / maxDiaCantidad) * 120)
-                          )}px`,
+                          height: `${alturaBarraTerminados(d.cantidad)}px`,
                         }}
                       />
                       <span
