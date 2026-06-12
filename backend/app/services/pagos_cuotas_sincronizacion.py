@@ -82,6 +82,9 @@ def sincronizar_pagos_pendientes_a_prestamos(
                     r.get("pagos_reaplicados"),
                 )
             else:
+                db.rollback()
+                n = 0
+                cascadas = 0
                 logger.warning(
                     "reaplicacion cascada auto omitida prestamo_id=%s error=%s",
                     pid,

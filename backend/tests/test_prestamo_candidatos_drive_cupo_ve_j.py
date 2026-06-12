@@ -1,6 +1,7 @@
 """Reglas V/E (max 1 APROBADO) vs J (varios) en candidatos Drive."""
 import os
 import sys
+from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 os.environ.setdefault("DATABASE_URL", "sqlite:///./test.db")
@@ -68,3 +69,42 @@ def test_j_con_varios_aprobados_no_bloquea_por_cupo_ve(monkeypatch):
     )
     assert ok is True
     assert not any("tipo V o E" in m for m in motivos)
+
+
+def test_guardar_una_fila_exitosa_no_falla_por_actualizar_conteo(monkeypatch):
+    from app.api.v1.endpoints import prestamos as prestamos_routes
+    from app.services import prestamo_candidatos_drive_guardar as svc
+
+    candidato = SimpleNamespace(
+        payload=_payload_base("V12345678"),
+        cedula_cmp="V12345678",
+    )
+    db = MagicMock()
+    db.scalar.return_value = candidato
+
+    monkeypatch.setattr(
+        svc,
+        "conteo_prestamos_aprobados_por_cedula_norm",
+        lambda _db: {"V12345678": 0},
+    )
+    monkeypatch.setattr(
+        svc,
+        "_motivos_no_100",
+        lambda _payload, _db, _counts: (True, [], SimpleNamespace()),
+    )
+    monkeypatch.setattr(
+        prestamos_routes,
+        "crear_prestamo_servicio_interno",
+        lambda _db, _pc, _current_user: SimpleNamespace(id=123),
+    )
+
+    out = svc.ejecutar_guardar_candidatos_drive_una_fila(
+        db,
+        current_user=SimpleNamespace(rol="admin"),
+        sheet_row_number=25,
+    )
+
+    assert out["ok"] is True
+    assert out["insertados_ok"] == 1
+    db.delete.assert_called_once_with(candidato)
+    db.commit.assert_called_once()

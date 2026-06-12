@@ -95,3 +95,30 @@ def test_pipeline_reconstruir_completa_llama_reset():
     assert out["reaplicacion_completa"] is True
     reset_mock.assert_called_once_with(db, 10)
     inc_mock.assert_not_called()
+
+
+def test_sincronizacion_no_commit_si_reaplicacion_cascada_falla():
+    from app.services.pagos_cuotas_sincronizacion import (
+        sincronizar_pagos_pendientes_a_prestamos,
+    )
+
+    db = MagicMock()
+    with (
+        patch(
+            "app.api.v1.endpoints.pagos.aplicar_pagos_pendientes_prestamo",
+            return_value=1,
+        ),
+        patch(
+            "app.services.pagos_cuotas_reaplicacion.prestamo_requiere_correccion_cascada",
+            return_value=True,
+        ),
+        patch(
+            "app.services.pagos_cuotas_reaplicacion.reset_y_reaplicar_cascada_prestamo",
+            return_value={"ok": False, "error": "fallo reaplicando"},
+        ),
+    ):
+        out = sincronizar_pagos_pendientes_a_prestamos(db, [10])
+
+    assert out == 0
+    db.rollback.assert_called_once()
+    db.commit.assert_not_called()

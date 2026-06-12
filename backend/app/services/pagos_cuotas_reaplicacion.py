@@ -48,6 +48,17 @@ def _delete_cuota_pagos_por_prestamo_sql(db: Session, prestamo_id: int) -> int:
     return int(getattr(r, "rowcount", -1) or -1)
 
 
+def _rollback_reset_cascada_fallido(db: Session, prestamo_id: int) -> None:
+    try:
+        db.rollback()
+    except Exception:
+        logger.warning(
+            "reset_y_reaplicar_cascada_prestamo prestamo_id=%s: no se pudo revertir fallo",
+            prestamo_id,
+            exc_info=True,
+        )
+
+
 def integridad_cuotas_prestamo(db: Session, prestamo_id: int) -> dict[str, Any]:
     """Compara total_pagado con SUM(cuota_pagos) por cuota; no modifica datos."""
     prestamo = db.get(Prestamo, prestamo_id)
@@ -534,6 +545,7 @@ def reset_y_reaplicar_cascada_prestamo(db: Session, prestamo_id: int) -> dict[st
                 .where(Cuota.prestamo_id == prestamo_id)
             )
         if restantes and int(restantes) > 0:
+            _rollback_reset_cascada_fallido(db, prestamo_id)
             return {
                 "ok": False,
                 "error": f"Aun quedan {restantes} filas en cuota_pagos tras DELETE; abortar.",
@@ -554,6 +566,7 @@ def reset_y_reaplicar_cascada_prestamo(db: Session, prestamo_id: int) -> dict[st
         _marcar_prestamo_liquidado_si_corresponde(prestamo_id, db)
     except Exception as exc:
         logger.exception("reset_y_reaplicar_cascada_prestamo prestamo_id=%s", prestamo_id)
+        _rollback_reset_cascada_fallido(db, prestamo_id)
         return {
             "ok": False,
             "error": detalle_excepcion_db(exc),

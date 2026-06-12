@@ -6295,6 +6295,7 @@ def aplicar_pagos_pendientes_cuotas_por_prestamo(
     prestamo_id: int,
 
     db: Session = Depends(get_db),
+    _current: UserResponse = Depends(require_operator_or_higher),
 
 ):
 
@@ -6467,7 +6468,11 @@ def eliminar_todos_pagos_por_prestamo(
 
 @router.delete("/{pago_id:int}", status_code=204)
 
-def eliminar_pago(pago_id: int, db: Session = Depends(get_db)):
+def eliminar_pago(
+    pago_id: int,
+    db: Session = Depends(get_db),
+    _current: UserResponse = Depends(require_operator_or_higher),
+):
 
     """Elimina un pago, limpia dependencias y, si tiene crédito, alinea cuotas vía cascada.
 
