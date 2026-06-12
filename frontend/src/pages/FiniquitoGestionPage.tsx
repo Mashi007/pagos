@@ -1497,39 +1497,43 @@ function FiniquitoGestionPageInner() {
   const renderAcciones = (row: FiniquitoCasoItem) => (
     <div className="flex flex-wrap items-center justify-end gap-2">
       {canTrasladarFiniquitoBandejas ? (
-        <Button
-          type="button"
-          size="sm"
-          className="h-8 bg-emerald-700 text-xs hover:bg-emerald-800"
-          disabled={casoTieneAccionPendiente(row.id)}
-          onClick={() => void cambiarEstado(row.id, 'ACEPTADO')}
-        >
-          Validar
-        </Button>
-      ) : null}
-      <Button
-        type="button"
-        size="sm"
-        variant="outline"
-        className="h-8 border-rose-300 text-xs text-rose-900"
-        disabled={casoTieneAccionPendiente(row.id)}
-        onClick={() => setPendingRechazoCasoId(row.id)}
-      >
-        Rechazar
-      </Button>
-      {botonProcesosNormales(row)}
-      <Button
-        type="button"
-        size="icon"
-        variant="outline"
-        className="h-8 w-8 border-slate-300 text-rose-800"
-        title="Eliminar caso de la bandeja"
-        aria-label={`Eliminar caso ${row.id}`}
-        disabled={casoTieneAccionPendiente(row.id)}
-        onClick={() => setPendingEliminarCasoId(row.id)}
-      >
-        <Trash2 className="h-4 w-4" aria-hidden />
-      </Button>
+        <>
+          <Button
+            type="button"
+            size="sm"
+            className="h-8 bg-emerald-700 text-xs hover:bg-emerald-800"
+            disabled={casoTieneAccionPendiente(row.id)}
+            onClick={() => void cambiarEstado(row.id, 'ACEPTADO')}
+          >
+            Validar
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-8 border-rose-300 text-xs text-rose-900"
+            disabled={casoTieneAccionPendiente(row.id)}
+            onClick={() => setPendingRechazoCasoId(row.id)}
+          >
+            Rechazar
+          </Button>
+          {botonProcesosNormales(row)}
+          <Button
+            type="button"
+            size="icon"
+            variant="outline"
+            className="h-8 w-8 border-slate-300 text-rose-800"
+            title="Eliminar caso de la bandeja"
+            aria-label={`Eliminar caso ${row.id}`}
+            disabled={casoTieneAccionPendiente(row.id)}
+            onClick={() => setPendingEliminarCasoId(row.id)}
+          >
+            <Trash2 className="h-4 w-4" aria-hidden />
+          </Button>
+        </>
+      ) : (
+        botonesFilaOperativos(row)
+      )}
     </div>
   )
 
@@ -1537,32 +1541,34 @@ function FiniquitoGestionPageInner() {
     return (
       <div className="flex flex-wrap items-center justify-end gap-2">
         {botonesFilaOperativos(row)}
-        <Button
-          type="button"
-          size="sm"
-          className="h-8 gap-1 bg-emerald-700 text-xs hover:bg-emerald-800"
-          disabled={casoTieneAccionPendiente(row.id)}
-          title="Abrir revisión manual y usar Conciliar (mismo flujo que revisión manual estándar)"
-          onClick={() => solicitarVistoRevisionManual(row)}
-        >
-          <CheckCircle2 className="h-3.5 w-3.5" aria-hidden />
-          Visto
-        </Button>
-        {botonProcesosNormales(row)}
         {canTrasladarFiniquitoBandejas ? (
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            className="h-8 gap-1 border-emerald-600 text-xs text-emerald-900 hover:bg-emerald-50"
-            title="Solo administrador: cierra conciliación y pasa el caso directo al área de trabajo"
-            aria-label={`Pasar caso ${row.id} directo al área de trabajo`}
-            disabled={casoTieneAccionPendiente(row.id)}
-            onClick={() => void pasarATrabajo(row.id)}
-          >
-            <X className="h-3.5 w-3.5 shrink-0" aria-hidden />
-            Área trabajo
-          </Button>
+          <>
+            <Button
+              type="button"
+              size="sm"
+              className="h-8 gap-1 bg-emerald-700 text-xs hover:bg-emerald-800"
+              disabled={casoTieneAccionPendiente(row.id)}
+              title="Abrir revisión manual y usar Conciliar (mismo flujo que revisión manual estándar)"
+              onClick={() => solicitarVistoRevisionManual(row)}
+            >
+              <CheckCircle2 className="h-3.5 w-3.5" aria-hidden />
+              Visto
+            </Button>
+            {botonProcesosNormales(row)}
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="h-8 gap-1 border-emerald-600 text-xs text-emerald-900 hover:bg-emerald-50"
+              title="Solo administrador: cierra conciliación y pasa el caso directo al área de trabajo"
+              aria-label={`Pasar caso ${row.id} directo al área de trabajo`}
+              disabled={casoTieneAccionPendiente(row.id)}
+              onClick={() => void pasarATrabajo(row.id)}
+            >
+              <X className="h-3.5 w-3.5 shrink-0" aria-hidden />
+              Área trabajo
+            </Button>
+          </>
         ) : null}
       </div>
     )
@@ -2065,15 +2071,24 @@ function FiniquitoGestionPageInner() {
                 Bandeja principal
               </h2>
               <p className="text-xs text-slate-600 sm:text-sm">
-                <strong>Validar</strong> (pasa al área de revisión, sin procesar
-                datos) solo administrador; puede seleccionar varios y usar{' '}
-                <strong>Validar seleccionados</strong>;{' '}
-                <strong>Procesos normales</strong> saca el crédito de
-                finiquito si Conciliar confirma que no está liquidado;{' '}
-                <strong>Rechazar</strong> o <strong>Eliminar</strong> para todos los
-                perfiles con acceso. Días 1-2 en bandeja; desde día{' '}
-                {BANDEJA_DIA_ATRASADO} el estado pasa a atrasado. Ciclo total{' '}
-                {PLAZO_CICLO_DIAS} días.
+                {canTrasladarFiniquitoBandejas ? (
+                  <>
+                    <strong>Validar</strong> (pasa al área de revisión, sin procesar
+                    datos) solo administrador; puede seleccionar varios y usar{' '}
+                    <strong>Validar seleccionados</strong>;{' '}
+                    <strong>Procesos normales</strong> saca el crédito de finiquito si
+                    Conciliar confirma que no está liquidado;{' '}
+                    <strong>Rechazar</strong> o <strong>Eliminar</strong> en esta
+                    bandeja. Días 1-2 en bandeja; desde día {BANDEJA_DIA_ATRASADO} el
+                    estado pasa a atrasado. Ciclo total {PLAZO_CICLO_DIAS} días.
+                  </>
+                ) : (
+                  <>
+                    Operadores y gerentes: solo revisión manual del préstamo, edición
+                    del caso y descarga de estado de cuenta (iconos por fila). No pueden
+                    validar, rechazar, eliminar ni mover casos entre bandejas.
+                  </>
+                )}
               </p>
             </div>
             <div className="flex w-full shrink-0 flex-col gap-3 sm:min-w-[min(100%,280px)] lg:w-full lg:max-w-sm xl:max-w-md">
@@ -2281,9 +2296,20 @@ function FiniquitoGestionPageInner() {
                 Area de revision
               </h2>
               <p className="text-xs text-amber-900/85">
-                {displayTotalRevision} {subtituloRevision} · Visto → Conciliar;{' '}
-                <strong>Procesos normales</strong> si no está liquidado; «Área
-                trabajo» solo administrador
+                {displayTotalRevision} {subtituloRevision}
+                {canTrasladarFiniquitoBandejas ? (
+                  <>
+                    {' '}
+                    · Visto → Conciliar; <strong>Procesos normales</strong> si no
+                    está liquidado; «Área trabajo» solo administrador
+                  </>
+                ) : (
+                  <>
+                    {' '}
+                    · Operadores y gerentes: solo iconos de revisión manual, edición y
+                    PDF por fila (sin Visto ni traslado a otra bandeja)
+                  </>
+                )}
               </p>
             </div>
           </div>
