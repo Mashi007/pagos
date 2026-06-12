@@ -117,6 +117,9 @@ def test_confirmacion_humana_publica_no_omite_validadores(monkeypatch):
             monto=100,
             moneda="USD",
             comprobante=_Upload(),
+            observacion=None,
+            contact_website=None,
+            fuente_tasa_cambio="euro",
             confirmacion_humana="true",
         )
     )
