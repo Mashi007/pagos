@@ -72,6 +72,13 @@ import {
   FINIQUITO_TERMINADOS_RESUMEN_DIAS_DEFAULT,
 } from '../services/finiquitoService'
 import { descargarTerminadosExcel } from '../utils/finiquitoTerminadosExcelExport'
+import {
+  FINIQUITO_TERMINADOS_CACHE_TTL_MS,
+  invalidateFiniquitoTerminadosCache,
+  minutosDesdeCache,
+  readFiniquitoTerminadosCache,
+  writeFiniquitoTerminadosCache,
+} from '../utils/finiquitoTerminadosCache'
 import { prestamoService } from '../services/prestamoService'
 
 import { cn, formatCurrency, formatDate } from '../utils'
@@ -389,6 +396,34 @@ function casoCoincideCedula(caso: FiniquitoCasoItem, filtro: string): boolean {
     .includes(f)
 }
 
+/** Para ordenar área de revisión: sin fecha al final. */
+function timestampUltimoPago(iso: string | null | undefined): number {
+  if (iso == null || String(iso).trim() === '') return Number.POSITIVE_INFINITY
+  const t = Date.parse(String(iso))
+  return Number.isNaN(t) ? Number.POSITIVE_INFINITY : t
+}
+
+function ordenarCasosPorUltimoPagoAsc(
+  items: FiniquitoCasoItem[]
+): FiniquitoCasoItem[] {
+  return [...items].sort(
+    (a, b) =>
+      timestampUltimoPago(a.ultima_fecha_pago) -
+      timestampUltimoPago(b.ultima_fecha_pago)
+  )
+}
+
+type SeleccionFilasTabla = {
+  selectedIds: Set<number>
+  onToggleRow: (id: number, checked: boolean) => void
+  onToggleAll: (checked: boolean) => void
+  disabled: boolean
+  todosSeleccionados: boolean
+  algunSeleccionado: boolean
+  estadoRequerido: string
+  ariaSeleccionarTodos: string
+}
+
 function textoFechaTabla(iso: string | null | undefined): string {
   if (iso == null || String(iso).trim() === '') return '-'
   try {
@@ -555,6 +590,10 @@ function FiniquitoGestionPageInner() {
     () => new Set()
   )
   const [validandoBandejaLote, setValidandoBandejaLote] = useState(false)
+  const [selectedRevisionIds, setSelectedRevisionIds] = useState<Set<number>>(
+    () => new Set()
+  )
+  const [pasandoRevisionLote, setPasandoRevisionLote] = useState(false)
   const [resumenEstado, setResumenEstado] = useState<FiniquitoResumenEstado | null>(
     null
   )
@@ -616,6 +655,9 @@ function FiniquitoGestionPageInner() {
     })
   const [descargandoTerminadosExcel, setDescargandoTerminadosExcel] =
     useState(false)
+  const [terminadosFetchedAt, setTerminadosFetchedAt] = useState<number | null>(
+    null
+  )
   const resumenDigestRef = useRef<string | null>(null)
   const resumenPollingBusyRef = useRef(false)
   const bandejaFetchGenRef = useRef(0)
@@ -805,10 +847,47 @@ function FiniquitoGestionPageInner() {
   )
 
   const cargarTerminados = useCallback(
-    async (opts?: { silent?: boolean }) => {
+    async (opts?: { silent?: boolean; force?: boolean }) => {
       const silent = opts?.silent === true
+      const force = opts?.force === true
       const gen = ++terminadosFetchGenRef.current
       const cedulaFiltro = cedulaTerminadosBusqueda
+
+      const aplicarPayload = (
+        items: FiniquitoTerminadoItem[],
+        total: number,
+        dias: { fecha: string; etiqueta: string; cantidad: number }[],
+        totalEnVentana: number,
+        totalResumen: number,
+        fetchedAt: number
+      ) => {
+        setItemsTerminados(items)
+        setTotalTerminados(total)
+        setResumenDias(dias)
+        setTotalTerminadosEnVentana(totalEnVentana)
+        setTotalTerminadosResumen(totalResumen)
+        setTerminadosFetchedAt(fetchedAt)
+        marcarAreaCargada('terminados')
+      }
+
+      if (!force) {
+        const cached = readFiniquitoTerminadosCache(
+          cedulaFiltro,
+          FINIQUITO_TERMINADOS_RESUMEN_DIAS_DEFAULT
+        )
+        if (cached) {
+          aplicarPayload(
+            cached.items,
+            cached.totalTerminados,
+            cached.resumenDias,
+            cached.totalEnVentana,
+            cached.totalTerminadosResumen,
+            cached.fetchedAt
+          )
+          return
+        }
+      }
+
       if (!silent) setAreaLoadingFlag('terminados', true)
       try {
         const [rTerm, rSem] = await Promise.all([
@@ -822,12 +901,28 @@ function FiniquitoGestionPageInner() {
           ),
         ])
         if (gen !== terminadosFetchGenRef.current) return
-        setItemsTerminados(rTerm.items || [])
-        setTotalTerminados(rTerm.total ?? (rTerm.items || []).length)
-        setResumenDias(rSem.dias || [])
-        setTotalTerminadosEnVentana(rSem.total_en_ventana ?? 0)
-        setTotalTerminadosResumen(rSem.total_terminados ?? 0)
-        marcarAreaCargada('terminados')
+        const fetchedAt = Date.now()
+        const items = rTerm.items || []
+        const total = rTerm.total ?? items.length
+        const dias = rSem.dias || []
+        aplicarPayload(
+          items,
+          total,
+          dias,
+          rSem.total_en_ventana ?? 0,
+          rSem.total_terminados ?? 0,
+          fetchedAt
+        )
+        writeFiniquitoTerminadosCache({
+          fetchedAt,
+          cedula: cedulaFiltro,
+          dias: FINIQUITO_TERMINADOS_RESUMEN_DIAS_DEFAULT,
+          items,
+          totalTerminados: total,
+          resumenDias: dias,
+          totalEnVentana: rSem.total_en_ventana ?? 0,
+          totalTerminadosResumen: rSem.total_terminados ?? 0,
+        })
       } catch (e: unknown) {
         if (gen !== terminadosFetchGenRef.current) return
         if (!silent) {
@@ -873,8 +968,10 @@ function FiniquitoGestionPageInner() {
 
   const itemsAreaRevisionVisibles = useMemo(
     () =>
-      itemsAreaRevision.filter(row =>
-        casoCoincideCedula(row, cedulaRevisionBusqueda)
+      ordenarCasosPorUltimoPagoAsc(
+        itemsAreaRevision.filter(row =>
+          casoCoincideCedula(row, cedulaRevisionBusqueda)
+        )
       ),
     [itemsAreaRevision, cedulaRevisionBusqueda]
   )
@@ -1075,6 +1172,7 @@ function FiniquitoGestionPageInner() {
       try {
         const snapshot = await finiquitoAdminResumenEstado()
         const digest = buildResumenDigest(snapshot)
+        const terminadoAntes = resumenEstado?.terminado
         setResumenEstado(snapshot)
         if (resumenDigestRef.current == null) {
           resumenDigestRef.current = digest
@@ -1082,6 +1180,12 @@ function FiniquitoGestionPageInner() {
         }
         if (digest !== resumenDigestRef.current) {
           resumenDigestRef.current = digest
+          if (
+            terminadoAntes != null &&
+            terminadoAntes !== snapshot.terminado
+          ) {
+            invalidateFiniquitoTerminadosCache()
+          }
           void invalidatePrestamosQueries(queryClient)
           await cargarAreasVisibles({ silent: true })
         }
@@ -1097,7 +1201,7 @@ function FiniquitoGestionPageInner() {
     }, AUTO_REFRESH_POLL_MS)
     void tick()
     return () => window.clearInterval(intervalId)
-  }, [cargarAreasVisibles, queryClient, refreshing])
+  }, [cargarAreasVisibles, queryClient, refreshing, resumenEstado?.terminado])
 
   const onRefreshJob = async () => {
     setRefreshing(true)
@@ -1257,6 +1361,7 @@ function FiniquitoGestionPageInner() {
       if (r.caso) {
         incorporarCasoActualizado(r.caso)
       }
+      invalidateFiniquitoTerminadosCache()
       void invalidatePrestamosQueries(queryClient)
       await cargarAreasVisibles({ silent: true })
     } catch (e: unknown) {
@@ -1329,7 +1434,9 @@ function FiniquitoGestionPageInner() {
   }
 
   const casoTieneAccionPendiente = (casoId: number) =>
-    pendingEstadoCasoId === casoId || validandoBandejaLote
+    pendingEstadoCasoId === casoId ||
+    validandoBandejaLote ||
+    pasandoRevisionLote
 
   useEffect(() => {
     setSelectedBandejaIds(prev => {
@@ -1339,6 +1446,15 @@ function FiniquitoGestionPageInner() {
       return next.size === prev.size ? prev : next
     })
   }, [itemsBandejaVisibles])
+
+  useEffect(() => {
+    setSelectedRevisionIds(prev => {
+      if (prev.size === 0) return prev
+      const visibles = new Set(itemsAreaRevisionVisibles.map(r => r.id))
+      const next = new Set(Array.from(prev).filter(id => visibles.has(id)))
+      return next.size === prev.size ? prev : next
+    })
+  }, [itemsAreaRevisionVisibles])
 
   const idsBandejaSeleccionables = useMemo(
     () =>
@@ -1355,6 +1471,22 @@ function FiniquitoGestionPageInner() {
   const algunBandejaSeleccionado =
     !todosBandejaSeleccionados &&
     idsBandejaSeleccionables.some(id => selectedBandejaIds.has(id))
+
+  const idsRevisionSeleccionables = useMemo(
+    () =>
+      itemsAreaRevisionVisibles
+        .filter(r => (r.estado || '').toUpperCase() === 'ACEPTADO')
+        .map(r => r.id),
+    [itemsAreaRevisionVisibles]
+  )
+
+  const todosRevisionSeleccionados =
+    idsRevisionSeleccionables.length > 0 &&
+    idsRevisionSeleccionables.every(id => selectedRevisionIds.has(id))
+
+  const algunRevisionSeleccionado =
+    !todosRevisionSeleccionados &&
+    idsRevisionSeleccionables.some(id => selectedRevisionIds.has(id))
 
   const validarBandejaEnLote = async () => {
     if (!canTrasladarFiniquitoBandejas || validandoBandejaLote) return
@@ -1408,6 +1540,64 @@ function FiniquitoGestionPageInner() {
       }
     } finally {
       setValidandoBandejaLote(false)
+    }
+  }
+
+  const pasarRevisionATrabajoEnLote = async () => {
+    if (!canTrasladarFiniquitoBandejas || pasandoRevisionLote) return
+    const ids = idsRevisionSeleccionables.filter(id =>
+      selectedRevisionIds.has(id)
+    )
+    if (ids.length === 0) {
+      toast.message('Seleccione al menos un caso en el área de revisión.')
+      return
+    }
+    const confirmado = window.confirm(
+      `¿Pasar ${ids.length} caso(s) al área de trabajo? Cierra conciliación pendiente y mueve cada caso a En proceso.`
+    )
+    if (!confirmado) return
+
+    setPasandoRevisionLote(true)
+    let ok = 0
+    let fail = 0
+    const errores: string[] = []
+    try {
+      for (const id of ids) {
+        try {
+          const r = await finiquitoAdminPasarATrabajo(id)
+          if (r.ok && r.caso) {
+            incorporarCasoActualizado(r.caso)
+            ok += 1
+          } else {
+            fail += 1
+            errores.push(
+              `Caso ${id}: ${r.error || 'no se pudo pasar al área de trabajo'}`
+            )
+          }
+        } catch (e: unknown) {
+          fail += 1
+          errores.push(
+            `Caso ${id}: ${e instanceof Error ? e.message : 'error de red'}`
+          )
+        }
+      }
+      setSelectedRevisionIds(new Set())
+      void invalidatePrestamosQueries(queryClient)
+      await cargarAreasVisibles({ silent: true })
+      if (fail === 0) {
+        toast.success(`${ok} caso(s) en área de trabajo.`)
+      } else if (ok > 0) {
+        toast.warning(
+          `${ok} movidos, ${fail} con error. ${errores.slice(0, 2).join(' · ')}`
+        )
+      } else {
+        toast.error(
+          errores.slice(0, 3).join(' · ') ||
+            'No se pudo pasar ningún caso al área de trabajo.'
+        )
+      }
+    } finally {
+      setPasandoRevisionLote(false)
     }
   }
 
@@ -1635,14 +1825,7 @@ function FiniquitoGestionPageInner() {
     items: FiniquitoCasoItem[],
     renderAccionesFila: (row: FiniquitoCasoItem) => ReactNode = renderAcciones,
     modoTiempo: 'bandeja' | 'revision' = 'bandeja',
-    seleccionBandeja?: {
-      selectedIds: Set<number>
-      onToggleRow: (id: number, checked: boolean) => void
-      onToggleAll: (checked: boolean) => void
-      disabled: boolean
-      todosSeleccionados: boolean
-      algunSeleccionado: boolean
-    }
+    seleccionFilas?: SeleccionFilasTabla
   ) => (
     <div
       className={cn(
@@ -1656,22 +1839,20 @@ function FiniquitoGestionPageInner() {
       >
         <TableHeader className={theadStickyClass}>
           <TableRow className="border-0 hover:bg-transparent">
-            {seleccionBandeja ? (
+            {seleccionFilas ? (
               <TableHead className={cn(thGestion, 'w-10 text-center')} scope="col">
                 <input
                   type="checkbox"
-                  aria-label="Seleccionar todos los casos visibles en bandeja"
+                  aria-label={seleccionFilas.ariaSeleccionarTodos}
                   className="h-4 w-4 rounded border-slate-300"
-                  checked={seleccionBandeja.todosSeleccionados}
+                  checked={seleccionFilas.todosSeleccionados}
                   ref={el => {
                     if (el) {
-                      el.indeterminate = seleccionBandeja.algunSeleccionado
+                      el.indeterminate = seleccionFilas.algunSeleccionado
                     }
                   }}
-                  disabled={seleccionBandeja.disabled}
-                  onChange={e =>
-                    seleccionBandeja.onToggleAll(e.target.checked)
-                  }
+                  disabled={seleccionFilas.disabled}
+                  onChange={e => seleccionFilas.onToggleAll(e.target.checked)}
                 />
               </TableHead>
             ) : null}
@@ -1687,8 +1868,18 @@ function FiniquitoGestionPageInner() {
             <TableHead
               className={cn(thGestion, 'whitespace-normal')}
               scope="col"
+              title={
+                modoTiempo === 'revision'
+                  ? 'Ordenado de fecha más antigua a la más reciente'
+                  : undefined
+              }
             >
               Último pago
+              {modoTiempo === 'revision' ? (
+                <span className="mt-0.5 block text-[9px] font-normal normal-case text-slate-300">
+                  ↑ antiguo · reciente ↓
+                </span>
+              ) : null}
             </TableHead>
             <TableHead
               className={cn(
@@ -1727,22 +1918,21 @@ function FiniquitoGestionPageInner() {
                 ? textoTiempoLimiteBandeja(row)
                 : textoTiempoLimiteAreaRevision(row)
             const puedeSeleccionar =
-              seleccionBandeja &&
-              (row.estado || '').toUpperCase() === 'REVISION'
+              seleccionFilas &&
+              (row.estado || '').toUpperCase() ===
+                seleccionFilas.estadoRequerido
             return (
             <TableRow key={row.id} className={idx % 2 === 0 ? trEven : trOdd}>
-              {seleccionBandeja ? (
+              {seleccionFilas ? (
                 <TableCell className={cn(tdGestion, 'text-center')}>
                   <input
                     type="checkbox"
                     aria-label={`Seleccionar caso ${row.id}`}
                     className="h-4 w-4 rounded border-slate-300"
-                    checked={seleccionBandeja.selectedIds.has(row.id)}
-                    disabled={
-                      seleccionBandeja.disabled || !puedeSeleccionar
-                    }
+                    checked={seleccionFilas.selectedIds.has(row.id)}
+                    disabled={seleccionFilas.disabled || !puedeSeleccionar}
                     onChange={e =>
-                      seleccionBandeja.onToggleRow(row.id, e.target.checked)
+                      seleccionFilas.onToggleRow(row.id, e.target.checked)
                     }
                   />
                 </TableCell>
@@ -2294,6 +2484,9 @@ function FiniquitoGestionPageInner() {
                           validandoBandejaLote || pendingEstadoCasoId != null,
                         todosSeleccionados: todosBandejaSeleccionados,
                         algunSeleccionado: algunBandejaSeleccionado,
+                        estadoRequerido: 'REVISION',
+                        ariaSeleccionarTodos:
+                          'Seleccionar todos los casos visibles en bandeja',
                       }
                     : undefined
                 )}
@@ -2332,8 +2525,8 @@ function FiniquitoGestionPageInner() {
                 {canTrasladarFiniquitoBandejas ? (
                   <>
                     {' '}
-                    · Visto → Conciliar; <strong>Procesos normales</strong> si no
-                    está liquidado; «Área trabajo» solo administrador
+                    · Orden: último pago (más antiguo arriba). Marque varios y use{' '}
+                    <strong>Área trabajo seleccionados</strong>
                   </>
                 ) : (
                   <>
@@ -2349,9 +2542,12 @@ function FiniquitoGestionPageInner() {
         <div className="border-b border-amber-200/70 bg-amber-50/40 px-4 py-3.5 sm:px-5">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
             <p className="max-w-xl text-xs text-amber-950/85">
-              Filtro propio de esta área (independiente de bandeja y trabajo).
-              Escriba parte de la cédula (~{DEBOUNCE_MS / 1000} s tras dejar de
-              escribir).
+              Listado ordenado por <strong>último pago</strong> (fecha más antigua
+              primero). Filtro propio de esta área (~{DEBOUNCE_MS / 1000} s tras
+              dejar de escribir).
+              {canTrasladarFiniquitoBandejas
+                ? ' Administrador: casillas por fila y traslado en lote al área de trabajo.'
+                : ''}
             </p>
             <div className="flex w-full shrink-0 flex-col gap-3 sm:min-w-[min(100%,280px)] lg:w-full lg:max-w-sm xl:max-w-md">
               <div className="space-y-1.5">
@@ -2389,12 +2585,35 @@ function FiniquitoGestionPageInner() {
                 </div>
               </div>
               <div className="flex flex-wrap items-center gap-2">
+                {canTrasladarFiniquitoBandejas ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="h-10 shrink-0 border-emerald-700 bg-emerald-700 hover:bg-emerald-800"
+                    disabled={
+                      areasLoading.revision ||
+                      pasandoRevisionLote ||
+                      selectedRevisionIds.size === 0
+                    }
+                    onClick={() => void pasarRevisionATrabajoEnLote()}
+                  >
+                    {pasandoRevisionLote ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      `Área trabajo seleccionados (${selectedRevisionIds.size})`
+                    )}
+                  </Button>
+                ) : null}
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
                   className="h-10 shrink-0 border-amber-300 bg-white"
-                  disabled={areasLoading.revision}
+                  disabled={
+                    areasLoading.revision ||
+                    pasandoRevisionLote ||
+                    validandoBandejaLote
+                  }
                   onClick={() => void cargarAreaRevision()}
                 >
                   {areasLoading.revision ? (
@@ -2436,7 +2655,33 @@ function FiniquitoGestionPageInner() {
                 {renderTabla(
                   itemsAreaRevisionVisibles,
                   renderAccionesAreaRevision,
-                  'revision'
+                  'revision',
+                  canTrasladarFiniquitoBandejas
+                    ? {
+                        selectedIds: selectedRevisionIds,
+                        onToggleRow: (id, checked) => {
+                          setSelectedRevisionIds(prev => {
+                            const next = new Set(prev)
+                            if (checked) next.add(id)
+                            else next.delete(id)
+                            return next
+                          })
+                        },
+                        onToggleAll: checked => {
+                          setSelectedRevisionIds(() => {
+                            if (!checked) return new Set()
+                            return new Set(idsRevisionSeleccionables)
+                          })
+                        },
+                        disabled:
+                          pasandoRevisionLote || pendingEstadoCasoId != null,
+                        todosSeleccionados: todosRevisionSeleccionados,
+                        algunSeleccionado: algunRevisionSeleccionado,
+                        estadoRequerido: 'ACEPTADO',
+                        ariaSeleccionarTodos:
+                          'Seleccionar todos los casos visibles en área de revisión',
+                      }
+                    : undefined
                 )}
                 <FiniquitoTablaScrollHint
                   total={totalAreaRevision}
@@ -2634,8 +2879,9 @@ function FiniquitoGestionPageInner() {
               Caracas): hoy y los {FINIQUITO_TERMINADOS_RESUMEN_DIAS_DEFAULT - 1}{' '}
               días anteriores. El gráfico abre mostrando <strong>Hoy</strong> y{' '}
               <strong>Ayer</strong>; desplácese a la izquierda para ver días
-              anteriores. Use el filtro de cédula para acotar el gráfico y el
-              listado (~{DEBOUNCE_MS / 1000} s de espera).
+              anteriores. Listado y gráfico se guardan en caché{' '}
+              {FINIQUITO_TERMINADOS_CACHE_TTL_MS / 3_600_000} h por filtro de
+              cédula (se actualizan al marcar Terminado o con «Recargar»).
             </p>
             <div className="flex w-full shrink-0 flex-col gap-3 sm:min-w-[min(100%,280px)] lg:w-full lg:max-w-sm xl:max-w-md">
               <div className="space-y-1.5">
@@ -2672,8 +2918,35 @@ function FiniquitoGestionPageInner() {
                   ) : null}
                 </div>
               </div>
+              <div className="flex flex-wrap items-center gap-2">
+                {areasCargadas.terminados ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-10 shrink-0 border-slate-300 bg-white"
+                    disabled={areasLoading.terminados}
+                    onClick={() =>
+                      void cargarTerminados({ force: true, silent: false })
+                    }
+                  >
+                    {areasLoading.terminados ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      'Recargar'
+                    )}
+                  </Button>
+                ) : null}
+              </div>
             </div>
           </div>
+          {terminadosFetchedAt != null && areasCargadas.terminados ? (
+            <p className="mt-3 text-[11px] text-slate-500">
+              Datos en caché · actualizados hace{' '}
+              {minutosDesdeCache(terminadosFetchedAt)} min (válidos{' '}
+              {FINIQUITO_TERMINADOS_CACHE_TTL_MS / 3_600_000} h).
+            </p>
+          ) : null}
           {!areasCargadas.terminados ? (
             <p className="mt-4 rounded-lg border border-dashed border-violet-200/90 bg-white/60 px-4 py-6 text-center text-sm text-slate-600">
               Baje hasta el listado o pulse «Cargar ahora» para traer el gráfico
