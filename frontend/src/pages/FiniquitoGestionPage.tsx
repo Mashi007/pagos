@@ -1930,8 +1930,8 @@ function FiniquitoGestionPageInner() {
         aria-labelledby="finiquito-bandeja-titulo"
       >
         <div className="border-b border-slate-200 bg-slate-50/90 px-4 py-4 sm:px-5">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-            <div className="space-y-1">
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+            <div className="min-w-0 flex-1 space-y-1">
               <h2
                 id="finiquito-bandeja-titulo"
                 className="text-base font-bold text-[#1e3a5f]"
@@ -1950,11 +1950,11 @@ function FiniquitoGestionPageInner() {
                 {PLAZO_CICLO_DIAS} días.
               </p>
             </div>
-            <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-end lg:w-auto lg:min-w-[320px]">
-              <div className="min-w-0 flex-1 space-y-1.5">
+            <div className="flex w-full shrink-0 flex-col gap-3 sm:min-w-[min(100%,280px)] lg:w-full lg:max-w-sm xl:max-w-md">
+              <div className="space-y-1.5">
                 <Label
                   htmlFor="finiquito-filtro-cedula-bandeja"
-                  className="text-xs font-semibold text-slate-700"
+                  className="whitespace-nowrap text-xs font-semibold text-slate-700"
                 >
                   Filtrar por cédula
                 </Label>
@@ -1970,7 +1970,7 @@ function FiniquitoGestionPageInner() {
                     placeholder="Ej. V12345678 o parte del número"
                     value={cedulaInput}
                     onChange={e => setCedulaInput(e.target.value)}
-                    className="h-10 border-slate-300 pl-9 pr-10 font-mono text-sm"
+                    className="h-10 w-full border-slate-300 pl-9 pr-10 font-mono text-sm"
                   />
                   {cedulaInput ? (
                     <button
@@ -1985,39 +1985,41 @@ function FiniquitoGestionPageInner() {
                   ) : null}
                 </div>
               </div>
-              {canTrasladarFiniquitoBandejas ? (
+              <div className="flex flex-wrap items-center gap-2">
+                {canTrasladarFiniquitoBandejas ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="h-10 shrink-0 bg-emerald-700 hover:bg-emerald-800"
+                    disabled={
+                      areasLoading.bandeja ||
+                      validandoBandejaLote ||
+                      selectedBandejaIds.size === 0
+                    }
+                    onClick={() => void validarBandejaEnLote()}
+                  >
+                    {validandoBandejaLote ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      `Validar seleccionados (${selectedBandejaIds.size})`
+                    )}
+                  </Button>
+                ) : null}
                 <Button
                   type="button"
+                  variant="outline"
                   size="sm"
-                  className="h-10 shrink-0 bg-emerald-700 hover:bg-emerald-800"
-                  disabled={
-                    areasLoading.bandeja ||
-                    validandoBandejaLote ||
-                    selectedBandejaIds.size === 0
-                  }
-                  onClick={() => void validarBandejaEnLote()}
+                  className="h-10 shrink-0 border-slate-300"
+                  disabled={areasLoading.bandeja || validandoBandejaLote}
+                  onClick={() => void cargarBandeja()}
                 >
-                  {validandoBandejaLote ? (
+                  {areasLoading.bandeja ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (
-                    `Validar seleccionados (${selectedBandejaIds.size})`
+                    'Recargar'
                   )}
                 </Button>
-              ) : null}
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-10 shrink-0 border-slate-300"
-                disabled={areasLoading.bandeja || validandoBandejaLote}
-                onClick={() => void cargarBandeja()}
-              >
-                {areasLoading.bandeja ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  'Recargar'
-                )}
-              </Button>
+              </div>
             </div>
           </div>
           {cedulaBusqueda ? (
@@ -2116,11 +2118,11 @@ function FiniquitoGestionPageInner() {
               Escriba parte de la cédula (~{DEBOUNCE_MS / 1000} s tras dejar de
               escribir).
             </p>
-            <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-end lg:w-auto lg:min-w-[320px]">
-              <div className="min-w-0 flex-1 space-y-1.5">
+            <div className="flex w-full shrink-0 flex-col gap-3 sm:min-w-[min(100%,280px)] lg:w-full lg:max-w-sm xl:max-w-md">
+              <div className="space-y-1.5">
                 <Label
                   htmlFor="finiquito-filtro-cedula-revision"
-                  className="text-xs font-semibold text-amber-950"
+                  className="whitespace-nowrap text-xs font-semibold text-amber-950"
                 >
                   Filtrar por cédula
                 </Label>
@@ -2136,7 +2138,7 @@ function FiniquitoGestionPageInner() {
                     placeholder="Ej. V17037221 o parte del número"
                     value={cedulaRevisionInput}
                     onChange={e => setCedulaRevisionInput(e.target.value)}
-                    className="h-10 border-amber-200 bg-white pl-9 pr-10 font-mono text-sm"
+                    className="h-10 w-full border-amber-200 bg-white pl-9 pr-10 font-mono text-sm"
                   />
                   {cedulaRevisionInput ? (
                     <button
@@ -2151,20 +2153,22 @@ function FiniquitoGestionPageInner() {
                   ) : null}
                 </div>
               </div>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-10 shrink-0 border-amber-300 bg-white"
-                disabled={areasLoading.revision}
-                onClick={() => void cargarAreaRevision()}
-              >
-                {areasLoading.revision ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  'Recargar'
-                )}
-              </Button>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-10 shrink-0 border-amber-300 bg-white"
+                  disabled={areasLoading.revision}
+                  onClick={() => void cargarAreaRevision()}
+                >
+                  {areasLoading.revision ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    'Recargar'
+                  )}
+                </Button>
+              </div>
             </div>
           </div>
           {cedulaRevisionBusqueda ? (
@@ -2242,11 +2246,11 @@ function FiniquitoGestionPageInner() {
               revisión manual, etc.). Escriba parte de la cédula para acotar el
               listado (~{DEBOUNCE_MS / 1000} s tras dejar de escribir).
             </p>
-            <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-end lg:w-auto lg:min-w-[320px]">
-              <div className="min-w-0 flex-1 space-y-1.5">
+            <div className="flex w-full shrink-0 flex-col gap-3 sm:min-w-[min(100%,280px)] lg:w-full lg:max-w-sm xl:max-w-md">
+              <div className="space-y-1.5">
                 <Label
                   htmlFor="finiquito-filtro-cedula-trabajo"
-                  className="text-xs font-semibold text-slate-700"
+                  className="whitespace-nowrap text-xs font-semibold text-slate-700"
                 >
                   Filtrar por cédula
                 </Label>
@@ -2262,7 +2266,7 @@ function FiniquitoGestionPageInner() {
                     placeholder="Ej. V12345678 o parte del número"
                     value={cedulaTrabajoInput}
                     onChange={e => setCedulaTrabajoInput(e.target.value)}
-                    className="h-10 border-slate-300 bg-white pl-9 pr-10 font-mono text-sm"
+                    className="h-10 w-full border-slate-300 bg-white pl-9 pr-10 font-mono text-sm"
                   />
                   {cedulaTrabajoInput ? (
                     <button
@@ -2277,20 +2281,22 @@ function FiniquitoGestionPageInner() {
                   ) : null}
                 </div>
               </div>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-10 shrink-0 border-slate-300 bg-white"
-                disabled={areasLoading.trabajo}
-                onClick={() => void cargarAreaTrabajo()}
-              >
-                {areasLoading.trabajo ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  'Recargar'
-                )}
-              </Button>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-10 shrink-0 border-slate-300 bg-white"
+                  disabled={areasLoading.trabajo}
+                  onClick={() => void cargarAreaTrabajo()}
+                >
+                  {areasLoading.trabajo ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    'Recargar'
+                  )}
+                </Button>
+              </div>
             </div>
           </div>
           {cedulaTrabajoBusqueda ? (
@@ -2393,11 +2399,11 @@ function FiniquitoGestionPageInner() {
               filtro de cédula para acotar el gráfico y el listado (~
               {DEBOUNCE_MS / 1000} s de espera).
             </p>
-            <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-end lg:w-auto lg:min-w-[320px]">
-              <div className="min-w-0 flex-1 space-y-1.5">
+            <div className="flex w-full shrink-0 flex-col gap-3 sm:min-w-[min(100%,280px)] lg:w-full lg:max-w-sm xl:max-w-md">
+              <div className="space-y-1.5">
                 <Label
                   htmlFor="finiquito-filtro-cedula-terminados"
-                  className="text-xs font-semibold text-slate-700"
+                  className="whitespace-nowrap text-xs font-semibold text-slate-700"
                 >
                   Buscar por cédula
                 </Label>
@@ -2413,7 +2419,7 @@ function FiniquitoGestionPageInner() {
                     placeholder="Ej. V12345678"
                     value={cedulaTerminadosInput}
                     onChange={e => setCedulaTerminadosInput(e.target.value)}
-                    className="h-10 border-slate-300 bg-white pl-9 pr-10 font-mono text-sm"
+                    className="h-10 w-full border-slate-300 bg-white pl-9 pr-10 font-mono text-sm"
                   />
                   {cedulaTerminadosInput ? (
                     <button
