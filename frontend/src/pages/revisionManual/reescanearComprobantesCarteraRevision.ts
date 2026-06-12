@@ -18,12 +18,34 @@ import {
   omitirValidacionFechaBinanceReescaneo,
   omitirValidacionInstitucionReescaneoCartera,
   patchPagoDesdeOcrReescaneoCartera,
+  cedulaPartesReescaneoCartera,
   partesCedulaParaEscaneoRevision,
   pagoTieneComprobanteInsertado,
   sugerenciaOcrCompletaParaReescaneoCartera,
 } from './EditarRevisionManual.helpers'
 
 const CHUNK_CONTEXTO_REVISION = 10
+
+function mensajeErrorExtraccionReescaneo(err: unknown): string {
+  if (err && typeof err === 'object' && 'response' in err) {
+    const detail = (
+      err as { response?: { data?: { detail?: unknown } } }
+    ).response?.data?.detail
+    if (typeof detail === 'string' && detail.trim()) return detail.trim()
+    if (Array.isArray(detail)) {
+      const msgs = detail
+        .map(x =>
+          typeof x === 'object' && x && 'msg' in x
+            ? String((x as { msg?: string }).msg || '')
+            : String(x)
+        )
+        .filter(Boolean)
+      if (msgs.length) return msgs.join('; ')
+    }
+  }
+  if (err instanceof Error && err.message.trim()) return err.message.trim()
+  return 'Error de red o del servidor al digitalizar el comprobante.'
+}
 
 function fileDesdeBase64(b64: string, fileName: string, mimeType: string): File {
   const bin = atob(b64)
@@ -195,9 +217,8 @@ export async function reescanearComprobantesCarteraPrestamo(opts: {
   prestamoId: number
   onProgreso?: (progreso: ReescaneoCarteraProgreso) => void
 }): Promise<ReescaneoCarteraResultado> {
-  const partes = partesCedulaParaEscaneoRevision(opts.cedula)
-  if (!partes) {
-    throw new Error('Cédula inválida para re-escanear comprobantes.')
+  if (!Number.isFinite(opts.prestamoId) || opts.prestamoId <= 0) {
+    throw new Error('Préstamo inválido para re-escanear comprobantes.')
   }
 
   const pagos = await listarPagosPrestamo(opts.cedula, opts.prestamoId)
@@ -267,10 +288,17 @@ export async function reescanearComprobantesCarteraPrestamo(opts: {
         continue
       }
 
+      const cedulaPartes = cedulaPartesReescaneoCartera(
+        opts.cedula,
+        pago.cedula_cliente
+      )
+
       const fd = new FormData()
-      fd.append('tipo_cedula', partes.tipo)
-      fd.append('numero_cedula', partes.numero)
+      fd.append('tipo_cedula', cedulaPartes.tipo)
+      fd.append('numero_cedula', cedulaPartes.numero)
       fd.append('fuente_tasa_cambio', 'euro')
+      fd.append('extraccion_sin_cliente', 'true')
+      fd.append('prestamo_objetivo_id', String(opts.prestamoId))
       fd.append('comprobante', archivo)
       const instHint = institucionPlantillaConfirmadaReescaneo(pago)
       if (instHint) fd.append('institucion_plantilla', instHint)
@@ -290,10 +318,8 @@ export async function reescanearComprobantesCarteraPrestamo(opts: {
             alertas[item.pago_id] = motivos
           }
         }
-      } catch {
-        alertas[item.pago_id] = [
-          'Error de red o del servidor al digitalizar el comprobante.',
-        ]
+      } catch (err) {
+        alertas[item.pago_id] = [mensajeErrorExtraccionReescaneo(err)]
       }
 
       hecho++

@@ -155,6 +155,7 @@ import {
   opcionesSelectCuotaRevision,
   opcionesSelectEstadoPrestamoRevision,
   pagoInicialDesdeSugerenciaEscaneoRevision,
+  cedulaPartesReescaneoCartera,
   partesCedulaParaEscaneoRevision,
   pagoRowAPagoCreateInicial,
   timestampOrdenFechaPago,
@@ -1171,12 +1172,8 @@ export function EditarRevisionManual() {
     if (!fileRaw || soloLectura) return
 
     const ced = cedulaParaPagosRealizados
-    let cedulaPartes = partesCedulaParaEscaneoRevision(ced)
-    let extraccionSinCliente = false
-    if (!cedulaPartes) {
-      cedulaPartes = { tipo: 'V', numero: '12345678' }
-      extraccionSinCliente = true
-    }
+    const cedulaPartes = cedulaPartesReescaneoCartera(ced, ced)
+    const pid = Number(prestamoData.prestamo_id)
 
     setEscaneandoComprobanteAgregarPago(true)
     try {
@@ -1186,8 +1183,9 @@ export function EditarRevisionManual() {
       const fd = new FormData()
       fd.append('tipo_cedula', cedulaPartes.tipo)
       fd.append('numero_cedula', cedulaPartes.numero)
-      if (extraccionSinCliente) {
-        fd.append('extraccion_sin_cliente', 'true')
+      fd.append('extraccion_sin_cliente', 'true')
+      if (Number.isFinite(pid) && pid > 0) {
+        fd.append('prestamo_objetivo_id', String(pid))
       }
       fd.append('comprobante', archivo)
       fd.append('fuente_tasa_cambio', 'euro')
@@ -1203,7 +1201,6 @@ export function EditarRevisionManual() {
         return
       }
 
-      const pid = prestamoData.prestamo_id
       setPagoModalId(undefined)
       setPagoModalComprobanteInicial(archivo)
       setPagoModalInicial(
@@ -3490,7 +3487,9 @@ export function EditarRevisionManual() {
                       </CardTitle>
                       {vieneDesdeFiniquitos ? (
                         <p className="mt-1 max-w-2xl text-xs text-muted-foreground">
-                          Desde finiquitos: use solo{' '}
+                          Desde finiquitos: puede usar{' '}
+                          <strong className="text-amber-950">Reescanear</strong>{' '}
+                          (OCR sobre comprobantes ya guardados) o{' '}
                           <strong className="text-amber-950">Conciliar</strong>{' '}
                           (reserva comprobantes, ABONOS de Notificaciones →
                           General, OCR y cascada). Al terminar, vuelva a

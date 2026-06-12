@@ -4241,6 +4241,7 @@ async def escaner_extraer_comprobante_infopagos(
     fuente_tasa_cambio: str = Form("euro"),
     institucion_plantilla: str = Form(""),
     extraccion_sin_cliente: str = Form(""),
+    prestamo_objetivo_id: str = Form(""),
 ):
     """
     Personal autenticado: sugiere campos del formulario Infopagos leyendo el comprobante con Gemini.
@@ -4252,8 +4253,11 @@ async def escaner_extraer_comprobante_infopagos(
 
     `extraccion_sin_cliente` (multipart, ej. "true"): solo personal autenticado; la cédula del formulario
     debe seguir siendo sintácticamente válida (placeholder), pero no se exige que exista en BD ni
-    préstamo APROBADO. Sirve para re-escanear comprobantes cuando aún no hay cédula del deudor (p. ej.
-    valor ERROR o pendiente de leer desde la imagen).
+    préstamo APROBADO único. Sirve para re-escanear comprobantes en revisión manual / finiquitos
+    (varios créditos activos, LIQUIDADO, cédula pendiente, etc.).
+
+    `prestamo_objetivo_id` (opcional): préstamo en contexto al re-escanear cartera en revisión;
+    mejora metadatos de duplicado cuando `extraccion_sin_cliente=true`.
     """
     _enforce_escaner_rate_limit(request)
 
@@ -4289,6 +4293,18 @@ async def escaner_extraer_comprobante_infopagos(
         err_pres = cpr.error_si_no_puede_reportar_en_web(prestamos_aprob)
         if err_pres:
             raise HTTPException(status_code=400, detail=err_pres)
+
+    prestamo_objetivo_id_ctx: Optional[int] = None
+    _raw_prest_obj = (prestamo_objetivo_id or "").strip()
+    if _raw_prest_obj:
+        try:
+            _pid_obj = int(_raw_prest_obj)
+            if _pid_obj > 0:
+                prestamo_objetivo_id_ctx = _pid_obj
+        except (TypeError, ValueError):
+            prestamo_objetivo_id_ctx = None
+    if prestamo_objetivo_id_ctx is None and len(prestamos_aprob) == 1:
+        prestamo_objetivo_id_ctx = int(prestamos_aprob[0])
 
     content = await comprobante.read()
     fn_comp = comprobante.filename or "comprobante"
@@ -4347,7 +4363,7 @@ async def escaner_extraer_comprobante_infopagos(
                     "duplicado_en_pagos": False,
                     "pago_existente_id": None,
                     "prestamo_existente_id": None,
-                    "prestamo_objetivo_id": int(prestamos_aprob[0]) if len(prestamos_aprob) == 1 else None,
+                    "prestamo_objetivo_id": prestamo_objetivo_id_ctx,
                     "motivo_digitalizacion": "gemini_no_digitaliza",
                 }
                 if cliente is not None:
@@ -4452,9 +4468,6 @@ async def escaner_extraer_comprobante_infopagos(
     duplicado_en_pagos = False
     pago_existente_id: Optional[int] = None
     prestamo_existente_id: Optional[int] = None
-    prestamo_objetivo_id: Optional[int] = None
-    if len(prestamos_aprob) == 1:
-        prestamo_objetivo_id = int(prestamos_aprob[0])
     t_post0 = time.perf_counter()
     num_op_trim = (num_op or "").strip()
     if num_op_trim:
@@ -4495,7 +4508,7 @@ async def escaner_extraer_comprobante_infopagos(
                 "duplicado_en_pagos": duplicado_en_pagos,
                 "pago_existente_id": pago_existente_id,
                 "prestamo_existente_id": prestamo_existente_id,
-                "prestamo_objetivo_id": prestamo_objetivo_id,
+                "prestamo_objetivo_id": prestamo_objetivo_id_ctx,
             }
             borrador_id = ieb.crear_borrador_escaneo(
                 db,
@@ -4541,7 +4554,7 @@ async def escaner_extraer_comprobante_infopagos(
         "duplicado_en_pagos": duplicado_en_pagos,
         "pago_existente_id": pago_existente_id,
         "prestamo_existente_id": prestamo_existente_id,
-        "prestamo_objetivo_id": prestamo_objetivo_id,
+        "prestamo_objetivo_id": prestamo_objetivo_id_ctx,
         "borrador_id": borrador_id,
     }
 

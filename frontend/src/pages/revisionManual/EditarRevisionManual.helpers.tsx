@@ -545,6 +545,20 @@ export function descripcionDiagnosticoCascada(d: {
   return partes.join(' ')
 }
 
+/** Cédula sintáctica para escáner en revisión (sin regla web de préstamo único). */
+export function cedulaPartesReescaneoCartera(
+  cedulaPagina: string,
+  cedulaPago: string | null | undefined
+): { tipo: string; numero: string } {
+  return (
+    partesCedulaParaEscaneoRevision((cedulaPago || '').trim()) ||
+    partesCedulaParaEscaneoRevision(cedulaPagina.trim()) || {
+      tipo: 'V',
+      numero: '12345678',
+    }
+  )
+}
+
 /** Partes de cédula para FormData del escáner (misma lógica que RegistrarPagoForm). */
 export function partesCedulaParaEscaneoRevision(
   cedulaRaw: string
