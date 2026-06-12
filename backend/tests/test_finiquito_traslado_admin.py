@@ -6,6 +6,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 from app.api.v1.endpoints.finiquito.routes import (
+    _error_gestion_bandeja_finiquito_si_no_admin,
     _error_traslado_finiquito_si_no_admin,
     _traslado_finiquito_requiere_admin,
 )
@@ -34,3 +35,13 @@ def test_operario_denegado_traslado():
 def test_admin_permitido_traslado():
     admin = SimpleNamespace(rol="admin")
     assert _error_traslado_finiquito_si_no_admin(admin, "REVISION", "ACEPTADO") is None
+
+
+def test_operario_denegado_gestion_bandeja():
+    operario = SimpleNamespace(rol="operator")
+    assert _error_gestion_bandeja_finiquito_si_no_admin(operario) is not None
+
+
+def test_admin_permitido_gestion_bandeja():
+    admin = SimpleNamespace(rol="admin")
+    assert _error_gestion_bandeja_finiquito_si_no_admin(admin) is None

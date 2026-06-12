@@ -1375,9 +1375,12 @@ def finiquito_admin_revision_datos(
 def finiquito_admin_eliminar_caso(
     caso_id: int,
     db: Session = Depends(get_db),
-    _: UserResponse = Depends(require_admin_or_operator),
+    panel_user: UserResponse = Depends(require_admin_or_operator),
 ):
     """Quita el caso de finiquito desde la bandeja principal (solo estado REVISION)."""
+    err_perm = _error_gestion_bandeja_finiquito_si_no_admin(panel_user)
+    if err_perm:
+        return FiniquitoEliminarCasoResponse(ok=False, error=err_perm)
     caso = db.query(FiniquitoCaso).filter(FiniquitoCaso.id == caso_id).first()
     if not caso:
         raise HTTPException(status_code=404, detail="Caso no encontrado")
@@ -1400,12 +1403,15 @@ def finiquito_admin_eliminar_caso(
 def finiquito_admin_liberar_procesos_normales(
     caso_id: int,
     db: Session = Depends(get_db),
-    _: UserResponse = Depends(require_admin_or_operator),
+    panel_user: UserResponse = Depends(require_admin_or_operator),
 ):
     """
     Quita el caso de finiquito y deja el préstamo en cartera operativa (pagos, cuotas).
     Bandeja principal (REVISION) o área de revisión (ACEPTADO), p. ej. tras Conciliar.
     """
+    err_perm = _error_gestion_bandeja_finiquito_si_no_admin(panel_user)
+    if err_perm:
+        return FiniquitoLiberarProcesosNormalesResponse(ok=False, error=err_perm)
     from app.services.finiquito_liberar_procesos_normales_service import (
         ejecutar_liberar_finiquito_a_procesos_normales,
     )
@@ -1473,6 +1479,18 @@ def _error_traslado_finiquito_si_no_admin(
     )
 
 
+def _error_gestion_bandeja_finiquito_si_no_admin(
+    panel_user: UserResponse,
+) -> Optional[str]:
+    """Rechazar, eliminar o liberar a procesos normales: solo administrador."""
+    if user_is_administrator(panel_user):
+        return None
+    return (
+        "Solo administradores pueden rechazar, eliminar o liberar casos "
+        "desde la bandeja principal o el area de revision."
+    )
+
+
 def _admin_pasar_caso_a_en_proceso(
     db: Session,
     caso: FiniquitoCaso,
@@ -1522,6 +1540,11 @@ def finiquito_admin_conciliacion_visto_iniciar(
     panel_user: UserResponse = Depends(require_admin_or_operator),
 ):
     """Primer Visto: reserva comprobantes en temporal y luego borra todos los pagos del prestamo."""
+    err_perm = _error_gestion_bandeja_finiquito_si_no_admin(panel_user)
+    if err_perm:
+        return FiniquitoConciliacionVistoIniciarResponse(
+            ok=False, error=err_perm
+        )
     try:
         r = iniciar_visto_reserva(
             db,
@@ -1670,6 +1693,11 @@ def finiquito_admin_patch_estado(
     err_perm = _error_traslado_finiquito_si_no_admin(panel_user, anterior, nuevo)
     if err_perm:
         return FiniquitoPatchEstadoResponse(ok=False, error=err_perm)
+
+    if nuevo == "RECHAZADO":
+        err_gestion = _error_gestion_bandeja_finiquito_si_no_admin(panel_user)
+        if err_gestion:
+            return FiniquitoPatchEstadoResponse(ok=False, error=err_gestion)
 
     if nuevo == "REVISION":
         if anterior not in ("ACEPTADO", "EN_PROCESO", "TERMINADO", "RECHAZADO"):

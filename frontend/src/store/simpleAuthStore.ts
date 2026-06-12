@@ -36,6 +36,8 @@ import {
   clearAuthStorage,
 } from '../utils/storage'
 
+import { normalizeAuthUser } from '../utils/rol'
+
 interface SimpleAuthState {
   user: User | null
 
@@ -205,7 +207,7 @@ export const useSimpleAuthStore = create<SimpleAuthState>(set => {
                 error
               )
               set({
-                user,
+                user: normalizeAuthUser(user) ?? user,
                 isAuthenticated: true,
                 isLoading: false,
                 error: null,
