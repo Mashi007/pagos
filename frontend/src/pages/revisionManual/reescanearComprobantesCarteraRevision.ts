@@ -7,7 +7,7 @@ import {
   escanerInfopagosLoteContextoRevision,
   type EscanerInfopagosExtraerResponse,
 } from '../../services/cobrosService'
-import { pagoService, type Pago } from '../../services/pagoService'
+import { pagoService, type Pago, type PagoCreate } from '../../services/pagoService'
 import { normalizarComprobanteArchivoParaEscaneo } from '../../utils/normalizarComprobanteArchivo'
 import { hayDuplicadoFila, filaDesdeRevisionPago } from '../escanerInfopagosLoteModel'
 import {
@@ -17,11 +17,12 @@ import {
   institucionPlantillaConfirmadaReescaneo,
   omitirValidacionFechaBinanceReescaneo,
   omitirValidacionInstitucionReescaneoCartera,
-  patchPagoDesdeOcrReescaneoCartera,
+  patchParcialPagoDesdeOcrReescaneoCartera,
+  motivosCamposDigitadosNoAplicadosReescaneo,
+  type CampoReescaneoOcr,
   cedulaPartesReescaneoCartera,
   partesCedulaParaEscaneoRevision,
   pagoTieneComprobanteInsertado,
-  sugerenciaOcrCompletaParaReescaneoCartera,
 } from './EditarRevisionManual.helpers'
 
 const CHUNK_CONTEXTO_REVISION = 10
@@ -180,19 +181,58 @@ export function evaluarAlertaReescaneoCartera(
   return [...new Set(motivos.map(m => m.trim()).filter(Boolean))]
 }
 
+export function resultadoPersistenciaReescaneoOcr(
+  pago: Pago,
+  res: EscanerInfopagosExtraerResponse
+): {
+  patch: Partial<PagoCreate> & { monto_bs_original?: number | null }
+  hayCambios: boolean
+  camposAplicados: CampoReescaneoOcr[]
+} | null {
+  if (!res.ok || !res.sugerencia) return null
+  const validacion = validacionReescaneoEfectiva(pago, res)
+  const bloquearNumero = duplicadoBloqueaReescaneo(Number(pago.id), res, validacion)
+  const parcial = patchParcialPagoDesdeOcrReescaneoCartera(
+    pago,
+    res.sugerencia,
+    validacion,
+    { bloquearNumeroPorDuplicado: bloquearNumero }
+  )
+  if (!parcial.hayCambios) return null
+  return {
+    patch: parcial.patch,
+    hayCambios: true,
+    camposAplicados: parcial.camposAplicados,
+  }
+}
+
+export function evaluarAlertaReescaneoTrasPersistencia(
+  pago: Pago,
+  res: EscanerInfopagosExtraerResponse,
+  camposAplicados: CampoReescaneoOcr[]
+): string[] {
+  if (!res.ok || !res.sugerencia) {
+    return evaluarAlertaReescaneoCartera(pago, res)
+  }
+  const validacion = validacionReescaneoEfectiva(pago, res)
+  const bloquearNumero = duplicadoBloqueaReescaneo(Number(pago.id), res, validacion)
+  const base = evaluarAlertaReescaneoCartera(pago, res)
+  const parciales = motivosCamposDigitadosNoAplicadosReescaneo(
+    pago,
+    res.sugerencia,
+    validacion,
+    camposAplicados,
+    { bloquearNumeroPorDuplicado: bloquearNumero }
+  )
+  return [...new Set([...base, ...parciales].map(m => m.trim()).filter(Boolean))]
+}
+
+/** @deprecated Use resultadoPersistenciaReescaneoOcr */
 export function puedeActualizarPagoDesdeOcrReescaneo(
   pago: Pago,
   res: EscanerInfopagosExtraerResponse
 ): boolean {
-  if (!res.ok || !res.sugerencia) return false
-  if (!sugerenciaOcrCompletaParaReescaneoCartera(pago, res.sugerencia)) {
-    return false
-  }
-  const validacion = validacionReescaneoEfectiva(pago, res)
-  if (validacion.campos) return false
-  if (validacion.reglas) return false
-  if (duplicadoBloqueaReescaneo(Number(pago.id), res, validacion)) return false
-  return true
+  return resultadoPersistenciaReescaneoOcr(pago, res) != null
 }
 
 export type ReescaneoCarteraProgreso = {
@@ -210,7 +250,8 @@ export type ReescaneoCarteraResultado = {
 
 /**
  * Re-escanea solo comprobantes ya insertados en el préstamo (OCR + actualización).
- * Pagos sin imagen no se tocan. Tras OCR limpio actualiza el pago en BD.
+ * Pagos sin imagen no se tocan. Cada campo digitalizado en OCR reemplaza el valor en BD
+ * (actualización parcial: banco, Nº, monto, fecha, moneda por separado).
  */
 export async function reescanearComprobantesCarteraPrestamo(opts: {
   cedula: string
@@ -305,17 +346,26 @@ export async function reescanearComprobantesCarteraPrestamo(opts: {
 
       try {
         const res = await escanerInfopagosExtraerComprobante(fd)
-        if (puedeActualizarPagoDesdeOcrReescaneo(pago, res)) {
-          const patch = patchPagoDesdeOcrReescaneoCartera(
-            pago,
-            res.sugerencia!
-          )
-          await pagoService.updatePago(item.pago_id, patch)
+        const persistencia = resultadoPersistenciaReescaneoOcr(pago, res)
+        if (persistencia?.hayCambios) {
+          await pagoService.updatePago(item.pago_id, persistencia.patch)
           actualizados++
+          const motivos = evaluarAlertaReescaneoTrasPersistencia(
+            pago,
+            res,
+            persistencia.camposAplicados
+          )
+          if (motivos.length) {
+            alertas[item.pago_id] = motivos
+          }
         } else {
           const motivos = evaluarAlertaReescaneoCartera(pago, res)
           if (motivos.length) {
             alertas[item.pago_id] = motivos
+          } else if (res.ok && res.sugerencia) {
+            alertas[item.pago_id] = [
+              'OCR sin cambios respecto a los datos guardados.',
+            ]
           }
         }
       } catch (err) {

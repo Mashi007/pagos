@@ -700,56 +700,278 @@ export function pagoTieneComprobanteInsertado(
   )
 }
 
-/** Actualiza monto/fecha/documento/banco solo desde OCR; conserva cédula, imagen y notas. */
-export function patchPagoDesdeOcrReescaneoCartera(
-  pago: Pago,
+export type CampoReescaneoOcr =
+  | 'banco'
+  | 'numero'
+  | 'monto'
+  | 'fecha'
+  | 'moneda'
+
+export type ValidacionReescaneoOcr = {
+  campos: string | null
+  reglas: string | null
+}
+
+/** Campos que el OCR devolvió con valor utilizable en esta pasada. */
+export function camposDigitadosOcrReescaneo(
   sugerencia: EscanerInfopagosSugerencia
-): Partial<PagoCreate> & { monto_bs_original?: number | null } {
+): CampoReescaneoOcr[] {
+  const out: CampoReescaneoOcr[] = []
   const inst = institucionDesdeSugerenciaOcrReescaneo(sugerencia)
-  const moneda = sugerencia.moneda === 'BS' ? 'BS' : 'USD'
-  const monto =
+  if (inst) out.push('banco')
+  if ((sugerencia.numero_operacion || '').trim()) out.push('numero')
+  const m = sugerencia.monto
+  if (m != null && Number.isFinite(Number(m)) && Number(m) > 0) {
+    out.push('monto')
+    out.push('moneda')
+  }
+  if (
+    !esInstitucionBinanceReescaneo(inst || '') &&
+    (sugerencia.fecha_pago || '').trim()
+  ) {
+    out.push('fecha')
+  }
+  return out
+}
+
+function textoValidacionReescaneoEfectiva(
+  validacion: ValidacionReescaneoOcr,
+  inst: string | null
+): string {
+  let campos = validacion.campos
+  let reglas = validacion.reglas
+  if (inst) {
+    campos = omitirValidacionInstitucionReescaneoCartera(campos)
+    reglas = omitirValidacionInstitucionReescaneoCartera(reglas)
+  }
+  if (esInstitucionBinanceReescaneo(inst || '')) {
+    campos = omitirValidacionFechaBinanceReescaneo(campos)
+    reglas = omitirValidacionFechaBinanceReescaneo(reglas)
+  }
+  return `${campos || ''} ${reglas || ''}`.trim()
+}
+
+function campoBloqueadoValidacionReescaneo(
+  campo: CampoReescaneoOcr,
+  validacion: ValidacionReescaneoOcr,
+  inst: string | null
+): boolean {
+  const texto = textoValidacionReescaneoEfectiva(validacion, inst).toLowerCase()
+  if (!texto) return false
+  switch (campo) {
+    case 'banco':
+      return /instituci[oó]n financiera|indique la instituci/i.test(texto)
+    case 'numero':
+      return (
+        /n[uú]mero de operaci[oó]n|n[uú]mero de documento|referencia|documento/i.test(
+          texto
+        ) && !/duplicad/i.test(texto)
+      )
+    case 'monto':
+      return /\bmonto\b/i.test(texto)
+    case 'fecha':
+      return /fecha de pago|fecha de pago/i.test(texto)
+    case 'moneda':
+      return /\bmoneda\b/i.test(texto)
+    default:
+      return false
+  }
+}
+
+function monedaRegistroPagoRow(pago: Pago): 'BS' | 'USD' {
+  const m = String(pago.moneda_registro || '')
+    .trim()
+    .toUpperCase()
+  return m === 'BS' ? 'BS' : 'USD'
+}
+
+function montoUsdPagoRow(pago: Pago): number | null {
+  const v = pago.monto_pagado
+  if (v == null || !Number.isFinite(Number(v))) return null
+  return Number(v)
+}
+
+function montoBsPagoRow(pago: Pago): number | null {
+  const v = pago.monto_bs_original
+  if (v != null && Number.isFinite(Number(v))) return Number(v)
+  if (monedaRegistroPagoRow(pago) === 'BS') return montoUsdPagoRow(pago)
+  return null
+}
+
+function valoresDifierenReescaneo(
+  a: string | number | null | undefined,
+  b: string | number | null | undefined
+): boolean {
+  if (a == null && b == null) return false
+  if (typeof a === 'number' || typeof b === 'number') {
+    const na = Number(a)
+    const nb = Number(b)
+    if (!Number.isFinite(na) || !Number.isFinite(nb)) return String(a) !== String(b)
+    return Math.abs(na - nb) > 0.0001
+  }
+  return String(a ?? '').trim() !== String(b ?? '').trim()
+}
+
+export type PatchReescaneoOcrResult = {
+  patch: Partial<PagoCreate> & { monto_bs_original?: number | null }
+  camposAplicados: CampoReescaneoOcr[]
+  hayCambios: boolean
+}
+
+/**
+ * Re-escaneo: por cada campo digitalizado en OCR, reemplaza el valor en cartera
+ * si pasa validación de ese campo (actualización parcial permitida).
+ */
+export function patchParcialPagoDesdeOcrReescaneoCartera(
+  pago: Pago,
+  sugerencia: EscanerInfopagosSugerencia,
+  validacion: ValidacionReescaneoOcr,
+  opts?: { bloquearNumeroPorDuplicado?: boolean }
+): PatchReescaneoOcrResult {
+  const inst = institucionDesdeSugerenciaOcrReescaneo(sugerencia)
+  const monedaOcr = sugerencia.moneda === 'BS' ? 'BS' : 'USD'
+  const montoOcr =
     sugerencia.monto != null && Number.isFinite(Number(sugerencia.monto))
       ? Number(sugerencia.monto)
       : null
-  const numero = (sugerencia.numero_operacion || '').trim()
+  const numeroOcr = (sugerencia.numero_operacion || '').trim()
   const fechaOcr = (sugerencia.fecha_pago || '').trim()
 
   const patch: Partial<PagoCreate> & { monto_bs_original?: number | null } = {
     cedula_cliente: pago.cedula_cliente,
     prestamo_id: pago.prestamo_id ?? null,
-    fecha_pago: esInstitucionBinanceReescaneo(inst || '')
-      ? fechaPagoPagoRowParaInput(pago)
-      : fechaOcr,
-    numero_documento: numero,
-    institucion_bancaria: inst,
-    moneda_registro: moneda,
     link_comprobante: pago.link_comprobante ?? null,
     notas: pago.notas ?? null,
   }
-  if (moneda === 'BS') {
-    patch.monto_bs_original = monto
-  } else {
-    patch.monto_pagado = monto ?? undefined
+  const camposAplicados: CampoReescaneoOcr[] = []
+
+  const digitados = camposDigitadosOcrReescaneo(sugerencia)
+
+  if (
+    digitados.includes('banco') &&
+    inst &&
+    !campoBloqueadoValidacionReescaneo('banco', validacion, inst) &&
+    valoresDifierenReescaneo(
+      normalizarInstitucionBancoReescaneo((pago.institucion_bancaria || '').trim()),
+      inst
+    )
+  ) {
+    patch.institucion_bancaria = inst
+    camposAplicados.push('banco')
   }
-  return patch
+
+  if (
+    digitados.includes('numero') &&
+    numeroOcr &&
+    !opts?.bloquearNumeroPorDuplicado &&
+    !campoBloqueadoValidacionReescaneo('numero', validacion, inst) &&
+    valoresDifierenReescaneo((pago.numero_documento || '').trim(), numeroOcr)
+  ) {
+    patch.numero_documento = numeroOcr
+    camposAplicados.push('numero')
+  }
+
+  const aplicaMonto =
+    digitados.includes('monto') &&
+    montoOcr != null &&
+    !campoBloqueadoValidacionReescaneo('monto', validacion, inst)
+
+  const aplicaMoneda =
+    digitados.includes('moneda') &&
+    !campoBloqueadoValidacionReescaneo('moneda', validacion, inst)
+
+  if (aplicaMoneda) {
+    const monedaActual = monedaRegistroPagoRow(pago)
+    if (valoresDifierenReescaneo(monedaActual, monedaOcr)) {
+      patch.moneda_registro = monedaOcr
+      camposAplicados.push('moneda')
+    }
+  }
+
+  if (aplicaMonto) {
+    if (monedaOcr === 'BS') {
+      if (valoresDifierenReescaneo(montoBsPagoRow(pago), montoOcr)) {
+        patch.monto_bs_original = montoOcr
+        patch.monto_pagado = 0
+        camposAplicados.push('monto')
+        if (!patch.moneda_registro) patch.moneda_registro = 'BS'
+      }
+    } else if (valoresDifierenReescaneo(montoUsdPagoRow(pago), montoOcr)) {
+      patch.monto_pagado = montoOcr
+      camposAplicados.push('monto')
+      if (!patch.moneda_registro) patch.moneda_registro = 'USD'
+    }
+  }
+
+  if (
+    digitados.includes('fecha') &&
+    fechaOcr &&
+    !campoBloqueadoValidacionReescaneo('fecha', validacion, inst) &&
+    valoresDifierenReescaneo(fechaPagoPagoRowParaInput(pago), fechaOcr)
+  ) {
+    patch.fecha_pago = fechaOcr
+    camposAplicados.push('fecha')
+  }
+
+  return {
+    patch,
+    camposAplicados: [...new Set(camposAplicados)],
+    hayCambios: camposAplicados.length > 0,
+  }
 }
 
-/** Campos mínimos exigidos en sugerencia OCR antes de persistir (no rellenar desde BD). */
-export function sugerenciaOcrCompletaParaReescaneoCartera(
-  pago: Pick<Pago, 'institucion_bancaria'>,
-  sugerencia: EscanerInfopagosSugerencia
-): boolean {
+/** @deprecated Use patchParcialPagoDesdeOcrReescaneoCartera */
+export function patchPagoDesdeOcrReescaneoCartera(
+  pago: Pago,
+  sugerencia: EscanerInfopagosSugerencia,
+  validacion: ValidacionReescaneoOcr = { campos: null, reglas: null }
+): Partial<PagoCreate> & { monto_bs_original?: number | null } {
+  return patchParcialPagoDesdeOcrReescaneoCartera(pago, sugerencia, validacion)
+    .patch
+}
+
+export function motivosCamposDigitadosNoAplicadosReescaneo(
+  pago: Pago,
+  sugerencia: EscanerInfopagosSugerencia,
+  validacion: ValidacionReescaneoOcr,
+  camposAplicados: CampoReescaneoOcr[],
+  opts?: { bloquearNumeroPorDuplicado?: boolean }
+): string[] {
   const inst = institucionDesdeSugerenciaOcrReescaneo(sugerencia)
-  if (!inst) return false
-  if (!(sugerencia.numero_operacion || '').trim()) return false
-  const monto = sugerencia.monto
-  if (monto == null || !Number.isFinite(Number(monto)) || Number(monto) <= 0) {
-    return false
+  const digitados = camposDigitadosOcrReescaneo(sugerencia)
+  const labels: Record<CampoReescaneoOcr, string> = {
+    banco: 'Banco',
+    numero: 'Nº documento',
+    monto: 'Monto',
+    fecha: 'Fecha',
+    moneda: 'Moneda',
   }
-  if (!esInstitucionBinanceReescaneo(inst) && !(sugerencia.fecha_pago || '').trim()) {
-    return false
+  const motivos: string[] = []
+  for (const c of digitados) {
+    if (camposAplicados.includes(c)) continue
+    if (c === 'numero' && opts?.bloquearNumeroPorDuplicado) {
+      motivos.push(
+        `${labels.numero} digitado pero no aplicado: posible duplicado en cartera.`
+      )
+      continue
+    }
+    if (campoBloqueadoValidacionReescaneo(c, validacion, inst)) {
+      motivos.push(
+        `${labels[c]} digitado en imagen pero no aplicado por validación.`
+      )
+      continue
+    }
+    const parcial = patchParcialPagoDesdeOcrReescaneoCartera(
+      pago,
+      sugerencia,
+      validacion,
+      opts
+    )
+    if (!parcial.camposAplicados.includes(c)) {
+      motivos.push(`${labels[c]} digitado coincide con el valor ya guardado.`)
+    }
   }
-  return true
+  return [...new Set(motivos)]
 }
 
 /** Hidrata el modal de agregar pago tras escanear un comprobante en revisión manual. */
