@@ -365,6 +365,147 @@ def _map_fecha_cierre_terminado_por_caso(
     return out
 
 
+def _map_fecha_auditoria_en_proceso_por_caso(
+    db: Session, caso_ids: List[int]
+) -> Dict[int, Any]:
+    """MAX(creado_en) en auditoria area trabajo con accion EN_PROCESO."""
+    seen: set[int] = set()
+    uniq: List[int] = []
+    for i in caso_ids:
+        if i is None:
+            continue
+        ii = int(i)
+        if ii not in seen:
+            seen.add(ii)
+            uniq.append(ii)
+    if not uniq:
+        return {}
+    rows = (
+        db.query(
+            FiniquitoAreaTrabajoAuditoria.caso_id,
+            func.max(FiniquitoAreaTrabajoAuditoria.creado_en).label("mx"),
+        )
+        .filter(
+            FiniquitoAreaTrabajoAuditoria.caso_id.in_(uniq),
+            FiniquitoAreaTrabajoAuditoria.accion == "EN_PROCESO",
+        )
+        .group_by(FiniquitoAreaTrabajoAuditoria.caso_id)
+        .all()
+    )
+    return {int(r.caso_id): r.mx for r in rows if r.mx is not None}
+
+
+def _map_fecha_entrada_area_trabajo_por_caso(
+    db: Session, caso_ids: List[int]
+) -> Dict[int, Any]:
+    """
+    Ultima entrada a EN_PROCESO por caso_id.
+    Prioridad: historial, auditoria area trabajo, actualizado_en (solo EN_PROCESO).
+    """
+    seen: set[int] = set()
+    uniq: List[int] = []
+    for i in caso_ids:
+        if i is None:
+            continue
+        ii = int(i)
+        if ii not in seen:
+            seen.add(ii)
+            uniq.append(ii)
+    if not uniq:
+        return {}
+
+    out: Dict[int, Any] = dict(
+        _map_fecha_estado_historial_por_caso(db, uniq, "EN_PROCESO")
+    )
+    missing = [cid for cid in uniq if cid not in out]
+    if missing and finiquito_has_area_trabajo_auditoria_table(db):
+        for cid, raw in _map_fecha_auditoria_en_proceso_por_caso(db, missing).items():
+            out[int(cid)] = raw
+        missing = [cid for cid in missing if cid not in out]
+    if missing:
+        rows = (
+            db.query(FiniquitoCaso.id, FiniquitoCaso.actualizado_en)
+            .filter(
+                FiniquitoCaso.id.in_(missing),
+                FiniquitoCaso.estado == "EN_PROCESO",
+            )
+            .all()
+        )
+        for cid, upd in rows:
+            if upd is not None:
+                out[int(cid)] = upd
+    return out
+
+
+def _conteo_ingresos_area_trabajo_por_dia_caracas(
+    db: Session,
+    *,
+    inicio: date,
+    hoy: date,
+    ced_filtro: Optional[str],
+) -> Counter[str]:
+    """
+    Entradas al area de trabajo por dia calendario Caracas.
+    Cuenta transiciones a EN_PROCESO (historial y auditoria) y completa casos
+    EN_PROCESO/TERMINADO sin evento registrado.
+    """
+    ctr: Counter[str] = Counter()
+    vistos: set[tuple[str, int]] = set()
+
+    def registrar(caso_id: int, raw: Any) -> None:
+        d = _fecha_historial_a_date_caracas(raw)
+        if d is None or d < inicio or d > hoy:
+            return
+        key = d.isoformat()
+        par = (key, int(caso_id))
+        if par in vistos:
+            return
+        vistos.add(par)
+        ctr[key] += 1
+
+    q_hist = db.query(
+        FiniquitoEstadoHistorial.caso_id,
+        FiniquitoEstadoHistorial.creado_en,
+    ).filter(FiniquitoEstadoHistorial.estado_nuevo == "EN_PROCESO")
+    if ced_filtro:
+        q_hist = q_hist.join(
+            FiniquitoCaso, FiniquitoCaso.id == FiniquitoEstadoHistorial.caso_id
+        ).filter(FiniquitoCaso.cedula.ilike(f"%{ced_filtro}%"))
+    for caso_id, creado in q_hist.all():
+        registrar(int(caso_id), creado)
+
+    if finiquito_has_area_trabajo_auditoria_table(db):
+        q_aud = db.query(
+            FiniquitoAreaTrabajoAuditoria.caso_id,
+            FiniquitoAreaTrabajoAuditoria.creado_en,
+        ).filter(FiniquitoAreaTrabajoAuditoria.accion == "EN_PROCESO")
+        if ced_filtro:
+            q_aud = q_aud.join(
+                FiniquitoCaso,
+                FiniquitoCaso.id == FiniquitoAreaTrabajoAuditoria.caso_id,
+            ).filter(FiniquitoCaso.cedula.ilike(f"%{ced_filtro}%"))
+        for caso_id, creado in q_aud.all():
+            registrar(int(caso_id), creado)
+
+    q_casos = db.query(FiniquitoCaso).filter(
+        FiniquitoCaso.estado.in_(("EN_PROCESO", "TERMINADO"))
+    )
+    if ced_filtro:
+        q_casos = q_casos.filter(FiniquitoCaso.cedula.ilike(f"%{ced_filtro}%"))
+    casos = q_casos.all()
+    if casos:
+        fentrada = _map_fecha_entrada_area_trabajo_por_caso(db, [c.id for c in casos])
+        for c in casos:
+            cid = int(c.id)
+            raw = fentrada.get(cid)
+            if raw is None and c.estado == "EN_PROCESO":
+                raw = c.actualizado_en
+            if raw is not None:
+                registrar(cid, raw)
+
+    return ctr
+
+
 def _conteo_terminados_por_dia_caracas(
     db: Session,
     *,
@@ -1408,21 +1549,15 @@ def finiquito_admin_terminados_resumen_diario(
     db: Session = Depends(get_db),
     _: UserResponse = Depends(require_admin_or_operator),
 ):
-    """Conteo diario Caracas: ingresos (materializacion) y terminados (historial TERMINADO)."""
+    """Conteo diario Caracas: entradas a area de trabajo (EN_PROCESO) y cierres TERMINADO."""
     hoy = fecha_hoy_caracas()
     inicio = hoy - timedelta(days=int(dias) - 1)
 
     ced_filtro = cedula.strip() if cedula and cedula.strip() else None
 
-    q_ing = db.query(FiniquitoCaso)
-    if ced_filtro:
-        q_ing = q_ing.filter(FiniquitoCaso.cedula.ilike(f"%{ced_filtro}%"))
-    ctr_ing: Counter[str] = Counter()
-    for c in q_ing.all():
-        d = _fecha_historial_a_date_caracas(c.creado_en)
-        if d is None or d < inicio or d > hoy:
-            continue
-        ctr_ing[d.isoformat()] += 1
+    ctr_ing = _conteo_ingresos_area_trabajo_por_dia_caracas(
+        db, inicio=inicio, hoy=hoy, ced_filtro=ced_filtro
+    )
 
     q = db.query(FiniquitoCaso).filter(FiniquitoCaso.estado == "TERMINADO")
     if ced_filtro:

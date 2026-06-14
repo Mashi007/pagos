@@ -3331,22 +3331,34 @@ function FiniquitoGestionPageInner() {
           ) : (
             <>
               <div className="mb-2 flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-slate-600">
-                  <span className="inline-flex items-center gap-1.5">
+                <div className="flex flex-col gap-1">
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-slate-600">
                     <span
-                      className="inline-block h-2.5 w-2.5 rounded-sm"
-                      style={{ backgroundColor: GRAFICO_DIA_COLOR_INGRESAN }}
-                      aria-hidden
-                    />
-                    Ingresan
-                  </span>
-                  <span className="inline-flex items-center gap-1.5">
+                      className="inline-flex items-center gap-1.5"
+                      title="Casos que pasaron al area de trabajo (EN_PROCESO) ese dia, calendario Caracas"
+                    >
+                      <span
+                        className="inline-block h-2.5 w-2.5 rounded-sm"
+                        style={{ backgroundColor: GRAFICO_DIA_COLOR_INGRESAN }}
+                        aria-hidden
+                      />
+                      Ingresan · area trabajo
+                    </span>
                     <span
-                      className="inline-block h-2.5 w-2.5 rounded-sm bg-violet-600"
-                      aria-hidden
-                    />
-                    Terminan
-                  </span>
+                      className="inline-flex items-center gap-1.5"
+                      title="Casos marcados Terminado ese dia, calendario Caracas"
+                    >
+                      <span
+                        className="inline-block h-2.5 w-2.5 rounded-sm bg-violet-600"
+                        aria-hidden
+                      />
+                      Terminan
+                    </span>
+                  </div>
+                  <p className="text-[10px] leading-snug text-slate-500">
+                    Flujo diario: entradas a area de trabajo vs cierres Terminado
+                    (fecha Caracas).
+                  </p>
                 </div>
                 {terminadosFetchedAt != null ? (
                   <p className="text-[10px] text-slate-500">
@@ -3361,7 +3373,7 @@ function FiniquitoGestionPageInner() {
                 ref={terminadosGraficoScrollRef}
                 className="mt-1 flex items-end gap-1 overflow-x-auto pb-2 pt-1 scroll-smooth"
                 role="img"
-                aria-label="Grafico diario: ingresos y terminados (vista inicial: Hoy)"
+                aria-label="Grafico diario: entradas al area de trabajo y cierres Terminado (vista inicial: Hoy)"
               >
                 <BarChart3
                   className="mb-6 h-5 w-5 shrink-0 text-violet-700"
@@ -3379,7 +3391,7 @@ function FiniquitoGestionPageInner() {
                         'flex min-w-[2.75rem] flex-col items-center gap-1 rounded-t-md px-0.5',
                         esHoy && 'bg-violet-100/80 ring-1 ring-violet-400/70'
                       )}
-                      title={`${d.etiqueta} (${d.fecha}): ${ingresos} ingreso(s), ${terminados} terminado(s)`}
+                      title={`${d.etiqueta} (${d.fecha}): ${ingresos} entrada(s) a area de trabajo, ${terminados} terminado(s)`}
                     >
                       <div className="flex items-end justify-center gap-0.5">
                         {renderColumnaBarraGraficoDiario(ingresos, {

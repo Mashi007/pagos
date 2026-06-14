@@ -293,7 +293,9 @@ export type FiniquitoTerminadosResumenSemanal = {
 export type FiniquitoTerminadosDia = {
   fecha: string
   etiqueta: string
+  /** Casos marcados Terminado ese dia (Caracas). */
   cantidad: number
+  /** Entradas al area de trabajo (EN_PROCESO) ese dia (Caracas). */
   cantidad_ingresos: number
 }
 

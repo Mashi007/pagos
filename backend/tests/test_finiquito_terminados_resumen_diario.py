@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Resumen diario finiquito: ingresos + terminados por dia."""
+"""Resumen diario finiquito: entradas area trabajo + terminados por dia."""
 
 from datetime import date, datetime, timezone
 

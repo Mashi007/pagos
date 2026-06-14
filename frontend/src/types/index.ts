@@ -216,8 +216,15 @@ export interface Prestamo {
     | 'LIQUIDADO'
     | 'DESISTIMIENTO'
 
-  /** Fase finiquito (Antiguo / En proceso / Terminado), reflejada en el préstamo. */
-  estado_gestion_finiquito?: 'ANTIGUO' | 'EN_PROCESO' | 'TERMINADO' | null
+  /** Fase finiquito reflejada en el prestamo (alineada a finiquito_casos.estado). */
+  estado_gestion_finiquito?:
+    | 'REVISION'
+    | 'ACEPTADO'
+    | 'REVISION_CONTABLE'
+    | 'EN_PROCESO'
+    | 'TERMINADO'
+    | 'ANTIGUO'
+    | null
 
   /** Fecha límite del trámite (15 días laborales al pasar a En proceso), ISO date. */
   finiquito_tramite_fecha_limite?: string | null

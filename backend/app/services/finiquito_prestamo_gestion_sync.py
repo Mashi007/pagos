@@ -1,6 +1,7 @@
 """
 Refleja en prestamos.estado_gestion_finiquito la fase finiquito visible para todos
-(REVISION, EN_PROCESO, TERMINADO). No sustituye prestamos.estado (LIQUIDADO, etc.).
+(REVISION, ACEPTADO, REVISION_CONTABLE, EN_PROCESO, TERMINADO). No sustituye
+prestamos.estado (LIQUIDADO, etc.). RECHAZADO y estados desconocidos limpian la columna.
 
 En EN_PROCESO fija finiquito_tramite_fecha_limite al dia 30 del ciclo finiquito
 (29 dias calendario despues de creado_en del caso, o hoy+29 si no hay caso). En otros estados la limpia.
@@ -19,7 +20,15 @@ from app.models.prestamo import Prestamo
 from app.utils.dias_laborales_caracas import fecha_hoy_caracas
 
 _PLAZO_CICLO_DIAS = 30
-_VALORES_GESTION_EN_PRESTAMO = frozenset({"REVISION", "EN_PROCESO", "TERMINADO"})
+_VALORES_GESTION_EN_PRESTAMO = frozenset(
+    {
+        "REVISION",
+        "ACEPTADO",
+        "REVISION_CONTABLE",
+        "EN_PROCESO",
+        "TERMINADO",
+    }
+)
 
 
 def sincronizar_prestamo_estado_gestion_finiquito(
