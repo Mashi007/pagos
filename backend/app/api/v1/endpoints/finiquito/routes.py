@@ -451,6 +451,9 @@ def _admin_casos_to_items(db: Session, casos: List[FiniquitoCaso]) -> List[Finiq
     famap = _map_fecha_estado_historial_por_caso(
         db, [c.id for c in casos], "ACEPTADO"
     )
+    frcmap = _map_fecha_estado_historial_por_caso(
+        db, [c.id for c in casos], "REVISION_CONTABLE"
+    )
     clmap = _map_clientes_por_id(db, [c.cliente_id for c in casos if c.cliente_id])
     visto_map = map_conciliacion_visto_activa_por_caso(db, [c.id for c in casos])
     items: List[FiniquitoCasoOut] = []
@@ -463,6 +466,7 @@ def _admin_casos_to_items(db: Session, casos: List[FiniquitoCaso]) -> List[Finiq
             fecha_liquidado=fmap.get(c.prestamo_id),
             fecha_entrada_en_proceso=fepmap.get(c.id),
             fecha_entrada_aceptado=famap.get(c.id),
+            fecha_entrada_revision_contable=frcmap.get(c.id),
             conciliacion_visto_activa=visto_map.get(c.id, False),
         )
         cl = clmap.get(int(c.cliente_id)) if c.cliente_id else None
@@ -487,6 +491,7 @@ def _caso_to_out(
     fecha_liquidado: Optional[Any] = None,
     fecha_entrada_en_proceso: Optional[Any] = None,
     fecha_entrada_aceptado: Optional[Any] = None,
+    fecha_entrada_revision_contable: Optional[Any] = None,
     conciliacion_visto_activa: Optional[bool] = None,
 ) -> FiniquitoCasoOut:
     ufp: Optional[str] = None
@@ -512,6 +517,10 @@ def _caso_to_out(
     if fecha_entrada_aceptado is not None:
         v = fecha_entrada_aceptado
         fea = v.isoformat() if hasattr(v, "isoformat") else str(v)
+    ferc: Optional[str] = None
+    if fecha_entrada_revision_contable is not None:
+        v = fecha_entrada_revision_contable
+        ferc = v.isoformat() if hasattr(v, "isoformat") else str(v)
     creado_iso: Optional[str] = None
     if c.creado_en is not None:
         creado_iso = (
@@ -541,6 +550,7 @@ def _caso_to_out(
         creado_en=creado_iso,
         fecha_entrada_en_proceso=fep,
         fecha_entrada_aceptado=fea,
+        fecha_entrada_revision_contable=ferc,
         conciliacion_visto_activa=conciliacion_visto_activa,
     )
 
@@ -1701,10 +1711,13 @@ def finiquito_admin_pasar_a_trabajo(
             caso=caso_out,
             reservas_eliminadas=purgadas,
         )
-    if anterior != "REVISION_CONTABLE":
+    if anterior not in ("REVISION_CONTABLE", "ACEPTADO"):
         return FiniquitoConciliacionPasarATrabajoResponse(
             ok=False,
-            error="Solo desde revision contable (REVISION_CONTABLE) o ya en area de trabajo.",
+            error=(
+                "Solo desde area de revision (ACEPTADO), revision contable "
+                "(REVISION_CONTABLE) o ya en area de trabajo."
+            ),
         )
     err_perm = _error_traslado_finiquito_si_no_admin(panel_user, anterior, "EN_PROCESO")
     if err_perm:
@@ -1839,10 +1852,10 @@ def finiquito_admin_patch_estado(
                 error="Debe indicar si contacto al cliente para pasos siguientes (Si o No).",
             )
     elif nuevo == "EN_PROCESO":
-        if anterior != "REVISION_CONTABLE":
+        if anterior not in ("REVISION_CONTABLE", "ACEPTADO"):
             return FiniquitoPatchEstadoResponse(
                 ok=False,
-                error="En proceso solo desde revision contable.",
+                error="En proceso solo desde area de revision o revision contable.",
             )
         purgar_reserva_conciliacion_caso(db, caso.id)
 

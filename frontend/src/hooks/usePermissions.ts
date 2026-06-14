@@ -66,7 +66,7 @@ export function usePermissions() {
   /**
    * Trasladar casos entre bandeja principal, area de revision y revision contable
    * (Validar / pasar a revision contable). Solo administrador.
-   * Revision contable -> area de trabajo: todos los roles con acceso a finiquitos.
+   * Area de revision o revision contable -> area de trabajo: todos los roles con acceso a finiquitos.
    */
   const canTrasladarFiniquitoBandejas = (): boolean => {
     return isAdmin()

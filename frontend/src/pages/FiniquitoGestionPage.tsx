@@ -4,6 +4,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
   type ReactNode,
   type RefObject,
 } from 'react'
@@ -102,10 +103,13 @@ const PLAZO_CICLO_DIAS = 30
 const BANDEJA_DIA_ATRASADO = 3
 /** Fase area revision: hasta 5 dias; dia 6 = atrasado. */
 const AREA_REVISION_DIAS_MAX = 5
+/** Fase revision contable: hasta 5 dias; dia 6 = atrasado. */
+const AREA_REVISION_CONTABLE_DIAS_MAX = 5
 
-/** Nomenclatura tiempo limite: F1 bandeja, F2 revision, F3 trabajo. */
+/** Nomenclatura tiempo limite: F1 bandeja, F2 revision, F2C contable, F3 trabajo. */
 const FASE_TIEMPO_BANDEJA = 'F1'
 const FASE_TIEMPO_REVISION = 'F2'
+const FASE_TIEMPO_CONTABLE = 'F2C'
 const FASE_TIEMPO_TRABAJO = 'F3'
 
 function parseIsoDate(iso: string | null | undefined): Date | null {
@@ -186,8 +190,22 @@ function areaRevisionAtrasado(caso: FiniquitoCasoItem): boolean {
   return dias != null && dias >= AREA_REVISION_DIAS_MAX
 }
 
+function inicioFaseRevisionContable(caso: FiniquitoCasoItem): string | null {
+  return caso.fecha_entrada_revision_contable ?? null
+}
+
+function revisionContableAtrasado(caso: FiniquitoCasoItem): boolean {
+  if (caso.estado !== 'REVISION_CONTABLE') return false
+  const dias = diasDesdeIsoDate(inicioFaseRevisionContable(caso))
+  return dias != null && dias >= AREA_REVISION_CONTABLE_DIAS_MAX
+}
+
 function casoAtrasado(caso: FiniquitoCasoItem): boolean {
-  return bandejaAtrasado(caso) || areaRevisionAtrasado(caso)
+  return (
+    bandejaAtrasado(caso) ||
+    areaRevisionAtrasado(caso) ||
+    revisionContableAtrasado(caso)
+  )
 }
 
 function diasRestantesBandeja(caso: FiniquitoCasoItem): number | null {
@@ -204,6 +222,14 @@ function diasRestantesAreaRevision(caso: FiniquitoCasoItem): number | null {
   if (dias == null) return null
   if (dias >= AREA_REVISION_DIAS_MAX) return 0
   return AREA_REVISION_DIAS_MAX - dias
+}
+
+function diasRestantesRevisionContable(caso: FiniquitoCasoItem): number | null {
+  if (caso.estado !== 'REVISION_CONTABLE') return null
+  const dias = diasDesdeIsoDate(inicioFaseRevisionContable(caso))
+  if (dias == null) return null
+  if (dias >= AREA_REVISION_CONTABLE_DIAS_MAX) return 0
+  return AREA_REVISION_CONTABLE_DIAS_MAX - dias
 }
 
 function diasRestantesAreaTrabajo(caso: FiniquitoCasoItem): number | null {
@@ -242,6 +268,18 @@ function textoTiempoLimiteAreaRevision(caso: FiniquitoCasoItem): string {
   )
 }
 
+function textoTiempoLimiteRevisionContable(caso: FiniquitoCasoItem): string {
+  if (revisionContableAtrasado(caso)) {
+    return `${FASE_TIEMPO_CONTABLE} - Atrasado`
+  }
+  return formatoTiempoFase(
+    FASE_TIEMPO_CONTABLE,
+    diasRestantesRevisionContable(caso),
+    AREA_REVISION_CONTABLE_DIAS_MAX,
+    'Atrasado'
+  )
+}
+
 function totalDiasFaseTrabajo(caso: FiniquitoCasoItem): number | null {
   const restantes = diasRestantesAreaTrabajo(caso)
   if (restantes == null) return null
@@ -260,6 +298,33 @@ function textoTiempoLimiteAreaTrabajo(caso: FiniquitoCasoItem): string {
     total,
     'Vencido'
   )
+}
+
+type ModoTiempoTabla = 'bandeja' | 'revision' | 'contable'
+
+function tiempoLimiteTabla(
+  row: FiniquitoCasoItem,
+  modoTiempo: ModoTiempoTabla
+): { atrasado: boolean; diasRest: number | null; texto: string } {
+  if (modoTiempo === 'bandeja') {
+    return {
+      atrasado: bandejaAtrasado(row),
+      diasRest: diasRestantesBandeja(row),
+      texto: textoTiempoLimiteBandeja(row),
+    }
+  }
+  if (modoTiempo === 'contable') {
+    return {
+      atrasado: revisionContableAtrasado(row),
+      diasRest: diasRestantesRevisionContable(row),
+      texto: textoTiempoLimiteRevisionContable(row),
+    }
+  }
+  return {
+    atrasado: areaRevisionAtrasado(row),
+    diasRest: diasRestantesAreaRevision(row),
+    texto: textoTiempoLimiteAreaRevision(row),
+  }
 }
 
 function claseTiempoLimite(
@@ -339,7 +404,9 @@ const AUTO_REFRESH_POLL_MS = 60_000
 const TERMINADOS_GRAFICO_ESCALA_MAX = 25
 /** Altura visible de cada columna del gráfico diario (barra + número). */
 const GRAFICO_DIA_ALTURA_BARRA_MAX = 72
-const GRAFICO_DIA_COLOR_INGRESAN = '#c8674a'
+const GRAFICO_DIA_COLOR_INGRESAN = '#9c6654'
+const GRAFICO_DIA_COLOR_INGRESAN_VACIO = '#dcc8bc'
+const GRAFICO_DIA_COLOR_INGRESAN_ETIQUETA = '#5c4338'
 
 /** Coincide con backend `_ADMIN_CASOS_MAX_LIMIT` para bandejas pequeñas. */
 const FETCH_LIMIT = 2000
@@ -1166,6 +1233,9 @@ function FiniquitoGestionPageInner() {
       barClass: string
       barEmptyClass: string
       labelClass: string
+      barStyle?: CSSProperties
+      barEmptyStyle?: CSSProperties
+      labelStyle?: CSSProperties
     }
   ) => {
     const fuera = valor > TERMINADOS_GRAFICO_ESCALA_MAX
@@ -1181,7 +1251,7 @@ function FiniquitoGestionPageInner() {
             opts.labelClass,
             fuera && 'text-amber-900'
           )}
-          style={{ bottom: barH + 2 }}
+          style={{ bottom: barH + 2, ...opts.labelStyle }}
         >
           {valor}
         </span>
@@ -1191,7 +1261,10 @@ function FiniquitoGestionPageInner() {
             valor > 0 ? opts.barClass : opts.barEmptyClass,
             fuera && 'ring-1 ring-amber-400/90'
           )}
-          style={{ height: barH }}
+          style={{
+            height: barH,
+            ...(valor > 0 ? opts.barStyle : opts.barEmptyStyle),
+          }}
         />
       </div>
     )
@@ -2052,6 +2125,19 @@ function FiniquitoGestionPageInner() {
     return (
       <div className="flex flex-wrap items-center justify-end gap-2">
         {botonesFilaOperativos(row)}
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          className="h-8 gap-1 border-emerald-600 text-xs text-emerald-900 hover:bg-emerald-50"
+          title="Cierra conciliacion pendiente y pasa el caso al area de trabajo (sin revision contable)"
+          aria-label={`Pasar caso ${row.id} al area de trabajo`}
+          disabled={casoTieneAccionPendiente(row.id)}
+          onClick={() => void pasarATrabajo(row.id)}
+        >
+          <X className="h-3.5 w-3.5 shrink-0" aria-hidden />
+          Area trabajo
+        </Button>
         {canTrasladarFiniquitoBandejas ? (
           <>
             <Button
@@ -2132,7 +2218,7 @@ function FiniquitoGestionPageInner() {
   const renderTabla = (
     items: FiniquitoCasoItem[],
     renderAccionesFila: (row: FiniquitoCasoItem) => ReactNode = renderAcciones,
-    modoTiempo: 'bandeja' | 'revision' = 'bandeja',
+    modoTiempo: ModoTiempoTabla = 'bandeja',
     seleccionFilas?: SeleccionFilasTabla
   ) => (
     <div
@@ -2177,13 +2263,13 @@ function FiniquitoGestionPageInner() {
               className={cn(thGestion, 'whitespace-normal')}
               scope="col"
               title={
-                modoTiempo === 'revision'
+                modoTiempo !== 'bandeja'
                   ? 'Ordenado de fecha más antigua a la más reciente'
                   : undefined
               }
             >
               Último pago
-              {modoTiempo === 'revision' ? (
+              {modoTiempo !== 'bandeja' ? (
                 <span className="mt-0.5 block text-[9px] font-normal normal-case text-slate-300">
                   ↑ antiguo · reciente ↓
                 </span>
@@ -2198,7 +2284,9 @@ function FiniquitoGestionPageInner() {
               title={
                 modoTiempo === 'bandeja'
                   ? `${FASE_TIEMPO_BANDEJA}: dias restantes de ${BANDEJA_DIA_ATRASADO} en bandeja (atrasado desde dia ${BANDEJA_DIA_ATRASADO} del ciclo)`
-                  : `${FASE_TIEMPO_REVISION}: dias restantes de ${AREA_REVISION_DIAS_MAX} en area de revision`
+                  : modoTiempo === 'contable'
+                    ? `${FASE_TIEMPO_CONTABLE}: dias restantes de ${AREA_REVISION_CONTABLE_DIAS_MAX} en revision contable`
+                    : `${FASE_TIEMPO_REVISION}: dias restantes de ${AREA_REVISION_DIAS_MAX} en area de revision`
               }
             >
               Tiempo limite
@@ -2213,18 +2301,8 @@ function FiniquitoGestionPageInner() {
         </TableHeader>
         <TableBody>
           {items.map((row, idx) => {
-            const atrasado =
-              modoTiempo === 'bandeja'
-                ? bandejaAtrasado(row)
-                : areaRevisionAtrasado(row)
-            const diasRest =
-              modoTiempo === 'bandeja'
-                ? diasRestantesBandeja(row)
-                : diasRestantesAreaRevision(row)
-            const textoTiempo =
-              modoTiempo === 'bandeja'
-                ? textoTiempoLimiteBandeja(row)
-                : textoTiempoLimiteAreaRevision(row)
+            const { atrasado, diasRest, texto: textoTiempo } =
+              tiempoLimiteTabla(row, modoTiempo)
             const puedeSeleccionar =
               seleccionFilas &&
               (row.estado || '').toUpperCase() ===
@@ -2498,12 +2576,9 @@ function FiniquitoGestionPageInner() {
           Refrescar materializado
         </Button>
       }
-    >
-      <div
-        className="sticky top-3 z-30 -mx-4 border-b border-slate-200/80 bg-slate-100/95 px-4 pb-4 pt-1 shadow-sm backdrop-blur-sm supports-[backdrop-filter]:bg-slate-100/90 md:-mx-6 md:px-6"
-        aria-label="Indicadores finiquito"
-      >
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+      toolbar={
+        <div aria-label="Indicadores finiquito">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
           <Card className="border-slate-200 shadow-sm">
             <CardContent className="flex min-h-[5.5rem] flex-col justify-start gap-1 p-4">
               <p className="text-[11px] font-semibold uppercase leading-tight tracking-wide text-slate-500">
@@ -2584,7 +2659,7 @@ function FiniquitoGestionPageInner() {
                 {kpiCargando ? '-' : displayTotalContable}
               </p>
               <p className="text-xs leading-snug text-slate-500">
-                Tras area de revision
+                Hasta {AREA_REVISION_CONTABLE_DIAS_MAX}d · atrasado dia 6 de fase
                 {cedulaContableBusqueda ? ' (filtro cedula)' : ''}
               </p>
             </CardContent>
@@ -2604,8 +2679,9 @@ function FiniquitoGestionPageInner() {
             </CardContent>
           </Card>
         </div>
-      </div>
-
+        </div>
+      }
+    >
       <div className="space-y-5 md:space-y-6">
       <section
         className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-md"
@@ -3002,7 +3078,7 @@ function FiniquitoGestionPageInner() {
                 {renderTabla(
                   itemsAreaRevisionContableVisibles,
                   renderAccionesRevisionContable,
-                  'revision',
+                  'contable',
                   {
                     selectedIds: selectedContableIds,
                     onToggleRow: (id, checked) => {
@@ -3249,9 +3325,14 @@ function FiniquitoGestionPageInner() {
                     >
                       <div className="flex items-end justify-center gap-0.5">
                         {renderColumnaBarraGraficoDiario(ingresos, {
-                          barClass: 'bg-[#c8674a]',
-                          barEmptyClass: 'bg-[#e8c9bc]',
-                          labelClass: 'text-[#7a3b2a]',
+                          barClass: '',
+                          barEmptyClass: '',
+                          labelClass: '',
+                          barStyle: { backgroundColor: GRAFICO_DIA_COLOR_INGRESAN },
+                          barEmptyStyle: {
+                            backgroundColor: GRAFICO_DIA_COLOR_INGRESAN_VACIO,
+                          },
+                          labelStyle: { color: GRAFICO_DIA_COLOR_INGRESAN_ETIQUETA },
                         })}
                         {renderColumnaBarraGraficoDiario(terminados, {
                           barClass: esHoy ? 'bg-violet-700' : 'bg-violet-500/90',

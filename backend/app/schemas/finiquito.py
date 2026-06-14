@@ -85,6 +85,12 @@ class FiniquitoCasoOut(BaseModel):
             "Desde historial: ultima vez que el caso paso a ACEPTADO (area de revision), ISO datetime."
         ),
     )
+    fecha_entrada_revision_contable: Optional[str] = Field(
+        default=None,
+        description=(
+            "Desde historial: ultima vez que el caso paso a REVISION_CONTABLE, ISO datetime."
+        ),
+    )
     conciliacion_visto_activa: Optional[bool] = Field(
         default=None,
         description="True si hay reserva temporal de comprobantes (flujo Visto en curso).",

@@ -27,6 +27,8 @@ export type FiniquitoCasoItem = {
   fecha_entrada_en_proceso?: string | null
   /** ISO datetime: ultimo paso a ACEPTADO (area de revision). */
   fecha_entrada_aceptado?: string | null
+  /** ISO datetime: ultimo paso a REVISION_CONTABLE. */
+  fecha_entrada_revision_contable?: string | null
   /** Reserva temporal activa (flujo Visto conciliacion). */
   conciliacion_visto_activa?: boolean | null
 }
