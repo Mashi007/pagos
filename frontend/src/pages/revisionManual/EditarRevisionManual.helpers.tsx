@@ -574,6 +574,34 @@ export function partesCedulaParaEscaneoRevision(
   return { tipo: m[1] || 'V', numero }
 }
 
+function esMotivoAlertaReescaneoIgnorable(motivo: string): boolean {
+  const t = motivo.trim().toLowerCase()
+  if (!t) return true
+  if (/^ocr sin cambios respecto a los datos guardados\.?$/i.test(motivo.trim())) {
+    return true
+  }
+  if (/digitado coincide con el valor ya guardado/i.test(t)) return true
+  return false
+}
+
+/** Omite avisos informativos tras re-escaneo (sin cambios / ya coincidía). */
+export function filtrarMotivosAlertaReescaneo(motivos: string[]): string[] {
+  return [...new Set(motivos.map(m => m.trim()).filter(Boolean))].filter(
+    m => !esMotivoAlertaReescaneoIgnorable(m)
+  )
+}
+
+export function sanitizarAlertasReescaneoPorPagoId(
+  alertas: Record<number, string[]>
+): Record<number, string[]> {
+  const out: Record<number, string[]> = {}
+  for (const [id, motivos] of Object.entries(alertas)) {
+    const filtrados = filtrarMotivosAlertaReescaneo(motivos)
+    if (filtrados.length) out[Number(id)] = filtrados
+  }
+  return out
+}
+
 /** Re-escaneo cartera: institución Binance (Pay / P2P). */
 export function esInstitucionBinanceReescaneo(inst: string | null | undefined): boolean {
   return /\bbinance\b/i.test(String(inst ?? '').trim())
@@ -778,40 +806,6 @@ function campoBloqueadoValidacionReescaneo(
   }
 }
 
-function monedaRegistroPagoRow(pago: Pago): 'BS' | 'USD' {
-  const m = String(pago.moneda_registro || '')
-    .trim()
-    .toUpperCase()
-  return m === 'BS' ? 'BS' : 'USD'
-}
-
-function montoUsdPagoRow(pago: Pago): number | null {
-  const v = pago.monto_pagado
-  if (v == null || !Number.isFinite(Number(v))) return null
-  return Number(v)
-}
-
-function montoBsPagoRow(pago: Pago): number | null {
-  const v = pago.monto_bs_original
-  if (v != null && Number.isFinite(Number(v))) return Number(v)
-  if (monedaRegistroPagoRow(pago) === 'BS') return montoUsdPagoRow(pago)
-  return null
-}
-
-function valoresDifierenReescaneo(
-  a: string | number | null | undefined,
-  b: string | number | null | undefined
-): boolean {
-  if (a == null && b == null) return false
-  if (typeof a === 'number' || typeof b === 'number') {
-    const na = Number(a)
-    const nb = Number(b)
-    if (!Number.isFinite(na) || !Number.isFinite(nb)) return String(a) !== String(b)
-    return Math.abs(na - nb) > 0.0001
-  }
-  return String(a ?? '').trim() !== String(b ?? '').trim()
-}
-
 export type PatchReescaneoOcrResult = {
   patch: Partial<PagoCreate> & { monto_bs_original?: number | null }
   camposAplicados: CampoReescaneoOcr[]
@@ -850,11 +844,7 @@ export function patchParcialPagoDesdeOcrReescaneoCartera(
   if (
     digitados.includes('banco') &&
     inst &&
-    !campoBloqueadoValidacionReescaneo('banco', validacion, inst) &&
-    valoresDifierenReescaneo(
-      normalizarInstitucionBancoReescaneo((pago.institucion_bancaria || '').trim()),
-      inst
-    )
+    !campoBloqueadoValidacionReescaneo('banco', validacion, inst)
   ) {
     patch.institucion_bancaria = inst
     camposAplicados.push('banco')
@@ -864,8 +854,7 @@ export function patchParcialPagoDesdeOcrReescaneoCartera(
     digitados.includes('numero') &&
     numeroOcr &&
     !opts?.bloquearNumeroPorDuplicado &&
-    !campoBloqueadoValidacionReescaneo('numero', validacion, inst) &&
-    valoresDifierenReescaneo((pago.numero_documento || '').trim(), numeroOcr)
+    !campoBloqueadoValidacionReescaneo('numero', validacion, inst)
   ) {
     patch.numero_documento = numeroOcr
     camposAplicados.push('numero')
@@ -881,22 +870,17 @@ export function patchParcialPagoDesdeOcrReescaneoCartera(
     !campoBloqueadoValidacionReescaneo('moneda', validacion, inst)
 
   if (aplicaMoneda) {
-    const monedaActual = monedaRegistroPagoRow(pago)
-    if (valoresDifierenReescaneo(monedaActual, monedaOcr)) {
-      patch.moneda_registro = monedaOcr
-      camposAplicados.push('moneda')
-    }
+    patch.moneda_registro = monedaOcr
+    camposAplicados.push('moneda')
   }
 
   if (aplicaMonto) {
     if (monedaOcr === 'BS') {
-      if (valoresDifierenReescaneo(montoBsPagoRow(pago), montoOcr)) {
-        patch.monto_bs_original = montoOcr
-        patch.monto_pagado = 0
-        camposAplicados.push('monto')
-        if (!patch.moneda_registro) patch.moneda_registro = 'BS'
-      }
-    } else if (valoresDifierenReescaneo(montoUsdPagoRow(pago), montoOcr)) {
+      patch.monto_bs_original = montoOcr
+      patch.monto_pagado = 0
+      camposAplicados.push('monto')
+      if (!patch.moneda_registro) patch.moneda_registro = 'BS'
+    } else {
       patch.monto_pagado = montoOcr
       camposAplicados.push('monto')
       if (!patch.moneda_registro) patch.moneda_registro = 'USD'
@@ -906,8 +890,7 @@ export function patchParcialPagoDesdeOcrReescaneoCartera(
   if (
     digitados.includes('fecha') &&
     fechaOcr &&
-    !campoBloqueadoValidacionReescaneo('fecha', validacion, inst) &&
-    valoresDifierenReescaneo(fechaPagoPagoRowParaInput(pago), fechaOcr)
+    !campoBloqueadoValidacionReescaneo('fecha', validacion, inst)
   ) {
     patch.fecha_pago = fechaOcr
     camposAplicados.push('fecha')
@@ -959,16 +942,6 @@ export function motivosCamposDigitadosNoAplicadosReescaneo(
       motivos.push(
         `${labels[c]} digitado en imagen pero no aplicado por validación.`
       )
-      continue
-    }
-    const parcial = patchParcialPagoDesdeOcrReescaneoCartera(
-      pago,
-      sugerencia,
-      validacion,
-      opts
-    )
-    if (!parcial.camposAplicados.includes(c)) {
-      motivos.push(`${labels[c]} digitado coincide con el valor ya guardado.`)
     }
   }
   return [...new Set(motivos)]

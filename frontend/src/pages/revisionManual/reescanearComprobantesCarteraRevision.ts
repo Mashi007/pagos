@@ -19,6 +19,8 @@ import {
   omitirValidacionInstitucionReescaneoCartera,
   patchParcialPagoDesdeOcrReescaneoCartera,
   motivosCamposDigitadosNoAplicadosReescaneo,
+  filtrarMotivosAlertaReescaneo,
+  sanitizarAlertasReescaneoPorPagoId,
   type CampoReescaneoOcr,
   cedulaPartesReescaneoCartera,
   partesCedulaParaEscaneoRevision,
@@ -166,7 +168,7 @@ export function evaluarAlertaReescaneoCartera(
       msg = omitirValidacionInstitucionReescaneoCartera(msg) || ''
     }
     if (msg) motivos.push(msg)
-    return motivos
+    return filtrarMotivosAlertaReescaneo(motivos)
   }
 
   const validacion = validacionReescaneoEfectiva(pago, res)
@@ -178,7 +180,7 @@ export function evaluarAlertaReescaneoCartera(
     )
   }
 
-  return [...new Set(motivos.map(m => m.trim()).filter(Boolean))]
+  return filtrarMotivosAlertaReescaneo(motivos)
 }
 
 export function resultadoPersistenciaReescaneoOcr(
@@ -216,7 +218,6 @@ export function evaluarAlertaReescaneoTrasPersistencia(
   }
   const validacion = validacionReescaneoEfectiva(pago, res)
   const bloquearNumero = duplicadoBloqueaReescaneo(Number(pago.id), res, validacion)
-  const base = evaluarAlertaReescaneoCartera(pago, res)
   const parciales = motivosCamposDigitadosNoAplicadosReescaneo(
     pago,
     res.sugerencia,
@@ -224,7 +225,13 @@ export function evaluarAlertaReescaneoTrasPersistencia(
     camposAplicados,
     { bloquearNumeroPorDuplicado: bloquearNumero }
   )
-  return [...new Set([...base, ...parciales].map(m => m.trim()).filter(Boolean))]
+  const motivos = [...parciales]
+  if (duplicadoBloqueaReescaneo(Number(pago.id), res, validacion)) {
+    motivos.push(
+      'Posible duplicado en cartera; revise y use Visto si corresponde.'
+    )
+  }
+  return filtrarMotivosAlertaReescaneo(motivos)
 }
 
 /** @deprecated Use resultadoPersistenciaReescaneoOcr */
@@ -362,10 +369,6 @@ export async function reescanearComprobantesCarteraPrestamo(opts: {
           const motivos = evaluarAlertaReescaneoCartera(pago, res)
           if (motivos.length) {
             alertas[item.pago_id] = motivos
-          } else if (res.ok && res.sugerencia) {
-            alertas[item.pago_id] = [
-              'OCR sin cambios respecto a los datos guardados.',
-            ]
           }
         }
       } catch (err) {
@@ -379,7 +382,7 @@ export async function reescanearComprobantesCarteraPrestamo(opts: {
   }
 
   return {
-    alertas,
+    alertas: sanitizarAlertasReescaneoPorPagoId(alertas),
     escaneados: total,
     actualizados,
     omitidosSinImagen,
