@@ -1697,6 +1697,7 @@ function FiniquitoGestionPageInner() {
       }
       invalidateFiniquitoTerminadosCache()
       void invalidatePrestamosQueries(queryClient)
+      await cargarTerminados({ silent: true, force: true })
       await cargarAreasVisibles({ silent: true })
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : 'Error')

@@ -14,6 +14,13 @@ def test_fecha_historial_a_date_caracas_utc_naive():
     assert isinstance(d, date)
 
 
+def test_fecha_historial_a_date_caracas_naive_utc_medianoche_caracas():
+    """04:00 UTC = 00:00 Caracas (misma fecha calendario)."""
+    dt = datetime(2026, 6, 13, 4, 0, 0)
+    d = _fecha_historial_a_date_caracas(dt)
+    assert d == date(2026, 6, 13)
+
+
 def test_finiquito_terminados_dia_out_schema_fields():
     from app.schemas.finiquito import FiniquitoTerminadosDiaOut
 
