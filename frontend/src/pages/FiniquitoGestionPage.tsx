@@ -337,7 +337,9 @@ const AUTO_REFRESH_POLL_MS = 60_000
 
 /** Tope visual del gráfico diario de terminados (outliers no comprimen el resto). */
 const TERMINADOS_GRAFICO_ESCALA_MAX = 25
-const TERMINADOS_GRAFICO_ALTURA_PX = 120
+/** Altura visible de cada columna del gráfico diario (barra + número). */
+const GRAFICO_DIA_ALTURA_BARRA_MAX = 72
+const GRAFICO_DIA_COLOR_INGRESAN = '#c8674a'
 
 /** Coincide con backend `_ADMIN_CASOS_MAX_LIMIT` para bandejas pequeñas. */
 const FETCH_LIMIT = 2000
@@ -1151,10 +1153,47 @@ function FiniquitoGestionPageInner() {
     if (cantidad <= 0) return 4
     const paraEscala = Math.min(cantidad, TERMINADOS_GRAFICO_ESCALA_MAX)
     return Math.max(
-      12,
+      4,
       Math.round(
-        (paraEscala / escalaMaxTerminadosGrafico) * TERMINADOS_GRAFICO_ALTURA_PX
+        (paraEscala / escalaMaxTerminadosGrafico) * GRAFICO_DIA_ALTURA_BARRA_MAX
       )
+    )
+  }
+
+  const renderColumnaBarraGraficoDiario = (
+    valor: number,
+    opts: {
+      barClass: string
+      barEmptyClass: string
+      labelClass: string
+    }
+  ) => {
+    const fuera = valor > TERMINADOS_GRAFICO_ESCALA_MAX
+    const barH = alturaBarraGraficoDiario(valor)
+    return (
+      <div
+        className="relative flex w-3.5 shrink-0 flex-col items-center justify-end"
+        style={{ height: GRAFICO_DIA_ALTURA_BARRA_MAX + 12 }}
+      >
+        <span
+          className={cn(
+            'absolute left-1/2 z-[1] -translate-x-1/2 whitespace-nowrap text-[8px] font-semibold tabular-nums leading-none',
+            opts.labelClass,
+            fuera && 'text-amber-900'
+          )}
+          style={{ bottom: barH + 2 }}
+        >
+          {valor}
+        </span>
+        <div
+          className={cn(
+            'w-3 rounded-t-sm transition-all',
+            valor > 0 ? opts.barClass : opts.barEmptyClass,
+            fuera && 'ring-1 ring-amber-400/90'
+          )}
+          style={{ height: barH }}
+        />
+      </div>
     )
   }
 
@@ -2460,86 +2499,114 @@ function FiniquitoGestionPageInner() {
         </Button>
       }
     >
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-        <Card className="border-slate-200 shadow-sm">
-          <CardContent className="space-y-1 p-4">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-              Bandeja (Revision)
-            </p>
-            <p className="text-2xl font-bold tabular-nums text-[#1e3a5f]">
-              {kpiCargando ? '-' : displayTotalBandeja}
-            </p>
-          </CardContent>
-        </Card>
-        <Card
-          className={cn(
-            'border-slate-200 shadow-sm',
-            !kpiCargando &&
-              (kpiNuevosRevision?.total ?? 0) > 0 &&
-              'border-amber-300/90 bg-amber-50/40 ring-1 ring-amber-200/80'
-          )}
-        >
-          <CardContent className="space-y-1 p-4">
-            <div className="flex items-center gap-1.5">
-              <Bell
-                className={cn(
-                  'h-3.5 w-3.5 shrink-0',
-                  !kpiCargando && (kpiNuevosRevision?.total ?? 0) > 0
-                    ? 'text-amber-700'
-                    : 'text-slate-400'
-                )}
-                aria-hidden
-              />
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                Nuevos en bandeja
+      <div
+        className="sticky top-3 z-30 -mx-4 border-b border-slate-200/80 bg-slate-100/95 px-4 pb-4 pt-1 shadow-sm backdrop-blur-sm supports-[backdrop-filter]:bg-slate-100/90 md:-mx-6 md:px-6"
+        aria-label="Indicadores finiquito"
+      >
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+          <Card className="border-slate-200 shadow-sm">
+            <CardContent className="flex min-h-[5.5rem] flex-col justify-start gap-1 p-4">
+              <p className="text-[11px] font-semibold uppercase leading-tight tracking-wide text-slate-500">
+                Bandeja (Revision)
               </p>
-            </div>
-            <p
-              className={cn(
-                'text-2xl font-bold tabular-nums',
-                !kpiCargando && (kpiNuevosRevision?.total ?? 0) > 0
-                  ? 'text-amber-950'
-                  : 'text-slate-800'
-              )}
-            >
-              {areasLoading.bandeja && kpiNuevosRevision == null
-                ? '-'
-                : (kpiNuevosRevision?.total ?? 0)}
-            </p>
-          </CardContent>
-        </Card>
-        <Card className="border-slate-200 shadow-sm">
-          <CardContent className="space-y-1 p-4">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-              Area de revision
-            </p>
-            <p className="text-2xl font-bold tabular-nums text-amber-900">
-              {kpiCargando ? '-' : displayTotalRevision}
-            </p>
-          </CardContent>
-        </Card>
-        <Card className="border-indigo-200/80 shadow-sm ring-1 ring-indigo-100/60">
-          <CardContent className="space-y-1 p-4">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-              Revision contable
-            </p>
-            <p className="text-2xl font-bold tabular-nums text-indigo-900">
-              {kpiCargando ? '-' : displayTotalContable}
-            </p>
-          </CardContent>
-        </Card>
-        <Card className="border-slate-200 shadow-sm">
-          <CardContent className="space-y-1 p-4">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-              Area de trabajo
-            </p>
-            <p className="text-2xl font-bold tabular-nums text-emerald-900">
-              {kpiCargando ? '-' : displayTotalTrabajo}
-            </p>
-          </CardContent>
-        </Card>
+              <p className="text-2xl font-bold leading-none tabular-nums text-[#1e3a5f]">
+                {kpiCargando ? '-' : displayTotalBandeja}
+              </p>
+              <p className="text-xs leading-snug text-slate-500">
+                Dias 1-2 · atrasado desde dia {BANDEJA_DIA_ATRASADO}
+                {cedulaBusqueda ? ' (filtro cedula)' : ''}
+              </p>
+            </CardContent>
+          </Card>
+          <Card
+            className={cn(
+              'border-slate-200 shadow-sm',
+              !kpiCargando &&
+                (kpiNuevosRevision?.total ?? 0) > 0 &&
+                'border-amber-300/90 bg-amber-50/40 ring-1 ring-amber-200/80'
+            )}
+          >
+            <CardContent className="flex min-h-[5.5rem] flex-col justify-start gap-1 p-4">
+              <div className="flex items-center gap-1.5">
+                <Bell
+                  className={cn(
+                    'h-3.5 w-3.5 shrink-0',
+                    !kpiCargando && (kpiNuevosRevision?.total ?? 0) > 0
+                      ? 'text-amber-700'
+                      : 'text-slate-400'
+                  )}
+                  aria-hidden
+                />
+                <p className="text-[11px] font-semibold uppercase leading-tight tracking-wide text-slate-500">
+                  Nuevos en bandeja
+                </p>
+              </div>
+              <p
+                className={cn(
+                  'text-2xl font-bold leading-none tabular-nums',
+                  !kpiCargando && (kpiNuevosRevision?.total ?? 0) > 0
+                    ? 'text-amber-950'
+                    : 'text-slate-800'
+                )}
+              >
+                {areasLoading.bandeja && kpiNuevosRevision == null
+                  ? '-'
+                  : (kpiNuevosRevision?.total ?? 0)}
+              </p>
+              <p className="text-xs leading-snug text-slate-500">
+                Creados hace ≤{' '}
+                {kpiNuevosRevision?.ventana_horas ??
+                  FINIQUITO_HORAS_NUEVOS_REVISION_DEFAULT}{' '}
+                h (UTC)
+              </p>
+            </CardContent>
+          </Card>
+          <Card className="border-slate-200 shadow-sm">
+            <CardContent className="flex min-h-[5.5rem] flex-col justify-start gap-1 p-4">
+              <p className="text-[11px] font-semibold uppercase leading-tight tracking-wide text-slate-500">
+                Area de revision
+              </p>
+              <p className="text-2xl font-bold leading-none tabular-nums text-amber-900">
+                {kpiCargando ? '-' : displayTotalRevision}
+              </p>
+              <p className="text-xs leading-snug text-slate-500">
+                Hasta {AREA_REVISION_DIAS_MAX}d · atrasado dia 6 de fase
+                {cedulaRevisionBusqueda ? ' (filtro cedula)' : ''}
+              </p>
+            </CardContent>
+          </Card>
+          <Card className="border-indigo-200/80 shadow-sm ring-1 ring-indigo-100/60">
+            <CardContent className="flex min-h-[5.5rem] flex-col justify-start gap-1 p-4">
+              <p className="text-[11px] font-semibold uppercase leading-tight tracking-wide text-slate-500">
+                Revision contable
+              </p>
+              <p className="text-2xl font-bold leading-none tabular-nums text-indigo-900">
+                {kpiCargando ? '-' : displayTotalContable}
+              </p>
+              <p className="text-xs leading-snug text-slate-500">
+                Tras area de revision
+                {cedulaContableBusqueda ? ' (filtro cedula)' : ''}
+              </p>
+            </CardContent>
+          </Card>
+          <Card className="border-slate-200 shadow-sm">
+            <CardContent className="flex min-h-[5.5rem] flex-col justify-start gap-1 p-4">
+              <p className="text-[11px] font-semibold uppercase leading-tight tracking-wide text-slate-500">
+                Area de trabajo
+              </p>
+              <p className="text-2xl font-bold leading-none tabular-nums text-emerald-900">
+                {kpiCargando ? '-' : displayTotalTrabajo}
+              </p>
+              <p className="text-xs leading-snug text-slate-500">
+                Hasta dia {PLAZO_CICLO_DIAS} del ciclo
+                {cedulaTrabajoBusqueda ? ' (filtro cedula)' : ''}
+              </p>
+            </CardContent>
+          </Card>
+        </div>
       </div>
 
+      <div className="space-y-5 md:space-y-6">
       <section
         className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-md"
         aria-labelledby="finiquito-bandeja-titulo"
@@ -3142,7 +3209,8 @@ function FiniquitoGestionPageInner() {
               <div className="mb-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-slate-600">
                 <span className="inline-flex items-center gap-1.5">
                   <span
-                    className="inline-block h-2.5 w-2.5 rounded-sm bg-sky-500"
+                    className="inline-block h-2.5 w-2.5 rounded-sm"
+                    style={{ backgroundColor: GRAFICO_DIA_COLOR_INGRESAN }}
                     aria-hidden
                   />
                   Ingresan
@@ -3170,10 +3238,6 @@ function FiniquitoGestionPageInner() {
                   const esAyer = d.etiqueta === 'Ayer'
                   const ingresos = d.cantidad_ingresos ?? 0
                   const terminados = d.cantidad
-                  const ingresosFuera =
-                    ingresos > TERMINADOS_GRAFICO_ESCALA_MAX
-                  const terminadosFuera =
-                    terminados > TERMINADOS_GRAFICO_ESCALA_MAX
                   return (
                     <div
                       key={d.fecha}
@@ -3183,68 +3247,21 @@ function FiniquitoGestionPageInner() {
                       )}
                       title={`${d.etiqueta} (${d.fecha}): ${ingresos} ingreso(s), ${terminados} terminado(s)`}
                     >
-                      <div className="flex h-[72px] items-end justify-center gap-0.5">
-                        <div className="flex flex-col items-center gap-0.5">
-                          <span
-                            className={cn(
-                              'min-h-[10px] text-[8px] font-semibold tabular-nums leading-none text-sky-900',
-                              ingresosFuera && 'text-amber-900'
-                            )}
-                          >
-                            {ingresos > 0
-                              ? ingresos
-                              : esHoy || esAyer
-                                ? '0'
-                                : ''}
-                          </span>
-                          <div
-                            className={cn(
-                              'w-3 rounded-t-sm transition-all',
-                              ingresos > 0
-                                ? ingresosFuera
-                                  ? 'bg-sky-500 ring-1 ring-amber-400/90'
-                                  : 'bg-sky-500/90'
-                                : esHoy
-                                  ? 'bg-sky-200/80'
-                                  : 'bg-sky-100/70'
-                            )}
-                            style={{
-                              height: `${alturaBarraGraficoDiario(ingresos)}px`,
-                            }}
-                          />
-                        </div>
-                        <div className="flex flex-col items-center gap-0.5">
-                          <span
-                            className={cn(
-                              'min-h-[10px] text-[8px] font-semibold tabular-nums leading-none text-violet-900',
-                              esHoy && 'text-violet-950',
-                              terminadosFuera && 'text-amber-900'
-                            )}
-                          >
-                            {terminados > 0
-                              ? terminados
-                              : esHoy || esAyer
-                                ? '0'
-                                : ''}
-                          </span>
-                          <div
-                            className={cn(
-                              'w-3 rounded-t-sm transition-all',
-                              terminados > 0
-                                ? terminadosFuera
-                                  ? 'bg-violet-600 ring-1 ring-amber-400/90'
-                                  : esHoy
-                                    ? 'bg-violet-700'
-                                    : 'bg-violet-500/90'
-                                : esHoy
-                                  ? 'bg-violet-300/80'
-                                  : 'bg-violet-200/60'
-                            )}
-                            style={{
-                              height: `${alturaBarraGraficoDiario(terminados)}px`,
-                            }}
-                          />
-                        </div>
+                      <div className="flex items-end justify-center gap-0.5">
+                        {renderColumnaBarraGraficoDiario(ingresos, {
+                          barClass: 'bg-[#c8674a]',
+                          barEmptyClass: 'bg-[#e8c9bc]',
+                          labelClass: 'text-[#7a3b2a]',
+                        })}
+                        {renderColumnaBarraGraficoDiario(terminados, {
+                          barClass: esHoy ? 'bg-violet-700' : 'bg-violet-500/90',
+                          barEmptyClass: esHoy
+                            ? 'bg-violet-300/80'
+                            : 'bg-violet-200/60',
+                          labelClass: esHoy
+                            ? 'text-violet-950'
+                            : 'text-violet-900',
+                        })}
                       </div>
                       <span
                         className={cn(
@@ -3424,6 +3441,7 @@ function FiniquitoGestionPageInner() {
           )}
         </div>
       </section>
+      </div>
       <Dialog
         open={dialogTerminado != null}
         onOpenChange={open => {
