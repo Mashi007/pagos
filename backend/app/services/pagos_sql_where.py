@@ -28,7 +28,8 @@ def _where_pago_elegible_reaplicacion_cascada():
     Antes solo entraban conciliado o verificado_concordancia SI; muchos registros en PAGADO
     (carga, migracion, revision manual) quedaban fuera y el control 15 marcaba huérfanos.
 
-    Incluye: conciliado, verificado SI, o estado PAGADO.
+    Incluye: conciliado, verificado SI, estado PAGADO, o PENDIENTE ya asignado a un prestamo
+    (revision manual / cartera: el boton cascada debe repartir los 12 pagos, no solo los PAGADO).
     Excluye: mismo criterio que totales de cartera en auditoria (_sql_fragment_pago_excluido_cartera).
     """
     est = func.upper(func.coalesce(func.trim(Pago.estado), ""))
@@ -36,5 +37,6 @@ def _where_pago_elegible_reaplicacion_cascada():
         Pago.conciliado.is_(True),
         func.coalesce(func.upper(func.trim(Pago.verificado_concordancia)), "") == "SI",
         est == "PAGADO",
+        and_(est == "PENDIENTE", Pago.prestamo_id.isnot(None)),
     )
     return and_(incl, not_(_where_pago_excluido_operacion()))

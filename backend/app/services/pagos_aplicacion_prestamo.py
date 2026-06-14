@@ -147,8 +147,8 @@ def aplicar_pagos_pendientes_prestamo(
     """
     Aplica a cuotas los pagos del préstamo que aún no tienen enlaces en cuota_pagos.
 
-    Criterio de elegibilidad: conciliado, verificado_concordancia SI, o estado PAGADO;
-    excluye anulados/reversados/duplicado declarado (alineado con auditoria cartera).
+    Criterio de elegibilidad: conciliado, verificado_concordancia SI, estado PAGADO,
+    o PENDIENTE con prestamo_id; excluye anulados/reversados/duplicado declarado.
 
     No hace commit. Retorna el número de pagos a los que se les aplicó algo (cc o cp > 0).
     """
@@ -248,7 +248,8 @@ def aplicar_cascada_prestamo_pipeline(
     elif reaplicacion_completa:
         mensaje = (
             "Tabla de amortización reiniciada; no había pagos elegibles para volver a aplicar "
-            "(conciliado / verificado / PAGADO, monto > 0). Revise la conciliación de los pagos."
+            "(conciliado / verificado / PAGADO / PENDIENTE con crédito, monto > 0). "
+            "Revise la conciliación de los pagos."
         )
     else:
         mensaje = _mensaje_sin_aplicacion_cascada(diagnostico)

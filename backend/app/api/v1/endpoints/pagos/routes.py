@@ -6302,7 +6302,8 @@ def aplicar_pagos_pendientes_cuotas_por_prestamo(
 
     Aplica en cascada (por fecha_pago, luego id) los pagos del préstamo que aún no tienen
 
-    filas en cuota_pagos y cumplen criterios de elegibilidad (conciliado / verificado / PAGADO).
+    filas en cuota_pagos y cumplen criterios de elegibilidad (conciliado / verificado / PAGADO /
+    PENDIENTE con prestamo asignado).
 
     Por cada pago, el reparto a cuotas sigue el orden numero_cuota (cascada / waterfall).
 
