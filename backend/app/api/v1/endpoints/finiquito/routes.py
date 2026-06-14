@@ -12,7 +12,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 from fastapi.encoders import jsonable_encoder
-from sqlalchemy import Date, cast, func, select
+from sqlalchemy import Date, cast, func, literal, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from sqlalchemy.sql.expression import false as sql_false
@@ -442,10 +442,20 @@ def _expr_fecha_caracas_desde_utc_naive(column: Any) -> Any:
     ((col AT TIME ZONE 'UTC') AT TIME ZONE 'America/Caracas')::date
     Misma regla que consultas DBeaver sobre creado_en naive UTC.
     """
-    return cast(
-        func.timezone("America/Caracas", func.timezone("UTC", column)),
-        Date,
-    )
+    en_utc = column.op("AT TIME ZONE")(literal("UTC"))
+    en_caracas = en_utc.op("AT TIME ZONE")(literal("America/Caracas"))
+    return cast(en_caracas, Date)
+
+
+def _coerce_a_fecha_caracas(raw: Any) -> date | None:
+    """Normaliza date/datetime naive UTC a fecha calendario Caracas."""
+    if raw is None:
+        return None
+    if isinstance(raw, datetime):
+        return _fecha_historial_a_date_caracas(raw)
+    if isinstance(raw, date):
+        return raw
+    return _fecha_historial_a_date_caracas(raw)
 
 
 def _registrar_conteo_dia_caso(
@@ -457,10 +467,7 @@ def _registrar_conteo_dia_caso(
     inicio: date,
     hoy: date,
 ) -> None:
-    if isinstance(raw, date):
-        d = raw
-    else:
-        d = _fecha_historial_a_date_caracas(raw)
+    d = _coerce_a_fecha_caracas(raw)
     if d is None or d < inicio or d > hoy:
         return
     key = d.isoformat()

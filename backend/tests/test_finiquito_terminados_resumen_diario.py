@@ -4,6 +4,7 @@
 from datetime import date, datetime, timezone
 
 from app.api.v1.endpoints.finiquito.routes import (
+    _coerce_a_fecha_caracas,
     _fecha_historial_a_date_caracas,
     _registrar_conteo_dia_caso,
 )
@@ -21,6 +22,26 @@ def test_fecha_historial_a_date_caracas_naive_utc_medianoche_caracas():
     dt = datetime(2026, 6, 13, 4, 0, 0)
     d = _fecha_historial_a_date_caracas(dt)
     assert d == date(2026, 6, 13)
+
+
+def test_coerce_a_fecha_caracas_datetime_naive_utc():
+    dt = datetime(2026, 6, 13, 4, 0, 0)
+    assert _coerce_a_fecha_caracas(dt) == date(2026, 6, 13)
+
+
+def test_registrar_conteo_dia_caso_acepta_datetime_fallback():
+    ctr: Counter[str] = Counter()
+    vistos: set[tuple[str, int]] = set()
+    hoy = date(2026, 6, 13)
+    _registrar_conteo_dia_caso(
+        ctr,
+        vistos,
+        406,
+        datetime(2026, 6, 13, 4, 0, 0),
+        inicio=hoy,
+        hoy=hoy,
+    )
+    assert ctr[hoy.isoformat()] == 1
 
 
 def test_registrar_conteo_dia_caso_acepta_fecha_sql():
