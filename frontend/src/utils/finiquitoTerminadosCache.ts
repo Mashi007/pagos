@@ -9,8 +9,8 @@ import {
   safeSetSessionItem,
 } from './storage'
 
-/** Casos terminados + gráfico diario: no volver a pedir al servidor durante 1 h (misma cédula). */
-export const FINIQUITO_TERMINADOS_CACHE_TTL_MS = 60 * 60 * 1000
+/** Evita rafagas al reabrir la seccion; el polling activo usa force y refresca ~cada 1 min. */
+export const FINIQUITO_TERMINADOS_CACHE_TTL_MS = 5 * 60 * 1000
 
 const SESSION_INDEX_KEY = 'finiquito_terminados_cache_index'
 const SESSION_KEY_PREFIX = 'finiquito_terminados_cache:'

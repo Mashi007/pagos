@@ -75,7 +75,6 @@ import {
 } from '../services/finiquitoService'
 import { descargarTerminadosExcel } from '../utils/finiquitoTerminadosExcelExport'
 import {
-  FINIQUITO_TERMINADOS_CACHE_TTL_MS,
   invalidateFiniquitoTerminadosCache,
   minutosDesdeCache,
   readFiniquitoTerminadosCache,
@@ -815,6 +814,7 @@ function FiniquitoGestionPageInner() {
   const [terminadosFetchedAt, setTerminadosFetchedAt] = useState<number | null>(
     null
   )
+  const [, setTerminadosRelojUi] = useState(0)
   const resumenDigestRef = useRef<string | null>(null)
   const resumenPollingBusyRef = useRef(false)
   const bandejaFetchGenRef = useRef(0)
@@ -1085,6 +1085,48 @@ function FiniquitoGestionPageInner() {
             cached.totalTerminadosResumen,
             cached.fetchedAt
           )
+          const cacheAgeMs = Date.now() - cached.fetchedAt
+          if (cacheAgeMs >= AUTO_REFRESH_POLL_MS) {
+            void (async () => {
+              try {
+                const [rTerm, rSem] = await Promise.all([
+                  finiquitoAdminListarTerminados(cedulaFiltro || undefined, {
+                    limit: FETCH_LIMIT,
+                    offset: 0,
+                  }),
+                  finiquitoAdminResumenTerminadosDiario(
+                    cedulaFiltro || undefined,
+                    FINIQUITO_TERMINADOS_RESUMEN_DIAS_DEFAULT
+                  ),
+                ])
+                if (gen !== terminadosFetchGenRef.current) return
+                const fetchedAt = Date.now()
+                const items = rTerm.items || []
+                const total = rTerm.total ?? items.length
+                const dias = rSem.dias || []
+                aplicarPayload(
+                  items,
+                  total,
+                  dias,
+                  rSem.total_en_ventana ?? 0,
+                  rSem.total_terminados ?? 0,
+                  fetchedAt
+                )
+                writeFiniquitoTerminadosCache({
+                  fetchedAt,
+                  cedula: cedulaFiltro,
+                  dias: FINIQUITO_TERMINADOS_RESUMEN_DIAS_DEFAULT,
+                  items,
+                  totalTerminados: total,
+                  resumenDias: dias,
+                  totalEnVentana: rSem.total_en_ventana ?? 0,
+                  totalTerminadosResumen: rSem.total_terminados ?? 0,
+                })
+              } catch {
+                // Revalidacion en segundo plano: no interrumpir la UI.
+              }
+            })()
+          }
           return
         }
       }
@@ -1150,7 +1192,9 @@ function FiniquitoGestionPageInner() {
       if (cargadas.revision) tasks.push(cargarAreaRevision({ silent: true }))
       if (cargadas.contable) tasks.push(cargarAreaRevisionContable({ silent: true }))
       if (cargadas.trabajo) tasks.push(cargarAreaTrabajo({ silent: true }))
-      if (cargadas.terminados) tasks.push(cargarTerminados({ silent: true }))
+      if (cargadas.terminados) {
+        tasks.push(cargarTerminados({ silent: true, force: silent }))
+      }
       await Promise.all(tasks)
     },
     [
@@ -1331,6 +1375,14 @@ function FiniquitoGestionPageInner() {
   }, [cargarResumenKpis])
 
   useEffect(() => {
+    if (!areasCargadas.terminados) return
+    const id = window.setInterval(() => {
+      setTerminadosRelojUi(t => t + 1)
+    }, 30_000)
+    return () => window.clearInterval(id)
+  }, [areasCargadas.terminados])
+
+  useEffect(() => {
     void cargarBandeja()
   }, [cedulaBusqueda, cargarBandeja])
 
@@ -1454,22 +1506,17 @@ function FiniquitoGestionPageInner() {
       try {
         const snapshot = await finiquitoAdminResumenEstado()
         const digest = buildResumenDigest(snapshot)
-        const terminadoAntes = resumenEstado?.terminado
         setResumenEstado(snapshot)
-        if (resumenDigestRef.current == null) {
-          resumenDigestRef.current = digest
-          return
-        }
-        if (digest !== resumenDigestRef.current) {
-          resumenDigestRef.current = digest
-          if (
-            terminadoAntes != null &&
-            terminadoAntes !== snapshot.terminado
-          ) {
-            invalidateFiniquitoTerminadosCache()
-          }
+        const digestChanged =
+          resumenDigestRef.current != null &&
+          digest !== resumenDigestRef.current
+        resumenDigestRef.current = digest
+        if (digestChanged) {
+          invalidateFiniquitoTerminadosCache()
           void invalidatePrestamosQueries(queryClient)
           await cargarAreasVisibles({ silent: true })
+        } else if (areasCargadasRef.current.terminados) {
+          await cargarTerminados({ silent: true, force: true })
         }
       } catch {
         // Polling silencioso: no interrumpir la gestión por fallos transitorios.
@@ -1483,7 +1530,7 @@ function FiniquitoGestionPageInner() {
     }, AUTO_REFRESH_POLL_MS)
     void tick()
     return () => window.clearInterval(intervalId)
-  }, [cargarAreasVisibles, queryClient, refreshing, resumenEstado?.terminado])
+  }, [cargarAreasVisibles, cargarTerminados, queryClient, refreshing])
 
   const onRefreshJob = async () => {
     setRefreshing(true)
@@ -3282,22 +3329,32 @@ function FiniquitoGestionPageInner() {
             </p>
           ) : (
             <>
-              <div className="mb-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-slate-600">
-                <span className="inline-flex items-center gap-1.5">
-                  <span
-                    className="inline-block h-2.5 w-2.5 rounded-sm"
-                    style={{ backgroundColor: GRAFICO_DIA_COLOR_INGRESAN }}
-                    aria-hidden
-                  />
-                  Ingresan
-                </span>
-                <span className="inline-flex items-center gap-1.5">
-                  <span
-                    className="inline-block h-2.5 w-2.5 rounded-sm bg-violet-600"
-                    aria-hidden
-                  />
-                  Terminan
-                </span>
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-slate-600">
+                  <span className="inline-flex items-center gap-1.5">
+                    <span
+                      className="inline-block h-2.5 w-2.5 rounded-sm"
+                      style={{ backgroundColor: GRAFICO_DIA_COLOR_INGRESAN }}
+                      aria-hidden
+                    />
+                    Ingresan
+                  </span>
+                  <span className="inline-flex items-center gap-1.5">
+                    <span
+                      className="inline-block h-2.5 w-2.5 rounded-sm bg-violet-600"
+                      aria-hidden
+                    />
+                    Terminan
+                  </span>
+                </div>
+                {terminadosFetchedAt != null ? (
+                  <p className="text-[10px] text-slate-500">
+                    {minutosDesdeCache(terminadosFetchedAt) === 0
+                      ? 'Actualizado hace un momento'
+                      : `Actualizado hace ${minutosDesdeCache(terminadosFetchedAt)} min`}{' '}
+                    · auto cada 1 min
+                  </p>
+                ) : null}
               </div>
               <div
                 ref={terminadosGraficoScrollRef}
