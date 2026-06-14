@@ -1651,34 +1651,6 @@ export function RegistrarPagoForm({
 
             return
           }
-        } else if (
-          esRevisionManualPagosCartera &&
-          isEditing &&
-          fd.prestamo_id != null &&
-          Number(fd.prestamo_id) > 0
-        ) {
-          // Revisión manual: reconstruir cascada del crédito (LIQUIDADO/conciliado incluidos).
-          try {
-            const lote = await pagoService.aplicarPagosPendientesCuotasPorPrestamo(
-              Number(fd.prestamo_id)
-            )
-            const nAplic = Number(lote.pagos_con_aplicacion ?? 0)
-            toast.success(
-              lote.mensaje?.trim() ||
-                (nAplic > 0
-                  ? `Cascada reconstruida: ${nAplic} pago(s) distribuidos en cuotas.`
-                  : 'Pago guardado y conciliado; revise la amortización si no hubo abono en cuotas.'),
-              { duration: 6500 }
-            )
-          } catch (applyErr) {
-            toast.warning(
-              'Pago guardado pero no se pudo reconstruir la cascada del préstamo. Use «Aplicar a cuotas (cascada)» en esta pantalla.',
-              { duration: 7000 }
-            )
-            if (import.meta.env.DEV) {
-              console.warn('cascada revision manual tras editar:', applyErr)
-            }
-          }
         } else {
           try {
             const resultAplicar = await pagoService.aplicarPagoACuotas(

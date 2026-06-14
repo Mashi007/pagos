@@ -848,6 +848,77 @@ export function EditarRevisionManual() {
     await refrescarOrigenDatosTrasRevisionManual()
   }, [refrescarOrigenDatosTrasRevisionManual])
 
+  /** Tras cascada o guardar pago: cuotas + panel de coherencia alineados con BD. */
+  const sincronizarDetalleCuotasTrasOperacionPagos = useCallback(async () => {
+    await refrescarTrasCambioPagosRevision()
+    await refetchPagosRealizados()
+    if (!prestamoId) return
+    const pidNum = parseInt(prestamoId, 10)
+    if (!Number.isFinite(pidNum) || pidNum <= 0) return
+    try {
+      const datos =
+        await revisionManualService.getDetallePrestamoRevision(pidNum)
+      if (datos?.prestamo) {
+        setPrestamoData(datos.prestamo)
+        const faG = formatDateForInput(datos.prestamo.fecha_aprobacion)
+        if (faG) setFechaAprobacionOriginal(faG)
+      }
+      if (datos?.cuotas) {
+        const mergedCuotas = mergeCuotasParaMostrar(
+          datos.cuotas,
+          datos.prestamo?.numero_cuotas
+        )
+        setCuotasData(mergedCuotas)
+        setCambios(prev => ({
+          ...prev,
+          cuotas: false,
+          prestamo: false,
+        }))
+        const base = firmaCargaInicialRef.current
+        if (base) {
+          firmaCargaInicialRef.current = {
+            ...base,
+            ...(datos.prestamo
+              ? { prestamo: firmaSoloPrestamo(datos.prestamo) }
+              : {}),
+            cuotas: firmaSoloCuotas(mergedCuotas),
+          }
+        }
+      }
+    } catch (e) {
+      console.error(e)
+    }
+  }, [
+    prestamoId,
+    refrescarTrasCambioPagosRevision,
+    refetchPagosRealizados,
+  ])
+
+  /** Cascada: no exige cliente/email válidos; solo crédito y cuotas si hay que reconstruir. */
+  const validarMinimoParaCascadaRevision = useCallback((): boolean => {
+    const pid = Number(prestamoData.prestamo_id)
+    if (!Number.isFinite(pid) || pid <= 0) {
+      toast.error('No hay crédito válido para aplicar la cascada.')
+      return false
+    }
+    const esperadas = Math.floor(Number(prestamoData.numero_cuotas) || 0)
+    const persistidas = cuotasData.filter(c => c.cuota_id != null).length
+    const necesitaReconstruir =
+      esperadas > 0 && (persistidas === 0 || persistidas < esperadas)
+    if (necesitaReconstruir) {
+      const fa =
+        formatDateForInput(prestamoData.fecha_aprobacion) ||
+        formatDateForInput(prestamoData.fecha_base_calculo)
+      if (!fa) {
+        toast.error(
+          'Indique fecha de aprobación (o base de cálculo) para generar las cuotas faltantes antes de la cascada.'
+        )
+        return false
+      }
+    }
+    return true
+  }, [prestamoData, cuotasData])
+
   const manejarConciliarExito = useCallback(
     async (res: ConciliarCarteraRevisionResponse) => {
       const ids =
@@ -890,15 +961,10 @@ export function EditarRevisionManual() {
 
   const aplicarCascadaPagosMutation = useMutation({
     mutationFn: async () => {
-      if (!validarFormulario()) {
-        throw new Error(
-          'Corrija los errores marcados en rojo antes de aplicar la cascada.'
-        )
+      if (!validarMinimoParaCascadaRevision()) {
+        throw new Error('No se puede aplicar la cascada con los datos actuales.')
       }
       const pid = Number(prestamoData.prestamo_id)
-      if (!Number.isFinite(pid) || pid <= 0) {
-        throw new Error('No hay crédito válido para aplicar la cascada')
-      }
 
       const patch = buildPrestamoPatchGuardarRevision(
         prestamoData,
@@ -910,14 +976,6 @@ export function EditarRevisionManual() {
         esperadas > 0 && (persistidas === 0 || persistidas < esperadas)
 
       if (necesitaReconstruir) {
-        const fa =
-          formatDateForInput(prestamoData.fecha_aprobacion) ||
-          formatDateForInput(prestamoData.fecha_base_calculo)
-        if (!fa) {
-          throw new Error(
-            'Indique fecha de aprobación (o base de cálculo) para generar las cuotas faltantes antes de la cascada.'
-          )
-        }
         await revisionManualService.guardarPrestamoYReconstruirCuotas(
           pid,
           patch
@@ -940,49 +998,7 @@ export function EditarRevisionManual() {
       } else {
         toast.info(texto, desc != null ? { description: desc } : undefined)
       }
-      await refrescarTrasCambioPagosRevision()
-      /**
-       * Persistimos préstamo en servidor antes/durante la cascada; el detalle en caché puede quedar
-       * desalineado con el formulario. Traemos detalle fresco y alineamos préstamo + cuotas (merge N).
-       */
-      if (prestamoId) {
-        const pidNum = parseInt(prestamoId, 10)
-        if (Number.isFinite(pidNum) && pidNum > 0) {
-          try {
-            const datos =
-              await revisionManualService.getDetallePrestamoRevision(pidNum)
-            if (datos?.prestamo) {
-              setPrestamoData(datos.prestamo)
-              const faG = formatDateForInput(datos.prestamo.fecha_aprobacion)
-              if (faG) setFechaAprobacionOriginal(faG)
-            }
-            if (datos?.cuotas) {
-              const mergedCuotas = mergeCuotasParaMostrar(
-                datos.cuotas,
-                datos.prestamo?.numero_cuotas
-              )
-              setCuotasData(mergedCuotas)
-              setCambios(prev => ({
-                ...prev,
-                cuotas: false,
-                prestamo: false,
-              }))
-              const base = firmaCargaInicialRef.current
-              if (base) {
-                firmaCargaInicialRef.current = {
-                  ...base,
-                  ...(datos.prestamo
-                    ? { prestamo: firmaSoloPrestamo(datos.prestamo) }
-                    : {}),
-                  cuotas: firmaSoloCuotas(mergedCuotas),
-                }
-              }
-            }
-          } catch (e) {
-            console.error(e)
-          }
-        }
-      }
+      await sincronizarDetalleCuotasTrasOperacionPagos()
       setRevisionOperativaSucia(true)
     },
     onError: (err: unknown) => {
@@ -1014,7 +1030,7 @@ export function EditarRevisionManual() {
       await pagoService.deletePago(pago.id)
       quitarAlertaReescaneoPago(Number(pago.id))
       toast.success('Pago eliminado')
-      await refrescarTrasCambioPagosRevision()
+      await sincronizarDetalleCuotasTrasOperacionPagos()
       setRevisionOperativaSucia(true)
     } catch (err: unknown) {
       const msg =
@@ -1105,8 +1121,7 @@ export function EditarRevisionManual() {
         return
       }
 
-      await refrescarTrasCambioPagosRevision()
-      await refetchPagosRealizados()
+      await sincronizarDetalleCuotasTrasOperacionPagos()
 
       setReescaneoCarteraProgreso({
         hecho: resultado.escaneados,
@@ -1160,6 +1175,7 @@ export function EditarRevisionManual() {
     prestamoData.prestamo_id,
     refrescarTrasCambioPagosRevision,
     refetchPagosRealizados,
+    sincronizarDetalleCuotasTrasOperacionPagos,
     aplicarCascadaPagosMutation,
   ])
 
@@ -1242,7 +1258,7 @@ export function EditarRevisionManual() {
     if (fueEdicion && idEditado != null) {
       quitarAlertaReescaneoPago(Number(idEditado))
     }
-    await refrescarTrasCambioPagosRevision()
+    await sincronizarDetalleCuotasTrasOperacionPagos()
     setRevisionOperativaSucia(true)
   }
 

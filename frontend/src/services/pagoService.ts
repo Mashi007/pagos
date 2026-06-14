@@ -557,7 +557,9 @@ class PagoService {
     }
   }> {
     return await apiClient.post(
-      `${this.baseUrl}/por-prestamo/${prestamoId}/aplicar-pagos-cuotas`
+      `${this.baseUrl}/por-prestamo/${prestamoId}/aplicar-pagos-cuotas`,
+      undefined,
+      { timeout: PagoService.TIMEOUT_PAGO_CASCADA_MS }
     )
   }
 
