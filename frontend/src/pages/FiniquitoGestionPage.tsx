@@ -1343,8 +1343,7 @@ function FiniquitoGestionPageInner() {
       !canTrasladarFiniquitoBandejas &&
       row &&
       ((estado === 'ACEPTADO' && row.estado === 'REVISION') ||
-        (estado === 'REVISION_CONTABLE' && row.estado === 'ACEPTADO') ||
-        (estado === 'EN_PROCESO' && row.estado === 'REVISION_CONTABLE'))
+        (estado === 'REVISION_CONTABLE' && row.estado === 'ACEPTADO'))
     ) {
       toast.error(
         'Solo administradores pueden trasladar casos entre bandeja principal, area de revision, revision contable y area de trabajo.'
@@ -1729,7 +1728,7 @@ function FiniquitoGestionPageInner() {
   }
 
   const pasarContableATrabajoEnLote = async () => {
-    if (!canTrasladarFiniquitoBandejas || pasandoContableLote) return
+    if (pasandoContableLote) return
     const ids = idsContableSeleccionables.filter(id =>
       selectedContableIds.has(id)
     )
@@ -1800,12 +1799,6 @@ function FiniquitoGestionPageInner() {
 
   const pasarATrabajo = async (casoId: number) => {
     if (pendingEstadoCasoId != null) return
-    if (!canTrasladarFiniquitoBandejas) {
-      toast.error(
-        'Solo administradores pueden pasar casos de revision contable al area de trabajo.'
-      )
-      return
-    }
     setPendingEstadoCasoId(casoId)
     try {
       const r = await finiquitoAdminPasarATrabajo(casoId)
@@ -1985,24 +1978,20 @@ function FiniquitoGestionPageInner() {
   const renderAccionesRevisionContable = (row: FiniquitoCasoItem) => (
     <div className="flex flex-wrap items-center justify-end gap-2">
       {botonesFilaOperativos(row)}
-      {canTrasladarFiniquitoBandejas ? (
-        <>
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            className="h-8 gap-1 border-emerald-600 text-xs text-emerald-900 hover:bg-emerald-50"
-            title="Solo administrador: cierra conciliacion y pasa el caso al area de trabajo"
-            aria-label={`Pasar caso ${row.id} al area de trabajo`}
-            disabled={casoTieneAccionPendiente(row.id)}
-            onClick={() => void pasarATrabajo(row.id)}
-          >
-            <X className="h-3.5 w-3.5 shrink-0" aria-hidden />
-            Area trabajo
-          </Button>
-          {botonProcesosNormales(row)}
-        </>
-      ) : null}
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        className="h-8 gap-1 border-emerald-600 text-xs text-emerald-900 hover:bg-emerald-50"
+        title="Cierra conciliacion pendiente y pasa el caso al area de trabajo"
+        aria-label={`Pasar caso ${row.id} al area de trabajo`}
+        disabled={casoTieneAccionPendiente(row.id)}
+        onClick={() => void pasarATrabajo(row.id)}
+      >
+        <X className="h-3.5 w-3.5 shrink-0" aria-hidden />
+        Area trabajo
+      </Button>
+      {botonProcesosNormales(row)}
     </div>
   )
 
@@ -2929,18 +2918,11 @@ function FiniquitoGestionPageInner() {
               </h2>
               <p className="text-xs text-indigo-900/85">
                 {displayTotalContable} {subtituloContable}
-                {canTrasladarFiniquitoBandejas ? (
-                  <>
-                    {' '}
-                    · Iconos de revision manual, edicion y PDF; luego{' '}
-                    <strong>Area trabajo</strong> o <strong>Procesos normales</strong>
-                  </>
-                ) : (
-                  <>
-                    {' '}
-                    · Operadores: iconos de revision manual, edicion y PDF por fila
-                  </>
-                )}
+                {' '}
+                · Revision manual, edicion y PDF;{' '}
+                <strong>Area trabajo</strong> o <strong>Procesos normales</strong>
+                {' '}
+                (todos los perfiles con acceso a finiquitos)
               </p>
             </div>
           </div>
@@ -2949,10 +2931,8 @@ function FiniquitoGestionPageInner() {
           <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
             <p className="max-w-xl text-xs text-indigo-950/85">
               Casos trasladados desde el area de revision. Filtro propio (~
-              {DEBOUNCE_MS / 1000} s tras dejar de escribir).
-              {canTrasladarFiniquitoBandejas
-                ? ' Administrador: seleccion en lote y traslado al area de trabajo.'
-                : ''}
+              {DEBOUNCE_MS / 1000} s tras dejar de escribir). Puede seleccionar
+              varios y pasarlos al area de trabajo en lote.
             </p>
             <div className="flex w-full shrink-0 flex-col gap-3 sm:min-w-[min(100%,280px)] lg:w-full lg:max-w-sm xl:max-w-md">
               <div className="space-y-1.5">
@@ -2990,25 +2970,23 @@ function FiniquitoGestionPageInner() {
                 </div>
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                {canTrasladarFiniquitoBandejas ? (
-                  <Button
-                    type="button"
-                    size="sm"
-                    className="h-10 shrink-0 border-emerald-700 bg-emerald-700 hover:bg-emerald-800"
-                    disabled={
-                      areasLoading.contable ||
-                      pasandoContableLote ||
-                      selectedContableIds.size === 0
-                    }
-                    onClick={() => void pasarContableATrabajoEnLote()}
-                  >
-                    {pasandoContableLote ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      `Area trabajo seleccionados (${selectedContableIds.size})`
-                    )}
-                  </Button>
-                ) : null}
+                <Button
+                  type="button"
+                  size="sm"
+                  className="h-10 shrink-0 border-emerald-700 bg-emerald-700 hover:bg-emerald-800"
+                  disabled={
+                    areasLoading.contable ||
+                    pasandoContableLote ||
+                    selectedContableIds.size === 0
+                  }
+                  onClick={() => void pasarContableATrabajoEnLote()}
+                >
+                  {pasandoContableLote ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    `Area trabajo seleccionados (${selectedContableIds.size})`
+                  )}
+                </Button>
                 <Button
                   type="button"
                   variant="outline"
@@ -3064,32 +3042,30 @@ function FiniquitoGestionPageInner() {
                   itemsAreaRevisionContableVisibles,
                   renderAccionesRevisionContable,
                   'revision',
-                  canTrasladarFiniquitoBandejas
-                    ? {
-                        selectedIds: selectedContableIds,
-                        onToggleRow: (id, checked) => {
-                          setSelectedContableIds(prev => {
-                            const next = new Set(prev)
-                            if (checked) next.add(id)
-                            else next.delete(id)
-                            return next
-                          })
-                        },
-                        onToggleAll: checked => {
-                          setSelectedContableIds(() => {
-                            if (!checked) return new Set()
-                            return new Set(idsContableSeleccionables)
-                          })
-                        },
-                        disabled:
-                          pasandoContableLote || pendingEstadoCasoId != null,
-                        todosSeleccionados: todosContableSeleccionados,
-                        algunSeleccionado: algunContableSeleccionado,
-                        estadoRequerido: 'REVISION_CONTABLE',
-                        ariaSeleccionarTodos:
-                          'Seleccionar todos los casos visibles en revision contable',
-                      }
-                    : undefined
+                  {
+                    selectedIds: selectedContableIds,
+                    onToggleRow: (id, checked) => {
+                      setSelectedContableIds(prev => {
+                        const next = new Set(prev)
+                        if (checked) next.add(id)
+                        else next.delete(id)
+                        return next
+                      })
+                    },
+                    onToggleAll: checked => {
+                      setSelectedContableIds(() => {
+                        if (!checked) return new Set()
+                        return new Set(idsContableSeleccionables)
+                      })
+                    },
+                    disabled:
+                      pasandoContableLote || pendingEstadoCasoId != null,
+                    todosSeleccionados: todosContableSeleccionados,
+                    algunSeleccionado: algunContableSeleccionado,
+                    estadoRequerido: 'REVISION_CONTABLE',
+                    ariaSeleccionarTodos:
+                      'Seleccionar todos los casos visibles en revision contable',
+                  }
                 )}
                 <FiniquitoTablaScrollHint
                   total={totalAreaRevisionContable}

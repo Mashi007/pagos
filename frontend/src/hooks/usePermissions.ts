@@ -64,9 +64,9 @@ export function usePermissions() {
   }
 
   /**
-   * Trasladar casos entre bandeja principal, área de revisión y área de trabajo
-   * (Validar / pasar a trabajo). Solo administrador; el resto del módulo sigue
-   * disponible para gerente y operario (Visto, área de trabajo, etc.).
+   * Trasladar casos entre bandeja principal, area de revision y revision contable
+   * (Validar / pasar a revision contable). Solo administrador.
+   * Revision contable -> area de trabajo: todos los roles con acceso a finiquitos.
    */
   const canTrasladarFiniquitoBandejas = (): boolean => {
     return isAdmin()

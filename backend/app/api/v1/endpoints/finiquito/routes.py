@@ -1415,11 +1415,16 @@ def finiquito_admin_liberar_procesos_normales(
 ):
     """
     Quita el caso de finiquito y deja el préstamo en cartera operativa (pagos, cuotas).
-    Bandeja principal (REVISION) o área de revisión (ACEPTADO), p. ej. tras Conciliar.
+    Bandeja principal (REVISION), area de revision (ACEPTADO) o revision contable.
     """
-    err_perm = _error_gestion_bandeja_finiquito_si_no_admin(panel_user)
-    if err_perm:
-        return FiniquitoLiberarProcesosNormalesResponse(ok=False, error=err_perm)
+    caso = db.query(FiniquitoCaso).filter(FiniquitoCaso.id == caso_id).first()
+    if not caso:
+        raise HTTPException(status_code=404, detail="Caso no encontrado")
+    est_caso = (caso.estado or "").strip().upper()
+    if est_caso != "REVISION_CONTABLE":
+        err_perm = _error_gestion_bandeja_finiquito_si_no_admin(panel_user)
+        if err_perm:
+            return FiniquitoLiberarProcesosNormalesResponse(ok=False, error=err_perm)
     from app.services.finiquito_liberar_procesos_normales_service import (
         ejecutar_liberar_finiquito_a_procesos_normales,
     )
@@ -1468,8 +1473,6 @@ def _traslado_finiquito_requiere_admin(estado_anterior: str, estado_nuevo: str) 
     if nue == "ACEPTADO" and ant == "REVISION":
         return True
     if nue == "REVISION_CONTABLE" and ant == "ACEPTADO":
-        return True
-    if nue == "EN_PROCESO" and ant == "REVISION_CONTABLE":
         return True
     return False
 

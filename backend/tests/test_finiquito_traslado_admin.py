@@ -21,7 +21,7 @@ def test_traslado_requiere_admin_revision_a_contable():
 
 
 def test_traslado_requiere_admin_contable_a_trabajo():
-    assert _traslado_finiquito_requiere_admin("REVISION_CONTABLE", "EN_PROCESO") is True
+    assert _traslado_finiquito_requiere_admin("REVISION_CONTABLE", "EN_PROCESO") is False
 
 
 def test_aceptado_a_trabajo_directo_ya_no_requiere_admin():
