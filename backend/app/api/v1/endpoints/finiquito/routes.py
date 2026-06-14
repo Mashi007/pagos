@@ -13,6 +13,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 from fastapi.encoders import jsonable_encoder
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from sqlalchemy.sql.expression import false as sql_false
 
@@ -1274,12 +1275,12 @@ def finiquito_admin_terminados_resumen_semanal(
 )
 def finiquito_admin_terminados_resumen_diario(
     dias: int = Query(
-        31,
+        21,
         ge=2,
         le=90,
         description=(
             "Ventana en dias calendario Caracas: incluye hoy y (dias - 1) dias anteriores. "
-            "Por defecto 31 = hoy + 30 dias previos."
+            "Por defecto 21 = hoy + 20 dias previos."
         ),
     ),
     cedula: Optional[str] = Query(
@@ -1289,13 +1290,25 @@ def finiquito_admin_terminados_resumen_diario(
     db: Session = Depends(get_db),
     _: UserResponse = Depends(require_admin_or_operator),
 ):
-    """Conteo de casos TERMINADO por dia (fecha en historial), ventana fija hacia atras desde hoy Caracas."""
+    """Conteo diario Caracas: ingresos (materializacion) y terminados (historial TERMINADO)."""
     hoy = fecha_hoy_caracas()
     inicio = hoy - timedelta(days=int(dias) - 1)
 
+    ced_filtro = cedula.strip() if cedula and cedula.strip() else None
+
+    q_ing = db.query(FiniquitoCaso)
+    if ced_filtro:
+        q_ing = q_ing.filter(FiniquitoCaso.cedula.ilike(f"%{ced_filtro}%"))
+    ctr_ing: Counter[str] = Counter()
+    for c in q_ing.all():
+        d = _fecha_historial_a_date_caracas(c.creado_en)
+        if d is None or d < inicio or d > hoy:
+            continue
+        ctr_ing[d.isoformat()] += 1
+
     q = db.query(FiniquitoCaso).filter(FiniquitoCaso.estado == "TERMINADO")
-    if cedula and cedula.strip():
-        q = q.filter(FiniquitoCaso.cedula.ilike(f"%{cedula.strip()}%"))
+    if ced_filtro:
+        q = q.filter(FiniquitoCaso.cedula.ilike(f"%{ced_filtro}%"))
     casos = q.all()
     ft = _map_fecha_terminado_por_caso(db, [c.id for c in casos])
     ctr: Counter[str] = Counter()
@@ -1314,15 +1327,18 @@ def finiquito_admin_terminados_resumen_diario(
                 fecha=key,
                 etiqueta=_etiqueta_dia_terminado(cur, hoy),
                 cantidad=int(ctr.get(key, 0)),
+                cantidad_ingresos=int(ctr_ing.get(key, 0)),
             )
         )
         cur += timedelta(days=1)
 
     total_en_ventana = sum(d.cantidad for d in dias_out)
+    total_ingresos_en_ventana = sum(d.cantidad_ingresos for d in dias_out)
     return FiniquitoTerminadosResumenDiarioResponse(
         dias=dias_out,
         total_terminados=len(casos),
         total_en_ventana=total_en_ventana,
+        total_ingresos_en_ventana=total_ingresos_en_ventana,
     )
 
 
@@ -1502,6 +1518,37 @@ def _error_gestion_bandeja_finiquito_si_no_admin(
         "Solo administradores pueden rechazar, eliminar o liberar casos "
         "desde la bandeja principal o el area de revision."
     )
+
+
+def _mensaje_error_integridad_estado_finiquito(exc: IntegrityError, estado: str) -> str:
+    det = str(getattr(exc, "orig", exc) or exc).lower()
+    if "ck_finiquito_casos_estado" in det or "check constraint" in det:
+        if (estado or "").upper().strip() == "REVISION_CONTABLE":
+            return (
+                "La base de datos aun no admite el estado REVISION_CONTABLE. "
+                "Ejecute la migracion 075_finiquito_estado_revision_contable "
+                "(alembic upgrade head o backend/sql/075_finiquito_estado_revision_contable.sql)."
+            )
+        return (
+            "El estado solicitado no esta permitido por la base de datos (constraint ck_finiquito_casos_estado). "
+            "Revise migraciones pendientes de finiquito."
+        )
+    return "No se pudo guardar el cambio de estado del caso finiquito."
+
+
+def _commit_finiquito_patch_estado(
+    db: Session, *, estado_nuevo: str
+) -> Optional[FiniquitoPatchEstadoResponse]:
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        logger.exception("patch estado finiquito commit estado=%s", estado_nuevo)
+        return FiniquitoPatchEstadoResponse(
+            ok=False,
+            error=_mensaje_error_integridad_estado_finiquito(exc, estado_nuevo),
+        )
+    return None
 
 
 def _admin_pasar_caso_a_en_proceso(
@@ -1743,7 +1790,9 @@ def finiquito_admin_patch_estado(
                 user_id=panel_user.id,
             )
         sincronizar_prestamo_estado_gestion_finiquito(db, caso.prestamo_id, caso.estado)
-        db.commit()
+        err_commit = _commit_finiquito_patch_estado(db, estado_nuevo=nuevo)
+        if err_commit:
+            return err_commit
         db.refresh(caso)
         caso_out = _admin_casos_to_items(db, [caso])[0]
         return FiniquitoPatchEstadoResponse(ok=True, caso=caso_out)
@@ -1836,7 +1885,9 @@ def finiquito_admin_patch_estado(
             )
 
     sincronizar_prestamo_estado_gestion_finiquito(db, caso.prestamo_id, caso.estado)
-    db.commit()
+    err_commit = _commit_finiquito_patch_estado(db, estado_nuevo=nuevo)
+    if err_commit:
+        return err_commit
     db.refresh(caso)
     caso_out = _admin_casos_to_items(db, [caso])[0]
     return FiniquitoPatchEstadoResponse(ok=True, caso=caso_out)

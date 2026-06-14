@@ -232,11 +232,16 @@ class FiniquitoTerminadosResumenSemanalResponse(BaseModel):
 
 
 class FiniquitoTerminadosDiaOut(BaseModel):
-    """Conteo de casos terminados agrupados por dia calendario (America/Caracas)."""
+    """Conteo diario (calendario Caracas): ingresos al materializar y cierres TERMINADO."""
 
     fecha: str = Field(..., description="YYYY-MM-DD en calendario Caracas")
     etiqueta: str = Field(..., description="Etiqueta corta para grafico, ej. Hoy, Ayer, 12/06")
-    cantidad: int = Field(..., ge=0)
+    cantidad: int = Field(..., ge=0, description="Casos marcados Terminado ese dia.")
+    cantidad_ingresos: int = Field(
+        ...,
+        ge=0,
+        description="Casos materializados en finiquito ese dia (creado_en).",
+    )
 
 
 class FiniquitoTerminadosResumenDiarioResponse(BaseModel):
@@ -249,7 +254,12 @@ class FiniquitoTerminadosResumenDiarioResponse(BaseModel):
     total_en_ventana: int = Field(
         ...,
         ge=0,
-        description="Suma de cantidades en la ventana diaria devuelta.",
+        description="Suma de terminados en la ventana diaria devuelta.",
+    )
+    total_ingresos_en_ventana: int = Field(
+        ...,
+        ge=0,
+        description="Suma de ingresos materializados en la ventana diaria devuelta.",
     )
 
 

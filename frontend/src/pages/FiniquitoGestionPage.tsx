@@ -68,6 +68,7 @@ import {
   type FiniquitoRefreshStats,
   type FiniquitoResumenEstado,
   type FiniquitoTerminadoItem,
+  type FiniquitoTerminadosDia,
   FINIQUITO_HORAS_NUEVOS_REVISION_DEFAULT,
   FINIQUITO_TERMINADOS_RESUMEN_DIAS_DEFAULT,
 } from '../services/finiquitoService'
@@ -433,6 +434,75 @@ type SeleccionFilasTabla = {
   ariaSeleccionarTodos: string
 }
 
+type FiniquitoCedulaFiltroInlineProps = {
+  id: string
+  value: string
+  onChange: (value: string) => void
+  onClear: () => void
+  placeholder?: string
+  labelClassName?: string
+  inputClassName?: string
+  searchIconClassName?: string
+  clearButtonClassName?: string
+  ariaClear?: string
+}
+
+function FiniquitoCedulaFiltroInline({
+  id,
+  value,
+  onChange,
+  onClear,
+  placeholder = 'Ej. V12345678',
+  labelClassName = 'text-slate-700',
+  inputClassName = 'border-slate-300 bg-white',
+  searchIconClassName = 'text-slate-400',
+  clearButtonClassName = 'text-slate-500 hover:bg-slate-100 hover:text-slate-800',
+  ariaClear = 'Limpiar filtro',
+}: FiniquitoCedulaFiltroInlineProps) {
+  return (
+    <div className="flex min-w-0 flex-1 items-center gap-2 sm:max-w-xs lg:max-w-[14rem] xl:max-w-xs">
+      <Label
+        htmlFor={id}
+        className={cn('shrink-0 text-xs font-semibold', labelClassName)}
+      >
+        Filtro
+      </Label>
+      <div className="relative min-w-0 flex-1">
+        <Search
+          className={cn(
+            'pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2',
+            searchIconClassName
+          )}
+          aria-hidden
+        />
+        <Input
+          id={id}
+          type="search"
+          autoComplete="off"
+          placeholder={placeholder}
+          value={value}
+          onChange={e => onChange(e.target.value)}
+          className={cn('h-9 w-full pl-8 pr-8 font-mono text-sm', inputClassName)}
+        />
+        {value ? (
+          <button
+            type="button"
+            className={cn(
+              'absolute right-1.5 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md',
+              clearButtonClassName
+            )}
+            onClick={onClear}
+            title="Limpiar filtro"
+            aria-label={ariaClear}
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        ) : null}
+      </div>
+    </div>
+  )
+}
+
 function textoFechaTabla(iso: string | null | undefined): string {
   if (iso == null || String(iso).trim() === '') return '-'
   try {
@@ -660,9 +730,7 @@ function FiniquitoGestionPageInner() {
     []
   )
   const [totalTerminados, setTotalTerminados] = useState(0)
-  const [resumenDias, setResumenDias] = useState<
-    { fecha: string; etiqueta: string; cantidad: number }[]
-  >([])
+  const [resumenDias, setResumenDias] = useState<FiniquitoTerminadosDia[]>([])
   const [totalTerminadosEnVentana, setTotalTerminadosEnVentana] = useState(0)
   const [totalTerminadosResumen, setTotalTerminadosResumen] = useState(0)
   const [filtrosTerminados, setFiltrosTerminados] =
@@ -920,7 +988,7 @@ function FiniquitoGestionPageInner() {
       const aplicarPayload = (
         items: FiniquitoTerminadoItem[],
         total: number,
-        dias: { fecha: string; etiqueta: string; cantidad: number }[],
+        dias: FiniquitoTerminadosDia[],
         totalEnVentana: number,
         totalResumen: number,
         fetchedAt: number
@@ -1069,7 +1137,9 @@ function FiniquitoGestionPageInner() {
   )
 
   const escalaMaxTerminadosGrafico = useMemo(() => {
-    const vals = resumenDias.map(d => d.cantidad).filter(c => c > 0)
+    const vals = resumenDias
+      .flatMap(d => [d.cantidad, d.cantidad_ingresos ?? 0])
+      .filter(c => c > 0)
     const dataMax = vals.length ? Math.max(...vals) : 0
     return Math.min(
       TERMINADOS_GRAFICO_ESCALA_MAX,
@@ -1077,7 +1147,7 @@ function FiniquitoGestionPageInner() {
     )
   }, [resumenDias])
 
-  const alturaBarraTerminados = (cantidad: number) => {
+  const alturaBarraGraficoDiario = (cantidad: number) => {
     if (cantidad <= 0) return 4
     const paraEscala = Math.min(cantidad, TERMINADOS_GRAFICO_ESCALA_MAX)
     return Math.max(
@@ -2325,11 +2395,6 @@ function FiniquitoGestionPageInner() {
     </div>
   )
 
-  const subtituloTrabajo = totalAreaTrabajo === 1 ? 'registro' : 'registros'
-  const subtituloRevision = totalAreaRevision === 1 ? 'registro' : 'registros'
-  const subtituloContable =
-    totalAreaRevisionContable === 1 ? 'registro' : 'registros'
-
   const kpiCargando = loadingResumen && resumenEstado == null
   const displayTotalBandeja = cedulaBusqueda
     ? totalBandeja
@@ -2395,7 +2460,7 @@ function FiniquitoGestionPageInner() {
         </Button>
       }
     >
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         <Card className="border-slate-200 shadow-sm">
           <CardContent className="space-y-1 p-4">
             <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
@@ -2403,10 +2468,6 @@ function FiniquitoGestionPageInner() {
             </p>
             <p className="text-2xl font-bold tabular-nums text-[#1e3a5f]">
               {kpiCargando ? '-' : displayTotalBandeja}
-            </p>
-            <p className="text-xs text-slate-500">
-              Dias 1-2 · atrasado desde dia {BANDEJA_DIA_ATRASADO}
-              {cedulaBusqueda ? ' (filtro cedula)' : ''}
             </p>
           </CardContent>
         </Card>
@@ -2445,12 +2506,6 @@ function FiniquitoGestionPageInner() {
                 ? '-'
                 : (kpiNuevosRevision?.total ?? 0)}
             </p>
-            <p className="text-xs text-slate-500">
-              Creados hace ≤{' '}
-              {kpiNuevosRevision?.ventana_horas ??
-                FINIQUITO_HORAS_NUEVOS_REVISION_DEFAULT}{' '}
-              h (UTC)
-            </p>
           </CardContent>
         </Card>
         <Card className="border-slate-200 shadow-sm">
@@ -2461,9 +2516,15 @@ function FiniquitoGestionPageInner() {
             <p className="text-2xl font-bold tabular-nums text-amber-900">
               {kpiCargando ? '-' : displayTotalRevision}
             </p>
-            <p className="text-xs text-slate-500">
-              Hasta {AREA_REVISION_DIAS_MAX}d · atrasado dia 6 de fase
-              {cedulaRevisionBusqueda ? ' (filtro cedula)' : ''}
+          </CardContent>
+        </Card>
+        <Card className="border-indigo-200/80 shadow-sm ring-1 ring-indigo-100/60">
+          <CardContent className="space-y-1 p-4">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+              Revision contable
+            </p>
+            <p className="text-2xl font-bold tabular-nums text-indigo-900">
+              {kpiCargando ? '-' : displayTotalContable}
             </p>
           </CardContent>
         </Card>
@@ -2475,10 +2536,6 @@ function FiniquitoGestionPageInner() {
             <p className="text-2xl font-bold tabular-nums text-emerald-900">
               {kpiCargando ? '-' : displayTotalTrabajo}
             </p>
-            <p className="text-xs text-slate-500">
-              Hasta dia {PLAZO_CICLO_DIAS} del ciclo
-              {cedulaTrabajoBusqueda ? ' (filtro cedula)' : ''}
-            </p>
           </CardContent>
         </Card>
       </div>
@@ -2487,116 +2544,60 @@ function FiniquitoGestionPageInner() {
         className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-md"
         aria-labelledby="finiquito-bandeja-titulo"
       >
-        <div className="border-b border-slate-200 bg-slate-50/90 px-4 py-4 sm:px-5">
-          <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-            <div className="min-w-0 flex-1 space-y-1">
+        <div className="border-b border-slate-200 bg-slate-50/90 px-4 py-3 sm:px-5">
+          <div className="flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-center lg:justify-between">
+            <div className="flex min-w-0 flex-1 flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
               <h2
                 id="finiquito-bandeja-titulo"
-                className="text-base font-bold text-[#1e3a5f]"
+                className="shrink-0 text-base font-bold text-[#1e3a5f]"
               >
                 Bandeja principal
               </h2>
-              <p className="text-xs text-slate-600 sm:text-sm">
-                {canTrasladarFiniquitoBandejas ? (
-                  <>
-                    <strong>Validar</strong> (pasa al área de revisión, sin procesar
-                    datos) solo administrador; puede seleccionar varios y usar{' '}
-                    <strong>Validar seleccionados</strong>;{' '}
-                    <strong>Procesos normales</strong> saca el crédito de finiquito si
-                    Conciliar confirma que no está liquidado;{' '}
-                    <strong>Rechazar</strong> o <strong>Eliminar</strong> en esta
-                    bandeja. Días 1-2 en bandeja; desde día {BANDEJA_DIA_ATRASADO} el
-                    estado pasa a atrasado. Ciclo total {PLAZO_CICLO_DIAS} días.
-                  </>
-                ) : (
-                  <>
-                    Operadores y gerentes: solo revisión manual del préstamo, edición
-                    del caso y descarga de estado de cuenta (iconos por fila). No pueden
-                    validar, rechazar, eliminar ni mover casos entre bandejas.
-                  </>
-                )}
-              </p>
+              <FiniquitoCedulaFiltroInline
+                id="finiquito-filtro-cedula-bandeja"
+                value={cedulaInput}
+                onChange={setCedulaInput}
+                onClear={limpiarCedula}
+                placeholder="Ej. V12345678 o parte del número"
+                ariaClear="Limpiar filtro de cédula"
+              />
             </div>
-            <div className="flex w-full shrink-0 flex-col gap-3 sm:min-w-[min(100%,280px)] lg:w-full lg:max-w-sm xl:max-w-md">
-              <div className="space-y-1.5">
-                <Label
-                  htmlFor="finiquito-filtro-cedula-bandeja"
-                  className="whitespace-nowrap text-xs font-semibold text-slate-700"
-                >
-                  Filtrar por cédula
-                </Label>
-                <div className="relative">
-                  <Search
-                    className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
-                    aria-hidden
-                  />
-                  <Input
-                    id="finiquito-filtro-cedula-bandeja"
-                    type="search"
-                    autoComplete="off"
-                    placeholder="Ej. V12345678 o parte del número"
-                    value={cedulaInput}
-                    onChange={e => setCedulaInput(e.target.value)}
-                    className="h-10 w-full border-slate-300 pl-9 pr-10 font-mono text-sm"
-                  />
-                  {cedulaInput ? (
-                    <button
-                      type="button"
-                      className="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-800"
-                      onClick={limpiarCedula}
-                      title="Limpiar filtro"
-                      aria-label="Limpiar filtro de cédula"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
-                  ) : null}
-                </div>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                {canTrasladarFiniquitoBandejas ? (
-                  <Button
-                    type="button"
-                    size="sm"
-                    className="h-10 shrink-0 bg-emerald-700 hover:bg-emerald-800"
-                    disabled={
-                      areasLoading.bandeja ||
-                      validandoBandejaLote ||
-                      selectedBandejaIds.size === 0
-                    }
-                    onClick={() => void validarBandejaEnLote()}
-                  >
-                    {validandoBandejaLote ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      `Validar seleccionados (${selectedBandejaIds.size})`
-                    )}
-                  </Button>
-                ) : null}
+            <div className="flex flex-wrap items-center gap-2">
+              {canTrasladarFiniquitoBandejas ? (
                 <Button
                   type="button"
-                  variant="outline"
                   size="sm"
-                  className="h-10 shrink-0 border-slate-300"
-                  disabled={areasLoading.bandeja || validandoBandejaLote}
-                  onClick={() => void cargarBandeja()}
+                  className="h-9 shrink-0 bg-emerald-700 hover:bg-emerald-800"
+                  disabled={
+                    areasLoading.bandeja ||
+                    validandoBandejaLote ||
+                    selectedBandejaIds.size === 0
+                  }
+                  onClick={() => void validarBandejaEnLote()}
                 >
-                  {areasLoading.bandeja ? (
+                  {validandoBandejaLote ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (
-                    'Recargar'
+                    `Validar seleccionados (${selectedBandejaIds.size})`
                   )}
                 </Button>
-              </div>
+              ) : null}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-9 shrink-0 border-slate-300"
+                disabled={areasLoading.bandeja || validandoBandejaLote}
+                onClick={() => void cargarBandeja()}
+              >
+                {areasLoading.bandeja ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  'Recargar'
+                )}
+              </Button>
             </div>
           </div>
-          {cedulaBusqueda ? (
-            <p className="mt-3 text-xs text-slate-600">
-              Filtro activo (bandeja principal):{' '}
-              <span className="font-mono font-semibold text-[#1e3a5f]">
-                {cedulaBusqueda}
-              </span>
-            </p>
-          ) : null}
         </div>
         <div>
           <div className="p-3 sm:p-4">
@@ -2712,129 +2713,71 @@ function FiniquitoGestionPageInner() {
         )}
         aria-labelledby="finiquito-area-revision-titulo"
       >
-        <div className="border-b border-amber-200/90 bg-amber-100/95 px-4 py-3.5 sm:px-5">
-          <div className="flex flex-wrap items-center gap-3 text-amber-950">
-            <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-amber-300/90 bg-amber-50 shadow-sm">
-              <CheckCircle2 className="h-5 w-5 text-amber-800" aria-hidden />
-            </span>
-            <div>
+        <div className="border-b border-amber-200/90 bg-amber-100/95 px-4 py-3 sm:px-5">
+          <div className="flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-center lg:justify-between">
+            <div className="flex min-w-0 flex-1 flex-col gap-3 sm:flex-row sm:items-center sm:gap-3">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-amber-300/90 bg-amber-50 shadow-sm">
+                <CheckCircle2 className="h-4 w-4 text-amber-800" aria-hidden />
+              </span>
               <h2
                 id="finiquito-area-revision-titulo"
-                className="text-sm font-bold tracking-tight sm:text-base"
+                className="shrink-0 text-sm font-bold tracking-tight text-amber-950 sm:text-base"
               >
                 Area de revision
               </h2>
-              <p className="text-xs text-amber-900/85">
-                {displayTotalRevision} {subtituloRevision}
-                {canTrasladarFiniquitoBandejas ? (
-                  <>
-                    {' '}
-                    · Orden: último pago (más antiguo arriba). Marque varios y use{' '}
-                    <strong>Revision contable seleccionados</strong>
-                  </>
-                ) : (
-                  <>
-                    {' '}
-                    · Operadores y gerentes: solo iconos de revisión manual, edición y
-                    PDF por fila (sin Visto ni traslado a otra bandeja)
-                  </>
-                )}
-              </p>
+              <FiniquitoCedulaFiltroInline
+                id="finiquito-filtro-cedula-revision"
+                value={cedulaRevisionInput}
+                onChange={setCedulaRevisionInput}
+                onClear={limpiarCedulaRevision}
+                placeholder="Ej. V17037221 o parte del número"
+                labelClassName="text-amber-950"
+                inputClassName="border-amber-200 bg-white"
+                searchIconClassName="text-amber-700/70"
+                clearButtonClassName="text-amber-800 hover:bg-amber-100"
+                ariaClear="Limpiar filtro de cédula en área de revisión"
+              />
             </div>
-          </div>
-        </div>
-        <div className="border-b border-amber-200/70 bg-amber-50/40 px-4 py-3.5 sm:px-5">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-            <p className="max-w-xl text-xs text-amber-950/85">
-              Listado ordenado por <strong>último pago</strong> (fecha más antigua
-              primero). Filtro propio de esta área (~{DEBOUNCE_MS / 1000} s tras
-              dejar de escribir).
-              {canTrasladarFiniquitoBandejas
-                ? ' Administrador: casillas por fila y traslado en lote a revision contable.'
-                : ''}
-            </p>
-            <div className="flex w-full shrink-0 flex-col gap-3 sm:min-w-[min(100%,280px)] lg:w-full lg:max-w-sm xl:max-w-md">
-              <div className="space-y-1.5">
-                <Label
-                  htmlFor="finiquito-filtro-cedula-revision"
-                  className="whitespace-nowrap text-xs font-semibold text-amber-950"
-                >
-                  Filtrar por cédula
-                </Label>
-                <div className="relative">
-                  <Search
-                    className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-amber-700/70"
-                    aria-hidden
-                  />
-                  <Input
-                    id="finiquito-filtro-cedula-revision"
-                    type="search"
-                    autoComplete="off"
-                    placeholder="Ej. V17037221 o parte del número"
-                    value={cedulaRevisionInput}
-                    onChange={e => setCedulaRevisionInput(e.target.value)}
-                    className="h-10 w-full border-amber-200 bg-white pl-9 pr-10 font-mono text-sm"
-                  />
-                  {cedulaRevisionInput ? (
-                    <button
-                      type="button"
-                      className="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md text-amber-800 hover:bg-amber-100"
-                      onClick={limpiarCedulaRevision}
-                      title="Limpiar filtro"
-                      aria-label="Limpiar filtro de cédula en área de revisión"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
-                  ) : null}
-                </div>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                {canTrasladarFiniquitoBandejas ? (
-                  <Button
-                    type="button"
-                    size="sm"
-                    className="h-10 shrink-0 border-indigo-700 bg-indigo-700 hover:bg-indigo-800"
-                    disabled={
-                      areasLoading.revision ||
-                      pasandoRevisionLote ||
-                      selectedRevisionIds.size === 0
-                    }
-                    onClick={() => void pasarRevisionContableEnLote()}
-                  >
-                    {pasandoRevisionLote ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      `Revision contable seleccionados (${selectedRevisionIds.size})`
-                    )}
-                  </Button>
-                ) : null}
+            <div className="flex flex-wrap items-center gap-2">
+              {canTrasladarFiniquitoBandejas ? (
                 <Button
                   type="button"
-                  variant="outline"
                   size="sm"
-                  className="h-10 shrink-0 border-amber-300 bg-white"
+                  className="h-9 shrink-0 border-indigo-700 bg-indigo-700 hover:bg-indigo-800"
                   disabled={
                     areasLoading.revision ||
                     pasandoRevisionLote ||
-                    validandoBandejaLote
+                    selectedRevisionIds.size === 0
                   }
-                  onClick={() => void cargarAreaRevision()}
+                  onClick={() => void pasarRevisionContableEnLote()}
                 >
-                  {areasLoading.revision ? (
+                  {pasandoRevisionLote ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (
-                    'Recargar'
+                    `Revision contable seleccionados (${selectedRevisionIds.size})`
                   )}
                 </Button>
-              </div>
+              ) : null}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-9 shrink-0 border-amber-300 bg-white"
+                disabled={
+                  areasLoading.revision ||
+                  pasandoRevisionLote ||
+                  validandoBandejaLote
+                }
+                onClick={() => void cargarAreaRevision()}
+              >
+                {areasLoading.revision ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  'Recargar'
+                )}
+              </Button>
             </div>
           </div>
-          {cedulaRevisionBusqueda ? (
-            <p className="mt-3 text-xs text-amber-950/85">
-              Filtro activo (área de revisión):{' '}
-              <span className="font-mono font-semibold">{cedulaRevisionBusqueda}</span>
-            </p>
-          ) : null}
         </div>
         <div>
           <div className="p-3 sm:p-4">
@@ -2904,118 +2847,69 @@ function FiniquitoGestionPageInner() {
         )}
         aria-labelledby="finiquito-revision-contable-titulo"
       >
-        <div className="border-b border-indigo-200/90 bg-indigo-100/95 px-4 py-3.5 sm:px-5">
-          <div className="flex flex-wrap items-center gap-3 text-indigo-950">
-            <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-indigo-300/90 bg-indigo-50 shadow-sm">
-              <CheckCircle2 className="h-5 w-5 text-indigo-800" aria-hidden />
-            </span>
-            <div>
+        <div className="border-b border-indigo-200/90 bg-indigo-100/95 px-4 py-3 sm:px-5">
+          <div className="flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-center lg:justify-between">
+            <div className="flex min-w-0 flex-1 flex-col gap-3 sm:flex-row sm:items-center sm:gap-3">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-indigo-300/90 bg-indigo-50 shadow-sm">
+                <CheckCircle2 className="h-4 w-4 text-indigo-800" aria-hidden />
+              </span>
               <h2
                 id="finiquito-revision-contable-titulo"
-                className="text-sm font-bold tracking-tight sm:text-base"
+                className="shrink-0 text-sm font-bold tracking-tight text-indigo-950 sm:text-base"
               >
                 Revision contable
               </h2>
-              <p className="text-xs text-indigo-900/85">
-                {displayTotalContable} {subtituloContable}
-                {' '}
-                · Revision manual, edicion y PDF;{' '}
-                <strong>Area trabajo</strong> o <strong>Procesos normales</strong>
-                {' '}
-                (todos los perfiles con acceso a finiquitos)
-              </p>
+              <FiniquitoCedulaFiltroInline
+                id="finiquito-filtro-cedula-contable"
+                value={cedulaContableInput}
+                onChange={setCedulaContableInput}
+                onClear={limpiarCedulaContable}
+                placeholder="Ej. V17037221 o parte del numero"
+                labelClassName="text-indigo-950"
+                inputClassName="border-indigo-200 bg-white"
+                searchIconClassName="text-indigo-700/70"
+                clearButtonClassName="text-indigo-800 hover:bg-indigo-100"
+                ariaClear="Limpiar filtro de cedula en revision contable"
+              />
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                size="sm"
+                className="h-9 shrink-0 border-emerald-700 bg-emerald-700 hover:bg-emerald-800"
+                disabled={
+                  areasLoading.contable ||
+                  pasandoContableLote ||
+                  selectedContableIds.size === 0
+                }
+                onClick={() => void pasarContableATrabajoEnLote()}
+              >
+                {pasandoContableLote ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  `Area trabajo seleccionados (${selectedContableIds.size})`
+                )}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-9 shrink-0 border-indigo-300 bg-white"
+                disabled={
+                  areasLoading.contable ||
+                  pasandoContableLote ||
+                  pasandoRevisionLote
+                }
+                onClick={() => void cargarAreaRevisionContable()}
+              >
+                {areasLoading.contable ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  'Recargar'
+                )}
+              </Button>
             </div>
           </div>
-        </div>
-        <div className="border-b border-indigo-200/70 bg-indigo-50/40 px-4 py-3.5 sm:px-5">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-            <p className="max-w-xl text-xs text-indigo-950/85">
-              Casos trasladados desde el area de revision. Filtro propio (~
-              {DEBOUNCE_MS / 1000} s tras dejar de escribir). Puede seleccionar
-              varios y pasarlos al area de trabajo en lote.
-            </p>
-            <div className="flex w-full shrink-0 flex-col gap-3 sm:min-w-[min(100%,280px)] lg:w-full lg:max-w-sm xl:max-w-md">
-              <div className="space-y-1.5">
-                <Label
-                  htmlFor="finiquito-filtro-cedula-contable"
-                  className="whitespace-nowrap text-xs font-semibold text-indigo-950"
-                >
-                  Filtrar por cedula
-                </Label>
-                <div className="relative">
-                  <Search
-                    className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-indigo-700/70"
-                    aria-hidden
-                  />
-                  <Input
-                    id="finiquito-filtro-cedula-contable"
-                    type="search"
-                    autoComplete="off"
-                    placeholder="Ej. V17037221 o parte del numero"
-                    value={cedulaContableInput}
-                    onChange={e => setCedulaContableInput(e.target.value)}
-                    className="h-10 w-full border-indigo-200 bg-white pl-9 pr-10 font-mono text-sm"
-                  />
-                  {cedulaContableInput ? (
-                    <button
-                      type="button"
-                      className="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md text-indigo-800 hover:bg-indigo-100"
-                      onClick={limpiarCedulaContable}
-                      title="Limpiar filtro"
-                      aria-label="Limpiar filtro de cedula en revision contable"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
-                  ) : null}
-                </div>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <Button
-                  type="button"
-                  size="sm"
-                  className="h-10 shrink-0 border-emerald-700 bg-emerald-700 hover:bg-emerald-800"
-                  disabled={
-                    areasLoading.contable ||
-                    pasandoContableLote ||
-                    selectedContableIds.size === 0
-                  }
-                  onClick={() => void pasarContableATrabajoEnLote()}
-                >
-                  {pasandoContableLote ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    `Area trabajo seleccionados (${selectedContableIds.size})`
-                  )}
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="h-10 shrink-0 border-indigo-300 bg-white"
-                  disabled={
-                    areasLoading.contable ||
-                    pasandoContableLote ||
-                    pasandoRevisionLote
-                  }
-                  onClick={() => void cargarAreaRevisionContable()}
-                >
-                  {areasLoading.contable ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    'Recargar'
-                  )}
-                </Button>
-              </div>
-            </div>
-          </div>
-          {cedulaContableBusqueda ? (
-            <p className="mt-3 text-xs text-indigo-950/85">
-              Filtro activo (revision contable):{' '}
-              <span className="font-mono font-semibold">
-                {cedulaContableBusqueda}
-              </span>
-            </p>
-          ) : null}
         </div>
         <div>
           <div className="p-3 sm:p-4">
@@ -3084,93 +2978,46 @@ function FiniquitoGestionPageInner() {
         )}
         aria-labelledby="finiquito-area-trabajo-titulo"
       >
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-emerald-200/80 bg-gradient-to-r from-emerald-800 to-emerald-600 px-4 py-3.5 text-white sm:px-5">
-          <div className="flex items-center gap-3">
-            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/15 shadow-inner">
-              <CheckCircle2 className="h-5 w-5" aria-hidden />
-            </span>
-            <div>
+        <div className="border-b border-emerald-200/80 bg-gradient-to-r from-emerald-800 to-emerald-600 px-4 py-3 text-white sm:px-5">
+          <div className="flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-center lg:justify-between">
+            <div className="flex min-w-0 flex-1 flex-col gap-3 sm:flex-row sm:items-center sm:gap-3">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/15 shadow-inner">
+                <CheckCircle2 className="h-4 w-4" aria-hidden />
+              </span>
               <h2
                 id="finiquito-area-trabajo-titulo"
-                className="text-sm font-bold tracking-tight sm:text-base"
+                className="shrink-0 text-sm font-bold tracking-tight sm:text-base"
               >
                 Área de trabajo
               </h2>
-              <p className="text-xs text-emerald-100">
-                En proceso · {displayTotalTrabajo} {subtituloTrabajo} · hasta dia{' '}
-                {PLAZO_CICLO_DIAS}
-              </p>
+              <FiniquitoCedulaFiltroInline
+                id="finiquito-filtro-cedula-trabajo"
+                value={cedulaTrabajoInput}
+                onChange={setCedulaTrabajoInput}
+                onClear={limpiarCedulaTrabajo}
+                placeholder="Ej. V12345678 o parte del número"
+                labelClassName="text-emerald-50"
+                inputClassName="border-emerald-200/80 bg-white text-slate-900"
+                searchIconClassName="text-slate-400"
+                clearButtonClassName="text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+                ariaClear="Limpiar filtro de cédula en área de trabajo"
+              />
             </div>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              className="h-9 shrink-0 border-white/30 bg-white/15 text-white hover:bg-white/25"
+              disabled={areasLoading.trabajo}
+              onClick={() => void cargarAreaTrabajo()}
+            >
+              {areasLoading.trabajo ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                'Recargar'
+              )}
+            </Button>
           </div>
-        </div>
-        <div className="border-b border-emerald-200/70 bg-emerald-50/30 px-4 py-3.5 sm:px-5">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-            <p className="max-w-xl text-xs text-slate-600">
-              Todos los perfiles con acceso pueden operar aquí (Terminado,
-              revisión manual, etc.). Escriba parte de la cédula para acotar el
-              listado (~{DEBOUNCE_MS / 1000} s tras dejar de escribir).
-            </p>
-            <div className="flex w-full shrink-0 flex-col gap-3 sm:min-w-[min(100%,280px)] lg:w-full lg:max-w-sm xl:max-w-md">
-              <div className="space-y-1.5">
-                <Label
-                  htmlFor="finiquito-filtro-cedula-trabajo"
-                  className="whitespace-nowrap text-xs font-semibold text-slate-700"
-                >
-                  Filtrar por cédula
-                </Label>
-                <div className="relative">
-                  <Search
-                    className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
-                    aria-hidden
-                  />
-                  <Input
-                    id="finiquito-filtro-cedula-trabajo"
-                    type="search"
-                    autoComplete="off"
-                    placeholder="Ej. V12345678 o parte del número"
-                    value={cedulaTrabajoInput}
-                    onChange={e => setCedulaTrabajoInput(e.target.value)}
-                    className="h-10 w-full border-slate-300 bg-white pl-9 pr-10 font-mono text-sm"
-                  />
-                  {cedulaTrabajoInput ? (
-                    <button
-                      type="button"
-                      className="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-800"
-                      onClick={limpiarCedulaTrabajo}
-                      title="Limpiar filtro"
-                      aria-label="Limpiar filtro de cédula en área de trabajo"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
-                  ) : null}
-                </div>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="h-10 shrink-0 border-slate-300 bg-white"
-                  disabled={areasLoading.trabajo}
-                  onClick={() => void cargarAreaTrabajo()}
-                >
-                  {areasLoading.trabajo ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    'Recargar'
-                  )}
-                </Button>
-              </div>
-            </div>
-          </div>
-          {cedulaTrabajoBusqueda ? (
-            <p className="mt-3 text-xs text-slate-600">
-              Filtro activo (área de trabajo):{' '}
-              <span className="font-mono font-semibold text-emerald-900">
-                {cedulaTrabajoBusqueda}
-              </span>
-            </p>
-          ) : null}
         </div>
         <div className="bg-gradient-to-b from-emerald-50/50 to-white">
           <div className="p-3 sm:p-4">
@@ -3218,119 +3065,69 @@ function FiniquitoGestionPageInner() {
         )}
         aria-labelledby="finiquito-terminados-titulo"
       >
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-violet-200/80 bg-gradient-to-r from-violet-900 to-violet-600 px-4 py-3.5 text-white sm:px-5">
-          <div className="flex items-center gap-3">
-            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/15 shadow-inner">
-              <CheckCircle2 className="h-5 w-5" aria-hidden />
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-violet-200/80 bg-gradient-to-r from-violet-900 to-violet-600 px-4 py-3 text-white sm:px-5">
+          <div className="flex min-w-0 flex-1 flex-col gap-3 sm:flex-row sm:items-center sm:gap-3">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/15 shadow-inner">
+              <CheckCircle2 className="h-4 w-4" aria-hidden />
             </span>
-            <div>
-              <h2
-                id="finiquito-terminados-titulo"
-                className="text-sm font-bold tracking-tight sm:text-base"
+            <h2
+              id="finiquito-terminados-titulo"
+              className="shrink-0 text-sm font-bold tracking-tight sm:text-base"
+            >
+              Casos terminados
+            </h2>
+            <FiniquitoCedulaFiltroInline
+              id="finiquito-filtro-cedula-terminados"
+              value={cedulaTerminadosInput}
+              onChange={setCedulaTerminadosInput}
+              onClear={limpiarCedulaTerminados}
+              placeholder="Ej. V12345678"
+              labelClassName="text-violet-50"
+              inputClassName="border-violet-200/80 bg-white text-slate-900"
+              searchIconClassName="text-slate-400"
+              clearButtonClassName="text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+              ariaClear="Limpiar filtro de cédula en terminados"
+            />
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {areasCargadas.terminados ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                className="h-9 shrink-0 border-white/30 bg-white/15 text-white hover:bg-white/25"
+                disabled={areasLoading.terminados}
+                onClick={() =>
+                  void cargarTerminados({ force: true, silent: false })
+                }
               >
-                Casos terminados
-              </h2>
-              <p className="text-xs text-violet-100">
-                Pasivos tras marcar Terminado · {totalTerminadosResumen} en total
-                {cedulaTerminadosBusqueda
-                  ? ` (filtro cédula: ${cedulaTerminadosBusqueda})`
-                  : ''}
-              </p>
-            </div>
+                {areasLoading.terminados ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  'Recargar'
+                )}
+              </Button>
+            ) : null}
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              className="h-9 shrink-0 border-white/30 bg-white/15 text-white hover:bg-white/25"
+              disabled={
+                descargandoTerminadosExcel || itemsTerminadosFiltrados.length === 0
+              }
+              onClick={() => void exportarTerminadosExcel()}
+            >
+              {descargandoTerminadosExcel ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
+              ) : (
+                <Download className="mr-2 h-4 w-4" aria-hidden />
+              )}
+              Descargar Excel
+            </Button>
           </div>
-          <Button
-            type="button"
-            size="sm"
-            variant="secondary"
-            className="h-9 shrink-0 border-white/30 bg-white/15 text-white hover:bg-white/25"
-            disabled={
-              descargandoTerminadosExcel || itemsTerminadosFiltrados.length === 0
-            }
-            onClick={() => void exportarTerminadosExcel()}
-          >
-            {descargandoTerminadosExcel ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
-            ) : (
-              <Download className="mr-2 h-4 w-4" aria-hidden />
-            )}
-            Descargar Excel
-          </Button>
         </div>
-        <div className="border-b border-violet-200/70 bg-violet-50/40 px-4 py-4 sm:px-5">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-            <p className="max-w-xl text-xs text-slate-600">
-              Resumen por día (fecha en que se marcó Terminado, calendario
-              Caracas): hoy y los {FINIQUITO_TERMINADOS_RESUMEN_DIAS_DEFAULT - 1}{' '}
-              días anteriores. El gráfico abre mostrando <strong>Hoy</strong> y{' '}
-              <strong>Ayer</strong>; desplácese a la izquierda para ver días
-              anteriores. Listado y gráfico se guardan en caché{' '}
-              {FINIQUITO_TERMINADOS_CACHE_TTL_MS / 3_600_000} h por filtro de
-              cédula (se actualizan al marcar Terminado o con «Recargar»).
-            </p>
-            <div className="flex w-full shrink-0 flex-col gap-3 sm:min-w-[min(100%,280px)] lg:w-full lg:max-w-sm xl:max-w-md">
-              <div className="space-y-1.5">
-                <Label
-                  htmlFor="finiquito-filtro-cedula-terminados"
-                  className="whitespace-nowrap text-xs font-semibold text-slate-700"
-                >
-                  Buscar por cédula
-                </Label>
-                <div className="relative">
-                  <Search
-                    className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
-                    aria-hidden
-                  />
-                  <Input
-                    id="finiquito-filtro-cedula-terminados"
-                    type="search"
-                    autoComplete="off"
-                    placeholder="Ej. V12345678"
-                    value={cedulaTerminadosInput}
-                    onChange={e => setCedulaTerminadosInput(e.target.value)}
-                    className="h-10 w-full border-slate-300 bg-white pl-9 pr-10 font-mono text-sm"
-                  />
-                  {cedulaTerminadosInput ? (
-                    <button
-                      type="button"
-                      className="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-800"
-                      onClick={limpiarCedulaTerminados}
-                      title="Limpiar filtro"
-                      aria-label="Limpiar filtro de cédula en terminados"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
-                  ) : null}
-                </div>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                {areasCargadas.terminados ? (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="h-10 shrink-0 border-slate-300 bg-white"
-                    disabled={areasLoading.terminados}
-                    onClick={() =>
-                      void cargarTerminados({ force: true, silent: false })
-                    }
-                  >
-                    {areasLoading.terminados ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      'Recargar'
-                    )}
-                  </Button>
-                ) : null}
-              </div>
-            </div>
-          </div>
-          {terminadosFetchedAt != null && areasCargadas.terminados ? (
-            <p className="mt-3 text-[11px] text-slate-500">
-              Datos en caché · actualizados hace{' '}
-              {minutosDesdeCache(terminadosFetchedAt)} min (válidos{' '}
-              {FINIQUITO_TERMINADOS_CACHE_TTL_MS / 3_600_000} h).
-            </p>
-          ) : null}
+        <div className="border-b border-violet-200/70 bg-violet-50/40 px-4 py-3 sm:px-5">
           {!areasCargadas.terminados ? (
             <p className="mt-4 rounded-lg border border-dashed border-violet-200/90 bg-white/60 px-4 py-6 text-center text-sm text-slate-600">
               Baje hasta el listado o pulse «Cargar ahora» para traer el gráfico
@@ -3342,20 +3139,27 @@ function FiniquitoGestionPageInner() {
             </p>
           ) : (
             <>
-              <p className="mt-3 text-[11px] text-slate-500">
-                {totalTerminadosEnVentana} terminado(s) en los últimos{' '}
-                {FINIQUITO_TERMINADOS_RESUMEN_DIAS_DEFAULT} días
-                {cedulaTerminadosBusqueda
-                  ? ` (filtro: ${cedulaTerminadosBusqueda})`
-                  : ''}
-                . Escala del gráfico: máx. {TERMINADOS_GRAFICO_ESCALA_MAX}{' '}
-                casos/día (cifras mayores se muestran arriba de la barra).
-              </p>
+              <div className="mb-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-slate-600">
+                <span className="inline-flex items-center gap-1.5">
+                  <span
+                    className="inline-block h-2.5 w-2.5 rounded-sm bg-sky-500"
+                    aria-hidden
+                  />
+                  Ingresan
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <span
+                    className="inline-block h-2.5 w-2.5 rounded-sm bg-violet-600"
+                    aria-hidden
+                  />
+                  Terminan
+                </span>
+              </div>
               <div
                 ref={terminadosGraficoScrollRef}
-                className="mt-2 flex items-end gap-1 overflow-x-auto pb-2 pt-1 scroll-smooth"
+                className="mt-1 flex items-end gap-1 overflow-x-auto pb-2 pt-1 scroll-smooth"
                 role="img"
-                aria-label="Gráfico de casos terminados por día (vista inicial: Hoy)"
+                aria-label="Grafico diario: ingresos y terminados (vista inicial: Hoy)"
               >
                 <BarChart3
                   className="mb-6 h-5 w-5 shrink-0 text-violet-700"
@@ -3364,47 +3168,84 @@ function FiniquitoGestionPageInner() {
                 {resumenDias.map(d => {
                   const esHoy = d.etiqueta === 'Hoy'
                   const esAyer = d.etiqueta === 'Ayer'
-                  const fueraDeEscala =
-                    d.cantidad > TERMINADOS_GRAFICO_ESCALA_MAX
+                  const ingresos = d.cantidad_ingresos ?? 0
+                  const terminados = d.cantidad
+                  const ingresosFuera =
+                    ingresos > TERMINADOS_GRAFICO_ESCALA_MAX
+                  const terminadosFuera =
+                    terminados > TERMINADOS_GRAFICO_ESCALA_MAX
                   return (
                     <div
                       key={d.fecha}
                       className={cn(
-                        'flex min-w-[2.35rem] flex-col items-center gap-1 rounded-t-md px-0.5',
+                        'flex min-w-[2.75rem] flex-col items-center gap-1 rounded-t-md px-0.5',
                         esHoy && 'bg-violet-100/80 ring-1 ring-violet-400/70'
                       )}
-                      title={
-                        fueraDeEscala
-                          ? `${d.etiqueta} (${d.fecha}): ${d.cantidad} caso(s) — barra limitada a escala ${TERMINADOS_GRAFICO_ESCALA_MAX}/día`
-                          : `${d.etiqueta} (${d.fecha}): ${d.cantidad} caso(s)`
-                      }
+                      title={`${d.etiqueta} (${d.fecha}): ${ingresos} ingreso(s), ${terminados} terminado(s)`}
                     >
-                      <span
-                        className={cn(
-                          'text-[10px] font-semibold tabular-nums text-violet-900',
-                          esHoy && 'text-violet-950',
-                          fueraDeEscala && 'text-amber-900'
-                        )}
-                      >
-                        {d.cantidad > 0 ? d.cantidad : esHoy || esAyer ? '0' : ''}
-                      </span>
-                      <div
-                        className={cn(
-                          'w-7 rounded-t-md transition-all',
-                          d.cantidad > 0
-                            ? fueraDeEscala
-                              ? 'bg-violet-600 ring-1 ring-amber-400/90'
-                              : esHoy
-                                ? 'bg-violet-700'
-                                : 'bg-violet-500/90'
-                            : esHoy
-                              ? 'bg-violet-300/80'
-                              : 'bg-violet-200/60'
-                        )}
-                        style={{
-                          height: `${alturaBarraTerminados(d.cantidad)}px`,
-                        }}
-                      />
+                      <div className="flex h-[72px] items-end justify-center gap-0.5">
+                        <div className="flex flex-col items-center gap-0.5">
+                          <span
+                            className={cn(
+                              'min-h-[10px] text-[8px] font-semibold tabular-nums leading-none text-sky-900',
+                              ingresosFuera && 'text-amber-900'
+                            )}
+                          >
+                            {ingresos > 0
+                              ? ingresos
+                              : esHoy || esAyer
+                                ? '0'
+                                : ''}
+                          </span>
+                          <div
+                            className={cn(
+                              'w-3 rounded-t-sm transition-all',
+                              ingresos > 0
+                                ? ingresosFuera
+                                  ? 'bg-sky-500 ring-1 ring-amber-400/90'
+                                  : 'bg-sky-500/90'
+                                : esHoy
+                                  ? 'bg-sky-200/80'
+                                  : 'bg-sky-100/70'
+                            )}
+                            style={{
+                              height: `${alturaBarraGraficoDiario(ingresos)}px`,
+                            }}
+                          />
+                        </div>
+                        <div className="flex flex-col items-center gap-0.5">
+                          <span
+                            className={cn(
+                              'min-h-[10px] text-[8px] font-semibold tabular-nums leading-none text-violet-900',
+                              esHoy && 'text-violet-950',
+                              terminadosFuera && 'text-amber-900'
+                            )}
+                          >
+                            {terminados > 0
+                              ? terminados
+                              : esHoy || esAyer
+                                ? '0'
+                                : ''}
+                          </span>
+                          <div
+                            className={cn(
+                              'w-3 rounded-t-sm transition-all',
+                              terminados > 0
+                                ? terminadosFuera
+                                  ? 'bg-violet-600 ring-1 ring-amber-400/90'
+                                  : esHoy
+                                    ? 'bg-violet-700'
+                                    : 'bg-violet-500/90'
+                                : esHoy
+                                  ? 'bg-violet-300/80'
+                                  : 'bg-violet-200/60'
+                            )}
+                            style={{
+                              height: `${alturaBarraGraficoDiario(terminados)}px`,
+                            }}
+                          />
+                        </div>
+                      </div>
                       <span
                         className={cn(
                           'max-w-[2.75rem] text-center text-[8px] leading-tight text-slate-600',

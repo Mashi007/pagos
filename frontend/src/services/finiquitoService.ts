@@ -292,16 +292,18 @@ export type FiniquitoTerminadosDia = {
   fecha: string
   etiqueta: string
   cantidad: number
+  cantidad_ingresos: number
 }
 
 export type FiniquitoTerminadosResumenDiario = {
   dias: FiniquitoTerminadosDia[]
   total_terminados: number
   total_en_ventana: number
+  total_ingresos_en_ventana: number
 }
 
-/** Ventana por defecto: hoy + 30 dias anteriores (calendario Caracas). */
-export const FINIQUITO_TERMINADOS_RESUMEN_DIAS_DEFAULT = 31
+/** Ventana por defecto: hoy + 20 dias anteriores (calendario Caracas). */
+export const FINIQUITO_TERMINADOS_RESUMEN_DIAS_DEFAULT = 21
 
 export async function finiquitoAdminListarTerminados(
   cedula?: string,
