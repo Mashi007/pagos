@@ -219,7 +219,6 @@ def _enviar_correos_items(
     )
     log_envio_config(modo_pruebas, bool(email_pruebas and "@" in email_pruebas), habilitados)
     if habilitados == 0:
-        logger = logging.getLogger(__name__)
         logger.warning(
             "[notif_envio_config] Ningún tipo de notificación está habilitado. "
             "Habilite al menos uno en Configuración > Notificaciones > Envíos (por caso: Faltan 5 días, Hoy vence, etc.) "
