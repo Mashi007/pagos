@@ -12,7 +12,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 from fastapi.encoders import jsonable_encoder
-from sqlalchemy import func, select
+from sqlalchemy import Date, cast, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from sqlalchemy.sql.expression import false as sql_false
@@ -437,6 +437,40 @@ def _map_fecha_entrada_area_trabajo_por_caso(
     return out
 
 
+def _expr_fecha_caracas_desde_utc_naive(column: Any) -> Any:
+    """
+    ((col AT TIME ZONE 'UTC') AT TIME ZONE 'America/Caracas')::date
+    Misma regla que consultas DBeaver sobre creado_en naive UTC.
+    """
+    return cast(
+        func.timezone("America/Caracas", func.timezone("UTC", column)),
+        Date,
+    )
+
+
+def _registrar_conteo_dia_caso(
+    ctr: Counter[str],
+    vistos: set[tuple[str, int]],
+    caso_id: int,
+    raw: Any,
+    *,
+    inicio: date,
+    hoy: date,
+) -> None:
+    if isinstance(raw, date):
+        d = raw
+    else:
+        d = _fecha_historial_a_date_caracas(raw)
+    if d is None or d < inicio or d > hoy:
+        return
+    key = d.isoformat()
+    par = (key, int(caso_id))
+    if par in vistos:
+        return
+    vistos.add(par)
+    ctr[key] += 1
+
+
 def _conteo_ingresos_area_trabajo_por_dia_caracas(
     db: Session,
     *,
@@ -451,41 +485,47 @@ def _conteo_ingresos_area_trabajo_por_dia_caracas(
     """
     ctr: Counter[str] = Counter()
     vistos: set[tuple[str, int]] = set()
+    fec_hist = _expr_fecha_caracas_desde_utc_naive(FiniquitoEstadoHistorial.creado_en)
 
     def registrar(caso_id: int, raw: Any) -> None:
-        d = _fecha_historial_a_date_caracas(raw)
-        if d is None or d < inicio or d > hoy:
-            return
-        key = d.isoformat()
-        par = (key, int(caso_id))
-        if par in vistos:
-            return
-        vistos.add(par)
-        ctr[key] += 1
+        _registrar_conteo_dia_caso(
+            ctr, vistos, caso_id, raw, inicio=inicio, hoy=hoy
+        )
 
     q_hist = db.query(
+        fec_hist.label("dia"),
         FiniquitoEstadoHistorial.caso_id,
-        FiniquitoEstadoHistorial.creado_en,
-    ).filter(FiniquitoEstadoHistorial.estado_nuevo == "EN_PROCESO")
+    ).filter(
+        FiniquitoEstadoHistorial.estado_nuevo == "EN_PROCESO",
+        fec_hist >= inicio,
+        fec_hist <= hoy,
+    )
     if ced_filtro:
         q_hist = q_hist.join(
             FiniquitoCaso, FiniquitoCaso.id == FiniquitoEstadoHistorial.caso_id
         ).filter(FiniquitoCaso.cedula.ilike(f"%{ced_filtro}%"))
-    for caso_id, creado in q_hist.all():
-        registrar(int(caso_id), creado)
+    for dia, caso_id in q_hist.all():
+        registrar(int(caso_id), dia)
 
     if finiquito_has_area_trabajo_auditoria_table(db):
+        fec_aud = _expr_fecha_caracas_desde_utc_naive(
+            FiniquitoAreaTrabajoAuditoria.creado_en
+        )
         q_aud = db.query(
+            fec_aud.label("dia"),
             FiniquitoAreaTrabajoAuditoria.caso_id,
-            FiniquitoAreaTrabajoAuditoria.creado_en,
-        ).filter(FiniquitoAreaTrabajoAuditoria.accion == "EN_PROCESO")
+        ).filter(
+            FiniquitoAreaTrabajoAuditoria.accion == "EN_PROCESO",
+            fec_aud >= inicio,
+            fec_aud <= hoy,
+        )
         if ced_filtro:
             q_aud = q_aud.join(
                 FiniquitoCaso,
                 FiniquitoCaso.id == FiniquitoAreaTrabajoAuditoria.caso_id,
             ).filter(FiniquitoCaso.cedula.ilike(f"%{ced_filtro}%"))
-        for caso_id, creado in q_aud.all():
-            registrar(int(caso_id), creado)
+        for dia, caso_id in q_aud.all():
+            registrar(int(caso_id), dia)
 
     q_casos = db.query(FiniquitoCaso).filter(
         FiniquitoCaso.estado.in_(("EN_PROCESO", "TERMINADO"))
@@ -519,41 +559,47 @@ def _conteo_terminados_por_dia_caracas(
     """
     ctr: Counter[str] = Counter()
     vistos: set[tuple[str, int]] = set()
+    fec_hist = _expr_fecha_caracas_desde_utc_naive(FiniquitoEstadoHistorial.creado_en)
 
     def registrar(caso_id: int, raw: Any) -> None:
-        d = _fecha_historial_a_date_caracas(raw)
-        if d is None or d < inicio or d > hoy:
-            return
-        key = d.isoformat()
-        par = (key, int(caso_id))
-        if par in vistos:
-            return
-        vistos.add(par)
-        ctr[key] += 1
+        _registrar_conteo_dia_caso(
+            ctr, vistos, caso_id, raw, inicio=inicio, hoy=hoy
+        )
 
     q_hist = db.query(
+        fec_hist.label("dia"),
         FiniquitoEstadoHistorial.caso_id,
-        FiniquitoEstadoHistorial.creado_en,
-    ).filter(FiniquitoEstadoHistorial.estado_nuevo == "TERMINADO")
+    ).filter(
+        FiniquitoEstadoHistorial.estado_nuevo == "TERMINADO",
+        fec_hist >= inicio,
+        fec_hist <= hoy,
+    )
     if ced_filtro:
         q_hist = q_hist.join(
             FiniquitoCaso, FiniquitoCaso.id == FiniquitoEstadoHistorial.caso_id
         ).filter(FiniquitoCaso.cedula.ilike(f"%{ced_filtro}%"))
-    for caso_id, creado in q_hist.all():
-        registrar(int(caso_id), creado)
+    for dia, caso_id in q_hist.all():
+        registrar(int(caso_id), dia)
 
     if finiquito_has_area_trabajo_auditoria_table(db):
+        fec_aud = _expr_fecha_caracas_desde_utc_naive(
+            FiniquitoAreaTrabajoAuditoria.creado_en
+        )
         q_aud = db.query(
+            fec_aud.label("dia"),
             FiniquitoAreaTrabajoAuditoria.caso_id,
-            FiniquitoAreaTrabajoAuditoria.creado_en,
-        ).filter(FiniquitoAreaTrabajoAuditoria.accion == "TERMINADO")
+        ).filter(
+            FiniquitoAreaTrabajoAuditoria.accion == "TERMINADO",
+            fec_aud >= inicio,
+            fec_aud <= hoy,
+        )
         if ced_filtro:
             q_aud = q_aud.join(
                 FiniquitoCaso,
                 FiniquitoCaso.id == FiniquitoAreaTrabajoAuditoria.caso_id,
             ).filter(FiniquitoCaso.cedula.ilike(f"%{ced_filtro}%"))
-        for caso_id, creado in q_aud.all():
-            registrar(int(caso_id), creado)
+        for dia, caso_id in q_aud.all():
+            registrar(int(caso_id), dia)
 
     q_casos = db.query(FiniquitoCaso).filter(FiniquitoCaso.estado == "TERMINADO")
     if ced_filtro:

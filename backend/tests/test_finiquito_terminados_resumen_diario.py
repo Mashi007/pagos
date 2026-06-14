@@ -5,7 +5,9 @@ from datetime import date, datetime, timezone
 
 from app.api.v1.endpoints.finiquito.routes import (
     _fecha_historial_a_date_caracas,
+    _registrar_conteo_dia_caso,
 )
+from collections import Counter
 
 
 def test_fecha_historial_a_date_caracas_utc_naive():
@@ -19,6 +21,27 @@ def test_fecha_historial_a_date_caracas_naive_utc_medianoche_caracas():
     dt = datetime(2026, 6, 13, 4, 0, 0)
     d = _fecha_historial_a_date_caracas(dt)
     assert d == date(2026, 6, 13)
+
+
+def test_registrar_conteo_dia_caso_acepta_fecha_sql():
+    ctr: Counter[str] = Counter()
+    vistos: set[tuple[str, int]] = set()
+    hoy = date(2026, 6, 12)
+    for cid in (406, 409, 419):
+        _registrar_conteo_dia_caso(
+            ctr, vistos, cid, hoy, inicio=hoy, hoy=hoy
+        )
+    assert ctr[hoy.isoformat()] == 3
+    assert len(vistos) == 3
+
+
+def test_registrar_conteo_dia_caso_deduplica_mismo_caso_mismo_dia():
+    ctr: Counter[str] = Counter()
+    vistos: set[tuple[str, int]] = set()
+    hoy = date(2026, 6, 12)
+    _registrar_conteo_dia_caso(ctr, vistos, 406, hoy, inicio=hoy, hoy=hoy)
+    _registrar_conteo_dia_caso(ctr, vistos, 406, hoy, inicio=hoy, hoy=hoy)
+    assert ctr[hoy.isoformat()] == 1
 
 
 def test_finiquito_terminados_dia_out_schema_fields():
