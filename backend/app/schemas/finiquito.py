@@ -114,6 +114,11 @@ class FiniquitoAdminResumenEstadoResponse(BaseModel):
     total: int = Field(..., ge=0)
     revision: int = Field(..., ge=0)
     aceptado: int = Field(..., ge=0)
+    revision_contable: int = Field(
+        0,
+        ge=0,
+        description="Casos en revision contable (entre area de revision y area de trabajo).",
+    )
     rechazado: int = Field(..., ge=0)
     en_proceso: int = Field(..., ge=0)
     terminado: int = Field(..., ge=0)

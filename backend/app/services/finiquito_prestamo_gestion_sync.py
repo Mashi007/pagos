@@ -91,7 +91,7 @@ def reconciliar_caso_y_prestamo_gestion_finiquito(
     if (
         promover_caso_a_trabajo
         and est_p == "EN_PROCESO"
-        and est_c in ("REVISION", "ACEPTADO")
+        and est_c in ("REVISION", "ACEPTADO", "REVISION_CONTABLE")
     ):
         anterior = est_c
         c.estado = "EN_PROCESO"
@@ -115,7 +115,7 @@ def reconciliar_caso_y_prestamo_gestion_finiquito(
             "estado_nuevo": "EN_PROCESO",
         }
 
-    if est_p == "EN_PROCESO" and est_c in ("REVISION", "ACEPTADO"):
+    if est_p == "EN_PROCESO" and est_c in ("REVISION", "ACEPTADO", "REVISION_CONTABLE"):
         sincronizar_prestamo_estado_gestion_finiquito(db, pid, est_c)
         return {
             "prestamo_id": pid,

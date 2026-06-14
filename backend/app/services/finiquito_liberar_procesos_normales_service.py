@@ -20,7 +20,9 @@ from app.services.prestamo_db_compat import prestamos_tiene_columna_fecha_liquid
 
 logger = logging.getLogger(__name__)
 
-ESTADOS_CASO_LIBERAR_PROCESOS_NORMALES = frozenset({"REVISION", "ACEPTADO"})
+ESTADOS_CASO_LIBERAR_PROCESOS_NORMALES = frozenset(
+    {"REVISION", "ACEPTADO", "REVISION_CONTABLE"}
+)
 
 
 def ejecutar_liberar_finiquito_a_procesos_normales(
@@ -28,7 +30,7 @@ def ejecutar_liberar_finiquito_a_procesos_normales(
     caso_id: int,
 ) -> Dict[str, Any]:
     """
-    - Solo REVISION (bandeja) o ACEPTADO (área revisión).
+    - Solo REVISION (bandeja), ACEPTADO (area revision) o REVISION_CONTABLE.
     - Purga reservas de conciliación.
     - Elimina finiquito_casos y limpia gestión finiquito en préstamo.
     - Alinea LIQUIDADO/APROBADO con cuotas; si sigue LIQUIDADO, fuerza APROBADO.
@@ -43,7 +45,7 @@ def ejecutar_liberar_finiquito_a_procesos_normales(
             "ok": False,
             "error": (
                 "Solo puede liberar a procesos normales desde la bandeja principal "
-                "(Revision) o el area de revision (Validado)."
+                "(Revision), el area de revision (Validado) o revision contable."
             ),
         }
 

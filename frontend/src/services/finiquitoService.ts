@@ -79,6 +79,7 @@ export type FiniquitoResumenEstado = {
   total: number
   revision: number
   aceptado: number
+  revision_contable?: number
   rechazado: number
   en_proceso: number
   terminado: number

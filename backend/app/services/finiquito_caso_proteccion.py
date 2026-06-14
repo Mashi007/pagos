@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 # Posterior a bandeja principal (REVISION): no auto-eliminar por LIQUIDADO temporal.
 ESTADOS_CASO_PROTEGIDOS_AUTO_LIMPIEZA = frozenset(
-    {"ACEPTADO", "EN_PROCESO", "TERMINADO", "RECHAZADO"}
+    {"ACEPTADO", "REVISION_CONTABLE", "EN_PROCESO", "TERMINADO", "RECHAZADO"}
 )
 
 

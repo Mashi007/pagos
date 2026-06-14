@@ -131,7 +131,14 @@ _ADMIN_CASOS_DEFAULT_LIMIT = 500
 _ADMIN_CASOS_MAX_LIMIT = 2000
 
 ESTADOS_VALIDOS = frozenset(
-    {"REVISION", "ACEPTADO", "RECHAZADO", "EN_PROCESO", "TERMINADO"}
+    {
+        "REVISION",
+        "ACEPTADO",
+        "REVISION_CONTABLE",
+        "RECHAZADO",
+        "EN_PROCESO",
+        "TERMINADO",
+    }
 )
 FINIQUITO_PORTAL_PUBLICO_ACTIVO = False
 
@@ -1193,6 +1200,7 @@ def finiquito_admin_resumen_estado(
         total=total,
         revision=int(counts.get("REVISION", 0)),
         aceptado=int(counts.get("ACEPTADO", 0)),
+        revision_contable=int(counts.get("REVISION_CONTABLE", 0)),
         rechazado=int(counts.get("RECHAZADO", 0)),
         en_proceso=int(counts.get("EN_PROCESO", 0)),
         terminado=int(counts.get("TERMINADO", 0)),
@@ -1454,12 +1462,14 @@ def _usuario_registro_panel(panel_user: UserResponse) -> str:
 
 
 def _traslado_finiquito_requiere_admin(estado_anterior: str, estado_nuevo: str) -> bool:
-    """Bandeja principal -> revision (ACEPTADO) o revision -> trabajo (EN_PROCESO)."""
+    """Bandeja -> revision, revision -> contable, contable -> trabajo."""
     ant = (estado_anterior or "").upper().strip()
     nue = (estado_nuevo or "").upper().strip()
     if nue == "ACEPTADO" and ant == "REVISION":
         return True
-    if nue == "EN_PROCESO" and ant == "ACEPTADO":
+    if nue == "REVISION_CONTABLE" and ant == "ACEPTADO":
+        return True
+    if nue == "EN_PROCESO" and ant == "REVISION_CONTABLE":
         return True
     return False
 
@@ -1475,7 +1485,7 @@ def _error_traslado_finiquito_si_no_admin(
         return None
     return (
         "Solo administradores pueden trasladar casos entre bandeja principal, "
-        "area de revision y area de trabajo."
+        "area de revision, revision contable y area de trabajo."
     )
 
 
@@ -1641,10 +1651,10 @@ def finiquito_admin_pasar_a_trabajo(
             caso=caso_out,
             reservas_eliminadas=purgadas,
         )
-    if anterior != "ACEPTADO":
+    if anterior != "REVISION_CONTABLE":
         return FiniquitoConciliacionPasarATrabajoResponse(
             ok=False,
-            error="Solo desde area de revision (ACEPTADO) o ya en area de trabajo.",
+            error="Solo desde revision contable (REVISION_CONTABLE) o ya en area de trabajo.",
         )
     err_perm = _error_traslado_finiquito_si_no_admin(panel_user, anterior, "EN_PROCESO")
     if err_perm:
@@ -1742,6 +1752,13 @@ def finiquito_admin_patch_estado(
                 error="Validado (Aceptado) solo desde Revision o al volver desde En proceso.",
             )
 
+    if nuevo == "REVISION_CONTABLE":
+        if anterior != "ACEPTADO":
+            return FiniquitoPatchEstadoResponse(
+                ok=False,
+                error="Revision contable solo desde el area de revision (Validado).",
+            )
+
     if nuevo == "RECHAZADO":
         if anterior != "REVISION":
             return FiniquitoPatchEstadoResponse(
@@ -1770,10 +1787,10 @@ def finiquito_admin_patch_estado(
                 error="Debe indicar si contacto al cliente para pasos siguientes (Si o No).",
             )
     elif nuevo == "EN_PROCESO":
-        if anterior != "ACEPTADO":
+        if anterior != "REVISION_CONTABLE":
             return FiniquitoPatchEstadoResponse(
                 ok=False,
-                error="En proceso solo desde el area de revision (caso validado).",
+                error="En proceso solo desde revision contable.",
             )
         purgar_reserva_conciliacion_caso(db, caso.id)
 

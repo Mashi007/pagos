@@ -15,6 +15,7 @@ from app.services.finiquito_caso_proteccion import (
 
 def test_estados_protegidos_incluyen_area_revision_y_trabajo():
     assert "ACEPTADO" in ESTADOS_CASO_PROTEGIDOS_AUTO_LIMPIEZA
+    assert "REVISION_CONTABLE" in ESTADOS_CASO_PROTEGIDOS_AUTO_LIMPIEZA
     assert "EN_PROCESO" in ESTADOS_CASO_PROTEGIDOS_AUTO_LIMPIEZA
 
 

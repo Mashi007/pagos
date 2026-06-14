@@ -16,8 +16,16 @@ def test_traslado_requiere_admin_bandeja_a_revision():
     assert _traslado_finiquito_requiere_admin("REVISION", "ACEPTADO") is True
 
 
-def test_traslado_requiere_admin_revision_a_trabajo():
-    assert _traslado_finiquito_requiere_admin("ACEPTADO", "EN_PROCESO") is True
+def test_traslado_requiere_admin_revision_a_contable():
+    assert _traslado_finiquito_requiere_admin("ACEPTADO", "REVISION_CONTABLE") is True
+
+
+def test_traslado_requiere_admin_contable_a_trabajo():
+    assert _traslado_finiquito_requiere_admin("REVISION_CONTABLE", "EN_PROCESO") is True
+
+
+def test_aceptado_a_trabajo_directo_ya_no_requiere_admin():
+    assert _traslado_finiquito_requiere_admin("ACEPTADO", "EN_PROCESO") is False
 
 
 def test_volver_validacion_desde_trabajo_no_requiere_admin():
