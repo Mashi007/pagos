@@ -404,9 +404,9 @@ const AUTO_REFRESH_POLL_MS = 60_000
 const TERMINADOS_GRAFICO_ESCALA_MAX = 25
 /** Altura visible de cada columna del gráfico diario (barra + número). */
 const GRAFICO_DIA_ALTURA_BARRA_MAX = 72
-const GRAFICO_DIA_COLOR_INGRESAN = '#9c6654'
-const GRAFICO_DIA_COLOR_INGRESAN_VACIO = '#dcc8bc'
-const GRAFICO_DIA_COLOR_INGRESAN_ETIQUETA = '#5c4338'
+const GRAFICO_DIA_COLOR_INGRESAN = '#f5b896'
+const GRAFICO_DIA_COLOR_INGRESAN_VACIO = '#fde9d8'
+const GRAFICO_DIA_COLOR_INGRESAN_ETIQUETA = '#c48655'
 
 /** Coincide con backend `_ADMIN_CASOS_MAX_LIMIT` para bandejas pequeñas. */
 const FETCH_LIMIT = 2000
