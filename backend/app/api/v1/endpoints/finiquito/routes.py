@@ -542,6 +542,19 @@ def _conteo_terminados_por_dia_caracas(
     for caso_id, creado in q_hist.all():
         registrar(int(caso_id), creado)
 
+    if finiquito_has_area_trabajo_auditoria_table(db):
+        q_aud = db.query(
+            FiniquitoAreaTrabajoAuditoria.caso_id,
+            FiniquitoAreaTrabajoAuditoria.creado_en,
+        ).filter(FiniquitoAreaTrabajoAuditoria.accion == "TERMINADO")
+        if ced_filtro:
+            q_aud = q_aud.join(
+                FiniquitoCaso,
+                FiniquitoCaso.id == FiniquitoAreaTrabajoAuditoria.caso_id,
+            ).filter(FiniquitoCaso.cedula.ilike(f"%{ced_filtro}%"))
+        for caso_id, creado in q_aud.all():
+            registrar(int(caso_id), creado)
+
     q_casos = db.query(FiniquitoCaso).filter(FiniquitoCaso.estado == "TERMINADO")
     if ced_filtro:
         q_casos = q_casos.filter(FiniquitoCaso.cedula.ilike(f"%{ced_filtro}%"))

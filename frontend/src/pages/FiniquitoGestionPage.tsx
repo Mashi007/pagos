@@ -816,7 +816,7 @@ function FiniquitoGestionPageInner() {
   )
   const [, setTerminadosRelojUi] = useState(0)
   const resumenDigestRef = useRef<string | null>(null)
-  const resumenPollingBusyRef = useRef(false)
+  const refreshingRef = useRef(false)
   const bandejaFetchGenRef = useRef(0)
   const revisionFetchGenRef = useRef(0)
   const contableFetchGenRef = useRef(0)
@@ -1498,11 +1498,13 @@ function FiniquitoGestionPageInner() {
   }, [cargarAreaRevision, cargarAreaRevisionContable, cargarAreaTrabajo, cargarTerminados])
 
   useEffect(() => {
-    const tick = async () => {
-      if (document.hidden || refreshing || resumenPollingBusyRef.current) {
-        return
-      }
-      resumenPollingBusyRef.current = true
+    refreshingRef.current = refreshing
+  }, [refreshing])
+
+  /** KPIs sticky: resumen-estado cada 1 min (independiente del grafico). */
+  useEffect(() => {
+    const tickResumen = async () => {
+      if (document.hidden || refreshingRef.current) return
       try {
         const snapshot = await finiquitoAdminResumenEstado()
         const digest = buildResumenDigest(snapshot)
@@ -1515,22 +1517,32 @@ function FiniquitoGestionPageInner() {
           invalidateFiniquitoTerminadosCache()
           void invalidatePrestamosQueries(queryClient)
           await cargarAreasVisibles({ silent: true })
-        } else if (areasCargadasRef.current.terminados) {
-          await cargarTerminados({ silent: true, force: true })
         }
       } catch {
-        // Polling silencioso: no interrumpir la gestión por fallos transitorios.
-      } finally {
-        resumenPollingBusyRef.current = false
+        // Polling silencioso: no interrumpir la gestion por fallos transitorios.
       }
     }
 
     const intervalId = window.setInterval(() => {
-      void tick()
+      void tickResumen()
     }, AUTO_REFRESH_POLL_MS)
-    void tick()
+    void tickResumen()
     return () => window.clearInterval(intervalId)
-  }, [cargarAreasVisibles, cargarTerminados, queryClient, refreshing])
+  }, [cargarAreasVisibles, queryClient])
+
+  /** Grafico Terminados / Ingresan: refresh cada 1 min sin depender del resumen KPI. */
+  useEffect(() => {
+    if (!areasCargadas.terminados) return
+
+    const tickGrafico = () => {
+      if (document.hidden || refreshingRef.current) return
+      void cargarTerminados({ silent: true, force: true })
+    }
+
+    const intervalId = window.setInterval(tickGrafico, AUTO_REFRESH_POLL_MS)
+    tickGrafico()
+    return () => window.clearInterval(intervalId)
+  }, [areasCargadas.terminados, cargarTerminados, cedulaTerminadosBusqueda])
 
   const onRefreshJob = async () => {
     setRefreshing(true)
