@@ -241,6 +241,25 @@ def _motivos_no_100(
                 f"fecha de aprobación (Q) supera {MAX_DIAS_APROBACION_DRIVE} días "
                 "(1 año) de antigüedad; no se permite guardar desde este flujo."
             )
+        elif monto is not None and ncu is not None:
+            from app.services.prestamos.prestamo_reimporte_liquidado import (
+                motivo_si_reimporte_liquidado_desde_fechas,
+            )
+
+            ced_para_huella = ced_cmp or _cell_str(payload.get("col_e_cedula"))
+            mod_pre = _normalizar_modalidad(_cell_str(payload.get("col_s_modalidad_pago")))
+            if mod_pre:
+                dup_liq = motivo_si_reimporte_liquidado_desde_fechas(
+                    db,
+                    cedula=ced_para_huella,
+                    fecha_aprobacion=ap_d,
+                    fecha_requerimiento=req_d,
+                    total_financiamiento=monto,
+                    numero_cuotas=ncu,
+                    modalidad_pago=mod_pre,
+                )
+                if dup_liq:
+                    motivos.append(dup_liq)
 
     mod = _normalizar_modalidad(_cell_str(payload.get("col_s_modalidad_pago")))
     if mod is None:

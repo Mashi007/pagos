@@ -2,9 +2,9 @@
 Validadores compartidos para snapshot y guardado de candidatos préstamo (Drive / CONCILIACIÓN).
 
 1) Formato de cédula: se delega a `validate_cedula` en el job y en `_motivos_no_100`.
-2) Tabla `prestamos` (misma cédula normalizada): cédulas **V** o **E** — a lo sumo **un** préstamo;
-   dos o más préstamos con esa clave no cumplen el validador (innegociable). Cédulas **J** (jurídico): pueden
-   tener **dos o más** préstamos; no aplica el tope de un solo crédito.
+2) Tabla `prestamos` (misma cédula normalizada):
+   - **V** o **E**: máximo **un** préstamo en estado **APROBADO** (LIQUIDADO y otros no cuentan).
+   - **J** (jurídico): puede tener **uno o más** créditos; no aplica el tope de un solo APROBADO.
 3) Sin duplicado en hoja: `duplicada_en_hoja` en payload (conteo por columna E en refresh).
 """
 from __future__ import annotations

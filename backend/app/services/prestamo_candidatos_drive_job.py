@@ -156,6 +156,31 @@ def ejecutar_refresh_prestamo_candidatos_drive(
         huella_no_comparable = (
             monto_norm is None or cuotas_norm is None or modalidad_norm is None or q_date is None
         )
+        reimporte_liquidado_huella = False
+        if (
+            es_ve
+            and not huella_no_comparable
+            and q_date is not None
+            and monto_norm is not None
+            and cuotas_norm is not None
+            and modalidad_norm
+        ):
+            from datetime import timedelta
+
+            from app.services.prestamos.prestamo_reimporte_liquidado import (
+                existe_liquidado_misma_huella_operativa,
+            )
+
+            req_q = q_date - timedelta(days=1)
+            reimporte_liquidado_huella = existe_liquidado_misma_huella_operativa(
+                db,
+                cedula=cmp_e,
+                fecha_aprobacion=q_date,
+                fecha_requerimiento=req_q,
+                total_financiamiento=monto_norm,
+                numero_cuotas=int(cuotas_norm),
+                modalidad_pago=modalidad_norm,
+            )
 
         payload: Dict[str, Any] = {
             "col_e_cedula": raw_e or None,
@@ -174,6 +199,7 @@ def ejecutar_refresh_prestamo_candidatos_drive(
             "col_q_fecha_iso": q_date.isoformat() if q_date is not None else None,
             "col_q_fecha_ambigua": q_ambigua,
             "huella_no_comparable": huella_no_comparable,
+            "reimporte_liquidado_huella": reimporte_liquidado_huella,
             "cedula_valida": cedula_valida,
             "cedula_error": cedula_error,
             "duplicada_en_hoja": dup_sheet,

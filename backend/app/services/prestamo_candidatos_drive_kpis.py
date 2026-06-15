@@ -99,7 +99,8 @@ def fila_payload_grilla_verde(payload: Dict[str, Any], cedula_cmp_fila: str) -> 
     except (TypeError, ValueError):
         n_aprob = n_prest
     red_ve = es_ve and n_aprob >= 1
-    if not formato_ok or red_ve or red_fecha:
+    red_reimporte_liq = payload.get("reimporte_liquidado_huella") is True
+    if not formato_ok or red_ve or red_fecha or red_reimporte_liq:
         return False
     dup = payload.get("duplicada_en_hoja") is True
     if formato_ok and dup:

@@ -313,12 +313,14 @@ function filaCandidatoDriveTono(
   const redVeCupoAprobado = !esJ && esVe && Number.isFinite(nAprob) && nAprob >= 1
   const redFechaAntigua = aprobacionFueraVentanaFromPayload(p)
   const redHuellaNoComparable = p.huella_no_comparable === true
+  const redReimporteLiquidado = p.reimporte_liquidado_huella === true
 
   if (
     redInvalida ||
     redVeCupoAprobado ||
     redFechaAntigua ||
-    redHuellaNoComparable
+    redHuellaNoComparable ||
+    redReimporteLiquidado
   )
     return 'red'
   if (formatoOk && dup) return 'amber'
@@ -875,6 +877,14 @@ export default function ActualizacionesPrestamosDrivePage() {
         <span className="text-red-600">
           Huella no comparable: revise y normalice N/R/S/Q (monto, cuotas,
           modalidad y fecha).
+        </span>
+      )
+    }
+    if (p.reimporte_liquidado_huella === true) {
+      return (
+        <span className="text-red-600">
+          Ya existe un préstamo LIQUIDADO con la misma huella (cédula, fechas,
+          monto, cuotas y modalidad). No se permite re-importar desde Drive.
         </span>
       )
     }

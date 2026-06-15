@@ -4793,6 +4793,12 @@ def crear_prestamo_servicio_interno(
 
         ensure_no_duplicate_aprobado_huella(db, row, exclude_prestamo_id=None)
 
+    from app.services.prestamos.prestamo_reimporte_liquidado import (
+        ensure_no_reimporte_liquidado_huella,
+    )
+
+    ensure_no_reimporte_liquidado_huella(db, row, exclude_prestamo_id=None)
+
     validar_cupo_nuevo_prestamo_aprobado(db, row.cedula or "", exclude_prestamo_id=None)
 
     alinear_fecha_aprobacion_y_base_calculo(row)

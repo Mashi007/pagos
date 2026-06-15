@@ -4121,6 +4121,10 @@ export function EditarRevisionManual() {
                         const sumPagosCredito =
                           Number(rp.suma_monto_pagado) || 0
                         const cantPagosCredito = Number(rp.cantidad) || 0
+                        const cantNoOper =
+                          Number(rp.cantidad_no_operativos) || 0
+                        const sumTotalBd =
+                          Number(rp.suma_monto_total_bd) || sumPagosCredito
                         const diffPlanVsFin = sumCuotasMonto - tf
                         const diffPagosVsCuotas =
                           sumPagosCredito - sumCuotasPagado
@@ -4170,6 +4174,23 @@ export function EditarRevisionManual() {
                           )
                         }
                         if (
+                          cantNoOper > 0 &&
+                          sumTotalBd > sumPagosCredito + COHERENCIA_USD_TOL
+                        ) {
+                          sugerencias.push(
+                            `Hay ${cantNoOper} pago(s) no operativo(s) (anulado/duplicado) por ${(sumTotalBd - sumPagosCredito).toFixed(2)} USD en la tabla; no entran en cascada ni en el cuadre de cartera.`
+                          )
+                        }
+                        if (
+                          pagosAlineadosCuotas &&
+                          faltaCubrirPlan > COHERENCIA_USD_TOL &&
+                          estadoPrestamoNorm === 'APROBADO'
+                        ) {
+                          sugerencias.push(
+                            `Faltan ${faltaCubrirPlan.toFixed(2)} USD por cubrir en el cronograma (${pctCoberturaPlan}% cubierto). Los pagos operativos ya están aplicados; registre el abono faltante o revise cuotas.`
+                          )
+                        }
+                        if (
                           estadoPrestamoNorm === 'LIQUIDADO' &&
                           faltaCubrirPlan > COHERENCIA_USD_TOL
                         ) {
@@ -4216,6 +4237,16 @@ export function EditarRevisionManual() {
                                     ? 'registro'
                                     : 'registros'}{' '}
                                   en base
+                                  {cantNoOper > 0 ? (
+                                    <>
+                                      {' '}
+                                      ·{' '}
+                                      <span className="text-amber-800">
+                                        {cantNoOper} no operativo
+                                        {cantNoOper === 1 ? '' : 's'}
+                                      </span>
+                                    </>
+                                  ) : null}
                                 </p>
                                 <dl className="mt-3 space-y-1.5 border-t border-slate-100 pt-3 text-xs">
                                   <div className="flex justify-between gap-2">

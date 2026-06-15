@@ -704,11 +704,23 @@ def listar_pagos(
 
             rp_where = and_(*rp_conds)
 
+            from app.services.pagos_sql_where import _where_pago_excluido_operacion
+
             n_all = db.scalar(select(func.count()).select_from(Pago).where(rp_where)) or 0
 
             s_all = db.scalar(
 
                 select(func.coalesce(func.sum(Pago.monto_pagado), 0)).select_from(Pago).where(rp_where)
+
+            ) or 0
+
+            oper_where = and_(rp_where, not_(_where_pago_excluido_operacion()))
+
+            n_oper = db.scalar(select(func.count()).select_from(Pago).where(oper_where)) or 0
+
+            s_oper = db.scalar(
+
+                select(func.coalesce(func.sum(Pago.monto_pagado), 0)).select_from(Pago).where(oper_where)
 
             ) or 0
 
@@ -738,7 +750,13 @@ def listar_pagos(
 
                 "cantidad": int(n_all),
 
-                "suma_monto_pagado": float(s_all or 0),
+                "cantidad_operativos": int(n_oper),
+
+                "cantidad_no_operativos": int(n_all) - int(n_oper),
+
+                "suma_monto_pagado": float(s_oper or 0),
+
+                "suma_monto_total_bd": float(s_all or 0),
 
                 "cantidad_pendiente": int(n_pend),
 
