@@ -1529,7 +1529,7 @@ def _regularizar_reportados_gemini_ok_sin_falla_manual(
             db.execute(
                 select(PagoReportado.id)
                 .where(
-                    PagoReportado.estado.in_(("pendiente", "en_revision", "aprobado")),
+                    PagoReportado.estado.in_(("pendiente", "aprobado")),
                     candidatos_regularizar,
                 )
                 .order_by(PagoReportado.id.desc())
@@ -1545,6 +1545,12 @@ def _regularizar_reportados_gemini_ok_sin_falla_manual(
         try:
             pr = db.get(PagoReportado, pid)
             if pr is None:
+                continue
+            # En revisión manual explícita: no auto-aprobar al listar Cobros.
+            if (getattr(pr, "estado", None) or "").strip() == "en_revision":
+                continue
+            # Escáner / operador dejó falla_validadores_manual=True: no auto-aprobar al listar.
+            if getattr(pr, "falla_validadores_manual", None) is True:
                 continue
             if getattr(pr, "estado", None) in ("pendiente", "en_revision", "aprobado") and pago_reportado_colisiona_tabla_pagos(
                 db, pr
@@ -1769,6 +1775,9 @@ def _item_falla_validadores_cola_manual(it: PagoReportadoListItem) -> bool:
     """
     True = requiere análisis manual (cola en pantalla: no cumplen validadores).
 
+    Los reportes en estado ``en_revision`` siempre entran en cola (p. ej. escáner Infopagos con
+    confirmación humana): Cobros debe aprobar/rechazar aunque Gemini y las reglas automáticas cuadren.
+
     Si Gemini marcó coincidencia exacta (`true`/`1`), solo falla si queda observación de **reglas**
     (DUPLICADO, NO CLIENTES, etc.); el texto residual de Gemini no cuenta en ese caso (se omite al armar la observación).
 
@@ -1780,6 +1789,8 @@ def _item_falla_validadores_cola_manual(it: PagoReportadoListItem) -> bool:
 
     `error` (fallo de API / sin clave) sigue exigiendo revisión manual.
     """
+    if (getattr(it, "estado", None) or "").strip() == "en_revision":
+        return True
     obs = _obs_efectiva_para_validadores(
         (it.observacion or "").strip(),
         getattr(it, "institucion_financiera", "") or "",
@@ -2223,6 +2234,7 @@ def _list_pagos_reportados_payload(
     # por dedup como hoy (semantica preservada).
     wh_scan = list(wh) + [
         or_(
+            PagoReportado.estado == "en_revision",
             PagoReportado.falla_validadores_manual.is_(True),
             PagoReportado.falla_validadores_manual.is_(None),
         )
@@ -2371,6 +2383,7 @@ def _kpis_pagos_reportados_payload(
         # "lider" con `falla=False` siga liderando y sus "seguidores" se descarten igual.
         wh_kpi_scan = list(wh_kpi) + [
             or_(
+                PagoReportado.estado == "en_revision",
                 PagoReportado.falla_validadores_manual.is_(True),
                 PagoReportado.falla_validadores_manual.is_(None),
             )
@@ -2422,9 +2435,9 @@ def list_pagos_reportados(
     """
     Lista paginada de pagos reportados con filtros.
 
-    Sin `estado` o con `pendiente` / `en_revision` / `aprobado`: solo filas que **no cumplen validadores**
-    (Gemini false/error u observación de reglas; si Gemini es true y no hay observación, cumple 100%
-    y no se lista — sigue el proceso automático fuera de esta cola).
+    Sin `estado` o con `pendiente` / `en_revision` / `aprobado`: filas de cola manual.
+    `pendiente`: solo las que **no cumplen validadores** automáticos.
+    `en_revision`: **todas** las de ese estado (p. ej. escáner Infopagos con confirmación humana).
 
     `estado=importado` o `rechazado`: listado completo de ese estado (sin filtro de validadores).
 

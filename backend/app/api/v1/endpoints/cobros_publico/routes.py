@@ -1217,14 +1217,14 @@ async def enviar_reporte_infopagos(
         phase_ms["gemini_ms"] = _elapsed_ms(gemini_started)
 
         confirmo_humano = _bool_from_form(confirmacion_humana)
+        validadores_started = perf_counter()
         if confirmo_humano:
-            # La revisión humana del operador prevalece sobre falsos negativos de Gemini.
+            # Operador del escáner validó campos: Gemini OK, pero la cola Cobros aprueba.
             pr.gemini_coincide_exacto = "true"
             pr.gemini_comentario = ""
-        # Si hubo confirmación humana explícita desde escáner/operador,
-        # no forzamos revisión manual por validadores automáticos.
-        validadores_started = perf_counter()
-        falla_validadores = False if confirmo_humano else reportado_falla_validadores_cobros(db, pr)
+            falla_validadores = True
+        else:
+            falla_validadores = reportado_falla_validadores_cobros(db, pr)
         if cpr.aplicar_revision_manual_por_monto_alto_en_reportado(
             monto=monto,
             moneda_upper=mon_norm.moneda_upper,
