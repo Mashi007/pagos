@@ -252,6 +252,83 @@ def test_aplicar_pagos_pendientes_incluye_pagado_sin_conciliar(db: Session):
     assert int(n_cp or 0) >= 1
 
 
+def test_aplicar_pagos_pendientes_no_aplica_pendiente_sin_conciliar(db: Session):
+    """Un pago PENDIENTE asignado al prestamo no debe afectar cuotas si no esta verificado."""
+    from app.services.pagos_aplicacion_prestamo import aplicar_pagos_pendientes_prestamo
+
+    hoy = date.today()
+    suffix = datetime.now().strftime("%Y%m%d%H%M%S%f")
+    cedula = f"VPN{suffix[-12:]}"
+    cliente = Cliente(
+        cedula=cedula,
+        nombres="Test PENDIENTE sin conciliar",
+        telefono="0",
+        email="vpn@test.local",
+        direccion="X",
+        fecha_nacimiento=date(1990, 1, 1),
+        ocupacion="T",
+        estado="ACTIVO",
+        usuario_registro="test@test.local",
+        notas="aplicar_pagos_pendientes PENDIENTE no verificado",
+    )
+    db.add(cliente)
+    db.flush()
+    prestamo = Prestamo(
+        cliente_id=cliente.id,
+        cedula=cliente.cedula,
+        nombres=cliente.nombres,
+        total_financiamiento=Decimal("100.00"),
+        fecha_requerimiento=hoy,
+        modalidad_pago="MENSUAL",
+        numero_cuotas=1,
+        cuota_periodo=Decimal("100.00"),
+        producto="T",
+        analista="test@test.local",
+    )
+    db.add(prestamo)
+    db.flush()
+    cuota = Cuota(
+        prestamo_id=prestamo.id,
+        numero_cuota=1,
+        fecha_vencimiento=hoy + timedelta(days=30),
+        monto=Decimal("100.00"),
+        saldo_capital_inicial=Decimal("100.00"),
+        saldo_capital_final=Decimal("0.00"),
+        monto_capital=Decimal("100.00"),
+        monto_interes=Decimal("0.00"),
+        total_pagado=None,
+        estado="PENDIENTE",
+    )
+    db.add(cuota)
+    db.flush()
+    doc = f"VPN-{suffix}"
+    pago = Pago(
+        prestamo_id=prestamo.id,
+        cedula_cliente=cliente.cedula,
+        fecha_pago=datetime.now(),
+        monto_pagado=Decimal("100.00"),
+        numero_documento=doc,
+        referencia_pago=doc,
+        conciliado=False,
+        verificado_concordancia="",
+        estado="PENDIENTE",
+    )
+    db.add(pago)
+    db.flush()
+
+    n = aplicar_pagos_pendientes_prestamo(prestamo.id, db)
+    db.flush()
+
+    assert n == 0
+    n_cp = db.scalar(
+        select(func.count()).select_from(CuotaPago).where(CuotaPago.pago_id == pago.id)
+    )
+    assert int(n_cp or 0) == 0
+    assert cuota.total_pagado in (None, Decimal("0.00"))
+    assert cuota.estado == "PENDIENTE"
+    assert pago.estado == "PENDIENTE"
+
+
 def test_mensaje_sin_aplicacion_cascada_no_elegibles():
     from app.services.pagos_cascada_mensajes import _mensaje_sin_aplicacion_cascada
 
