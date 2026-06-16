@@ -578,6 +578,7 @@ export default function CobrosPagosReportadosPage() {
     setHiddenIdsTick(t => (t + 1) % 1_000_000)
   }, [])
   const loadSeqRef = useRef(0)
+  const skipListadoEffectOnceRef = useRef(false)
   const postMutationSyncTimerRef = useRef<number | null>(null)
   const dataRef = useRef<ListPagosReportadosResponse | null>(null)
   dataRef.current = data
@@ -677,11 +678,14 @@ export default function CobrosPagosReportadosPage() {
       bypassCache?: boolean
       silent?: boolean
       page?: number
+      estado?: string
     }) => {
       const lp = listadoParamsRef.current
       const startedAt = performance.now()
       const requestSeq = ++loadSeqRef.current
       const pageToFetch = opts?.page != null ? opts.page : lp.page
+      const estadoToFetch =
+        opts?.estado !== undefined ? opts.estado : lp.estado || undefined
 
       const filterParams = {
         fecha_desde: lp.fechaDesde || undefined,
@@ -692,7 +696,7 @@ export default function CobrosPagosReportadosPage() {
       const queryParams = {
         page: pageToFetch,
         per_page: 20,
-        estado: lp.estado || undefined,
+        estado: estadoToFetch || undefined,
         incluir_exportados: lp.incluirExportados,
         ...filterParams,
       }
@@ -764,6 +768,10 @@ export default function CobrosPagosReportadosPage() {
 
   /** Carga al montar, al «Buscar», al cambiar página/estado/exportados y al mismo ritmo que el TTL de caché (no en cada tecla de cédula/fechas). */
   useEffect(() => {
+    if (skipListadoEffectOnceRef.current) {
+      skipListadoEffectOnceRef.current = false
+      return
+    }
     void fetchListado()
   }, [fetchListado, page, estado, incluirExportados])
 
@@ -1013,7 +1021,12 @@ export default function CobrosPagosReportadosPage() {
     setEstado(estadoKey)
     setPage(1)
     invalidateCobrosListadoKpisCache()
-    void fetchListado({ bypassCache: true, page: 1 })
+    skipListadoEffectOnceRef.current = true
+    void fetchListado({
+      bypassCache: true,
+      page: 1,
+      estado: estadoKey,
+    })
   }
 
   const schedulePostMutationSync = useCallback(() => {
@@ -1394,6 +1407,18 @@ export default function CobrosPagosReportadosPage() {
     soloDuplicadoDocumento,
     hiddenIdsTick,
   ])
+
+  const porGestionarKpi = useMemo(() => {
+    if (!kpis) return 0
+    if (estado === '' && data != null) return Number(data.total ?? 0)
+    return Number(kpis.pendiente ?? 0) + Number(kpis.en_revision ?? 0)
+  }, [kpis, estado, data?.total])
+
+  const enRevisionKpi = useMemo(() => {
+    if (!kpis) return 0
+    if (estado === 'en_revision' && data != null) return Number(data.total ?? 0)
+    return Number(kpis.en_revision ?? 0)
+  }, [kpis, estado, data?.total])
 
   const seleccionablesEnPagina = useMemo(
     () => itemsTabla.filter(puedeAprobarMasivoRow).map(r => r.id),
@@ -1933,9 +1958,7 @@ export default function CobrosPagosReportadosPage() {
                 Por gestionar
               </span>
 
-              <span className="text-2xl font-bold">
-                {kpis.pendiente + kpis.en_revision}
-              </span>
+              <span className="text-2xl font-bold">{porGestionarKpi}</span>
             </button>
 
             {/*
@@ -1954,7 +1977,10 @@ export default function CobrosPagosReportadosPage() {
 
               const selected = estado === key
 
-              const valor = Number(kpis[key] ?? 0)
+              const valor =
+                key === 'en_revision'
+                  ? enRevisionKpi
+                  : Number(kpis[key] ?? 0)
 
               return (
                 <button

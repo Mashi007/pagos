@@ -1075,6 +1075,23 @@ def _numero_operacion_canonico(raw: Optional[str]) -> str:
     return clave_numero_operacion_canonico(raw)
 
 
+def _reportado_pasa_filtro_dedup_num_op(
+    it: Any,
+    primer_num_op: Dict[str, int],
+) -> bool:
+    """True si el reporte es el líder de su cadena de nº operación (misma regla que el listado paginado)."""
+    num_key = _numero_operacion_canonico(getattr(it, "numero_operacion", None))
+    num_raw = (getattr(it, "numero_operacion", None) or "").strip()
+    first_id = None
+    if num_key:
+        first_id = primer_num_op.get(num_key)
+    if first_id is None and num_raw:
+        first_id = primer_num_op.get(num_raw)
+    if first_id is not None and int(it.id) != int(first_id):
+        return False
+    return True
+
+
 def _primer_id_por_numero_operacion_para_where(db: Session, wh: List[Any]) -> Dict[str, int]:
     """
     Mapa clave -> primer id por created_at/id dentro del WHERE dado.
@@ -2332,14 +2349,7 @@ def _list_pagos_reportados_payload(
             pagos_canon_acum=pagos_canon_acum,
             pagos_info_acum=pagos_info_acum,
         ):
-            num_key = _numero_operacion_canonico(getattr(it, "numero_operacion", None))
-            num_raw = (getattr(it, "numero_operacion", None) or "").strip()
-            first_id = None
-            if num_key:
-                first_id = primer_num_op.get(num_key)
-            if first_id is None and num_raw:
-                first_id = primer_num_op.get(num_raw)
-            if first_id is not None and int(it.id) != int(first_id):
+            if not _reportado_pasa_filtro_dedup_num_op(it, primer_num_op):
                 continue
             if not _item_falla_validadores_cola_manual(it):
                 continue
@@ -2441,7 +2451,7 @@ def _kpis_pagos_reportados_payload(
             cedula=cedula,
             institucion=institucion,
         )
-        primer_kpi, _, _ = _get_primer_triple_cached(db, wh_kpi, kpi_scope_key)
+        primer_kpi, primer_num_op_kpi, _ = _get_primer_triple_cached(db, wh_kpi, kpi_scope_key)
         # Fast path simetrico al listado: el barrido KPI itera solo filas que pueden caer en
         # cola (`falla=True` o NULL pendiente de backfill). El precalc de dedup (primer_kpi)
         # se calcula sobre el scope completo `wh_kpi` SIN filtro, para que un duplicado
@@ -2471,6 +2481,8 @@ def _kpis_pagos_reportados_payload(
                 pagos_canon_acum=pagos_canon_acum_kpi,
                 pagos_info_acum=pagos_info_acum_kpi,
             ):
+                if not _reportado_pasa_filtro_dedup_num_op(it, primer_num_op_kpi):
+                    continue
                 if not _item_falla_validadores_cola_manual(it):
                     continue
                 st = (it.estado or "").strip()
