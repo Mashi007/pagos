@@ -48,8 +48,14 @@ def test_listado_y_kpis_fresh_does_not_read_cached_payload(monkeypatch: pytest.M
 
     result = cobros_routes.list_pagos_reportados_y_kpis(
         db=object(),
+        estado=None,
+        fecha_desde=None,
+        fecha_hasta=None,
+        cedula=None,
+        institucion=None,
         page=1,
         per_page=20,
+        incluir_exportados=False,
         fresh=True,
     )
 
