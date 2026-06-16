@@ -567,7 +567,6 @@ export default function CobrosPagosReportadosPage() {
 
   const [ultimaCargaMs, setUltimaCargaMs] = useState<number | null>(null)
 
-  const [searchNonce, setSearchNonce] = useState(0)
   /**
    * Tick para forzar re-evaluacion de `itemsTabla` cuando se agrega un id al set
    * de "ocultos recientemente" (aprobado / rechazado / eliminado): el Map global
@@ -757,13 +756,16 @@ export default function CobrosPagosReportadosPage() {
   const handleBuscar = useCallback(() => {
     setPage(1)
     invalidateCobrosListadoKpisCache()
-    setSearchNonce(prev => prev + 1)
-  }, [])
+    void fetchListado({
+      bypassCache: true,
+      page: 1,
+    })
+  }, [fetchListado])
 
   /** Carga al montar, al «Buscar», al cambiar página/estado/exportados y al mismo ritmo que el TTL de caché (no en cada tecla de cédula/fechas). */
   useEffect(() => {
     void fetchListado()
-  }, [fetchListado, searchNonce, page, estado, incluirExportados])
+  }, [fetchListado, page, estado, incluirExportados])
 
   useEffect(() => {
     setSelectedIds([])

@@ -36,6 +36,12 @@ if row:
         )
     )
     db.commit()
+    try:
+        from app.api.v1.endpoints.cobros.routes import _invalidate_cobros_listado_kpis_cache
+
+        _invalidate_cobros_listado_kpis_cache()
+    except Exception:
+        pass
     row2 = db.execute(
         text(
             "SELECT id, estado, falla_validadores_manual, gemini_coincide_exacto, observacion "

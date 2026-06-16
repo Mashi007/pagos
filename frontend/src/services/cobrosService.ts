@@ -1250,6 +1250,8 @@ export async function listPagosReportadosConKpis(
 
   if (params.incluir_exportados) q.set('incluir_exportados', 'true')
 
+  if (opts?.bypassCache) q.set('fresh', 'true')
+
   // Sin `_rq`: el listado va con Bearer y no debe cachearse en CDN; `_rq` impedía deduplicar
   // peticiones GET concurrentes idénticas en apiClient (misma pantalla / doble montaje).
 

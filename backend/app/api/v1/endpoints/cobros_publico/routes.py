@@ -1236,6 +1236,15 @@ async def enviar_reporte_infopagos(
         pr.falla_validadores_manual = falla_validadores
         commit_estado_started = perf_counter()
         db.commit()
+        if falla_validadores:
+            try:
+                from app.api.v1.endpoints.cobros.routes import (
+                    _invalidate_cobros_listado_kpis_cache,
+                )
+
+                _invalidate_cobros_listado_kpis_cache()
+            except Exception:
+                pass
         phase_ms["commit_estado_ms"] = _elapsed_ms(commit_estado_started)
 
         if borrador_efectivo:

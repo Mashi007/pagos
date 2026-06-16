@@ -2496,6 +2496,10 @@ def list_pagos_reportados_y_kpis(
         False,
         description="Igual que GET /pagos-reportados: muestra filas ya exportadas en corrección masiva para seguir gestionándolas.",
     ),
+    fresh: bool = Query(
+        False,
+        description="Si true, ignora caché Redis/memoria y recalcula listado+KPIs (usar con «Actualizar ahora» en UI).",
+    ),
 ):
     """
     Listado paginado + KPIs en una sola petición (mismos query params que GET /pagos-reportados).
@@ -2515,11 +2519,14 @@ def list_pagos_reportados_y_kpis(
         per_page=per_page,
         incluir_exportados=incluir_exportados,
     )
-    cached = _cobros_listado_kpis_cache_get(cache_payload)
-    if cached is not None:
-        return cached
+    if not fresh:
+        cached = _cobros_listado_kpis_cache_get(cache_payload)
+        if cached is not None:
+            return cached
+    else:
+        cached = None
 
-    acquired = _cobros_listado_kpis_try_acquire_singleflight(cache_payload)
+    acquired = False if fresh else _cobros_listado_kpis_try_acquire_singleflight(cache_payload)
     if not acquired:
         wait_deadline = time.monotonic() + _COBROS_LISTADO_KPIS_SINGLEFLIGHT_WAIT_SEC
         while time.monotonic() < wait_deadline:
@@ -2560,7 +2567,8 @@ def list_pagos_reportados_y_kpis(
             manual_queue_counts=manual_queue,
         )
         payload = {**lista, "kpis": kpis}
-        _cobros_listado_kpis_cache_set(cache_payload, payload)
+        if not fresh:
+            _cobros_listado_kpis_cache_set(cache_payload, payload)
         return payload
     except Exception as e:
         fallback = _cobros_listado_kpis_cache_get_stale(cache_payload)
