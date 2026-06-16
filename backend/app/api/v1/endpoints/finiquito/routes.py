@@ -1808,6 +1808,17 @@ def _traslado_finiquito_requiere_admin(estado_anterior: str, estado_nuevo: str) 
     return False
 
 
+def _panel_usuario_finiquito_gestion_habilitado(panel_user: UserResponse) -> bool:
+    """Admin, operario y gerente: mismos botones y traslados en /finiquitos/gestion."""
+    from app.core.rol_normalization import canonical_rol
+
+    return canonical_rol(getattr(panel_user, "rol", None)) in (
+        "admin",
+        "operator",
+        "manager",
+    )
+
+
 def _error_traslado_finiquito_si_no_admin(
     panel_user: UserResponse,
     estado_anterior: str,
@@ -1815,7 +1826,7 @@ def _error_traslado_finiquito_si_no_admin(
 ) -> Optional[str]:
     if not _traslado_finiquito_requiere_admin(estado_anterior, estado_nuevo):
         return None
-    if user_is_administrator(panel_user):
+    if _panel_usuario_finiquito_gestion_habilitado(panel_user):
         return None
     return (
         "Solo administradores pueden trasladar casos entre bandeja principal, "
@@ -1826,8 +1837,8 @@ def _error_traslado_finiquito_si_no_admin(
 def _error_gestion_bandeja_finiquito_si_no_admin(
     panel_user: UserResponse,
 ) -> Optional[str]:
-    """Rechazar, eliminar o liberar a procesos normales: solo administrador."""
-    if user_is_administrator(panel_user):
+    """Rechazar, eliminar o liberar a procesos normales: panel interno (no solo admin)."""
+    if _panel_usuario_finiquito_gestion_habilitado(panel_user):
         return None
     return (
         "Solo administradores pueden rechazar, eliminar o liberar casos "

@@ -2140,44 +2140,39 @@ function FiniquitoGestionPageInner() {
 
   const renderAcciones = (row: FiniquitoCasoItem) => (
     <div className="flex flex-wrap items-center justify-end gap-2">
-      {canTrasladarFiniquitoBandejas ? (
-        <>
-          <Button
-            type="button"
-            size="sm"
-            className="h-8 bg-emerald-700 text-xs hover:bg-emerald-800"
-            disabled={casoTieneAccionPendiente(row.id)}
-            onClick={() => void cambiarEstado(row.id, 'ACEPTADO')}
-          >
-            Validar
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            className="h-8 border-rose-300 text-xs text-rose-900"
-            disabled={casoTieneAccionPendiente(row.id)}
-            onClick={() => setPendingRechazoCasoId(row.id)}
-          >
-            Rechazar
-          </Button>
-          {botonProcesosNormales(row)}
-          <Button
-            type="button"
-            size="icon"
-            variant="outline"
-            className="h-8 w-8 border-slate-300 text-rose-800"
-            title="Eliminar caso de la bandeja"
-            aria-label={`Eliminar caso ${row.id}`}
-            disabled={casoTieneAccionPendiente(row.id)}
-            onClick={() => setPendingEliminarCasoId(row.id)}
-          >
-            <Trash2 className="h-4 w-4" aria-hidden />
-          </Button>
-        </>
-      ) : (
-        botonesFilaOperativos(row)
-      )}
+      {botonesFilaOperativos(row)}
+      <Button
+        type="button"
+        size="sm"
+        className="h-8 bg-emerald-700 text-xs hover:bg-emerald-800"
+        disabled={casoTieneAccionPendiente(row.id)}
+        onClick={() => void cambiarEstado(row.id, 'ACEPTADO')}
+      >
+        Validar
+      </Button>
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        className="h-8 border-rose-300 text-xs text-rose-900"
+        disabled={casoTieneAccionPendiente(row.id)}
+        onClick={() => setPendingRechazoCasoId(row.id)}
+      >
+        Rechazar
+      </Button>
+      {botonProcesosNormales(row)}
+      <Button
+        type="button"
+        size="icon"
+        variant="outline"
+        className="h-8 w-8 border-slate-300 text-rose-800"
+        title="Eliminar caso de la bandeja"
+        aria-label={`Eliminar caso ${row.id}`}
+        disabled={casoTieneAccionPendiente(row.id)}
+        onClick={() => setPendingEliminarCasoId(row.id)}
+      >
+        <Trash2 className="h-4 w-4" aria-hidden />
+      </Button>
     </div>
   )
 
@@ -2198,34 +2193,30 @@ function FiniquitoGestionPageInner() {
           <X className="h-3.5 w-3.5 shrink-0" aria-hidden />
           Area trabajo
         </Button>
-        {canTrasladarFiniquitoBandejas ? (
-          <>
-            <Button
-              type="button"
-              size="sm"
-              className="h-8 gap-1 bg-emerald-700 text-xs hover:bg-emerald-800"
-              disabled={casoTieneAccionPendiente(row.id)}
-              title="Abrir revisión manual y usar Conciliar (mismo flujo que revisión manual estándar)"
-              onClick={() => solicitarVistoRevisionManual(row)}
-            >
-              <CheckCircle2 className="h-3.5 w-3.5" aria-hidden />
-              Visto
-            </Button>
-            {botonProcesosNormales(row)}
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              className="h-8 gap-1 border-indigo-600 text-xs text-indigo-900 hover:bg-indigo-50"
-              title="Solo administrador: pasa el caso a revision contable"
-              aria-label={`Pasar caso ${row.id} a revision contable`}
-              disabled={casoTieneAccionPendiente(row.id)}
-              onClick={() => void cambiarEstado(row.id, 'REVISION_CONTABLE')}
-            >
-              Revision contable
-            </Button>
-          </>
-        ) : null}
+        <Button
+          type="button"
+          size="sm"
+          className="h-8 gap-1 bg-emerald-700 text-xs hover:bg-emerald-800"
+          disabled={casoTieneAccionPendiente(row.id)}
+          title="Abrir revisión manual y usar Conciliar (mismo flujo que revisión manual estándar)"
+          onClick={() => solicitarVistoRevisionManual(row)}
+        >
+          <CheckCircle2 className="h-3.5 w-3.5" aria-hidden />
+          Visto
+        </Button>
+        {botonProcesosNormales(row)}
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          className="h-8 gap-1 border-indigo-600 text-xs text-indigo-900 hover:bg-indigo-50"
+          title="Pasa el caso a revision contable"
+          aria-label={`Pasar caso ${row.id} a revision contable`}
+          disabled={casoTieneAccionPendiente(row.id)}
+          onClick={() => void cambiarEstado(row.id, 'REVISION_CONTABLE')}
+        >
+          Revision contable
+        </Button>
       </div>
     )
   }
