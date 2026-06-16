@@ -1991,6 +1991,64 @@ def _filtros_fecha_cedula_institucion_reportados(
     return out
 
 
+def _reencolar_escaner_infopagos_aprobado_sin_gestion_por_cedula(
+    db: Session,
+    *,
+    cedula: Optional[str],
+    fecha_desde: Optional[date],
+    fecha_hasta: Optional[date],
+) -> int:
+    """
+    Escaneos Infopagos auto-aprobados (sin usuario Cobros) vuelven a en_revision al buscar por cédula.
+
+    Cubre reportes que quedaron en `aprobado` por regularización o flujo viejo del escáner y ya no
+    aparecen en la cola manual aunque el operador espera revisarlos.
+    """
+    if not cedula or not str(cedula).strip():
+        return 0
+    filtros = _filtros_fecha_cedula_institucion_reportados(
+        fecha_desde=fecha_desde,
+        fecha_hasta=fecha_hasta,
+        cedula=cedula,
+        institucion=None,
+    )
+    wh = [
+        PagoReportado.canal_ingreso == "infopagos",
+        PagoReportado.estado == "aprobado",
+        PagoReportado.usuario_gestion_id.is_(None),
+    ] + filtros
+    rows = (
+        db.execute(
+            select(PagoReportado)
+            .where(*wh)
+            .order_by(PagoReportado.created_at.desc())
+            .limit(5)
+        )
+        .scalars()
+        .all()
+    )
+    if not rows:
+        return 0
+    n = 0
+    for pr in rows:
+        pr.estado = "en_revision"
+        pr.falla_validadores_manual = True
+        obs = (pr.observacion or "").strip()
+        nota = "[COBROS] Reencolado a revision manual (busqueda escaner Infopagos)."
+        pr.observacion = nota if not obs else f"{obs} / {nota}"
+        db.add(pr)
+        n += 1
+    if n:
+        db.commit()
+        _invalidate_cobros_listado_kpis_cache()
+        logger.info(
+            "[COBROS] Reencolados %s reportes Infopagos a en_revision (cedula=%s)",
+            n,
+            (cedula or "").strip().upper(),
+        )
+    return n
+
+
 def _where_clauses_cola_reportados(
     estado: Optional[str],
     incluir_exportados: bool,
@@ -2180,6 +2238,13 @@ def _list_pagos_reportados_payload(
     pendiente+en_revision+aprobado), se añade `_manual_kpi_counts` al dict de retorno
     para evitar un segundo barrido completo en listado-y-kpis (solo uso interno).
     """
+    if cedula and str(cedula).strip():
+        _reencolar_escaner_infopagos_aprobado_sin_gestion_por_cedula(
+            db,
+            cedula=cedula,
+            fecha_desde=fecha_desde,
+            fecha_hasta=fecha_hasta,
+        )
     _regularizar_reportados_guarded(db)
     exportados_subq = select(PagoReportadoExportado.pago_reportado_id)
     filtros = _filtros_fecha_cedula_institucion_reportados(
@@ -2519,14 +2584,19 @@ def list_pagos_reportados_y_kpis(
         per_page=per_page,
         incluir_exportados=incluir_exportados,
     )
-    if not fresh:
+    skip_cache = bool(
+        fresh
+        or (cedula and str(cedula).strip())
+        or (institucion and str(institucion).strip())
+    )
+    if not skip_cache:
         cached = _cobros_listado_kpis_cache_get(cache_payload)
         if cached is not None:
             return cached
     else:
         cached = None
 
-    acquired = False if fresh else _cobros_listado_kpis_try_acquire_singleflight(cache_payload)
+    acquired = False if skip_cache else _cobros_listado_kpis_try_acquire_singleflight(cache_payload)
     if not acquired:
         wait_deadline = time.monotonic() + _COBROS_LISTADO_KPIS_SINGLEFLIGHT_WAIT_SEC
         while time.monotonic() < wait_deadline:
@@ -2567,7 +2637,7 @@ def list_pagos_reportados_y_kpis(
             manual_queue_counts=manual_queue,
         )
         payload = {**lista, "kpis": kpis}
-        if not fresh:
+        if not skip_cache:
             _cobros_listado_kpis_cache_set(cache_payload, payload)
         return payload
     except Exception as e:

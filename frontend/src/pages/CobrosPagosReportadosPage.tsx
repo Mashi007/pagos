@@ -1012,6 +1012,8 @@ export default function CobrosPagosReportadosPage() {
   const handleKpiClick = (estadoKey: string) => {
     setEstado(estadoKey)
     setPage(1)
+    invalidateCobrosListadoKpisCache()
+    void fetchListado({ bypassCache: true, page: 1 })
   }
 
   const schedulePostMutationSync = useCallback(() => {
