@@ -282,6 +282,13 @@ export default function EscanerInfopagosPage() {
   const enviarActivoRef = useRef(false)
   const ultimoIntentoGuardarRef = useRef(0)
 
+  useEffect(() => {
+    return () => {
+      escanearActivoRef.current = false
+      enviarActivoRef.current = false
+    }
+  }, [])
+
   const initialFromSession = useMemo(() => readPersistedCedulaFull(), [])
   const [fase, setFase] = useState<Fase>(initialFromSession.faseInicial)
   const [cedulaRaw, setCedulaRaw] = useState(initialFromSession.cedulaRaw)
@@ -606,7 +613,10 @@ export default function EscanerInfopagosPage() {
       toast.error('Cédula inválida.')
       return
     }
-    if (escanearActivoRef.current) return
+    if (escanearActivoRef.current) {
+      toast('Ya hay un escaneo en curso. Espere unos segundos.')
+      return
+    }
     setBorradorId(null)
     const vA = validarArchivo(archivo)
     if (!vA.valido) {
@@ -768,7 +778,10 @@ export default function EscanerInfopagosPage() {
     const ahora = Date.now()
     if (ahora - ultimoIntentoGuardarRef.current < 150) return
     ultimoIntentoGuardarRef.current = ahora
-    if (enviarActivoRef.current) return
+    if (enviarActivoRef.current) {
+      toast('Ya hay un guardado en curso. Espere unos segundos.')
+      return
+    }
     if (!cedulaNormalizada.valido || !cedulaNormalizada.valorParaEnviar) {
       toast.error('Cédula inválida.')
       return
@@ -1068,7 +1081,7 @@ export default function EscanerInfopagosPage() {
                 </p>
               )}
             </div>
-            <Button onClick={handleValidarCedula} disabled={validandoCedula}>
+            <Button type="button" onClick={handleValidarCedula} disabled={validandoCedula}>
               {validandoCedula ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -1142,6 +1155,7 @@ export default function EscanerInfopagosPage() {
                 Volver
               </Button>
               <Button
+                type="button"
                 onClick={handleEscanear}
                 disabled={escaneando || !archivo}
               >
@@ -1218,7 +1232,7 @@ export default function EscanerInfopagosPage() {
             </Card>
           </aside>
 
-          <div className="min-h-0 min-w-0 space-y-6 overflow-y-auto overscroll-y-contain px-3 py-4 sm:px-4 lg:py-4 lg:pl-5 lg:pr-2">
+          <div className="relative z-10 min-h-0 min-w-0 space-y-6 overflow-y-auto overscroll-y-contain px-3 py-4 sm:px-4 lg:py-4 lg:pl-5 lg:pr-2">
             <Card className="border-0 shadow-none lg:border lg:border-slate-200/80 lg:shadow-sm">
               <CardHeader className="space-y-2">
                 <div className="flex flex-wrap items-start justify-between gap-2">
@@ -1557,7 +1571,7 @@ export default function EscanerInfopagosPage() {
                   >
                     Volver
                   </Button>
-                  <Button onClick={handleGuardar} disabled={enviando}>
+                  <Button type="button" onClick={handleGuardar} disabled={enviando}>
                     {enviando ? (
                       <>
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />

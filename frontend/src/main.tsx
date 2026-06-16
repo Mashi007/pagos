@@ -18,6 +18,8 @@ import './index.css'
 
 import { BASE_PATH } from './config/env'
 
+import { clearChunkRecoveryAfterAppReady } from './app/lazyWithRetry'
+
 declare global {
   interface Window {
     __RAPICREDIT_APP_READY__?: boolean
@@ -232,6 +234,7 @@ if (!rootElement) {
     requestAnimationFrame(() => {
       window.__RAPICREDIT_APP_READY__ = true
       rootElement.setAttribute('data-app-ready', 'true')
+      clearChunkRecoveryAfterAppReady()
     })
   } catch (error) {
     console.error('❌ Error al renderizar la aplicación:', error)

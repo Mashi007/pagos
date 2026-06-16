@@ -172,13 +172,55 @@
     originalError.apply(console, arguments)
   }
 
-  var reloadAttempted = false
+  var CHUNK_RELOAD_KEY = 'rapicredit_missing_chunk_reload_v1'
+  var MAX_CHUNK_RELOADS = 5
+
   function reloadPage() {
-    if (reloadAttempted) return
-    reloadAttempted = true
-    originalWarn.call(console, 'M?dulo no encontrado (cache desactualizado). Recargando...')
+    try {
+      var n = Number(sessionStorage.getItem(CHUNK_RELOAD_KEY) || '0')
+      if (n >= MAX_CHUNK_RELOADS) {
+        originalError.call(
+          console,
+          '[bootstrap] Chunk ausente tras ' + String(MAX_CHUNK_RELOADS) + ' recargas. Use Ctrl+Shift+R.'
+        )
+        showChunkRecoveryBanner()
+        return
+      }
+      sessionStorage.setItem(CHUNK_RELOAD_KEY, String(n + 1))
+    } catch (e) {
+      /* sessionStorage bloqueado */
+    }
+    originalWarn.call(console, 'Modulo no encontrado (cache desactualizado). Recargando...')
     var base = window.location.href.split('?')[0].split('#')[0]
     window.location.replace(base + '?nocache=' + Date.now())
+  }
+
+  function showChunkRecoveryBanner() {
+    if (document.getElementById('rapicredit-chunk-recovery-banner')) return
+    var el = document.createElement('div')
+    el.id = 'rapicredit-chunk-recovery-banner'
+    el.setAttribute('role', 'alert')
+    el.style.cssText =
+      'position:fixed;inset:0;z-index:2147483000;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(15,23,42,.55);'
+    el.innerHTML =
+      '<div style="max-width:420px;background:#fffbeb;border:1px solid #fcd34d;border-radius:12px;padding:20px;font-family:system-ui,sans-serif;color:#78350f;box-shadow:0 20px 40px rgba(0,0,0,.2)">' +
+      '<h2 style="margin:0 0 8px;font-size:18px">Actualizacion pendiente en el navegador</h2>' +
+      '<p style="margin:0 0 16px;font-size:14px;line-height:1.45">Los botones pueden dejar de responder si quedo una version antigua de la app. Recargue sin cache.</p>' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+      '<button type="button" id="rapicredit-chunk-reload-btn" style="padding:8px 14px;border:0;border-radius:8px;background:#b45309;color:#fff;font-weight:600;cursor:pointer">Recargar ahora</button>' +
+      '</div></div>'
+    document.body.appendChild(el)
+    var btn = document.getElementById('rapicredit-chunk-reload-btn')
+    if (btn) {
+      btn.addEventListener('click', function () {
+        try {
+          sessionStorage.removeItem(CHUNK_RELOAD_KEY)
+        } catch (e) {}
+        var u = new URL(window.location.href)
+        u.searchParams.set('nocache', String(Date.now()))
+        window.location.replace(u.pathname + u.search + u.hash)
+      })
+    }
   }
 
   function isAssetChunkUrl(url) {

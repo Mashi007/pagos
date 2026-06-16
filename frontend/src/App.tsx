@@ -108,6 +108,8 @@ const ANIMATION_DURATION = 0.3
 
 import { Login } from './pages/Login'
 
+import { RouteErrorBoundary } from './app/RouteErrorBoundary'
+
 import {
   AccesoLimitadoPage,
   ActualizacionesGmailPage,
@@ -230,8 +232,9 @@ function App() {
 
   return (
     <AnimatePresence mode="wait">
-      <Suspense fallback={<PageLoader />}>
-        <Routes>
+      <RouteErrorBoundary>
+        <Suspense fallback={<PageLoader />}>
+          <Routes>
           {/* Una sola raz path="/" para que Layout reciba correctamente las rutas hijas (dashboard, clientes, etc.) */}
 
           <Route path="/" element={<RootLayoutWrapper />}>
@@ -734,8 +737,9 @@ function App() {
           </Route>
 
           <Route path="/admin/tasas-cambio" element={<AdminTasaCambioPage />} />
-        </Routes>
-      </Suspense>
+          </Routes>
+        </Suspense>
+      </RouteErrorBoundary>
     </AnimatePresence>
   )
 }

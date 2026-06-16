@@ -299,8 +299,16 @@ export default function EscanerInfopagosLotePage() {
     })
     return () => {
       setDigitacionLoteFilasSink(null)
+      guardarActivoRef.current.clear()
     }
   }, [])
+
+  useEffect(() => {
+    if (editClientId && !filas.some(f => f.clientId === editClientId)) {
+      setEditClientId(null)
+      setEditDraft(null)
+    }
+  }, [editClientId, filas])
 
   useEffect(() => {
     const bundle = takePendingDigitacionSession()
@@ -807,7 +815,15 @@ export default function EscanerInfopagosLotePage() {
 
   const handleEliminarFila = useCallback(async (clientId: string) => {
     const fila = filasRef.current.find(f => f.clientId === clientId)
-    if (!fila || fila.guardando) return
+    if (!fila) return
+    if (fila.guardando) {
+      toast('Espere a que termine el guardado de esta fila.')
+      return
+    }
+    if (guardarActivoRef.current.has(clientId)) {
+      toast('Espere a que termine el guardado de esta fila.')
+      return
+    }
     if (fila.guardado && fila.pagoId != null) {
       if (
         !window.confirm(
@@ -827,13 +843,23 @@ export default function EscanerInfopagosLotePage() {
         toast.error(e instanceof Error ? e.message : 'Error al eliminar.')
         return
       }
+    } else if (
+      !window.confirm(
+        `¿Quitar "${fila.nombreArchivo}" de la lista de este lote?`
+      )
+    ) {
+      return
+    }
+    if (editClientId === clientId) {
+      setEditClientId(null)
+      setEditDraft(null)
     }
     setFilas(prev => {
       const next = prev.filter(f => f.clientId !== clientId)
       filasRef.current = next
       return next
     })
-  }, [])
+  }, [editClientId])
 
   const handleGuardarFila = useCallback(
     async (clientId: string) => {
@@ -1655,7 +1681,9 @@ export default function EscanerInfopagosLotePage() {
       )}
       <Dialog
         open={Boolean(filaEditando)}
-        onOpenChange={open => (open ? undefined : cerrarEditorFila())}
+        onOpenChange={open => {
+          if (!open) cerrarEditorFila()
+        }}
       >
         <DialogContent className="flex max-h-[90vh] w-full max-w-6xl flex-col gap-0 p-0 sm:max-w-6xl">
           <DialogHeader className="flex-shrink-0 space-y-3 border-b px-6 py-4 sm:flex sm:flex-row sm:items-start sm:justify-between sm:space-y-0">

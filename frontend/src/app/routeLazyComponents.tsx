@@ -4,6 +4,8 @@
  */
 import { lazy } from 'react'
 
+import { lazyWithRetry } from './lazyWithRetry'
+
 export const PublicBasenameIndexPage = lazy(() =>
   import('../pages/PublicBasenameIndexPage').then(m => ({
     default: m.PublicBasenameIndexPage,
@@ -40,12 +42,14 @@ export const TasaCambioPage = lazy(() => import('../pages/TasaCambioPage'))
 
 export const InfopagosPage = lazy(() => import('../pages/InfopagosPage'))
 
-export const EscanerInfopagosPage = lazy(
-  () => import('../pages/EscanerInfopagosPage')
+export const EscanerInfopagosPage = lazyWithRetry(
+  () => import('../pages/EscanerInfopagosPage'),
+  'escaner-infopagos'
 )
 
-export const EscanerInfopagosLotePage = lazy(
-  () => import('../pages/EscanerInfopagosLotePage')
+export const EscanerInfopagosLotePage = lazyWithRetry(
+  () => import('../pages/EscanerInfopagosLotePage'),
+  'escaner-infopagos-lote'
 )
 
 export const AmortizacionPage = lazy(() => import('../pages/AmortizacionPage'))
