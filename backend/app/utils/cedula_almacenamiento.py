@@ -153,10 +153,12 @@ def asegurar_cedula_pago_para_fk(
                 cli = db.get(Cliente, prestamo.cliente_id)
                 if cli and (cli.cedula or "").strip():
                     cli_cedula = (cli.cedula or "").strip()
-            for candidato in (
+            candidatos = [
                 (prestamo.cedula or "").strip() or None,
                 cli_cedula,
-            ):
+            ]
+            alinear_cedulas_clientes_existentes(db, candidatos)
+            for candidato in candidatos:
                 if not candidato:
                     continue
                 res = resolver_cedula_almacenada_en_clientes(db, candidato)
