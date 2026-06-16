@@ -46,6 +46,7 @@ import {
   escanerInfopagosLoteDesdeDrive,
   enviarReporteInfopagos,
   getReciboInfopagos,
+  patchListadoKpisCacheDropPagoReportado,
   validarCedulaPublico,
 } from '../services/cobrosService'
 import { formatMontoBsVe, parseMontoLatam } from '../utils/montoLatam'
@@ -839,6 +840,7 @@ export default function EscanerInfopagosLotePage() {
           return
         }
         toast.success(r.mensaje || 'Eliminado.')
+        patchListadoKpisCacheDropPagoReportado(fila.pagoId)
       } catch (e: unknown) {
         toast.error(e instanceof Error ? e.message : 'Error al eliminar.')
         return
@@ -854,6 +856,10 @@ export default function EscanerInfopagosLotePage() {
       setEditClientId(null)
       setEditDraft(null)
     }
+    const filaIndex = filasRef.current.findIndex(f => f.clientId === clientId)
+    setArchivos(prev =>
+      filaIndex >= 0 ? prev.filter((_, i) => i !== filaIndex) : prev
+    )
     setFilas(prev => {
       const next = prev.filter(f => f.clientId !== clientId)
       filasRef.current = next

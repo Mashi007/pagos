@@ -33,7 +33,7 @@ import React, {
 } from 'react'
 import { createPortal } from 'react-dom'
 
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 
 import { useQueryClient } from '@tanstack/react-query'
 
@@ -422,6 +422,7 @@ const COBROS_REPORTADOS_TABLE_HEAD: ReadonlyArray<{
 
 export default function CobrosPagosReportadosPage() {
   const navigate = useNavigate()
+  const location = useLocation()
   const diagnosticoNoEmail = useMemo(() => {
     if (typeof window === 'undefined') return false
     const q = new URLSearchParams(window.location.search)
@@ -767,6 +768,20 @@ export default function CobrosPagosReportadosPage() {
   }, [fetchListado])
 
   /** Carga al montar, al «Buscar», al cambiar página/estado/exportados y al mismo ritmo que el TTL de caché (no en cada tecla de cédula/fechas). */
+  useEffect(() => {
+    const skipOnce = Boolean(
+      (location.state as { skipListadoFetchOnce?: boolean } | null)
+        ?.skipListadoFetchOnce
+    )
+    if (skipOnce) {
+      skipListadoEffectOnceRef.current = true
+      navigate(
+        { pathname: location.pathname, search: location.search },
+        { replace: true, state: null }
+      )
+    }
+  }, [location.pathname, location.search, location.state, navigate])
+
   useEffect(() => {
     if (skipListadoEffectOnceRef.current) {
       skipListadoEffectOnceRef.current = false
@@ -1235,7 +1250,8 @@ export default function CobrosPagosReportadosPage() {
       // tick para que el useMemo del listado lo filtre al instante en cualquier
       // pagina/filtro abierta (no solo la actual con optimistic ya aplicado).
       bumpHiddenIdsTick()
-      schedulePostMutationSync()
+      // Sin refetch en background: el parche optimista + cache cliente ya alinean
+      // la fila y los KPIs; un sync tardío reemplazaba toda la tabla ("actualizando").
     } catch (e: unknown) {
       const errAny = e as { silent?: boolean }
       if (errAny?.silent) return

@@ -250,7 +250,10 @@ export default function CobrosDetallePage() {
       // Parche quirurgico en lugar de invalidar todo el cache cliente: la pantalla
       // principal regresa al instante sin spinner y con KPIs alineados.
       patchListadoKpisCacheDropPagoReportado(Number(id), estadoPrevio)
-      navigate('/cobros/pagos-reportados')
+      navigate('/cobros/pagos-reportados', {
+        replace: true,
+        state: { skipListadoFetchOnce: true },
+      })
     } catch (e: unknown) {
       const any = e as {
         response?: { data?: { detail?: unknown } }

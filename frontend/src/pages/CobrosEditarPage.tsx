@@ -20,7 +20,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useLocation } from 'react-router-dom'
 
 import {
   getPagoReportadoDetalle,
@@ -28,6 +28,7 @@ import {
   openComprobanteInNewTab,
   updatePagoReportado,
   eliminarPagoReportado,
+  patchListadoKpisCacheDropPagoReportado,
   diagnosticoDuplicadoPagoReportado,
   escanerInfopagosExtraerComprobante,
   type EscanerInfopagosExtraerResponse,
@@ -117,6 +118,7 @@ export default function CobrosEditarPage() {
   const { id } = useParams<{ id: string }>()
 
   const navigate = useNavigate()
+  const location = useLocation()
 
   const [detalle, setDetalle] = useState<PagoReportadoDetalleResponse | null>(
     null
@@ -554,9 +556,23 @@ export default function CobrosEditarPage() {
     }
     setEliminandoReporte(true)
     try {
+      const estadoPrevio = detalle?.estado
       const res = await eliminarPagoReportado(Number(id))
+      patchListadoKpisCacheDropPagoReportado(Number(id), estadoPrevio)
       toast.success(res?.mensaje || 'Pago reportado eliminado.')
-      navigate('/cobros/pagos-reportados')
+      const returnTo =
+        typeof (location.state as { returnTo?: string } | null)?.returnTo ===
+        'string'
+          ? String((location.state as { returnTo?: string }).returnTo)
+          : ''
+      if (returnTo.startsWith('/')) {
+        navigate(returnTo, { replace: true })
+      } else {
+        navigate('/cobros/pagos-reportados', {
+          replace: true,
+          state: { skipListadoFetchOnce: true },
+        })
+      }
     } catch (e: unknown) {
       toast.error(detalleErrorApi(e))
     } finally {
