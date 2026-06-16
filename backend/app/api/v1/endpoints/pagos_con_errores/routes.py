@@ -111,6 +111,54 @@ def _cedula_lote_it_master_desde_pago_con_error(
     return resolver_cedula_almacenada_en_clientes(db, cedula_asunto)
 
 
+def _resolver_prestamo_id_para_mover_a_cartera(
+    db: Session,
+    cedula_resuelta: str,
+    prestamo_id_hint: Optional[int] = None,
+) -> tuple[Optional[int], Optional[str]]:
+    """
+    Préstamo destino al pasar de pagos_con_errores a pagos.
+    Si la fila no trae prestamo_id, intenta el único APROBADO de la cédula.
+    """
+    if prestamo_id_hint is not None and int(prestamo_id_hint) > 0:
+        return int(prestamo_id_hint), None
+
+    prestamos = (
+        db.execute(
+            select(Prestamo)
+            .where(
+                Prestamo.cedula == cedula_resuelta,
+                Prestamo.estado == "APROBADO",
+            )
+            .order_by(Prestamo.id.asc())
+        )
+        .scalars()
+        .all()
+    )
+    if len(prestamos) == 1:
+        return int(prestamos[0].id), None
+    if len(prestamos) > 1:
+        return None, (
+            f"cédula {cedula_resuelta} con {len(prestamos)} préstamos APROBADOS: "
+            "asigne el préstamo en edición antes de mover a cartera"
+        )
+    return None, (
+        f"cédula {cedula_resuelta} sin préstamo APROBADO: "
+        "asigne el préstamo en edición antes de mover a cartera"
+    )
+
+
+def _mensaje_error_mover_pago_a_cartera(exc: BaseException) -> str:
+    raw = str(exc)
+    if "chk_pagos_prestamo_id_not_null" in raw:
+        return (
+            "falta préstamo (prestamo_id). Edite el pago, asigne un crédito APROBADO "
+            "y reintente."
+        )
+    linea = raw.split("\n", 1)[0].strip()
+    return linea[:400] if linea else "error al mover a cartera"
+
+
 
 
 class PagoConErrorCreate(BaseModel):
@@ -1037,12 +1085,26 @@ def mover_a_pagos_normales(
                 )
                 continue  # No insertar: violaría fk_pagos_cedula.
 
+            prestamo_id_destino, err_prestamo = _resolver_prestamo_id_para_mover_a_cartera(
+                db,
+                cedula_resuelta,
+                row.prestamo_id,
+            )
+            if err_prestamo:
+                logger.warning(
+                    "mover_a_pagos_normales: pago %s sin préstamo destino (%s)",
+                    pid,
+                    err_prestamo,
+                )
+                errores_procesamiento.append(f"Pago {pid}: {err_prestamo}")
+                continue
+
             adopt_pago_id = None
-            if numero_documento_normalizado and row.prestamo_id:
+            if numero_documento_normalizado and prestamo_id_destino:
                 adopt_pago_id = pago_huerfano_adoptable_por_documento(
                     db,
                     numero_documento_normalizado,
-                    prestamo_id_destino=int(row.prestamo_id),
+                    prestamo_id_destino=int(prestamo_id_destino),
                     cedula_cliente=cedula_resuelta,
                 )
 
@@ -1073,7 +1135,7 @@ def mover_a_pagos_normales(
             # «Guardar y procesar» = intención explícita de pasar a cartera. Si hay préstamo y monto,
             # forzamos validación cartera (conciliado + verificado SI) para que la columna Cartera y la
             # cascada queden alineadas con el estado final. Sin préstamo respetamos la fila origen.
-            debe_validar_cartera = bool(row.prestamo_id) and float(row.monto_pagado or 0) > 0
+            debe_validar_cartera = bool(prestamo_id_destino) and float(row.monto_pagado or 0) > 0
             if debe_validar_cartera:
                 conciliado = True
             else:
@@ -1103,7 +1165,7 @@ def mover_a_pagos_normales(
             else:
                 pago = Pago(
                     cedula_cliente=cedula_resuelta,
-                    prestamo_id=row.prestamo_id,
+                    prestamo_id=prestamo_id_destino,
                     fecha_pago=row.fecha_pago,
                     monto_pagado=row.monto_pagado,
                     numero_documento=row.numero_documento or "",
@@ -1121,7 +1183,7 @@ def mover_a_pagos_normales(
 
             if adopt_pago_id is not None:
                 pago.cedula_cliente = cedula_resuelta
-                pago.prestamo_id = row.prestamo_id
+                pago.prestamo_id = prestamo_id_destino
                 pago.fecha_pago = row.fecha_pago
                 pago.monto_pagado = row.monto_pagado
                 if row.institucion_bancaria:
@@ -1185,7 +1247,9 @@ def mover_a_pagos_normales(
                 f"mover_a_pagos_normales: fallo procesando pago_con_error id={pid}: {e_row}",
                 exc_info=True,
             )
-            errores_procesamiento.append(f"Pago {pid}: {str(e_row)}")
+            errores_procesamiento.append(
+                f"Pago {pid}: {_mensaje_error_mover_pago_a_cartera(e_row)}"
+            )
             continue
 
     try:

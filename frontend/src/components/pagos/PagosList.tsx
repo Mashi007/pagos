@@ -1436,6 +1436,15 @@ export function PagosList() {
       toast.info('Seleccione al menos un pago.')
       return
     }
+    const sinPrestamo = (revisionData?.pagos ?? []).filter(
+      p => ids.includes(p.id) && !p.prestamo_id
+    )
+    if (sinPrestamo.length > 0) {
+      toast.message(
+        `${sinPrestamo.length} pago(s) sin préstamo asignado: se intentará vincular al único crédito APROBADO de la cédula; si hay varios o ninguno, edite la fila antes de reintentar.`,
+        { duration: 7000 }
+      )
+    }
     setIsBulkMovingRevision(true)
     setBulkMovingProgress({ movidos: 0, total: ids.length })
     try {
