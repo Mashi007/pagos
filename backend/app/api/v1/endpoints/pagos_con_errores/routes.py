@@ -43,7 +43,7 @@ from app.core.documento import (
     split_numero_documento_almacenado,
 )
 from app.services.pago_huella_funcional import (
-    conflicto_huella_para_creacion,
+    conflicto_huella_pago_con_error_para_prestamo,
     pago_con_error_conflicto_huella_existente,
     rechazar_si_pago_con_error_serial_duplicado,
 )
@@ -145,28 +145,6 @@ def _resolver_prestamo_id_para_mover_a_cartera(
     return None, (
         f"cédula {cedula_resuelta} sin préstamo APROBADO: "
         "asigne el préstamo en edición antes de mover a cartera"
-    )
-
-
-def _conflicto_huella_pago_con_error_para_prestamo(
-    db: Session,
-    row: PagoConError,
-    *,
-    prestamo_id_destino: Optional[int],
-    exclude_pago_id: Optional[int] = None,
-) -> Optional[str]:
-    if not prestamo_id_destino:
-        return None
-    fecha = getattr(row, "fecha_pago", None)
-    fecha_pago = fecha.date() if hasattr(fecha, "date") else fecha
-    return conflicto_huella_para_creacion(
-        db,
-        prestamo_id=int(prestamo_id_destino),
-        fecha_pago=fecha_pago if isinstance(fecha_pago, date) else None,
-        monto_pagado=getattr(row, "monto_pagado", None),
-        numero_documento=getattr(row, "numero_documento", None),
-        referencia_pago=getattr(row, "referencia_pago", None),
-        exclude_pago_id=exclude_pago_id,
     )
 
 
@@ -1147,7 +1125,7 @@ def mover_a_pagos_normales(
                     )
                     continue
 
-            huella_error = _conflicto_huella_pago_con_error_para_prestamo(
+            huella_error = conflicto_huella_pago_con_error_para_prestamo(
                 db,
                 row,
                 prestamo_id_destino=prestamo_id_destino,

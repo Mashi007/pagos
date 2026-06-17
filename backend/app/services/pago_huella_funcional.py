@@ -357,6 +357,40 @@ def pago_con_error_conflicto_huella_existente(
     )
 
 
+def conflicto_huella_pago_con_error_para_prestamo(
+    db: Session,
+    perr: "PagoConError",
+    *,
+    prestamo_id_destino: Optional[int],
+    exclude_pago_id: Optional[int] = None,
+) -> Optional[str]:
+    """
+    Valida la huella de un PagoConError contra el préstamo destino ya resuelto.
+
+    Algunas filas en revisión no tienen prestamo_id en origen y se resuelven al moverlas
+    a cartera; la validación debe usar ese destino o la colisión solo aparece como
+    IntegrityError en el flush.
+    """
+    if perr is None or not prestamo_id_destino:
+        return None
+    fp = getattr(perr, "fecha_pago", None)
+    fecha = fp.date() if hasattr(fp, "date") else fp
+    if not isinstance(fecha, date):
+        return None
+    monto = getattr(perr, "monto_pagado", None)
+    if monto is None:
+        return None
+    return conflicto_huella_para_creacion(
+        db,
+        prestamo_id=int(prestamo_id_destino),
+        fecha_pago=fecha,
+        monto_pagado=monto,
+        numero_documento=getattr(perr, "numero_documento", None),
+        referencia_pago=getattr(perr, "referencia_pago", None),
+        exclude_pago_id=exclude_pago_id,
+    )
+
+
 def existe_otro_pago_misma_huella_funcional(
     db: Session,
     *,
