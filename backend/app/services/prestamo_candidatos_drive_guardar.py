@@ -340,7 +340,7 @@ def ejecutar_guardar_candidatos_drive_validados_100(
             )
             continue
         try:
-            crear_prestamo_servicio_interno(db, pc, current_user)
+            crear_prestamo_servicio_interno(db, pc, current_user, commit_transaction=False)
             db.delete(r)
             db.commit()
             insertados += 1
@@ -443,7 +443,7 @@ def ejecutar_guardar_candidatos_drive_una_fila(
         }
 
     try:
-        crear_prestamo_servicio_interno(db, pc, current_user)
+        crear_prestamo_servicio_interno(db, pc, current_user, commit_transaction=False)
         db.delete(r)
         db.commit()
         cmp_upd = (_cell_str(payload.get("cedula_cmp")) or (r.cedula_cmp or "")).strip()
