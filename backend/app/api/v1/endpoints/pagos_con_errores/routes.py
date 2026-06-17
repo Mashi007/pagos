@@ -43,7 +43,7 @@ from app.core.documento import (
     split_numero_documento_almacenado,
 )
 from app.services.pago_huella_funcional import (
-    mensaje_409_huella_funcional_con_id,
+    conflicto_huella_para_creacion,
     pago_con_error_conflicto_huella_existente,
     rechazar_si_pago_con_error_serial_duplicado,
 )
@@ -145,6 +145,28 @@ def _resolver_prestamo_id_para_mover_a_cartera(
     return None, (
         f"cédula {cedula_resuelta} sin préstamo APROBADO: "
         "asigne el préstamo en edición antes de mover a cartera"
+    )
+
+
+def _conflicto_huella_pago_con_error_para_prestamo(
+    db: Session,
+    row: PagoConError,
+    *,
+    prestamo_id_destino: Optional[int],
+    exclude_pago_id: Optional[int] = None,
+) -> Optional[str]:
+    if not prestamo_id_destino:
+        return None
+    fecha = getattr(row, "fecha_pago", None)
+    fecha_pago = fecha.date() if hasattr(fecha, "date") else fecha
+    return conflicto_huella_para_creacion(
+        db,
+        prestamo_id=int(prestamo_id_destino),
+        fecha_pago=fecha_pago if isinstance(fecha_pago, date) else None,
+        monto_pagado=getattr(row, "monto_pagado", None),
+        numero_documento=getattr(row, "numero_documento", None),
+        referencia_pago=getattr(row, "referencia_pago", None),
+        exclude_pago_id=exclude_pago_id,
     )
 
 
@@ -1125,10 +1147,15 @@ def mover_a_pagos_normales(
                     )
                     continue
 
-            pago_huella_id = pago_con_error_conflicto_huella_existente(db, row)
-            if pago_huella_id is not None and adopt_pago_id != pago_huella_id:
+            huella_error = _conflicto_huella_pago_con_error_para_prestamo(
+                db,
+                row,
+                prestamo_id_destino=prestamo_id_destino,
+                exclude_pago_id=adopt_pago_id,
+            )
+            if huella_error:
                 errores_procesamiento.append(
-                    f"Pago {pid}: {mensaje_409_huella_funcional_con_id(pago_huella_id)}"
+                    f"Pago {pid}: {huella_error}"
                 )
                 continue
 
