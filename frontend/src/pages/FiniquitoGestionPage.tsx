@@ -95,6 +95,7 @@ import {
   FINIQUITO_FASE_REVISION_MAX,
   FINIQUITO_FASE_TRABAJO_MAX,
   FINIQUITO_IDEAL_INICIO_TRABAJO,
+  ordenarCasosPorConteoGlobalAntiguoPrimero,
 } from '../utils/finiquitoTiempoCiclo'
 import { invalidatePrestamosQueries } from '../hooks/usePrestamos'
 import { usePermissions } from '../hooks/usePermissions'
@@ -243,23 +244,6 @@ function casoCoincideCedula(caso: FiniquitoCasoItem, filtro: string): boolean {
   return String(caso.cedula || '')
     .toLowerCase()
     .includes(f)
-}
-
-/** Para ordenar área de revisión: sin fecha al final. */
-function timestampUltimoPago(iso: string | null | undefined): number {
-  if (iso == null || String(iso).trim() === '') return Number.POSITIVE_INFINITY
-  const t = Date.parse(String(iso))
-  return Number.isNaN(t) ? Number.POSITIVE_INFINITY : t
-}
-
-function ordenarCasosPorUltimoPagoAsc(
-  items: FiniquitoCasoItem[]
-): FiniquitoCasoItem[] {
-  return [...items].sort(
-    (a, b) =>
-      timestampUltimoPago(a.ultima_fecha_pago) -
-      timestampUltimoPago(b.ultima_fecha_pago)
-  )
 }
 
 type SeleccionFilasTabla = {
@@ -980,13 +964,15 @@ function FiniquitoGestionPageInner() {
 
   const itemsBandejaVisibles = useMemo(
     () =>
-      itemsBandeja.filter(row => casoCoincideCedula(row, cedulaBusqueda)),
+      ordenarCasosPorConteoGlobalAntiguoPrimero(
+        itemsBandeja.filter(row => casoCoincideCedula(row, cedulaBusqueda))
+      ),
     [itemsBandeja, cedulaBusqueda]
   )
 
   const itemsAreaRevisionVisibles = useMemo(
     () =>
-      ordenarCasosPorUltimoPagoAsc(
+      ordenarCasosPorConteoGlobalAntiguoPrimero(
         itemsAreaRevision.filter(row =>
           casoCoincideCedula(row, cedulaRevisionBusqueda)
         )
@@ -996,7 +982,7 @@ function FiniquitoGestionPageInner() {
 
   const itemsAreaRevisionContableVisibles = useMemo(
     () =>
-      ordenarCasosPorUltimoPagoAsc(
+      ordenarCasosPorConteoGlobalAntiguoPrimero(
         itemsAreaRevisionContable.filter(row =>
           casoCoincideCedula(row, cedulaContableBusqueda)
         )
@@ -1006,8 +992,10 @@ function FiniquitoGestionPageInner() {
 
   const itemsAreaTrabajoVisibles = useMemo(
     () =>
-      itemsAreaTrabajo.filter(row =>
-        casoCoincideCedula(row, cedulaTrabajoBusqueda)
+      ordenarCasosPorConteoGlobalAntiguoPrimero(
+        itemsAreaTrabajo.filter(row =>
+          casoCoincideCedula(row, cedulaTrabajoBusqueda)
+        )
       ),
     [itemsAreaTrabajo, cedulaTrabajoBusqueda]
   )
@@ -2084,18 +2072,8 @@ function FiniquitoGestionPageInner() {
             <TableHead
               className={cn(thGestion, 'whitespace-normal')}
               scope="col"
-              title={
-                modoTiempo !== 'bandeja'
-                  ? 'Ordenado de fecha más antigua a la más reciente'
-                  : undefined
-              }
             >
               Último pago
-              {modoTiempo !== 'bandeja' ? (
-                <span className="mt-0.5 block text-[9px] font-normal normal-case text-slate-300">
-                  ↑ antiguo · reciente ↓
-                </span>
-              ) : null}
             </TableHead>
             <TableHead
               className={cn(
@@ -2107,8 +2085,15 @@ function FiniquitoGestionPageInner() {
             >
               Ciclo
             </TableHead>
-            <TableHead className={thGestion} scope="col">
+            <TableHead
+              className={thGestion}
+              scope="col"
+              title="Ordenado de conteo global mas antiguo (arriba) al mas reciente (abajo)"
+            >
               Conteo global
+              <span className="mt-0.5 block text-[9px] font-normal normal-case text-slate-300">
+                ↑ antiguo · reciente ↓
+              </span>
             </TableHead>
             <TableHead className={cn(thGestion, 'text-right')} scope="col">
               Acciones
@@ -2214,8 +2199,15 @@ function FiniquitoGestionPageInner() {
             <TableHead className={cn(thGestion, 'min-w-[140px]')} scope="col">
               Contacto
             </TableHead>
-            <TableHead className={thGestion} scope="col">
+            <TableHead
+              className={thGestion}
+              scope="col"
+              title="Ordenado de conteo global mas antiguo (arriba) al mas reciente (abajo)"
+            >
               Conteo global
+              <span className="mt-0.5 block text-[9px] font-normal normal-case text-slate-300">
+                ↑ antiguo · reciente ↓
+              </span>
             </TableHead>
             <TableHead className={cn(thGestion, 'text-right')} scope="col">
               Acciones

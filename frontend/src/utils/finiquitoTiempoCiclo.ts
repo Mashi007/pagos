@@ -83,6 +83,20 @@ export function diaGlobalCiclo(caso: FiniquitoTiempoCaso): number | null {
   return dias + 1
 }
 
+/** Mas antiguo primero (mayor dia global arriba). Sin fecha al final. */
+export function ordenarCasosPorConteoGlobalAntiguoPrimero<
+  T extends FiniquitoTiempoCaso,
+>(items: T[]): T[] {
+  return [...items].sort((a, b) => {
+    const da = diaGlobalCiclo(a)
+    const db = diaGlobalCiclo(b)
+    if (da == null && db == null) return 0
+    if (da == null) return 1
+    if (db == null) return -1
+    return db - da
+  })
+}
+
 function diaGlobalDesdeEntrada(iso: string | null | undefined): number | null {
   const anchor = iso
   if (anchor == null) return null
