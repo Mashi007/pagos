@@ -2608,21 +2608,23 @@ def list_pagos_reportados_y_kpis(
     else:
         cached = None
 
-    acquired = False if skip_cache else _cobros_listado_kpis_try_acquire_singleflight(cache_payload)
-    if not acquired:
-        wait_deadline = time.monotonic() + _COBROS_LISTADO_KPIS_SINGLEFLIGHT_WAIT_SEC
-        while time.monotonic() < wait_deadline:
-            cached_wait = _cobros_listado_kpis_cache_get(cache_payload)
-            if cached_wait is not None:
-                return cached_wait
-            time.sleep(0.1)
-        stale_wait = _cobros_listado_kpis_cache_get_stale(cache_payload)
-        if stale_wait is not None:
-            logger.warning(
-                "[COBROS_CACHE] listado-y-kpis devolviendo stale por single-flight en curso (key=%s)",
-                _cobros_listado_kpis_storage_key(cache_payload),
-            )
-            return stale_wait
+    acquired = False
+    if not skip_cache:
+        acquired = _cobros_listado_kpis_try_acquire_singleflight(cache_payload)
+        if not acquired:
+            wait_deadline = time.monotonic() + _COBROS_LISTADO_KPIS_SINGLEFLIGHT_WAIT_SEC
+            while time.monotonic() < wait_deadline:
+                cached_wait = _cobros_listado_kpis_cache_get(cache_payload)
+                if cached_wait is not None:
+                    return cached_wait
+                time.sleep(0.1)
+            stale_wait = _cobros_listado_kpis_cache_get_stale(cache_payload)
+            if stale_wait is not None:
+                logger.warning(
+                    "[COBROS_CACHE] listado-y-kpis devolviendo stale por single-flight en curso (key=%s)",
+                    _cobros_listado_kpis_storage_key(cache_payload),
+                )
+                return stale_wait
 
     try:
         emit_kpi_from_list = estado is None
