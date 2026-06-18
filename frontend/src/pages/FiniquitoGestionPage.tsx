@@ -20,7 +20,6 @@ import {
   Eye,
   Loader2,
   Lock,
-  Pencil,
   RefreshCw,
   Search,
   Trash2,
@@ -33,7 +32,6 @@ import { toast } from 'sonner'
 import { Button } from '../components/ui/button'
 
 import { FiniquitoWorkspaceShell } from '../components/finiquito/FiniquitoWorkspaceShell'
-import { FiniquitoRevisionDialog } from '../components/finiquito/FiniquitoRevisionDialog'
 import { Input } from '../components/ui/input'
 import { Label } from '../components/ui/label'
 import {
@@ -537,9 +535,6 @@ function FiniquitoGestionPageInner() {
   >(null)
   const [pendingLiberarCaso, setPendingLiberarCaso] =
     useState<FiniquitoCasoItem | null>(null)
-  const [revisionDialogCasoId, setRevisionDialogCasoId] = useState<
-    number | null
-  >(null)
   const [pendingVistoRow, setPendingVistoRow] = useState<FiniquitoCasoItem | null>(
     null
   )
@@ -1851,17 +1846,6 @@ function FiniquitoGestionPageInner() {
         }
       >
         <Eye className="h-4 w-4" aria-hidden />
-      </Button>
-      <Button
-        type="button"
-        size="icon"
-        variant="outline"
-        className="h-8 w-8 border-slate-300"
-        title="Edicion y datos del caso"
-        aria-label={`Edicion del caso ${row.id}`}
-        onClick={() => setRevisionDialogCasoId(row.id)}
-      >
-        <Pencil className="h-4 w-4" aria-hidden />
       </Button>
       <Button
         type="button"
@@ -3500,13 +3484,6 @@ function FiniquitoGestionPageInner() {
         </DialogContent>
       </Dialog>
 
-      <FiniquitoRevisionDialog
-        open={revisionDialogCasoId != null}
-        casoId={revisionDialogCasoId ?? 0}
-        onOpenChange={open => {
-          if (!open) setRevisionDialogCasoId(null)
-        }}
-      />
     </FiniquitoWorkspaceShell>
   )
 }
