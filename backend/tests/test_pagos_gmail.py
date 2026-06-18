@@ -26,6 +26,7 @@ from app.api.v1.endpoints.pagos_gmail import (
     download_excel,
     status,
 )
+from app.api.v1.endpoints.pagos_gmail.routes import ConfirmarDiaBody, confirmar_dia
 from app.models.pagos_gmail_sync import PagosGmailSync, PagosGmailSyncItem
 from app.services.pagos_gmail.gemini_service import (
     _guess_bank_hint_from_text,
@@ -279,6 +280,53 @@ def test_download_excel_logs_etapa_when_has_data(db: Session, caplog_gmail):
     assert resp is not None
     etapas = [r.message for r in caplog_gmail.records if "[ETAPA]" in (r.message or "")]
     assert any("download-excel" in m for m in etapas), "Debería haber log [ETAPA] download-excel"
+
+
+def test_confirmar_dia_sin_fecha_no_borra_temporales_si_migracion_omite():
+    """Vaciar todo no debe eliminar gmail_temporal si quedaron pendientes sin migrar."""
+    db = MagicMock()
+    count_result = MagicMock()
+    count_result.scalar_one.return_value = 1
+    db.execute.return_value = count_result
+
+    with patch(
+        "app.api.v1.endpoints.pagos_gmail.routes._migrar_pendientes_gmail_a_con_errores_core",
+        return_value={"migrados": 0, "omitidos": 1, "eliminados_temporal": 0},
+    ):
+        with pytest.raises(HTTPException) as exc_info:
+            confirmar_dia(ConfirmarDiaBody(confirmado=True), db=db)
+
+    assert exc_info.value.status_code == 409
+    assert db.execute.call_count == 1
+    db.commit.assert_not_called()
+
+
+def test_confirmar_dia_sin_fecha_migra_antes_de_borrar_acumulado():
+    """Si no quedan temporales, vaciar todo borra solo tras migrar pendientes."""
+    db = MagicMock()
+    count_result = MagicMock()
+    count_result.scalar_one.return_value = 0
+    delete_sync_result = MagicMock()
+    delete_sync_result.rowcount = 3
+    delete_temp_result = MagicMock()
+    db.execute.side_effect = [count_result, delete_sync_result, delete_temp_result]
+    migracion = {"migrados": 2, "omitidos": 0, "eliminados_temporal": 2}
+
+    with patch(
+        "app.api.v1.endpoints.pagos_gmail.routes._migrar_pendientes_gmail_a_con_errores_core",
+        return_value=migracion,
+    ) as migrar, patch(
+        "app.api.v1.endpoints.pagos_gmail.routes._get_blocking_running_sync",
+        return_value=None,
+    ):
+        resp = confirmar_dia(ConfirmarDiaBody(confirmado=True), db=db)
+
+    migrar.assert_called_once_with(db)
+    assert resp["confirmado"] is True
+    assert resp["borrados"] == 3
+    assert resp["migracion_pendientes"] == migracion
+    assert db.execute.call_count == 3
+    db.commit.assert_called_once()
 
 
 def test_format_monto_excel_sin_unidad():

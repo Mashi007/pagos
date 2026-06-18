@@ -682,12 +682,40 @@ def confirmar_dia(body: ConfirmarDiaBody = Body(...), db: Session = Depends(get_
             "blocking_sync_id": run.id if run is not None else None,
         }
     else:
-        # Sin fecha: borrar todo el acumulado
+        # Sin fecha: antes de vaciar, rescatar cualquier comprobante que aun
+        # este en la cola temporal para no perder evidencia de pago.
+        migracion = _migrar_pendientes_gmail_a_con_errores_core(db)
+        temporales_restantes = db.execute(
+            select(func.count(GmailTemporal.id))
+        ).scalar_one()
+        if temporales_restantes:
+            logger.warning(
+                "Pagos Gmail confirmar-dia: no se vacia acumulado; quedan %d filas "
+                "en gmail_temporal tras migrar pendientes (migrados=%s omitidos=%s)",
+                temporales_restantes,
+                migracion.get("migrados"),
+                migracion.get("omitidos"),
+            )
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "No se vacio la tabla porque aun hay comprobantes Gmail sin migrar a "
+                    "Pagos con errores. Revise el proceso Gmail y reintente; no se borraron "
+                    "pendientes temporales."
+                ),
+            )
+
+        # Sin fecha: borrar todo el acumulado ya protegido en pagos_con_errores.
         result = db.execute(delete(PagosGmailSyncItem))
         db.execute(delete(GmailTemporal))
         db.commit()
         deleted = result.rowcount if hasattr(result, "rowcount") else 0
-        logger.info("Pagos Gmail confirmar-dia: borrados TODOS los ítems (%d)", deleted)
+        logger.info(
+            "Pagos Gmail confirmar-dia: borrados TODOS los ítems (%d); "
+            "migracion_previa=%s",
+            deleted,
+            migracion,
+        )
         run = _get_blocking_running_sync(db)
         if run is not None:
             logger.warning(
@@ -699,6 +727,7 @@ def confirmar_dia(body: ConfirmarDiaBody = Body(...), db: Session = Depends(get_
         return {
             "confirmado": True,
             "borrados": deleted,
+            "migracion_pendientes": migracion,
             "mensaje": f"Acumulado completo borrado ({deleted} filas). Listo para el próximo ciclo.",
             "pipeline_running": run is not None,
             "blocking_sync_id": run.id if run is not None else None,
