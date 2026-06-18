@@ -15,8 +15,12 @@ from app.models.prestamo import Prestamo
 def _load_routes_module():
     deps_stub = types.ModuleType("app.core.deps")
     deps_stub.get_current_user = lambda: None
+    auth_stub = types.ModuleType("app.schemas.auth")
+    auth_stub.UserResponse = type("UserResponse", (), {})
     original_deps = sys.modules.get("app.core.deps")
+    original_auth = sys.modules.get("app.schemas.auth")
     sys.modules["app.core.deps"] = deps_stub
+    sys.modules["app.schemas.auth"] = auth_stub
     try:
         routes_path = (
             Path(__file__).resolve().parents[1]
@@ -35,6 +39,10 @@ def _load_routes_module():
             sys.modules.pop("app.core.deps", None)
         else:
             sys.modules["app.core.deps"] = original_deps
+        if original_auth is None:
+            sys.modules.pop("app.schemas.auth", None)
+        else:
+            sys.modules["app.schemas.auth"] = original_auth
 
 
 _routes = _load_routes_module()
