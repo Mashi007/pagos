@@ -140,6 +140,15 @@ function badgeConteoGlobal(tiempo: ReturnType<typeof calcularTiempoFiniquito>) {
   )
 }
 
+function celdaCicloYConteoGlobal(tiempo: ReturnType<typeof calcularTiempoFiniquito>) {
+  return (
+    <div className="flex flex-col gap-1">
+      {badgeConteoFase(tiempo)}
+      {badgeConteoGlobal(tiempo)}
+    </div>
+  )
+}
+
 const thGestion =
   'h-9 whitespace-nowrap bg-slate-800 px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-white'
 
@@ -2176,22 +2185,18 @@ function FiniquitoGestionPageInner() {
                 'max-w-[9rem] whitespace-normal leading-tight'
               )}
               scope="col"
-              title="Dias transcurridos en area de trabajo (N de M)."
+              title="Ciclo (fase N de M) y conteo global (N de 30). Orden: mas antiguo arriba."
             >
               Ciclo
-            </TableHead>
-            <TableHead className={cn(thGestion, 'min-w-[140px]')} scope="col">
-              Contacto
-            </TableHead>
-            <TableHead
-              className={thGestion}
-              scope="col"
-              title="Ordenado de conteo global mas antiguo (arriba) al mas reciente (abajo)"
-            >
-              Conteo global
+              <span className="mt-0.5 block text-[9px] font-normal normal-case text-slate-300">
+                Conteo global
+              </span>
               <span className="mt-0.5 block text-[9px] font-normal normal-case text-slate-300">
                 ↑ antiguo · reciente ↓
               </span>
+            </TableHead>
+            <TableHead className={cn(thGestion, 'min-w-[140px]')} scope="col">
+              Contacto
             </TableHead>
             <TableHead className={cn(thGestion, 'text-right')} scope="col">
               Acciones
@@ -2222,8 +2227,8 @@ function FiniquitoGestionPageInner() {
               >
                 {textoUltimoPago(row.ultima_fecha_pago)}
               </TableCell>
-              <TableCell className={cn(tdGestion, 'whitespace-nowrap')}>
-                {badgeConteoFase(tiempo)}
+              <TableCell className={cn(tdGestion, 'whitespace-nowrap align-top')}>
+                {celdaCicloYConteoGlobal(tiempo)}
               </TableCell>
               <TableCell className={cn(tdGestion, 'max-w-[200px]')}>
                 <div className="space-y-0.5 text-xs leading-snug text-slate-800">
@@ -2247,9 +2252,6 @@ function FiniquitoGestionPageInner() {
                     </div>
                   ) : null}
                 </div>
-              </TableCell>
-              <TableCell className={cn(tdGestion, 'whitespace-nowrap')}>
-                {badgeConteoGlobal(tiempo)}
               </TableCell>
               <TableCell className={cn(tdGestion, 'text-right')}>
                 {renderAccionesAreaTrabajo(row)}
