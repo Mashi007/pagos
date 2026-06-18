@@ -85,7 +85,6 @@ import { prestamoService } from '../services/prestamoService'
 import { cn, formatCurrency, formatDate } from '../utils'
 import {
   calcularTiempoFiniquito,
-  casoFiniquitoAtrasado,
   claseSemaforoTiempoFiniquito,
   FINIQUITO_CICLO_DIAS,
   FINIQUITO_CUPO_FIN_BANDEJA,
@@ -116,37 +115,30 @@ function celdaCicloFiniquito(row: FiniquitoCasoItem) {
   return calcularTiempoFiniquito(row)
 }
 
-function estadoEtiquetaVisible(caso: FiniquitoCasoItem): string {
-  if (casoFiniquitoAtrasado(caso)) return 'Atrasado'
-  const map: Record<string, string> = {
-    REVISION: 'Revision',
-    ACEPTADO: 'Validado',
-    REVISION_CONTABLE: 'Revision contable',
-    RECHAZADO: 'Rechazado',
-    EN_PROCESO: 'En proceso',
-    TERMINADO: 'Terminado',
-  }
-  return map[caso.estado] ?? caso.estado.replace(/_/g, ' ')
+function badgeConteoFase(tiempo: ReturnType<typeof calcularTiempoFiniquito>) {
+  return (
+    <span
+      className={cn(
+        'rounded px-1.5 py-0.5 text-xs font-medium tabular-nums',
+        claseSemaforoTiempoFiniquito(tiempo.semaforo)
+      )}
+    >
+      {tiempo.textoFase}
+    </span>
+  )
 }
 
-function estadoBadgeClassName(caso: FiniquitoCasoItem): string {
-  if (casoFiniquitoAtrasado(caso)) return 'bg-red-100 text-red-950'
-  switch (caso.estado) {
-    case 'REVISION':
-      return 'bg-sky-100 text-sky-950'
-    case 'ACEPTADO':
-      return 'bg-amber-100 text-amber-950'
-    case 'REVISION_CONTABLE':
-      return 'bg-indigo-100 text-indigo-950'
-    case 'RECHAZADO':
-      return 'bg-rose-100 text-rose-950'
-    case 'EN_PROCESO':
-      return 'bg-emerald-100 text-emerald-950'
-    case 'TERMINADO':
-      return 'bg-violet-100 text-violet-950'
-    default:
-      return 'bg-slate-100 text-slate-800'
-  }
+function badgeConteoGlobal(tiempo: ReturnType<typeof calcularTiempoFiniquito>) {
+  return (
+    <span
+      className={cn(
+        'rounded px-1.5 py-0.5 text-xs font-medium tabular-nums',
+        claseSemaforoTiempoFiniquito(tiempo.semaforoGlobal)
+      )}
+    >
+      {tiempo.textoGlobal}
+    </span>
+  )
 }
 
 const thGestion =
@@ -2111,12 +2103,12 @@ function FiniquitoGestionPageInner() {
                 'max-w-[9rem] whitespace-normal leading-tight'
               )}
               scope="col"
-              title="Dia global del ciclo (30 dias calendario Caracas). Pase el cursor sobre la celda para ver la fase."
+              title="Dias transcurridos en la fase actual (N de M)."
             >
               Ciclo
             </TableHead>
             <TableHead className={thGestion} scope="col">
-              Estado
+              Conteo global
             </TableHead>
             <TableHead className={cn(thGestion, 'text-right')} scope="col">
               Acciones
@@ -2165,28 +2157,11 @@ function FiniquitoGestionPageInner() {
               >
                 {textoUltimoPago(row.ultima_fecha_pago)}
               </TableCell>
-              <TableCell
-                className={cn(tdGestion, 'whitespace-nowrap')}
-                title={`Fase: ${tiempo.textoFase}`}
-              >
-                <span
-                  className={cn(
-                    'rounded px-1.5 py-0.5 text-xs font-medium tabular-nums',
-                    claseSemaforoTiempoFiniquito(tiempo.semaforo)
-                  )}
-                >
-                  {tiempo.textoGlobal}
-                </span>
+              <TableCell className={cn(tdGestion, 'whitespace-nowrap')}>
+                {badgeConteoFase(tiempo)}
               </TableCell>
-              <TableCell className={tdGestion}>
-                <span
-                  className={cn(
-                    'rounded px-1.5 py-0.5 text-xs font-medium',
-                    estadoBadgeClassName(row)
-                  )}
-                >
-                  {estadoEtiquetaVisible(row)}
-                </span>
+              <TableCell className={cn(tdGestion, 'whitespace-nowrap')}>
+                {badgeConteoGlobal(tiempo)}
               </TableCell>
               <TableCell className={cn(tdGestion, 'text-right')}>
                 {renderAccionesFila(row)}
@@ -2232,7 +2207,7 @@ function FiniquitoGestionPageInner() {
                 'max-w-[9rem] whitespace-normal leading-tight'
               )}
               scope="col"
-              title="Dia global del ciclo (30 dias). Pase el cursor para ver fase en area de trabajo."
+              title="Dias transcurridos en area de trabajo (N de M)."
             >
               Ciclo
             </TableHead>
@@ -2240,7 +2215,7 @@ function FiniquitoGestionPageInner() {
               Contacto
             </TableHead>
             <TableHead className={thGestion} scope="col">
-              Estado
+              Conteo global
             </TableHead>
             <TableHead className={cn(thGestion, 'text-right')} scope="col">
               Acciones
@@ -2271,22 +2246,8 @@ function FiniquitoGestionPageInner() {
               >
                 {textoUltimoPago(row.ultima_fecha_pago)}
               </TableCell>
-              <TableCell
-                className={cn(tdGestion, 'whitespace-nowrap text-slate-800')}
-                title={`Fase: ${tiempo.textoFase}${
-                  row.fecha_entrada_en_proceso
-                    ? ` · EN_PROCESO desde ${row.fecha_entrada_en_proceso}`
-                    : ''
-                }`}
-              >
-                <span
-                  className={cn(
-                    'rounded px-1.5 py-0.5 text-xs font-medium tabular-nums',
-                    claseSemaforoTiempoFiniquito(tiempo.semaforo)
-                  )}
-                >
-                  {tiempo.textoGlobal}
-                </span>
+              <TableCell className={cn(tdGestion, 'whitespace-nowrap')}>
+                {badgeConteoFase(tiempo)}
               </TableCell>
               <TableCell className={cn(tdGestion, 'max-w-[200px]')}>
                 <div className="space-y-0.5 text-xs leading-snug text-slate-800">
@@ -2311,19 +2272,8 @@ function FiniquitoGestionPageInner() {
                   ) : null}
                 </div>
               </TableCell>
-              <TableCell className={tdGestion}>
-                <span
-                  className={cn(
-                    'rounded px-1.5 py-0.5 text-xs font-medium',
-                    row.estado === 'ACEPTADO' && 'bg-slate-100 text-slate-800',
-                    row.estado === 'EN_PROCESO' &&
-                      'bg-amber-100 text-amber-950',
-                    row.estado === 'TERMINADO' &&
-                      'bg-emerald-100 text-emerald-950'
-                  )}
-                >
-                  {estadoEtiquetaVisible(row)}
-                </span>
+              <TableCell className={cn(tdGestion, 'whitespace-nowrap')}>
+                {badgeConteoGlobal(tiempo)}
               </TableCell>
               <TableCell className={cn(tdGestion, 'text-right')}>
                 {renderAccionesAreaTrabajo(row)}
@@ -2383,7 +2333,7 @@ function FiniquitoGestionPageInner() {
 
   return (
     <FiniquitoWorkspaceShell
-      description={`Ciclo ${FINIQUITO_CICLO_DIAS} dias (Caracas): bandeja ${FINIQUITO_FASE_BANDEJA_MAX} + revision ${FINIQUITO_FASE_REVISION_MAX} + contable ${FINIQUITO_FASE_CONTABLE_MAX} + trabajo ${FINIQUITO_FASE_TRABAJO_MAX}. Columna Ciclo = dia global; tooltip = fase (N de M).`}
+      description={`Ciclo ${FINIQUITO_CICLO_DIAS} dias (Caracas): bandeja ${FINIQUITO_FASE_BANDEJA_MAX} + revision ${FINIQUITO_FASE_REVISION_MAX} + contable ${FINIQUITO_FASE_CONTABLE_MAX} + trabajo ${FINIQUITO_FASE_TRABAJO_MAX}. Ciclo = fase (N de M); Conteo global = dia del ciclo (N de 30).`}
       actions={
         <Button
           size="sm"

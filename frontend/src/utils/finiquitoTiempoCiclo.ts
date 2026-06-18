@@ -1,6 +1,6 @@
 /**
- * Ciclo finiquito (30 dias calendario Caracas): bandeja 4 + revision 5 + contable 1 + trabajo 20.
- * Contador de fase = dias transcurridos "N de M". Traslados manuales; dias vencidos consumen cupo siguiente.
+ * Ciclo finiquito (30 dias calendario Caracas): bandeja 5 + revision 5 + contable 1 + trabajo 20.
+ * Columna Ciclo = fase (N de M). Columna Conteo global = dia del ciclo (N de 30).
  */
 
 export type FiniquitoTiempoCaso = {
@@ -13,7 +13,7 @@ export type FiniquitoTiempoCaso = {
 }
 
 export const FINIQUITO_CICLO_DIAS = 30
-export const FINIQUITO_FASE_BANDEJA_MAX = 4
+export const FINIQUITO_FASE_BANDEJA_MAX = 5
 export const FINIQUITO_FASE_REVISION_MAX = 5
 export const FINIQUITO_FASE_CONTABLE_MAX = 1
 export const FINIQUITO_FASE_TRABAJO_MAX = 20
@@ -44,7 +44,10 @@ export type FiniquitoTiempoFila = {
   diaFase: number | null
   maxFase: number | null
   atrasado: boolean
+  /** Semaforo segun fase actual (columna Ciclo). */
   semaforo: SemaforoTiempoFiniquito
+  /** Semaforo segun dia global (columna Conteo global). */
+  semaforoGlobal: SemaforoTiempoFiniquito
 }
 
 const TZ_CARACAS = 'America/Caracas'
@@ -96,18 +99,22 @@ function formatoGlobal(dia: number): string {
   return `${dia} de ${FINIQUITO_CICLO_DIAS}`
 }
 
-function semaforoDesdeFase(
-  diaFase: number,
-  maxFase: number,
-  diaGlobal: number
-): SemaforoTiempoFiniquito {
-  if (diaGlobal > FINIQUITO_CICLO_DIAS + 1) return 'recontraatrasado'
-  if (diaGlobal > FINIQUITO_CICLO_DIAS) return 'atrasado'
+function semaforoDesdeFase(diaFase: number, maxFase: number): SemaforoTiempoFiniquito {
   if (diaFase > maxFase + 1) return 'recontraatrasado'
   if (diaFase > maxFase) return 'atrasado'
   if (diaFase === maxFase) return 'termino'
   const umbralInicio = Math.max(1, Math.ceil(maxFase * 0.25))
   if (diaFase <= umbralInicio) return 'inicio'
+  return 'avance'
+}
+
+function semaforoDesdeGlobal(diaGlobal: number): SemaforoTiempoFiniquito {
+  if (diaGlobal > FINIQUITO_CICLO_DIAS + 1) return 'recontraatrasado'
+  if (diaGlobal > FINIQUITO_CICLO_DIAS) return 'atrasado'
+  if (diaGlobal === FINIQUITO_CICLO_DIAS) return 'termino'
+  const umbralInicio = Math.max(1, Math.ceil(FINIQUITO_CICLO_DIAS * 0.25))
+  if (diaGlobal <= umbralInicio) return 'inicio'
+  if (diaGlobal >= FINIQUITO_CICLO_DIAS - 4) return 'termino'
   return 'avance'
 }
 
@@ -206,10 +213,12 @@ export function calcularTiempoFiniquito(caso: FiniquitoTiempoCaso): FiniquitoTie
       maxFase: null,
       atrasado: false,
       semaforo: 'inicio',
+      semaforoGlobal: 'inicio',
     }
   }
 
   const textoGlobal = formatoGlobal(diaGlobal)
+  const semaforoGlobal = semaforoDesdeGlobal(diaGlobal)
 
   let fase: { diaFase: number | null; maxFase: number; textoFase: string }
 
@@ -235,6 +244,7 @@ export function calcularTiempoFiniquito(caso: FiniquitoTiempoCaso): FiniquitoTie
         maxFase: null,
         atrasado: false,
         semaforo: 'inicio',
+        semaforoGlobal,
       }
   }
 
@@ -247,10 +257,8 @@ export function calcularTiempoFiniquito(caso: FiniquitoTiempoCaso): FiniquitoTie
 
   const semaforo =
     diaFase != null && maxFase != null
-      ? semaforoDesdeFase(diaFase, maxFase, diaGlobal)
-      : diaGlobal > FINIQUITO_CICLO_DIAS
-        ? 'atrasado'
-        : 'avance'
+      ? semaforoDesdeFase(diaFase, maxFase)
+      : semaforoGlobal
 
   return {
     diaGlobal,
@@ -260,6 +268,7 @@ export function calcularTiempoFiniquito(caso: FiniquitoTiempoCaso): FiniquitoTie
     maxFase,
     atrasado,
     semaforo,
+    semaforoGlobal,
   }
 }
 
