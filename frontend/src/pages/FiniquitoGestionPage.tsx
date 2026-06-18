@@ -180,6 +180,9 @@ const GRAFICO_DIA_COLOR_INGRESAN_ETIQUETA = '#c48655'
 /** Coincide con backend `_ADMIN_CASOS_MAX_LIMIT` para bandejas pequeñas. */
 const FETCH_LIMIT = 2000
 const BANDEJA_PRINCIPAL_FETCH_LIMIT = 100
+/** Primera carga de tabla terminados (el listado completo 2000 tarda ~15s en prod). */
+const TERMINADOS_TABLA_LIMIT_INICIAL = 200
+const TERMINADOS_TABLA_LIMIT_PAGINA = 200
 
 type FiniquitoAreaId = 'bandeja' | 'revision' | 'contable' | 'trabajo' | 'terminados'
 
@@ -561,6 +564,7 @@ function FiniquitoGestionPageInner() {
     })
   const [descargandoTerminadosExcel, setDescargandoTerminadosExcel] =
     useState(false)
+  const [cargandoMasTerminados, setCargandoMasTerminados] = useState(false)
   const [terminadosFetchedAt, setTerminadosFetchedAt] = useState<number | null>(
     null
   )
@@ -572,6 +576,8 @@ function FiniquitoGestionPageInner() {
   const contableFetchGenRef = useRef(0)
   const trabajoFetchGenRef = useRef(0)
   const terminadosFetchGenRef = useRef(0)
+  const terminadosFetchInFlightRef = useRef(false)
+  const terminadosUltimaCedulaCargadaRef = useRef<string | null>(null)
   const terminadosGraficoScrollRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -797,28 +803,78 @@ function FiniquitoGestionPageInner() {
     [cedulaTrabajoBusqueda, marcarAreaCargada, setAreaLoadingFlag]
   )
 
+  const cargarTerminadosResumenSilencioso = useCallback(
+    async (cedulaFiltro: string, gen: number) => {
+      try {
+        const rSem = await finiquitoAdminResumenTerminadosDiario(
+          cedulaFiltro || undefined,
+          FINIQUITO_TERMINADOS_RESUMEN_DIAS_DEFAULT
+        )
+        if (gen !== terminadosFetchGenRef.current) return
+        setResumenDias(rSem.dias || [])
+        setTotalTerminadosEnVentana(rSem.total_en_ventana ?? 0)
+        setTotalTerminadosResumen(rSem.total_terminados ?? 0)
+        const cached = readFiniquitoTerminadosCache(
+          cedulaFiltro,
+          FINIQUITO_TERMINADOS_RESUMEN_DIAS_DEFAULT
+        )
+        if (cached) {
+          writeFiniquitoTerminadosCache({
+            ...cached,
+            resumenDias: rSem.dias || [],
+            totalEnVentana: rSem.total_en_ventana ?? 0,
+            totalTerminadosResumen: rSem.total_terminados ?? 0,
+          })
+        }
+      } catch {
+        // Polling silencioso del grafico.
+      }
+    },
+    []
+  )
+
   const cargarTerminados = useCallback(
     async (opts?: { silent?: boolean; force?: boolean }) => {
       const silent = opts?.silent === true
       const force = opts?.force === true
+      if (terminadosFetchInFlightRef.current && !force) return
+      terminadosFetchInFlightRef.current = true
       const gen = ++terminadosFetchGenRef.current
       const cedulaFiltro = cedulaTerminadosBusqueda
 
-      const aplicarPayload = (
-        items: FiniquitoTerminadoItem[],
-        total: number,
+      const aplicarResumen = (
         dias: FiniquitoTerminadosDia[],
         totalEnVentana: number,
-        totalResumen: number,
-        fetchedAt: number
+        totalResumen: number
       ) => {
-        setItemsTerminados(items)
-        setTotalTerminados(total)
         setResumenDias(dias)
         setTotalTerminadosEnVentana(totalEnVentana)
         setTotalTerminadosResumen(totalResumen)
+      }
+
+      const aplicarTabla = (
+        items: FiniquitoTerminadoItem[],
+        total: number,
+        fetchedAt: number,
+        dias: FiniquitoTerminadosDia[],
+        totalEnVentana: number,
+        totalResumen: number
+      ) => {
+        setItemsTerminados(items)
+        setTotalTerminados(total)
         setTerminadosFetchedAt(fetchedAt)
         marcarAreaCargada('terminados')
+        terminadosUltimaCedulaCargadaRef.current = cedulaFiltro
+        writeFiniquitoTerminadosCache({
+          fetchedAt,
+          cedula: cedulaFiltro,
+          dias: FINIQUITO_TERMINADOS_RESUMEN_DIAS_DEFAULT,
+          items,
+          totalTerminados: total,
+          resumenDias: dias,
+          totalEnVentana,
+          totalTerminadosResumen: totalResumen,
+        })
       }
 
       if (!force) {
@@ -827,95 +883,59 @@ function FiniquitoGestionPageInner() {
           FINIQUITO_TERMINADOS_RESUMEN_DIAS_DEFAULT
         )
         if (cached) {
-          aplicarPayload(
-            cached.items,
-            cached.totalTerminados,
+          aplicarResumen(
             cached.resumenDias,
             cached.totalEnVentana,
-            cached.totalTerminadosResumen,
-            cached.fetchedAt
+            cached.totalTerminadosResumen
+          )
+          aplicarTabla(
+            cached.items,
+            cached.totalTerminados,
+            cached.fetchedAt,
+            cached.resumenDias,
+            cached.totalEnVentana,
+            cached.totalTerminadosResumen
           )
           const cacheAgeMs = Date.now() - cached.fetchedAt
           if (cacheAgeMs >= AUTO_REFRESH_POLL_MS) {
-            void (async () => {
-              try {
-                const [rTerm, rSem] = await Promise.all([
-                  finiquitoAdminListarTerminados(cedulaFiltro || undefined, {
-                    limit: FETCH_LIMIT,
-                    offset: 0,
-                  }),
-                  finiquitoAdminResumenTerminadosDiario(
-                    cedulaFiltro || undefined,
-                    FINIQUITO_TERMINADOS_RESUMEN_DIAS_DEFAULT
-                  ),
-                ])
-                if (gen !== terminadosFetchGenRef.current) return
-                const fetchedAt = Date.now()
-                const items = rTerm.items || []
-                const total = rTerm.total ?? items.length
-                const dias = rSem.dias || []
-                aplicarPayload(
-                  items,
-                  total,
-                  dias,
-                  rSem.total_en_ventana ?? 0,
-                  rSem.total_terminados ?? 0,
-                  fetchedAt
-                )
-                writeFiniquitoTerminadosCache({
-                  fetchedAt,
-                  cedula: cedulaFiltro,
-                  dias: FINIQUITO_TERMINADOS_RESUMEN_DIAS_DEFAULT,
-                  items,
-                  totalTerminados: total,
-                  resumenDias: dias,
-                  totalEnVentana: rSem.total_en_ventana ?? 0,
-                  totalTerminadosResumen: rSem.total_terminados ?? 0,
-                })
-              } catch {
-                // Revalidacion en segundo plano: no interrumpir la UI.
-              }
-            })()
+            void cargarTerminadosResumenSilencioso(cedulaFiltro, gen)
           }
+          terminadosFetchInFlightRef.current = false
           return
         }
       }
 
       if (!silent) setAreaLoadingFlag('terminados', true)
       try {
-        const [rTerm, rSem] = await Promise.all([
-          finiquitoAdminListarTerminados(cedulaFiltro || undefined, {
-            limit: FETCH_LIMIT,
+        const rSem = await finiquitoAdminResumenTerminadosDiario(
+          cedulaFiltro || undefined,
+          FINIQUITO_TERMINADOS_RESUMEN_DIAS_DEFAULT
+        )
+        if (gen !== terminadosFetchGenRef.current) return
+        const dias = rSem.dias || []
+        const totalEnVentana = rSem.total_en_ventana ?? 0
+        const totalResumen = rSem.total_terminados ?? 0
+        aplicarResumen(dias, totalEnVentana, totalResumen)
+
+        const rTerm = await finiquitoAdminListarTerminados(
+          cedulaFiltro || undefined,
+          {
+            limit: TERMINADOS_TABLA_LIMIT_INICIAL,
             offset: 0,
-          }),
-          finiquitoAdminResumenTerminadosDiario(
-            cedulaFiltro || undefined,
-            FINIQUITO_TERMINADOS_RESUMEN_DIAS_DEFAULT
-          ),
-        ])
+          }
+        )
         if (gen !== terminadosFetchGenRef.current) return
         const fetchedAt = Date.now()
         const items = rTerm.items || []
         const total = rTerm.total ?? items.length
-        const dias = rSem.dias || []
-        aplicarPayload(
+        aplicarTabla(
           items,
           total,
-          dias,
-          rSem.total_en_ventana ?? 0,
-          rSem.total_terminados ?? 0,
-          fetchedAt
-        )
-        writeFiniquitoTerminadosCache({
           fetchedAt,
-          cedula: cedulaFiltro,
-          dias: FINIQUITO_TERMINADOS_RESUMEN_DIAS_DEFAULT,
-          items,
-          totalTerminados: total,
-          resumenDias: dias,
-          totalEnVentana: rSem.total_en_ventana ?? 0,
-          totalTerminadosResumen: rSem.total_terminados ?? 0,
-        })
+          dias,
+          totalEnVentana,
+          totalResumen
+        )
       } catch (e: unknown) {
         if (gen !== terminadosFetchGenRef.current) return
         if (!silent) {
@@ -924,13 +944,65 @@ function FiniquitoGestionPageInner() {
           )
         }
       } finally {
+        terminadosFetchInFlightRef.current = false
         if (gen === terminadosFetchGenRef.current && !silent) {
           setAreaLoadingFlag('terminados', false)
         }
       }
     },
-    [cedulaTerminadosBusqueda, marcarAreaCargada, setAreaLoadingFlag]
+    [
+      cedulaTerminadosBusqueda,
+      cargarTerminadosResumenSilencioso,
+      marcarAreaCargada,
+      setAreaLoadingFlag,
+    ]
   )
+
+  const cargarMasTerminados = useCallback(async () => {
+    if (cargandoMasTerminados) return
+    if (itemsTerminados.length >= totalTerminados) return
+    setCargandoMasTerminados(true)
+    const gen = terminadosFetchGenRef.current
+    try {
+      const rTerm = await finiquitoAdminListarTerminados(
+        cedulaTerminadosBusqueda || undefined,
+        {
+          limit: TERMINADOS_TABLA_LIMIT_PAGINA,
+          offset: itemsTerminados.length,
+        }
+      )
+      if (gen !== terminadosFetchGenRef.current) return
+      const nuevos = rTerm.items || []
+      if (nuevos.length === 0) return
+      setItemsTerminados(prev => {
+        const merged = [...prev, ...nuevos]
+        const cached = readFiniquitoTerminadosCache(
+          cedulaTerminadosBusqueda,
+          FINIQUITO_TERMINADOS_RESUMEN_DIAS_DEFAULT
+        )
+        if (cached) {
+          writeFiniquitoTerminadosCache({
+            ...cached,
+            items: merged,
+            totalTerminados: rTerm.total ?? cached.totalTerminados,
+          })
+        }
+        return merged
+      })
+      setTotalTerminados(rTerm.total ?? totalTerminados)
+    } catch (e: unknown) {
+      toast.error(
+        e instanceof Error ? e.message : 'Error al cargar mas terminados'
+      )
+    } finally {
+      setCargandoMasTerminados(false)
+    }
+  }, [
+    cargandoMasTerminados,
+    cedulaTerminadosBusqueda,
+    itemsTerminados.length,
+    totalTerminados,
+  ])
 
   /** Recarga solo las áreas que el usuario ya abrió (polling / tras acciones). */
   const cargarAreasVisibles = useCallback(
@@ -1188,6 +1260,9 @@ function FiniquitoGestionPageInner() {
 
   useEffect(() => {
     if (!areasCargadas.terminados) return
+    if (terminadosUltimaCedulaCargadaRef.current === cedulaTerminadosBusqueda) {
+      return
+    }
     void cargarTerminados()
   }, [areasCargadas.terminados, cedulaTerminadosBusqueda, cargarTerminados])
 
@@ -1284,19 +1359,25 @@ function FiniquitoGestionPageInner() {
     return () => window.clearInterval(intervalId)
   }, [cargarAreasVisibles, queryClient])
 
-  /** Grafico Terminados / Ingresan: refresh cada 1 min sin depender del resumen KPI. */
+  /** Grafico Terminados / Ingresan: solo resumen-diario cada 1 min (no recargar 2000 filas). */
   useEffect(() => {
     if (!areasCargadas.terminados) return
 
     const tickGrafico = () => {
       if (document.hidden || refreshingRef.current) return
-      void cargarTerminados({ silent: true, force: true })
+      void cargarTerminadosResumenSilencioso(
+        cedulaTerminadosBusqueda,
+        terminadosFetchGenRef.current
+      )
     }
 
     const intervalId = window.setInterval(tickGrafico, AUTO_REFRESH_POLL_MS)
-    tickGrafico()
     return () => window.clearInterval(intervalId)
-  }, [areasCargadas.terminados, cargarTerminados, cedulaTerminadosBusqueda])
+  }, [
+    areasCargadas.terminados,
+    cargarTerminadosResumenSilencioso,
+    cedulaTerminadosBusqueda,
+  ])
 
   const onRefreshJob = async () => {
     setRefreshing(true)
@@ -3282,8 +3363,33 @@ function FiniquitoGestionPageInner() {
               </div>
               <FiniquitoTablaScrollHint
                 total={totalTerminados}
-                cargados={itemsTerminadosFiltrados.length}
+                cargados={itemsTerminados.length}
+                limit={TERMINADOS_TABLA_LIMIT_INICIAL}
               />
+              {itemsTerminados.length < totalTerminados ? (
+                <div className="mt-3 flex justify-center">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="border-slate-300"
+                    disabled={cargandoMasTerminados || areasLoading.terminados}
+                    onClick={() => void cargarMasTerminados()}
+                  >
+                    {cargandoMasTerminados ? (
+                      <>
+                        <Loader2
+                          className="mr-2 h-4 w-4 animate-spin"
+                          aria-hidden
+                        />
+                        Cargando…
+                      </>
+                    ) : (
+                      `Cargar mas (${itemsTerminados.length} de ${totalTerminados})`
+                    )}
+                  </Button>
+                </div>
+              ) : null}
               {itemsTerminadosFiltrados.length !== itemsTerminados.length ? (
                 <p className="mt-2 text-center text-[11px] text-slate-500">
                   Mostrando {itemsTerminadosFiltrados.length} de{' '}

@@ -689,6 +689,7 @@ def _terminados_items_from_casos(
     ft = _map_fecha_terminado_por_caso(db, caso_ids)
     pr = _map_prestamo_nombre_fecha_aprobacion(db, prestamo_ids)
     clmap = _map_clientes_por_id(db, cliente_ids)
+    has_contacto_col = finiquito_casos_has_contacto_para_siguientes(db)
     items: List[FiniquitoTerminadoItemOut] = []
     for c in casos:
         nombre = ""
@@ -706,7 +707,7 @@ def _terminados_items_from_casos(
         ft_raw = ft.get(c.id)
         fterm = _dt_iso(ft_raw) if ft_raw is not None else None
         cps: Optional[bool] = None
-        if finiquito_casos_has_contacto_para_siguientes(db):
+        if has_contacto_col:
             try:
                 cps = c.contacto_para_siguientes
             except Exception:
