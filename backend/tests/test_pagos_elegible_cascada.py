@@ -10,8 +10,8 @@ from app.models.pago import Pago
 from app.services.pagos_sql_where import _where_pago_elegible_reaplicacion_cascada
 
 
-def test_elegible_cascada_incluye_pendiente_con_prestamo():
-    """PENDIENTE sin conciliar pero con prestamo_id entra en cascada (revision manual)."""
+def test_elegible_cascada_no_incluye_pendiente_sin_verificar():
+    """PENDIENTE sin conciliar no debe entrar en cascada solo por tener prestamo_id."""
     q = select(Pago).where(
         Pago.prestamo_id == 782,
         Pago.monto_pagado > 0,
@@ -20,7 +20,6 @@ def test_elegible_cascada_incluye_pendiente_con_prestamo():
     sql = str(
         q.compile(dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True})
     ).upper()
-    assert "PENDIENTE" in sql
-    assert "PRESTAMO_ID IS NOT NULL" in sql
     assert "CONCILIADO" in sql
     assert "PAGADO" in sql
+    assert "PENDIENTE" not in sql

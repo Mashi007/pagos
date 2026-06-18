@@ -147,8 +147,8 @@ def aplicar_pagos_pendientes_prestamo(
     """
     Aplica a cuotas los pagos del préstamo que aún no tienen enlaces en cuota_pagos.
 
-    Criterio de elegibilidad: conciliado, verificado_concordancia SI, estado PAGADO,
-    o PENDIENTE con prestamo_id; excluye anulados/reversados/duplicado declarado.
+    Criterio de elegibilidad: conciliado, verificado_concordancia SI, o estado PAGADO;
+    excluye anulados/reversados/duplicado declarado.
 
     No hace commit. Retorna el número de pagos a los que se les aplicó algo (cc o cp > 0).
     """
