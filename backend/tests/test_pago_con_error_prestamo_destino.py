@@ -1,15 +1,47 @@
 from __future__ import annotations
 
+import importlib.util
+import sys
+import types
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 from fastapi import HTTPException
 
-from app.api.v1.endpoints.pagos_con_errores.routes import (
-    _resolver_prestamo_id_para_mover_a_cartera,
-    _validar_prestamo_payload_o_400,
-)
 from app.models.prestamo import Prestamo
+
+
+def _load_routes_module():
+    deps_stub = types.ModuleType("app.core.deps")
+    deps_stub.get_current_user = lambda: None
+    original_deps = sys.modules.get("app.core.deps")
+    sys.modules["app.core.deps"] = deps_stub
+    try:
+        routes_path = (
+            Path(__file__).resolve().parents[1]
+            / "app/api/v1/endpoints/pagos_con_errores/routes.py"
+        )
+        spec = importlib.util.spec_from_file_location(
+            "pagos_con_errores_routes_under_test",
+            routes_path,
+        )
+        assert spec is not None and spec.loader is not None
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+    finally:
+        if original_deps is None:
+            sys.modules.pop("app.core.deps", None)
+        else:
+            sys.modules["app.core.deps"] = original_deps
+
+
+_routes = _load_routes_module()
+_resolver_prestamo_id_para_mover_a_cartera = (
+    _routes._resolver_prestamo_id_para_mover_a_cartera
+)
+_validar_prestamo_payload_o_400 = _routes._validar_prestamo_payload_o_400
 
 
 class _Db:
