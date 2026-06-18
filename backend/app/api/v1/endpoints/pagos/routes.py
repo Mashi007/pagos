@@ -6877,6 +6877,7 @@ def conciliar_y_aplicar_pagos_batch(
                     cambios = True
                 if cambios:
                     db.flush()
+                    db.commit()
                     procesados += 1
                 else:
                     saltados += 1
@@ -6894,7 +6895,9 @@ def conciliar_y_aplicar_pagos_batch(
             db.flush()
 
             cc, cp = _aplicar_pago_a_cuotas_interno(pago, db)
-            cuotas_aplicadas += int(cc) + int(cp)
+            cuotas_afectadas = int(cc) + int(cp)
+            db.commit()
+            cuotas_aplicadas += cuotas_afectadas
             procesados += 1
         except Exception as e_row:
             db.rollback()
@@ -6906,16 +6909,6 @@ def conciliar_y_aplicar_pagos_batch(
             )
             errores.append(f"Pago {pid}: {e_row}")
             continue
-
-    try:
-        db.commit()
-    except Exception as e_commit:
-        db.rollback()
-        logger.exception("conciliar_y_aplicar_pagos_batch: commit final falló: %s", e_commit)
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error al confirmar el lote: {e_commit}",
-        ) from e_commit
 
     mensaje = (
         f"{procesados} pago(s) procesado(s); {cuotas_aplicadas} cuota(s) afectada(s); "
