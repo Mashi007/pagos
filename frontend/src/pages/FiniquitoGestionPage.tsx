@@ -83,6 +83,20 @@ import {
 import { prestamoService } from '../services/prestamoService'
 
 import { cn, formatCurrency, formatDate } from '../utils'
+import {
+  calcularTiempoFiniquito,
+  casoFiniquitoAtrasado,
+  claseSemaforoTiempoFiniquito,
+  FINIQUITO_CICLO_DIAS,
+  FINIQUITO_CUPO_FIN_BANDEJA,
+  FINIQUITO_CUPO_FIN_CONTABLE,
+  FINIQUITO_CUPO_FIN_REVISION,
+  FINIQUITO_FASE_BANDEJA_MAX,
+  FINIQUITO_FASE_CONTABLE_MAX,
+  FINIQUITO_FASE_REVISION_MAX,
+  FINIQUITO_FASE_TRABAJO_MAX,
+  FINIQUITO_IDEAL_INICIO_TRABAJO,
+} from '../utils/finiquitoTiempoCiclo'
 import { invalidatePrestamosQueries } from '../hooks/usePrestamos'
 import { usePermissions } from '../hooks/usePermissions'
 import { Card, CardContent } from '../components/ui/card'
@@ -96,249 +110,14 @@ function textoUltimoPago(iso: string | null | undefined): string {
   }
 }
 
-/** Ciclo finiquito desde entrada a bandeja (dia 1 = alta del caso). */
-const PLAZO_CICLO_DIAS = 30
-/** Dias 1-2 en bandeja; desde dia 3 = atrasado si sigue en REVISION. */
-const BANDEJA_DIA_ATRASADO = 3
-/** Fase area revision: hasta 5 dias; dia 6 = atrasado. */
-const AREA_REVISION_DIAS_MAX = 5
-/** Fase revision contable: hasta 5 dias; dia 6 = atrasado. */
-const AREA_REVISION_CONTABLE_DIAS_MAX = 5
-
-/** Nomenclatura tiempo limite: F1 bandeja, F2 revision, F2C contable, F3 trabajo. */
-const FASE_TIEMPO_BANDEJA = 'F1'
-const FASE_TIEMPO_REVISION = 'F2'
-const FASE_TIEMPO_CONTABLE = 'F2C'
-const FASE_TIEMPO_TRABAJO = 'F3'
-
-function parseIsoDate(iso: string | null | undefined): Date | null {
-  if (iso == null || String(iso).trim() === '') return null
-  const d = new Date(`${String(iso).slice(0, 10)}T00:00:00`)
-  return Number.isNaN(d.getTime()) ? null : d
-}
-
-function hoyMedianoche(): Date {
-  const hoy = new Date()
-  hoy.setHours(0, 0, 0, 0)
-  return hoy
-}
-
-function diasDesdeIsoDate(iso: string | null | undefined) {
-  const d = parseIsoDate(iso)
-  if (d == null) return null
-  return Math.floor((hoyMedianoche().getTime() - d.getTime()) / 86_400_000)
-}
-
-function sumarDiasCalendario(iso: string, dias: number): string {
-  const d = parseIsoDate(iso)
-  if (d == null) return iso
-  const out = new Date(d.getTime())
-  out.setDate(out.getDate() + dias)
-  return out.toISOString().slice(0, 10)
-}
-
-function maxIsoDate(a: string | null | undefined, b: string | null | undefined) {
-  const da = parseIsoDate(a)
-  const db = parseIsoDate(b)
-  if (da == null) return b ?? null
-  if (db == null) return a ?? null
-  return da.getTime() >= db.getTime() ? a! : b!
-}
-
-/** Alta en finiquito (entrada a bandeja principal). */
-function anchorCiclo(caso: FiniquitoCasoItem): string | null {
-  return caso.creado_en ?? caso.fecha_liquidado ?? null
-}
-
-function diaOperativoCiclo(caso: FiniquitoCasoItem): number | null {
-  const dias = diasDesdeIsoDate(anchorCiclo(caso))
-  if (dias == null) return null
-  return dias + 1
-}
-
-function finCicloIso(caso: FiniquitoCasoItem): string | null {
-  const anchor = anchorCiclo(caso)
-  if (anchor == null) return caso.finiquito_tramite_fecha_limite ?? null
-  return sumarDiasCalendario(anchor.slice(0, 10), PLAZO_CICLO_DIAS - 1)
-}
-
-function diasRestantesHastaFinCiclo(caso: FiniquitoCasoItem): number | null {
-  const fin = finCicloIso(caso)
-  if (fin == null) return null
-  const dFin = parseIsoDate(fin)
-  if (dFin == null) return null
-  return Math.floor((dFin.getTime() - hoyMedianoche().getTime()) / 86_400_000)
-}
-
-function bandejaAtrasado(caso: FiniquitoCasoItem): boolean {
-  if (caso.estado !== 'REVISION') return false
-  const dia = diaOperativoCiclo(caso)
-  return dia != null && dia >= BANDEJA_DIA_ATRASADO
-}
-
-function inicioFaseAreaRevision(caso: FiniquitoCasoItem): string | null {
-  const anchor = anchorCiclo(caso)
-  if (anchor == null) return caso.fecha_entrada_aceptado ?? null
-  const dia3 = sumarDiasCalendario(anchor.slice(0, 10), BANDEJA_DIA_ATRASADO - 1)
-  return maxIsoDate(dia3, caso.fecha_entrada_aceptado)
-}
-
-function areaRevisionAtrasado(caso: FiniquitoCasoItem): boolean {
-  if (caso.estado !== 'ACEPTADO') return false
-  const dias = diasDesdeIsoDate(inicioFaseAreaRevision(caso))
-  return dias != null && dias >= AREA_REVISION_DIAS_MAX
-}
-
-function inicioFaseRevisionContable(caso: FiniquitoCasoItem): string | null {
-  return caso.fecha_entrada_revision_contable ?? null
-}
-
-function revisionContableAtrasado(caso: FiniquitoCasoItem): boolean {
-  if (caso.estado !== 'REVISION_CONTABLE') return false
-  const dias = diasDesdeIsoDate(inicioFaseRevisionContable(caso))
-  return dias != null && dias >= AREA_REVISION_CONTABLE_DIAS_MAX
-}
-
-function casoAtrasado(caso: FiniquitoCasoItem): boolean {
-  return (
-    bandejaAtrasado(caso) ||
-    areaRevisionAtrasado(caso) ||
-    revisionContableAtrasado(caso)
-  )
-}
-
-function diasRestantesBandeja(caso: FiniquitoCasoItem): number | null {
-  if (caso.estado !== 'REVISION') return null
-  const dia = diaOperativoCiclo(caso)
-  if (dia == null) return null
-  if (dia >= BANDEJA_DIA_ATRASADO) return 0
-  return BANDEJA_DIA_ATRASADO - dia
-}
-
-function diasRestantesAreaRevision(caso: FiniquitoCasoItem): number | null {
-  if (caso.estado !== 'ACEPTADO') return null
-  const dias = diasDesdeIsoDate(inicioFaseAreaRevision(caso))
-  if (dias == null) return null
-  if (dias >= AREA_REVISION_DIAS_MAX) return 0
-  return AREA_REVISION_DIAS_MAX - dias
-}
-
-function diasRestantesRevisionContable(caso: FiniquitoCasoItem): number | null {
-  if (caso.estado !== 'REVISION_CONTABLE') return null
-  const dias = diasDesdeIsoDate(inicioFaseRevisionContable(caso))
-  if (dias == null) return null
-  if (dias >= AREA_REVISION_CONTABLE_DIAS_MAX) return 0
-  return AREA_REVISION_CONTABLE_DIAS_MAX - dias
-}
-
-function diasRestantesAreaTrabajo(caso: FiniquitoCasoItem): number | null {
-  if (caso.estado !== 'EN_PROCESO') return null
-  return diasRestantesHastaFinCiclo(caso)
-}
-
-function formatoTiempoFase(
-  fase: string,
-  restantes: number | null,
-  total: number,
-  etiquetaVencido: string
-): string {
-  if (restantes == null) return '-'
-  if (restantes <= 0) return `${fase} - ${etiquetaVencido}`
-  return `${fase} - ${restantes} de ${total} días`
-}
-
-function textoTiempoLimiteBandeja(caso: FiniquitoCasoItem): string {
-  if (bandejaAtrasado(caso)) return `${FASE_TIEMPO_BANDEJA} - Atrasado`
-  return formatoTiempoFase(
-    FASE_TIEMPO_BANDEJA,
-    diasRestantesBandeja(caso),
-    BANDEJA_DIA_ATRASADO,
-    'Atrasado'
-  )
-}
-
-function textoTiempoLimiteAreaRevision(caso: FiniquitoCasoItem): string {
-  if (areaRevisionAtrasado(caso)) return `${FASE_TIEMPO_REVISION} - Atrasado`
-  return formatoTiempoFase(
-    FASE_TIEMPO_REVISION,
-    diasRestantesAreaRevision(caso),
-    AREA_REVISION_DIAS_MAX,
-    'Atrasado'
-  )
-}
-
-function textoTiempoLimiteRevisionContable(caso: FiniquitoCasoItem): string {
-  if (revisionContableAtrasado(caso)) {
-    return `${FASE_TIEMPO_CONTABLE} - Atrasado`
-  }
-  return formatoTiempoFase(
-    FASE_TIEMPO_CONTABLE,
-    diasRestantesRevisionContable(caso),
-    AREA_REVISION_CONTABLE_DIAS_MAX,
-    'Atrasado'
-  )
-}
-
-function totalDiasFaseTrabajo(caso: FiniquitoCasoItem): number | null {
-  const restantes = diasRestantesAreaTrabajo(caso)
-  if (restantes == null) return null
-  const desdeEntrada = diasDesdeIsoDate(caso.fecha_entrada_en_proceso)
-  if (desdeEntrada == null) return Math.max(restantes, 1)
-  return Math.max(desdeEntrada + restantes, 1)
-}
-
-function textoTiempoLimiteAreaTrabajo(caso: FiniquitoCasoItem): string {
-  const restantes = diasRestantesAreaTrabajo(caso)
-  const total = totalDiasFaseTrabajo(caso)
-  if (restantes == null || total == null) return '-'
-  return formatoTiempoFase(
-    FASE_TIEMPO_TRABAJO,
-    restantes,
-    total,
-    'Vencido'
-  )
-}
-
 type ModoTiempoTabla = 'bandeja' | 'revision' | 'contable'
 
-function tiempoLimiteTabla(
-  row: FiniquitoCasoItem,
-  modoTiempo: ModoTiempoTabla
-): { atrasado: boolean; diasRest: number | null; texto: string } {
-  if (modoTiempo === 'bandeja') {
-    return {
-      atrasado: bandejaAtrasado(row),
-      diasRest: diasRestantesBandeja(row),
-      texto: textoTiempoLimiteBandeja(row),
-    }
-  }
-  if (modoTiempo === 'contable') {
-    return {
-      atrasado: revisionContableAtrasado(row),
-      diasRest: diasRestantesRevisionContable(row),
-      texto: textoTiempoLimiteRevisionContable(row),
-    }
-  }
-  return {
-    atrasado: areaRevisionAtrasado(row),
-    diasRest: diasRestantesAreaRevision(row),
-    texto: textoTiempoLimiteAreaRevision(row),
-  }
-}
-
-function claseTiempoLimite(
-  dias: number | null,
-  atrasado: boolean
-): string {
-  if (atrasado || (dias != null && dias <= 0)) {
-    return 'bg-red-100 text-red-950'
-  }
-  if (dias != null && dias <= 2) return 'bg-amber-100 text-amber-950'
-  return 'bg-emerald-100 text-emerald-950'
+function celdaCicloFiniquito(row: FiniquitoCasoItem) {
+  return calcularTiempoFiniquito(row)
 }
 
 function estadoEtiquetaVisible(caso: FiniquitoCasoItem): string {
-  if (casoAtrasado(caso)) return 'Atrasado'
+  if (casoFiniquitoAtrasado(caso)) return 'Atrasado'
   const map: Record<string, string> = {
     REVISION: 'Revision',
     ACEPTADO: 'Validado',
@@ -351,7 +130,7 @@ function estadoEtiquetaVisible(caso: FiniquitoCasoItem): string {
 }
 
 function estadoBadgeClassName(caso: FiniquitoCasoItem): string {
-  if (casoAtrasado(caso)) return 'bg-red-100 text-red-950'
+  if (casoFiniquitoAtrasado(caso)) return 'bg-red-100 text-red-950'
   switch (caso.estado) {
     case 'REVISION':
       return 'bg-sky-100 text-sky-950'
@@ -2332,15 +2111,9 @@ function FiniquitoGestionPageInner() {
                 'max-w-[9rem] whitespace-normal leading-tight'
               )}
               scope="col"
-              title={
-                modoTiempo === 'bandeja'
-                  ? `${FASE_TIEMPO_BANDEJA}: dias restantes de ${BANDEJA_DIA_ATRASADO} en bandeja (atrasado desde dia ${BANDEJA_DIA_ATRASADO} del ciclo)`
-                  : modoTiempo === 'contable'
-                    ? `${FASE_TIEMPO_CONTABLE}: dias restantes de ${AREA_REVISION_CONTABLE_DIAS_MAX} en revision contable`
-                    : `${FASE_TIEMPO_REVISION}: dias restantes de ${AREA_REVISION_DIAS_MAX} en area de revision`
-              }
+              title="Dia global del ciclo (30 dias calendario Caracas). Pase el cursor sobre la celda para ver la fase."
             >
-              Tiempo limite
+              Ciclo
             </TableHead>
             <TableHead className={thGestion} scope="col">
               Estado
@@ -2352,8 +2125,7 @@ function FiniquitoGestionPageInner() {
         </TableHeader>
         <TableBody>
           {items.map((row, idx) => {
-            const { atrasado, diasRest, texto: textoTiempo } =
-              tiempoLimiteTabla(row, modoTiempo)
+            const tiempo = celdaCicloFiniquito(row)
             const puedeSeleccionar =
               seleccionFilas &&
               (row.estado || '').toUpperCase() ===
@@ -2393,14 +2165,17 @@ function FiniquitoGestionPageInner() {
               >
                 {textoUltimoPago(row.ultima_fecha_pago)}
               </TableCell>
-              <TableCell className={cn(tdGestion, 'whitespace-nowrap')}>
+              <TableCell
+                className={cn(tdGestion, 'whitespace-nowrap')}
+                title={`Fase: ${tiempo.textoFase}`}
+              >
                 <span
                   className={cn(
-                    'rounded px-1.5 py-0.5 text-xs font-medium',
-                    claseTiempoLimite(diasRest, atrasado)
+                    'rounded px-1.5 py-0.5 text-xs font-medium tabular-nums',
+                    claseSemaforoTiempoFiniquito(tiempo.semaforo)
                   )}
                 >
-                  {textoTiempo}
+                  {tiempo.textoGlobal}
                 </span>
               </TableCell>
               <TableCell className={tdGestion}>
@@ -2457,9 +2232,9 @@ function FiniquitoGestionPageInner() {
                 'max-w-[9rem] whitespace-normal leading-tight'
               )}
               scope="col"
-              title={`${FASE_TIEMPO_TRABAJO}: dias restantes de la fase hasta el dia ${PLAZO_CICLO_DIAS} del ciclo`}
+              title="Dia global del ciclo (30 dias). Pase el cursor para ver fase en area de trabajo."
             >
-              Tiempo limite
+              Ciclo
             </TableHead>
             <TableHead className={cn(thGestion, 'min-w-[140px]')} scope="col">
               Contacto
@@ -2473,7 +2248,9 @@ function FiniquitoGestionPageInner() {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {items.map((row, idx) => (
+          {items.map((row, idx) => {
+            const tiempo = celdaCicloFiniquito(row)
+            return (
             <TableRow key={row.id} className={idx % 2 === 0 ? trEven : trOdd}>
               <TableCell className={cn(tdGestion, 'font-mono text-xs')}>
                 {row.id}
@@ -2496,24 +2273,19 @@ function FiniquitoGestionPageInner() {
               </TableCell>
               <TableCell
                 className={cn(tdGestion, 'whitespace-nowrap text-slate-800')}
-                title={
+                title={`Fase: ${tiempo.textoFase}${
                   row.fecha_entrada_en_proceso
-                    ? `Desde EN_PROCESO: ${row.fecha_entrada_en_proceso}`
-                    : row.finiquito_tramite_fecha_limite
-                      ? `Limite: ${row.finiquito_tramite_fecha_limite}`
-                      : 'Sin fecha de inicio en area de trabajo'
-                }
+                    ? ` · EN_PROCESO desde ${row.fecha_entrada_en_proceso}`
+                    : ''
+                }`}
               >
                 <span
                   className={cn(
-                    'rounded px-1.5 py-0.5 text-xs font-medium',
-                    claseTiempoLimite(
-                      diasRestantesAreaTrabajo(row),
-                      (diasRestantesAreaTrabajo(row) ?? 1) <= 0
-                    )
+                    'rounded px-1.5 py-0.5 text-xs font-medium tabular-nums',
+                    claseSemaforoTiempoFiniquito(tiempo.semaforo)
                   )}
                 >
-                  {textoTiempoLimiteAreaTrabajo(row)}
+                  {tiempo.textoGlobal}
                 </span>
               </TableCell>
               <TableCell className={cn(tdGestion, 'max-w-[200px]')}>
@@ -2557,7 +2329,8 @@ function FiniquitoGestionPageInner() {
                 {renderAccionesAreaTrabajo(row)}
               </TableCell>
             </TableRow>
-          ))}
+            )
+          })}
         </TableBody>
       </Table>
     </div>
@@ -2610,7 +2383,7 @@ function FiniquitoGestionPageInner() {
 
   return (
     <FiniquitoWorkspaceShell
-      description={`Ciclo ${PLAZO_CICLO_DIAS} dias: bandeja (dias 1-2, atrasado desde dia ${BANDEJA_DIA_ATRASADO}) → area revision (hasta ${AREA_REVISION_DIAS_MAX}d) → area de trabajo (hasta dia ${PLAZO_CICLO_DIAS}).`}
+      description={`Ciclo ${FINIQUITO_CICLO_DIAS} dias (Caracas): bandeja ${FINIQUITO_FASE_BANDEJA_MAX} + revision ${FINIQUITO_FASE_REVISION_MAX} + contable ${FINIQUITO_FASE_CONTABLE_MAX} + trabajo ${FINIQUITO_FASE_TRABAJO_MAX}. Columna Ciclo = dia global; tooltip = fase (N de M).`}
       actions={
         <Button
           size="sm"
@@ -2639,7 +2412,7 @@ function FiniquitoGestionPageInner() {
                 {kpiCargando ? '-' : displayTotalBandeja}
               </p>
               <p className="text-xs leading-snug text-slate-500">
-                Dias 1-2 · atrasado desde dia {BANDEJA_DIA_ATRASADO}
+                Max {FINIQUITO_FASE_BANDEJA_MAX}d · dias global 1-{FINIQUITO_CUPO_FIN_BANDEJA}
                 {cedulaBusqueda ? ' (filtro cedula)' : ''}
               </p>
             </CardContent>
@@ -2696,7 +2469,7 @@ function FiniquitoGestionPageInner() {
                 {kpiCargando ? '-' : displayTotalRevision}
               </p>
               <p className="text-xs leading-snug text-slate-500">
-                Hasta {AREA_REVISION_DIAS_MAX}d · atrasado dia 6 de fase
+                Max {FINIQUITO_FASE_REVISION_MAX}d · global {FINIQUITO_CUPO_FIN_BANDEJA + 1}-{FINIQUITO_CUPO_FIN_REVISION}
                 {cedulaRevisionBusqueda ? ' (filtro cedula)' : ''}
               </p>
             </CardContent>
@@ -2710,7 +2483,7 @@ function FiniquitoGestionPageInner() {
                 {kpiCargando ? '-' : displayTotalContable}
               </p>
               <p className="text-xs leading-snug text-slate-500">
-                Hasta {AREA_REVISION_CONTABLE_DIAS_MAX}d · atrasado dia 6 de fase
+                Max {FINIQUITO_FASE_CONTABLE_MAX}d · global {FINIQUITO_CUPO_FIN_REVISION + 1}-{FINIQUITO_CUPO_FIN_CONTABLE}
                 {cedulaContableBusqueda ? ' (filtro cedula)' : ''}
               </p>
             </CardContent>
@@ -2724,7 +2497,7 @@ function FiniquitoGestionPageInner() {
                 {kpiCargando ? '-' : displayTotalTrabajo}
               </p>
               <p className="text-xs leading-snug text-slate-500">
-                Hasta dia {PLAZO_CICLO_DIAS} del ciclo
+                Max {FINIQUITO_FASE_TRABAJO_MAX}d desde entrada · ideal dia {FINIQUITO_IDEAL_INICIO_TRABAJO}
                 {cedulaTrabajoBusqueda ? ' (filtro cedula)' : ''}
               </p>
             </CardContent>
