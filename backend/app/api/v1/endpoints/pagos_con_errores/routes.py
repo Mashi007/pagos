@@ -120,8 +120,18 @@ def _resolver_prestamo_id_para_mover_a_cartera(
     Préstamo destino al pasar de pagos_con_errores a pagos.
     Si la fila no trae prestamo_id, intenta el único APROBADO de la cédula.
     """
-    if prestamo_id_hint is not None and int(prestamo_id_hint) > 0:
-        return int(prestamo_id_hint), None
+    if prestamo_id_hint is not None:
+        try:
+            prestamo_id = int(prestamo_id_hint)
+        except (TypeError, ValueError):
+            return None, f"préstamo id='{prestamo_id_hint}' inválido"
+        if prestamo_id > 0:
+            err = _validar_prestamo_destino_para_cedula(
+                db, prestamo_id, cedula_resuelta
+            )
+            if err:
+                return None, err
+            return prestamo_id, None
 
     prestamos = (
         db.execute(
@@ -146,6 +156,62 @@ def _resolver_prestamo_id_para_mover_a_cartera(
         f"cédula {cedula_resuelta} sin préstamo APROBADO: "
         "asigne el préstamo en edición antes de mover a cartera"
     )
+
+
+def _validar_prestamo_destino_para_cedula(
+    db: Session,
+    prestamo_id: int,
+    cedula_cliente: str,
+) -> Optional[str]:
+    """Evita aplicar pagos de una cédula a cuotas de otro préstamo."""
+    prestamo = db.get(Prestamo, int(prestamo_id))
+    if prestamo is None:
+        return f"préstamo id={prestamo_id} no existe"
+
+    cedula_pago = normalizar_cedula_almacenamiento(cedula_cliente)
+    cedula_prestamo = normalizar_cedula_almacenamiento(
+        getattr(prestamo, "cedula", None)
+    )
+    if not cedula_pago:
+        return "cédula del pago inválida para validar préstamo destino"
+    if cedula_prestamo != cedula_pago:
+        cedula_prestamo_msg = cedula_prestamo or "(vacía)"
+        return (
+            f"préstamo id={prestamo_id} pertenece a cédula "
+            f"{cedula_prestamo_msg}, no a {cedula_pago}"
+        )
+
+    estado = (getattr(prestamo, "estado", None) or "").strip().upper()
+    if estado != "APROBADO":
+        return (
+            f"préstamo id={prestamo_id} para cédula {cedula_pago} "
+            f"no está APROBADO (estado={estado or 'SIN_ESTADO'})"
+        )
+    return None
+
+
+def _validar_prestamo_payload_o_400(
+    db: Session,
+    prestamo_id: Optional[int],
+    cedula_cliente: Optional[str],
+) -> Optional[int]:
+    if prestamo_id is None:
+        return None
+    try:
+        prestamo_id_int = int(prestamo_id)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="prestamo_id inválido")
+    if prestamo_id_int <= 0:
+        return None
+
+    err = _validar_prestamo_destino_para_cedula(
+        db,
+        prestamo_id_int,
+        (cedula_cliente or "").strip(),
+    )
+    if err:
+        raise HTTPException(status_code=400, detail=err)
+    return prestamo_id_int
 
 
 def _mensaje_error_mover_pago_a_cartera(exc: BaseException) -> str:
@@ -574,15 +640,19 @@ def crear_pago_con_error(
 
         )
 
+    cedula_cliente = (payload.cedula_cliente or "").strip()
+    prestamo_id = _validar_prestamo_payload_o_400(
+        db, payload.prestamo_id, cedula_cliente
+    )
     ref = (num_norm or (payload.numero_documento or "").strip() or "N/A")[:100]
 
     usuario_registro = _usuario_registro_desde_current_user(current_user)
 
     row = PagoConError(
 
-        cedula_cliente=payload.cedula_cliente.strip(),
+        cedula_cliente=cedula_cliente,
 
-        prestamo_id=payload.prestamo_id,
+        prestamo_id=prestamo_id,
 
         fecha_pago=fecha_ts,
 
@@ -684,13 +754,28 @@ def crear_pagos_con_error_batch(
 
                 continue
 
+            cedula_cliente = (payload.cedula_cliente or "").strip()
+            try:
+                prestamo_id = _validar_prestamo_payload_o_400(
+                    db, payload.prestamo_id, cedula_cliente
+                )
+            except HTTPException as exc:
+                results.append(
+                    {
+                        "success": False,
+                        "error": str(exc.detail),
+                        "payload_index": len(results),
+                    }
+                )
+                continue
+
             ref = (num_norm or (payload.numero_documento or "").strip() or "N/A")[:100]
 
             row = PagoConError(
 
-                cedula_cliente=(payload.cedula_cliente or "").strip(),
+                cedula_cliente=cedula_cliente,
 
-                prestamo_id=payload.prestamo_id,
+                prestamo_id=prestamo_id,
 
                 fecha_pago=fecha_ts,
 
@@ -1371,6 +1456,16 @@ def actualizar_pago_con_error(pago_id: int, payload: PagoConErrorUpdate, db: Ses
                 prestamo_destino = db.get(Prestamo, prestamo_id_destino)
                 if prestamo_destino and getattr(prestamo_destino, "cedula", None):
                     data["cedula_cliente"] = prestamo_destino.cedula
+
+    if "prestamo_id" in data or "cedula_cliente" in data:
+        prestamo_id_validar = data.get("prestamo_id", row.prestamo_id)
+        if prestamo_id_validar is not None:
+            cedula_validar = data.get("cedula_cliente", row.cedula_cliente)
+            prestamo_id_validado = _validar_prestamo_payload_o_400(
+                db, prestamo_id_validar, cedula_validar
+            )
+            if "prestamo_id" in data:
+                data["prestamo_id"] = prestamo_id_validado
 
     _doc_touch = "numero_documento" in data or "codigo_documento" in data
 
