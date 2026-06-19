@@ -147,7 +147,6 @@ export default function ActualizacionesGmailPage() {
   const [paginaTabla, setPaginaTabla] = useState(1)
   const [diagnostico, setDiagnostico] = useState<DiagnosticoGmail | null>(null)
   const [probandoGmail, setProbandoGmail] = useState(false)
-  const [limpiando, setLimpiando] = useState(false)
   /** Modal de revisión manual abierto sobre un pago_con_error recién migrado. */
   const [editPago, setEditPago] = useState<{
     pagoConErrorId: number
@@ -358,32 +357,21 @@ export default function ActualizacionesGmailPage() {
     }
   }, [correoInput, criterio, ejecutarDiagnostico])
 
-  const handleLimpiar = useCallback(async () => {
+  const handleLimpiar = useCallback(() => {
     if (ejecutandoPipeline) {
       toast('Hay un escaneo en curso. Espera a que termine para limpiar.', {
         duration: 6000,
       })
       return
     }
-    setLimpiando(true)
-    try {
-      const res =
-        await pagoService.limpiarGmailSyncItemsPorCorreo(REMITENTE_FIJO_LOTE)
-      setCorreoInput(REMITENTE_FIJO_LOTE)
-      setCorreoActivo('')
-      setPaginaTabla(1)
-      setDiagnostico(null)
-      setEditPago(null)
-      // Limpia el cache de React Query y resetea su estado: evita que al volver a
-      // procesar aparezcan placeholders / datos de la corrida anterior antes del
-      // refetch real (el problema "siempre veo la misma pantalla").
-      queryClient.removeQueries({ queryKey: QK_LIST })
-      toast.success(res.mensaje || 'Resultados Gmail limpiados.')
-    } catch (e) {
-      toast.error(getErrorMessage(e) || 'No se pudo limpiar resultados Gmail')
-    } finally {
-      setLimpiando(false)
-    }
+    setCorreoInput(REMITENTE_FIJO_LOTE)
+    setCorreoActivo('')
+    setPaginaTabla(1)
+    setDiagnostico(null)
+    setEditPago(null)
+    // Solo limpia estado/cache local. Las filas Gmail pendientes se conservan en BD:
+    // los correos ya etiquetados por Gmail pueden no reescanearse en futuras corridas.
+    queryClient.removeQueries({ queryKey: QK_LIST })
   }, [ejecutandoPipeline, queryClient])
 
   const guardarMutation = useMutation({
@@ -645,16 +633,9 @@ export default function ActualizacionesGmailPage() {
               <Button
                 type="button"
                 variant="ghost"
-                onClick={() => void handleLimpiar()}
-                disabled={
-                  limpiando ||
-                  ejecutandoPipeline ||
-                  (!correoActivo && !correoInput)
-                }
+                onClick={handleLimpiar}
+                disabled={ejecutandoPipeline || (!correoActivo && !correoInput)}
               >
-                {limpiando ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : null}
                 Limpiar
               </Button>
             </div>
