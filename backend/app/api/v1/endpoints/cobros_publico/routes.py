@@ -900,13 +900,13 @@ async def enviar_reporte_publico(
             pr.gemini_comentario = f"Error Gemini (reintentado): {str(gemini_err)[:200]}"
             coincide = False
 
-        confirmo_humano = _bool_from_form(confirmacion_humana)
-        if confirmo_humano:
-            # La revisión humana del operador prevalece sobre falsos negativos de Gemini.
-            pr.gemini_coincide_exacto = "true"
-            pr.gemini_comentario = ""
-        # Si hubo confirmación humana explícita desde escáner/operador,
-        # no forzamos revisión manual por validadores automáticos.
+        confirmo_humano = False
+        if _bool_from_form(confirmacion_humana):
+            logger.warning(
+                "[COBROS_PUBLIC] Ignorando confirmacion_humana en endpoint publico ref=%s",
+                referencia,
+            )
+        # La confirmacion humana solo es valida en el flujo interno de Infopagos.
         falla_validadores = False if confirmo_humano else reportado_falla_validadores_cobros(db, pr)
         if cpr.aplicar_revision_manual_por_monto_alto_en_reportado(
             monto=monto,

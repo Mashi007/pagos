@@ -448,7 +448,7 @@ def ejecutar_guardar_candidatos_drive_una_fila(
         db.commit()
         cmp_upd = (_cell_str(payload.get("cedula_cmp")) or (r.cedula_cmp or "")).strip()
         if cmp_upd:
-            prestamo_counts[cmp_upd] = int(prestamo_counts.get(cmp_upd, 0) or 0) + 1
+            prestamo_counts_aprob[cmp_upd] = int(prestamo_counts_aprob.get(cmp_upd, 0) or 0) + 1
     except HTTPException as he:
         db.rollback()
         msg = str(he.detail) if he.detail else str(he)
