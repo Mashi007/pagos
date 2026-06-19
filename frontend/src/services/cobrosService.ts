@@ -53,6 +53,12 @@ const BASE_COBROS = `${API}/api/v1/cobros`
 /** Timeout (ms) para peticiones públicas ligeras. Sin timeout pueden quedar colgadas. */
 const FETCH_TIMEOUT_MS = 30000
 
+/** Validar cédula / OTP: alinear con pool_timeout del API (~60s) bajo carga. */
+const FETCH_TIMEOUT_VALIDAR_CEDULA_MS = 65000
+
+/** SMTP en solicitar-codigo-reporte puede superar 30s. */
+const FETCH_TIMEOUT_SOLICITAR_CODIGO_MS = 90000
+
 /**
  * POST multipart de reporte (público / Infopagos): en Render puede superar 30s
  * (validación, persistencia, PDF/recibo). Firefox muestra el abort como NS_BINDING_ABORTED.
@@ -74,7 +80,7 @@ function mensajeErrorRedPublico(msg: string): string {
     /timeout|abort|ns_binding_aborted|aborted a request/i.test(m) ||
     /despu[eé]s de \d+s/i.test(m)
   ) {
-    return 'El servidor tardó demasiado. Intente de nuevo en unos segundos.'
+    return 'El servidor tardó demasiado. Espere un momento e intente de nuevo.'
   }
   if (/failed to fetch|load failed|networkerror/i.test(m)) {
     const corto =
@@ -320,11 +326,15 @@ export async function validarCedulaPublico(
   if (tok) headers.Authorization = `Bearer ${tok}`
 
   try {
-    const res = await fetchWithTimeout(url, {
-      credentials: 'same-origin',
+    const res = await fetchWithTimeout(
+      url,
+      {
+        credentials: 'same-origin',
 
-      headers,
-    })
+        headers,
+      },
+      FETCH_TIMEOUT_VALIDAR_CEDULA_MS
+    )
 
     if (res.status === 429) {
       return {
@@ -352,15 +362,19 @@ export async function solicitarCodigoReportePublico(body: {
   const url = `${BASE_PUBLIC}/solicitar-codigo-reporte`
 
   try {
-    const res = await fetchWithTimeout(url, {
-      method: 'POST',
+    const res = await fetchWithTimeout(
+      url,
+      {
+        method: 'POST',
 
-      credentials: 'same-origin',
+        credentials: 'same-origin',
 
-      headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json' },
 
-      body: JSON.stringify(body),
-    })
+        body: JSON.stringify(body),
+      },
+      FETCH_TIMEOUT_SOLICITAR_CODIGO_MS
+    )
 
     if (res.status === 429) {
       return {
@@ -395,15 +409,19 @@ export async function verificarCodigoReportePublico(body: {
   const url = `${BASE_PUBLIC}/verificar-codigo-reporte`
 
   try {
-    const res = await fetchWithTimeout(url, {
-      method: 'POST',
+    const res = await fetchWithTimeout(
+      url,
+      {
+        method: 'POST',
 
-      credentials: 'same-origin',
+        credentials: 'same-origin',
 
-      headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json' },
 
-      body: JSON.stringify(body),
-    })
+        body: JSON.stringify(body),
+      },
+      FETCH_TIMEOUT_VALIDAR_CEDULA_MS
+    )
 
     if (res.status === 429) {
       return {

@@ -28,10 +28,32 @@ const BASE = `${API}/api/v1/estado-cuenta/public`
 const FETCH_TIMEOUT_MS = 30000
 
 /**
+ * Validar cédula puede esperar hasta pool_timeout del API (~60s) bajo carga.
+ * Un abort a 30s mostraba "Timeout... El servidor no responde" aunque el backend aún procesaba.
+ */
+const FETCH_TIMEOUT_VALIDAR_CEDULA_MS = 65000
+
+/**
  * SMTP y generación de PDF pueden superar 30s (red, proveedor, carga).
  * Mismo criterio que SLOW_ENDPOINT_TIMEOUT_MS en api.ts.
  */
-const FETCH_TIMEOUT_SLOW_MS = 60000
+const FETCH_TIMEOUT_SLOW_MS = 90000
+
+function mensajeErrorRedPublico(msg: string): string {
+  const m = (msg || '').trim()
+  if (
+    /timeout|abort|ns_binding_aborted|aborted a request/i.test(m) ||
+    /despu[eé]s de \d+s/i.test(m)
+  ) {
+    return (
+      'El servidor está ocupado o tardó demasiado. Espere un momento e intente de nuevo.'
+    )
+  }
+  if (/failed to fetch|load failed|networkerror/i.test(m)) {
+    return 'Sin conexión con el servidor. Revise la red o intente más tarde.'
+  }
+  return m
+}
 
 export interface ValidarCedulaEstadoCuentaResponse {
   ok: boolean
@@ -149,7 +171,11 @@ export async function validarCedulaEstadoCuenta(
   const url = `${BASE}/validar-cedula?${q.toString()}`
 
   try {
-    const res = await fetchWithTimeout(url, { credentials: 'same-origin' })
+    const res = await fetchWithTimeout(
+      url,
+      { credentials: 'same-origin' },
+      FETCH_TIMEOUT_VALIDAR_CEDULA_MS
+    )
 
     if (res.status === 429) {
       return {
@@ -163,9 +189,9 @@ export async function validarCedulaEstadoCuenta(
       error: 'Error al procesar respuesta del servidor.',
     }))
   } catch (e: unknown) {
-    const msg =
+    const raw =
       e instanceof Error ? e.message : 'Error de conexión con el servidor.'
-    return { ok: false, error: msg }
+    return { ok: false, error: mensajeErrorRedPublico(raw) }
   }
 }
 
@@ -210,9 +236,9 @@ export async function solicitarCodigo(
 
     return data
   } catch (e: unknown) {
-    const msg =
+    const raw =
       e instanceof Error ? e.message : 'Error de conexión con el servidor.'
-    return { ok: false, error: msg }
+    return { ok: false, error: mensajeErrorRedPublico(raw) }
   }
 }
 
@@ -260,9 +286,9 @@ export async function verificarCodigo(
 
     return data
   } catch (e: unknown) {
-    const msg =
+    const raw =
       e instanceof Error ? e.message : 'Error de conexión con el servidor.'
-    return { ok: false, error: msg }
+    return { ok: false, error: mensajeErrorRedPublico(raw) }
   }
 }
 
