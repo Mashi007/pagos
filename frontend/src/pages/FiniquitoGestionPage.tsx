@@ -58,6 +58,7 @@ import {
   finiquitoAdminEliminarCaso,
   finiquitoAdminLiberarProcesosNormales,
   finiquitoAdminListar,
+  finiquitoAdminListarTerminadosCompleto,
   finiquitoAdminListarTerminados,
   finiquitoAdminPasarATrabajo,
   finiquitoAdminPatchEstado,
@@ -1603,13 +1604,19 @@ function FiniquitoGestionPageInner() {
   }
 
   const exportarTerminadosExcel = async () => {
-    if (!itemsTerminadosFiltrados.length) {
-      toast.error('No hay filas para exportar con los filtros actuales')
-      return
-    }
     setDescargandoTerminadosExcel(true)
     try {
-      await descargarTerminadosExcel(itemsTerminadosFiltrados, {
+      const rTerm = await finiquitoAdminListarTerminadosCompleto(
+        cedulaTerminadosBusqueda || undefined
+      )
+      const itemsExportar = (rTerm.items || []).filter(row =>
+        terminadoCoincideFiltrosTabla(row, filtrosTerminados)
+      )
+      if (!itemsExportar.length) {
+        toast.error('No hay filas para exportar con los filtros actuales')
+        return
+      }
+      await descargarTerminadosExcel(itemsExportar, {
         cedulaFiltro: cedulaTerminadosBusqueda || 'todos',
       })
       toast.success('Excel de terminados descargado')
@@ -3088,7 +3095,9 @@ function FiniquitoGestionPageInner() {
               variant="secondary"
               className="h-9 shrink-0 border-white/30 bg-white/15 text-white hover:bg-white/25"
               disabled={
-                descargandoTerminadosExcel || itemsTerminadosFiltrados.length === 0
+                descargandoTerminadosExcel ||
+                (itemsTerminadosFiltrados.length === 0 &&
+                  itemsTerminados.length >= totalTerminados)
               }
               onClick={() => void exportarTerminadosExcel()}
             >
