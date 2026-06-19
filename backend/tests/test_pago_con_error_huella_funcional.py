@@ -11,6 +11,7 @@ from fastapi import HTTPException
 
 from app.services.pago_huella_funcional import (
     HTTP_409_DETAIL_DOCUMENTO_DUPLICADO,
+    conflicto_huella_pago_con_error_para_prestamo,
     conflicto_serial_para_formulario,
     pago_con_error_conflicto_huella_existente,
     rechazar_si_pago_con_error_serial_duplicado,
@@ -57,6 +58,25 @@ def test_pago_con_error_sin_prestamo_no_conflicto() -> None:
         referencia_pago="164458244",
     )
     assert pago_con_error_conflicto_huella_existente(_FakeDb(99), row) is None
+
+
+def test_mover_precheck_usa_prestamo_destino_para_huella() -> None:
+    row = SimpleNamespace(
+        prestamo_id=None,
+        fecha_pago=datetime(2025, 8, 11),
+        monto_pagado=Decimal("96.00"),
+        numero_documento="BNC/164458244",
+        referencia_pago="164458244",
+    )
+
+    msg = conflicto_huella_pago_con_error_para_prestamo(
+        _FakeDb(501),
+        row,
+        prestamo_id_destino=1443,
+    )
+
+    assert msg is not None
+    assert "pagos.id=501" in msg
 
 
 def test_pago_con_error_detecta_conflicto_huella() -> None:

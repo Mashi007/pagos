@@ -43,7 +43,7 @@ from app.core.documento import (
     split_numero_documento_almacenado,
 )
 from app.services.pago_huella_funcional import (
-    mensaje_409_huella_funcional_con_id,
+    conflicto_huella_pago_con_error_para_prestamo,
     pago_con_error_conflicto_huella_existente,
     rechazar_si_pago_con_error_serial_duplicado,
 )
@@ -1125,10 +1125,15 @@ def mover_a_pagos_normales(
                     )
                     continue
 
-            pago_huella_id = pago_con_error_conflicto_huella_existente(db, row)
-            if pago_huella_id is not None and adopt_pago_id != pago_huella_id:
+            huella_error = conflicto_huella_pago_con_error_para_prestamo(
+                db,
+                row,
+                prestamo_id_destino=prestamo_id_destino,
+                exclude_pago_id=adopt_pago_id,
+            )
+            if huella_error:
                 errores_procesamiento.append(
-                    f"Pago {pid}: {mensaje_409_huella_funcional_con_id(pago_huella_id)}"
+                    f"Pago {pid}: {huella_error}"
                 )
                 continue
 
