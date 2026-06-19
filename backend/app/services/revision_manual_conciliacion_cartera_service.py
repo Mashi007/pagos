@@ -23,7 +23,7 @@ from decimal import Decimal
 from typing import Any, Dict, List, Optional, Tuple
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import and_, delete, func, or_, select, text
+from sqlalchemy import and_, func, or_, select, text
 from sqlalchemy.orm import Session
 
 from app.core.documento import compose_numero_documento_almacenado
@@ -99,6 +99,12 @@ def _tiene_comprobante(p: Pago) -> bool:
 def _reserva_tiene_imagen_guardada(reserva: RevisionManualConciliacionReserva) -> bool:
     data = reserva.comprobante_imagen_data
     return bool(data) and len(data) > 0
+
+
+def _hash_imagen_reserva(reserva: RevisionManualConciliacionReserva) -> Optional[str]:
+    if not _reserva_tiene_imagen_guardada(reserva):
+        return None
+    return hashlib.sha256(bytes(reserva.comprobante_imagen_data)).hexdigest()
 
 
 def _placeholder_fecha_reserva() -> datetime:
@@ -289,13 +295,45 @@ def _evaluar_fuentes_comprobante_reserva(
     return reservables, omitidos
 
 
-def purgar_reserva_conciliacion_prestamo(db: Session, prestamo_id: int) -> int:
-    r = db.execute(
-        delete(RevisionManualConciliacionReserva).where(
-            RevisionManualConciliacionReserva.prestamo_id == prestamo_id
+def _reservas_con_imagen_prestamo(
+    db: Session,
+    prestamo_id: int,
+) -> List[RevisionManualConciliacionReserva]:
+    rows = (
+        db.execute(
+            select(RevisionManualConciliacionReserva)
+            .where(RevisionManualConciliacionReserva.prestamo_id == prestamo_id)
+            .order_by(RevisionManualConciliacionReserva.orden.asc())
         )
+        .scalars()
+        .all()
     )
-    return int(getattr(r, "rowcount", 0) or 0)
+    return [r for r in rows if _reserva_tiene_imagen_guardada(r)]
+
+
+def purgar_reserva_conciliacion_prestamo(
+    db: Session,
+    prestamo_id: int,
+    *,
+    conservar_con_imagen: bool = False,
+) -> int:
+    rows = (
+        db.execute(
+            select(RevisionManualConciliacionReserva).where(
+                RevisionManualConciliacionReserva.prestamo_id == prestamo_id
+            )
+        )
+        .scalars()
+        .all()
+    )
+    borradas = 0
+    for reserva in rows:
+        if conservar_con_imagen and _reserva_tiene_imagen_guardada(reserva):
+            continue
+        db.delete(reserva)
+        borradas += 1
+    db.flush()
+    return borradas
 
 
 def _bytes_y_nombre_ocr_desde_reserva(
@@ -669,8 +707,20 @@ def _reservar_comprobantes_prestamo(
         .all()
     )
     fuentes = _iter_fuentes_comprobante_conciliar_revision(db, prestamo)
+    reservas_existentes = _reservas_con_imagen_prestamo(db, int(prestamo.id))
+    hashes_existentes = {
+        h for h in (_hash_imagen_reserva(r) for r in reservas_existentes) if h
+    }
+    reservas_preservadas = len(reservas_existentes)
+    orden = max(
+        (
+            int(getattr(r, "orden", 0) or 0)
+            for r in reservas_existentes
+        ),
+        default=0,
+    )
 
-    if not pagos and not fuentes:
+    if not pagos and not fuentes and reservas_preservadas == 0:
         if permitir_sin_comprobantes:
             return {
                 "ok": True,
@@ -687,11 +737,16 @@ def _reservar_comprobantes_prestamo(
 
     reservables, omitidos_detalle = _evaluar_fuentes_comprobante_reserva(db, fuentes)
     omitidos_sin_bytes = [str(o.get("referencia") or o.get("fuente_id") or "") for o in omitidos_detalle]
-    orden = 0
+    nuevas_reservas = 0
     placeholder_fecha = _placeholder_fecha_reserva()
 
     for fuente, body, filename in reservables:
+        img_hash = hashlib.sha256(body).hexdigest()
+        if img_hash in hashes_existentes:
+            continue
+        hashes_existentes.add(img_hash)
         orden += 1
+        nuevas_reservas += 1
         ct = mime_efectivo_comprobante_web(
             "",
             (filename or "comprobante.jpg").strip() or "comprobante.jpg",
@@ -722,8 +777,9 @@ def _reservar_comprobantes_prestamo(
         )
 
     n_fuentes = len(fuentes)
+    total_reservas = reservas_preservadas + nuevas_reservas
 
-    if orden == 0:
+    if total_reservas == 0:
         if permitir_sin_comprobantes:
             det = (
                 f" ({len(omitidos_sin_bytes)} con enlace pero sin imagen descargable)"
@@ -765,12 +821,13 @@ def _reservar_comprobantes_prestamo(
         return {
             "ok": False,
             "error": (
-                f"Solo se reservaron {orden} de {n_fuentes} comprobante(s) con imagen. "
+                f"Solo se reservaron {total_reservas} de {n_fuentes} comprobante(s) con imagen. "
                 f"{len(omitidos_sin_bytes)} fuente(s) tienen enlace pero la imagen no está en el "
                 "sistema. Si continúa, esos comprobantes no se recrearán."
             ),
             "requiere_confirmacion_comprobantes_omitidos": True,
-            "reservas": orden,
+            "reservas": total_reservas,
+            "reservas_preservadas": reservas_preservadas,
             "omitidos_sin_bytes": len(omitidos_sin_bytes),
             "omitidos_detalle": omitidos_sin_bytes,
             "fuentes_comprobante_total": n_fuentes,
@@ -778,14 +835,18 @@ def _reservar_comprobantes_prestamo(
 
     db.flush()
     msg = (
-        f"Reservadas {orden} imagen(es) de comprobante en tabla temporal "
+        f"Reservadas {total_reservas} imagen(es) de comprobante en tabla temporal "
         f"(fuentes: {n_fuentes} pagos/Gmail/errores)."
     )
+    if reservas_preservadas:
+        msg += f" Incluye {reservas_preservadas} comprobante(s) pendiente(s) de un intento anterior."
     if omitidos_sin_bytes:
         msg += f" Omitidos sin bytes: {len(omitidos_sin_bytes)}."
     return {
         "ok": True,
-        "reservas": orden,
+        "reservas": total_reservas,
+        "reservas_preservadas": reservas_preservadas,
+        "reservas_nuevas": nuevas_reservas,
         "reservas_sin_imagen": 0,
         "omitidos_sin_bytes": len(omitidos_sin_bytes),
         "omitidos_detalle": omitidos_sin_bytes,
@@ -821,7 +882,11 @@ async def ejecutar_conciliar_cartera_revision_manual(
             "prestamo_id": prestamo_id,
         }
 
-    purgar_reserva_conciliacion_prestamo(db, prestamo_id)
+    purgar_reserva_conciliacion_prestamo(
+        db,
+        prestamo_id,
+        conservar_con_imagen=True,
+    )
 
     snap = referencia_abonos_notificaciones_general(
         db,
