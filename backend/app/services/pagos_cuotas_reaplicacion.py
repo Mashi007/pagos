@@ -476,6 +476,10 @@ def realinear_cuotas_prestamo_desde_cuota_pagos(db: Session, prestamo_id: int) -
 
 
 def reset_y_reaplicar_cascada_prestamo(db: Session, prestamo_id: int) -> dict[str, Any]:
+    from app.services.pago_huella_funcional import (
+        mensaje_409_huella_funcional_con_id,
+        primer_par_huella_duplicada_prestamo,
+    )
     from app.services.pagos_aplicacion_prestamo import (
         aplicar_pagos_pendientes_prestamo,
         detalle_excepcion_db,
@@ -485,6 +489,18 @@ def reset_y_reaplicar_cascada_prestamo(db: Session, prestamo_id: int) -> dict[st
     prestamo = db.get(Prestamo, prestamo_id)
     if not prestamo:
         return {"ok": False, "error": "Prestamo no encontrado", "prestamo_id": prestamo_id}
+
+    par_dup = primer_par_huella_duplicada_prestamo(db, prestamo_id)
+    if par_dup is not None:
+        return {
+            "ok": False,
+            "codigo": "huella_duplicada",
+            "error": (
+                f"{mensaje_409_huella_funcional_con_id(par_dup[0])} "
+                f"Duplicado con pagos.id={par_dup[1]}."
+            ),
+            "prestamo_id": prestamo_id,
+        }
 
     cuotas = db.execute(
         select(Cuota).where(Cuota.prestamo_id == prestamo_id).order_by(Cuota.numero_cuota.asc())
@@ -554,9 +570,19 @@ def reset_y_reaplicar_cascada_prestamo(db: Session, prestamo_id: int) -> dict[st
         _marcar_prestamo_liquidado_si_corresponde(prestamo_id, db)
     except Exception as exc:
         logger.exception("reset_y_reaplicar_cascada_prestamo prestamo_id=%s", prestamo_id)
+        try:
+            db.rollback()
+        except Exception:
+            logger.exception(
+                "reset_y_reaplicar_cascada_prestamo: rollback fallo prestamo_id=%s",
+                prestamo_id,
+            )
+        err = detalle_excepcion_db(exc)
+        codigo = "huella_duplicada" if "huella funcional" in err.lower() else None
         return {
             "ok": False,
-            "error": detalle_excepcion_db(exc),
+            "codigo": codigo,
+            "error": err,
             "prestamo_id": prestamo_id,
         }
 

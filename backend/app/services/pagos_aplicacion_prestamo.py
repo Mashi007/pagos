@@ -25,13 +25,40 @@ from app.services.pagos_sql_where import (
 logger = logging.getLogger(__name__)
 
 
+def _causa_raiz_excepcion_db(exc: BaseException) -> BaseException:
+    actual: BaseException = exc
+    visitados: set[int] = set()
+    while id(actual) not in visitados:
+        visitados.add(id(actual))
+        siguiente = getattr(actual, "__cause__", None) or getattr(actual, "__context__", None)
+        if siguiente is None or not isinstance(siguiente, BaseException):
+            break
+        actual = siguiente
+    return actual
+
+
 def detalle_excepcion_db(exc: BaseException, max_len: int = 300) -> str:
-    """Mensaje legible para UI/logs; prioriza la causa raíz psycopg/SQLAlchemy."""
-    causa: BaseException | None = exc
-    while getattr(causa, "__cause__", None) is not None:
-        causa = causa.__cause__  # type: ignore[assignment]
-    raiz = str(causa or exc).strip()
+    """Mensaje legible para UI/logs; prioriza la causa raiz psycopg/SQLAlchemy."""
+    from sqlalchemy.exc import IntegrityError, PendingRollbackError
+
+    from app.services.pago_huella_funcional import HTTP_409_DETAIL_HUELLA_FUNCIONAL
+
+    raiz_exc = _causa_raiz_excepcion_db(exc)
+    raiz = str(raiz_exc).strip()
     envoltorio = str(exc).strip()
+
+    for texto in (raiz, envoltorio):
+        if "ux_pagos_fingerprint_activos" in texto:
+            return HTTP_409_DETAIL_HUELLA_FUNCIONAL[:max_len]
+        if "UniqueViolation" in texto and "ref_norm" in texto:
+            return HTTP_409_DETAIL_HUELLA_FUNCIONAL[:max_len]
+
+    if isinstance(raiz_exc, IntegrityError):
+        return (raiz or envoltorio)[:max_len]
+
+    if isinstance(exc, PendingRollbackError) and raiz and raiz != envoltorio:
+        return raiz[:max_len]
+
     if raiz and raiz != envoltorio and "rolled back" in envoltorio.lower():
         msg = f"{envoltorio[:100]} | Causa: {raiz}"
     else:

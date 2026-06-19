@@ -175,6 +175,7 @@ from app.services.pago_huella_funcional import (
     HTTP_409_DETAIL_HUELLA_FUNCIONAL,
     mensaje_409_huella_funcional_con_id,
     primer_id_conflicto_huella_funcional,
+    primer_par_huella_duplicada_prestamo,
     ref_norm_desde_campos,
 )
 from app.services.pago_huella_metricas import (
@@ -6156,22 +6157,30 @@ def actualizar_pago(
 
             for pid in sorted({p for p in (old_prestamo_id, row.prestamo_id) if p}):
 
+                par_dup = primer_par_huella_duplicada_prestamo(db, int(pid))
+                if par_dup is not None:
+                    registrar_rechazo_huella_funcional()
+                    raise HTTPException(
+                        status_code=409,
+                        detail=(
+                            f"{mensaje_409_huella_funcional_con_id(par_dup[0])} "
+                            f"Duplicado con pagos.id={par_dup[1]}."
+                        ),
+                    )
+
                 r = reset_y_reaplicar_cascada_prestamo(db, pid)
 
                 if not r.get("ok"):
-
+                    err_sync = str(r.get("error") or "error desconocido")
+                    if r.get("codigo") == "huella_duplicada" or "huella funcional" in err_sync.lower():
+                        registrar_rechazo_huella_funcional()
+                        raise HTTPException(status_code=409, detail=err_sync)
                     raise HTTPException(
-
                         status_code=400,
-
                         detail=(
-
                             f"No se pudo sincronizar la tabla de amortización del préstamo {pid}: "
-
-                            f"{r.get('error') or 'error desconocido'}."
-
+                            f"{err_sync}."
                         ),
-
                     )
 
                 _restaurar_autoconciliacion_pagos_prestamo(int(pid), db)

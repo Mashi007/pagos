@@ -157,9 +157,66 @@ def primer_id_conflicto_huella_funcional(
     if exclude_pago_id is not None:
         params["exid"] = exclude_pago_id
     row = db.execute(text(sql), params).first()
-    if not row or row[0] is None:
-        return None
-    return int(row[0])
+    if row and row[0] is not None:
+        return int(row[0])
+
+    # Pagos legacy sin ref_norm persistido: misma huella al normalizar documento/referencia.
+    sql_legacy = f"""
+        SELECT p.id, p.numero_documento, p.referencia_pago FROM pagos p
+        WHERE p.prestamo_id = :pid
+          AND CAST(p.fecha_pago AS date) = :fd
+          AND p.monto_pagado = :monto
+          AND TRIM(COALESCE(p.ref_norm, '')) = ''
+          AND NOT {excl}
+          {"AND p.id <> :exid" if exclude_pago_id is not None else ""}
+    """
+    for leg in db.execute(text(sql_legacy), params).all():
+        if leg[0] is None:
+            continue
+        rn_calc = ref_norm_desde_campos(leg[1], leg[2]).strip()
+        if rn_calc == rn:
+            return int(leg[0])
+    return None
+
+
+def primer_par_huella_duplicada_prestamo(
+    db: Session,
+    prestamo_id: int,
+) -> Optional[tuple[int, int]]:
+    """
+    Primer par de pagos operativos del prestamo que comparten huella funcional
+    (fecha, monto, ref_norm normalizada desde documento/referencia).
+    """
+    from sqlalchemy import not_, select
+
+    from app.models.pago import Pago
+    from app.services.pagos_sql_where import _where_pago_excluido_operacion
+
+    rows = db.execute(
+        select(Pago).where(
+            Pago.prestamo_id == prestamo_id,
+            Pago.monto_pagado > 0,
+            not_(_where_pago_excluido_operacion()),
+        )
+    ).scalars().all()
+
+    visto: dict[tuple[int, str, str, str], int] = {}
+    for p in rows:
+        fp = p.fecha_pago
+        if fp is not None and hasattr(fp, "date") and callable(getattr(fp, "date", None)):
+            fp = fp.date()
+        if not isinstance(fp, date):
+            continue
+        rn = ref_norm_desde_campos(p.numero_documento, p.referencia_pago).strip()
+        if not rn:
+            continue
+        m = Decimal(str(round(float(p.monto_pagado or 0), 2)))
+        key = _tupla_huella_lote(int(prestamo_id), fp, m, rn)
+        pid = int(p.id)
+        if key in visto:
+            return (visto[key], pid)
+        visto[key] = pid
+    return None
 
 
 HTTP_409_DETAIL_DOCUMENTO_DUPLICADO = (

@@ -13,6 +13,7 @@ from app.services.pago_huella_funcional import (
     HTTP_409_DETAIL_DOCUMENTO_DUPLICADO,
     conflicto_serial_para_formulario,
     pago_con_error_conflicto_huella_existente,
+    primer_id_conflicto_huella_funcional,
     rechazar_si_pago_con_error_serial_duplicado,
     ref_norm_desde_campos,
 )
@@ -22,13 +23,21 @@ class _FakeDb:
     def __init__(self, conflict_id: int | None) -> None:
         self._conflict_id = conflict_id
 
-    def execute(self, _sql, _params):
+    def execute(self, sql, _params):
+        sql_s = str(sql)
+        if "ref_norm, '')) = ''" in sql_s:
+            return _EmptyIterable()
         if self._conflict_id is None:
             return _EmptyResult()
         return _RowResult(self._conflict_id)
 
     def scalar(self, _sql):
         return None
+
+
+class _EmptyIterable:
+    def all(self):
+        return []
 
 
 class _EmptyResult:
@@ -146,6 +155,36 @@ def test_conflicto_serial_adopta_huerfano(monkeypatch) -> None:
     assert out["adoptar_pago_huerfano_id"] == 77
     assert out["documento_bloquea_guardar"] is False
     assert out["conflicto"] is False
+
+
+def test_primer_id_conflicto_detecta_legacy_sin_ref_norm() -> None:
+    class _LegacyDb:
+        def execute(self, sql, _params):
+            sql_s = str(sql)
+            if "ref_norm, '')) = ''" in sql_s:
+                return _RowIterable([(50103, "BNC/90534743", "BNC/90534743")])
+            return _EmptyResult()
+
+    cid = primer_id_conflicto_huella_funcional(
+        _LegacyDb(),
+        prestamo_id=3975,
+        fecha_pago=date(2026, 1, 15),
+        monto_pagado=Decimal("112.00"),
+        ref_norm="90534743",
+        exclude_pago_id=57624,
+    )
+    assert cid == 50103
+
+
+class _RowIterable:
+    def __init__(self, rows):
+        self._rows = rows
+
+    def all(self):
+        return self._rows
+
+    def first(self):
+        return self._rows[0] if self._rows else None
 
 
 def test_conflicto_serial_para_formulario_huella(monkeypatch) -> None:
