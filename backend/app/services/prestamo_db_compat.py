@@ -8,9 +8,18 @@ from datetime import date
 from typing import Dict, List, Optional
 
 from sqlalchemy import bindparam, inspect, text
+from sqlalchemy.exc import TimeoutError as SATimeoutError
 from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
+
+
+def _es_agotamiento_pool_sqlalchemy(exc: Exception) -> bool:
+    """True si el error indica pool lleno; no debe cachearse como 'columna ausente'."""
+    if isinstance(exc, SATimeoutError):
+        return True
+    msg = str(exc).lower()
+    return "queuepool" in msg or "connection timed out" in msg
 
 _cached_fecha_liquidado: Optional[bool] = None
 _cached_fecha_desistimiento: Optional[bool] = None
@@ -39,6 +48,8 @@ def prestamos_tiene_columna_fecha_liquidado(db: Session) -> bool:
         )
     except Exception as e:
         logger.warning("prestamos_tiene_columna_fecha_liquidado: %s", e)
+        if _es_agotamiento_pool_sqlalchemy(e):
+            return False
         _cached_fecha_liquidado = False
     return _cached_fecha_liquidado
 
@@ -56,6 +67,8 @@ def prestamos_tiene_columna_fecha_desistimiento(db: Session) -> bool:
         )
     except Exception as e:
         logger.warning("prestamos_tiene_columna_fecha_desistimiento: %s", e)
+        if _es_agotamiento_pool_sqlalchemy(e):
+            return False
         _cached_fecha_desistimiento = False
     return _cached_fecha_desistimiento
 

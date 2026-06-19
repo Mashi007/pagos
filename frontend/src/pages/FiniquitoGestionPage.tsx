@@ -59,6 +59,7 @@ import {
   finiquitoAdminLiberarProcesosNormales,
   finiquitoAdminListar,
   finiquitoAdminListarTerminados,
+  finiquitoAdminListarTodosTerminados,
   finiquitoAdminPasarATrabajo,
   finiquitoAdminPatchEstado,
   finiquitoAdminRefreshMaterializado,
@@ -1603,16 +1604,30 @@ function FiniquitoGestionPageInner() {
   }
 
   const exportarTerminadosExcel = async () => {
-    if (!itemsTerminadosFiltrados.length) {
-      toast.error('No hay filas para exportar con los filtros actuales')
+    if (!areasCargadas.terminados) {
+      toast.error('Cargue primero la seccion de casos terminados')
+      return
+    }
+    if (totalTerminadosResumen === 0 && totalTerminados === 0) {
+      toast.error('No hay casos terminados para exportar')
       return
     }
     setDescargandoTerminadosExcel(true)
     try {
-      await descargarTerminadosExcel(itemsTerminadosFiltrados, {
+      const todos = await finiquitoAdminListarTodosTerminados(
+        cedulaTerminadosBusqueda || undefined
+      )
+      const filtrados = todos.filter(row =>
+        terminadoCoincideFiltrosTabla(row, filtrosTerminados)
+      )
+      if (!filtrados.length) {
+        toast.error('No hay filas para exportar con los filtros actuales')
+        return
+      }
+      await descargarTerminadosExcel(filtrados, {
         cedulaFiltro: cedulaTerminadosBusqueda || 'todos',
       })
-      toast.success('Excel de terminados descargado')
+      toast.success(`Excel descargado (${filtrados.length} filas)`)
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : 'Error al exportar Excel')
     } finally {
@@ -3088,7 +3103,9 @@ function FiniquitoGestionPageInner() {
               variant="secondary"
               className="h-9 shrink-0 border-white/30 bg-white/15 text-white hover:bg-white/25"
               disabled={
-                descargandoTerminadosExcel || itemsTerminadosFiltrados.length === 0
+                descargandoTerminadosExcel ||
+                !areasCargadas.terminados ||
+                (totalTerminadosResumen === 0 && totalTerminados === 0)
               }
               onClick={() => void exportarTerminadosExcel()}
             >

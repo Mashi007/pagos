@@ -16,6 +16,9 @@ from app.core.deps import get_current_user
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
 
+# Menos conexiones simultaneas al pool por request (antes 5; ver incidente QueuePool).
+_PAGOS_INICIAL_PARALLEL_JOBS = 3
+
 
 @router.get("/pagos-inicial")
 def get_pagos_dashboard_inicial(
@@ -110,7 +113,7 @@ def get_pagos_dashboard_inicial(
             s.close()
 
     out: Dict[str, Any] = {}
-    with ThreadPoolExecutor(max_workers=5) as pool:
+    with ThreadPoolExecutor(max_workers=_PAGOS_INICIAL_PARALLEL_JOBS) as pool:
         futures = [
             pool.submit(job_opciones),
             pool.submit(job_stats),

@@ -687,7 +687,6 @@ HONEYPOT_FIELD = "contact_website"
 @router.post("/digitalizar-comprobante", response_model=DigitalizarComprobanteResponse)
 async def digitalizar_comprobante_publico(
     request: Request,
-    db: Session = Depends(get_db),
     tipo_cedula: str = Form(...),
     numero_cedula: str = Form(...),
     comprobante: UploadFile = File(...),
@@ -708,16 +707,20 @@ async def digitalizar_comprobante_publico(
     if not cedula_lookup:
         return DigitalizarComprobanteResponse(ok=False, error="Formato de cédula no reconocido.")
 
-    cliente = db.execute(
-        select(Cliente).where(expr_cedula_normalizada_para_comparar(Cliente.cedula) == cedula_lookup)
-    ).scalars().first()
-    if not cliente:
-        return DigitalizarComprobanteResponse(ok=False, error="La cédula no está registrada.")
+    db = SessionLocal()
+    try:
+        cliente = db.execute(
+            select(Cliente).where(expr_cedula_normalizada_para_comparar(Cliente.cedula) == cedula_lookup)
+        ).scalars().first()
+        if not cliente:
+            return DigitalizarComprobanteResponse(ok=False, error="La cédula no está registrada.")
 
-    prestamos_aprob = cpr.prestamos_aprobados_del_cliente(db, cliente.id)
-    err_pres = cpr.error_si_no_puede_reportar_en_web(prestamos_aprob)
-    if err_pres:
-        return DigitalizarComprobanteResponse(ok=False, error=err_pres)
+        prestamos_aprob = cpr.prestamos_aprobados_del_cliente(db, cliente.id)
+        err_pres = cpr.error_si_no_puede_reportar_en_web(prestamos_aprob)
+        if err_pres:
+            return DigitalizarComprobanteResponse(ok=False, error=err_pres)
+    finally:
+        db.close()
 
     content = await comprobante.read()
     fn_comp = comprobante.filename or "comprobante"
@@ -877,6 +880,9 @@ async def enviar_reporte_publico(
             "numero_cedula": numero_cedula,
         }
 
+        pr_id = int(pr.id)
+        cliente_id = int(cliente.id)
+
         from app.core.config import settings as _s
 
         _gemini_configured = bool((getattr(_s, "GEMINI_API_KEY", None) or "").strip())
@@ -885,65 +891,89 @@ async def enviar_reporte_publico(
         else:
             logger.info("[COBROS_PUBLIC] GEMINI_API_KEY no configurado: ref=%s irá a revisión manual", referencia)
 
+        db.close()
+
+        gemini_coincide_exacto = "false"
+        gemini_comentario: Optional[str] = None
+        coincide = False
         try:
             gemini_result = await compare_form_with_image_async(form_data, content, filename)
             coincide = gemini_result.get("coincide_exacto", False)
-            pr.gemini_coincide_exacto = "true" if coincide else "false"
-            pr.gemini_comentario = gemini_result.get("comentario")
+            gemini_coincide_exacto = "true" if coincide else "false"
+            gemini_comentario = gemini_result.get("comentario")
         except Exception as gemini_err:
             logger.warning(
                 "[COBROS_PUBLIC] Gemini error para ref=%s tras reintentos, enviando a revisión manual: %s",
                 referencia,
                 str(gemini_err),
             )
-            pr.gemini_coincide_exacto = "error"
-            pr.gemini_comentario = f"Error Gemini (reintentado): {str(gemini_err)[:200]}"
+            gemini_coincide_exacto = "error"
+            gemini_comentario = f"Error Gemini (reintentado): {str(gemini_err)[:200]}"
             coincide = False
 
         confirmo_humano = _bool_from_form(confirmacion_humana)
-        if confirmo_humano:
-            # La revisión humana del operador prevalece sobre falsos negativos de Gemini.
-            pr.gemini_coincide_exacto = "true"
-            pr.gemini_comentario = ""
-        # Si hubo confirmación humana explícita desde escáner/operador,
-        # no forzamos revisión manual por validadores automáticos.
-        falla_validadores = False if confirmo_humano else reportado_falla_validadores_cobros(db, pr)
-        if cpr.aplicar_revision_manual_por_monto_alto_en_reportado(
-            monto=monto,
-            moneda_upper=mon_norm.moneda_upper,
-            pr=pr,
-        ):
-            falla_validadores = True
-        pr.estado = "en_revision" if falla_validadores else "aprobado"
-        pr.falla_validadores_manual = falla_validadores
-        db.commit()
 
-        recibo_enviado_val = None
-        if not falla_validadores:
-            cpr.intentar_importar_reportado_automatico(db, pr, referencia, "COBROS_PUBLIC")
-            db.refresh(pr)
-            if (pr.estado or "").strip() == "importado":
-                pr.falla_validadores_manual = False
-            background_tasks.add_task(
-                _procesar_recibo_y_correo_aprobado_background,
-                int(pr.id),
-                str(referencia),
-                int(cliente.id),
-                "COBROS_PUBLIC",
+        db_post = SessionLocal()
+        try:
+            pr = db_post.get(PagoReportado, pr_id)
+            if pr is None:
+                return EnviarReporteResponse(
+                    ok=False,
+                    error="No se pudo recuperar el reporte registrado. Intente de nuevo.",
+                )
+            cliente = db_post.get(Cliente, cliente_id)
+
+            pr.gemini_coincide_exacto = gemini_coincide_exacto
+            pr.gemini_comentario = gemini_comentario
+            if confirmo_humano:
+                pr.gemini_coincide_exacto = "true"
+                pr.gemini_comentario = ""
+            falla_validadores = False if confirmo_humano else reportado_falla_validadores_cobros(db_post, pr)
+            if cpr.aplicar_revision_manual_por_monto_alto_en_reportado(
+                monto=monto,
+                moneda_upper=mon_norm.moneda_upper,
+                pr=pr,
+            ):
+                falla_validadores = True
+            pr.estado = "en_revision" if falla_validadores else "aprobado"
+            pr.falla_validadores_manual = falla_validadores
+            db_post.commit()
+
+            recibo_enviado_val = None
+            if not falla_validadores:
+                cpr.intentar_importar_reportado_automatico(db_post, pr, referencia, "COBROS_PUBLIC")
+                db_post.refresh(pr)
+                if (pr.estado or "").strip() == "importado":
+                    pr.falla_validadores_manual = False
+                if cliente is not None:
+                    background_tasks.add_task(
+                        _procesar_recibo_y_correo_aprobado_background,
+                        int(pr.id),
+                        str(referencia),
+                        int(cliente.id),
+                        "COBROS_PUBLIC",
+                    )
+                db_post.commit()
+
+            db_post.refresh(pr)
+            return EnviarReporteResponse(
+                ok=True,
+                referencia_interna=referencia,
+                mensaje="Tu reporte de pago fue recibido exitosamente.",
+                estado_reportado=(pr.estado or "").strip() or None,
+                recibo_enviado=recibo_enviado_val,
             )
-            db.commit()
-
-        db.refresh(pr)
-        return EnviarReporteResponse(
-            ok=True,
-            referencia_interna=referencia,
-            mensaje="Tu reporte de pago fue recibido exitosamente.",
-            estado_reportado=(pr.estado or "").strip() or None,
-            recibo_enviado=recibo_enviado_val,
-        )
+        except Exception:
+            db_post.rollback()
+            raise
+        finally:
+            db_post.close()
     except Exception as e:
         logger.exception("[COBROS_PUBLIC] Error en enviar-reporte: %s", e)
-        db.rollback()
+        try:
+            db.rollback()
+        except Exception:
+            pass
         return EnviarReporteResponse(
             ok=False,
             error="No se pudo procesar el reporte. Intente de nuevo o contacte por WhatsApp 424-4579934.",
@@ -1191,6 +1221,9 @@ async def enviar_reporte_infopagos(
             "numero_cedula": numero_cedula,
         }
 
+        pr_id = int(pr.id)
+        cliente_id = int(cliente.id)
+
         from app.core.config import settings as _s
 
         _gemini_configured = bool((getattr(_s, "GEMINI_API_KEY", None) or "").strip())
@@ -1199,130 +1232,157 @@ async def enviar_reporte_infopagos(
         else:
             logger.info("[INFOPAGOS] GEMINI_API_KEY no configurado: ref=%s irá a revisión manual", referencia)
 
+        db.close()
+
         gemini_started = perf_counter()
+        gemini_coincide_exacto = "false"
+        gemini_comentario: Optional[str] = None
         try:
             gemini_result = await compare_form_with_image_async(form_data, content, filename)
             coincide = gemini_result.get("coincide_exacto", False)
-            pr.gemini_coincide_exacto = "true" if coincide else "false"
-            pr.gemini_comentario = gemini_result.get("comentario")
+            gemini_coincide_exacto = "true" if coincide else "false"
+            gemini_comentario = gemini_result.get("comentario")
         except Exception as gemini_err:
             logger.warning(
                 "[INFOPAGOS] Gemini error para ref=%s tras reintentos, enviando a revisión manual: %s",
                 referencia,
                 str(gemini_err),
             )
-            pr.gemini_coincide_exacto = "error"
-            pr.gemini_comentario = f"Error Gemini (reintentado): {str(gemini_err)[:200]}"
+            gemini_coincide_exacto = "error"
+            gemini_comentario = f"Error Gemini (reintentado): {str(gemini_err)[:200]}"
             coincide = False
         phase_ms["gemini_ms"] = _elapsed_ms(gemini_started)
 
         confirmo_humano = _bool_from_form(confirmacion_humana)
-        validadores_started = perf_counter()
-        if confirmo_humano:
-            # Operador del escáner validó campos: Gemini OK, pero la cola Cobros aprueba.
-            pr.gemini_coincide_exacto = "true"
-            pr.gemini_comentario = ""
-            falla_validadores = True
-        else:
-            falla_validadores = reportado_falla_validadores_cobros(db, pr)
-        if cpr.aplicar_revision_manual_por_monto_alto_en_reportado(
-            monto=monto,
-            moneda_upper=mon_norm.moneda_upper,
-            pr=pr,
-        ):
-            falla_validadores = True
-        phase_ms["validadores_ms"] = _elapsed_ms(validadores_started)
-        pr.estado = "en_revision" if falla_validadores else "aprobado"
-        pr.falla_validadores_manual = falla_validadores
-        commit_estado_started = perf_counter()
-        db.commit()
-        if falla_validadores:
-            try:
-                from app.api.v1.endpoints.cobros.routes import (
-                    _invalidate_cobros_listado_kpis_cache,
-                )
 
-                _invalidate_cobros_listado_kpis_cache()
-            except Exception:
-                pass
-        phase_ms["commit_estado_ms"] = _elapsed_ms(commit_estado_started)
-
-        if borrador_efectivo:
-            marcar_borrador_started = perf_counter()
-            try:
-                ieb.marcar_borrador_confirmado(db, borrador_efectivo, int(pr.id))
-                db.commit()
-            except Exception as mark_err:
-                logger.warning(
-                    "[INFOPAGOS] Reporte OK ref=%s pero no se pudo marcar borrador %s: %s",
-                    referencia,
-                    borrador_efectivo,
-                    mark_err,
+        db_post = SessionLocal()
+        try:
+            pr = db_post.get(PagoReportado, pr_id)
+            if pr is None:
+                return EnviarReporteInfopagosResponse(
+                    ok=False,
+                    error="No se pudo recuperar el reporte registrado. Intente de nuevo.",
                 )
+            cliente = db_post.get(Cliente, cliente_id)
+
+            pr.gemini_coincide_exacto = gemini_coincide_exacto
+            pr.gemini_comentario = gemini_comentario
+            validadores_started = perf_counter()
+            if confirmo_humano:
+                pr.gemini_coincide_exacto = "true"
+                pr.gemini_comentario = ""
+                falla_validadores = True
+            else:
+                falla_validadores = reportado_falla_validadores_cobros(db_post, pr)
+            if cpr.aplicar_revision_manual_por_monto_alto_en_reportado(
+                monto=monto,
+                moneda_upper=mon_norm.moneda_upper,
+                pr=pr,
+            ):
+                falla_validadores = True
+            phase_ms["validadores_ms"] = _elapsed_ms(validadores_started)
+            pr.estado = "en_revision" if falla_validadores else "aprobado"
+            pr.falla_validadores_manual = falla_validadores
+            commit_estado_started = perf_counter()
+            db_post.commit()
+            if falla_validadores:
                 try:
-                    db.rollback()
+                    from app.api.v1.endpoints.cobros.routes import (
+                        _invalidate_cobros_listado_kpis_cache,
+                    )
+
+                    _invalidate_cobros_listado_kpis_cache()
                 except Exception:
                     pass
-            phase_ms["marcar_borrador_ms"] = _elapsed_ms(marcar_borrador_started)
-        else:
-            phase_ms["marcar_borrador_ms"] = 0.0
+            phase_ms["commit_estado_ms"] = _elapsed_ms(commit_estado_started)
 
-        if not falla_validadores:
-            autoimport_started = perf_counter()
-            auto_import_result = cpr.intentar_importar_reportado_automatico(db, pr, referencia, "INFOPAGOS")
-            phase_ms["autoimport_ms"] = _elapsed_ms(autoimport_started)
-            if (pr.estado or "").strip() == "importado":
-                pr.falla_validadores_manual = False
-            cuotas_lookup_started = perf_counter()
-            if auto_import_result.pago_id:
-                cuotas_display = texto_cuotas_aplicadas_pago_id(db, auto_import_result.pago_id)
+            if borrador_efectivo:
+                marcar_borrador_started = perf_counter()
+                try:
+                    ieb.marcar_borrador_confirmado(db_post, borrador_efectivo, int(pr.id))
+                    db_post.commit()
+                except Exception as mark_err:
+                    logger.warning(
+                        "[INFOPAGOS] Reporte OK ref=%s pero no se pudo marcar borrador %s: %s",
+                        referencia,
+                        borrador_efectivo,
+                        mark_err,
+                    )
+                    try:
+                        db_post.rollback()
+                    except Exception:
+                        pass
+                phase_ms["marcar_borrador_ms"] = _elapsed_ms(marcar_borrador_started)
             else:
-                cuotas_display = texto_cuotas_aplicadas_pago_reportado(db, pr)
-            phase_ms["cuotas_lookup_ms"] = _elapsed_ms(cuotas_lookup_started)
-            background_started = perf_counter()
-            background_tasks.add_task(
-                _procesar_recibo_y_correo_aprobado_background,
-                int(pr.id),
-                str(referencia),
-                int(cliente.id),
-                "INFOPAGOS",
-            )
-            phase_ms["background_task_ms"] = _elapsed_ms(background_started)
-            token_started = perf_counter()
-            recibo_token = create_recibo_infopagos_token(pr.id, expire_hours=2)
-            phase_ms["token_ms"] = _elapsed_ms(token_started)
-            final_commit_started = perf_counter()
-            db.commit()
-            phase_ms["final_commit_ms"] = _elapsed_ms(final_commit_started)
-            _log_infopagos_timing("aprobado", referencia, pr)
+                phase_ms["marcar_borrador_ms"] = 0.0
+
+            if not falla_validadores:
+                autoimport_started = perf_counter()
+                auto_import_result = cpr.intentar_importar_reportado_automatico(
+                    db_post, pr, referencia, "INFOPAGOS"
+                )
+                phase_ms["autoimport_ms"] = _elapsed_ms(autoimport_started)
+                if (pr.estado or "").strip() == "importado":
+                    pr.falla_validadores_manual = False
+                cuotas_lookup_started = perf_counter()
+                if auto_import_result.pago_id:
+                    cuotas_display = texto_cuotas_aplicadas_pago_id(db_post, auto_import_result.pago_id)
+                else:
+                    cuotas_display = texto_cuotas_aplicadas_pago_reportado(db_post, pr)
+                phase_ms["cuotas_lookup_ms"] = _elapsed_ms(cuotas_lookup_started)
+                background_started = perf_counter()
+                if cliente is not None:
+                    background_tasks.add_task(
+                        _procesar_recibo_y_correo_aprobado_background,
+                        int(pr.id),
+                        str(referencia),
+                        int(cliente.id),
+                        "INFOPAGOS",
+                    )
+                phase_ms["background_task_ms"] = _elapsed_ms(background_started)
+                token_started = perf_counter()
+                recibo_token = create_recibo_infopagos_token(pr.id, expire_hours=2)
+                phase_ms["token_ms"] = _elapsed_ms(token_started)
+                final_commit_started = perf_counter()
+                db_post.commit()
+                phase_ms["final_commit_ms"] = _elapsed_ms(final_commit_started)
+                _log_infopagos_timing("aprobado", referencia, pr)
+                return EnviarReporteInfopagosResponse(
+                    ok=True,
+                    referencia_interna=referencia,
+                    mensaje="Pago registrado. El recibo se está generando y enviando al correo del deudor. Puede descargarlo aquí cuando esté listo.",
+                    recibo_descarga_token=recibo_token,
+                    pago_id=pr.id,
+                    aplicado_a_cuotas=(cuotas_display or "").strip() or RECIBO_TEXTO_CUOTA_EN_REVISION_CLIENTE,
+                    estado_reportado="aprobado",
+                    recibo_listo=False,
+                )
+
+            _log_infopagos_timing("en_revision", referencia, pr)
             return EnviarReporteInfopagosResponse(
                 ok=True,
                 referencia_interna=referencia,
-                mensaje="Pago registrado. El recibo se está generando y enviando al correo del deudor. Puede descargarlo aquí cuando esté listo.",
-                recibo_descarga_token=recibo_token,
-                pago_id=pr.id,
-                aplicado_a_cuotas=(cuotas_display or "").strip() or RECIBO_TEXTO_CUOTA_EN_REVISION_CLIENTE,
-                estado_reportado="aprobado",
-                recibo_listo=False,
+                mensaje=(
+                    "Reporte recibido. El comprobante quedó en revisión manual (mismo flujo que Pagos reportados). "
+                    "No se envía recibo al deudor ni descarga aquí hasta que cobranzas apruebe."
+                ),
+                recibo_descarga_token=None,
+                pago_id=None,
+                aplicado_a_cuotas=None,
+                estado_reportado="en_revision",
+                recibo_listo=None,
             )
-
-        _log_infopagos_timing("en_revision", referencia, pr)
-        return EnviarReporteInfopagosResponse(
-            ok=True,
-            referencia_interna=referencia,
-            mensaje=(
-                "Reporte recibido. El comprobante quedó en revisión manual (mismo flujo que Pagos reportados). "
-                "No se envía recibo al deudor ni descarga aquí hasta que cobranzas apruebe."
-            ),
-            recibo_descarga_token=None,
-            pago_id=None,
-            aplicado_a_cuotas=None,
-            estado_reportado="en_revision",
-            recibo_listo=None,
-        )
+        except Exception:
+            db_post.rollback()
+            raise
+        finally:
+            db_post.close()
     except Exception as e:
         logger.exception("[INFOPAGOS] Error en enviar-reporte: %s", e)
-        db.rollback()
+        try:
+            db.rollback()
+        except Exception:
+            pass
         return EnviarReporteInfopagosResponse(
             ok=False,
             error="No se pudo procesar el reporte. Intente de nuevo o contacte por WhatsApp 424-4579934.",

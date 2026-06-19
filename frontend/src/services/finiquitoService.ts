@@ -328,6 +328,34 @@ export async function finiquitoAdminListarTerminados(
   )
 }
 
+/** Paginas de export Excel (no bloquea la carga inicial de la tabla). */
+export const FINIQUITO_TERMINADOS_EXPORT_PAGE_SIZE = 500
+
+/** Trae todos los terminados paginando (filtro cedula en servidor). */
+export async function finiquitoAdminListarTodosTerminados(
+  cedula?: string,
+  opts?: { pageSize?: number }
+): Promise<FiniquitoTerminadoItem[]> {
+  const pageSize = opts?.pageSize ?? FINIQUITO_TERMINADOS_EXPORT_PAGE_SIZE
+  const all: FiniquitoTerminadoItem[] = []
+  let offset = 0
+  let total = Number.POSITIVE_INFINITY
+
+  while (offset < total) {
+    const r = await finiquitoAdminListarTerminados(cedula, {
+      limit: pageSize,
+      offset,
+    })
+    const items = r.items ?? []
+    total = r.total ?? items.length
+    all.push(...items)
+    if (items.length === 0) break
+    offset += items.length
+  }
+
+  return all
+}
+
 export async function finiquitoAdminResumenTerminadosDiario(
   cedula?: string,
   dias = FINIQUITO_TERMINADOS_RESUMEN_DIAS_DEFAULT
