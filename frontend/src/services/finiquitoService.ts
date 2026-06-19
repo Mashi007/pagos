@@ -1,6 +1,7 @@
 import { apiClient } from './api'
 
 const BASE = '/api/v1/finiquito'
+const FINIQUITO_TERMINADOS_PAGE_LIMIT = 2000
 
 export type FiniquitoCasoItem = {
   id: number
@@ -326,6 +327,39 @@ export async function finiquitoAdminListarTerminados(
   return apiClient.get<FiniquitoTerminadosListaResult>(
     `${BASE}/admin/casos/terminados${q}`
   )
+}
+
+export async function finiquitoAdminListarTerminadosCompleto(
+  cedula?: string
+): Promise<FiniquitoTerminadosListaResult> {
+  const items: FiniquitoTerminadoItem[] = []
+  let offset = 0
+  let total: number | null = null
+
+  while (total == null || items.length < total) {
+    const page = await finiquitoAdminListarTerminados(cedula, {
+      limit: FINIQUITO_TERMINADOS_PAGE_LIMIT,
+      offset,
+    })
+    const pageItems = page.items || []
+    items.push(...pageItems)
+    total = page.total ?? items.length
+
+    if (
+      pageItems.length === 0 ||
+      pageItems.length < FINIQUITO_TERMINADOS_PAGE_LIMIT
+    ) {
+      break
+    }
+    offset += pageItems.length
+  }
+
+  return {
+    items,
+    total: total ?? items.length,
+    limit: FINIQUITO_TERMINADOS_PAGE_LIMIT,
+    offset: 0,
+  }
 }
 
 export async function finiquitoAdminResumenTerminadosDiario(
