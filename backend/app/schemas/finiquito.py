@@ -271,6 +271,41 @@ class FiniquitoTerminadosResumenDiarioResponse(BaseModel):
     )
 
 
+class FiniquitoFlujoDiaOut(BaseModel):
+    """Serie diaria Caracas del flujo entre bandejas del módulo finiquito."""
+
+    fecha: str = Field(..., description="YYYY-MM-DD en calendario Caracas")
+    etiqueta: str = Field(..., description="Etiqueta corta para grafico, ej. Hoy, Ayer, 12/06")
+    cantidad_ingresados: int = Field(
+        ...,
+        ge=0,
+        description="Casos creados en finiquito (bandeja principal) ese dia.",
+    )
+    cantidad_revision: int = Field(
+        ...,
+        ge=0,
+        description="Casos que entraron a ACEPTADO (area de revision) ese dia.",
+    )
+    cantidad_trabajo: int = Field(
+        ...,
+        ge=0,
+        description="Casos que entraron a EN_PROCESO (area de trabajo) ese dia.",
+    )
+    cantidad_terminados: int = Field(
+        ...,
+        ge=0,
+        description="Casos marcados TERMINADO ese dia.",
+    )
+
+
+class FiniquitoFlujoResumenDiarioResponse(BaseModel):
+    dias: List[FiniquitoFlujoDiaOut]
+    total_ingresados_en_ventana: int = Field(..., ge=0)
+    total_revision_en_ventana: int = Field(..., ge=0)
+    total_trabajo_en_ventana: int = Field(..., ge=0)
+    total_terminados_en_ventana: int = Field(..., ge=0)
+
+
 class FiniquitoConciliacionVistoIniciarRequest(BaseModel):
     confirmar_sin_comprobantes: bool = Field(
         False,

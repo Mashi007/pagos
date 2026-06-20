@@ -306,6 +306,23 @@ export type FiniquitoTerminadosResumenDiario = {
   total_ingresos_en_ventana: number
 }
 
+export type FiniquitoFlujoDia = {
+  fecha: string
+  etiqueta: string
+  cantidad_ingresados: number
+  cantidad_revision: number
+  cantidad_trabajo: number
+  cantidad_terminados: number
+}
+
+export type FiniquitoFlujoResumenDiario = {
+  dias: FiniquitoFlujoDia[]
+  total_ingresados_en_ventana: number
+  total_revision_en_ventana: number
+  total_trabajo_en_ventana: number
+  total_terminados_en_ventana: number
+}
+
 /** Ventana por defecto: hoy + 20 dias anteriores (calendario Caracas). */
 export const FINIQUITO_TERMINADOS_RESUMEN_DIAS_DEFAULT = 21
 
@@ -366,6 +383,19 @@ export async function finiquitoAdminResumenTerminadosDiario(
   if (ced) params.set('cedula', ced)
   return apiClient.get<FiniquitoTerminadosResumenDiario>(
     `${BASE}/admin/casos/terminados/resumen-diario?${params.toString()}`
+  )
+}
+
+export async function finiquitoAdminResumenFlujoDiario(
+  cedula?: string,
+  dias = FINIQUITO_TERMINADOS_RESUMEN_DIAS_DEFAULT
+): Promise<FiniquitoFlujoResumenDiario> {
+  const params = new URLSearchParams()
+  params.set('dias', String(dias))
+  const ced = (cedula ?? '').trim()
+  if (ced) params.set('cedula', ced)
+  return apiClient.get<FiniquitoFlujoResumenDiario>(
+    `${BASE}/admin/casos/resumen-flujo-diario?${params.toString()}`
   )
 }
 

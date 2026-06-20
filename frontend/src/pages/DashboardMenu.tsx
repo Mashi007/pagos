@@ -69,6 +69,7 @@ import {
   FINANCIAMIENTO_BANDAS_ORDEN_CATEGORIAS,
   getPeriodoEtiqueta,
   PERIODOS_VALORES,
+  PERIODO_DIA,
 } from '../constants/dashboard'
 
 import type {
@@ -76,12 +77,16 @@ import type {
   DashboardAdminResponse,
   FinanciamientoPorRangosResponse,
   CobranzasSemanalesResponse,
-  MorosidadPorAnalistaItem,
   AnalisisCuentasPorCobrarResponse,
   TendenciaProgramadoTotalCobradoResponse,
   EvolucionMensualItem,
   NotificacionesEnviosPorDiaResponse,
 } from '../types/dashboard'
+import {
+  finiquitoAdminResumenFlujoDiario,
+  type FiniquitoFlujoDia,
+  type FiniquitoFlujoResumenDiario,
+} from '../services/finiquitoService'
 
 import { DashboardFiltrosPanel } from '../components/dashboard/DashboardFiltrosPanel'
 
@@ -214,6 +219,14 @@ function notificacionesSerieConTendenciaLineal<T extends { enviados: number }>(
 
     tendencia: Math.max(0, a + b * i),
   }))
+}
+
+function diasVentanaFiniquito(periodo: string): number {
+  if (periodo === PERIODO_DIA || periodo === 'dia') return 7
+  if (periodo === 'semana') return 14
+  if (periodo === 'mes') return 31
+  if (periodo === 'año') return 180
+  return 90
 }
 
 export function DashboardMenu() {
@@ -451,39 +464,6 @@ export function DashboardMenu() {
     refetchOnWindowFocus: false,
   })
 
-  const periodoMorosidadAnalista = getPeriodoGrafico('morosidad-analista')
-
-  const { data: datosMorosidadAnalista, isLoading: loadingMorosidadAnalista } =
-    useQuery({
-      queryKey: [
-        'morosidad-analista',
-        periodoMorosidadAnalista,
-        JSON.stringify(filtros),
-      ],
-
-      queryFn: async () => {
-        const params = construirFiltrosObject(periodoMorosidadAnalista)
-
-        const queryParams = new URLSearchParams()
-
-        Object.entries(params).forEach(([key, value]) => {
-          if (value) queryParams.append(key, value.toString())
-        })
-
-        const response = await apiClient.get<{
-          analistas: MorosidadPorAnalistaItem[]
-        }>(`/api/v1/dashboard/morosidad-por-analista?${queryParams.toString()}`)
-
-        return response.analistas ?? []
-      },
-
-      staleTime: 4 * 60 * 60 * 1000,
-
-      refetchOnWindowFocus: false,
-
-      enabled: true,
-    })
-
   const {
     data: datosMontoProgramadoSemana,
     isLoading: loadingMontoProgramadoSemana,
@@ -588,6 +568,9 @@ export function DashboardMenu() {
     })
 
   const NOTIFICACIONES_ENVIOS_TENDENCIA_DIAS = 90
+  const diasGraficoFlujoFiniquito = diasVentanaFiniquito(
+    getPeriodoGrafico('finiquito-flujo')
+  )
 
   const {
     data: datosNotificacionesPorDia,
@@ -627,6 +610,24 @@ export function DashboardMenu() {
     () =>
       serieNotificacionesEjeDesde5Abril(datosNotificacionesPorDia?.serie ?? []),
     [datosNotificacionesPorDia?.serie]
+  )
+
+  const {
+    data: datosFlujoFiniquito,
+    isLoading: loadingFlujoFiniquito,
+  } = useQuery({
+    queryKey: ['finiquito-flujo-diario', diasGraficoFlujoFiniquito],
+    queryFn: async (): Promise<FiniquitoFlujoResumenDiario> =>
+      finiquitoAdminResumenFlujoDiario(undefined, diasGraficoFlujoFiniquito),
+    staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    retry: 1,
+    enabled: true,
+  })
+
+  const serieFlujoFiniquito = useMemo<FiniquitoFlujoDia[]>(
+    () => datosFlujoFiniquito?.dias ?? [],
+    [datosFlujoFiniquito?.dias]
   )
 
   const serieNotificacionesConTendencia = useMemo(
@@ -688,11 +689,6 @@ export function DashboardMenu() {
       })
 
       await queryClient.invalidateQueries({
-        queryKey: ['morosidad-analista'],
-        exact: false,
-      })
-
-      await queryClient.invalidateQueries({
         queryKey: ['monto-programado-proxima-semana'],
         exact: false,
       })
@@ -709,6 +705,11 @@ export function DashboardMenu() {
 
       await queryClient.invalidateQueries({
         queryKey: ['notificaciones-envios-por-dia'],
+        exact: false,
+      })
+
+      await queryClient.invalidateQueries({
+        queryKey: ['finiquito-flujo-diario'],
         exact: false,
       })
 
@@ -730,11 +731,6 @@ export function DashboardMenu() {
       })
 
       await queryClient.refetchQueries({
-        queryKey: ['morosidad-analista'],
-        exact: false,
-      })
-
-      await queryClient.refetchQueries({
         queryKey: ['monto-programado-proxima-semana'],
         exact: false,
       })
@@ -751,6 +747,11 @@ export function DashboardMenu() {
 
       await queryClient.refetchQueries({
         queryKey: ['notificaciones-envios-por-dia'],
+        exact: false,
+      })
+
+      await queryClient.refetchQueries({
+        queryKey: ['finiquito-flujo-diario'],
         exact: false,
       })
 
@@ -1041,6 +1042,128 @@ export function DashboardMenu() {
                   />
                 </div>
               </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.17 }}
+          className="mt-2"
+        >
+          <Card className="overflow-hidden rounded-xl border border-gray-200/90 bg-white shadow-lg">
+            <CardHeader className="border-b border-gray-200/80 bg-gradient-to-r from-amber-50/80 to-emerald-50/80 pb-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <CardTitle className="flex items-center gap-2 text-lg font-bold text-gray-800">
+                    <LineChart className="h-5 w-5 text-amber-600" />
+                    <span>Flujo de finiquitos</span>
+                  </CardTitle>
+                  <CardDescription>
+                    Bandeja principal, área de revisión, área de trabajo y terminados.
+                  </CardDescription>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <SelectorPeriodoGrafico chartId="finiquito-flujo" />
+                  <Badge
+                    variant="secondary"
+                    className="border border-gray-200 bg-white/80 text-xs font-medium text-gray-600"
+                  >
+                    4 líneas
+                  </Badge>
+                </div>
+              </div>
+            </CardHeader>
+
+            <CardContent className="p-6 pt-4">
+              {loadingFlujoFiniquito ? (
+                <div className="flex items-center justify-center py-16 text-gray-500">
+                  Cargando flujo de finiquitos...
+                </div>
+              ) : serieFlujoFiniquito.length > 0 ? (
+                <ChartWithDateRangeSlider
+                  data={serieFlujoFiniquito}
+                  dataKey="fecha"
+                  chartHeight={360}
+                >
+                  {filteredData => (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <RechartsLineChart
+                        data={filteredData}
+                        margin={{ top: 14, right: 24, left: 12, bottom: 14 }}
+                      >
+                        <CartesianGrid {...chartCartesianGrid} />
+                        <XAxis
+                          dataKey="etiqueta"
+                          tick={chartAxisTick}
+                          minTickGap={18}
+                        />
+                        <YAxis
+                          tick={chartAxisTick}
+                          allowDecimals={false}
+                          label={{
+                            value: 'Casos',
+                            angle: -90,
+                            position: 'insideLeft',
+                            style: { fill: '#374151', fontSize: 13 },
+                          }}
+                        />
+                        <Tooltip
+                          contentStyle={chartTooltipStyle.contentStyle}
+                          labelStyle={chartTooltipStyle.labelStyle}
+                          formatter={(value: number, name: string) => [value, name]}
+                          labelFormatter={(_, payload) =>
+                            payload?.[0]?.payload?.fecha || ''
+                          }
+                        />
+                        <Legend {...chartLegendStyle} />
+                        <Line
+                          type="monotone"
+                          dataKey="cantidad_ingresados"
+                          stroke="#1d4ed8"
+                          strokeWidth={2}
+                          dot={{ r: 3 }}
+                          activeDot={{ r: 5 }}
+                          name="Ingresados"
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="cantidad_revision"
+                          stroke="#d97706"
+                          strokeWidth={2}
+                          dot={{ r: 3 }}
+                          activeDot={{ r: 5 }}
+                          name="Procesados"
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="cantidad_trabajo"
+                          stroke="#059669"
+                          strokeWidth={2}
+                          dot={{ r: 3 }}
+                          activeDot={{ r: 5 }}
+                          name="En finiquito"
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="cantidad_terminados"
+                          stroke="#7c3aed"
+                          strokeWidth={2}
+                          dot={{ r: 3 }}
+                          activeDot={{ r: 5 }}
+                          name="Terminados"
+                        />
+                      </RechartsLineChart>
+                    </ResponsiveContainer>
+                  )}
+                </ChartWithDateRangeSlider>
+              ) : (
+                <div className="flex items-center justify-center py-16 text-gray-500">
+                  No hay datos de flujo de finiquitos para el período seleccionado
+                </div>
+              )}
             </CardContent>
           </Card>
         </motion.div>
@@ -1921,140 +2044,6 @@ export function DashboardMenu() {
           </motion.div>
         </div>
 
-        {/* GRÁFICOS DE MOROSIDAD */}
-
-        <div className="grid grid-cols-1 gap-6">
-          {/* Cantidad de préstamos en mora por rango de días */}
-        </div>
-
-        {/* Pago vencido por Analista (por analista) */}
-
-        <div className="mt-6 flex flex-col gap-6">
-          {/* Dólares vencidos por analista (barras) */}
-
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.95 }}
-            className="w-full"
-          >
-            <Card className="w-full overflow-hidden rounded-xl border border-gray-200/90 bg-white shadow-lg">
-              <CardHeader className="border-b border-gray-200/80 bg-gradient-to-r from-amber-50/90 to-orange-50/90 pb-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <CardTitle className="flex items-center gap-2 text-lg font-bold text-gray-800">
-                    <DollarSign className="h-5 w-5 text-amber-600" />
-
-                    <span>Pago vencido por Analista - Dólares vencidos</span>
-                  </CardTitle>
-
-                  <div className="flex items-center gap-2">
-                    <SelectorPeriodoGrafico chartId="morosidad-analista" />
-
-                    <Badge
-                      variant="secondary"
-                      className="border border-gray-200 bg-white/80 text-xs font-medium text-gray-600"
-                    >
-                      Al día de hoy
-                    </Badge>
-                  </div>
-                </div>
-
-                <p className="mt-1 px-6 text-xs text-gray-600">
-                  Suma de monto_cuota de cuotas vencidas (fecha_vencimiento &lt;
-                  hoy, sin pagar), snapshot actual por analista
-                </p>
-              </CardHeader>
-
-              <CardContent className="p-6">
-                {loadingMorosidadAnalista ? (
-                  <div className="flex items-center justify-center py-16 text-gray-500">
-                    Cargando...
-                  </div>
-                ) : datosMorosidadAnalista &&
-                  datosMorosidadAnalista.length > 0 ? (
-                  <>
-                    <h4 className="mb-1 text-center text-sm font-semibold text-gray-700">
-                      Dólares vencidos por analista
-                    </h4>
-
-                    <ResponsiveContainer
-                      width="100%"
-                      height={Math.max(
-                        380,
-                        Math.min(620, datosMorosidadAnalista.length * 28)
-                      )}
-                    >
-                      <BarChart
-                        data={datosMorosidadAnalista}
-                        layout="vertical"
-                        margin={{ top: 12, right: 32, left: 16, bottom: 12 }}
-                        barCategoryGap="12%"
-                      >
-                        <CartesianGrid
-                          {...chartCartesianGrid}
-                          horizontal={false}
-                        />
-
-                        <XAxis
-                          type="number"
-                          tickFormatter={v =>
-                            `$${v >= 1000 ? (v / 1000).toFixed(0) + 'k' : v}`
-                          }
-                          tick={chartAxisTick}
-                          axisLine={{ stroke: '#e5e7eb' }}
-                        />
-
-                        <YAxis
-                          type="category"
-                          dataKey="analista"
-                          width={200}
-                          tick={{
-                            fontSize: 12,
-                            fill: '#374151',
-                            fontWeight: 500,
-                          }}
-                          interval={0}
-                          tickLine={false}
-                          axisLine={{ stroke: '#e5e7eb' }}
-                          tickFormatter={name =>
-                            name && name.length > 24
-                              ? `${name.slice(0, 22)}…`
-                              : name
-                          }
-                        />
-
-                        <Tooltip
-                          contentStyle={chartTooltipStyle.contentStyle}
-                          labelStyle={chartTooltipStyle.labelStyle}
-                          formatter={(value: number) => [
-                            formatCurrency(value),
-                            'Dólares vencidos',
-                          ]}
-                          labelFormatter={label => `Analista: ${label}`}
-                          cursor={{ fill: 'rgba(234, 88, 12, 0.06)' }}
-                        />
-
-                        <Legend {...chartLegendStyle} />
-
-                        <Bar
-                          dataKey="monto_vencido"
-                          name="Dólares vencidos"
-                          fill="#ea580c"
-                          radius={[0, 4, 4, 0]}
-                          maxBarSize={28}
-                        />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </>
-                ) : (
-                  <div className="flex items-center justify-center py-16 text-gray-500">
-                    No hay datos para mostrar
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </motion.div>
-        </div>
       </div>
     </div>
   )

@@ -22,7 +22,10 @@ interface ClientesKPIsProps {
 
   total: number
 
-  ultimaActualizacion?: string | null
+  /** Última alta con fecha_registro en el mes calendario actual (no ediciones de otros clientes). */
+  ultimaAltaEsteMes?: string | null
+
+  mesCalendario?: string | null
 
   isLoading?: boolean
 }
@@ -36,7 +39,9 @@ export function ClientesKPIs({
 
   total,
 
-  ultimaActualizacion,
+  ultimaAltaEsteMes,
+
+  mesCalendario,
 
   isLoading = false,
 }: ClientesKPIsProps) {
@@ -151,18 +156,18 @@ export function ClientesKPIs({
               variant="outline"
               className="border-orange-300 text-orange-700"
             >
-              Este mes
+              {mesCalendario ? `Mes ${mesCalendario}` : 'Este mes'}
             </Badge>
 
-            {ultimaActualizacion ? (
+            {nuevosEsteMes > 0 && ultimaAltaEsteMes ? (
               <div className="mt-1 text-xs text-orange-700/80">
-                Actualizado: {formatLastSyncDate(ultimaActualizacion)}
+                Última alta: {formatLastSyncDate(ultimaAltaEsteMes)}
               </div>
-            ) : (
-              <div className="mt-1 text-xs text-orange-700/60">
-                Actualizado: -
+            ) : nuevosEsteMes === 0 ? (
+              <div className="mt-1 text-xs text-orange-700/80">
+                Sin altas registradas en este mes
               </div>
-            )}
+            ) : null}
           </div>
         </CardContent>
       </Card>

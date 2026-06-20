@@ -267,16 +267,33 @@ def get_clientes_stats(
         or 0
     )
     # Nuevos clientes: fecha_registro (no nulo) en el mes calendario actual en zona negocio.
-    # Comparación explícita AT TIME ZONE: coherente aunque alguna conexión no herede SET timezone.
+    mes_actual_expr = f"date_trunc('month', (CURRENT_TIMESTAMP AT TIME ZONE '{BUSINESS_TIMEZONE}'))"
+    nuevos_este_mes = 0
+    ultima_alta_este_mes_iso: Optional[str] = None
+    mes_calendario: Optional[str] = None
     try:
+        mes_calendario = db.execute(
+            text(
+                f"SELECT to_char((CURRENT_TIMESTAMP AT TIME ZONE '{BUSINESS_TIMEZONE}'), 'YYYY-MM')"
+            )
+        ).scalar()
         stmt = text(f"""
             SELECT count(*)::int FROM clientes
             WHERE fecha_registro IS NOT NULL
-              AND date_trunc('month', fecha_registro)
-                  = date_trunc('month', (CURRENT_TIMESTAMP AT TIME ZONE '{BUSINESS_TIMEZONE}'))
+              AND date_trunc('month', fecha_registro) = {mes_actual_expr}
         """)
-        nuevos_este_mes = db.execute(stmt).scalar() or 0
-        nuevos_este_mes = int(nuevos_este_mes)
+        nuevos_este_mes = int(db.execute(stmt).scalar() or 0)
+        ultima_alta = db.execute(
+            text(f"""
+            SELECT max(fecha_registro) FROM clientes
+            WHERE fecha_registro IS NOT NULL
+              AND date_trunc('month', fecha_registro) = {mes_actual_expr}
+        """)
+        ).scalar()
+        if isinstance(ultima_alta, datetime):
+            if ultima_alta.tzinfo is None:
+                ultima_alta = ultima_alta.replace(tzinfo=ZoneInfo(BUSINESS_TIMEZONE))
+            ultima_alta_este_mes_iso = ultima_alta.isoformat()
     except Exception as e:
         logger.warning("Error calculando nuevos_este_mes por fecha_registro: %s", e)
         nuevos_este_mes = 0
@@ -302,6 +319,8 @@ def get_clientes_stats(
         "inactivos": int(inactivos),
         "finalizados": int(finalizados),
         "nuevos_este_mes": nuevos_este_mes,
+        "mes_calendario": mes_calendario,
+        "ultima_alta_este_mes": ultima_alta_este_mes_iso,
         "ultima_actualizacion": ultima_actualizacion_iso,
     }
     logger.debug("GET /clientes/stats -> %s", result)

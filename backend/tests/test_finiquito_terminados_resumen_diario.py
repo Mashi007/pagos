@@ -105,3 +105,56 @@ def test_resumen_diario_response_total_ingresos():
     )
     assert resp.total_ingresos_en_ventana == 4
     assert len(resp.dias) == 2
+
+
+def test_flujo_dia_out_schema_fields():
+    from app.schemas.finiquito import FiniquitoFlujoDiaOut
+
+    row = FiniquitoFlujoDiaOut(
+        fecha="2026-06-12",
+        etiqueta="Hoy",
+        cantidad_ingresados=4,
+        cantidad_revision=3,
+        cantidad_trabajo=2,
+        cantidad_terminados=1,
+    )
+    assert row.cantidad_ingresados == 4
+    assert row.cantidad_revision == 3
+    assert row.cantidad_trabajo == 2
+    assert row.cantidad_terminados == 1
+
+
+def test_flujo_resumen_diario_response_totals():
+    from app.schemas.finiquito import (
+        FiniquitoFlujoDiaOut,
+        FiniquitoFlujoResumenDiarioResponse,
+    )
+
+    resp = FiniquitoFlujoResumenDiarioResponse(
+        dias=[
+            FiniquitoFlujoDiaOut(
+                fecha="2026-06-11",
+                etiqueta="Ayer",
+                cantidad_ingresados=2,
+                cantidad_revision=1,
+                cantidad_trabajo=1,
+                cantidad_terminados=0,
+            ),
+            FiniquitoFlujoDiaOut(
+                fecha="2026-06-12",
+                etiqueta="Hoy",
+                cantidad_ingresados=3,
+                cantidad_revision=2,
+                cantidad_trabajo=1,
+                cantidad_terminados=1,
+            ),
+        ],
+        total_ingresados_en_ventana=5,
+        total_revision_en_ventana=3,
+        total_trabajo_en_ventana=2,
+        total_terminados_en_ventana=1,
+    )
+    assert resp.total_ingresados_en_ventana == 5
+    assert resp.total_revision_en_ventana == 3
+    assert resp.total_trabajo_en_ventana == 2
+    assert resp.total_terminados_en_ventana == 1

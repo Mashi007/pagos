@@ -15,6 +15,12 @@ interface ClientesStats {
   /** Altas en `clientes` este mes calendario (fecha_registro, zona America/Caracas). */
   nuevos_este_mes: number
 
+  /** YYYY-MM del mes usado para el conteo (Caracas). */
+  mes_calendario?: string | null
+
+  /** Max fecha_registro entre altas del mes actual; null si nuevos_este_mes = 0. */
+  ultima_alta_este_mes?: string | null
+
   /** Máxima fecha de registro/actualización en tabla `clientes` (ISO). */
   ultima_actualizacion?: string | null
 }

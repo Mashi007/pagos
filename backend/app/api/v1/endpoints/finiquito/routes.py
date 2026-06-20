@@ -44,6 +44,8 @@ from app.models.prestamo import Prestamo
 from app.core.user_utils import user_is_administrator
 from app.schemas.auth import UserResponse
 from app.schemas.finiquito import (
+    FiniquitoFlujoDiaOut,
+    FiniquitoFlujoResumenDiarioResponse,
     FiniquitoAdminResumenEstadoResponse,
     FiniquitoConciliacionPasarATrabajoResponse,
     FiniquitoConciliacionRecrearOcrItem,
@@ -546,6 +548,88 @@ def _conteo_ingresos_area_trabajo_por_dia_caracas(
             cid = int(c.id)
             raw = fentrada.get(cid)
             if raw is None and c.estado == "EN_PROCESO":
+                raw = c.actualizado_en
+            if raw is not None:
+                registrar(cid, raw)
+
+    return ctr
+
+
+def _conteo_ingresados_bandeja_por_dia_caracas(
+    db: Session,
+    *,
+    inicio: date,
+    hoy: date,
+    ced_filtro: Optional[str],
+) -> Counter[str]:
+    """Casos creados en finiquito (bandeja principal) por día calendario Caracas."""
+    ctr: Counter[str] = Counter()
+    fec_caso = _expr_fecha_caracas_desde_utc_naive(FiniquitoCaso.creado_en)
+    q = db.query(fec_caso.label("dia"), func.count(FiniquitoCaso.id)).filter(
+        fec_caso >= inicio,
+        fec_caso <= hoy,
+    )
+    if ced_filtro:
+        q = q.filter(FiniquitoCaso.cedula.ilike(f"%{ced_filtro}%"))
+    q = q.group_by(fec_caso)
+    for dia, cantidad in q.all():
+        if dia is None:
+            continue
+        ctr[str(dia)] = int(cantidad or 0)
+    return ctr
+
+
+def _conteo_ingresos_area_revision_por_dia_caracas(
+    db: Session,
+    *,
+    inicio: date,
+    hoy: date,
+    ced_filtro: Optional[str],
+) -> Counter[str]:
+    """
+    Entradas al área de revisión por día calendario Caracas.
+    Cuenta transiciones a ACEPTADO y completa casos ya avanzados sin historial legado.
+    """
+    ctr: Counter[str] = Counter()
+    vistos: set[tuple[str, int]] = set()
+    fec_hist = _expr_fecha_caracas_desde_utc_naive(FiniquitoEstadoHistorial.creado_en)
+
+    def registrar(caso_id: int, raw: Any) -> None:
+        _registrar_conteo_dia_caso(
+            ctr, vistos, caso_id, raw, inicio=inicio, hoy=hoy
+        )
+
+    q_hist = db.query(
+        fec_hist.label("dia"),
+        FiniquitoEstadoHistorial.caso_id,
+    ).filter(
+        FiniquitoEstadoHistorial.estado_nuevo == "ACEPTADO",
+        fec_hist >= inicio,
+        fec_hist <= hoy,
+    )
+    if ced_filtro:
+        q_hist = q_hist.join(
+            FiniquitoCaso, FiniquitoCaso.id == FiniquitoEstadoHistorial.caso_id
+        ).filter(FiniquitoCaso.cedula.ilike(f"%{ced_filtro}%"))
+    for dia, caso_id in q_hist.all():
+        registrar(int(caso_id), dia)
+
+    q_casos = db.query(FiniquitoCaso).filter(
+        FiniquitoCaso.estado.in_(
+            ("ACEPTADO", "REVISION_CONTABLE", "EN_PROCESO", "TERMINADO")
+        )
+    )
+    if ced_filtro:
+        q_casos = q_casos.filter(FiniquitoCaso.cedula.ilike(f"%{ced_filtro}%"))
+    casos = q_casos.all()
+    if casos:
+        fentrada = _map_fecha_estado_historial_por_caso(
+            db, [c.id for c in casos], "ACEPTADO"
+        )
+        for c in casos:
+            cid = int(c.id)
+            raw = fentrada.get(cid)
+            if raw is None and c.estado == "ACEPTADO":
                 raw = c.actualizado_en
             if raw is not None:
                 registrar(cid, raw)
@@ -1655,6 +1739,75 @@ def finiquito_admin_terminados_resumen_diario(
         total_terminados=len(casos),
         total_en_ventana=total_en_ventana,
         total_ingresos_en_ventana=total_ingresos_en_ventana,
+    )
+
+
+@router.get(
+    "/admin/casos/resumen-flujo-diario",
+    response_model=FiniquitoFlujoResumenDiarioResponse,
+)
+def finiquito_admin_resumen_flujo_diario(
+    dias: int = Query(
+        21,
+        ge=2,
+        le=365,
+        description=(
+            "Ventana en dias calendario Caracas: incluye hoy y (dias - 1) dias anteriores."
+        ),
+    ),
+    cedula: Optional[str] = Query(
+        None,
+        description="Subcadena de cedula (coincidencia parcial), misma regla que GET /admin/casos.",
+    ),
+    db: Session = Depends(get_db),
+    _: UserResponse = Depends(require_admin_or_operator),
+):
+    """
+    Serie diaria del flujo finiquito:
+    - ingresados a bandeja principal (creado_en)
+    - procesados a área de revisión (ACEPTADO)
+    - enviados a área de trabajo (EN_PROCESO)
+    - terminados (TERMINADO)
+    """
+    hoy = fecha_hoy_caracas()
+    inicio = hoy - timedelta(days=int(dias) - 1)
+    ced_filtro = cedula.strip() if cedula and cedula.strip() else None
+
+    ctr_bandeja = _conteo_ingresados_bandeja_por_dia_caracas(
+        db, inicio=inicio, hoy=hoy, ced_filtro=ced_filtro
+    )
+    ctr_revision = _conteo_ingresos_area_revision_por_dia_caracas(
+        db, inicio=inicio, hoy=hoy, ced_filtro=ced_filtro
+    )
+    ctr_trabajo = _conteo_ingresos_area_trabajo_por_dia_caracas(
+        db, inicio=inicio, hoy=hoy, ced_filtro=ced_filtro
+    )
+    ctr_terminados = _conteo_terminados_por_dia_caracas(
+        db, inicio=inicio, hoy=hoy, ced_filtro=ced_filtro
+    )
+
+    dias_out: List[FiniquitoFlujoDiaOut] = []
+    cur = inicio
+    while cur <= hoy:
+        key = cur.isoformat()
+        dias_out.append(
+            FiniquitoFlujoDiaOut(
+                fecha=key,
+                etiqueta=_etiqueta_dia_terminado(cur, hoy),
+                cantidad_ingresados=int(ctr_bandeja.get(key, 0)),
+                cantidad_revision=int(ctr_revision.get(key, 0)),
+                cantidad_trabajo=int(ctr_trabajo.get(key, 0)),
+                cantidad_terminados=int(ctr_terminados.get(key, 0)),
+            )
+        )
+        cur += timedelta(days=1)
+
+    return FiniquitoFlujoResumenDiarioResponse(
+        dias=dias_out,
+        total_ingresados_en_ventana=sum(d.cantidad_ingresados for d in dias_out),
+        total_revision_en_ventana=sum(d.cantidad_revision for d in dias_out),
+        total_trabajo_en_ventana=sum(d.cantidad_trabajo for d in dias_out),
+        total_terminados_en_ventana=sum(d.cantidad_terminados for d in dias_out),
     )
 
 

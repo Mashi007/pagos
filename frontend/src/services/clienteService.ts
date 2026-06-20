@@ -354,6 +354,8 @@ class ClienteService {
     inactivos: number
     finalizados: number
     nuevos_este_mes: number
+    mes_calendario?: string | null
+    ultima_alta_este_mes?: string | null
     ultima_actualizacion?: string | null
   }> {
     const response = await apiClient.get<{
@@ -362,6 +364,8 @@ class ClienteService {
       inactivos: number
       finalizados: number
       nuevos_este_mes: number
+      mes_calendario?: string | null
+      ultima_alta_este_mes?: string | null
       ultima_actualizacion?: string | null
     }>(`${this.baseUrl}/stats`)
 
