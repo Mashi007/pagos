@@ -3592,7 +3592,7 @@ export function EditarRevisionManual() {
                         title={
                           soloLectura
                             ? 'Revision cerrada: solo lectura'
-                            : 'Re-escanea todas las imagenes ya guardadas en este prestamo (OCR), actualiza monto/fecha/documento si el OCR es limpio, marca ⚠ si requiere Visto o revision manual, deja intactos los pagos sin imagen y luego aplica cascada.'
+                            : 'Limpia fecha, banco, Nº, monto y moneda; re-escanea comprobantes guardados y persiste solo lo devuelto por OCR (sin mezclar con valores previos). Luego aplica cascada.'
                         }
                       >
                         {reescaneandoCartera ? (

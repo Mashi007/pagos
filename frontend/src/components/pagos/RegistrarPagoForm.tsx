@@ -549,6 +549,7 @@ export function RegistrarPagoForm({
   }, [archivoComprobante])
 
   const [isRescanning, setIsRescanning] = useState(false)
+  const rescanSeqRef = useRef(0)
 
   const [formData, setFormData] = useState<PagoCreate>({
     cedula_cliente: pagoInicial?.cedula_cliente || '',
@@ -908,7 +909,26 @@ export function RegistrarPagoForm({
       toast.info('Re-escaneando para extraer cédula del comprobante...')
     }
 
+    const rescanSeq = ++rescanSeqRef.current
     setIsRescanning(true)
+    setMonedaRegistro('USD')
+    setMontoStr('')
+    setFormData(prev => ({
+      ...prev,
+      fecha_pago: '',
+      institucion_bancaria: null,
+      numero_documento: '',
+      monto_pagado: 0,
+    }))
+    setErrors(prev => {
+      const next = { ...prev }
+      delete next.fecha_pago
+      delete next.institucion_bancaria
+      delete next.numero_documento
+      delete next.monto_pagado
+      delete next.general
+      return next
+    })
     try {
       let fileToScan: File | null = null
       if (archivoComprobante) {
@@ -967,6 +987,7 @@ export function RegistrarPagoForm({
       }
 
       const res = await escanerInfopagosExtraerComprobante(fd)
+      if (rescanSeq !== rescanSeqRef.current) return
       if (!res.ok || !res.sugerencia) {
         toast.error(
           res.error || 'No se pudo digitalizar el comprobante en este momento.'
@@ -979,21 +1000,36 @@ export function RegistrarPagoForm({
       const nextMonto =
         s.monto != null && Number.isFinite(Number(s.monto))
           ? Number(s.monto)
-          : formData.monto_pagado
+          : 0
       setMonedaRegistro(nextMoneda)
       setMontoStr(
         nextMoneda === 'BS' ? formatMontoBsVe(nextMonto) : nextMonto.toFixed(2)
       )
 
-      // Procesar cédula extraída del comprobante (solo dígitos para Mercantil/BNC)
+      // cedula_pagador_en_comprobante = depositante en el papel, NO el deudor del formulario.
+      // Solo reemplazar cedula_cliente si veníamos sin cliente (extraccion_sin_cliente).
       let nextCedula = formData.cedula_cliente
       const cedulaExtraida = (s.cedula_pagador_en_comprobante || '').trim()
-      if (cedulaExtraida) {
+      if (cedulaExtraida && extraccionSinCliente) {
         const norm = normalizarCedulaParaProcesar(cedulaExtraida)
         nextCedula =
           norm.valido && norm.valorParaEnviar
             ? norm.valorParaEnviar
             : extraerCaracteresCedulaPublica(cedulaExtraida)
+      } else if (cedulaExtraida && !extraccionSinCliente) {
+        const normPag = normalizarCedulaParaProcesar(cedulaExtraida)
+        const cedPag =
+          normPag.valido && normPag.valorParaEnviar
+            ? normPag.valorParaEnviar
+            : extraerCaracteresCedulaPublica(cedulaExtraida)
+        if (
+          cedPag &&
+          !cedulasMismaPersonaParaPrestamo(cedPag, formData.cedula_cliente)
+        ) {
+          toast.info(
+            `Depositante en comprobante (${cedPag}) distinto al deudor (${formData.cedula_cliente}). Se mantiene la cédula del deudor.`
+          )
+        }
       }
 
       setFormData(prev => {
@@ -1030,13 +1066,11 @@ export function RegistrarPagoForm({
         return {
           ...prev,
           cedula_cliente: nextCedula,
-          fecha_pago: (s.fecha_pago || '').trim() || prev.fecha_pago,
+          fecha_pago: (s.fecha_pago || '').trim(),
           institucion_bancaria:
-            (s.institucion_financiera || '').trim() ||
-            prev.institucion_bancaria,
-          numero_documento:
-            (s.numero_operacion || '').trim() || prev.numero_documento,
-          monto_pagado: nextMonto,
+            (s.institucion_financiera || '').trim() || null,
+          numero_documento: (s.numero_operacion || '').trim(),
+          monto_pagado: nextMoneda === 'USD' ? nextMonto : 0,
           prestamo_id: nextPrestamoId,
         }
       })
@@ -1050,7 +1084,7 @@ export function RegistrarPagoForm({
         return next
       })
 
-      if (cedulaExtraida) {
+      if (cedulaExtraida && extraccionSinCliente) {
         toast.success(
           `Campos actualizados desde el comprobante. Cédula detectada: ${nextCedula}`
         )

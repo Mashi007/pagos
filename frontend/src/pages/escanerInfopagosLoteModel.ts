@@ -3,6 +3,10 @@
  */
 import type { EscanerInfopagosExtraerResponse } from '../services/cobrosService'
 import { formatMontoBsVe } from '../utils/montoLatam'
+import {
+  extraerCaracteresCedulaPublica,
+  normalizarCedulaParaProcesar,
+} from '../utils/cedulaConsultaPublica'
 
 const INSTITUCIONES_FINANCIERAS = [
   'BINANCE',
@@ -61,6 +65,20 @@ export type FilaLote = {
   borradorId?: string | null
   /** Origen revisión /pagos (re-escaneo masivo). */
   pagoRevisionId?: number | null
+  /** Cédula del deudor de esta fila (revisión con varias cédulas). Si vacío, usa la del encabezado. */
+  cedulaDeudor?: string
+}
+
+/** Partes V/E/J + número para FormData del escáner / enviar-reporte. */
+export function partesCedulaParaApi(
+  raw: string
+): { tipo: string; numero: string } | null {
+  const norm = normalizarCedulaParaProcesar(extraerCaracteresCedulaPublica(raw))
+  if (!norm.valido || !norm.valorParaEnviar) return null
+  return {
+    tipo: norm.valorParaEnviar.charAt(0).toUpperCase(),
+    numero: norm.valorParaEnviar.slice(1).replace(/\D/g, ''),
+  }
 }
 
 export function newClientId(): string {
@@ -160,6 +178,7 @@ export function filaDesdeRevisionPago(
     montoStr,
     moneda: 'USD',
     pagoRevisionId: item.pago_id,
+    cedulaDeudor: (item.cedula || '').trim() || undefined,
     escanerColision: {
       duplicado_en_pagos: false,
       pago_existente_id: item.pago_id,

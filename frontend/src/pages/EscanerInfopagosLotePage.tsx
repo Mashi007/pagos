@@ -75,6 +75,7 @@ import {
   filaDesdeRevisionPago,
   fechaPagoEfectivaParaGuardar,
   hayDuplicadoFila,
+  partesCedulaParaApi,
   type FilaLote,
 } from './escanerInfopagosLoteModel'
 import {
@@ -446,7 +447,8 @@ export default function EscanerInfopagosLotePage() {
         }
         if (res.cedulas_distintas) {
           toast(
-            'Los pagos seleccionados tienen cédulas distintas; se usará una sola cédula deudor.'
+            'Los pagos seleccionados tienen cédulas distintas; cada fila usará la cédula de su pago original.',
+            { duration: 8000 }
           )
         }
         const okItems = res.items.filter(
@@ -456,13 +458,15 @@ export default function EscanerInfopagosLotePage() {
           toast.error('Ningún pago trae comprobante en BD para re-escanear.')
           return
         }
-        const cedula = (res.cedula_comun || okItems[0]?.cedula || '').trim()
-        if (!cedula) {
+        const cedulaUnica = res.cedulas_distintas
+          ? ''
+          : (res.cedula_comun || okItems[0]?.cedula || '').trim()
+        if (!cedulaUnica && !res.cedulas_distintas) {
           toast.error('No se pudo determinar la cédula del deudor.')
           return
         }
         const nombre = (res.nombre_cliente || '').trim()
-        setCedulaRaw(cedula)
+        setCedulaRaw(cedulaUnica)
         setNombreCliente(nombre)
         setFuenteTasa(FUENTE_TASA_DEFAULT)
 
@@ -492,24 +496,39 @@ export default function EscanerInfopagosLotePage() {
           `${String(filasRev.length)} comprobante(s) cargados desde revisión de pagos.`
         )
 
-        const norm = normalizarCedulaParaProcesar(
-          extraerCaracteresCedulaPublica(cedula)
-        )
-        if (norm.valido && norm.valorParaEnviar) {
-          const tipo = norm.valorParaEnviar.charAt(0).toUpperCase()
-          const numero = norm.valorParaEnviar.slice(1).replace(/\D/g, '')
+        if (res.cedulas_distintas) {
           void runDigitacionLoteEnSegundoPlano(
             filasRev,
-            tipo,
-            numero,
+            'V',
+            '0',
             tokens => {
               for (const t of tokens) {
                 tokensSufijoUsadosRef.current.add(t)
               }
             },
-            { cedulaRaw: cedula, nombreCliente: nombre },
+            { cedulaRaw: '', nombreCliente: nombre },
             FUENTE_TASA_DEFAULT
           )
+        } else {
+          const norm = normalizarCedulaParaProcesar(
+            extraerCaracteresCedulaPublica(cedulaUnica)
+          )
+          if (norm.valido && norm.valorParaEnviar) {
+            const tipo = norm.valorParaEnviar.charAt(0).toUpperCase()
+            const numero = norm.valorParaEnviar.slice(1).replace(/\D/g, '')
+            void runDigitacionLoteEnSegundoPlano(
+              filasRev,
+              tipo,
+              numero,
+              tokens => {
+                for (const t of tokens) {
+                  tokensSufijoUsadosRef.current.add(t)
+                }
+              },
+              { cedulaRaw: cedulaUnica, nombreCliente: nombre },
+              FUENTE_TASA_DEFAULT
+            )
+          }
         }
       } catch (e: unknown) {
         toast.error(
@@ -924,13 +943,20 @@ export default function EscanerInfopagosLotePage() {
         toast.error('No se pudo procesar el envío.')
         return
       }
-      const tipo = cedulaNormalizada.valorParaEnviar.charAt(0).toUpperCase()
-      const numero = cedulaNormalizada.valorParaEnviar
-        .slice(1)
-        .replace(/\D/g, '')
+      const cedulaFilaGuardar = (
+        fila.cedulaDeudor ||
+        cedulaNormalizada.valorParaEnviar ||
+        cedulaRaw ||
+        ''
+      ).trim()
+      const partesCedula = partesCedulaParaApi(cedulaFilaGuardar)
+      if (!partesCedula) {
+        toast.error('Cédula del deudor inválida para esta fila.')
+        return
+      }
       const form = new FormData()
-      form.append('tipo_cedula', tipo)
-      form.append('numero_cedula', numero)
+      form.append('tipo_cedula', partesCedula.tipo)
+      form.append('numero_cedula', partesCedula.numero)
       form.append('contact_website', '')
       form.append('fecha_pago', fechaPagoEnvio)
       form.append('institucion_financiera', fila.institucion.trim())
@@ -983,7 +1009,7 @@ export default function EscanerInfopagosLotePage() {
         guardarActivoRef.current.delete(clientId)
       }
     },
-    [actualizarFila, cedulaNormalizada, fuenteTasa]
+    [actualizarFila, cedulaNormalizada, cedulaRaw, fuenteTasa]
   )
 
   const handleDescargarRecibo = useCallback(

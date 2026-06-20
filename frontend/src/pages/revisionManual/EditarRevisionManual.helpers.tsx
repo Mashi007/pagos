@@ -5,11 +5,7 @@ import {
   type PagoInicialRegistrar,
 } from '../../services/pagoService'
 import type { EscanerInfopagosSugerencia } from '../../services/cobrosService'
-import {
-  extraerCaracteresCedulaPublica,
-  normalizarCedulaParaProcesar,
-  quitarCerosIzquierdaNumeroCedula,
-} from '../../utils/cedulaConsultaPublica'
+import { quitarCerosIzquierdaNumeroCedula } from '../../utils/cedulaConsultaPublica'
 import { codigoEstadoCuotaParaUi } from '../../utils/cuotaEstadoDisplay'
 
 /** Estados de negocio del préstamo (tabla prestamos.estado); alineado con backend y fechas obligatorias. */
@@ -812,16 +808,33 @@ export type PatchReescaneoOcrResult = {
   hayCambios: boolean
 }
 
+/** Vacía campos OCR del pago; conserva identidad (cédula, préstamo, comprobante, notas). */
+export function patchLimpiarCamposOcrReescaneoCartera(
+  pago: Pago
+): Partial<PagoCreate> & { monto_bs_original?: number | null } {
+  return {
+    cedula_cliente: pago.cedula_cliente,
+    prestamo_id: pago.prestamo_id ?? null,
+    link_comprobante: pago.link_comprobante ?? null,
+    notas: pago.notas ?? null,
+    fecha_pago: '',
+    institucion_bancaria: null,
+    numero_documento: '',
+    monto_pagado: 0,
+    monto_bs_original: null,
+    moneda_registro: 'USD',
+  }
+}
+
 /**
- * Re-escaneo: por cada campo digitalizado en OCR, reemplaza el valor en cartera
- * si pasa validación de ese campo (actualización parcial permitida).
+ * Re-escaneo: base vacía + solo lo devuelto por OCR en esta pasada.
+ * No conserva valores previos de fecha, banco, Nº, monto ni moneda.
  */
-export function patchParcialPagoDesdeOcrReescaneoCartera(
+export function patchCompletoPagoDesdeOcrReescaneoCartera(
   pago: Pago,
-  sugerencia: EscanerInfopagosSugerencia,
-  validacion: ValidacionReescaneoOcr,
-  opts?: { bloquearNumeroPorDuplicado?: boolean }
+  sugerencia: EscanerInfopagosSugerencia
 ): PatchReescaneoOcrResult {
+  const patch = patchLimpiarCamposOcrReescaneoCartera(pago)
   const inst = institucionDesdeSugerenciaOcrReescaneo(sugerencia)
   const monedaOcr = sugerencia.moneda === 'BS' ? 'BS' : 'USD'
   const montoOcr =
@@ -830,68 +843,31 @@ export function patchParcialPagoDesdeOcrReescaneoCartera(
       : null
   const numeroOcr = (sugerencia.numero_operacion || '').trim()
   const fechaOcr = (sugerencia.fecha_pago || '').trim()
-
-  const patch: Partial<PagoCreate> & { monto_bs_original?: number | null } = {
-    cedula_cliente: pago.cedula_cliente,
-    prestamo_id: pago.prestamo_id ?? null,
-    link_comprobante: pago.link_comprobante ?? null,
-    notas: pago.notas ?? null,
-  }
   const camposAplicados: CampoReescaneoOcr[] = []
 
-  const digitados = camposDigitadosOcrReescaneo(sugerencia)
-
-  if (
-    digitados.includes('banco') &&
-    inst &&
-    !campoBloqueadoValidacionReescaneo('banco', validacion, inst)
-  ) {
+  if (inst) {
     patch.institucion_bancaria = inst
     camposAplicados.push('banco')
   }
-
-  if (
-    digitados.includes('numero') &&
-    numeroOcr &&
-    !opts?.bloquearNumeroPorDuplicado &&
-    !campoBloqueadoValidacionReescaneo('numero', validacion, inst)
-  ) {
+  if (numeroOcr) {
     patch.numero_documento = numeroOcr
     camposAplicados.push('numero')
   }
-
-  const aplicaMonto =
-    digitados.includes('monto') &&
-    montoOcr != null &&
-    !campoBloqueadoValidacionReescaneo('monto', validacion, inst)
-
-  const aplicaMoneda =
-    digitados.includes('moneda') &&
-    !campoBloqueadoValidacionReescaneo('moneda', validacion, inst)
-
-  if (aplicaMoneda) {
-    patch.moneda_registro = monedaOcr
-    camposAplicados.push('moneda')
-  }
-
-  if (aplicaMonto) {
+  if (montoOcr != null && montoOcr > 0) {
     if (monedaOcr === 'BS') {
       patch.monto_bs_original = montoOcr
       patch.monto_pagado = 0
-      camposAplicados.push('monto')
-      if (!patch.moneda_registro) patch.moneda_registro = 'BS'
+      patch.moneda_registro = 'BS'
     } else {
       patch.monto_pagado = montoOcr
-      camposAplicados.push('monto')
-      if (!patch.moneda_registro) patch.moneda_registro = 'USD'
+      patch.moneda_registro = 'USD'
     }
+    camposAplicados.push('monto', 'moneda')
+  } else if (sugerencia.moneda === 'BS' || sugerencia.moneda === 'USD') {
+    patch.moneda_registro = monedaOcr
+    camposAplicados.push('moneda')
   }
-
-  if (
-    digitados.includes('fecha') &&
-    fechaOcr &&
-    !campoBloqueadoValidacionReescaneo('fecha', validacion, inst)
-  ) {
+  if (fechaOcr && !esInstitucionBinanceReescaneo(inst || '')) {
     patch.fecha_pago = fechaOcr
     camposAplicados.push('fecha')
   }
@@ -899,18 +875,27 @@ export function patchParcialPagoDesdeOcrReescaneoCartera(
   return {
     patch,
     camposAplicados: [...new Set(camposAplicados)],
-    hayCambios: camposAplicados.length > 0,
+    hayCambios: true,
   }
 }
 
-/** @deprecated Use patchParcialPagoDesdeOcrReescaneoCartera */
+/** @deprecated Use patchCompletoPagoDesdeOcrReescaneoCartera */
+export function patchParcialPagoDesdeOcrReescaneoCartera(
+  pago: Pago,
+  sugerencia: EscanerInfopagosSugerencia,
+  _validacion: ValidacionReescaneoOcr,
+  _opts?: { bloquearNumeroPorDuplicado?: boolean }
+): PatchReescaneoOcrResult {
+  return patchCompletoPagoDesdeOcrReescaneoCartera(pago, sugerencia)
+}
+
+/** @deprecated Use patchCompletoPagoDesdeOcrReescaneoCartera */
 export function patchPagoDesdeOcrReescaneoCartera(
   pago: Pago,
   sugerencia: EscanerInfopagosSugerencia,
-  validacion: ValidacionReescaneoOcr = { campos: null, reglas: null }
+  _validacion: ValidacionReescaneoOcr = { campos: null, reglas: null }
 ): Partial<PagoCreate> & { monto_bs_original?: number | null } {
-  return patchParcialPagoDesdeOcrReescaneoCartera(pago, sugerencia, validacion)
-    .patch
+  return patchCompletoPagoDesdeOcrReescaneoCartera(pago, sugerencia).patch
 }
 
 export function motivosCamposDigitadosNoAplicadosReescaneo(
@@ -959,15 +944,8 @@ export function pagoInicialDesdeSugerenciaEscaneoRevision(
       ? Number(sugerencia.monto)
       : 0
 
-  let cedula = cedulaPagina.trim()
-  const cedulaExtraida = (sugerencia.cedula_pagador_en_comprobante || '').trim()
-  if (cedulaExtraida) {
-    const norm = normalizarCedulaParaProcesar(cedulaExtraida)
-    cedula =
-      norm.valido && norm.valorParaEnviar
-        ? norm.valorParaEnviar
-        : extraerCaracteresCedulaPublica(cedulaExtraida)
-  }
+  // Deudor fijado por la página de revisión; pagador en comprobante es informativo (no sobrescribe).
+  const cedula = cedulaPagina.trim()
 
   const pid =
     prestamoId != null && Number(prestamoId) > 0 ? Number(prestamoId) : null

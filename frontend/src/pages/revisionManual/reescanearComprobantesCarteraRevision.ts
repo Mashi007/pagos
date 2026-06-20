@@ -1,6 +1,7 @@
 /**
  * Re-escaneo cartera: misma API/prompts que lote Infopagos (extraer-comprobante +
- * rescate_plantilla Gmail A/B/C/D/G). Solo persiste lo devuelto por OCR; no inventa desde BD.
+ * rescate_plantilla Gmail A/B/C/D/G). Limpia campos OCR en BD y reemplaza solo con lo
+ * devuelto por Gemini en esa pasada; no conserva valores previos ni inventa desde BD.
  */
 import {
   escanerInfopagosExtraerComprobante,
@@ -17,7 +18,8 @@ import {
   institucionPlantillaConfirmadaReescaneo,
   omitirValidacionFechaBinanceReescaneo,
   omitirValidacionInstitucionReescaneoCartera,
-  patchParcialPagoDesdeOcrReescaneoCartera,
+  patchCompletoPagoDesdeOcrReescaneoCartera,
+  patchLimpiarCamposOcrReescaneoCartera,
   motivosCamposDigitadosNoAplicadosReescaneo,
   filtrarMotivosAlertaReescaneo,
   sanitizarAlertasReescaneoPorPagoId,
@@ -192,19 +194,11 @@ export function resultadoPersistenciaReescaneoOcr(
   camposAplicados: CampoReescaneoOcr[]
 } | null {
   if (!res.ok || !res.sugerencia) return null
-  const validacion = validacionReescaneoEfectiva(pago, res)
-  const bloquearNumero = duplicadoBloqueaReescaneo(Number(pago.id), res, validacion)
-  const parcial = patchParcialPagoDesdeOcrReescaneoCartera(
-    pago,
-    res.sugerencia,
-    validacion,
-    { bloquearNumeroPorDuplicado: bloquearNumero }
-  )
-  if (!parcial.hayCambios) return null
+  const completo = patchCompletoPagoDesdeOcrReescaneoCartera(pago, res.sugerencia)
   return {
-    patch: parcial.patch,
-    hayCambios: true,
-    camposAplicados: parcial.camposAplicados,
+    patch: completo.patch,
+    hayCambios: completo.hayCambios,
+    camposAplicados: completo.camposAplicados,
   }
 }
 
@@ -257,8 +251,8 @@ export type ReescaneoCarteraResultado = {
 
 /**
  * Re-escanea solo comprobantes ya insertados en el préstamo (OCR + actualización).
- * Pagos sin imagen no se tocan. Cada campo digitalizado en OCR reemplaza el valor en BD
- * (actualización parcial: banco, Nº, monto, fecha, moneda por separado).
+ * Pagos sin imagen no se tocan. Por cada pago: limpia campos OCR en BD, escanea y
+ * persiste solo lo devuelto por Gemini (reemplazo completo, sin mezclar con valores previos).
  */
 export async function reescanearComprobantesCarteraPrestamo(opts: {
   cedula: string
@@ -352,6 +346,10 @@ export async function reescanearComprobantesCarteraPrestamo(opts: {
       if (instHint) fd.append('institucion_plantilla', instHint)
 
       try {
+        await pagoService.updatePago(
+          item.pago_id,
+          patchLimpiarCamposOcrReescaneoCartera(pago)
+        )
         const res = await escanerInfopagosExtraerComprobante(fd)
         const persistencia = resultadoPersistenciaReescaneoOcr(pago, res)
         if (persistencia?.hayCambios) {

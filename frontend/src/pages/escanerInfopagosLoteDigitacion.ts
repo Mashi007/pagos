@@ -8,7 +8,7 @@ import type { EscanerInfopagosExtraerResponse } from '../services/cobrosService'
 import { escanerInfopagosExtraerComprobante } from '../services/cobrosService'
 import { collectTokensSufijoVistoArchivoDesdeFilas } from '../utils/documentoSufijoVisto'
 
-import { filaTrasExtraccion, type FilaLote } from './escanerInfopagosLoteModel'
+import { filaTrasExtraccion, partesCedulaParaApi, type FilaLote } from './escanerInfopagosLoteModel'
 
 /** Opciones de `runDigitacionLoteEnSegundoPlano` (re-escaneo lote desde modal, etc.). */
 export type DigitacionLoteOpciones = {
@@ -196,9 +196,27 @@ export async function runDigitacionLoteEnSegundoPlano(
         continue
       }
 
+      const cedulaFila = (filaActual.cedulaDeudor || contexto.cedulaRaw || '').trim()
+      const partesCedula =
+        partesCedulaParaApi(cedulaFila) || partesCedulaParaApi(contexto.cedulaRaw)
+      if (!partesCedula) {
+        working = working.map(f =>
+          f.clientId === clientId
+            ? {
+                ...f,
+                extract: 'error',
+                errorExtraccion:
+                  'Cédula del deudor inválida o no indicada para esta fila.',
+              }
+            : f
+        )
+        pushFilas(working, contexto)
+        continue
+      }
+
       const fd = new FormData()
-      fd.append('tipo_cedula', tipo)
-      fd.append('numero_cedula', numero)
+      fd.append('tipo_cedula', partesCedula.tipo)
+      fd.append('numero_cedula', partesCedula.numero)
       fd.append('fuente_tasa_cambio', fuenteTasaCambio)
       fd.append('comprobante', archivoEnvio)
       const plantilla = institucionPlantillaParaFila(filaActual)
