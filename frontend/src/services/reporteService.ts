@@ -1783,7 +1783,7 @@ class ReporteService {
     )
   }
 
-  /** POST /conciliacion-sheet/verificar-cola — última fila con dato en rango A:S (sin sync completo). */
+  /** POST /conciliacion-sheet/verificar-cola - última fila con dato en rango A:S (sin sync completo). */
   async verificarConciliacionSheetCola(): Promise<{
     ok: boolean
     google_tail_row_number: number | null

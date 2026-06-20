@@ -138,6 +138,10 @@ import { validadoresService } from '../services/validadoresService'
 import { escanerInfopagosExtraerComprobante } from '../services/cobrosService'
 
 import { normalizarComprobanteArchivoParaEscaneo } from '../utils/normalizarComprobanteArchivo'
+import {
+  buildFormDataEscanerComprobante,
+  mensajeFalloExtraccionEscaner,
+} from '../utils/escanerComprobanteInfopagos'
 
 import {
   CUOTAS_REVISION_PUT_CONCURRENCY,
@@ -1196,24 +1200,17 @@ export function EditarRevisionManual() {
       const archivo = await normalizarComprobanteArchivoParaEscaneo(
         await blobComprobanteAFileParaEscaneo(fileRaw, fileRaw.type)
       )
-      const fd = new FormData()
-      fd.append('tipo_cedula', cedulaPartes.tipo)
-      fd.append('numero_cedula', cedulaPartes.numero)
-      fd.append('extraccion_sin_cliente', 'true')
-      if (Number.isFinite(pid) && pid > 0) {
-        fd.append('prestamo_objetivo_id', String(pid))
-      }
-      fd.append('comprobante', archivo)
-      fd.append('fuente_tasa_cambio', 'euro')
+      const fd = buildFormDataEscanerComprobante({
+        tipoCedula: cedulaPartes.tipo,
+        numeroCedula: cedulaPartes.numero,
+        comprobante: archivo,
+        extraccionSinCliente: true,
+        prestamoObjetivoId: pid,
+      })
 
       const res = await escanerInfopagosExtraerComprobante(fd)
       if (!res.ok || !res.sugerencia) {
-        toast.error(
-          res.validacion_reglas ||
-            res.validacion_campos ||
-            res.error ||
-            'No se pudo digitalizar el comprobante en este momento.'
-        )
+        toast.error(mensajeFalloExtraccionEscaner(res))
         return
       }
 

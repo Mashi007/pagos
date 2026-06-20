@@ -113,6 +113,12 @@ import {
 } from '../../utils/comprobanteImagenAuth'
 import { normalizarComprobanteArchivoParaEscaneo } from '../../utils/normalizarComprobanteArchivo'
 import { escanerInfopagosExtraerComprobante } from '../../services/cobrosService'
+import {
+  buildFormDataEscanerComprobante,
+  mergePagoRegistrarDesdeSugerenciaOcr,
+  mensajeErrorExtraccionEscaner,
+  mensajeFalloExtraccionEscaner,
+} from '../../utils/escanerComprobanteInfopagos'
 import { eliminarPagoRevisionOConError } from '../../utils/eliminarPagoRevision'
 
 import {
@@ -881,7 +887,7 @@ export function RegistrarPagoForm({
     if (
       isEditing &&
       !window.confirm(
-        'Escanear reemplazara los campos actuales (fecha, banco, numero, monto y moneda). Desea continuar?'
+        'Escanear actualizara los campos que el modelo detecte en el comprobante (fecha, banco, numero, monto y moneda). Los datos no detectados se conservan. Desea continuar?'
       )
     ) {
       return
@@ -911,24 +917,6 @@ export function RegistrarPagoForm({
 
     const rescanSeq = ++rescanSeqRef.current
     setIsRescanning(true)
-    setMonedaRegistro('USD')
-    setMontoStr('')
-    setFormData(prev => ({
-      ...prev,
-      fecha_pago: '',
-      institucion_bancaria: null,
-      numero_documento: '',
-      monto_pagado: 0,
-    }))
-    setErrors(prev => {
-      const next = { ...prev }
-      delete next.fecha_pago
-      delete next.institucion_bancaria
-      delete next.numero_documento
-      delete next.monto_pagado
-      delete next.general
-      return next
-    })
     try {
       let fileToScan: File | null = null
       if (archivoComprobante) {
@@ -973,34 +961,49 @@ export function RegistrarPagoForm({
         }
       }
 
-      const fd = new FormData()
-      fd.append('tipo_cedula', cedulaPartes!.tipo)
-      fd.append('numero_cedula', cedulaPartes!.numero)
-      if (extraccionSinCliente) {
-        fd.append('extraccion_sin_cliente', 'true')
-      }
-      fd.append('comprobante', fileToScan)
-      fd.append('fuente_tasa_cambio', 'euro')
-      const institucionPlantilla = (formData.institucion_bancaria || '').trim()
-      if (institucionPlantilla) {
-        fd.append('institucion_plantilla', institucionPlantilla)
-      }
+      const fd = buildFormDataEscanerComprobante({
+        tipoCedula: cedulaPartes!.tipo,
+        numeroCedula: cedulaPartes!.numero,
+        comprobante: fileToScan,
+        extraccionSinCliente,
+        prestamoObjetivoId: formData.prestamo_id ?? prestamoIdFormulario ?? null,
+        institucionPlantillaHint: formData.institucion_bancaria,
+      })
 
       const res = await escanerInfopagosExtraerComprobante(fd)
       if (rescanSeq !== rescanSeqRef.current) return
       if (!res.ok || !res.sugerencia) {
         toast.error(
-          res.error || 'No se pudo digitalizar el comprobante en este momento.'
+          mensajeFalloExtraccionEscaner(res) ||
+            'No se pudo digitalizar el comprobante en este momento.'
         )
         return
       }
 
       const s = res.sugerencia
-      const nextMoneda = s.moneda === 'BS' ? 'BS' : 'USD'
+      const merged = mergePagoRegistrarDesdeSugerenciaOcr(
+        {
+          fecha_pago: formData.fecha_pago,
+          institucion_bancaria: formData.institucion_bancaria,
+          numero_documento: formData.numero_documento,
+          monto_pagado:
+            monedaRegistro === 'USD'
+              ? parseMontoLatam(montoStr) ?? formData.monto_pagado
+              : formData.monto_pagado,
+          monto_bs_original:
+            monedaRegistro === 'BS'
+              ? parseMontoLatam(montoStr)
+              : (pagoInicial as PagoInicialRegistrar | undefined)
+                  ?.monto_bs_original ?? null,
+          moneda_registro: monedaRegistro === 'BS' ? 'BS' : 'USD',
+        },
+        s
+      )
+      const nextMoneda = merged.moneda_registro
       const nextMonto =
-        s.monto != null && Number.isFinite(Number(s.monto))
-          ? Number(s.monto)
-          : 0
+        nextMoneda === 'BS'
+          ? Number(merged.monto_bs_original ?? 0)
+          : Number(merged.monto_pagado ?? 0)
       setMonedaRegistro(nextMoneda)
       setMontoStr(
         nextMoneda === 'BS' ? formatMontoBsVe(nextMonto) : nextMonto.toFixed(2)
@@ -1066,11 +1069,10 @@ export function RegistrarPagoForm({
         return {
           ...prev,
           cedula_cliente: nextCedula,
-          fecha_pago: (s.fecha_pago || '').trim(),
-          institucion_bancaria:
-            (s.institucion_financiera || '').trim() || null,
-          numero_documento: (s.numero_operacion || '').trim(),
-          monto_pagado: nextMoneda === 'USD' ? nextMonto : 0,
+          fecha_pago: merged.fecha_pago,
+          institucion_bancaria: merged.institucion_bancaria,
+          numero_documento: merged.numero_documento,
+          monto_pagado: merged.monto_pagado,
           prestamo_id: nextPrestamoId,
         }
       })
@@ -1093,11 +1095,7 @@ export function RegistrarPagoForm({
       }
     } catch (error) {
       console.error('Error re-escaneando:', error)
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : 'No se pudo re-escanear el comprobante.'
-      )
+      toast.error(mensajeErrorExtraccionEscaner(error))
     } finally {
       setIsRescanning(false)
     }
@@ -2673,7 +2671,7 @@ export function RegistrarPagoForm({
                               <span className="font-semibold">
                                 Abono repetido
                               </span>
-                              {' — '}
+                              {' - '}
                               {mensajeConflictoGuardarUsuario({
                                 tipo: 'huella',
                                 pagoIdCartera: conflictoDocApi?.huella_pago_id,

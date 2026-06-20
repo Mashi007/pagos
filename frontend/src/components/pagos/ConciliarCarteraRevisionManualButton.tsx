@@ -583,13 +583,13 @@ export function ConciliarCarteraRevisionManualButton({
 
   const fmt = (n: number | null | undefined) =>
 
-    n == null || Number.isNaN(Number(n)) ? '—' : `$${Number(n).toFixed(2)}`
+    n == null || Number.isNaN(Number(n)) ? '-' : `$${Number(n).toFixed(2)}`
 
 
 
   const fmtDiff = (n: number | null | undefined) => {
 
-    if (n == null || Number.isNaN(Number(n))) return '—'
+    if (n == null || Number.isNaN(Number(n))) return '-'
 
     const abs = Math.abs(Number(n))
 
@@ -712,7 +712,7 @@ export function ConciliarCarteraRevisionManualButton({
                     {resultado.detalle
                       ?.filter(d => d.ok && d.pago_id)
                       .map(d => d.pago_id)
-                      .join(', ') || '—'}
+                      .join(', ') || '-'}
                   </span>
                 </p>
               ) : null}
@@ -803,9 +803,9 @@ export function ConciliarCarteraRevisionManualButton({
 
                 <p className="mt-1 text-muted-foreground">
 
-                  Se borraron <strong>{resultado.pagos_eliminados ?? '—'}</strong>{' '}
+                  Se borraron <strong>{resultado.pagos_eliminados ?? '-'}</strong>{' '}
 
-                  pago(s) y se crearon <strong>{resultado.ocr_ok ?? '—'}</strong>{' '}
+                  pago(s) y se crearon <strong>{resultado.ocr_ok ?? '-'}</strong>{' '}
 
                   filas nuevas
 
@@ -965,7 +965,7 @@ export function ConciliarCarteraRevisionManualButton({
 
                     <strong>
 
-                      {diagComprobantes?.pagos_omitidos_sin_bytes ?? '—'}
+                      {diagComprobantes?.pagos_omitidos_sin_bytes ?? '-'}
 
                     </strong>{' '}
 
@@ -1257,7 +1257,7 @@ export function ConciliarCarteraRevisionManualButton({
 
                   >
 
-                    <option value="">— Elija lote —</option>
+                    <option value="">- Elija lote -</option>
 
                     {preview.opciones_lote!.map(op => (
 

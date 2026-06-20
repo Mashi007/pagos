@@ -7,6 +7,11 @@ import {
 import type { EscanerInfopagosSugerencia } from '../../services/cobrosService'
 import { quitarCerosIzquierdaNumeroCedula } from '../../utils/cedulaConsultaPublica'
 import { codigoEstadoCuotaParaUi } from '../../utils/cuotaEstadoDisplay'
+import {
+  institucionDesdeSugerenciaOcr,
+  institucionPlantillaConfirmadaEscaneo,
+  normalizarInstitucionBancoEscaneo,
+} from '../../utils/escanerComprobanteInfopagos'
 
 /** Estados de negocio del préstamo (tabla prestamos.estado); alineado con backend y fechas obligatorias. */
 const OPCIONES_ESTADO_PRESTAMO_REVISION: { value: string; label: string }[] = [
@@ -664,55 +669,23 @@ export function institucionEfectivaReescaneoCartera(
   } | null
 ): string {
   return (
-    institucionDesdeSugerenciaOcrReescaneo(res?.sugerencia ?? null) ||
-    normalizarInstitucionBancoReescaneo((pago.institucion_bancaria || '').trim()) ||
+    institucionDesdeSugerenciaOcr(res?.sugerencia ?? null) ||
+    normalizarInstitucionBancoEscaneo((pago.institucion_bancaria || '').trim()) ||
     ''
   )
 }
 
-/** Serial Mercantil 740087… (misma regla que plantilla A / pipeline Gmail). */
-export function esSerialMercantil740087(digitsOnly: string): boolean {
-  return /^740087\d{6,}$/.test(digitsOnly)
-}
-
-/**
- * Banco inferido solo desde la respuesta OCR de esta pasada (Gemini + post-proceso backend).
- * Serial 740087… solo si vino en numero_operacion del OCR, nunca desde BD previa.
- */
-export function institucionDesdeSugerenciaOcrReescaneo(
-  sugerencia: Pick<
-    EscanerInfopagosSugerencia,
-    'institucion_financiera' | 'numero_operacion'
-  > | null
-): string | null {
-  const ocr = normalizarInstitucionBancoReescaneo(
-    (sugerencia?.institucion_financiera || '').trim()
-  )
-  if (ocr) return ocr
-
-  const numOcr = (sugerencia?.numero_operacion || '').replace(/\D/g, '')
-  if (esSerialMercantil740087(numOcr)) return 'Mercantil'
-  return null
-}
+export {
+  esSerialMercantil740087,
+  institucionDesdeSugerenciaOcr as institucionDesdeSugerenciaOcrReescaneo,
+  normalizarInstitucionBancoEscaneo as normalizarInstitucionBancoReescaneo,
+} from '../../utils/escanerComprobanteInfopagos'
 
 /** Plantilla opcional pre-OCR: solo banco ya confirmado en cartera (igual que lote Infopagos). */
 export function institucionPlantillaConfirmadaReescaneo(
   pago: Pick<Pago, 'institucion_bancaria'>
 ): string | null {
-  return normalizarInstitucionBancoReescaneo(
-    (pago.institucion_bancaria || '').trim()
-  )
-}
-
-function normalizarInstitucionBancoReescaneo(raw: string): string | null {
-  const t = (raw || '').trim()
-  if (!t) return null
-  if (/^binance$/i.test(t)) return 'Binance'
-  if (/^bnc$/i.test(t) || /^bnv$/i.test(t)) return 'BNC'
-  if (/mercantil/i.test(t)) return 'Mercantil'
-  if (/^recibo/i.test(t)) return 'Recibo'
-  if (/banco de venezuela|^bdv$/i.test(t)) return 'Banco de Venezuela'
-  return t
+  return institucionPlantillaConfirmadaEscaneo(pago.institucion_bancaria)
 }
 
 /** Pago con enlace o ruta de comprobante ya insertado en cartera. */
@@ -741,7 +714,7 @@ export function camposDigitadosOcrReescaneo(
   sugerencia: EscanerInfopagosSugerencia
 ): CampoReescaneoOcr[] {
   const out: CampoReescaneoOcr[] = []
-  const inst = institucionDesdeSugerenciaOcrReescaneo(sugerencia)
+  const inst = institucionDesdeSugerenciaOcr(sugerencia)
   if (inst) out.push('banco')
   if ((sugerencia.numero_operacion || '').trim()) out.push('numero')
   const m = sugerencia.monto
@@ -837,8 +810,8 @@ export function patchCompletoPagoDesdeOcrReescaneoCartera(
 ): PatchReescaneoOcrResult {
   const patch: Partial<PagoCreate> & { monto_bs_original?: number | null } = {}
   const inst =
-    institucionDesdeSugerenciaOcrReescaneo(sugerencia) ||
-    normalizarInstitucionBancoReescaneo((pago.institucion_bancaria || '').trim())
+    institucionDesdeSugerenciaOcr(sugerencia) ||
+    normalizarInstitucionBancoEscaneo((pago.institucion_bancaria || '').trim())
   const monedaOcr = sugerencia.moneda === 'BS' ? 'BS' : 'USD'
   const montoOcr =
     sugerencia.monto != null && Number.isFinite(Number(sugerencia.monto))
@@ -938,7 +911,7 @@ export function motivosCamposDigitadosNoAplicadosReescaneo(
   camposAplicados: CampoReescaneoOcr[],
   opts?: { bloquearNumeroPorDuplicado?: boolean }
 ): string[] {
-  const inst = institucionDesdeSugerenciaOcrReescaneo(sugerencia)
+  const inst = institucionDesdeSugerenciaOcr(sugerencia)
   const digitados = camposDigitadosOcrReescaneo(sugerencia)
   const labels: Record<CampoReescaneoOcr, string> = {
     banco: 'Banco',
@@ -983,14 +956,19 @@ export function pagoInicialDesdeSugerenciaEscaneoRevision(
   const pid =
     prestamoId != null && Number(prestamoId) > 0 ? Number(prestamoId) : null
 
+  const inst =
+    institucionDesdeSugerenciaOcr(sugerencia) ||
+    normalizarInstitucionBancoEscaneo(
+      (sugerencia.institucion_financiera || '').trim()
+    )
+
   const base: PagoInicialRegistrar = {
     cedula_cliente: cedula,
     prestamo_id: pid,
     fecha_pago:
       (sugerencia.fecha_pago || '').trim() || new Date().toISOString().slice(0, 10),
     numero_documento: (sugerencia.numero_operacion || '').trim(),
-    institucion_bancaria:
-      (sugerencia.institucion_financiera || '').trim() || null,
+    institucion_bancaria: inst || null,
     notas: (sugerencia.notas_modelo || '').trim() || null,
     link_comprobante: null,
     moneda_registro: moneda,

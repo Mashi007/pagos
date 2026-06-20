@@ -54,7 +54,11 @@ import toast from 'react-hot-toast'
 
 import { Loader2, Eye, Brain } from 'lucide-react'
 import { FUENTE_TASA_DEFAULT } from '../constants/fuenteTasaCambio'
-import { resolverInstitucionDesdeExtraccion } from './escanerInfopagosLoteModel'
+import {
+  buildFormDataEscanerComprobante,
+  mergeCamposFormularioDesdeSugerenciaOcr,
+  mensajeFalloExtraccionEscaner,
+} from '../utils/escanerComprobanteInfopagos'
 import {
   aplicarSufijoVistoADocumento,
   collectTokensSufijoVistoArchivoDesdeFilas,
@@ -439,26 +443,26 @@ export default function CobrosEditarPage() {
     (res: EscanerInfopagosExtraerResponse) => {
       const s = res.sugerencia
       if (!s) return false
-      const { institucion: inst, otroInstitucion: otroInst } =
-        resolverInstitucionDesdeExtraccion(
-          s.institucion_financiera || '',
-          form.institucion_financiera,
-          otroInstitucion
-        )
-      const mon = s.moneda === 'BS' ? 'BS' : 'USD'
-      const fechaExtraida = (s.fecha_pago || '').trim()
+      const merged = mergeCamposFormularioDesdeSugerenciaOcr(
+        {
+          fechaPago: form.fecha_pago,
+          institucion: form.institucion_financiera,
+          otroInstitucion: otroInstitucion,
+          numeroOperacion: form.numero_operacion,
+          monto: form.monto,
+          moneda: form.moneda === 'BS' ? 'BS' : 'USD',
+        },
+        s
+      )
       setForm(prev => ({
         ...prev,
-        fecha_pago: fechaExtraida || prev.fecha_pago,
-        institucion_financiera: inst || prev.institucion_financiera,
-        numero_operacion: (s.numero_operacion || '').trim() || prev.numero_operacion,
-        monto:
-          s.monto != null && Number.isFinite(s.monto)
-            ? String(s.monto)
-            : prev.monto,
-        moneda: mon,
+        fecha_pago: merged.fechaPago,
+        institucion_financiera: merged.institucion,
+        numero_operacion: merged.numeroOperacion,
+        monto: merged.monto,
+        moneda: merged.moneda,
       }))
-      setOtroInstitucion(otroInst)
+      setOtroInstitucion(merged.otroInstitucion)
       if (s.numero_operacion) {
         tokensSufijoUsadosRef.current =
           collectTokensSufijoVistoArchivoDesdeFilas([
@@ -509,23 +513,16 @@ export default function CobrosEditarPage() {
         )
         return
       }
-      const fd = new FormData()
-      fd.append('tipo_cedula', tipo)
-      fd.append('numero_cedula', numero)
-      fd.append('fuente_tasa_cambio', FUENTE_TASA_DEFAULT)
-      fd.append('comprobante', archivo)
-      const instHint = (form.institucion_financiera || '').trim()
-      if (instHint && INSTITUCIONES_FINANCIERAS.includes(instHint)) {
-        fd.append('institucion_plantilla', instHint)
-      }
+      const fd = buildFormDataEscanerComprobante({
+        tipoCedula: tipo,
+        numeroCedula: numero,
+        comprobante: archivo,
+        fuenteTasaCambio: FUENTE_TASA_DEFAULT,
+        institucionPlantillaHint: form.institucion_financiera,
+      })
       const res = await escanerInfopagosExtraerComprobante(fd)
       if (!res.ok) {
-        toast.error(
-          res.validacion_reglas ||
-            res.validacion_campos ||
-            res.error ||
-            'No se pudo digitalizar el comprobante.'
-        )
+        toast.error(mensajeFalloExtraccionEscaner(res))
         return
       }
       if (!aplicarExtraccionAlFormulario(res)) {

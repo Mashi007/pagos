@@ -208,7 +208,7 @@ export function CobranzaGestionCaso({
         <div className="flex flex-wrap items-start justify-between gap-2 border-b border-slate-200 pb-3">
           <div>
             <p className="text-lg font-semibold text-slate-900">
-              Caso en gestion — Prestamo #{prestamo.id}
+              Caso en gestion - Prestamo #{prestamo.id}
             </p>
             <p className="text-sm text-slate-600">
               {prestamo.nombres || prestamo.cedula} · Pendiente{' '}

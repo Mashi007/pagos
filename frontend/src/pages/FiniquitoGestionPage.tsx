@@ -3468,7 +3468,7 @@ function FiniquitoGestionPageInner() {
             <DialogTitle>Abrir revisión para conciliar</DialogTitle>
             <DialogDescription className="space-y-2 text-base text-slate-800">
               <span className="block">
-                Préstamo <strong>{pendingVistoRow?.prestamo_id ?? '—'}</strong>:
+                Préstamo <strong>{pendingVistoRow?.prestamo_id ?? '-'}</strong>:
                 se abrirá revisión manual. La conciliación se hace solo con el
                 botón <strong>Conciliar</strong> (ABONOS, comprobantes, OCR y
                 cascada), igual que en cualquier revisión manual.
@@ -3511,8 +3511,8 @@ function FiniquitoGestionPageInner() {
             <DialogDescription className="space-y-2 text-base text-slate-800">
               <span className="block">
                 Préstamo{' '}
-                <strong>#{pendingLiberarCaso?.prestamo_id ?? '—'}</strong> (caso{' '}
-                {pendingLiberarCaso?.id ?? '—'}) saldrá del flujo finiquito.
+                <strong>#{pendingLiberarCaso?.prestamo_id ?? '-'}</strong> (caso{' '}
+                {pendingLiberarCaso?.id ?? '-'}) saldrá del flujo finiquito.
               </span>
               <span className="block">
                 Use esto cuando <strong>Conciliar</strong> confirme que el crédito{' '}

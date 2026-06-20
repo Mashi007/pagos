@@ -166,7 +166,7 @@ export default function CobranzasPage() {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-xl">
-              Prestamos — {resultado.nombres || 'Cliente'}
+              Prestamos - {resultado.nombres || 'Cliente'}
             </CardTitle>
             <p className="text-sm text-slate-500">Cedula: {resultado.cedula}</p>
           </CardHeader>

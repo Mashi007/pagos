@@ -312,7 +312,7 @@ class ApiClient {
         }
 
         // FormData/multipart: quitar Content-Type por defecto (application/json).
-        // Si no, el proxy o FastAPI reciben cuerpo inválido y devuelven 400 con HTML en ~10–50 ms.
+        // Si no, el proxy o FastAPI reciben cuerpo inválido y devuelven 400 con HTML en ~10-50 ms.
         if (
           typeof FormData !== 'undefined' &&
           config.data instanceof FormData

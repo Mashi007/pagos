@@ -66,14 +66,14 @@ export function ConciliarCarteraPagosProgreso({
             </span>
             <span className="mx-2">→</span>
             <span className="font-semibold">
-              ID nuevos: {idsRecreados.length > 0 ? idsRecreados.join(', ') : '—'}
+              ID nuevos: {idsRecreados.length > 0 ? idsRecreados.join(', ') : '-'}
             </span>
           </p>
         ) : (
           <p className="mt-2 text-sm text-green-800">
             Nuevos pagos:{' '}
             <strong>
-              {idsRecreados.length > 0 ? idsRecreados.join(', ') : ocrOk ?? '—'}
+              {idsRecreados.length > 0 ? idsRecreados.join(', ') : ocrOk ?? '-'}
             </strong>
           </p>
         )}
@@ -93,7 +93,7 @@ export function ConciliarCarteraPagosProgreso({
   return (
     <div className="space-y-4 rounded-lg border border-amber-200 bg-amber-50/80 p-4">
       <p className="text-sm font-medium text-amber-950">
-        Conciliando cartera — préstamo {prestamoId}
+        Conciliando cartera - préstamo {prestamoId}
       </p>
       <ul className="space-y-2">
         {PASOS.map((paso, idx) => {

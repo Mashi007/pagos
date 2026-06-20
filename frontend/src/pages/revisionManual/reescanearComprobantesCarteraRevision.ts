@@ -1,7 +1,6 @@
 /**
- * Re-escaneo cartera: misma API/prompts que lote Infopagos (extraer-comprobante +
- * rescate_plantilla Gmail A/B/C/D/G). Limpia campos OCR en BD y reemplaza solo con lo
- * devuelto por Gemini en esa pasada; no conserva valores previos ni inventa desde BD.
+ * Re-escaneo cartera: misma API/prompts que Escanear (extraer-comprobante +
+ * rescate_plantilla Gmail). Merge conservador: solo actualiza campos detectados por OCR.
  */
 import {
   escanerInfopagosExtraerComprobante,
@@ -10,12 +9,15 @@ import {
 } from '../../services/cobrosService'
 import { pagoService, type Pago, type PagoCreate } from '../../services/pagoService'
 import { normalizarComprobanteArchivoParaEscaneo } from '../../utils/normalizarComprobanteArchivo'
+import {
+  buildFormDataEscanerComprobante,
+  mensajeErrorExtraccionEscaner,
+} from '../../utils/escanerComprobanteInfopagos'
 import { hayDuplicadoFila, filaDesdeRevisionPago } from '../escanerInfopagosLoteModel'
 import {
   esInstitucionBinanceReescaneo,
   institucionDesdeSugerenciaOcrReescaneo,
   institucionEfectivaReescaneoCartera,
-  institucionPlantillaConfirmadaReescaneo,
   omitirValidacionFechaBinanceReescaneo,
   omitirValidacionInstitucionReescaneoCartera,
   patchCompletoPagoDesdeOcrReescaneoCartera,
@@ -29,56 +31,6 @@ import {
 } from './EditarRevisionManual.helpers'
 
 const CHUNK_CONTEXTO_REVISION = 10
-
-function traducirDetalleTecnicoReescaneo(detail: string): string {
-  const raw = (detail || '').trim()
-  if (!raw) return raw
-  const t = raw.toLowerCase()
-
-  const faltaFecha =
-    t.includes('valid date or datetime') ||
-    t.includes('fecha_pago') ||
-    t.includes('input is too short')
-  const faltaNumero = t.includes('numero_documento no puede estar vacio')
-
-  if (faltaFecha && faltaNumero) {
-    return 'Falta fecha y número de documento en el reescaneo.'
-  }
-  if (faltaFecha) {
-    return 'Falta la fecha en el reescaneo.'
-  }
-  if (faltaNumero) {
-    return 'Falta el número de documento en el reescaneo.'
-  }
-  return raw
-}
-
-function mensajeErrorExtraccionReescaneo(err: unknown): string {
-  if (err && typeof err === 'object' && 'response' in err) {
-    const detail = (
-      err as { response?: { data?: { detail?: unknown } } }
-    ).response?.data?.detail
-    if (typeof detail === 'string' && detail.trim()) {
-      return traducirDetalleTecnicoReescaneo(detail)
-    }
-    if (Array.isArray(detail)) {
-      const msgs = detail
-        .map(x =>
-          typeof x === 'object' && x && 'msg' in x
-            ? String((x as { msg?: string }).msg || '')
-            : String(x)
-        )
-        .filter(Boolean)
-      if (msgs.length) {
-        return traducirDetalleTecnicoReescaneo(msgs.join('; '))
-      }
-    }
-  }
-  if (err instanceof Error && err.message.trim()) {
-    return traducirDetalleTecnicoReescaneo(err.message)
-  }
-  return 'Error de red o del servidor al digitalizar el comprobante.'
-}
 
 function fileDesdeBase64(b64: string, fileName: string, mimeType: string): File {
   const bin = atob(b64)
@@ -279,8 +231,8 @@ export type ReescaneoCarteraResultado = {
 
 /**
  * Re-escanea solo comprobantes ya insertados en el préstamo (OCR + actualización).
- * Pagos sin imagen no se tocan. Por cada pago: limpia campos OCR en BD, escanea y
- * persiste solo lo devuelto por Gemini (reemplazo completo, sin mezclar con valores previos).
+ * Pagos sin imagen no se tocan. Por cada pago: escanea y persiste solo campos
+ * detectados por Gemini (merge conservador, sin borrar datos previos con vacío).
  */
 export async function reescanearComprobantesCarteraPrestamo(opts: {
   cedula: string
@@ -363,15 +315,14 @@ export async function reescanearComprobantesCarteraPrestamo(opts: {
         pago.cedula_cliente
       )
 
-      const fd = new FormData()
-      fd.append('tipo_cedula', cedulaPartes.tipo)
-      fd.append('numero_cedula', cedulaPartes.numero)
-      fd.append('fuente_tasa_cambio', 'euro')
-      fd.append('extraccion_sin_cliente', 'true')
-      fd.append('prestamo_objetivo_id', String(opts.prestamoId))
-      fd.append('comprobante', archivo)
-      const instHint = institucionPlantillaConfirmadaReescaneo(pago)
-      if (instHint) fd.append('institucion_plantilla', instHint)
+      const fd = buildFormDataEscanerComprobante({
+        tipoCedula: cedulaPartes.tipo,
+        numeroCedula: cedulaPartes.numero,
+        comprobante: archivo,
+        extraccionSinCliente: true,
+        prestamoObjetivoId: opts.prestamoId,
+        institucionPlantillaHint: pago.institucion_bancaria,
+      })
 
       try {
         const res = await escanerInfopagosExtraerComprobante(fd)
@@ -394,7 +345,7 @@ export async function reescanearComprobantesCarteraPrestamo(opts: {
           }
         }
       } catch (err) {
-        alertas[item.pago_id] = [mensajeErrorExtraccionReescaneo(err)]
+        alertas[item.pago_id] = [mensajeErrorExtraccionEscaner(err)]
       }
 
       hecho++
