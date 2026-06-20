@@ -424,6 +424,8 @@ _LABEL_NUM_OP_PREFIX_RE = re.compile(
 )
 
 _MERCANTIL_SERIAL_LARGO_RE = re.compile(r"7400\d{9,}")
+_MERCANTIL_SERIAL_15_RE = re.compile(r"740087\d{9}")
+MERCANTIL_SERIAL_DIGITOS = 15
 _SERIAL_ETIQUETADO_RE = re.compile(r"(?i)\bserial\s*[:.]?\s*(\d{6,30})")
 _REF_ETIQUETADO_RE = re.compile(r"(?i)\bref(?:\.|\s|:)?\s*(\d{6,18})")
 _MERCANTIL_DCME_GUIONADO_RE = re.compile(
@@ -434,6 +436,33 @@ _MERCANTIL_DCME_GUIONADO_RE = re.compile(
 
 def _es_institucion_mercantil(institucion: str) -> bool:
     return "mercantil" in (institucion or "").strip().lower()
+
+
+def digitos_serial_mercantil(num_op: str) -> str:
+    return re.sub(r"\D", "", (num_op or "").strip())
+
+
+def es_serial_mercantil_740087(num_op: str) -> bool:
+    """True si parece serial Mercantil (prefijo 740087, longitud plausible)."""
+    d = digitos_serial_mercantil(num_op)
+    return bool(d.startswith("740087") and len(d) >= 12)
+
+
+def longitud_serial_mercantil_valida(num_op: str) -> bool:
+    """Serial Mercantil canónico: exactamente 15 dígitos empezando por 740087."""
+    d = digitos_serial_mercantil(num_op)
+    return len(d) == MERCANTIL_SERIAL_DIGITOS and d.startswith("740087")
+
+
+def serial_mercantil_requiere_rescate(num_op: str) -> bool:
+    """
+    OCR truncó o mezcló dígitos (típ. 13-14 cifras en tira vertical).
+    Dispara segunda pasada Gemini con plantilla Mercantil.
+    """
+    d = digitos_serial_mercantil(num_op)
+    if not d.startswith("740087"):
+        return False
+    return len(d) != MERCANTIL_SERIAL_DIGITOS
 
 
 def es_codigo_dcme_mercantil(s: str) -> bool:
@@ -511,26 +540,23 @@ def corregir_numero_operacion_bnc(
 
 
 def extraer_serial_mercantil_7400(texto: str) -> str:
-    """Serial Mercantil (740087…, 15 dígitos típicos) desde cualquier fragmento OCR."""
+    """Serial Mercantil (740087 + 9 dígitos = 15) desde cualquier fragmento OCR."""
     if not texto:
         return ""
     compact = _deduplicar_digitos_repetidos(re.sub(r"\D", "", texto))
     if not compact:
         return ""
+    m15 = _MERCANTIL_SERIAL_15_RE.search(compact)
+    if m15:
+        return m15.group(0)
     runs = _MERCANTIL_SERIAL_LARGO_RE.findall(compact)
     if not runs:
         return ""
-    quince = [r for r in runs if len(r) == 15]
+    quince = [r for r in runs if longitud_serial_mercantil_valida(r)]
     if quince:
         return quince[0]
-    candidatos: List[str] = []
-    for r in sorted(set(runs), key=len):
-        norm = _deduplicar_digitos_repetidos(r)
-        if norm and norm not in candidatos:
-            candidatos.append(norm)
-    if not candidatos:
-        return ""
-    return min(candidatos, key=len)
+    # No devolver 13-14 dígitos truncados: provocan rescate o revisión manual.
+    return ""
 
 
 def numero_operacion_mercantil_solo_dcme(num_op: str) -> bool:
@@ -565,6 +591,12 @@ def corregir_numero_operacion_mercantil(
             return op_norm
         return serial[:100]
     if op_norm and numero_operacion_mercantil_solo_dcme(op_norm):
+        return ""
+    if (
+        op_norm
+        and es_serial_mercantil_740087(op_norm)
+        and not longitud_serial_mercantil_valida(op_norm)
+    ):
         return ""
     return op_norm if op_norm else num_op
 

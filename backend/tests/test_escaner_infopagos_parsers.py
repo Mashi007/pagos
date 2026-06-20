@@ -260,6 +260,20 @@ def test_corregir_numero_operacion_mercantil_serial_740087():
     assert sanitizar_numero_operacion_comprobante(f"{serial}{serial}") == serial
 
 
+def test_serial_mercantil_14_digitos_truncado_no_aceptado():
+    from app.services.pagos_gmail.parse_campos_comprobante import (
+        corregir_numero_operacion_mercantil,
+        extraer_serial_mercantil_7400,
+        serial_mercantil_requiere_rescate,
+    )
+
+    truncado = "74008740065053"
+    assert len(truncado) == 14
+    assert serial_mercantil_requiere_rescate(truncado) is True
+    assert extraer_serial_mercantil_7400(truncado) == ""
+    assert corregir_numero_operacion_mercantil(truncado, institucion="Mercantil") == ""
+
+
 def test_normalizar_campos_gemini_descarta_dcme_sin_serial():
     out = normalizar_campos_gemini_gmail(
         {

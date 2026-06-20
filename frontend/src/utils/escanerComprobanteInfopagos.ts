@@ -23,9 +23,9 @@ export function normalizarInstitucionBancoEscaneo(raw: string): string | null {
   return t
 }
 
-/** Serial Mercantil 740087… (misma regla que plantilla A / pipeline Gmail). */
+/** Serial Mercantil 740087 + 9 dígitos = 15 (misma regla que plantilla A / pipeline Gmail). */
 export function esSerialMercantil740087(digitsOnly: string): boolean {
-  return /^740087\d{6,}$/.test(digitsOnly)
+  return /^740087\d{9}$/.test(digitsOnly)
 }
 
 /**

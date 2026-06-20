@@ -40,6 +40,7 @@ from app.services.pagos_gmail.parse_campos_comprobante import (
     parse_fecha_comprobante as _parse_fecha_escaner_desde_gemini,
     parse_monto_comprobante as _parse_monto_escaner,
     sanitizar_numero_operacion_comprobante,
+    serial_mercantil_requiere_rescate,
 )
 
 logger = logging.getLogger(__name__)
@@ -72,7 +73,7 @@ NÚMERO DE OPERACIÓN / SERIAL / REFERENCIA (copiar del comprobante — no inven
   - Un solo valor: no concatenes Ref y Serial (BNC); en recibo **cajero BNC** con ambas etiquetas, copia **solo Serial:** (nunca Ref).
   - No repitas el mismo número dos veces (ej. 113907169113907169 → solo 113907169).
   - Conserva ceros a la izquierda tal como en el papel (ej. 0000091316488).
-  - Mercantil DEPÓSITO DIVISAS / RECAUDACIÓN: el número de operación es **siempre** la línea **Serial:** con ristra larga que **empieza por 740087** (15 dígitos típicos, ej. 740087408543435). **Prohibido** usar como `numero_operacion` el código guionado del validador (ej. `9276-20260424-140259-DCME-7819-A`): ese bloque DCME solo sirve para inferir fecha, no es el serial del depósito. Si coexisten DCME y Serial 740087…, copia **solo** el Serial completo.
+  - Mercantil DEPÓSITO DIVISAS / RECAUDACIÓN: el número de operación es **siempre** la línea **Serial:** con ristra larga que **empieza por 740087** (**exactamente 15 dígitos**, ej. 740087408543435). **Prohibido** devolver 13-14 dígitos truncados (lectura vertical errónea). Si la tira térmica está girada, **rote mentalmente** la imagen y lea el Serial **en línea horizontal** (todos los dígitos seguidos junto a la etiqueta Serial); **no** mezcles cifras de monto, cuenta 0105 ni código DCME. **Prohibido** usar como `numero_operacion` el código guionado del validador (ej. `9276-20260424-140259-DCME-7819-A`): ese bloque DCME solo sirve para inferir fecha, no es el serial del depósito. Si coexisten DCME y Serial 740087…, copia **solo** el Serial completo de 15 dígitos.
   - BNC **cajero** (papel, Depósito US$, asteriscos): si coexisten **Ref:** y **Serial:**, usa **solo Serial:** (ej. Ref 105137683 y Serial 105137674 → 105137674). **App BNC** (Bs., sin Serial): usa **Referencia**/**Ref**. Nunca cuenta 0191 ni RIF del banco.
 """.strip()
 
@@ -2604,7 +2605,7 @@ REFERENCIA DE CALENDARIO (solo coherencia; no inventes fechas que no estén en e
 TAREA: Lee la imagen o PDF adjunto y extrae SOLO lo que aparezca con claridad en el comprobante para rellenar un formulario de "Infopagos" con estos campos:
   - fecha_pago: fecha de la operación en el comprobante. Devuélvela como cadena en formato **YYYY-MM-DD** si puedes inferir año/mes/día; si solo hay día/mes sin año razonable, deja fecha_pago vacía "".
   - institucion_financiera: nombre corto del banco o entidad. **Obligatorio** si reconoces una plantilla conocida (ver bloque PLANTILLAS). Valores preferidos: **Mercantil**, **BNC**, **Banco de Venezuela**, **BINANCE**, **Recibo** (recibo manuscrito TORO MOTORCYCLES / ventanilla). Máximo 100 caracteres. No dejes vacío si el diseño del comprobante coincide con Mercantil (0105/RAPI), BNC (0191/cajero BNC), BDV (0102), Binance Pay, **Recibo** (título RECIBO + C.I./RIF + Por:), etc.
-  - numero_operacion: número o código que identifica la transacción (Serial, Ref, Nº operación, referencia, código, ID de orden en Binance, **número de recibo** en formato Recibo, etc.). Sin etiquetas largas: solo el valor. Máximo 100 caracteres. **Recibo manuscrito (TORO MOTORCYCLES)**: copie el **№ / Nº** junto a RECIBO (ej. 00972, conservando ceros). **Un solo valor**: no concatenes Ref y Serial (BNC). **BNC cajero** (papel, Depósito US$): copia **solo** el valor de **Serial:** (ej. 105137674); **nunca** Ref: (ej. 105137683) ni RIF. **App BNC** (Bs., sin línea Serial): usa Referencia/Ref. No repitas el mismo número dos veces (ej. 113907169113907169). Conserva ceros a la izquierda tal como en el papel. **Mercantil** (DEPÓSITO DIVISAS / tira 0105): copia **solo** el **Serial:** largo que empieza por **740087** (todos los dígitos visibles, ej. 740087408543435). **Nunca** uses el código guionado DCME del validador (ej. 9276-20260424-140259-DCME-7819-A) como numero_operacion. **BINANCE Pay**: copia el **Id. de orden / Order ID completo** (típicamente **15-19 dígitos**, a menudo **18**); no trunques ni uses solo el inicio (prohibido devolver 436166756 si en pantalla es 436166756159873024).
+  - numero_operacion: número o código que identifica la transacción (Serial, Ref, Nº operación, referencia, código, ID de orden en Binance, **número de recibo** en formato Recibo, etc.). Sin etiquetas largas: solo el valor. Máximo 100 caracteres. **Recibo manuscrito (TORO MOTORCYCLES)**: copie el **№ / Nº** junto a RECIBO (ej. 00972, conservando ceros). **Un solo valor**: no concatenes Ref y Serial (BNC). **BNC cajero** (papel, Depósito US$): copia **solo** el valor de **Serial:** (ej. 105137674); **nunca** Ref: (ej. 105137683) ni RIF. **App BNC** (Bs., sin línea Serial): usa Referencia/Ref. No repitas el mismo número dos veces (ej. 113907169113907169). Conserva ceros a la izquierda tal como en el papel. **Mercantil** (DEPÓSITO DIVISAS / tira 0105): copia **solo** el **Serial:** largo que empieza por **740087** (**exactamente 15 dígitos** contiguos, ej. 740087408543435). Si la foto muestra la tira en vertical, rote mentalmente y lea el Serial en línea; no devuelvas 13-14 dígitos. **Nunca** uses el código guionado DCME del validador (ej. 9276-20260424-140259-DCME-7819-A) como numero_operacion. **BINANCE Pay**: copia el **Id. de orden / Order ID completo** (típicamente **15-19 dígitos**, a menudo **18**); no trunques ni uses solo el inicio (prohibido devolver 436166756 si en pantalla es 436166756159873024).
   - monto: importe **exacto** del pago principal (Total, Monto Bs., Monto USD, Efectivo). En JSON usa **solo número decimal con punto** (sin separadores de miles): impreso `1.500,00` → `1500.00`; `150,50` → `150.50`; `US$ 20,00` → `20.00`; tira Mercantil `***********96,00 USD` → `96.00` (**nunca** `969`, `965`, `980`). **BINANCE Pay**: copia el monto grande tal cual (ej. `580 USDT` → `580`, no `58`). No redondees ni cambies cifras. Si no es legible, `null`.
   - moneda: exactamente **BS** o **USD** (USDT, $ en contexto divisa fuerte, "Dólares", Binance Pay en USDT → USD).
   - cedula_pagador_en_comprobante: secuencia numérica del **depositante/pagador** (no la del deudor del contexto). Si en el comprobante aparece claramente la línea/casilla del depositante, devuélvela **solo con dígitos** (sin letra V/E/J/G ni puntos de miles). Mercantil (formato **A**): **DP:V-/E-/J-**, **Cédula Dep.**, **Nro. de Cédula del Depositante**. BNC (formato **B**): **DP:V-/E-/J-** en recibo cajero. **Recibo manuscrito (formato G / TORO MOTORCYCLES)**: línea **C.I. / RIF:** (ej. V- 18.231.931 → **18231931**). No inventes dígitos; si la línea no es legible o hay duda, "".
@@ -2746,7 +2747,9 @@ def _extra_prompt_plantilla_escaner(institucion_plantilla: str) -> str:
         chunks.append(
             "MERCANTIL (mismos patrones que clasificación **A** en el pipeline Gmail): "
             "DEPÓSITO DIVISAS / RECAUDACIÓN / tira 0105 RAPI; para `numero_operacion` use "
-            "exclusivamente la línea **Serial:** con ristra larga **740087…** (copie todos los dígitos). "
+            "exclusivamente la línea **Serial:** con ristra larga **740087…** (**15 dígitos** exactos). "
+            "Si la tira está vertical en la foto, rote mentalmente y lea el Serial en línea horizontal; "
+            "no mezcle cifras de monto/cuenta/DCME ni devuelva 13-14 dígitos truncados. "
             "Ignore el código guionado DCME del validador (ej. …-DCME-…-A). Para "
             "`cedula_pagador_en_comprobante` use solo dígitos en DP:V-/E-/J-, Cédula Dep., "
             "Nro. de Cédula del Depositante (sin inventar). Monto desde la tira con asteriscos."
@@ -3072,6 +3075,10 @@ def extract_infopagos_campos_desde_comprobante_con_rescate_plantilla(
             (gem.get("numero_operacion") or "").strip()
         )
     )
+    mercantil_serial_incompleto = (
+        inst_canon == "Mercantil"
+        and serial_mercantil_requiere_rescate((gem.get("numero_operacion") or "").strip())
+    )
     gem_blob = f"{gem.get('numero_operacion') or ''}\n{gem.get('notas') or ''}"
     bnc_ref_en_lugar_serial = False
     if inst_canon == "BNC":
@@ -3091,6 +3098,7 @@ def extract_infopagos_campos_desde_comprobante_con_rescate_plantilla(
         falta_fecha
         or falta_numero_operacion
         or mercantil_solo_dcme
+        or mercantil_serial_incompleto
         or bnc_ref_en_lugar_serial
     )
     if not inst_canon:
@@ -3098,7 +3106,7 @@ def extract_infopagos_campos_desde_comprobante_con_rescate_plantilla(
     if gem.get("ok") and not necesita_rescate:
         return gem
     if plantilla_prev == inst_canon and not mercantil_solo_dcme and not bnc_ref_en_lugar_serial:
-        if not (falta_fecha or falta_numero_operacion):
+        if not (falta_fecha or falta_numero_operacion or mercantil_serial_incompleto):
             return gem
     gem2 = extract_infopagos_campos_desde_comprobante(
         cedula_deudor_contexto,
