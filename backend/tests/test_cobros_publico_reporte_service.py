@@ -256,3 +256,40 @@ class TestGenerarReferenciaInterna:
         ref = cpr.generar_referencia_interna(db)
         hoy = fecha_hoy_caracas().strftime("%Y%m%d")
         assert ref == f"RPC-{hoy}-00002"
+
+
+class TestAutoimportReceiptGuard:
+    def test_autoimport_confirmado_requiere_pago_o_colision_existente(self):
+        from app.api.v1.endpoints.cobros_publico.routes import (
+            _autoimport_confirmo_pago,
+        )
+
+        assert _autoimport_confirmo_pago(cpr.AutoImportResultado(pago_id=123))
+        assert _autoimport_confirmo_pago(
+            cpr.AutoImportResultado(ya_existia_en_pagos=True)
+        )
+        assert not _autoimport_confirmo_pago(
+            cpr.AutoImportResultado(error="huella duplicada")
+        )
+
+    def test_autoimport_fallido_vuelve_a_revision_antes_de_recibo(self):
+        from types import SimpleNamespace
+
+        from app.api.v1.endpoints.cobros_publico.routes import (
+            _marcar_reportado_en_revision_por_autoimport_fallido,
+        )
+
+        pr = SimpleNamespace(
+            estado="aprobado",
+            falla_validadores_manual=False,
+            motivo_rechazo=None,
+        )
+
+        _marcar_reportado_en_revision_por_autoimport_fallido(
+            pr,
+            cpr.AutoImportResultado(error="no hay tasa BS"),
+        )
+
+        assert pr.estado == "en_revision"
+        assert pr.falla_validadores_manual is True
+        assert "no hay tasa BS" in pr.motivo_rechazo
