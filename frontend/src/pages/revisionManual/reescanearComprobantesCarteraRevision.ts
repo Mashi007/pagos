@@ -19,7 +19,6 @@ import {
   omitirValidacionFechaBinanceReescaneo,
   omitirValidacionInstitucionReescaneoCartera,
   patchCompletoPagoDesdeOcrReescaneoCartera,
-  patchLimpiarCamposOcrReescaneoCartera,
   motivosCamposDigitadosNoAplicadosReescaneo,
   filtrarMotivosAlertaReescaneo,
   sanitizarAlertasReescaneoPorPagoId,
@@ -31,12 +30,37 @@ import {
 
 const CHUNK_CONTEXTO_REVISION = 10
 
+function traducirDetalleTecnicoReescaneo(detail: string): string {
+  const raw = (detail || '').trim()
+  if (!raw) return raw
+  const t = raw.toLowerCase()
+
+  const faltaFecha =
+    t.includes('valid date or datetime') ||
+    t.includes('fecha_pago') ||
+    t.includes('input is too short')
+  const faltaNumero = t.includes('numero_documento no puede estar vacio')
+
+  if (faltaFecha && faltaNumero) {
+    return 'Falta fecha y número de documento en el reescaneo.'
+  }
+  if (faltaFecha) {
+    return 'Falta la fecha en el reescaneo.'
+  }
+  if (faltaNumero) {
+    return 'Falta el número de documento en el reescaneo.'
+  }
+  return raw
+}
+
 function mensajeErrorExtraccionReescaneo(err: unknown): string {
   if (err && typeof err === 'object' && 'response' in err) {
     const detail = (
       err as { response?: { data?: { detail?: unknown } } }
     ).response?.data?.detail
-    if (typeof detail === 'string' && detail.trim()) return detail.trim()
+    if (typeof detail === 'string' && detail.trim()) {
+      return traducirDetalleTecnicoReescaneo(detail)
+    }
     if (Array.isArray(detail)) {
       const msgs = detail
         .map(x =>
@@ -45,10 +69,14 @@ function mensajeErrorExtraccionReescaneo(err: unknown): string {
             : String(x)
         )
         .filter(Boolean)
-      if (msgs.length) return msgs.join('; ')
+      if (msgs.length) {
+        return traducirDetalleTecnicoReescaneo(msgs.join('; '))
+      }
     }
   }
-  if (err instanceof Error && err.message.trim()) return err.message.trim()
+  if (err instanceof Error && err.message.trim()) {
+    return traducirDetalleTecnicoReescaneo(err.message)
+  }
   return 'Error de red o del servidor al digitalizar el comprobante.'
 }
 
@@ -346,10 +374,6 @@ export async function reescanearComprobantesCarteraPrestamo(opts: {
       if (instHint) fd.append('institucion_plantilla', instHint)
 
       try {
-        await pagoService.updatePago(
-          item.pago_id,
-          patchLimpiarCamposOcrReescaneoCartera(pago)
-        )
         const res = await escanerInfopagosExtraerComprobante(fd)
         const persistencia = resultadoPersistenciaReescaneoOcr(pago, res)
         if (persistencia?.hayCambios) {

@@ -3049,7 +3049,9 @@ def extract_infopagos_campos_desde_comprobante_con_rescate_plantilla(
 ) -> Dict[str, Any]:
     """
     Escáner Infopagos: extracción + rescate opcional con plantilla bancaria inferida.
-    Segunda pasada solo si hay institución canónica y la primera falló o no trajo fecha.
+    Segunda pasada si hay institución canónica y la primera falló, o dejó vacíos
+    campos críticos como fecha o número de operación, o cayó en errores conocidos
+    de Mercantil/BNC.
     """
     gem = extract_infopagos_campos_desde_comprobante(
         cedula_deudor_contexto,
@@ -3082,13 +3084,22 @@ def extract_infopagos_campos_desde_comprobante_con_rescate_plantilla(
             and (not serial_bnc or serial_bnc != num_gem)
         )
     falta_fecha = bool(gem.get("ok") and gem.get("fecha_pago") is None)
-    necesita_rescate = falta_fecha or mercantil_solo_dcme or bnc_ref_en_lugar_serial
+    falta_numero_operacion = bool(
+        gem.get("ok") and not str(gem.get("numero_operacion") or "").strip()
+    )
+    necesita_rescate = (
+        falta_fecha
+        or falta_numero_operacion
+        or mercantil_solo_dcme
+        or bnc_ref_en_lugar_serial
+    )
     if not inst_canon:
         return gem
     if gem.get("ok") and not necesita_rescate:
         return gem
     if plantilla_prev == inst_canon and not mercantil_solo_dcme and not bnc_ref_en_lugar_serial:
-        return gem
+        if not (falta_fecha or falta_numero_operacion):
+            return gem
     gem2 = extract_infopagos_campos_desde_comprobante(
         cedula_deudor_contexto,
         image_bytes,

@@ -827,15 +827,18 @@ export function patchLimpiarCamposOcrReescaneoCartera(
 }
 
 /**
- * Re-escaneo: base vacía + solo lo devuelto por OCR en esta pasada.
- * No conserva valores previos de fecha, banco, Nº, monto ni moneda.
+ * Re-escaneo: limpia campos OCR y reaplica lo detectado en esta pasada.
+ * Si Gemini no identifica banco con claridad, conserva la institución previa confirmada
+ * para no degradar un dato que ya existía en cartera.
  */
 export function patchCompletoPagoDesdeOcrReescaneoCartera(
   pago: Pago,
   sugerencia: EscanerInfopagosSugerencia
 ): PatchReescaneoOcrResult {
-  const patch = patchLimpiarCamposOcrReescaneoCartera(pago)
-  const inst = institucionDesdeSugerenciaOcrReescaneo(sugerencia)
+  const patch: Partial<PagoCreate> & { monto_bs_original?: number | null } = {}
+  const inst =
+    institucionDesdeSugerenciaOcrReescaneo(sugerencia) ||
+    normalizarInstitucionBancoReescaneo((pago.institucion_bancaria || '').trim())
   const monedaOcr = sugerencia.moneda === 'BS' ? 'BS' : 'USD'
   const montoOcr =
     sugerencia.monto != null && Number.isFinite(Number(sugerencia.monto))
@@ -844,38 +847,68 @@ export function patchCompletoPagoDesdeOcrReescaneoCartera(
   const numeroOcr = (sugerencia.numero_operacion || '').trim()
   const fechaOcr = (sugerencia.fecha_pago || '').trim()
   const camposAplicados: CampoReescaneoOcr[] = []
+  let hayCambios = false
 
-  if (inst) {
+  if (inst && inst !== (pago.institucion_bancaria || '').trim()) {
     patch.institucion_bancaria = inst
     camposAplicados.push('banco')
+    hayCambios = true
   }
-  if (numeroOcr) {
+  if (numeroOcr && numeroOcr !== (pago.numero_documento || '').trim()) {
     patch.numero_documento = numeroOcr
     camposAplicados.push('numero')
+    hayCambios = true
   }
   if (montoOcr != null && montoOcr > 0) {
     if (monedaOcr === 'BS') {
-      patch.monto_bs_original = montoOcr
-      patch.monto_pagado = 0
-      patch.moneda_registro = 'BS'
+      if (
+        Number(pago.monto_bs_original ?? 0) !== montoOcr ||
+        (pago.moneda_registro || '').toUpperCase() !== 'BS'
+      ) {
+        patch.monto_bs_original = montoOcr
+        patch.monto_pagado = 0
+        patch.moneda_registro = 'BS'
+        hayCambios = true
+      }
     } else {
-      patch.monto_pagado = montoOcr
-      patch.moneda_registro = 'USD'
+      if (
+        Number(pago.monto_pagado ?? 0) !== montoOcr ||
+        (pago.moneda_registro || 'USD').toUpperCase() !== 'USD'
+      ) {
+        patch.monto_pagado = montoOcr
+        patch.moneda_registro = 'USD'
+        hayCambios = true
+      }
     }
     camposAplicados.push('monto', 'moneda')
-  } else if (sugerencia.moneda === 'BS' || sugerencia.moneda === 'USD') {
+  } else if (
+    (sugerencia.moneda === 'BS' || sugerencia.moneda === 'USD') &&
+    (pago.moneda_registro || 'USD').toUpperCase() !== monedaOcr
+  ) {
     patch.moneda_registro = monedaOcr
     camposAplicados.push('moneda')
+    hayCambios = true
   }
-  if (fechaOcr && !esInstitucionBinanceReescaneo(inst || '')) {
+  const fechaPagoActual =
+    typeof pago.fecha_pago === 'string'
+      ? pago.fecha_pago.slice(0, 10)
+      : pago.fecha_pago instanceof Date
+        ? pago.fecha_pago.toISOString().slice(0, 10)
+        : ''
+  if (
+    fechaOcr &&
+    !esInstitucionBinanceReescaneo(inst || '') &&
+    fechaOcr !== fechaPagoActual
+  ) {
     patch.fecha_pago = fechaOcr
     camposAplicados.push('fecha')
+    hayCambios = true
   }
 
   return {
     patch,
     camposAplicados: [...new Set(camposAplicados)],
-    hayCambios: true,
+    hayCambios,
   }
 }
 
