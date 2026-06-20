@@ -274,6 +274,22 @@ def test_serial_mercantil_14_digitos_truncado_no_aceptado():
     assert corregir_numero_operacion_mercantil(truncado, institucion="Mercantil") == ""
 
 
+def test_inferir_fecha_mercantil_desde_dcme_recuadro():
+    from app.services.pagos_gmail.parse_campos_comprobante import (
+        extraer_codigo_dcme_mercantil_en_texto,
+        inferir_fecha_pago_mercantil_desde_texto,
+        inferir_fecha_pago_desde_numero_operacion,
+    )
+
+    dcme = "9264-20260618-115409-DCME-5574-A"
+    serial = "740087459986093"
+    assert extraer_codigo_dcme_mercantil_en_texto(dcme) == dcme
+    assert inferir_fecha_pago_mercantil_desde_texto(dcme) == "18/06/2026"
+    assert inferir_fecha_pago_desde_numero_operacion(serial) == ""
+    blob = f"Serial: {serial}\n{dcme}"
+    assert inferir_fecha_pago_mercantil_desde_texto(blob) == "18/06/2026"
+
+
 def test_normalizar_campos_gemini_descarta_dcme_sin_serial():
     out = normalizar_campos_gemini_gmail(
         {

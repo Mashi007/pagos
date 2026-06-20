@@ -417,6 +417,26 @@ def inferir_fecha_pago_desde_numero_operacion(
     return fecha_comprobante_a_ddmmyyyy(nr, ref_hoy)
 
 
+def extraer_codigo_dcme_mercantil_en_texto(texto: str) -> str:
+    """Código del recuadro superior Mercantil (ej. 9264-20260618-115409-DCME-5574-A)."""
+    m = _MERCANTIL_DCME_EN_TEXTO_RE.search((texto or "").strip())
+    return m.group(0) if m else ""
+
+
+def inferir_fecha_pago_mercantil_desde_texto(
+    texto: str,
+    ref_hoy: Optional[date] = None,
+) -> str:
+    """
+    Fecha operación Mercantil: 2º bloque YYYYMMDD del código DCME en el recuadro
+  superior de la tira (no del Serial 740087…).
+    """
+    dcme = extraer_codigo_dcme_mercantil_en_texto(texto)
+    if dcme:
+        return inferir_fecha_pago_desde_numero_operacion(dcme, ref_hoy)
+    return inferir_fecha_pago_desde_numero_operacion(texto, ref_hoy)
+
+
 _LABEL_NUM_OP_PREFIX_RE = re.compile(
     r"^(?:(?:serial|ref(?:\.|\s|:)?|referencia|operaci[oó]n|secuencial|"
     r"n[ºo°°]\.?\s*(?:operaci[oó]n|documento|control|ref)?)\s*[:.]?\s*)+",
@@ -430,6 +450,10 @@ _SERIAL_ETIQUETADO_RE = re.compile(r"(?i)\bserial\s*[:.]?\s*(\d{6,30})")
 _REF_ETIQUETADO_RE = re.compile(r"(?i)\bref(?:\.|\s|:)?\s*(\d{6,18})")
 _MERCANTIL_DCME_GUIONADO_RE = re.compile(
     r"^\d{3,5}-\d{8}-\d{6}-DCME-\d{3,5}-[A-Z]$",
+    re.IGNORECASE,
+)
+_MERCANTIL_DCME_EN_TEXTO_RE = re.compile(
+    r"\d{3,5}-\d{8}-\d{6}-DCME-\d{3,5}-[A-Z]",
     re.IGNORECASE,
 )
 
@@ -957,7 +981,10 @@ def normalizar_campos_gemini_gmail(fields: Dict[str, str]) -> Dict[str, str]:
         norm = fecha_comprobante_a_ddmmyyyy(fp, ref)
         out["fecha_pago"] = norm if norm else PAGOS_NA
     elif (not fp or fp.upper() == PAGOS_NA) and nr_raw_para_fecha and nr_raw_para_fecha.upper() != PAGOS_NA:
-        inferida = inferir_fecha_pago_desde_numero_operacion(nr_raw_para_fecha, ref)
+        if "mercantil" in inst.lower() or extraer_codigo_dcme_mercantil_en_texto(nr_raw_para_fecha):
+            inferida = inferir_fecha_pago_mercantil_desde_texto(nr_raw_para_fecha, ref)
+        else:
+            inferida = inferir_fecha_pago_desde_numero_operacion(nr_raw_para_fecha, ref)
         if inferida:
             out["fecha_pago"] = inferida
     mo = (out.get("monto") or "").strip()

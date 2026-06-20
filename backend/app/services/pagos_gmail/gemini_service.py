@@ -35,6 +35,8 @@ from app.services.pagos_gmail.parse_campos_comprobante import (
     extraer_serial_etiquetado_bnc,
     extraer_serial_mercantil_7400,
     inferir_fecha_pago_desde_numero_operacion,
+    inferir_fecha_pago_mercantil_desde_texto,
+    extraer_codigo_dcme_mercantil_en_texto,
     normalizar_campos_gemini_gmail,
     numero_operacion_mercantil_solo_dcme,
     parse_fecha_comprobante as _parse_fecha_escaner_desde_gemini,
@@ -60,7 +62,7 @@ MONTO — coma venezolana y asteriscos de cajero; NO concatenar decimales al ent
   - En JSON de monto usa número decimal con **punto** (96.00), sin separador de miles.
 
 FECHA — Venezuela DD/MM/YYYY; no confundir con MM/DD ni inventar desde metadata:
-  - Mercantil A1: fecha operación = **YYYYMMDD** del bloque guionado (ej. `9824-20250703-151620-DCME-…` → **2025-07-03**).
+  - Mercantil A1: fecha operación = **YYYYMMDD** del **recuadro superior** de la tira (1ª fila con código guionado **DCME**, ej. `9264-20260618-115409-DCME-5574-A` → **2026-06-18**; el 2º bloque es año/mes/día). **No** uses el Serial `740087…` para la fecha. Si Gemini dejó `fecha_pago` vacía pero el DCME es legible en notas/imagen, el backend infiere desde ese bloque.
   - Pie **PDP 056(09-02-2021)** o fecha manuscrita distinta = lote del formulario, **no** sustituye la fecha del depósito si la tira trae YYYYMMDD.
   - Conflicto manuscrito vs tira impresa → **tira manda** (fecha, monto, serial/referencia).
   - Prohibido usar fecha del correo (cabecera Date), metadata del archivo o nombre del archivo para rellenar fecha.
@@ -2603,7 +2605,7 @@ REFERENCIA DE CALENDARIO (solo coherencia; no inventes fechas que no estén en e
   - Fecha de hoy en Venezuela (America/Caracas), para comprobar que la operación no quede en el futuro: **{fecha_hoy_iso}**
 
 TAREA: Lee la imagen o PDF adjunto y extrae SOLO lo que aparezca con claridad en el comprobante para rellenar un formulario de "Infopagos" con estos campos:
-  - fecha_pago: fecha de la operación en el comprobante. Devuélvela como cadena en formato **YYYY-MM-DD** si puedes inferir año/mes/día; si solo hay día/mes sin año razonable, deja fecha_pago vacía "".
+  - fecha_pago: fecha de la operación en el comprobante. Devuélvela como cadena en formato **YYYY-MM-DD** si puedes inferir año/mes/día; si solo hay día/mes sin año razonable, deja fecha_pago vacía "". **Mercantil** (tira 0105 / DEPÓSITO DIVISAS): la fecha está en el **recuadro superior** (1ª fila), en el **2º bloque YYYYMMDD** del código con **DCME** (ej. `9264-20260618-115409-DCME-5574-A` → **2026-06-18**). **No** infieras la fecha desde el Serial `740087…` (ese es solo `numero_operacion`).
   - institucion_financiera: nombre corto del banco o entidad. **Obligatorio** si reconoces una plantilla conocida (ver bloque PLANTILLAS). Valores preferidos: **Mercantil**, **BNC**, **Banco de Venezuela**, **BINANCE**, **Recibo** (recibo manuscrito TORO MOTORCYCLES / ventanilla). Máximo 100 caracteres. No dejes vacío si el diseño del comprobante coincide con Mercantil (0105/RAPI), BNC (0191/cajero BNC), BDV (0102), Binance Pay, **Recibo** (título RECIBO + C.I./RIF + Por:), etc.
   - numero_operacion: número o código que identifica la transacción (Serial, Ref, Nº operación, referencia, código, ID de orden en Binance, **número de recibo** en formato Recibo, etc.). Sin etiquetas largas: solo el valor. Máximo 100 caracteres. **Recibo manuscrito (TORO MOTORCYCLES)**: copie el **№ / Nº** junto a RECIBO (ej. 00972, conservando ceros). **Un solo valor**: no concatenes Ref y Serial (BNC). **BNC cajero** (papel, Depósito US$): copia **solo** el valor de **Serial:** (ej. 105137674); **nunca** Ref: (ej. 105137683) ni RIF. **App BNC** (Bs., sin línea Serial): usa Referencia/Ref. No repitas el mismo número dos veces (ej. 113907169113907169). Conserva ceros a la izquierda tal como en el papel. **Mercantil** (DEPÓSITO DIVISAS / tira 0105): copia **solo** el **Serial:** largo que empieza por **740087** (**exactamente 15 dígitos** contiguos, ej. 740087408543435). Si la foto muestra la tira en vertical, rote mentalmente y lea el Serial en línea; no devuelvas 13-14 dígitos. **Nunca** uses el código guionado DCME del validador (ej. 9276-20260424-140259-DCME-7819-A) como numero_operacion. **BINANCE Pay**: copia el **Id. de orden / Order ID completo** (típicamente **15-19 dígitos**, a menudo **18**); no trunques ni uses solo el inicio (prohibido devolver 436166756 si en pantalla es 436166756159873024).
   - monto: importe **exacto** del pago principal (Total, Monto Bs., Monto USD, Efectivo). En JSON usa **solo número decimal con punto** (sin separadores de miles): impreso `1.500,00` → `1500.00`; `150,50` → `150.50`; `US$ 20,00` → `20.00`; tira Mercantil `***********96,00 USD` → `96.00` (**nunca** `969`, `965`, `980`). **BINANCE Pay**: copia el monto grande tal cual (ej. `580 USDT` → `580`, no `58`). No redondees ni cambies cifras. Si no es legible, `null`.
@@ -2750,7 +2752,9 @@ def _extra_prompt_plantilla_escaner(institucion_plantilla: str) -> str:
             "exclusivamente la línea **Serial:** con ristra larga **740087…** (**15 dígitos** exactos). "
             "Si la tira está vertical en la foto, rote mentalmente y lea el Serial en línea horizontal; "
             "no mezcle cifras de monto/cuenta/DCME ni devuelva 13-14 dígitos truncados. "
-            "Ignore el código guionado DCME del validador (ej. …-DCME-…-A). Para "
+            "Ignore el código guionado DCME del validador (ej. …-DCME-…-A) para `numero_operacion`, "
+            "pero use su **2º bloque YYYYMMDD** (recuadro superior, 1ª fila) para `fecha_pago` "
+            "cuando no haya otra fecha clara. Para "
             "`cedula_pagador_en_comprobante` use solo dígitos en DP:V-/E-/J-, Cédula Dep., "
             "Nro. de Cédula del Depositante (sin inventar). Monto desde la tira con asteriscos."
         )
@@ -2922,9 +2926,19 @@ def extract_infopagos_campos_desde_comprobante(
                     texto_auxiliar=f"{raw_num_op}\n{notas}",
                 )[:100]
                 fecha = _parse_fecha_escaner_desde_gemini(data.get("fecha_pago"), ref_hoy)
-                num_op_fecha = num_op or raw_num_op
-                if fecha is None and num_op_fecha:
-                    f_inf = inferir_fecha_pago_desde_numero_operacion(num_op_fecha, ref_hoy)
+                blob_fecha = f"{raw_num_op}\n{notas}"
+                if fecha is None:
+                    inst_canon_fecha = _canonical_institucion_escaner(inst)
+                    if inst_canon_fecha == "Mercantil" or extraer_codigo_dcme_mercantil_en_texto(
+                        blob_fecha
+                    ):
+                        f_inf = inferir_fecha_pago_mercantil_desde_texto(
+                            blob_fecha, ref_hoy
+                        )
+                    else:
+                        f_inf = inferir_fecha_pago_desde_numero_operacion(
+                            num_op or raw_num_op, ref_hoy
+                        )
                     if f_inf:
                         fecha = _parse_fecha_escaner_desde_gemini(f_inf, ref_hoy)
                 monto = _parse_monto_escaner(
