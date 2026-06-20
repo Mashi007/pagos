@@ -21,6 +21,9 @@ export interface TasaCambioEstado {
   binance_ok?: boolean
   hora_obligatoria_desde: string
   hora_obligatoria_hasta: string
+  /** Sábado o domingo (America/Caracas): no ingreso manual; copia del viernes anterior. */
+  fin_de_semana_caracas?: boolean
+  fecha_referencia_viernes?: string | null
 }
 
 export interface TasaCambioHistorial {

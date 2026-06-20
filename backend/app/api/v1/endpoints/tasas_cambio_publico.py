@@ -14,9 +14,12 @@ from app.core.deps import get_current_user
 from app.schemas.auth import UserResponse
 from app.services.tasa_cambio_service import (
     debe_ingresar_tasa,
+    es_fin_de_semana_caracas,
     estado_multifuente_fila_hoy,
+    fecha_hoy_caracas,
     fila_tasa_multifuente_completa_hoy,
     obtener_tasa_hoy,
+    ultimo_viernes_anterior,
 )
 
 # Reusar el mismo contrato de respuesta de /admin/tasas-cambio/hoy
@@ -51,6 +54,8 @@ def get_estado_tasa_publico(
     tasa_guardada = obtener_tasa_hoy(db)
     mf = estado_multifuente_fila_hoy(tasa_guardada)
     completa = fila_tasa_multifuente_completa_hoy(tasa_guardada)
+    hoy = fecha_hoy_caracas()
+    fin_de_semana = es_fin_de_semana_caracas(hoy)
 
     return {
         "debe_ingresar": debe_ingresar,
@@ -60,5 +65,9 @@ def get_estado_tasa_publico(
         "binance_ok": mf["binance_ok"],
         "hora_obligatoria_desde": "01:00",
         "hora_obligatoria_hasta": "23:59",
+        "fin_de_semana_caracas": fin_de_semana,
+        "fecha_referencia_viernes": (
+            ultimo_viernes_anterior(hoy).isoformat() if fin_de_semana else None
+        ),
     }
 

@@ -1,7 +1,7 @@
 """
 Servicios para gestionar tasas de cambio oficiales.
 """
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 from typing import Any, Dict, List, Literal, Optional, Sequence, Tuple, Union
 from zoneinfo import ZoneInfo
@@ -83,6 +83,84 @@ def fecha_hoy_caracas() -> date:
     return datetime.now(CARACAS_TZ).date()
 
 
+def es_fin_de_semana_caracas(fecha: Optional[date] = None) -> bool:
+    """True solo sábado o domingo (calendario America/Caracas)."""
+    d = fecha or fecha_hoy_caracas()
+    return d.weekday() in (5, 6)
+
+
+def ultimo_viernes_anterior(fecha: date) -> date:
+    """
+    Viernes inmediatamente anterior a una fecha de fin de semana.
+    Solo válido si `fecha` es sábado (weekday 5) o domingo (6).
+    """
+    wd = fecha.weekday()
+    if wd == 5:
+        return fecha - timedelta(days=1)
+    if wd == 6:
+        return fecha - timedelta(days=2)
+    raise ValueError("ultimo_viernes_anterior solo aplica a sábado o domingo")
+
+
+def asegurar_tasa_fin_semana_desde_viernes(
+    db: Session,
+    fecha: date,
+) -> Optional[TasaCambioDiaria]:
+    """
+    Sábado/domingo: si no hay fila completa para `fecha`, copia Euro/BCV/Binance
+    del último viernes anterior (misma fila, nueva fecha). No inventa valores.
+    """
+    if not es_fin_de_semana_caracas(fecha):
+        return obtener_tasa_por_fecha_sin_fin_semana(db, fecha)
+
+    existente = obtener_tasa_por_fecha_sin_fin_semana(db, fecha)
+    if existente and fila_tasa_multifuente_completa_hoy(existente):
+        return existente
+
+    viernes = ultimo_viernes_anterior(fecha)
+    origen = obtener_tasa_por_fecha_sin_fin_semana(db, viernes)
+    if origen is None or not fila_tasa_multifuente_completa_hoy(origen):
+        return existente
+
+    tasa_bcv = getattr(origen, "tasa_bcv", None)
+    tasa_binance = getattr(origen, "tasa_binance", None)
+    if tasa_bcv is None or tasa_binance is None:
+        return existente
+
+    ref_email = f"sistema:fin_semana<-{viernes.isoformat()}"
+    if existente:
+        existente.tasa_oficial = origen.tasa_oficial
+        existente.tasa_bcv = tasa_bcv
+        existente.tasa_binance = tasa_binance
+        existente.usuario_email = ref_email
+        existente.updated_at = datetime.now()
+        db.commit()
+        db.refresh(existente)
+        return existente
+
+    nueva = TasaCambioDiaria(
+        fecha=fecha,
+        tasa_oficial=origen.tasa_oficial,
+        tasa_bcv=tasa_bcv,
+        tasa_binance=tasa_binance,
+        usuario_id=getattr(origen, "usuario_id", None),
+        usuario_email=ref_email,
+    )
+    db.add(nueva)
+    db.commit()
+    db.refresh(nueva)
+    return nueva
+
+
+def obtener_tasa_por_fecha_sin_fin_semana(
+    db: Session, fecha: date
+) -> Optional[TasaCambioDiaria]:
+    """Lectura directa por fecha sin regla de fin de semana."""
+    return db.execute(
+        select(TasaCambioDiaria).where(TasaCambioDiaria.fecha == fecha)
+    ).scalars().first()
+
+
 def ahora_caracas() -> datetime:
     """DateTime con zona America/Caracas."""
     return datetime.now(CARACAS_TZ)
@@ -91,9 +169,9 @@ def ahora_caracas() -> datetime:
 def obtener_tasa_hoy(db: Session) -> Optional[TasaCambioDiaria]:
     """Obtiene la tasa de cambio oficial para hoy (calendario Caracas)."""
     hoy = fecha_hoy_caracas()
-    return db.execute(
-        select(TasaCambioDiaria).where(TasaCambioDiaria.fecha == hoy)
-    ).scalars().first()
+    if es_fin_de_semana_caracas(hoy):
+        return asegurar_tasa_fin_semana_desde_viernes(db, hoy)
+    return obtener_tasa_por_fecha_sin_fin_semana(db, hoy)
 
 
 def es_tasa_problematica_para_operacion(tasa_oficial: Any) -> bool:
@@ -221,9 +299,9 @@ def rellenar_tasas_problematicas_desde_vecino(
 
 def obtener_tasa_por_fecha(db: Session, fecha: date) -> Optional[TasaCambioDiaria]:
     """Obtiene la tasa oficial para una fecha (fecha de pago = clave en tasas_cambio_diaria)."""
-    return db.execute(
-        select(TasaCambioDiaria).where(TasaCambioDiaria.fecha == fecha)
-    ).scalars().first()
+    if es_fin_de_semana_caracas(fecha):
+        return asegurar_tasa_fin_semana_desde_viernes(db, fecha)
+    return obtener_tasa_por_fecha_sin_fin_semana(db, fecha)
 
 
 def obtener_tasas_por_fechas(db: Session, fechas: Sequence[date]) -> Dict[date, TasaCambioDiaria]:
@@ -377,7 +455,9 @@ def tasa_y_equivalente_usd_excel(
 
 
 def debe_ingresar_tasa() -> bool:
-    """True desde las 01:00 hora Caracas (ventana de ingreso diario)."""
+    """True desde las 01:00 hora Caracas (ventana de ingreso diario). Sábado/domingo: False."""
+    if es_fin_de_semana_caracas():
+        return False
     ahora = ahora_caracas().time()
     inicio = time(1, 0)
     return ahora >= inicio

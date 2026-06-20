@@ -5,6 +5,7 @@ import { Card, CardContent } from '../ui/card'
 import {
   getTasaHoy,
   getTasaPorFecha,
+  getEstadoTasa,
   guardarTasaPorFecha,
 } from '../../services/tasaCambioService'
 import { toast } from 'sonner'
@@ -39,6 +40,19 @@ export function AgregarTasaFechaPagoPanel() {
     staleTime: 60_000,
     refetchOnWindowFocus: true,
   })
+
+  const { data: estadoTasa } = useQuery({
+    queryKey: ['tasa-estado-banner-pagos'],
+    queryFn: getEstadoTasa,
+    staleTime: 60_000,
+    refetchOnWindowFocus: true,
+  })
+
+  const esFinDeSemana = Boolean(estadoTasa?.fin_de_semana_caracas)
+  const fechaViernesRef = (estadoTasa?.fecha_referencia_viernes || '').slice(
+    0,
+    10
+  )
 
   const handleGuardarTasa = async () => {
     if (!fechaTasaForm.trim()) {
@@ -160,6 +174,19 @@ export function AgregarTasaFechaPagoPanel() {
             </p>
           </div>
 
+          {esFinDeSemana ? (
+            <div className="flex items-start gap-2 rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-950">
+              <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0" />
+              <span>
+                <strong>Fin de semana (Caracas):</strong> no es necesario
+                registrar tasas de hoy. El sistema copia automáticamente las
+                del viernes
+                {fechaViernesRef ? ` (${fechaViernesRef})` : ''} para sábado y
+                domingo.
+              </span>
+            </div>
+          ) : null}
+
           {tasaHoyBannerLoading ? (
             <div className="flex items-center gap-2 rounded-lg bg-white/80 p-4 text-sm text-amber-800">
               <Loader2 className="h-4 w-4 animate-spin text-amber-600" />
@@ -170,7 +197,7 @@ export function AgregarTasaFechaPagoPanel() {
               <DollarSign className="h-6 w-6 text-amber-700" />
               <div className="min-w-0">
                 <p className="text-xs font-medium text-gray-600">
-                  Tasa Vigente Hoy
+                  {esFinDeSemana ? 'Tasa vigente hoy (desde viernes)' : 'Tasa Vigente Hoy'}
                 </p>
                 <p className="text-base font-semibold text-amber-900">
                   {(tasaHoyBanner.fecha || '').slice(0, 10)} - Euro: Bs.{' '}
@@ -181,6 +208,16 @@ export function AgregarTasaFechaPagoPanel() {
                   por 1 USD
                 </p>
               </div>
+            </div>
+          ) : esFinDeSemana ? (
+            <div className="flex items-start gap-2 rounded-lg bg-amber-100/60 p-4 text-sm text-amber-900">
+              <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0" />
+              <span>
+                No hay tasas completas del viernes
+                {fechaViernesRef ? ` (${fechaViernesRef})` : ''} para copiar a
+                hoy. Registre primero el viernes o use el formulario inferior
+                solo para fechas puntuales.
+              </span>
             </div>
           ) : (
             <div className="flex items-start gap-2 rounded-lg bg-amber-100/60 p-4 text-sm text-amber-900">
