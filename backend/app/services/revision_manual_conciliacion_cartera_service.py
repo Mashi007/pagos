@@ -44,6 +44,7 @@ from app.services.finiquito_conciliacion_visto_service import (
     cargar_bytes_comprobante,
 )
 from app.services.pago_huella_funcional import conflicto_huella_para_creacion
+from app.services.pago_numero_documento import numero_documento_ya_registrado
 from app.services.pago_registro_moneda import resolver_monto_registro_pago
 from app.services.pagos.comprobante_link_desde_gmail import (
     drive_raw_a_url,
@@ -442,6 +443,75 @@ def _crear_pago_asiento_abonos_general(
     return pago, None
 
 
+def _ref_sintetica_conciliar_ocr(
+    prestamo_id: int,
+    reserva_orden: int,
+    *,
+    n_hex: int = 6,
+) -> str:
+    return f"CONC-IMG-{prestamo_id}-{reserva_orden}-{uuid.uuid4().hex[:n_hex]}"[:100]
+
+
+def _resolver_numero_documento_conciliar_ocr(
+    db: Session,
+    *,
+    num_op: Optional[str],
+    prestamo_id: int,
+    reserva_orden: int,
+    fecha_pago: date,
+    monto_pagado: Decimal,
+) -> Tuple[str, str]:
+    """
+    Elige par (numero_documento, referencia_pago) único en cartera.
+
+    El OCR puede repetir un serial ya usado en otro préstamo (ux_pagos_numero_documento_btrim);
+    en ese caso se desambigua con §CD: o referencia sintética CONC-IMG-…
+    """
+
+    def _valido(doc: str, ref: str) -> bool:
+        if numero_documento_ya_registrado(db, doc):
+            return False
+        return (
+            conflicto_huella_para_creacion(
+                db,
+                prestamo_id=prestamo_id,
+                fecha_pago=fecha_pago,
+                monto_pagado=monto_pagado,
+                numero_documento=doc,
+                referencia_pago=ref,
+            )
+            is None
+        )
+
+    candidatos: List[Tuple[str, str]] = []
+    if num_op:
+        base = compose_numero_documento_almacenado(num_op, None)
+        if base:
+            candidatos.append((base, base[:100]))
+        for codigo in (f"P{prestamo_id}", f"CONC-{prestamo_id}-{reserva_orden}"):
+            comp = compose_numero_documento_almacenado(num_op, codigo)
+            if comp:
+                candidatos.append((comp, (num_op or comp)[:100]))
+
+    ref0 = _ref_sintetica_conciliar_ocr(prestamo_id, reserva_orden)
+    candidatos.append((ref0, ref0))
+    ref1 = _ref_sintetica_conciliar_ocr(prestamo_id, reserva_orden, n_hex=12)
+    candidatos.append((ref1, ref1))
+
+    seen: set[str] = set()
+    for doc, ref in candidatos:
+        doc_key = doc[:100]
+        if doc_key in seen:
+            continue
+        seen.add(doc_key)
+        ref_use = ref[:100]
+        if _valido(doc_key, ref_use):
+            return doc_key, ref_use
+
+    ref_last = _ref_sintetica_conciliar_ocr(prestamo_id, reserva_orden, n_hex=16)
+    return ref_last, ref_last
+
+
 def _crear_pago_asiento_imagen_ocr(
     db: Session,
     reserva: RevisionManualConciliacionReserva,
@@ -468,8 +538,6 @@ def _crear_pago_asiento_imagen_ocr(
         fecha_date = _placeholder_fecha_reserva().date()
 
     num_op = sanitizar_numero_operacion_comprobante(gem.get("numero_operacion"))
-    ref_tmp = f"CONC-IMG-{prestamo.id}-{reserva.orden}-{uuid.uuid4().hex[:6]}"[:100]
-    num_stored = compose_numero_documento_almacenado(num_op, None) if num_op else ref_tmp
 
     try:
         cedula_fk = asegurar_cedula_pago_para_fk(
@@ -489,39 +557,14 @@ def _crear_pago_asiento_imagen_ocr(
         tasa_cambio_manual=None,
     )
 
-    msg_h = conflicto_huella_para_creacion(
+    num_stored, ref_tmp = _resolver_numero_documento_conciliar_ocr(
         db,
-        prestamo_id=prestamo.id,
+        num_op=num_op,
+        prestamo_id=int(prestamo.id),
+        reserva_orden=int(reserva.orden),
         fecha_pago=fecha_date,
         monto_pagado=monto_usd,
-        numero_documento=num_stored,
-        referencia_pago=(num_stored or ref_tmp)[:100],
     )
-    if msg_h:
-        num_stored = ref_tmp
-        ref_use = ref_tmp
-        msg_h_alt = conflicto_huella_para_creacion(
-            db,
-            prestamo_id=prestamo.id,
-            fecha_pago=fecha_date,
-            monto_pagado=monto_usd,
-            numero_documento=num_stored,
-            referencia_pago=ref_use[:100],
-        )
-        if msg_h_alt:
-            ref_use = f"CONC-IMG-{prestamo.id}-{reserva.orden}-{uuid.uuid4().hex[:12]}"[:100]
-            num_stored = ref_use
-            msg_h_alt2 = conflicto_huella_para_creacion(
-                db,
-                prestamo_id=prestamo.id,
-                fecha_pago=fecha_date,
-                monto_pagado=monto_usd,
-                numero_documento=num_stored,
-                referencia_pago=ref_use[:100],
-            )
-            if msg_h_alt2:
-                return None, msg_h
-        ref_tmp = ref_use
 
     inst = (gem.get("institucion_financiera") or "").strip() or None
     ahora = datetime.now(ZoneInfo(TZ_NEGOCIO))
@@ -535,7 +578,7 @@ def _crear_pago_asiento_imagen_ocr(
         institucion_bancaria=inst[:255] if inst else None,
         estado="PAGADO",
         notas="Conciliar cartera: asiento comprobante (monto y datos del reescaneo OCR).",
-        referencia_pago=(num_stored or ref_tmp)[:100],
+        referencia_pago=ref_tmp[:100],
         conciliado=True,
         fecha_conciliacion=ahora,
         verificado_concordancia="SI",
@@ -899,6 +942,10 @@ async def ejecutar_conciliar_cartera_revision_manual(
     )
     if not reserva_out.get("ok"):
         return {**reserva_out, "referencia_abonos": snap}
+
+    # Persistir imágenes reservadas antes de borrar pagos (sobreviven rollback si falla OCR).
+    if int(reserva_out.get("reservas") or 0) > 0:
+        db.commit()
 
     est_previo = (prestamo.estado or "").strip().upper()
     del_res = eliminar_todos_pagos_prestamo(

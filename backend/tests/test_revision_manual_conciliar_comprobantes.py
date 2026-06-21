@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+from datetime import date
+from decimal import Decimal
 from types import SimpleNamespace
 
+from app.core.documento import SUFIJO_CODIGO_DOCUMENTO
 from app.services.revision_manual_conciliacion_cartera_service import (
     _FuenteComprobanteConciliar,
+    _resolver_numero_documento_conciliar_ocr,
     _reservar_comprobantes_prestamo,
 )
 
@@ -101,3 +105,34 @@ def test_reservar_continua_si_usuario_confirma_omitidos(monkeypatch) -> None:
 
     assert out["ok"] is True
     assert out.get("reservas") == 1
+
+
+def test_resolver_numero_documento_usa_codigo_si_serial_global_ocupado(monkeypatch) -> None:
+    num_op = "428780232585682944"
+    ocupados = {num_op}
+
+    def fake_registrado(_db, doc, **kwargs):
+        return doc in ocupados
+
+    monkeypatch.setattr(
+        "app.services.revision_manual_conciliacion_cartera_service.numero_documento_ya_registrado",
+        fake_registrado,
+    )
+    monkeypatch.setattr(
+        "app.services.revision_manual_conciliacion_cartera_service.conflicto_huella_para_creacion",
+        lambda *a, **k: None,
+    )
+
+    doc, ref = _resolver_numero_documento_conciliar_ocr(
+        None,  # type: ignore[arg-type]
+        num_op=num_op,
+        prestamo_id=493,
+        reserva_orden=1,
+        fecha_pago=date(2026, 6, 21),
+        monto_pagado=Decimal("105.00"),
+    )
+
+    assert doc != num_op
+    assert SUFIJO_CODIGO_DOCUMENTO in doc
+    assert num_op in doc
+    assert ref == num_op
