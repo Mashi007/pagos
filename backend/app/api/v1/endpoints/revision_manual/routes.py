@@ -2645,10 +2645,14 @@ async def conciliar_cartera_revision_manual(
                         :500
                     ],
                 )
-            raise HTTPException(
-                status_code=400,
-                detail=str(r.get("error") or "No se pudo conciliar cartera")[:500],
+            err_msg = str(r.get("error") or "No se pudo conciliar cartera")[:500]
+            logger.warning(
+                "revision_manual CONCILIAR_CARTERA rechazado prestamo_id=%s actor=%s error=%s",
+                prestamo_id,
+                actor,
+                err_msg,
             )
+            raise HTTPException(status_code=400, detail=err_msg)
         db.commit()
     except HTTPException:
         raise

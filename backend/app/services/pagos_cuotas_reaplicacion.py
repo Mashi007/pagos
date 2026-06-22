@@ -241,13 +241,13 @@ def eliminar_todos_pagos_prestamo(
         return {"ok": False, "error": "Prestamo no encontrado", "prestamo_id": prestamo_id}
 
     est = (prestamo.estado or "").strip().upper()
-    estados_ok_conciliar = frozenset({"APROBADO", "LIQUIDADO"})
+    estados_bloqueados_conciliar = frozenset({"DESISTIMIENTO", "RECHAZADO"})
     if contexto_revision_conciliar:
-        if est not in estados_ok_conciliar:
+        if est in estados_bloqueados_conciliar:
             return {
                 "ok": False,
                 "error": (
-                    f"Conciliar cartera solo en préstamos APROBADO o LIQUIDADO "
+                    f"No se puede conciliar cartera en préstamos {est} "
                     f"(estado actual: {prestamo.estado or 'sin estado'})."
                 ),
                 "prestamo_id": prestamo_id,

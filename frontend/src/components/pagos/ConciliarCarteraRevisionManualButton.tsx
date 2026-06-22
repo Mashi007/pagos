@@ -137,6 +137,8 @@ export function ConciliarCarteraRevisionManualButton({
 
     useState(false)
 
+  const [errorEjecucion, setErrorEjecucion] = useState<string | null>(null)
+
 
 
   const ced = cedula.trim()
@@ -164,6 +166,8 @@ export function ConciliarCarteraRevisionManualButton({
     setAceptaDestructivo(false)
 
     setAceptaComprobantesOmitidos(false)
+
+    setErrorEjecucion(null)
 
   }, [])
 
@@ -251,6 +255,8 @@ export function ConciliarCarteraRevisionManualButton({
 
     setAceptaComprobantesOmitidos(false)
 
+    setErrorEjecucion(null)
+
     void cargarPreview()
 
   }
@@ -286,6 +292,8 @@ export function ConciliarCarteraRevisionManualButton({
     setAceptaDestructivo(false)
 
     setAceptaComprobantesOmitidos(false)
+
+    setErrorEjecucion(null)
 
   }
 
@@ -327,6 +335,8 @@ export function ConciliarCarteraRevisionManualButton({
 
     setEjecutando(true)
 
+    setErrorEjecucion(null)
+
     onEjecutarInicio?.()
 
     onProgresoTabla?.('borrando')
@@ -343,11 +353,7 @@ export function ConciliarCarteraRevisionManualButton({
 
       const diagComp = preview?.comprobantes_conciliar
 
-      const sinReservables =
-
-        (diagComp?.pagos_reservables ?? 0) === 0 &&
-
-        (diagComp?.pagos_con_enlace ?? 0) > 0
+      const sinReservables = (diagComp?.pagos_reservables ?? 0) === 0
 
       const hayOmitidos = Boolean(
 
@@ -471,7 +477,11 @@ export function ConciliarCarteraRevisionManualButton({
 
         onEjecutarError?.()
 
-        toast.error(res.error || res.mensaje || 'No se pudo conciliar cartera.')
+        const msgErr = res.error || res.mensaje || 'No se pudo conciliar cartera.'
+
+        setErrorEjecucion(msgErr)
+
+        toast.error(msgErr)
 
         return
 
@@ -527,7 +537,11 @@ export function ConciliarCarteraRevisionManualButton({
 
       } else {
 
-        toast.error(msg || 'Error al conciliar cartera.')
+        const msgErr = msg || 'Error al conciliar cartera.'
+
+        setErrorEjecucion(msgErr)
+
+        toast.error(msgErr)
 
       }
 
@@ -572,6 +586,8 @@ export function ConciliarCarteraRevisionManualButton({
     diagComprobantes?.sin_comprobantes_reservables
 
   )
+
+  const sinReservablesPreview = (diagComprobantes?.pagos_reservables ?? 0) === 0
 
 
 
@@ -904,6 +920,28 @@ export function ConciliarCarteraRevisionManualButton({
           ) : paso === 'confirmar' ? (
 
             <div className="space-y-3 text-sm">
+
+              {errorEjecucion ? (
+
+                <p className="rounded border border-red-300 bg-red-100 p-3 text-red-950">
+
+                  {errorEjecucion}
+
+                </p>
+
+              ) : null}
+
+              {(sinComprobantesReservables || sinReservablesPreview) && !hayComprobantesOmitidos ? (
+
+                <p className="rounded border border-amber-300 bg-amber-50 p-3 text-amber-950">
+
+                  No hay imágenes reservables: tras confirmar solo se creará el asiento ABONOS
+
+                  (total General), sin comprobantes OCR.
+
+                </p>
+
+              ) : null}
 
               <p className="rounded border border-red-200 bg-red-50 p-3 text-red-900">
 

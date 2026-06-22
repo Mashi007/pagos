@@ -864,6 +864,18 @@ async def ejecutar_conciliar_cartera_revision_manual(
             "prestamo_id": prestamo_id,
         }
 
+    est_bloqueado = (prestamo.estado or "").strip().upper()
+    if est_bloqueado in {"DESISTIMIENTO", "RECHAZADO"}:
+        return {
+            "ok": False,
+            "error": (
+                f"No se puede conciliar cartera en préstamos {est_bloqueado} "
+                f"(estado actual: {prestamo.estado or 'sin estado'})."
+            ),
+            "prestamo_id": prestamo_id,
+            "estado_actual": prestamo.estado,
+        }
+
     purgar_reserva_conciliacion_prestamo(db, prestamo_id)
 
     snap = referencia_abonos_notificaciones_general(
