@@ -43,6 +43,8 @@ from app.services.pagos_gmail.parse_campos_comprobante import (
     parse_monto_comprobante as _parse_monto_escaner,
     sanitizar_numero_operacion_comprobante,
     serial_mercantil_requiere_rescate,
+    longitud_serial_mercantil_valida,
+    es_serial_mercantil_740087,
 )
 
 logger = logging.getLogger(__name__)
@@ -1856,6 +1858,88 @@ def _parse_formato_y_pagos_json(
         return "ninguno", empty.copy()
 
 
+def _gmail_puntaje_referencia_pass(fields: Dict[str, str], fmt: str) -> int:
+    """Mayor = mejor numero_referencia (Serial Mercantil 15 dígitos > parcial > DCME)."""
+    ref = (fields.get("numero_referencia") or "").strip()
+    if (fmt or "").upper() == "A":
+        if longitud_serial_mercantil_valida(ref):
+            return 3
+        if extraer_serial_mercantil_7400(ref):
+            return 2
+        if numero_operacion_mercantil_solo_dcme(ref):
+            return 0
+    if ref and ref.upper() != PAGOS_NA:
+        return 1
+    return 0
+
+
+def _gmail_fields_necesita_rescate_post_pass1(
+    fmt: PagosGmailFormato, fields: Dict[str, str]
+) -> tuple[bool, str, str]:
+    """
+    Tras pass 1 con plantilla reconocida: ¿hace falta pass 2 por reglas post-parse
+    (alineado con escáner Infopagos)?
+    """
+    fmt_u = (fmt or "").strip().upper()
+    ref = (fields.get("numero_referencia") or "").strip()
+    if fmt_u == "A":
+        if serial_mercantil_requiere_rescate(ref) or numero_operacion_mercantil_solo_dcme(ref):
+            return True, "A", "falto_ref"
+        if es_serial_mercantil_740087(ref) and not longitud_serial_mercantil_valida(ref):
+            return True, "A", "falto_ref"
+    if fmt_u == "B":
+        blob = ref
+        ref_bnc = extraer_ref_etiquetado_bnc(blob)
+        serial_bnc = extraer_serial_etiquetado_bnc(blob)
+        if ref_bnc and ref == ref_bnc and serial_bnc and serial_bnc != ref:
+            return True, "B", "falto_ref"
+    return False, "", ""
+
+
+def _gmail_merge_pass_results(
+    fmt1: PagosGmailFormato,
+    fields1: Dict[str, str],
+    fmt2: PagosGmailFormato,
+    fields2: Dict[str, str],
+) -> tuple[PagosGmailFormato, Dict[str, str]]:
+    """Prefiere pass 2 si mejora ref Mercantil o completa fecha faltante."""
+    if fmt2 not in PAGOS_GMAIL_FORMATOS_PLANTILLA:
+        return fmt1, fields1
+    if fmt1 not in PAGOS_GMAIL_FORMATOS_PLANTILLA:
+        return fmt2, fields2
+    s1, s2 = _gmail_puntaje_referencia_pass(fields1, fmt1), _gmail_puntaje_referencia_pass(
+        fields2, fmt2
+    )
+    if s2 > s1:
+        chosen_fmt, chosen, other = fmt2, dict(fields2), fields1
+    elif s1 > s2:
+        chosen_fmt, chosen, other = fmt1, dict(fields1), fields2
+    else:
+        fp1 = (fields1.get("fecha_pago") or "").strip().upper()
+        fp2 = (fields2.get("fecha_pago") or "").strip().upper()
+        if (not fp1 or fp1 == PAGOS_NA) and fp2 and fp2 != PAGOS_NA:
+            chosen_fmt, chosen, other = fmt2, dict(fields2), fields1
+        else:
+            chosen_fmt, chosen, other = fmt1, dict(fields1), fields2
+    for key in ("fecha_pago", "monto", "numero_referencia", "banco"):
+        cv = (chosen.get(key) or "").strip().upper()
+        ov = (other.get(key) or "").strip().upper()
+        if (not cv or cv == PAGOS_NA) and ov and ov != PAGOS_NA:
+            chosen[key] = other.get(key)
+    return chosen_fmt, chosen
+
+
+def _gmail_pass1_serial_mercantil_inaceptable(fields: Dict[str, str]) -> bool:
+    ref = (fields.get("numero_referencia") or "").strip()
+    if not ref or ref.upper() == PAGOS_NA:
+        return False
+    if numero_operacion_mercantil_solo_dcme(ref):
+        return True
+    if es_serial_mercantil_740087(ref) and not longitud_serial_mercantil_valida(ref):
+        return True
+    return False
+
+
 def classify_and_extract_pagos_gmail_attachment(
     file_content: bytes,
     filename: str,
@@ -1949,13 +2033,40 @@ def classify_and_extract_pagos_gmail_attachment(
         for variant_name, image_part in image_parts:
             fmt, fields, raw_text = _run_call(prompt_text, image_part)
             if fmt in PAGOS_GMAIL_FORMATOS_PLANTILLA:
-                fields["_scan_pass"] = "pass_1"
-                fields["_scan_variant"] = variant_name
-                fields["_scan_bank_hint"] = ""
+                needs_rescue, hint, reason = _gmail_fields_necesita_rescate_post_pass1(
+                    fmt, fields
+                )
+                if needs_rescue:
+                    rescue_prompt = prompt_text + _rescue_prompt_suffix(hint or fmt, reason)
+                    rv_name, rv_part = _pick_rescue_image_part(
+                        image_parts, hint or fmt, reason
+                    )
+                    fmt2, fields2, _ = _run_call(rescue_prompt, rv_part)
+                    if fmt2 in PAGOS_GMAIL_FORMATOS_PLANTILLA:
+                        fmt, fields = _gmail_merge_pass_results(fmt, fields, fmt2, fields2)
+                        fields["_scan_pass"] = "pass_2"
+                        fields["_scan_variant"] = rv_name
+                        fields["_scan_bank_hint"] = hint or ""
+                    elif _gmail_pass1_serial_mercantil_inaceptable(fields):
+                        logger.warning(
+                            "[PAGOS_GMAIL] Gemini pass=1 %s ref Mercantil inválida y rescate falló",
+                            fmt,
+                        )
+                        return "ninguno", {
+                            **fields,
+                            "_diag_none_reason": "falto_ref",
+                            "_scan_pass": "pass_2",
+                            "_scan_variant": rv_name,
+                            "_scan_bank_hint": hint or "A",
+                        }
+                fields["_scan_pass"] = fields.get("_scan_pass") or "pass_1"
+                fields["_scan_variant"] = fields.get("_scan_variant") or variant_name
+                fields["_scan_bank_hint"] = fields.get("_scan_bank_hint") or ""
                 logger.info(
-                    "[PAGOS_GMAIL] Gemini formato=%s pass=1 variant=%s fecha=%s monto=%s ref=%s",
+                    "[PAGOS_GMAIL] Gemini formato=%s pass=%s variant=%s fecha=%s monto=%s ref=%s",
                     fmt,
-                    variant_name,
+                    fields.get("_scan_pass"),
+                    fields.get("_scan_variant"),
                     fields.get("fecha_pago"),
                     fields.get("monto"),
                     fields.get("numero_referencia"),

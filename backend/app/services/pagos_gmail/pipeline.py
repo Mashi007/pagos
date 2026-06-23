@@ -1365,6 +1365,10 @@ def run_pipeline(
                     # Binance (C): la pantalla no trae fecha; no rellenar desde el correo.
                     if fmt_u == "C":
                         return ok(cedula) and ok(monto) and ok(ref)
+                    # A y B/E/F/D: alineado con gates Gemini (_pagos_gmail_*_campos_imagen_minimos).
+                    # Fecha puede venir del asunto (DD/MM) o DCME Mercantil, no es obligatoria en imagen.
+                    if fmt_u in ("A", "B", "D", "E", "F"):
+                        return ok(cedula) and ok(monto) and ok(ref)
                     return ok(fecha) and ok(cedula) and ok(monto) and ok(ref)
 
                 def _campos_completos_nr(cedula: str, monto: str) -> bool:
@@ -1374,6 +1378,43 @@ def run_pipeline(
                         return False
                     s_c = (cedula or "").strip()
                     return bool(s_c) and s_c.upper() != PAGOS_NA
+
+                def _completar_fecha_mercantil_pipeline(
+                    formato: str, fecha: str, referencia: str, asunto: str
+                ) -> str:
+                    fmt_u = (formato or "").strip().upper()
+                    f_out = (fecha or "").strip()
+                    if fmt_u != "A" or (f_out and f_out.upper() != PAGOS_NA):
+                        return fecha
+                    from app.services.pagos_gmail.parse_campos_comprobante import (
+                        inferir_fecha_pago_mercantil_desde_texto,
+                    )
+
+                    inf = inferir_fecha_pago_mercantil_desde_texto(
+                        f"{referencia}\n{asunto}"
+                    )
+                    return normalizar_fecha_pago(inf) if inf else fecha
+
+                def _ref_mercantil_inaceptable_pipeline(
+                    formato: str, referencia: str
+                ) -> bool:
+                    if (formato or "").strip().upper() != "A":
+                        return False
+                    from app.services.pagos_gmail.parse_campos_comprobante import (
+                        es_serial_mercantil_740087,
+                        longitud_serial_mercantil_valida,
+                        numero_operacion_mercantil_solo_dcme,
+                    )
+
+                    r_chk = (referencia or "").strip()
+                    if not r_chk:
+                        return False
+                    if numero_operacion_mercantil_solo_dcme(r_chk):
+                        return True
+                    return bool(
+                        es_serial_mercantil_740087(r_chk)
+                        and not longitud_serial_mercantil_valida(r_chk)
+                    )
 
                 def _insert_rows_sin_drive(
                     correo: str,
@@ -1754,6 +1795,21 @@ def run_pipeline(
                         if not c_ok:
                             any_incomplete_or_skipped = True
                             any_cedula_lookup_failed = True
+                            continue
+                        f = _completar_fecha_mercantil_pipeline(fmt, f, r, subject)
+                        if _ref_mercantil_inaceptable_pipeline(fmt, r):
+                            any_incomplete_or_skipped = True
+                            any_skipped_not_plantilla_o_campos = True
+                            logger.warning(
+                                "[PAGOS_GMAIL]   Mercantil A ref inválida (DCME solo o serial truncado) - no BD: %s ref=%s",
+                                filename,
+                                (r or "")[:40],
+                            )
+                            _pipeline_evt(
+                                EVT_CAMPOS_INCOMPLETOS_PLANTILLA,
+                                filename=filename,
+                                detalle="A_serial_invalido",
+                            )
                             continue
                         if fmt == "NR":
                             if not _campos_completos_nr(c, m):

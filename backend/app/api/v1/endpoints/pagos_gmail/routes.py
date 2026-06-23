@@ -46,6 +46,12 @@ from app.services.pagos_gmail.gmail_service import (
 )
 from app.services.pagos_gmail.helpers import format_monto_excel_pagos_gmail, formatear_cedula
 from app.services.pagos_gmail.pipeline import run_pipeline
+from app.services.pagos_gmail.sync_stale import (
+    get_blocking_running_gmail_sync,
+    gmail_sync_looks_stale,
+    reconcile_blocking_running_gmail_sync_if_stale,
+    reconcile_stale_running_gmail_sync,
+)
 from app.services.pagos_gmail.plantilla_abcd_proceso_negocio import (
     PAGOS_GMAIL_UMBRAL_REVISION_MANUAL_USD,
     monto_gmail_sync_requiere_revision_manual_usd,
@@ -78,20 +84,8 @@ def _documento_ruta_desde_gmail_temporal(drive_link: Optional[str]) -> Optional[
 
 
 def _get_blocking_running_sync(db: Session) -> Optional[PagosGmailSync]:
-    """
-    Si hay una sync en estado running reciente (últimas 2 h), devuelve esa fila; si no, None.
-    Ventana 2 h: evita doble ejecución mientras un pipeline legítimo corre; huérfanos por crash
-    dejan de bloquear tras 2 h.
-    """
-    cutoff = datetime.utcnow() - timedelta(hours=2)
-    return db.execute(
-        select(PagosGmailSync).where(
-            and_(
-                PagosGmailSync.status == "running",
-                PagosGmailSync.started_at >= cutoff,
-            )
-        ).limit(1)
-    ).scalars().first()
+    """Sync running reciente (2 h) que bloquea otra corrida."""
+    return get_blocking_running_gmail_sync(db)
 
 
 def _is_pipeline_running(db: Session) -> bool:
@@ -262,17 +256,23 @@ def run_now(
     El parametro force se mantiene por compatibilidad y no aplica ninguna restriccion.
     """
     _ = force
+    reconcile_blocking_running_gmail_sync_if_stale(db)
     blocking = _get_blocking_running_sync(db)
     if blocking is not None:
         started = blocking.started_at.isoformat() if blocking.started_at else "?"
-        raise HTTPException(
-            status_code=409,
-            detail=(
-                f"Ya hay una sincronización en curso (sync_id={blocking.id}, iniciada={started}). "
-                "Espere a que termine (consulte estado arriba) o, si quedó colgada más de 2 h, podrá iniciar otra. "
-                "Borrar el acumulado (confirmar día) no detiene el proceso en segundo plano."
-            ),
-        )
+        if force and gmail_sync_looks_stale(blocking):
+            reconcile_stale_running_gmail_sync(db, blocking)
+            blocking = _get_blocking_running_sync(db)
+        if blocking is not None:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"Ya hay una sincronización en curso (sync_id={blocking.id}, iniciada={started}). "
+                    "Espere a que termine (consulte estado arriba). Si lleva más de 20 min sin procesar "
+                    "correos, vuelva a pulsar «Procesar manualmente» (force) o espere a que el servidor "
+                    "libere el bloqueo."
+                ),
+            )
     # Verificar credenciales de forma síncrona (respuesta inmediata si fallan)
     creds = get_pagos_gmail_credentials()
     if not creds:
@@ -359,6 +359,7 @@ def run_now(
 @router.get("/status")
 def status(db: Session = Depends(get_db)):
     """Ultima ejecucion (manual o programada); next_run_approx solo si el escaneo Gmail programado esta registrado en el scheduler."""
+    reconcile_blocking_running_gmail_sync_if_stale(db)
     last = db.execute(select(PagosGmailSync).order_by(desc(PagosGmailSync.started_at)).limit(1)).scalars().first()
     latest_data_date = _get_latest_date_with_data(db)
     marcados = 0
@@ -382,6 +383,7 @@ def status(db: Session = Depends(get_db)):
         "latest_data_date": latest_data_date,
         "last_correos_marcados_revision": marcados,
         "last_run_summary": run_summary,
+        "running_looks_stale": bool(last and gmail_sync_looks_stale(last)),
     }
 
 

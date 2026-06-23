@@ -494,6 +494,7 @@ export function PagosList() {
     gmailStatus,
     setGmailStatus,
     run: runGmail,
+    startPolling: startGmailPolling,
     stopPolling: stopGmailPolling,
   } = useGmailPipeline({
     onStatusUpdate: s => setGmailStatus(s),
@@ -517,13 +518,18 @@ export function PagosList() {
     },
   })
 
-  // Cargar estado Gmail al montar
+  // Cargar estado Gmail al montar; reanudar polling si quedó una corrida en curso.
   useEffect(() => {
     pagoService
       .getGmailStatus()
-      .then(setGmailStatus)
+      .then(s => {
+        setGmailStatus(s)
+        if (s.last_status === 'running') {
+          startGmailPolling('all')
+        }
+      })
       .catch(() => setGmailStatus(null))
-  }, [])
+  }, [setGmailStatus, startGmailPolling])
   useEffect(() => {
     if (!agregarPagoOpen) return
     pagoService
@@ -2337,6 +2343,13 @@ export function PagosList() {
                     <>
                       Procesando: {gmailStatus.last_emails} correos,{' '}
                       {gmailStatus.last_files} archivos
+                      {gmailStatus.running_looks_stale ? (
+                        <span className="mt-1 block text-amber-700">
+                          Sin actividad prolongada: el servidor puede liberar el
+                          bloqueo pronto. Vuelva a pulsar «Procesar manualmente»
+                          si no avanza.
+                        </span>
+                      ) : null}
                     </>
                   ) : gmailStatus.last_run ? (
                     <>

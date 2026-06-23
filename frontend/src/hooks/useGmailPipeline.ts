@@ -259,6 +259,9 @@ interface GmailStatus {
   last_correos_marcados_revision?: number
 
   last_run_summary?: GmailRunSummary | null
+
+  /** True si el backend detecta running huérfano (sin actividad prolongada). */
+  running_looks_stale?: boolean
 }
 
 interface UseGmailPipelineOptions {
@@ -394,6 +397,7 @@ export function useGmailPipeline({
   const abortedRef = useRef(false)
 
   const fetchErrorStreakRef = useRef(0)
+  const staleToastShownRef = useRef(false)
 
   /** Último scan_filter enviado a run-now (el status no lo devuelve). */
   const lastScanFilterRef = useRef<GmailScanFilter>('all')
@@ -411,6 +415,7 @@ export function useGmailPipeline({
 
     abortedRef.current = true
     fetchErrorStreakRef.current = 0
+    staleToastShownRef.current = false
     setLoading(false)
   }, [])
 
@@ -427,6 +432,16 @@ export function useGmailPipeline({
           setGmailStatus(s)
 
           onStatusUpdate?.(s)
+
+          if (s.running_looks_stale && s.last_status === 'running') {
+            if (!suppressDoneToasts && !staleToastShownRef.current) {
+              staleToastShownRef.current = true
+              toast(
+                'El escaneo Gmail lleva mucho tiempo sin procesar correos. El servidor lo liberará automáticamente; puede volver a pulsar «Procesar manualmente».',
+                { duration: 12000 }
+              )
+            }
+          }
 
           if (s.last_status && s.last_status !== 'running') {
             // Pipeline terminado
@@ -569,6 +584,7 @@ export function useGmailPipeline({
       abortedRef.current = false
 
       fetchErrorStreakRef.current = 0
+      staleToastShownRef.current = false
 
       setLoading(true)
 
