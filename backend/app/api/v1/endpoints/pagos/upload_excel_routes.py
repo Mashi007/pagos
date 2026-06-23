@@ -225,6 +225,7 @@ from .comprobante_imagen_helpers import (
     _normalizar_id_comprobante_imagen,
     _public_base_url_para_comprobante,
 )
+from .pagos_cedula_helpers import looks_like_cedula_vej
 from app.services.pagos_gmail.comprobante_bd import url_comprobante_imagen_absoluta
 
 from .constants import (
@@ -1552,7 +1553,7 @@ def importar_un_pago_reportado_a_pagos(
 
 
 
-    if not _looks_like_cedula_inline(cedula_raw):
+    if not looks_like_cedula_vej(cedula_raw):
 
         return _err_con_pce(
 

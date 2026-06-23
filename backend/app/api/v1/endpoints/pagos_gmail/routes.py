@@ -38,7 +38,11 @@ from app.models.pagos_gmail_abcd_cuotas_traza import PagosGmailAbcdCuotasTraza
 from app.models.pagos_gmail_pipeline_evento import PagosGmailPipelineEvento
 from app.models.prestamo import Prestamo
 from app.services.pago_numero_documento import numero_documento_ya_registrado
-from app.services.pagos_gmail.credentials import get_pagos_gmail_credentials, log_pagos_gmail_config_status
+from app.services.pagos_gmail.credentials import (
+    get_pagos_gmail_credentials,
+    log_pagos_gmail_config_status,
+    pagos_gmail_credentials_configured,
+)
 from app.services.pagos_gmail.gmail_service import (
     PAGOS_GMAIL_LABEL_ERROR_EMAIL,
     PAGOS_GMAIL_LOTE_REMITENTE_IT_MASTER,
@@ -273,9 +277,8 @@ def run_now(
     El parametro force se mantiene por compatibilidad y no aplica ninguna restriccion.
     """
     _ = force
-    # Verificar credenciales de forma síncrona (respuesta inmediata si fallan)
-    creds = get_pagos_gmail_credentials()
-    if not creds:
+    # Verificar credenciales sin refresh OAuth (evita bloquear el worker 30-90s en run-now).
+    if not pagos_gmail_credentials_configured():
         log_pagos_gmail_config_status()
         raise HTTPException(
             status_code=503,

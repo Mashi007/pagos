@@ -225,6 +225,7 @@ from .comprobante_imagen_helpers import (
     _normalizar_id_comprobante_imagen,
     _public_base_url_para_comprobante,
 )
+from .pagos_cedula_helpers import looks_like_cedula_vej
 from app.services.pagos_gmail.comprobante_bd import url_comprobante_imagen_absoluta
 
 from .constants import (
@@ -781,7 +782,7 @@ def guardar_fila_editable(
 
             raise HTTPException(status_code=400, detail="Cédula requerida")
 
-        if not _looks_like_cedula_inline(cedula):
+        if not looks_like_cedula_vej(cedula):
 
             raise HTTPException(status_code=400, detail="Cédula inválida (debe ser V/E/J/Z + 6-11 dígitos)")
 
@@ -1060,18 +1061,5 @@ def guardar_fila_editable(
         logger.exception("Error guardar-fila-editable: %s", e)
 
         raise HTTPException(status_code=500, detail=str(e)) from e
-
-
-
-
-
-def _looks_like_cedula_inline(cedula: str) -> bool:
-
-    """Validar cédula inline: solo V, E o J + 6-11 dígitos (no se admite Z)."""
-
-    return bool(re.match(r"^[VEJ]\d{6,11}$", cedula.strip(), re.IGNORECASE))
-
-
-
 
 

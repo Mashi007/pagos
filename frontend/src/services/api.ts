@@ -1493,7 +1493,7 @@ class ApiClient {
                 : url.includes('/pagos/batch')
                   ? 180000 // 3 min: Render frío + muchas filas
                   : url.includes('/pagos/gmail/run-now')
-                    ? 90000 // 90s: cubre credenciales OAuth + margen para backend síncrono viejo
+                    ? 45000 // Debe responder al instante; si tarda, worker ocupado (polling /status)
                     : url.includes('/clientes/check-emails') ||
                         url.includes('/clientes/check-cedulas')
                       ? 60000

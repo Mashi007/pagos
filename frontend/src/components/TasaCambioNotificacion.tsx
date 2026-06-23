@@ -33,9 +33,13 @@ export const TasaCambioNotificacion: React.FC<TasaCambioNotificacionProps> = ({
   const [tasaHoyRow, setTasaHoyRow] = useState<TasaCambioResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const ultimaFechaToastRef = useRef<string | null>(null)
+  const verificarEnCursoRef = useRef(false)
 
   useEffect(() => {
     const verificarTasa = async () => {
+      if (typeof document !== 'undefined' && document.hidden) return
+      if (verificarEnCursoRef.current) return
+      verificarEnCursoRef.current = true
       try {
         const estado = await getEstadoTasa()
 
@@ -87,8 +91,12 @@ export const TasaCambioNotificacion: React.FC<TasaCambioNotificacionProps> = ({
           setMostrarModal(true)
         }
       } catch (err: unknown) {
-        console.error('Error verificando tasa:', err)
+        // Evitar ruido en consola si el API está saturado (p. ej. pipeline Gmail largo).
+        if (import.meta.env.DEV) {
+          console.error('Error verificando tasa:', err)
+        }
       } finally {
+        verificarEnCursoRef.current = false
         setLoading(false)
       }
     }

@@ -30,7 +30,7 @@ import toast from 'react-hot-toast'
 
 import { pagoService } from '../services/pagoService'
 
-import { getErrorMessage } from '../types/errors'
+import { getErrorMessage, isAxiosTimeoutError } from '../types/errors'
 
 /** Resumen de la última corrida (backend); sirve para explicar 0 correos / 0 archivos. */
 export type GmailRunSummary = {
@@ -747,6 +747,25 @@ export function useGmailPipeline({
         // El endpoint devuelve inmediatamente (status="running"); hacer polling
         armPolling(scanFilter)
       } catch (e) {
+        // En Render (1 worker) la cola puede tardar >90s aunque el pipeline ya arrancó.
+        if (isAxiosTimeoutError(e)) {
+          try {
+            const s = await pagoService.getGmailStatus()
+            if (s.last_status === 'running') {
+              if (!suppressDoneToasts) {
+                toast(
+                  'La solicitud tardó en responder, pero el escaneo Gmail parece estar en curso. Consultando progreso…',
+                  { duration: 7000 }
+                )
+              }
+              armPolling(scanFilter)
+              return
+            }
+          } catch {
+            /* status no disponible; mostrar error original */
+          }
+        }
+
         setLoading(false)
 
         toast.error(getErrorMessage(e))

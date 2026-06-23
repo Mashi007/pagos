@@ -508,6 +508,8 @@ if (API_URL) {
         /\/cobros\/pagos-reportados\/\d+\/estado\b/.test(p) ||
         isCobrosPagoReportadoPatchEditarBase ||
         isCobrosPagoReportadoReadHeavyGet
+      const isGmailRunNowPost =
+        req.method === 'POST' && p.includes('pagos/gmail/run-now')
       const isConciliacionSheetSlowPost =
         p.includes('conciliacion-sheet/sync-now') ||
         p.includes('conciliacion-sheet/sync')
@@ -550,6 +552,9 @@ if (API_URL) {
       } else if (isConciliacionSheetSlowPost || isCandidatosDriveSlowPost) {
         // Google Sheets + snapshot BD / Drive masivo: suele >60s; el cliente usa hasta 300s.
         proxyTimeoutMs = 300000
+      } else if (isGmailRunNowPost) {
+        // run-now debe responder al instante; margen por cola del worker API en Render.
+        proxyTimeoutMs = 120000
       } else if (isLongJobCobrosPublicOrEscaner) {
         proxyTimeoutMs = 180000
       }

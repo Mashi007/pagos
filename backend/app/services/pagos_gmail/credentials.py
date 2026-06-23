@@ -137,6 +137,48 @@ def get_pagos_gmail_credentials() -> Optional[Any]:
     return creds_fallback
 
 
+def pagos_gmail_credentials_configured() -> bool:
+    """
+    Comprueba que hay material OAuth/SA para Gmail sin llamar a Google (respuesta HTTP rápida).
+    El pipeline en background llama a get_pagos_gmail_credentials() y refresca el token allí.
+    """
+    client_id = getattr(settings, "GOOGLE_CLIENT_ID", None)
+    client_secret = getattr(settings, "GOOGLE_CLIENT_SECRET", None)
+    tokens_path = getattr(settings, "GMAIL_TOKENS_PATH", "gmail_tokens.json") or "gmail_tokens.json"
+    if client_id and client_secret and tokens_path and os.path.isfile(tokens_path):
+        try:
+            with open(tokens_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if data.get("refresh_token"):
+                return True
+        except Exception:
+            pass
+    try:
+        from app.core.informe_pagos_config_holder import (
+            get_google_credentials_json,
+            get_google_oauth_client_id,
+            get_google_oauth_client_secret,
+            get_google_oauth_refresh_token,
+            sync_from_db,
+            use_google_oauth,
+        )
+
+        sync_from_db()
+        if use_google_oauth():
+            cid = get_google_oauth_client_id()
+            csec = get_google_oauth_client_secret()
+            ref = get_google_oauth_refresh_token()
+            return bool(
+                (cid or "").strip()
+                and (csec or "").strip()
+                and (ref or "").strip()
+            )
+        sa_json = get_google_credentials_json()
+        return bool((sa_json or "").strip())
+    except Exception:
+        return False
+
+
 def _fallback_informe_pagos_creds() -> Optional[Any]:
     """
     Usa credenciales de informe pagos (OAuth o SA) si tienen los scopes necesarios.
