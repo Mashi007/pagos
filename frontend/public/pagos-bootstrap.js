@@ -319,15 +319,34 @@
     'error',
     function (event) {
       var errorMessage = event.message || ''
-      var errorSource = (event.filename || (event.target && event.target.src) || '') || ''
+      var errorSource =
+        (event.filename ||
+          (event.target && (event.target.src || event.target.href)) ||
+          '') ||
+        ''
       if (isStaleBuildReactInvariant(errorMessage, errorSource)) {
         reloadPage()
         return
       }
-      if (event.target && event.target.tagName === 'SCRIPT' && event.target.type === 'module') {
+      var target = event.target
+      var isModuleScript =
+        target && target.tagName === 'SCRIPT' && target.type === 'module'
+      var isModulePreload =
+        target &&
+        target.tagName === 'LINK' &&
+        String(target.rel || '').toLowerCase() === 'modulepreload'
+      if (isModuleScript || isModulePreload) {
         if (isDynamicChunkLoadFailure(errorMessage, errorSource)) {
           reloadPage()
         }
+        return
+      }
+      // Firefox puede reportar MIME text/html en consola sin target SCRIPT/LINK claro.
+      if (
+        isDynamicChunkLoadFailure(errorMessage, errorSource) &&
+        isAssetChunkUrl(errorSource)
+      ) {
+        reloadPage()
       }
     },
     true
