@@ -537,6 +537,10 @@ if (API_URL) {
         p.includes('estado-cuenta/public/verificar-codigo')
       // PUT finalizar / guardar préstamo + validadores en «Guardar y Cerrar»: alinear con api.ts (120s).
       const isRevisionManualSlowPath = p.includes('revision-manual/')
+      const isValidadoresCampoPost =
+        req.method === 'POST' &&
+        (p.includes('validadores/validar-campo') ||
+          p.includes('validadores/formatear-tiempo-real'))
       let proxyTimeoutMs = 60000
       if (isExportReport) {
         proxyTimeoutMs = 180000
@@ -546,6 +550,8 @@ if (API_URL) {
         proxyTimeoutMs = 600000
       } else if (isClientesDriveImportFila || isClientesDriveRefreshCache) {
         proxyTimeoutMs = 300000
+      } else if (isValidadoresCampoPost) {
+        proxyTimeoutMs = 90000
       } else if (isCobrosPagosReportadosSlowPath || isRevisionManualSlowPath) {
         // Listado+KPIs (barrido), PATCH estado (aprobar puede tardar), PATCH editar (validadores +
         // dedup documento + commit BD) y GET detalle/comprobante/recibo (regeneración PDF + descarga

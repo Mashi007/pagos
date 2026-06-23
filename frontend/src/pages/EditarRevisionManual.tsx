@@ -120,7 +120,10 @@ import { useModelosVehiculosActivos } from '../hooks/useModelosVehiculos'
 
 import { codigoEstadoCuotaParaUi } from '../utils/cuotaEstadoDisplay'
 
-import { getErrorMessage, isAxiosError } from '../types/errors'
+import {
+  getErrorMessage,
+  isAxiosError,
+} from '../types/errors'
 
 import {
   claveDocumentoPagoListaNormalizada,
@@ -133,7 +136,11 @@ import {
   esUrlComprobanteImagenConAuth,
 } from '../utils/comprobanteImagenAuth'
 
-import { validadoresService } from '../services/validadoresService'
+import {
+  validarEmailRevisionLocal,
+  validarTelefonoVenezuelaRevisionLocal,
+  mensajeValidacionCampoLocal,
+} from '../utils/validadoresCampoLocal'
 
 import { escanerInfopagosExtraerComprobante } from '../services/cobrosService'
 
@@ -154,7 +161,6 @@ import {
   firmaSoloCuotas,
   firmaSoloPrestamo,
   buildPrestamoPatchGuardarRevision,
-  mensajeValidacionServidor,
   mergeCuotasParaMostrar,
   opcionesSelectCuotaRevision,
   opcionesSelectEstadoPrestamoRevision,
@@ -335,88 +341,37 @@ export function EditarRevisionManual() {
     useState<EstadoValidadorCierreContacto>({ listo: true, validando: false })
 
   useEffect(() => {
-    let cancelled = false
     const raw = telefonoDebouncCierre.trim()
     if (!raw) {
       setTelValidadorCierre({ listo: true, validando: false })
-      return () => {
-        cancelled = true
-      }
+      return
     }
-    setTelValidadorCierre({ listo: false, validando: true })
-    void validadoresService
-      .validarCampo('telefono_venezuela', raw, 'VENEZUELA')
-      .then(res => {
-        if (cancelled) return
-        const v = res?.validacion
-        const ok = Boolean(v?.valido)
-        setTelValidadorCierre({
-          listo: ok,
-          validando: false,
-          mensaje: ok ? undefined : mensajeValidacionServidor(v),
-        })
-      })
-      .catch(err => {
-        if (cancelled) return
-        setTelValidadorCierre({
-          listo: false,
-          validando: false,
-          mensaje:
-            getErrorMessage(err) ||
-            'No se pudo validar el teléfono con el sistema',
-        })
-      })
-    return () => {
-      cancelled = true
-    }
+    const v = validarTelefonoVenezuelaRevisionLocal(raw)
+    setTelValidadorCierre({
+      listo: v.valido,
+      validando: false,
+      mensaje: v.valido ? undefined : mensajeValidacionCampoLocal(v),
+    })
   }, [telefonoDebouncCierre])
 
   useEffect(() => {
-    let cancelled = false
     const raw = emailDebouncCierre.trim()
     if (!raw) {
       setEmailValidadorCierre({ listo: true, validando: false })
-      return () => {
-        cancelled = true
-      }
+      return
     }
-    setEmailValidadorCierre({ listo: false, validando: true })
-    void validadoresService
-      .validarCampo('email', raw, 'VENEZUELA')
-      .then(res => {
-        if (cancelled) return
-        const v = res?.validacion
-        const ok = Boolean(v?.valido)
-        setEmailValidadorCierre({
-          listo: ok,
-          validando: false,
-          mensaje: ok ? undefined : mensajeValidacionServidor(v),
-        })
-      })
-      .catch(err => {
-        if (cancelled) return
-        setEmailValidadorCierre({
-          listo: false,
-          validando: false,
-          mensaje:
-            getErrorMessage(err) ||
-            'No se pudo validar el correo con el sistema',
-        })
-      })
-    return () => {
-      cancelled = true
-    }
+    const v = validarEmailRevisionLocal(raw)
+    setEmailValidadorCierre({
+      listo: v.valido,
+      validando: false,
+      mensaje: v.valido ? undefined : mensajeValidacionCampoLocal(v),
+    })
   }, [emailDebouncCierre])
 
   const bloqueoGuardarYCerrarPorContacto = useMemo(() => {
-    if (telValidadorCierre.validando || emailValidadorCierre.validando) {
-      return {
-        bloqueado: true,
-        motivo:
-          'Validando teléfono o correo con los validadores del sistema. Espere un momento.',
-      }
-    }
-    if (!telValidadorCierre.listo) {
+    // Solo bloquear cuando el servidor respondió «inválido»; no durante validación en curso
+    // ni por timeout de red (listo=true en ese caso). handleGuardarYCerrar revalida al pulsar.
+    if (!telValidadorCierre.validando && !telValidadorCierre.listo) {
       return {
         bloqueado: true,
         motivo:
@@ -424,7 +379,7 @@ export function EditarRevisionManual() {
           'El teléfono no cumple los validadores. Use «Guardar cambios» para seguir corrigiendo; «Guardar y cerrar» se habilitará cuando sea válido.',
       }
     }
-    if (!emailValidadorCierre.listo) {
+    if (!emailValidadorCierre.validando && !emailValidadorCierre.listo) {
       return {
         bloqueado: true,
         motivo:
@@ -1524,6 +1479,7 @@ export function EditarRevisionManual() {
     }
 
     setGuardandoParcial(true)
+    toast.info('Guardando cambios…')
 
     try {
       let savedSomething = false
@@ -1828,7 +1784,9 @@ export function EditarRevisionManual() {
 
         await refrescarOrigenDatosTrasRevisionManual()
 
-        setTimeout(() => navegarTrasGuardarRevision(), 400)
+        if (opts?.volverAunqueNoHayaCambios || returnToRevision) {
+          setTimeout(() => navegarTrasGuardarRevision(), 400)
+        }
       } else if (errorOccurred) {
         toast.warning(
           '⚠️ Algunos cambios no se guardaron. Revisa los errores arriba'
@@ -1867,42 +1825,24 @@ export function EditarRevisionManual() {
 
     const tLive = (clienteData.telefono || '').trim()
     if (tLive) {
-      try {
-        const rt = await validadoresService.validarCampo(
-          'telefono_venezuela',
-          tLive,
-          'VENEZUELA'
+      const rt = validarTelefonoVenezuelaRevisionLocal(tLive)
+      if (!rt.valido) {
+        toast.error(
+          mensajeValidacionCampoLocal(rt) ||
+            'El teléfono no es válido para cerrar la revisión.'
         )
-        if (!rt?.validacion?.valido) {
-          toast.error(
-            mensajeValidacionServidor(rt.validacion) ||
-              'El teléfono no es válido para cerrar la revisión.'
-          )
-          return
-        }
-      } catch (e) {
-        toast.error(getErrorMessage(e) || 'Error al validar el teléfono')
         return
       }
     }
 
     const eLive = (clienteData.email || '').trim()
     if (eLive) {
-      try {
-        const re = await validadoresService.validarCampo(
-          'email',
-          eLive,
-          'VENEZUELA'
+      const re = validarEmailRevisionLocal(eLive)
+      if (!re.valido) {
+        toast.error(
+          mensajeValidacionCampoLocal(re) ||
+            'El correo no es válido para cerrar la revisión.'
         )
-        if (!re?.validacion?.valido) {
-          toast.error(
-            mensajeValidacionServidor(re.validacion) ||
-              'El correo no es válido para cerrar la revisión.'
-          )
-          return
-        }
-      } catch (e) {
-        toast.error(getErrorMessage(e) || 'Error al validar el correo')
         return
       }
     }
@@ -2425,8 +2365,12 @@ export function EditarRevisionManual() {
               className={`gap-2 ${claseResaltarGuardarRevision}`}
               title="Guarda los cambios y continúa revisando - estado cambia a ?"
             >
-              <Save className="h-4 w-4" />
-              Guardar Cambios
+              {guardandoParcial ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Save className="h-4 w-4" />
+              )}
+              {guardandoParcial ? 'Guardando…' : 'Guardar Cambios'}
             </Button>
 
             {vieneDesdeFiniquitos ? (
@@ -2466,7 +2410,7 @@ export function EditarRevisionManual() {
             <Button
               type="button"
               className={`gap-2 bg-green-600 text-white hover:bg-green-700 ${claseResaltarGuardarRevision}`}
-              onClick={handleGuardarYCerrar}
+              onClick={() => void handleGuardarYCerrar()}
               disabled={deshabilitarGuardarYCerrar}
               title={tituloGuardarYCerrarBoton}
             >
@@ -2475,7 +2419,7 @@ export function EditarRevisionManual() {
               ) : (
                 <Check className="h-4 w-4" />
               )}
-              Guardar y Cerrar
+              {guardandoFinal ? 'Finalizando…' : 'Guardar y Cerrar'}
             </Button>
           </div>
         </div>
@@ -2852,8 +2796,12 @@ export function EditarRevisionManual() {
             className={`gap-2 ${claseResaltarGuardarRevision}`}
             title="Guarda los cambios y continúa revisando - estado cambia a ?"
           >
-            <Save className="h-4 w-4" />
-            Guardar Cambios
+            {guardandoParcial ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Save className="h-4 w-4" />
+            )}
+            {guardandoParcial ? 'Guardando…' : 'Guardar Cambios'}
           </Button>
 
           {vieneDesdeFiniquitos ? (
@@ -2887,7 +2835,7 @@ export function EditarRevisionManual() {
           <Button
             type="button"
             className={`gap-2 bg-green-600 text-white hover:bg-green-700 ${claseResaltarGuardarRevision}`}
-            onClick={handleGuardarYCerrar}
+            onClick={() => void handleGuardarYCerrar()}
             disabled={deshabilitarGuardarYCerrar}
             title={tituloGuardarYCerrarBoton}
           >
@@ -2896,7 +2844,7 @@ export function EditarRevisionManual() {
             ) : (
               <Check className="h-4 w-4" />
             )}
-            Guardar y Cerrar
+            {guardandoFinal ? 'Finalizando…' : 'Guardar y Cerrar'}
           </Button>
         </div>
       </div>

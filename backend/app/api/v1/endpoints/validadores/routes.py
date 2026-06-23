@@ -307,10 +307,10 @@ def post_validar_campo(
     if campo == "email":
         result = validate_email(valor)
         return {"validacion": result}
-    elif campo == "cedula":
+    elif campo in ("cedula", "cedula_venezuela"):
         result = validate_cedula(valor)
         return {"validacion": result}
-    elif campo == "telefono":
+    elif campo in ("telefono", "telefono_venezuela"):
         result = validate_phone(valor)
         return {"validacion": result}
     elif campo == "fecha":
