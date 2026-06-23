@@ -361,6 +361,8 @@ def status(db: Session = Depends(get_db)):
     """Ultima ejecucion (manual o programada); next_run_approx solo si el escaneo Gmail programado esta registrado en el scheduler."""
     reconcile_blocking_running_gmail_sync_if_stale(db)
     last = db.execute(select(PagosGmailSync).order_by(desc(PagosGmailSync.started_at)).limit(1)).scalars().first()
+    if last is not None and reconcile_stale_running_gmail_sync(db, last):
+        db.refresh(last)
     latest_data_date = _get_latest_date_with_data(db)
     marcados = 0
     if last is not None:

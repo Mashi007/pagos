@@ -277,12 +277,42 @@ interface UseGmailPipelineOptions {
   suppressDoneToasts?: boolean
 }
 
-const POLL_INTERVAL_MS = 10000
+const POLL_MAX_ATTEMPTS = 120
 
-const POLL_MAX_ATTEMPTS = 180 // 180 × 10s = 30 min máximo de espera (pipeline con muchos correos)
+/** Intervalo entre consultas: más espaciado tras muchos intentos (menos carga al API). */
+function pollDelayMs(attempt: number): number {
+  if (attempt < 40) return 10000
+  if (attempt < 80) return 20000
+  return 30000
+}
 
 /** Tras varios fallos de red / 5xx (p. ej. 502 Render), dejar de martillar el API. */
 const POLL_MAX_CONSECUTIVE_FETCH_ERRORS = 5
+
+/**
+ * Un solo loop de polling Gmail en toda la SPA.
+ * Sin esto, remounts o varios useGmailPipeline disparan decenas de cadenas en paralelo
+ * (~2-3 GET /status por segundo en logs de backend).
+ */
+let globalGmailPollSession = 0
+let globalGmailPollTimeout: ReturnType<typeof setTimeout> | null = null
+
+function beginGlobalGmailPollSession(): number {
+  globalGmailPollSession += 1
+  if (globalGmailPollTimeout !== null) {
+    clearTimeout(globalGmailPollTimeout)
+    globalGmailPollTimeout = null
+  }
+  return globalGmailPollSession
+}
+
+function cancelGlobalGmailPollSession(): void {
+  globalGmailPollSession += 1
+  if (globalGmailPollTimeout !== null) {
+    clearTimeout(globalGmailPollTimeout)
+    globalGmailPollTimeout = null
+  }
+}
 
 type GmailScanFilter =
   | 'unread'
@@ -398,6 +428,9 @@ export function useGmailPipeline({
 
   const fetchErrorStreakRef = useRef(0)
   const staleToastShownRef = useRef(false)
+  const pollingActiveRef = useRef(false)
+  /** Tras agotar intentos con last_status=running, no reanudar polling hasta un run() nuevo. */
+  const gaveUpWhileRunningRef = useRef(false)
 
   /** Último scan_filter enviado a run-now (el status no lo devuelve). */
   const lastScanFilterRef = useRef<GmailScanFilter>('all')
@@ -406,6 +439,8 @@ export function useGmailPipeline({
 
   onDoneRef.current = onDone
 
+  const pollSessionRef = useRef(0)
+
   const stopPolling = useCallback(() => {
     if (pollingRef.current) {
       clearTimeout(pollingRef.current)
@@ -413,17 +448,29 @@ export function useGmailPipeline({
       pollingRef.current = null
     }
 
+    cancelGlobalGmailPollSession()
     abortedRef.current = true
     fetchErrorStreakRef.current = 0
     staleToastShownRef.current = false
+    pollingActiveRef.current = false
     setLoading(false)
   }, [])
 
   const _pollStatus = useCallback(
-    (attempt: number) => {
-      if (abortedRef.current) return
+    (attempt: number, session: number) => {
+      if (abortedRef.current || session !== globalGmailPollSession) return
 
+      if (pollingRef.current) {
+        clearTimeout(pollingRef.current)
+        pollingRef.current = null
+      }
+
+      const delayMs = pollDelayMs(attempt)
       pollingRef.current = setTimeout(async () => {
+        pollingRef.current = null
+        globalGmailPollTimeout = null
+        if (abortedRef.current || session !== globalGmailPollSession) return
+
         try {
           const s = await pagoService.getGmailStatus()
 
@@ -437,13 +484,18 @@ export function useGmailPipeline({
             if (!suppressDoneToasts && !staleToastShownRef.current) {
               staleToastShownRef.current = true
               toast(
-                'El escaneo Gmail lleva mucho tiempo sin procesar correos. El servidor lo liberará automáticamente; puede volver a pulsar «Procesar manualmente».',
+                'El escaneo Gmail lleva mucho tiempo sin avanzar. El servidor lo liberará en la próxima consulta; pulse «Procesar manualmente» de nuevo.',
                 { duration: 12000 }
               )
             }
+            pollingActiveRef.current = false
+            gaveUpWhileRunningRef.current = true
+            setLoading(false)
+            return
           }
 
           if (s.last_status && s.last_status !== 'running') {
+            pollingActiveRef.current = false
             // Pipeline terminado
 
             setLoading(false)
@@ -519,6 +571,8 @@ export function useGmailPipeline({
           }
 
           if (attempt >= POLL_MAX_ATTEMPTS) {
+            pollingActiveRef.current = false
+            gaveUpWhileRunningRef.current = true
             setLoading(false)
 
             const processed = s.last_emails ?? 0
@@ -545,12 +599,13 @@ export function useGmailPipeline({
             return
           }
 
-          _pollStatus(attempt + 1)
+          _pollStatus(attempt + 1, session)
         } catch {
           fetchErrorStreakRef.current += 1
           if (
             fetchErrorStreakRef.current >= POLL_MAX_CONSECUTIVE_FETCH_ERRORS
           ) {
+            pollingActiveRef.current = false
             setLoading(false)
             toast.error(
               'No se pudo consultar el estado del pipeline Gmail (varios intentos fallidos). ' +
@@ -560,15 +615,32 @@ export function useGmailPipeline({
             return
           }
           if (attempt < POLL_MAX_ATTEMPTS) {
-            _pollStatus(attempt + 1)
+            _pollStatus(attempt + 1, session)
           } else {
+            pollingActiveRef.current = false
             setLoading(false)
           }
         }
-      }, POLL_INTERVAL_MS)
+      }, delayMs)
+      globalGmailPollTimeout = pollingRef.current
     },
 
-    [onStatusUpdate]
+    [onStatusUpdate, suppressDoneToasts]
+  )
+
+  const armPolling = useCallback(
+    (scanFilter?: GmailScanFilter) => {
+      const session = beginGlobalGmailPollSession()
+      pollSessionRef.current = session
+      abortedRef.current = false
+      fetchErrorStreakRef.current = 0
+      staleToastShownRef.current = false
+      pollingActiveRef.current = true
+      lastScanFilterRef.current = scanFilter ?? 'all'
+      setLoading(true)
+      _pollStatus(0, session)
+    },
+    [_pollStatus]
   )
 
   const run = useCallback(
@@ -585,9 +657,9 @@ export function useGmailPipeline({
 
       fetchErrorStreakRef.current = 0
       staleToastShownRef.current = false
+      gaveUpWhileRunningRef.current = false
 
       setLoading(true)
-
       lastScanFilterRef.current = scanFilter ?? 'all'
 
       toast('Procesando correos en segundo plano...', { duration: 4000 })
@@ -602,15 +674,14 @@ export function useGmailPipeline({
         )
 
         // El endpoint devuelve inmediatamente (status="running"); hacer polling
-
-        _pollStatus(0)
+        armPolling(scanFilter)
       } catch (e) {
         setLoading(false)
 
         toast.error(getErrorMessage(e))
       }
     },
-    [loading, _pollStatus]
+    [loading, armPolling]
   )
 
   const refreshStatus = useCallback(() => {
@@ -633,14 +704,10 @@ export function useGmailPipeline({
    */
   const startPolling = useCallback(
     (scanFilter?: GmailScanFilter) => {
-      if (loading) return
-      abortedRef.current = false
-      fetchErrorStreakRef.current = 0
-      setLoading(true)
-      lastScanFilterRef.current = scanFilter ?? 'all'
-      _pollStatus(0)
+      if (gaveUpWhileRunningRef.current) return
+      armPolling(scanFilter)
     },
-    [loading, _pollStatus]
+    [armPolling]
   )
 
   return {

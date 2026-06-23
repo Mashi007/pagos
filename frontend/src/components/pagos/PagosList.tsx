@@ -518,18 +518,28 @@ export function PagosList() {
     },
   })
 
-  // Cargar estado Gmail al montar; reanudar polling si quedó una corrida en curso.
+  // Cargar estado Gmail una vez al montar; reanudar polling solo si quedó running.
+  // No depender de startGmailPolling: al terminar el tope de espera (30 min) loading
+  // vuelve a false, cambia la referencia del callback y este efecto reiniciaba el polling en bucle.
   useEffect(() => {
+    let cancelled = false
     pagoService
       .getGmailStatus()
       .then(s => {
+        if (cancelled) return
         setGmailStatus(s)
         if (s.last_status === 'running') {
           startGmailPolling('all')
         }
       })
-      .catch(() => setGmailStatus(null))
-  }, [setGmailStatus, startGmailPolling])
+      .catch(() => {
+        if (!cancelled) setGmailStatus(null)
+      })
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- solo al montar PagosList
+  }, [])
   useEffect(() => {
     if (!agregarPagoOpen) return
     pagoService
