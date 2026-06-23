@@ -606,10 +606,10 @@ class ApiClient {
             isColdStartSafeGetTimeoutRetry
               ? 2500
               : st === 502 || st === 503
-              ? useLong502Delay
-                ? 3500
-                : 2000
-              : 500
+                ? useLong502Delay
+                  ? 3500
+                  : 2000
+                : 500
           const rawDelay = delayBase * Math.pow(2, retryCount)
           const delayMs = useLong502Delay ? Math.min(14000, rawDelay) : rawDelay
 
