@@ -26,6 +26,7 @@ from sqlalchemy import select, func, or_, and_, case, delete, text, update
 from sqlalchemy.exc import ProgrammingError, OperationalError, IntegrityError
 
 from app.core.database import get_db
+from app.core.db_transient import run_db_with_transient_retry
 from app.core.documento import normalize_documento
 from app.core.deps import get_current_user
 from app.services.cobros import infopagos_escaner_borrador_service as ieb
@@ -247,30 +248,40 @@ def list_pagos_reportados_y_kpis(
             return stale_wait
 
     try:
-        emit_kpi_from_list = estado is None
-        lista = _list_pagos_reportados_payload(
+        def _compute_payload() -> dict:
+            emit_kpi_from_list = estado is None
+            lista = _list_pagos_reportados_payload(
+                db,
+                estado=estado,
+                fecha_desde=fecha_desde,
+                fecha_hasta=fecha_hasta,
+                cedula=cedula,
+                institucion=institucion,
+                page=page,
+                per_page=per_page,
+                incluir_exportados=incluir_exportados,
+                emit_manual_estado_counts_for_kpis=emit_kpi_from_list,
+            )
+            manual_queue = (
+                lista.pop("_manual_kpi_counts", None) if emit_kpi_from_list else None
+            )
+            kpis = _kpis_pagos_reportados_payload(
+                db,
+                fecha_desde=fecha_desde,
+                fecha_hasta=fecha_hasta,
+                cedula=cedula,
+                institucion=institucion,
+                incluir_exportados=incluir_exportados,
+                manual_queue_counts=manual_queue,
+            )
+            return {**lista, "kpis": kpis}
+
+        payload = run_db_with_transient_retry(
             db,
-            estado=estado,
-            fecha_desde=fecha_desde,
-            fecha_hasta=fecha_hasta,
-            cedula=cedula,
-            institucion=institucion,
-            page=page,
-            per_page=per_page,
-            incluir_exportados=incluir_exportados,
-            emit_manual_estado_counts_for_kpis=emit_kpi_from_list,
+            _compute_payload,
+            attempts=3,
+            log_prefix="[COBROS listado-y-kpis]",
         )
-        manual_queue = lista.pop("_manual_kpi_counts", None) if emit_kpi_from_list else None
-        kpis = _kpis_pagos_reportados_payload(
-            db,
-            fecha_desde=fecha_desde,
-            fecha_hasta=fecha_hasta,
-            cedula=cedula,
-            institucion=institucion,
-            incluir_exportados=incluir_exportados,
-            manual_queue_counts=manual_queue,
-        )
-        payload = {**lista, "kpis": kpis}
         if not skip_cache:
             _cobros_listado_kpis_cache_set(cache_payload, payload)
         return payload

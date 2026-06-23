@@ -114,7 +114,13 @@ from .listado_kpis_cache import (
     _cobros_listado_kpis_release_singleflight,
     _cobros_listado_kpis_try_acquire_singleflight,
 )
-from .reportados_dedup_helpers import *
+from . import reportados_dedup_helpers as _dedup
+from .reportados_dedup_helpers import (
+    _numeros_operacion_presentes_en_pagos,
+    _pago_reportado_list_items_from_rows,
+    _primer_id_por_numero_operacion_para_where,
+    _reportado_pasa_filtro_dedup_num_op,
+)
 from .reportados_validadores_helpers import (
     _item_falla_validadores_cola_manual,
     _regularizar_reportados_guarded,
@@ -359,17 +365,17 @@ def _cobros_primer_maps_revision_token(db: Session) -> tuple:
 
 def _prune_primer_maps_triple_cache_unlocked() -> None:
     """Mantiene acotado el dict; caller debe tener `_primer_maps_triple_cache_lock`."""
-    global _primer_maps_triple_cache
-    if len(_primer_maps_triple_cache) <= _PRIMER_MAPS_CACHE_MAX_ENTRIES:
+    cache = _dedup._primer_maps_triple_cache
+    if len(cache) <= _dedup._PRIMER_MAPS_CACHE_MAX_ENTRIES:
         return
     # Eliminar entradas más antiguas por `monotonic_ts`.
     items = sorted(
-        _primer_maps_triple_cache.items(),
+        cache.items(),
         key=lambda kv: kv[1][1],
     )
-    drop = len(items) - _PRIMER_MAPS_CACHE_MAX_ENTRIES
+    drop = len(items) - _dedup._PRIMER_MAPS_CACHE_MAX_ENTRIES
     for k, _ in items[:drop]:
-        _primer_maps_triple_cache.pop(k, None)
+        cache.pop(k, None)
 
 
 def _compute_primer_triple_for_where(
@@ -396,11 +402,11 @@ def _get_primer_triple_cached(
     """
     rev = _cobros_primer_maps_revision_token(db)
     now = time.monotonic()
-    with _primer_maps_triple_cache_lock:
-        ent = _primer_maps_triple_cache.get(scope_key)
+    with _dedup._primer_maps_triple_cache_lock:
+        ent = _dedup._primer_maps_triple_cache.get(scope_key)
         if ent is not None:
             stored_rev, ts, a, b, c_f = ent
-            if stored_rev == rev and (now - ts) < _PRIMER_MAPS_CACHE_TTL_SEC:
+            if stored_rev == rev and (now - ts) < _dedup._PRIMER_MAPS_CACHE_TTL_SEC:
                 logger.debug(
                     "[COBROS_CACHE] primer_triple hit scope=%s rev=%s age_s=%.2f",
                     scope_key,
@@ -412,8 +418,8 @@ def _get_primer_triple_cached(
     primer_precalc, primer_num_op, numeros_en_pagos = _compute_primer_triple_for_where(db, wh)
     rev_after = _cobros_primer_maps_revision_token(db)
     now_store = time.monotonic()
-    with _primer_maps_triple_cache_lock:
-        _primer_maps_triple_cache[scope_key] = (
+    with _dedup._primer_maps_triple_cache_lock:
+        _dedup._primer_maps_triple_cache[scope_key] = (
             rev_after,
             now_store,
             primer_precalc,
@@ -523,7 +529,7 @@ def _list_pagos_reportados_payload(
     emit_counts = bool(emit_manual_estado_counts_for_kpis and estado is None)
     by_estado_manual: Dict[str, int] = {"pendiente": 0, "en_revision": 0}
 
-    batch = _COBROS_LISTADO_SCAN_BATCH
+    batch = _dedup._COBROS_LISTADO_SCAN_BATCH
     offset_scan = 0
     skip_need = (page - 1) * per_page
     take_need = per_page
@@ -659,7 +665,7 @@ def _kpis_pagos_reportados_payload(
         ]
         q_scan = select(PagoReportado).where(*wh_kpi_scan).order_by(PagoReportado.created_at.asc())
 
-        batch = _COBROS_LISTADO_SCAN_BATCH
+        batch = _dedup._COBROS_LISTADO_SCAN_BATCH
         offset_scan = 0
         pagos_canon_acum_kpi: Dict[str, Set[str]] = {"queried": set(), "present": set()}
         pagos_info_acum_kpi: Dict[str, Any] = {"info_queried": set(), "info_by_key": {}}

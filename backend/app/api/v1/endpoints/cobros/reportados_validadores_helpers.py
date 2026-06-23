@@ -107,22 +107,18 @@ from .schemas import (
     PagoReportadoDuplicadoDiagnostico,
     PagoReportadoListItem,
 )
+from . import reportados_dedup_helpers as _dedup
 from .reportados_dedup_helpers import (
     _cedula_lookup_variants,
     _collect_candidatos_canon_desde_reportados,
     _es_banco_mercantil,
+    _gemini_coincide_exacto_ok,
     _normalize_cedula_for_client_lookup,
     _pago_existente_info_para_reportado,
     _pago_reportado_list_items_from_rows,
     _pagos_existentes_info_por_clave,
     _referencia_display,
 )
-
-def _gemini_coincide_exacto_ok(val: Optional[str]) -> bool:
-    """True si Gemini indicó coincidencia exacta (valores habituales en BD: true, 1)."""
-    g = (val or "").strip().lower()
-    return g in ("true", "1")
-
 
 def _regularizar_reportados_gemini_ok_sin_falla_manual(
     db: Session, max_ids: int = 24, deadline_monotonic: Optional[float] = None
@@ -228,29 +224,31 @@ def _regularizar_reportados_guarded(db: Session) -> None:
     El backfill progresivo de falla_validadores_manual solo corre en los paths
     de cooldown/lock-miss para no bloquear el primer request post-cold-start.
     """
-    global _regulariza_last_run_monotonic
     now = time.monotonic()
-    if now - _process_start_monotonic < _REGULARIZA_COLD_START_GRACE_SEC:
+    if now - _dedup._process_start_monotonic < _dedup._REGULARIZA_COLD_START_GRACE_SEC:
         return
-    if now - _regulariza_last_run_monotonic < _REGULARIZA_MIN_INTERVAL_SEC:
+    if now - _dedup._regulariza_last_run_monotonic < _dedup._REGULARIZA_MIN_INTERVAL_SEC:
         _backfill_falla_validadores_lote(db)
         return
-    if not _regulariza_lock.acquire(blocking=False):
+    if not _dedup._regulariza_lock.acquire(blocking=False):
         _backfill_falla_validadores_lote(db)
         return
     try:
         now_inside = time.monotonic()
-        if now_inside - _regulariza_last_run_monotonic < _REGULARIZA_MIN_INTERVAL_SEC:
+        if (
+            now_inside - _dedup._regulariza_last_run_monotonic
+            < _dedup._REGULARIZA_MIN_INTERVAL_SEC
+        ):
             return
-        _regulariza_last_run_monotonic = now_inside
-        deadline = now_inside + (_REGULARIZA_TIME_BUDGET_MS / 1000.0)
+        _dedup._regulariza_last_run_monotonic = now_inside
+        deadline = now_inside + (_dedup._REGULARIZA_TIME_BUDGET_MS / 1000.0)
         _regularizar_reportados_gemini_ok_sin_falla_manual(
             db,
-            max_ids=_REGULARIZA_MAX_IDS_PER_RUN,
+            max_ids=_dedup._REGULARIZA_MAX_IDS_PER_RUN,
             deadline_monotonic=deadline,
         )
     finally:
-        _regulariza_lock.release()
+        _dedup._regulariza_lock.release()
 
 
 def _estado_label_estado_reportado(estado: str) -> str:

@@ -27,6 +27,7 @@ from sqlalchemy import select, func, or_, and_, case, delete, text, update
 from sqlalchemy.exc import ProgrammingError, OperationalError, IntegrityError
 
 from app.core.database import get_db
+from app.core.db_transient import run_db_with_transient_retry
 from app.core.documento import normalize_documento
 from app.core.deps import get_current_user
 from app.services.cobros import infopagos_escaner_borrador_service as ieb
@@ -126,6 +127,12 @@ def _columna_observacion_gemini_ignora_cola_cobros(nombre: str) -> bool:
     t = " ".join((nombre or "").strip().lower().split())
     t = t.replace("ó", "o")
     return t in ("fecha pago", "fecha de pago")
+
+
+def _gemini_coincide_exacto_ok(val: Optional[str]) -> bool:
+    """True si Gemini indico coincidencia exacta (valores habituales en BD: true, 1)."""
+    g = (val or "").strip().lower()
+    return g in ("true", "1")
 
 
 def _observacion_solo_columnas(raw: Optional[str]) -> Optional[str]:
@@ -604,9 +611,16 @@ def _numeros_operacion_presentes_en_pagos(db: Session, keys: Set[str]) -> Set[st
         part = lst[i : i + 450]
         if not part:
             continue
-        vals = db.execute(
-            select(Pago.doc_canon_numero).where(Pago.doc_canon_numero.in_(part))
-        ).scalars().all()
+        vals = run_db_with_transient_retry(
+            db,
+            lambda p=part: db.execute(
+                select(Pago.doc_canon_numero).where(Pago.doc_canon_numero.in_(p))
+            )
+            .scalars()
+            .all(),
+            attempts=3,
+            log_prefix="[COBROS doc_canon]",
+        )
         for v in vals:
             if v:
                 out.add(v)
