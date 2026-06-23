@@ -73,6 +73,15 @@ function isPrestamoDetailGet(url?: string): boolean {
   return /\/prestamos\/\d+(?:\?|#|$)/.test(String(url || ''))
 }
 
+/** Listados Pagos (ultimos, tabla conciliados, etc.); lectura idempotente. */
+function isPagosListReadGet(url?: string): boolean {
+  const u = String(url || '')
+  return (
+    /\/api\/v1\/pagos\/ultimos(?:\?|#|$)/.test(u) ||
+    /\/api\/v1\/pagos\?(?:[^#]*)/.test(u)
+  )
+}
+
 // Base URL de la API. CSP permite same-origin y orígenes Render; usar VITE_API_URL cuando front y back estén en servicios distintos.
 
 function getEffectiveApiBaseUrl(): string {
@@ -384,6 +393,14 @@ class ApiClient {
           config.timeout = SLOW_ENDPOINT_TIMEOUT_MS
         }
 
+        if (
+          config.method?.toLowerCase() === 'get' &&
+          isPagosListReadGet(config.url) &&
+          (config.timeout == null || config.timeout < 90000)
+        ) {
+          config.timeout = 90000
+        }
+
         // Cobros: PATCH estado (aprobar/rechazar) puede tardar (cascada, correo, PDF).
         if (
           config.method?.toLowerCase() === 'patch' &&
@@ -522,6 +539,7 @@ class ApiClient {
               reqUrl
             ) ||
             isPrestamoDetailGet(reqUrl) ||
+            isPagosListReadGet(reqUrl) ||
             reqUrl.includes('/pagos/con-errores') ||
             /\/pagos\/comprobante-imagen\/[a-f0-9]+/i.test(reqUrl) ||
             reqUrl.includes('/prestamos/candidatos-drive/snapshot') ||
@@ -1133,7 +1151,17 @@ class ApiClient {
 
       if (
         errorCode === 'ERR_CANCELED' ||
-        errorMessage.includes('Request aborted')
+        errorMessage.includes('Request aborted') ||
+        (error.config as { signal?: AbortSignal })?.signal?.aborted
+      ) {
+        return
+      }
+
+      // Petición sustituida por otra (p. ej. refetch React Query): no alarmar en consola.
+      if (
+        isGmailStatusPollRequest(error.config) &&
+        errorCode === 'ECONNABORTED' &&
+        (error.config as any)?._retryCount
       ) {
         return
       }
@@ -1218,6 +1246,7 @@ class ApiClient {
       url.includes('/auditoria/prestamos/cartera') ||
       url.includes('/pagos/kpis') ||
       url.includes('/pagos/stats') ||
+      isPagosListReadGet(url) ||
       url.includes('/pagos/con-errores') ||
       url.includes('/pagos/comprobante-imagen/') ||
       url.includes('/tasas-cambio/') ||
@@ -1276,11 +1305,14 @@ class ApiClient {
     const isAuthMe = url.includes('/auth/me')
     const isGmailStatus = isGmailStatusPollRequest({ url })
     const isPrestamoDetail = isPrestamoDetailGet(url)
+    const isPagosList = isPagosListReadGet(url)
 
     let defaultTimeout = DEFAULT_TIMEOUT_MS
 
     if (isGmailStatus) {
       defaultTimeout = SLOW_ENDPOINT_TIMEOUT_MS
+    } else if (isPagosList) {
+      defaultTimeout = 90000
     } else if (isAuthMe || isPrestamoDetail) {
       defaultTimeout = SLOW_ENDPOINT_TIMEOUT_MS
     } else if (isListadoKpisPagosReportados) {
