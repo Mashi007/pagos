@@ -95,6 +95,7 @@ import { BASE_PATH } from '../../config/env'
 import {
   gmailRunSummaryHeadline,
   gmailRunSummaryLines,
+  gmailRunningProgressLabel,
   useGmailPipeline,
   type GmailRunSummary,
 } from '../../hooks/useGmailPipeline'
@@ -2301,15 +2302,23 @@ export function PagosList() {
             type="button"
             onClick={() => void runGmail('all')}
             disabled={loadingGmail}
-            className="px-6 py-6 text-base font-semibold"
-            title="Ejecuta el pipeline Gmail (misma acción que Agregar pago → Generar Excel desde email → Procesar correos)"
+            className="max-w-[min(100%,22rem)] px-6 py-6 text-base font-semibold"
+            title={
+              loadingGmail && gmailStatus?.last_status === 'running'
+                ? `${gmailRunningProgressLabel(gmailStatus)}. El contador sube al terminar cada correo; Gemini puede tardar varios minutos por imagen.`
+                : 'Ejecuta el pipeline Gmail (misma acción que Agregar pago → Procesar correos)'
+            }
           >
             {loadingGmail ? (
-              <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+              <Loader2 className="mr-2 h-5 w-5 shrink-0 animate-spin" />
             ) : (
-              <Mail className="mr-2 h-5 w-5" />
+              <Mail className="mr-2 h-5 w-5 shrink-0" />
             )}
-            Procesar manualmente
+            <span className="truncate">
+              {loadingGmail
+                ? gmailRunningProgressLabel(gmailStatus)
+                : 'Procesar manualmente'}
+            </span>
           </Button>
           <Popover open={agregarPagoOpen} onOpenChange={setAgregarPagoOpen}>
             <PopoverTrigger asChild>
@@ -2567,9 +2576,28 @@ export function PagosList() {
                 </p>
               ) : null}
               <div className="mt-1 break-words">
-                {bannerSummary
-                  ? gmailRunSummaryHeadline(bannerSummary)
-                  : 'Sin corrida manual reciente. Ejecute "Buscar nuevos pagos (Gmail)" para generar métricas.'}
+                {gmailStatus?.last_status === 'running' ? (
+                  <>
+                    <span className="font-medium text-blue-800">
+                      {gmailRunningProgressLabel(gmailStatus)}
+                    </span>
+                    {typeof gmailStatus.last_run_summary?.gmail_messages_listed ===
+                      'number' &&
+                    gmailStatus.last_run_summary.gmail_messages_listed > 0 &&
+                    (gmailStatus.last_emails ?? 0) <
+                      gmailStatus.last_run_summary.gmail_messages_listed ? (
+                      <span className="mt-1 block text-xs text-gray-600">
+                        Gemini puede tardar varios minutos por correo con
+                        imagen grande; el número no sube hasta terminar cada
+                        hilo.
+                      </span>
+                    ) : null}
+                  </>
+                ) : bannerSummary ? (
+                  gmailRunSummaryHeadline(bannerSummary)
+                ) : (
+                  'Sin corrida manual reciente. Ejecute "Buscar nuevos pagos (Gmail)" para generar métricas.'
+                )}
               </div>
               {bannerLastRun ? (
                 <div className="mt-1 text-xs text-gray-500">

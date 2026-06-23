@@ -50,6 +50,8 @@ export type GmailRunSummary = {
   pagos_invalidos_pendientes_revision?: number
   /** Modelo Gemini usado en la corrida (settings GEMINI_MODEL). */
   gemini_model?: string
+  /** Fase actual del pipeline (listed, processing, …). */
+  pipeline_phase?: string
   /** Métricas de latencia de Gemini por corrida. */
   gemini_calls_total?: number
   gemini_ms_total?: number
@@ -241,6 +243,38 @@ export function diagnosticoIdentificacionDesdeRunSummary(
   return `${passTxt}${reasonTxt}`
 }
 
+/** Texto corto para botón / barra mientras last_status=running. */
+export function gmailRunningProgressLabel(
+  status: Pick<
+    GmailStatus,
+    'last_status' | 'last_emails' | 'last_files' | 'last_run_summary'
+  > | null
+  | undefined
+): string {
+  if (!status || status.last_status !== 'running') {
+    return 'Procesar manualmente'
+  }
+  const emails = status.last_emails ?? 0
+  const files = status.last_files ?? 0
+  const listed = status.last_run_summary?.gmail_messages_listed
+  const phase = status.last_run_summary?.pipeline_phase
+
+  if (typeof listed === 'number' && listed > 0) {
+    if (emails === 0 && phase === 'listed') {
+      return `Listando ${listed} correo(s) en Gmail…`
+    }
+    if (emails < listed) {
+      return `Procesando… ${emails}/${listed} correos (${files} arch.)`
+    }
+    return `Procesando… ${emails}/${listed} correos (${files} arch.)`
+  }
+
+  if (emails === 0 && files === 0) {
+    return 'Procesando… iniciando escaneo Gmail'
+  }
+  return `Procesando… ${emails} correos, ${files} archivos`
+}
+
 interface GmailStatus {
   last_run: string | null
 
@@ -259,6 +293,8 @@ interface GmailStatus {
   last_correos_marcados_revision?: number
 
   last_run_summary?: GmailRunSummary | null
+
+  pipeline_phase?: string | null
 
   /** True si el backend detecta running huérfano (sin actividad prolongada). */
   running_looks_stale?: boolean
@@ -281,6 +317,7 @@ const POLL_MAX_ATTEMPTS = 220
 
 /** Intervalo entre consultas: alineado con STALE_MAX_RUNNING_MINUTES (~110 min) en backend. */
 function pollDelayMs(attempt: number): number {
+  if (attempt === 0) return 3000
   if (attempt < 40) return 10000
   if (attempt < 90) return 20000
   if (attempt < 160) return 30000
@@ -659,9 +696,14 @@ export function useGmailPipeline({
       setPollGaveUp(false)
       lastScanFilterRef.current = scanFilter ?? 'all'
       setLoading(true)
+      void pagoService.getGmailStatus().then(s => {
+        if (session !== globalGmailPollSession) return
+        setGmailStatus(s)
+        onStatusUpdate?.(s)
+      })
       _pollStatus(0, session)
     },
-    [_pollStatus]
+    [_pollStatus, onStatusUpdate]
   )
 
   const run = useCallback(
