@@ -92,7 +92,7 @@ from app.services.cobros.pago_reportado_comprobante_unico import (
 
 logger = logging.getLogger(__name__)
 from .listado_kpis_cache import _enforce_escaner_rate_limit, _invalidate_cobros_listado_kpis_cache
-from .reportados_helpers import _reencolar_escaner_infopagos_aprobado_sin_gestion_por_cedula
+from .reportados_listado_payload import _reencolar_escaner_infopagos_aprobado_sin_gestion_por_cedula
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
 

@@ -1,6 +1,6 @@
 """Cobros (admin): router y utilidades internas reutilizadas en tests."""
 
-from .reportados_helpers import _cedulas_en_clientes_set
+from .reportados_dedup_helpers import _cedulas_en_clientes_set
 from .routes import (
     _invalidate_cobros_listado_kpis_cache,
     _list_pagos_reportados_payload,

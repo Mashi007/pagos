@@ -92,12 +92,14 @@ from app.services.cobros.pago_reportado_comprobante_unico import (
 
 logger = logging.getLogger(__name__)
 from .listado_kpis_cache import _invalidate_cobros_listado_kpis_cache
-from .reportados_helpers import (
-    _diagnostico_duplicado_reportado,
+from .reportados_dedup_helpers import _rechazar_aprobacion_si_documento_ya_en_pagos
+from .reportados_listado_payload import (
     _kpis_pagos_reportados_payload,
     _list_pagos_reportados_payload,
     _persist_marcar_exportados_y_cola,
-    _rechazar_aprobacion_si_documento_ya_en_pagos,
+)
+from .reportados_validadores_helpers import (
+    _diagnostico_duplicado_reportado,
     actualizar_flag_falla_validadores,
     reportado_falla_validadores_cobros,
 )
