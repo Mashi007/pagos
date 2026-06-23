@@ -83,6 +83,7 @@ def crear_pago_conciliado_y_aplicar_cuotas_gmail_plantilla_abcd(
     sync_id: Optional[int] = None,
     sync_item_id: Optional[int] = None,
     comprobante_imagen_id: Optional[str] = None,
+    control_usuario_operaciones: Optional[str] = None,
 ) -> dict[str, Any]:
     """
     Crea `Pago`, aplica cascada y hace `commit` en BD si todo OK.
@@ -139,6 +140,18 @@ def crear_pago_conciliado_y_aplicar_cuotas_gmail_plantilla_abcd(
             "monto_umbral_revision_manual",
             f"Monto > {PAGOS_GMAIL_UMBRAL_REVISION_MANUAL_USD}: requiere revision manual.",
         )
+
+    if fmt_u == "C":
+        from app.services.pagos_gmail.plantilla_abcd_proceso_negocio import (
+            PAGOS_GMAIL_OBS_USUARIO_OPERACIONES,
+            binance_requiere_revision_usuario_operaciones,
+        )
+
+        if binance_requiere_revision_usuario_operaciones(control_usuario_operaciones):
+            return _fail(
+                "usuario_operaciones",
+                PAGOS_GMAIL_OBS_USUARIO_OPERACIONES,
+            )
 
     ref_raw = (numero_referencia or "").strip()
     numero_doc_norm = compose_numero_documento_almacenado(ref_raw, None)

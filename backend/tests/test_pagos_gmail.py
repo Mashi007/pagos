@@ -547,6 +547,38 @@ def test_parse_formato_c_email_cliente_siguen_siendo_na():
     assert (fields.get("email_cliente") or "").upper() == "NA"
 
 
+def test_parse_formato_c_control_usuario_operaciones_true():
+  j = (
+      '{"formato":"C","fecha_pago":"NA","cedula":"NA",'
+      '"monto":"122 USDT","numero_referencia":"423594224765779968",'
+      '"email_cliente":"NA","banco":"NA","control_usuario_operaciones":true}'
+  )
+  fmt, fields = _parse_formato_y_pagos_json(j)
+  assert fmt == "C"
+  assert fields.get("control_usuario_operaciones") == "true"
+
+
+def test_parse_formato_c_control_usuario_operaciones_false_sigue_siendo_c():
+  j = (
+      '{"formato":"C","fecha_pago":"NA","cedula":"NA",'
+      '"monto":"122 USDT","numero_referencia":"423594224765779968",'
+      '"email_cliente":"NA","banco":"NA","control_usuario_operaciones":false}'
+  )
+  fmt, fields = _parse_formato_y_pagos_json(j)
+  assert fmt == "C"
+  assert fields.get("control_usuario_operaciones") == "false"
+
+
+def test_binance_requiere_revision_usuario_operaciones_sin_campo():
+  from app.services.pagos_gmail.plantilla_abcd_proceso_negocio import (
+      binance_requiere_revision_usuario_operaciones,
+  )
+
+  assert binance_requiere_revision_usuario_operaciones(None) is True
+  assert binance_requiere_revision_usuario_operaciones("false") is True
+  assert binance_requiere_revision_usuario_operaciones("true") is False
+
+
 def test_pagos_gmail_list_q_media_parts_incluye_filename():
     from app.services.pagos_gmail.gmail_service import pagos_gmail_list_q_media_parts
 

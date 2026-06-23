@@ -55,6 +55,8 @@ from app.services.pagos_gmail.sync_stale import (
     reserve_gmail_pipeline_sync,
 )
 from app.services.pagos_gmail.plantilla_abcd_proceso_negocio import (
+    PAGOS_GMAIL_MOTIVO_USUARIO_OPERACIONES,
+    PAGOS_GMAIL_OBS_USUARIO_OPERACIONES,
     PAGOS_GMAIL_UMBRAL_REVISION_MANUAL_USD,
     monto_gmail_sync_requiere_revision_manual_usd,
 )
@@ -83,6 +85,31 @@ def _documento_ruta_desde_gmail_temporal(drive_link: Optional[str]) -> Optional[
     if m:
         return m.group(1)
     return s[:255]
+
+
+def _gmail_binance_requiere_obs_usuario_operaciones(
+    db: Session,
+    *,
+    banco: Optional[str],
+    numero_referencia: Optional[str],
+) -> bool:
+    """True si la traza ABCD marco control Binance operaciones@ incumplido para esta referencia."""
+    if (banco or "").strip().upper() != "BINANCE":
+        return False
+    ref = (numero_referencia or "").strip()
+    if not ref:
+        return False
+    traza = db.execute(
+        select(PagosGmailAbcdCuotasTraza.id)
+        .where(
+            PagosGmailAbcdCuotasTraza.plantilla_fmt == "C",
+            PagosGmailAbcdCuotasTraza.motivo == PAGOS_GMAIL_MOTIVO_USUARIO_OPERACIONES,
+            PagosGmailAbcdCuotasTraza.numero_referencia == ref,
+        )
+        .order_by(PagosGmailAbcdCuotasTraza.id.desc())
+        .limit(1)
+    ).scalar_one_or_none()
+    return traza is not None
 
 
 def _get_blocking_running_sync(db: Session) -> Optional[PagosGmailSync]:
@@ -579,6 +606,14 @@ def _migrar_pendientes_gmail_a_con_errores_core(db: Session) -> dict:
                     continue
 
                 observaciones = "Pendiente desde Gmail (no autoconciliado)"
+                if _gmail_binance_requiere_obs_usuario_operaciones(
+                    db,
+                    banco=row.banco,
+                    numero_referencia=row.numero_referencia,
+                ):
+                    observaciones = (
+                        f"{observaciones}; {PAGOS_GMAIL_OBS_USUARIO_OPERACIONES}"
+                    )[:255]
                 if monto_num <= 0:
                     observaciones = (
                         f"{observaciones}; monto no interpretable: {(row.monto or '').strip() or 'vacío'}"
@@ -1383,6 +1418,14 @@ def _pago_con_error_desde_sync_item(
     numero_doc_key = (numero_doc or "").strip().upper()
 
     observaciones = "Pendiente desde Gmail (guardado manual desde módulo Actualizaciones > Gmail)"
+    if _gmail_binance_requiere_obs_usuario_operaciones(
+        db,
+        banco=item.banco,
+        numero_referencia=item.numero_referencia,
+    ):
+        observaciones = (
+            f"{observaciones}; {PAGOS_GMAIL_OBS_USUARIO_OPERACIONES}"
+        )[:255]
     if monto_gmail_sync_requiere_revision_manual_usd(item.monto):
         observaciones = (
             f"{observaciones}; monto > {PAGOS_GMAIL_UMBRAL_REVISION_MANUAL_USD} "

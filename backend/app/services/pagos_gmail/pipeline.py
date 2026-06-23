@@ -2227,6 +2227,9 @@ def run_pipeline(
                                                                 sync_id=ssync,
                                                                 sync_item_id=sid,
                                                                 comprobante_imagen_id=uid,
+                                                                control_usuario_operaciones=p.get(
+                                                                    "control_usuario_operaciones"
+                                                                ),
                                                             )
                                                         )
                                                         if res_abcd.get("ok"):
