@@ -97,7 +97,9 @@ function validateEnv(): EnvConfig {
             alreadyLogged = false
           }
           if (!alreadyLogged) {
-            console.info(
+            const logFn =
+              typeof console.debug === 'function' ? console.debug : console.info
+            logFn(
               `[env] VITE_API_URL apunta a otro origen (${parsed.origin}); el navegador usa /api (mismo sitio) y el servicio Node debe proxyear con API_BASE_URL o BACKEND_URL hacia ese API. ` +
                 'Esto es esperado y no es un error. Un 502 al abrir suele ser el dyno del API arrancando en Render: espere unos segundos y reintente.'
             )
