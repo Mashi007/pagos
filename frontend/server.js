@@ -535,6 +535,8 @@ if (API_URL) {
         p.includes('cobros/escaner/extraer-comprobante') ||
         p.includes('estado-cuenta/public/solicitar-codigo') ||
         p.includes('estado-cuenta/public/verificar-codigo')
+      // PUT finalizar / guardar préstamo + validadores en «Guardar y Cerrar»: alinear con api.ts (120s).
+      const isRevisionManualSlowPath = p.includes('revision-manual/')
       let proxyTimeoutMs = 60000
       if (isExportReport) {
         proxyTimeoutMs = 180000
@@ -544,10 +546,11 @@ if (API_URL) {
         proxyTimeoutMs = 600000
       } else if (isClientesDriveImportFila || isClientesDriveRefreshCache) {
         proxyTimeoutMs = 300000
-      } else if (isCobrosPagosReportadosSlowPath) {
+      } else if (isCobrosPagosReportadosSlowPath || isRevisionManualSlowPath) {
         // Listado+KPIs (barrido), PATCH estado (aprobar puede tardar), PATCH editar (validadores +
         // dedup documento + commit BD) y GET detalle/comprobante/recibo (regeneración PDF + descarga
         // imagen): evitar corte a 60s en el proxy frente a cold start del API.
+        // Revisión manual: PUT guardar/finalizar y GET detalle comparten el mismo margen (120s).
         proxyTimeoutMs = 120000
       } else if (isConciliacionSheetSlowPost || isCandidatosDriveSlowPost) {
         // Google Sheets + snapshot BD / Drive masivo: suele >60s; el cliente usa hasta 300s.

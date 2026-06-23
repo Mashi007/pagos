@@ -60,6 +60,13 @@ const DEFAULT_TIMEOUT_MS = 30000
 
 const SLOW_ENDPOINT_TIMEOUT_MS = 60000 // Para endpoints que pueden tardar más
 
+/** Revisión manual: lecturas y escrituras en Render frío + BD pesada (alinear GET/PUT/PATCH/POST). */
+const REVISION_MANUAL_TIMEOUT_MS = 120000
+
+function isRevisionManualUrl(url?: string): boolean {
+  return String(url || '').includes('/revision-manual/')
+}
+
 /** Polling Gmail: el hook useGmailPipeline muestra su propio feedback; evitar toasts duplicados. */
 function isGmailStatusPollRequest(
   config?: AxiosRequestConfig | { url?: string }
@@ -411,6 +418,26 @@ class ApiClient {
           (config.timeout == null || config.timeout < 120000)
         ) {
           config.timeout = 120000
+        }
+
+        // Revisión manual: PUT/PATCH/POST (guardar, finalizar, cuotas) pueden superar 30s en Render frío.
+        if (
+          isRevisionManualUrl(config.url) &&
+          (config.timeout == null ||
+            config.timeout < REVISION_MANUAL_TIMEOUT_MS)
+        ) {
+          config.timeout = REVISION_MANUAL_TIMEOUT_MS
+        }
+
+        // Validadores en tiempo real: suele ser rápido, pero cold start del API puede superar 30s.
+        if (
+          config.method?.toLowerCase() === 'post' &&
+          config.url &&
+          (config.url.includes('/validadores/validar-campo') ||
+            config.url.includes('/validadores/formatear-tiempo-real')) &&
+          (config.timeout == null || config.timeout < SLOW_ENDPOINT_TIMEOUT_MS)
+        ) {
+          config.timeout = SLOW_ENDPOINT_TIMEOUT_MS
         }
 
         // Soft circuit breaker: si hubo 502/503 reciente sobre endpoints catalogados,
@@ -1513,6 +1540,9 @@ class ApiClient {
       )
       const isAuthSessionPost =
         url.includes('/auth/login') || url.includes('/auth/refresh')
+      const isValidadoresCampoPost =
+        url.includes('/validadores/validar-campo') ||
+        url.includes('/validadores/formatear-tiempo-real')
 
       let defaultTimeout = DEFAULT_TIMEOUT_MS
       if (isCobrosEscanerGemini) {
@@ -1527,6 +1557,10 @@ class ApiClient {
         defaultTimeout = 120000 // alinear muchas cuotas
       } else if (isAuthSessionPost) {
         defaultTimeout = SLOW_ENDPOINT_TIMEOUT_MS // Render frío / worker ocupado
+      } else if (isValidadoresCampoPost) {
+        defaultTimeout = SLOW_ENDPOINT_TIMEOUT_MS
+      } else if (isRevisionManualUrl(url)) {
+        defaultTimeout = REVISION_MANUAL_TIMEOUT_MS
       } else if (isSlowEndpoint) {
         defaultTimeout = url.includes('/clientes/drive-import/importar')
           ? 600000 // 10 min: import parcial muchas filas (commit por fila + Render frío)
@@ -1646,7 +1680,9 @@ class ApiClient {
 
       const putTimeoutMs = aiConfigPut
         ? Math.max(config?.timeout ?? 0, 60000)
-        : (config?.timeout ?? DEFAULT_TIMEOUT_MS)
+        : isRevisionManualUrl(url)
+          ? Math.max(config?.timeout ?? 0, REVISION_MANUAL_TIMEOUT_MS)
+          : (config?.timeout ?? DEFAULT_TIMEOUT_MS)
 
       const executePut = async () =>
         await this.client.put<T>(url, data, {
@@ -1722,7 +1758,9 @@ class ApiClient {
     const isCobrosPagoReportadoPatch = url.includes('/cobros/pagos-reportados/')
     const patchTimeoutMs =
       config?.timeout ??
-      (isCobrosPagoReportadoPatch ? 120000 : DEFAULT_TIMEOUT_MS)
+      (isCobrosPagoReportadoPatch || isRevisionManualUrl(url)
+        ? REVISION_MANUAL_TIMEOUT_MS
+        : DEFAULT_TIMEOUT_MS)
     const response: AxiosResponse<T> = await this.client.patch(url, data, {
       ...config,
       timeout: patchTimeoutMs,
