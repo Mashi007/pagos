@@ -5,10 +5,11 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from sqlalchemy import and_, func, not_, select
+from sqlalchemy import and_, func, not_, or_, select
 from sqlalchemy.exc import PendingRollbackError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from app.models.cuota import Cuota
 from app.models.cuota_pago import CuotaPago
 from app.models.pago import Pago
 from app.models.prestamo import Prestamo
@@ -23,6 +24,22 @@ from app.services.pagos_sql_where import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def prestamo_tiene_cuotas_con_saldo_pendiente(db: Session, prestamo_id: int) -> bool:
+    """True si al menos una cuota tiene saldo por cubrir (misma regla que cascada incremental)."""
+    n = int(
+        db.scalar(
+            select(func.count())
+            .select_from(Cuota)
+            .where(
+                Cuota.prestamo_id == prestamo_id,
+                or_(Cuota.total_pagado.is_(None), Cuota.total_pagado < Cuota.monto - 0.01),
+            )
+        )
+        or 0
+    )
+    return n > 0
 
 
 def _causa_raiz_excepcion_db(exc: BaseException) -> BaseException:
@@ -96,6 +113,7 @@ def aplicar_pagos_pendientes_prestamo_con_diagnostico(
         "pagos_elegibles_cascada_sin_cuota_pagos": 0,
         "pagos_no_elegibles_sin_cuota_pagos": 0,
         "pagos_con_intento_sin_abono_ids": [],
+        "pagos_omitidos_sin_cuotas_pendientes_ids": [],
         "errores_por_pago": [],
     }
     prestamo_chk = db.get(Prestamo, prestamo_id)
@@ -124,6 +142,19 @@ def aplicar_pagos_pendientes_prestamo_con_diagnostico(
 
     n_eleg = len(rows)
     n_no_eleg = max(0, n_oper - n_eleg)
+
+    omitidos_sin_cuotas: list[int] = []
+    if rows and not prestamo_tiene_cuotas_con_saldo_pendiente(db, prestamo_id):
+        omitidos_sin_cuotas = [int(p.id) for p in rows]
+        logger.info(
+            "aplicar_pagos_pendientes prestamo_id=%s: %s pago(s) sin cuota_pagos pero ninguna cuota "
+            "con saldo pendiente; omitida aplicacion incremental (use POST aplicar-pagos-cuotas si "
+            "requiere reaplicacion en cascada). ids=%s",
+            prestamo_id,
+            len(omitidos_sin_cuotas),
+            omitidos_sin_cuotas[:20],
+        )
+        rows = []
 
     n = 0
     sin_abono: list[int] = []
@@ -159,6 +190,7 @@ def aplicar_pagos_pendientes_prestamo_con_diagnostico(
             "pagos_elegibles_cascada_sin_cuota_pagos": n_eleg,
             "pagos_no_elegibles_sin_cuota_pagos": n_no_eleg,
             "pagos_con_intento_sin_abono_ids": sin_abono,
+            "pagos_omitidos_sin_cuotas_pendientes_ids": omitidos_sin_cuotas,
             "errores_por_pago": errores,
         },
     }

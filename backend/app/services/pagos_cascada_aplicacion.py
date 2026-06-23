@@ -307,13 +307,22 @@ def _aplicar_pago_a_cuotas_interno(
             ) or 0
 
             if num_cuotas > 0:
-                logger.warning(
-                    "Pago id=%s (prestamo_id=%s): no se aplicó a ninguna cuota; el préstamo tiene %s cuotas. "
-                    "Puede deberse a que las cuotas se generaron después del pago; use aplicar-cuotas o generar cuotas (aplica pendientes automático).",
-                    pago.id,
-                    prestamo_id,
-                    num_cuotas,
-                )
+                if len(cuotas_pendientes) == 0:
+                    logger.info(
+                        "Pago id=%s (prestamo_id=%s): sin cuotas con saldo pendiente; no se aplicó "
+                        "incrementalmente. Si hay desalineación total_pagado/cuota_pagos, use "
+                        "POST aplicar-pagos-cuotas o reaplicar-cascada-aplicacion.",
+                        pago.id,
+                        prestamo_id,
+                    )
+                else:
+                    logger.warning(
+                        "Pago id=%s (prestamo_id=%s): no se aplicó a ninguna cuota; el préstamo tiene %s cuotas. "
+                        "Puede deberse a que las cuotas se generaron después del pago; use aplicar-cuotas o generar cuotas (aplica pendientes automático).",
+                        pago.id,
+                        prestamo_id,
+                        num_cuotas,
+                    )
 
         flush_started = perf_counter()
         db.flush()
