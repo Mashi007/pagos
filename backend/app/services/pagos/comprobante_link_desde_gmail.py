@@ -7,12 +7,15 @@ cuando el comprobante se guardó en BD (pipeline Gmail).
 """
 from __future__ import annotations
 
+import logging
 import re
 from typing import Any, Optional
 
 from sqlalchemy import or_, select
+from sqlalchemy.exc import DBAPIError, OperationalError
 from sqlalchemy.orm import Session
 
+from app.core.db_transient import run_db_with_transient_retry
 from app.core.documento import normalize_documento
 from app.models.pago_reportado import PagoReportado
 from app.models.pagos_gmail_sync import PagosGmailSyncItem
@@ -24,6 +27,8 @@ from app.services.pagos_gmail.parse_campos_comprobante import (
     sanitizar_numero_operacion_comprobante,
 )
 from app.services.pago_numero_documento import _candidatos_evasion_columna
+
+logger = logging.getLogger(__name__)
 
 
 def drive_raw_a_url(dlink: Any) -> str:
@@ -74,6 +79,21 @@ def enriquecer_items_link_comprobante_desde_gmail(db: Session, items: list) -> N
     Si un item no tiene link_comprobante ni documento_ruta, busca drive_link en
     pagos_gmail_sync_item por numero_referencia (mismo criterio que Excel Gmail).
     """
+    try:
+        _enriquecer_items_link_comprobante_desde_gmail_impl(db, items)
+    except (OperationalError, DBAPIError) as e:
+        # Enriquecimiento opcional: no tumbar GET /pagos por SSL/reset en Render.
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        logger.warning(
+            "[GMAIL_LINK] No se pudo resolver link desde Gmail (BD transitoria): %s",
+            e,
+        )
+
+
+def _enriquecer_items_link_comprobante_desde_gmail_impl(db: Session, items: list) -> None:
     if not items:
         return
 
@@ -103,15 +123,19 @@ def enriquecer_items_link_comprobante_desde_gmail(db: Session, items: list) -> N
     by_norm: dict[str, str] = {}
 
     if raw_strings:
-        rows = db.execute(
-            select(PagosGmailSyncItem.numero_referencia, PagosGmailSyncItem.drive_link)
-            .where(
-                PagosGmailSyncItem.numero_referencia.in_(raw_strings),
-                PagosGmailSyncItem.drive_link.isnot(None),
-                PagosGmailSyncItem.drive_link != "",
-            )
-            .order_by(PagosGmailSyncItem.id.desc())
-        ).all()
+        rows = run_db_with_transient_retry(
+            db,
+            lambda: db.execute(
+                select(PagosGmailSyncItem.numero_referencia, PagosGmailSyncItem.drive_link)
+                .where(
+                    PagosGmailSyncItem.numero_referencia.in_(raw_strings),
+                    PagosGmailSyncItem.drive_link.isnot(None),
+                    PagosGmailSyncItem.drive_link != "",
+                )
+                .order_by(PagosGmailSyncItem.id.desc())
+            ).all(),
+            log_prefix="[GMAIL_LINK]",
+        )
         for ref, dlink in rows:
             url = drive_raw_a_url(dlink)
             if not url:
@@ -136,15 +160,19 @@ def enriquecer_items_link_comprobante_desde_gmail(db: Session, items: list) -> N
             if na:
                 missing_norms.add(na)
     if missing_norms:
-        rows2 = db.execute(
-            select(PagosGmailSyncItem.numero_referencia, PagosGmailSyncItem.drive_link)
-            .where(
-                PagosGmailSyncItem.drive_link.isnot(None),
-                PagosGmailSyncItem.drive_link != "",
-            )
-            .order_by(PagosGmailSyncItem.id.desc())
-            .limit(15000)
-        ).all()
+        rows2 = run_db_with_transient_retry(
+            db,
+            lambda: db.execute(
+                select(PagosGmailSyncItem.numero_referencia, PagosGmailSyncItem.drive_link)
+                .where(
+                    PagosGmailSyncItem.drive_link.isnot(None),
+                    PagosGmailSyncItem.drive_link != "",
+                )
+                .order_by(PagosGmailSyncItem.id.desc())
+                .limit(5000)
+            ).all(),
+            log_prefix="[GMAIL_LINK]",
+        )
         for ref, dlink in rows2:
             url = drive_raw_a_url(dlink)
             if not url:
@@ -172,19 +200,23 @@ def enriquecer_items_link_comprobante_desde_gmail(db: Session, items: list) -> N
             PagosGmailSyncItem.numero_referencia, compact
         ):
             evasion_rows.extend(
-                db.execute(
-                    select(
-                        PagosGmailSyncItem.numero_referencia,
-                        PagosGmailSyncItem.drive_link,
-                    )
-                    .where(
-                        cond,
-                        PagosGmailSyncItem.drive_link.isnot(None),
-                        PagosGmailSyncItem.drive_link != "",
-                    )
-                    .order_by(PagosGmailSyncItem.id.desc())
-                    .limit(80)
-                ).all()
+                run_db_with_transient_retry(
+                    db,
+                    lambda c=cond: db.execute(
+                        select(
+                            PagosGmailSyncItem.numero_referencia,
+                            PagosGmailSyncItem.drive_link,
+                        )
+                        .where(
+                            c,
+                            PagosGmailSyncItem.drive_link.isnot(None),
+                            PagosGmailSyncItem.drive_link != "",
+                        )
+                        .order_by(PagosGmailSyncItem.id.desc())
+                        .limit(80)
+                    ).all(),
+                    log_prefix="[GMAIL_LINK]",
+                )
             )
         for ref, dlink in evasion_rows:
             if not numeros_operacion_coinciden_o_evasion(doc_raw, ref):
