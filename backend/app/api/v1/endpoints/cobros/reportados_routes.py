@@ -92,7 +92,17 @@ from app.services.cobros.pago_reportado_comprobante_unico import (
 )
 
 logger = logging.getLogger(__name__)
-from .listado_kpis_cache import _invalidate_cobros_listado_kpis_cache
+from .listado_kpis_cache import (
+    _COBROS_LISTADO_KPIS_SINGLEFLIGHT_WAIT_SEC,
+    _cobros_listado_kpis_cache_get,
+    _cobros_listado_kpis_cache_get_stale,
+    _cobros_listado_kpis_cache_key_payload,
+    _cobros_listado_kpis_cache_set,
+    _cobros_listado_kpis_release_singleflight,
+    _cobros_listado_kpis_storage_key,
+    _cobros_listado_kpis_try_acquire_singleflight,
+    _invalidate_cobros_listado_kpis_cache,
+)
 from .reportados_dedup_helpers import _rechazar_aprobacion_si_documento_ya_en_pagos
 from .reportados_listado_payload import (
     _kpis_pagos_reportados_payload,
