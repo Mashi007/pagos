@@ -101,9 +101,22 @@ from .listado_kpis_cache import (
     _cobros_listado_kpis_release_singleflight,
     _cobros_listado_kpis_storage_key,
     _cobros_listado_kpis_try_acquire_singleflight,
+    _drop_pagos_from_listado_kpis_cache,
     _invalidate_cobros_listado_kpis_cache,
+    _log_fase_aprobacion,
 )
-from .reportados_dedup_helpers import _rechazar_aprobacion_si_documento_ya_en_pagos
+from .reportados_dedup_helpers import (
+    _cedula_lookup_variants,
+    _duplicados_reportados_por_numero_operacion,
+    _es_banco_mercantil,
+    _lock_numero_operacion_canonico,
+    _normalize_cedula_for_client_lookup,
+    _numero_operacion_canonico,
+    _pago_reportado_list_items_from_rows,
+    _query_reportados_falla_validadores_pendientes_exportar,
+    _referencia_display,
+    _rechazar_aprobacion_si_documento_ya_en_pagos,
+)
 from .reportados_listado_payload import (
     _kpis_pagos_reportados_payload,
     _list_pagos_reportados_payload,
@@ -111,6 +124,8 @@ from .reportados_listado_payload import (
 )
 from .reportados_validadores_helpers import (
     _diagnostico_duplicado_reportado,
+    _estado_label_estado_reportado,
+    _item_falla_validadores_cola_manual,
     actualizar_flag_falla_validadores,
     reportado_falla_validadores_cobros,
 )
@@ -1212,15 +1227,17 @@ def eliminar_pago_reportado(
     estado_previo = (pr.estado or "").strip()
     db.delete(pr)
     db.commit()
-    # Parche quirúrgico en lugar de invalidación total: evita que el siguiente
-    # `listado-y-kpis` recompute toda la BD (20-30s con 1 worker), bloquee el worker
-    # y dispare 502 en GET vecinos (regresión observada en producción).
-    # `estados_previos` permite decrementar kpis[estado_previo] incluso si la fila
-    # vivia en pagina >1 del cache (causa del card "Pendiente" inconsistente).
-    _drop_pagos_from_listado_kpis_cache(
-        [pago_id],
-        estados_previos={int(pago_id): estado_previo} if estado_previo else None,
-    )
+    try:
+        _drop_pagos_from_listado_kpis_cache(
+            [pago_id],
+            estados_previos={int(pago_id): estado_previo} if estado_previo else None,
+        )
+    except Exception as e:
+        logger.warning(
+            "[COBROS] parche cache tras eliminar id=%s falló (registro ya borrado en BD): %s",
+            pago_id,
+            e,
+        )
     logger.info("[COBROS] Pago reportado eliminado: id=%s ref=%s", pago_id, ref)
     return {"ok": True, "mensaje": f"Pago reportado {ref} eliminado."}
 

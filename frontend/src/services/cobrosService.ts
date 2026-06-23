@@ -1747,15 +1747,21 @@ export async function cambiarEstadoPago(
 export async function eliminarPagoReportado(
   pagoId: number
 ): Promise<{ ok: boolean; mensaje?: string }> {
-  const data = await apiClient.delete<{ ok: boolean; mensaje?: string }>(
-    `${BASE_COBROS}/pagos-reportados/${pagoId}`
-  )
-
-  // Marcar el id como "recién eliminado" para suprimir el toast 404 que aparecía
-  // si otro efecto/BFCache disparaba GET /pagos-reportados/{id} después del DELETE.
-  markPagoReportadoRecentlyDeleted(pagoId)
-
-  return data
+  try {
+    const data = await apiClient.delete<{ ok: boolean; mensaje?: string }>(
+      `${BASE_COBROS}/pagos-reportados/${pagoId}`
+    )
+    markPagoReportadoRecentlyDeleted(pagoId)
+    return data
+  } catch (error: unknown) {
+    // Tras un 500 post-commit el reintento del ApiClient devuelve 404: idempotente.
+    const status = (error as { response?: { status?: number } })?.response?.status
+    if (status === 404) {
+      markPagoReportadoRecentlyDeleted(pagoId)
+      return { ok: true, mensaje: 'Pago reportado eliminado.' }
+    }
+    throw error
+  }
 }
 
 export interface EditarPagoReportadoPayload {
