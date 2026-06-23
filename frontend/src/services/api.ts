@@ -519,6 +519,14 @@ class ApiClient {
           methodLc === 'post' &&
           (reqUrl.includes('/cobros/escaner/extraer-comprobante') ||
             reqUrl.includes('/cobros/escaner/lote/drive-digitalizar'))
+        const isAuthSessionPost =
+          methodLc === 'post' &&
+          (reqUrl.includes('/auth/login') || reqUrl.includes('/auth/refresh'))
+        const isAuthSessionTimeoutRetry =
+          isAuthSessionPost &&
+          (errorCodeEarly === 'ECONNABORTED' ||
+            errorMessageEarly.includes('timeout')) &&
+          retryCount < 2
         /**
          * GET idempotentes donde 502/503 suele ser cold start o proxy (Render), no lógica de negocio.
          * Solo rutas de lectura explícitas; no ampliar a GET arbitrarios (riesgo de duplicar efectos si hubiera efectos colaterales).
@@ -598,7 +606,8 @@ class ApiClient {
             mayRetryThisRequest) ||
           isGmailStatusTimeoutRetry ||
           isPrestamoDetailGetRetry ||
-          isColdStartSafeGetTimeoutRetry
+          isColdStartSafeGetTimeoutRetry ||
+          isAuthSessionTimeoutRetry
         if (shouldRetry) {
           ;(requestConfigForRetry as any)._retryCount = retryCount + 1
 
@@ -621,7 +630,8 @@ class ApiClient {
           const delayBase =
             isGmailStatusTimeoutRetry ||
             isPrestamoDetailGetRetry ||
-            isColdStartSafeGetTimeoutRetry
+            isColdStartSafeGetTimeoutRetry ||
+            isAuthSessionTimeoutRetry
               ? 2500
               : st === 502 || st === 503
                 ? useLong502Delay
@@ -743,7 +753,7 @@ class ApiClient {
               const refreshClient = axios.create({
                 baseURL: API_BASE_URL,
 
-                timeout: DEFAULT_TIMEOUT_MS,
+                timeout: SLOW_ENDPOINT_TIMEOUT_MS,
 
                 headers: {
                   'Content-Type': 'application/json',
@@ -1501,6 +1511,8 @@ class ApiClient {
       const isAuditoriaCarteraSyncCuotas = url.includes(
         '/auditoria/prestamos/cartera/sincronizar-estados-cuotas'
       )
+      const isAuthSessionPost =
+        url.includes('/auth/login') || url.includes('/auth/refresh')
 
       let defaultTimeout = DEFAULT_TIMEOUT_MS
       if (isCobrosEscanerGemini) {
@@ -1513,6 +1525,8 @@ class ApiClient {
         defaultTimeout = 180000 // 3 min
       } else if (isAuditoriaCarteraSyncCuotas) {
         defaultTimeout = 120000 // alinear muchas cuotas
+      } else if (isAuthSessionPost) {
+        defaultTimeout = SLOW_ENDPOINT_TIMEOUT_MS // Render frío / worker ocupado
       } else if (isSlowEndpoint) {
         defaultTimeout = url.includes('/clientes/drive-import/importar')
           ? 600000 // 10 min: import parcial muchas filas (commit por fila + Render frío)

@@ -181,17 +181,34 @@ const NotFound = () => (
   </div>
 )
 
-// Componente de loading para Suspense
+// Componente de loading para Suspense / auth inicial
 
-const PageLoader = () => (
-  <div className="flex min-h-screen items-center justify-center">
-    <div className="text-center">
-      <div className="mx-auto mb-4 h-12 w-12 animate-spin rounded-full border-b-2 border-blue-600"></div>
+function PageLoader({ hint }: { hint?: 'auth' | 'route' }) {
+  const [slowPhase, setSlowPhase] = React.useState(false)
 
-      <p className="text-gray-600">Cargando página...</p>
+  React.useEffect(() => {
+    const t = window.setTimeout(() => setSlowPhase(true), 8000)
+    return () => window.clearTimeout(t)
+  }, [])
+
+  const subtitle =
+    hint === 'auth'
+      ? slowPhase
+        ? 'Verificando sesión… el servidor puede estar ocupado; en unos segundos se usará la sesión guardada.'
+        : 'Verificando sesión…'
+      : slowPhase
+        ? 'Descargando módulo… si tarda mucho, recargue la página (puede ser arranque en Render).'
+        : 'Cargando página…'
+
+  return (
+    <div className="flex min-h-screen items-center justify-center px-4">
+      <div className="max-w-md text-center">
+        <div className="mx-auto mb-4 h-12 w-12 animate-spin rounded-full border-b-2 border-blue-600"></div>
+        <p className="text-gray-600">{subtitle}</p>
+      </div>
     </div>
-  </div>
-)
+  )
+}
 
 // Una sola ejecucin de init auth por sesin (evita doble llamada en StrictMode
 
@@ -227,7 +244,7 @@ function App() {
   const isPublicPath = PUBLIC_PATHS.some((p: string) => pathname === p)
 
   if (isLoading && !isPublicPath) {
-    return <PageLoader />
+    return <PageLoader hint="auth" />
   }
 
   return (

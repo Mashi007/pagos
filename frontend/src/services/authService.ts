@@ -48,6 +48,26 @@ export interface ChangePasswordRequest {
   confirm_password: string
 }
 
+/** Acepta User plano o envoltorios legacy/proxy ({ data }, { user }). */
+export function extractUserFromAuthMePayload(raw: unknown): User | null {
+  if (raw == null || typeof raw === 'string') return null
+  if (typeof raw !== 'object') return null
+
+  const obj = raw as Record<string, unknown>
+  let candidate: Record<string, unknown> | null = null
+
+  if (obj.id != null && obj.email) {
+    candidate = obj
+  } else if (obj.user && typeof obj.user === 'object') {
+    candidate = obj.user as Record<string, unknown>
+  } else if (obj.data && typeof obj.data === 'object') {
+    candidate = obj.data as Record<string, unknown>
+  }
+
+  if (!candidate || candidate.id == null || !candidate.email) return null
+  return normalizeAuthUser(candidate as unknown as User)
+}
+
 export class AuthService {
   // Login de usuario - CON PERSISTENCIA SEGURA
 
@@ -218,17 +238,9 @@ export class AuthService {
 
   async getCurrentUser(): Promise<User> {
     try {
-      const response = await apiClient.get<User>('/api/v1/auth/me')
+      const response = await apiClient.get<unknown>('/api/v1/auth/me')
 
-      // El backend retorna directamente el objeto User, no envuelto en ApiResponse
-
-      const raw = response
-
-      if (!raw) {
-        throw new Error('Usuario no encontrado en la respuesta')
-      }
-
-      const user = normalizeAuthUser(raw)
+      const user = extractUserFromAuthMePayload(response)
 
       if (!user) {
         throw new Error('Usuario no encontrado en la respuesta')

@@ -22,7 +22,10 @@ export const AccesoLimitadoPage = lazy(
   () => import('../pages/AccesoLimitadoPage')
 )
 
-export const DashboardMenu = lazy(() => import('../pages/DashboardMenu'))
+export const DashboardMenu = lazyWithRetry(
+  () => import('../pages/DashboardMenu'),
+  'dashboard-menu'
+)
 
 export const Clientes = lazy(() => import('../pages/Clientes'))
 

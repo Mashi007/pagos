@@ -82,6 +82,12 @@ const hasAuthData = (): boolean => {
 
 const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms))
 
+/**
+ * No bloquear toda la SPA más de esto esperando GET /auth/me (worker único en Render
+ * puede tardar 30–60s si hay escáner Gemini, cascada o finiquitos en curso).
+ */
+const AUTH_VERIFY_UI_CAP_MS = 12_000
+
 /** Red fría / Render: reintentar una vez antes de borrar sesión local. */
 const isTransientAuthVerifyError = (error: unknown): boolean => {
   if (!error || typeof error !== 'object') return false
@@ -102,7 +108,9 @@ const isTransientAuthVerifyError = (error: unknown): boolean => {
     msg.includes('Timeout') ||
     msg.toLowerCase().includes('timeout') ||
     msg.includes('Network Error') ||
-    msg.toLowerCase().includes('bad gateway')
+    msg.toLowerCase().includes('bad gateway') ||
+    msg.includes('Usuario no encontrado en la respuesta') ||
+    msg.includes('Usuario no encontrado en backend')
   )
 }
 
@@ -114,6 +122,75 @@ const fetchCurrentUserWithRetry = async (): Promise<User> => {
     await sleep(2500)
     return await authService.getCurrentUser()
   }
+}
+
+const applyVerifiedUser = (
+  set: (partial: Partial<SimpleAuthState>) => void,
+  freshUser: User
+) => {
+  set({
+    user: freshUser,
+    isAuthenticated: true,
+    isLoading: false,
+    error: null,
+  })
+}
+
+const applyOptimisticLocalUser = (
+  set: (partial: Partial<SimpleAuthState>) => void,
+  storedUser: User
+) => {
+  set({
+    user: normalizeAuthUser(storedUser) ?? storedUser,
+    isAuthenticated: true,
+    isLoading: false,
+    error: null,
+  })
+}
+
+/** Verifica sesión con el API; si tarda demasiado, desbloquea la UI con datos locales. */
+const verifyStoredSessionWithUiCap = async (
+  set: (partial: Partial<SimpleAuthState>) => void,
+  storedUser: User
+): Promise<void> => {
+  let verifyDone = false
+  const verifyPromise = fetchCurrentUserWithRetry()
+    .then(freshUser => {
+      verifyDone = true
+      if (freshUser) applyVerifiedUser(set, freshUser)
+      else throw new Error('Usuario no encontrado en backend')
+    })
+    .catch(error => {
+      verifyDone = true
+      if (isTransientAuthVerifyError(error)) {
+        console.warn(
+          'Auth/me temporalmente no disponible; se conserva sesión local:',
+          error
+        )
+        applyOptimisticLocalUser(set, storedUser)
+        return
+      }
+      console.warn('Error al verificar autenticación:', error)
+      clearAuthStorage()
+      set({
+        user: null,
+        isAuthenticated: false,
+        isLoading: false,
+        error: null,
+      })
+    })
+
+  await Promise.race([
+    verifyPromise,
+    sleep(AUTH_VERIFY_UI_CAP_MS).then(() => {
+      if (!verifyDone) {
+        console.warn(
+          `Auth/me superó ${AUTH_VERIFY_UI_CAP_MS}ms; UI con sesión local (verificación en segundo plano).`
+        )
+        applyOptimisticLocalUser(set, storedUser)
+      }
+    }),
+  ])
 }
 
 export const useSimpleAuthStore = create<SimpleAuthState>(set => {
@@ -179,51 +256,7 @@ export const useSimpleAuthStore = create<SimpleAuthState>(set => {
         }
 
         if (user && token) {
-          // CRÍTICO: Siempre verificar con el backend al inicializar
-
-          // El timeout lo marca axios (apiClient); /auth/me usa margen amplio para cold start en Render.
-
-          try {
-            const freshUser = await fetchCurrentUserWithRetry()
-
-            if (freshUser) {
-              set({
-                user: freshUser,
-
-                isAuthenticated: true,
-
-                isLoading: false,
-
-                error: null,
-              })
-            } else {
-              throw new Error('Usuario no encontrado en backend')
-            }
-          } catch (error) {
-            // Si el fallo es transitorio (p. ej. 502/timeout en arranque Render), conservar sesión local.
-            if (isTransientAuthVerifyError(error)) {
-              console.warn(
-                'Auth/me temporalmente no disponible; se conserva sesión local:',
-                error
-              )
-              set({
-                user: normalizeAuthUser(user) ?? user,
-                isAuthenticated: true,
-                isLoading: false,
-                error: null,
-              })
-            } else {
-              // Error no transitorio: limpiar almacenamiento y forzar relogin.
-              console.warn('Error al verificar autenticación:', error)
-              clearAuthStorage()
-              set({
-                user: null,
-                isAuthenticated: false,
-                isLoading: false,
-                error: null,
-              })
-            }
-          }
+          await verifyStoredSessionWithUiCap(set, user)
         } else {
           // No hay usuario almacenado - establecer estado inmediatamente
 
