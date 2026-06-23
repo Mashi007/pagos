@@ -236,6 +236,28 @@ async def http_exception_handler(request: Request, exc: HTTPException):
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     """Captura excepciones no controladas y devuelve 500 con CORS para que el frontend reciba el error."""
+    from sqlalchemy.exc import OperationalError as SAOperationalError
+
+    if isinstance(exc, SAOperationalError):
+        logger.warning(
+            "BD no disponible (OperationalError) en %s %s: %s",
+            request.method,
+            request.url.path,
+            exc,
+        )
+        headers = {
+            **_cors_headers_for_request(request),
+            "Retry-After": "3",
+        }
+        return JSONResponse(
+            status_code=503,
+            content={
+                "detail": "Base de datos temporalmente no disponible. Reintente en unos segundos.",
+                "code": 503,
+            },
+            headers=headers,
+        )
+
     logger.exception("Excepcion no controlada: %s", exc)
     headers = _cors_headers_for_request(request)
     return JSONResponse(

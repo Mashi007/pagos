@@ -530,6 +530,11 @@ class ApiClient {
             reqUrl.includes('/admin/tasas-cambio/hoy') ||
             reqUrl.includes('/tasas-cambio/estado') ||
             reqUrl.includes('/tasas-cambio/hoy'))
+        const isColdStartSafeGetTimeoutRetry =
+          isSafeTransientRetryGet &&
+          (errorCodeEarly === 'ECONNABORTED' ||
+            errorMessageEarly.includes('timeout')) &&
+          retryCount < 3
         /**
          * Dyno API en Render: 502/503 pueden durar >15s (arranque Gunicorn + init BD).
          * Reintentos cortos no alcanzan; GET seguros y PATCH estado cobros-reportados usan hasta 6 con backoff.
@@ -574,7 +579,8 @@ class ApiClient {
             retryCount < maxRetries &&
             mayRetryThisRequest) ||
           isGmailStatusTimeoutRetry ||
-          isPrestamoDetailGetRetry
+          isPrestamoDetailGetRetry ||
+          isColdStartSafeGetTimeoutRetry
         if (shouldRetry) {
           ;(requestConfigForRetry as any)._retryCount = retryCount + 1
 
@@ -594,9 +600,12 @@ class ApiClient {
           // 502/503 en Render: dar tiempo al dyno del API a despertar (reintentos más espaciados).
           const useLong502Delay =
             isColdStartProxySafeGet || isCobrosEstadoPatch502Storm
-          const delayBase = isGmailStatusTimeoutRetry || isPrestamoDetailGetRetry
-            ? 2500
-            : st === 502 || st === 503
+          const delayBase =
+            isGmailStatusTimeoutRetry ||
+            isPrestamoDetailGetRetry ||
+            isColdStartSafeGetTimeoutRetry
+              ? 2500
+              : st === 502 || st === 503
               ? useLong502Delay
                 ? 3500
                 : 2000
@@ -1209,6 +1218,10 @@ class ApiClient {
       url.includes('/auditoria/prestamos/cartera') ||
       url.includes('/pagos/kpis') ||
       url.includes('/pagos/stats') ||
+      url.includes('/pagos/con-errores') ||
+      url.includes('/pagos/comprobante-imagen/') ||
+      url.includes('/tasas-cambio/') ||
+      url.includes('/admin/tasas-cambio/') ||
       url.includes('/revision-manual/') || // Render cold start + consulta pesada
       url.includes('/conciliacion-sheet/diagnostico') || // Ping Google + lecturas BD
       url.includes('listado-y-kpis') || // Cobros: listado + KPIs en un request (dos consultas BD)

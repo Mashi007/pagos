@@ -343,6 +343,7 @@
       var namedChunk =
         (msg.indexOf('comunicaciones-') !== -1 ||
           msg.indexOf('notificaciones-') !== -1 ||
+          msg.indexOf('notificacionesrecibos') !== -1 ||
           msg.indexOf('clientes-') !== -1 ||
           msg.indexOf('infopagos') !== -1 ||
           msg.indexOf('cobroshistorico') !== -1 ||
