@@ -1,49 +1,32 @@
 import { useCallback, useState } from 'react'
 
-
-
 import { AlertTriangle, Loader2, Scale } from 'lucide-react'
 
 import { toast } from 'sonner'
-
-
 
 import { Button } from '../ui/button'
 
 import { Input } from '../ui/input'
 
 import {
-
   Dialog,
-
   DialogContent,
-
   DialogFooter,
-
   DialogHeader,
-
   DialogTitle,
-
 } from '../ui/dialog'
 
 import {
-
   revisionManualService,
-
   type CompararAbonosNotificacionesReferencia,
-
   type ConciliarCarteraRevisionResponse,
-
 } from '../../services/revisionManualService'
 
 import { getErrorMessage } from '../../types/errors'
 
 import {
-
   abonosSuperanUmbralConfirmo,
-
   umbralConfirmaAbonosUsd,
-
 } from '../../pages/notificaciones/notificacionesPageCells'
 
 import {
@@ -51,10 +34,7 @@ import {
   type ConciliarCarteraFaseTabla,
 } from './ConciliarCarteraPagosProgreso'
 
-
-
 type Props = {
-
   prestamoId: number
 
   cedula: string
@@ -74,17 +54,11 @@ type Props = {
   onEjecutarError?: () => void
 
   onExito?: (res: ConciliarCarteraRevisionResponse) => void | Promise<void>
-
 }
-
-
 
 type PasoDialogo = 'preview' | 'confirmar' | 'resultado'
 
-
-
 export function ConciliarCarteraRevisionManualButton({
-
   prestamoId,
 
   cedula,
@@ -104,9 +78,7 @@ export function ConciliarCarteraRevisionManualButton({
   onEjecutarError,
 
   onExito,
-
 }: Props) {
-
   const [open, setOpen] = useState(false)
 
   const [paso, setPaso] = useState<PasoDialogo>('preview')
@@ -116,14 +88,10 @@ export function ConciliarCarteraRevisionManualButton({
   const [ejecutando, setEjecutando] = useState(false)
 
   const [preview, setPreview] =
-
     useState<CompararAbonosNotificacionesReferencia | null>(null)
 
-  const [resultado, setResultado] = useState<ConciliarCarteraRevisionResponse | null>(
-
-    null
-
-  )
+  const [resultado, setResultado] =
+    useState<ConciliarCarteraRevisionResponse | null>(null)
 
   const [loteSeleccionado, setLoteSeleccionado] = useState('')
 
@@ -134,21 +102,15 @@ export function ConciliarCarteraRevisionManualButton({
   const [aceptaDestructivo, setAceptaDestructivo] = useState(false)
 
   const [aceptaComprobantesOmitidos, setAceptaComprobantesOmitidos] =
-
     useState(false)
 
   const [errorEjecucion, setErrorEjecucion] = useState<string | null>(null)
-
-
 
   const ced = cedula.trim()
 
   const pid = Number(prestamoId)
 
-
-
   const cerrar = useCallback(() => {
-
     setOpen(false)
 
     setPaso('preview')
@@ -168,15 +130,10 @@ export function ConciliarCarteraRevisionManualButton({
     setAceptaComprobantesOmitidos(false)
 
     setErrorEjecucion(null)
-
   }, [])
 
-
-
   const cargarPreview = useCallback(
-
     async (lote?: string) => {
-
       if (!ced || !Number.isFinite(pid) || pid <= 0) return
 
       setLoadingPreview(true)
@@ -184,63 +141,41 @@ export function ConciliarCarteraRevisionManualButton({
       setPreview(null)
 
       try {
+        const res =
+          await revisionManualService.getReferenciaAbonosNotificaciones(
+            pid,
 
-        const res = await revisionManualService.getReferenciaAbonosNotificaciones(
-
-          pid,
-
-          lote?.trim() || undefined
-
-        )
+            lote?.trim() || undefined
+          )
 
         setPreview(res)
 
         if (res.sin_cache) {
-
           toast.error(
-
             (res.advertencias && res.advertencias[0]) ||
-
               'Sin caché ABONOS. Use «Recalcular» en Notificaciones → General.'
-
           )
-
         }
 
         if (res.lote_aplicado) {
-
           setLoteSeleccionado(String(res.lote_aplicado))
-
         }
-
       } catch (e) {
-
         toast.error(
-
           getErrorMessage(e) ||
-
             'No se pudo leer ABONOS (Notificaciones → General).'
-
         )
 
         cerrar()
-
       } finally {
-
         setLoadingPreview(false)
-
       }
-
     },
 
     [ced, pid, cerrar]
-
   )
 
-
-
   const abrir = () => {
-
     setOpen(true)
 
     setPaso('preview')
@@ -258,31 +193,23 @@ export function ConciliarCarteraRevisionManualButton({
     setErrorEjecucion(null)
 
     void cargarPreview()
-
   }
 
-
-
   const irAConfirmar = () => {
-
     if (preview?.sin_cache) {
-
       toast.warning(
-
         'No hay caché ABONOS. Ejecute «Recalcular» en Notificaciones → General.'
-
       )
 
       return
-
     }
 
     if (requiereLote) {
-
-      toast.warning('Seleccione el lote del crédito (caché Notificaciones → General).')
+      toast.warning(
+        'Seleccione el lote del crédito (caché Notificaciones → General).'
+      )
 
       return
-
     }
 
     setPaso('confirmar')
@@ -294,44 +221,30 @@ export function ConciliarCarteraRevisionManualButton({
     setAceptaComprobantesOmitidos(false)
 
     setErrorEjecucion(null)
-
   }
 
-
-
   const ejecutar = async () => {
-
     if (!Number.isFinite(pid) || pid <= 0) return
 
     if (String(confirmacionPrestamoId).trim() !== String(pid)) {
-
       toast.error(`Escriba el ID del préstamo (${pid}) para confirmar.`)
 
       return
-
     }
 
     if (!aceptaDestructivo) {
-
       toast.error('Marque la casilla de confirmación destructiva.')
 
       return
-
     }
 
     if (hayComprobantesOmitidos && !aceptaComprobantesOmitidos) {
-
       toast.error(
-
         'Marque la casilla que indica que acepta perder los comprobantes no reservables.'
-
       )
 
       return
-
     }
-
-
 
     setEjecutando(true)
 
@@ -343,182 +256,128 @@ export function ConciliarCarteraRevisionManualButton({
 
     const tOcr = window.setTimeout(() => onProgresoTabla?.('ocr'), 4000)
 
-    const tCascada = window.setTimeout(() => onProgresoTabla?.('cascada'), 12000)
+    const tCascada = window.setTimeout(
+      () => onProgresoTabla?.('cascada'),
+      12000
+    )
 
     try {
-
       const needConf =
-
-        preview != null && abonosSuperanUmbralConfirmo(preview, preview.abonos_drive)
+        preview != null &&
+        abonosSuperanUmbralConfirmo(preview, preview.abonos_drive)
 
       const diagComp = preview?.comprobantes_conciliar
 
       const sinReservables = (diagComp?.pagos_reservables ?? 0) === 0
 
       const hayOmitidos = Boolean(
-
         diagComp?.requiere_confirmacion_comprobantes_omitidos
-
       )
 
       const res: ConciliarCarteraRevisionResponse =
-
         await revisionManualService.conciliarCarteraPrestamo(pid, {
-
           ...(loteSeleccionado.trim() ? { lote: loteSeleccionado.trim() } : {}),
 
           ...(needConf
-
             ? { confirmacion_montos_altos: confirmacionMontos.trim() }
-
             : {}),
 
           ...(sinReservables && aceptaDestructivo
-
             ? { confirmar_sin_comprobantes: true }
-
             : {}),
 
           ...(hayOmitidos && aceptaComprobantesOmitidos
-
             ? { confirmar_comprobantes_omitidos: true }
-
             : {}),
-
         })
 
-
-
       if (res.requiere_seleccion_lote) {
-
         onEjecutarError?.()
 
         const ref = res.referencia_abonos ?? res.drive
 
         if (ref && typeof ref === 'object') {
-
           setPreview(ref as CompararAbonosNotificacionesReferencia)
-
         }
 
         setPaso('preview')
 
         toast.warning(
-
           res.error ||
-
             'Seleccione el lote del crédito (caché Notificaciones → General).'
-
         )
 
         return
-
       }
 
-
-
       if (res.requiere_confirmacion_montos_altos) {
-
         onEjecutarError?.()
 
         setPaso('confirmar')
 
         toast.warning(
-
           res.error ||
-
             `ABONOS elevado (>${res.umbral_usd ?? umbralConfirmaAbonosUsd(preview)} USD). Escriba CONFIRMO.`
-
         )
 
         return
-
       }
 
       if (res.requiere_confirmacion_comprobantes_omitidos) {
-
         onEjecutarError?.()
 
         setPaso('confirmar')
 
         toast.warning(
-
           res.error ||
-
             'Algunos comprobantes no tienen imagen en el sistema. Confirme para continuar sin ellos.'
-
         )
 
         return
-
       }
 
       if (res.requiere_confirmacion_sin_comprobantes) {
-
         onEjecutarError?.()
 
         setPaso('confirmar')
 
         toast.warning(
-
           res.error ||
-
             'Ningún comprobante tiene imagen reservable. Confirme para continuar solo con ABONOS.'
-
         )
 
         return
-
       }
 
-
-
       if (!res.ok) {
-
         onEjecutarError?.()
 
-        const msgErr = res.error || res.mensaje || 'No se pudo conciliar cartera.'
+        const msgErr =
+          res.error || res.mensaje || 'No se pudo conciliar cartera.'
 
         setErrorEjecucion(msgErr)
 
         toast.error(msgErr)
 
         return
-
       }
-
-
 
       setResultado(res)
 
       setPaso('resultado')
 
-
-
       if (res.advertencia_parcial) {
-
         toast.warning(
-
           res.mensaje || 'Conciliación parcial: revise pagos no recreados.'
-
         )
-
       } else if (res.cascada?.ok === false) {
-
         toast.warning(res.mensaje || 'Pagos recreados; revise la cascada.')
-
       } else {
-
         toast.success('Conciliación completada.')
-
       }
 
-
-
       await onExito?.(res)
-
     } catch (e) {
-
       onEjecutarError?.()
 
       const status = (e as { response?: { status?: number } })?.response?.status
@@ -526,85 +385,54 @@ export function ConciliarCarteraRevisionManualButton({
       const msg = getErrorMessage(e)
 
       if (status === 409) {
-
         toast.warning(
-
           msg ||
-
             'Otra conciliación está en curso para este préstamo. Espere y reintente.'
-
         )
-
       } else {
-
         const msgErr = msg || 'Error al conciliar cartera.'
 
         setErrorEjecucion(msgErr)
 
         toast.error(msgErr)
-
       }
-
     } finally {
-
       window.clearTimeout(tOcr)
 
       window.clearTimeout(tCascada)
 
       setEjecutando(false)
-
     }
-
   }
 
-
-
   const requiereLote =
-
     Boolean(preview?.requiere_seleccion_lote) &&
-
     !loteSeleccionado.trim() &&
-
     !(preview?.lote_aplicado || '').toString().trim()
 
-
-
   const needConfirmo =
-
-    preview != null && abonosSuperanUmbralConfirmo(preview, preview.abonos_drive)
+    preview != null &&
+    abonosSuperanUmbralConfirmo(preview, preview.abonos_drive)
 
   const diagComprobantes = preview?.comprobantes_conciliar
 
   const hayComprobantesOmitidos = Boolean(
-
     diagComprobantes?.requiere_confirmacion_comprobantes_omitidos
-
   )
 
   const sinComprobantesReservables = Boolean(
-
     diagComprobantes?.sin_comprobantes_reservables
-
   )
 
   const sinReservablesPreview = (diagComprobantes?.pagos_reservables ?? 0) === 0
 
-
-
   const confirmacionPrestamoOk =
-
     String(confirmacionPrestamoId).trim() === String(pid)
 
-
-
   const fmt = (n: number | null | undefined) =>
-
     n == null || Number.isNaN(Number(n)) ? '-' : `$${Number(n).toFixed(2)}`
 
-
-
   const fmtDiff = (n: number | null | undefined) => {
-
     if (n == null || Number.isNaN(Number(n))) return '-'
 
     const abs = Math.abs(Number(n))
@@ -612,114 +440,67 @@ export function ConciliarCarteraRevisionManualButton({
     const sign = Number(n) > 0.02 ? '+' : Number(n) < -0.02 ? '−' : ''
 
     return `${sign}$${abs.toFixed(2)}`
-
   }
 
-
-
   const abonosResultado =
-
     resultado?.abonos_referencia_notificaciones ?? resultado?.abonos_drive
 
   const diffResultado =
-
-    resultado?.diferencia_referencia_ocr_usd ?? resultado?.diferencia_drive_ocr_usd
-
-
+    resultado?.diferencia_referencia_ocr_usd ??
+    resultado?.diferencia_drive_ocr_usd
 
   return (
-
     <>
-
       <Button
-
         type="button"
-
         variant="outline"
-
         size="sm"
-
         className="gap-2 border-amber-300 bg-amber-50 text-amber-950 hover:bg-amber-100"
-
         disabled={disabled || ejecutando}
-
         onClick={abrir}
-
         title="Reserva comprobantes, toma ABONOS de Notificaciones→General, recrea pagos por OCR y aplica cascada (solo admin)"
-
       >
-
         {ejecutando ? (
-
           <Loader2 className="h-4 w-4 animate-spin" />
-
         ) : (
-
           <Scale className="h-4 w-4" />
-
         )}
-
         Conciliar
-
       </Button>
 
-
-
       <Dialog open={open} onOpenChange={v => (v ? setOpen(true) : cerrar())}>
-
         <DialogContent className="max-w-lg">
-
           <DialogHeader>
-
             <DialogTitle>
-
               {paso === 'resultado'
-
                 ? `Resultado conciliación (préstamo ${pid})`
-
                 : `Conciliar cartera (préstamo ${pid})`}
-
             </DialogTitle>
-
           </DialogHeader>
 
-
-
           {paso === 'resultado' && resultado ? (
-
             <div className="space-y-3 text-sm">
-
               <div
-
                 className={`rounded-lg border p-3 ${
-
                   resultado.advertencia_parcial
-
                     ? 'border-amber-300 bg-amber-50'
-
                     : 'border-green-300 bg-green-50'
-
                 }`}
-
               >
-
                 <p className="font-medium text-foreground">
-
                   {resultado.advertencia_parcial
-
                     ? 'Conciliación parcial'
-
                     : 'Conciliación completada'}
-
                 </p>
 
-                <p className="mt-1 text-muted-foreground">{resultado.mensaje}</p>
-
+                <p className="mt-1 text-muted-foreground">
+                  {resultado.mensaje}
+                </p>
               </div>
 
               {idsAnterioresTabla.length > 0 ? (
                 <p className="rounded border border-sky-200 bg-sky-50 p-3 text-sm text-sky-950">
-                  <span className="line-through text-muted-foreground">
+                  <span className="text-muted-foreground line-through">
                     ID eliminados: {idsAnterioresTabla.join(', ')}
                   </span>
                   <span className="mx-2">→</span>
@@ -734,99 +515,68 @@ export function ConciliarCarteraRevisionManualButton({
               ) : null}
 
               <ul className="space-y-2 rounded border bg-slate-50 p-3">
-
                 <li>
-
-                  <span className="text-muted-foreground">Asiento ABONOS (sin imagen):</span>{' '}
-
-                  <strong>{fmt(resultado.abonos_total_aplicado_usd ?? abonosResultado)}</strong>
-
+                  <span className="text-muted-foreground">
+                    Asiento ABONOS (sin imagen):
+                  </span>{' '}
+                  <strong>
+                    {fmt(
+                      resultado.abonos_total_aplicado_usd ?? abonosResultado
+                    )}
+                  </strong>
                   {resultado.pago_id_abonos != null ? (
-
                     <span className="text-muted-foreground">
-
                       {' '}
-
                       (pago #{resultado.pago_id_abonos})
-
                     </span>
-
                   ) : null}
-
                 </li>
 
                 <li>
-
-                  <span className="text-muted-foreground">Asientos comprobante (OCR):</span>{' '}
-
-                  <strong>
-
-                    {fmt(
-
-                      resultado.total_imagenes_ocr_usd ??
-
-                        (diffResultado != null ? diffResultado : null)
-
-                    )}
-
-                  </strong>
-
                   <span className="text-muted-foreground">
-
+                    Asientos comprobante (OCR):
+                  </span>{' '}
+                  <strong>
+                    {fmt(
+                      resultado.total_imagenes_ocr_usd ??
+                        (diffResultado != null ? diffResultado : null)
+                    )}
+                  </strong>
+                  <span className="text-muted-foreground">
                     {' '}
-
                     ({resultado.ocr_ok}/{resultado.ocr_total} imágenes)
-
                   </span>
-
                 </li>
 
                 <li className="text-base">
-
                   <span className="text-muted-foreground">Total cartera:</span>{' '}
-
                   <strong>{fmt(resultado.total_pagos_recriados_usd)}</strong>
-
                 </li>
 
                 {resultado.prestamo_estado_final ? (
-
                   <li>
-
-                    <span className="text-muted-foreground">Estado préstamo:</span>{' '}
-
+                    <span className="text-muted-foreground">
+                      Estado préstamo:
+                    </span>{' '}
                     {resultado.prestamo_estado_previo &&
-
                     resultado.prestamo_estado_previo !==
-
                       resultado.prestamo_estado_final
-
                       ? `${resultado.prestamo_estado_previo} → `
-
                       : ''}
-
                     <strong>{resultado.prestamo_estado_final}</strong>
-
                   </li>
-
                 ) : null}
-
               </ul>
 
               <div className="rounded border border-sky-200 bg-sky-50 p-3 text-sky-950">
-
                 <p className="font-medium">Qué cambió en cartera</p>
 
                 <p className="mt-1 text-muted-foreground">
-
-                  Se borraron <strong>{resultado.pagos_eliminados ?? '-'}</strong>{' '}
-
-                  pago(s) y se crearon <strong>{resultado.ocr_ok ?? '-'}</strong>{' '}
-
-                  filas nuevas
-
+                  Se borraron{' '}
+                  <strong>{resultado.pagos_eliminados ?? '-'}</strong> pago(s) y
+                  se crearon <strong>{resultado.ocr_ok ?? '-'}</strong> filas
+                  nuevas
                   {resultado.detalle?.length
-
                     ? ` (ID ${resultado.detalle
 
                         .filter(d => d.ok && d.pago_id)
@@ -834,596 +584,359 @@ export function ConciliarCarteraRevisionManualButton({
                         .map(d => d.pago_id)
 
                         .join(', ')})`
-
                     : ''}
-
                   . Asiento ABONOS ({fmt(abonosResultado)}) sin imagen, más un
-
                   asiento por cada comprobante con monto OCR (ej. $177) e imagen
-
                   adjunta.
-
                 </p>
 
                 {diffResultado != null && Math.abs(diffResultado) > 0.02 ? (
-
                   <p className="mt-2 text-amber-900">
-
-                    El total recreado ({fmt(resultado.total_pagos_recriados_usd)})
-
-                    no coincide con ABONOS ({fmt(abonosResultado)}). Diferencia:{' '}
-
+                    El total recreado (
+                    {fmt(resultado.total_pagos_recriados_usd)}) no coincide con
+                    ABONOS ({fmt(abonosResultado)}). Diferencia:{' '}
                     {fmtDiff(diffResultado)}. Revise comprobantes omitidos u OCR
-
                     fallido.
-
                   </p>
-
                 ) : null}
-
               </div>
 
               {resultado.advertencia_parcial ? (
-
                 <p className="flex items-start gap-2 text-amber-900">
-
                   <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-
-                  Cuadre manualmente los pagos que no se recrearon y la diferencia
-
-                  con ABONOS si aplica.
-
+                  Cuadre manualmente los pagos que no se recrearon y la
+                  diferencia con ABONOS si aplica.
                 </p>
-
               ) : null}
-
             </div>
-
           ) : loadingPreview ? (
-
             <div className="flex items-center gap-2 py-6 text-muted-foreground">
-
               <Loader2 className="h-5 w-5 animate-spin" />
-
               Leyendo ABONOS (Notificaciones → General)…
-
             </div>
-
           ) : ejecutando && faseTabla && faseTabla !== 'listo' ? (
-
             <div className="space-y-3">
-
               <ConciliarCarteraPagosProgreso
-
                 fase={faseTabla}
-
                 prestamoId={pid}
-
                 pagosAntes={pagosAntesTabla}
-
                 idsAnteriores={idsAnterioresTabla}
-
               />
 
               <p className="text-xs text-muted-foreground">
-
-                La sección «Pagos registrados en cartera» (debajo) también muestra
-
-                este progreso. El <strong>total en cartera = ABONOS</strong> de
-
-                General; los <strong>ID</strong> serán distintos tras recargar.
-
+                La sección «Pagos registrados en cartera» (debajo) también
+                muestra este progreso. El{' '}
+                <strong>total en cartera = ABONOS</strong> de General; los{' '}
+                <strong>ID</strong> serán distintos tras recargar.
               </p>
-
             </div>
-
           ) : paso === 'confirmar' ? (
-
             <div className="space-y-3 text-sm">
-
               {errorEjecucion ? (
-
                 <p className="rounded border border-red-300 bg-red-100 p-3 text-red-950">
-
                   {errorEjecucion}
-
                 </p>
-
               ) : null}
 
-              {(sinComprobantesReservables || sinReservablesPreview) && !hayComprobantesOmitidos ? (
-
+              {(sinComprobantesReservables || sinReservablesPreview) &&
+              !hayComprobantesOmitidos ? (
                 <p className="rounded border border-amber-300 bg-amber-50 p-3 text-amber-950">
-
-                  No hay imágenes reservables: tras confirmar solo se creará el asiento ABONOS
-
-                  (total General), sin comprobantes OCR.
-
+                  No hay imágenes reservables: tras confirmar solo se creará el
+                  asiento ABONOS (total General), sin comprobantes OCR.
                 </p>
-
               ) : null}
 
               <p className="rounded border border-red-200 bg-red-50 p-3 text-red-900">
-
-                Se borrarán <strong>todos los pagos de este préstamo</strong> y se
-
-                recrearán con el <strong>total ABONOS</strong> de General más las
-
-                imágenes reservadas (reescaneo OCR). Si no hay comprobantes con
-
-                imagen, tras confirmar continuará solo con el asiento ABONOS. Esta
-
-                acción no se puede deshacer con un clic.
-
+                Se borrarán <strong>todos los pagos de este préstamo</strong> y
+                se recrearán con el <strong>total ABONOS</strong> de General más
+                las imágenes reservadas (reescaneo OCR). Si no hay comprobantes
+                con imagen, tras confirmar continuará solo con el asiento
+                ABONOS. Esta acción no se puede deshacer con un clic.
               </p>
 
               <label className="flex items-start gap-2">
-
                 <input
-
                   type="checkbox"
-
                   className="mt-1"
-
                   checked={aceptaDestructivo}
-
                   onChange={e => setAceptaDestructivo(e.target.checked)}
-
                 />
 
                 <span>
-
                   Entiendo que se eliminarán los pagos del préstamo {pid} y se
-
                   reconstruirá la cartera desde las imágenes reservadas.
-
                 </span>
-
               </label>
 
               {hayComprobantesOmitidos ? (
-
                 <label className="flex items-start gap-2 rounded border border-amber-300 bg-amber-50 p-3 text-amber-950">
-
                   <input
-
                     type="checkbox"
-
                     className="mt-1"
-
                     checked={aceptaComprobantesOmitidos}
-
-                    onChange={e => setAceptaComprobantesOmitidos(e.target.checked)}
-
+                    onChange={e =>
+                      setAceptaComprobantesOmitidos(e.target.checked)
+                    }
                   />
 
                   <span>
-
                     Acepto que{' '}
-
                     <strong>
-
                       {diagComprobantes?.pagos_omitidos_sin_bytes ?? '-'}
-
                     </strong>{' '}
-
-                    pago(s) con enlace pero sin imagen en el sistema se borrarán y{' '}
-
-                    <strong>no</strong> se recrearán tras conciliar.
-
+                    pago(s) con enlace pero sin imagen en el sistema se borrarán
+                    y <strong>no</strong> se recrearán tras conciliar.
                   </span>
-
                 </label>
-
               ) : null}
 
               <div>
-
                 <label className="mb-1 block font-medium">
-
                   Escriba el ID del préstamo ({pid}) para confirmar
-
                 </label>
 
                 <Input
-
                   value={confirmacionPrestamoId}
-
                   onChange={e => setConfirmacionPrestamoId(e.target.value)}
-
                   placeholder={String(pid)}
-
                   autoComplete="off"
-
                 />
-
               </div>
 
               {needConfirmo && (
-
                 <div>
-
                   <label className="mb-1 block font-medium text-amber-900">
-
                     ABONOS elevado (Notificaciones → General): escriba CONFIRMO
-
                   </label>
 
                   <Input
-
                     value={confirmacionMontos}
-
                     onChange={e => setConfirmacionMontos(e.target.value)}
-
                     placeholder="CONFIRMO"
-
                     autoComplete="off"
-
                   />
-
                 </div>
-
               )}
-
             </div>
-
           ) : (
-
             <div className="space-y-3 text-sm">
-
               <p className="text-muted-foreground">
-
-                <strong>Siempre</strong> se crean: (1) <strong>un</strong> asiento
-
-                ABONOS (total General, sea cual sea, sin imagen); (2) <strong>un
-
-                asiento por cada imagen</strong> guardada y reescaneada (monto OCR,
-
-                ej. $177, con comprobante adjunto).
-
+                <strong>Siempre</strong> se crean: (1) <strong>un</strong>{' '}
+                asiento ABONOS (total General, sea cual sea, sin imagen); (2){' '}
+                <strong>un asiento por cada imagen</strong> guardada y
+                reescaneada (monto OCR, ej. $177, con comprobante adjunto).
               </p>
 
               <ol className="list-decimal space-y-1 pl-5 text-muted-foreground">
-
                 <li>Reserva solo imágenes en tabla temporal</li>
 
                 <li>Borra pagos solo de este préstamo</li>
 
-                <li>Asiento ABONOS (total General) + asientos comprobante (OCR)</li>
+                <li>
+                  Asiento ABONOS (total General) + asientos comprobante (OCR)
+                </li>
 
                 <li>Cascada a cuotas</li>
-
               </ol>
 
               {preview?.sin_cache ? (
-
                 <p className="rounded border border-amber-300 bg-amber-50 p-3 text-amber-950">
-
                   {(preview.advertencias && preview.advertencias[0]) ||
-
                     'Sin caché ABONOS. Vaya a Notificaciones → General y pulse «Recalcular».'}
-
                 </p>
-
               ) : null}
 
               {preview && !preview.sin_cache ? (
-
                 <ul className="space-y-1 rounded border bg-slate-50 p-3">
-
                   <li>
-
                     <span className="text-muted-foreground">
-
                       ABONOS (Notificaciones → General):
-
                     </span>{' '}
-
                     <strong>{fmt(preview.abonos_drive)}</strong>
-
                     <span className="text-muted-foreground">
-
                       {' '}
-
                       (asiento 1: pago aparte sin comprobante)
-
                     </span>
-
                   </li>
 
                   <li>
-
-                    <span className="text-muted-foreground">Total en cuotas BD:</span>{' '}
-
+                    <span className="text-muted-foreground">
+                      Total en cuotas BD:
+                    </span>{' '}
                     {fmt(preview.total_pagado_cuotas)}
-
                   </li>
 
                   <li>
-
-                    <span className="text-muted-foreground">Diferencia ABONOS − cuotas:</span>{' '}
-
+                    <span className="text-muted-foreground">
+                      Diferencia ABONOS − cuotas:
+                    </span>{' '}
                     {fmt(preview.diferencia)}
-
                   </li>
 
                   {preview.cache_at ? (
-
                     <li className="text-xs text-muted-foreground">
-
                       Caché actualizada: {preview.cache_at}
-
                     </li>
-
                   ) : null}
-
                 </ul>
-
               ) : null}
 
               {preview?.comprobantes_conciliar ? (
-
                 <div
-
                   className={`rounded border p-3 ${
-
                     hayComprobantesOmitidos || sinComprobantesReservables
-
                       ? 'border-amber-300 bg-amber-50 text-amber-950'
-
                       : 'border-slate-200 bg-white'
-
                   }`}
-
                 >
-
-                  <p className="font-medium">Comprobantes en cartera (este préstamo)</p>
+                  <p className="font-medium">
+                    Comprobantes en cartera (este préstamo)
+                  </p>
 
                   <ul className="mt-2 space-y-1 text-muted-foreground">
-
                     <li>
-
                       Pagos en tabla cartera con enlace:{' '}
-
-                      <strong>{preview.comprobantes_conciliar.pagos_con_enlace ?? 0}</strong>
-
-                    </li>
-
-                    <li>
-
-                      Fuentes totales (cartera + errores + Gmail):{' '}
-
                       <strong>
-
-                        {preview.comprobantes_conciliar.fuentes_comprobante_total ??
-
-                          preview.comprobantes_conciliar.pagos_con_enlace ??
-
-                          0}
-
+                        {preview.comprobantes_conciliar.pagos_con_enlace ?? 0}
                       </strong>
-
-                      {(preview.comprobantes_conciliar.fuentes_gmail_sync ?? 0) > 0 ||
-
-                      (preview.comprobantes_conciliar.fuentes_pago_con_error ?? 0) > 0 ? (
-
-                        <span className="text-xs">
-
-                          {' '}
-
-                          (Gmail:{' '}
-
-                          {preview.comprobantes_conciliar.fuentes_gmail_sync ?? 0}, errores:{' '}
-
-                          {preview.comprobantes_conciliar.fuentes_pago_con_error ?? 0})
-
-                        </span>
-
-                      ) : null}
-
                     </li>
 
                     <li>
-
-                      Imágenes reservables al conciliar:{' '}
-
-                      <strong>{preview.comprobantes_conciliar.pagos_reservables ?? 0}</strong>
-
+                      Fuentes totales (cartera + errores + Gmail):{' '}
+                      <strong>
+                        {preview.comprobantes_conciliar
+                          .fuentes_comprobante_total ??
+                          preview.comprobantes_conciliar.pagos_con_enlace ??
+                          0}
+                      </strong>
+                      {(preview.comprobantes_conciliar.fuentes_gmail_sync ??
+                        0) > 0 ||
+                      (preview.comprobantes_conciliar.fuentes_pago_con_error ??
+                        0) > 0 ? (
+                        <span className="text-xs">
+                          {' '}
+                          (Gmail:{' '}
+                          {preview.comprobantes_conciliar.fuentes_gmail_sync ??
+                            0}
+                          , errores:{' '}
+                          {preview.comprobantes_conciliar
+                            .fuentes_pago_con_error ?? 0}
+                          )
+                        </span>
+                      ) : null}
                     </li>
 
-                    {(preview.comprobantes_conciliar.pagos_omitidos_sin_bytes ?? 0) >
+                    <li>
+                      Imágenes reservables al conciliar:{' '}
+                      <strong>
+                        {preview.comprobantes_conciliar.pagos_reservables ?? 0}
+                      </strong>
+                    </li>
 
-                    0 ? (
-
+                    {(preview.comprobantes_conciliar.pagos_omitidos_sin_bytes ??
+                      0) > 0 ? (
                       <li className="text-amber-900">
-
                         Sin imagen en el sistema (se perderán si concilia):{' '}
-
                         <strong>
-
-                          {preview.comprobantes_conciliar.pagos_omitidos_sin_bytes}
-
+                          {
+                            preview.comprobantes_conciliar
+                              .pagos_omitidos_sin_bytes
+                          }
                         </strong>
-
                       </li>
-
                     ) : null}
-
                   </ul>
 
                   {hayComprobantesOmitidos ? (
-
                     <p className="mt-2 text-xs text-amber-900">
-
-                      Suba cada comprobante con «Escanear comprobante» + «Guardar y
-
-                      procesar» antes de conciliar. Los pagos cuyo ícono de ojo está
-
-                      deshabilitado no tienen imagen en BD.
-
+                      Suba cada comprobante con «Escanear comprobante» +
+                      «Guardar y procesar» antes de conciliar. Los pagos cuyo
+                      ícono de ojo está deshabilitado no tienen imagen en BD.
                     </p>
-
                   ) : null}
-
                 </div>
-
               ) : null}
 
-
-
               {preview?.requiere_seleccion_lote &&
-
               (preview.opciones_lote?.length ?? 0) > 0 ? (
-
                 <div>
-
                   <label className="mb-1 block font-medium">Lote (caché)</label>
 
                   <select
-
                     className="w-full rounded-md border px-2 py-1.5"
-
                     value={loteSeleccionado}
-
                     onChange={e => {
-
                       setLoteSeleccionado(e.target.value)
 
                       void cargarPreview(e.target.value)
-
                     }}
-
                   >
-
                     <option value="">- Elija lote -</option>
 
                     {preview.opciones_lote!.map(op => (
-
                       <option key={op.lote} value={op.lote}>
-
                         {op.lote} ({fmt(op.abonos)})
-
                       </option>
-
                     ))}
-
                   </select>
-
                 </div>
-
               ) : null}
-
             </div>
-
           )}
 
-
-
           <DialogFooter className="gap-2">
-
             {paso === 'resultado' ? (
-
               <Button type="button" onClick={cerrar}>
-
                 Cerrar
-
               </Button>
-
             ) : (
-
               <>
-
                 <Button type="button" variant="outline" onClick={cerrar}>
-
                   Cancelar
-
                 </Button>
 
                 {paso === 'preview' ? (
-
                   <Button
-
                     type="button"
-
                     variant="default"
-
                     disabled={
-
                       loadingPreview ||
-
                       requiereLote ||
-
                       !preview ||
-
                       Boolean(preview?.sin_cache)
-
                     }
-
                     onClick={irAConfirmar}
-
                   >
-
                     Continuar
-
                   </Button>
-
                 ) : (
-
                   <Button
-
                     type="button"
-
                     variant="destructive"
-
                     disabled={
-
                       ejecutando ||
-
                       !aceptaDestructivo ||
-
                       !confirmacionPrestamoOk ||
-
-                      (needConfirmo && confirmacionMontos.trim().toUpperCase() !== 'CONFIRMO')
-
+                      (needConfirmo &&
+                        confirmacionMontos.trim().toUpperCase() !== 'CONFIRMO')
                     }
-
                     onClick={() => void ejecutar()}
-
                   >
-
                     {ejecutando ? (
-
                       <>
-
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-
                         Conciliando…
-
                       </>
-
                     ) : (
-
                       'Ejecutar conciliación'
-
                     )}
-
                   </Button>
-
                 )}
-
               </>
-
             )}
-
           </DialogFooter>
-
         </DialogContent>
-
       </Dialog>
-
     </>
-
   )
-
 }
-

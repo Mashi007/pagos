@@ -53,7 +53,10 @@ function readSessionEntry(key: string): FiniquitoTerminadosCacheEntry | null {
   return raw as FiniquitoTerminadosCacheEntry
 }
 
-function writeSessionEntry(key: string, entry: FiniquitoTerminadosCacheEntry): void {
+function writeSessionEntry(
+  key: string,
+  entry: FiniquitoTerminadosCacheEntry
+): void {
   safeSetSessionItem(sessionStorageKey(key), entry)
   const index = readSessionIndex()
   if (!index.includes(key)) {

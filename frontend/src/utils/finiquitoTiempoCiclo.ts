@@ -68,7 +68,9 @@ function utcMsDesdeYmd(ymd: string): number | null {
 }
 
 /** Dias calendario entre ancla (inclusive como dia 1) y hoy Caracas. */
-export function diasDesdeAnclaCaracas(iso: string | null | undefined): number | null {
+export function diasDesdeAnclaCaracas(
+  iso: string | null | undefined
+): number | null {
   if (iso == null || String(iso).trim() === '') return null
   const desde = utcMsDesdeYmd(String(iso))
   const hasta = utcMsDesdeYmd(ymdCaracas())
@@ -113,7 +115,10 @@ function formatoGlobal(dia: number): string {
   return `${dia} de ${FINIQUITO_CICLO_DIAS}`
 }
 
-function semaforoDesdeFase(diaFase: number, maxFase: number): SemaforoTiempoFiniquito {
+function semaforoDesdeFase(
+  diaFase: number,
+  maxFase: number
+): SemaforoTiempoFiniquito {
   if (diaFase > maxFase + 1) return 'recontraatrasado'
   if (diaFase > maxFase) return 'atrasado'
   if (diaFase === maxFase) return 'termino'
@@ -132,7 +137,9 @@ function semaforoDesdeGlobal(diaGlobal: number): SemaforoTiempoFiniquito {
   return 'avance'
 }
 
-export function claseSemaforoTiempoFiniquito(s: SemaforoTiempoFiniquito): string {
+export function claseSemaforoTiempoFiniquito(
+  s: SemaforoTiempoFiniquito
+): string {
   switch (s) {
     case 'inicio':
       return 'bg-emerald-100 text-emerald-950'
@@ -180,7 +187,9 @@ function calcularFaseRevision(caso: FiniquitoTiempoCaso, globalDay: number) {
 }
 
 function calcularFaseContable(caso: FiniquitoTiempoCaso, globalDay: number) {
-  const transferDay = diaGlobalDesdeEntrada(caso.fecha_entrada_revision_contable)
+  const transferDay = diaGlobalDesdeEntrada(
+    caso.fecha_entrada_revision_contable
+  )
   if (transferDay == null) {
     return {
       diaFase: null,
@@ -214,7 +223,9 @@ function calcularFaseTrabajo(caso: FiniquitoTiempoCaso, globalDay: number) {
   }
 }
 
-export function calcularTiempoFiniquito(caso: FiniquitoTiempoCaso): FiniquitoTiempoFila {
+export function calcularTiempoFiniquito(
+  caso: FiniquitoTiempoCaso
+): FiniquitoTiempoFila {
   const estado = (caso.estado || '').toUpperCase().trim()
   const diaGlobal = diaGlobalCiclo(caso)
 

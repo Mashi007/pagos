@@ -1,10 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react'
-import {
-  ChevronLeft,
-  History,
-  Loader2,
-  MessageSquare,
-} from 'lucide-react'
+import { ChevronLeft, History, Loader2, MessageSquare } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 import {
@@ -183,7 +178,7 @@ export function CobranzaHistorialNotasDialog({
                   <div key={n.id} className="relative pl-6">
                     {idx < notas.length - 1 && (
                       <span
-                        className="absolute left-2 top-10 bottom-0 w-px bg-violet-200"
+                        className="absolute bottom-0 left-2 top-10 w-px bg-violet-200"
                         aria-hidden
                       />
                     )}

@@ -60,7 +60,9 @@ export default function CobranzasPage() {
   const navigate = useNavigate()
   const [cedulaInput, setCedulaInput] = useState('')
   const [buscando, setBuscando] = useState(false)
-  const [resultado, setResultado] = useState<CobranzaBuscarResponse | null>(null)
+  const [resultado, setResultado] = useState<CobranzaBuscarResponse | null>(
+    null
+  )
   const [aperturaToken, setAperturaToken] = useState(0)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [prestamoNegociacion, setPrestamoNegociacion] =
@@ -129,8 +131,8 @@ export default function CobranzasPage() {
       <div>
         <h1 className="text-2xl font-semibold text-slate-900">Cobranzas</h1>
         <p className="mt-1 text-sm text-slate-600">
-          Busque por cedula. Use el icono de historial para registrar notas y ver
-          el historial del prestamo.
+          Busque por cedula. Use el icono de historial para registrar notas y
+          ver el historial del prestamo.
         </p>
       </div>
 
@@ -188,7 +190,9 @@ export default function CobranzasPage() {
                   <TableBody>
                     {resultado.prestamos.map(p => (
                       <TableRow key={p.id}>
-                        <TableCell>{modalidadLabel(p.modalidad_pago)}</TableCell>
+                        <TableCell>
+                          {modalidadLabel(p.modalidad_pago)}
+                        </TableCell>
                         <TableCell>{p.numero_cuotas ?? '-'}</TableCell>
                         <TableCell>{estadoPrestamoBadge(p.estado)}</TableCell>
                         <TableCell>

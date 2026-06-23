@@ -310,7 +310,8 @@ function filaCandidatoDriveTono(
   const dup = p.duplicada_en_hoja === true
 
   const redInvalida = !formatoOk
-  const redVeCupoAprobado = !esJ && esVe && Number.isFinite(nAprob) && nAprob >= 1
+  const redVeCupoAprobado =
+    !esJ && esVe && Number.isFinite(nAprob) && nAprob >= 1
   const redFechaAntigua = aprobacionFueraVentanaFromPayload(p)
   const redHuellaNoComparable = p.huella_no_comparable === true
   const redReimporteLiquidado = p.reimporte_liquidado_huella === true
@@ -778,8 +779,7 @@ export default function ActualizacionesPrestamosDrivePage() {
           valor
         )
         toast.success(
-          res.mensaje ||
-            `Fecha (Q) actualizada en fila ${sheetRowNumber}.`
+          res.mensaje || `Fecha (Q) actualizada en fila ${sheetRowNumber}.`
         )
         await refrescarSnapshotPostAccion()
       } catch (e) {
@@ -1390,7 +1390,7 @@ export default function ActualizacionesPrestamosDrivePage() {
                                 Guardando…
                               </span>
                             ) : strPayload(r.payload, 'col_q_fecha') !==
-                                fechaQInputValue(r.payload) ? (
+                              fechaQInputValue(r.payload) ? (
                               <span
                                 className="max-w-[8.5rem] truncate text-[10px] text-muted-foreground"
                                 title={strPayload(r.payload, 'col_q_fecha')}

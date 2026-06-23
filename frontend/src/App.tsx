@@ -235,508 +235,517 @@ function App() {
       <RouteErrorBoundary>
         <Suspense fallback={<PageLoader />}>
           <Routes>
-          {/* Una sola raz path="/" para que Layout reciba correctamente las rutas hijas (dashboard, clientes, etc.) */}
+            {/* Una sola raz path="/" para que Layout reciba correctamente las rutas hijas (dashboard, clientes, etc.) */}
 
-          <Route path="/" element={<RootLayoutWrapper />}>
-            {/* Raíz /pagos: clientes eligen servicio público; personal usa /login?personal=1 */}
+            <Route path="/" element={<RootLayoutWrapper />}>
+              {/* Raíz /pagos: clientes eligen servicio público; personal usa /login?personal=1 */}
 
-            <Route
-              index
-              element={
-                isAuthenticated ? (
-                  <Navigate to={defaultHomePathForRol(user?.rol)} replace />
-                ) : (
-                  <PublicBasenameIndexPage />
-                )
-              }
-            />
+              <Route
+                index
+                element={
+                  isAuthenticated ? (
+                    <Navigate to={defaultHomePathForRol(user?.rol)} replace />
+                  ) : (
+                    <PublicBasenameIndexPage />
+                  )
+                }
+              />
 
-            {/* Formulario publico de reporte de pago (sin login). Link canonico: /rapicredit-cobros */}
+              {/* Formulario publico de reporte de pago (sin login). Link canonico: /rapicredit-cobros */}
 
-            <Route path="rapicredit-cobros" element={<ReportePagoPage />} />
+              <Route path="rapicredit-cobros" element={<ReportePagoPage />} />
 
-            {/* Alias públicos legacy/amigables para evitar caída a login por rutas antiguas. */}
-            <Route
-              path="reportar"
-              element={<Navigate to="/rapicredit-cobros" replace />}
-            />
-            <Route
-              path="reportar-pago"
-              element={<Navigate to="/rapicredit-cobros" replace />}
-            />
+              {/* Alias públicos legacy/amigables para evitar caída a login por rutas antiguas. */}
+              <Route
+                path="reportar"
+                element={<Navigate to="/rapicredit-cobros" replace />}
+              />
+              <Route
+                path="reportar-pago"
+                element={<Navigate to="/rapicredit-cobros" replace />}
+              />
 
-            {/* Consulta publica de estado de cuenta (sin login). Solo esta consulta, sin acceso a otros servicios. */}
+              {/* Consulta publica de estado de cuenta (sin login). Solo esta consulta, sin acceso a otros servicios. */}
 
-            <Route
-              path="rapicredit-estadocuenta"
-              element={<EstadoCuentaPublicoPage />}
-            />
-            <Route
-              path="estado-cuenta"
-              element={<Navigate to="/rapicredit-estadocuenta" replace />}
-            />
-            <Route
-              path="estado-de-cuenta"
-              element={<Navigate to="/rapicredit-estadocuenta" replace />}
-            />
+              <Route
+                path="rapicredit-estadocuenta"
+                element={<EstadoCuentaPublicoPage />}
+              />
+              <Route
+                path="estado-cuenta"
+                element={<Navigate to="/rapicredit-estadocuenta" replace />}
+              />
+              <Route
+                path="estado-de-cuenta"
+                element={<Navigate to="/rapicredit-estadocuenta" replace />}
+              />
 
-            {/* Acceso limitado: ruta pública (p. ej. historial); "Volver a Infopagos" exige login y redirige con state.from */}
+              {/* Acceso limitado: ruta pública (p. ej. historial); "Volver a Infopagos" exige login y redirige con state.from */}
 
-            <Route path="acceso-limitado" element={<AccesoLimitadoPage />} />
+              <Route path="acceso-limitado" element={<AccesoLimitadoPage />} />
 
-            {/* Entrada dedicada para personal (evita confusion con /login solo). */}
-            <Route
-              path="acceso-personal"
-              element={
-                isAuthenticated ? (
-                  <Navigate to={defaultHomePathForRol(user?.rol)} replace />
-                ) : (
-                  <Navigate to={`/login${STAFF_LOGIN_SEARCH}`} replace />
-                )
-              }
-            />
+              {/* Entrada dedicada para personal (evita confusion con /login solo). */}
+              <Route
+                path="acceso-personal"
+                element={
+                  isAuthenticated ? (
+                    <Navigate to={defaultHomePathForRol(user?.rol)} replace />
+                  ) : (
+                    <Navigate to={`/login${STAFF_LOGIN_SEARCH}`} replace />
+                  )
+                }
+              />
 
-            {/* Finiquitos: módulo interno protegido (admin, operador, gerente). */}
+              {/* Finiquitos: módulo interno protegido (admin, operador, gerente). */}
 
-            {/* Login: misma pantalla que index cuando no autenticado */}
+              {/* Login: misma pantalla que index cuando no autenticado */}
 
-            <Route
-              path="login"
-              element={
-                isAuthenticated ? (
-                  <Navigate to={defaultHomePathForRol(user?.rol)} replace />
-                ) : (
-                  <motion.div
-                    key="login"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    transition={{ duration: ANIMATION_DURATION }}
-                  >
-                    <Login />
-                  </motion.div>
-                )
-              }
-            />
+              <Route
+                path="login"
+                element={
+                  isAuthenticated ? (
+                    <Navigate to={defaultHomePathForRol(user?.rol)} replace />
+                  ) : (
+                    <motion.div
+                      key="login"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: ANIMATION_DURATION }}
+                    >
+                      <Login />
+                    </motion.div>
+                  )
+                }
+              />
 
-            {/* Dashboard - ruta ms especfica primero */}
+              {/* Dashboard - ruta ms especfica primero */}
 
-            <Route path="dashboard/menu" element={<DashboardMenu />} />
+              <Route path="dashboard/menu" element={<DashboardMenu />} />
 
-            <Route
-              path="dashboard"
-              element={<Navigate to="/dashboard/menu" replace />}
-            />
+              <Route
+                path="dashboard"
+                element={<Navigate to="/dashboard/menu" replace />}
+              />
 
-            {/* Clientes */}
+              {/* Clientes */}
 
-            <Route path="clientes" element={<Clientes />} />
+              <Route path="clientes" element={<Clientes />} />
 
-            <Route path="clientes/nuevo" element={<Clientes />} />
+              <Route path="clientes/nuevo" element={<Clientes />} />
 
-            <Route path="clientes/:id" element={<Clientes />} />
+              <Route path="clientes/:id" element={<Clientes />} />
 
-            {/* Prstamos */}
+              {/* Prstamos */}
 
-            <Route path="prestamos" element={<Prestamos />} />
+              <Route path="prestamos" element={<Prestamos />} />
 
-            {/* Finiquitos: entrada interna solo desde Sidebar -> /finiquitos/gestion. */}
+              {/* Finiquitos: entrada interna solo desde Sidebar -> /finiquitos/gestion. */}
 
-            <Route
-              path="finiquitos"
-              element={<Navigate to="/acceso-limitado" replace />}
-            />
+              <Route
+                path="finiquitos"
+                element={<Navigate to="/acceso-limitado" replace />}
+              />
 
-            <Route
-              path="finiquitos/acceso"
-              element={<Navigate to="/acceso-limitado" replace />}
-            />
+              <Route
+                path="finiquitos/acceso"
+                element={<Navigate to="/acceso-limitado" replace />}
+              />
 
-            <Route
-              path="finiquitos/panel"
-              element={<Navigate to="/acceso-limitado" replace />}
-            />
+              <Route
+                path="finiquitos/panel"
+                element={<Navigate to="/acceso-limitado" replace />}
+              />
 
-            <Route
-              path="finiquitos/gestion"
-              element={<FiniquitoGestionGatePage />}
-            />
+              <Route
+                path="finiquitos/gestion"
+                element={<FiniquitoGestionGatePage />}
+              />
 
-            {/* Pagos (URL: /pagos/pagos con basename /pagos) */}
+              {/* Pagos (URL: /pagos/pagos con basename /pagos) */}
 
-            <Route path="pagos">
-              <Route index element={<PagosPage />} />
+              <Route path="pagos">
+                <Route index element={<PagosPage />} />
 
-              <Route path="pago-bs" element={<PagoBsPage />} />
+                <Route path="pago-bs" element={<PagoBsPage />} />
 
-              <Route path=":id" element={<PagosPage />} />
+                <Route path=":id" element={<PagosPage />} />
+              </Route>
+
+              <Route
+                path="tasa-cambio"
+                element={
+                  <SimpleProtectedRoute requireAdmin={true}>
+                    <TasaCambioPage />
+                  </SimpleProtectedRoute>
+                }
+              />
+
+              {/* Infopagos: dentro del layout con sidebar (requiere login) */}
+
+              <Route path="infopagos" element={<InfopagosPage />} />
+
+              <Route path="escaner" element={<EscanerInfopagosPage />} />
+
+              <Route
+                path="escaner-lote"
+                element={
+                  <SimpleProtectedRoute>
+                    <EscanerInfopagosLotePage />
+                  </SimpleProtectedRoute>
+                }
+              />
+
+              {/* Amortizacin */}
+
+              <Route path="amortizacion" element={<AmortizacionPage />} />
+
+              {/* Conciliacin */}
+
+              {/* Cobros (Pagos Reportados, Detalle, Histrico) */}
+
+              <Route
+                path="cobros/pagos-reportados"
+                element={<CobrosPagosReportadosPage />}
+              />
+
+              <Route
+                path="cobros/pagos-reportados/:id/editar"
+                element={<CobrosEditarPage />}
+              />
+
+              <Route
+                path="cobros/pagos-reportados/:id"
+                element={<CobrosDetallePage />}
+              />
+
+              <Route
+                path="cobros/historico-cliente"
+                element={<CobrosHistoricoPage />}
+              />
+
+              <Route path="cobranzas" element={<CobranzasPage />} />
+
+              {/* Reportes */}
+
+              <Route path="reportes" element={<Reportes />} />
+
+              {/* Revisin Manual de Prstamos */}
+
+              <Route path="revision-manual" element={<RevisionManual />} />
+
+              <Route
+                path="revision-manual/editar/:prestamoId"
+                element={<EditarRevisionManual />}
+              />
+
+              <Route path="auditoria" element={<Auditoria />} />
+
+              {/* Notificaciones (dentro de CRM en sidebar) */}
+
+              <Route
+                path="notificaciones"
+                element={
+                  <SimpleProtectedRoute requireAdmin={true}>
+                    <Notificaciones modulo="a1dia" />
+                  </SimpleProtectedRoute>
+                }
+              />
+
+              <Route
+                path="notificaciones/a-3-cuotas"
+                element={
+                  <SimpleProtectedRoute requireAdmin={true}>
+                    <Notificaciones modulo="a3cuotas" />
+                  </SimpleProtectedRoute>
+                }
+              />
+
+              <Route
+                path="notificaciones/d-2-antes"
+                element={
+                  <SimpleProtectedRoute requireAdmin={true}>
+                    <Notificaciones modulo="d2antes" />
+                  </SimpleProtectedRoute>
+                }
+              />
+
+              <Route
+                path="notificaciones/atraso-45-dias"
+                element={
+                  <Navigate to="/notificaciones/atraso-10-dias" replace />
+                }
+              />
+
+              <Route
+                path="notificaciones/atraso-10-dias"
+                element={
+                  <SimpleProtectedRoute requireAdmin={true}>
+                    <Notificaciones modulo="a10dias" />
+                  </SimpleProtectedRoute>
+                }
+              />
+
+              <Route
+                path="notificaciones/general"
+                element={
+                  <SimpleProtectedRoute requireAdmin={true}>
+                    <Notificaciones modulo="general" />
+                  </SimpleProtectedRoute>
+                }
+              />
+
+              <Route
+                path="notificaciones/fecha"
+                element={
+                  <SimpleProtectedRoute requireAdmin={true}>
+                    <FechaQAuditoriaTotalPage />
+                  </SimpleProtectedRoute>
+                }
+              />
+              <Route
+                path="notificaciones/fecha-auditoria-total"
+                element={<Navigate to="/notificaciones/fecha" replace />}
+              />
+
+              <Route
+                path="notificaciones/clientes-drive"
+                element={
+                  <SimpleProtectedRoute requireAdmin={true}>
+                    <NotificacionesClientesDrive />
+                  </SimpleProtectedRoute>
+                }
+              />
+
+              <Route
+                path="notificaciones/recibos"
+                element={
+                  <SimpleProtectedRoute requireAdmin={true}>
+                    <NotificacionesRecibosPage />
+                  </SimpleProtectedRoute>
+                }
+              />
+
+              <Route
+                path="actualizaciones/prestamos"
+                element={
+                  <SimpleProtectedRoute requireAdmin={true}>
+                    <ActualizacionesPrestamosDrivePage />
+                  </SimpleProtectedRoute>
+                }
+              />
+
+              <Route
+                path="actualizaciones/cuotas-fecha-base"
+                element={
+                  <SimpleProtectedRoute requireAdmin={true}>
+                    <CuotasVsFechaBaseAdminPage />
+                  </SimpleProtectedRoute>
+                }
+              />
+
+              <Route
+                path="actualizaciones/gmail"
+                element={
+                  <SimpleProtectedRoute requireAdmin={true}>
+                    <ActualizacionesGmailPage />
+                  </SimpleProtectedRoute>
+                }
+              />
+
+              {/* Compatibilidad: «Fechas 2» redirige al módulo Fechas (Q vs BD + panel por día). */}
+              <Route
+                path="actualizaciones/fechas-2"
+                element={<Navigate to="/notificaciones/fecha" replace />}
+              />
+
+              {/* Redirect de compatibilidad: la URL anterior d-1-dia era confusa (el módulo es «2 días antes»). */}
+              <Route
+                path="notificaciones/d-1-dia"
+                element={<Navigate to="/notificaciones/d-2-antes" replace />}
+              />
+
+              {/* Redirecciones: plantillas viven en Configuracin */}
+
+              <Route
+                path="notificaciones/plantillas"
+                element={
+                  <Navigate to="/configuracion?tab=plantillas" replace />
+                }
+              />
+
+              <Route
+                path="herramientas/notificaciones"
+                element={<Navigate to="/notificaciones" replace />}
+              />
+
+              <Route
+                path="herramientas/plantillas"
+                element={
+                  <Navigate to="/configuracion?tab=plantillas" replace />
+                }
+              />
+
+              {/* Comunicaciones (Unificado WhatsApp y Email) */}
+
+              <Route path="comunicaciones" element={<ComunicacionesPage />} />
+
+              {/* Conversaciones WhatsApp (Legacy - mantener por compatibilidad) */}
+
+              <Route
+                path="conversaciones-whatsapp"
+                element={<ConversacionesWhatsAppPage />}
+              />
+
+              {/* Scheduler */}
+
+              <Route
+                path="scheduler"
+                element={
+                  <SimpleProtectedRoute requireAdmin={true}>
+                    <Programador />
+                  </SimpleProtectedRoute>
+                }
+              />
+
+              {/* Configuracin */}
+
+              <Route
+                path="configuracion"
+                element={
+                  <SimpleProtectedRoute requireAdmin={true}>
+                    <Configuracion />
+                  </SimpleProtectedRoute>
+                }
+              />
+
+              {/* Analistas */}
+
+              <Route
+                path="analistas"
+                element={
+                  <SimpleProtectedRoute requireAdmin={true}>
+                    <Analistas />
+                  </SimpleProtectedRoute>
+                }
+              />
+
+              {/* Validadores */}
+
+              <Route
+                path="validadores"
+                element={
+                  <SimpleProtectedRoute requireAdmin={true}>
+                    <Validadores />
+                  </SimpleProtectedRoute>
+                }
+              />
+
+              {/* Analistas (ruta alternativa - redirige a /analistas) */}
+
+              <Route
+                path="analistaes"
+                element={<Navigate to="/analistas" replace />}
+              />
+
+              {/* Concesionarios */}
+
+              <Route
+                path="concesionarios"
+                element={
+                  <SimpleProtectedRoute requireAdmin={true}>
+                    <Concesionarios />
+                  </SimpleProtectedRoute>
+                }
+              />
+
+              {/* Modelos de Vehculos */}
+
+              <Route
+                path="modelos-vehiculos"
+                element={
+                  <SimpleProtectedRoute requireAdmin={true}>
+                    <ModelosVehiculos />
+                  </SimpleProtectedRoute>
+                }
+              />
+
+              {/* Chat AI  accesible por cualquier usuario autenticado (no solo admin) */}
+
+              <Route
+                path="chat-ai"
+                element={
+                  <SimpleProtectedRoute>
+                    <ChatAI />
+                  </SimpleProtectedRoute>
+                }
+              />
+
+              {/* Usuarios */}
+
+              <Route
+                path="usuarios"
+                element={
+                  <SimpleProtectedRoute requireAdmin={true}>
+                    <Usuarios />
+                  </SimpleProtectedRoute>
+                }
+              />
+
+              <Route
+                path="administracion/autorizaciones-revision-manual"
+                element={
+                  <SimpleProtectedRoute requireAdmin={true}>
+                    <Navigate to="/revision-manual" replace />
+                  </SimpleProtectedRoute>
+                }
+              />
+
+              {/* Solicitudes */}
+
+              <Route
+                path="solicitudes"
+                element={
+                  <SimpleProtectedRoute requireAdmin={true}>
+                    <Solicitudes />
+                  </SimpleProtectedRoute>
+                }
+              />
+
+              {/* Ventas: en pausa - redirige a inicio para no cargar procesos */}
+
+              <Route path="ventas" element={<Navigate to="/pagos" replace />} />
+
+              {/* CRM */}
+
+              <Route path="crm/embudo-clientes" element={<EmbudoClientes />} />
+
+              {/* CRM campañas y tickets: ocultos - redirigen a clientes */}
+
+              <Route
+                path="crm/tickets"
+                element={<Navigate to="/clientes" replace />}
+              />
+
+              <Route
+                path="crm/campanas"
+                element={<Navigate to="/clientes" replace />}
+              />
+
+              <Route
+                path="crm/embudo-concesionarios"
+                element={<EmbudoConcesionarios />}
+              />
+
+              {/* 404 para rutas no encontradas */}
+
+              <Route path="*" element={<NotFound />} />
             </Route>
 
             <Route
-              path="tasa-cambio"
-              element={
-                <SimpleProtectedRoute requireAdmin={true}>
-                  <TasaCambioPage />
-                </SimpleProtectedRoute>
-              }
+              path="/admin/tasas-cambio"
+              element={<AdminTasaCambioPage />}
             />
-
-            {/* Infopagos: dentro del layout con sidebar (requiere login) */}
-
-            <Route path="infopagos" element={<InfopagosPage />} />
-
-            <Route path="escaner" element={<EscanerInfopagosPage />} />
-
-            <Route
-              path="escaner-lote"
-              element={
-                <SimpleProtectedRoute>
-                  <EscanerInfopagosLotePage />
-                </SimpleProtectedRoute>
-              }
-            />
-
-            {/* Amortizacin */}
-
-            <Route path="amortizacion" element={<AmortizacionPage />} />
-
-            {/* Conciliacin */}
-
-            {/* Cobros (Pagos Reportados, Detalle, Histrico) */}
-
-            <Route
-              path="cobros/pagos-reportados"
-              element={<CobrosPagosReportadosPage />}
-            />
-
-            <Route
-              path="cobros/pagos-reportados/:id/editar"
-              element={<CobrosEditarPage />}
-            />
-
-            <Route
-              path="cobros/pagos-reportados/:id"
-              element={<CobrosDetallePage />}
-            />
-
-            <Route
-              path="cobros/historico-cliente"
-              element={<CobrosHistoricoPage />}
-            />
-
-            <Route path="cobranzas" element={<CobranzasPage />} />
-
-            {/* Reportes */}
-
-            <Route path="reportes" element={<Reportes />} />
-
-            {/* Revisin Manual de Prstamos */}
-
-            <Route path="revision-manual" element={<RevisionManual />} />
-
-            <Route
-              path="revision-manual/editar/:prestamoId"
-              element={<EditarRevisionManual />}
-            />
-
-            <Route path="auditoria" element={<Auditoria />} />
-
-            {/* Notificaciones (dentro de CRM en sidebar) */}
-
-            <Route
-              path="notificaciones"
-              element={
-                <SimpleProtectedRoute requireAdmin={true}>
-                  <Notificaciones modulo="a1dia" />
-                </SimpleProtectedRoute>
-              }
-            />
-
-            <Route
-              path="notificaciones/a-3-cuotas"
-              element={
-                <SimpleProtectedRoute requireAdmin={true}>
-                  <Notificaciones modulo="a3cuotas" />
-                </SimpleProtectedRoute>
-              }
-            />
-
-            <Route
-              path="notificaciones/d-2-antes"
-              element={
-                <SimpleProtectedRoute requireAdmin={true}>
-                  <Notificaciones modulo="d2antes" />
-                </SimpleProtectedRoute>
-              }
-            />
-
-            <Route
-              path="notificaciones/atraso-45-dias"
-              element={<Navigate to="/notificaciones/atraso-10-dias" replace />}
-            />
-
-            <Route
-              path="notificaciones/atraso-10-dias"
-              element={
-                <SimpleProtectedRoute requireAdmin={true}>
-                  <Notificaciones modulo="a10dias" />
-                </SimpleProtectedRoute>
-              }
-            />
-
-            <Route
-              path="notificaciones/general"
-              element={
-                <SimpleProtectedRoute requireAdmin={true}>
-                  <Notificaciones modulo="general" />
-                </SimpleProtectedRoute>
-              }
-            />
-
-            <Route
-              path="notificaciones/fecha"
-              element={
-                <SimpleProtectedRoute requireAdmin={true}>
-                  <FechaQAuditoriaTotalPage />
-                </SimpleProtectedRoute>
-              }
-            />
-            <Route
-              path="notificaciones/fecha-auditoria-total"
-              element={<Navigate to="/notificaciones/fecha" replace />}
-            />
-
-            <Route
-              path="notificaciones/clientes-drive"
-              element={
-                <SimpleProtectedRoute requireAdmin={true}>
-                  <NotificacionesClientesDrive />
-                </SimpleProtectedRoute>
-              }
-            />
-
-            <Route
-              path="notificaciones/recibos"
-              element={
-                <SimpleProtectedRoute requireAdmin={true}>
-                  <NotificacionesRecibosPage />
-                </SimpleProtectedRoute>
-              }
-            />
-
-            <Route
-              path="actualizaciones/prestamos"
-              element={
-                <SimpleProtectedRoute requireAdmin={true}>
-                  <ActualizacionesPrestamosDrivePage />
-                </SimpleProtectedRoute>
-              }
-            />
-
-            <Route
-              path="actualizaciones/cuotas-fecha-base"
-              element={
-                <SimpleProtectedRoute requireAdmin={true}>
-                  <CuotasVsFechaBaseAdminPage />
-                </SimpleProtectedRoute>
-              }
-            />
-
-            <Route
-              path="actualizaciones/gmail"
-              element={
-                <SimpleProtectedRoute requireAdmin={true}>
-                  <ActualizacionesGmailPage />
-                </SimpleProtectedRoute>
-              }
-            />
-
-            {/* Compatibilidad: «Fechas 2» redirige al módulo Fechas (Q vs BD + panel por día). */}
-            <Route
-              path="actualizaciones/fechas-2"
-              element={<Navigate to="/notificaciones/fecha" replace />}
-            />
-
-            {/* Redirect de compatibilidad: la URL anterior d-1-dia era confusa (el módulo es «2 días antes»). */}
-            <Route
-              path="notificaciones/d-1-dia"
-              element={<Navigate to="/notificaciones/d-2-antes" replace />}
-            />
-
-            {/* Redirecciones: plantillas viven en Configuracin */}
-
-            <Route
-              path="notificaciones/plantillas"
-              element={<Navigate to="/configuracion?tab=plantillas" replace />}
-            />
-
-            <Route
-              path="herramientas/notificaciones"
-              element={<Navigate to="/notificaciones" replace />}
-            />
-
-            <Route
-              path="herramientas/plantillas"
-              element={<Navigate to="/configuracion?tab=plantillas" replace />}
-            />
-
-            {/* Comunicaciones (Unificado WhatsApp y Email) */}
-
-            <Route path="comunicaciones" element={<ComunicacionesPage />} />
-
-            {/* Conversaciones WhatsApp (Legacy - mantener por compatibilidad) */}
-
-            <Route
-              path="conversaciones-whatsapp"
-              element={<ConversacionesWhatsAppPage />}
-            />
-
-            {/* Scheduler */}
-
-            <Route
-              path="scheduler"
-              element={
-                <SimpleProtectedRoute requireAdmin={true}>
-                  <Programador />
-                </SimpleProtectedRoute>
-              }
-            />
-
-            {/* Configuracin */}
-
-            <Route
-              path="configuracion"
-              element={
-                <SimpleProtectedRoute requireAdmin={true}>
-                  <Configuracion />
-                </SimpleProtectedRoute>
-              }
-            />
-
-            {/* Analistas */}
-
-            <Route
-              path="analistas"
-              element={
-                <SimpleProtectedRoute requireAdmin={true}>
-                  <Analistas />
-                </SimpleProtectedRoute>
-              }
-            />
-
-            {/* Validadores */}
-
-            <Route
-              path="validadores"
-              element={
-                <SimpleProtectedRoute requireAdmin={true}>
-                  <Validadores />
-                </SimpleProtectedRoute>
-              }
-            />
-
-            {/* Analistas (ruta alternativa - redirige a /analistas) */}
-
-            <Route
-              path="analistaes"
-              element={<Navigate to="/analistas" replace />}
-            />
-
-            {/* Concesionarios */}
-
-            <Route
-              path="concesionarios"
-              element={
-                <SimpleProtectedRoute requireAdmin={true}>
-                  <Concesionarios />
-                </SimpleProtectedRoute>
-              }
-            />
-
-            {/* Modelos de Vehculos */}
-
-            <Route
-              path="modelos-vehiculos"
-              element={
-                <SimpleProtectedRoute requireAdmin={true}>
-                  <ModelosVehiculos />
-                </SimpleProtectedRoute>
-              }
-            />
-
-            {/* Chat AI  accesible por cualquier usuario autenticado (no solo admin) */}
-
-            <Route
-              path="chat-ai"
-              element={
-                <SimpleProtectedRoute>
-                  <ChatAI />
-                </SimpleProtectedRoute>
-              }
-            />
-
-            {/* Usuarios */}
-
-            <Route
-              path="usuarios"
-              element={
-                <SimpleProtectedRoute requireAdmin={true}>
-                  <Usuarios />
-                </SimpleProtectedRoute>
-              }
-            />
-
-            <Route
-              path="administracion/autorizaciones-revision-manual"
-              element={
-                <SimpleProtectedRoute requireAdmin={true}>
-                  <Navigate to="/revision-manual" replace />
-                </SimpleProtectedRoute>
-              }
-            />
-
-            {/* Solicitudes */}
-
-            <Route
-              path="solicitudes"
-              element={
-                <SimpleProtectedRoute requireAdmin={true}>
-                  <Solicitudes />
-                </SimpleProtectedRoute>
-              }
-            />
-
-            {/* Ventas: en pausa - redirige a inicio para no cargar procesos */}
-
-            <Route path="ventas" element={<Navigate to="/pagos" replace />} />
-
-            {/* CRM */}
-
-            <Route path="crm/embudo-clientes" element={<EmbudoClientes />} />
-
-            {/* CRM campañas y tickets: ocultos - redirigen a clientes */}
-
-            <Route
-              path="crm/tickets"
-              element={<Navigate to="/clientes" replace />}
-            />
-
-            <Route
-              path="crm/campanas"
-              element={<Navigate to="/clientes" replace />}
-            />
-
-            <Route
-              path="crm/embudo-concesionarios"
-              element={<EmbudoConcesionarios />}
-            />
-
-            {/* 404 para rutas no encontradas */}
-
-            <Route path="*" element={<NotFound />} />
-          </Route>
-
-          <Route path="/admin/tasas-cambio" element={<AdminTasaCambioPage />} />
           </Routes>
         </Suspense>
       </RouteErrorBoundary>

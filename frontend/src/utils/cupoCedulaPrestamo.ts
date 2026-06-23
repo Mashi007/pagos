@@ -27,7 +27,9 @@ export function cedulaPermiteVariosPrestamosAprobados(clave: string): boolean {
   return prefijoPoliticaCupoAprobados(normalizarCedulaClaveCupo(clave)) === 'J'
 }
 
-export function descripcionPoliticaCupo(prefijo: PrefijoCupoCedula | null): string {
+export function descripcionPoliticaCupo(
+  prefijo: PrefijoCupoCedula | null
+): string {
   if (prefijo === 'J') {
     return 'Cedula juridica (empieza por J): hasta 5 prestamos APROBADO con la misma cedula.'
   }

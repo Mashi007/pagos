@@ -28,7 +28,9 @@ export function esNotaBorrador(a: CobranzaAcuerdo): boolean {
 }
 
 /** Notas guardadas: mas reciente primero. */
-export function notasGuardadasOrdenadas(acuerdos: CobranzaAcuerdo[]): CobranzaAcuerdo[] {
+export function notasGuardadasOrdenadas(
+  acuerdos: CobranzaAcuerdo[]
+): CobranzaAcuerdo[] {
   return acuerdos
     .filter(a => !esNotaBorrador(a))
     .sort((a, b) => {

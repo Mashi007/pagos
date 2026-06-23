@@ -5,7 +5,10 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { AlertTriangle, CheckCircle2, Loader2, Search } from 'lucide-react'
 
 import { Button } from '../ui/button'
-import { reporteService, type DriveScanCoverage } from '../../services/reporteService'
+import {
+  reporteService,
+  type DriveScanCoverage,
+} from '../../services/reporteService'
 import { toast } from 'sonner'
 import { getErrorMessage } from '../../types/errors'
 import { cn } from '../../utils'
@@ -15,15 +18,22 @@ const QK_SCAN_COVERAGE = ['conciliacion-sheet', 'scan-coverage'] as const
 function fmtCaracas(iso: string | null | undefined): string {
   if (!iso) return '-'
   try {
-    return new Date(iso).toLocaleString('es-VE', { timeZone: 'America/Caracas' })
+    return new Date(iso).toLocaleString('es-VE', {
+      timeZone: 'America/Caracas',
+    })
   } catch {
     return iso
   }
 }
 
-function coverageTone(cov: DriveScanCoverage | undefined): 'ok' | 'warn' | 'neutral' {
+function coverageTone(
+  cov: DriveScanCoverage | undefined
+): 'ok' | 'warn' | 'neutral' {
   if (!cov) return 'neutral'
-  if (cov.tail_aligned_with_drive_table === true && cov.bd_internally_consistent === true) {
+  if (
+    cov.tail_aligned_with_drive_table === true &&
+    cov.bd_internally_consistent === true
+  ) {
     return 'ok'
   }
   if (
@@ -70,7 +80,9 @@ export function DriveScanCoveragePanel({ className, onAfterProbe }: Props) {
       await qc.invalidateQueries({ queryKey: QK_SCAN_COVERAGE })
       onAfterProbe?.()
     } catch (e) {
-      toast.error(getErrorMessage(e) || 'No se pudo verificar la cola en Google')
+      toast.error(
+        getErrorMessage(e) || 'No se pudo verificar la cola en Google'
+      )
     } finally {
       setProbing(false)
     }
@@ -85,11 +97,7 @@ export function DriveScanCoveragePanel({ className, onAfterProbe }: Props) {
 
   return (
     <div
-      className={cn(
-        'rounded-lg border px-3 py-2.5 text-sm',
-        border,
-        className
-      )}
+      className={cn('rounded-lg border px-3 py-2.5 text-sm', border, className)}
       role="status"
       aria-live="polite"
     >
@@ -119,7 +127,8 @@ export function DriveScanCoveragePanel({ className, onAfterProbe }: Props) {
               <p className="text-muted-foreground">Cargando métricas…</p>
             ) : statusQuery.isError ? (
               <p className="text-red-600">
-                {getErrorMessage(statusQuery.error) || 'No se pudo cargar cobertura.'}
+                {getErrorMessage(statusQuery.error) ||
+                  'No se pudo cargar cobertura.'}
               </p>
             ) : (
               <ul className="list-none space-y-0.5 text-muted-foreground">
@@ -144,7 +153,9 @@ export function DriveScanCoveragePanel({ className, onAfterProbe }: Props) {
                     {cov?.expected_last_data_sheet_row ?? '-'}
                   </strong>
                   {cov?.bd_internally_consistent === true && (
-                    <span className="ml-1 text-emerald-800">· BD coherente</span>
+                    <span className="ml-1 text-emerald-800">
+                      · BD coherente
+                    </span>
                   )}
                   {cov?.bd_internally_consistent === false && (
                     <span className="ml-1 text-amber-800">
@@ -175,9 +186,10 @@ export function DriveScanCoveragePanel({ className, onAfterProbe }: Props) {
                   </li>
                 )}
                 <li className="text-xs">
-                  Sync hoja: {fmtCaracas(cov?.drive_synced_at ?? null)}. Jobs 01:00 / 02:00 Caracas
-                  (si ENABLE_AUTOMATIC_SCHEDULED_JOBS): lee A:S hasta la última fila con dato en
-                  cualquier columna del rango (no solo A) → guardado automático solo de filas que
+                  Sync hoja: {fmtCaracas(cov?.drive_synced_at ?? null)}. Jobs
+                  01:00 / 02:00 Caracas (si ENABLE_AUTOMATIC_SCHEDULED_JOBS):
+                  lee A:S hasta la última fila con dato en cualquier columna del
+                  rango (no solo A) → guardado automático solo de filas que
                   cumplen validadores; el resto queda en pantalla.
                 </li>
               </ul>

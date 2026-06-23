@@ -2,7 +2,9 @@
  * Evita GET ?search=1 / search=19 mientras el usuario arma cédula, email o nombre.
  * Vacío = sin filtro de búsqueda en API.
  */
-export function effectiveListSearchQuery(raw: string | undefined | null): string {
+export function effectiveListSearchQuery(
+  raw: string | undefined | null
+): string {
   const t = (raw ?? '').trim()
   if (!t) {
     return ''

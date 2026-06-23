@@ -7,13 +7,20 @@ import {
   escanerInfopagosLoteContextoRevision,
   type EscanerInfopagosExtraerResponse,
 } from '../../services/cobrosService'
-import { pagoService, type Pago, type PagoCreate } from '../../services/pagoService'
+import {
+  pagoService,
+  type Pago,
+  type PagoCreate,
+} from '../../services/pagoService'
 import { normalizarComprobanteArchivoParaEscaneo } from '../../utils/normalizarComprobanteArchivo'
 import {
   buildFormDataEscanerComprobante,
   mensajeErrorExtraccionEscaner,
 } from '../../utils/escanerComprobanteInfopagos'
-import { hayDuplicadoFila, filaDesdeRevisionPago } from '../escanerInfopagosLoteModel'
+import {
+  hayDuplicadoFila,
+  filaDesdeRevisionPago,
+} from '../escanerInfopagosLoteModel'
 import {
   esInstitucionBinanceReescaneo,
   institucionDesdeSugerenciaOcrReescaneo,
@@ -32,7 +39,11 @@ import {
 
 const CHUNK_CONTEXTO_REVISION = 10
 
-function fileDesdeBase64(b64: string, fileName: string, mimeType: string): File {
+function fileDesdeBase64(
+  b64: string,
+  fileName: string,
+  mimeType: string
+): File {
   const bin = atob(b64)
   const bytes = new Uint8Array(bin.length)
   for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
@@ -102,7 +113,9 @@ function duplicadoBloqueaReescaneo(
     escanerColision: {
       duplicado_en_pagos: Boolean(res.duplicado_en_pagos),
       pago_existente_id:
-        typeof res.pago_existente_id === 'number' ? res.pago_existente_id : null,
+        typeof res.pago_existente_id === 'number'
+          ? res.pago_existente_id
+          : null,
       prestamo_existente_id:
         typeof res.prestamo_existente_id === 'number'
           ? res.prestamo_existente_id
@@ -134,7 +147,9 @@ export function evaluarAlertaReescaneoCartera(
 
   if (!res.ok || !res.sugerencia) {
     const inst = institucionEfectivaReescaneoCartera(pago, res)
-    const instOcr = institucionDesdeSugerenciaOcrReescaneo(res.sugerencia ?? null)
+    const instOcr = institucionDesdeSugerenciaOcrReescaneo(
+      res.sugerencia ?? null
+    )
     let msg =
       res.validacion_reglas?.trim() ||
       res.validacion_campos?.trim() ||
@@ -174,7 +189,10 @@ export function resultadoPersistenciaReescaneoOcr(
   camposAplicados: CampoReescaneoOcr[]
 } | null {
   if (!res.ok || !res.sugerencia) return null
-  const completo = patchCompletoPagoDesdeOcrReescaneoCartera(pago, res.sugerencia)
+  const completo = patchCompletoPagoDesdeOcrReescaneoCartera(
+    pago,
+    res.sugerencia
+  )
   return {
     patch: completo.patch,
     hayCambios: completo.hayCambios,
@@ -191,7 +209,11 @@ export function evaluarAlertaReescaneoTrasPersistencia(
     return evaluarAlertaReescaneoCartera(pago, res)
   }
   const validacion = validacionReescaneoEfectiva(pago, res)
-  const bloquearNumero = duplicadoBloqueaReescaneo(Number(pago.id), res, validacion)
+  const bloquearNumero = duplicadoBloqueaReescaneo(
+    Number(pago.id),
+    res,
+    validacion
+  )
   const parciales = motivosCamposDigitadosNoAplicadosReescaneo(
     pago,
     res.sugerencia,

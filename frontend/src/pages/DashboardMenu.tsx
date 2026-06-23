@@ -614,18 +614,16 @@ export function DashboardMenu() {
     [datosNotificacionesPorDia?.serie]
   )
 
-  const {
-    data: datosFlujoFiniquito,
-    isLoading: loadingFlujoFiniquito,
-  } = useQuery({
-    queryKey: ['finiquito-flujo-diario', diasGraficoFlujoFiniquito],
-    queryFn: async (): Promise<FiniquitoFlujoResumenDiario> =>
-      finiquitoAdminResumenFlujoDiario(undefined, diasGraficoFlujoFiniquito),
-    staleTime: 5 * 60 * 1000,
-    refetchOnWindowFocus: false,
-    retry: 1,
-    enabled: true,
-  })
+  const { data: datosFlujoFiniquito, isLoading: loadingFlujoFiniquito } =
+    useQuery({
+      queryKey: ['finiquito-flujo-diario', diasGraficoFlujoFiniquito],
+      queryFn: async (): Promise<FiniquitoFlujoResumenDiario> =>
+        finiquitoAdminResumenFlujoDiario(undefined, diasGraficoFlujoFiniquito),
+      staleTime: 5 * 60 * 1000,
+      refetchOnWindowFocus: false,
+      retry: 1,
+      enabled: true,
+    })
 
   const serieFlujoFiniquito = useMemo<FiniquitoFlujoDia[]>(
     () => datosFlujoFiniquito?.dias ?? [],
@@ -1963,7 +1961,8 @@ export function DashboardMenu() {
                     <span>Flujo de finiquitos</span>
                   </CardTitle>
                   <CardDescription>
-                    Bandeja principal, área de revisión, área de trabajo y terminados.
+                    Bandeja principal, área de revisión, área de trabajo y
+                    terminados.
                   </CardDescription>
                 </div>
 
@@ -2016,8 +2015,13 @@ export function DashboardMenu() {
                         <Tooltip
                           contentStyle={chartTooltipStyle.contentStyle}
                           labelStyle={chartTooltipStyle.labelStyle}
-                          formatter={(value: number, name: string, item: any) => {
-                            const original = Number(item?.payload?.[item?.dataKey]) || 0
+                          formatter={(
+                            value: number,
+                            name: string,
+                            item: any
+                          ) => {
+                            const original =
+                              Number(item?.payload?.[item?.dataKey]) || 0
                             const shown = Number(value) || 0
                             return [
                               original > FINIQUITO_GRAFICO_MAX_DIARIO
@@ -2073,13 +2077,13 @@ export function DashboardMenu() {
                 </ChartWithDateRangeSlider>
               ) : (
                 <div className="flex items-center justify-center py-16 text-gray-500">
-                  No hay datos de flujo de finiquitos para el período seleccionado
+                  No hay datos de flujo de finiquitos para el período
+                  seleccionado
                 </div>
               )}
             </CardContent>
           </Card>
         </motion.div>
-
       </div>
     </div>
   )

@@ -117,7 +117,9 @@ export async function finiquitoAdminResumenEstado(
   const ced = (cedula ?? '').trim()
   if (ced) params.set('cedula', ced)
   const q = params.toString() ? `?${params.toString()}` : ''
-  return apiClient.get<FiniquitoResumenEstado>(`${BASE}/admin/casos/resumen-estado${q}`)
+  return apiClient.get<FiniquitoResumenEstado>(
+    `${BASE}/admin/casos/resumen-estado${q}`
+  )
 }
 
 export async function finiquitoAdminListar(

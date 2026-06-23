@@ -600,7 +600,6 @@ export function CrearPrestamoForm({
 
     let cancelled = false
     setCupoCedulaLoading(true)
-
     ;(async () => {
       try {
         const res = await prestamoService.checkCupoCedulas([cedulaParaCupo])

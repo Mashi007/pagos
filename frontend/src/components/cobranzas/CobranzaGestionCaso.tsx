@@ -1,5 +1,12 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { ChevronDown, ChevronUp, Loader2, RefreshCw, Upload, X } from 'lucide-react'
+import {
+  ChevronDown,
+  ChevronUp,
+  Loader2,
+  RefreshCw,
+  Upload,
+  X,
+} from 'lucide-react'
 import toast from 'react-hot-toast'
 
 import {
@@ -241,7 +248,9 @@ export function CobranzaGestionCaso({
               : void expandirFormulario()
           }
         >
-          <span className="text-sm font-semibold text-slate-800">Nueva nota</span>
+          <span className="text-sm font-semibold text-slate-800">
+            Nueva nota
+          </span>
           {formularioExpandido ? (
             <ChevronUp className="h-5 w-5 text-slate-500" />
           ) : (
@@ -327,7 +336,9 @@ export function CobranzaGestionCaso({
 
             <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
               <div className="sm:col-span-2">
-                <label className="text-xs font-medium">Cantidad (opcional)</label>
+                <label className="text-xs font-medium">
+                  Cantidad (opcional)
+                </label>
                 <Input
                   type="number"
                   min={0}

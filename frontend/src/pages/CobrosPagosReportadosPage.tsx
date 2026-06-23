@@ -1994,9 +1994,7 @@ export default function CobrosPagosReportadosPage() {
               const selected = estado === key
 
               const valor =
-                key === 'en_revision'
-                  ? enRevisionKpi
-                  : Number(kpis[key] ?? 0)
+                key === 'en_revision' ? enRevisionKpi : Number(kpis[key] ?? 0)
 
               return (
                 <button

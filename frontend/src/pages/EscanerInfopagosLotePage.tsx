@@ -833,58 +833,61 @@ export default function EscanerInfopagosLotePage() {
     []
   )
 
-  const handleEliminarFila = useCallback(async (clientId: string) => {
-    const fila = filasRef.current.find(f => f.clientId === clientId)
-    if (!fila) return
-    if (fila.guardando) {
-      toast('Espere a que termine el guardado de esta fila.')
-      return
-    }
-    if (guardarActivoRef.current.has(clientId)) {
-      toast('Espere a que termine el guardado de esta fila.')
-      return
-    }
-    if (fila.guardado && fila.pagoId != null) {
-      if (
+  const handleEliminarFila = useCallback(
+    async (clientId: string) => {
+      const fila = filasRef.current.find(f => f.clientId === clientId)
+      if (!fila) return
+      if (fila.guardando) {
+        toast('Espere a que termine el guardado de esta fila.')
+        return
+      }
+      if (guardarActivoRef.current.has(clientId)) {
+        toast('Espere a que termine el guardado de esta fila.')
+        return
+      }
+      if (fila.guardado && fila.pagoId != null) {
+        if (
+          !window.confirm(
+            '¿Eliminar este pago reportado en Cobros? Esta acción no se puede deshacer.'
+          )
+        ) {
+          return
+        }
+        try {
+          const r = await eliminarPagoReportado(fila.pagoId)
+          if (!r.ok) {
+            toast.error(r.mensaje || 'No se pudo eliminar.')
+            return
+          }
+          toast.success(r.mensaje || 'Eliminado.')
+          patchListadoKpisCacheDropPagoReportado(fila.pagoId)
+        } catch (e: unknown) {
+          toast.error(e instanceof Error ? e.message : 'Error al eliminar.')
+          return
+        }
+      } else if (
         !window.confirm(
-          '¿Eliminar este pago reportado en Cobros? Esta acción no se puede deshacer.'
+          `¿Quitar "${fila.nombreArchivo}" de la lista de este lote?`
         )
       ) {
         return
       }
-      try {
-        const r = await eliminarPagoReportado(fila.pagoId)
-        if (!r.ok) {
-          toast.error(r.mensaje || 'No se pudo eliminar.')
-          return
-        }
-        toast.success(r.mensaje || 'Eliminado.')
-        patchListadoKpisCacheDropPagoReportado(fila.pagoId)
-      } catch (e: unknown) {
-        toast.error(e instanceof Error ? e.message : 'Error al eliminar.')
-        return
+      if (editClientId === clientId) {
+        setEditClientId(null)
+        setEditDraft(null)
       }
-    } else if (
-      !window.confirm(
-        `¿Quitar "${fila.nombreArchivo}" de la lista de este lote?`
+      const filaIndex = filasRef.current.findIndex(f => f.clientId === clientId)
+      setArchivos(prev =>
+        filaIndex >= 0 ? prev.filter((_, i) => i !== filaIndex) : prev
       )
-    ) {
-      return
-    }
-    if (editClientId === clientId) {
-      setEditClientId(null)
-      setEditDraft(null)
-    }
-    const filaIndex = filasRef.current.findIndex(f => f.clientId === clientId)
-    setArchivos(prev =>
-      filaIndex >= 0 ? prev.filter((_, i) => i !== filaIndex) : prev
-    )
-    setFilas(prev => {
-      const next = prev.filter(f => f.clientId !== clientId)
-      filasRef.current = next
-      return next
-    })
-  }, [editClientId])
+      setFilas(prev => {
+        const next = prev.filter(f => f.clientId !== clientId)
+        filasRef.current = next
+        return next
+      })
+    },
+    [editClientId]
+  )
 
   const handleGuardarFila = useCallback(
     async (clientId: string) => {
@@ -1486,8 +1489,8 @@ export default function EscanerInfopagosLotePage() {
                               </p>
                             ) : (
                               <p className="text-xs text-amber-800">
-                                Sin fecha clara en la imagen: indique la fecha del
-                                comprobante antes de guardar.
+                                Sin fecha clara en la imagen: indique la fecha
+                                del comprobante antes de guardar.
                               </p>
                             )}
                             <div className="flex flex-col gap-3 sm:flex-row sm:items-end">

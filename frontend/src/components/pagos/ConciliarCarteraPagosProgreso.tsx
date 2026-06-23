@@ -51,13 +51,14 @@ export function ConciliarCarteraPagosProgreso({
 
   if (fase === 'listo') {
     return (
-      <div className="space-y-3 rounded-lg border border-green-300 bg-green-50 p-4 animate-in fade-in duration-300">
+      <div className="animate-in fade-in space-y-3 rounded-lg border border-green-300 bg-green-50 p-4 duration-300">
         <p className="flex items-center gap-2 font-medium text-green-900">
           <CheckCircle2 className="h-5 w-5 shrink-0" />
           Pagos recreados y cargados en la tabla
         </p>
         <p className="text-sm text-green-800">
-          Préstamo <strong>{prestamoId}</strong>: la cartera se reconstruyó en BD.
+          Préstamo <strong>{prestamoId}</strong>: la cartera se reconstruyó en
+          BD.
         </p>
         {idsAnteriores.length > 0 ? (
           <p className="mt-2 text-sm text-green-900">
@@ -66,20 +67,24 @@ export function ConciliarCarteraPagosProgreso({
             </span>
             <span className="mx-2">→</span>
             <span className="font-semibold">
-              ID nuevos: {idsRecreados.length > 0 ? idsRecreados.join(', ') : '-'}
+              ID nuevos:{' '}
+              {idsRecreados.length > 0 ? idsRecreados.join(', ') : '-'}
             </span>
           </p>
         ) : (
           <p className="mt-2 text-sm text-green-800">
             Nuevos pagos:{' '}
             <strong>
-              {idsRecreados.length > 0 ? idsRecreados.join(', ') : ocrOk ?? '-'}
+              {idsRecreados.length > 0
+                ? idsRecreados.join(', ')
+                : (ocrOk ?? '-')}
             </strong>
           </p>
         )}
         <p className="mt-1 text-xs text-muted-foreground">
-          Tras conciliar: 1 fila ABONOS (total General) + 1 fila por comprobante OCR
-          ({pagosAntes > 0 ? `${pagosAntes} imagen(es)` : 'imágenes'} reservadas).
+          Tras conciliar: 1 fila ABONOS (total General) + 1 fila por comprobante
+          OCR ({pagosAntes > 0 ? `${pagosAntes} imagen(es)` : 'imágenes'}{' '}
+          reservadas).
         </p>
         {ocrOk != null && ocrTotal != null ? (
           <p className="text-xs text-muted-foreground">
@@ -131,11 +136,13 @@ export function ConciliarCarteraPagosProgreso({
       {idsAnteriores.length > 0 ? (
         <p className="rounded border border-red-200 bg-red-50/90 px-3 py-2 text-xs text-red-900">
           Desapareciendo de la tabla:{' '}
-          <span className="font-mono line-through">{idsAnteriores.join(', ')}</span>
+          <span className="font-mono line-through">
+            {idsAnteriores.join(', ')}
+          </span>
         </p>
       ) : null}
       {fase === 'borrando' ? (
-        <p className="text-xs text-amber-900/80 animate-pulse">
+        <p className="animate-pulse text-xs text-amber-900/80">
           La lista de pagos se oculta mientras el servidor borra y recrea en BD…
         </p>
       ) : null}

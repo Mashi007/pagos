@@ -1,0 +1,1951 @@
+"""Helpers internos cobros: validadores, dedup, payloads listado/KPIs."""
+"""
+Endpoints de administración del módulo Cobros (requieren autenticación).
+Listado de pagos reportados, detalle, aprobar, rechazar, histórico por cédula.
+"""
+import io
+import logging
+import base64
+import hashlib
+import json
+import re
+import threading
+import time
+from collections import Counter, defaultdict
+from datetime import date, datetime, time as dt_time, timedelta
+from decimal import Decimal
+from types import SimpleNamespace
+from typing import Optional, List, Tuple, Any, Dict, Iterable, Set
+
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
+from fastapi.encoders import jsonable_encoder
+from fastapi.responses import Response
+from pydantic import BaseModel, Field
+from sqlalchemy.orm import Session
+from sqlalchemy import select, func, or_, and_, case, delete, text, update
+from sqlalchemy.exc import ProgrammingError, OperationalError, IntegrityError
+
+from app.core.database import get_db
+from app.core.documento import normalize_documento
+from app.core.deps import get_current_user
+from app.services.cobros import infopagos_escaner_borrador_service as ieb
+from app.core.rate_limit_store import get_redis_client
+from app.api.v1.endpoints.pagos.pago_integridad_db import _integridad_error_pgcode_y_constraint
+from app.models.pago_reportado import PagoReportado, PagoReportadoHistorial
+from app.models.pago_reportado_exportado import PagoReportadoExportado
+from app.models.pago_pendiente_descargar import PagoPendienteDescargar
+from app.models.cliente import Cliente
+from app.models.prestamo import Prestamo
+from app.models.pago import Pago
+from app.services.cobros.recibo_pdf import WHATSAPP_LINK, WHATSAPP_DISPLAY
+from app.services.documentos_cliente_centro import generar_recibo_pdf_desde_pago_reportado
+from app.core.email import cobros_recibo_attachments_or_oversize_note, send_email
+from app.utils.cliente_emails import emails_destino_desde_objeto, unir_destinatarios_log
+from app.services.notificaciones_exclusion_desistimiento import (
+    cliente_bloqueado_por_desistimiento,
+)
+from app.core.email_config_holder import get_email_activo_servicio
+from app.api.v1.endpoints.validadores import validate_cedula
+from app.api.v1.endpoints.pagos import _aplicar_pago_a_cuotas_interno
+from app.services.cobros.pago_reportado_documento import (
+    claves_documento_pago_para_reportado,
+    documento_numero_desde_pago_reportado,
+    pago_reportado_colisiona_tabla_pagos,
+    primer_pago_id_si_existe_para_claves_reportado,
+    primer_reportado_id_por_norm_batch,
+    primer_reportado_id_por_norm_peer_first_map,
+    reportado_toca_claves_canonicas_en_pagos,
+)
+from app.services.cobros.cedula_reportar_bs_service import (
+    load_autorizados_bs_claves,
+    cedula_coincide_autorizados_bs,
+    fuente_tasa_bs_efectiva_para_cedula,
+)
+from app.services.tasa_cambio_service import (
+    convertir_bs_a_usd,
+    normalizar_fuente_tasa,
+    obtener_tasa_por_fecha,
+    obtener_tasas_por_fechas,
+    tasa_y_equivalente_usd_excel,
+    valor_tasa_para_fuente,
+)
+from app.services.pagos_gmail.gemini_async import (
+    compare_form_with_image_async,
+    extract_infopagos_campos_desde_comprobante_async,
+    extract_infopagos_campos_desde_comprobante_con_rescate_plantilla_async,
+)
+from app.services.pagos_gmail.gemini_service import (
+    _canonical_institucion_escaner,
+    compare_form_with_image,
+)
+from app.services.pagos.comprobante_adjunto_pago import comprobante_blob_para_pdf_desde_pago
+from app.services.cobros import cobros_publico_reporte_service as cpr
+from app.utils.cedula_almacenamiento import expr_cedula_normalizada_para_comparar
+from app.services.pagos_gmail.comprobante_bd import url_comprobante_imagen_absoluta
+from app.services.pagos_gmail.credentials import get_pagos_gmail_credentials
+from app.services.pagos_gmail.drive_service import build_drive_service
+from app.services.pago_huella_funcional import conflicto_huella_para_creacion
+from app.services.cobros.pago_reportado_comprobante_unico import (
+    comprobante_bytes_y_content_type_desde_reportado,
+    nombre_adjunto_email_desde_reportado,
+)
+
+logger = logging.getLogger(__name__)
+from .listado_kpis_cache import (
+    _cobros_listado_kpis_cache_get,
+    _cobros_listado_kpis_cache_get_stale,
+    _cobros_listado_kpis_cache_set,
+    _cobros_listado_kpis_release_singleflight,
+    _cobros_listado_kpis_try_acquire_singleflight,
+    _drop_pago_from_listado_kpis_cache,
+    _drop_pagos_from_listado_kpis_cache,
+    _invalidate_cobros_listado_kpis_cache,
+)
+from .schemas import (
+    MENSAJE_RECHAZO_GENERICO,
+    PagoReportadoDuplicadoDiagnostico,
+    PagoReportadoListItem,
+)
+
+def _referencia_display(referencia_interna: str) -> str:
+    ref = (referencia_interna or "").strip()
+    if not ref:
+        return "-"
+    return ref if ref.startswith("#") else f"#{ref}"
+
+
+def _columna_observacion_gemini_ignora_cola_cobros(nombre: str) -> bool:
+    """
+    Nombres de columna (desde comentario Gemini o lista corta) que no deben
+    contar como «falla validadores» ni aparecer en la observación de cola para
+    bloquear aprobación automática. La fecha del comprobante sigue editable en
+    Cobros; no se usa como criterio de cola frente a divergencias de imagen.
+    """
+    t = " ".join((nombre or "").strip().lower().split())
+    t = t.replace("ó", "o")
+    return t in ("fecha pago", "fecha de pago")
+
+
+def _observacion_solo_columnas(raw: Optional[str]) -> Optional[str]:
+    """Devuelve la observación mostrando solo nombres de columnas (formato estándar: separador único ' / '). Si raw ya es lista corta, normaliza separadores; si es texto largo, extrae columnas por palabras clave."""
+    if not raw or not (raw := raw.strip()):
+        return None
+    # Si ya parece lista de columnas (corta, sin frases largas): normalizar a " / "
+    if len(raw) <= 80 and not any(x in raw for x in ("en la imagen", "en el formulario", "mientras que", "incluye el", "no coincide")):
+        parts = [p.strip() for p in raw.replace(",", " / ").split(" / ") if p.strip()]
+        parts = [p for p in parts if not _columna_observacion_gemini_ignora_cola_cobros(p)]
+        if not parts:
+            return None
+        return " / ".join(parts)
+    # Extraer columnas por palabras clave (registros antiguos con texto largo)
+    lower = raw.lower()
+    columnas = []
+    if "cédula" in lower or "cedula" in lower:
+        columnas.append("Cédula")
+    if "banco" in lower or "institución" in lower or "institucion" in lower or "financiera" in lower:
+        columnas.append("Banco")
+    if "operación" in lower or "operacion" in lower or "referencia" in lower or "serial" in lower:
+        columnas.append("Nº operación")
+    if "monto" in lower or "cantidad" in lower:
+        columnas.append("Monto")
+    if "moneda" in lower:
+        columnas.append("Moneda")
+    columnas = [c for c in columnas if not _columna_observacion_gemini_ignora_cola_cobros(c)]
+    return " / ".join(columnas) if columnas else raw[:100]
+
+
+def _normalize_cedula_for_client_lookup(cedula: str) -> str:
+    """Normaliza cédula para comparar con tabla clientes: sin guión/espacios, mayúsculas, sin ceros a la izquierda en el número (V08752971 -> V8752971)."""
+    s = (cedula or "").replace("-", "").replace(" ", "").strip().upper()
+    if not s:
+        return s
+    if len(s) >= 2 and s[0] in ("V", "E", "J", "G") and s[1:].isdigit():
+        num = s[1:].lstrip("0") or "0"
+        return s[0] + num
+    return s
+
+
+def _cedula_lookup_variants(cedula_norm: str) -> List[str]:
+    """Para buscar cliente por cédula: si cedula_norm es V/E/J/G + dígitos, incluir también solo los dígitos (en clientes a veces está solo el número)."""
+    if not cedula_norm:
+        return []
+    variants = [cedula_norm]
+    if len(cedula_norm) >= 2 and cedula_norm[0] in ("V", "E", "J", "G") and cedula_norm[1:].isdigit():
+        variants.append(cedula_norm[1:])
+    return variants
+
+
+def _cedulas_en_clientes_set(db: Session) -> set:
+    """
+    Devuelve el conjunto de cédulas que se consideran "en clientes" para la regla NO CLIENTES.
+    Incluye la forma normalizada de cada clientes.cedula y, si la cédula en BD es solo dígitos (ej. 20149164),
+    también añade la variante con prefijo V (V20149164), porque en préstamos/reportes suele usarse V+numero
+    y el cliente puede estar guardado solo con el número.
+    """
+    clientes_cedulas = db.execute(select(Cliente.cedula).select_from(Cliente)).scalars().all()
+    out = set()
+    for cedula in clientes_cedulas:
+        if cedula is None:
+            continue
+        # scalars().all() devuelve valores escalares (str/int), no tuplas
+        raw = str(cedula).strip().upper().replace("-", "").replace(" ", "")
+        if not raw:
+            continue
+        norm = _normalize_cedula_for_client_lookup(raw)
+        if not norm:
+            continue
+        out.add(norm)
+        # Si en clientes está solo el número (con o sin ceros a la izq.), añadir variante sin ceros y V+numero
+        if len(norm) >= 6 and norm.isdigit():
+            num = norm.lstrip("0") or "0"
+            out.add(num)
+            out.add("V" + num)
+    return out
+
+
+# Listado pagos reportados: evitar leer todas las cédulas de clientes en cada request (miles de filas).
+_CEDULAS_CLIENTES_CACHE_TTL_SEC = 120.0
+_cedulas_clientes_cache: Optional[Tuple[float, frozenset]] = None
+_autorizados_bs_cache: Optional[Tuple[float, frozenset]] = None
+_cobros_list_aux_lock = threading.Lock()
+
+# Mapas de precálculo duplicados (norm global, nº operación, presencia en pagos): costosos en GET listado/KPIs.
+# Cache en proceso con token de revisión barato + TTL para no servir datos obsoletos si cambia cola/exportados/pagos.
+_PRIMER_MAPS_CACHE_TTL_SEC = 90.0
+
+# Filas SQL por iteración al barrer la cola manual (validadores en Python). Subir reduce round-trips a BD por lote.
+_COBROS_LISTADO_SCAN_BATCH = 1200
+_PRIMER_MAPS_CACHE_MAX_ENTRIES = 24
+_primer_maps_triple_cache_lock = threading.Lock()
+# scope_key -> (revision_token, monotonic_ts, primer_precalc, primer_num_op, numeros_en_pagos_frozen)
+_primer_maps_triple_cache: Dict[str, Tuple[tuple, float, Dict[str, int], Dict[str, int], frozenset]] = {}
+_REGULARIZA_MIN_INTERVAL_SEC = 90.0
+_REGULARIZA_TIME_BUDGET_MS = 350.0
+_REGULARIZA_MAX_IDS_PER_RUN = 4
+_regulariza_last_run_monotonic = 0.0
+_regulariza_lock = threading.Lock()
+_REGULARIZA_COLD_START_GRACE_SEC = 45.0
+_process_start_monotonic = time.monotonic()
+
+
+def _cedulas_en_clientes_set_cached(db: Session) -> frozenset:
+    """Misma semántica que _cedulas_en_clientes_set; cache en proceso ~2 min."""
+    global _cedulas_clientes_cache
+    now = time.monotonic()
+    with _cobros_list_aux_lock:
+        if _cedulas_clientes_cache is not None:
+            ts, data = _cedulas_clientes_cache
+            if now - ts < _CEDULAS_CLIENTES_CACHE_TTL_SEC:
+                return data
+        data = frozenset(_cedulas_en_clientes_set(db))
+        _cedulas_clientes_cache = (now, data)
+        return data
+
+
+def _autorizados_bs_claves_cached(db: Session) -> frozenset:
+    global _autorizados_bs_cache
+    now = time.monotonic()
+    with _cobros_list_aux_lock:
+        if _autorizados_bs_cache is not None:
+            ts, data = _autorizados_bs_cache
+            if now - ts < _CEDULAS_CLIENTES_CACHE_TTL_SEC:
+                return data
+        data = load_autorizados_bs_claves(db)
+        _autorizados_bs_cache = (now, data)
+        return data
+
+
+def _collect_candidatos_canon_desde_reportados(rows: List[PagoReportado]) -> Set[str]:
+    """Claves canónicas candidatas del lote (reportados) para cruzar con `pagos` por IN indexado."""
+    out: Set[str] = set()
+    for r in rows:
+        for k in claves_documento_pago_para_reportado(r):
+            if not k:
+                continue
+            c = normalize_documento(k) or k
+            if c:
+                out.add(c)
+    return out
+
+
+def _pagos_canonicos_presentes_para_claves(db: Session, claves: Set[str]) -> frozenset:
+    """
+    Subconjunto de `claves` que existen en cartera.
+
+    Prioridad:
+    1) `pagos.doc_canon_*` (rápido con índices cuando están pobladas)
+    2) fallback legacy por `pagos.numero_documento` / `pagos.referencia_pago`
+       para filas antiguas sin backfill canónico.
+    """
+    if not claves:
+        return frozenset()
+    found: Set[str] = set()
+    chunk_size = 450
+    lst = [x for x in claves if x]
+    for i in range(0, len(lst), chunk_size):
+        part = lst[i : i + chunk_size]
+        if not part:
+            continue
+        for v in db.execute(
+            select(Pago.doc_canon_numero).where(Pago.doc_canon_numero.in_(part))
+        ).scalars().all():
+            if v:
+                found.add(v)
+        for v in db.execute(
+            select(Pago.doc_canon_referencia).where(Pago.doc_canon_referencia.in_(part))
+        ).scalars().all():
+            if v:
+                found.add(v)
+        # Fallback legacy: si hay pagos sin doc_canon_* poblado, igual marcar DUPLICADO.
+        for v in db.execute(
+            select(Pago.numero_documento).where(Pago.numero_documento.in_(part))
+        ).scalars().all():
+            c = normalize_documento(v) if v else None
+            if c:
+                found.add(c)
+        for v in db.execute(
+            select(Pago.referencia_pago).where(Pago.referencia_pago.in_(part))
+        ).scalars().all():
+            c = normalize_documento(v) if v else None
+            if c:
+                found.add(c)
+    return frozenset(found)
+
+
+def _pagos_canonicos_presentes_para_claves_reutilizando(
+    db: Session,
+    claves: Set[str],
+    acum: Dict[str, Set[str]],
+) -> frozenset:
+    """
+    Misma intersección (claves que ya están en cartera) que
+    ``_pagos_canonicos_presentes_para_claves(db, claves)``, pero solo consulta
+    claves aún no vistas en ``acum['queried']``. Reduce round-trips en el barrido
+    por lotes de pagos reportados (listado / KPIs).
+    """
+    if not claves:
+        return frozenset()
+    present = acum.setdefault("present", set())
+    queried = acum.setdefault("queried", set())
+    nuevas = {x for x in claves if x} - queried
+    if nuevas:
+        encontrados = _pagos_canonicos_presentes_para_claves(db, nuevas)
+        queried.update(nuevas)
+        present.update(encontrados)
+    return frozenset(present & claves)
+
+
+PagoExistenteInfo = Tuple[int, Optional[int], Optional[str]]
+
+
+def _pagos_existentes_info_por_clave(
+    db: Session,
+    claves: Set[str],
+) -> Dict[str, PagoExistenteInfo]:
+    """
+    Mapa canonico -> (pago_id, prestamo_id, numero_documento) para claves ya presentes
+    en cartera. Es la version con datos del set `_pagos_canonicos_presentes_para_claves`.
+    """
+    if not claves:
+        return {}
+    out: Dict[str, PagoExistenteInfo] = {}
+
+    def _add(
+        key: Optional[str],
+        pago_id: int,
+        prestamo_id: Optional[int],
+        numero_documento: Optional[str],
+    ) -> None:
+        k = (key or "").strip()
+        if not k or k in out:
+            return
+        out[k] = (
+            int(pago_id),
+            int(prestamo_id) if prestamo_id is not None else None,
+            (numero_documento or "").strip() or None,
+        )
+
+    lst = [x for x in claves if x]
+    chunk_size = 450
+    for i in range(0, len(lst), chunk_size):
+        part = lst[i : i + chunk_size]
+        if not part:
+            continue
+        for key, pid, prestamo_id, numero_documento in db.execute(
+            select(
+                Pago.doc_canon_numero,
+                Pago.id,
+                Pago.prestamo_id,
+                Pago.numero_documento,
+            ).where(Pago.doc_canon_numero.in_(part))
+        ).all():
+            _add(key, pid, prestamo_id, numero_documento)
+        for key, pid, prestamo_id, numero_documento in db.execute(
+            select(
+                Pago.doc_canon_referencia,
+                Pago.id,
+                Pago.prestamo_id,
+                Pago.numero_documento,
+            ).where(Pago.doc_canon_referencia.in_(part))
+        ).all():
+            _add(key, pid, prestamo_id, numero_documento)
+        for raw, pid, prestamo_id, numero_documento in db.execute(
+            select(
+                Pago.numero_documento,
+                Pago.id,
+                Pago.prestamo_id,
+                Pago.numero_documento,
+            ).where(Pago.numero_documento.in_(part))
+        ).all():
+            _add(
+                (normalize_documento(raw) or raw) if raw else None,
+                pid,
+                prestamo_id,
+                numero_documento,
+            )
+        for raw, pid, prestamo_id, numero_documento in db.execute(
+            select(
+                Pago.referencia_pago,
+                Pago.id,
+                Pago.prestamo_id,
+                Pago.numero_documento,
+            ).where(Pago.referencia_pago.in_(part))
+        ).all():
+            _add(
+                (normalize_documento(raw) or raw) if raw else None,
+                pid,
+                prestamo_id,
+                numero_documento,
+            )
+    return out
+
+
+def _pagos_existentes_info_por_clave_reutilizando(
+    db: Session,
+    claves: Set[str],
+    acum: Dict[str, Any],
+) -> Dict[str, PagoExistenteInfo]:
+    if not claves:
+        return {}
+    queried: Set[str] = acum.setdefault("info_queried", set())
+    by_key: Dict[str, PagoExistenteInfo] = acum.setdefault("info_by_key", {})
+    nuevas = {x for x in claves if x} - queried
+    if nuevas:
+        by_key.update(_pagos_existentes_info_por_clave(db, nuevas))
+        queried.update(nuevas)
+    return {k: v for k, v in by_key.items() if k in claves}
+
+
+def _pago_existente_info_para_reportado(
+    pr: PagoReportado,
+    info_por_clave: Dict[str, PagoExistenteInfo],
+) -> Optional[PagoExistenteInfo]:
+    if not info_por_clave:
+        return None
+    for raw in claves_documento_pago_para_reportado(pr):
+        c = (normalize_documento(raw) or raw) if raw else None
+        if c and c in info_por_clave:
+            return info_por_clave[c]
+    return None
+
+
+def _prestamo_objetivo_por_cedula_norm_batch(
+    db: Session,
+    cedulas_norm: Set[str],
+) -> Tuple[Dict[str, int], Set[str]]:
+    """
+    Para cada cedula normalizada del lote, devuelve el prestamo APROBADO mas reciente.
+    Se usa para saber si un duplicado de Mercantil ya pertenece al mismo prestamo.
+    """
+    if not cedulas_norm:
+        return {}, set()
+
+    variant_to_norms: Dict[str, Set[str]] = defaultdict(set)
+    for norm in cedulas_norm:
+        for variant in _cedula_lookup_variants(norm):
+            variant_to_norms[variant].add(norm)
+    if not variant_to_norms:
+        return {}, set()
+
+    cedula_lookup = func.upper(
+        func.replace(func.replace(Cliente.cedula, "-", ""), " ", "")
+    )
+    client_ids_by_norm: Dict[str, Set[int]] = defaultdict(set)
+    for cliente_id, cedula_raw in db.execute(
+        select(Cliente.id, Cliente.cedula).where(
+            cedula_lookup.in_(list(variant_to_norms.keys()))
+        )
+    ).all():
+        ced_db = _normalize_cedula_for_client_lookup(str(cedula_raw or ""))
+        matched_norms: Set[str] = set()
+        for variant in _cedula_lookup_variants(ced_db):
+            matched_norms.update(variant_to_norms.get(variant, set()))
+        for norm in matched_norms:
+            client_ids_by_norm[norm].add(int(cliente_id))
+
+    client_ids = {cid for ids in client_ids_by_norm.values() for cid in ids}
+    if not client_ids:
+        return {}, set()
+
+    target_by_client: Dict[int, int] = {}
+    for cliente_id, prestamo_id in db.execute(
+        select(Prestamo.cliente_id, Prestamo.id)
+        .where(
+            Prestamo.cliente_id.in_(client_ids),
+            func.upper(Prestamo.estado) == "APROBADO",
+        )
+        .order_by(Prestamo.cliente_id.asc(), Prestamo.id.desc())
+    ).all():
+        cid = int(cliente_id)
+        if cid not in target_by_client:
+            target_by_client[cid] = int(prestamo_id)
+
+    target_by_norm: Dict[str, int] = {}
+    multiple_by_norm: Set[str] = set()
+    for norm, ids in client_ids_by_norm.items():
+        targets = [target_by_client[cid] for cid in ids if cid in target_by_client]
+        if not targets:
+            continue
+        target_by_norm[norm] = max(targets)
+        if len(set(targets)) > 1:
+            multiple_by_norm.add(norm)
+    return target_by_norm, multiple_by_norm
+
+
+def _rechazar_aprobacion_si_documento_ya_en_pagos(db: Session, pr: PagoReportado) -> None:
+    """Regla operativa: no aprobar si el comprobante ya existe en cartera (`pagos`)."""
+    if pago_reportado_colisiona_tabla_pagos(db, pr):
+        raise HTTPException(
+            status_code=400,
+            detail="No se puede aprobar: el número de documento / comprobante ya consta en la tabla de pagos.",
+        )
+
+
+def _numero_operacion_canonico(raw: Optional[str]) -> str:
+    """Normaliza solo `numero_operacion` para regla estricta de duplicado."""
+    from app.services.pagos_gmail.parse_campos_comprobante import (
+        clave_numero_operacion_canonico,
+    )
+
+    return clave_numero_operacion_canonico(raw)
+
+
+def _reportado_pasa_filtro_dedup_num_op(
+    it: Any,
+    primer_num_op: Dict[str, int],
+) -> bool:
+    """True si el reporte es el líder de su cadena de nº operación (misma regla que el listado paginado)."""
+    num_key = _numero_operacion_canonico(getattr(it, "numero_operacion", None))
+    num_raw = (getattr(it, "numero_operacion", None) or "").strip()
+    first_id = None
+    if num_key:
+        first_id = primer_num_op.get(num_key)
+    if first_id is None and num_raw:
+        first_id = primer_num_op.get(num_raw)
+    if first_id is not None and int(it.id) != int(first_id):
+        return False
+    return True
+
+
+def _primer_id_por_numero_operacion_para_where(db: Session, wh: List[Any]) -> Dict[str, int]:
+    """
+    Mapa clave -> primer id por created_at/id dentro del WHERE dado.
+    Agrupa por evasión (sufijo/prefijo), no solo igualdad canónica exacta.
+    """
+    from app.services.pagos_gmail.parse_campos_comprobante import (
+        clave_numero_operacion_canonico,
+        numeros_operacion_coinciden_o_evasion,
+    )
+
+    if not wh:
+        return {}
+    first: Dict[str, int] = {}
+    grupos: list[tuple[int, str]] = []
+    stmt = (
+        select(PagoReportado.id, PagoReportado.numero_operacion)
+        .where(*wh)
+        .order_by(PagoReportado.created_at.asc(), PagoReportado.id.asc())
+    )
+    res = db.execute(stmt)
+    while True:
+        block = res.fetchmany(3000)
+        if not block:
+            break
+        for pid, numero_operacion in block:
+            ipid = int(pid)
+            rop = (numero_operacion or "").strip()
+            if not rop:
+                continue
+            lider_id: Optional[int] = None
+            for gid, gop in grupos:
+                if numeros_operacion_coinciden_o_evasion(rop, gop):
+                    lider_id = gid
+                    break
+            if lider_id is None:
+                grupos.append((ipid, rop))
+                lider_id = ipid
+            k = clave_numero_operacion_canonico(rop)
+            if k and k not in first:
+                first[k] = lider_id
+            if rop not in first:
+                first[rop] = lider_id
+    return first
+
+
+def _numeros_operacion_presentes_en_pagos(db: Session, keys: Set[str]) -> Set[str]:
+    """Subconjunto de `keys` que ya existe en `pagos.doc_canon_numero`."""
+    if not keys:
+        return set()
+    out: Set[str] = set()
+    lst = [k for k in keys if k]
+    for i in range(0, len(lst), 450):
+        part = lst[i : i + 450]
+        if not part:
+            continue
+        vals = db.execute(
+            select(Pago.doc_canon_numero).where(Pago.doc_canon_numero.in_(part))
+        ).scalars().all()
+        for v in vals:
+            if v:
+                out.add(v)
+    return out
+
+
+def _duplicados_reportados_por_numero_operacion(
+    db: Session,
+    *,
+    numero_operacion: str,
+    excluir_id: Optional[int] = None,
+) -> List[Tuple[int, str, str]]:
+    """
+    Devuelve reportados (id, referencia, estado) con el mismo numero_operacion
+    (exacto, sufijo truncado o prefijo OCR). Prefiltra con LIKE antes de comparar.
+    """
+    from app.services.pagos_gmail.parse_campos_comprobante import (
+        _condiciones_sql_numero_operacion,
+        numeros_operacion_coinciden_o_evasion,
+    )
+    op = (numero_operacion or "").strip()
+    if not op:
+        return []
+    conds = _condiciones_sql_numero_operacion(PagoReportado.numero_operacion, op)
+    if not conds:
+        return []
+    stmt = (
+        select(
+            PagoReportado.id,
+            PagoReportado.referencia_interna,
+            PagoReportado.estado,
+            PagoReportado.numero_operacion,
+        )
+        .where(
+            PagoReportado.estado.in_(("pendiente", "en_revision", "aprobado", "rechazado")),
+            or_(*conds),
+        )
+        .order_by(PagoReportado.created_at.asc(), PagoReportado.id.asc())
+        .limit(200)
+    )
+    if excluir_id is not None:
+        stmt = stmt.where(PagoReportado.id != excluir_id)
+    rows = db.execute(stmt).all()
+    out: List[Tuple[int, str, str]] = []
+    seen: set[int] = set()
+    for rid, rref, rstate, rnum in rows:
+        ipid = int(rid)
+        if ipid in seen:
+            continue
+        if not numeros_operacion_coinciden_o_evasion(op, rnum):
+            continue
+        seen.add(ipid)
+        out.append((ipid, str(rref or ""), str(rstate or "")))
+    return out
+
+
+def _lock_numero_operacion_canonico(db: Session, numero_key: str) -> None:
+    """
+    Bloquea por transacción una clave de número de operación (PostgreSQL) para
+    evitar carreras al aprobar dos reportes iguales al mismo tiempo.
+    """
+    if not numero_key:
+        return
+    bind = db.get_bind()
+    if bind is None or bind.dialect.name != "postgresql":
+        return
+    db.execute(
+        text("SELECT pg_advisory_xact_lock(887766553, hashtext(:k))"),
+        {"k": numero_key},
+    )
+
+
+def _es_banco_mercantil(nombre_banco: Optional[str]) -> bool:
+    return "mercantil" in (nombre_banco or "").strip().lower()
+
+
+def _observacion_reglas_carga(
+    db: Session,
+    rows: list,
+    cedulas_en_clientes: set,
+    cedulas_bolivares: frozenset,
+    claves_doc_en_pagos: frozenset,
+    conteo_norm_en_pagina: Counter,
+    primer_id_por_norm: Dict[str, int],
+) -> list:
+    """
+    Para cada fila: NO CLIENTES, No pag Bs., DUPLICADO.
+
+    ``claves_doc_en_pagos``: canónicos ya presentes en cartera para las claves del lote
+    (consulta indexada a ``pagos.doc_canon_*``, no toda la tabla en RAM).
+
+    DUPLICADO entre reportados: solo si no es el primer reporte con ese documento normalizado
+    (primer id global por created_at/id). Si falta en el mapa (escaneo acotado), se usa el
+    conteo del lote actual como respaldo (mismo criterio antiguo para esa pagina).
+    """
+    result = []
+    for r in rows:
+        partes = []
+        raw_cedula = ((r.tipo_cedula or "") + (r.numero_cedula or "")).replace("-", "").replace(" ", "").strip().upper()
+        cedula_norm = _normalize_cedula_for_client_lookup(raw_cedula)
+        if cedula_norm and cedula_norm not in cedulas_en_clientes:
+            partes.append("NO CLIENTES")
+            logger.debug(
+                "[COBROS] NO CLIENTES: ref=%s tipo_cedula=%r numero_cedula=%r raw=%r cedula_norm=%r | set_size=%s",
+                getattr(r, "referencia_interna", None),
+                getattr(r, "tipo_cedula", None),
+                getattr(r, "numero_cedula", None),
+                raw_cedula,
+                cedula_norm,
+                len(cedulas_en_clientes),
+            )
+        moneda = (r.moneda or "BS").strip().upper()
+        if moneda == "BS" and cedula_norm and not cedula_coincide_autorizados_bs(cedula_norm, cedulas_bolivares):
+            partes.append("No pag Bs.")
+        dup_pagos = reportado_toca_claves_canonicas_en_pagos(r, claves_doc_en_pagos)
+        if not dup_pagos and (getattr(r, "numero_operacion", None) or "").strip():
+            from app.services.pago_numero_documento import documento_colisiona_evasion_registrado
+
+            dup_pagos = documento_colisiona_evasion_registrado(
+                db,
+                r.numero_operacion,
+                incluir_reportados_activos=False,
+            )
+        n_doc_eff = documento_numero_desde_pago_reportado(r)[1]
+        dup_entre_reportados = False
+        if n_doc_eff:
+            pid = primer_id_por_norm.get(n_doc_eff)
+            if pid is not None:
+                dup_entre_reportados = r.id != pid
+            elif conteo_norm_en_pagina.get(n_doc_eff, 0) > 1:
+                dup_entre_reportados = True
+        if not dup_entre_reportados and (getattr(r, "numero_operacion", None) or "").strip():
+            from app.services.pagos_gmail.parse_campos_comprobante import (
+                numeros_operacion_coinciden_o_evasion,
+            )
+
+            op_r = r.numero_operacion
+            for other in rows:
+                if other.id == r.id:
+                    continue
+                other_ced = _normalize_cedula_for_client_lookup(
+                    ((other.tipo_cedula or "") + (other.numero_cedula or ""))
+                    .replace("-", "")
+                    .replace(" ", "")
+                    .strip()
+                    .upper()
+                )
+                if numeros_operacion_coinciden_o_evasion(
+                    op_r,
+                    other.numero_operacion,
+                    monto_a=getattr(r, "monto", None),
+                    monto_b=getattr(other, "monto", None),
+                    cedula_a=cedula_norm,
+                    cedula_b=other_ced,
+                    fecha_a=getattr(r, "fecha_pago", None),
+                    fecha_b=getattr(other, "fecha_pago", None),
+                ):
+                    dup_entre_reportados = True
+                    break
+        if dup_pagos or dup_entre_reportados:
+            partes.append("DUPLICADO")
+        result.append(partes)
+    return result
+
+
+def _pago_reportado_list_items_from_rows(
+    db: Session,
+    rows: List[PagoReportado],
+    *,
+    primer_id_por_norm_precalc: Optional[Dict[str, int]] = None,
+    include_financial_fields: bool = True,
+    pagos_canon_acum: Optional[Dict[str, Set[str]]] = None,
+    pagos_info_acum: Optional[Dict[str, Any]] = None,
+) -> List[PagoReportadoListItem]:
+    """Misma lógica de observaciones / tasa que el listado paginado.
+
+    Si ``include_financial_fields`` es False, no calcula tasa Bs/USD ni equivalente (ahorra trabajo
+    en barridos masivos donde solo se usa ``observacion`` + Gemini para ``_item_falla_validadores_cola_manual``).
+
+    ``pagos_canon_acum``: opcional, mismo dict en todo un barrido por lotes; claves ``queried`` y ``present``.
+    """
+    if not rows:
+        return []
+    cedula_norms = [
+        _normalize_cedula_for_client_lookup(
+            ((r.tipo_cedula or "") + (r.numero_cedula or "")).replace("-", "").replace(" ", "").strip().upper()
+        )
+        for r in rows
+    ]
+    cedulas_en_clientes = _cedulas_en_clientes_set_cached(db)
+    logger.debug(
+        "[COBROS] pagos-reportados: cedulas_en_clientes set_size=%s (cache)",
+        len(cedulas_en_clientes),
+    )
+
+    cedulas_bolivares = _autorizados_bs_claves_cached(db)
+
+    fechas_tasa = list({r.fecha_pago for r in rows if r.fecha_pago is not None})
+    tasas_por_fecha = (
+        obtener_tasas_por_fechas(db, fechas_tasa) if include_financial_fields else {}
+    )
+
+    candidatos = _collect_candidatos_canon_desde_reportados(rows)
+    if pagos_canon_acum is None:
+        claves_doc_en_pagos = _pagos_canonicos_presentes_para_claves(db, candidatos)
+    else:
+        claves_doc_en_pagos = _pagos_canonicos_presentes_para_claves_reutilizando(
+            db, candidatos, pagos_canon_acum
+        )
+    if pagos_info_acum is None:
+        pagos_info_por_clave = _pagos_existentes_info_por_clave(
+            db, set(claves_doc_en_pagos)
+        )
+    else:
+        pagos_info_por_clave = _pagos_existentes_info_por_clave_reutilizando(
+            db, set(claves_doc_en_pagos), pagos_info_acum
+        )
+    pago_info_por_reportado: Dict[int, PagoExistenteInfo] = {}
+    cedulas_con_dup: Set[str] = set()
+    for idx, r in enumerate(rows):
+        info = _pago_existente_info_para_reportado(r, pagos_info_por_clave)
+        if info is None:
+            continue
+        pago_info_por_reportado[int(r.id)] = info
+        if not _es_banco_mercantil(getattr(r, "institucion_financiera", None)):
+            continue
+        ced_norm = cedula_norms[idx] if idx < len(cedula_norms) else ""
+        if ced_norm:
+            cedulas_con_dup.add(ced_norm)
+    prestamo_objetivo_por_cedula, prestamo_objetivo_multiple_cedulas = (
+        _prestamo_objetivo_por_cedula_norm_batch(db, cedulas_con_dup)
+        if cedulas_con_dup
+        else ({}, set())
+    )
+    norm_por_fila = []
+    for r in rows:
+        _, n_eff = documento_numero_desde_pago_reportado(r)
+        norm_por_fila.append(n_eff if n_eff else None)
+    conteo_norm_en_pagina = Counter(n for n in norm_por_fila if n)
+
+    norms_en_batch = {n for n in norm_por_fila if n}
+    if primer_id_por_norm_precalc is not None:
+        primer_id_por_norm = primer_id_por_norm_precalc
+    else:
+        created_at_desde = None
+        if rows:
+            fechas_c = [r.created_at for r in rows if getattr(r, "created_at", None) is not None]
+            if fechas_c:
+                created_at_desde = min(fechas_c) - timedelta(days=45)
+        primer_id_por_norm = primer_reportado_id_por_norm_batch(
+            db,
+            norms_en_batch,
+            created_at_desde=created_at_desde,
+        )
+
+    partes_por_fila = _observacion_reglas_carga(
+        db,
+        rows,
+        cedulas_en_clientes,
+        cedulas_bolivares,
+        claves_doc_en_pagos,
+        conteo_norm_en_pagina,
+        primer_id_por_norm,
+    )
+
+    items: List[PagoReportadoListItem] = []
+    for i, r in enumerate(rows):
+        # Si Gemini ya dijo coincidencia exacta, no mezclar el comentario de Gemini en la observación:
+        # evita que texto informativo dispare "falla validadores" y bloquee auto-import / cola.
+        if _gemini_coincide_exacto_ok(getattr(r, "gemini_coincide_exacto", None)):
+            obs_gemini = None
+        else:
+            obs_gemini = _observacion_solo_columnas(r.gemini_comentario)
+        partes_reglas = partes_por_fila[i] if i < len(partes_por_fila) else []
+        partes_final = partes_reglas + ([obs_gemini] if obs_gemini else [])
+        observacion = " / ".join(partes_final) if partes_final else None
+        if include_financial_fields:
+            tasa_x, eq_usd = tasa_y_equivalente_usd_excel(
+                db, r.fecha_pago, float(r.monto), r.moneda, tasas_por_fecha=tasas_por_fecha
+            )
+        else:
+            tasa_x, eq_usd = None, None
+        pago_info = pago_info_por_reportado.get(int(r.id))
+        dup_pagos = pago_info is not None
+        pago_existente_id = pago_info[0] if pago_info is not None else None
+        prestamo_existente_id = pago_info[1] if pago_info is not None else None
+        numero_documento_pago_existente = (
+            pago_info[2] if pago_info is not None else None
+        )
+        cedula_norm = cedula_norms[i] if i < len(cedula_norms) else ""
+        prestamo_objetivo_id = prestamo_objetivo_por_cedula.get(cedula_norm)
+        prestamo_objetivo_multiple = (
+            cedula_norm in prestamo_objetivo_multiple_cedulas
+            if prestamo_objetivo_id is not None
+            else None
+        )
+        prestamo_duplicado_es_objetivo = (
+            int(prestamo_existente_id) == int(prestamo_objetivo_id)
+            if prestamo_existente_id is not None and prestamo_objetivo_id is not None
+            else None
+        )
+        items.append(PagoReportadoListItem(
+            id=r.id,
+            referencia_interna=r.referencia_interna,
+            nombres=r.nombres,
+            apellidos=r.apellidos,
+            cedula_display=f"{r.tipo_cedula}{r.numero_cedula}",
+            institucion_financiera=r.institucion_financiera,
+            monto=float(r.monto),
+            moneda=r.moneda or "BS",
+            tasa_cambio_bs_usd=tasa_x,
+            equivalente_usd=eq_usd,
+            fecha_pago=r.fecha_pago,
+            numero_operacion=r.numero_operacion,
+            fecha_reporte=r.created_at,
+            estado=r.estado,
+            gemini_coincide_exacto=r.gemini_coincide_exacto,
+            observacion=observacion,
+            correo_enviado_a=r.correo_enviado_a,
+            tiene_recibo_pdf=bool(r.recibo_pdf),
+            tiene_comprobante=bool(getattr(r, "comprobante_imagen_id", None)),
+            canal_ingreso=getattr(r, "canal_ingreso", None),
+            duplicado_en_pagos=bool(dup_pagos),
+            pago_existente_id=pago_existente_id,
+            prestamo_existente_id=prestamo_existente_id,
+            numero_documento_pago_existente=numero_documento_pago_existente,
+            prestamo_objetivo_id=prestamo_objetivo_id,
+            prestamo_objetivo_multiple=prestamo_objetivo_multiple,
+            prestamo_duplicado_es_objetivo=prestamo_duplicado_es_objetivo,
+        ))
+    return items
+
+
+def _query_reportados_falla_validadores_pendientes_exportar(
+    db: Session,
+    cedula: Optional[str],
+    institucion: Optional[str],
+) -> List[PagoReportado]:
+    """Pendiente, en revisión o aprobado (legacy), aún no marcados como exportados; sin fechas (mismos filtros opcionales que el front)."""
+    exportados_subq = select(PagoReportadoExportado.pago_reportado_id)
+    q = select(PagoReportado).where(PagoReportado.estado.in_(("pendiente", "en_revision", "aprobado")))
+    q = q.where(~PagoReportado.id.in_(exportados_subq))
+    if cedula:
+        ced_clean = cedula.strip().replace("-", "").replace(" ", "").upper()
+        cond_cedula = or_(
+            func.concat(PagoReportado.tipo_cedula, PagoReportado.numero_cedula).like(f"%{ced_clean}%"),
+            PagoReportado.numero_cedula.like(f"%{ced_clean}%"),
+            func.concat(PagoReportado.tipo_cedula, PagoReportado.numero_cedula) == ced_clean,
+            PagoReportado.numero_cedula == ced_clean,
+        )
+        if len(ced_clean) >= 1 and ced_clean[0:1] in ("V", "E", "J") and ced_clean[1:].isdigit():
+            cond_cedula = or_(
+                cond_cedula,
+                and_(PagoReportado.tipo_cedula == ced_clean[0:1], PagoReportado.numero_cedula == ced_clean[1:]),
+            )
+        q = q.where(cond_cedula)
+    if institucion:
+        ins = (institucion or "").strip()
+        if ins:
+            q = q.where(PagoReportado.institucion_financiera.ilike(f"%{ins}%"))
+    q = q.order_by(PagoReportado.created_at.asc())
+    return list(db.execute(q).scalars().all())
+
+
+def _gemini_coincide_exacto_ok(val: Optional[str]) -> bool:
+    """True si Gemini indicó coincidencia exacta (valores habituales en BD: true, 1)."""
+    g = (val or "").strip().lower()
+    return g in ("true", "1")
+
+
+def _regularizar_reportados_gemini_ok_sin_falla_manual(
+    db: Session, max_ids: int = 24, deadline_monotonic: Optional[float] = None
+) -> None:
+    """
+    Al listar Cobros: si un reporte ya cumple validadores (misma regla que la cola), pasa a aprobado
+    e intenta importar a `pagos` + cuotas como en el flujo público.
+
+    Candidatos: estados pendiente/en_revision/aprobado con Gemini OK (`true`/`1`),
+    Gemini `false` sin comentario (falso negativo frecuente), o sin Gemini (NULL/vacío).
+    En todos los casos `reportado_falla_validadores_cobros` decide si pasa.
+    Errores de API (`error`) no son candidatos (se excluyen por el OR).
+    """
+    from app.services.cobros import cobros_publico_reporte_service as cpr
+
+    gem_col = func.lower(func.trim(func.coalesce(PagoReportado.gemini_coincide_exacto, "")))
+    com_trim = func.trim(func.coalesce(PagoReportado.gemini_comentario, ""))
+    candidatos_regularizar = or_(
+        gem_col.in_(("true", "1")),
+        and_(gem_col == "false", com_trim == ""),
+        gem_col == "",
+    )
+    try:
+        ids = list(
+            db.execute(
+                select(PagoReportado.id)
+                .where(
+                    PagoReportado.estado.in_(("pendiente", "aprobado")),
+                    candidatos_regularizar,
+                )
+                .order_by(PagoReportado.id.desc())
+                .limit(max_ids)
+            ).scalars().all()
+        )
+    except Exception:
+        return
+    ids_colision_importado: List[int] = []
+    for pid in ids:
+        if deadline_monotonic is not None and time.monotonic() > deadline_monotonic:
+            break
+        try:
+            pr = db.get(PagoReportado, pid)
+            if pr is None:
+                continue
+            # En revisión manual explícita: no auto-aprobar al listar Cobros.
+            if (getattr(pr, "estado", None) or "").strip() == "en_revision":
+                continue
+            # Escáner / operador dejó falla_validadores_manual=True: no auto-aprobar al listar.
+            if getattr(pr, "falla_validadores_manual", None) is True:
+                continue
+            if getattr(pr, "estado", None) in ("pendiente", "en_revision", "aprobado") and pago_reportado_colisiona_tabla_pagos(
+                db, pr
+            ):
+                ids_colision_importado.append(pid)
+                continue
+            falla = reportado_falla_validadores_cobros(db, pr)
+            pr.falla_validadores_manual = falla
+            if falla:
+                db.commit()
+                continue
+            ref = (pr.referencia_interna or "").strip() or str(pr.id)
+            if getattr(pr, "estado", None) in ("pendiente", "en_revision"):
+                pr.estado = "aprobado"
+                pr.falla_validadores_manual = False
+                db.add(pr)
+                db.commit()
+                db.refresh(pr)
+            if getattr(pr, "estado", None) == "aprobado":
+                if deadline_monotonic is not None and time.monotonic() > deadline_monotonic:
+                    break
+                cpr.intentar_importar_reportado_automatico(db, pr, ref, "COBROS_COLA_REGULARIZA")
+        except Exception:
+            try:
+                db.rollback()
+            except Exception:
+                pass
+    if ids_colision_importado:
+        try:
+            db.execute(
+                update(PagoReportado)
+                .where(PagoReportado.id.in_(ids_colision_importado))
+                .values(estado="importado", falla_validadores_manual=False, updated_at=func.now())
+            )
+            db.commit()
+            logger.info(
+                "[COBROS_COLA_REGULARIZA] Marcados %s reportados como importado (comprobante ya en pagos).",
+                len(ids_colision_importado),
+            )
+        except Exception:
+            try:
+                db.rollback()
+            except Exception:
+                pass
+
+
+def _regularizar_reportados_guarded(db: Session) -> None:
+    """
+    Ejecuta regularización con control de impacto en requests de lectura:
+    - un solo runner por proceso (lock no bloqueante),
+    - cooldown entre ejecuciones,
+    - presupuesto de tiempo por request,
+    - gracia post-cold-start para no bloquear los primeros requests.
+    El backfill progresivo de falla_validadores_manual solo corre en los paths
+    de cooldown/lock-miss para no bloquear el primer request post-cold-start.
+    """
+    global _regulariza_last_run_monotonic
+    now = time.monotonic()
+    if now - _process_start_monotonic < _REGULARIZA_COLD_START_GRACE_SEC:
+        return
+    if now - _regulariza_last_run_monotonic < _REGULARIZA_MIN_INTERVAL_SEC:
+        _backfill_falla_validadores_lote(db)
+        return
+    if not _regulariza_lock.acquire(blocking=False):
+        _backfill_falla_validadores_lote(db)
+        return
+    try:
+        now_inside = time.monotonic()
+        if now_inside - _regulariza_last_run_monotonic < _REGULARIZA_MIN_INTERVAL_SEC:
+            return
+        _regulariza_last_run_monotonic = now_inside
+        deadline = now_inside + (_REGULARIZA_TIME_BUDGET_MS / 1000.0)
+        _regularizar_reportados_gemini_ok_sin_falla_manual(
+            db,
+            max_ids=_REGULARIZA_MAX_IDS_PER_RUN,
+            deadline_monotonic=deadline,
+        )
+    finally:
+        _regulariza_lock.release()
+
+
+def _estado_label_estado_reportado(estado: str) -> str:
+    m = {
+        "pendiente": "Pendiente",
+        "en_revision": "En revisión (manual)",
+        "aprobado": "Aprobado",
+        "rechazado": "Rechazado",
+        "importado": "Importado a Pagos",
+    }
+    return m.get((estado or "").strip(), estado or "")
+
+
+def _prestamo_objetivo_desde_cedula(
+    db: Session,
+    tipo_cedula: Optional[str],
+    numero_cedula: Optional[str],
+) -> Tuple[Optional[int], Optional[bool]]:
+    cedula_norm = _normalize_cedula_for_client_lookup(
+        ((tipo_cedula or "") + (numero_cedula or ""))
+        .replace("-", "")
+        .replace(" ", "")
+        .strip()
+        .upper()
+    )
+    variants = _cedula_lookup_variants(cedula_norm)
+    if not variants:
+        return None, None
+
+    cedula_lookup = func.upper(
+        func.replace(func.replace(Cliente.cedula, "-", ""), " ", "")
+    )
+    cliente = db.execute(
+        select(Cliente).where(cedula_lookup.in_(variants))
+    ).scalars().first()
+    if not cliente:
+        return None, None
+
+    prestamos_aprob = db.execute(
+        select(Prestamo.id)
+        .where(
+            Prestamo.cliente_id == cliente.id,
+            func.upper(Prestamo.estado) == "APROBADO",
+        )
+        .order_by(Prestamo.id.desc())
+    ).scalars().all()
+    if not prestamos_aprob:
+        return None, None
+    return int(prestamos_aprob[0]), len(prestamos_aprob) > 1
+
+
+def _diagnostico_duplicado_reportado(
+    db: Session,
+    pr_like: Any,
+    *,
+    tipo_cedula: Optional[str],
+    numero_cedula: Optional[str],
+) -> PagoReportadoDuplicadoDiagnostico:
+    pago_existente_info = _pago_existente_info_para_reportado(
+        pr_like,
+        _pagos_existentes_info_por_clave(
+            db,
+            _collect_candidatos_canon_desde_reportados([pr_like]),
+        ),
+    )
+    pago_existente_id: Optional[int] = (
+        pago_existente_info[0] if pago_existente_info is not None else None
+    )
+    prestamo_existente_id: Optional[int] = None
+    pago_existente_estado: Optional[str] = None
+    pago_existente_fecha_pago: Optional[date] = None
+    if pago_existente_id is not None:
+        p_exist = db.execute(
+            select(Pago).where(Pago.id == pago_existente_id)
+        ).scalars().first()
+        if p_exist:
+            prestamo_existente_id = getattr(p_exist, "prestamo_id", None)
+            pago_existente_estado = getattr(p_exist, "estado", None)
+            fp = getattr(p_exist, "fecha_pago", None)
+            if fp is not None:
+                pago_existente_fecha_pago = (
+                    fp.date() if isinstance(fp, datetime) else fp
+                )
+
+    try:
+        prestamo_objetivo_id, prestamo_objetivo_multiple = (
+            _prestamo_objetivo_desde_cedula(db, tipo_cedula, numero_cedula)
+        )
+    except Exception:
+        prestamo_objetivo_id = None
+        prestamo_objetivo_multiple = None
+
+    prestamo_duplicado_es_objetivo: Optional[bool] = None
+    if prestamo_existente_id is not None and prestamo_objetivo_id is not None:
+        prestamo_duplicado_es_objetivo = int(prestamo_existente_id) == int(
+            prestamo_objetivo_id
+        )
+
+    return PagoReportadoDuplicadoDiagnostico(
+        duplicado_en_pagos=bool(pago_existente_id is not None),
+        pago_existente_id=pago_existente_id,
+        prestamo_existente_id=prestamo_existente_id,
+        pago_existente_estado=pago_existente_estado,
+        pago_existente_fecha_pago=pago_existente_fecha_pago,
+        prestamo_objetivo_id=prestamo_objetivo_id,
+        prestamo_objetivo_multiple=prestamo_objetivo_multiple,
+        prestamo_duplicado_es_objetivo=prestamo_duplicado_es_objetivo,
+    )
+
+
+def _obs_sin_duplicado(obs: str) -> str:
+    partes = [p.strip() for p in (obs or "").split("/") if p.strip()]
+    partes = [p for p in partes if "DUPLICADO" not in p.upper()]
+    return " / ".join(partes)
+
+
+def _obs_efectiva_para_validadores(
+    obs: str,
+    institucion: str,
+    *,
+    duplicado_mismo_prestamo: bool = False,
+) -> str:
+    """
+    Observación relevante para decidir cola manual.
+
+    DUPLICADO de banco distinto a Mercantil → toda la observación se descarta (auto-desestimar).
+    El pago original ya está siendo gestionado; revisar el duplicado no aporta valor.
+    Mercantil mantiene duplicados en cola salvo que el pago existente sea del mismo
+    préstamo objetivo; en ese caso "DUPLICADO" no cuenta como falla manual.
+    """
+    if not obs:
+        return ""
+    if "DUPLICADO" not in obs:
+        return obs
+    if duplicado_mismo_prestamo:
+        return _obs_sin_duplicado(obs)
+    if _es_banco_mercantil(institucion):
+        return obs
+    return ""
+
+
+def _item_falla_validadores_cola_manual(it: PagoReportadoListItem) -> bool:
+    """
+    True = requiere análisis manual (cola en pantalla: no cumplen validadores).
+
+    Los reportes en estado ``en_revision`` siempre entran en cola (p. ej. escáner Infopagos con
+    confirmación humana): Cobros debe aprobar/rechazar aunque Gemini y las reglas automáticas cuadren.
+
+    Si Gemini marcó coincidencia exacta (`true`/`1`), solo falla si queda observación de **reglas**
+    (DUPLICADO, NO CLIENTES, etc.); el texto residual de Gemini no cuenta en ese caso (se omite al armar la observación).
+
+    DUPLICADO de banco distinto a Mercantil se auto-desestima (no requiere revisión manual).
+
+    Si Gemini respondió `false` pero la observación armada está vacía (sin reglas ni columnas
+    deducidas del comentario), no se exige paso manual: suele ser falso negativo con comentario vacío
+    cuando los validadores determinísticos ya cuadran.
+
+    `error` (fallo de API / sin clave) sigue exigiendo revisión manual.
+    """
+    if (getattr(it, "estado", None) or "").strip() == "en_revision":
+        return True
+    obs = _obs_efectiva_para_validadores(
+        (it.observacion or "").strip(),
+        getattr(it, "institucion_financiera", "") or "",
+        duplicado_mismo_prestamo=getattr(
+            it, "prestamo_duplicado_es_objetivo", None
+        )
+        is True,
+    )
+    if _gemini_coincide_exacto_ok(it.gemini_coincide_exacto):
+        return bool(obs)
+    gem = (it.gemini_coincide_exacto or "").strip().lower()
+    if gem == "error":
+        return True
+    if gem == "false":
+        return bool(obs)
+    return bool(obs)
+
+
+def reportado_falla_validadores_cobros(db: Session, pr: PagoReportado) -> bool:
+    """
+    True si el reportado NO cumple los mismos validadores que el listado de cola manual (Gemini + reglas de carga).
+    Usado al registrar desde formulario público / Infopagos para no mandar a revisión manual lo que ya cumple.
+    """
+    items = _pago_reportado_list_items_from_rows(db, [pr])
+    if not items:
+        return True
+    return _item_falla_validadores_cola_manual(items[0])
+
+
+def actualizar_flag_falla_validadores(db: Session, pr: PagoReportado, *, commit: bool = False) -> bool:
+    """
+    Recalcula y persiste ``pr.falla_validadores_manual``.
+
+    Retorna el valor calculado.  No hace commit salvo que ``commit=True``.
+    Para estados terminales no ejecuta la evaluación costosa.
+    """
+    if pr is None:
+        return True
+    estado = (getattr(pr, "estado", None) or "").strip()
+    if estado in ("importado", "rechazado", "eliminado_duplicado"):
+        pr.falla_validadores_manual = False
+        if commit:
+            db.commit()
+        return False
+    resultado = reportado_falla_validadores_cobros(db, pr)
+    pr.falla_validadores_manual = resultado
+    if commit:
+        db.commit()
+    return resultado
+
+
+_BACKFILL_FLAG_BATCH = 5
+_backfill_flag_last_run = 0.0
+_BACKFILL_FLAG_COOLDOWN_SEC = 120.0
+_BACKFILL_TIME_BUDGET_SEC = 2.0
+
+
+def _backfill_falla_validadores_lote(db: Session) -> int:
+    """
+    Recalcula falla_validadores_manual para un lote pequeño de filas con flag NULL o
+    potencialmente stale (gemini='true'/'1' en cola que la migracion pudo haber marcado
+    false por heuristica).
+
+    Retorna cuantas filas proceso.  Se auto-limita por cooldown + time budget para
+    no bloquear requests de listado.
+    """
+    global _backfill_flag_last_run
+    now = time.monotonic()
+    if now - _backfill_flag_last_run < _BACKFILL_FLAG_COOLDOWN_SEC:
+        return 0
+    _backfill_flag_last_run = now
+
+    gem_col = func.lower(func.trim(func.coalesce(PagoReportado.gemini_coincide_exacto, "")))
+    ids = list(
+        db.execute(
+            select(PagoReportado.id).where(
+                or_(
+                    PagoReportado.falla_validadores_manual.is_(None),
+                    and_(
+                        PagoReportado.falla_validadores_manual == False,
+                        PagoReportado.estado.in_(("pendiente", "en_revision", "aprobado")),
+                        gem_col.in_(("true", "1")),
+                    ),
+                ),
+            )
+            .order_by(PagoReportado.id.desc())
+            .limit(_BACKFILL_FLAG_BATCH)
+        ).scalars().all()
+    )
+    if not ids:
+        return 0
+
+    deadline = time.monotonic() + _BACKFILL_TIME_BUDGET_SEC
+    updated = 0
+    for pid in ids:
+        if time.monotonic() > deadline:
+            break
+        try:
+            pr = db.get(PagoReportado, pid)
+            if pr is None:
+                continue
+            actualizar_flag_falla_validadores(db, pr)
+            updated += 1
+        except Exception:
+            try:
+                db.rollback()
+            except Exception:
+                pass
+    if updated:
+        try:
+            db.commit()
+        except Exception:
+            try:
+                db.rollback()
+            except Exception:
+                pass
+    logger.debug("[COBROS_FLAG] Backfill: %d/%d filas recalculadas.", updated, len(ids))
+    return updated
+
+
+def _persist_marcar_exportados_y_cola(db: Session, ids: List[int]) -> dict:
+    """
+    Inserta exportados + quita de pagos_pendiente_descargar y hace commit.
+    """
+    ya_exportados = set(
+        db.execute(
+            select(PagoReportadoExportado.pago_reportado_id).where(
+                PagoReportadoExportado.pago_reportado_id.in_(ids)
+            )
+        ).scalars().all()
+    )
+
+    nuevos = [
+        PagoReportadoExportado(pago_reportado_id=pid)
+        for pid in ids
+        if pid not in ya_exportados
+    ]
+
+    if nuevos:
+        db.add_all(nuevos)
+
+    res_cola = db.execute(
+        delete(PagoPendienteDescargar).where(
+            PagoPendienteDescargar.pago_reportado_id.in_(ids)
+        )
+    )
+    quitados_cola_temporal = int(res_cola.rowcount or 0)
+
+    db.commit()
+    _invalidate_cobros_listado_kpis_cache()
+
+    return {
+        "ok": True,
+        "marcados": len(nuevos),
+        "ya_exportados": len(ya_exportados),
+        "total_solicitados": len(ids),
+        "quitados_cola_temporal": quitados_cola_temporal,
+    }
+
+
+def _condicion_cedula_pago_reportado(cedula: Optional[str]) -> Any:
+    """Predicado SQL para búsqueda por cédula (mismo criterio en listado y KPIs)."""
+    if not cedula or not str(cedula).strip():
+        return None
+    ced_clean = cedula.strip().replace("-", "").replace(" ", "").upper()
+    cond_cedula = or_(
+        func.concat(PagoReportado.tipo_cedula, PagoReportado.numero_cedula).like(f"%{ced_clean}%"),
+        PagoReportado.numero_cedula.like(f"%{ced_clean}%"),
+        func.concat(PagoReportado.tipo_cedula, PagoReportado.numero_cedula) == ced_clean,
+        PagoReportado.numero_cedula == ced_clean,
+    )
+    if len(ced_clean) >= 1 and ced_clean[0:1] in ("V", "E", "J") and ced_clean[1:].isdigit():
+        cond_cedula = or_(
+            cond_cedula,
+            and_(PagoReportado.tipo_cedula == ced_clean[0:1], PagoReportado.numero_cedula == ced_clean[1:]),
+        )
+    return cond_cedula
+
+
+def _filtros_fecha_cedula_institucion_reportados(
+    *,
+    fecha_desde: Optional[date],
+    fecha_hasta: Optional[date],
+    cedula: Optional[str],
+    institucion: Optional[str],
+) -> List[Any]:
+    """Fragmentos WHERE compartidos entre listado paginado y agregación KPI (evita divergencia)."""
+    out: List[Any] = []
+    if fecha_desde:
+        out.append(PagoReportado.created_at >= datetime.combine(fecha_desde, datetime.min.time()))
+    if fecha_hasta:
+        out.append(PagoReportado.created_at <= datetime.combine(fecha_hasta, datetime.max.time()))
+    ced_pred = _condicion_cedula_pago_reportado(cedula)
+    if ced_pred is not None:
+        out.append(ced_pred)
+    if institucion and institucion.strip():
+        out.append(PagoReportado.institucion_financiera.ilike(f"%{institucion.strip()}%"))
+    return out
+
+
+def _reencolar_escaner_infopagos_aprobado_sin_gestion_por_cedula(
+    db: Session,
+    *,
+    cedula: Optional[str],
+    fecha_desde: Optional[date],
+    fecha_hasta: Optional[date],
+) -> int:
+    """
+    Escaneos Infopagos auto-aprobados (sin usuario Cobros) vuelven a en_revision al buscar por cédula.
+
+    Cubre reportes que quedaron en `aprobado` por regularización o flujo viejo del escáner y ya no
+    aparecen en la cola manual aunque el operador espera revisarlos.
+    """
+    if not cedula or not str(cedula).strip():
+        return 0
+    filtros = _filtros_fecha_cedula_institucion_reportados(
+        fecha_desde=fecha_desde,
+        fecha_hasta=fecha_hasta,
+        cedula=cedula,
+        institucion=None,
+    )
+    wh = [
+        PagoReportado.canal_ingreso == "infopagos",
+        PagoReportado.estado == "aprobado",
+        PagoReportado.usuario_gestion_id.is_(None),
+    ] + filtros
+    rows = (
+        db.execute(
+            select(PagoReportado)
+            .where(*wh)
+            .order_by(PagoReportado.created_at.desc())
+            .limit(5)
+        )
+        .scalars()
+        .all()
+    )
+    if not rows:
+        return 0
+    n = 0
+    for pr in rows:
+        pr.estado = "en_revision"
+        pr.falla_validadores_manual = True
+        obs = (pr.observacion or "").strip()
+        nota = "[COBROS] Reencolado a revision manual (busqueda escaner Infopagos)."
+        pr.observacion = nota if not obs else f"{obs} / {nota}"
+        db.add(pr)
+        n += 1
+    if n:
+        db.commit()
+        _invalidate_cobros_listado_kpis_cache()
+        logger.info(
+            "[COBROS] Reencolados %s reportes Infopagos a en_revision (cedula=%s)",
+            n,
+            (cedula or "").strip().upper(),
+        )
+    return n
+
+
+def _where_clauses_cola_reportados(
+    estado: Optional[str],
+    incluir_exportados: bool,
+    exportados_subq: Any,
+    filtros: List[Any],
+) -> List[Any]:
+    """Predicados WHERE compartidos: cola pendiente / en_revision (+ exportados + filtros fecha/cedula/banco).
+
+    El estado `aprobado` ya no entra en la cola por defecto: cuando un reporte queda en
+    `aprobado` el pago ya fue creado en cartera y aplicado a cuotas; conservarlo en la
+    cola manual era ruido visual y forzaba un barrido extra de filas que no requieren
+    accion humana. Para auditoria de aprobados usar el historico o el filtro explicito
+    `estado=aprobado` (que sigue funcionando aqui por compatibilidad de URL/permaview).
+    """
+    wh: List[Any] = []
+    if estado == "aprobado":
+        wh.append(PagoReportado.estado == "aprobado")
+        if not incluir_exportados:
+            wh.append(~PagoReportado.id.in_(exportados_subq))
+    elif estado in ("pendiente", "en_revision"):
+        wh.append(PagoReportado.estado == estado)
+        if not incluir_exportados:
+            wh.append(~PagoReportado.id.in_(exportados_subq))
+    else:
+        wh.append(PagoReportado.estado.in_(("pendiente", "en_revision")))
+        if not incluir_exportados:
+            wh.append(~PagoReportado.id.in_(exportados_subq))
+    wh.extend(filtros)
+    return wh
+
+
+def _primer_id_por_norm_global_para_where(db: Session, wh: List[Any]) -> Dict[str, int]:
+    """
+    Calcula una sola vez el mapa documento_normalizado -> id del primer PagoReportado (cola),
+    para no repetir escaneos masivos de `pagos_reportados` en cada lote de 400 filas del listado/KPIs.
+    """
+    if not wh:
+        return {}
+    lite = (
+        select(PagoReportado.numero_operacion, PagoReportado.referencia_interna)
+        .select_from(PagoReportado)
+        .where(*wh)
+    )
+    all_norms: Set[str] = set()
+    res = db.execute(lite)
+    while True:
+        block = res.fetchmany(2000)
+        if not block:
+            break
+        for op, ref in block:
+            _, n_eff = documento_numero_desde_pago_reportado(
+                SimpleNamespace(numero_operacion=op, referencia_interna=ref)
+            )
+            if n_eff:
+                all_norms.add(n_eff)
+    if not all_norms:
+        return {}
+    return primer_reportado_id_por_norm_peer_first_map(db, all_norms)
+
+
+def _primer_maps_scope_key(
+    *,
+    incluir_exportados: bool,
+    fecha_desde: Optional[date],
+    fecha_hasta: Optional[date],
+    cedula: Optional[str],
+    institucion: Optional[str],
+) -> str:
+    """Clave estable para mapas de duplicados: mismo criterio que `wh_primer_scope` (cola completa + filtros)."""
+    c = (cedula or "").strip().upper()
+    i = (institucion or "").strip().lower()
+    return f"{int(bool(incluir_exportados))}|{fecha_desde!s}|{fecha_hasta!s}|{c}|{i}"
+
+
+def _cobros_primer_maps_revision_token(db: Session) -> tuple:
+    """
+    Token barato para invalidar cache al cambiar cola, exportados o cartera (nuevo pago / doc).
+
+    Incluye `max(Pago.id)` (índice PK, lectura O(1) típica) para que nuevos `pagos` invaliden
+    `_numeros_operacion_presentes_en_pagos` sin full scan.
+    """
+    row = db.execute(
+        select(
+            func.count(PagoReportado.id),
+            func.max(PagoReportado.updated_at),
+        ).where(PagoReportado.estado.in_(("pendiente", "en_revision", "aprobado")))
+    ).one()
+    n_exp = int(db.execute(select(func.count()).select_from(PagoReportadoExportado)).scalar_one())
+    max_pago_id = db.execute(select(func.max(Pago.id))).scalar()
+    return (
+        int(row[0] or 0),
+        row[1],
+        int(n_exp),
+        int(max_pago_id or 0),
+    )
+
+
+def _prune_primer_maps_triple_cache_unlocked() -> None:
+    """Mantiene acotado el dict; caller debe tener `_primer_maps_triple_cache_lock`."""
+    global _primer_maps_triple_cache
+    if len(_primer_maps_triple_cache) <= _PRIMER_MAPS_CACHE_MAX_ENTRIES:
+        return
+    # Eliminar entradas más antiguas por `monotonic_ts`.
+    items = sorted(
+        _primer_maps_triple_cache.items(),
+        key=lambda kv: kv[1][1],
+    )
+    drop = len(items) - _PRIMER_MAPS_CACHE_MAX_ENTRIES
+    for k, _ in items[:drop]:
+        _primer_maps_triple_cache.pop(k, None)
+
+
+def _compute_primer_triple_for_where(
+    db: Session, wh: List[Any]
+) -> Tuple[Dict[str, int], Dict[str, int], Set[str]]:
+    """Precalcula mapas duplicados / nº operación / presencia en pagos para un WHERE de cola."""
+    primer_precalc = _primer_id_por_norm_global_para_where(db, wh)
+    primer_num_op = _primer_id_por_numero_operacion_para_where(db, wh)
+    numeros_en_pagos = _numeros_operacion_presentes_en_pagos(
+        db, set(primer_num_op.keys())
+    )
+    return primer_precalc, primer_num_op, numeros_en_pagos
+
+
+def _get_primer_triple_cached(
+    db: Session,
+    wh: List[Any],
+    scope_key: str,
+) -> Tuple[Dict[str, int], Dict[str, int], Set[str]]:
+    """
+    Devuelve (primer_precalc, primer_num_op, numeros_en_pagos) reusando cache si la revisión no cambió.
+
+    Thread-safe en el dict de cache; el cálculo pesado ocurre fuera del lock para no serializar requests.
+    """
+    rev = _cobros_primer_maps_revision_token(db)
+    now = time.monotonic()
+    with _primer_maps_triple_cache_lock:
+        ent = _primer_maps_triple_cache.get(scope_key)
+        if ent is not None:
+            stored_rev, ts, a, b, c_f = ent
+            if stored_rev == rev and (now - ts) < _PRIMER_MAPS_CACHE_TTL_SEC:
+                logger.debug(
+                    "[COBROS_CACHE] primer_triple hit scope=%s rev=%s age_s=%.2f",
+                    scope_key,
+                    rev,
+                    now - ts,
+                )
+                return a, b, set(c_f)
+
+    primer_precalc, primer_num_op, numeros_en_pagos = _compute_primer_triple_for_where(db, wh)
+    rev_after = _cobros_primer_maps_revision_token(db)
+    now_store = time.monotonic()
+    with _primer_maps_triple_cache_lock:
+        _primer_maps_triple_cache[scope_key] = (
+            rev_after,
+            now_store,
+            primer_precalc,
+            primer_num_op,
+            frozenset(numeros_en_pagos),
+        )
+        _prune_primer_maps_triple_cache_unlocked()
+    logger.debug(
+        "[COBROS_CACHE] primer_triple miss store scope=%s rev=%s",
+        scope_key,
+        rev_after,
+    )
+    return primer_precalc, primer_num_op, numeros_en_pagos
+
+
+def _list_pagos_reportados_payload(
+    db: Session,
+    *,
+    estado: Optional[str],
+    fecha_desde: Optional[date],
+    fecha_hasta: Optional[date],
+    cedula: Optional[str],
+    institucion: Optional[str],
+    page: int,
+    per_page: int,
+    incluir_exportados: bool = False,
+    emit_manual_estado_counts_for_kpis: bool = False,
+) -> dict:
+    """
+    Misma lógica que GET /pagos-reportados (reutilizada por listado-y-kpis).
+
+    Si `emit_manual_estado_counts_for_kpis` y `estado` es None (lista la cola completa
+    pendiente+en_revision+aprobado), se añade `_manual_kpi_counts` al dict de retorno
+    para evitar un segundo barrido completo en listado-y-kpis (solo uso interno).
+    """
+    if cedula and str(cedula).strip():
+        _reencolar_escaner_infopagos_aprobado_sin_gestion_por_cedula(
+            db,
+            cedula=cedula,
+            fecha_desde=fecha_desde,
+            fecha_hasta=fecha_hasta,
+        )
+    _regularizar_reportados_guarded(db)
+    exportados_subq = select(PagoReportadoExportado.pago_reportado_id)
+    filtros = _filtros_fecha_cedula_institucion_reportados(
+        fecha_desde=fecha_desde,
+        fecha_hasta=fecha_hasta,
+        cedula=cedula,
+        institucion=institucion,
+    )
+
+    # Rechazado / importado: listado sin filtro de validadores (auditoría por estado).
+    if estado in ("rechazado", "importado"):
+        q = select(PagoReportado).where(PagoReportado.estado == estado)
+        count_q = select(func.count(PagoReportado.id)).where(PagoReportado.estado == estado)
+        for w in filtros:
+            q = q.where(w)
+            count_q = count_q.where(w)
+        total = int(db.execute(count_q).scalar() or 0)
+        q = q.order_by(
+            case((PagoReportado.estado == "rechazado", 1), else_=0),
+            PagoReportado.created_at.asc(),
+        ).offset((page - 1) * per_page).limit(per_page)
+        rows = db.execute(q).scalars().all()
+        items = _pago_reportado_list_items_from_rows(db, rows)
+        return {"items": items, "total": total, "page": page, "per_page": per_page}
+
+    # Cola manual: pendiente / en_revision que NO cumplen validadores.
+    # `aprobado` ya no entra en la cola por defecto (se accede solo via filtro explicito).
+    wh = _where_clauses_cola_reportados(estado, incluir_exportados, exportados_subq, filtros)
+    wh_primer_scope = (
+        _where_clauses_cola_reportados(None, incluir_exportados, exportados_subq, filtros)
+        if estado in ("pendiente", "en_revision")
+        else wh
+    )
+    primer_scope_key = _primer_maps_scope_key(
+        incluir_exportados=incluir_exportados,
+        fecha_desde=fecha_desde,
+        fecha_hasta=fecha_hasta,
+        cedula=cedula,
+        institucion=institucion,
+    )
+    primer_precalc, primer_num_op, _ = _get_primer_triple_cached(
+        db, wh_primer_scope, primer_scope_key
+    )
+    # Fast path: filtrar el barrido por la columna persistida `falla_validadores_manual`
+    # (indexada). Las filas con `falla=False` ya cumplen validadores y el bucle Python las
+    # descartaria igualmente con `_item_falla_validadores_cola_manual`; ahorrar leerlas y
+    # iterarlas reduce el escaneo de O(filas_en_estado) a O(filas_que_realmente_van_a_cola).
+    # `IS NULL` (filas no backfilled todavia) se incluye para preservar correctness — el
+    # validador Python se ejecutara igual sobre ellas. El mapa de dedup (`primer_num_op`)
+    # se sigue calculando sobre `wh_primer_scope` SIN este filtro, para que un duplicado
+    # "lider" con `falla=False` siga liderando su cadena y los "seguidores" se descarten
+    # por dedup como hoy (semantica preservada).
+    wh_scan = list(wh) + [
+        or_(
+            PagoReportado.estado == "en_revision",
+            PagoReportado.falla_validadores_manual.is_(True),
+            PagoReportado.falla_validadores_manual.is_(None),
+        )
+    ]
+    q = select(PagoReportado).where(*wh_scan).order_by(
+        case((PagoReportado.estado == "rechazado", 1), else_=0),
+        PagoReportado.created_at.asc(),
+    )
+
+    emit_counts = bool(emit_manual_estado_counts_for_kpis and estado is None)
+    by_estado_manual: Dict[str, int] = {"pendiente": 0, "en_revision": 0}
+
+    batch = _COBROS_LISTADO_SCAN_BATCH
+    offset_scan = 0
+    skip_need = (page - 1) * per_page
+    take_need = per_page
+    page_ids_ordered: List[int] = []
+    total = 0
+    pagos_canon_acum: Dict[str, Set[str]] = {"queried": set(), "present": set()}
+    pagos_info_acum: Dict[str, Any] = {"info_queried": set(), "info_by_key": {}}
+    while True:
+        rows = db.execute(q.offset(offset_scan).limit(batch)).scalars().all()
+        if not rows:
+            break
+        for it in _pago_reportado_list_items_from_rows(
+            db,
+            rows,
+            primer_id_por_norm_precalc=primer_precalc,
+            include_financial_fields=False,
+            pagos_canon_acum=pagos_canon_acum,
+            pagos_info_acum=pagos_info_acum,
+        ):
+            if not _reportado_pasa_filtro_dedup_num_op(it, primer_num_op):
+                continue
+            if not _item_falla_validadores_cola_manual(it):
+                continue
+            total += 1
+            if emit_counts:
+                st = (it.estado or "").strip()
+                if st in by_estado_manual:
+                    by_estado_manual[st] += 1
+            if skip_need > 0:
+                skip_need -= 1
+                continue
+            if take_need > 0:
+                page_ids_ordered.append(int(it.id))
+                take_need -= 1
+        offset_scan += len(rows)
+
+    page_items: List[PagoReportadoListItem] = []
+    if page_ids_ordered:
+        seen: Set[int] = set()
+        uniq_ids: List[int] = []
+        for pid in page_ids_ordered:
+            if pid in seen:
+                continue
+            seen.add(pid)
+            uniq_ids.append(pid)
+        rows_page = db.execute(select(PagoReportado).where(PagoReportado.id.in_(uniq_ids))).scalars().all()
+        by_id = {int(r.id): r for r in rows_page}
+        ordered_pr = [by_id[i] for i in uniq_ids if i in by_id]
+        if ordered_pr:
+            page_items = _pago_reportado_list_items_from_rows(
+                db,
+                ordered_pr,
+                primer_id_por_norm_precalc=primer_precalc,
+                include_financial_fields=True,
+                pagos_canon_acum=pagos_canon_acum,
+                pagos_info_acum=pagos_info_acum,
+            )
+
+    out: Dict[str, Any] = {"items": page_items, "total": total, "page": page, "per_page": per_page}
+    if emit_counts:
+        out["_manual_kpi_counts"] = dict(by_estado_manual)
+    return out
+
+
+def _kpis_pagos_reportados_payload(
+    db: Session,
+    *,
+    fecha_desde: Optional[date],
+    fecha_hasta: Optional[date],
+    cedula: Optional[str],
+    institucion: Optional[str],
+    incluir_exportados: bool = False,
+    manual_queue_counts: Optional[Dict[str, int]] = None,
+) -> dict:
+    """
+    Conteos por estado con mismos filtros fecha/cedula/institucion que el listado.
+    pendiente / en_revision: solo los que NO cumplen validadores (cola de analisis manual).
+    importado / rechazado: totales SQL (estados terminales).
+
+    `aprobado` ya no se computa: el pago aprobado ya esta en cartera (tabla pagos) y no
+    requiere accion. Mantenerlo costaba un barrido extra de la cola y un KPI confuso
+    ("aprobado" pero con observacion DUPLICADO en una pantalla de cola por gestionar).
+
+    Si `manual_queue_counts` viene del listado (mismo barrido), no se vuelve a escanear la cola.
+    """
+    filtros = _filtros_fecha_cedula_institucion_reportados(
+        fecha_desde=fecha_desde,
+        fecha_hasta=fecha_hasta,
+        cedula=cedula,
+        institucion=institucion,
+    )
+    counts = {"pendiente": 0, "en_revision": 0, "rechazado": 0, "importado": 0}
+
+    if incluir_exportados:
+        base_term = select(PagoReportado.estado, func.count(PagoReportado.id).label("cnt")).where(
+            PagoReportado.estado.in_(("importado", "rechazado"))
+        )
+    else:
+        base_term = select(PagoReportado.estado, func.count(PagoReportado.id).label("cnt")).where(
+            PagoReportado.estado.in_(("importado", "rechazado"))
+        )
+    for w in filtros:
+        base_term = base_term.where(w)
+    base_term = base_term.group_by(PagoReportado.estado)
+    for row in db.execute(base_term).all():
+        if row.estado in counts:
+            counts[row.estado] = int(row.cnt or 0)
+
+    if manual_queue_counts is not None:
+        counts["pendiente"] = int(manual_queue_counts.get("pendiente", 0))
+        counts["en_revision"] = int(manual_queue_counts.get("en_revision", 0))
+    else:
+        exportados_subq = select(PagoReportadoExportado.pago_reportado_id)
+        wh_kpi = _where_clauses_cola_reportados(None, incluir_exportados, exportados_subq, filtros)
+        kpi_scope_key = _primer_maps_scope_key(
+            incluir_exportados=incluir_exportados,
+            fecha_desde=fecha_desde,
+            fecha_hasta=fecha_hasta,
+            cedula=cedula,
+            institucion=institucion,
+        )
+        primer_kpi, primer_num_op_kpi, _ = _get_primer_triple_cached(db, wh_kpi, kpi_scope_key)
+        # Fast path simetrico al listado: el barrido KPI itera solo filas que pueden caer en
+        # cola (`falla=True` o NULL pendiente de backfill). El precalc de dedup (primer_kpi)
+        # se calcula sobre el scope completo `wh_kpi` SIN filtro, para que un duplicado
+        # "lider" con `falla=False` siga liderando y sus "seguidores" se descarten igual.
+        wh_kpi_scan = list(wh_kpi) + [
+            or_(
+                PagoReportado.estado == "en_revision",
+                PagoReportado.falla_validadores_manual.is_(True),
+                PagoReportado.falla_validadores_manual.is_(None),
+            )
+        ]
+        q_scan = select(PagoReportado).where(*wh_kpi_scan).order_by(PagoReportado.created_at.asc())
+
+        batch = _COBROS_LISTADO_SCAN_BATCH
+        offset_scan = 0
+        pagos_canon_acum_kpi: Dict[str, Set[str]] = {"queried": set(), "present": set()}
+        pagos_info_acum_kpi: Dict[str, Any] = {"info_queried": set(), "info_by_key": {}}
+        while True:
+            rows_b = db.execute(q_scan.offset(offset_scan).limit(batch)).scalars().all()
+            if not rows_b:
+                break
+            for it in _pago_reportado_list_items_from_rows(
+                db,
+                rows_b,
+                primer_id_por_norm_precalc=primer_kpi,
+                include_financial_fields=False,
+                pagos_canon_acum=pagos_canon_acum_kpi,
+                pagos_info_acum=pagos_info_acum_kpi,
+            ):
+                if not _reportado_pasa_filtro_dedup_num_op(it, primer_num_op_kpi):
+                    continue
+                if not _item_falla_validadores_cola_manual(it):
+                    continue
+                st = (it.estado or "").strip()
+                if st in ("pendiente", "en_revision"):
+                    counts[st] += 1
+            offset_scan += len(rows_b)
+
+    counts["total"] = sum(counts[k] for k in ("pendiente", "en_revision", "rechazado", "importado"))
+    return counts
+
+

@@ -110,89 +110,16 @@ import {
   esUrlComprobanteImagenConAuth,
   fetchStaffComprobanteBlobWithDisplayMime,
 } from '../../utils/comprobanteImagenAuth'
-
-type StaffComprobanteListPreview = {
-  open: boolean
-  href: string
-  label: string
-  pagoId: number | null
-  blobUrl: string | null
-  contentType: string | null
-  loading: boolean
-  rotDeg: number
-}
-
-const STAFF_COMPROBANTE_LIST_PREVIEW_CLOSED: StaffComprobanteListPreview = {
-  open: false,
-  href: '',
-  label: '',
-  pagoId: null,
-  blobUrl: null,
-  contentType: null,
-  loading: false,
-  rotDeg: 0,
-}
-
-/** Visible en columna Observaciones (lista principal y revisar pagos). */
-const OBSERVACION_COL_PAGO_DUPLICADO = 'PAGO DUPLICADO'
-
-function observacionesConMarcaDuplicadoCartera(p: PagoConError): string {
-  const obs = (p.observaciones ?? '').trim()
-  if (p.duplicado_documento_en_pagos === true) {
-    return obs
-      ? `${OBSERVACION_COL_PAGO_DUPLICADO} ${obs}`
-      : OBSERVACION_COL_PAGO_DUPLICADO
-  }
-  return obs
-}
-
-/**
- * Pago «cerrado»: conciliado, verificado SI, aplicado a cuotas y estado PAGADO/ADELANTADO.
- * Para estas filas el modal solo aporta consulta - el icono debe ser Eye y «Editar» pasa a «Ver»,
- * alineado con el modo solo-lectura del formulario y con `pagoCarteraRevisionBloquearToggleCerrado`.
- */
-function pagoEstaCerradoSoloConsulta(
-  p: Pago | PagoConError | null | undefined
-): boolean {
-  if (!p) return false
-  const pago = p as Pago
-  if (pago.tiene_aplicacion_cuotas === false) return false
-  if (!Boolean(pago.conciliado)) return false
-  const verif = String(pago.verificado_concordancia ?? '')
-    .trim()
-    .toUpperCase()
-  if (verif !== 'SI') return false
-  const est = String(pago.estado ?? '')
-    .trim()
-    .toUpperCase()
-  return est === 'PAGADO' || est === 'PAGO_ADELANTADO' || est === 'ADELANTADO'
-}
-
-/**
- * Pago elegible para «Conciliar y aplicar cuotas» en lote desde la pestaña «Todos los Pagos».
- * Requiere estar en cartera con préstamo y monto positivo, en estado PENDIENTE y aún sin cuota_pagos.
- * Si ya está cerrado (`pagoEstaCerradoSoloConsulta`) o sin préstamo/monto, no se ofrece.
- */
-function pagoElegibleConciliarAplicar(
-  p: Pago | PagoConError | null | undefined
-): boolean {
-  if (!p) return false
-  const pago = p as Pago
-  if (!pago.prestamo_id) return false
-  const monto =
-    typeof pago.monto_pagado === 'number'
-      ? pago.monto_pagado
-      : parseFloat(String(pago.monto_pagado ?? 0))
-  if (!Number.isFinite(monto) || monto <= 0) return false
-  const estado = String(pago.estado ?? '')
-    .trim()
-    .toUpperCase()
-  if (estado !== 'PENDIENTE' && estado !== '') return false
-  if (pago.tiene_aplicacion_cuotas === true) return false
-  return true
-}
-
-const GMAIL_METRICS_SNAPSHOT_KEY = 'pagos:last_gmail_metrics_snapshot'
+import {
+  GMAIL_METRICS_SNAPSHOT_KEY,
+  OBSERVACION_COL_PAGO_DUPLICADO,
+  observacionesConMarcaDuplicadoCartera,
+  pagoElegibleConciliarAplicar,
+  pagoEstaCerradoSoloConsulta,
+} from './pagosList/pagosListUtils'
+import { ReemplazarPagosDialog } from './pagosList/ReemplazarPagosDialog'
+import { StaffComprobanteDock } from './pagosList/StaffComprobanteDock'
+import { useStaffComprobantePreview } from './pagosList/useStaffComprobantePreview'
 
 export function PagosList() {
   const [searchParams, setSearchParams] = useSearchParams()
@@ -370,93 +297,13 @@ export function PagosList() {
   const syncingRevisionRef = useRef(false)
   const queryClient = useQueryClient()
 
-  const [lgViewport, setLgViewport] = useState(false)
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    const mq = window.matchMedia('(min-width: 1024px)')
-    const apply = () => setLgViewport(mq.matches)
-    apply()
-    mq.addEventListener('change', apply)
-    return () => mq.removeEventListener('change', apply)
-  }, [])
-
-  const [staffComprobantePreview, setStaffComprobantePreview] =
-    useState<StaffComprobanteListPreview>(STAFF_COMPROBANTE_LIST_PREVIEW_CLOSED)
-
-  useEffect(() => {
-    if (!lgViewport && staffComprobantePreview.open) {
-      setStaffComprobantePreview(prev => {
-        if (prev.blobUrl) URL.revokeObjectURL(prev.blobUrl)
-        return STAFF_COMPROBANTE_LIST_PREVIEW_CLOSED
-      })
-    }
-  }, [lgViewport, staffComprobantePreview.open])
-
-  useEffect(() => {
-    return () => {
-      if (staffComprobantePreview.blobUrl) {
-        URL.revokeObjectURL(staffComprobantePreview.blobUrl)
-      }
-    }
-  }, [staffComprobantePreview.blobUrl])
-
-  const closeStaffComprobanteListPreview = useCallback(() => {
-    setStaffComprobantePreview(prev => {
-      if (prev.blobUrl) URL.revokeObjectURL(prev.blobUrl)
-      return STAFF_COMPROBANTE_LIST_PREVIEW_CLOSED
-    })
-  }, [])
-
-  const openStaffComprobanteForList = useCallback(
-    async (href: string, label: string, pagoId: number | null) => {
-      const u = String(href || '').trim()
-      if (!u) {
-        toast.error('No hay comprobante o recibo asociado.')
-        return
-      }
-      if (!esUrlComprobanteImagenConAuth(u)) {
-        await abrirStaffComprobanteDesdeHref(u)
-        return
-      }
-      if (!lgViewport) {
-        await abrirStaffComprobanteDesdeHref(u)
-        return
-      }
-      setStaffComprobantePreview(prev => {
-        if (prev.blobUrl) URL.revokeObjectURL(prev.blobUrl)
-        return {
-          ...STAFF_COMPROBANTE_LIST_PREVIEW_CLOSED,
-          open: true,
-          href: u,
-          label,
-          pagoId,
-          loading: true,
-        }
-      })
-      try {
-        const { blob, contentType } =
-          await fetchStaffComprobanteBlobWithDisplayMime(u)
-        const blobUrl = URL.createObjectURL(blob)
-        setStaffComprobantePreview(prev => ({
-          ...prev,
-          blobUrl,
-          contentType,
-          loading: false,
-          rotDeg: 0,
-        }))
-      } catch (e) {
-        toast.error(getErrorMessage(e) || 'No se pudo cargar el comprobante.')
-        setStaffComprobantePreview(prev => {
-          if (prev.blobUrl) URL.revokeObjectURL(prev.blobUrl)
-          return STAFF_COMPROBANTE_LIST_PREVIEW_CLOSED
-        })
-      }
-    },
-    [lgViewport]
-  )
-
-  const dockStaffComprobante = staffComprobantePreview.open && lgViewport
+  const {
+    staffComprobantePreview,
+    setStaffComprobantePreview,
+    closeStaffComprobanteListPreview,
+    openStaffComprobanteForList,
+    dockStaffComprobante,
+  } = useStaffComprobantePreview()
 
   const sincronizarPendientesRevision = useCallback(
     async (opts?: { silent?: boolean }) => {
@@ -2139,114 +1986,16 @@ export function PagosList() {
       )}
     >
       {dockStaffComprobante ? (
-        <aside className="flex min-h-[min(36vh,320px)] min-w-0 flex-col bg-slate-100 lg:h-full lg:max-h-full lg:min-h-0 lg:overflow-y-auto lg:overscroll-y-contain">
-          <Card className="flex h-full min-h-0 flex-col rounded-none border-0 shadow-none">
-            <CardHeader className="shrink-0 border-b border-slate-200/80 px-3 pb-2 pt-3">
-              <CardTitle className="text-base">Comprobante</CardTitle>
-              <p className="text-xs text-muted-foreground">
-                {staffComprobantePreview.label}
-              </p>
-            </CardHeader>
-            <CardContent className="flex min-h-0 flex-1 flex-col space-y-2 overflow-hidden p-2 sm:p-3 lg:pl-0 lg:pr-2">
-              {staffComprobantePreview.loading ? (
-                <div className="flex flex-1 items-center justify-center py-12">
-                  <Loader2 className="h-10 w-10 animate-spin text-slate-500" />
-                </div>
-              ) : staffComprobantePreview.blobUrl &&
-                staffComprobantePreview.contentType?.startsWith('image/') ? (
-                <>
-                  <div className="flex min-h-0 flex-1 items-center justify-center overflow-auto rounded-md border border-slate-200/80 bg-white lg:rounded-l-none lg:border-l-0">
-                    <div
-                      className="inline-flex max-h-full max-w-full origin-center transition-transform duration-200"
-                      style={{
-                        transform: `rotate(${staffComprobantePreview.rotDeg}deg)`,
-                      }}
-                    >
-                      <img
-                        src={staffComprobantePreview.blobUrl}
-                        alt="Comprobante"
-                        className="max-h-full max-w-full object-contain"
-                      />
-                    </div>
-                  </div>
-                  <div className="flex shrink-0 flex-wrap gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      title="Rotar 90° a la izquierda"
-                      onClick={() =>
-                        setStaffComprobantePreview(prev => ({
-                          ...prev,
-                          rotDeg: (prev.rotDeg - 90 + 360) % 360,
-                        }))
-                      }
-                    >
-                      <RotateCcw className="mr-1 h-4 w-4" />
-                      Rotar
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      title="Rotar 90° a la derecha"
-                      onClick={() =>
-                        setStaffComprobantePreview(prev => ({
-                          ...prev,
-                          rotDeg: (prev.rotDeg + 90) % 360,
-                        }))
-                      }
-                    >
-                      <span className="inline-flex" aria-hidden>
-                        <RotateCcw className="mr-1 h-4 w-4 scale-x-[-1]" />
-                      </span>
-                      Rotar der.
-                    </Button>
-                  </div>
-                </>
-              ) : staffComprobantePreview.blobUrl ? (
-                <div className="min-h-0 flex-1 overflow-auto rounded-md border border-slate-200/80 bg-white lg:rounded-l-none lg:border-l-0">
-                  <iframe
-                    title={staffComprobantePreview.label || 'Comprobante PDF'}
-                    src={staffComprobantePreview.blobUrl}
-                    className="h-[min(36vh,320px)] min-h-[200px] w-full border-0 lg:h-full lg:min-h-[min(50vh,520px)]"
-                  />
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">
-                  No se pudo cargar el comprobante.
-                </p>
-              )}
-              {staffComprobantePreview.href ? (
-                <div className="flex shrink-0 flex-col gap-2 sm:flex-row">
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    className="w-full sm:flex-1"
-                    onClick={() =>
-                      void abrirStaffComprobanteDesdeHref(
-                        staffComprobantePreview.href
-                      )
-                    }
-                  >
-                    <Eye className="mr-1 h-4 w-4" />
-                    Abrir en nueva pestaña
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="secondary"
-                    className="w-full sm:flex-1"
-                    onClick={closeStaffComprobanteListPreview}
-                  >
-                    Cerrar panel
-                  </Button>
-                </div>
-              ) : null}
-            </CardContent>
-          </Card>
-        </aside>
+        <StaffComprobanteDock
+          preview={staffComprobantePreview}
+          onClose={closeStaffComprobanteListPreview}
+          onRotate={delta =>
+            setStaffComprobantePreview(prev => ({
+              ...prev,
+              rotDeg: (prev.rotDeg + delta + 360) % 360,
+            }))
+          }
+        />
       ) : null}
 
       <div
@@ -2363,8 +2112,8 @@ export function PagosList() {
                     <>
                       Procesando: {gmailStatus.last_emails} correos,{' '}
                       {gmailStatus.last_files} archivos
-                      {typeof gmailStatus.last_run_summary?.gmail_messages_listed ===
-                        'number' &&
+                      {typeof gmailStatus.last_run_summary
+                        ?.gmail_messages_listed === 'number' &&
                       gmailStatus.last_run_summary.gmail_messages_listed > 0 &&
                       (gmailStatus.last_emails ?? 0) === 0 ? (
                         <span className="mt-1 block text-gray-600">
@@ -2520,7 +2269,8 @@ export function PagosList() {
                           <span>Detener seguimiento</span>
                         </button>
                       )}
-                      {gmailPollGaveUp && gmailStatus?.last_status === 'running' ? (
+                      {gmailPollGaveUp &&
+                      gmailStatus?.last_status === 'running' ? (
                         <p className="px-3 text-xs text-amber-800">
                           El servidor no respondió a tiempo varias veces; el
                           proceso puede continuar en segundo plano.
@@ -2546,7 +2296,6 @@ export function PagosList() {
                     </div>
                   )}
                 </div>
-
               </div>
             </PopoverContent>
           </Popover>
@@ -2570,8 +2319,8 @@ export function PagosList() {
               </div>
               {gmailPollGaveUp && gmailStatus?.last_status === 'running' ? (
                 <p className="mt-1 text-xs text-amber-800">
-                  Seguimiento en el navegador pausado (timeouts del servidor). El
-                  escaneo puede seguir en Render; recargue la página en unos
+                  Seguimiento en el navegador pausado (timeouts del servidor).
+                  El escaneo puede seguir en Render; recargue la página en unos
                   minutos para ver progreso.
                 </p>
               ) : null}
@@ -2581,15 +2330,14 @@ export function PagosList() {
                     <span className="font-medium text-blue-800">
                       {gmailRunningProgressLabel(gmailStatus)}
                     </span>
-                    {typeof gmailStatus.last_run_summary?.gmail_messages_listed ===
-                      'number' &&
+                    {typeof gmailStatus.last_run_summary
+                      ?.gmail_messages_listed === 'number' &&
                     gmailStatus.last_run_summary.gmail_messages_listed > 0 &&
                     (gmailStatus.last_emails ?? 0) <
                       gmailStatus.last_run_summary.gmail_messages_listed ? (
                       <span className="mt-1 block text-xs text-gray-600">
-                        Gemini puede tardar varios minutos por correo con
-                        imagen grande; el número no sube hasta terminar cada
-                        hilo.
+                        Gemini puede tardar varios minutos por correo con imagen
+                        grande; el número no sube hasta terminar cada hilo.
                       </span>
                     ) : null}
                   </>
@@ -2611,164 +2359,23 @@ export function PagosList() {
             </div>
           </div>
         </div>
-        <Dialog
+        <ReemplazarPagosDialog
           open={reemplazarPagosOpen}
+          step={reemplazarStep}
+          cedula={cedulaReemplazo}
+          prestamos={prestamosReemplazo}
+          prestamoId={prestamoIdReemplazo}
+          prestamoSeleccionado={prestamoReemplazoSeleccionado}
+          loading={loadingReemplazo}
           onOpenChange={open => {
             if (!open) cerrarReemplazarPagos()
           }}
-        >
-          <DialogContent className="max-w-md">
-            <DialogHeader>
-              <DialogTitle>Reemplazar pagos</DialogTitle>
-            </DialogHeader>
-            {reemplazarStep === 'cedula' && (
-              <div className="space-y-4 py-2">
-                <p className="text-sm text-gray-600">
-                  Ingrese la cédula del cliente. Solo se consideran préstamos en
-                  estado APROBADO.
-                </p>
-                <Input
-                  placeholder="Cédula"
-                  value={cedulaReemplazo}
-                  onChange={e => setCedulaReemplazo(e.target.value)}
-                  onKeyDown={e => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault()
-                      void handleBuscarPrestamosReemplazo()
-                    }
-                  }}
-                  autoFocus
-                />
-                <DialogFooter className="gap-2 sm:gap-0">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={cerrarReemplazarPagos}
-                    disabled={loadingReemplazo}
-                  >
-                    Cancelar
-                  </Button>
-                  <Button
-                    type="button"
-                    onClick={() => void handleBuscarPrestamosReemplazo()}
-                    disabled={loadingReemplazo}
-                  >
-                    {loadingReemplazo ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Buscando...
-                      </>
-                    ) : (
-                      'Continuar'
-                    )}
-                  </Button>
-                </DialogFooter>
-              </div>
-            )}
-            {reemplazarStep === 'elegir' && (
-              <div className="space-y-4 py-2">
-                <p className="text-sm text-gray-600">
-                  Hay {prestamosReemplazo.length} préstamos aprobados. Elija el
-                  crédito cuyos pagos desea borrar y reemplazar.
-                </p>
-                <Select
-                  value={
-                    prestamoIdReemplazo != null
-                      ? String(prestamoIdReemplazo)
-                      : 'none'
-                  }
-                  onValueChange={v =>
-                    setPrestamoIdReemplazo(v === 'none' ? null : Number(v))
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Seleccione préstamo" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Seleccione préstamo</SelectItem>
-                    {prestamosReemplazo.map(p => (
-                      <SelectItem key={p.id} value={String(p.id)}>
-                        #{p.id} {p.modelo_vehiculo || p.producto || 'Préstamo'}{' '}
-                        - {p.nombres}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <DialogFooter className="gap-2 sm:gap-0">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => {
-                      setReemplazarStep('cedula')
-                      setPrestamoIdReemplazo(null)
-                    }}
-                    disabled={loadingReemplazo}
-                  >
-                    Atrás
-                  </Button>
-                  <Button
-                    type="button"
-                    onClick={() => {
-                      if (prestamoIdReemplazo == null) {
-                        toast.error('Seleccione un préstamo')
-                        return
-                      }
-                      setReemplazarStep('confirmar')
-                    }}
-                    disabled={loadingReemplazo || prestamoIdReemplazo == null}
-                  >
-                    Continuar
-                  </Button>
-                </DialogFooter>
-              </div>
-            )}
-            {reemplazarStep === 'confirmar' &&
-              prestamoIdReemplazo != null &&
-              prestamoReemplazoSeleccionado && (
-                <div className="space-y-4 py-2">
-                  <p className="text-sm text-gray-700">
-                    ¿Desea borrar <strong>todos los pagos</strong> de la cédula{' '}
-                    <strong>{prestamoReemplazoSeleccionado.cedula}</strong> en
-                    el préstamo <strong>#{prestamoIdReemplazo}</strong>
-                    {prestamoReemplazoSeleccionado.modelo_vehiculo
-                      ? ` (${prestamoReemplazoSeleccionado.modelo_vehiculo})`
-                      : ''}
-                    ? Luego podrá cargar los pagos desde Excel con el flujo
-                    habitual.
-                  </p>
-                  <DialogFooter className="gap-2 sm:gap-0">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() =>
-                        setReemplazarStep(
-                          prestamosReemplazo.length > 1 ? 'elegir' : 'cedula'
-                        )
-                      }
-                      disabled={loadingReemplazo}
-                    >
-                      Atrás
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="destructive"
-                      onClick={() => void handleConfirmarReemplazarPagos()}
-                      disabled={loadingReemplazo}
-                    >
-                      {loadingReemplazo ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Borrando...
-                        </>
-                      ) : (
-                        'Sí, borrar todos los pagos'
-                      )}
-                    </Button>
-                  </DialogFooter>
-                </div>
-              )}
-          </DialogContent>
-        </Dialog>
+          onCedulaChange={setCedulaReemplazo}
+          onPrestamoIdChange={setPrestamoIdReemplazo}
+          onStepChange={setReemplazarStep}
+          onBuscarPrestamos={handleBuscarPrestamosReemplazo}
+          onConfirmar={handleConfirmarReemplazarPagos}
+        />
         {/* Después de importar desde Cobros: si hay errores, ofrecer descargar Excel de esta importación (datos_importados_conerrores) */}
         {lastImportCobrosResult &&
           lastImportCobrosResult.registros_con_error > 0 && (
@@ -4939,11 +4546,10 @@ export function PagosList() {
                   } else {
                     try {
                       if (esRevisarPagos || activeTab === 'revision') {
-                        const resultado =
-                          await eliminarPagoRevisionOConError({
-                            idConError: pagoIdEliminado,
-                            idCartera: meta?.pagoCarteraId,
-                          })
+                        const resultado = await eliminarPagoRevisionOConError({
+                          idConError: pagoIdEliminado,
+                          idCartera: meta?.pagoCarteraId,
+                        })
                         toast.success(
                           resultado === 'ya_ausente'
                             ? 'Pago guardado, conciliado y aplicado (ya no estaba en revisión).'

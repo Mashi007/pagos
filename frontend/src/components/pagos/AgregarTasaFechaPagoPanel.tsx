@@ -179,8 +179,8 @@ export function AgregarTasaFechaPagoPanel() {
               <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0" />
               <span>
                 <strong>Fin de semana (Caracas):</strong> no es necesario
-                registrar tasas de hoy. El sistema copia automáticamente las
-                del viernes
+                registrar tasas de hoy. El sistema copia automáticamente las del
+                viernes
                 {fechaViernesRef ? ` (${fechaViernesRef})` : ''} para sábado y
                 domingo.
               </span>
@@ -197,7 +197,9 @@ export function AgregarTasaFechaPagoPanel() {
               <DollarSign className="h-6 w-6 text-amber-700" />
               <div className="min-w-0">
                 <p className="text-xs font-medium text-gray-600">
-                  {esFinDeSemana ? 'Tasa vigente hoy (desde viernes)' : 'Tasa Vigente Hoy'}
+                  {esFinDeSemana
+                    ? 'Tasa vigente hoy (desde viernes)'
+                    : 'Tasa Vigente Hoy'}
                 </p>
                 <p className="text-base font-semibold text-amber-900">
                   {(tasaHoyBanner.fecha || '').slice(0, 10)} - Euro: Bs.{' '}

@@ -245,11 +245,13 @@ export function diagnosticoIdentificacionDesdeRunSummary(
 
 /** Texto corto para botón / barra mientras last_status=running. */
 export function gmailRunningProgressLabel(
-  status: Pick<
-    GmailStatus,
-    'last_status' | 'last_emails' | 'last_files' | 'last_run_summary'
-  > | null
-  | undefined
+  status:
+    | Pick<
+        GmailStatus,
+        'last_status' | 'last_emails' | 'last_files' | 'last_run_summary'
+      >
+    | null
+    | undefined
 ): string {
   if (!status || status.last_status !== 'running') {
     return 'Procesar manualmente'

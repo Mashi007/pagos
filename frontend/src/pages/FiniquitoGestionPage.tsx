@@ -185,7 +185,12 @@ const BANDEJA_PRINCIPAL_FETCH_LIMIT = 100
 const TERMINADOS_TABLA_LIMIT_INICIAL = 200
 const TERMINADOS_TABLA_LIMIT_PAGINA = 200
 
-type FiniquitoAreaId = 'bandeja' | 'revision' | 'contable' | 'trabajo' | 'terminados'
+type FiniquitoAreaId =
+  | 'bandeja'
+  | 'revision'
+  | 'contable'
+  | 'trabajo'
+  | 'terminados'
 
 const AREAS_CARGADAS_INICIAL: Record<FiniquitoAreaId, boolean> = {
   bandeja: false,
@@ -307,7 +312,10 @@ function FiniquitoCedulaFiltroInline({
           placeholder={placeholder}
           value={value}
           onChange={e => onChange(e.target.value)}
-          className={cn('h-9 w-full pl-8 pr-8 font-mono text-sm', inputClassName)}
+          className={cn(
+            'h-9 w-full pl-8 pr-8 font-mono text-sm',
+            inputClassName
+          )}
         />
         {value ? (
           <button
@@ -345,10 +353,7 @@ type FiltrosTerminadosTabla = {
   fechaTerminado: string
 }
 
-function terminadoCoincideFiltroTexto(
-  valor: string,
-  filtro: string
-): boolean {
+function terminadoCoincideFiltroTexto(valor: string, filtro: string): boolean {
   const f = filtro.trim().toLowerCase()
   if (!f) return true
   return valor.toLowerCase().includes(f)
@@ -378,10 +383,7 @@ function terminadoCoincideFiltrosTabla(
     if (!raw.includes(t) && !fmt.includes(t)) return false
   }
   if (
-    !terminadoCoincideFiltroFecha(
-      row.fecha_aprobacion,
-      filtros.fechaAprobacion
-    )
+    !terminadoCoincideFiltroFecha(row.fecha_aprobacion, filtros.fechaAprobacion)
   ) {
     return false
   }
@@ -479,9 +481,9 @@ function FiniquitoGestionPageInner() {
   const [cedulaContableBusqueda, setCedulaContableBusqueda] = useState('')
   const [cedulaTrabajoInput, setCedulaTrabajoInput] = useState('')
   const [cedulaTrabajoBusqueda, setCedulaTrabajoBusqueda] = useState('')
-  const [itemsAreaRevision, setItemsAreaRevision] = useState<FiniquitoCasoItem[]>(
-    []
-  )
+  const [itemsAreaRevision, setItemsAreaRevision] = useState<
+    FiniquitoCasoItem[]
+  >([])
   const [totalAreaRevision, setTotalAreaRevision] = useState(0)
   const [itemsAreaRevisionContable, setItemsAreaRevisionContable] = useState<
     FiniquitoCasoItem[]
@@ -508,9 +510,8 @@ function FiniquitoGestionPageInner() {
     () => new Set()
   )
   const [pasandoContableLote, setPasandoContableLote] = useState(false)
-  const [resumenEstado, setResumenEstado] = useState<FiniquitoResumenEstado | null>(
-    null
-  )
+  const [resumenEstado, setResumenEstado] =
+    useState<FiniquitoResumenEstado | null>(null)
   const [resumenBandejaPorCedula, setResumenBandejaPorCedula] =
     useState<FiniquitoResumenEstado | null>(null)
   const [cargandoResumenBandejaPorCedula, setCargandoResumenBandejaPorCedula] =
@@ -539,18 +540,17 @@ function FiniquitoGestionPageInner() {
   >(null)
   const [pendingLiberarCaso, setPendingLiberarCaso] =
     useState<FiniquitoCasoItem | null>(null)
-  const [pendingVistoRow, setPendingVistoRow] = useState<FiniquitoCasoItem | null>(
-    null
-  )
+  const [pendingVistoRow, setPendingVistoRow] =
+    useState<FiniquitoCasoItem | null>(null)
   const [kpiNuevosRevision, setKpiNuevosRevision] = useState<{
     total: number
     ventana_horas: number
   } | null>(null)
   const [cedulaTerminadosInput, setCedulaTerminadosInput] = useState('')
   const [cedulaTerminadosBusqueda, setCedulaTerminadosBusqueda] = useState('')
-  const [itemsTerminados, setItemsTerminados] = useState<FiniquitoTerminadoItem[]>(
-    []
-  )
+  const [itemsTerminados, setItemsTerminados] = useState<
+    FiniquitoTerminadoItem[]
+  >([])
   const [totalTerminados, setTotalTerminados] = useState(0)
   const [resumenDias, setResumenDias] = useState<FiniquitoTerminadosDia[]>([])
   const [totalTerminadosEnVentana, setTotalTerminadosEnVentana] = useState(0)
@@ -626,9 +626,7 @@ function FiniquitoGestionPageInner() {
   }, [areasCargadas])
 
   const marcarAreaCargada = useCallback((area: FiniquitoAreaId) => {
-    setAreasCargadas(prev =>
-      prev[area] ? prev : { ...prev, [area]: true }
-    )
+    setAreasCargadas(prev => (prev[area] ? prev : { ...prev, [area]: true }))
   }, [])
 
   const setAreaLoadingFlag = useCallback(
@@ -690,7 +688,9 @@ function FiniquitoGestionPageInner() {
       } catch (e: unknown) {
         if (gen !== bandejaFetchGenRef.current) return
         if (!silent) {
-          toast.error(e instanceof Error ? e.message : 'Error al cargar bandeja')
+          toast.error(
+            e instanceof Error ? e.message : 'Error al cargar bandeja'
+          )
         }
       } finally {
         if (gen === bandejaFetchGenRef.current && !silent) {
@@ -716,9 +716,7 @@ function FiniquitoGestionPageInner() {
         )
         if (gen !== revisionFetchGenRef.current) return
         setItemsAreaRevision(rRevision.items || [])
-        setTotalAreaRevision(
-          rRevision.total ?? (rRevision.items || []).length
-        )
+        setTotalAreaRevision(rRevision.total ?? (rRevision.items || []).length)
         marcarAreaCargada('revision')
       } catch (e: unknown) {
         if (gen !== revisionFetchGenRef.current) return
@@ -1013,7 +1011,8 @@ function FiniquitoGestionPageInner() {
       const tasks: Promise<void>[] = [cargarResumenKpis({ silent: true })]
       if (cargadas.bandeja) tasks.push(cargarBandeja({ silent: true }))
       if (cargadas.revision) tasks.push(cargarAreaRevision({ silent: true }))
-      if (cargadas.contable) tasks.push(cargarAreaRevisionContable({ silent: true }))
+      if (cargadas.contable)
+        tasks.push(cargarAreaRevisionContable({ silent: true }))
       if (cargadas.trabajo) tasks.push(cargarAreaTrabajo({ silent: true }))
       if (cargadas.terminados) {
         tasks.push(cargarTerminados({ silent: true, force: silent }))
@@ -1081,10 +1080,7 @@ function FiniquitoGestionPageInner() {
       .flatMap(d => [d.cantidad, d.cantidad_ingresos ?? 0])
       .filter(c => c > 0)
     const dataMax = vals.length ? Math.max(...vals) : 0
-    return Math.min(
-      TERMINADOS_GRAFICO_ESCALA_MAX,
-      Math.max(1, dataMax)
-    )
+    return Math.min(TERMINADOS_GRAFICO_ESCALA_MAX, Math.max(1, dataMax))
   }, [resumenDias])
 
   const alturaBarraGraficoDiario = (cantidad: number) => {
@@ -1252,7 +1248,11 @@ function FiniquitoGestionPageInner() {
   useEffect(() => {
     if (!areasCargadas.contable) return
     void cargarAreaRevisionContable()
-  }, [areasCargadas.contable, cedulaContableBusqueda, cargarAreaRevisionContable])
+  }, [
+    areasCargadas.contable,
+    cedulaContableBusqueda,
+    cargarAreaRevisionContable,
+  ])
 
   useEffect(() => {
     if (!areasCargadas.trabajo) return
@@ -1325,7 +1325,12 @@ function FiniquitoGestionPageInner() {
     }
 
     return () => observer.disconnect()
-  }, [cargarAreaRevision, cargarAreaRevisionContable, cargarAreaTrabajo, cargarTerminados])
+  }, [
+    cargarAreaRevision,
+    cargarAreaRevisionContable,
+    cargarAreaTrabajo,
+    cargarTerminados,
+  ])
 
   useEffect(() => {
     refreshingRef.current = refreshing
@@ -1708,7 +1713,9 @@ function FiniquitoGestionPageInner() {
 
   const validarBandejaEnLote = async () => {
     if (!canTrasladarFiniquitoBandejas || validandoBandejaLote) return
-    const ids = idsBandejaSeleccionables.filter(id => selectedBandejaIds.has(id))
+    const ids = idsBandejaSeleccionables.filter(id =>
+      selectedBandejaIds.has(id)
+    )
     if (ids.length === 0) {
       toast.message('Seleccione al menos un caso en la bandeja principal.')
       return
@@ -1744,9 +1751,7 @@ function FiniquitoGestionPageInner() {
       void invalidatePrestamosQueries(queryClient)
       await cargarAreasVisibles({ silent: true })
       if (fail === 0) {
-        toast.success(
-          `${ok} caso(s) validados: pasan al área de revisión.`
-        )
+        toast.success(`${ok} caso(s) validados: pasan al área de revisión.`)
       } else if (ok > 0) {
         toast.warning(
           `${ok} validados, ${fail} con error. ${errores.slice(0, 2).join(' · ')}`
@@ -2124,7 +2129,10 @@ function FiniquitoGestionPageInner() {
         <TableHeader className={theadStickyClass}>
           <TableRow className="border-0 hover:bg-transparent">
             {seleccionFilas ? (
-              <TableHead className={cn(thGestion, 'w-10 text-center')} scope="col">
+              <TableHead
+                className={cn(thGestion, 'w-10 text-center')}
+                scope="col"
+              >
                 <input
                   type="checkbox"
                   aria-label={seleccionFilas.ariaSeleccionarTodos}
@@ -2188,51 +2196,52 @@ function FiniquitoGestionPageInner() {
               (row.estado || '').toUpperCase() ===
                 seleccionFilas.estadoRequerido
             return (
-            <TableRow key={row.id} className={idx % 2 === 0 ? trEven : trOdd}>
-              {seleccionFilas ? (
-                <TableCell className={cn(tdGestion, 'text-center')}>
-                  <input
-                    type="checkbox"
-                    aria-label={`Seleccionar caso ${row.id}`}
-                    className="h-4 w-4 rounded border-slate-300"
-                    checked={seleccionFilas.selectedIds.has(row.id)}
-                    disabled={seleccionFilas.disabled || !puedeSeleccionar}
-                    onChange={e =>
-                      seleccionFilas.onToggleRow(row.id, e.target.checked)
-                    }
-                  />
+              <TableRow key={row.id} className={idx % 2 === 0 ? trEven : trOdd}>
+                {seleccionFilas ? (
+                  <TableCell className={cn(tdGestion, 'text-center')}>
+                    <input
+                      type="checkbox"
+                      aria-label={`Seleccionar caso ${row.id}`}
+                      className="h-4 w-4 rounded border-slate-300"
+                      checked={seleccionFilas.selectedIds.has(row.id)}
+                      disabled={seleccionFilas.disabled || !puedeSeleccionar}
+                      onChange={e =>
+                        seleccionFilas.onToggleRow(row.id, e.target.checked)
+                      }
+                    />
+                  </TableCell>
+                ) : null}
+                <TableCell className={cn(tdGestion, 'font-mono text-xs')}>
+                  {row.id}
                 </TableCell>
-              ) : null}
-              <TableCell className={cn(tdGestion, 'font-mono text-xs')}>
-                {row.id}
-              </TableCell>
-              <TableCell className={cn(tdGestion, 'font-mono text-xs')}>
-                {row.cedula}
-              </TableCell>
-              <TableCell className={cn(tdGestion, 'tabular-nums')}>
-                {row.prestamo_id}
-              </TableCell>
-              <TableCell
-                className={cn(tdGestion, 'whitespace-nowrap text-slate-800')}
-                title={
-                  row.ultima_fecha_pago
-                    ? `Desde pagos: ${row.ultima_fecha_pago}`
-                    : 'Sin pagos con prestamo vinculado'
-                }
-              >
-                {textoUltimoPago(row.ultima_fecha_pago)}
-              </TableCell>
-              <TableCell className={cn(tdGestion, 'whitespace-nowrap')}>
-                {badgeConteoFase(tiempo)}
-              </TableCell>
-              <TableCell className={cn(tdGestion, 'whitespace-nowrap')}>
-                {badgeConteoGlobal(tiempo)}
-              </TableCell>
-              <TableCell className={cn(tdGestion, 'text-right')}>
-                {renderAccionesFila(row)}
-              </TableCell>
-            </TableRow>
-          )})}
+                <TableCell className={cn(tdGestion, 'font-mono text-xs')}>
+                  {row.cedula}
+                </TableCell>
+                <TableCell className={cn(tdGestion, 'tabular-nums')}>
+                  {row.prestamo_id}
+                </TableCell>
+                <TableCell
+                  className={cn(tdGestion, 'whitespace-nowrap text-slate-800')}
+                  title={
+                    row.ultima_fecha_pago
+                      ? `Desde pagos: ${row.ultima_fecha_pago}`
+                      : 'Sin pagos con prestamo vinculado'
+                  }
+                >
+                  {textoUltimoPago(row.ultima_fecha_pago)}
+                </TableCell>
+                <TableCell className={cn(tdGestion, 'whitespace-nowrap')}>
+                  {badgeConteoFase(tiempo)}
+                </TableCell>
+                <TableCell className={cn(tdGestion, 'whitespace-nowrap')}>
+                  {badgeConteoGlobal(tiempo)}
+                </TableCell>
+                <TableCell className={cn(tdGestion, 'text-right')}>
+                  {renderAccionesFila(row)}
+                </TableCell>
+              </TableRow>
+            )
+          })}
         </TableBody>
       </Table>
     </div>
@@ -2298,59 +2307,59 @@ function FiniquitoGestionPageInner() {
           {items.map((row, idx) => {
             const tiempo = celdaCicloFiniquito(row)
             return (
-            <TableRow key={row.id} className={idx % 2 === 0 ? trEven : trOdd}>
-              <TableCell className={cn(tdGestion, 'font-mono text-xs')}>
-                {row.id}
-              </TableCell>
-              <TableCell className={cn(tdGestion, 'font-mono text-xs')}>
-                {row.cedula}
-              </TableCell>
-              <TableCell className={cn(tdGestion, 'tabular-nums')}>
-                {row.prestamo_id}
-              </TableCell>
-              <TableCell
-                className={cn(tdGestion, 'whitespace-nowrap text-slate-800')}
-                title={
-                  row.ultima_fecha_pago
-                    ? `Desde pagos: ${row.ultima_fecha_pago}`
-                    : 'Sin pagos con préstamo vinculado'
-                }
-              >
-                {textoUltimoPago(row.ultima_fecha_pago)}
-              </TableCell>
-              <TableCell className={cn(tdGestion, 'whitespace-nowrap')}>
-                {badgeConteoFase(tiempo)}
-              </TableCell>
-              <TableCell className={cn(tdGestion, 'whitespace-nowrap')}>
-                {badgeConteoGlobal(tiempo)}
-              </TableCell>
-              <TableCell className={cn(tdGestion, 'max-w-[200px]')}>
-                <div className="space-y-0.5 text-xs leading-snug text-slate-800">
-                  <div className="font-medium">
-                    {row.cliente_nombres?.trim() || '-'}
-                  </div>
-                  <div className="break-all text-slate-600">
-                    {row.cliente_email?.trim() || '-'}
-                  </div>
-                  <div className="font-mono text-slate-700">
-                    {row.cliente_telefono?.trim() || '-'}
-                  </div>
-                  {row.estado === 'TERMINADO' &&
-                  row.contacto_para_siguientes !== undefined &&
-                  row.contacto_para_siguientes !== null ? (
-                    <div className="pt-1 text-[11px] text-slate-500">
-                      Contactó para siguientes:{' '}
-                      <span className="font-semibold text-slate-700">
-                        {row.contacto_para_siguientes ? 'Sí' : 'No'}
-                      </span>
+              <TableRow key={row.id} className={idx % 2 === 0 ? trEven : trOdd}>
+                <TableCell className={cn(tdGestion, 'font-mono text-xs')}>
+                  {row.id}
+                </TableCell>
+                <TableCell className={cn(tdGestion, 'font-mono text-xs')}>
+                  {row.cedula}
+                </TableCell>
+                <TableCell className={cn(tdGestion, 'tabular-nums')}>
+                  {row.prestamo_id}
+                </TableCell>
+                <TableCell
+                  className={cn(tdGestion, 'whitespace-nowrap text-slate-800')}
+                  title={
+                    row.ultima_fecha_pago
+                      ? `Desde pagos: ${row.ultima_fecha_pago}`
+                      : 'Sin pagos con préstamo vinculado'
+                  }
+                >
+                  {textoUltimoPago(row.ultima_fecha_pago)}
+                </TableCell>
+                <TableCell className={cn(tdGestion, 'whitespace-nowrap')}>
+                  {badgeConteoFase(tiempo)}
+                </TableCell>
+                <TableCell className={cn(tdGestion, 'whitespace-nowrap')}>
+                  {badgeConteoGlobal(tiempo)}
+                </TableCell>
+                <TableCell className={cn(tdGestion, 'max-w-[200px]')}>
+                  <div className="space-y-0.5 text-xs leading-snug text-slate-800">
+                    <div className="font-medium">
+                      {row.cliente_nombres?.trim() || '-'}
                     </div>
-                  ) : null}
-                </div>
-              </TableCell>
-              <TableCell className={cn(tdGestion, 'text-right')}>
-                {renderAccionesAreaTrabajo(row)}
-              </TableCell>
-            </TableRow>
+                    <div className="break-all text-slate-600">
+                      {row.cliente_email?.trim() || '-'}
+                    </div>
+                    <div className="font-mono text-slate-700">
+                      {row.cliente_telefono?.trim() || '-'}
+                    </div>
+                    {row.estado === 'TERMINADO' &&
+                    row.contacto_para_siguientes !== undefined &&
+                    row.contacto_para_siguientes !== null ? (
+                      <div className="pt-1 text-[11px] text-slate-500">
+                        Contactó para siguientes:{' '}
+                        <span className="font-semibold text-slate-700">
+                          {row.contacto_para_siguientes ? 'Sí' : 'No'}
+                        </span>
+                      </div>
+                    ) : null}
+                  </div>
+                </TableCell>
+                <TableCell className={cn(tdGestion, 'text-right')}>
+                  {renderAccionesAreaTrabajo(row)}
+                </TableCell>
+              </TableRow>
             )
           })}
         </TableBody>
@@ -2425,473 +2434,604 @@ function FiniquitoGestionPageInner() {
       toolbar={
         <div aria-label="Indicadores finiquito">
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-          <Card className="border-slate-200 shadow-sm">
-            <CardContent className="flex min-h-[5.5rem] flex-col justify-start gap-1 p-4">
-              <p className="text-[11px] font-semibold uppercase leading-tight tracking-wide text-slate-500">
-                Bandeja (Revision)
-              </p>
-              <p className="text-2xl font-bold leading-none tabular-nums text-[#1e3a5f]">
-                {kpiCargando ? '-' : displayTotalBandeja}
-              </p>
-              <p className="text-xs leading-snug text-slate-500">
-                Max {FINIQUITO_FASE_BANDEJA_MAX}d · dias global 1-{FINIQUITO_CUPO_FIN_BANDEJA}
-                {cedulaBusqueda ? ' (filtro cedula)' : ''}
-              </p>
-            </CardContent>
-          </Card>
-          <Card
-            className={cn(
-              'border-slate-200 shadow-sm',
-              !kpiCargando &&
-                (kpiNuevosRevision?.total ?? 0) > 0 &&
-                'border-amber-300/90 bg-amber-50/40 ring-1 ring-amber-200/80'
-            )}
-          >
-            <CardContent className="flex min-h-[5.5rem] flex-col justify-start gap-1 p-4">
-              <div className="flex items-center gap-1.5">
-                <Bell
-                  className={cn(
-                    'h-3.5 w-3.5 shrink-0',
-                    !kpiCargando && (kpiNuevosRevision?.total ?? 0) > 0
-                      ? 'text-amber-700'
-                      : 'text-slate-400'
-                  )}
-                  aria-hidden
-                />
+            <Card className="border-slate-200 shadow-sm">
+              <CardContent className="flex min-h-[5.5rem] flex-col justify-start gap-1 p-4">
                 <p className="text-[11px] font-semibold uppercase leading-tight tracking-wide text-slate-500">
-                  Nuevos en bandeja
+                  Bandeja (Revision)
                 </p>
-              </div>
-              <p
-                className={cn(
-                  'text-2xl font-bold leading-none tabular-nums',
-                  !kpiCargando && (kpiNuevosRevision?.total ?? 0) > 0
-                    ? 'text-amber-950'
-                    : 'text-slate-800'
-                )}
-              >
-                {areasLoading.bandeja && kpiNuevosRevision == null
-                  ? '-'
-                  : (kpiNuevosRevision?.total ?? 0)}
-              </p>
-              <p className="text-xs leading-snug text-slate-500">
-                Creados hace ≤{' '}
-                {kpiNuevosRevision?.ventana_horas ??
-                  FINIQUITO_HORAS_NUEVOS_REVISION_DEFAULT}{' '}
-                h (UTC)
-              </p>
-            </CardContent>
-          </Card>
-          <Card className="border-slate-200 shadow-sm">
-            <CardContent className="flex min-h-[5.5rem] flex-col justify-start gap-1 p-4">
-              <p className="text-[11px] font-semibold uppercase leading-tight tracking-wide text-slate-500">
-                Area de revision
-              </p>
-              <p className="text-2xl font-bold leading-none tabular-nums text-amber-900">
-                {kpiCargando ? '-' : displayTotalRevision}
-              </p>
-              <p className="text-xs leading-snug text-slate-500">
-                Max {FINIQUITO_FASE_REVISION_MAX}d · global {FINIQUITO_CUPO_FIN_BANDEJA + 1}-{FINIQUITO_CUPO_FIN_REVISION}
-                {cedulaRevisionBusqueda ? ' (filtro cedula)' : ''}
-              </p>
-            </CardContent>
-          </Card>
-          <Card className="border-indigo-200/80 shadow-sm ring-1 ring-indigo-100/60">
-            <CardContent className="flex min-h-[5.5rem] flex-col justify-start gap-1 p-4">
-              <p className="text-[11px] font-semibold uppercase leading-tight tracking-wide text-slate-500">
-                Revision contable
-              </p>
-              <p className="text-2xl font-bold leading-none tabular-nums text-indigo-900">
-                {kpiCargando ? '-' : displayTotalContable}
-              </p>
-              <p className="text-xs leading-snug text-slate-500">
-                Max {FINIQUITO_FASE_CONTABLE_MAX}d · global {FINIQUITO_CUPO_FIN_REVISION + 1}-{FINIQUITO_CUPO_FIN_CONTABLE}
-                {cedulaContableBusqueda ? ' (filtro cedula)' : ''}
-              </p>
-            </CardContent>
-          </Card>
-          <Card className="border-slate-200 shadow-sm">
-            <CardContent className="flex min-h-[5.5rem] flex-col justify-start gap-1 p-4">
-              <p className="text-[11px] font-semibold uppercase leading-tight tracking-wide text-slate-500">
-                Area de trabajo
-              </p>
-              <p className="text-2xl font-bold leading-none tabular-nums text-emerald-900">
-                {kpiCargando ? '-' : displayTotalTrabajo}
-              </p>
-              <p className="text-xs leading-snug text-slate-500">
-                Max {FINIQUITO_FASE_TRABAJO_MAX}d desde entrada · ideal dia {FINIQUITO_IDEAL_INICIO_TRABAJO}
-                {cedulaTrabajoBusqueda ? ' (filtro cedula)' : ''}
-              </p>
-            </CardContent>
-          </Card>
-        </div>
+                <p className="text-2xl font-bold tabular-nums leading-none text-[#1e3a5f]">
+                  {kpiCargando ? '-' : displayTotalBandeja}
+                </p>
+                <p className="text-xs leading-snug text-slate-500">
+                  Max {FINIQUITO_FASE_BANDEJA_MAX}d · dias global 1-
+                  {FINIQUITO_CUPO_FIN_BANDEJA}
+                  {cedulaBusqueda ? ' (filtro cedula)' : ''}
+                </p>
+              </CardContent>
+            </Card>
+            <Card
+              className={cn(
+                'border-slate-200 shadow-sm',
+                !kpiCargando &&
+                  (kpiNuevosRevision?.total ?? 0) > 0 &&
+                  'border-amber-300/90 bg-amber-50/40 ring-1 ring-amber-200/80'
+              )}
+            >
+              <CardContent className="flex min-h-[5.5rem] flex-col justify-start gap-1 p-4">
+                <div className="flex items-center gap-1.5">
+                  <Bell
+                    className={cn(
+                      'h-3.5 w-3.5 shrink-0',
+                      !kpiCargando && (kpiNuevosRevision?.total ?? 0) > 0
+                        ? 'text-amber-700'
+                        : 'text-slate-400'
+                    )}
+                    aria-hidden
+                  />
+                  <p className="text-[11px] font-semibold uppercase leading-tight tracking-wide text-slate-500">
+                    Nuevos en bandeja
+                  </p>
+                </div>
+                <p
+                  className={cn(
+                    'text-2xl font-bold tabular-nums leading-none',
+                    !kpiCargando && (kpiNuevosRevision?.total ?? 0) > 0
+                      ? 'text-amber-950'
+                      : 'text-slate-800'
+                  )}
+                >
+                  {areasLoading.bandeja && kpiNuevosRevision == null
+                    ? '-'
+                    : (kpiNuevosRevision?.total ?? 0)}
+                </p>
+                <p className="text-xs leading-snug text-slate-500">
+                  Creados hace ≤{' '}
+                  {kpiNuevosRevision?.ventana_horas ??
+                    FINIQUITO_HORAS_NUEVOS_REVISION_DEFAULT}{' '}
+                  h (UTC)
+                </p>
+              </CardContent>
+            </Card>
+            <Card className="border-slate-200 shadow-sm">
+              <CardContent className="flex min-h-[5.5rem] flex-col justify-start gap-1 p-4">
+                <p className="text-[11px] font-semibold uppercase leading-tight tracking-wide text-slate-500">
+                  Area de revision
+                </p>
+                <p className="text-2xl font-bold tabular-nums leading-none text-amber-900">
+                  {kpiCargando ? '-' : displayTotalRevision}
+                </p>
+                <p className="text-xs leading-snug text-slate-500">
+                  Max {FINIQUITO_FASE_REVISION_MAX}d · global{' '}
+                  {FINIQUITO_CUPO_FIN_BANDEJA + 1}-{FINIQUITO_CUPO_FIN_REVISION}
+                  {cedulaRevisionBusqueda ? ' (filtro cedula)' : ''}
+                </p>
+              </CardContent>
+            </Card>
+            <Card className="border-indigo-200/80 shadow-sm ring-1 ring-indigo-100/60">
+              <CardContent className="flex min-h-[5.5rem] flex-col justify-start gap-1 p-4">
+                <p className="text-[11px] font-semibold uppercase leading-tight tracking-wide text-slate-500">
+                  Revision contable
+                </p>
+                <p className="text-2xl font-bold tabular-nums leading-none text-indigo-900">
+                  {kpiCargando ? '-' : displayTotalContable}
+                </p>
+                <p className="text-xs leading-snug text-slate-500">
+                  Max {FINIQUITO_FASE_CONTABLE_MAX}d · global{' '}
+                  {FINIQUITO_CUPO_FIN_REVISION + 1}-
+                  {FINIQUITO_CUPO_FIN_CONTABLE}
+                  {cedulaContableBusqueda ? ' (filtro cedula)' : ''}
+                </p>
+              </CardContent>
+            </Card>
+            <Card className="border-slate-200 shadow-sm">
+              <CardContent className="flex min-h-[5.5rem] flex-col justify-start gap-1 p-4">
+                <p className="text-[11px] font-semibold uppercase leading-tight tracking-wide text-slate-500">
+                  Area de trabajo
+                </p>
+                <p className="text-2xl font-bold tabular-nums leading-none text-emerald-900">
+                  {kpiCargando ? '-' : displayTotalTrabajo}
+                </p>
+                <p className="text-xs leading-snug text-slate-500">
+                  Max {FINIQUITO_FASE_TRABAJO_MAX}d desde entrada · ideal dia{' '}
+                  {FINIQUITO_IDEAL_INICIO_TRABAJO}
+                  {cedulaTrabajoBusqueda ? ' (filtro cedula)' : ''}
+                </p>
+              </CardContent>
+            </Card>
+          </div>
         </div>
       }
     >
       <div className="space-y-5 md:space-y-6">
-      <section
-        className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-md"
-        aria-labelledby="finiquito-bandeja-titulo"
-      >
-        <div className="border-b border-slate-200 bg-slate-50/90 px-4 py-3 sm:px-5">
-          <div className="flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-center lg:justify-between">
-            <div className="flex min-w-0 flex-1 flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
-              <h2
-                id="finiquito-bandeja-titulo"
-                className="shrink-0 text-base font-bold text-[#1e3a5f]"
-              >
-                Bandeja principal
-              </h2>
-              <FiniquitoCedulaFiltroInline
-                id="finiquito-filtro-cedula-bandeja"
-                value={cedulaInput}
-                onChange={setCedulaInput}
-                onClear={limpiarCedula}
-                placeholder="Ej. V12345678 o parte del número"
-                ariaClear="Limpiar filtro de cédula"
-              />
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              {canTrasladarFiniquitoBandejas ? (
+        <section
+          className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-md"
+          aria-labelledby="finiquito-bandeja-titulo"
+        >
+          <div className="border-b border-slate-200 bg-slate-50/90 px-4 py-3 sm:px-5">
+            <div className="flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-center lg:justify-between">
+              <div className="flex min-w-0 flex-1 flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
+                <h2
+                  id="finiquito-bandeja-titulo"
+                  className="shrink-0 text-base font-bold text-[#1e3a5f]"
+                >
+                  Bandeja principal
+                </h2>
+                <FiniquitoCedulaFiltroInline
+                  id="finiquito-filtro-cedula-bandeja"
+                  value={cedulaInput}
+                  onChange={setCedulaInput}
+                  onClear={limpiarCedula}
+                  placeholder="Ej. V12345678 o parte del número"
+                  ariaClear="Limpiar filtro de cédula"
+                />
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                {canTrasladarFiniquitoBandejas ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="h-9 shrink-0 bg-emerald-700 hover:bg-emerald-800"
+                    disabled={
+                      areasLoading.bandeja ||
+                      validandoBandejaLote ||
+                      selectedBandejaIds.size === 0
+                    }
+                    onClick={() => void validarBandejaEnLote()}
+                  >
+                    {validandoBandejaLote ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      `Validar seleccionados (${selectedBandejaIds.size})`
+                    )}
+                  </Button>
+                ) : null}
                 <Button
                   type="button"
+                  variant="outline"
                   size="sm"
-                  className="h-9 shrink-0 bg-emerald-700 hover:bg-emerald-800"
-                  disabled={
-                    areasLoading.bandeja ||
-                    validandoBandejaLote ||
-                    selectedBandejaIds.size === 0
-                  }
-                  onClick={() => void validarBandejaEnLote()}
+                  className="h-9 shrink-0 border-slate-300"
+                  disabled={areasLoading.bandeja || validandoBandejaLote}
+                  onClick={() => void cargarBandeja()}
                 >
-                  {validandoBandejaLote ? (
+                  {areasLoading.bandeja ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (
-                    `Validar seleccionados (${selectedBandejaIds.size})`
+                    'Recargar'
                   )}
                 </Button>
-              ) : null}
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-9 shrink-0 border-slate-300"
-                disabled={areasLoading.bandeja || validandoBandejaLote}
-                onClick={() => void cargarBandeja()}
-              >
-                {areasLoading.bandeja ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  'Recargar'
-                )}
-              </Button>
+              </div>
             </div>
           </div>
-        </div>
-        <div>
-          <div className="p-3 sm:p-4">
-            {areasLoading.bandeja && itemsBandejaVisibles.length === 0 ? (
-              <div className="flex justify-center py-14">
-                <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
-              </div>
-            ) : itemsBandejaVisibles.length === 0 ? (
-              <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50/50 px-4 py-10 text-center text-sm leading-relaxed text-slate-600">
-                {cedulaBusqueda ? (
-                  <>
-                    <p>
-                      Ningún caso en <strong>Revisión</strong> (bandeja principal)
-                      coincide con esa cédula.
-                    </p>
-                    <p className="mt-2 text-xs text-slate-500">
-                      La bandeja solo muestra créditos recién ingresados a finiquito.
-                      Si en Préstamos figura <strong>Liquidado / Terminado</strong>,
-                      el caso ya cerró el flujo y está en{' '}
-                      <strong>Casos terminados</strong> (más abajo), no aquí.
-                    </p>
-                    {cargandoResumenBandejaPorCedula ? (
-                      <p className="mt-3 flex items-center justify-center gap-2 text-xs text-slate-500">
-                        <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-                        Buscando en otras áreas…
+          <div>
+            <div className="p-3 sm:p-4">
+              {areasLoading.bandeja && itemsBandejaVisibles.length === 0 ? (
+                <div className="flex justify-center py-14">
+                  <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
+                </div>
+              ) : itemsBandejaVisibles.length === 0 ? (
+                <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50/50 px-4 py-10 text-center text-sm leading-relaxed text-slate-600">
+                  {cedulaBusqueda ? (
+                    <>
+                      <p>
+                        Ningún caso en <strong>Revisión</strong> (bandeja
+                        principal) coincide con esa cédula.
                       </p>
-                    ) : resumenBandejaPorCedula ? (
-                      <>
-                        {textoUbicacionOtrasAreasFiniquito(
-                          resumenBandejaPorCedula
-                        ) ? (
-                          <p className="mt-3 text-xs font-medium text-[#1e3a5f]">
-                            Para{' '}
-                            <span className="font-mono">{cedulaBusqueda}</span>:{' '}
-                            {textoUbicacionOtrasAreasFiniquito(
-                              resumenBandejaPorCedula
-                            )}
-                            .
-                          </p>
-                        ) : (
-                          <p className="mt-3 text-xs text-amber-900">
-                            No hay casos finiquito materializados para esta cédula.
-                            Use «Refrescar materializado» si el préstamo está
-                            LIQUIDADO y las cuotas cuadran con el financiamiento.
-                          </p>
-                        )}
-                        {resumenBandejaPorCedula.terminado > 0 ? (
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            className="mt-4 border-slate-300"
-                            onClick={() => buscarCedulaEnTerminados(cedulaBusqueda)}
-                          >
-                            Ver en Casos terminados
-                          </Button>
-                        ) : null}
-                      </>
-                    ) : null}
-                  </>
-                ) : (
-                  'No hay casos en Revision. Use «Refrescar materializado» para traer prestamos LIQUIDADO elegibles.'
-                )}
-              </div>
-            ) : (
-              <>
-                {renderTabla(
-                  itemsBandejaVisibles,
-                  renderAcciones,
-                  'bandeja',
-                  canTrasladarFiniquitoBandejas
-                    ? {
-                        selectedIds: selectedBandejaIds,
-                        onToggleRow: (id, checked) => {
-                          setSelectedBandejaIds(prev => {
-                            const next = new Set(prev)
-                            if (checked) next.add(id)
-                            else next.delete(id)
-                            return next
-                          })
-                        },
-                        onToggleAll: checked => {
-                          setSelectedBandejaIds(() => {
-                            if (!checked) return new Set()
-                            return new Set(idsBandejaSeleccionables)
-                          })
-                        },
-                        disabled:
-                          validandoBandejaLote || pendingEstadoCasoId != null,
-                        todosSeleccionados: todosBandejaSeleccionados,
-                        algunSeleccionado: algunBandejaSeleccionado,
-                        estadoRequerido: 'REVISION',
-                        ariaSeleccionarTodos:
-                          'Seleccionar todos los casos visibles en bandeja',
-                      }
-                    : undefined
-                )}
-                <FiniquitoTablaScrollHint
-                  total={totalBandeja}
-                  cargados={itemsBandejaVisibles.length}
-                  limit={BANDEJA_PRINCIPAL_FETCH_LIMIT}
-                />
-              </>
-            )}
-          </div>
-        </div>
-      </section>
-      <section
-        ref={revisionSectionRef}
-        className={cn(
-          'overflow-hidden rounded-2xl border-2 border-dashed border-amber-400/85',
-          'bg-amber-50/40 shadow-inner'
-        )}
-        aria-labelledby="finiquito-area-revision-titulo"
-      >
-        <div className="border-b border-amber-200/90 bg-amber-100/95 px-4 py-3 sm:px-5">
-          <div className="flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-center lg:justify-between">
-            <div className="flex min-w-0 flex-1 flex-col gap-3 sm:flex-row sm:items-center sm:gap-3">
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-amber-300/90 bg-amber-50 shadow-sm">
-                <CheckCircle2 className="h-4 w-4 text-amber-800" aria-hidden />
-              </span>
-              <h2
-                id="finiquito-area-revision-titulo"
-                className="shrink-0 text-sm font-bold tracking-tight text-amber-950 sm:text-base"
-              >
-                Area de revision
-              </h2>
-              <FiniquitoCedulaFiltroInline
-                id="finiquito-filtro-cedula-revision"
-                value={cedulaRevisionInput}
-                onChange={setCedulaRevisionInput}
-                onClear={limpiarCedulaRevision}
-                placeholder="Ej. V17037221 o parte del número"
-                labelClassName="text-amber-950"
-                inputClassName="border-amber-200 bg-white"
-                searchIconClassName="text-amber-700/70"
-                clearButtonClassName="text-amber-800 hover:bg-amber-100"
-                ariaClear="Limpiar filtro de cédula en área de revisión"
-              />
+                      <p className="mt-2 text-xs text-slate-500">
+                        La bandeja solo muestra créditos recién ingresados a
+                        finiquito. Si en Préstamos figura{' '}
+                        <strong>Liquidado / Terminado</strong>, el caso ya cerró
+                        el flujo y está en <strong>Casos terminados</strong>{' '}
+                        (más abajo), no aquí.
+                      </p>
+                      {cargandoResumenBandejaPorCedula ? (
+                        <p className="mt-3 flex items-center justify-center gap-2 text-xs text-slate-500">
+                          <Loader2
+                            className="h-4 w-4 animate-spin"
+                            aria-hidden
+                          />
+                          Buscando en otras áreas…
+                        </p>
+                      ) : resumenBandejaPorCedula ? (
+                        <>
+                          {textoUbicacionOtrasAreasFiniquito(
+                            resumenBandejaPorCedula
+                          ) ? (
+                            <p className="mt-3 text-xs font-medium text-[#1e3a5f]">
+                              Para{' '}
+                              <span className="font-mono">
+                                {cedulaBusqueda}
+                              </span>
+                              :{' '}
+                              {textoUbicacionOtrasAreasFiniquito(
+                                resumenBandejaPorCedula
+                              )}
+                              .
+                            </p>
+                          ) : (
+                            <p className="mt-3 text-xs text-amber-900">
+                              No hay casos finiquito materializados para esta
+                              cédula. Use «Refrescar materializado» si el
+                              préstamo está LIQUIDADO y las cuotas cuadran con
+                              el financiamiento.
+                            </p>
+                          )}
+                          {resumenBandejaPorCedula.terminado > 0 ? (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="mt-4 border-slate-300"
+                              onClick={() =>
+                                buscarCedulaEnTerminados(cedulaBusqueda)
+                              }
+                            >
+                              Ver en Casos terminados
+                            </Button>
+                          ) : null}
+                        </>
+                      ) : null}
+                    </>
+                  ) : (
+                    'No hay casos en Revision. Use «Refrescar materializado» para traer prestamos LIQUIDADO elegibles.'
+                  )}
+                </div>
+              ) : (
+                <>
+                  {renderTabla(
+                    itemsBandejaVisibles,
+                    renderAcciones,
+                    'bandeja',
+                    canTrasladarFiniquitoBandejas
+                      ? {
+                          selectedIds: selectedBandejaIds,
+                          onToggleRow: (id, checked) => {
+                            setSelectedBandejaIds(prev => {
+                              const next = new Set(prev)
+                              if (checked) next.add(id)
+                              else next.delete(id)
+                              return next
+                            })
+                          },
+                          onToggleAll: checked => {
+                            setSelectedBandejaIds(() => {
+                              if (!checked) return new Set()
+                              return new Set(idsBandejaSeleccionables)
+                            })
+                          },
+                          disabled:
+                            validandoBandejaLote || pendingEstadoCasoId != null,
+                          todosSeleccionados: todosBandejaSeleccionados,
+                          algunSeleccionado: algunBandejaSeleccionado,
+                          estadoRequerido: 'REVISION',
+                          ariaSeleccionarTodos:
+                            'Seleccionar todos los casos visibles en bandeja',
+                        }
+                      : undefined
+                  )}
+                  <FiniquitoTablaScrollHint
+                    total={totalBandeja}
+                    cargados={itemsBandejaVisibles.length}
+                    limit={BANDEJA_PRINCIPAL_FETCH_LIMIT}
+                  />
+                </>
+              )}
             </div>
-            <div className="flex flex-wrap items-center gap-2">
-              {canTrasladarFiniquitoBandejas ? (
+          </div>
+        </section>
+        <section
+          ref={revisionSectionRef}
+          className={cn(
+            'overflow-hidden rounded-2xl border-2 border-dashed border-amber-400/85',
+            'bg-amber-50/40 shadow-inner'
+          )}
+          aria-labelledby="finiquito-area-revision-titulo"
+        >
+          <div className="border-b border-amber-200/90 bg-amber-100/95 px-4 py-3 sm:px-5">
+            <div className="flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-center lg:justify-between">
+              <div className="flex min-w-0 flex-1 flex-col gap-3 sm:flex-row sm:items-center sm:gap-3">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-amber-300/90 bg-amber-50 shadow-sm">
+                  <CheckCircle2
+                    className="h-4 w-4 text-amber-800"
+                    aria-hidden
+                  />
+                </span>
+                <h2
+                  id="finiquito-area-revision-titulo"
+                  className="shrink-0 text-sm font-bold tracking-tight text-amber-950 sm:text-base"
+                >
+                  Area de revision
+                </h2>
+                <FiniquitoCedulaFiltroInline
+                  id="finiquito-filtro-cedula-revision"
+                  value={cedulaRevisionInput}
+                  onChange={setCedulaRevisionInput}
+                  onClear={limpiarCedulaRevision}
+                  placeholder="Ej. V17037221 o parte del número"
+                  labelClassName="text-amber-950"
+                  inputClassName="border-amber-200 bg-white"
+                  searchIconClassName="text-amber-700/70"
+                  clearButtonClassName="text-amber-800 hover:bg-amber-100"
+                  ariaClear="Limpiar filtro de cédula en área de revisión"
+                />
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                {canTrasladarFiniquitoBandejas ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="h-9 shrink-0 border-indigo-700 bg-indigo-700 hover:bg-indigo-800"
+                    disabled={
+                      areasLoading.revision ||
+                      pasandoRevisionLote ||
+                      selectedRevisionIds.size === 0
+                    }
+                    onClick={() => void pasarRevisionContableEnLote()}
+                  >
+                    {pasandoRevisionLote ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      `Revision contable seleccionados (${selectedRevisionIds.size})`
+                    )}
+                  </Button>
+                ) : null}
                 <Button
                   type="button"
+                  variant="outline"
                   size="sm"
-                  className="h-9 shrink-0 border-indigo-700 bg-indigo-700 hover:bg-indigo-800"
+                  className="h-9 shrink-0 border-amber-300 bg-white"
                   disabled={
                     areasLoading.revision ||
                     pasandoRevisionLote ||
-                    selectedRevisionIds.size === 0
+                    validandoBandejaLote
                   }
-                  onClick={() => void pasarRevisionContableEnLote()}
+                  onClick={() => void cargarAreaRevision()}
                 >
-                  {pasandoRevisionLote ? (
+                  {areasLoading.revision ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (
-                    `Revision contable seleccionados (${selectedRevisionIds.size})`
+                    'Recargar'
                   )}
                 </Button>
-              ) : null}
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-9 shrink-0 border-amber-300 bg-white"
-                disabled={
-                  areasLoading.revision ||
-                  pasandoRevisionLote ||
-                  validandoBandejaLote
-                }
-                onClick={() => void cargarAreaRevision()}
-              >
-                {areasLoading.revision ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  'Recargar'
-                )}
-              </Button>
+              </div>
             </div>
           </div>
-        </div>
-        <div>
-          <div className="p-3 sm:p-4">
-            {!areasCargadas.revision ? (
-              renderContenidoAreaPendiente(
-                'revision',
-                'Área de revisión',
-                () => void cargarAreaRevision()
-              )
-            ) : areasLoading.revision && itemsAreaRevisionVisibles.length === 0 ? (
-              <div className="flex justify-center py-12">
-                <Loader2 className="h-8 w-8 animate-spin text-amber-600/70" />
-              </div>
-            ) : itemsAreaRevisionVisibles.length === 0 ? (
-              <p className="rounded-lg border border-dashed border-amber-200/90 bg-white/50 px-4 py-10 text-center text-sm text-amber-950/85">
-                {cedulaRevisionBusqueda
-                  ? 'Ningún caso en el área de revisión coincide con esa cédula.'
-                  : 'No hay casos validados pendientes. Al pulsar Validar en la bandeja principal aparecen aqui.'}
-              </p>
-            ) : (
-              <>
-                {renderTabla(
-                  itemsAreaRevisionVisibles,
-                  renderAccionesAreaRevision,
+          <div>
+            <div className="p-3 sm:p-4">
+              {!areasCargadas.revision ? (
+                renderContenidoAreaPendiente(
                   'revision',
-                  canTrasladarFiniquitoBandejas
-                    ? {
-                        selectedIds: selectedRevisionIds,
-                        onToggleRow: (id, checked) => {
-                          setSelectedRevisionIds(prev => {
-                            const next = new Set(prev)
-                            if (checked) next.add(id)
-                            else next.delete(id)
-                            return next
-                          })
-                        },
-                        onToggleAll: checked => {
-                          setSelectedRevisionIds(() => {
-                            if (!checked) return new Set()
-                            return new Set(idsRevisionSeleccionables)
-                          })
-                        },
-                        disabled:
-                          pasandoRevisionLote || pendingEstadoCasoId != null,
-                        todosSeleccionados: todosRevisionSeleccionados,
-                        algunSeleccionado: algunRevisionSeleccionado,
-                        estadoRequerido: 'ACEPTADO',
-                        ariaSeleccionarTodos:
-                          'Seleccionar todos los casos visibles en área de revisión',
-                      }
-                    : undefined
-                )}
-                <FiniquitoTablaScrollHint
-                  total={totalAreaRevision}
-                  cargados={itemsAreaRevisionVisibles.length}
-                />
-              </>
-            )}
-          </div>
-        </div>
-      </section>
-      <section
-        ref={contableSectionRef}
-        className={cn(
-          'overflow-hidden rounded-2xl border border-indigo-200/90 bg-white shadow-md',
-          'ring-1 ring-indigo-100/80'
-        )}
-        aria-labelledby="finiquito-revision-contable-titulo"
-      >
-        <div className="border-b border-indigo-200/90 bg-indigo-100/95 px-4 py-3 sm:px-5">
-          <div className="flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-center lg:justify-between">
-            <div className="flex min-w-0 flex-1 flex-col gap-3 sm:flex-row sm:items-center sm:gap-3">
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-indigo-300/90 bg-indigo-50 shadow-sm">
-                <CheckCircle2 className="h-4 w-4 text-indigo-800" aria-hidden />
-              </span>
-              <h2
-                id="finiquito-revision-contable-titulo"
-                className="shrink-0 text-sm font-bold tracking-tight text-indigo-950 sm:text-base"
-              >
-                Revision contable
-              </h2>
-              <FiniquitoCedulaFiltroInline
-                id="finiquito-filtro-cedula-contable"
-                value={cedulaContableInput}
-                onChange={setCedulaContableInput}
-                onClear={limpiarCedulaContable}
-                placeholder="Ej. V17037221 o parte del numero"
-                labelClassName="text-indigo-950"
-                inputClassName="border-indigo-200 bg-white"
-                searchIconClassName="text-indigo-700/70"
-                clearButtonClassName="text-indigo-800 hover:bg-indigo-100"
-                ariaClear="Limpiar filtro de cedula en revision contable"
-              />
+                  'Área de revisión',
+                  () => void cargarAreaRevision()
+                )
+              ) : areasLoading.revision &&
+                itemsAreaRevisionVisibles.length === 0 ? (
+                <div className="flex justify-center py-12">
+                  <Loader2 className="h-8 w-8 animate-spin text-amber-600/70" />
+                </div>
+              ) : itemsAreaRevisionVisibles.length === 0 ? (
+                <p className="rounded-lg border border-dashed border-amber-200/90 bg-white/50 px-4 py-10 text-center text-sm text-amber-950/85">
+                  {cedulaRevisionBusqueda
+                    ? 'Ningún caso en el área de revisión coincide con esa cédula.'
+                    : 'No hay casos validados pendientes. Al pulsar Validar en la bandeja principal aparecen aqui.'}
+                </p>
+              ) : (
+                <>
+                  {renderTabla(
+                    itemsAreaRevisionVisibles,
+                    renderAccionesAreaRevision,
+                    'revision',
+                    canTrasladarFiniquitoBandejas
+                      ? {
+                          selectedIds: selectedRevisionIds,
+                          onToggleRow: (id, checked) => {
+                            setSelectedRevisionIds(prev => {
+                              const next = new Set(prev)
+                              if (checked) next.add(id)
+                              else next.delete(id)
+                              return next
+                            })
+                          },
+                          onToggleAll: checked => {
+                            setSelectedRevisionIds(() => {
+                              if (!checked) return new Set()
+                              return new Set(idsRevisionSeleccionables)
+                            })
+                          },
+                          disabled:
+                            pasandoRevisionLote || pendingEstadoCasoId != null,
+                          todosSeleccionados: todosRevisionSeleccionados,
+                          algunSeleccionado: algunRevisionSeleccionado,
+                          estadoRequerido: 'ACEPTADO',
+                          ariaSeleccionarTodos:
+                            'Seleccionar todos los casos visibles en área de revisión',
+                        }
+                      : undefined
+                  )}
+                  <FiniquitoTablaScrollHint
+                    total={totalAreaRevision}
+                    cargados={itemsAreaRevisionVisibles.length}
+                  />
+                </>
+              )}
             </div>
-            <div className="flex flex-wrap items-center gap-2">
+          </div>
+        </section>
+        <section
+          ref={contableSectionRef}
+          className={cn(
+            'overflow-hidden rounded-2xl border border-indigo-200/90 bg-white shadow-md',
+            'ring-1 ring-indigo-100/80'
+          )}
+          aria-labelledby="finiquito-revision-contable-titulo"
+        >
+          <div className="border-b border-indigo-200/90 bg-indigo-100/95 px-4 py-3 sm:px-5">
+            <div className="flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-center lg:justify-between">
+              <div className="flex min-w-0 flex-1 flex-col gap-3 sm:flex-row sm:items-center sm:gap-3">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-indigo-300/90 bg-indigo-50 shadow-sm">
+                  <CheckCircle2
+                    className="h-4 w-4 text-indigo-800"
+                    aria-hidden
+                  />
+                </span>
+                <h2
+                  id="finiquito-revision-contable-titulo"
+                  className="shrink-0 text-sm font-bold tracking-tight text-indigo-950 sm:text-base"
+                >
+                  Revision contable
+                </h2>
+                <FiniquitoCedulaFiltroInline
+                  id="finiquito-filtro-cedula-contable"
+                  value={cedulaContableInput}
+                  onChange={setCedulaContableInput}
+                  onClear={limpiarCedulaContable}
+                  placeholder="Ej. V17037221 o parte del numero"
+                  labelClassName="text-indigo-950"
+                  inputClassName="border-indigo-200 bg-white"
+                  searchIconClassName="text-indigo-700/70"
+                  clearButtonClassName="text-indigo-800 hover:bg-indigo-100"
+                  ariaClear="Limpiar filtro de cedula en revision contable"
+                />
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  className="h-9 shrink-0 border-emerald-700 bg-emerald-700 hover:bg-emerald-800"
+                  disabled={
+                    areasLoading.contable ||
+                    pasandoContableLote ||
+                    selectedContableIds.size === 0
+                  }
+                  onClick={() => void pasarContableATrabajoEnLote()}
+                >
+                  {pasandoContableLote ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    `Area trabajo seleccionados (${selectedContableIds.size})`
+                  )}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-9 shrink-0 border-indigo-300 bg-white"
+                  disabled={
+                    areasLoading.contable ||
+                    pasandoContableLote ||
+                    pasandoRevisionLote
+                  }
+                  onClick={() => void cargarAreaRevisionContable()}
+                >
+                  {areasLoading.contable ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    'Recargar'
+                  )}
+                </Button>
+              </div>
+            </div>
+          </div>
+          <div>
+            <div className="p-3 sm:p-4">
+              {!areasCargadas.contable ? (
+                renderContenidoAreaPendiente(
+                  'contable',
+                  'Revision contable',
+                  () => void cargarAreaRevisionContable()
+                )
+              ) : areasLoading.contable &&
+                itemsAreaRevisionContableVisibles.length === 0 ? (
+                <div className="flex justify-center py-12">
+                  <Loader2 className="h-8 w-8 animate-spin text-indigo-600/70" />
+                </div>
+              ) : itemsAreaRevisionContableVisibles.length === 0 ? (
+                <p className="rounded-lg border border-dashed border-indigo-200/90 bg-white/50 px-4 py-10 text-center text-sm text-indigo-950/85">
+                  {cedulaContableBusqueda
+                    ? 'Ningun caso en revision contable coincide con esa cedula.'
+                    : 'No hay casos en revision contable. Trasladelos desde el area de revision con «Revision contable».'}
+                </p>
+              ) : (
+                <>
+                  {renderTabla(
+                    itemsAreaRevisionContableVisibles,
+                    renderAccionesRevisionContable,
+                    'contable',
+                    {
+                      selectedIds: selectedContableIds,
+                      onToggleRow: (id, checked) => {
+                        setSelectedContableIds(prev => {
+                          const next = new Set(prev)
+                          if (checked) next.add(id)
+                          else next.delete(id)
+                          return next
+                        })
+                      },
+                      onToggleAll: checked => {
+                        setSelectedContableIds(() => {
+                          if (!checked) return new Set()
+                          return new Set(idsContableSeleccionables)
+                        })
+                      },
+                      disabled:
+                        pasandoContableLote || pendingEstadoCasoId != null,
+                      todosSeleccionados: todosContableSeleccionados,
+                      algunSeleccionado: algunContableSeleccionado,
+                      estadoRequerido: 'REVISION_CONTABLE',
+                      ariaSeleccionarTodos:
+                        'Seleccionar todos los casos visibles en revision contable',
+                    }
+                  )}
+                  <FiniquitoTablaScrollHint
+                    total={totalAreaRevisionContable}
+                    cargados={itemsAreaRevisionContableVisibles.length}
+                  />
+                </>
+              )}
+            </div>
+          </div>
+        </section>
+        <section
+          ref={trabajoSectionRef}
+          className={cn(
+            'overflow-hidden rounded-2xl border border-emerald-200/90 bg-white shadow-md',
+            'ring-1 ring-emerald-100/80'
+          )}
+          aria-labelledby="finiquito-area-trabajo-titulo"
+        >
+          <div className="border-b border-emerald-200/80 bg-gradient-to-r from-emerald-800 to-emerald-600 px-4 py-3 text-white sm:px-5">
+            <div className="flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-center lg:justify-between">
+              <div className="flex min-w-0 flex-1 flex-col gap-3 sm:flex-row sm:items-center sm:gap-3">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/15 shadow-inner">
+                  <CheckCircle2 className="h-4 w-4" aria-hidden />
+                </span>
+                <h2
+                  id="finiquito-area-trabajo-titulo"
+                  className="shrink-0 text-sm font-bold tracking-tight sm:text-base"
+                >
+                  Área de trabajo
+                </h2>
+                <FiniquitoCedulaFiltroInline
+                  id="finiquito-filtro-cedula-trabajo"
+                  value={cedulaTrabajoInput}
+                  onChange={setCedulaTrabajoInput}
+                  onClear={limpiarCedulaTrabajo}
+                  placeholder="Ej. V12345678 o parte del número"
+                  labelClassName="text-emerald-50"
+                  inputClassName="border-emerald-200/80 bg-white text-slate-900"
+                  searchIconClassName="text-slate-400"
+                  clearButtonClassName="text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+                  ariaClear="Limpiar filtro de cédula en área de trabajo"
+                />
+              </div>
               <Button
                 type="button"
+                variant="secondary"
                 size="sm"
-                className="h-9 shrink-0 border-emerald-700 bg-emerald-700 hover:bg-emerald-800"
-                disabled={
-                  areasLoading.contable ||
-                  pasandoContableLote ||
-                  selectedContableIds.size === 0
-                }
-                onClick={() => void pasarContableATrabajoEnLote()}
+                className="h-9 shrink-0 border-white/30 bg-white/15 text-white hover:bg-white/25"
+                disabled={areasLoading.trabajo}
+                onClick={() => void cargarAreaTrabajo()}
               >
-                {pasandoContableLote ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  `Area trabajo seleccionados (${selectedContableIds.size})`
-                )}
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-9 shrink-0 border-indigo-300 bg-white"
-                disabled={
-                  areasLoading.contable ||
-                  pasandoContableLote ||
-                  pasandoRevisionLote
-                }
-                onClick={() => void cargarAreaRevisionContable()}
-              >
-                {areasLoading.contable ? (
+                {areasLoading.trabajo ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
                   'Recargar'
@@ -2899,524 +3039,424 @@ function FiniquitoGestionPageInner() {
               </Button>
             </div>
           </div>
-        </div>
-        <div>
-          <div className="p-3 sm:p-4">
-            {!areasCargadas.contable ? (
-              renderContenidoAreaPendiente(
-                'contable',
-                'Revision contable',
-                () => void cargarAreaRevisionContable()
-              )
-            ) : areasLoading.contable &&
-              itemsAreaRevisionContableVisibles.length === 0 ? (
-              <div className="flex justify-center py-12">
-                <Loader2 className="h-8 w-8 animate-spin text-indigo-600/70" />
-              </div>
-            ) : itemsAreaRevisionContableVisibles.length === 0 ? (
-              <p className="rounded-lg border border-dashed border-indigo-200/90 bg-white/50 px-4 py-10 text-center text-sm text-indigo-950/85">
-                {cedulaContableBusqueda
-                  ? 'Ningun caso en revision contable coincide con esa cedula.'
-                  : 'No hay casos en revision contable. Trasladelos desde el area de revision con «Revision contable».'}
-              </p>
-            ) : (
-              <>
-                {renderTabla(
-                  itemsAreaRevisionContableVisibles,
-                  renderAccionesRevisionContable,
-                  'contable',
-                  {
-                    selectedIds: selectedContableIds,
-                    onToggleRow: (id, checked) => {
-                      setSelectedContableIds(prev => {
-                        const next = new Set(prev)
-                        if (checked) next.add(id)
-                        else next.delete(id)
-                        return next
-                      })
-                    },
-                    onToggleAll: checked => {
-                      setSelectedContableIds(() => {
-                        if (!checked) return new Set()
-                        return new Set(idsContableSeleccionables)
-                      })
-                    },
-                    disabled:
-                      pasandoContableLote || pendingEstadoCasoId != null,
-                    todosSeleccionados: todosContableSeleccionados,
-                    algunSeleccionado: algunContableSeleccionado,
-                    estadoRequerido: 'REVISION_CONTABLE',
-                    ariaSeleccionarTodos:
-                      'Seleccionar todos los casos visibles en revision contable',
-                  }
-                )}
-                <FiniquitoTablaScrollHint
-                  total={totalAreaRevisionContable}
-                  cargados={itemsAreaRevisionContableVisibles.length}
-                />
-              </>
-            )}
+          <div className="bg-gradient-to-b from-emerald-50/50 to-white">
+            <div className="p-3 sm:p-4">
+              {!areasCargadas.trabajo ? (
+                renderContenidoAreaPendiente(
+                  'trabajo',
+                  'Área de trabajo',
+                  () => void cargarAreaTrabajo()
+                )
+              ) : areasLoading.trabajo &&
+                itemsAreaTrabajoVisibles.length === 0 ? (
+                <div className="flex justify-center py-12">
+                  <Loader2 className="h-8 w-8 animate-spin text-emerald-600/70" />
+                </div>
+              ) : itemsAreaTrabajoVisibles.length === 0 ? (
+                <p className="rounded-lg border border-dashed border-emerald-200/80 bg-white/60 px-4 py-10 text-center text-sm text-slate-600">
+                  {cedulaTrabajoBusqueda ? (
+                    <>
+                      Ningún caso en el área de trabajo coincide con esa cédula.
+                      Pruebe otra subcadena o limpie el filtro.
+                    </>
+                  ) : (
+                    <>
+                      No hay casos en area de trabajo. Paselos desde revision
+                      contable con «Area trabajo».
+                    </>
+                  )}
+                </p>
+              ) : (
+                <>
+                  {renderTablaAreaTrabajo(itemsAreaTrabajoVisibles)}
+                  <FiniquitoTablaScrollHint
+                    total={totalAreaTrabajo}
+                    cargados={itemsAreaTrabajoVisibles.length}
+                  />
+                </>
+              )}
+            </div>
           </div>
-        </div>
-      </section>
-      <section
-        ref={trabajoSectionRef}
-        className={cn(
-          'overflow-hidden rounded-2xl border border-emerald-200/90 bg-white shadow-md',
-          'ring-1 ring-emerald-100/80'
-        )}
-        aria-labelledby="finiquito-area-trabajo-titulo"
-      >
-        <div className="border-b border-emerald-200/80 bg-gradient-to-r from-emerald-800 to-emerald-600 px-4 py-3 text-white sm:px-5">
-          <div className="flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-center lg:justify-between">
+        </section>
+        <section
+          ref={terminadosSectionRef}
+          className={cn(
+            'overflow-hidden rounded-2xl border border-violet-200/90 bg-white shadow-md',
+            'ring-1 ring-violet-100/80'
+          )}
+          aria-labelledby="finiquito-terminados-titulo"
+        >
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-violet-200/80 bg-gradient-to-r from-violet-900 to-violet-600 px-4 py-3 text-white sm:px-5">
             <div className="flex min-w-0 flex-1 flex-col gap-3 sm:flex-row sm:items-center sm:gap-3">
               <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/15 shadow-inner">
                 <CheckCircle2 className="h-4 w-4" aria-hidden />
               </span>
               <h2
-                id="finiquito-area-trabajo-titulo"
+                id="finiquito-terminados-titulo"
                 className="shrink-0 text-sm font-bold tracking-tight sm:text-base"
               >
-                Área de trabajo
+                Casos terminados
               </h2>
               <FiniquitoCedulaFiltroInline
-                id="finiquito-filtro-cedula-trabajo"
-                value={cedulaTrabajoInput}
-                onChange={setCedulaTrabajoInput}
-                onClear={limpiarCedulaTrabajo}
-                placeholder="Ej. V12345678 o parte del número"
-                labelClassName="text-emerald-50"
-                inputClassName="border-emerald-200/80 bg-white text-slate-900"
+                id="finiquito-filtro-cedula-terminados"
+                value={cedulaTerminadosInput}
+                onChange={setCedulaTerminadosInput}
+                onClear={limpiarCedulaTerminados}
+                placeholder="Ej. V12345678"
+                labelClassName="text-violet-50"
+                inputClassName="border-violet-200/80 bg-white text-slate-900"
                 searchIconClassName="text-slate-400"
                 clearButtonClassName="text-slate-500 hover:bg-slate-100 hover:text-slate-800"
-                ariaClear="Limpiar filtro de cédula en área de trabajo"
+                ariaClear="Limpiar filtro de cédula en terminados"
               />
             </div>
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              className="h-9 shrink-0 border-white/30 bg-white/15 text-white hover:bg-white/25"
-              disabled={areasLoading.trabajo}
-              onClick={() => void cargarAreaTrabajo()}
-            >
-              {areasLoading.trabajo ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                'Recargar'
-              )}
-            </Button>
-          </div>
-        </div>
-        <div className="bg-gradient-to-b from-emerald-50/50 to-white">
-          <div className="p-3 sm:p-4">
-            {!areasCargadas.trabajo ? (
-              renderContenidoAreaPendiente(
-                'trabajo',
-                'Área de trabajo',
-                () => void cargarAreaTrabajo()
-              )
-            ) : areasLoading.trabajo && itemsAreaTrabajoVisibles.length === 0 ? (
-              <div className="flex justify-center py-12">
-                <Loader2 className="h-8 w-8 animate-spin text-emerald-600/70" />
-              </div>
-            ) : itemsAreaTrabajoVisibles.length === 0 ? (
-              <p className="rounded-lg border border-dashed border-emerald-200/80 bg-white/60 px-4 py-10 text-center text-sm text-slate-600">
-                {cedulaTrabajoBusqueda ? (
-                  <>
-                    Ningún caso en el área de trabajo coincide con esa cédula.
-                    Pruebe otra subcadena o limpie el filtro.
-                  </>
-                ) : (
-                  <>
-                    No hay casos en area de trabajo. Paselos desde revision
-                    contable con «Area trabajo».
-                  </>
-                )}
-              </p>
-            ) : (
-              <>
-                {renderTablaAreaTrabajo(itemsAreaTrabajoVisibles)}
-                <FiniquitoTablaScrollHint
-                  total={totalAreaTrabajo}
-                  cargados={itemsAreaTrabajoVisibles.length}
-                />
-              </>
-            )}
-          </div>
-        </div>
-      </section>
-      <section
-        ref={terminadosSectionRef}
-        className={cn(
-          'overflow-hidden rounded-2xl border border-violet-200/90 bg-white shadow-md',
-          'ring-1 ring-violet-100/80'
-        )}
-        aria-labelledby="finiquito-terminados-titulo"
-      >
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-violet-200/80 bg-gradient-to-r from-violet-900 to-violet-600 px-4 py-3 text-white sm:px-5">
-          <div className="flex min-w-0 flex-1 flex-col gap-3 sm:flex-row sm:items-center sm:gap-3">
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/15 shadow-inner">
-              <CheckCircle2 className="h-4 w-4" aria-hidden />
-            </span>
-            <h2
-              id="finiquito-terminados-titulo"
-              className="shrink-0 text-sm font-bold tracking-tight sm:text-base"
-            >
-              Casos terminados
-            </h2>
-            <FiniquitoCedulaFiltroInline
-              id="finiquito-filtro-cedula-terminados"
-              value={cedulaTerminadosInput}
-              onChange={setCedulaTerminadosInput}
-              onClear={limpiarCedulaTerminados}
-              placeholder="Ej. V12345678"
-              labelClassName="text-violet-50"
-              inputClassName="border-violet-200/80 bg-white text-slate-900"
-              searchIconClassName="text-slate-400"
-              clearButtonClassName="text-slate-500 hover:bg-slate-100 hover:text-slate-800"
-              ariaClear="Limpiar filtro de cédula en terminados"
-            />
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            {areasCargadas.terminados ? (
+            <div className="flex flex-wrap items-center gap-2">
+              {areasCargadas.terminados ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  className="h-9 shrink-0 border-white/30 bg-white/15 text-white hover:bg-white/25"
+                  disabled={areasLoading.terminados}
+                  onClick={() =>
+                    void cargarTerminados({ force: true, silent: false })
+                  }
+                >
+                  {areasLoading.terminados ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    'Recargar'
+                  )}
+                </Button>
+              ) : null}
               <Button
                 type="button"
                 size="sm"
                 variant="secondary"
                 className="h-9 shrink-0 border-white/30 bg-white/15 text-white hover:bg-white/25"
-                disabled={areasLoading.terminados}
-                onClick={() =>
-                  void cargarTerminados({ force: true, silent: false })
+                disabled={
+                  descargandoTerminadosExcel ||
+                  !areasCargadas.terminados ||
+                  (totalTerminadosResumen === 0 && totalTerminados === 0)
                 }
+                onClick={() => void exportarTerminadosExcel()}
               >
-                {areasLoading.terminados ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
+                {descargandoTerminadosExcel ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
                 ) : (
-                  'Recargar'
+                  <Download className="mr-2 h-4 w-4" aria-hidden />
                 )}
+                Descargar Excel
               </Button>
-            ) : null}
-            <Button
-              type="button"
-              size="sm"
-              variant="secondary"
-              className="h-9 shrink-0 border-white/30 bg-white/15 text-white hover:bg-white/25"
-              disabled={
-                descargandoTerminadosExcel ||
-                !areasCargadas.terminados ||
-                (totalTerminadosResumen === 0 && totalTerminados === 0)
-              }
-              onClick={() => void exportarTerminadosExcel()}
-            >
-              {descargandoTerminadosExcel ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
-              ) : (
-                <Download className="mr-2 h-4 w-4" aria-hidden />
-              )}
-              Descargar Excel
-            </Button>
-          </div>
-        </div>
-        <div className="border-b border-violet-200/70 bg-violet-50/40 px-4 py-3 sm:px-5">
-          {!areasCargadas.terminados ? (
-            <p className="mt-4 rounded-lg border border-dashed border-violet-200/90 bg-white/60 px-4 py-6 text-center text-sm text-slate-600">
-              Baje hasta el listado o pulse «Cargar ahora» para traer el gráfico
-              diario y los terminados.
-            </p>
-          ) : areasLoading.terminados && resumenDias.length === 0 ? (
-            <p className="mt-4 rounded-lg border border-dashed border-violet-200/90 bg-white/60 px-4 py-6 text-center text-sm text-slate-600">
-              Cargando resumen…
-            </p>
-          ) : (
-            <>
-              <div className="mb-2 flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
-                <div className="flex flex-col gap-1">
-                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-slate-600">
-                    <span
-                      className="inline-flex items-center gap-1.5"
-                      title="Casos que pasaron al area de trabajo (EN_PROCESO) ese dia, calendario Caracas"
-                    >
-                      <span
-                        className="inline-block h-2.5 w-2.5 rounded-sm"
-                        style={{ backgroundColor: GRAFICO_DIA_COLOR_INGRESAN }}
-                        aria-hidden
-                      />
-                      Ingresan · area trabajo
-                    </span>
-                    <span
-                      className="inline-flex items-center gap-1.5"
-                      title="Casos marcados Terminado ese dia, calendario Caracas"
-                    >
-                      <span
-                        className="inline-block h-2.5 w-2.5 rounded-sm bg-violet-600"
-                        aria-hidden
-                      />
-                      Terminan
-                    </span>
-                  </div>
-                  <p className="text-[10px] leading-snug text-slate-500">
-                    Flujo diario: entradas a area de trabajo vs cierres Terminado
-                    (fecha Caracas).
-                  </p>
-                </div>
-                {terminadosFetchedAt != null ? (
-                  <p className="text-[10px] text-slate-500">
-                    {minutosDesdeCache(terminadosFetchedAt) === 0
-                      ? 'Actualizado hace un momento'
-                      : `Actualizado hace ${minutosDesdeCache(terminadosFetchedAt)} min`}{' '}
-                    · auto cada 1 min
-                  </p>
-                ) : null}
-              </div>
-              <div
-                ref={terminadosGraficoScrollRef}
-                className="mt-1 flex items-end gap-1 overflow-x-auto pb-2 pt-1 scroll-smooth"
-                role="img"
-                aria-label="Grafico diario: entradas al area de trabajo y cierres Terminado (vista inicial: Hoy)"
-              >
-                <BarChart3
-                  className="mb-6 h-5 w-5 shrink-0 text-violet-700"
-                  aria-hidden
-                />
-                {resumenDias.map(d => {
-                  const esHoy = d.etiqueta === 'Hoy'
-                  const esAyer = d.etiqueta === 'Ayer'
-                  const ingresos = d.cantidad_ingresos ?? 0
-                  const terminados = d.cantidad
-                  return (
-                    <div
-                      key={d.fecha}
-                      className={cn(
-                        'flex min-w-[2.75rem] flex-col items-center gap-1 rounded-t-md px-0.5',
-                        esHoy && 'bg-violet-100/80 ring-1 ring-violet-400/70'
-                      )}
-                      title={`${d.etiqueta} (${d.fecha}): ${ingresos} entrada(s) a area de trabajo, ${terminados} terminado(s)`}
-                    >
-                      <div className="flex items-end justify-center gap-0.5">
-                        {renderColumnaBarraGraficoDiario(ingresos, {
-                          barClass: '',
-                          barEmptyClass: '',
-                          labelClass: '',
-                          barStyle: { backgroundColor: GRAFICO_DIA_COLOR_INGRESAN },
-                          barEmptyStyle: {
-                            backgroundColor: GRAFICO_DIA_COLOR_INGRESAN_VACIO,
-                          },
-                          labelStyle: { color: GRAFICO_DIA_COLOR_INGRESAN_ETIQUETA },
-                        })}
-                        {renderColumnaBarraGraficoDiario(terminados, {
-                          barClass: esHoy ? 'bg-violet-700' : 'bg-violet-500/90',
-                          barEmptyClass: esHoy
-                            ? 'bg-violet-300/80'
-                            : 'bg-violet-200/60',
-                          labelClass: esHoy
-                            ? 'text-violet-950'
-                            : 'text-violet-900',
-                        })}
-                      </div>
-                      <span
-                        className={cn(
-                          'max-w-[2.75rem] text-center text-[8px] leading-tight text-slate-600',
-                          esHoy && 'font-bold text-violet-900',
-                          esAyer && 'font-semibold text-violet-800'
-                        )}
-                      >
-                        {d.etiqueta}
-                      </span>
-                    </div>
-                  )
-                })}
-              </div>
-            </>
-          )}
-        </div>
-        <div className="border-b border-violet-100 bg-slate-50/80 px-3 py-3 sm:px-4">
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-            <Input
-              placeholder="Filtrar nombre"
-              value={filtrosTerminados.nombre}
-              onChange={e =>
-                setFiltrosTerminados(prev => ({
-                  ...prev,
-                  nombre: e.target.value,
-                }))
-              }
-              className="h-9 bg-white text-sm"
-              aria-label="Filtrar por nombre"
-            />
-            <Input
-              placeholder="Filtrar total financ."
-              value={filtrosTerminados.total}
-              onChange={e =>
-                setFiltrosTerminados(prev => ({
-                  ...prev,
-                  total: e.target.value,
-                }))
-              }
-              className="h-9 bg-white text-sm"
-              aria-label="Filtrar por total de financiamiento"
-            />
-            <Input
-              placeholder="Filtrar fecha aprobación"
-              value={filtrosTerminados.fechaAprobacion}
-              onChange={e =>
-                setFiltrosTerminados(prev => ({
-                  ...prev,
-                  fechaAprobacion: e.target.value,
-                }))
-              }
-              className="h-9 bg-white text-sm"
-              aria-label="Filtrar por fecha de aprobación"
-            />
-            <Input
-              placeholder="Filtrar último pago"
-              value={filtrosTerminados.fechaTerminoPago}
-              onChange={e =>
-                setFiltrosTerminados(prev => ({
-                  ...prev,
-                  fechaTerminoPago: e.target.value,
-                }))
-              }
-              className="h-9 bg-white text-sm"
-              aria-label="Filtrar por fecha de término de pago"
-            />
-            <Input
-              placeholder="Filtrar fecha terminado"
-              value={filtrosTerminados.fechaTerminado}
-              onChange={e =>
-                setFiltrosTerminados(prev => ({
-                  ...prev,
-                  fechaTerminado: e.target.value,
-                }))
-              }
-              className="h-9 bg-white text-sm"
-              aria-label="Filtrar por fecha en que se marcó terminado"
-            />
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="h-9 border-slate-300 bg-white text-xs"
-              onClick={limpiarFiltrosTerminadosTabla}
-            >
-              Limpiar filtros tabla
-            </Button>
-          </div>
-        </div>
-        <div className="bg-gradient-to-b from-violet-50/40 to-white p-3 sm:p-4">
-          {!areasCargadas.terminados ? (
-            renderContenidoAreaPendiente(
-              'terminados',
-              'Casos terminados',
-              () => void cargarTerminados()
-            )
-          ) : areasLoading.terminados && itemsTerminados.length === 0 ? (
-            <div className="flex justify-center py-12">
-              <Loader2 className="h-8 w-8 animate-spin text-violet-600/70" />
             </div>
-          ) : itemsTerminadosFiltrados.length === 0 ? (
-            <p className="rounded-lg border border-dashed border-violet-200/80 bg-white/60 px-4 py-10 text-center text-sm text-slate-600">
-              {itemsTerminados.length === 0
-                ? 'No hay casos terminados. Aparecerán aquí al confirmar Terminado en el área de trabajo.'
-                : 'Ningún caso coincide con los filtros de la tabla.'}
-            </p>
-          ) : (
-            <>
-              <div
-                className={cn(
-                  'overflow-auto rounded-lg border border-slate-200',
-                  TABLA_SCROLL_MAX_H_COMPACTO
-                )}
-              >
-                <Table>
-                  <TableHeader className={theadStickyClass}>
-                    <TableRow>
-                      <TableHead className={thGestion}>Cédula</TableHead>
-                      <TableHead className={thGestion}>Nombre</TableHead>
-                      <TableHead className={thGestion}>
-                        Total financ.
-                      </TableHead>
-                      <TableHead className={thGestion}>
-                        Fecha aprobación
-                      </TableHead>
-                      <TableHead className={thGestion}>
-                        Último pago
-                      </TableHead>
-                      <TableHead className={thGestion}>
-                        Fecha terminado
-                      </TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {itemsTerminadosFiltrados.map((row, idx) => (
-                      <TableRow
-                        key={row.id}
-                        className={idx % 2 === 0 ? trEven : trOdd}
+          </div>
+          <div className="border-b border-violet-200/70 bg-violet-50/40 px-4 py-3 sm:px-5">
+            {!areasCargadas.terminados ? (
+              <p className="mt-4 rounded-lg border border-dashed border-violet-200/90 bg-white/60 px-4 py-6 text-center text-sm text-slate-600">
+                Baje hasta el listado o pulse «Cargar ahora» para traer el
+                gráfico diario y los terminados.
+              </p>
+            ) : areasLoading.terminados && resumenDias.length === 0 ? (
+              <p className="mt-4 rounded-lg border border-dashed border-violet-200/90 bg-white/60 px-4 py-6 text-center text-sm text-slate-600">
+                Cargando resumen…
+              </p>
+            ) : (
+              <>
+                <div className="mb-2 flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+                  <div className="flex flex-col gap-1">
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-slate-600">
+                      <span
+                        className="inline-flex items-center gap-1.5"
+                        title="Casos que pasaron al area de trabajo (EN_PROCESO) ese dia, calendario Caracas"
                       >
-                        <TableCell
-                          className={cn(tdGestion, 'font-mono text-xs')}
-                        >
-                          {row.cedula}
-                        </TableCell>
-                        <TableCell className={tdGestion}>
-                          {row.nombre || '-'}
-                        </TableCell>
-                        <TableCell className={cn(tdGestion, 'tabular-nums')}>
-                          {formatCurrency(Number(row.total_financiamiento))}
-                        </TableCell>
-                        <TableCell className={tdGestion}>
-                          {textoFechaTabla(row.fecha_aprobacion)}
-                        </TableCell>
-                        <TableCell className={tdGestion}>
-                          {textoFechaTabla(row.fecha_termino_pago)}
-                        </TableCell>
-                        <TableCell className={tdGestion}>
-                          {textoFechaTabla(row.fecha_terminado)}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-              <FiniquitoTablaScrollHint
-                total={totalTerminados}
-                cargados={itemsTerminados.length}
-                limit={TERMINADOS_TABLA_LIMIT_INICIAL}
-              />
-              {itemsTerminados.length < totalTerminados ? (
-                <div className="mt-3 flex justify-center">
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    className="border-slate-300"
-                    disabled={cargandoMasTerminados || areasLoading.terminados}
-                    onClick={() => void cargarMasTerminados()}
-                  >
-                    {cargandoMasTerminados ? (
-                      <>
-                        <Loader2
-                          className="mr-2 h-4 w-4 animate-spin"
+                        <span
+                          className="inline-block h-2.5 w-2.5 rounded-sm"
+                          style={{
+                            backgroundColor: GRAFICO_DIA_COLOR_INGRESAN,
+                          }}
                           aria-hidden
                         />
-                        Cargando…
-                      </>
-                    ) : (
-                      `Cargar mas (${itemsTerminados.length} de ${totalTerminados})`
-                    )}
-                  </Button>
+                        Ingresan · area trabajo
+                      </span>
+                      <span
+                        className="inline-flex items-center gap-1.5"
+                        title="Casos marcados Terminado ese dia, calendario Caracas"
+                      >
+                        <span
+                          className="inline-block h-2.5 w-2.5 rounded-sm bg-violet-600"
+                          aria-hidden
+                        />
+                        Terminan
+                      </span>
+                    </div>
+                    <p className="text-[10px] leading-snug text-slate-500">
+                      Flujo diario: entradas a area de trabajo vs cierres
+                      Terminado (fecha Caracas).
+                    </p>
+                  </div>
+                  {terminadosFetchedAt != null ? (
+                    <p className="text-[10px] text-slate-500">
+                      {minutosDesdeCache(terminadosFetchedAt) === 0
+                        ? 'Actualizado hace un momento'
+                        : `Actualizado hace ${minutosDesdeCache(terminadosFetchedAt)} min`}{' '}
+                      · auto cada 1 min
+                    </p>
+                  ) : null}
                 </div>
-              ) : null}
-              {itemsTerminadosFiltrados.length !== itemsTerminados.length ? (
-                <p className="mt-2 text-center text-[11px] text-slate-500">
-                  Mostrando {itemsTerminadosFiltrados.length} de{' '}
-                  {itemsTerminados.length} filas cargadas (filtros de tabla).
-                </p>
-              ) : null}
-            </>
-          )}
-        </div>
-      </section>
+                <div
+                  ref={terminadosGraficoScrollRef}
+                  className="mt-1 flex items-end gap-1 overflow-x-auto scroll-smooth pb-2 pt-1"
+                  role="img"
+                  aria-label="Grafico diario: entradas al area de trabajo y cierres Terminado (vista inicial: Hoy)"
+                >
+                  <BarChart3
+                    className="mb-6 h-5 w-5 shrink-0 text-violet-700"
+                    aria-hidden
+                  />
+                  {resumenDias.map(d => {
+                    const esHoy = d.etiqueta === 'Hoy'
+                    const esAyer = d.etiqueta === 'Ayer'
+                    const ingresos = d.cantidad_ingresos ?? 0
+                    const terminados = d.cantidad
+                    return (
+                      <div
+                        key={d.fecha}
+                        className={cn(
+                          'flex min-w-[2.75rem] flex-col items-center gap-1 rounded-t-md px-0.5',
+                          esHoy && 'bg-violet-100/80 ring-1 ring-violet-400/70'
+                        )}
+                        title={`${d.etiqueta} (${d.fecha}): ${ingresos} entrada(s) a area de trabajo, ${terminados} terminado(s)`}
+                      >
+                        <div className="flex items-end justify-center gap-0.5">
+                          {renderColumnaBarraGraficoDiario(ingresos, {
+                            barClass: '',
+                            barEmptyClass: '',
+                            labelClass: '',
+                            barStyle: {
+                              backgroundColor: GRAFICO_DIA_COLOR_INGRESAN,
+                            },
+                            barEmptyStyle: {
+                              backgroundColor: GRAFICO_DIA_COLOR_INGRESAN_VACIO,
+                            },
+                            labelStyle: {
+                              color: GRAFICO_DIA_COLOR_INGRESAN_ETIQUETA,
+                            },
+                          })}
+                          {renderColumnaBarraGraficoDiario(terminados, {
+                            barClass: esHoy
+                              ? 'bg-violet-700'
+                              : 'bg-violet-500/90',
+                            barEmptyClass: esHoy
+                              ? 'bg-violet-300/80'
+                              : 'bg-violet-200/60',
+                            labelClass: esHoy
+                              ? 'text-violet-950'
+                              : 'text-violet-900',
+                          })}
+                        </div>
+                        <span
+                          className={cn(
+                            'max-w-[2.75rem] text-center text-[8px] leading-tight text-slate-600',
+                            esHoy && 'font-bold text-violet-900',
+                            esAyer && 'font-semibold text-violet-800'
+                          )}
+                        >
+                          {d.etiqueta}
+                        </span>
+                      </div>
+                    )
+                  })}
+                </div>
+              </>
+            )}
+          </div>
+          <div className="border-b border-violet-100 bg-slate-50/80 px-3 py-3 sm:px-4">
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+              <Input
+                placeholder="Filtrar nombre"
+                value={filtrosTerminados.nombre}
+                onChange={e =>
+                  setFiltrosTerminados(prev => ({
+                    ...prev,
+                    nombre: e.target.value,
+                  }))
+                }
+                className="h-9 bg-white text-sm"
+                aria-label="Filtrar por nombre"
+              />
+              <Input
+                placeholder="Filtrar total financ."
+                value={filtrosTerminados.total}
+                onChange={e =>
+                  setFiltrosTerminados(prev => ({
+                    ...prev,
+                    total: e.target.value,
+                  }))
+                }
+                className="h-9 bg-white text-sm"
+                aria-label="Filtrar por total de financiamiento"
+              />
+              <Input
+                placeholder="Filtrar fecha aprobación"
+                value={filtrosTerminados.fechaAprobacion}
+                onChange={e =>
+                  setFiltrosTerminados(prev => ({
+                    ...prev,
+                    fechaAprobacion: e.target.value,
+                  }))
+                }
+                className="h-9 bg-white text-sm"
+                aria-label="Filtrar por fecha de aprobación"
+              />
+              <Input
+                placeholder="Filtrar último pago"
+                value={filtrosTerminados.fechaTerminoPago}
+                onChange={e =>
+                  setFiltrosTerminados(prev => ({
+                    ...prev,
+                    fechaTerminoPago: e.target.value,
+                  }))
+                }
+                className="h-9 bg-white text-sm"
+                aria-label="Filtrar por fecha de término de pago"
+              />
+              <Input
+                placeholder="Filtrar fecha terminado"
+                value={filtrosTerminados.fechaTerminado}
+                onChange={e =>
+                  setFiltrosTerminados(prev => ({
+                    ...prev,
+                    fechaTerminado: e.target.value,
+                  }))
+                }
+                className="h-9 bg-white text-sm"
+                aria-label="Filtrar por fecha en que se marcó terminado"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-9 border-slate-300 bg-white text-xs"
+                onClick={limpiarFiltrosTerminadosTabla}
+              >
+                Limpiar filtros tabla
+              </Button>
+            </div>
+          </div>
+          <div className="bg-gradient-to-b from-violet-50/40 to-white p-3 sm:p-4">
+            {!areasCargadas.terminados ? (
+              renderContenidoAreaPendiente(
+                'terminados',
+                'Casos terminados',
+                () => void cargarTerminados()
+              )
+            ) : areasLoading.terminados && itemsTerminados.length === 0 ? (
+              <div className="flex justify-center py-12">
+                <Loader2 className="h-8 w-8 animate-spin text-violet-600/70" />
+              </div>
+            ) : itemsTerminadosFiltrados.length === 0 ? (
+              <p className="rounded-lg border border-dashed border-violet-200/80 bg-white/60 px-4 py-10 text-center text-sm text-slate-600">
+                {itemsTerminados.length === 0
+                  ? 'No hay casos terminados. Aparecerán aquí al confirmar Terminado en el área de trabajo.'
+                  : 'Ningún caso coincide con los filtros de la tabla.'}
+              </p>
+            ) : (
+              <>
+                <div
+                  className={cn(
+                    'overflow-auto rounded-lg border border-slate-200',
+                    TABLA_SCROLL_MAX_H_COMPACTO
+                  )}
+                >
+                  <Table>
+                    <TableHeader className={theadStickyClass}>
+                      <TableRow>
+                        <TableHead className={thGestion}>Cédula</TableHead>
+                        <TableHead className={thGestion}>Nombre</TableHead>
+                        <TableHead className={thGestion}>
+                          Total financ.
+                        </TableHead>
+                        <TableHead className={thGestion}>
+                          Fecha aprobación
+                        </TableHead>
+                        <TableHead className={thGestion}>Último pago</TableHead>
+                        <TableHead className={thGestion}>
+                          Fecha terminado
+                        </TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {itemsTerminadosFiltrados.map((row, idx) => (
+                        <TableRow
+                          key={row.id}
+                          className={idx % 2 === 0 ? trEven : trOdd}
+                        >
+                          <TableCell
+                            className={cn(tdGestion, 'font-mono text-xs')}
+                          >
+                            {row.cedula}
+                          </TableCell>
+                          <TableCell className={tdGestion}>
+                            {row.nombre || '-'}
+                          </TableCell>
+                          <TableCell className={cn(tdGestion, 'tabular-nums')}>
+                            {formatCurrency(Number(row.total_financiamiento))}
+                          </TableCell>
+                          <TableCell className={tdGestion}>
+                            {textoFechaTabla(row.fecha_aprobacion)}
+                          </TableCell>
+                          <TableCell className={tdGestion}>
+                            {textoFechaTabla(row.fecha_termino_pago)}
+                          </TableCell>
+                          <TableCell className={tdGestion}>
+                            {textoFechaTabla(row.fecha_terminado)}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+                <FiniquitoTablaScrollHint
+                  total={totalTerminados}
+                  cargados={itemsTerminados.length}
+                  limit={TERMINADOS_TABLA_LIMIT_INICIAL}
+                />
+                {itemsTerminados.length < totalTerminados ? (
+                  <div className="mt-3 flex justify-center">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="border-slate-300"
+                      disabled={
+                        cargandoMasTerminados || areasLoading.terminados
+                      }
+                      onClick={() => void cargarMasTerminados()}
+                    >
+                      {cargandoMasTerminados ? (
+                        <>
+                          <Loader2
+                            className="mr-2 h-4 w-4 animate-spin"
+                            aria-hidden
+                          />
+                          Cargando…
+                        </>
+                      ) : (
+                        `Cargar mas (${itemsTerminados.length} de ${totalTerminados})`
+                      )}
+                    </Button>
+                  </div>
+                ) : null}
+                {itemsTerminadosFiltrados.length !== itemsTerminados.length ? (
+                  <p className="mt-2 text-center text-[11px] text-slate-500">
+                    Mostrando {itemsTerminadosFiltrados.length} de{' '}
+                    {itemsTerminados.length} filas cargadas (filtros de tabla).
+                  </p>
+                ) : null}
+              </>
+            )}
+          </div>
+        </section>
       </div>
       <Dialog
         open={dialogTerminado != null}
@@ -3515,9 +3555,9 @@ function FiniquitoGestionPageInner() {
                 {pendingLiberarCaso?.id ?? '-'}) saldrá del flujo finiquito.
               </span>
               <span className="block">
-                Use esto cuando <strong>Conciliar</strong> confirme que el crédito{' '}
-                <strong>no está liquidado</strong>: el préstamo vuelve a cartera
-                operativa (pagos, cuotas, revisión manual habitual).
+                Use esto cuando <strong>Conciliar</strong> confirme que el
+                crédito <strong>no está liquidado</strong>: el préstamo vuelve a
+                cartera operativa (pagos, cuotas, revisión manual habitual).
               </span>
             </DialogDescription>
           </DialogHeader>
@@ -3606,7 +3646,6 @@ function FiniquitoGestionPageInner() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
     </FiniquitoWorkspaceShell>
   )
 }

@@ -321,10 +321,7 @@ class PagoService {
     if (params.fecha_pago?.trim()) {
       qs.set('fecha_pago', params.fecha_pago.trim().slice(0, 10))
     }
-    if (
-      params.monto_pagado != null &&
-      Number.isFinite(params.monto_pagado)
-    ) {
+    if (params.monto_pagado != null && Number.isFinite(params.monto_pagado)) {
       qs.set('monto_pagado', String(params.monto_pagado))
     }
     if (params.referencia_pago?.trim()) {
@@ -1034,7 +1031,7 @@ class PagoService {
       saldo_vencido: number
 
       total_prestamos: number
-    }>,
+    }>
     total: number
 
     page: number
@@ -1435,7 +1432,6 @@ class PagoService {
       `${this.baseUrl}/gmail/migrar-pendientes-a-con-errores`
     )
   }
-
 }
 
 /**

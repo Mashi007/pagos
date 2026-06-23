@@ -160,13 +160,9 @@ function mensajeConflictoGuardarUsuario(opts: {
     )
   }
   if (opts.mismosCredito) {
-    return (
-      `${en} ${aplica} Mismo comprobante en el mismo crédito: pulse Visto para asignar un código distinto.`
-    )
+    return `${en} ${aplica} Mismo comprobante en el mismo crédito: pulse Visto para asignar un código distinto.`
   }
-  return (
-    `${en} ${aplica} El comprobante ya está registrado en otro crédito (o sin crédito): pulse Visto para asignar un código y poder guardar.`
-  )
+  return `${en} ${aplica} El comprobante ya está registrado en otro crédito (o sin crédito): pulse Visto para asignar un código y poder guardar.`
 }
 
 function etiquetaPrestamoLinea(
@@ -726,7 +722,8 @@ export function RegistrarPagoForm({
         exclude_pago_id: excludeIdConflicto,
         exclude_pago_con_error_id: excludePagoConErrorIdConflicto,
         prestamo_id: prestamoIdConflicto,
-        cedula_cliente: cedulaCanonicaBusqueda || formData.cedula_cliente || null,
+        cedula_cliente:
+          cedulaCanonicaBusqueda || formData.cedula_cliente || null,
         fecha_pago: formData.fecha_pago || null,
         monto_pagado: formData.monto_pagado,
         referencia_pago: debouncedClaveDocumentoConflicto,
@@ -737,7 +734,7 @@ export function RegistrarPagoForm({
 
   const conflictoDocumentoSerial = Boolean(
     conflictoDocApi?.documento_conflicto ??
-      (conflictoDocApi?.conflicto && !conflictoDocApi?.huella_conflicto)
+    (conflictoDocApi?.conflicto && !conflictoDocApi?.huella_conflicto)
   )
 
   const conflictoHuellaSerial = Boolean(conflictoDocApi?.huella_conflicto)
@@ -746,11 +743,10 @@ export function RegistrarPagoForm({
     conflictoDocApi?.puede_adoptar_pago_huerfano
   )
 
-  const conflictoDocumentoBloquea =
-    Boolean(
-      conflictoDocApi?.documento_bloquea_guardar ??
-        (conflictoDocumentoSerial && !puedeAdoptarPagoHuerfano)
-    )
+  const conflictoDocumentoBloquea = Boolean(
+    conflictoDocApi?.documento_bloquea_guardar ??
+    (conflictoDocumentoSerial && !puedeAdoptarPagoHuerfano)
+  )
 
   const tieneCodigoDocumentoDesambiguacion = Boolean(
     String(formData.codigo_documento ?? '').trim()
@@ -784,8 +780,7 @@ export function RegistrarPagoForm({
 
   /** Mismo serial en cartera en un pago huérfano; el formulario sí tiene crédito elegido. */
   const conflictoDocOrfanoCarteraConPrestamoEnFormulario =
-    puedeAdoptarPagoHuerfano &&
-    prestamoIdFormulario != null
+    puedeAdoptarPagoHuerfano && prestamoIdFormulario != null
 
   const mismoDocQueInicial =
     debouncedClaveDocumentoConflicto === claveDocumentoInicial
@@ -812,7 +807,9 @@ export function RegistrarPagoForm({
       : prestamoIdFormulario
 
   const { data: prestamoHuellaDetalle } = usePrestamo(
-    conflictoHuellaSerial && prestamoIdHuellaCartera ? prestamoIdHuellaCartera : 0
+    conflictoHuellaSerial && prestamoIdHuellaCartera
+      ? prestamoIdHuellaCartera
+      : 0
   )
 
   const etiquetaPrestamoFormulario = useMemo(
@@ -822,13 +819,15 @@ export function RegistrarPagoForm({
 
   const etiquetaPrestamoCarteraDocumento = useMemo(
     () =>
-      etiquetaPrestamoLinea(prestamoIdConflictoCartera, prestamoConflictoDetalle),
+      etiquetaPrestamoLinea(
+        prestamoIdConflictoCartera,
+        prestamoConflictoDetalle
+      ),
     [prestamoIdConflictoCartera, prestamoConflictoDetalle]
   )
 
   const etiquetaPrestamoCarteraHuella = useMemo(
-    () =>
-      etiquetaPrestamoLinea(prestamoIdHuellaCartera, prestamoHuellaDetalle),
+    () => etiquetaPrestamoLinea(prestamoIdHuellaCartera, prestamoHuellaDetalle),
     [prestamoIdHuellaCartera, prestamoHuellaDetalle]
   )
 
@@ -966,7 +965,8 @@ export function RegistrarPagoForm({
         numeroCedula: cedulaPartes!.numero,
         comprobante: fileToScan,
         extraccionSinCliente,
-        prestamoObjetivoId: formData.prestamo_id ?? prestamoIdFormulario ?? null,
+        prestamoObjetivoId:
+          formData.prestamo_id ?? prestamoIdFormulario ?? null,
         institucionPlantillaHint: formData.institucion_bancaria,
       })
 
@@ -988,13 +988,13 @@ export function RegistrarPagoForm({
           numero_documento: formData.numero_documento,
           monto_pagado:
             monedaRegistro === 'USD'
-              ? parseMontoLatam(montoStr) ?? formData.monto_pagado
+              ? (parseMontoLatam(montoStr) ?? formData.monto_pagado)
               : formData.monto_pagado,
           monto_bs_original:
             monedaRegistro === 'BS'
               ? parseMontoLatam(montoStr)
-              : (pagoInicial as PagoInicialRegistrar | undefined)
-                  ?.monto_bs_original ?? null,
+              : ((pagoInicial as PagoInicialRegistrar | undefined)
+                  ?.monto_bs_original ?? null),
           moneda_registro: monedaRegistro === 'BS' ? 'BS' : 'USD',
         },
         s
@@ -1444,10 +1444,7 @@ export function RegistrarPagoForm({
       return
     }
 
-    if (
-      conflictoHuellaSerial &&
-      !bloquearCambioComprobanteCodigo
-    ) {
+    if (conflictoHuellaSerial && !bloquearCambioComprobanteCodigo) {
       setErrors({
         general: mensajeConflictoGuardarUsuario({
           tipo: 'huella',
@@ -2898,10 +2895,10 @@ export function RegistrarPagoForm({
                 {puedeVistoRevisionManual ? (
                   <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-violet-200/70 bg-violet-50 px-3 py-2">
                     <p className="min-w-0 flex-1 text-xs text-violet-900">
-                      <span className="font-medium">Revisión manual:</span>{' '}
-                      si hay duplicado, pulse{' '}
-                      <strong>Visto</strong> una vez (asigna código A####/P####
-                      y guarda). No repita el paso si ya asignó código.
+                      <span className="font-medium">Revisión manual:</span> si
+                      hay duplicado, pulse <strong>Visto</strong> una vez
+                      (asigna código A####/P#### y guarda). No repita el paso si
+                      ya asignó código.
                     </p>
                     <div className="flex shrink-0 items-center gap-2">
                       <button
@@ -2994,7 +2991,10 @@ export function RegistrarPagoForm({
                         }
                       >
                         {isRescanning ? (
-                          <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                          <Loader2
+                            className="h-4 w-4 animate-spin"
+                            aria-hidden
+                          />
                         ) : (
                           <Brain className="h-4 w-4" aria-hidden />
                         )}
@@ -3141,9 +3141,9 @@ export function RegistrarPagoForm({
                             {conflictoDocApi?.adoptar_pago_huerfano_id ??
                               conflictoDocApi?.pago_id}{' '}
                             (sin crédito en cartera). Este formulario sí tiene
-                            préstamo{' '}
-                            <strong>#{prestamoIdFormulario}</strong>: al guardar
-                            se asignará ese crédito al abono existente.
+                            préstamo <strong>#{prestamoIdFormulario}</strong>:
+                            al guardar se asignará ese crédito al abono
+                            existente.
                           </p>
                         ) : null}
                         <p>
@@ -3195,8 +3195,8 @@ export function RegistrarPagoForm({
                                 {conflictoDocApi?.adoptar_pago_huerfano_id ??
                                   conflictoDocApi?.pago_id}
                               </span>{' '}
-                              (sin crédito → se asignará #
-                              {prestamoIdFormulario})
+                              (sin crédito → se asignará #{prestamoIdFormulario}
+                              )
                             </>
                           ) : conflictoDocApi?.conflicto ? (
                             <>
@@ -3416,68 +3416,68 @@ export function RegistrarPagoForm({
                 </p>
               ) : null}
               <div className="flex flex-wrap items-center justify-end gap-3">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={onClose}
-                disabled={isSubmitting || isDeleting}
-              >
-                Cancelar
-              </Button>
-
-              {isEditing && pagoId && !bloquearCambioComprobanteCodigo ? (
                 <Button
                   type="button"
                   variant="outline"
-                  className="border-red-300 text-red-700 hover:bg-red-50"
-                  onClick={() => void handleEliminarPago()}
+                  onClick={onClose}
                   disabled={isSubmitting || isDeleting}
                 >
-                  {isDeleting ? (
+                  Cancelar
+                </Button>
+
+                {isEditing && pagoId && !bloquearCambioComprobanteCodigo ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="border-red-300 text-red-700 hover:bg-red-50"
+                    onClick={() => void handleEliminarPago()}
+                    disabled={isSubmitting || isDeleting}
+                  >
+                    {isDeleting ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Eliminando...
+                      </>
+                    ) : (
+                      <>
+                        <Trash2 className="mr-2 h-4 w-4" aria-hidden />
+                        Eliminar
+                      </>
+                    )}
+                  </Button>
+                ) : null}
+
+                <Button
+                  type="submit"
+                  disabled={
+                    isSubmitting ||
+                    isDeleting ||
+                    conflictoSerialBloqueaGuardar ||
+                    (conflictoHuellaSerial && !bloquearCambioComprobanteCodigo)
+                  }
+                >
+                  {isSubmitting ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Eliminando...
+
+                      {modoGuardarYProcesar
+                        ? 'Guardando y procesando...'
+                        : isEditing
+                          ? 'Actualizando...'
+                          : 'Registrando...'}
                     </>
                   ) : (
                     <>
-                      <Trash2 className="mr-2 h-4 w-4" aria-hidden />
-                      Eliminar
+                      <CheckCircle className="mr-2 h-4 w-4" />
+
+                      {modoGuardarYProcesar
+                        ? 'Guardar y Procesar'
+                        : isEditing
+                          ? 'Actualizar Pago'
+                          : 'Registrar Pago'}
                     </>
                   )}
                 </Button>
-              ) : null}
-
-              <Button
-                type="submit"
-                disabled={
-                  isSubmitting ||
-                  isDeleting ||
-                  conflictoSerialBloqueaGuardar ||
-                  (conflictoHuellaSerial && !bloquearCambioComprobanteCodigo)
-                }
-              >
-                {isSubmitting ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-
-                    {modoGuardarYProcesar
-                      ? 'Guardando y procesando...'
-                      : isEditing
-                        ? 'Actualizando...'
-                        : 'Registrando...'}
-                  </>
-                ) : (
-                  <>
-                    <CheckCircle className="mr-2 h-4 w-4" />
-
-                    {modoGuardarYProcesar
-                      ? 'Guardar y Procesar'
-                      : isEditing
-                        ? 'Actualizar Pago'
-                        : 'Registrar Pago'}
-                  </>
-                )}
-              </Button>
               </div>
             </div>
           </form>

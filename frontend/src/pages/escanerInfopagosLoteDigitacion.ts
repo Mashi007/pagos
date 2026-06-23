@@ -8,7 +8,11 @@ import type { EscanerInfopagosExtraerResponse } from '../services/cobrosService'
 import { escanerInfopagosExtraerComprobante } from '../services/cobrosService'
 import { collectTokensSufijoVistoArchivoDesdeFilas } from '../utils/documentoSufijoVisto'
 
-import { filaTrasExtraccion, partesCedulaParaApi, type FilaLote } from './escanerInfopagosLoteModel'
+import {
+  filaTrasExtraccion,
+  partesCedulaParaApi,
+  type FilaLote,
+} from './escanerInfopagosLoteModel'
 
 /** Opciones de `runDigitacionLoteEnSegundoPlano` (re-escaneo lote desde modal, etc.). */
 export type DigitacionLoteOpciones = {
@@ -175,9 +179,8 @@ export async function runDigitacionLoteEnSegundoPlano(
 
       let archivoEnvio = filaActual.archivo
       try {
-        const { normalizarComprobanteArchivoParaEscaneo } = await import(
-          '../utils/normalizarComprobanteArchivo'
-        )
+        const { normalizarComprobanteArchivoParaEscaneo } =
+          await import('../utils/normalizarComprobanteArchivo')
         archivoEnvio = await normalizarComprobanteArchivoParaEscaneo(
           filaActual.archivo
         )
@@ -196,9 +199,14 @@ export async function runDigitacionLoteEnSegundoPlano(
         continue
       }
 
-      const cedulaFila = (filaActual.cedulaDeudor || contexto.cedulaRaw || '').trim()
+      const cedulaFila = (
+        filaActual.cedulaDeudor ||
+        contexto.cedulaRaw ||
+        ''
+      ).trim()
       const partesCedula =
-        partesCedulaParaApi(cedulaFila) || partesCedulaParaApi(contexto.cedulaRaw)
+        partesCedulaParaApi(cedulaFila) ||
+        partesCedulaParaApi(contexto.cedulaRaw)
       if (!partesCedula) {
         working = working.map(f =>
           f.clientId === clientId

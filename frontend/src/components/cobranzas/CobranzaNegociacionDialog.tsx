@@ -5,7 +5,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from '../ui/dialog'
-import { CobranzaGestionCaso, type CobranzaGestionCasoProps } from './CobranzaGestionCaso'
+import {
+  CobranzaGestionCaso,
+  type CobranzaGestionCasoProps,
+} from './CobranzaGestionCaso'
 import type { CobranzaPrestamoResumen } from '../../services/cobranzaService'
 
 export interface CobranzaNegociacionDialogProps {

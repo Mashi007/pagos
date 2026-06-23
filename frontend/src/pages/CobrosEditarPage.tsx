@@ -476,7 +476,8 @@ export default function CobrosEditarPage() {
           prestamo_existente_id: res.prestamo_existente_id ?? null,
           prestamo_objetivo_id: res.prestamo_objetivo_id ?? null,
           prestamo_objetivo_multiple: detalle?.prestamo_objetivo_multiple,
-          prestamo_duplicado_es_objetivo: detalle?.prestamo_duplicado_es_objetivo,
+          prestamo_duplicado_es_objetivo:
+            detalle?.prestamo_duplicado_es_objetivo,
         })
       }
       return true

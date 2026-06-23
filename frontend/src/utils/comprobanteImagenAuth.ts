@@ -34,12 +34,16 @@ export async function fetchStaffComprobanteBlobFromHref(
   return apiClient.getBlob(path)
 }
 
-function sniffHeicHeifFromHead(u: Uint8Array): 'image/heic' | 'image/heif' | null {
+function sniffHeicHeifFromHead(
+  u: Uint8Array
+): 'image/heic' | 'image/heif' | null {
   if (u.length < 16) return null
   if (u[4] !== 0x66 || u[5] !== 0x74 || u[6] !== 0x79 || u[7] !== 0x70) {
     return null
   }
-  const marca = String.fromCharCode(...u.slice(8, Math.min(48, u.length))).toLowerCase()
+  const marca = String.fromCharCode(
+    ...u.slice(8, Math.min(48, u.length))
+  ).toLowerCase()
   if (/heic|heix|hevc|hevx/.test(marca)) return 'image/heic'
   if (/mif1|msf1/.test(marca)) return 'image/heif'
   return null
@@ -101,7 +105,10 @@ export async function blobComprobanteAFileParaEscaneo(
   const buf = await blob.arrayBuffer()
   const head = new Uint8Array(buf.slice(0, Math.min(48, buf.byteLength)))
   const sniffed = sniffComprobanteMimeFromHead(head)
-  let mime = (contentTypeHint || blob.type || '').split(';')[0].trim().toLowerCase()
+  let mime = (contentTypeHint || blob.type || '')
+    .split(';')[0]
+    .trim()
+    .toLowerCase()
   if (
     !mime ||
     mime === 'application/octet-stream' ||

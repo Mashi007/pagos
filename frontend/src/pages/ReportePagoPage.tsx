@@ -644,7 +644,9 @@ function mensajeErrorDigitalizarComprobante(msg: string): string {
       'Puede continuar: revise los datos en los pasos siguientes o use «Atrás» y complete manualmente.'
     )
   }
-  return m || 'No se pudo digitalizar el comprobante. Continúe con carga manual.'
+  return (
+    m || 'No se pudo digitalizar el comprobante. Continúe con carga manual.'
+  )
 }
 
 type NotificationType = 'error' | 'success'

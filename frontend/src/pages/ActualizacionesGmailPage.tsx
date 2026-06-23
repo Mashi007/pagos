@@ -943,7 +943,9 @@ export default function ActualizacionesGmailPage() {
                   ) : (
                     tablaItems.map(item => {
                       const dup = item.duplicado_en_pagos
-                      const montoAlto = Boolean(item.requiere_revision_manual_monto)
+                      const montoAlto = Boolean(
+                        item.requiere_revision_manual_monto
+                      )
                       const compUrl = urlComprobante(item.comprobante_url)
                       const guardandoEste = guardandoId === item.id
                       const migrandoEste = migrandoId === item.id

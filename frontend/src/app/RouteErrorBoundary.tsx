@@ -31,7 +31,11 @@ export class RouteErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, info: ErrorInfo) {
     if (isChunkLoadError(error)) {
-      console.warn('[route] Chunk load error:', error.message, info.componentStack)
+      console.warn(
+        '[route] Chunk load error:',
+        error.message,
+        info.componentStack
+      )
       return
     }
     console.error('[route] Render error:', error, info.componentStack)

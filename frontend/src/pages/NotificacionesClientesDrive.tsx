@@ -411,8 +411,7 @@ export default function NotificacionesClientesDrive() {
           ? syncRes.last_data_sheet_row_number
           : null
       const filas = typeof n === 'number' ? `${n} fila(s) en snapshot. ` : ''
-      const cola =
-        ultima != null ? `Última fila hoja: ${ultima}. ` : ''
+      const cola = ultima != null ? `Última fila hoja: ${ultima}. ` : ''
       toast.success(
         `${filas}${cola}Hoja CONCILIACIÓN traída desde Drive y lista de candidatos actualizada.`
       )
@@ -1042,8 +1041,7 @@ export default function NotificacionesClientesDrive() {
                       la sincronización en Configuración (Google), el job
                       interno (01:00 sync rango A:S + caché Clientes Drive;
                       02:00 sync A:S + snapshot Préstamos Drive si
-                      ENABLE_AUTOMATIC_SCHEDULED_JOBS=true)
-                      o un cron externo
+                      ENABLE_AUTOMATIC_SCHEDULED_JOBS=true) o un cron externo
                       alineado (POST /api/v1/conciliacion-sheet/sync con
                       secreto). Puede pulsar «Actualizar lista» para
                       materializar ahora.

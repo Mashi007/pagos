@@ -96,7 +96,9 @@ export function buildFormDataEscanerComprobante(
   return fd
 }
 
-export function traducirDetalleTecnicoExtraccionEscaner(detail: string): string {
+export function traducirDetalleTecnicoExtraccionEscaner(
+  detail: string
+): string {
   const raw = (detail || '').trim()
   if (!raw) return raw
   const t = raw.toLowerCase()
@@ -121,9 +123,8 @@ export function traducirDetalleTecnicoExtraccionEscaner(detail: string): string 
 
 export function mensajeErrorExtraccionEscaner(err: unknown): string {
   if (err && typeof err === 'object' && 'response' in err) {
-    const detail = (
-      err as { response?: { data?: { detail?: unknown } } }
-    ).response?.data?.detail
+    const detail = (err as { response?: { data?: { detail?: unknown } } })
+      .response?.data?.detail
     if (typeof detail === 'string' && detail.trim()) {
       return traducirDetalleTecnicoExtraccionEscaner(detail)
     }
@@ -179,8 +180,7 @@ export function mergeCamposFormularioDesdeSugerenciaOcr(
   sugerencia: EscanerInfopagosSugerencia
 ): CamposFormularioEscaner {
   const instOcr = institucionDesdeSugerenciaOcr(sugerencia)
-  const geminiInst =
-    instOcr || (sugerencia.institucion_financiera || '').trim()
+  const geminiInst = instOcr || (sugerencia.institucion_financiera || '').trim()
   const { institucion, otroInstitucion } = resolverInstitucionDesdeExtraccion(
     geminiInst,
     actual.institucion,
@@ -247,10 +247,7 @@ export function mergePagoRegistrarDesdeSugerenciaOcr(
       next.moneda_registro = 'USD'
       next.monto_pagado = montoOcr
     }
-  } else if (
-    sugerencia.moneda === 'BS' ||
-    sugerencia.moneda === 'USD'
-  ) {
+  } else if (sugerencia.moneda === 'BS' || sugerencia.moneda === 'USD') {
     next.moneda_registro = monedaOcr
   }
 

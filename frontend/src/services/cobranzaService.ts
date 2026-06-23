@@ -125,9 +125,7 @@ export async function buscarCobranzasPorCedula(
 export async function obtenerCasoCobranza(
   casoId: number
 ): Promise<CobranzaCasoDetalle> {
-  return apiClient.get<CobranzaCasoDetalle>(
-    buildUrl(`${base}/casos/${casoId}`)
-  )
+  return apiClient.get<CobranzaCasoDetalle>(buildUrl(`${base}/casos/${casoId}`))
 }
 
 export async function crearCasoCobranza(body: {
@@ -262,7 +260,9 @@ export async function eliminarImagenCobranza(
   casoId: number,
   imagenId: string
 ): Promise<void> {
-  await apiClient.delete(buildUrl(`${base}/casos/${casoId}/imagenes/${imagenId}`))
+  await apiClient.delete(
+    buildUrl(`${base}/casos/${casoId}/imagenes/${imagenId}`)
+  )
 }
 
 export const MOTIVOS_COBRANZA_LABEL: Record<MotivoCobranza, string> = {

@@ -40,9 +40,7 @@ import {
   normalizarFuenteTasaCambio,
   type FuenteTasaCambio,
 } from '../constants/fuenteTasaCambio'
-import {
-  resolverInstitucionDesdeExtraccion,
-} from './escanerInfopagosLoteModel'
+import { resolverInstitucionDesdeExtraccion } from './escanerInfopagosLoteModel'
 import { searchParamsRevisionPagosDesdeNumeroDocumento } from '../utils/linkRevisionPagosDesdeEscaner'
 
 type Fase = 'cedula' | 'imagen' | 'formulario' | 'exito'
@@ -629,9 +627,8 @@ export default function EscanerInfopagosPage() {
     setEscaneando(true)
     let archivoEnvio: File
     try {
-      const { normalizarComprobanteArchivoParaEscaneo } = await import(
-        '../utils/normalizarComprobanteArchivo'
-      )
+      const { normalizarComprobanteArchivoParaEscaneo } =
+        await import('../utils/normalizarComprobanteArchivo')
       archivoEnvio = await normalizarComprobanteArchivoParaEscaneo(archivo!)
     } catch (convErr) {
       escanearActivoRef.current = false
@@ -786,8 +783,7 @@ export default function EscanerInfopagosPage() {
       toast.error('Cédula inválida.')
       return
     }
-    const fechaPagoEnvio =
-      fechaPago.trim() || fechaDetectada.trim()
+    const fechaPagoEnvio = fechaPago.trim() || fechaDetectada.trim()
     if (!fechaPagoEnvio) {
       toast.error(
         'Indique la fecha de pago (no se detectó con claridad en el comprobante).'
@@ -849,9 +845,8 @@ export default function EscanerInfopagosPage() {
     }
     if (archivo) {
       try {
-        const { normalizarComprobanteArchivoParaEscaneo } = await import(
-          '../utils/normalizarComprobanteArchivo'
-        )
+        const { normalizarComprobanteArchivoParaEscaneo } =
+          await import('../utils/normalizarComprobanteArchivo')
         form.append(
           'comprobante',
           await normalizarComprobanteArchivoParaEscaneo(archivo)
@@ -1081,7 +1076,11 @@ export default function EscanerInfopagosPage() {
                 </p>
               )}
             </div>
-            <Button type="button" onClick={handleValidarCedula} disabled={validandoCedula}>
+            <Button
+              type="button"
+              onClick={handleValidarCedula}
+              disabled={validandoCedula}
+            >
               {validandoCedula ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -1123,7 +1122,9 @@ export default function EscanerInfopagosPage() {
               </p>
             ) : null}
             <div className="space-y-2">
-              <Label htmlFor="archivo-escaner">Imagen, PDF o Word (.docx) con foto del recibo (máx. 10 MB)</Label>
+              <Label htmlFor="archivo-escaner">
+                Imagen, PDF o Word (.docx) con foto del recibo (máx. 10 MB)
+              </Label>
               <Input
                 id="archivo-escaner"
                 type="file"
@@ -1571,7 +1572,11 @@ export default function EscanerInfopagosPage() {
                   >
                     Volver
                   </Button>
-                  <Button type="button" onClick={handleGuardar} disabled={enviando}>
+                  <Button
+                    type="button"
+                    onClick={handleGuardar}
+                    disabled={enviando}
+                  >
                     {enviando ? (
                       <>
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />

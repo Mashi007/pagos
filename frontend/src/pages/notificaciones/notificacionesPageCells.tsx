@@ -481,7 +481,9 @@ export type UmbralConfirmoAbonosSource = {
   umbral_doble_confirmacion_abonos_usd?: number | null
 } | null
 
-export function umbralConfirmaAbonosUsd(data: UmbralConfirmoAbonosSource): number {
+export function umbralConfirmaAbonosUsd(
+  data: UmbralConfirmoAbonosSource
+): number {
   const u = data?.umbral_doble_confirmacion_abonos_usd
   return u != null && Number.isFinite(Number(u)) ? Number(u) : 5000
 }

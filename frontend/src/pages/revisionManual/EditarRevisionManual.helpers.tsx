@@ -578,7 +578,9 @@ export function partesCedulaParaEscaneoRevision(
 function esMotivoAlertaReescaneoIgnorable(motivo: string): boolean {
   const t = motivo.trim().toLowerCase()
   if (!t) return true
-  if (/^ocr sin cambios respecto a los datos guardados\.?$/i.test(motivo.trim())) {
+  if (
+    /^ocr sin cambios respecto a los datos guardados\.?$/i.test(motivo.trim())
+  ) {
     return true
   }
   if (/digitado coincide con el valor ya guardado/i.test(t)) return true
@@ -604,7 +606,9 @@ export function sanitizarAlertasReescaneoPorPagoId(
 }
 
 /** Re-escaneo cartera: institución Binance (Pay / P2P). */
-export function esInstitucionBinanceReescaneo(inst: string | null | undefined): boolean {
+export function esInstitucionBinanceReescaneo(
+  inst: string | null | undefined
+): boolean {
   return /\bbinance\b/i.test(String(inst ?? '').trim())
 }
 
@@ -670,7 +674,9 @@ export function institucionEfectivaReescaneoCartera(
 ): string {
   return (
     institucionDesdeSugerenciaOcr(res?.sugerencia ?? null) ||
-    normalizarInstitucionBancoEscaneo((pago.institucion_bancaria || '').trim()) ||
+    normalizarInstitucionBancoEscaneo(
+      (pago.institucion_bancaria || '').trim()
+    ) ||
     ''
   )
 }
@@ -966,7 +972,8 @@ export function pagoInicialDesdeSugerenciaEscaneoRevision(
     cedula_cliente: cedula,
     prestamo_id: pid,
     fecha_pago:
-      (sugerencia.fecha_pago || '').trim() || new Date().toISOString().slice(0, 10),
+      (sugerencia.fecha_pago || '').trim() ||
+      new Date().toISOString().slice(0, 10),
     numero_documento: (sugerencia.numero_operacion || '').trim(),
     institucion_bancaria: inst || null,
     notas: (sugerencia.notas_modelo || '').trim() || null,

@@ -45,9 +45,7 @@ function mensajeErrorRedPublico(msg: string): string {
     /timeout|abort|ns_binding_aborted|aborted a request/i.test(m) ||
     /despu[eé]s de \d+s/i.test(m)
   ) {
-    return (
-      'El servidor está ocupado o tardó demasiado. Espere un momento e intente de nuevo.'
-    )
+    return 'El servidor está ocupado o tardó demasiado. Espere un momento e intente de nuevo.'
   }
   if (/failed to fetch|load failed|networkerror/i.test(m)) {
     return 'Sin conexión con el servidor. Revise la red o intente más tarde.'

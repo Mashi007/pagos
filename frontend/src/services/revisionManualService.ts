@@ -577,7 +577,12 @@ export type ConciliarCarteraRevisionResponse = {
   omitidos_sin_bytes?: number
   umbral_usd?: number
   opciones_lote?: Array<{ lote: string; abonos?: number }>
-  cascada?: { ok?: boolean; mensaje?: string; prestamo_estado?: string; error?: string }
+  cascada?: {
+    ok?: boolean
+    mensaje?: string
+    prestamo_estado?: string
+    error?: string
+  }
   referencia_abonos?: CompararAbonosNotificacionesReferencia
   /** @deprecated use referencia_abonos */
   drive?: Record<string, unknown>

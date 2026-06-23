@@ -48,11 +48,7 @@ export function clearChunkRecoveryAfterAppReady() {
 
 function isChunkLoadError(err: unknown): boolean {
   const msg = (
-    err instanceof Error
-      ? err.message
-      : typeof err === 'string'
-        ? err
-        : ''
+    err instanceof Error ? err.message : typeof err === 'string' ? err : ''
   ).toLowerCase()
   return (
     msg.includes('dynamically imported module') ||
