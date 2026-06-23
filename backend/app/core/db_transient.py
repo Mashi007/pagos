@@ -35,7 +35,7 @@ def is_transient_operational_error(exc: BaseException) -> bool:
     return False
 
 
-def _invalidate_session_connection(db: Session) -> None:
+def invalidate_db_session_connection(db: Session) -> None:
     try:
         db.rollback()
     except Exception:
@@ -68,7 +68,7 @@ def run_db_with_transient_retry(
                 attempts,
                 e,
             )
-            _invalidate_session_connection(db)
+            invalidate_db_session_connection(db)
     if last is not None:
         raise last
     raise RuntimeError("run_db_with_transient_retry: sin resultado")

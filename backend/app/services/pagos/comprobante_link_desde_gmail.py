@@ -15,7 +15,11 @@ from sqlalchemy import or_, select
 from sqlalchemy.exc import DBAPIError, OperationalError
 from sqlalchemy.orm import Session
 
-from app.core.db_transient import run_db_with_transient_retry
+from app.core.db_transient import (
+    invalidate_db_session_connection,
+    is_transient_operational_error,
+    run_db_with_transient_retry,
+)
 from app.core.documento import normalize_documento
 from app.models.pago_reportado import PagoReportado
 from app.models.pagos_gmail_sync import PagosGmailSyncItem
@@ -83,14 +87,17 @@ def enriquecer_items_link_comprobante_desde_gmail(db: Session, items: list) -> N
         _enriquecer_items_link_comprobante_desde_gmail_impl(db, items)
     except (OperationalError, DBAPIError) as e:
         # Enriquecimiento opcional: no tumbar GET /pagos por SSL/reset en Render.
-        try:
-            db.rollback()
-        except Exception:
-            pass
-        logger.warning(
-            "[GMAIL_LINK] No se pudo resolver link desde Gmail (BD transitoria): %s",
-            e,
-        )
+        invalidate_db_session_connection(db)
+        if is_transient_operational_error(e):
+            logger.warning(
+                "[GMAIL_LINK] No se pudo resolver link desde Gmail (BD transitoria): %s",
+                e,
+            )
+        else:
+            logger.warning(
+                "[GMAIL_LINK] No se pudo resolver link desde Gmail: %s",
+                e,
+            )
 
 
 def _enriquecer_items_link_comprobante_desde_gmail_impl(db: Session, items: list) -> None:
@@ -199,25 +206,33 @@ def _enriquecer_items_link_comprobante_desde_gmail_impl(db: Session, items: list
         for cond, _tag in _candidatos_evasion_columna(
             PagosGmailSyncItem.numero_referencia, compact
         ):
-            evasion_rows.extend(
-                run_db_with_transient_retry(
-                    db,
-                    lambda c=cond: db.execute(
-                        select(
-                            PagosGmailSyncItem.numero_referencia,
-                            PagosGmailSyncItem.drive_link,
-                        )
-                        .where(
-                            c,
-                            PagosGmailSyncItem.drive_link.isnot(None),
-                            PagosGmailSyncItem.drive_link != "",
-                        )
-                        .order_by(PagosGmailSyncItem.id.desc())
-                        .limit(80)
-                    ).all(),
-                    log_prefix="[GMAIL_LINK]",
+            try:
+                evasion_rows.extend(
+                    run_db_with_transient_retry(
+                        db,
+                        lambda c=cond: db.execute(
+                            select(
+                                PagosGmailSyncItem.numero_referencia,
+                                PagosGmailSyncItem.drive_link,
+                            )
+                            .where(
+                                c,
+                                PagosGmailSyncItem.drive_link.isnot(None),
+                                PagosGmailSyncItem.drive_link != "",
+                            )
+                            .order_by(PagosGmailSyncItem.id.desc())
+                            .limit(80)
+                        ).all(),
+                        log_prefix="[GMAIL_LINK]",
+                    )
                 )
-            )
+            except (OperationalError, DBAPIError) as e:
+                invalidate_db_session_connection(db)
+                logger.warning(
+                    "[GMAIL_LINK] Prefijo evasion omitido (BD transitoria): %s",
+                    e,
+                )
+                break
         for ref, dlink in evasion_rows:
             if not numeros_operacion_coinciden_o_evasion(doc_raw, ref):
                 continue
