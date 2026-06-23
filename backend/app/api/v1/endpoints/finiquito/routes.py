@@ -12,7 +12,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 from fastapi.encoders import jsonable_encoder
-from sqlalchemy import Date, cast, func, literal, select
+from sqlalchemy import Date, cast, exists, func, literal, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from sqlalchemy.sql.expression import false as sql_false
@@ -480,6 +480,17 @@ def _registrar_conteo_dia_caso(
     ctr[key] += 1
 
 
+def _filtro_caso_sin_historial_estado(estado_nuevo: str):
+    """Casos sin ningun evento en FiniquitoEstadoHistorial para ese estado_nuevo."""
+    target = (estado_nuevo or "").strip().upper()
+    return ~exists(
+        select(1).where(
+            FiniquitoEstadoHistorial.caso_id == FiniquitoCaso.id,
+            FiniquitoEstadoHistorial.estado_nuevo == target,
+        )
+    )
+
+
 def _conteo_ingresos_area_trabajo_por_dia_caracas(
     db: Session,
     *,
@@ -536,19 +547,26 @@ def _conteo_ingresos_area_trabajo_por_dia_caracas(
         for dia, caso_id in q_aud.all():
             registrar(int(caso_id), dia)
 
-    q_casos = db.query(FiniquitoCaso).filter(
-        FiniquitoCaso.estado.in_(("EN_PROCESO", "TERMINADO"))
+    q_casos = db.query(
+        FiniquitoCaso.id,
+        FiniquitoCaso.estado,
+        FiniquitoCaso.actualizado_en,
+    ).filter(
+        FiniquitoCaso.estado.in_(("EN_PROCESO", "TERMINADO")),
+        _filtro_caso_sin_historial_estado("EN_PROCESO"),
     )
     if ced_filtro:
         q_casos = q_casos.filter(FiniquitoCaso.cedula.ilike(f"%{ced_filtro}%"))
     casos = q_casos.all()
     if casos:
-        fentrada = _map_fecha_entrada_area_trabajo_por_caso(db, [c.id for c in casos])
-        for c in casos:
-            cid = int(c.id)
+        fentrada = _map_fecha_entrada_area_trabajo_por_caso(
+            db, [int(c.id) for c in casos]
+        )
+        for caso_id, estado, actualizado_en in casos:
+            cid = int(caso_id)
             raw = fentrada.get(cid)
-            if raw is None and c.estado == "EN_PROCESO":
-                raw = c.actualizado_en
+            if raw is None and estado == "EN_PROCESO":
+                raw = actualizado_en
             if raw is not None:
                 registrar(cid, raw)
 
@@ -614,23 +632,28 @@ def _conteo_ingresos_area_revision_por_dia_caracas(
     for dia, caso_id in q_hist.all():
         registrar(int(caso_id), dia)
 
-    q_casos = db.query(FiniquitoCaso).filter(
+    q_casos = db.query(
+        FiniquitoCaso.id,
+        FiniquitoCaso.estado,
+        FiniquitoCaso.actualizado_en,
+    ).filter(
         FiniquitoCaso.estado.in_(
             ("ACEPTADO", "REVISION_CONTABLE", "EN_PROCESO", "TERMINADO")
-        )
+        ),
+        _filtro_caso_sin_historial_estado("ACEPTADO"),
     )
     if ced_filtro:
         q_casos = q_casos.filter(FiniquitoCaso.cedula.ilike(f"%{ced_filtro}%"))
     casos = q_casos.all()
     if casos:
         fentrada = _map_fecha_estado_historial_por_caso(
-            db, [c.id for c in casos], "ACEPTADO"
+            db, [int(c.id) for c in casos], "ACEPTADO"
         )
-        for c in casos:
-            cid = int(c.id)
+        for caso_id, estado, actualizado_en in casos:
+            cid = int(caso_id)
             raw = fentrada.get(cid)
-            if raw is None and c.estado == "ACEPTADO":
-                raw = c.actualizado_en
+            if raw is None and estado == "ACEPTADO":
+                raw = actualizado_en
             if raw is not None:
                 registrar(cid, raw)
 
@@ -692,17 +715,25 @@ def _conteo_terminados_por_dia_caracas(
         for dia, caso_id in q_aud.all():
             registrar(int(caso_id), dia)
 
-    q_casos = db.query(FiniquitoCaso).filter(FiniquitoCaso.estado == "TERMINADO")
+    q_casos = db.query(
+        FiniquitoCaso.id,
+        FiniquitoCaso.actualizado_en,
+    ).filter(
+        FiniquitoCaso.estado == "TERMINADO",
+        _filtro_caso_sin_historial_estado("TERMINADO"),
+    )
     if ced_filtro:
         q_casos = q_casos.filter(FiniquitoCaso.cedula.ilike(f"%{ced_filtro}%"))
     casos = q_casos.all()
     if casos:
-        fcierre = _map_fecha_cierre_terminado_por_caso(db, [c.id for c in casos])
-        for c in casos:
-            cid = int(c.id)
+        fcierre = _map_fecha_cierre_terminado_por_caso(
+            db, [int(c.id) for c in casos]
+        )
+        for caso_id, actualizado_en in casos:
+            cid = int(caso_id)
             raw = fcierre.get(cid)
             if raw is None:
-                raw = c.actualizado_en
+                raw = actualizado_en
             registrar(cid, raw)
 
     return ctr
@@ -1713,7 +1744,7 @@ def finiquito_admin_terminados_resumen_diario(
     q = db.query(FiniquitoCaso).filter(FiniquitoCaso.estado == "TERMINADO")
     if ced_filtro:
         q = q.filter(FiniquitoCaso.cedula.ilike(f"%{ced_filtro}%"))
-    casos = q.all()
+    total_terminados = int(q.count())
     ctr = _conteo_terminados_por_dia_caracas(
         db, inicio=inicio, hoy=hoy, ced_filtro=ced_filtro
     )
@@ -1736,7 +1767,7 @@ def finiquito_admin_terminados_resumen_diario(
     total_ingresos_en_ventana = sum(d.cantidad_ingresos for d in dias_out)
     return FiniquitoTerminadosResumenDiarioResponse(
         dias=dias_out,
-        total_terminados=len(casos),
+        total_terminados=total_terminados,
         total_en_ventana=total_en_ventana,
         total_ingresos_en_ventana=total_ingresos_en_ventana,
     )
