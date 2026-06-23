@@ -1429,7 +1429,9 @@ class PagoService {
     mensaje: string
   }> {
     return await apiClient.post(
-      `${this.baseUrl}/gmail/migrar-pendientes-a-con-errores`
+      `${this.baseUrl}/gmail/migrar-pendientes-a-con-errores`,
+      {},
+      { timeout: 180000 }
     )
   }
 }

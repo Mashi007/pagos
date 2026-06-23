@@ -541,6 +541,25 @@ if (API_URL) {
         req.method === 'POST' &&
         (p.includes('validadores/validar-campo') ||
           p.includes('validadores/formatear-tiempo-real'))
+      const isMigrarPendientesGmailPost =
+        req.method === 'POST' &&
+        p.includes('pagos/gmail/migrar-pendientes-a-con-errores')
+      const isPrestamoCedulaGet =
+        req.method === 'GET' &&
+        /\/prestamos\/cedula\/[^/?#]+/.test(p) &&
+        !p.includes('/cedula/batch')
+      const isPrestamoDetailGetProxy =
+        req.method === 'GET' && /\/prestamos\/\d+(?:\?|$)/.test(p)
+      const isPagosTabReadGetProxy =
+        req.method === 'GET' &&
+        (/\/pagos\/con-errores(?:\?|$)/.test(p) ||
+          /\/pagos\/ultimos(?:\?|$)/.test(p) ||
+          (/\/pagos(?:\?|$)/.test(p) &&
+            !p.includes('/pagos/gmail') &&
+            !p.includes('/pagos/upload') &&
+            !p.includes('/pagos/batch')))
+      const isCobrosEscanerBorradoresGetProxy =
+        req.method === 'GET' && p.includes('cobros/escaner/borradores')
       let proxyTimeoutMs = 60000
       if (isExportReport) {
         proxyTimeoutMs = 180000
@@ -551,6 +570,12 @@ if (API_URL) {
       } else if (isClientesDriveImportFila || isClientesDriveRefreshCache) {
         proxyTimeoutMs = 300000
       } else if (isValidadoresCampoPost) {
+        proxyTimeoutMs = 90000
+      } else if (isMigrarPendientesGmailPost) {
+        proxyTimeoutMs = 180000
+      } else if (isPrestamoCedulaGet || isPrestamoDetailGetProxy) {
+        proxyTimeoutMs = 90000
+      } else if (isPagosTabReadGetProxy || isCobrosEscanerBorradoresGetProxy) {
         proxyTimeoutMs = 90000
       } else if (isCobrosPagosReportadosSlowPath || isRevisionManualSlowPath) {
         // Listado+KPIs (barrido), PATCH estado (aprobar puede tardar), PATCH editar (validadores +

@@ -60,8 +60,20 @@ const DEFAULT_TIMEOUT_MS = 30000
 
 const SLOW_ENDPOINT_TIMEOUT_MS = 60000 // Para endpoints que pueden tardar más
 
+/** Lecturas de préstamo (detalle por id, búsqueda por cédula): Render frío + joins. */
+const PRESTAMOS_READ_TIMEOUT_MS = 90000
+
+/** Pestañas Pagos / Cobros: listados, con-errores, conciliados (Render frío). */
+const PAGOS_TAB_READ_TIMEOUT_MS = 90000
+
+/** Borradores escáner Infopagos (lectura al abrir pagos reportados). */
+const COBROS_ESCANER_READ_TIMEOUT_MS = 90000
+
 /** Revisión manual: lecturas y escrituras en Render frío + BD pesada (alinear GET/PUT/PATCH/POST). */
 const REVISION_MANUAL_TIMEOUT_MS = 120000
+
+/** Gmail: migrar bandeja temporal puede recorrer muchas filas en BD. */
+const GMAIL_MIGRAR_PENDIENTES_TIMEOUT_MS = 180000
 
 function isRevisionManualUrl(url?: string): boolean {
   return String(url || '').includes('/revision-manual/')
@@ -80,12 +92,38 @@ function isPrestamoDetailGet(url?: string): boolean {
   return /\/prestamos\/\d+(?:\?|#|$)/.test(String(url || ''))
 }
 
+/** GET /api/v1/prestamos/cedula/{cedula} (búsqueda en pantalla Pagos / carga masiva). */
+function isPrestamoCedulaGet(url?: string): boolean {
+  const u = String(url || '')
+  return (
+    /\/prestamos\/cedula\/[^/?#]+(?:\?|#|$)/.test(u) &&
+    !u.includes('/cedula/batch')
+  )
+}
+
 /** Listados Pagos (ultimos, tabla conciliados, etc.); lectura idempotente. */
 function isPagosListReadGet(url?: string): boolean {
   const u = String(url || '')
   return (
     /\/api\/v1\/pagos\/ultimos(?:\?|#|$)/.test(u) ||
     /\/api\/v1\/pagos\?(?:[^#]*)/.test(u)
+  )
+}
+
+function isPagosConErroresGet(url?: string): boolean {
+  return String(url || '').includes('/pagos/con-errores')
+}
+
+/** Listados de pestañas Pagos (conciliados, últimos, pendientes revisión). */
+function isPagosTabReadGet(url?: string): boolean {
+  return isPagosListReadGet(url) || isPagosConErroresGet(url)
+}
+
+function isCobrosEscanerBorradoresGet(url?: string): boolean {
+  const u = String(url || '')
+  return (
+    u.includes('/cobros/escaner/borradores') ||
+    u.includes('/cobros/escaner/borrador/')
   )
 }
 
@@ -394,18 +432,28 @@ class ApiClient {
 
         if (
           config.method?.toLowerCase() === 'get' &&
-          isPrestamoDetailGet(config.url) &&
-          (config.timeout == null || config.timeout < SLOW_ENDPOINT_TIMEOUT_MS)
+          (isPrestamoDetailGet(config.url) ||
+            isPrestamoCedulaGet(config.url)) &&
+          (config.timeout == null || config.timeout < PRESTAMOS_READ_TIMEOUT_MS)
         ) {
-          config.timeout = SLOW_ENDPOINT_TIMEOUT_MS
+          config.timeout = PRESTAMOS_READ_TIMEOUT_MS
         }
 
         if (
           config.method?.toLowerCase() === 'get' &&
-          isPagosListReadGet(config.url) &&
-          (config.timeout == null || config.timeout < 90000)
+          isPagosTabReadGet(config.url) &&
+          (config.timeout == null || config.timeout < PAGOS_TAB_READ_TIMEOUT_MS)
         ) {
-          config.timeout = 90000
+          config.timeout = PAGOS_TAB_READ_TIMEOUT_MS
+        }
+
+        if (
+          config.method?.toLowerCase() === 'get' &&
+          isCobrosEscanerBorradoresGet(config.url) &&
+          (config.timeout == null ||
+            config.timeout < COBROS_ESCANER_READ_TIMEOUT_MS)
+        ) {
+          config.timeout = COBROS_ESCANER_READ_TIMEOUT_MS
         }
 
         // Cobros: PATCH estado (aprobar/rechazar) puede tardar (cascada, correo, PDF).
@@ -438,6 +486,16 @@ class ApiClient {
           (config.timeout == null || config.timeout < SLOW_ENDPOINT_TIMEOUT_MS)
         ) {
           config.timeout = SLOW_ENDPOINT_TIMEOUT_MS
+        }
+
+        // Gmail: migrar pendientes temporal → pagos_con_errores (PagosList al abrir /pagos).
+        if (
+          config.method?.toLowerCase() === 'post' &&
+          config.url?.includes('/pagos/gmail/migrar-pendientes-a-con-errores') &&
+          (config.timeout == null ||
+            config.timeout < GMAIL_MIGRAR_PENDIENTES_TIMEOUT_MS)
+        ) {
+          config.timeout = GMAIL_MIGRAR_PENDIENTES_TIMEOUT_MS
         }
 
         // Soft circuit breaker: si hubo 502/503 reciente sobre endpoints catalogados,
@@ -538,7 +596,7 @@ class ApiClient {
           retryCount < 2
         const isPrestamoDetailGetRetry =
           methodLc === 'get' &&
-          isPrestamoDetailGet(reqUrl) &&
+          (isPrestamoDetailGet(reqUrl) || isPrestamoCedulaGet(reqUrl)) &&
           (errorCodeEarly === 'ECONNABORTED' ||
             errorMessageEarly.includes('timeout')) &&
           retryCount < 2
@@ -574,8 +632,9 @@ class ApiClient {
               reqUrl
             ) ||
             isPrestamoDetailGet(reqUrl) ||
-            isPagosListReadGet(reqUrl) ||
-            reqUrl.includes('/pagos/con-errores') ||
+            isPrestamoCedulaGet(reqUrl) ||
+            isPagosTabReadGet(reqUrl) ||
+            isCobrosEscanerBorradoresGet(reqUrl) ||
             /\/pagos\/comprobante-imagen\/[a-f0-9]+/i.test(reqUrl) ||
             reqUrl.includes('/prestamos/candidatos-drive/snapshot') ||
             reqUrl.includes('/pagos/gmail/status') ||
@@ -1342,15 +1401,21 @@ class ApiClient {
     const isAuthMe = url.includes('/auth/me')
     const isGmailStatus = isGmailStatusPollRequest({ url })
     const isPrestamoDetail = isPrestamoDetailGet(url)
-    const isPagosList = isPagosListReadGet(url)
+    const isPrestamoCedula = isPrestamoCedulaGet(url)
+    const isPagosTab = isPagosTabReadGet(url)
+    const isCobrosEscanerBorradores = isCobrosEscanerBorradoresGet(url)
 
     let defaultTimeout = DEFAULT_TIMEOUT_MS
 
     if (isGmailStatus) {
       defaultTimeout = SLOW_ENDPOINT_TIMEOUT_MS
-    } else if (isPagosList) {
-      defaultTimeout = 90000
-    } else if (isAuthMe || isPrestamoDetail) {
+    } else if (isPagosTab) {
+      defaultTimeout = PAGOS_TAB_READ_TIMEOUT_MS
+    } else if (isCobrosEscanerBorradores) {
+      defaultTimeout = COBROS_ESCANER_READ_TIMEOUT_MS
+    } else if (isPrestamoCedula || isPrestamoDetail) {
+      defaultTimeout = PRESTAMOS_READ_TIMEOUT_MS
+    } else if (isAuthMe) {
       defaultTimeout = SLOW_ENDPOINT_TIMEOUT_MS
     } else if (isListadoKpisPagosReportados) {
       defaultTimeout = listadoKpisPagosReportadosTimeout
@@ -1543,12 +1608,17 @@ class ApiClient {
       const isValidadoresCampoPost =
         url.includes('/validadores/validar-campo') ||
         url.includes('/validadores/formatear-tiempo-real')
+      const isMigrarPendientesGmailPost = url.includes(
+        '/pagos/gmail/migrar-pendientes-a-con-errores'
+      )
 
       let defaultTimeout = DEFAULT_TIMEOUT_MS
       if (isCobrosEscanerGemini) {
         defaultTimeout = 120000 // Gemini + lectura comprobante
       } else if (isCobrosPagosReportadosHeavyPost) {
         defaultTimeout = 180000 // 3 min: PDF + SMTP + import; PATCH detalle ya visto ~35s en producción
+      } else if (isMigrarPendientesGmailPost) {
+        defaultTimeout = GMAIL_MIGRAR_PENDIENTES_TIMEOUT_MS
       } else if (isAuditoriaCarteraCorregir) {
         defaultTimeout = 300000 // 5 min
       } else if (isAuditoriaCarteraEjecutar) {
