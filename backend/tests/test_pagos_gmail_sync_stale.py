@@ -6,6 +6,7 @@ from app.models.pagos_gmail_sync import PagosGmailSync
 from app.services.pagos_gmail.sync_stale import (
     STALE_MAX_RUNNING_MINUTES,
     STALE_NO_PROGRESS_MINUTES,
+    STALE_STUCK_EMAIL_MINUTES,
     gmail_sync_looks_stale,
 )
 
@@ -55,3 +56,93 @@ def test_stale_when_max_running_minutes_exceeded():
 def test_not_stale_for_success_status():
     sync = _sync(status="success", minutes_ago=STALE_MAX_RUNNING_MINUTES + 10)
     assert gmail_sync_looks_stale(sync) is False
+
+
+def test_stale_when_stuck_at_20_of_50_old_heartbeat():
+    old_hb = (
+        datetime.utcnow() - timedelta(minutes=STALE_STUCK_EMAIL_MINUTES + 5)
+    ).replace(microsecond=0).isoformat() + "Z"
+    sync = _sync(
+        emails=20,
+        files=11,
+        minutes_ago=45,
+        run_summary={
+            "gmail_messages_listed": 50,
+            "progress_heartbeat_at": old_hb,
+        },
+    )
+    assert gmail_sync_looks_stale(sync) is True
+
+
+def test_not_stale_when_partial_progress_recent_heartbeat():
+    fresh_hb = (
+        datetime.utcnow() - timedelta(minutes=5)
+    ).replace(microsecond=0).isoformat() + "Z"
+    sync = _sync(
+        emails=20,
+        files=11,
+        minutes_ago=45,
+        run_summary={
+            "gmail_messages_listed": 50,
+            "progress_heartbeat_at": fresh_hb,
+            "pipeline_phase": "correo_21",
+        },
+    )
+    assert gmail_sync_looks_stale(sync) is False
+
+
+def test_auto_continue_on_partial_error():
+    from app.services.pagos_gmail.runner import should_auto_continue_gmail_pipeline
+
+    sync = _sync(
+        status="error",
+        emails=20,
+        run_summary={"gmail_messages_listed": 50},
+    )
+    assert should_auto_continue_gmail_pipeline(
+        sync, "error", continue_round=0, only_message_ids=None, max_messages=None
+    )
+
+
+def test_no_auto_continue_when_complete_or_only_ids():
+    from app.services.pagos_gmail.runner import (
+        AUTO_CONTINUE_MAX_ROUNDS,
+        should_auto_continue_gmail_pipeline,
+    )
+
+    sync_done = _sync(
+        status="error",
+        emails=50,
+        run_summary={"gmail_messages_listed": 50},
+    )
+    assert (
+        should_auto_continue_gmail_pipeline(
+            sync_done, "error", continue_round=0, only_message_ids=None, max_messages=None
+        )
+        is False
+    )
+    sync_partial = _sync(
+        status="error",
+        emails=10,
+        run_summary={"gmail_messages_listed": 50},
+    )
+    assert (
+        should_auto_continue_gmail_pipeline(
+            sync_partial,
+            "error",
+            continue_round=AUTO_CONTINUE_MAX_ROUNDS,
+            only_message_ids=None,
+            max_messages=None,
+        )
+        is False
+    )
+    assert (
+        should_auto_continue_gmail_pipeline(
+            sync_partial,
+            "error",
+            continue_round=0,
+            only_message_ids=["abc"],
+            max_messages=None,
+        )
+        is False
+    )

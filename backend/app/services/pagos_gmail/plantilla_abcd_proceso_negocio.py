@@ -94,6 +94,34 @@ logger = logging.getLogger(__name__)
 # Umbral numerico: pagos > este valor van a revision manual (sin distinguir moneda).
 PAGOS_GMAIL_UMBRAL_REVISION_MANUAL_USD = Decimal(str(MONTO_UMBRAL_REVISION_MANUAL))
 
+# Binance Pay (C): correo beneficiario operaciones@ debe verse arriba del ID de orden.
+PAGOS_GMAIL_OBS_USUARIO_OPERACIONES = "Usuario operaciones"
+PAGOS_GMAIL_MOTIVO_USUARIO_OPERACIONES = "usuario_operaciones"
+EMAIL_BINANCE_USUARIO_OPERACIONES = "operaciones@rapicreditca.com"
+
+
+def _coerce_bool_control_usuario_operaciones(val: object) -> Optional[bool]:
+    if val is None:
+        return None
+    if isinstance(val, bool):
+        return val
+    s = str(val).strip().lower()
+    if s in ("true", "1", "si", "sí", "yes"):
+        return True
+    if s in ("false", "0", "no"):
+        return False
+    return None
+
+
+def binance_control_usuario_operaciones_cumple(val: object) -> bool:
+    """True solo si Gemini devolvió control_usuario_operaciones=true explícitamente."""
+    return _coerce_bool_control_usuario_operaciones(val) is True
+
+
+def binance_requiere_revision_usuario_operaciones(val: object) -> bool:
+    """True si falta el control o Gemini marcó false (revisión manual / pagos reportados)."""
+    return not binance_control_usuario_operaciones_cumple(val)
+
 # Plantillas de comprobante bancario (Gemini) cubiertas por este proceso.
 PLANTILLAS_BANCO_ABCD = frozenset({"A", "B", "C", "D"})
 
@@ -158,11 +186,16 @@ def resumen_log_linea_plantilla_abcd(
     *,
     duplicado_documento: bool = False,
     revision_manual_monto: bool = False,
+    revision_manual_usuario_operaciones: bool = False,
 ) -> str:
     """Texto de log por fila (no describe la ruta de filas ya conciliadas en CUOTAS_OK)."""
     partes = ["ABCD: autoconciliado + cascada cuotas (mismo código /pagos)"]
     if duplicado_documento:
         partes.append("duplicado por documento → revisión manual (pagos_con_errores)")
+    if revision_manual_usuario_operaciones:
+        partes.append(
+            f"Binance sin {EMAIL_BINANCE_USUARIO_OPERACIONES} arriba del ID → revisión manual"
+        )
     if revision_manual_monto:
         partes.append(
             f"monto > {PAGOS_GMAIL_UMBRAL_REVISION_MANUAL_USD} → revisión manual (pagos_con_errores)"

@@ -190,6 +190,7 @@ REGLA SISTEMA G (Recibo manuscrito TORO MOTORCYCLES): Devuelve "G" si ves nucleo
 
 REGLA SISTEMA C (imagen 3 / Binance Pay): Devuelve "C" si ves el nucleo C (PASO 2b) y con certeza: monto (USDT/USD) y numero_referencia (Id. de orden u otro id largo de la pantalla).
   En el JSON pon siempre fecha_pago="NA", cedula="NA" y email_cliente="NA" (el backend usa el remitente del correo para cliente y cedula).
+  Campo obligatorio **control_usuario_operaciones** (boolean): ver **MEDIDA DE CONTROL USUARIO OPERACIONES** en PASO 2b.
   Si falta monto o id de orden con certeza -> "ninguno".
 
 COLUMNAS OBLIGATORIAS Y GMAIL (etiquetas de usuario — las aplica el backend; no gestiona estrellas):
@@ -211,7 +212,7 @@ PASO 1 - DESCARTE (ninguno al instante):
     y tampoco es **FORMATO G** (**RECIBO** manuscrito TORO MOTORCYCLES / ventanilla con **№**, **C.I./RIF**, **Por:** — ver **G** arriba)
     y tampoco aplica **FORMATO NR** (comprobante bancario claro a otro beneficiario distinto de RapiCredit) -> ninguno.
   Es captura de app generica (sin marca ni layout de comprobante BNC/Mercantil/BDV/Binance/Bancamiga/Banco del Tesoro), Pago Movil no Binance Pay, Zelle, otro banco distinto (salvo Mercantil con RAPI+RECAUDACION), selfie, publicidad, borroso sin datos -> ninguno.
-  Excepcion: NO descartes como "solo app" si cumple nucleo C (PASO 2b): Binance/Binance Pay + pago exitoso + USDT o USD + identificador de orden; el email en pantalla no es obligatorio si hay CONTEXTO_REMITE en el mensaje del sistema.
+  Excepcion: NO descartes como "solo app" si cumple nucleo C (PASO 2b): Binance/Binance Pay + pago exitoso + USDT o USD + identificador de orden. El correo del beneficiario en pantalla no sustituye **control_usuario_operaciones** (ver PASO 2b).
   Excepcion: NO descartes como "solo app" si cumple **nucleo B en pantalla BNC** (VARIANTE B app / Comprobante de Pago / NOTA DE OPERACION EJECUTADA): marca **BNC** + linea **Referencia** numerica + monto **Bs.**/**VEB** o USD + cuenta **0191...** o texto **RAPI-CREDIT** en cuenta abonada/beneficiario — evalua **PASO 2** y formato **B**.
   Excepcion: NO descartes como "solo app" si ves **app Banco de Venezuela (BDV/BNV)** con titulo **Comprobante de operacion** / **Comprobante de operación** y **Transferencias a otros bancos**, lineas **Origen** con prefijo **0102** (cuenta debitada/mascarada), **Destino** con prefijo **0191** (BNC), **Nombre**/**Beneficiario** tipo **Rapicredit** / **Rapi credi**, linea **Operación** con cadena numerica larga (suelen ser **13 digitos**, ej. 3701197089205) — es **formato B** (pago hacia cuenta BNC/Rapi), no "ninguno"; ver VARIANTE B **BDV app origen**.
   Excepcion: NO descartes como "solo app" si ves **Bancamiga**/**Banco Universal** + titulo **Transacción procesada** + bloque centrado con **NUMERO DE REFERENCIA**, **MONTO DE LA OPERACIÓN** (**Bs.** miles **.** decimales **,**), **CUENTA A DEBITAR** con prefijo **0172** y **CUENTA A ACREDITAR** (a menudo **0191****...**) + **FECHA** — es **formato E** (Bancamiga), no "ninguno"; **no** lo fuerces como **B** aunque acredite a 0191.
@@ -363,7 +364,7 @@ PASO 2b - C (imagen 3 / Binance Pay) si PASO 2 y 2a no aplicaron (no es recibo B
   Regla **sin fecha en pantalla**: muchas confirmaciones **no** muestran fecha/hora en el cuerpo; **fecha_pago** en JSON sigue siendo **"NA"** (correcto); **no** bajes a **ninguno** solo por falta de fecha si monto + ID de orden son claros.
   Regla de tolerancia por truncado: si la captura viene recortada y no se ve alias/destinatario, pero en la misma pieza se identifica
     (1) indicador de exito (check verde o texto equivalente), (2) monto en USDT/USD y (3) **ID de orden** legible (>=10 digitos),
-    mantén **C**; el alias no es obligatorio para formato C.
+    mantén **C** para clasificacion y extraccion; evalua **control_usuario_operaciones** aparte (false si no puedes ver **operaciones@rapicreditca.com** claramente **arriba** del ID de orden).
   **Logo o marca Binance visible = indicio confirmado** de que la plataforma es Binance (formato C), no otra wallet:
     - Isotipo rombo/diamante amarillo-dorado, logo amarillo sobre fondo oscuro, texto **Binance** o **Binance Pay** en cabecera o pie, iconografia oficial de la app.
     - Si ves ese logo/marca con claridad **y** ademas monto + id en la misma captura, trata la pieza como Binance Pay; no la clasifiques A ni B.
@@ -390,8 +391,13 @@ PASO 2b - C (imagen 3 / Binance Pay) si PASO 2 y 2a no aplicaron (no es recibo B
   Si la captura esta recortada: basta senal clara de app (barra de estado movil, flecha atras, tema oscuro/claro tipo wallet) + monto **USDT** o USD + check/exitoso + **cualquier** ristra numerica larga visible (>=10 digitos) como numero_referencia; no devuelvas "ninguno" solo porque falte la etiqueta literal "Order ID".
     - numero_referencia: copia el Id. completo; si hay varios numeros largos, el que acompane a "orden" / "Order" / "ID"; si no hay etiqueta, el bloque de **10+** digitos mas largo o mas centrado en la zona de detalle del pago (no numeros de hora/fecha sueltos de 6-8 digitos si hay otro bloque mas largo).
     - En capturas como las reales del flujo (Rapicredit): si se ve **ID de orden** con **15-19** digitos (a menudo **18**) y monto en USDT consistente en la misma pantalla, prioriza ese ID como `numero_referencia` aunque haya otros numeros cortos de hora/notificacion.
-    - Ausencia de alias por recorte: no penalizar si `Alias` / destinatario no aparece completo, siempre que la triada check + monto USDT/USD + ID de orden sea inequívoca.
+    - Ausencia de alias por recorte: no invalida **C** si monto + ID son claros; **control_usuario_operaciones** sigue siendo obligatorio (false si no ves el correo arriba del ID).
     - email_cliente: debe ser el correo del PAGADOR (cliente persona) si aparece en pantalla. Si solo ves correo corporativo del BENEFICIARIO (ej. operaciones@..., pagos@..., cuenta de la empresa receptora), NO lo uses como email_cliente: pon "NA" o usa CONTEXTO_REMITE (From del correo), que es quien envia el comprobante.
+  MEDIDA DE CONTROL USUARIO OPERACIONES (formato C / Binance Pay — obligatoria en JSON):
+    - En pagos Rapicredit por Binance Pay, el correo **operaciones@rapicreditca.com** del **beneficiario** debe aparecer en la captura **visualmente ARRIBA** (posicion vertical superior) del bloque **ID de orden** / numero de documento de la transaccion (suele ir junto a **Alias: Rapicredit** y enlace **Agregar alias**).
+    - **control_usuario_operaciones** = **true** solo si ese correo (tolerancia OCR menor: mayusculas, espacios) es legible y esta **por encima** del bloque **ID de orden** en la misma imagen.
+    - **control_usuario_operaciones** = **false** si: no aparece el correo; aparece **debajo** del ID de orden; ves otro correo de beneficiario distinto; el recorte impide verificar la posicion relativa; o hay duda.
+    - Si **control_usuario_operaciones** = **false** pero monto + ID de orden son legibles, **mantén formato C** y extrae monto + numero_referencia; el backend envia el caso a **revision manual** con observacion **Usuario operaciones** (no bajes a **ninguno** solo por este control).
   NO es C: otra exchange (Bybit, OKX, ...) con marca clara distinta, solo historial sin confirmacion, transferencia bancaria tradicional en PDF de banco, captura **sin** monto **y sin** ningun bloque numerico largo de orden.
   Si nucleo C: formato C (no A, B ni D). Extraccion: monto, numero_referencia; fecha_pago=NA; cedula=NA; email_cliente NA en JSON (backend usa remitente).
 
@@ -580,6 +586,7 @@ Prioriza la plantilla BNC: **cajero** (papel, asteriscos+US$), **app BNC** (Bs.,
 
 === DETALLE FORMATO C (imagen 3 / Binance Pay) ===
   Banco en Excel lo fija el sistema como BINANCE; no hace falta devolver campo banco en JSON.
+  control_usuario_operaciones: boolean obligatorio — ver **MEDIDA DE CONTROL USUARIO OPERACIONES** (PASO 2b).
   monto: lee la cifra principal junto a **Pago exitoso** (grande), en **USDT** o **USD** (ej. 177 USDT, 85 USDT, 96 USDT -> "177.00 USDT" / "177 USDT" segun consistencia del JSON). Si **Pagado con** repite el mismo importe, confirma coherencia; si **Pagado con** solo dice **Ver detalles** sin cifra, usa el monto del bloque superior.
   numero_referencia: copia **entera** la cadena de **ID de orden** / **Id. de la orden** / **Order ID** (solo digitos; **18** cifras es tipico en capturas reales Binance Pay; tolera 15-19 u OCR parcial). No omitas ceros a la izquierda si aparecen; no uses hora del telefono, bateria ni fragmentos del banner promocional.
   email_cliente: pagador/cliente si se ve en pantalla; no uses solo el correo corporativo del beneficiario (operaciones@rapicreditca.com, pagos@...). Si no hay email del pagador, CONTEXTO_REMITE o "NA".
@@ -623,7 +630,7 @@ Salida: solo JSON, sin markdown.
   E: {"formato":"E","fecha_pago":"...","cedula":"NA","monto":"...","numero_referencia":"...","email_cliente":"NA","banco":"Bancamiga"|"Bancamiga Banco Universal"|"..."}
   F: {"formato":"F","fecha_pago":"...","cedula":"NA","monto":"...","numero_referencia":"...","email_cliente":"NA","banco":"Banco del Tesoro"|"..."}
   G: {"formato":"G","fecha_pago":"08/06/2026","cedula":"V18231931"|"18231931","monto":"200","numero_referencia":"00972","email_cliente":"NA","banco":"Recibo"}
-  C: {"formato":"C","fecha_pago":"NA","cedula":"NA","monto":"...","numero_referencia":"...","email_cliente":"NA","banco":"NA"}
+  C: {"formato":"C","fecha_pago":"NA","cedula":"NA","monto":"...","numero_referencia":"...","email_cliente":"NA","banco":"NA","control_usuario_operaciones":true|false}
   NR: {"formato":"NR","fecha_pago":"...|NA","cedula":"NA","monto":"NR","monto_operacion":"123.45"|"NA","numero_referencia":"...|NA","email_cliente":"NA","banco":"..."}
   ninguno: {"formato":"ninguno","fecha_pago":"NA","cedula":"NA","monto":"NA","numero_referencia":"NA","email_cliente":"NA","banco":"NA"}
 """.strip()
@@ -1692,9 +1699,10 @@ def _rescue_prompt_suffix(bank_hint: Optional[str], none_reason: Optional[str] =
         )
     if bank_hint == "C":
         return (
-            "\n\nMODO RESCATE C (Binance / Binance Pay): prioriza **Pago exitoso** + monto **USDT**/**USD** grande + **ID de orden** (cadena larga solo digitos, tipico **18** cifras; icono copiar al lado OK). Alias **Rapicredit** / email operaciones@ y **Método de pago** (**Cuenta de Fondos**, **Spot y de Fondos**) refuerzan pero no sustituyen monto+ID."
+            "\n\nMODO RESCATE C (Binance / Binance Pay): prioriza **Pago exitoso** + monto **USDT**/**USD** grande + **ID de orden** (cadena larga solo digitos, tipico **18** cifras; icono copiar al lado OK). Verifica **control_usuario_operaciones**: **operaciones@rapicreditca.com** debe verse **arriba** del bloque **ID de orden**."
+            "\nAlias **Rapicredit** / **Método de pago** (**Cuenta de Fondos**, **Spot y de Fondos**) refuerzan pero no sustituyen monto+ID ni el control de correo."
             "\n**Pagado con** puede repetir USDT o mostrar solo **Ver detalles** — si el monto titular e ID son legibles, mantén **C**. **fecha_pago** = NA si no hay fecha en pantalla."
-            "\nAnclas léxicas: **Pago exitoso**, **USDT**, **ID de orden**/**Order ID**, check **verde**, **Listo**/**Enviar otro**, texto ayuda **cuenta de Fondos** del destinatario, **Agregar alias**."
+            "\nAnclas léxicas: **Pago exitoso**, **USDT**, **ID de orden**/**Order ID**, check **verde**, **Listo**/**Enviar otro**, **operaciones@rapicreditca.com**, **Agregar alias**."
         )
     if bank_hint == "D":
         return (
@@ -1727,6 +1735,14 @@ def _rescue_prompt_suffix(bank_hint: Optional[str], none_reason: Optional[str] =
         "\n\nMODO RESCATE GENERAL: imagen difícil; no inventar datos, pero intenta recuperar campos visibles con máxima tolerancia OCR."
         "\nAnclas genéricas: líneas con **Ref**/**Serial**/**Operacion**/**Monto**/**Total**/**Fecha** cerca del bloque de comprobante (no del chrome del correo)."
     )
+
+
+def _binance_control_usuario_operaciones_desde_json(val: object) -> bool:
+    from app.services.pagos_gmail.plantilla_abcd_proceso_negocio import (
+        binance_control_usuario_operaciones_cumple,
+    )
+
+    return binance_control_usuario_operaciones_cumple(val)
 
 
 def _parse_formato_y_pagos_json(
@@ -1774,6 +1790,13 @@ def _parse_formato_y_pagos_json(
                 data.get("email_cliente", PAGOS_NA)
             ),
             "banco": _normalize_banco_gemini_field(data.get("banco", PAGOS_NA)),
+            "control_usuario_operaciones": (
+                "true"
+                if _binance_control_usuario_operaciones_desde_json(
+                    data.get("control_usuario_operaciones")
+                )
+                else "false"
+            ),
         }
         fields = normalizar_campos_gemini_gmail(fields)
         na_fields = {
@@ -2490,6 +2513,12 @@ NÚMERO DE OPERACIÓN (igual que Serial / Referencia en el comprobante):
 EXCEPCIÓN BANCO = BINANCE (aplicar siempre y solo en este caso):
 - Si la columna Banco (institucion_financiera) es BINANCE (o Binance), IGNORAR siempre el error de fecha. En el formato de imagen para Banco = BINANCE no hay fecha que comprobar; no incluyas "Fecha pago" en el comentario por diferencia de fecha cuando el banco sea BINANCE.
 
+MEDIDA DE CONTROL USUARIO OPERACIONES (solo BINANCE / Binance Pay en la imagen):
+- El correo del beneficiario **operaciones@rapicreditca.com** debe aparecer en la captura **visualmente ARRIBA** del bloque **ID de orden** / número de operación.
+- Evalúa **control_usuario_operaciones** en el JSON de respuesta: **true** si se cumple; **false** si no aparece, está debajo del ID, es otro correo, o no puedes verificar la posición.
+- Si **control_usuario_operaciones** = **false**: **coincide_exacto** = false, **requiere_revision_humana** = true y **comentario** = exactamente **Usuario operaciones** (sin otras columnas). El caso queda en cola de pagos reportados para revisión manual.
+- Si **control_usuario_operaciones** = **true**, aplica el resto de reglas de comparación normalmente.
+
 REGLA CRÍTICA — MONEDA USDT / USD (obligatoria; no negociable):
 - En este sistema USDT y USD son LA MISMA moneda para validar el comprobante: dólares / stablecoin en USD / Tether / US$ / símbolo $ / texto "Dólares" en el recibo = equivalente a USD.
 - Si el formulario indica USD y el comprobante muestra USDT (o al revés), o uno dice "USDT" y el otro "USD" o "$", NO hay divergencia de Moneda si el monto numérico coincide.
@@ -2519,7 +2548,7 @@ Paso 3 — Decidir:
 - comentario: si coincide_exacto = false, es OBLIGATORIO indicar SOLO los nombres de las columnas que no coinciden, separados por coma. Usa EXACTAMENTE estos nombres: Cédula, Banco, Fecha pago, Nº operación, Monto, Moneda. Sin explicaciones. Ejemplo: "Monto, Fecha pago". Si coincide_exacto = true, deja comentario vacío o "".
 
 Responde ÚNICAMENTE con un JSON válido, sin markdown ni texto antes o después:
-{"coincide_exacto": true o false, "requiere_revision_humana": true o false, "comentario": "solo nombres de columnas separados por coma: Cédula, Banco, Fecha pago, Nº operación, Monto, Moneda"}
+{"coincide_exacto": true o false, "requiere_revision_humana": true o false, "comentario": "solo nombres de columnas separados por coma: Cédula, Banco, Fecha pago, Nº operación, Monto, Moneda — o exactamente Usuario operaciones si falla el control Binance", "control_usuario_operaciones": true o false si Banco=BINANCE, si no null}
 """
     + "\n\n"
     + GEMINI_REGLAS_RECIBO_MANUSCRITO
@@ -2666,6 +2695,18 @@ def compare_form_with_image(
                             coincide = True
                             comentario = ""
                             logger.info("[COBROS] Gemini: divergencia solo Banco con Recibo/Recibos; ignorada.")
+                    inst_compare = (
+                        (form_compare.get("institucion_financiera") or "").strip().lower()
+                    )
+                    if "binance" in inst_compare:
+                        control_uo = data.get("control_usuario_operaciones")
+                        if not _binance_control_usuario_operaciones_desde_json(control_uo):
+                            coincide = False
+                            comentario = "Usuario operaciones"
+                            logger.info(
+                                "[COBROS] Binance: control_usuario_operaciones=false "
+                                "(operaciones@ no arriba del ID de orden)"
+                            )
                     result = {
                         "coincide_exacto": coincide,
                         "requiere_revision_humana": not coincide,
@@ -2722,7 +2763,8 @@ TAREA: Lee la imagen o PDF adjunto y extrae SOLO lo que aparezca con claridad en
   - monto: importe **exacto** del pago principal (Total, Monto Bs., Monto USD, Efectivo). En JSON usa **solo número decimal con punto** (sin separadores de miles): impreso `1.500,00` → `1500.00`; `150,50` → `150.50`; `US$ 20,00` → `20.00`; tira Mercantil `***********96,00 USD` → `96.00` (**nunca** `969`, `965`, `980`). **BINANCE Pay**: copia el monto grande tal cual (ej. `580 USDT` → `580`, no `58`). No redondees ni cambies cifras. Si no es legible, `null`.
   - moneda: exactamente **BS** o **USD** (USDT, $ en contexto divisa fuerte, "Dólares", Binance Pay en USDT → USD).
   - cedula_pagador_en_comprobante: secuencia numérica del **depositante/pagador** (no la del deudor del contexto). Si en el comprobante aparece claramente la línea/casilla del depositante, devuélvela **solo con dígitos** (sin letra V/E/J/G ni puntos de miles). Mercantil (formato **A**): **DP:V-/E-/J-**, **Cédula Dep.**, **Nro. de Cédula del Depositante**. BNC (formato **B**): **DP:V-/E-/J-** en recibo cajero. **Recibo manuscrito (formato G / TORO MOTORCYCLES)**: línea **C.I. / RIF:** (ej. V- 18.231.931 → **18231931**). No inventes dígitos; si la línea no es legible o hay duda, "".
-  - notas: una frase corta opcional sobre calidad de lectura o ambigüedades (máx 300 caracteres); puede ser "".
+  - notas: una frase corta opcional sobre calidad de lectura o ambigüedades (máx 300 caracteres); puede ser "". Si Binance Pay y falla el control de **operaciones@rapicreditca.com** arriba del ID de orden, incluye **Usuario operaciones**.
+  - control_usuario_operaciones: solo si **institucion_financiera** es BINANCE — **true** si **operaciones@rapicreditca.com** aparece **arriba** del **ID de orden** en la imagen; **false** en caso contrario. Para otros bancos, omite la clave o null.
 
 REGLAS:
   - No inventes datos: si un campo no está legible, usa "" o null según el tipo.
@@ -2734,7 +2776,7 @@ REGLAS:
   - La fecha de operación inferida **no puede ser posterior** a {fecha_hoy_iso}; si una lectura lleva a futuro, corrige interpretación o deja "".
   - Si la fecha no es legible con suficiente certeza, deja `fecha_pago` como "" y explícitalo en `notas`.
   - Responde ÚNICAMENTE con un objeto JSON válido, sin markdown ni texto extra, con exactamente estas claves:
-  fecha_pago, institucion_financiera, numero_operacion, monto, moneda, cedula_pagador_en_comprobante, notas
+  fecha_pago, institucion_financiera, numero_operacion, monto, moneda, cedula_pagador_en_comprobante, notas, control_usuario_operaciones
   - SALIDA OBLIGATORIA: solo el objeto JSON; ningún párrafo ni razonamiento antes ni después. Sin fences markdown ni texto extra.
 """
     + "\n\n"
@@ -2749,7 +2791,7 @@ PLANTILLAS CONOCIDAS (misma lógica que clasificación Gmail A/B/C/D/G; **obliga
   - **Mercantil** → formato **A**: DEPÓSITO DIVISAS, RECAUDACIÓN, cuenta **0105**, RAPI-CREDIT, logo/texto Mercantil, tira validador Mercantil (monto/fecha: ver REGLAS MONTO Y FECHA OCR del prompt).
   - **BNC** → formato **B**: recibo cajero **BNC**, cuenta **0191**, línea RAPI, logo BNC, bloque Depósito US$.
   - **Banco de Venezuela** → formato **D**: **0102**, SECUENCIAL, Total Efectivo/Depósito, logo BDV.
-  - **BINANCE** → formato **C**: Binance Pay, USDT, **Id. de orden completo** (15-19 dígitos; no truncar).
+  - **BINANCE** → formato **C**: Binance Pay, USDT, **Id. de orden completo** (15-19 dígitos; no truncar). **Control obligatorio:** **operaciones@rapicreditca.com** debe verse **arriba** del bloque **ID de orden**; si no cumple, indica en `notas` **Usuario operaciones** y `control_usuario_operaciones`: false.
   - **Recibo** → formato **G**: recibo manuscrito **TORO MOTORCYCLES** / **INVERSIONES GUIGUE 2 RUEDAS**; título **RECIBO**; **№** en rojo (00972); fecha cajas Dia/Mes/Año; **C.I. / RIF**; monto caja **Por:** (200 $); concepto Cuota Rapi-Credit.
   - Otros bancos (Banesco, Bancamiga, Tesoro, Pago Móvil): nombre corto tal como aparece en el comprobante.
 REGLA: Si clasificas la imagen en A/B/C/D/G o reconoces Mercantil/BNC/BDV/Binance/**Recibo** por diseño, **`institucion_financiera` no puede quedar vacía**. En `notas` puedes indicar la plantilla (ej. "plantilla G Recibo") si ayuda.
@@ -2886,7 +2928,9 @@ def _extra_prompt_plantilla_escaner(institucion_plantilla: str) -> str:
         )
     if "binance" in low:
         chunks.append(
-            "BINANCE / USDT: use ID de orden, Pay ID o referencia y el monto en USD/USDT según lo impreso."
+            "BINANCE / USDT: use ID de orden completo y monto en USD/USDT. "
+            "Control: **operaciones@rapicreditca.com** debe verse **arriba** del **ID de orden**; "
+            "si no, `control_usuario_operaciones`=false y en `notas` **Usuario operaciones**."
         )
     if "recibo" in low:
         chunks.append(

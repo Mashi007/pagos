@@ -878,6 +878,7 @@ def run_pipeline(
         "gmail_labels_list_failed": 0,
         "manual_error_redigitaliza_listed": 0,
         "manual_error_redigitaliza_error": "",
+        "messages_pipeline_errors": 0,
     }
     none_reason_counts: dict[str, int] = {}
     none_reason_hint_counts: dict[str, int] = {}
@@ -895,6 +896,7 @@ def run_pipeline(
                 run_stats["pipeline_phase"] = phase
             sync.emails_processed = emails_ok
             sync.files_processed = files_ok
+            hb = datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
             sync.run_summary = {
                 "scan_filter": scan_filter,
                 "gmail_messages_listed": int(run_stats.get("gmail_messages_listed", 0) or 0),
@@ -903,6 +905,7 @@ def run_pipeline(
                 "files_processed_so_far": files_ok,
                 "gemini_calls_total": int(run_stats.get("gemini_calls_total", 0) or 0),
                 "gemini_model": _gemini_model_snapshot,
+                "progress_heartbeat_at": hb,
             }
             db.commit()
         except Exception as _pub_exc:
@@ -1002,6 +1005,13 @@ def run_pipeline(
             redig_manual_error_pass: bool = False,
         ) -> None:
             nonlocal emails_ok, files_ok, correos_marcados_revision
+
+            def _bump_message_progress(*, phase_suffix: str = "done") -> None:
+                nonlocal emails_ok
+                emails_ok += 1
+                sync.emails_processed = emails_ok
+                sync.files_processed = files_ok
+                _publish_sync_progress(phase=f"correo_{emails_ok}_{phase_suffix}")
             if batch:
                 logger.info(
                     "[PAGOS_GMAIL] Procesando lote %s: %d correos (imagen/PDF pipeline, formatos A/B/C/D)%s",
@@ -1045,1211 +1055,1108 @@ def run_pipeline(
                         detalle=detalle,
                     )
 
-                label_ids_snapshot = list(msg_info.get("label_ids") or [])
-                was_unread = "UNREAD" in label_ids_snapshot
-                msg_lids_set = frozenset(label_ids_snapshot)
-                _user_on_msg = msg_lids_set & _gmail_user_label_ids
-                k_err_shared = PAGOS_GMAIL_LABEL_ERROR_EMAIL
-                if k_err_shared not in plantilla_label_cache:
-                    plantilla_label_cache[k_err_shared] = ensure_user_label_id(
-                        gmail_svc, k_err_shared
-                    )
-                mid_err_shared = plantilla_label_cache.get(k_err_shared)
-
-                # Extracción anticipada del remitente: necesaria para el bypass del skip por
-                # etiquetas en modo redig_por_remitente (mostrar la fila aunque ya esté etiquetada).
-                payload = msg_info["payload"]
-                headers = msg_info["headers"]
-                from_h = headers.get("from") or headers.get("From") or ""
-                sender = extract_sender_email(from_h)
-                sender_lc = (sender or "").strip().lower()
-
-                # Bypass selectivo del skip por etiquetas:
-                # - scan_filter == manual_redigitaliza_por_remitente: el usuario pidió rastreo
-                #   selectivo de un correo específico (remitente, destinatario o participante,
-                #   según `criterio_norm`); el listado Gmail ya filtró la cadena `from:/to:`
-                #   así que cualquier mensaje devuelto pertenece al rastreo y debe re-clasificarse.
-                # - el caller pasó una lista explícita de IDs (only_ids_set) que incluye este mensaje:
-                #   el endpoint ya validó origen, el usuario marcó esta fila a propósito.
-                # En esos casos retiramos del mensaje las etiquetas finales del set permitido
-                # (A/B/C/D/E/F, MANUAL, TEXTO, ERROR EMAIL) para que la pasada pueda re-clasificar
-                # y dejar una etiqueta final única coherente. La regla global de "skip por etiqueta
-                # de usuario" se mantiene para todos los demás modos.
-                _bypass_etiquetas_remitente = (
-                    (redig_por_remitente and from_email_lc is not None)
-                    or (only_ids_set is not None and msg_id in only_ids_set)
-                )
-                if _bypass_etiquetas_remitente and _labels_catalog_ok and _user_on_msg:
-                    _ids_a_quitar = [
-                        lid
-                        for lid in _user_on_msg
-                        if _gmail_user_label_names.get(lid, "")
-                        in PAGOS_GMAIL_ETIQUETAS_FINALES_PERMITIDAS
-                    ]
-                    if _ids_a_quitar:
-                        try:
-                            modify_message_labels_add_remove(
-                                gmail_svc,
-                                msg_id,
-                                add_label_ids=[],
-                                remove_label_ids=_ids_a_quitar,
-                            )
-                            _nombres_quitados = sorted(
-                                _gmail_user_label_names.get(lid, lid)
-                                for lid in _ids_a_quitar
-                            )
-                            logger.info(
-                                "[PAGOS_GMAIL]   Redig por remitente: etiquetas previas retiradas [%s] msg=%s sender=%s",
-                                ", ".join(_nombres_quitados),
-                                msg_id,
-                                sender_lc,
-                            )
-                        except Exception as exc:
-                            logger.warning(
-                                "[PAGOS_GMAIL]   Redig por remitente: no se pudieron retirar etiquetas previas (msg=%s): %s",
-                                msg_id,
-                                exc,
-                            )
-                elif _labels_catalog_ok and _user_on_msg:
-                    _skip_por_etiquetas_usuario = True
-                    _hit_names = sorted(
-                        _gmail_user_label_names.get(lid, lid) for lid in _user_on_msg
-                    )
-                    run_stats["messages_skipped_clasificacion_etiqueta"] += 1
-                    logger.info(
-                        "[PAGOS_GMAIL]   Omitido: mensaje con etiqueta(s) de usuario Gmail [%s] — "
-                        "sin escanear de nuevo ni filas Excel/BD (msg=%s)",
-                        ", ".join(_hit_names),
-                        msg_id,
-                    )
-                    _pipeline_evt(
-                        EVT_OMISION_ETIQUETA_USUARIO,
-                        detalle=", ".join(_hit_names)[:8000],
-                    )
-                    if was_unread:
-                        mark_as_read(gmail_svc, msg_id)
-                    continue
-                if (
-                    not sender_lc
-                    or sender_lc == "desconocido"
-                    or "@" not in sender_lc
-                ):
-                    logger.info(
-                        "[PAGOS_GMAIL]   Omitido: remitente (De) sin email valido (%s) msg=%s",
-                        sender_lc[:72] if sender_lc else "(vacio)",
-                        msg_id,
-                    )
-                    _pipeline_evt(EVT_REMITENTE_INVALIDO, detalle=(sender_lc[:200] or "(vacio)"))
-                    run_stats["messages_skipped_invalid_sender"] += 1
-                    if was_unread:
-                        mark_as_read(gmail_svc, msg_id)
-                        logger.info(
-                            "[PAGOS_GMAIL]   Gmail: LEIDO tras escaneo (no leido al listar; remitente omitido)"
+                _msg_phase_suffix = "done"
+                try:
+                    label_ids_snapshot = list(msg_info.get("label_ids") or [])
+                    was_unread = "UNREAD" in label_ids_snapshot
+                    msg_lids_set = frozenset(label_ids_snapshot)
+                    _user_on_msg = msg_lids_set & _gmail_user_label_ids
+                    k_err_shared = PAGOS_GMAIL_LABEL_ERROR_EMAIL
+                    if k_err_shared not in plantilla_label_cache:
+                        plantilla_label_cache[k_err_shared] = ensure_user_label_id(
+                            gmail_svc, k_err_shared
                         )
-                    continue
+                    mid_err_shared = plantilla_label_cache.get(k_err_shared)
 
-                # === Modo "Lote IT Master" =============================================
-                # Cuando el correo llega al buzón itmaster@rapicreditca.com con asunto = solo cedula
-                # numerica y .eml adjuntos, la cedula del cliente se TOMA del asunto del maestro
-                # (NO de la inferida del remitente del .eml). El pipeline ya extrae las
-                # imagenes/PDF dentro de los .eml automaticamente (paso "rfc822" de
-                # get_pagos_gmail_image_pdf_files_for_pipeline), por lo que el resto del flujo
-                # (Gemini -> plantillas A/B/C/D/E/F -> BD -> cascada cuotas) corre normal y
-                # solo se sustituye la cedula de cada item por la cedula resuelta del asunto.
-                full_payload: Optional[dict] = None
-                if redig_por_remitente and from_email_lc == PAGOS_GMAIL_LOTE_REMITENTE_IT_MASTER:
-                    # list_messages_by_filter trae solo metadata (From/Date/Subject), sin To ni partes.
-                    # Para validar si es lote real (To/Cc/Delivered-To + .eml) necesitamos format=full
-                    # ANTES de la compuerta que evita gastar Gemini en PDFs/JPG sueltos.
-                    full_payload = get_message_full_payload(gmail_svc, msg_id)
-                    if full_payload:
-                        payload = full_payload
-                        headers = {
-                            (h.get("name") or "").lower(): h.get("value") or ""
-                            for h in (full_payload.get("headers") or [])
-                        }
-                _es_lote_it_master, _cedula_lote_v_raw, _n_eml_lote = is_lote_it_master_message(
-                    headers, payload
-                )
-                _cedula_forzada_lote: Optional[str] = None
-                if (
-                    redig_por_remitente
-                    and from_email_lc == PAGOS_GMAIL_LOTE_REMITENTE_IT_MASTER
-                    and not _es_lote_it_master
-                ):
-                    # Este módulo NO debe escanear el buzón completo de itmaster ni PDFs sueltos.
-                    # Solo procesa correos lote: asunto cedula + adjuntos .eml/message-rfc822.
-                    # Los demás mensajes se ignoran sin Gemini, sin marcar leídos y sin etiquetas.
-                    logger.info(
-                        "[PAGOS_GMAIL]   IT Master omitido antes de Gemini: no es lote válido "
-                        "(requiere asunto cedula + .eml). msg=%s sender=%s subject=%s",
-                        msg_id,
-                        sender_lc,
-                        (headers.get("subject") or headers.get("Subject") or "")[:120],
+                    # Extracción anticipada del remitente: necesaria para el bypass del skip por
+                    # etiquetas en modo redig_por_remitente (mostrar la fila aunque ya esté etiquetada).
+                    payload = msg_info["payload"]
+                    headers = msg_info["headers"]
+                    from_h = headers.get("from") or headers.get("From") or ""
+                    sender = extract_sender_email(from_h)
+                    sender_lc = (sender or "").strip().lower()
+
+                    # Bypass selectivo del skip por etiquetas:
+                    # - scan_filter == manual_redigitaliza_por_remitente: el usuario pidió rastreo
+                    #   selectivo de un correo específico (remitente, destinatario o participante,
+                    #   según `criterio_norm`); el listado Gmail ya filtró la cadena `from:/to:`
+                    #   así que cualquier mensaje devuelto pertenece al rastreo y debe re-clasificarse.
+                    # - el caller pasó una lista explícita de IDs (only_ids_set) que incluye este mensaje:
+                    #   el endpoint ya validó origen, el usuario marcó esta fila a propósito.
+                    # En esos casos retiramos del mensaje las etiquetas finales del set permitido
+                    # (A/B/C/D/E/F, MANUAL, TEXTO, ERROR EMAIL) para que la pasada pueda re-clasificar
+                    # y dejar una etiqueta final única coherente. La regla global de "skip por etiqueta
+                    # de usuario" se mantiene para todos los demás modos.
+                    _bypass_etiquetas_remitente = (
+                        (redig_por_remitente and from_email_lc is not None)
+                        or (only_ids_set is not None and msg_id in only_ids_set)
                     )
-                    continue
-                if _es_lote_it_master:
-                    _cedula_lote_real = resolver_cedula_almacenada_en_clientes(
-                        db, _cedula_lote_v_raw
-                    )
-                    # CONCILIACION: marca de "ya pasó por el pipeline" para el maestro de lote.
-                    # Se aplica tanto si la cédula no existe (rechazo ERROR EMAIL) como si el lote
-                    # se procesa OK, para que el operador vea en Gmail cuáles ya fueron tocados.
-                    try:
-                        _conc_lid = ensure_user_label_id(
-                            gmail_svc, PAGOS_GMAIL_LABEL_CONCILIACION
-                        )
-                    except Exception as _e_conc_create:
-                        _conc_lid = None
-                        logger.warning(
-                            "[PAGOS_GMAIL] Lote IT Master: no se pudo crear/obtener etiqueta "
-                            "'%s' (msg=%s): %s",
-                            PAGOS_GMAIL_LABEL_CONCILIACION, msg_id, _e_conc_create,
-                        )
-                    if not _cedula_lote_real:
-                        # Cedula del asunto NO existe en clientes -> ETIQUETAR ERROR EMAIL + CONCILIACION y skip lote.
-                        try:
-                            _err_lid = ensure_user_label_id(
-                                gmail_svc, PAGOS_GMAIL_LABEL_ERROR_EMAIL
-                            )
-                            _add_ids = [lid for lid in (_err_lid, _conc_lid) if lid]
-                            if _add_ids:
+                    if _bypass_etiquetas_remitente and _labels_catalog_ok and _user_on_msg:
+                        _ids_a_quitar = [
+                            lid
+                            for lid in _user_on_msg
+                            if _gmail_user_label_names.get(lid, "")
+                            in PAGOS_GMAIL_ETIQUETAS_FINALES_PERMITIDAS
+                        ]
+                        if _ids_a_quitar:
+                            try:
                                 modify_message_labels_add_remove(
-                                    gmail_svc, msg_id, add_label_ids=_add_ids, remove_label_ids=[]
+                                    gmail_svc,
+                                    msg_id,
+                                    add_label_ids=[],
+                                    remove_label_ids=_ids_a_quitar,
                                 )
-                        except Exception as _e_lbl:
-                            logger.warning(
-                                "[PAGOS_GMAIL] Lote IT Master: no se pudo etiquetar ERROR EMAIL/CONCILIACION (msg=%s): %s",
-                                msg_id, _e_lbl,
-                            )
+                                _nombres_quitados = sorted(
+                                    _gmail_user_label_names.get(lid, lid)
+                                    for lid in _ids_a_quitar
+                                )
+                                logger.info(
+                                    "[PAGOS_GMAIL]   Redig por remitente: etiquetas previas retiradas [%s] msg=%s sender=%s",
+                                    ", ".join(_nombres_quitados),
+                                    msg_id,
+                                    sender_lc,
+                                )
+                            except Exception as exc:
+                                logger.warning(
+                                    "[PAGOS_GMAIL]   Redig por remitente: no se pudieron retirar etiquetas previas (msg=%s): %s",
+                                    msg_id,
+                                    exc,
+                                )
+                    elif _labels_catalog_ok and _user_on_msg:
+                        _skip_por_etiquetas_usuario = True
+                        _hit_names = sorted(
+                            _gmail_user_label_names.get(lid, lid) for lid in _user_on_msg
+                        )
+                        run_stats["messages_skipped_clasificacion_etiqueta"] += 1
                         logger.info(
-                            "[PAGOS_GMAIL]   Lote IT Master: cedula '%s' del asunto NO existe en clientes; "
-                            "ERROR EMAIL + CONCILIACION aplicados, lote NO procesado (msg=%s, n_eml_adjuntos=%d, sender=%s)",
-                            _cedula_lote_v_raw, msg_id, _n_eml_lote, PAGOS_GMAIL_LOTE_REMITENTE_IT_MASTER,
+                            "[PAGOS_GMAIL]   Omitido: mensaje con etiqueta(s) de usuario Gmail [%s] — "
+                            "sin escanear de nuevo ni filas Excel/BD (msg=%s)",
+                            ", ".join(_hit_names),
+                            msg_id,
                         )
                         _pipeline_evt(
-                            EVT_REMITENTE_NO_CLIENTE_CON_MEDIA,
-                            detalle=f"lote_it_master cedula={_cedula_lote_v_raw} sin_cliente",
+                            EVT_OMISION_ETIQUETA_USUARIO,
+                            detalle=", ".join(_hit_names)[:8000],
                         )
                         if was_unread:
                             mark_as_read(gmail_svc, msg_id)
                         continue
-                    _cedula_forzada_lote = _cedula_lote_real
-                    # Lote OK -> aplicar CONCILIACION ya (el flujo normal seguirá clasificando
-                    # con plantillas A-F/MANUAL/etc.; CONCILIACION coexiste como marca adicional).
-                    if _conc_lid:
-                        try:
-                            modify_message_labels_add_remove(
-                                gmail_svc, msg_id, add_label_ids=[_conc_lid], remove_label_ids=[]
-                            )
-                        except Exception as _e_conc:
-                            logger.warning(
-                                "[PAGOS_GMAIL] Lote IT Master: no se pudo aplicar CONCILIACION al maestro "
-                                "(msg=%s): %s",
-                                msg_id, _e_conc,
-                            )
-                    logger.info(
-                        "[PAGOS_GMAIL]   Lote IT Master detectado: cedula='%s' (asunto del maestro), "
-                        "n_eml_adjuntos=%d. CONCILIACION aplicada al maestro. Cada .eml se procesa con "
-                        "reglas existentes (Mercantil/BNC/etc.); la cedula de TODAS las filas se forzara "
-                        "a la del asunto. msg=%s",
-                        _cedula_forzada_lote, _n_eml_lote, msg_id,
-                    )
-
-                remitente_solo_master = sender_lc == PAGOS_GMAIL_SENDER_MASTER
-                if _cedula_forzada_lote:
-                    # Lote IT Master: cedula resuelta desde el asunto, no desde el remitente del maestro.
-                    # remitente_en_clientes=True permite que el flujo aplique plantillas A-F sin
-                    # forzar el modo "plan B" (que asume sender no en BD).
-                    _ced_lookup = _cedula_forzada_lote
-                    remitente_en_clientes = True
-                else:
-                    _ced_lookup, _ = _cedula_por_email_cliente(db, sender_lc)
-                    remitente_en_clientes = _ced_lookup is not None
-                subject = (headers.get("subject") or headers.get("Subject") or "").strip() or sender
-                msg_date = get_message_date(headers)
-                sheet_name = get_sheet_name_for_date(msg_date)
-
-                # Mercantil/BNC (A/B): cédula desde imagen en re-escaneo, redig MANUAL+ERROR, o inbox con **solo** ERROR EMAIL.
-                solo_error_email_inbox = (
-                    not error_email_rescan
-                    and not redig_manual_error_pass
-                    and _labels_catalog_ok
-                    and bool(mid_err_shared)
-                    and _user_on_msg == frozenset({mid_err_shared})
-                )
-                modo_ab_cedula_desde_imagen = (
-                    error_email_rescan or redig_manual_error_pass or solo_error_email_inbox
-                )
-                # Sin fila en clientes (correo De no en BD): no inventar C/D/NR; solo intentar Mercantil/BNC (A/B) con cédula en imagen.
-                plan_b_mercantil_bnc_fuera_bd = (
-                    not remitente_en_clientes
-                    and not error_email_rescan
-                    and not redig_manual_error_pass
-                    and not solo_error_email_inbox
-                )
-                usar_extraccion_cedula_imagen_ab = (
-                    modo_ab_cedula_desde_imagen or plan_b_mercantil_bnc_fuera_bd
-                )
-                if modo_ab_cedula_desde_imagen:
-                    _modo_nom = (
-                        "error_email_rescan"
-                        if error_email_rescan
-                        else (
-                            "redig_manual_error"
-                            if redig_manual_error_pass
-                            else (
-                                "solo_error_email_inbox"
-                                if solo_error_email_inbox
-                                else "?"
-                            )
-                        )
-                    )
-                    logger.info(
-                        "[PAGOS_GMAIL]   Modo cedula imagen A/B (%s); msg=%s",
-                        _modo_nom,
-                        msg_id,
-                    )
-                elif plan_b_mercantil_bnc_fuera_bd:
-                    logger.info(
-                        "[PAGOS_GMAIL]   Plan B (De no en clientes): Mercantil/BNC si Gemini A o B (cédula imagen); "
-                        "Binance C si monto+ref OK (cédula columna ERROR EMAIL, sin cuotas auto); si no, ERROR EMAIL; msg=%s",
-                        msg_id,
-                    )
-
-                logger.info(
-                    "[PAGOS_GMAIL] -- Correo %d (%s) id=%s | de=%s | asunto=%s",
-                    emails_ok + 1,
-                    label,
-                    msg_id,
-                    sender[:40],
-                    subject[:50],
-                )
-
-                if full_payload is None:
-                    full_payload = get_message_full_payload(gmail_svc, msg_id)
-                if not full_payload and payload.get("parts"):
-                    full_payload = payload
-
-                attachments = get_pagos_gmail_image_pdf_files_for_pipeline(
-                    gmail_svc, msg_id, full_payload or {}
-                )
-                candidatos, n_pdf_adjuntos_multipagina = expand_pipeline_pdf_tuples(attachments)
-
-                logger.info(
-                    "[PAGOS_GMAIL]   candidatos imagen/PDF (adjunto + embebido + reenvio; adjuntos PDF multipag=%d): %d - %s",
-                    n_pdf_adjuntos_multipagina,
-                    len(candidatos),
-                    ", ".join(f"{f}({len(c)}B,{o})" for f, c, _, o in candidatos)
-                    if candidatos
-                    else "ninguno",
-                )
-
-                had_complete_digitalization = False
-                any_incomplete_or_skipped = False
-                any_cedula_lookup_failed = False
-                # True solo si un adjunto se descarta por formato/parse (no por cedula del remitente).
-                any_skipped_not_plantilla_o_campos = False
-                # MANUAL en Gmail solo si hay señal de revisión (Gemini/plantilla fallida con pista, o error al procesar adjunto);
-                # no marcar solo por tener filas sync: la etiqueta bancaria puede salir de comprobante digitalizado sin CUOTAS_OK.
-                manual_evidence_for_revision = False
-                label_ids_for_message: list[str] = []
-                # Formatos A/B/C/D/E/NR digitalizados OK (comprobante en BD) en este mensaje (para detectar mezcla -> MANUAL).
-                bank_fmts_digitized: list[str] = []
-                # Plantillas que Gemini reconoció aunque no se hayan guardado filas (campos incompletos, etc.).
-                bank_fmts_classified: list[str] = []
-                # Formatos con resultado de negocio CUOTAS_OK (único criterio para etiqueta bancaria final).
-                bank_fmts_cuotas_ok: list[str] = []
-                if not candidatos:
-                    any_incomplete_or_skipped = True
-                    _pipeline_evt(EVT_SIN_ADJUNTOS_DIGITABLES)
-                if (
-                    not remitente_en_clientes
-                    and candidatos
-                    and not solo_error_email_inbox
-                    and not plan_b_mercantil_bnc_fuera_bd
-                ):
-                    logger.info(
-                        "[PAGOS_GMAIL]   Remitente no en clientes.email/email_secundario (o fallo al consultar): "
-                        "sin Gemini ni filas Excel/BD; Gmail solo ERROR EMAIL (msg_id=%s).",
-                        msg_id,
-                    )
-                    _pipeline_evt(
-                        EVT_REMITENTE_NO_CLIENTE_CON_MEDIA,
-                        detalle=f"de={sender_lc[:120]} adjuntos={len(candidatos)}",
-                    )
-
-                def _campos_completos_plantilla(
-                    formato: str, fecha: str, cedula: str, monto: str, ref: str
-                ) -> bool:
-                    def ok(val: str) -> bool:
-                        s = (val or "").strip()
-                        return bool(s) and s.upper() != PAGOS_NA
-
-                    fmt_u = (formato or "").strip().upper()
-                    # Binance (C): la pantalla no trae fecha; no rellenar desde el correo.
-                    if fmt_u == "C":
-                        return ok(cedula) and ok(monto) and ok(ref)
-                    # A y B/E/F/D: alineado con gates Gemini (_pagos_gmail_*_campos_imagen_minimos).
-                    # Fecha puede venir del asunto (DD/MM) o DCME Mercantil, no es obligatoria en imagen.
-                    if fmt_u in ("A", "B", "D", "E", "F"):
-                        return ok(cedula) and ok(monto) and ok(ref)
-                    return ok(fecha) and ok(cedula) and ok(monto) and ok(ref)
-
-                def _campos_completos_nr(cedula: str, monto: str) -> bool:
-                    """Fila NR: monto literal NR; cédula columna debe existir (cliente o ERROR EMAIL)."""
-                    s_m = (monto or "").strip().upper()
-                    if s_m != "NR":
-                        return False
-                    s_c = (cedula or "").strip()
-                    return bool(s_c) and s_c.upper() != PAGOS_NA
-
-                def _completar_fecha_mercantil_pipeline(
-                    formato: str, fecha: str, referencia: str, asunto: str
-                ) -> str:
-                    fmt_u = (formato or "").strip().upper()
-                    f_out = (fecha or "").strip()
-                    if fmt_u != "A" or (f_out and f_out.upper() != PAGOS_NA):
-                        return fecha
-                    from app.services.pagos_gmail.parse_campos_comprobante import (
-                        inferir_fecha_pago_mercantil_desde_texto,
-                    )
-
-                    inf = inferir_fecha_pago_mercantil_desde_texto(
-                        f"{referencia}\n{asunto}"
-                    )
-                    return normalizar_fecha_pago(inf) if inf else fecha
-
-                def _ref_mercantil_inaceptable_pipeline(
-                    formato: str, referencia: str
-                ) -> bool:
-                    if (formato or "").strip().upper() != "A":
-                        return False
-                    from app.services.pagos_gmail.parse_campos_comprobante import (
-                        es_serial_mercantil_740087,
-                        longitud_serial_mercantil_valida,
-                        numero_operacion_mercantil_solo_dcme,
-                    )
-
-                    r_chk = (referencia or "").strip()
-                    if not r_chk:
-                        return False
-                    if numero_operacion_mercantil_solo_dcme(r_chk):
-                        return True
-                    return bool(
-                        es_serial_mercantil_740087(r_chk)
-                        and not longitud_serial_mercantil_valida(r_chk)
-                    )
-
-                def _insert_rows_sin_drive(
-                    correo: str,
-                    fecha: str,
-                    cedula: str,
-                    monto: str,
-                    referencia: str,
-                    banco: str,
-                ) -> Optional[tuple[PagosGmailSyncItem, GmailTemporal]]:
-                    try:
-                        si = PagosGmailSyncItem(
-                            sync_id=sync_id,
-                            correo_origen=correo,
-                            asunto=subject,
-                            banco=banco,
-                            fecha_pago=fecha,
-                            cedula=cedula,
-                            monto=monto,
-                            numero_referencia=referencia,
-                            drive_file_id=None,
-                            drive_link=None,
-                            drive_email_link=None,
-                            sheet_name=sheet_name,
-                            gmail_message_id=(msg_id or "")[:100] or None,
-                            gmail_thread_id=gmail_thread_id,
-                        )
-                        gt = GmailTemporal(
-                            correo_origen=correo,
-                            asunto=subject,
-                            banco=banco,
-                            fecha_pago=fecha,
-                            cedula=cedula,
-                            monto=monto,
-                            numero_referencia=referencia,
-                            drive_file_id=None,
-                            drive_link=None,
-                            drive_email_link=None,
-                            sheet_name=sheet_name,
-                            gmail_message_id=(msg_id or "")[:100] or None,
-                            gmail_thread_id=gmail_thread_id,
-                        )
-                        db.add(si)
-                        db.add(gt)
-                        return (si, gt)
-                    except Exception as db_err:
-                        logger.warning("[PAGOS_GMAIL] Error preparando filas BD: %s", db_err)
-                        return None
-
-                def _v(x: Optional[str]) -> str:
-                    v = (x or "").strip()
-                    return v if v and v.upper() != "NA" else ""
-
-                pending: list[dict] = []
-                committed_comprobante_rows = False
-                message_scan_bank_hint = ""
-                candidatos_loop = (
-                    candidatos
                     if (
-                        remitente_en_clientes
-                        or redig_manual_error_pass
-                        or solo_error_email_inbox
-                        or error_email_rescan
-                        or plan_b_mercantil_bnc_fuera_bd
-                    )
-                    else []
-                )
-                candidatos_para_gemini = _filtrar_adjuntos_ruido_pagos_gmail_gemini(
-                    candidatos_loop
-                )
-                _body_payload_for_cedula: object = full_payload or payload
-                body_txt_cedula = ""
-                try:
-                    if isinstance(_body_payload_for_cedula, dict):
-                        body_txt_cedula = get_message_body_text(
-                            _body_payload_for_cedula
-                        )
-                except Exception:
-                    body_txt_cedula = ""
-                cedula_extra_correo_txt = extraer_cedula_desde_asunto_cuerpo_pipeline(
-                    subject, body_txt_cedula
-                )
-                if not remitente_en_clientes and cedula_extra_correo_txt:
-                    c_try_asunto = formatear_cedula(cedula_extra_correo_txt)
-                    c_res_asunto = (
-                        resolver_cedula_almacenada_en_clientes(db, c_try_asunto)
-                        if c_try_asunto and c_try_asunto.upper() != PAGOS_NA
-                        else None
-                    )
-                    if c_res_asunto:
-                        remitente_en_clientes = True
+                        not sender_lc
+                        or sender_lc == "desconocido"
+                        or "@" not in sender_lc
+                    ):
                         logger.info(
-                            "[PAGOS_GMAIL]   Cliente identificado por cédula en asunto/cuerpo (%s), "
-                            "no por email De=%s msg=%s",
-                            formatear_cedula(c_res_asunto)[:24],
-                            sender_lc[:48],
+                            "[PAGOS_GMAIL]   Omitido: remitente (De) sin email valido (%s) msg=%s",
+                            sender_lc[:72] if sender_lc else "(vacio)",
                             msg_id,
                         )
-                for filename, content, mime_type, origen_binario in candidatos_para_gemini:
-                    try:
-                        body_bin = (
-                            content
-                            if isinstance(content, (bytes, bytearray))
-                            else bytes(content)
-                        )
-                        file_digest = hashlib.sha256(body_bin).hexdigest()
-
-                        # Dedupe intra-corrida: si el mismo binario (mismo SHA-256) ya generó una fila
-                        # pending en esta corrida, no llamamos a Gemini ni creamos una segunda fila.
-                        # Salva el caso "mismo comprobante adjunto en varios .eml del lote".
-                        if file_digest in _sha256_pending_seen_in_run:
+                        _pipeline_evt(EVT_REMITENTE_INVALIDO, detalle=(sender_lc[:200] or "(vacio)"))
+                        run_stats["messages_skipped_invalid_sender"] += 1
+                        if was_unread:
+                            mark_as_read(gmail_svc, msg_id)
                             logger.info(
-                                "[PAGOS_GMAIL]   Skip duplicado intra-corrida por SHA-256 (mismo binario "
-                                "ya empaquetado en otra fila pending): %s (msg=%s, file=%s)",
-                                file_digest[:12], msg_id, filename,
+                                "[PAGOS_GMAIL]   Gmail: LEIDO tras escaneo (no leido al listar; remitente omitido)"
                             )
-                            continue
+                        continue
 
-                        _t0_gem = perf_counter()
-                        fmt, data = classify_and_extract_pagos_gmail_attachment(
-                            content,
-                            filename,
-                            remitente_correo_header=from_h,
-                            origen_binario=origen_binario,
-                            modo_error_email_ab=usar_extraccion_cedula_imagen_ab,
+                    # === Modo "Lote IT Master" =============================================
+                    # Cuando el correo llega al buzón itmaster@rapicreditca.com con asunto = solo cedula
+                    # numerica y .eml adjuntos, la cedula del cliente se TOMA del asunto del maestro
+                    # (NO de la inferida del remitente del .eml). El pipeline ya extrae las
+                    # imagenes/PDF dentro de los .eml automaticamente (paso "rfc822" de
+                    # get_pagos_gmail_image_pdf_files_for_pipeline), por lo que el resto del flujo
+                    # (Gemini -> plantillas A/B/C/D/E/F -> BD -> cascada cuotas) corre normal y
+                    # solo se sustituye la cedula de cada item por la cedula resuelta del asunto.
+                    full_payload: Optional[dict] = None
+                    if redig_por_remitente and from_email_lc == PAGOS_GMAIL_LOTE_REMITENTE_IT_MASTER:
+                        # list_messages_by_filter trae solo metadata (From/Date/Subject), sin To ni partes.
+                        # Para validar si es lote real (To/Cc/Delivered-To + .eml) necesitamos format=full
+                        # ANTES de la compuerta que evita gastar Gemini en PDFs/JPG sueltos.
+                        full_payload = get_message_full_payload(gmail_svc, msg_id)
+                        if full_payload:
+                            payload = full_payload
+                            headers = {
+                                (h.get("name") or "").lower(): h.get("value") or ""
+                                for h in (full_payload.get("headers") or [])
+                            }
+                    _es_lote_it_master, _cedula_lote_v_raw, _n_eml_lote = is_lote_it_master_message(
+                        headers, payload
+                    )
+                    _cedula_forzada_lote: Optional[str] = None
+                    if (
+                        redig_por_remitente
+                        and from_email_lc == PAGOS_GMAIL_LOTE_REMITENTE_IT_MASTER
+                        and not _es_lote_it_master
+                    ):
+                        # Este módulo NO debe escanear el buzón completo de itmaster ni PDFs sueltos.
+                        # Solo procesa correos lote: asunto cedula + adjuntos .eml/message-rfc822.
+                        # Los demás mensajes se ignoran sin Gemini, sin marcar leídos y sin etiquetas.
+                        logger.info(
+                            "[PAGOS_GMAIL]   IT Master omitido antes de Gemini: no es lote válido "
+                            "(requiere asunto cedula + .eml). msg=%s sender=%s subject=%s",
+                            msg_id,
+                            sender_lc,
+                            (headers.get("subject") or headers.get("Subject") or "")[:120],
                         )
-                        _scan_hint = (data.get("_scan_bank_hint") or "").strip()
-                        if _scan_hint:
-                            message_scan_bank_hint = _scan_hint
-                        _gem_ms = int((perf_counter() - _t0_gem) * 1000)
-                        run_stats["gemini_calls_total"] = int(
-                            run_stats.get("gemini_calls_total", 0) or 0
-                        ) + 1
-                        run_stats["gemini_ms_total"] = int(
-                            run_stats.get("gemini_ms_total", 0) or 0
-                        ) + _gem_ms
-                        run_stats["gemini_ms_max"] = max(
-                            int(run_stats.get("gemini_ms_max", 0) or 0), _gem_ms
+                        continue
+                    if _es_lote_it_master:
+                        _cedula_lote_real = resolver_cedula_almacenada_en_clientes(
+                            db, _cedula_lote_v_raw
                         )
-                        _scan_pass = str(data.get("_scan_pass") or "").strip().lower()
-                        if _scan_pass == "pass_2":
-                            run_stats["gemini_second_pass_total"] = int(
-                                run_stats.get("gemini_second_pass_total", 0) or 0
-                            ) + 1
-
-                        if redig_manual_error_pass and fmt not in ("A", "B"):
-                            _none_reason = (data.get("_diag_none_reason") or "sin_detalle").strip()
-                            any_incomplete_or_skipped = True
-                            any_skipped_not_plantilla_o_campos = True
-                            logger.info(
-                                "[PAGOS_GMAIL] redig MANUAL+ERROR: Gemini no clasifica Mercantil/BNC (formato=%r motivo=%s) — "
-                                "sin digitalizar %s",
-                                fmt,
-                                _none_reason,
-                                filename,
+                        # CONCILIACION: marca de "ya pasó por el pipeline" para el maestro de lote.
+                        # Se aplica tanto si la cédula no existe (rechazo ERROR EMAIL) como si el lote
+                        # se procesa OK, para que el operador vea en Gmail cuáles ya fueron tocados.
+                        try:
+                            _conc_lid = ensure_user_label_id(
+                                gmail_svc, PAGOS_GMAIL_LABEL_CONCILIACION
                             )
-                            _pipeline_evt(
-                                EVT_NO_PLANTILLA_GEMINI,
-                                filename=filename,
-                                detalle=(f"redig_solo_ab:{fmt!s}:{_none_reason}")[:500],
-                            )
-                            continue
-
-                        if fmt not in PAGOS_GMAIL_FORMATOS_PLANTILLA:
-                            _none_reason = (data.get("_diag_none_reason") or "sin_detalle").strip()
-                            _hint = (data.get("_scan_bank_hint") or "").strip().upper()
-                            _hint_fmt = _fmt_desde_bank_hint_escaneo(_hint)
-                            if _hint_fmt and (
-                                not plan_b_mercantil_bnc_fuera_bd
-                                or _hint_fmt in _PLAN_B_FORMATOS_ETIQUETA
-                            ):
-                                bank_fmts_classified.append(_hint_fmt)
-                            none_reason_counts[_none_reason] = (
-                                int(none_reason_counts.get(_none_reason, 0)) + 1
-                            )
-                            if _hint:
-                                _hk = f"{_hint}:{_none_reason}"
-                                none_reason_hint_counts[_hk] = (
-                                    int(none_reason_hint_counts.get(_hk, 0)) + 1
-                                )
-                            if _hint or (
-                                _none_reason
-                                and _none_reason not in ("sin_plantilla", "json_invalido")
-                            ):
-                                manual_evidence_for_revision = True
-                            any_incomplete_or_skipped = True
-                            any_skipped_not_plantilla_o_campos = True
+                        except Exception as _e_conc_create:
+                            _conc_lid = None
                             logger.warning(
-                                "[PAGOS_GMAIL]   No es plantilla A/B/C/D/E/F/NR - no BD: %s (motivo=%s)",
-                                filename,
-                                _none_reason,
+                                "[PAGOS_GMAIL] Lote IT Master: no se pudo crear/obtener etiqueta "
+                                "'%s' (msg=%s): %s",
+                                PAGOS_GMAIL_LABEL_CONCILIACION, msg_id, _e_conc_create,
                             )
-                            _pipeline_evt(
-                                EVT_NO_PLANTILLA_GEMINI,
-                                filename=filename,
-                                detalle=(f"{fmt or '?'}:{_none_reason}")[:500],
-                            )
-                            continue
-                        if (str(data.get("_scan_pass") or "").strip().lower() == "pass_2") and (
-                            fmt in PAGOS_GMAIL_FORMATOS_PLANTILLA
-                        ):
-                            run_stats["gemini_second_pass_hits"] = int(
-                                run_stats.get("gemini_second_pass_hits", 0) or 0
-                            ) + 1
-
-                        if (
-                            plan_b_mercantil_bnc_fuera_bd
-                            and fmt in PAGOS_GMAIL_FORMATOS_PLANTILLA
-                            and fmt not in ("A", "B", "C")
-                        ):
-                            any_incomplete_or_skipped = True
-                            any_skipped_not_plantilla_o_campos = True
-                            logger.info(
-                                "[PAGOS_GMAIL]   Plan B: formato %s no aplicable (solo A/B/C) — %s",
-                                fmt,
-                                filename,
-                            )
-                            _pipeline_evt(
-                                EVT_NO_PLANTILLA_GEMINI,
-                                filename=filename,
-                                detalle=(f"plan_b_solo_abc:{fmt!s}")[:500],
-                            )
-                            continue
-
-                        bank_fmts_classified.append(fmt)
-
-                        if fmt == "C":
-                            f_raw = _v(data.get("fecha_pago"))
-                            f = normalizar_fecha_pago(f_raw) if f_raw else ""
-                            m = _v(data.get("monto"))
-                            r = normalizar_referencia(_v(data.get("numero_referencia")))
-                            c, c_ok = _cedula_columna_gmail_pipeline(
-                                db,
-                                sender_lc,
-                                subject,
-                                body_txt_cedula,
-                                plan_b_activo=plan_b_mercantil_bnc_fuera_bd,
-                            )
-                            if not c_ok:
-                                if plan_b_mercantil_bnc_fuera_bd and m and r:
-                                    c = PAGOS_GMAIL_ERROR_CEDULA_EMAIL
-                                    c_ok = True
-                                    logger.info(
-                                        "[PAGOS_GMAIL]   Plan B Binance (C): De sin fila en clientes; "
-                                        "columna Cedula=%s (digitalizar sin auto CUOTAS) archivo=%s",
-                                        c,
-                                        filename,
+                        if not _cedula_lote_real:
+                            # Cedula del asunto NO existe en clientes -> ETIQUETAR ERROR EMAIL + CONCILIACION y skip lote.
+                            try:
+                                _err_lid = ensure_user_label_id(
+                                    gmail_svc, PAGOS_GMAIL_LABEL_ERROR_EMAIL
+                                )
+                                _add_ids = [lid for lid in (_err_lid, _conc_lid) if lid]
+                                if _add_ids:
+                                    modify_message_labels_add_remove(
+                                        gmail_svc, msg_id, add_label_ids=_add_ids, remove_label_ids=[]
                                     )
-                                else:
+                            except Exception as _e_lbl:
+                                logger.warning(
+                                    "[PAGOS_GMAIL] Lote IT Master: no se pudo etiquetar ERROR EMAIL/CONCILIACION (msg=%s): %s",
+                                    msg_id, _e_lbl,
+                                )
+                            logger.info(
+                                "[PAGOS_GMAIL]   Lote IT Master: cedula '%s' del asunto NO existe en clientes; "
+                                "ERROR EMAIL + CONCILIACION aplicados, lote NO procesado (msg=%s, n_eml_adjuntos=%d, sender=%s)",
+                                _cedula_lote_v_raw, msg_id, _n_eml_lote, PAGOS_GMAIL_LOTE_REMITENTE_IT_MASTER,
+                            )
+                            _pipeline_evt(
+                                EVT_REMITENTE_NO_CLIENTE_CON_MEDIA,
+                                detalle=f"lote_it_master cedula={_cedula_lote_v_raw} sin_cliente",
+                            )
+                            if was_unread:
+                                mark_as_read(gmail_svc, msg_id)
+                            continue
+                        _cedula_forzada_lote = _cedula_lote_real
+                        # Lote OK -> aplicar CONCILIACION ya (el flujo normal seguirá clasificando
+                        # con plantillas A-F/MANUAL/etc.; CONCILIACION coexiste como marca adicional).
+                        if _conc_lid:
+                            try:
+                                modify_message_labels_add_remove(
+                                    gmail_svc, msg_id, add_label_ids=[_conc_lid], remove_label_ids=[]
+                                )
+                            except Exception as _e_conc:
+                                logger.warning(
+                                    "[PAGOS_GMAIL] Lote IT Master: no se pudo aplicar CONCILIACION al maestro "
+                                    "(msg=%s): %s",
+                                    msg_id, _e_conc,
+                                )
+                        logger.info(
+                            "[PAGOS_GMAIL]   Lote IT Master detectado: cedula='%s' (asunto del maestro), "
+                            "n_eml_adjuntos=%d. CONCILIACION aplicada al maestro. Cada .eml se procesa con "
+                            "reglas existentes (Mercantil/BNC/etc.); la cedula de TODAS las filas se forzara "
+                            "a la del asunto. msg=%s",
+                            _cedula_forzada_lote, _n_eml_lote, msg_id,
+                        )
+
+                    remitente_solo_master = sender_lc == PAGOS_GMAIL_SENDER_MASTER
+                    if _cedula_forzada_lote:
+                        # Lote IT Master: cedula resuelta desde el asunto, no desde el remitente del maestro.
+                        # remitente_en_clientes=True permite que el flujo aplique plantillas A-F sin
+                        # forzar el modo "plan B" (que asume sender no en BD).
+                        _ced_lookup = _cedula_forzada_lote
+                        remitente_en_clientes = True
+                    else:
+                        _ced_lookup, _ = _cedula_por_email_cliente(db, sender_lc)
+                        remitente_en_clientes = _ced_lookup is not None
+                    subject = (headers.get("subject") or headers.get("Subject") or "").strip() or sender
+                    msg_date = get_message_date(headers)
+                    sheet_name = get_sheet_name_for_date(msg_date)
+
+                    # Mercantil/BNC (A/B): cédula desde imagen en re-escaneo, redig MANUAL+ERROR, o inbox con **solo** ERROR EMAIL.
+                    solo_error_email_inbox = (
+                        not error_email_rescan
+                        and not redig_manual_error_pass
+                        and _labels_catalog_ok
+                        and bool(mid_err_shared)
+                        and _user_on_msg == frozenset({mid_err_shared})
+                    )
+                    modo_ab_cedula_desde_imagen = (
+                        error_email_rescan or redig_manual_error_pass or solo_error_email_inbox
+                    )
+                    # Sin fila en clientes (correo De no en BD): no inventar C/D/NR; solo intentar Mercantil/BNC (A/B) con cédula en imagen.
+                    plan_b_mercantil_bnc_fuera_bd = (
+                        not remitente_en_clientes
+                        and not error_email_rescan
+                        and not redig_manual_error_pass
+                        and not solo_error_email_inbox
+                    )
+                    usar_extraccion_cedula_imagen_ab = (
+                        modo_ab_cedula_desde_imagen or plan_b_mercantil_bnc_fuera_bd
+                    )
+                    if modo_ab_cedula_desde_imagen:
+                        _modo_nom = (
+                            "error_email_rescan"
+                            if error_email_rescan
+                            else (
+                                "redig_manual_error"
+                                if redig_manual_error_pass
+                                else (
+                                    "solo_error_email_inbox"
+                                    if solo_error_email_inbox
+                                    else "?"
+                                )
+                            )
+                        )
+                        logger.info(
+                            "[PAGOS_GMAIL]   Modo cedula imagen A/B (%s); msg=%s",
+                            _modo_nom,
+                            msg_id,
+                        )
+                    elif plan_b_mercantil_bnc_fuera_bd:
+                        logger.info(
+                            "[PAGOS_GMAIL]   Plan B (De no en clientes): Mercantil/BNC si Gemini A o B (cédula imagen); "
+                            "Binance C si monto+ref OK (cédula columna ERROR EMAIL, sin cuotas auto); si no, ERROR EMAIL; msg=%s",
+                            msg_id,
+                        )
+
+                    logger.info(
+                        "[PAGOS_GMAIL] -- Correo %d (%s) id=%s | de=%s | asunto=%s",
+                        emails_ok + 1,
+                        label,
+                        msg_id,
+                        sender[:40],
+                        subject[:50],
+                    )
+                    _publish_sync_progress(phase=f"correo_{emails_ok + 1}")
+
+                    if full_payload is None:
+                        full_payload = get_message_full_payload(gmail_svc, msg_id)
+                    if not full_payload and payload.get("parts"):
+                        full_payload = payload
+
+                    attachments = get_pagos_gmail_image_pdf_files_for_pipeline(
+                        gmail_svc, msg_id, full_payload or {}
+                    )
+                    candidatos, n_pdf_adjuntos_multipagina = expand_pipeline_pdf_tuples(attachments)
+
+                    logger.info(
+                        "[PAGOS_GMAIL]   candidatos imagen/PDF (adjunto + embebido + reenvio; adjuntos PDF multipag=%d): %d - %s",
+                        n_pdf_adjuntos_multipagina,
+                        len(candidatos),
+                        ", ".join(f"{f}({len(c)}B,{o})" for f, c, _, o in candidatos)
+                        if candidatos
+                        else "ninguno",
+                    )
+
+                    had_complete_digitalization = False
+                    any_incomplete_or_skipped = False
+                    any_cedula_lookup_failed = False
+                    # True solo si un adjunto se descarta por formato/parse (no por cedula del remitente).
+                    any_skipped_not_plantilla_o_campos = False
+                    # MANUAL en Gmail solo si hay señal de revisión (Gemini/plantilla fallida con pista, o error al procesar adjunto);
+                    # no marcar solo por tener filas sync: la etiqueta bancaria puede salir de comprobante digitalizado sin CUOTAS_OK.
+                    manual_evidence_for_revision = False
+                    label_ids_for_message: list[str] = []
+                    # Formatos A/B/C/D/E/NR digitalizados OK (comprobante en BD) en este mensaje (para detectar mezcla -> MANUAL).
+                    bank_fmts_digitized: list[str] = []
+                    # Plantillas que Gemini reconoció aunque no se hayan guardado filas (campos incompletos, etc.).
+                    bank_fmts_classified: list[str] = []
+                    # Formatos con resultado de negocio CUOTAS_OK (único criterio para etiqueta bancaria final).
+                    bank_fmts_cuotas_ok: list[str] = []
+                    if not candidatos:
+                        any_incomplete_or_skipped = True
+                        _pipeline_evt(EVT_SIN_ADJUNTOS_DIGITABLES)
+                    if (
+                        not remitente_en_clientes
+                        and candidatos
+                        and not solo_error_email_inbox
+                        and not plan_b_mercantil_bnc_fuera_bd
+                    ):
+                        logger.info(
+                            "[PAGOS_GMAIL]   Remitente no en clientes.email/email_secundario (o fallo al consultar): "
+                            "sin Gemini ni filas Excel/BD; Gmail solo ERROR EMAIL (msg_id=%s).",
+                            msg_id,
+                        )
+                        _pipeline_evt(
+                            EVT_REMITENTE_NO_CLIENTE_CON_MEDIA,
+                            detalle=f"de={sender_lc[:120]} adjuntos={len(candidatos)}",
+                        )
+
+                    def _campos_completos_plantilla(
+                        formato: str, fecha: str, cedula: str, monto: str, ref: str
+                    ) -> bool:
+                        def ok(val: str) -> bool:
+                            s = (val or "").strip()
+                            return bool(s) and s.upper() != PAGOS_NA
+
+                        fmt_u = (formato or "").strip().upper()
+                        # Binance (C): la pantalla no trae fecha; no rellenar desde el correo.
+                        if fmt_u == "C":
+                            return ok(cedula) and ok(monto) and ok(ref)
+                        # A y B/E/F/D: alineado con gates Gemini (_pagos_gmail_*_campos_imagen_minimos).
+                        # Fecha puede venir del asunto (DD/MM) o DCME Mercantil, no es obligatoria en imagen.
+                        if fmt_u in ("A", "B", "D", "E", "F"):
+                            return ok(cedula) and ok(monto) and ok(ref)
+                        return ok(fecha) and ok(cedula) and ok(monto) and ok(ref)
+
+                    def _campos_completos_nr(cedula: str, monto: str) -> bool:
+                        """Fila NR: monto literal NR; cédula columna debe existir (cliente o ERROR EMAIL)."""
+                        s_m = (monto or "").strip().upper()
+                        if s_m != "NR":
+                            return False
+                        s_c = (cedula or "").strip()
+                        return bool(s_c) and s_c.upper() != PAGOS_NA
+
+                    def _completar_fecha_mercantil_pipeline(
+                        formato: str, fecha: str, referencia: str, asunto: str
+                    ) -> str:
+                        fmt_u = (formato or "").strip().upper()
+                        f_out = (fecha or "").strip()
+                        if fmt_u != "A" or (f_out and f_out.upper() != PAGOS_NA):
+                            return fecha
+                        from app.services.pagos_gmail.parse_campos_comprobante import (
+                            inferir_fecha_pago_mercantil_desde_texto,
+                        )
+
+                        inf = inferir_fecha_pago_mercantil_desde_texto(
+                            f"{referencia}\n{asunto}"
+                        )
+                        return normalizar_fecha_pago(inf) if inf else fecha
+
+                    def _ref_mercantil_inaceptable_pipeline(
+                        formato: str, referencia: str
+                    ) -> bool:
+                        if (formato or "").strip().upper() != "A":
+                            return False
+                        from app.services.pagos_gmail.parse_campos_comprobante import (
+                            es_serial_mercantil_740087,
+                            longitud_serial_mercantil_valida,
+                            numero_operacion_mercantil_solo_dcme,
+                        )
+
+                        r_chk = (referencia or "").strip()
+                        if not r_chk:
+                            return False
+                        if numero_operacion_mercantil_solo_dcme(r_chk):
+                            return True
+                        return bool(
+                            es_serial_mercantil_740087(r_chk)
+                            and not longitud_serial_mercantil_valida(r_chk)
+                        )
+
+                    def _insert_rows_sin_drive(
+                        correo: str,
+                        fecha: str,
+                        cedula: str,
+                        monto: str,
+                        referencia: str,
+                        banco: str,
+                    ) -> Optional[tuple[PagosGmailSyncItem, GmailTemporal]]:
+                        try:
+                            si = PagosGmailSyncItem(
+                                sync_id=sync_id,
+                                correo_origen=correo,
+                                asunto=subject,
+                                banco=banco,
+                                fecha_pago=fecha,
+                                cedula=cedula,
+                                monto=monto,
+                                numero_referencia=referencia,
+                                drive_file_id=None,
+                                drive_link=None,
+                                drive_email_link=None,
+                                sheet_name=sheet_name,
+                                gmail_message_id=(msg_id or "")[:100] or None,
+                                gmail_thread_id=gmail_thread_id,
+                            )
+                            gt = GmailTemporal(
+                                correo_origen=correo,
+                                asunto=subject,
+                                banco=banco,
+                                fecha_pago=fecha,
+                                cedula=cedula,
+                                monto=monto,
+                                numero_referencia=referencia,
+                                drive_file_id=None,
+                                drive_link=None,
+                                drive_email_link=None,
+                                sheet_name=sheet_name,
+                                gmail_message_id=(msg_id or "")[:100] or None,
+                                gmail_thread_id=gmail_thread_id,
+                            )
+                            db.add(si)
+                            db.add(gt)
+                            return (si, gt)
+                        except Exception as db_err:
+                            logger.warning("[PAGOS_GMAIL] Error preparando filas BD: %s", db_err)
+                            return None
+
+                    def _v(x: Optional[str]) -> str:
+                        v = (x or "").strip()
+                        return v if v and v.upper() != "NA" else ""
+
+                    pending: list[dict] = []
+                    committed_comprobante_rows = False
+                    message_scan_bank_hint = ""
+                    candidatos_loop = (
+                        candidatos
+                        if (
+                            remitente_en_clientes
+                            or redig_manual_error_pass
+                            or solo_error_email_inbox
+                            or error_email_rescan
+                            or plan_b_mercantil_bnc_fuera_bd
+                        )
+                        else []
+                    )
+                    candidatos_para_gemini = _filtrar_adjuntos_ruido_pagos_gmail_gemini(
+                        candidatos_loop
+                    )
+                    _body_payload_for_cedula: object = full_payload or payload
+                    body_txt_cedula = ""
+                    try:
+                        if isinstance(_body_payload_for_cedula, dict):
+                            body_txt_cedula = get_message_body_text(
+                                _body_payload_for_cedula
+                            )
+                    except Exception:
+                        body_txt_cedula = ""
+                    cedula_extra_correo_txt = extraer_cedula_desde_asunto_cuerpo_pipeline(
+                        subject, body_txt_cedula
+                    )
+                    if not remitente_en_clientes and cedula_extra_correo_txt:
+                        c_try_asunto = formatear_cedula(cedula_extra_correo_txt)
+                        c_res_asunto = (
+                            resolver_cedula_almacenada_en_clientes(db, c_try_asunto)
+                            if c_try_asunto and c_try_asunto.upper() != PAGOS_NA
+                            else None
+                        )
+                        if c_res_asunto:
+                            remitente_en_clientes = True
+                            logger.info(
+                                "[PAGOS_GMAIL]   Cliente identificado por cédula en asunto/cuerpo (%s), "
+                                "no por email De=%s msg=%s",
+                                formatear_cedula(c_res_asunto)[:24],
+                                sender_lc[:48],
+                                msg_id,
+                            )
+                    for filename, content, mime_type, origen_binario in candidatos_para_gemini:
+                        try:
+                            body_bin = (
+                                content
+                                if isinstance(content, (bytes, bytearray))
+                                else bytes(content)
+                            )
+                            file_digest = hashlib.sha256(body_bin).hexdigest()
+
+                            # Dedupe intra-corrida: si el mismo binario (mismo SHA-256) ya generó una fila
+                            # pending en esta corrida, no llamamos a Gemini ni creamos una segunda fila.
+                            # Salva el caso "mismo comprobante adjunto en varios .eml del lote".
+                            if file_digest in _sha256_pending_seen_in_run:
+                                logger.info(
+                                    "[PAGOS_GMAIL]   Skip duplicado intra-corrida por SHA-256 (mismo binario "
+                                    "ya empaquetado en otra fila pending): %s (msg=%s, file=%s)",
+                                    file_digest[:12], msg_id, filename,
+                                )
+                                continue
+
+                            _t0_gem = perf_counter()
+                            fmt, data = classify_and_extract_pagos_gmail_attachment(
+                                content,
+                                filename,
+                                remitente_correo_header=from_h,
+                                origen_binario=origen_binario,
+                                modo_error_email_ab=usar_extraccion_cedula_imagen_ab,
+                            )
+                            _scan_hint = (data.get("_scan_bank_hint") or "").strip()
+                            if _scan_hint:
+                                message_scan_bank_hint = _scan_hint
+                            _gem_ms = int((perf_counter() - _t0_gem) * 1000)
+                            run_stats["gemini_calls_total"] = int(
+                                run_stats.get("gemini_calls_total", 0) or 0
+                            ) + 1
+                            run_stats["gemini_ms_total"] = int(
+                                run_stats.get("gemini_ms_total", 0) or 0
+                            ) + _gem_ms
+                            run_stats["gemini_ms_max"] = max(
+                                int(run_stats.get("gemini_ms_max", 0) or 0), _gem_ms
+                            )
+                            _scan_pass = str(data.get("_scan_pass") or "").strip().lower()
+                            if _scan_pass == "pass_2":
+                                run_stats["gemini_second_pass_total"] = int(
+                                    run_stats.get("gemini_second_pass_total", 0) or 0
+                                ) + 1
+
+                            if redig_manual_error_pass and fmt not in ("A", "B"):
+                                _none_reason = (data.get("_diag_none_reason") or "sin_detalle").strip()
+                                any_incomplete_or_skipped = True
+                                any_skipped_not_plantilla_o_campos = True
+                                logger.info(
+                                    "[PAGOS_GMAIL] redig MANUAL+ERROR: Gemini no clasifica Mercantil/BNC (formato=%r motivo=%s) — "
+                                    "sin digitalizar %s",
+                                    fmt,
+                                    _none_reason,
+                                    filename,
+                                )
+                                _pipeline_evt(
+                                    EVT_NO_PLANTILLA_GEMINI,
+                                    filename=filename,
+                                    detalle=(f"redig_solo_ab:{fmt!s}:{_none_reason}")[:500],
+                                )
+                                continue
+
+                            if fmt not in PAGOS_GMAIL_FORMATOS_PLANTILLA:
+                                _none_reason = (data.get("_diag_none_reason") or "sin_detalle").strip()
+                                _hint = (data.get("_scan_bank_hint") or "").strip().upper()
+                                _hint_fmt = _fmt_desde_bank_hint_escaneo(_hint)
+                                if _hint_fmt and (
+                                    not plan_b_mercantil_bnc_fuera_bd
+                                    or _hint_fmt in _PLAN_B_FORMATOS_ETIQUETA
+                                ):
+                                    bank_fmts_classified.append(_hint_fmt)
+                                none_reason_counts[_none_reason] = (
+                                    int(none_reason_counts.get(_none_reason, 0)) + 1
+                                )
+                                if _hint:
+                                    _hk = f"{_hint}:{_none_reason}"
+                                    none_reason_hint_counts[_hk] = (
+                                        int(none_reason_hint_counts.get(_hk, 0)) + 1
+                                    )
+                                if _hint or (
+                                    _none_reason
+                                    and _none_reason not in ("sin_plantilla", "json_invalido")
+                                ):
+                                    manual_evidence_for_revision = True
+                                any_incomplete_or_skipped = True
+                                any_skipped_not_plantilla_o_campos = True
+                                logger.warning(
+                                    "[PAGOS_GMAIL]   No es plantilla A/B/C/D/E/F/NR - no BD: %s (motivo=%s)",
+                                    filename,
+                                    _none_reason,
+                                )
+                                _pipeline_evt(
+                                    EVT_NO_PLANTILLA_GEMINI,
+                                    filename=filename,
+                                    detalle=(f"{fmt or '?'}:{_none_reason}")[:500],
+                                )
+                                continue
+                            if (str(data.get("_scan_pass") or "").strip().lower() == "pass_2") and (
+                                fmt in PAGOS_GMAIL_FORMATOS_PLANTILLA
+                            ):
+                                run_stats["gemini_second_pass_hits"] = int(
+                                    run_stats.get("gemini_second_pass_hits", 0) or 0
+                                ) + 1
+
+                            if (
+                                plan_b_mercantil_bnc_fuera_bd
+                                and fmt in PAGOS_GMAIL_FORMATOS_PLANTILLA
+                                and fmt not in ("A", "B", "C")
+                            ):
+                                any_incomplete_or_skipped = True
+                                any_skipped_not_plantilla_o_campos = True
+                                logger.info(
+                                    "[PAGOS_GMAIL]   Plan B: formato %s no aplicable (solo A/B/C) — %s",
+                                    fmt,
+                                    filename,
+                                )
+                                _pipeline_evt(
+                                    EVT_NO_PLANTILLA_GEMINI,
+                                    filename=filename,
+                                    detalle=(f"plan_b_solo_abc:{fmt!s}")[:500],
+                                )
+                                continue
+
+                            bank_fmts_classified.append(fmt)
+
+                            if fmt == "C":
+                                f_raw = _v(data.get("fecha_pago"))
+                                f = normalizar_fecha_pago(f_raw) if f_raw else ""
+                                m = _v(data.get("monto"))
+                                r = normalizar_referencia(_v(data.get("numero_referencia")))
+                                c, c_ok = _cedula_columna_gmail_pipeline(
+                                    db,
+                                    sender_lc,
+                                    subject,
+                                    body_txt_cedula,
+                                    plan_b_activo=plan_b_mercantil_bnc_fuera_bd,
+                                )
+                                if not c_ok:
+                                    if plan_b_mercantil_bnc_fuera_bd and m and r:
+                                        c = PAGOS_GMAIL_ERROR_CEDULA_EMAIL
+                                        c_ok = True
+                                        logger.info(
+                                            "[PAGOS_GMAIL]   Plan B Binance (C): De sin fila en clientes; "
+                                            "columna Cedula=%s (digitalizar sin auto CUOTAS) archivo=%s",
+                                            c,
+                                            filename,
+                                        )
+                                    else:
+                                        any_incomplete_or_skipped = True
+                                        any_cedula_lookup_failed = True
+                                        logger.warning(
+                                            "[PAGOS_GMAIL]   BINANCE (C): columna Cedula=%s — De=%s archivo=%s",
+                                            c,
+                                            sender_lc[:72],
+                                            filename,
+                                        )
+                            elif fmt == "NR":
+                                f = normalizar_fecha_pago(_v(data.get("fecha_pago")))
+                                m = "NR"
+                                r = normalizar_referencia(_v(data.get("numero_referencia")))
+                                c, c_ok = _cedula_columna_gmail_pipeline(
+                                    db,
+                                    sender_lc,
+                                    subject,
+                                    body_txt_cedula,
+                                    plan_b_activo=plan_b_mercantil_bnc_fuera_bd,
+                                )
+                                if not c_ok:
                                     any_incomplete_or_skipped = True
                                     any_cedula_lookup_failed = True
                                     logger.warning(
-                                        "[PAGOS_GMAIL]   BINANCE (C): columna Cedula=%s — De=%s archivo=%s",
+                                        "[PAGOS_GMAIL]   NR (no RapiCredit): columna Cedula=%s — De=%s archivo=%s",
                                         c,
                                         sender_lc[:72],
                                         filename,
                                     )
-                        elif fmt == "NR":
-                            f = normalizar_fecha_pago(_v(data.get("fecha_pago")))
-                            m = "NR"
-                            r = normalizar_referencia(_v(data.get("numero_referencia")))
-                            c, c_ok = _cedula_columna_gmail_pipeline(
-                                db,
-                                sender_lc,
-                                subject,
-                                body_txt_cedula,
-                                plan_b_activo=plan_b_mercantil_bnc_fuera_bd,
-                            )
-                            if not c_ok:
-                                any_incomplete_or_skipped = True
-                                any_cedula_lookup_failed = True
-                                logger.warning(
-                                    "[PAGOS_GMAIL]   NR (no RapiCredit): columna Cedula=%s — De=%s archivo=%s",
-                                    c,
-                                    sender_lc[:72],
-                                    filename,
+                            elif fmt == "G":
+                                f = _completar_fecha_pago_desde_asunto(
+                                    normalizar_fecha_pago(_v(data.get("fecha_pago"))),
+                                    subject,
                                 )
-                        elif fmt == "G":
-                            f = _completar_fecha_pago_desde_asunto(
-                                normalizar_fecha_pago(_v(data.get("fecha_pago"))),
-                                subject,
-                            )
-                            m = _v(data.get("monto"))
-                            r = normalizar_referencia(_v(data.get("numero_referencia")))
-                            c_img = _cedula_desde_imagen_rescan_error_email(data.get("cedula"))
-                            c_res = (
-                                resolver_cedula_almacenada_en_clientes(db, c_img)
-                                if c_img
-                                and c_img
-                                not in (
-                                    PAGOS_GMAIL_ERROR_CEDULA_IMAGEN,
-                                    PAGOS_GMAIL_ERROR_CEDULA_EMAIL,
-                                )
-                                else None
-                            )
-                            if c_res:
-                                c = formatear_cedula(c_res)
-                            else:
-                                c = c_img
-                            c_ok = bool((c or "").strip()) and (c or "").strip().upper() != PAGOS_NA
-                            logger.info(
-                                "[PAGOS_GMAIL]   Recibo (G): columna Cedula desde CI/RIF=%s archivo=%s",
-                                (c or "")[:24],
-                                filename,
-                            )
-                        elif usar_extraccion_cedula_imagen_ab and fmt in ("A", "B"):
-                            f = _completar_fecha_pago_desde_asunto(
-                                normalizar_fecha_pago(_v(data.get("fecha_pago"))),
-                                subject,
-                            )
-                            m = _v(data.get("monto"))
-                            r = normalizar_referencia(_v(data.get("numero_referencia")))
-                            c = _cedula_desde_imagen_rescan_error_email(data.get("cedula"))
-                            if (
-                                plan_b_mercantil_bnc_fuera_bd
-                                and c == PAGOS_GMAIL_ERROR_CEDULA_IMAGEN
-                                and cedula_extra_correo_txt
-                            ):
-                                c_try = formatear_cedula(cedula_extra_correo_txt)
+                                m = _v(data.get("monto"))
+                                r = normalizar_referencia(_v(data.get("numero_referencia")))
+                                c_img = _cedula_desde_imagen_rescan_error_email(data.get("cedula"))
                                 c_res = (
-                                    resolver_cedula_almacenada_en_clientes(db, c_try)
-                                    if c_try and c_try.upper() != PAGOS_NA
+                                    resolver_cedula_almacenada_en_clientes(db, c_img)
+                                    if c_img
+                                    and c_img
+                                    not in (
+                                        PAGOS_GMAIL_ERROR_CEDULA_IMAGEN,
+                                        PAGOS_GMAIL_ERROR_CEDULA_EMAIL,
+                                    )
                                     else None
                                 )
                                 if c_res:
                                     c = formatear_cedula(c_res)
-                                    logger.info(
-                                        "[PAGOS_GMAIL]   Plan B (sin De en clientes) (%s): cédula desde "
-                                        "asunto/cuerpo (cliente)=%s archivo=%s",
+                                else:
+                                    c = c_img
+                                c_ok = bool((c or "").strip()) and (c or "").strip().upper() != PAGOS_NA
+                                logger.info(
+                                    "[PAGOS_GMAIL]   Recibo (G): columna Cedula desde CI/RIF=%s archivo=%s",
+                                    (c or "")[:24],
+                                    filename,
+                                )
+                            elif usar_extraccion_cedula_imagen_ab and fmt in ("A", "B"):
+                                f = _completar_fecha_pago_desde_asunto(
+                                    normalizar_fecha_pago(_v(data.get("fecha_pago"))),
+                                    subject,
+                                )
+                                m = _v(data.get("monto"))
+                                r = normalizar_referencia(_v(data.get("numero_referencia")))
+                                c = _cedula_desde_imagen_rescan_error_email(data.get("cedula"))
+                                if (
+                                    plan_b_mercantil_bnc_fuera_bd
+                                    and c == PAGOS_GMAIL_ERROR_CEDULA_IMAGEN
+                                    and cedula_extra_correo_txt
+                                ):
+                                    c_try = formatear_cedula(cedula_extra_correo_txt)
+                                    c_res = (
+                                        resolver_cedula_almacenada_en_clientes(db, c_try)
+                                        if c_try and c_try.upper() != PAGOS_NA
+                                        else None
+                                    )
+                                    if c_res:
+                                        c = formatear_cedula(c_res)
+                                        logger.info(
+                                            "[PAGOS_GMAIL]   Plan B (sin De en clientes) (%s): cédula desde "
+                                            "asunto/cuerpo (cliente)=%s archivo=%s",
+                                            fmt,
+                                            c[:24] if c else "",
+                                            filename,
+                                        )
+                                c_ok = True
+                                _log_ab = (
+                                    "Plan B (sin De en clientes)"
+                                    if plan_b_mercantil_bnc_fuera_bd
+                                    else "Re-scan ERROR EMAIL"
+                                )
+                                logger.info(
+                                    "[PAGOS_GMAIL]   %s (%s): columna Cedula desde imagen=%s archivo=%s",
+                                    _log_ab,
+                                    fmt,
+                                    c[:24] if c else "",
+                                    filename,
+                                )
+                            else:
+                                f = _completar_fecha_pago_desde_asunto(
+                                    normalizar_fecha_pago(_v(data.get("fecha_pago"))),
+                                    subject,
+                                )
+                                m = _v(data.get("monto"))
+                                r = normalizar_referencia(_v(data.get("numero_referencia")))
+                                c, c_ok = _cedula_columna_gmail_pipeline(
+                                    db,
+                                    sender_lc,
+                                    subject,
+                                    body_txt_cedula,
+                                    plan_b_activo=plan_b_mercantil_bnc_fuera_bd,
+                                )
+                                if not c_ok:
+                                    any_incomplete_or_skipped = True
+                                    any_cedula_lookup_failed = True
+                                    logger.warning(
+                                        "[PAGOS_GMAIL]   Plantilla banco imagen A/B/D/E/F (%s): columna Cedula=%s — De=%s archivo=%s",
                                         fmt,
-                                        c[:24] if c else "",
+                                        c,
+                                        sender_lc[:72],
                                         filename,
                                     )
-                            c_ok = True
-                            _log_ab = (
-                                "Plan B (sin De en clientes)"
-                                if plan_b_mercantil_bnc_fuera_bd
-                                else "Re-scan ERROR EMAIL"
-                            )
-                            logger.info(
-                                "[PAGOS_GMAIL]   %s (%s): columna Cedula desde imagen=%s archivo=%s",
-                                _log_ab,
-                                fmt,
-                                c[:24] if c else "",
-                                filename,
-                            )
-                        else:
-                            f = _completar_fecha_pago_desde_asunto(
-                                normalizar_fecha_pago(_v(data.get("fecha_pago"))),
-                                subject,
-                            )
-                            m = _v(data.get("monto"))
-                            r = normalizar_referencia(_v(data.get("numero_referencia")))
-                            c, c_ok = _cedula_columna_gmail_pipeline(
-                                db,
-                                sender_lc,
-                                subject,
-                                body_txt_cedula,
-                                plan_b_activo=plan_b_mercantil_bnc_fuera_bd,
-                            )
+                            if _cedula_forzada_lote:
+                                # Lote IT Master: la cédula validada desde el asunto del correo maestro
+                                # reemplaza cualquier cédula inferida por imagen/remitente y debe hacerlo
+                                # ANTES del gate `if not c_ok`, para que formatos BNC/Mercantil/etc. no
+                                # queden descartados como ERROR EMAIL por venir de cobranza@...
+                                c = _cedula_forzada_lote
+                                c_ok = True
+                            # Sin cédula de cliente no hay fila Excel/BD (la literal ERROR EMAIL no se exporta).
                             if not c_ok:
                                 any_incomplete_or_skipped = True
                                 any_cedula_lookup_failed = True
-                                logger.warning(
-                                    "[PAGOS_GMAIL]   Plantilla banco imagen A/B/D/E/F (%s): columna Cedula=%s — De=%s archivo=%s",
-                                    fmt,
-                                    c,
-                                    sender_lc[:72],
-                                    filename,
-                                )
-                        if _cedula_forzada_lote:
-                            # Lote IT Master: la cédula validada desde el asunto del correo maestro
-                            # reemplaza cualquier cédula inferida por imagen/remitente y debe hacerlo
-                            # ANTES del gate `if not c_ok`, para que formatos BNC/Mercantil/etc. no
-                            # queden descartados como ERROR EMAIL por venir de cobranza@...
-                            c = _cedula_forzada_lote
-                            c_ok = True
-                        # Sin cédula de cliente no hay fila Excel/BD (la literal ERROR EMAIL no se exporta).
-                        if not c_ok:
-                            any_incomplete_or_skipped = True
-                            any_cedula_lookup_failed = True
-                            continue
-                        f = _completar_fecha_mercantil_pipeline(fmt, f, r, subject)
-                        if _ref_mercantil_inaceptable_pipeline(fmt, r):
-                            any_incomplete_or_skipped = True
-                            any_skipped_not_plantilla_o_campos = True
-                            logger.warning(
-                                "[PAGOS_GMAIL]   Mercantil A ref inválida (DCME solo o serial truncado) - no BD: %s ref=%s",
-                                filename,
-                                (r or "")[:40],
-                            )
-                            _pipeline_evt(
-                                EVT_CAMPOS_INCOMPLETOS_PLANTILLA,
-                                filename=filename,
-                                detalle="A_serial_invalido",
-                            )
-                            continue
-                        if fmt == "NR":
-                            if not _campos_completos_nr(c, m):
+                                continue
+                            f = _completar_fecha_mercantil_pipeline(fmt, f, r, subject)
+                            if _ref_mercantil_inaceptable_pipeline(fmt, r):
                                 any_incomplete_or_skipped = True
                                 any_skipped_not_plantilla_o_campos = True
                                 logger.warning(
-                                    "[PAGOS_GMAIL]   Formato NR pero fila incompleta (monto!=NR o cedula vacia) - no BD: %s",
+                                    "[PAGOS_GMAIL]   Mercantil A ref inválida (DCME solo o serial truncado) - no BD: %s ref=%s",
+                                    filename,
+                                    (r or "")[:40],
+                                )
+                                _pipeline_evt(
+                                    EVT_CAMPOS_INCOMPLETOS_PLANTILLA,
+                                    filename=filename,
+                                    detalle="A_serial_invalido",
+                                )
+                                continue
+                            if fmt == "NR":
+                                if not _campos_completos_nr(c, m):
+                                    any_incomplete_or_skipped = True
+                                    any_skipped_not_plantilla_o_campos = True
+                                    logger.warning(
+                                        "[PAGOS_GMAIL]   Formato NR pero fila incompleta (monto!=NR o cedula vacia) - no BD: %s",
+                                        filename,
+                                    )
+                                    _pipeline_evt(
+                                        EVT_CAMPOS_INCOMPLETOS_PLANTILLA,
+                                        filename=filename,
+                                        detalle="NR",
+                                    )
+                                    continue
+                            elif not _campos_completos_plantilla(fmt, f, c, m, r):
+                                any_incomplete_or_skipped = True
+                                any_skipped_not_plantilla_o_campos = True
+                                manual_evidence_for_revision = True
+                                logger.warning(
+                                    "[PAGOS_GMAIL]   Plantilla %s pero columnas incompletas - no BD: %s",
+                                    fmt,
                                     filename,
                                 )
                                 _pipeline_evt(
                                     EVT_CAMPOS_INCOMPLETOS_PLANTILLA,
                                     filename=filename,
-                                    detalle="NR",
+                                    detalle=(fmt or "?")[:80],
                                 )
                                 continue
-                        elif not _campos_completos_plantilla(fmt, f, c, m, r):
+
+                            banco_excel = resolve_banco_para_excel_pagos_gmail(
+                                fmt,
+                                (data.get("banco") or "").strip(),
+                                default_a=PAGOS_GMAIL_BANCO_IMAGEN_1,
+                                default_b=PAGOS_GMAIL_BANCO_IMAGEN_2,
+                                default_c=PAGOS_GMAIL_BANCO_IMAGEN_3,
+                                default_d=PAGOS_GMAIL_BANCO_IMAGEN_4,
+                                default_e=PAGOS_GMAIL_BANCO_BANCAMIGA,
+                                default_f=PAGOS_GMAIL_BANCO_TESORO,
+                                default_g=PAGOS_GMAIL_BANCO_RECIBO,
+                            )
+                            # Re-escaneo A/B (solo_error / redig / error_email_rescan): cédula ilegible -> literal "ERROR".
+                            # _campos_completos acepta "ERROR" como texto no vacío; sin esto, fully_digitized_email=True
+                            # y se quita ERROR EMAIL en redig aunque la cédula no sea válida.
+                            if (
+                                usar_extraccion_cedula_imagen_ab
+                                and fmt in ("A", "B")
+                                and c == PAGOS_GMAIL_ERROR_CEDULA_IMAGEN
+                            ):
+                                any_incomplete_or_skipped = True
+                            # Lote IT Master: la cedula del cliente la dicta el asunto del maestro,
+                            # no la inferida por Gemini desde la imagen ni por el remitente. Esto
+                            # cubre TODAS las plantillas (A/B/C/D/E/F/NR) sin tocar el resto del flujo.
+                            if _cedula_forzada_lote:
+                                c = _cedula_forzada_lote
+                            from app.services.pagos_gmail.parse_campos_comprobante import (
+                                referencia_duplicada_en_memoria_o_bd,
+                            )
+
+                            if referencia_duplicada_en_memoria_o_bd(
+                                r,
+                                monto=m,
+                                cedula=c,
+                                fecha=f,
+                                lote_previo=_refs_registradas_corrida,
+                                db=db,
+                            ):
+                                logger.info(
+                                    "[PAGOS_GMAIL]   Skip duplicado intra-corrida por referencia "
+                                    "(evasión sufijo/prefijo o ya en cartera/reportados): ref=%s monto=%s "
+                                    "archivo=%s msg=%s",
+                                    (r or "")[:24],
+                                    (m or "")[:16],
+                                    filename,
+                                    msg_id,
+                                )
+                                continue
+                            pending.append(
+                                {
+                                    "fmt": fmt,
+                                    "f": f,
+                                    "c": c,
+                                    "m": m,
+                                    "r": r,
+                                    "monto_operacion": _v(data.get("monto_operacion")),
+                                    "banco_excel": banco_excel,
+                                    "filename": filename,
+                                    "content": content,
+                                    "mime_type": mime_type,
+                                    "sha256": file_digest,
+                                }
+                            )
+                            _refs_registradas_corrida.append(
+                                {"r": r, "m": m, "c": c, "f": f}
+                            )
+                            _sha256_pending_seen_in_run.add(file_digest)
+                        except Exception as e:
+                            logger.warning("[PAGOS_GMAIL]   Error procesando %s: %s", filename, e)
+                            _pipeline_evt(
+                                EVT_ERROR_PROCESAR_ADJUNTO,
+                                filename=filename,
+                                detalle=str(e)[:800],
+                            )
                             any_incomplete_or_skipped = True
                             any_skipped_not_plantilla_o_campos = True
                             manual_evidence_for_revision = True
-                            logger.warning(
-                                "[PAGOS_GMAIL]   Plantilla %s pero columnas incompletas - no BD: %s",
-                                fmt,
-                                filename,
+
+                    if redig_manual_error_pass and candidatos and not pending:
+                        logger.info(
+                            "[PAGOS_GMAIL] redig MANUAL+ERROR: sin fila Mercantil/BNC valida tras Gemini "
+                            "(o dedupe/campos; candidatos=%d) msg=%s",
+                            len(candidatos),
+                            msg_id,
+                        )
+                        if was_unread:
+                            mark_as_read(gmail_svc, msg_id)
+                        emails_ok += 1
+                        sync.emails_processed = emails_ok
+                        sync.files_processed = files_ok
+                        db.commit()
+                        continue
+
+                    rows_pairs: list[tuple[PagosGmailSyncItem, GmailTemporal, dict]] = []
+                    if pending:
+                        for p in pending:
+                            correo_origen_item = (
+                                PAGOS_GMAIL_LOTE_REMITENTE_IT_MASTER
+                                if _cedula_forzada_lote
+                                else sender
                             )
-                            _pipeline_evt(
-                                EVT_CAMPOS_INCOMPLETOS_PLANTILLA,
-                                filename=filename,
-                                detalle=(fmt or "?")[:80],
+                            inserted = _insert_rows_sin_drive(
+                                correo_origen_item,
+                                p["f"],
+                                p["c"],
+                                p["m"],
+                                p["r"],
+                                p["banco_excel"],
                             )
-                            continue
+                            if inserted is None:
+                                db.rollback()
+                                any_incomplete_or_skipped = True
+                                rows_pairs = []
+                                break
+                            rows_pairs.append((inserted[0], inserted[1], p))
 
-                        banco_excel = resolve_banco_para_excel_pagos_gmail(
-                            fmt,
-                            (data.get("banco") or "").strip(),
-                            default_a=PAGOS_GMAIL_BANCO_IMAGEN_1,
-                            default_b=PAGOS_GMAIL_BANCO_IMAGEN_2,
-                            default_c=PAGOS_GMAIL_BANCO_IMAGEN_3,
-                            default_d=PAGOS_GMAIL_BANCO_IMAGEN_4,
-                            default_e=PAGOS_GMAIL_BANCO_BANCAMIGA,
-                            default_f=PAGOS_GMAIL_BANCO_TESORO,
-                            default_g=PAGOS_GMAIL_BANCO_RECIBO,
-                        )
-                        # Re-escaneo A/B (solo_error / redig / error_email_rescan): cédula ilegible -> literal "ERROR".
-                        # _campos_completos acepta "ERROR" como texto no vacío; sin esto, fully_digitized_email=True
-                        # y se quita ERROR EMAIL en redig aunque la cédula no sea válida.
-                        if (
-                            usar_extraccion_cedula_imagen_ab
-                            and fmt in ("A", "B")
-                            and c == PAGOS_GMAIL_ERROR_CEDULA_IMAGEN
-                        ):
-                            any_incomplete_or_skipped = True
-                        # Lote IT Master: la cedula del cliente la dicta el asunto del maestro,
-                        # no la inferida por Gemini desde la imagen ni por el remitente. Esto
-                        # cubre TODAS las plantillas (A/B/C/D/E/F/NR) sin tocar el resto del flujo.
-                        if _cedula_forzada_lote:
-                            c = _cedula_forzada_lote
-                        from app.services.pagos_gmail.parse_campos_comprobante import (
-                            referencia_duplicada_en_memoria_o_bd,
-                        )
-
-                        if referencia_duplicada_en_memoria_o_bd(
-                            r,
-                            monto=m,
-                            cedula=c,
-                            fecha=f,
-                            lote_previo=_refs_registradas_corrida,
-                            db=db,
-                        ):
-                            logger.info(
-                                "[PAGOS_GMAIL]   Skip duplicado intra-corrida por referencia "
-                                "(evasión sufijo/prefijo o ya en cartera/reportados): ref=%s monto=%s "
-                                "archivo=%s msg=%s",
-                                (r or "")[:24],
-                                (m or "")[:16],
-                                filename,
-                                msg_id,
-                            )
-                            continue
-                        pending.append(
-                            {
-                                "fmt": fmt,
-                                "f": f,
-                                "c": c,
-                                "m": m,
-                                "r": r,
-                                "monto_operacion": _v(data.get("monto_operacion")),
-                                "banco_excel": banco_excel,
-                                "filename": filename,
-                                "content": content,
-                                "mime_type": mime_type,
-                                "sha256": file_digest,
-                            }
-                        )
-                        _refs_registradas_corrida.append(
-                            {"r": r, "m": m, "c": c, "f": f}
-                        )
-                        _sha256_pending_seen_in_run.add(file_digest)
-                    except Exception as e:
-                        logger.warning("[PAGOS_GMAIL]   Error procesando %s: %s", filename, e)
-                        _pipeline_evt(
-                            EVT_ERROR_PROCESAR_ADJUNTO,
-                            filename=filename,
-                            detalle=str(e)[:800],
-                        )
-                        any_incomplete_or_skipped = True
-                        any_skipped_not_plantilla_o_campos = True
-                        manual_evidence_for_revision = True
-
-                if redig_manual_error_pass and candidatos and not pending:
-                    logger.info(
-                        "[PAGOS_GMAIL] redig MANUAL+ERROR: sin fila Mercantil/BNC valida tras Gemini "
-                        "(o dedupe/campos; candidatos=%d) msg=%s",
-                        len(candidatos),
-                        msg_id,
-                    )
-                    if was_unread:
-                        mark_as_read(gmail_svc, msg_id)
-                    emails_ok += 1
-                    sync.emails_processed = emails_ok
-                    sync.files_processed = files_ok
-                    db.commit()
-                    continue
-
-                rows_pairs: list[tuple[PagosGmailSyncItem, GmailTemporal, dict]] = []
-                if pending:
-                    for p in pending:
-                        correo_origen_item = (
-                            PAGOS_GMAIL_LOTE_REMITENTE_IT_MASTER
-                            if _cedula_forzada_lote
-                            else sender
-                        )
-                        inserted = _insert_rows_sin_drive(
-                            correo_origen_item,
-                            p["f"],
-                            p["c"],
-                            p["m"],
-                            p["r"],
-                            p["banco_excel"],
-                        )
-                        if inserted is None:
-                            db.rollback()
-                            any_incomplete_or_skipped = True
-                            rows_pairs = []
-                            break
-                        rows_pairs.append((inserted[0], inserted[1], p))
-
-                    if rows_pairs:
-                        try:
-                            db.flush()
-                        except Exception as flush_err:
-                            logger.warning(
-                                "[PAGOS_GMAIL] Error flush filas sync/temporal antes de comprobante: %s",
-                                flush_err,
-                            )
-                            db.rollback()
-                            any_incomplete_or_skipped = True
-                            rows_pairs = []
-                        else:
-                            _label_ids_len_before_comprobante = len(label_ids_for_message)
-                            comprobante_resueltos: list[tuple[str, str, dict, PagosGmailSyncItem]] = []
-                            persist_ok = True
-                            for si, gt, p in rows_pairs:
-                                sh_raw = p.get("sha256")
-                                sh_key: Optional[str] = None
-                                if isinstance(sh_raw, str) and len(sh_raw.strip()) == 64:
-                                    cand = sh_raw.strip().lower()
-                                    if all(c in "0123456789abcdef" for c in cand):
-                                        sh_key = cand
-                                persisted = persistir_comprobante_gmail_en_bd(
-                                    db,
-                                    p["content"],
-                                    p["mime_type"],
-                                    sha256_hex=sh_key,
-                                    reuse_por_sha256=comprobante_reuse_por_sha256,
+                        if rows_pairs:
+                            try:
+                                db.flush()
+                            except Exception as flush_err:
+                                logger.warning(
+                                    "[PAGOS_GMAIL] Error flush filas sync/temporal antes de comprobante: %s",
+                                    flush_err,
                                 )
-                                if not persisted:
-                                    persist_ok = False
-                                    logger.warning(
-                                        "[PAGOS_GMAIL]   No se pudo guardar comprobante en BD — "
-                                        "rollback de filas de este correo: %s",
+                                db.rollback()
+                                any_incomplete_or_skipped = True
+                                rows_pairs = []
+                            else:
+                                _label_ids_len_before_comprobante = len(label_ids_for_message)
+                                comprobante_resueltos: list[tuple[str, str, dict, PagosGmailSyncItem]] = []
+                                persist_ok = True
+                                for si, gt, p in rows_pairs:
+                                    sh_raw = p.get("sha256")
+                                    sh_key: Optional[str] = None
+                                    if isinstance(sh_raw, str) and len(sh_raw.strip()) == 64:
+                                        cand = sh_raw.strip().lower()
+                                        if all(c in "0123456789abcdef" for c in cand):
+                                            sh_key = cand
+                                    persisted = persistir_comprobante_gmail_en_bd(
+                                        db,
+                                        p["content"],
+                                        p["mime_type"],
+                                        sha256_hex=sh_key,
+                                        reuse_por_sha256=comprobante_reuse_por_sha256,
+                                    )
+                                    if not persisted:
+                                        persist_ok = False
+                                        logger.warning(
+                                            "[PAGOS_GMAIL]   No se pudo guardar comprobante en BD — "
+                                            "rollback de filas de este correo: %s",
+                                            p["filename"],
+                                        )
+                                        break
+                                    _uid, link_url = persisted
+                                    comprobante_resueltos.append(
+                                        (_uid, link_url or "", p, si)
+                                    )
+                                    logger.info(
+                                        "[PAGOS_GMAIL]   Comprobante en sesion OK: %s -> %s",
+                                        p["filename"],
+                                        (link_url or "")[:72],
+                                    )
+                                    si.drive_file_id = None
+                                    si.drive_link = link_url or None
+                                    si.drive_email_link = None
+                                    gt.drive_file_id = None
+                                    gt.drive_link = link_url or None
+                                    gt.drive_email_link = None
+                                    fmt = p["fmt"]
+                                    id_a, id_b, id_c, id_d, id_e, id_f, id_g = get_or_create_pagos_gmail_plantilla_label_ids(
+                                        gmail_svc, plantilla_label_cache
+                                    )
+                                    if fmt == "A":
+                                        label_id = id_a
+                                        etiqueta_nombre = PAGOS_GMAIL_LABEL_IMAGEN_1
+                                    elif fmt == "B":
+                                        label_id = id_b
+                                        etiqueta_nombre = PAGOS_GMAIL_LABEL_IMAGEN_2
+                                    elif fmt == "D":
+                                        label_id = id_d
+                                        etiqueta_nombre = PAGOS_GMAIL_LABEL_IMAGEN_4
+                                    elif fmt == "C":
+                                        label_id = id_c
+                                        etiqueta_nombre = PAGOS_GMAIL_LABEL_IMAGEN_3
+                                    elif fmt == "E":
+                                        label_id = id_e
+                                        etiqueta_nombre = PAGOS_GMAIL_LABEL_BANCAMIGA
+                                    elif fmt == "F":
+                                        label_id = id_f
+                                        etiqueta_nombre = PAGOS_GMAIL_LABEL_TESORO
+                                    elif fmt == "G":
+                                        label_id = id_g
+                                        etiqueta_nombre = PAGOS_GMAIL_LABEL_RECIBO
+                                    elif fmt == "NR":
+                                        label_id = None
+                                        etiqueta_nombre = "NR"
+                                    else:
+                                        label_id = None
+                                        etiqueta_nombre = fmt or "?"
+                                    if label_id and (
+                                        remitente_en_clientes
+                                        or redig_manual_error_pass
+                                        or solo_error_email_inbox
+                                        or plan_b_mercantil_bnc_fuera_bd
+                                    ):
+                                        label_ids_for_message.append(label_id)
+                                    logger.info(
+                                        "[PAGOS_GMAIL]   Digitalizado OK (%s); etiquetas plantilla solo si 100%% candidatos: %s",
+                                        etiqueta_nombre,
                                         p["filename"],
                                     )
-                                    break
-                                _uid, link_url = persisted
-                                comprobante_resueltos.append(
-                                    (_uid, link_url or "", p, si)
-                                )
-                                logger.info(
-                                    "[PAGOS_GMAIL]   Comprobante en sesion OK: %s -> %s",
-                                    p["filename"],
-                                    (link_url or "")[:72],
-                                )
-                                si.drive_file_id = None
-                                si.drive_link = link_url or None
-                                si.drive_email_link = None
-                                gt.drive_file_id = None
-                                gt.drive_link = link_url or None
-                                gt.drive_email_link = None
-                                fmt = p["fmt"]
-                                id_a, id_b, id_c, id_d, id_e, id_f, id_g = get_or_create_pagos_gmail_plantilla_label_ids(
-                                    gmail_svc, plantilla_label_cache
-                                )
-                                if fmt == "A":
-                                    label_id = id_a
-                                    etiqueta_nombre = PAGOS_GMAIL_LABEL_IMAGEN_1
-                                elif fmt == "B":
-                                    label_id = id_b
-                                    etiqueta_nombre = PAGOS_GMAIL_LABEL_IMAGEN_2
-                                elif fmt == "D":
-                                    label_id = id_d
-                                    etiqueta_nombre = PAGOS_GMAIL_LABEL_IMAGEN_4
-                                elif fmt == "C":
-                                    label_id = id_c
-                                    etiqueta_nombre = PAGOS_GMAIL_LABEL_IMAGEN_3
-                                elif fmt == "E":
-                                    label_id = id_e
-                                    etiqueta_nombre = PAGOS_GMAIL_LABEL_BANCAMIGA
-                                elif fmt == "F":
-                                    label_id = id_f
-                                    etiqueta_nombre = PAGOS_GMAIL_LABEL_TESORO
-                                elif fmt == "G":
-                                    label_id = id_g
-                                    etiqueta_nombre = PAGOS_GMAIL_LABEL_RECIBO
-                                elif fmt == "NR":
-                                    label_id = None
-                                    etiqueta_nombre = "NR"
-                                else:
-                                    label_id = None
-                                    etiqueta_nombre = fmt or "?"
-                                if label_id and (
-                                    remitente_en_clientes
-                                    or redig_manual_error_pass
-                                    or solo_error_email_inbox
-                                    or plan_b_mercantil_bnc_fuera_bd
-                                ):
-                                    label_ids_for_message.append(label_id)
-                                logger.info(
-                                    "[PAGOS_GMAIL]   Digitalizado OK (%s); etiquetas plantilla solo si 100%% candidatos: %s",
-                                    etiqueta_nombre,
-                                    p["filename"],
-                                )
 
-                            if not persist_ok:
-                                db.rollback()
-                                del label_ids_for_message[_label_ids_len_before_comprobante:]
-                                any_incomplete_or_skipped = True
-                            else:
-                                try:
-                                    db.commit()
-                                    committed_comprobante_rows = True
-                                    logger.info(
-                                        "[PAGOS_GMAIL]   Commit BD: %d fila(s) sync/temporal + comprobante enlazado",
-                                        len(rows_pairs),
-                                    )
-                                    for uid, link_url, p, si in comprobante_resueltos:
-                                        sh_raw = p.get("sha256")
-                                        if isinstance(sh_raw, str) and len(sh_raw.strip()) == 64:
-                                            k = sh_raw.strip().lower()
-                                            if all(c in "0123456789abcdef" for c in k):
-                                                comprobante_reuse_por_sha256[k] = (uid, link_url)
-                                        files_ok += 1
-                                        had_complete_digitalization = True
-                                        fmt_row = p["fmt"]
-                                        if fmt_row in ("A", "B", "C", "D", "E", "F", "NR"):
-                                            bank_fmts_digitized.append(fmt_row)
-                                        if es_plantilla_banco_abcd(fmt_row):
-                                            try:
-                                                dup_doc = (
-                                                    item_sync_abcd_candidato_revision_duplicado(
-                                                        fmt=fmt_row,
-                                                        banco_excel=p.get(
-                                                            "banco_excel"
-                                                        ),
-                                                        referencia=p.get("r"),
-                                                        db=db,
-                                                    )
-                                                )
-                                                logger.info(
-                                                    "[PAGOS_GMAIL] [REGLA_ABCD] Plantilla %s archivo=%s | %s | "
-                                                    "serial_ya_en_pagos_o_pagos_con_errores=%s",
-                                                    fmt_row,
-                                                    p.get("filename"),
-                                                    resumen_log_linea_plantilla_abcd(
-                                                        duplicado_documento=dup_doc,
-                                                        revision_manual_monto=monto_gmail_sync_requiere_revision_manual_usd(
-                                                            p.get("m")
-                                                        ),
-                                                    ),
-                                                    dup_doc,
-                                                )
-                                                sid = getattr(si, "id", None)
-                                                ssync = getattr(si, "sync_id", None)
-                                                if dup_doc:
-                                                    registrar_traza_gmail_abcd_cuotas_evento(
-                                                        db,
-                                                        sync_id=ssync,
-                                                        sync_item_id=sid,
-                                                        plantilla_fmt=fmt_row,
-                                                        cedula=p.get("c"),
-                                                        numero_referencia=p.get("r"),
-                                                        banco_excel=p.get("banco_excel"),
-                                                        archivo_adjunto=p.get("filename"),
-                                                        comprobante_imagen_id=uid,
-                                                        duplicado_documento=True,
-                                                        etapa_final="OMITIDO_DUPLICADO",
-                                                    )
-                                                elif monto_gmail_sync_requiere_revision_manual_usd(
-                                                    p.get("m")
-                                                ):
-                                                    registrar_traza_gmail_abcd_cuotas_evento(
-                                                        db,
-                                                        sync_id=ssync,
-                                                        sync_item_id=sid,
-                                                        plantilla_fmt=fmt_row,
-                                                        cedula=p.get("c"),
-                                                        numero_referencia=p.get("r"),
-                                                        banco_excel=p.get("banco_excel"),
-                                                        archivo_adjunto=p.get("filename"),
-                                                        comprobante_imagen_id=uid,
-                                                        duplicado_documento=False,
-                                                        etapa_final="OMITIDO_NEGOCIO",
-                                                        motivo="monto_umbral_revision_manual",
-                                                        detalle="Monto >= 1000",
-                                                    )
-                                                else:
-                                                    res_abcd = (
-                                                        crear_pago_conciliado_y_aplicar_cuotas_gmail_plantilla_abcd(
-                                                            db,
-                                                            cedula_columna=p.get("c")
-                                                            or "",
-                                                            fecha_pago_str=p.get("f")
-                                                            or "",
-                                                            monto_str=p.get("m") or "",
-                                                            numero_referencia=p.get("r")
-                                                            or "",
-                                                            institucion_bancaria=p.get(
+                                if not persist_ok:
+                                    db.rollback()
+                                    del label_ids_for_message[_label_ids_len_before_comprobante:]
+                                    any_incomplete_or_skipped = True
+                                else:
+                                    try:
+                                        db.commit()
+                                        committed_comprobante_rows = True
+                                        logger.info(
+                                            "[PAGOS_GMAIL]   Commit BD: %d fila(s) sync/temporal + comprobante enlazado",
+                                            len(rows_pairs),
+                                        )
+                                        for uid, link_url, p, si in comprobante_resueltos:
+                                            sh_raw = p.get("sha256")
+                                            if isinstance(sh_raw, str) and len(sh_raw.strip()) == 64:
+                                                k = sh_raw.strip().lower()
+                                                if all(c in "0123456789abcdef" for c in k):
+                                                    comprobante_reuse_por_sha256[k] = (uid, link_url)
+                                            files_ok += 1
+                                            had_complete_digitalization = True
+                                            fmt_row = p["fmt"]
+                                            if fmt_row in ("A", "B", "C", "D", "E", "F", "NR"):
+                                                bank_fmts_digitized.append(fmt_row)
+                                            if es_plantilla_banco_abcd(fmt_row):
+                                                try:
+                                                    dup_doc = (
+                                                        item_sync_abcd_candidato_revision_duplicado(
+                                                            fmt=fmt_row,
+                                                            banco_excel=p.get(
                                                                 "banco_excel"
                                                             ),
-                                                            link_comprobante=link_url,
-                                                            fmt=fmt_row,
-                                                            filename=p.get("filename"),
-                                                            sync_id=ssync,
-                                                            sync_item_id=sid,
-                                                            comprobante_imagen_id=uid,
+                                                            referencia=p.get("r"),
+                                                            db=db,
                                                         )
                                                     )
-                                                    if res_abcd.get("ok"):
-                                                        logger.info(
-                                                            "[PAGOS_GMAIL] [ABCD_PAGO] Alta pagos+cuotas OK: %s",
-                                                            res_abcd,
+                                                    logger.info(
+                                                        "[PAGOS_GMAIL] [REGLA_ABCD] Plantilla %s archivo=%s | %s | "
+                                                        "serial_ya_en_pagos_o_pagos_con_errores=%s",
+                                                        fmt_row,
+                                                        p.get("filename"),
+                                                        resumen_log_linea_plantilla_abcd(
+                                                            duplicado_documento=dup_doc,
+                                                            revision_manual_monto=monto_gmail_sync_requiere_revision_manual_usd(
+                                                                p.get("m")
+                                                            ),
+                                                        ),
+                                                        dup_doc,
+                                                    )
+                                                    sid = getattr(si, "id", None)
+                                                    ssync = getattr(si, "sync_id", None)
+                                                    if dup_doc:
+                                                        registrar_traza_gmail_abcd_cuotas_evento(
+                                                            db,
+                                                            sync_id=ssync,
+                                                            sync_item_id=sid,
+                                                            plantilla_fmt=fmt_row,
+                                                            cedula=p.get("c"),
+                                                            numero_referencia=p.get("r"),
+                                                            banco_excel=p.get("banco_excel"),
+                                                            archivo_adjunto=p.get("filename"),
+                                                            comprobante_imagen_id=uid,
+                                                            duplicado_documento=True,
+                                                            etapa_final="OMITIDO_DUPLICADO",
                                                         )
-                                                        if (
-                                                            str(res_abcd.get("etapa_final") or "")
-                                                            == "CUOTAS_OK"
-                                                        ):
-                                                            bank_fmts_cuotas_ok.append(fmt_row)
-                                                            _gt_del_id = None
-                                                            for _sii, _gt, _pp in rows_pairs:
-                                                                if (
-                                                                    getattr(_sii, "id", None)
-                                                                    is not None
-                                                                    and getattr(si, "id", None)
-                                                                    is not None
-                                                                    and int(_sii.id) == int(si.id)
-                                                                ):
-                                                                    _gt_del_id = getattr(
-                                                                        _gt, "id", None
-                                                                    )
-                                                                    break
-                                                            if _gt_del_id is not None:
-                                                                try:
-                                                                    db.execute(
-                                                                        delete(GmailTemporal).where(
-                                                                            GmailTemporal.id
-                                                                            == int(_gt_del_id)
-                                                                        )
-                                                                    )
-                                                                    db.commit()
-                                                                    logger.info(
-                                                                        "[PAGOS_GMAIL] [ABCD_PAGO] "
-                                                                        "gmail_temporal id=%s eliminada "
-                                                                        "(CUOTAS_OK, pago en BD)",
-                                                                        _gt_del_id,
-                                                                    )
-                                                                except Exception as _gt_exc:
-                                                                    logger.warning(
-                                                                        "[PAGOS_GMAIL] [ABCD_PAGO] "
-                                                                        "No se pudo eliminar gmail_temporal id=%s: %s",
-                                                                        _gt_del_id,
-                                                                        _gt_exc,
-                                                                    )
-                                                                    try:
-                                                                        pending_gmail_temporal_delete_ids.add(
-                                                                            int(_gt_del_id)
-                                                                        )
-                                                                    except Exception:
-                                                                        pass
-                                                                    try:
-                                                                        db.rollback()
-                                                                    except Exception:
-                                                                        pass
-                                                        else:
-                                                            logger.warning(
-                                                                "[PAGOS_GMAIL] [ABCD_PAGO] pago_id=%s sin aplicación a cuotas "
-                                                                "(etapa=%s): permanece en revisión manual",
-                                                                res_abcd.get("pago_id"),
-                                                                res_abcd.get("etapa_final"),
-                                                            )
-                                                    else:
-                                                        logger.warning(
-                                                            "[PAGOS_GMAIL] [ABCD_PAGO] Sin alta automatica: "
-                                                            "motivo=%s detalle=%s",
-                                                            res_abcd.get("motivo"),
-                                                            (res_abcd.get("detalle") or "")[:160],
-                                                        )
+                                                    elif monto_gmail_sync_requiere_revision_manual_usd(
+                                                        p.get("m")
+                                                    ):
                                                         registrar_traza_gmail_abcd_cuotas_evento(
                                                             db,
                                                             sync_id=ssync,
@@ -2262,137 +2169,41 @@ def run_pipeline(
                                                             comprobante_imagen_id=uid,
                                                             duplicado_documento=False,
                                                             etapa_final="OMITIDO_NEGOCIO",
-                                                            motivo=str(
-                                                                res_abcd.get("motivo") or ""
-                                                            )[:80]
-                                                            or None,
-                                                            detalle=str(
-                                                                res_abcd.get("detalle") or ""
-                                                            )[:4000]
-                                                            or None,
-                                                        )
-                                            except Exception as dup_exc:
-                                                logger.warning(
-                                                    "[PAGOS_GMAIL] [REGLA_ABCD] Evaluacion duplicado documento: %s",
-                                                    dup_exc,
-                                                )
-                                                try:
-                                                    registrar_traza_gmail_abcd_cuotas_evento(
-                                                        db,
-                                                        sync_id=getattr(
-                                                            si, "sync_id", None
-                                                        ),
-                                                        sync_item_id=getattr(si, "id", None),
-                                                        plantilla_fmt=fmt_row,
-                                                        cedula=p.get("c"),
-                                                        numero_referencia=p.get("r"),
-                                                        banco_excel=p.get("banco_excel"),
-                                                        archivo_adjunto=p.get("filename"),
-                                                        comprobante_imagen_id=uid,
-                                                        duplicado_documento=False,
-                                                        etapa_final="ERROR_PIPELINE",
-                                                        motivo="excepcion",
-                                                        detalle=str(dup_exc)[:4000],
-                                                    )
-                                                except Exception:
-                                                    pass
-                                        elif fmt_row == "NR":
-                                            try:
-                                                m_op = (p.get("monto_operacion") or "").strip()
-                                                if (
-                                                    not m_op
-                                                    or m_op.upper() == PAGOS_NA
-                                                    or m_op.upper() == "NR"
-                                                ):
-                                                    registrar_traza_gmail_abcd_cuotas_evento(
-                                                        db,
-                                                        sync_id=getattr(
-                                                            si, "sync_id", None
-                                                        ),
-                                                        sync_item_id=getattr(si, "id", None),
-                                                        plantilla_fmt="NR",
-                                                        cedula=p.get("c"),
-                                                        numero_referencia=p.get("r"),
-                                                        banco_excel=p.get("banco_excel"),
-                                                        archivo_adjunto=p.get("filename"),
-                                                        comprobante_imagen_id=uid,
-                                                        duplicado_documento=False,
-                                                        etapa_final="OMITIDO_SIN_MONTO_OPERACION",
-                                                        motivo="monto_operacion",
-                                                        detalle="NA o vacio",
-                                                    )
-                                                else:
-                                                    dup_nr = (
-                                                        item_sync_nr_candidato_revision_duplicado(
-                                                            referencia=p.get("r"),
-                                                            db=db,
-                                                        )
-                                                    )
-                                                    sid = getattr(si, "id", None)
-                                                    ssync = getattr(si, "sync_id", None)
-                                                    if dup_nr:
-                                                        registrar_traza_gmail_abcd_cuotas_evento(
-                                                            db,
-                                                            sync_id=ssync,
-                                                            sync_item_id=sid,
-                                                            plantilla_fmt="NR",
-                                                            cedula=p.get("c"),
-                                                            numero_referencia=p.get("r"),
-                                                            banco_excel=p.get("banco_excel"),
-                                                            archivo_adjunto=p.get("filename"),
-                                                            comprobante_imagen_id=uid,
-                                                            duplicado_documento=True,
-                                                            etapa_final="OMITIDO_DUPLICADO",
-                                                        )
-                                                    elif monto_gmail_sync_requiere_revision_manual_usd(
-                                                        m_op
-                                                    ):
-                                                        registrar_traza_gmail_abcd_cuotas_evento(
-                                                            db,
-                                                            sync_id=ssync,
-                                                            sync_item_id=sid,
-                                                            plantilla_fmt="NR",
-                                                            cedula=p.get("c"),
-                                                            numero_referencia=p.get("r"),
-                                                            banco_excel=p.get("banco_excel"),
-                                                            archivo_adjunto=p.get("filename"),
-                                                            comprobante_imagen_id=uid,
-                                                            duplicado_documento=False,
-                                                            etapa_final="OMITIDO_NEGOCIO",
                                                             motivo="monto_umbral_revision_manual",
                                                             detalle="Monto >= 1000",
                                                         )
                                                     else:
-                                                        res_nr = (
-                                                            crear_pago_conciliado_y_aplicar_cuotas_gmail_plantilla_nr(
+                                                        res_abcd = (
+                                                            crear_pago_conciliado_y_aplicar_cuotas_gmail_plantilla_abcd(
                                                                 db,
                                                                 cedula_columna=p.get("c")
                                                                 or "",
                                                                 fecha_pago_str=p.get("f")
                                                                 or "",
-                                                                monto_operacion_str=m_op,
+                                                                monto_str=p.get("m") or "",
                                                                 numero_referencia=p.get("r")
                                                                 or "",
                                                                 institucion_bancaria=p.get(
                                                                     "banco_excel"
                                                                 ),
                                                                 link_comprobante=link_url,
+                                                                fmt=fmt_row,
                                                                 filename=p.get("filename"),
                                                                 sync_id=ssync,
                                                                 sync_item_id=sid,
                                                                 comprobante_imagen_id=uid,
                                                             )
                                                         )
-                                                        if res_nr.get("ok"):
+                                                        if res_abcd.get("ok"):
                                                             logger.info(
-                                                                "[PAGOS_GMAIL] [NR_PAGO] Alta pagos+cuotas OK: %s",
-                                                                res_nr,
+                                                                "[PAGOS_GMAIL] [ABCD_PAGO] Alta pagos+cuotas OK: %s",
+                                                                res_abcd,
                                                             )
                                                             if (
-                                                                str(res_nr.get("etapa_final") or "")
+                                                                str(res_abcd.get("etapa_final") or "")
                                                                 == "CUOTAS_OK"
                                                             ):
-                                                                bank_fmts_cuotas_ok.append("NR")
+                                                                bank_fmts_cuotas_ok.append(fmt_row)
                                                                 _gt_del_id = None
                                                                 for _sii, _gt, _pp in rows_pairs:
                                                                     if (
@@ -2400,8 +2211,7 @@ def run_pipeline(
                                                                         is not None
                                                                         and getattr(si, "id", None)
                                                                         is not None
-                                                                        and int(_sii.id)
-                                                                        == int(si.id)
+                                                                        and int(_sii.id) == int(si.id)
                                                                     ):
                                                                         _gt_del_id = getattr(
                                                                             _gt, "id", None
@@ -2410,22 +2220,21 @@ def run_pipeline(
                                                                 if _gt_del_id is not None:
                                                                     try:
                                                                         db.execute(
-                                                                            delete(
-                                                                                GmailTemporal
-                                                                            ).where(
+                                                                            delete(GmailTemporal).where(
                                                                                 GmailTemporal.id
                                                                                 == int(_gt_del_id)
                                                                             )
                                                                         )
                                                                         db.commit()
                                                                         logger.info(
-                                                                            "[PAGOS_GMAIL] [NR_PAGO] "
-                                                                            "gmail_temporal id=%s eliminada (CUOTAS_OK)",
+                                                                            "[PAGOS_GMAIL] [ABCD_PAGO] "
+                                                                            "gmail_temporal id=%s eliminada "
+                                                                            "(CUOTAS_OK, pago en BD)",
                                                                             _gt_del_id,
                                                                         )
                                                                     except Exception as _gt_exc:
                                                                         logger.warning(
-                                                                            "[PAGOS_GMAIL] [NR_PAGO] "
+                                                                            "[PAGOS_GMAIL] [ABCD_PAGO] "
                                                                             "No se pudo eliminar gmail_temporal id=%s: %s",
                                                                             _gt_del_id,
                                                                             _gt_exc,
@@ -2442,18 +2251,115 @@ def run_pipeline(
                                                                             pass
                                                             else:
                                                                 logger.warning(
-                                                                    "[PAGOS_GMAIL] [NR_PAGO] pago_id=%s sin aplicación a cuotas "
+                                                                    "[PAGOS_GMAIL] [ABCD_PAGO] pago_id=%s sin aplicación a cuotas "
                                                                     "(etapa=%s): permanece en revisión manual",
-                                                                    res_nr.get("pago_id"),
-                                                                    res_nr.get("etapa_final"),
+                                                                    res_abcd.get("pago_id"),
+                                                                    res_abcd.get("etapa_final"),
                                                                 )
                                                         else:
                                                             logger.warning(
-                                                                "[PAGOS_GMAIL] [NR_PAGO] Sin alta automatica: "
+                                                                "[PAGOS_GMAIL] [ABCD_PAGO] Sin alta automatica: "
                                                                 "motivo=%s detalle=%s",
-                                                                res_nr.get("motivo"),
-                                                                (res_nr.get("detalle") or "")[:160],
+                                                                res_abcd.get("motivo"),
+                                                                (res_abcd.get("detalle") or "")[:160],
                                                             )
+                                                            registrar_traza_gmail_abcd_cuotas_evento(
+                                                                db,
+                                                                sync_id=ssync,
+                                                                sync_item_id=sid,
+                                                                plantilla_fmt=fmt_row,
+                                                                cedula=p.get("c"),
+                                                                numero_referencia=p.get("r"),
+                                                                banco_excel=p.get("banco_excel"),
+                                                                archivo_adjunto=p.get("filename"),
+                                                                comprobante_imagen_id=uid,
+                                                                duplicado_documento=False,
+                                                                etapa_final="OMITIDO_NEGOCIO",
+                                                                motivo=str(
+                                                                    res_abcd.get("motivo") or ""
+                                                                )[:80]
+                                                                or None,
+                                                                detalle=str(
+                                                                    res_abcd.get("detalle") or ""
+                                                                )[:4000]
+                                                                or None,
+                                                            )
+                                                except Exception as dup_exc:
+                                                    logger.warning(
+                                                        "[PAGOS_GMAIL] [REGLA_ABCD] Evaluacion duplicado documento: %s",
+                                                        dup_exc,
+                                                    )
+                                                    try:
+                                                        registrar_traza_gmail_abcd_cuotas_evento(
+                                                            db,
+                                                            sync_id=getattr(
+                                                                si, "sync_id", None
+                                                            ),
+                                                            sync_item_id=getattr(si, "id", None),
+                                                            plantilla_fmt=fmt_row,
+                                                            cedula=p.get("c"),
+                                                            numero_referencia=p.get("r"),
+                                                            banco_excel=p.get("banco_excel"),
+                                                            archivo_adjunto=p.get("filename"),
+                                                            comprobante_imagen_id=uid,
+                                                            duplicado_documento=False,
+                                                            etapa_final="ERROR_PIPELINE",
+                                                            motivo="excepcion",
+                                                            detalle=str(dup_exc)[:4000],
+                                                        )
+                                                    except Exception:
+                                                        pass
+                                            elif fmt_row == "NR":
+                                                try:
+                                                    m_op = (p.get("monto_operacion") or "").strip()
+                                                    if (
+                                                        not m_op
+                                                        or m_op.upper() == PAGOS_NA
+                                                        or m_op.upper() == "NR"
+                                                    ):
+                                                        registrar_traza_gmail_abcd_cuotas_evento(
+                                                            db,
+                                                            sync_id=getattr(
+                                                                si, "sync_id", None
+                                                            ),
+                                                            sync_item_id=getattr(si, "id", None),
+                                                            plantilla_fmt="NR",
+                                                            cedula=p.get("c"),
+                                                            numero_referencia=p.get("r"),
+                                                            banco_excel=p.get("banco_excel"),
+                                                            archivo_adjunto=p.get("filename"),
+                                                            comprobante_imagen_id=uid,
+                                                            duplicado_documento=False,
+                                                            etapa_final="OMITIDO_SIN_MONTO_OPERACION",
+                                                            motivo="monto_operacion",
+                                                            detalle="NA o vacio",
+                                                        )
+                                                    else:
+                                                        dup_nr = (
+                                                            item_sync_nr_candidato_revision_duplicado(
+                                                                referencia=p.get("r"),
+                                                                db=db,
+                                                            )
+                                                        )
+                                                        sid = getattr(si, "id", None)
+                                                        ssync = getattr(si, "sync_id", None)
+                                                        if dup_nr:
+                                                            registrar_traza_gmail_abcd_cuotas_evento(
+                                                                db,
+                                                                sync_id=ssync,
+                                                                sync_item_id=sid,
+                                                                plantilla_fmt="NR",
+                                                                cedula=p.get("c"),
+                                                                numero_referencia=p.get("r"),
+                                                                banco_excel=p.get("banco_excel"),
+                                                                archivo_adjunto=p.get("filename"),
+                                                                comprobante_imagen_id=uid,
+                                                                duplicado_documento=True,
+                                                                etapa_final="OMITIDO_DUPLICADO",
+                                                            )
+                                                        elif monto_gmail_sync_requiere_revision_manual_usd(
+                                                            m_op
+                                                        ):
                                                             registrar_traza_gmail_abcd_cuotas_evento(
                                                                 db,
                                                                 sync_id=ssync,
@@ -2466,176 +2372,297 @@ def run_pipeline(
                                                                 comprobante_imagen_id=uid,
                                                                 duplicado_documento=False,
                                                                 etapa_final="OMITIDO_NEGOCIO",
-                                                                motivo=str(
-                                                                    res_nr.get("motivo") or ""
-                                                                )[:80]
-                                                                or None,
-                                                                detalle=str(
-                                                                    res_nr.get("detalle") or ""
-                                                                )[:4000]
-                                                                or None,
+                                                                motivo="monto_umbral_revision_manual",
+                                                                detalle="Monto >= 1000",
                                                             )
-                                            except Exception as nr_exc:
-                                                logger.warning(
-                                                    "[PAGOS_GMAIL] [REGLA_NR] %s",
-                                                    nr_exc,
-                                                )
-                                                try:
-                                                    registrar_traza_gmail_abcd_cuotas_evento(
-                                                        db,
-                                                        sync_id=getattr(
-                                                            si, "sync_id", None
-                                                        ),
-                                                        sync_item_id=getattr(si, "id", None),
-                                                        plantilla_fmt="NR",
-                                                        cedula=p.get("c"),
-                                                        numero_referencia=p.get("r"),
-                                                        banco_excel=p.get("banco_excel"),
-                                                        archivo_adjunto=p.get("filename"),
-                                                        comprobante_imagen_id=uid,
-                                                        duplicado_documento=False,
-                                                        etapa_final="ERROR_PIPELINE",
-                                                        motivo="excepcion",
-                                                        detalle=str(nr_exc)[:4000],
+                                                        else:
+                                                            res_nr = (
+                                                                crear_pago_conciliado_y_aplicar_cuotas_gmail_plantilla_nr(
+                                                                    db,
+                                                                    cedula_columna=p.get("c")
+                                                                    or "",
+                                                                    fecha_pago_str=p.get("f")
+                                                                    or "",
+                                                                    monto_operacion_str=m_op,
+                                                                    numero_referencia=p.get("r")
+                                                                    or "",
+                                                                    institucion_bancaria=p.get(
+                                                                        "banco_excel"
+                                                                    ),
+                                                                    link_comprobante=link_url,
+                                                                    filename=p.get("filename"),
+                                                                    sync_id=ssync,
+                                                                    sync_item_id=sid,
+                                                                    comprobante_imagen_id=uid,
+                                                                )
+                                                            )
+                                                            if res_nr.get("ok"):
+                                                                logger.info(
+                                                                    "[PAGOS_GMAIL] [NR_PAGO] Alta pagos+cuotas OK: %s",
+                                                                    res_nr,
+                                                                )
+                                                                if (
+                                                                    str(res_nr.get("etapa_final") or "")
+                                                                    == "CUOTAS_OK"
+                                                                ):
+                                                                    bank_fmts_cuotas_ok.append("NR")
+                                                                    _gt_del_id = None
+                                                                    for _sii, _gt, _pp in rows_pairs:
+                                                                        if (
+                                                                            getattr(_sii, "id", None)
+                                                                            is not None
+                                                                            and getattr(si, "id", None)
+                                                                            is not None
+                                                                            and int(_sii.id)
+                                                                            == int(si.id)
+                                                                        ):
+                                                                            _gt_del_id = getattr(
+                                                                                _gt, "id", None
+                                                                            )
+                                                                            break
+                                                                    if _gt_del_id is not None:
+                                                                        try:
+                                                                            db.execute(
+                                                                                delete(
+                                                                                    GmailTemporal
+                                                                                ).where(
+                                                                                    GmailTemporal.id
+                                                                                    == int(_gt_del_id)
+                                                                                )
+                                                                            )
+                                                                            db.commit()
+                                                                            logger.info(
+                                                                                "[PAGOS_GMAIL] [NR_PAGO] "
+                                                                                "gmail_temporal id=%s eliminada (CUOTAS_OK)",
+                                                                                _gt_del_id,
+                                                                            )
+                                                                        except Exception as _gt_exc:
+                                                                            logger.warning(
+                                                                                "[PAGOS_GMAIL] [NR_PAGO] "
+                                                                                "No se pudo eliminar gmail_temporal id=%s: %s",
+                                                                                _gt_del_id,
+                                                                                _gt_exc,
+                                                                            )
+                                                                            try:
+                                                                                pending_gmail_temporal_delete_ids.add(
+                                                                                    int(_gt_del_id)
+                                                                                )
+                                                                            except Exception:
+                                                                                pass
+                                                                            try:
+                                                                                db.rollback()
+                                                                            except Exception:
+                                                                                pass
+                                                                else:
+                                                                    logger.warning(
+                                                                        "[PAGOS_GMAIL] [NR_PAGO] pago_id=%s sin aplicación a cuotas "
+                                                                        "(etapa=%s): permanece en revisión manual",
+                                                                        res_nr.get("pago_id"),
+                                                                        res_nr.get("etapa_final"),
+                                                                    )
+                                                            else:
+                                                                logger.warning(
+                                                                    "[PAGOS_GMAIL] [NR_PAGO] Sin alta automatica: "
+                                                                    "motivo=%s detalle=%s",
+                                                                    res_nr.get("motivo"),
+                                                                    (res_nr.get("detalle") or "")[:160],
+                                                                )
+                                                                registrar_traza_gmail_abcd_cuotas_evento(
+                                                                    db,
+                                                                    sync_id=ssync,
+                                                                    sync_item_id=sid,
+                                                                    plantilla_fmt="NR",
+                                                                    cedula=p.get("c"),
+                                                                    numero_referencia=p.get("r"),
+                                                                    banco_excel=p.get("banco_excel"),
+                                                                    archivo_adjunto=p.get("filename"),
+                                                                    comprobante_imagen_id=uid,
+                                                                    duplicado_documento=False,
+                                                                    etapa_final="OMITIDO_NEGOCIO",
+                                                                    motivo=str(
+                                                                        res_nr.get("motivo") or ""
+                                                                    )[:80]
+                                                                    or None,
+                                                                    detalle=str(
+                                                                        res_nr.get("detalle") or ""
+                                                                    )[:4000]
+                                                                    or None,
+                                                                )
+                                                except Exception as nr_exc:
+                                                    logger.warning(
+                                                        "[PAGOS_GMAIL] [REGLA_NR] %s",
+                                                        nr_exc,
                                                     )
-                                                except Exception:
-                                                    pass
-                                except Exception as upd_err:
-                                    logger.warning(
-                                        "[PAGOS_GMAIL] Error commit filas + comprobante en BD: %s",
-                                        upd_err,
-                                    )
-                                    db.rollback()
-                                    del label_ids_for_message[_label_ids_len_before_comprobante:]
-                                    any_incomplete_or_skipped = True
+                                                    try:
+                                                        registrar_traza_gmail_abcd_cuotas_evento(
+                                                            db,
+                                                            sync_id=getattr(
+                                                                si, "sync_id", None
+                                                            ),
+                                                            sync_item_id=getattr(si, "id", None),
+                                                            plantilla_fmt="NR",
+                                                            cedula=p.get("c"),
+                                                            numero_referencia=p.get("r"),
+                                                            banco_excel=p.get("banco_excel"),
+                                                            archivo_adjunto=p.get("filename"),
+                                                            comprobante_imagen_id=uid,
+                                                            duplicado_documento=False,
+                                                            etapa_final="ERROR_PIPELINE",
+                                                            motivo="excepcion",
+                                                            detalle=str(nr_exc)[:4000],
+                                                        )
+                                                    except Exception:
+                                                        pass
+                                    except Exception as upd_err:
+                                        logger.warning(
+                                            "[PAGOS_GMAIL] Error commit filas + comprobante en BD: %s",
+                                            upd_err,
+                                        )
+                                        db.rollback()
+                                        del label_ids_for_message[_label_ids_len_before_comprobante:]
+                                        any_incomplete_or_skipped = True
 
-                n_att = len(candidatos)
-                if (
-                    n_att > 1
-                    and any_incomplete_or_skipped
-                    and had_complete_digitalization
-                ):
-                    if any_skipped_not_plantilla_o_campos and any_cedula_lookup_failed:
-                        logger.warning(
-                            "[PAGOS_GMAIL]   Resumen correo: %d adjuntos; mezcla: uno o mas no son plantilla A/B/C/D/E/F/NR "
-                            "o datos incompletos, y ademas remitente sin cedula en clientes (ERROR EMAIL). "
-                            "Sin etiquetas plantilla ni leido automatico (100%% en todos + remitente valido).",
-                            n_att,
-                        )
-                    elif any_cedula_lookup_failed:
-                        logger.warning(
-                            "[PAGOS_GMAIL]   Resumen correo: %d adjuntos; comprobantes reconocidos y guardados en BD pero "
-                            "remitente sin match en clientes (columna Cedula ERROR EMAIL). "
-                            "En Gmail solo ERROR EMAIL (sin MERCANTIL/BNC/BINANCE/BNV/BANCAMIGA/TESORO).",
-                            n_att,
-                        )
-                    elif any_skipped_not_plantilla_o_campos:
-                        logger.warning(
-                            "[PAGOS_GMAIL]   Resumen correo: %d adjuntos; uno o mas no son plantilla A/B/C/D/E/F/NR valida "
-                            "o fallaron -> sin etiquetas plantilla ni leido (se exige 100%% OK en todos). "
-                            "Si fallo el guardado del comprobante, las filas de ese correo se revierten (sin huerfanas).",
-                            n_att,
-                        )
-                    else:
-                        logger.warning(
-                            "[PAGOS_GMAIL]   Resumen correo: %d adjuntos; incompleto por commit/guardado comprobante u otro fallo "
-                            "-> sin etiquetas plantilla ni leido (100%% en todos).",
-                            n_att,
-                        )
+                    n_att = len(candidatos)
+                    if (
+                        n_att > 1
+                        and any_incomplete_or_skipped
+                        and had_complete_digitalization
+                    ):
+                        if any_skipped_not_plantilla_o_campos and any_cedula_lookup_failed:
+                            logger.warning(
+                                "[PAGOS_GMAIL]   Resumen correo: %d adjuntos; mezcla: uno o mas no son plantilla A/B/C/D/E/F/NR "
+                                "o datos incompletos, y ademas remitente sin cedula en clientes (ERROR EMAIL). "
+                                "Sin etiquetas plantilla ni leido automatico (100%% en todos + remitente valido).",
+                                n_att,
+                            )
+                        elif any_cedula_lookup_failed:
+                            logger.warning(
+                                "[PAGOS_GMAIL]   Resumen correo: %d adjuntos; comprobantes reconocidos y guardados en BD pero "
+                                "remitente sin match en clientes (columna Cedula ERROR EMAIL). "
+                                "En Gmail solo ERROR EMAIL (sin MERCANTIL/BNC/BINANCE/BNV/BANCAMIGA/TESORO).",
+                                n_att,
+                            )
+                        elif any_skipped_not_plantilla_o_campos:
+                            logger.warning(
+                                "[PAGOS_GMAIL]   Resumen correo: %d adjuntos; uno o mas no son plantilla A/B/C/D/E/F/NR valida "
+                                "o fallaron -> sin etiquetas plantilla ni leido (se exige 100%% OK en todos). "
+                                "Si fallo el guardado del comprobante, las filas de ese correo se revierten (sin huerfanas).",
+                                n_att,
+                            )
+                        else:
+                            logger.warning(
+                                "[PAGOS_GMAIL]   Resumen correo: %d adjuntos; incompleto por commit/guardado comprobante u otro fallo "
+                                "-> sin etiquetas plantilla ni leido (100%% en todos).",
+                                n_att,
+                            )
 
-                fully_digitized_email = (
-                    len(candidatos_para_gemini) > 0
-                    and not any_incomplete_or_skipped
-                    and had_complete_digitalization
-                )
-                final_label_name, final_label_reason = resolver_etiqueta_final_gmail(
-                    tiene_candidatos=bool(candidatos),
-                    remitente_en_clientes=remitente_en_clientes,
-                    plan_b_mercantil_bnc_fuera_bd=plan_b_mercantil_bnc_fuera_bd,
-                    remitente_solo_master=remitente_solo_master,
-                    fully_digitized_email=fully_digitized_email,
-                    bank_fmts_digitized=bank_fmts_digitized,
-                    bank_fmts_classified=bank_fmts_classified,
-                    bank_fmts_cuotas_ok=bank_fmts_cuotas_ok,
-                    message_scan_bank_hint=message_scan_bank_hint,
-                )
-
-                if final_label_name and final_label_name in PAGOS_GMAIL_ETIQUETAS_FINALES_PERMITIDAS:
-                    if final_label_name not in plantilla_label_cache:
-                        plantilla_label_cache[final_label_name] = ensure_user_label_id(
-                            gmail_svc, final_label_name
-                        )
-                    final_label_id = plantilla_label_cache.get(final_label_name)
-                    if final_label_id:
-                        # Una sola etiqueta final entre las permitidas: quitar otras si ya están en el mensaje.
-                        _remove_final_ids: list[str] = []
-                        for _other_name in PAGOS_GMAIL_ETIQUETAS_FINALES_PERMITIDAS:
-                            if _other_name == final_label_name:
-                                continue
-                            _oid = get_existing_user_label_id(gmail_svc, _other_name)
-                            if _oid:
-                                _remove_final_ids.append(_oid)
-                        modify_message_labels_add_remove(
-                            gmail_svc,
-                            msg_id,
-                            add_label_ids=[final_label_id],
-                            remove_label_ids=_remove_final_ids,
-                        )
-                        run_stats["messages_final_label_applied"] += 1
-                        _k = f"final_{final_label_reason}"
-                        if _k in run_stats:
-                            run_stats[_k] += 1
-                        logger.info(
-                            "[PAGOS_GMAIL]   Gmail: etiqueta final=%s (%s) msg=%s",
-                            final_label_name,
-                            final_label_reason,
-                            msg_id,
-                        )
-                    else:
-                        logger.warning(
-                            "[PAGOS_GMAIL]   Gmail: no se pudo crear/obtener etiqueta final %s",
-                            final_label_name,
-                        )
-                elif candidatos:
-                    run_stats["messages_no_final_label"] += 1
-                    logger.info(
-                        "[PAGOS_GMAIL]   Gmail: sin etiqueta final aplicable pese a candidatos (msg=%s)",
-                        msg_id,
+                    fully_digitized_email = (
+                        len(candidatos_para_gemini) > 0
+                        and not any_incomplete_or_skipped
+                        and had_complete_digitalization
+                    )
+                    final_label_name, final_label_reason = resolver_etiqueta_final_gmail(
+                        tiene_candidatos=bool(candidatos),
+                        remitente_en_clientes=remitente_en_clientes,
+                        plan_b_mercantil_bnc_fuera_bd=plan_b_mercantil_bnc_fuera_bd,
+                        remitente_solo_master=remitente_solo_master,
+                        fully_digitized_email=fully_digitized_email,
+                        bank_fmts_digitized=bank_fmts_digitized,
+                        bank_fmts_classified=bank_fmts_classified,
+                        bank_fmts_cuotas_ok=bank_fmts_cuotas_ok,
+                        message_scan_bank_hint=message_scan_bank_hint,
                     )
 
-                if was_unread:
-                    mark_as_read(gmail_svc, msg_id)
-
-                if pending_gmail_temporal_delete_ids:
-                    _ids_retry = sorted(pending_gmail_temporal_delete_ids)
-                    try:
-                        db.execute(
-                            delete(GmailTemporal).where(
-                                GmailTemporal.id.in_(_ids_retry)
+                    if final_label_name and final_label_name in PAGOS_GMAIL_ETIQUETAS_FINALES_PERMITIDAS:
+                        if final_label_name not in plantilla_label_cache:
+                            plantilla_label_cache[final_label_name] = ensure_user_label_id(
+                                gmail_svc, final_label_name
                             )
-                        )
-                        db.commit()
+                        final_label_id = plantilla_label_cache.get(final_label_name)
+                        if final_label_id:
+                            # Una sola etiqueta final entre las permitidas: quitar otras si ya están en el mensaje.
+                            _remove_final_ids: list[str] = []
+                            for _other_name in PAGOS_GMAIL_ETIQUETAS_FINALES_PERMITIDAS:
+                                if _other_name == final_label_name:
+                                    continue
+                                _oid = get_existing_user_label_id(gmail_svc, _other_name)
+                                if _oid:
+                                    _remove_final_ids.append(_oid)
+                            modify_message_labels_add_remove(
+                                gmail_svc,
+                                msg_id,
+                                add_label_ids=[final_label_id],
+                                remove_label_ids=_remove_final_ids,
+                            )
+                            run_stats["messages_final_label_applied"] += 1
+                            _k = f"final_{final_label_reason}"
+                            if _k in run_stats:
+                                run_stats[_k] += 1
+                            logger.info(
+                                "[PAGOS_GMAIL]   Gmail: etiqueta final=%s (%s) msg=%s",
+                                final_label_name,
+                                final_label_reason,
+                                msg_id,
+                            )
+                        else:
+                            logger.warning(
+                                "[PAGOS_GMAIL]   Gmail: no se pudo crear/obtener etiqueta final %s",
+                                final_label_name,
+                            )
+                    elif candidatos:
+                        run_stats["messages_no_final_label"] += 1
                         logger.info(
-                            "[PAGOS_GMAIL] Reintento limpieza gmail_temporal OK: %d id(s)",
-                            len(_ids_retry),
+                            "[PAGOS_GMAIL]   Gmail: sin etiqueta final aplicable pese a candidatos (msg=%s)",
+                            msg_id,
                         )
-                        pending_gmail_temporal_delete_ids.difference_update(_ids_retry)
-                    except Exception as _retry_del_exc:
+
+                    if was_unread:
+                        mark_as_read(gmail_svc, msg_id)
+
+                    if pending_gmail_temporal_delete_ids:
+                        _ids_retry = sorted(pending_gmail_temporal_delete_ids)
                         try:
-                            db.rollback()
-                        except Exception:
-                            pass
-                        logger.warning(
-                            "[PAGOS_GMAIL] Reintento limpieza gmail_temporal falló (%d id(s)): %s",
-                            len(_ids_retry),
-                            _retry_del_exc,
+                            db.execute(
+                                delete(GmailTemporal).where(
+                                    GmailTemporal.id.in_(_ids_retry)
+                                )
+                            )
+                            db.commit()
+                            logger.info(
+                                "[PAGOS_GMAIL] Reintento limpieza gmail_temporal OK: %d id(s)",
+                                len(_ids_retry),
+                            )
+                            pending_gmail_temporal_delete_ids.difference_update(_ids_retry)
+                        except Exception as _retry_del_exc:
+                            try:
+                                db.rollback()
+                            except Exception:
+                                pass
+                            logger.warning(
+                                "[PAGOS_GMAIL] Reintento limpieza gmail_temporal falló (%d id(s)): %s",
+                                len(_ids_retry),
+                                _retry_del_exc,
+                            )
+
+                except Exception as _msg_pipeline_exc:
+                    _msg_phase_suffix = "error"
+                    run_stats["messages_pipeline_errors"] = int(
+                        run_stats.get("messages_pipeline_errors", 0) or 0
+                    ) + 1
+                    logger.exception(
+                        "[PAGOS_GMAIL] Error procesando correo msg=%s (se continua con el siguiente): %s",
+                        msg_id,
+                        _msg_pipeline_exc,
+                    )
+                    try:
+                        _pipeline_evt(
+                            "pipeline_message_error",
+                            detalle=str(_msg_pipeline_exc)[:8000],
                         )
-
-                emails_ok += 1
-
-                sync.emails_processed = emails_ok
-                sync.files_processed = files_ok
-                db.commit()
+                    except Exception:
+                        pass
+                finally:
+                    _bump_message_progress(phase_suffix=_msg_phase_suffix)
 
         messages = fetch_sorted_batch()
         run_stats["gmail_messages_listed"] = len(messages)
@@ -2735,6 +2762,9 @@ def run_pipeline(
                 "manual_error_redigitaliza_error"
             )
             or None,
+            "messages_pipeline_errors": int(
+                run_stats.get("messages_pipeline_errors", 0) or 0
+            ),
             "gemini_model": _gemini_model_snapshot,
             **_pagos_metrics,
         }
