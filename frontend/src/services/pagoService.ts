@@ -1386,6 +1386,9 @@ class PagoService {
       none_reason_hint_counts?: Record<string, number>
       gemini_model?: string
     } | null
+
+    /** True si el backend detecta una corrida running huérfana (sin actividad prolongada). */
+    running_looks_stale?: boolean
   }> {
     return await apiClient.get(`${this.baseUrl}/gmail/status`)
   }
