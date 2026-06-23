@@ -68,6 +68,11 @@ function isGmailStatusPollRequest(
   return u.includes('/pagos/gmail/status')
 }
 
+/** GET /api/v1/prestamos/{id} (detalle); no listados ni sub-rutas como /cuotas. */
+function isPrestamoDetailGet(url?: string): boolean {
+  return /\/prestamos\/\d+(?:\?|#|$)/.test(String(url || ''))
+}
+
 // Base URL de la API. CSP permite same-origin y orígenes Render; usar VITE_API_URL cuando front y back estén en servicios distintos.
 
 function getEffectiveApiBaseUrl(): string {
@@ -371,6 +376,14 @@ class ApiClient {
           config.timeout = 120000
         }
 
+        if (
+          config.method?.toLowerCase() === 'get' &&
+          isPrestamoDetailGet(config.url) &&
+          (config.timeout == null || config.timeout < SLOW_ENDPOINT_TIMEOUT_MS)
+        ) {
+          config.timeout = SLOW_ENDPOINT_TIMEOUT_MS
+        }
+
         // Cobros: PATCH estado (aprobar/rechazar) puede tardar (cascada, correo, PDF).
         if (
           config.method?.toLowerCase() === 'patch' &&
@@ -479,6 +492,12 @@ class ApiClient {
           (errorCodeEarly === 'ECONNABORTED' ||
             errorMessageEarly.includes('timeout')) &&
           retryCount < 2
+        const isPrestamoDetailGetRetry =
+          methodLc === 'get' &&
+          isPrestamoDetailGet(reqUrl) &&
+          (errorCodeEarly === 'ECONNABORTED' ||
+            errorMessageEarly.includes('timeout')) &&
+          retryCount < 2
         const isScannerReadOnlyPost =
           methodLc === 'post' &&
           (reqUrl.includes('/cobros/escaner/extraer-comprobante') ||
@@ -502,6 +521,9 @@ class ApiClient {
             /\/cobros\/pagos-reportados\/\d+\/(?:comprobante|recibo\.pdf)(?:\?|#|$)/.test(
               reqUrl
             ) ||
+            isPrestamoDetailGet(reqUrl) ||
+            reqUrl.includes('/pagos/con-errores') ||
+            /\/pagos\/comprobante-imagen\/[a-f0-9]+/i.test(reqUrl) ||
             reqUrl.includes('/prestamos/candidatos-drive/snapshot') ||
             reqUrl.includes('/pagos/gmail/status') ||
             reqUrl.includes('/admin/tasas-cambio/estado') ||
@@ -551,7 +573,8 @@ class ApiClient {
           (canRetryBecauseStatus &&
             retryCount < maxRetries &&
             mayRetryThisRequest) ||
-          isGmailStatusTimeoutRetry
+          isGmailStatusTimeoutRetry ||
+          isPrestamoDetailGetRetry
         if (shouldRetry) {
           ;(requestConfigForRetry as any)._retryCount = retryCount + 1
 
@@ -571,7 +594,7 @@ class ApiClient {
           // 502/503 en Render: dar tiempo al dyno del API a despertar (reintentos más espaciados).
           const useLong502Delay =
             isColdStartProxySafeGet || isCobrosEstadoPatch502Storm
-          const delayBase = isGmailStatusTimeoutRetry
+          const delayBase = isGmailStatusTimeoutRetry || isPrestamoDetailGetRetry
             ? 2500
             : st === 502 || st === 503
               ? useLong502Delay
@@ -1239,12 +1262,13 @@ class ApiClient {
     // Sesión al arranque: Render frío + CORS preflight puede dejar el GET por detrás de un timeout corto.
     const isAuthMe = url.includes('/auth/me')
     const isGmailStatus = isGmailStatusPollRequest({ url })
+    const isPrestamoDetail = isPrestamoDetailGet(url)
 
     let defaultTimeout = DEFAULT_TIMEOUT_MS
 
     if (isGmailStatus) {
       defaultTimeout = SLOW_ENDPOINT_TIMEOUT_MS
-    } else if (isAuthMe) {
+    } else if (isAuthMe || isPrestamoDetail) {
       defaultTimeout = SLOW_ENDPOINT_TIMEOUT_MS
     } else if (isListadoKpisPagosReportados) {
       defaultTimeout = listadoKpisPagosReportadosTimeout

@@ -7,6 +7,7 @@ import os
 from typing import Generator
 
 from sqlalchemy import create_engine, event
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import sessionmaker, Session, declarative_base
 
 from app.core.config import settings
@@ -79,6 +80,18 @@ if _is_postgres:
         pool_use_lifo=True,  # QueuePool: bajo ráfagas, LIFO reutiliza conexiones recientes
     )
     engine = create_engine(_db_url, **_engine_kwargs)
+
+    @event.listens_for(engine, "handle_error")
+    def _invalidate_on_disconnect(ctx):
+        """Tras SSL closed / conexion Postgres caida (deploy, idle), no reutilizar el socket."""
+        orig = getattr(ctx, "original_exception", None)
+        if isinstance(orig, OperationalError):
+            conn = getattr(ctx, "connection", None)
+            if conn is not None:
+                try:
+                    conn.invalidate()
+                except Exception:
+                    pass
 else:
     # SQLite (p. ej. pytest): no acepta pool_size/max_overflow ni connect_args de psycopg2.
     _non_pg_kwargs: dict = {"echo": False}

@@ -783,14 +783,14 @@ const staticOptions = {
       res.setHeader('Expires', '0')
       return
     }
-    // Para chunks hash de /assets, usar cache corta + revalidación estricta:
-    // reduce errores "chunk missing" durante/tras deploy cuando cambia el hash.
+    // Chunks con hash: no almacenar en cache agresiva (evita MIME text/html de 502 en deploy).
     if (
       filePath.includes(`${path.sep}assets${path.sep}`) &&
       (filePath.endsWith('.js') || filePath.endsWith('.css'))
     ) {
-      res.setHeader('Cache-Control', 'public, max-age=300, must-revalidate')
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate')
       res.setHeader('Pragma', 'no-cache')
+      res.setHeader('Expires', '0')
       return
     }
     // No cachear chunks de exportación (exceljs, jspdf) - evita 404 tras deploy cuando el hash cambia

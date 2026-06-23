@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 
 import { Button } from '../components/ui/button'
 
+import { tryAutoReloadForChunkError } from './RouteErrorBoundary'
+
 type Props = {
   error: Error
   reset: () => void
@@ -12,6 +14,16 @@ export function RouteChunkError({ error, reset }: Props) {
 
   useEffect(() => {
     setDetail(error?.message || 'Error desconocido al cargar la página.')
+    const msg = (error?.message || '').toLowerCase()
+    const isChunk =
+      msg.includes('dynamically imported module') ||
+      msg.includes('error loading') ||
+      msg.includes('missing js chunk') ||
+      msg.includes('mime no permitido') ||
+      msg.includes('text/html')
+    if (isChunk) {
+      tryAutoReloadForChunkError()
+    }
   }, [error])
 
   const hardReload = () => {

@@ -18,8 +18,27 @@ function isChunkLoadError(err: Error | null): boolean {
     msg.includes('error loading dynamically imported module') ||
     msg.includes('failed to load module') ||
     msg.includes('missing js chunk') ||
+    msg.includes('mime no permitido') ||
+    msg.includes('tipo mime') ||
     (msg.includes('text/html') && msg.includes('module'))
   )
+}
+
+const CHUNK_RELOAD_KEY = 'rapicredit_missing_chunk_reload_v1'
+const CHUNK_RELOAD_MAX = 5
+
+export function tryAutoReloadForChunkError(): boolean {
+  try {
+    const n = Number(sessionStorage.getItem(CHUNK_RELOAD_KEY) || '0')
+    if (n >= CHUNK_RELOAD_MAX) return false
+    sessionStorage.setItem(CHUNK_RELOAD_KEY, String(n + 1))
+    const u = new URL(window.location.href)
+    u.searchParams.set('nocache', String(Date.now()))
+    window.location.replace(`${u.pathname}${u.search}${u.hash}`)
+    return true
+  } catch {
+    return false
+  }
 }
 
 export class RouteErrorBoundary extends Component<Props, State> {
@@ -36,6 +55,7 @@ export class RouteErrorBoundary extends Component<Props, State> {
         error.message,
         info.componentStack
       )
+      if (tryAutoReloadForChunkError()) return
       return
     }
     console.error('[route] Render error:', error, info.componentStack)
