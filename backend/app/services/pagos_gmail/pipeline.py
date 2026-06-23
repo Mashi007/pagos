@@ -155,10 +155,13 @@ from app.services.pagos_gmail.pago_nr_auto_service import (
     crear_pago_conciliado_y_aplicar_cuotas_gmail_plantilla_nr,
 )
 from app.services.pagos_gmail.plantilla_abcd_proceso_negocio import (
+    binance_requiere_revision_usuario_operaciones,
     es_plantilla_banco_abcd,
     item_sync_abcd_candidato_revision_duplicado,
     item_sync_nr_candidato_revision_duplicado,
     monto_gmail_sync_requiere_revision_manual_usd,
+    PAGOS_GMAIL_MOTIVO_USUARIO_OPERACIONES,
+    PAGOS_GMAIL_OBS_USUARIO_OPERACIONES,
     resumen_log_linea_plantilla_abcd,
 )
 from app.services.pagos_gmail.gmail_service import (
@@ -1934,6 +1937,9 @@ def run_pipeline(
                                     "m": m,
                                     "r": r,
                                     "monto_operacion": _v(data.get("monto_operacion")),
+                                    "control_usuario_operaciones": _v(
+                                        data.get("control_usuario_operaciones")
+                                    ),
                                     "banco_excel": banco_excel,
                                     "filename": filename,
                                     "content": content,
@@ -2135,6 +2141,14 @@ def run_pipeline(
                                                             revision_manual_monto=monto_gmail_sync_requiere_revision_manual_usd(
                                                                 p.get("m")
                                                             ),
+                                                            revision_manual_usuario_operaciones=(
+                                                                fmt_row == "C"
+                                                                and binance_requiere_revision_usuario_operaciones(
+                                                                    p.get(
+                                                                        "control_usuario_operaciones"
+                                                                    )
+                                                                )
+                                                            ),
                                                         ),
                                                         dup_doc,
                                                     )
@@ -2153,6 +2167,27 @@ def run_pipeline(
                                                             comprobante_imagen_id=uid,
                                                             duplicado_documento=True,
                                                             etapa_final="OMITIDO_DUPLICADO",
+                                                        )
+                                                    elif (
+                                                        fmt_row == "C"
+                                                        and binance_requiere_revision_usuario_operaciones(
+                                                            p.get("control_usuario_operaciones")
+                                                        )
+                                                    ):
+                                                        registrar_traza_gmail_abcd_cuotas_evento(
+                                                            db,
+                                                            sync_id=ssync,
+                                                            sync_item_id=sid,
+                                                            plantilla_fmt=fmt_row,
+                                                            cedula=p.get("c"),
+                                                            numero_referencia=p.get("r"),
+                                                            banco_excel=p.get("banco_excel"),
+                                                            archivo_adjunto=p.get("filename"),
+                                                            comprobante_imagen_id=uid,
+                                                            duplicado_documento=False,
+                                                            etapa_final="OMITIDO_NEGOCIO",
+                                                            motivo=PAGOS_GMAIL_MOTIVO_USUARIO_OPERACIONES,
+                                                            detalle=PAGOS_GMAIL_OBS_USUARIO_OPERACIONES,
                                                         )
                                                     elif monto_gmail_sync_requiere_revision_manual_usd(
                                                         p.get("m")
