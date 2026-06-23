@@ -60,6 +60,14 @@ const DEFAULT_TIMEOUT_MS = 30000
 
 const SLOW_ENDPOINT_TIMEOUT_MS = 60000 // Para endpoints que pueden tardar más
 
+/** Polling Gmail: el hook useGmailPipeline muestra su propio feedback; evitar toasts duplicados. */
+function isGmailStatusPollRequest(
+  config?: AxiosRequestConfig | { url?: string }
+): boolean {
+  const u = String(config?.url || '')
+  return u.includes('/pagos/gmail/status')
+}
+
 // Base URL de la API. CSP permite same-origin y orígenes Render; usar VITE_API_URL cuando front y back estén en servicios distintos.
 
 function getEffectiveApiBaseUrl(): string {
@@ -462,6 +470,15 @@ class ApiClient {
         const methodLc = String(
           requestConfigForRetry?.method || ''
         ).toLowerCase()
+        const errorCodeEarly = String((error as { code?: string }).code || '')
+        const errorMessageEarly = String(error.message || '')
+        const isGmailStatusGet =
+          methodLc === 'get' && isGmailStatusPollRequest(requestConfigForRetry)
+        const isGmailStatusTimeoutRetry =
+          isGmailStatusGet &&
+          (errorCodeEarly === 'ECONNABORTED' ||
+            errorMessageEarly.includes('timeout')) &&
+          retryCount < 2
         const isScannerReadOnlyPost =
           methodLc === 'post' &&
           (reqUrl.includes('/cobros/escaner/extraer-comprobante') ||
@@ -530,11 +547,12 @@ class ApiClient {
               isCobrosPagoReportadoEditarPatch))
         const mayRetryThisRequest =
           methodLc !== 'get' || isSafeTransientRetryGet
-        if (
-          canRetryBecauseStatus &&
-          retryCount < maxRetries &&
-          mayRetryThisRequest
-        ) {
+        const shouldRetry =
+          (canRetryBecauseStatus &&
+            retryCount < maxRetries &&
+            mayRetryThisRequest) ||
+          isGmailStatusTimeoutRetry
+        if (shouldRetry) {
           ;(requestConfigForRetry as any)._retryCount = retryCount + 1
 
           // Backend Health Tracker: dejar señal de 502/503 reciente (alimenta el soft circuit
@@ -543,7 +561,7 @@ class ApiClient {
           // y la pantalla quedaba ~3.5s sin feedback tras el primer 502 (cold start de Render).
           try {
             markBackendError(Number(st), reqUrl)
-            if (st === 502 || st === 503) {
+            if ((st === 502 || st === 503) && !isGmailStatusGet) {
               showReconnectingToast(retryCount, maxRetries)
             }
           } catch {
@@ -553,8 +571,13 @@ class ApiClient {
           // 502/503 en Render: dar tiempo al dyno del API a despertar (reintentos más espaciados).
           const useLong502Delay =
             isColdStartProxySafeGet || isCobrosEstadoPatch502Storm
-          const delayBase =
-            st === 502 || st === 503 ? (useLong502Delay ? 3500 : 2000) : 500
+          const delayBase = isGmailStatusTimeoutRetry
+            ? 2500
+            : st === 502 || st === 503
+              ? useLong502Delay
+                ? 3500
+                : 2000
+              : 500
           const rawDelay = delayBase * Math.pow(2, retryCount)
           const delayMs = useLong502Delay ? Math.min(14000, rawDelay) : rawDelay
 
@@ -789,7 +812,8 @@ class ApiClient {
       url.includes('/api/v1/notificaciones-prejudicial') ||
       url.includes('/api/v1/cobros/pagos-reportados/listado-y-kpis') ||
       url.includes('/api/v1/cobros/pagos-reportados/kpis') ||
-      url.includes('/api/v1/prestamos/candidatos-drive/snapshot')
+      url.includes('/api/v1/prestamos/candidatos-drive/snapshot') ||
+      url.includes('/pagos/gmail/status')
     )
   }
 
@@ -899,6 +923,11 @@ class ApiClient {
       msg.includes('Request aborted') ||
       (error as any).isCancelled
     ) {
+      return
+    }
+
+    // Polling Gmail: useGmailPipeline maneja timeouts y fallos de red sin duplicar toasts.
+    if (isGmailStatusPollRequest(error.config)) {
       return
     }
 
@@ -1209,10 +1238,13 @@ class ApiClient {
 
     // Sesión al arranque: Render frío + CORS preflight puede dejar el GET por detrás de un timeout corto.
     const isAuthMe = url.includes('/auth/me')
+    const isGmailStatus = isGmailStatusPollRequest({ url })
 
     let defaultTimeout = DEFAULT_TIMEOUT_MS
 
-    if (isAuthMe) {
+    if (isGmailStatus) {
+      defaultTimeout = SLOW_ENDPOINT_TIMEOUT_MS
+    } else if (isAuthMe) {
       defaultTimeout = SLOW_ENDPOINT_TIMEOUT_MS
     } else if (isListadoKpisPagosReportados) {
       defaultTimeout = listadoKpisPagosReportadosTimeout

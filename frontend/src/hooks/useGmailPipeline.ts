@@ -277,17 +277,18 @@ interface UseGmailPipelineOptions {
   suppressDoneToasts?: boolean
 }
 
-const POLL_MAX_ATTEMPTS = 120
+const POLL_MAX_ATTEMPTS = 220
 
-/** Intervalo entre consultas: más espaciado tras muchos intentos (menos carga al API). */
+/** Intervalo entre consultas: alineado con STALE_MAX_RUNNING_MINUTES (~110 min) en backend. */
 function pollDelayMs(attempt: number): number {
   if (attempt < 40) return 10000
-  if (attempt < 80) return 20000
-  return 30000
+  if (attempt < 90) return 20000
+  if (attempt < 160) return 30000
+  return 45000
 }
 
-/** Tras varios fallos de red / 5xx (p. ej. 502 Render), dejar de martillar el API. */
-const POLL_MAX_CONSECUTIVE_FETCH_ERRORS = 5
+/** Tras varios fallos de red / timeout (servidor ocupado con Gemini), dejar de martillar el API. */
+const POLL_MAX_CONSECUTIVE_FETCH_ERRORS = 8
 
 /**
  * Un solo loop de polling Gmail en toda la SPA.
@@ -422,6 +423,8 @@ export function useGmailPipeline({
 
   const [gmailStatus, setGmailStatus] = useState<GmailStatus | null>(null)
 
+  const [pollGaveUp, setPollGaveUp] = useState(false)
+
   const pollingRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const abortedRef = useRef(false)
@@ -453,6 +456,7 @@ export function useGmailPipeline({
     fetchErrorStreakRef.current = 0
     staleToastShownRef.current = false
     pollingActiveRef.current = false
+    setPollGaveUp(false)
     setLoading(false)
   }, [])
 
@@ -469,7 +473,12 @@ export function useGmailPipeline({
       pollingRef.current = setTimeout(async () => {
         pollingRef.current = null
         globalGmailPollTimeout = null
-        if (abortedRef.current || session !== globalGmailPollSession) return
+        if (abortedRef.current || session !== globalGmailPollSession) {
+          if (session !== globalGmailPollSession) {
+            setLoading(false)
+          }
+          return
+        }
 
         try {
           const s = await pagoService.getGmailStatus()
@@ -490,12 +499,14 @@ export function useGmailPipeline({
             }
             pollingActiveRef.current = false
             gaveUpWhileRunningRef.current = true
+            setPollGaveUp(true)
             setLoading(false)
             return
           }
 
           if (s.last_status && s.last_status !== 'running') {
             pollingActiveRef.current = false
+            setPollGaveUp(false)
             // Pipeline terminado
 
             setLoading(false)
@@ -573,6 +584,7 @@ export function useGmailPipeline({
           if (attempt >= POLL_MAX_ATTEMPTS) {
             pollingActiveRef.current = false
             gaveUpWhileRunningRef.current = true
+            setPollGaveUp(true)
             setLoading(false)
 
             const processed = s.last_emails ?? 0
@@ -585,7 +597,9 @@ export function useGmailPipeline({
               const msgTope = resumenTope
                 ? `${resumenTope}${diagIdent} Tiempo de espera máximo alcanzado; si aún corre en servidor, consulte estado o descargue Excel.`
                 : `Procesamiento en curso (${processed} correo(s) hasta ahora). Puede descargar ya los datos disponibles.`
-              toast.success(msgTope, { duration: resumenTope ? 14000 : 8000 })
+              if (!suppressDoneToasts) {
+                toast.success(msgTope, { duration: resumenTope ? 14000 : 8000 })
+              }
 
               onDoneRef.current?.(s)
             } else {
@@ -593,7 +607,9 @@ export function useGmailPipeline({
               const msgTope = resumenTope
                 ? `${resumenTope} Tiempo de espera máximo alcanzado en el navegador.`
                 : `El procesamiento sigue en curso (${processed} correo(s)). Espere y vuelva a intentar descargar.`
-              toast(msgTope, { duration: 10000 })
+              if (!suppressDoneToasts) {
+                toast(msgTope, { duration: 10000 })
+              }
             }
 
             return
@@ -606,12 +622,16 @@ export function useGmailPipeline({
             fetchErrorStreakRef.current >= POLL_MAX_CONSECUTIVE_FETCH_ERRORS
           ) {
             pollingActiveRef.current = false
+            setPollGaveUp(true)
             setLoading(false)
-            toast.error(
-              'No se pudo consultar el estado del pipeline Gmail (varios intentos fallidos). ' +
-                'Si el navegador muestra «CORS» o 502, suele ser el servidor o el proxy (p. ej. Render) no disponible o reiniciando; revise logs del backend.',
-              { duration: 12000 }
-            )
+            if (!suppressDoneToasts) {
+              toast(
+                'No pudimos consultar el progreso del escaneo Gmail (el servidor no respondió a tiempo varias veces). ' +
+                  'El procesamiento puede seguir en segundo plano con muchos correos o imágenes grandes. ' +
+                  'Espere unos minutos y recargue la página, o revise los logs del backend en Render.',
+                { duration: 14000, icon: '!' }
+              )
+            }
             return
           }
           if (attempt < POLL_MAX_ATTEMPTS) {
@@ -636,6 +656,7 @@ export function useGmailPipeline({
       fetchErrorStreakRef.current = 0
       staleToastShownRef.current = false
       pollingActiveRef.current = true
+      setPollGaveUp(false)
       lastScanFilterRef.current = scanFilter ?? 'all'
       setLoading(true)
       _pollStatus(0, session)
@@ -651,13 +672,19 @@ export function useGmailPipeline({
       /** Solo modo manual_redigitaliza_por_remitente: remitente | destinatario | participante. */
       criterio?: 'remitente' | 'destinatario' | 'participante' | null
     ) => {
-      if (loading) return
+      if (loading) {
+        if (!suppressDoneToasts) {
+          toast('Ya hay un escaneo Gmail en seguimiento.', { duration: 3000 })
+        }
+        return
+      }
 
       abortedRef.current = false
 
       fetchErrorStreakRef.current = 0
       staleToastShownRef.current = false
       gaveUpWhileRunningRef.current = false
+      setPollGaveUp(false)
 
       setLoading(true)
       lastScanFilterRef.current = scanFilter ?? 'all'
@@ -712,6 +739,7 @@ export function useGmailPipeline({
 
   return {
     loading,
+    pollGaveUp,
     gmailStatus,
     setGmailStatus,
     run,

@@ -45,12 +45,14 @@ from app.services.pagos_gmail.gmail_service import (
     extract_lote_it_master_cedula_from_subject,
 )
 from app.services.pagos_gmail.helpers import format_monto_excel_pagos_gmail, formatear_cedula
-from app.services.pagos_gmail.pipeline import run_pipeline
+from app.services.pagos_gmail.runner import schedule_gmail_pipeline_background
 from app.services.pagos_gmail.sync_stale import (
+    GmailPipelineBusyError,
     get_blocking_running_gmail_sync,
     gmail_sync_looks_stale,
     reconcile_blocking_running_gmail_sync_if_stale,
     reconcile_stale_running_gmail_sync,
+    reserve_gmail_pipeline_sync,
 )
 from app.services.pagos_gmail.plantilla_abcd_proceso_negocio import (
     PAGOS_GMAIL_UMBRAL_REVISION_MANUAL_USD,
@@ -88,12 +90,35 @@ def _get_blocking_running_sync(db: Session) -> Optional[PagosGmailSync]:
     return get_blocking_running_gmail_sync(db)
 
 
+def _raise_gmail_pipeline_busy(exc: GmailPipelineBusyError) -> None:
+    if exc.lock_contended:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Otra solicitud de inicio del pipeline Gmail está en curso. "
+                "Espere unos segundos y reintente."
+            ),
+        )
+    blocking = exc.blocking
+    started = blocking.started_at.isoformat() if blocking and blocking.started_at else "?"
+    sync_id = blocking.id if blocking else "?"
+    raise HTTPException(
+        status_code=409,
+        detail=(
+            f"Ya hay una sincronización en curso (sync_id={sync_id}, iniciada={started}). "
+            "Espere a que termine (consulte estado arriba). Si lleva más de 20 min sin procesar "
+            "correos, vuelva a pulsar «Procesar manualmente» o espere a que el servidor libere el bloqueo."
+        ),
+    )
+
+
 def _is_pipeline_running(db: Session) -> bool:
     """True si hay una sync en estado running (misma ventana que _get_blocking_running_sync)."""
     return _get_blocking_running_sync(db) is not None
 
 
-def _run_pipeline_background(
+# Alias histórico: rutas y tests pueden referir _schedule_pipeline_background.
+def _schedule_pipeline_background(
     sync_id: int,
     scan_filter: str = "all",
     from_email: Optional[str] = None,
@@ -101,49 +126,14 @@ def _run_pipeline_background(
     max_messages: Optional[int] = None,
     criterio_remitente: str = "remitente",
 ) -> None:
-    """Ejecuta el pipeline en background con su propia sesión de BD (evita el timeout de 30s de Render/Axios)."""
-    db = SessionLocal()
-    logger.info(
-        "[PAGOS_GMAIL] [ETAPA] Inicio pipeline background sync_id=%s scan_filter=%s from_email=%s criterio=%s only_ids=%d max_messages=%s",
+    schedule_gmail_pipeline_background(
         sync_id,
         scan_filter,
-        from_email or "(sin remitente)",
+        from_email,
+        only_message_ids,
+        max_messages,
         criterio_remitente,
-        len(only_message_ids) if only_message_ids else 0,
-        max_messages if max_messages is not None else "(sin tope)",
     )
-    try:
-        _, final_status = run_pipeline(
-            db,
-            existing_sync_id=sync_id,
-            scan_filter=scan_filter,
-            from_email=from_email,
-            only_message_ids=only_message_ids,
-            max_messages=max_messages,
-            criterio_remitente=criterio_remitente,
-        )
-        if final_status == "success":
-            mig = _migrar_pendientes_gmail_a_con_errores_core(db)
-            if int(mig.get("migrados", 0) or 0) > 0:
-                logger.info(
-                    "[PAGOS_GMAIL] [ETAPA] Migración post-run Gmail -> pendientes revisión: migrados=%s omitidos=%s",
-                    mig.get("migrados"),
-                    mig.get("omitidos"),
-                )
-    except Exception as e:
-        logger.info("[PAGOS_GMAIL] [ETAPA] Pipeline finalizado sync_id=%s", sync_id)
-        logger.exception("[PAGOS_GMAIL] [ETAPA] Error en background pipeline (sync_id=%s): %s", sync_id, e)
-        try:
-            sync = db.execute(select(PagosGmailSync).where(PagosGmailSync.id == sync_id)).scalars().first()
-            if sync and sync.status == "running":
-                sync.status = "error"
-                sync.finished_at = datetime.utcnow()
-                sync.error_message = str(e)[:2000]
-                db.commit()
-        except Exception:
-            pass
-    finally:
-        db.close()
 
 
 # Validación email para modo manual_redigitaliza_por_remitente (mismo criterio que gmail_service).
@@ -256,23 +246,6 @@ def run_now(
     El parametro force se mantiene por compatibilidad y no aplica ninguna restriccion.
     """
     _ = force
-    reconcile_blocking_running_gmail_sync_if_stale(db)
-    blocking = _get_blocking_running_sync(db)
-    if blocking is not None:
-        started = blocking.started_at.isoformat() if blocking.started_at else "?"
-        if force and gmail_sync_looks_stale(blocking):
-            reconcile_stale_running_gmail_sync(db, blocking)
-            blocking = _get_blocking_running_sync(db)
-        if blocking is not None:
-            raise HTTPException(
-                status_code=409,
-                detail=(
-                    f"Ya hay una sincronización en curso (sync_id={blocking.id}, iniciada={started}). "
-                    "Espere a que termine (consulte estado arriba). Si lleva más de 20 min sin procesar "
-                    "correos, vuelva a pulsar «Procesar manualmente» (force) o espere a que el servidor "
-                    "libere el bloqueo."
-                ),
-            )
     # Verificar credenciales de forma síncrona (respuesta inmediata si fallan)
     creds = get_pagos_gmail_credentials()
     if not creds:
@@ -328,15 +301,14 @@ def run_now(
         # IT Master es la cuenta Gmail conectada/buzón receptor; este módulo debe leer
         # INBOX como destinatario, no `from:`. gmail_service también lo fuerza por defensa.
         criterio_norm = "destinatario"
-    # Crear registro de sync de inmediato (evita que un segundo click arranque otro pipeline)
-    sync = PagosGmailSync(status="running", emails_processed=0, files_processed=0)
-    db.add(sync)
-    db.commit()
-    db.refresh(sync)
+    # Crear registro de sync de inmediato (lock transaccional evita doble click concurrente)
+    try:
+        sync = reserve_gmail_pipeline_sync(db, force=force)
+    except GmailPipelineBusyError as exc:
+        _raise_gmail_pipeline_busy(exc)
     sync_id = sync.id
-    # Lanzar pipeline en segundo plano; el cliente hace polling a /status
-    background_tasks.add_task(
-        _run_pipeline_background,
+    # Lanzar pipeline en hilo dedicado; el cliente hace polling a /status
+    _schedule_pipeline_background(
         sync_id,
         scan_filter,
         from_email_norm,
@@ -368,6 +340,9 @@ def status(db: Session = Depends(get_db)):
     if last is not None:
         marcados = int(getattr(last, "correos_marcados_revision", 0) or 0)
     run_summary = getattr(last, "run_summary", None) if last is not None else None
+    pipeline_phase = None
+    if isinstance(run_summary, dict):
+        pipeline_phase = run_summary.get("pipeline_phase")
     next_run_approx: Optional[str] = None
     try:
         from app.core.scheduler import get_pagos_gmail_scan_next_run_iso
@@ -385,6 +360,7 @@ def status(db: Session = Depends(get_db)):
         "latest_data_date": latest_data_date,
         "last_correos_marcados_revision": marcados,
         "last_run_summary": run_summary,
+        "pipeline_phase": pipeline_phase,
         "running_looks_stale": bool(last and gmail_sync_looks_stale(last)),
     }
 
@@ -2600,6 +2576,14 @@ def procesar_mensajes(
 
     blocking = _get_blocking_running_sync(db)
     if blocking is not None:
+        reconcile_blocking_running_gmail_sync_if_stale(db)
+        blocking = _get_blocking_running_sync(db)
+    if blocking is not None:
+        started = blocking.started_at.isoformat() if blocking.started_at else "?"
+        if gmail_sync_looks_stale(blocking):
+            reconcile_stale_running_gmail_sync(db, blocking)
+            blocking = _get_blocking_running_sync(db)
+    if blocking is not None:
         started = blocking.started_at.isoformat() if blocking.started_at else "?"
         raise HTTPException(
             status_code=409,
@@ -2660,15 +2644,13 @@ def procesar_mensajes(
             ),
         )
 
-    # Crear sync_id de inmediato (evita doble click).
-    sync = PagosGmailSync(status="running", emails_processed=0, files_processed=0)
-    db.add(sync)
-    db.commit()
-    db.refresh(sync)
+    try:
+        sync = reserve_gmail_pipeline_sync(db, force=True)
+    except GmailPipelineBusyError as exc:
+        _raise_gmail_pipeline_busy(exc)
     sync_id = sync.id
 
-    background_tasks.add_task(
-        _run_pipeline_background,
+    _schedule_pipeline_background(
         sync_id,
         "manual_redigitaliza_por_remitente",
         correo_lc,

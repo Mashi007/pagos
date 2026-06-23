@@ -882,12 +882,37 @@ def run_pipeline(
     none_reason_counts: dict[str, int] = {}
     none_reason_hint_counts: dict[str, int] = {}
 
-    try:
-        from app.core.config import settings as _settings_pipeline
+    from app.core.config import settings as _settings_pipeline
 
-        _gemini_model_snapshot = (
-            (_settings_pipeline.GEMINI_MODEL or "").strip() or "gemini-2.5-flash"
-        )
+    _gemini_model_snapshot = (
+        (_settings_pipeline.GEMINI_MODEL or "").strip() or "gemini-2.5-flash"
+    )
+
+    def _publish_sync_progress(*, phase: str | None = None) -> None:
+        """Heartbeat en BD para que /status muestre avance aunque el primer correo tarde en Gemini."""
+        try:
+            if phase is not None:
+                run_stats["pipeline_phase"] = phase
+            sync.emails_processed = emails_ok
+            sync.files_processed = files_ok
+            sync.run_summary = {
+                "scan_filter": scan_filter,
+                "gmail_messages_listed": int(run_stats.get("gmail_messages_listed", 0) or 0),
+                "pipeline_phase": run_stats.get("pipeline_phase"),
+                "emails_processed_so_far": emails_ok,
+                "files_processed_so_far": files_ok,
+                "gemini_calls_total": int(run_stats.get("gemini_calls_total", 0) or 0),
+                "gemini_model": _gemini_model_snapshot,
+            }
+            db.commit()
+        except Exception as _pub_exc:
+            try:
+                db.rollback()
+            except Exception:
+                pass
+            logger.debug("[PAGOS_GMAIL] publish progress omitido: %s", _pub_exc)
+
+    try:
 
         def fetch_sorted_batch() -> list[dict]:
             if only_ids_set:
@@ -2614,9 +2639,11 @@ def run_pipeline(
 
         messages = fetch_sorted_batch()
         run_stats["gmail_messages_listed"] = len(messages)
+        _publish_sync_progress(phase="listed")
         if not messages:
             logger.info("[PAGOS_GMAIL] No hay correos con filtro %s", scan_filter)
         else:
+            _publish_sync_progress(phase="processing")
             process_message_batch(messages, "run")
 
         try:

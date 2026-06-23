@@ -1,44 +1,57 @@
 # -*- coding: utf-8 -*-
+"""Tests de detección de sync Gmail running huérfana."""
 from datetime import datetime, timedelta
-from unittest.mock import MagicMock
 
+from app.models.pagos_gmail_sync import PagosGmailSync
 from app.services.pagos_gmail.sync_stale import (
+    STALE_MAX_RUNNING_MINUTES,
     STALE_NO_PROGRESS_MINUTES,
     gmail_sync_looks_stale,
-    reconcile_stale_running_gmail_sync,
 )
 
 
-def test_gmail_sync_looks_stale_sin_progreso():
-    sync = MagicMock()
-    sync.status = "running"
-    sync.emails_processed = 0
-    sync.files_processed = 0
-    now = datetime(2026, 6, 23, 13, 0, 0)
-    sync.started_at = now - timedelta(minutes=STALE_NO_PROGRESS_MINUTES + 1)
-    assert gmail_sync_looks_stale(sync, now=now)
+def _sync(
+    *,
+    status: str = "running",
+    emails: int = 0,
+    files: int = 0,
+    minutes_ago: float = 0,
+    run_summary: dict | None = None,
+) -> PagosGmailSync:
+    now = datetime.utcnow()
+    return PagosGmailSync(
+        id=1,
+        status=status,
+        emails_processed=emails,
+        files_processed=files,
+        started_at=now - timedelta(minutes=minutes_ago),
+        run_summary=run_summary,
+    )
 
 
-def test_gmail_sync_no_stale_si_hay_progreso_reciente():
-    sync = MagicMock()
-    sync.status = "running"
-    sync.emails_processed = 3
-    sync.files_processed = 1
-    now = datetime(2026, 6, 23, 13, 0, 0)
-    sync.started_at = now - timedelta(minutes=5)
-    assert not gmail_sync_looks_stale(sync, now=now)
+def test_stale_when_zero_progress_after_20_minutes():
+    sync = _sync(minutes_ago=STALE_NO_PROGRESS_MINUTES + 1)
+    assert gmail_sync_looks_stale(sync) is True
 
 
-def test_reconcile_stale_running_marca_error():
-    db = MagicMock()
-    sync = MagicMock()
-    sync.status = "running"
-    sync.emails_processed = 0
-    sync.files_processed = 0
-    now = datetime(2026, 6, 23, 13, 0, 0)
-    sync.started_at = now - timedelta(minutes=30)
-    sync.id = 99
-    assert reconcile_stale_running_gmail_sync(db, sync, now=now) is True
-    assert sync.status == "error"
-    assert sync.finished_at == now
-    db.commit.assert_called_once()
+def test_not_stale_when_messages_listed_but_zero_counters():
+    sync = _sync(
+        minutes_ago=STALE_NO_PROGRESS_MINUTES + 5,
+        run_summary={"gmail_messages_listed": 45, "pipeline_phase": "processing"},
+    )
+    assert gmail_sync_looks_stale(sync) is False
+
+
+def test_stale_when_max_running_minutes_exceeded():
+    sync = _sync(
+        emails=3,
+        files=2,
+        minutes_ago=STALE_MAX_RUNNING_MINUTES + 1,
+        run_summary={"gmail_messages_listed": 45},
+    )
+    assert gmail_sync_looks_stale(sync) is True
+
+
+def test_not_stale_for_success_status():
+    sync = _sync(status="success", minutes_ago=STALE_MAX_RUNNING_MINUTES + 10)
+    assert gmail_sync_looks_stale(sync) is False

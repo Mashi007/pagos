@@ -403,50 +403,29 @@ def _job_limpiar_estado_cuenta_codigos() -> None:
 
 
 def _job_pagos_gmail_pending_scan() -> None:
-    """Todos los dias cada hora :30 entre 06:30 y 19:30 (America/Caracas): pipeline Gmail correos pendientes de identificacion."""
-    from datetime import datetime, timedelta
-
-    from sqlalchemy import and_, select
-
+    """Todos los dias cada hora :30 entre 06:30 y 19:30 (America/Caracas): pipeline Gmail."""
     if not getattr(settings, "PAGOS_GMAIL_SCHEDULED_SCAN_ENABLED", False):
         return
     db = SessionLocal()
     try:
-        from app.models.pagos_gmail_sync import PagosGmailSync
-        from app.services.pagos_gmail.pipeline import run_pipeline
+        from app.services.pagos_gmail.runner import schedule_gmail_pipeline_background
+        from app.services.pagos_gmail.sync_stale import (
+            GmailPipelineBusyError,
+            reconcile_blocking_running_gmail_sync_if_stale,
+            reserve_gmail_pipeline_sync,
+        )
 
-        cutoff = datetime.utcnow() - timedelta(hours=2)
-        row = db.execute(
-            select(PagosGmailSync).where(
-                and_(
-                    PagosGmailSync.status == "running",
-                    PagosGmailSync.started_at >= cutoff,
-                )
-            ).limit(1)
-        ).scalars().first()
-        if row is not None:
+        reconcile_blocking_running_gmail_sync_if_stale(db)
+        try:
+            sync = reserve_gmail_pipeline_sync(db, force=False)
+        except GmailPipelineBusyError:
             logger.info("[PAGOS_GMAIL] Escaneo programado omitido: sync en curso")
             return
-        logger.info("[PAGOS_GMAIL] Escaneo programado: all (leídos + no leídos)")
-        sync_done_id, pipe_status = run_pipeline(
-            db, existing_sync_id=None, scan_filter="all"
+        logger.info(
+            "[PAGOS_GMAIL] Escaneo programado: all (leídos + no leídos) sync_id=%s",
+            sync.id,
         )
-        if sync_done_id:
-            db.expire_all()
-            sync_row = db.execute(
-                select(PagosGmailSync).where(PagosGmailSync.id == sync_done_id)
-            ).scalars().first()
-            rs = (sync_row.run_summary or {}) if sync_row else {}
-            logger.info(
-                "[PAGOS_GMAIL] Escaneo programado finalizado (status=%s): correos=%s; "
-                "comprobantes=%s, pagos_validos_alta_auto=%s, pagos_pendientes_excel=%s — "
-                "pendientes en Excel (descarga temporal en UI Pagos).",
-                pipe_status,
-                getattr(sync_row, "emails_processed", 0) if sync_row else 0,
-                rs.get("comprobantes_digitados", 0),
-                rs.get("pagos_validos_alta_automatica", 0),
-                rs.get("pagos_invalidos_pendientes_revision", 0),
-            )
+        schedule_gmail_pipeline_background(sync.id, scan_filter="all")
     except Exception as e:
         logger.exception("[PAGOS_GMAIL] Escaneo programado: %s", e)
     finally:

@@ -491,6 +491,7 @@ export function PagosList() {
 
   const {
     loading: loadingGmail,
+    pollGaveUp: gmailPollGaveUp,
     gmailStatus,
     setGmailStatus,
     run: runGmail,
@@ -2353,6 +2354,17 @@ export function PagosList() {
                     <>
                       Procesando: {gmailStatus.last_emails} correos,{' '}
                       {gmailStatus.last_files} archivos
+                      {typeof gmailStatus.last_run_summary?.gmail_messages_listed ===
+                        'number' &&
+                      gmailStatus.last_run_summary.gmail_messages_listed > 0 &&
+                      (gmailStatus.last_emails ?? 0) === 0 ? (
+                        <span className="mt-1 block text-gray-600">
+                          En cola:{' '}
+                          {gmailStatus.last_run_summary.gmail_messages_listed}{' '}
+                          correo(s). El primer comprobante puede tardar varios
+                          minutos (imagen grande + Gemini).
+                        </span>
+                      ) : null}
                       {gmailStatus.running_looks_stale ? (
                         <span className="mt-1 block text-amber-700">
                           Sin actividad prolongada: el servidor puede liberar el
@@ -2499,6 +2511,12 @@ export function PagosList() {
                           <span>Detener seguimiento</span>
                         </button>
                       )}
+                      {gmailPollGaveUp && gmailStatus?.last_status === 'running' ? (
+                        <p className="px-3 text-xs text-amber-800">
+                          El servidor no respondió a tiempo varias veces; el
+                          proceso puede continuar en segundo plano.
+                        </p>
+                      ) : null}
                       <button
                         type="button"
                         className="flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left text-sm text-red-700 hover:bg-red-50 disabled:opacity-50"
@@ -2541,6 +2559,13 @@ export function PagosList() {
               <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
                 Última corrida Gmail (métricas)
               </div>
+              {gmailPollGaveUp && gmailStatus?.last_status === 'running' ? (
+                <p className="mt-1 text-xs text-amber-800">
+                  Seguimiento en el navegador pausado (timeouts del servidor). El
+                  escaneo puede seguir en Render; recargue la página en unos
+                  minutos para ver progreso.
+                </p>
+              ) : null}
               <div className="mt-1 break-words">
                 {bannerSummary
                   ? gmailRunSummaryHeadline(bannerSummary)
