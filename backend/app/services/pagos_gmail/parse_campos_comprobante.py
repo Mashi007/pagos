@@ -145,6 +145,28 @@ CRITERIO MATEMÁTICO — FECHA BORROSA (revisión manual; NO inventar):
 """.strip()
 
 
+REGLA_MONTO_BORROSO_REVISION_MANUAL_PROMPT = """
+CRITERIO MATEMÁTICO — MONTO BORROSO (revisión manual; NO inventar ni truncar):
+  El monto impreso se modela dígito a dígito (parte entera + decimales si aparecen). Para cada posición i, confianza visual cᵢ ∈ [0,1] (no reportes cᵢ en JSON).
+
+  Definiciones (mismas que fecha/serial):
+  - Dígito inequívoco: cᵢ ≥ 0,90.
+  - A = {{ i | cᵢ < 0,90 }}, L = (n − |A|) / n (n = cantidad de dígitos del monto leído).
+
+  BORROSO → null/NA si **cualquiera**:
+    (a) L < 0,875
+    (b) |A| ≥ 1 y ≥2 lecturas plausibles distintas del mismo monto (ej. 600 vs 60 por cero final dudoso; 96 vs 66)
+    (c) Orientación lateral/boca abajo impide contar dígitos con certeza tras rotar mentalmente
+    (d) Rasgos similares (0/O, 6/8, 1/7, 5/S) dejan ambiguo el valor
+
+  **Ceros finales (obligatorio):**
+  - Prohibido omitir ceros finales del entero: `600,00` / `600 $` / `600.00` → **600**, nunca **60** ni **6**.
+  - `60,00` solo si en el papel hay **exactamente dos** cifras antes de la coma/punto decimal.
+
+  Si declaras monto borroso en `notas`, `monto` = null o "NA". El backend no “corrige” multiplicando por 10.
+""".strip()
+
+
 REGLA_SERIAL_BORROSO_REVISION_MANUAL_PROMPT = """
 CRITERIO MATEMÁTICO — SERIAL / REF / Nº OPERACIÓN BORROSO (revisión manual; NO inventar):
   El serial (solo dígitos, longitud n ≥ 3) se modela como d₁…dₙ. Para cada posición i, confianza visual cᵢ ∈ [0,1] (no reportes cᵢ en JSON).
@@ -181,6 +203,13 @@ _SERIAL_BORROSO_NOTAS_RE = re.compile(
     r"serial.*L\s*<\s*0[,.]875|revisi[oó]n\s+manual.*serial|serial.*revisi[oó]n\s+manual)"
 )
 
+_MONTO_BORROSO_NOTAS_RE = re.compile(
+    r"(?i)(monto\s+borros|importe\s+borros|cantidad\s+borros|"
+    r"L\s*<\s*0[,.]875.*monto|monto.*L\s*<\s*0[,.]875|"
+    r"revisi[oó]n\s+manual.*monto|monto.*revisi[oó]n\s+manual|"
+    r"cero\s+final\s+dudoso|600\s+vs\s+60|truncad[oa].*monto)"
+)
+
 
 def gemini_indico_fecha_borrosa(fecha_raw: Any, notas: Any) -> bool:
     """True si Gemini marcó borrosura: descartar su fecha y no inferir desde texto libre."""
@@ -196,6 +225,28 @@ def gemini_indico_serial_borroso(serial_raw: Any, notas: Any) -> bool:
     if notas_s and _SERIAL_BORROSO_NOTAS_RE.search(notas_s):
         return True
     return False
+
+
+def gemini_indico_monto_borroso(monto_raw: Any, notas: Any) -> bool:
+    """True si Gemini marcó monto borroso o ambiguo (ej. 600 vs 60): no usar el valor."""
+    notas_s = str(notas or "").strip()
+    if notas_s and _MONTO_BORROSO_NOTAS_RE.search(notas_s):
+        return True
+    return False
+
+
+def monto_ocr_borrosa_revision_manual(
+    *,
+    digitos_inequivocos: int,
+    total_digitos: int,
+    dos_montos_plausibles_distintos: bool = False,
+) -> bool:
+    """True si el monto debe dejarse vacío/NA (mismo criterio L < 0,875 que fecha/serial)."""
+    return digitos_ocr_legibilidad_insuficiente(
+        digitos_inequivocos,
+        total_digitos,
+        dos_lecturas_distintas_plausibles=dos_montos_plausibles_distintos,
+    )
 
 
 def parse_fecha_comprobante_escaner(
@@ -234,6 +285,181 @@ def serial_ocr_borrosa_revision_manual(
         total_digitos,
         dos_lecturas_distintas_plausibles=dos_seriales_plausibles_distintos,
     )
+
+
+def ocr_borroso_indicado_en_texto(texto: Any) -> bool:
+    """True si un comentario/notas menciona fecha, serial o monto borroso (revisión manual)."""
+    t = str(texto or "").strip()
+    if not t:
+        return False
+    return bool(
+        _FECHA_BORROSA_NOTAS_RE.search(t)
+        or _SERIAL_BORROSO_NOTAS_RE.search(t)
+        or _MONTO_BORROSO_NOTAS_RE.search(t)
+    )
+
+
+def _procesar_serial_ocr_post_gemini(
+    raw: Any,
+    *,
+    notas: str,
+    institucion: str,
+) -> str:
+    """Sanitiza y corrige serial/ref si no está marcado borroso."""
+    s = str(raw or "").strip()
+    if not s or s.upper() in ("", PAGOS_NA, "N/A"):
+        return ""
+    cleaned = sanitizar_numero_operacion_comprobante(s)[:100]
+    aux = f"{s}\n{notas}"
+    inst = (institucion or "").strip()
+    cleaned = corregir_numero_operacion_mercantil(
+        cleaned, institucion=inst, texto_auxiliar=aux
+    )[:100]
+    cleaned = corregir_numero_operacion_bnc(
+        cleaned, institucion=inst, texto_auxiliar=aux
+    )[:100]
+    return cleaned
+
+
+def _resolver_fecha_ocr_post_gemini(
+    fecha_raw: Any,
+    *,
+    notas: str,
+    ref_hoy: date,
+    blob_dcme: str,
+    inferir_fecha_dcme: bool,
+) -> Optional[date]:
+    """Fecha conservadora + inferencia solo desde bloque DCME estructurado."""
+    if gemini_indico_fecha_borrosa(fecha_raw, notas):
+        return None
+    if fecha_raw and str(fecha_raw).strip():
+        parsed = parse_fecha_comprobante_escaner(fecha_raw, ref_hoy)
+        if parsed is not None:
+            return parsed
+    if not inferir_fecha_dcme:
+        return None
+    dcme = extraer_codigo_dcme_mercantil_en_texto(blob_dcme)
+    if not dcme:
+        return None
+    f_inf = inferir_fecha_pago_mercantil_desde_texto(dcme, ref_hoy)
+    if not f_inf:
+        return None
+    # Bloque DCME: fecha estructurada YYYYMMDD → sin ambigüedad DD/MM del parse conservador.
+    return parse_fecha_comprobante(f_inf, ref_hoy)
+
+
+def aplicar_reglas_ocr_post_gemini(
+    datos: Dict[str, Any],
+    *,
+    perfil: str = "escaner",
+    ref_hoy: Optional[date] = None,
+    institucion: str = "",
+    inferir_fecha_dcme: bool = True,
+) -> Dict[str, Any]:
+    """
+    Post-proceso unificado tras Gemini: borrosura fecha/serial (L < 0,875), parse conservador,
+    sin corrección de serial si notas indican borrosura, inferencia de fecha solo por DCME.
+
+    Perfiles:
+    - escaner: fecha_pago → date|None, numero_operacion → str
+    - gmail: fecha_pago → dd/mm/yyyy|NA, numero_referencia → str|NA
+    - cobranza: fecha_deposito, numero_deposito, numero_documento → str|NA
+    """
+    from app.services.tasa_cambio_service import fecha_hoy_caracas
+
+    if ref_hoy is None:
+        ref_hoy = fecha_hoy_caracas()
+
+    out = dict(datos)
+    notas = str(datos.get("notas") or "").strip()
+    perfil_norm = (perfil or "escaner").strip().lower()
+
+    if perfil_norm == "cobranza":
+        inst = institucion or str(datos.get("nombre_banco") or "")
+        fd_raw = datos.get("fecha_deposito")
+        if gemini_indico_fecha_borrosa(fd_raw, notas):
+            out["fecha_deposito"] = PAGOS_NA
+        elif fd_raw and str(fd_raw).strip().upper() not in ("", PAGOS_NA, "N/A"):
+            fd = _resolver_fecha_ocr_post_gemini(
+                fd_raw,
+                notas=notas,
+                ref_hoy=ref_hoy,
+                blob_dcme=notas,
+                inferir_fecha_dcme=False,
+            )
+            out["fecha_deposito"] = fd.strftime("%d/%m/%Y") if fd else PAGOS_NA
+        for key in ("numero_deposito", "numero_documento"):
+            raw = str(datos.get(key) or "").strip()
+            if gemini_indico_serial_borroso(raw, notas):
+                out[key] = PAGOS_NA
+            elif raw and raw.upper() not in (PAGOS_NA, "N/A"):
+                cleaned = _procesar_serial_ocr_post_gemini(
+                    raw, notas=notas, institucion=inst
+                )
+                out[key] = cleaned if cleaned else PAGOS_NA
+        out["_ocr_serial_borroso"] = any(
+            gemini_indico_serial_borroso(datos.get(k), notas)
+            for k in ("numero_deposito", "numero_documento")
+        )
+        out["_ocr_fecha_borroso"] = gemini_indico_fecha_borrosa(
+            datos.get("fecha_deposito"), notas
+        )
+        return out
+
+    if perfil_norm == "gmail":
+        serial_key = "numero_referencia"
+        inst = institucion or str(datos.get("banco") or "")
+        vacio_serial = PAGOS_NA
+    else:
+        serial_key = "numero_operacion"
+        inst = institucion or str(datos.get("institucion_financiera") or "")
+        vacio_serial = ""
+
+    raw_serial = str(datos.get(serial_key) or "").strip()
+    serial_borroso = gemini_indico_serial_borroso(raw_serial, notas)
+    if serial_borroso:
+        out[serial_key] = vacio_serial
+        cleaned_serial = ""
+    elif raw_serial and raw_serial.upper() not in (PAGOS_NA, "N/A"):
+        cleaned_serial = _procesar_serial_ocr_post_gemini(
+            raw_serial, notas=notas, institucion=inst
+        )
+        out[serial_key] = (
+            cleaned_serial if cleaned_serial else vacio_serial or PAGOS_NA
+        )
+    else:
+        cleaned_serial = ""
+
+    fecha_raw = datos.get("fecha_pago")
+    blob_dcme = f"{raw_serial}\n{notas}"
+    fecha_parsed = _resolver_fecha_ocr_post_gemini(
+        fecha_raw,
+        notas=notas,
+        ref_hoy=ref_hoy,
+        blob_dcme=blob_dcme,
+        inferir_fecha_dcme=inferir_fecha_dcme and not serial_borroso,
+    )
+    if perfil_norm == "gmail":
+        if gemini_indico_fecha_borrosa(fecha_raw, notas):
+            out["fecha_pago"] = PAGOS_NA
+        elif fecha_parsed:
+            out["fecha_pago"] = fecha_parsed.strftime("%d/%m/%Y")
+        elif fecha_raw and str(fecha_raw).strip().upper() not in ("", PAGOS_NA, "N/A"):
+            out["fecha_pago"] = PAGOS_NA
+    else:
+        out["fecha_pago"] = fecha_parsed
+
+    monto_raw = datos.get("monto")
+    monto_borroso = gemini_indico_monto_borroso(monto_raw, notas)
+    if monto_borroso:
+        out["monto"] = vacio_serial if perfil_norm == "gmail" else None
+    elif monto_raw is not None and str(monto_raw).strip():
+        out["monto"] = monto_raw
+
+    out["_ocr_serial_borroso"] = serial_borroso
+    out["_ocr_fecha_borroso"] = gemini_indico_fecha_borrosa(fecha_raw, notas)
+    out["_ocr_monto_borroso"] = monto_borroso
+    return out
 
 
 # Montos escaneados/reportados por encima de este valor van a revisión manual (cualquier moneda/medio).
@@ -1226,39 +1452,10 @@ def referencia_duplicada_en_memoria_o_bd(
 
 def normalizar_campos_gemini_gmail(fields: Dict[str, str]) -> Dict[str, str]:
     """Normaliza monto/fecha/referencia extraidos por Gemini antes de validar plantillas Gmail."""
-    from app.services.tasa_cambio_service import fecha_hoy_caracas
-
-    ref = fecha_hoy_caracas()
-    out = dict(fields)
-    nr = (out.get("numero_referencia") or "").strip()
-    nr_raw_para_fecha = nr
-    if nr and nr.upper() != PAGOS_NA:
-        banco = (out.get("banco") or "").strip()
-        inst = "" if banco.upper() == PAGOS_NA else banco
-        cleaned = sanitizar_numero_operacion_comprobante(nr)
-        cleaned = corregir_numero_operacion_mercantil(
-            cleaned,
-            institucion=inst,
-            texto_auxiliar=nr,
-        )
-        cleaned = corregir_numero_operacion_bnc(
-            cleaned,
-            institucion=inst,
-            texto_auxiliar=nr,
-        )
-        out["numero_referencia"] = cleaned if cleaned else PAGOS_NA
-        nr = out["numero_referencia"]
-    fp = (out.get("fecha_pago") or "").strip()
-    if fp and fp.upper() != PAGOS_NA:
-        norm = fecha_comprobante_a_ddmmyyyy(fp, ref)
-        out["fecha_pago"] = norm if norm else PAGOS_NA
-    elif (not fp or fp.upper() == PAGOS_NA) and nr_raw_para_fecha and nr_raw_para_fecha.upper() != PAGOS_NA:
-        if "mercantil" in inst.lower() or extraer_codigo_dcme_mercantil_en_texto(nr_raw_para_fecha):
-            inferida = inferir_fecha_pago_mercantil_desde_texto(nr_raw_para_fecha, ref)
-        else:
-            inferida = inferir_fecha_pago_desde_numero_operacion(nr_raw_para_fecha, ref)
-        if inferida:
-            out["fecha_pago"] = inferida
+    out = aplicar_reglas_ocr_post_gemini(dict(fields), perfil="gmail")
+    out.pop("_ocr_serial_borroso", None)
+    out.pop("_ocr_fecha_borroso", None)
+    out.pop("_ocr_monto_borroso", None)
     mo = (out.get("monto") or "").strip()
     if mo and mo.upper() not in (PAGOS_NA, "NR"):
         fm = monto_comprobante_a_excel(mo)

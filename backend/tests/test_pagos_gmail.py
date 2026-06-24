@@ -463,15 +463,17 @@ def test_parse_formato_b_app_sin_fecha_si_monto_y_referencia():
     assert (fields.get("fecha_pago") or "").strip().upper() == "NA"
 
 
-def test_parse_formato_a_sin_fecha_sigue_rechazado():
+def test_parse_formato_a_sin_fecha_permite_revision_manual():
+    """A con monto+ref legibles y fecha NA: formato A (fecha borrosa → revisión manual)."""
     j = (
         '{"formato":"A","fecha_pago":"NA","cedula":"NA",'
         '"monto":"100.00 USD","numero_referencia":"740087407343435",'
         '"email_cliente":"NA","banco":"NA"}'
     )
     fmt, fields = _parse_formato_y_pagos_json(j)
-    assert fmt == "ninguno"
-    assert (fields.get("_diag_none_reason") or "") == "falto_fecha"
+    assert fmt == "A"
+    assert (fields.get("fecha_pago") or "").strip().upper() == "NA"
+    assert (fields.get("numero_referencia") or "").strip() == "740087407343435"
 
 
 def test_parse_formato_c_binance_ok():

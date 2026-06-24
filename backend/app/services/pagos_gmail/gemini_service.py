@@ -31,7 +31,9 @@ from app.services.pagos_gmail.helpers import get_mime_type
 from app.services.pagos_gmail.parse_campos_comprobante import (
     REGLA_DUPLICADO_NUMERO_OPERACION_PROMPT,
     REGLA_FECHA_BORROSA_REVISION_MANUAL_PROMPT,
+    REGLA_MONTO_BORROSO_REVISION_MANUAL_PROMPT,
     REGLA_SERIAL_BORROSO_REVISION_MANUAL_PROMPT,
+    aplicar_reglas_ocr_post_gemini,
     corregir_numero_operacion_bnc,
     corregir_numero_operacion_mercantil,
     extraer_ref_etiquetado_bnc,
@@ -42,10 +44,7 @@ from app.services.pagos_gmail.parse_campos_comprobante import (
     extraer_codigo_dcme_mercantil_en_texto,
     normalizar_campos_gemini_gmail,
     numero_operacion_mercantil_solo_dcme,
-    parse_fecha_comprobante as _parse_fecha_escaner_desde_gemini,
-    parse_fecha_comprobante_escaner,
-    gemini_indico_fecha_borrosa,
-    gemini_indico_serial_borroso,
+    ocr_borroso_indicado_en_texto,
     parse_monto_comprobante as _parse_monto_escaner,
     sanitizar_numero_operacion_comprobante,
     serial_mercantil_requiere_rescate,
@@ -68,6 +67,8 @@ MONTO — coma venezolana y asteriscos de cajero; NO concatenar decimales al ent
   - Prioriza línea **Monto** de la **tira/sello del validador** sobre casilla manuscrita si difieren.
   - BNC cajero: `**********122.00`, `*****96.00` o `***********135.00` → 122.00 / 96.00 / **135.00** sin asteriscos. Prohibido `135000`, `135.000`, `13500` o `1.350.00`: son errores OCR de `135.00`.
   - BNC cajero — **no pierdas el primer dígito** tras asteriscos: `**************114.00` → **114.00**, nunca **14.00** (el `1` inicial va pegado al último `*`).
+  - **Ceros finales del entero (obligatorio):** `600,00` / `600 $` / `600.00` → **600**, nunca **60** ni **6**. Cuenta cada dígito antes de la coma/punto; si la foto está girada, **rote mentalmente** antes de leer el monto (igual que Serial Mercantil).
+  - Recibo manuscrito **Por:** (formato G): `600 $` → **600**; no omitas el cero final aunque esté pegado al símbolo $.
   - En JSON de monto usa número decimal con **punto** (96.00), sin separador de miles.
 
 FECHA — Venezuela DD/MM/YYYY; no confundir con MM/DD ni inventar desde metadata:
@@ -80,6 +81,8 @@ FECHA — Venezuela DD/MM/YYYY; no confundir con MM/DD ni inventar desde metadat
 """.strip()
     + "\n\n"
     + REGLA_FECHA_BORROSA_REVISION_MANUAL_PROMPT
+    + "\n\n"
+    + REGLA_MONTO_BORROSO_REVISION_MANUAL_PROMPT
 )
 
 # Reglas compartidas Serial/Ref (escáner Infopagos, compare formulario vs imagen).
@@ -106,7 +109,7 @@ Plantilla **G** cuando el documento es un **RECIBO** impreso a mano o pre-impres
 - **Número de recibo** (`numero_operacion` / `numero_referencia`): junto a **RECIBO**, impreso en rojo **№ 00972** / **Nº 00958** — copie **todos los dígitos conservando ceros** (00972, no 972).
 - **Fecha** (`fecha_pago`): cajas **Día / Mes / Año** esquina superior derecha (ej. **08 / 06 / 2026** → 2026-06-08 o 08/06/2026). Línea **EN:** ciudad (Guigue).
 - **C.I. / RIF** del pagador: etiqueta **C.I. / RIF:** en el cuerpo (ej. **V- 18.231.931** → solo dígitos **18231931** en escáner; en Gmail formato **G** puede devolver **V18231931**).
-- **Monto** (`monto`): caja **Por:** abajo a la derecha (ej. **200 $** → **200**, moneda **USD**). Si **Forma de Pago: Divisas** está marcada → **USD**.
+- **Monto** (`monto`): caja **Por:** abajo a la derecha (ej. **200 $** → **200**, **600 $** → **600**; moneda **USD**). **Prohibido** leer **600** como **60** (no omitas ceros finales). Si la foto está lateral o boca abajo, **rote mentalmente** antes de contar dígitos. Si **Forma de Pago: Divisas** está marcada → **USD**.
 - **Concepto**: «Cuota Rapi-Credit» / «Rapi credit» confirma pago a Rapicredit.
 - **`institucion_financiera` / `banco`**: siempre el literal exacto **Recibo** (no Mercantil, BNC ni otro banco).
 - Sello **PAGADO** / firma autorizada: confirma recibo válido; no sustituye número ni monto.
@@ -2484,7 +2487,7 @@ def _parse_cobranza_json(text: str) -> Dict[str, Any]:
                 base[k] = str(v).strip()[:255] if k == "nombre_banco" else str(v).strip()[:100]
         if data.get("aceptable") is False:
             base["humano"] = "HUMANO"
-        return base
+        return aplicar_reglas_ocr_post_gemini(base, perfil="cobranza")
     except (json.JSONDecodeError, TypeError):
         return base
 
@@ -2631,11 +2634,22 @@ def compare_form_with_image(
         return default_result
     
     form_compare = dict(form_data)
-    num_op_form = sanitizar_numero_operacion_comprobante(
-        form_data.get("numero_operacion")
+    ocr_form = aplicar_reglas_ocr_post_gemini(
+        {
+            "fecha_pago": form_data.get("fecha_pago"),
+            "numero_referencia": form_data.get("numero_operacion"),
+            "banco": form_data.get("institucion_financiera"),
+            "notas": form_data.get("notas") or "",
+        },
+        perfil="gmail",
     )
-    if num_op_form:
-        form_compare["numero_operacion"] = num_op_form
+    if ocr_form.get("fecha_pago"):
+        form_compare["fecha_pago"] = ocr_form["fecha_pago"]
+    nr_ocr = ocr_form.get("numero_referencia")
+    if nr_ocr and str(nr_ocr).strip().upper() != PAGOS_NA:
+        form_compare["numero_operacion"] = nr_ocr
+    elif ocr_form.get("_ocr_serial_borroso"):
+        form_compare["numero_operacion"] = ""
 
     cached_result = cache_get(image_bytes, form_compare)
     if cached_result:
@@ -2664,7 +2678,7 @@ def compare_form_with_image(
         from google import genai
         from google.genai import types
         client = _gemini_client(key)
-        image_part = _build_image_part(image_bytes, filename, mime)
+        image_part = _build_image_part_escaner_infopagos(image_bytes, filename, mime)
         last_error = None
         # 429 y 503 pueden tener distinto max de reintentos: el bucle debe permitir el mayor.
         _max_gemini_attempts = max(GEMINI_RATE_LIMIT_MAX_RETRIES, GEMINI_SERVER_ERROR_MAX_RETRIES) + 1
@@ -2732,6 +2746,12 @@ def compare_form_with_image(
                                 "[COBROS] Binance: control_usuario_operaciones=false "
                                 "(operaciones@ no arriba del ID de orden)"
                             )
+                    if ocr_borroso_indicado_en_texto(comentario):
+                        coincide = False
+                        comentario = comentario or "Fecha pago, Nº operación"
+                        logger.info(
+                            "[COBROS] Comparación: OCR borroso en comentario → revisión manual"
+                        )
                     result = {
                         "coincide_exacto": coincide,
                         "requiere_revision_humana": not coincide,
@@ -2801,6 +2821,8 @@ REGLAS:
   - La fecha de operación inferida **no puede ser posterior** a {fecha_hoy_iso}; si una lectura lleva a futuro, corrige interpretación o deja "".
   - Si la fecha no es legible con suficiente certeza (aplica CRITERIO MATEMÁTICO: L < 0,875 o ambigüedad calendario), deja `fecha_pago` como "" y explícitalo en `notas` (ej. "fecha borrosa, revisión manual").
   - Si el serial/ref no es legible con suficiente certeza (mismo CRITERIO MATEMÁTICO con n = cantidad de dígitos del serial: L < 0,875), deja `numero_operacion` como "" y explícitalo en `notas` (ej. "serial borroso, revisión manual").
+  - Si el monto no es legible con suficiente certeza (CRITERIO MATEMÁTICO del bloque MONTO BORROSO; ej. duda 600 vs 60), deja `monto` como `null` y explícitalo en `notas` (ej. "monto borroso, revisión manual").
+  - ORIENTACIÓN: recibos, tiras Mercantil y capturas pueden llegar en **cualquier giro** (0°/90°/180°/270°). Rote mentalmente la imagen antes de leer monto, fecha y serial; no trunques dígitos por leer el texto en vertical.
   - Responde ÚNICAMENTE con un objeto JSON válido, sin markdown ni texto extra, con exactamente estas claves:
   fecha_pago, institucion_financiera, numero_operacion, monto, moneda, cedula_pagador_en_comprobante, notas, control_usuario_operaciones
   - SALIDA OBLIGATORIA: solo el objeto JSON; ningún párrafo ni razonamiento antes ni después. Sin fences markdown ni texto extra.
@@ -3091,63 +3113,49 @@ def extract_infopagos_campos_desde_comprobante(
                     mon_norm = "BS"
 
                 notas_pre = str(data.get("notas") or "").strip()
-                raw_num_op = str(data.get("numero_operacion") or "").strip()
-                serial_borroso = gemini_indico_serial_borroso(raw_num_op, notas_pre)
-                if serial_borroso:
-                    num_op = ""
-                    inst = _resolver_institucion_escaner(
-                        str(data.get("institucion_financiera") or "").strip(),
-                        institucion_plantilla,
-                        notas_pre,
-                        raw_num_op,
-                    )
-                else:
-                    num_op = sanitizar_numero_operacion_comprobante(raw_num_op)[:100]
-                    inst = _resolver_institucion_escaner(
-                        str(data.get("institucion_financiera") or "").strip(),
-                        institucion_plantilla,
-                        notas_pre,
-                        num_op,
-                    )
-                    num_op = corregir_numero_operacion_mercantil(
-                        num_op,
-                        institucion=inst,
-                        texto_auxiliar=f"{raw_num_op}\n{notas_pre}",
-                    )[:100]
-                    num_op = corregir_numero_operacion_bnc(
-                        num_op,
-                        institucion=inst,
-                        texto_auxiliar=f"{raw_num_op}\n{notas_pre}",
-                    )[:100]
-                fecha = None
-                fecha_raw = data.get("fecha_pago")
-                if not gemini_indico_fecha_borrosa(fecha_raw, notas_pre):
-                    fecha = parse_fecha_comprobante_escaner(fecha_raw, ref_hoy)
-                    if fecha is None:
-                        blob_fecha = f"{raw_num_op}\n{notas_pre}"
-                        dcme = extraer_codigo_dcme_mercantil_en_texto(blob_fecha)
-                        if dcme:
-                            f_inf = inferir_fecha_pago_mercantil_desde_texto(
-                                dcme, ref_hoy
-                            )
-                            if f_inf:
-                                fecha = parse_fecha_comprobante_escaner(f_inf, ref_hoy)
-                monto = _parse_monto_escaner(
-                    data.get("monto"),
-                    moneda=mon_norm,
+                inst = _resolver_institucion_escaner(
+                    str(data.get("institucion_financiera") or "").strip(),
+                    institucion_plantilla,
+                    notas_pre,
+                    str(data.get("numero_operacion") or "").strip(),
+                )
+                ocr = aplicar_reglas_ocr_post_gemini(
+                    {
+                        "fecha_pago": data.get("fecha_pago"),
+                        "numero_operacion": data.get("numero_operacion"),
+                        "monto": data.get("monto"),
+                        "notas": notas_pre,
+                        "institucion_financiera": inst,
+                    },
+                    perfil="escaner",
+                    ref_hoy=ref_hoy,
                     institucion=inst,
                 )
-                if data.get("fecha_pago") and fecha is None:
+                num_op = str(ocr.get("numero_operacion") or "")
+                fecha = ocr.get("fecha_pago")
+                serial_borroso = bool(ocr.get("_ocr_serial_borroso"))
+                monto_borroso = bool(ocr.get("_ocr_monto_borroso"))
+                if data.get("fecha_pago") and fecha is None and not ocr.get("_ocr_fecha_borroso"):
                     logger.info(
                         "[ESCANER] fecha_pago descartada (ilegible/futura/lejana): raw=%r ref=%s",
                         str(data.get("fecha_pago"))[:40],
                         ref_hoy.isoformat(),
                     )
-                if serial_borroso and raw_num_op:
+                if serial_borroso and str(data.get("numero_operacion") or "").strip():
                     logger.info(
                         "[ESCANER] numero_operacion omitido (serial borroso en notas): raw=%r",
-                        raw_num_op[:40],
+                        str(data.get("numero_operacion"))[:40],
                     )
+                if monto_borroso and data.get("monto") is not None:
+                    logger.info(
+                        "[ESCANER] monto omitido (monto borroso en notas): raw=%r",
+                        str(data.get("monto"))[:40],
+                    )
+                monto = None if monto_borroso else _parse_monto_escaner(
+                    ocr.get("monto") if ocr.get("monto") is not None else data.get("monto"),
+                    moneda=mon_norm,
+                    institucion=inst,
+                )
                 ced_raw = str(data.get("cedula_pagador_en_comprobante") or "").strip()
                 # Solo dígitos; sin ceros a la izquierda (OCR: 0006832631 → 6832631).
                 ced_digits = re.sub(r"\D", "", ced_raw)

@@ -3,10 +3,12 @@ from datetime import date
 
 from app.services.pagos_gmail.helpers import format_monto_excel_pagos_gmail, normalizar_fecha_pago
 from app.services.pagos_gmail.parse_campos_comprobante import (
+    aplicar_reglas_ocr_post_gemini,
     clave_numero_operacion_canonico,
     duplicado_digitos_misma_longitud_mas_umbral,
     fecha_ocr_borrosa_revision_manual,
     gemini_indico_fecha_borrosa,
+    gemini_indico_monto_borroso,
     gemini_indico_serial_borroso,
     hamming_digitos_misma_longitud,
     min_digitos_inequivocos_ocr,
@@ -409,6 +411,31 @@ def test_gemini_indico_fecha_borrosa_y_parse_conservador():
     assert parse_fecha_comprobante("03/05/2024", REF, conservador=True) is None
 
 
+def test_parse_monto_comprobante_no_truncar_600_a_60():
+    """El backend no debe 'corregir' 60→600 ni 600→60 sin evidencia en el string."""
+    assert parse_monto_comprobante("600") == 600.0
+    assert parse_monto_comprobante("600,00") == 600.0
+    assert parse_monto_comprobante("600.00", moneda="USD") == 600.0
+    assert parse_monto_comprobante("60") == 60.0
+    assert parse_monto_comprobante("60,00 USD", moneda="USD") == 60.0
+
+
+def test_gemini_indico_monto_borroso_y_aplicar_reglas():
+    assert gemini_indico_monto_borroso(60, "monto borroso, duda 600 vs 60") is True
+    assert gemini_indico_monto_borroso(600, "") is False
+    esc = aplicar_reglas_ocr_post_gemini(
+        {"monto": 60, "notas": "monto borroso L<0,875"},
+        perfil="escaner",
+    )
+    assert esc["monto"] is None
+    assert esc["_ocr_monto_borroso"] is True
+    gmail = aplicar_reglas_ocr_post_gemini(
+        {"monto": "600", "notas": "monto borroso revisión manual"},
+        perfil="gmail",
+    )
+    assert gmail["monto"] == "NA"
+
+
 def test_serial_borroso_mismo_criterio_matematico_fecha():
     assert min_digitos_inequivocos_ocr(8) == 7
     assert min_digitos_inequivocos_ocr(15) == 14
@@ -419,3 +446,39 @@ def test_serial_borroso_mismo_criterio_matematico_fecha():
     assert serial_ocr_borrosa_revision_manual(digitos_inequivocos=12, total_digitos=13) is False
     assert gemini_indico_serial_borroso("7400874101194", "serial borroso L<0,875") is True
     assert gemini_indico_serial_borroso("7400874101194", "") is False
+
+
+def test_aplicar_reglas_ocr_post_gemini_perfiles():
+    gmail = aplicar_reglas_ocr_post_gemini(
+        {
+            "fecha_pago": "31/05/2026",
+            "numero_referencia": "113907169113907169",
+            "banco": "BNC",
+            "notas": "",
+        },
+        perfil="gmail",
+    )
+    assert gmail["numero_referencia"] == "113907169"
+    assert gmail["fecha_pago"] == "31/05/2026"
+
+    gmail_b = aplicar_reglas_ocr_post_gemini(
+        {
+            "fecha_pago": "2026-06-18",
+            "numero_referencia": "7400874101194",
+            "notas": "serial borroso L<0,875",
+        },
+        perfil="gmail",
+    )
+    assert gmail_b["numero_referencia"] == "NA"
+
+    cob = aplicar_reglas_ocr_post_gemini(
+        {
+            "fecha_deposito": "03/05/2024",
+            "numero_deposito": "105137674",
+            "numero_documento": "NA",
+            "notas": "",
+        },
+        perfil="cobranza",
+    )
+    assert cob["fecha_deposito"] == "NA"
+    assert cob["numero_deposito"] == "105137674"
