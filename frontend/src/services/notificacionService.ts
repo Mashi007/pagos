@@ -1611,7 +1611,8 @@ class NotificacionService {
     if (conf) body.confirmacion_montos_altos = conf
     return await apiClient.post<AplicarAbonosDriveCuotasResponse>(
       `${this.baseUrl}/aplicar-abonos-drive-a-cuotas`,
-      body
+      body,
+      { timeout: 180000 }
     )
   }
 

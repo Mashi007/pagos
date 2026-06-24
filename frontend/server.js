@@ -489,6 +489,9 @@ if (API_URL) {
       const isNotificacionesLote =
         p.includes('/notificaciones/enviar-caso-manual') ||
         p.includes('/notificaciones/enviar-todas')
+      const isNotificacionesAbonosDrivePost =
+        req.method === 'POST' &&
+        p.includes('notificaciones/aplicar-abonos-drive-a-cuotas')
       // PATCH "editar" del reporte (sin /estado): valida documento contra `pagos` + commit BD;
       // en 60s puede no caber tras cold start del API. Igual semántica que /estado: idempotente.
       const isCobrosPagoReportadoPatchEditarBase =
@@ -565,6 +568,8 @@ if (API_URL) {
         proxyTimeoutMs = 180000
       } else if (isNotificacionesLote) {
         proxyTimeoutMs = 900000
+      } else if (isNotificacionesAbonosDrivePost) {
+        proxyTimeoutMs = 180000
       } else if (isClientesDriveImportBulk) {
         proxyTimeoutMs = 600000
       } else if (isClientesDriveImportFila || isClientesDriveRefreshCache) {

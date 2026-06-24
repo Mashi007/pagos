@@ -75,6 +75,9 @@ const REVISION_MANUAL_TIMEOUT_MS = 120000
 /** Gmail: migrar bandeja temporal puede recorrer muchas filas en BD. */
 const GMAIL_MIGRAR_PENDIENTES_TIMEOUT_MS = 180000
 
+/** Notificaciones: ABONOS Drive → eliminar pagos + cascada cuotas (un préstamo). */
+const NOTIFICACIONES_ABONOS_DRIVE_CUOTAS_TIMEOUT_MS = 180000
+
 function isRevisionManualUrl(url?: string): boolean {
   return String(url || '').includes('/revision-manual/')
 }
@@ -496,6 +499,18 @@ class ApiClient {
             config.timeout < GMAIL_MIGRAR_PENDIENTES_TIMEOUT_MS)
         ) {
           config.timeout = GMAIL_MIGRAR_PENDIENTES_TIMEOUT_MS
+        }
+
+        // Notificaciones General: ABONOS hoja → borrar pagos préstamo + pago único en cascada.
+        if (
+          config.method?.toLowerCase() === 'post' &&
+          config.url?.includes(
+            '/notificaciones/aplicar-abonos-drive-a-cuotas'
+          ) &&
+          (config.timeout == null ||
+            config.timeout < NOTIFICACIONES_ABONOS_DRIVE_CUOTAS_TIMEOUT_MS)
+        ) {
+          config.timeout = NOTIFICACIONES_ABONOS_DRIVE_CUOTAS_TIMEOUT_MS
         }
 
         // Soft circuit breaker: si hubo 502/503 reciente sobre endpoints catalogados,
@@ -1591,7 +1606,8 @@ class ApiClient {
         url.includes('/clientes/drive-import/importar') || // Lote: un commit por fila; cientos de filas >30s en Render
         url.includes('/clientes/drive-import/refresh-cache') || // Sync Drive + snapshot; en Render frío >30s
         url.includes('/configuracion/email/probar') || // Prueba SMTP; Recibos puede generar PDF + envío >30s
-        url.includes('/notificaciones/recibos/ejecutar') // Lote recibos: PDF/SMTP; en Render frío suele >30s
+        url.includes('/notificaciones/recibos/ejecutar') || // Lote recibos: PDF/SMTP; en Render frío suele >30s
+        url.includes('/notificaciones/aplicar-abonos-drive-a-cuotas') // Cascada pagos/cuotas por préstamo
 
       // Auditoria cartera en Render: sincroniza decenas de miles de cuotas + cascadas masivas (siempre >30s).
       const isAuditoriaCarteraCorregir = url.includes(
@@ -1611,6 +1627,9 @@ class ApiClient {
       const isMigrarPendientesGmailPost = url.includes(
         '/pagos/gmail/migrar-pendientes-a-con-errores'
       )
+      const isNotificacionesAbonosDrivePost = url.includes(
+        '/notificaciones/aplicar-abonos-drive-a-cuotas'
+      )
 
       let defaultTimeout = DEFAULT_TIMEOUT_MS
       if (isCobrosEscanerGemini) {
@@ -1619,6 +1638,8 @@ class ApiClient {
         defaultTimeout = 180000 // 3 min: PDF + SMTP + import; PATCH detalle ya visto ~35s en producción
       } else if (isMigrarPendientesGmailPost) {
         defaultTimeout = GMAIL_MIGRAR_PENDIENTES_TIMEOUT_MS
+      } else if (isNotificacionesAbonosDrivePost) {
+        defaultTimeout = NOTIFICACIONES_ABONOS_DRIVE_CUOTAS_TIMEOUT_MS
       } else if (isAuditoriaCarteraCorregir) {
         defaultTimeout = 300000 // 5 min
       } else if (isAuditoriaCarteraEjecutar) {
@@ -1638,7 +1659,9 @@ class ApiClient {
             ? 60000
             : url.includes('/aplicar-pagos-cuotas')
               ? 120000 // 2 min: cascada por préstamo puede exceder 30s en producción
-              : url.includes('/pagos/upload')
+              : url.includes('/notificaciones/aplicar-abonos-drive-a-cuotas')
+                ? NOTIFICACIONES_ABONOS_DRIVE_CUOTAS_TIMEOUT_MS
+                : url.includes('/pagos/upload')
                 ? 120000
                 : url.includes('/pagos/batch')
                   ? 180000 // 3 min: Render frío + muchas filas
