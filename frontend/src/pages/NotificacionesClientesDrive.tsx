@@ -400,8 +400,8 @@ export default function NotificacionesClientesDrive() {
   const onActualizacionManualDesdeGoogle = async () => {
     setManualSyncing(true)
     toast.info(
-      'Sincronizando hoja CONCILIACIÓN desde Google… Puede tardar varios minutos si la hoja es grande; no cierre la pestaña.',
-      { duration: 12000 }
+      'Sincronizando hoja CONCILIACIÓN desde Google… Suele tardar 1–3 min; el recálculo Fecha Q sigue en el servidor en segundo plano.',
+      { duration: 10000 }
     )
     try {
       const syncRes = await reporteService.syncConciliacionSheetDesdeDrive()

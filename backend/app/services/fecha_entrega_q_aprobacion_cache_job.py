@@ -165,3 +165,23 @@ def ejecutar_refresh_fecha_entrega_q_cache_tras_sync_conciliacion(db: Session) -
         "[fecha_q_cache] Refresco masivo por sincronización Drive (conciliacion_sheet → comparación Q vs BD)"
     )
     return ejecutar_refresh_fecha_entrega_q_aprobacion_cache_nightly(db)
+
+
+def ejecutar_refresh_fecha_entrega_q_cache_background() -> None:
+    """
+    Ejecuta el refresco masivo en un hilo de BackgroundTasks (sesión propia).
+    Usado tras POST /conciliacion-sheet/sync y /sync-now para no bloquear la respuesta HTTP.
+    """
+    from app.core.database import SessionLocal
+
+    db = SessionLocal()
+    try:
+        logger.info(
+            "[fecha_q_cache] inicio refresco en segundo plano (post-sync CONCILIACIÓN)"
+        )
+        res = ejecutar_refresh_fecha_entrega_q_aprobacion_cache_nightly(db)
+        logger.info("[fecha_q_cache] fin refresco background resultado=%s", res)
+    except Exception:
+        logger.exception("[fecha_q_cache] error en refresco background")
+    finally:
+        db.close()

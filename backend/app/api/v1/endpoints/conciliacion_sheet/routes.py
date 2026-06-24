@@ -5,8 +5,8 @@ Sincronización de la hoja CONCILIACIÓN (Google Sheets) → BD.
   Horario recomendado alineado a jobs internos: 01:00 Clientes Drive y 02:00 Préstamos Drive (America/Caracas).
   Si ENABLE_AUTOMATIC_SCHEDULED_JOBS=true, el APScheduler ejecuta sync acotado por columna A en esos horarios;
   puede omitir el cron externo o dejarlo como respaldo (evite disparos redundantes minuto a minuto).
-  Tras cada sync exitoso, el backend recalcula en bloque `prestamos.fecha_entrega_q_aprobacion_cache` (columna Q vs
-  `fecha_aprobacion`) para alinear listados y auditoría con el snapshot nuevo.
+  Tras cada sync exitoso, el backend programa en segundo plano el recálculo de
+  `prestamos.fecha_entrega_q_aprobacion_cache` (columna Q vs `fecha_aprobacion`) para no bloquear la respuesta HTTP.
   Tras ese snapshot, el backend (si ENABLE_AUTOMATIC_SCHEDULED_JOBS=true) refresca cada día a las 04:05 la lista de
   candidatos «Clientes (Drive)» en BD; cron externo no es necesario para esa lista (ver POST /clientes/drive-import/refresh-cache).
 - POST /conciliacion-sheet/sync-now — mismo trabajo que /sync, pero con sesión staff (admin / operador / gerente).
@@ -18,7 +18,7 @@ Cada sync exitoso también rellena la tabla drive (columnas col_a..col_s).
 import logging
 from typing import Any, Dict, List, Optional, Tuple
 
-from fastapi import APIRouter, Depends, Header, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, status
 from sqlalchemy import desc, func, select
 from sqlalchemy.orm import Session
 
@@ -52,19 +52,29 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-def _run_sync_to_db_y_refrescar_cache_q(db: Session) -> Dict[str, Any]:
-    """Sync CONCILIACIÓN → BD y, si va bien, mismo recálculo masivo que el job / POST refresh (Q vs aprobación)."""
+def _run_sync_to_db_y_refrescar_cache_q(
+    db: Session,
+    background_tasks: BackgroundTasks,
+) -> Dict[str, Any]:
+    """Sync CONCILIACIÓN → BD y programa recálculo masivo Q vs aprobación en segundo plano."""
     res = run_sync_to_db(db)
     try:
         from app.services.fecha_entrega_q_aprobacion_cache_job import (
-            ejecutar_refresh_fecha_entrega_q_cache_tras_sync_conciliacion,
+            ejecutar_refresh_fecha_entrega_q_cache_background,
         )
 
-        qres = ejecutar_refresh_fecha_entrega_q_cache_tras_sync_conciliacion(db)
-        res["fecha_entrega_q_aprobacion_cache_refresh"] = qres
+        background_tasks.add_task(ejecutar_refresh_fecha_entrega_q_cache_background)
+        res["fecha_entrega_q_aprobacion_cache_refresh"] = {
+            "ok": True,
+            "en_background": True,
+            "mensaje": (
+                "Recálculo de caché «Fecha Q vs aprobación» programado en segundo plano "
+                "(varios minutos con miles de préstamos). La respuesta del sync no espera a que termine."
+            ),
+        }
     except Exception as e:
         logger.exception(
-            "[conciliacion_sheet] Sync OK pero falló refresco masivo fecha_entrega_q_aprobacion_cache: %s",
+            "[conciliacion_sheet] Sync OK pero no se pudo programar refresco fecha_entrega_q_aprobacion_cache: %s",
             e,
         )
         res["fecha_entrega_q_aprobacion_cache_refresh"] = {
@@ -87,13 +97,14 @@ def _require_sync_secret(x_secret: Optional[str]) -> None:
 
 @router.post("/sync")
 def post_sync_conciliacion_sheet(
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     x_conciliacion_sheet_sync_secret: Optional[str] = Header(None, alias="X-Conciliacion-Sheet-Sync-Secret"),
 ) -> Dict[str, Any]:
     logger.info("[conciliacion_sheet] POST /sync (cron / secreto)")
     _require_sync_secret(x_conciliacion_sheet_sync_secret)
     try:
-        return _run_sync_to_db_y_refrescar_cache_q(db)
+        return _run_sync_to_db_y_refrescar_cache_q(db, background_tasks)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
     except Exception as e:
@@ -106,6 +117,7 @@ def post_sync_conciliacion_sheet(
 
 @router.post("/sync-now")
 def post_sync_conciliacion_sheet_now(
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     _staff: UserResponse = Depends(require_admin_or_operator),
 ) -> Dict[str, Any]:
@@ -119,7 +131,7 @@ def post_sync_conciliacion_sheet_now(
         getattr(_staff, "rol", None),
     )
     try:
-        return _run_sync_to_db_y_refrescar_cache_q(db)
+        return _run_sync_to_db_y_refrescar_cache_q(db, background_tasks)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
     except Exception as e:

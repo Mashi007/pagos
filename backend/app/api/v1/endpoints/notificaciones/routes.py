@@ -2593,21 +2593,11 @@ def post_sincronizar_abonos_drive_cuotas(
 
 
 def _run_refresh_fecha_entrega_q_cache_bg() -> None:
-    db = SessionLocal()
-    try:
-        from app.services.fecha_entrega_q_aprobacion_cache_job import (
-            ejecutar_refresh_fecha_entrega_q_aprobacion_cache_nightly,
-        )
+    from app.services.fecha_entrega_q_aprobacion_cache_job import (
+        ejecutar_refresh_fecha_entrega_q_cache_background,
+    )
 
-        res = ejecutar_refresh_fecha_entrega_q_aprobacion_cache_nightly(db)
-        logger.info(
-            "[notificaciones] refresh_fecha_entrega_q_cache background resultado=%s",
-            res,
-        )
-    except Exception:
-        logger.exception("[notificaciones] refresh_fecha_entrega_q_cache background error")
-    finally:
-        db.close()
+    ejecutar_refresh_fecha_entrega_q_cache_background()
 
 
 @router.post("/refresh-fecha-entrega-q-cache")
