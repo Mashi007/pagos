@@ -10,9 +10,8 @@ Criterio de filas en snapshot (columna E, misma normalización que carga masiva 
 
 Validadores en cada payload:
 1) formato (`validate_cedula` / `cedula_valida`);
-2) cédula tipo **V** o **E**: a lo sumo un préstamo en tabla `prestamos` con esa cédula normalizada;
-   dos o más no cumplen (`validador_ve_max_un_prestamo_ok`; en candidatos V/E sin préstamo previo queda en true);
-3) no duplicada en hoja (`duplicada_en_hoja` / `validador_sin_duplicado_en_hoja_ok`).
+2) cédula tipo **V** o **E**: a lo sumo un préstamo **APROBADO** en BD (LIQUIDADO no cuenta);
+   **J** puede tener varios. `duplicada_en_hoja` solo informa filas repetidas en Drive; no bloquea guardado.
 
 Job programado: todos los días 02:00 America/Caracas (sync CONCILIACIÓN A:S hasta cola real + snapshot); 04:45 solo recalcula desde `drive` sin sync.
 """
@@ -41,7 +40,10 @@ from app.services.prestamo_candidatos_drive_validadores import (
     cedula_cmp_es_tipo_v_o_e,
     cedula_cmp_es_tipo_venezolano_v,
     conteo_prestamos_aprobados_por_cedula_norm,
+    conteo_prestamos_liquidados_por_cedula_norm,
     conteo_prestamos_por_cedula_norm,
+    cupo_ve_permite_nuevo_prestamo,
+    enriquecer_payload_conteos_cupo_bd,
 )
 
 logger = logging.getLogger(__name__)
@@ -77,6 +79,7 @@ def ejecutar_refresh_prestamo_candidatos_drive(
 
     prestamo_counts_total = conteo_prestamos_por_cedula_norm(db)
     prestamo_counts_aprob = conteo_prestamos_aprobados_por_cedula_norm(db)
+    prestamo_counts_liq = conteo_prestamos_liquidados_por_cedula_norm(db)
 
     drive_rows: List[DriveRow] = list(
         db.execute(select(DriveRow).order_by(DriveRow.sheet_row_number.asc())).scalars().all()
@@ -148,8 +151,11 @@ def ejecutar_refresh_prestamo_candidatos_drive(
         cedula_valida = bool(vced.get("valido"))
         cedula_error = None if cedula_valida else (vced.get("error") or "Cédula inválida")
         # V y E: máximo un APROBADO; J puede tener varios (validador siempre true en UI).
-        validador_ve_max_un_prestamo_ok = not (es_ve and n_prest_aprob >= 1)
+        validador_ve_max_un_prestamo_ok = cupo_ve_permite_nuevo_prestamo(
+            es_ve=es_ve, es_j=es_j, n_aprob=n_prest_aprob
+        )
         validador_v_max_un_prestamo_ok = validador_ve_max_un_prestamo_ok
+        n_prest_liq = int(prestamo_counts_liq.get(cmp_e, 0) or 0)
 
         q_raw = _cell(getattr(r, "col_q", None)) or None
         q_date, q_ambigua = parse_fecha_q_iso_y_ambigua(q_raw or "")
@@ -212,6 +218,7 @@ def ejecutar_refresh_prestamo_candidatos_drive(
             "duplicada_en_hoja": dup_sheet,
             "prestamos_misma_cedula_norm_count": n_prest_total,
             "prestamos_aprobados_misma_cedula_norm_count": n_prest_aprob,
+            "prestamos_liquidados_misma_cedula_norm_count": n_prest_liq,
             "cedula_es_tipo_v_venezolano": es_v,
             "cedula_es_tipo_e": es_e,
             "cedula_es_tipo_ve": es_ve,
@@ -310,6 +317,9 @@ def listar_prestamo_candidatos_drive_snapshot(
     stmt = stmt.offset(off).limit(lim)
 
     rows = list(db.execute(stmt).scalars().all() or [])
+    prestamo_counts_total = conteo_prestamos_por_cedula_norm(db)
+    prestamo_counts_aprob_live = conteo_prestamos_aprobados_por_cedula_norm(db)
+    prestamo_counts_liq_live = conteo_prestamos_liquidados_por_cedula_norm(db)
     computed_at = None
     if total > 0:
         max_stmt = select(func.max(PrestamoCandidatoDrive.computed_at))
@@ -343,7 +353,13 @@ def listar_prestamo_candidatos_drive_snapshot(
                 "id": r.id,
                 "sheet_row_number": r.sheet_row_number,
                 "cedula_cmp": r.cedula_cmp,
-                "payload": r.payload,
+                "payload": enriquecer_payload_conteos_cupo_bd(
+                    r.payload if isinstance(r.payload, dict) else {},
+                    r.cedula_cmp,
+                    prestamo_counts_total=prestamo_counts_total,
+                    prestamo_counts_aprob=prestamo_counts_aprob_live,
+                    prestamo_counts_liq=prestamo_counts_liq_live,
+                ),
                 "computed_at": r.computed_at.isoformat() if r.computed_at else None,
                 "listo_para_guardar": bool(listo_por_id.get(int(r.id), False)),
                 "motivos_no_guardable": list(motivos_por_id.get(int(r.id), []) or []),

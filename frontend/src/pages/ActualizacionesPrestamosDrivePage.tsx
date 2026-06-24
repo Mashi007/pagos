@@ -108,16 +108,12 @@ function cedulaEsTipoJFromPayload(
   return u.length > 0 && u[0] === 'J'
 }
 
-/** 1 formato cédula · 2 regla V/E vs tabla préstamos (J exento) · 3 sin duplicado en hoja */
-function validadoresTresFlags(p: PrestamoCandidatoDriveFila['payload']) {
+/** 1 formato cédula · 2 cupo en BD: V/E máx. un APROBADO (J varios; LIQUIDADO no cuenta) */
+function validadoresPantallaFlags(p: PrestamoCandidatoDriveFila['payload']) {
   const formatoOk = (p.validador_formato_cedula_ok ?? p.cedula_valida) === true
-  const hojaOk =
-    (p.validador_sin_duplicado_en_hoja_ok ?? p.duplicada_en_hoja !== true) ===
-    true
   const nPrest = Number(p.prestamos_misma_cedula_norm_count ?? 0)
-  const nAprob = Number(
-    p.prestamos_aprobados_misma_cedula_norm_count ?? nPrest ?? 0
-  )
+  const nAprob = Number(p.prestamos_aprobados_misma_cedula_norm_count ?? 0)
+  const nLiq = Number(p.prestamos_liquidados_misma_cedula_norm_count ?? 0)
   const esV = p.cedula_es_tipo_v_venezolano === true
   const esVe = cedulaEsTipoVeFromPayload(p)
   const esJ = cedulaEsTipoJFromPayload(p)
@@ -126,7 +122,8 @@ function validadoresTresFlags(p: PrestamoCandidatoDriveFila['payload']) {
     : (p.validador_ve_max_un_prestamo_ok ??
         p.validador_v_max_un_prestamo_ok ??
         !(esVe && nAprob >= 1)) === true
-  return { formatoOk, tablaVOk, hojaOk, nPrest, nAprob, esV, esVe, esJ }
+  const repetidaEnHoja = p.duplicada_en_hoja === true
+  return { formatoOk, tablaVOk, repetidaEnHoja, nPrest, nAprob, nLiq, esV, esVe, esJ }
 }
 
 /** Parseo ligero alineado a columna Q (DD/MM/YYYY, YYYY-MM-DD o serial Sheets/Excel). */
@@ -305,9 +302,7 @@ type FilaTablaTono = FilaCandidatoDriveTono | 'partial'
 function filaCandidatoDriveTono(
   p: PrestamoCandidatoDriveFila['payload']
 ): FilaCandidatoDriveTono {
-  const { formatoOk, tablaVOk, hojaOk, nAprob, esVe, esJ } =
-    validadoresTresFlags(p)
-  const dup = p.duplicada_en_hoja === true
+  const { formatoOk, tablaVOk, nAprob, esVe, esJ } = validadoresPantallaFlags(p)
 
   const redInvalida = !formatoOk
   const redVeCupoAprobado =
@@ -324,8 +319,7 @@ function filaCandidatoDriveTono(
     redReimporteLiquidado
   )
     return 'red'
-  if (formatoOk && dup) return 'amber'
-  if (formatoOk && tablaVOk && hojaOk) return 'green'
+  if (formatoOk && tablaVOk) return 'green'
   return 'plain'
 }
 
@@ -375,7 +369,7 @@ function exportarCsvVistaActual(filas: PrestamoCandidatoDriveFila[]) {
     'es_tipo_j',
     'val_formato',
     'val_tabla_ve',
-    'val_hoja',
+    'val_repetida_hoja_info',
     'total_n',
     'modalidad_s',
     'fecha_q',
@@ -389,14 +383,13 @@ function exportarCsvVistaActual(filas: PrestamoCandidatoDriveFila[]) {
   const lines = [headers.join(',')]
   for (const r of filas) {
     const p = r.payload
-    const { formatoOk, tablaVOk, hojaOk, nPrest, esVe, esJ } =
-      validadoresTresFlags(p)
+    const { formatoOk, tablaVOk, repetidaEnHoja, nPrest, esVe, esJ } =
+      validadoresPantallaFlags(p)
     const ok = p.cedula_valida === true
-    const dup = p.duplicada_en_hoja === true
     let estado = 'revisión'
     if (!ok) estado = `inválida: ${String(p.cedula_error ?? '')}`
-    else if (dup) estado = 'repetida_hoja'
-    else if (!tablaVOk) estado = 'tipo_VE: más de un préstamo o no cumple tabla'
+    else if (!tablaVOk) estado = 'tipo_VE: ya tiene préstamo APROBADO'
+    else if (repetidaEnHoja) estado = 'listo (cédula repetida en hoja, informativo)'
     else estado = 'listo'
     const fechaQNorm = colQFechaIsoDisplay(p) || strPayload(p, 'col_q_fecha')
     lines.push(
@@ -408,7 +401,7 @@ function exportarCsvVistaActual(filas: PrestamoCandidatoDriveFila[]) {
         esJ ? 'si' : 'no',
         formatoOk ? 'ok' : 'no',
         tablaVOk ? 'ok' : 'no',
-        hojaOk ? 'ok' : 'no',
+        repetidaEnHoja ? 'repetida_hoja_info' : '—',
         strPayload(p, 'col_n_total_financiamiento'),
         strPayload(p, 'col_s_modalidad_pago'),
         fechaQNorm,
@@ -851,7 +844,7 @@ export default function ActualizacionesPrestamosDrivePage() {
 
   const estadoFila = useCallback((fila: PrestamoCandidatoDriveFila) => {
     const p = fila.payload
-    const { formatoOk, tablaVOk, hojaOk } = validadoresTresFlags(p)
+    const { formatoOk, tablaVOk, repetidaEnHoja, nAprob } = validadoresPantallaFlags(p)
     const qRaw = String(p.col_q_fecha ?? '').trim()
     const qIso = String(p.col_q_fecha_iso ?? '').trim()
     if (!formatoOk) {
@@ -902,19 +895,28 @@ export default function ActualizacionesPrestamosDrivePage() {
         </span>
       )
     }
-    if (!hojaOk)
-      return <span className="text-amber-700">(3) Repetida en hoja</span>
     if (!tablaVOk) {
+      const nLiq = Number(p.prestamos_liquidados_misma_cedula_norm_count ?? 0)
       return (
         <span className="text-red-600">
-          (2) Cédula V o E: ya tiene un préstamo APROBADO (máximo uno). J puede
-          tener varios.
+          (2) Cédula V o E: ya tiene {nAprob} préstamo(s) APROBADO (máximo uno;
+          {nLiq > 0
+            ? ` ${nLiq} LIQUIDADO en historial no bloquea un crédito nuevo`
+            : ' LIQUIDADO no cuenta'}
+          ). J puede tener varios.
         </span>
       )
     }
     if (fila.listo_para_guardar === true) {
       return (
-        <span className="text-emerald-700">Listo para guardar (servidor)</span>
+        <span className="text-emerald-700">
+          Listo para guardar (servidor)
+          {repetidaEnHoja ? (
+            <span className="ml-1 text-muted-foreground">
+              · cédula repetida en hoja (no bloquea)
+            </span>
+          ) : null}
+        </span>
       )
     }
     if (fila.listo_para_guardar === false) {
@@ -977,7 +979,7 @@ export default function ActualizacionesPrestamosDrivePage() {
     <div className="mx-auto max-w-7xl space-y-6 p-4 md:p-6">
       <ModulePageHeader
         title="Préstamos"
-        description="Actualizaciones: cédulas en CONCILIACIÓN (columna E). V y E: sin préstamo previo. J (jurídico): puede figurar con uno o más préstamos ya en cartera. Filas que repiten la huella de un préstamo ya LIQUIDADO no aparecen en el snapshot (re-importe). Puede corregir la fecha (Q) en pantalla (YYYY-MM-DD); se guarda en snapshot y tabla drive local. Lista paginada (100 filas por página). Job automático diario 02:00 Caracas (sync rango A:S hasta última fila con dato → snapshot). Solo administradores."
+        description="Actualizaciones: cédulas en CONCILIACIÓN (columna E). V y E: máximo un préstamo APROBADO en BD (puede tener varios LIQUIDADO). J: varios préstamos. Repetir la misma cédula en varias filas de la hoja no bloquea el guardado. Filas con huella idéntica a un LIQUIDADO no entran al snapshot. Fecha (Q) editable en pantalla. Job 02:00 Caracas. Solo administradores."
         icon={CreditCard}
       />
 
@@ -1066,9 +1068,10 @@ export default function ActualizacionesPrestamosDrivePage() {
           </div>
           <p className="max-w-3xl text-xs leading-snug text-muted-foreground">
             <strong className="font-medium text-foreground">Aclaración:</strong>{' '}
-            «Guardar válidas» solo persiste las filas «Guardables». Los tres ✓
-            de la columna Val. son solo reglas en pantalla: si faltan datos para
-            el servidor, la fila puede verse en{' '}
+            «Guardar válidas» solo persiste las filas «Guardables». Los dos ✓
+            de Val. son formato y cupo en BD (V/E: máx. un APROBADO; J: varios;
+            LIQUIDADO no cuenta). Repetir cédula en la hoja no bloquea. Si faltan
+            datos para el servidor, la fila puede verse en{' '}
             <strong className="font-medium text-sky-900">azul claro</strong> con
             ✓✓✓; el{' '}
             <strong className="font-medium text-emerald-900">
@@ -1266,9 +1269,9 @@ export default function ActualizacionesPrestamosDrivePage() {
                   </th>
                   <th
                     className="whitespace-nowrap px-2 py-2.5 align-middle text-xs font-semibold"
-                    title="Tres ítems = solo validadores en pantalla (formato, tabla V/E, hoja). Pueden estar ✓✓✓ y la fila seguir en azul claro hasta cumplir la validación completa de servidor (columna Estado)."
+                    title="(1) formato cédula · (2) cupo BD: V/E máx. un APROBADO, J varios. Repetida en hoja no bloquea. Pueden estar ✓✓ y la fila seguir en azul hasta validación completa de servidor."
                   >
-                    Val. 1·2·3
+                    Val. 1·2
                   </th>
                   <th className="px-2 py-2.5 align-middle text-xs font-semibold">
                     Total (N)
@@ -1303,8 +1306,9 @@ export default function ActualizacionesPrestamosDrivePage() {
                 {showSkeleton && <TableSkeletonRows />}
                 {!showSkeleton &&
                   rows.map(r => {
-                    const { formatoOk, tablaVOk, hojaOk } =
-                      validadoresTresFlags(r.payload)
+                    const { formatoOk, tablaVOk } = validadoresPantallaFlags(
+                      r.payload
+                    )
                     const tono = filaTonoTabla(r)
                     const trTone = FILA_TONE_TR[tono]
                     const stickyTone = FILA_TONE_STICKY_TD[tono]
@@ -1343,12 +1347,11 @@ export default function ActualizacionesPrestamosDrivePage() {
                         </td>
                         <td
                           className="px-2 py-2 text-center align-middle font-mono text-xs"
-                          title="Solo reglas 1·2·3 en pantalla; no implica solo el fondo verde intenso (ver Estado / servidor)."
+                          title="(1) formato · (2) cupo V/E/J en BD. No implica verde intenso hasta validación servidor (columna Estado)."
                         >
                           <span className="inline-flex gap-0.5">
                             {mk(formatoOk)}
                             {mk(tablaVOk)}
-                            {mk(hojaOk)}
                           </span>
                         </td>
                         <td className="whitespace-nowrap px-2 py-2 align-middle font-mono text-xs tabular-nums">

@@ -187,8 +187,6 @@ def _motivos_no_100(
 
     if payload.get("cedula_valida") is not True:
         motivos.append("cédula: formato no válido según validadores")
-    if payload.get("duplicada_en_hoja") is True:
-        motivos.append("cédula duplicada en la hoja (columna E repetida)")
     ced_cmp = _cell_str(payload.get("cedula_cmp"))
     if not ced_cmp:
         motivos.append("sin clave de cédula normalizada")
@@ -200,8 +198,8 @@ def _motivos_no_100(
         and n_aprob >= 1
     ):
         motivos.append(
-            "cédula tipo V o E: máximo un préstamo APROBADO (innegociable). "
-            f"Hay {n_aprob} préstamo(s) APROBADO con esta cédula normalizada."
+            "cédula tipo V o E: máximo un préstamo APROBADO (innegociable; LIQUIDADO no cuenta). "
+            f"Hay {n_aprob} préstamo(s) APROBADO en cartera."
         )
     cliente_id = _cliente_id_por_cedula_normalizada(db, ced_cmp) if ced_cmp else None
     if cliente_id is None:

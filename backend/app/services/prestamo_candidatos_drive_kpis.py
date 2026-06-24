@@ -19,7 +19,11 @@ from app.services.prestamo_candidatos_drive_guardar import (
     _motivos_no_100,
 )
 from app.services.prestamo_candidatos_drive_validadores import (
+    cedula_cmp_es_tipo_j,
+    cedula_cmp_es_tipo_v_o_e,
     conteo_prestamos_aprobados_por_cedula_norm,
+    cupo_ve_permite_nuevo_prestamo,
+    n_aprobados_en_payload,
 )
 
 
@@ -59,7 +63,7 @@ def _hoja_ok(payload: Dict[str, Any]) -> bool:
     return payload.get("duplicada_en_hoja") is not True
 
 
-def _tabla_ve_ok(payload: Dict[str, Any], cedula_cmp_fila: str, n_prest: int, es_ve: bool, es_j: bool) -> bool:
+def _tabla_ve_ok(payload: Dict[str, Any], cedula_cmp_fila: str, es_ve: bool, es_j: bool) -> bool:
     if es_j:
         return True
     for k in ("validador_ve_max_un_prestamo_ok", "validador_v_max_un_prestamo_ok"):
@@ -68,24 +72,16 @@ def _tabla_ve_ok(payload: Dict[str, Any], cedula_cmp_fila: str, n_prest: int, es
             return True
         if t is False:
             return False
-    try:
-        n_aprob = int(payload.get("prestamos_aprobados_misma_cedula_norm_count") or 0)
-    except (TypeError, ValueError):
-        n_aprob = n_prest
-    return not (es_ve and n_aprob >= 1)
+    n_aprob = n_aprobados_en_payload(payload)
+    return cupo_ve_permite_nuevo_prestamo(es_ve=es_ve, es_j=es_j, n_aprob=n_aprob)
 
 
 def fila_payload_grilla_verde(payload: Dict[str, Any], cedula_cmp_fila: str) -> bool:
     """True si la fila se mostraría en verde (listas para guardar según validadores de pantalla)."""
     formato_ok = _formato_ok(payload)
-    hoja_ok = _hoja_ok(payload)
-    try:
-        n_prest = int(payload.get("prestamos_misma_cedula_norm_count") or 0)
-    except (TypeError, ValueError):
-        n_prest = 0
     es_ve = _cedula_es_ve(payload, cedula_cmp_fila)
     es_j = _cedula_es_j(payload, cedula_cmp_fila)
-    tabla_ok = _tabla_ve_ok(payload, cedula_cmp_fila, n_prest, es_ve, es_j)
+    tabla_ok = _tabla_ve_ok(payload, cedula_cmp_fila, es_ve, es_j)
 
     q_raw = _cell(payload.get("col_q_fecha"))
     red_fecha = False
@@ -94,18 +90,12 @@ def fila_payload_grilla_verde(payload: Dict[str, Any], cedula_cmp_fila: str) -> 
         _, ap_d = fechas
         red_fecha = (date.today() - ap_d).days > MAX_DIAS_APROBACION_DRIVE
 
-    try:
-        n_aprob = int(payload.get("prestamos_aprobados_misma_cedula_norm_count") or 0)
-    except (TypeError, ValueError):
-        n_aprob = n_prest
-    red_ve = es_ve and n_aprob >= 1
+    n_aprob = n_aprobados_en_payload(payload)
+    red_ve = es_ve and not cupo_ve_permite_nuevo_prestamo(es_ve=es_ve, es_j=es_j, n_aprob=n_aprob)
     red_reimporte_liq = payload.get("reimporte_liquidado_huella") is True
     if not formato_ok or red_ve or red_fecha or red_reimporte_liq:
         return False
-    dup = payload.get("duplicada_en_hoja") is True
-    if formato_ok and dup:
-        return False
-    return bool(formato_ok and tabla_ok and hoja_ok)
+    return bool(formato_ok and tabla_ok)
 
 
 def conteos_listo_guardar_y_map_por_id(
