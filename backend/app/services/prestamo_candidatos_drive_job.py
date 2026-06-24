@@ -5,6 +5,8 @@ Criterio de filas en snapshot (columna E, misma normalización que carga masiva 
 - **V** o **E**: no debe haber ya un préstamo con esa cédula (máximo un préstamo en cartera).
 - **J** (jurídico): puede haber ya uno o más préstamos; el candidato puede seguir figurando (dos o más créditos permitidos).
 - Otras letras: sin préstamo previo con esa cédula normalizada (mismo criterio que antes para no J).
+- **Re-importe LIQUIDADO**: si la huella operativa (cédula V/E, fechas, monto, cuotas, modalidad) ya existe en un
+  préstamo LIQUIDADO, la fila **no entra al snapshot** (no es alta nueva; evita cientos de «no guardables» en pantalla).
 
 Validadores en cada payload:
 1) formato (`validate_cedula` / `cedula_valida`);
@@ -126,6 +128,7 @@ def ejecutar_refresh_prestamo_candidatos_drive(
 
     now = datetime.now(timezone.utc)
     to_insert: List[PrestamoCandidatoDrive] = []
+    omitidos_reimporte_liquidado = 0
 
     for r, cmp_e in tmp:
         n_prest_total = int(prestamo_counts_total.get(cmp_e, 0) or 0)
@@ -182,6 +185,10 @@ def ejecutar_refresh_prestamo_candidatos_drive(
                 modalidad_pago=modalidad_norm,
             )
 
+        if reimporte_liquidado_huella:
+            omitidos_reimporte_liquidado += 1
+            continue
+
         payload: Dict[str, Any] = {
             "col_e_cedula": raw_e or None,
             "col_i_modelo_vehiculo": _cell(getattr(r, "col_i", None)) or None,
@@ -235,14 +242,17 @@ def ejecutar_refresh_prestamo_candidatos_drive(
         raise
 
     logger.info(
-        "[prestamo_candidatos_drive] refresh filas_drive=%s candidatos=%s drive_synced_at=%s",
+        "[prestamo_candidatos_drive] refresh filas_drive=%s candidatos=%s "
+        "omitidos_reimporte_liquidado=%s drive_synced_at=%s",
         len(drive_rows),
         len(to_insert),
+        omitidos_reimporte_liquidado,
         drive_synced_at,
     )
     return {
         "filas_en_drive": len(drive_rows),
         "candidatos_insertados": len(to_insert),
+        "omitidos_reimporte_liquidado": omitidos_reimporte_liquidado,
         "drive_synced_at": drive_synced_at.isoformat() if drive_synced_at else None,
         "computed_at": now.isoformat(),
         "omitido": False,

@@ -639,8 +639,13 @@ export default function ActualizacionesPrestamosDrivePage() {
             `${filasSync}${cola}Snapshot vaciado (drive sin filas, recálculo forzado).`
           )
         } else {
+          const omitLiq = Number(res.omitidos_reimporte_liquidado ?? 0)
+          const omitTxt =
+            omitLiq > 0
+              ? ` (${omitLiq} fila(s) omitida(s): misma huella que préstamo LIQUIDADO).`
+              : ''
           toast.success(
-            `${filasSync}${cola}Snapshot actualizado: ${Number(res.candidatos_insertados ?? 0)} candidato(s).`
+            `${filasSync}${cola}Snapshot actualizado: ${Number(res.candidatos_insertados ?? 0)} candidato(s).${omitTxt}`
           )
         }
       }
@@ -972,7 +977,7 @@ export default function ActualizacionesPrestamosDrivePage() {
     <div className="mx-auto max-w-7xl space-y-6 p-4 md:p-6">
       <ModulePageHeader
         title="Préstamos"
-        description="Actualizaciones: cédulas en CONCILIACIÓN (columna E). V y E: sin préstamo previo. J (jurídico): puede figurar con uno o más préstamos ya en cartera. Puede corregir la fecha (Q) en pantalla (YYYY-MM-DD); se guarda en snapshot y tabla drive local. Lista paginada (100 filas por página). Job automático diario 02:00 Caracas (sync rango A:S hasta última fila con dato → snapshot). Solo administradores."
+        description="Actualizaciones: cédulas en CONCILIACIÓN (columna E). V y E: sin préstamo previo. J (jurídico): puede figurar con uno o más préstamos ya en cartera. Filas que repiten la huella de un préstamo ya LIQUIDADO no aparecen en el snapshot (re-importe). Puede corregir la fecha (Q) en pantalla (YYYY-MM-DD); se guarda en snapshot y tabla drive local. Lista paginada (100 filas por página). Job automático diario 02:00 Caracas (sync rango A:S hasta última fila con dato → snapshot). Solo administradores."
         icon={CreditCard}
       />
 
