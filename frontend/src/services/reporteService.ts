@@ -1766,12 +1766,11 @@ class ReporteService {
    * usando credenciales del servidor. Requiere rol admin, operador o gerente.
    */
   async syncConciliacionSheetDesdeDrive(): Promise<Record<string, unknown>> {
-    // Sheets + BD puede superar 2 min en Render; alinear con api.ts (slow POST 300s) y proxy Node.
-    // Si Gunicorn usa --timeout 120, el worker puede cortarse antes: subir timeout en Render o async job.
+    // Hoja CONCILIACIÓN grande: en producción puede superar 5 min (Sheets API + escritura BD).
     return await apiClient.post<Record<string, unknown>>(
       `${this.conciliacionSheetBaseUrl}/sync-now`,
       undefined,
-      { timeout: 300000 }
+      { timeout: 600000 }
     )
   }
 

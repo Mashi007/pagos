@@ -78,6 +78,9 @@ const GMAIL_MIGRAR_PENDIENTES_TIMEOUT_MS = 180000
 /** Notificaciones: ABONOS Drive → eliminar pagos + cascada cuotas (un préstamo). */
 const NOTIFICACIONES_ABONOS_DRIVE_CUOTAS_TIMEOUT_MS = 180000
 
+/** Sheets CONCILIACIÓN → BD (hoja grande + Render frío; sync-now puede superar 5 min). */
+const CONCILIACION_SHEET_SYNC_TIMEOUT_MS = 600000
+
 function isRevisionManualUrl(url?: string): boolean {
   return String(url || '').includes('/revision-manual/')
 }
@@ -511,6 +514,16 @@ class ApiClient {
             config.timeout < NOTIFICACIONES_ABONOS_DRIVE_CUOTAS_TIMEOUT_MS)
         ) {
           config.timeout = NOTIFICACIONES_ABONOS_DRIVE_CUOTAS_TIMEOUT_MS
+        }
+
+        // CONCILIACIÓN: sync-now / sync (Google Sheets A:S completo + snapshot BD).
+        if (
+          config.method?.toLowerCase() === 'post' &&
+          config.url?.includes('/conciliacion-sheet/sync') &&
+          (config.timeout == null ||
+            config.timeout < CONCILIACION_SHEET_SYNC_TIMEOUT_MS)
+        ) {
+          config.timeout = CONCILIACION_SHEET_SYNC_TIMEOUT_MS
         }
 
         // Soft circuit breaker: si hubo 502/503 reciente sobre endpoints catalogados,
@@ -1630,12 +1643,17 @@ class ApiClient {
       const isNotificacionesAbonosDrivePost = url.includes(
         '/notificaciones/aplicar-abonos-drive-a-cuotas'
       )
+      const isConciliacionSheetSyncPost =
+        url.includes('/conciliacion-sheet/sync-now') ||
+        /\/conciliacion-sheet\/sync(?:\?|#|$)/.test(url)
 
       let defaultTimeout = DEFAULT_TIMEOUT_MS
       if (isCobrosEscanerGemini) {
         defaultTimeout = 120000 // Gemini + lectura comprobante
       } else if (isCobrosPagosReportadosHeavyPost) {
         defaultTimeout = 180000 // 3 min: PDF + SMTP + import; PATCH detalle ya visto ~35s en producción
+      } else if (isConciliacionSheetSyncPost) {
+        defaultTimeout = CONCILIACION_SHEET_SYNC_TIMEOUT_MS
       } else if (isMigrarPendientesGmailPost) {
         defaultTimeout = GMAIL_MIGRAR_PENDIENTES_TIMEOUT_MS
       } else if (isNotificacionesAbonosDrivePost) {
@@ -1657,7 +1675,10 @@ class ApiClient {
           ? 600000 // 10 min: import parcial muchas filas (commit por fila + Render frío)
           : url.includes('/prestamos/cedula/batch')
             ? 60000
-            : url.includes('/aplicar-pagos-cuotas')
+            : url.includes('/conciliacion-sheet/sync-now') ||
+                /\/conciliacion-sheet\/sync(?:\?|#|$)/.test(url)
+              ? CONCILIACION_SHEET_SYNC_TIMEOUT_MS
+              : url.includes('/aplicar-pagos-cuotas')
               ? 120000 // 2 min: cascada por préstamo puede exceder 30s en producción
               : url.includes('/notificaciones/aplicar-abonos-drive-a-cuotas')
                 ? NOTIFICACIONES_ABONOS_DRIVE_CUOTAS_TIMEOUT_MS

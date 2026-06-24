@@ -906,7 +906,8 @@ class NotificacionService {
   async syncConciliacionSheetNow(): Promise<Record<string, unknown>> {
     return await apiClient.post<Record<string, unknown>>(
       `/api/v1/conciliacion-sheet/sync-now`,
-      {}
+      {},
+      { timeout: 600000 }
     )
   }
 

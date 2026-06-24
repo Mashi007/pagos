@@ -589,8 +589,8 @@ if (API_URL) {
         // Revisión manual: PUT guardar/finalizar y GET detalle comparten el mismo margen (120s).
         proxyTimeoutMs = 120000
       } else if (isConciliacionSheetSlowPost || isCandidatosDriveSlowPost) {
-        // Google Sheets + snapshot BD / Drive masivo: suele >60s; el cliente usa hasta 300s.
-        proxyTimeoutMs = 300000
+        // Google Sheets + snapshot BD / Drive masivo: hoja grande puede superar 5 min en Render.
+        proxyTimeoutMs = 600000
       } else if (isGmailRunNowPost) {
         // run-now debe responder al instante; margen por cola del worker API en Render.
         proxyTimeoutMs = 120000
