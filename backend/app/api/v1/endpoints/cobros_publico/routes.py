@@ -70,6 +70,25 @@ logger = logging.getLogger(__name__)
 def _elapsed_ms(start_perf: float) -> float:
     return round((perf_counter() - start_perf) * 1000, 2)
 
+
+def _autoimport_confirmo_pago(
+    auto_import_result: cpr.AutoImportResultado,
+) -> bool:
+    return bool(auto_import_result.pago_id or auto_import_result.ya_existia_en_pagos)
+
+
+def _marcar_reportado_en_revision_por_autoimport_fallido(
+    pr: PagoReportado,
+    auto_import_result: cpr.AutoImportResultado,
+) -> None:
+    error = (auto_import_result.error or "auto-import omitido").strip()
+    pr.estado = "en_revision"
+    pr.falla_validadores_manual = True
+    pr.motivo_rechazo = (
+        "Auto-import fallido; requiere revision manual antes de emitir recibo: "
+        f"{error}"
+    )[:2000]
+
 router = APIRouter(dependencies=[])
 
 
@@ -941,11 +960,23 @@ async def enviar_reporte_publico(
 
             recibo_enviado_val = None
             if not falla_validadores:
-                cpr.intentar_importar_reportado_automatico(db_post, pr, referencia, "COBROS_PUBLIC")
+                auto_import_result = cpr.intentar_importar_reportado_automatico(
+                    db_post, pr, referencia, "COBROS_PUBLIC"
+                )
                 db_post.refresh(pr)
-                if (pr.estado or "").strip() == "importado":
+                if _autoimport_confirmo_pago(auto_import_result):
                     pr.falla_validadores_manual = False
-                if cliente is not None:
+                else:
+                    _marcar_reportado_en_revision_por_autoimport_fallido(
+                        pr, auto_import_result
+                    )
+                    falla_validadores = True
+                    logger.warning(
+                        "[COBROS_PUBLIC] Ref=%s queda en revision: auto-import fallo (%s)",
+                        referencia,
+                        auto_import_result.error or "sin pago confirmado",
+                    )
+                if not falla_validadores and cliente is not None:
                     background_tasks.add_task(
                         _procesar_recibo_y_correo_aprobado_background,
                         int(pr.id),
@@ -1322,41 +1353,55 @@ async def enviar_reporte_infopagos(
                     db_post, pr, referencia, "INFOPAGOS"
                 )
                 phase_ms["autoimport_ms"] = _elapsed_ms(autoimport_started)
-                if (pr.estado or "").strip() == "importado":
+                if _autoimport_confirmo_pago(auto_import_result):
                     pr.falla_validadores_manual = False
-                cuotas_lookup_started = perf_counter()
-                if auto_import_result.pago_id:
-                    cuotas_display = texto_cuotas_aplicadas_pago_id(db_post, auto_import_result.pago_id)
                 else:
-                    cuotas_display = texto_cuotas_aplicadas_pago_reportado(db_post, pr)
-                phase_ms["cuotas_lookup_ms"] = _elapsed_ms(cuotas_lookup_started)
-                background_started = perf_counter()
-                if cliente is not None:
-                    background_tasks.add_task(
-                        _procesar_recibo_y_correo_aprobado_background,
-                        int(pr.id),
-                        str(referencia),
-                        int(cliente.id),
-                        "INFOPAGOS",
+                    _marcar_reportado_en_revision_por_autoimport_fallido(
+                        pr, auto_import_result
                     )
-                phase_ms["background_task_ms"] = _elapsed_ms(background_started)
-                token_started = perf_counter()
-                recibo_token = create_recibo_infopagos_token(pr.id, expire_hours=2)
-                phase_ms["token_ms"] = _elapsed_ms(token_started)
-                final_commit_started = perf_counter()
-                db_post.commit()
-                phase_ms["final_commit_ms"] = _elapsed_ms(final_commit_started)
-                _log_infopagos_timing("aprobado", referencia, pr)
-                return EnviarReporteInfopagosResponse(
-                    ok=True,
-                    referencia_interna=referencia,
-                    mensaje="Pago registrado. El recibo se está generando y enviando al correo del deudor. Puede descargarlo aquí cuando esté listo.",
-                    recibo_descarga_token=recibo_token,
-                    pago_id=pr.id,
-                    aplicado_a_cuotas=(cuotas_display or "").strip() or RECIBO_TEXTO_CUOTA_EN_REVISION_CLIENTE,
-                    estado_reportado="aprobado",
-                    recibo_listo=False,
-                )
+                    falla_validadores = True
+                    logger.warning(
+                        "[INFOPAGOS] Ref=%s queda en revision: auto-import fallo (%s)",
+                        referencia,
+                        auto_import_result.error or "sin pago confirmado",
+                    )
+                    final_commit_started = perf_counter()
+                    db_post.commit()
+                    phase_ms["final_commit_ms"] = _elapsed_ms(final_commit_started)
+                if not falla_validadores:
+                    cuotas_lookup_started = perf_counter()
+                    if auto_import_result.pago_id:
+                        cuotas_display = texto_cuotas_aplicadas_pago_id(db_post, auto_import_result.pago_id)
+                    else:
+                        cuotas_display = texto_cuotas_aplicadas_pago_reportado(db_post, pr)
+                    phase_ms["cuotas_lookup_ms"] = _elapsed_ms(cuotas_lookup_started)
+                    background_started = perf_counter()
+                    if cliente is not None:
+                        background_tasks.add_task(
+                            _procesar_recibo_y_correo_aprobado_background,
+                            int(pr.id),
+                            str(referencia),
+                            int(cliente.id),
+                            "INFOPAGOS",
+                        )
+                    phase_ms["background_task_ms"] = _elapsed_ms(background_started)
+                    token_started = perf_counter()
+                    recibo_token = create_recibo_infopagos_token(pr.id, expire_hours=2)
+                    phase_ms["token_ms"] = _elapsed_ms(token_started)
+                    final_commit_started = perf_counter()
+                    db_post.commit()
+                    phase_ms["final_commit_ms"] = _elapsed_ms(final_commit_started)
+                    _log_infopagos_timing("aprobado", referencia, pr)
+                    return EnviarReporteInfopagosResponse(
+                        ok=True,
+                        referencia_interna=referencia,
+                        mensaje="Pago registrado. El recibo se está generando y enviando al correo del deudor. Puede descargarlo aquí cuando esté listo.",
+                        recibo_descarga_token=recibo_token,
+                        pago_id=pr.id,
+                        aplicado_a_cuotas=(cuotas_display or "").strip() or RECIBO_TEXTO_CUOTA_EN_REVISION_CLIENTE,
+                        estado_reportado="aprobado",
+                        recibo_listo=False,
+                    )
 
             _log_infopagos_timing("en_revision", referencia, pr)
             return EnviarReporteInfopagosResponse(
