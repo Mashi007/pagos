@@ -740,6 +740,7 @@ export default function NotificacionesClientesDrive() {
             <Button
               type="button"
               size="sm"
+              title="Descarga la pestaña CONCILIACIÓN desde Google (A:S hasta la última fila con datos) y actualiza candidatos."
               onClick={() => void onActualizacionManualDesdeGoogle()}
               disabled={manualSyncing || refreshing || q.isFetching || saving}
             >
@@ -752,6 +753,7 @@ export default function NotificacionesClientesDrive() {
               type="button"
               variant="outline"
               size="sm"
+              title="Recalcula candidatos desde el snapshot en BD (no descarga Google). Tras filas nuevas en la hoja use «Actualización manual»."
               onClick={() => onActualizarLista()}
               disabled={manualSyncing || refreshing || q.isFetching}
             >
@@ -1043,8 +1045,10 @@ export default function NotificacionesClientesDrive() {
                       02:00 sync A:S + snapshot Préstamos Drive si
                       ENABLE_AUTOMATIC_SCHEDULED_JOBS=true) o un cron externo
                       alineado (POST /api/v1/conciliacion-sheet/sync con
-                      secreto). Puede pulsar «Actualizar lista» para
-                      materializar ahora.
+                      secreto). Si agregó filas nuevas en la hoja esta semana,
+                      use «Actualización manual» (descarga A:S hasta la última
+                      fila con datos); «Actualizar lista» solo recalcula la
+                      caché en BD sin leer Google.
                     </td>
                   </tr>
                 )}
