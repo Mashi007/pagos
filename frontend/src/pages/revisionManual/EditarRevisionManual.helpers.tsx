@@ -11,6 +11,7 @@ import {
   institucionDesdeSugerenciaOcr,
   institucionPlantillaConfirmadaEscaneo,
   normalizarInstitucionBancoEscaneo,
+  fechaPagoDesdeExtraccionOcrConfiable,
 } from '../../utils/escanerComprobanteInfopagos'
 
 /** Estados de negocio del préstamo (tabla prestamos.estado); alineado con backend y fechas obligatorias. */
@@ -730,7 +731,7 @@ export function camposDigitadosOcrReescaneo(
   }
   if (
     !esInstitucionBinanceReescaneo(inst || '') &&
-    (sugerencia.fecha_pago || '').trim()
+    fechaPagoDesdeExtraccionOcrConfiable(sugerencia.fecha_pago)
   ) {
     out.push('fecha')
   }
@@ -806,83 +807,69 @@ export function patchLimpiarCamposOcrReescaneoCartera(
 }
 
 /**
- * Re-escaneo: limpia campos OCR y reaplica lo detectado en esta pasada.
- * Si Gemini no identifica banco con claridad, conserva la institución previa confirmada
- * para no degradar un dato que ya existía en cartera.
+ * Re-escaneo cartera: limpia campos OCR del pago y reaplica solo lo detectado en esta pasada.
+ * Fecha: nunca «hoy» ni valor previo si el OCR no devolvió fecha del papel.
  */
 export function patchCompletoPagoDesdeOcrReescaneoCartera(
   pago: Pago,
   sugerencia: EscanerInfopagosSugerencia
 ): PatchReescaneoOcrResult {
-  const patch: Partial<PagoCreate> & { monto_bs_original?: number | null } = {}
-  const inst =
-    institucionDesdeSugerenciaOcr(sugerencia) ||
-    normalizarInstitucionBancoEscaneo((pago.institucion_bancaria || '').trim())
+  const patch = patchLimpiarCamposOcrReescaneoCartera(pago)
+  const inst = institucionDesdeSugerenciaOcr(sugerencia)
   const monedaOcr = sugerencia.moneda === 'BS' ? 'BS' : 'USD'
   const montoOcr =
     sugerencia.monto != null && Number.isFinite(Number(sugerencia.monto))
       ? Number(sugerencia.monto)
       : null
   const numeroOcr = (sugerencia.numero_operacion || '').trim()
-  const fechaOcr = (sugerencia.fecha_pago || '').trim()
+  const fechaOcr = fechaPagoDesdeExtraccionOcrConfiable(sugerencia.fecha_pago)
   const camposAplicados: CampoReescaneoOcr[] = []
-  let hayCambios = false
 
-  if (inst && inst !== (pago.institucion_bancaria || '').trim()) {
+  if (inst) {
     patch.institucion_bancaria = inst
     camposAplicados.push('banco')
-    hayCambios = true
   }
-  if (numeroOcr && numeroOcr !== (pago.numero_documento || '').trim()) {
+  if (numeroOcr) {
     patch.numero_documento = numeroOcr
     camposAplicados.push('numero')
-    hayCambios = true
   }
   if (montoOcr != null && montoOcr > 0) {
     if (monedaOcr === 'BS') {
-      if (
-        Number(pago.monto_bs_original ?? 0) !== montoOcr ||
-        (pago.moneda_registro || '').toUpperCase() !== 'BS'
-      ) {
-        patch.monto_bs_original = montoOcr
-        patch.monto_pagado = 0
-        patch.moneda_registro = 'BS'
-        hayCambios = true
-      }
+      patch.monto_bs_original = montoOcr
+      patch.monto_pagado = 0
+      patch.moneda_registro = 'BS'
     } else {
-      if (
-        Number(pago.monto_pagado ?? 0) !== montoOcr ||
-        (pago.moneda_registro || 'USD').toUpperCase() !== 'USD'
-      ) {
-        patch.monto_pagado = montoOcr
-        patch.moneda_registro = 'USD'
-        hayCambios = true
-      }
+      patch.monto_pagado = montoOcr
+      patch.moneda_registro = 'USD'
+      patch.monto_bs_original = null
     }
     camposAplicados.push('monto', 'moneda')
-  } else if (
-    (sugerencia.moneda === 'BS' || sugerencia.moneda === 'USD') &&
-    (pago.moneda_registro || 'USD').toUpperCase() !== monedaOcr
-  ) {
+  } else if (sugerencia.moneda === 'BS' || sugerencia.moneda === 'USD') {
     patch.moneda_registro = monedaOcr
     camposAplicados.push('moneda')
-    hayCambios = true
   }
+  if (fechaOcr && !esInstitucionBinanceReescaneo(inst || '')) {
+    patch.fecha_pago = fechaOcr
+    camposAplicados.push('fecha')
+  }
+
   const fechaPagoActual =
     typeof pago.fecha_pago === 'string'
       ? pago.fecha_pago.slice(0, 10)
       : pago.fecha_pago instanceof Date
         ? pago.fecha_pago.toISOString().slice(0, 10)
         : ''
-  if (
-    fechaOcr &&
-    !esInstitucionBinanceReescaneo(inst || '') &&
-    fechaOcr !== fechaPagoActual
-  ) {
-    patch.fecha_pago = fechaOcr
-    camposAplicados.push('fecha')
-    hayCambios = true
-  }
+  const hayCambios =
+    (patch.fecha_pago || '') !== fechaPagoActual ||
+    (patch.institucion_bancaria || '').trim() !==
+      (pago.institucion_bancaria || '').trim() ||
+    (patch.numero_documento || '').trim() !==
+      (pago.numero_documento || '').trim() ||
+    Number(patch.monto_pagado ?? 0) !== Number(pago.monto_pagado ?? 0) ||
+    Number(patch.monto_bs_original ?? 0) !==
+      Number(pago.monto_bs_original ?? 0) ||
+    (patch.moneda_registro || 'USD').toUpperCase() !==
+      (pago.moneda_registro || 'USD').toUpperCase()
 
   return {
     patch,
@@ -971,9 +958,7 @@ export function pagoInicialDesdeSugerenciaEscaneoRevision(
   const base: PagoInicialRegistrar = {
     cedula_cliente: cedula,
     prestamo_id: pid,
-    fecha_pago:
-      (sugerencia.fecha_pago || '').trim() ||
-      new Date().toISOString().slice(0, 10),
+    fecha_pago: fechaPagoDesdeExtraccionOcrConfiable(sugerencia.fecha_pago),
     numero_documento: (sugerencia.numero_operacion || '').trim(),
     institucion_bancaria: inst || null,
     notas: (sugerencia.notas_modelo || '').trim() || null,

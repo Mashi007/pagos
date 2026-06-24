@@ -452,7 +452,8 @@ export default function CobrosEditarPage() {
           monto: form.monto,
           moneda: form.moneda === 'BS' ? 'BS' : 'USD',
         },
-        s
+        s,
+        { reemplazarSinConservarPrevios: true }
       )
       setForm(prev => ({
         ...prev,

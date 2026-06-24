@@ -321,6 +321,17 @@ def _procesar_serial_ocr_post_gemini(
     return cleaned
 
 
+def _inferir_fecha_desde_dcme_blob(blob_dcme: str, ref_hoy: date) -> Optional[date]:
+    """Fecha Mercantil desde bloque DCME …-YYYYMMDD-… en texto auxiliar."""
+    dcme = extraer_codigo_dcme_mercantil_en_texto(blob_dcme)
+    if not dcme:
+        return None
+    f_inf = inferir_fecha_pago_mercantil_desde_texto(dcme, ref_hoy)
+    if not f_inf:
+        return None
+    return parse_fecha_comprobante(f_inf, ref_hoy)
+
+
 def _resolver_fecha_ocr_post_gemini(
     fecha_raw: Any,
     *,
@@ -328,24 +339,29 @@ def _resolver_fecha_ocr_post_gemini(
     ref_hoy: date,
     blob_dcme: str,
     inferir_fecha_dcme: bool,
+    rechazar_fecha_hoy_sospechosa: bool = False,
 ) -> Optional[date]:
-    """Fecha conservadora + inferencia solo desde bloque DCME estructurado."""
+    """Fecha conservadora + inferencia DCME; escáner rechaza «hoy» sin DCME (alucinación Gemini)."""
     if gemini_indico_fecha_borrosa(fecha_raw, notas):
         return None
+
+    f_dcme: Optional[date] = None
+    if inferir_fecha_dcme:
+        f_dcme = _inferir_fecha_desde_dcme_blob(blob_dcme, ref_hoy)
+        if f_dcme is None and fecha_raw and str(fecha_raw).strip():
+            f_dcme = _inferir_fecha_desde_dcme_blob(str(fecha_raw), ref_hoy)
+    if f_dcme is not None:
+        return f_dcme
+
+    parsed: Optional[date] = None
     if fecha_raw and str(fecha_raw).strip():
         parsed = parse_fecha_comprobante_escaner(fecha_raw, ref_hoy)
-        if parsed is not None:
-            return parsed
-    if not inferir_fecha_dcme:
+
+    if parsed is None:
         return None
-    dcme = extraer_codigo_dcme_mercantil_en_texto(blob_dcme)
-    if not dcme:
+    if rechazar_fecha_hoy_sospechosa and parsed == ref_hoy:
         return None
-    f_inf = inferir_fecha_pago_mercantil_desde_texto(dcme, ref_hoy)
-    if not f_inf:
-        return None
-    # Bloque DCME: fecha estructurada YYYYMMDD → sin ambigüedad DD/MM del parse conservador.
-    return parse_fecha_comprobante(f_inf, ref_hoy)
+    return parsed
 
 
 def aplicar_reglas_ocr_post_gemini(
@@ -431,13 +447,14 @@ def aplicar_reglas_ocr_post_gemini(
         cleaned_serial = ""
 
     fecha_raw = datos.get("fecha_pago")
-    blob_dcme = f"{raw_serial}\n{notas}"
+    blob_dcme = f"{raw_serial}\n{notas}\n{fecha_raw or ''}"
     fecha_parsed = _resolver_fecha_ocr_post_gemini(
         fecha_raw,
         notas=notas,
         ref_hoy=ref_hoy,
         blob_dcme=blob_dcme,
         inferir_fecha_dcme=inferir_fecha_dcme and not serial_borroso,
+        rechazar_fecha_hoy_sospechosa=perfil_norm == "escaner",
     )
     if perfil_norm == "gmail":
         if gemini_indico_fecha_borrosa(fecha_raw, notas):

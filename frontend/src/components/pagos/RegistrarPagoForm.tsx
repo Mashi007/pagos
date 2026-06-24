@@ -997,7 +997,8 @@ export function RegistrarPagoForm({
                   ?.monto_bs_original ?? null),
           moneda_registro: monedaRegistro === 'BS' ? 'BS' : 'USD',
         },
-        s
+        s,
+        { modoReescaneo: true }
       )
       const nextMoneda = merged.moneda_registro
       const nextMonto =

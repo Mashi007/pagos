@@ -1,6 +1,6 @@
 /**
  * Re-escaneo cartera: misma API/prompts que Escanear (extraer-comprobante +
- * rescate_plantilla Gmail). Merge conservador: solo actualiza campos detectados por OCR.
+ * rescate_plantilla). Limpia campos OCR y persiste solo lo devuelto por la imagen.
  */
 import {
   escanerInfopagosExtraerComprobante,
@@ -15,6 +15,7 @@ import {
 import { normalizarComprobanteArchivoParaEscaneo } from '../../utils/normalizarComprobanteArchivo'
 import {
   buildFormDataEscanerComprobante,
+  fechaPagoDesdeExtraccionOcrConfiable,
   mensajeErrorExtraccionEscaner,
 } from '../../utils/escanerComprobanteInfopagos'
 import {
@@ -222,6 +223,16 @@ export function evaluarAlertaReescaneoTrasPersistencia(
     { bloquearNumeroPorDuplicado: bloquearNumero }
   )
   const motivos = [...parciales]
+  const instOcr = institucionDesdeSugerenciaOcrReescaneo(res.sugerencia)
+  if (
+    !esInstitucionBinanceReescaneo(instOcr || '') &&
+    !camposAplicados.includes('fecha') &&
+    !fechaPagoDesdeExtraccionOcrConfiable(res.sugerencia.fecha_pago)
+  ) {
+    motivos.push(
+      'Fecha no detectada en el comprobante; indíquela manualmente (no se usa la fecha de hoy).'
+    )
+  }
   if (duplicadoBloqueaReescaneo(Number(pago.id), res, validacion)) {
     motivos.push(
       'Posible duplicado en cartera; revise y use Visto si corresponde.'

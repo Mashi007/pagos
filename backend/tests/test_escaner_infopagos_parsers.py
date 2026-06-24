@@ -283,6 +283,47 @@ def test_serial_mercantil_14_digitos_truncado_no_aceptado():
     assert corregir_numero_operacion_mercantil(truncado, institucion="Mercantil") == ""
 
 
+def test_resolver_fecha_escaner_rechaza_hoy_y_prefiere_dcme():
+    ref = date(2026, 6, 23)
+    dcme = "9264-20260618-115409-DCME-5574-A"
+    serial = "740087459986093"
+    esc = aplicar_reglas_ocr_post_gemini(
+        {
+            "fecha_pago": "2026-06-23",
+            "numero_operacion": serial,
+            "notas": dcme,
+            "institucion_financiera": "Mercantil",
+        },
+        perfil="escaner",
+        ref_hoy=ref,
+    )
+    assert esc["fecha_pago"] == date(2026, 6, 18)
+
+    bnc = aplicar_reglas_ocr_post_gemini(
+        {
+            "fecha_pago": "2026-06-23",
+            "numero_operacion": "105137674",
+            "notas": "",
+            "institucion_financiera": "BNC",
+        },
+        perfil="escaner",
+        ref_hoy=ref,
+    )
+    assert bnc["fecha_pago"] is None
+
+    bnc_ok = aplicar_reglas_ocr_post_gemini(
+        {
+            "fecha_pago": "2026-06-18",
+            "numero_operacion": "105137674",
+            "notas": "",
+            "institucion_financiera": "BNC",
+        },
+        perfil="escaner",
+        ref_hoy=ref,
+    )
+    assert bnc_ok["fecha_pago"] == date(2026, 6, 18)
+
+
 def test_inferir_fecha_mercantil_desde_dcme_recuadro():
     from app.services.pagos_gmail.parse_campos_comprobante import (
         extraer_codigo_dcme_mercantil_en_texto,

@@ -76,6 +76,7 @@ FECHA — Venezuela DD/MM/YYYY; no confundir con MM/DD ni inventar desde metadat
   - Pie **PDP 056(09-02-2021)** o fecha manuscrita distinta = lote del formulario, **no** sustituye la fecha del depósito si la tira trae YYYYMMDD.
   - Conflicto manuscrito vs tira impresa → **tira manda** (fecha, monto, serial/referencia).
   - Prohibido usar fecha del correo (cabecera Date), metadata del archivo o nombre del archivo para rellenar fecha.
+  - **Prohibido** devolver la fecha de hoy del sistema como `fecha_pago`/`fecha_deposito` salvo que esté **impresa** en el comprobante.
   - El modelo no usa el asunto; si falta fecha en imagen A/B/D/E/F, el **backend** puede completar solo con DD/MM/YYYY **explícito** en el asunto del correo (no inventa desde Date).
   - Si la fecha en imagen es **borrosa** según el CRITERIO MATEMÁTICO (bloque siguiente): deja `fecha_pago`/`fecha_deposito` vacía o "NA"; no adivines dígitos.
 """.strip()
@@ -2798,8 +2799,8 @@ GEMINI_ESCANER_INFOPAGOS_PROMPT = (
 CONTEXTO (cédula del DEUDOR en el sistema — el cliente al que se le registra el pago; NO la confundas con la del depositante en el papel):
   "{cedula_deudor}"
 
-REFERENCIA DE CALENDARIO (solo coherencia; no inventes fechas que no estén en el comprobante):
-  - Fecha de hoy en Venezuela (America/Caracas), para comprobar que la operación no quede en el futuro: **{fecha_hoy_iso}**
+REFERENCIA DE CALENDARIO (solo coherencia; **no** uses este valor como `fecha_pago`):
+  - Fecha de hoy en Venezuela (America/Caracas): **{fecha_hoy_iso}** — úsala **solo** para descartar fechas futuras imposibles. **Prohibido** devolver `{fecha_hoy_iso}` como `fecha_pago` salvo que esa fecha exacta esté **impresa** en el comprobante (no en metadata ni en este prompt).
 
 TAREA: Lee la imagen o PDF adjunto y extrae SOLO lo que aparezca con claridad en el comprobante para rellenar un formulario de "Infopagos" con estos campos:
   - fecha_pago: fecha de la operación en el comprobante. Devuélvela como cadena en formato **YYYY-MM-DD** si puedes inferir año/mes/día; si solo hay día/mes sin año razonable, deja fecha_pago vacía "". **Mercantil** (tira 0105 / DEPÓSITO DIVISAS): la fecha está en el **recuadro superior** (1ª fila), en el **2º bloque YYYYMMDD** del código con **DCME** (ej. `9264-20260618-115409-DCME-5574-A` → **2026-06-18**). **No** infieras la fecha desde el Serial `740087…` (ese es solo `numero_operacion`).
@@ -2814,7 +2815,7 @@ TAREA: Lee la imagen o PDF adjunto y extrae SOLO lo que aparezca con claridad en
 REGLAS:
   - No inventes datos: si un campo no está legible, usa "" o null según el tipo.
   - No copies el correo ni datos que no estén en el comprobante.
-  - FECHA OBLIGATORIA DESDE IMAGEN/PDF: `fecha_pago` debe ser la fecha **impresa** en el comprobante (Fechar, Fecha/Hora, sello de operación). Devuélvela en **YYYY-MM-DD** copiando día, mes y **año de 4 cifras** tal como aparecen (si el papel muestra 2025, no uses 2026). Usa {fecha_hoy_iso} solo para descartar fechas futuras imposibles, **no** para inventar el día.
+  - FECHA OBLIGATORIA DESDE IMAGEN/PDF: `fecha_pago` debe ser la fecha **impresa** en el comprobante (Fechar, Fecha/Hora, sello de operación, bloque DCME Mercantil). Devuélvela en **YYYY-MM-DD** copiando día, mes y **año de 4 cifras** tal como aparecen. **Prohibido** usar la fecha de referencia `{fecha_hoy_iso}` del prompt si no está en el papel.
   - Prohibido usar fecha del correo, asunto, metadata del archivo, nombre del archivo o contexto externo para `fecha_pago`.
   - Si hay dos fechas en el comprobante (ej. sello y fecha transacción), prioriza la fecha del bloque principal de la operación/transferencia.
   - FORMATO VENEZOLANO / AMBIGÜEDAD: en boletos y apps locales casi siempre verás **día/mes/año** (o día-mes-año). Si ves **6 dígitos seguidos sin separadores** (ej. 191226), no asumas YYMMDD si con ello la operación quedaría **años incoherentes** respecto a otras fechas visibles del mismo boleto (sello, vigencia, año impreso, texto “202x”) o **en el futuro** respecto a {fecha_hoy_iso}. En ese caso prefiere la lectura **DDMMYY** (día/mes/año de dos dígitos) cuando encaje con el resto del comprobante; si sigue habiendo duda razonable, devuelve `fecha_pago` "" y explica en `notas`.
@@ -3233,8 +3234,20 @@ def _escaner_puntaje_serial_mercantil(gem: Dict[str, Any]) -> int:
 def _escaner_gem_resultado_mas_completo(
     prim: Dict[str, Any],
     seg: Dict[str, Any],
+    *,
+    ref_hoy: Optional[date] = None,
 ) -> Dict[str, Any]:
-    """Prefiere ok; si ambos ok, Serial Mercantil 740087… y luego fecha_pago."""
+    """Prefiere ok; si ambos ok, Serial Mercantil 740087… y luego fecha_pago confiable."""
+    if ref_hoy is None:
+        from app.services.tasa_cambio_service import fecha_hoy_caracas
+
+        ref_hoy = fecha_hoy_caracas()
+
+    def _fecha_confiable(f: Any) -> bool:
+        if not isinstance(f, date):
+            return False
+        return f != ref_hoy
+
     if seg.get("ok") and not prim.get("ok"):
         return seg
     if prim.get("ok") and not seg.get("ok"):
@@ -3245,7 +3258,12 @@ def _escaner_gem_resultado_mas_completo(
             return seg
         if sp > ss:
             return prim
-        if seg.get("fecha_pago") and not prim.get("fecha_pago"):
+        fp, fs = prim.get("fecha_pago"), seg.get("fecha_pago")
+        if _fecha_confiable(fs) and not _fecha_confiable(fp):
+            return seg
+        if _fecha_confiable(fp) and not _fecha_confiable(fs):
+            return prim
+        if fs and not fp:
             return seg
         return prim
     score_prim = sum(
@@ -3309,11 +3327,20 @@ def extract_infopagos_campos_desde_comprobante_con_rescate_plantilla(
             and (not serial_bnc or serial_bnc != num_gem)
         )
     falta_fecha = bool(gem.get("ok") and gem.get("fecha_pago") is None)
+    from app.services.tasa_cambio_service import fecha_hoy_caracas
+
+    ref_hoy_rescate = fecha_hoy_caracas()
+    fecha_hoy_sospechosa = bool(
+        gem.get("ok")
+        and isinstance(gem.get("fecha_pago"), date)
+        and gem.get("fecha_pago") == ref_hoy_rescate
+    )
     falta_numero_operacion = bool(
         gem.get("ok") and not str(gem.get("numero_operacion") or "").strip()
     )
     necesita_rescate = (
         falta_fecha
+        or fecha_hoy_sospechosa
         or falta_numero_operacion
         or mercantil_solo_dcme
         or mercantil_serial_incompleto
@@ -3333,5 +3360,5 @@ def extract_infopagos_campos_desde_comprobante_con_rescate_plantilla(
         api_key=api_key,
         institucion_plantilla=inst_canon,
     )
-    return _escaner_gem_resultado_mas_completo(gem, gem2)
+    return _escaner_gem_resultado_mas_completo(gem, gem2, ref_hoy=ref_hoy_rescate)
 

@@ -7,6 +7,7 @@ import {
   extraerCaracteresCedulaPublica,
   normalizarCedulaParaProcesar,
 } from '../utils/cedulaConsultaPublica'
+import { fechaPagoDesdeExtraccionOcrConfiable } from '../utils/escanerComprobanteInfopagos'
 
 const INSTITUCIONES_FINANCIERAS = [
   'BINANCE',
@@ -240,7 +241,7 @@ export function filaTrasExtraccion(
     }
   }
   const s = res.sugerencia
-  const fechaExtraida = (s.fecha_pago || '').trim()
+  const fechaExtraida = fechaPagoDesdeExtraccionOcrConfiable(s.fecha_pago)
   const tieneFechaDetectada = Boolean(fechaExtraida)
   const { institucion, otroInstitucion } = resolverInstitucionDesdeExtraccion(
     s.institucion_financiera || '',

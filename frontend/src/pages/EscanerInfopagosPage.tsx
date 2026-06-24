@@ -41,6 +41,7 @@ import {
   type FuenteTasaCambio,
 } from '../constants/fuenteTasaCambio'
 import { resolverInstitucionDesdeExtraccion } from './escanerInfopagosLoteModel'
+import { fechaPagoDesdeExtraccionOcrConfiable } from '../utils/escanerComprobanteInfopagos'
 import { searchParamsRevisionPagosDesdeNumeroDocumento } from '../utils/linkRevisionPagosDesdeEscaner'
 
 type Fase = 'cedula' | 'imagen' | 'formulario' | 'exito'
@@ -480,7 +481,7 @@ export default function EscanerInfopagosPage() {
     (res: EscanerInfopagosExtraerResponse) => {
       const s = res.sugerencia
       if (!s) return false
-      const fechaExtraida = (s.fecha_pago || '').trim()
+      const fechaExtraida = fechaPagoDesdeExtraccionOcrConfiable(s.fecha_pago)
       if (fechaExtraida) {
         setFechaPago(fechaExtraida)
         setFechaDetectada(fechaExtraida)

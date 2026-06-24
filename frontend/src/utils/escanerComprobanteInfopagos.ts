@@ -11,6 +11,20 @@ import {
   type FuenteTasaCambio,
 } from '../constants/fuenteTasaCambio'
 import { resolverInstitucionDesdeExtraccion } from '../pages/escanerInfopagosLoteModel'
+import { hoyYmdCaracas } from './fechaZona'
+
+/**
+ * Fecha OCR para escanear/reescanear: vacía si falta o si coincide con hoy Caracas
+ * (Gemini suele copiar la referencia del prompt; no sustituye la fecha impresa).
+ */
+export function fechaPagoDesdeExtraccionOcrConfiable(
+  fechaRaw: string | null | undefined
+): string {
+  const t = (fechaRaw || '').trim().slice(0, 10)
+  if (!t) return ''
+  if (t === hoyYmdCaracas()) return ''
+  return t
+}
 
 export function normalizarInstitucionBancoEscaneo(raw: string): string | null {
   const t = (raw || '').trim()
@@ -174,10 +188,12 @@ export type CamposFormularioEscaner = {
 /**
  * Merge conservador: solo reemplaza campos que el OCR devolvió con valor;
  * conserva fecha, banco, número y monto previos si Gemini omitió el dato.
+ * Con `reemplazarSinConservarPrevios` (re-escaneo): solo valores OCR confiables.
  */
 export function mergeCamposFormularioDesdeSugerenciaOcr(
   actual: CamposFormularioEscaner,
-  sugerencia: EscanerInfopagosSugerencia
+  sugerencia: EscanerInfopagosSugerencia,
+  opts?: { reemplazarSinConservarPrevios?: boolean }
 ): CamposFormularioEscaner {
   const instOcr = institucionDesdeSugerenciaOcr(sugerencia)
   const geminiInst = instOcr || (sugerencia.institucion_financiera || '').trim()
@@ -186,21 +202,26 @@ export function mergeCamposFormularioDesdeSugerenciaOcr(
     actual.institucion,
     actual.otroInstitucion
   )
-  const fechaExtraida = (sugerencia.fecha_pago || '').trim()
+  const fechaExtraida = fechaPagoDesdeExtraccionOcrConfiable(sugerencia.fecha_pago)
   const numeroExtraido = (sugerencia.numero_operacion || '').trim()
   const mon = sugerencia.moneda === 'BS' ? 'BS' : 'USD'
   const montoNum =
     sugerencia.monto != null && Number.isFinite(Number(sugerencia.monto))
       ? Number(sugerencia.monto)
       : null
+  const soloOcr = Boolean(opts?.reemplazarSinConservarPrevios)
 
   return {
-    fechaPago: fechaExtraida || actual.fechaPago,
-    institucion: institucion || actual.institucion,
-    otroInstitucion: otroInstitucion || actual.otroInstitucion,
-    numeroOperacion: numeroExtraido || actual.numeroOperacion,
-    monto: montoNum != null ? String(montoNum) : actual.monto,
-    moneda: montoNum != null ? mon : actual.moneda,
+    fechaPago: soloOcr ? fechaExtraida : fechaExtraida || actual.fechaPago,
+    institucion: soloOcr ? institucion : institucion || actual.institucion,
+    otroInstitucion: soloOcr
+      ? otroInstitucion
+      : otroInstitucion || actual.otroInstitucion,
+    numeroOperacion: soloOcr
+      ? numeroExtraido
+      : numeroExtraido || actual.numeroOperacion,
+    monto: montoNum != null ? String(montoNum) : soloOcr ? '' : actual.monto,
+    moneda: montoNum != null ? mon : soloOcr ? 'USD' : actual.moneda,
   }
 }
 
@@ -216,26 +237,34 @@ export type CamposPagoRegistrarEscaner = {
 /** Merge conservador para RegistrarPagoForm / modal Editar Pago. */
 export function mergePagoRegistrarDesdeSugerenciaOcr(
   actual: CamposPagoRegistrarEscaner,
-  sugerencia: EscanerInfopagosSugerencia
+  sugerencia: EscanerInfopagosSugerencia,
+  opts?: { modoReescaneo?: boolean }
 ): CamposPagoRegistrarEscaner {
   const inst =
     institucionDesdeSugerenciaOcr(sugerencia) ||
-    normalizarInstitucionBancoEscaneo(
-      (actual.institucion_bancaria || '').trim()
-    )
-  const fechaOcr = (sugerencia.fecha_pago || '').trim()
+    (opts?.modoReescaneo
+      ? null
+      : normalizarInstitucionBancoEscaneo(
+          (actual.institucion_bancaria || '').trim()
+        ))
+  const fechaOcr = fechaPagoDesdeExtraccionOcrConfiable(sugerencia.fecha_pago)
   const numeroOcr = (sugerencia.numero_operacion || '').trim()
   const monedaOcr = sugerencia.moneda === 'BS' ? 'BS' : 'USD'
   const montoOcr =
     sugerencia.monto != null && Number.isFinite(Number(sugerencia.monto))
       ? Number(sugerencia.monto)
       : null
+  const soloOcr = Boolean(opts?.modoReescaneo)
 
   const next: CamposPagoRegistrarEscaner = {
     ...actual,
-    fecha_pago: fechaOcr || actual.fecha_pago,
-    institucion_bancaria: inst || actual.institucion_bancaria,
-    numero_documento: numeroOcr || actual.numero_documento,
+    fecha_pago: soloOcr ? fechaOcr : fechaOcr || actual.fecha_pago,
+    institucion_bancaria: soloOcr
+      ? inst || null
+      : inst || actual.institucion_bancaria,
+    numero_documento: soloOcr
+      ? numeroOcr
+      : numeroOcr || actual.numero_documento,
   }
 
   if (montoOcr != null && montoOcr > 0) {
@@ -247,6 +276,10 @@ export function mergePagoRegistrarDesdeSugerenciaOcr(
       next.moneda_registro = 'USD'
       next.monto_pagado = montoOcr
     }
+  } else if (soloOcr) {
+    next.moneda_registro = 'USD'
+    next.monto_pagado = 0
+    next.monto_bs_original = null
   } else if (sugerencia.moneda === 'BS' || sugerencia.moneda === 'USD') {
     next.moneda_registro = monedaOcr
   }
