@@ -4,7 +4,14 @@ from datetime import date
 from app.services.pagos_gmail.helpers import format_monto_excel_pagos_gmail, normalizar_fecha_pago
 from app.services.pagos_gmail.parse_campos_comprobante import (
     clave_numero_operacion_canonico,
+    duplicado_digitos_misma_longitud_mas_umbral,
+    fecha_ocr_borrosa_revision_manual,
+    gemini_indico_fecha_borrosa,
+    gemini_indico_serial_borroso,
+    hamming_digitos_misma_longitud,
+    min_digitos_inequivocos_ocr,
     normalizar_campos_gemini_gmail,
+    serial_ocr_borrosa_revision_manual,
     numeros_operacion_coinciden_o_evasion,
     parse_fecha_comprobante,
     parse_monto_comprobante,
@@ -357,9 +364,17 @@ def test_escaner_gem_resultado_mas_completo_prefiere_fecha():
     assert not numeros_operacion_coinciden_o_evasion(
         "123456789012345", "6789"
     )
-    assert not numeros_operacion_coinciden_o_evasion(
+    assert numeros_operacion_coinciden_o_evasion(
         "7400874101194", "7400874101195"
     )
+    assert not numeros_operacion_coinciden_o_evasion(
+        "7400874101194", "7400874101284"
+    )
+    assert not duplicado_digitos_misma_longitud_mas_umbral(
+        "7400874101194", "7400874101284"
+    )
+    assert hamming_digitos_misma_longitud("7400874101194", "7400874101195") == 1
+    assert hamming_digitos_misma_longitud("7400874101194", "7400874101284") == 2
     assert not numeros_operacion_coinciden_o_evasion("12345", "678912345")
     assert not numeros_operacion_coinciden_o_evasion(
         "0993",
@@ -373,3 +388,34 @@ def test_escaner_gem_resultado_mas_completo_prefiere_fecha():
         monto_a=135.0,
         monto_b=135.0,
     )
+
+
+def test_fecha_ocr_borrosa_revision_manual_criterio():
+    assert fecha_ocr_borrosa_revision_manual(digitos_inequivocos=8) is False
+    assert fecha_ocr_borrosa_revision_manual(digitos_inequivocos=7) is False
+    assert fecha_ocr_borrosa_revision_manual(digitos_inequivocos=6) is True
+    assert fecha_ocr_borrosa_revision_manual(
+        digitos_inequivocos=7, dos_fechas_validas_distintas=True
+    ) is True
+    assert fecha_ocr_borrosa_revision_manual(
+        digitos_inequivocos=8, digitos_ambiguos_afectan_calendario=True
+    ) is True
+
+
+def test_gemini_indico_fecha_borrosa_y_parse_conservador():
+    assert gemini_indico_fecha_borrosa("", "fecha borrosa L<0,875") is True
+    assert gemini_indico_fecha_borrosa("2026-06-18", "") is False
+    assert parse_fecha_comprobante("03/05/2024", REF) is not None
+    assert parse_fecha_comprobante("03/05/2024", REF, conservador=True) is None
+
+
+def test_serial_borroso_mismo_criterio_matematico_fecha():
+    assert min_digitos_inequivocos_ocr(8) == 7
+    assert min_digitos_inequivocos_ocr(15) == 14
+    assert min_digitos_inequivocos_ocr(13) == 12
+    assert serial_ocr_borrosa_revision_manual(digitos_inequivocos=14, total_digitos=15) is False
+    assert serial_ocr_borrosa_revision_manual(digitos_inequivocos=13, total_digitos=15) is True
+    assert serial_ocr_borrosa_revision_manual(digitos_inequivocos=11, total_digitos=13) is True
+    assert serial_ocr_borrosa_revision_manual(digitos_inequivocos=12, total_digitos=13) is False
+    assert gemini_indico_serial_borroso("7400874101194", "serial borroso L<0,875") is True
+    assert gemini_indico_serial_borroso("7400874101194", "") is False

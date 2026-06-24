@@ -9,6 +9,233 @@ from typing import Any, Dict, List, Optional
 
 PAGOS_NA = "NA"
 
+# Anti-duplicado comprobantes: misma longitud, R > 70% y Hamming acotado (error OCR, no serial distinto).
+UMBRAL_SIMILITUD_DIGITOS_DUPLICADO = 0.70
+MAX_HAMMING_DUPLICADO_OCR_SERIAL_LARGO = 1  # n >= 10: solo 1 dígito OCR (ej. 12/13)
+MAX_HAMMING_DUPLICADO_OCR_SERIAL_CORTO = 1  # n < 10
+MIN_LONGITUD_DUPLICADO_SIMILITUD = 3
+
+REGLA_DUPLICADO_NUMERO_OPERACION_PROMPT = """
+REGLA SISTEMA — DUPLICADO DE NÚMERO DE OPERACIÓN / SERIAL / REFERENCIA (solo al COMPARAR dos valores ya extraídos; nunca para inventar dígitos al transcribir):
+  Dos valores se consideran EL MISMO documento — duplicado — si el backend verifica **todas** estas condiciones:
+  (1) Misma longitud de dígitos (n ≥ 3).
+  (2) Tasa de coincidencia posición a posición R = (coincidencias / n) **estrictamente** > 0,70.
+  (3) Distancia de Hamming H = (dígitos distintos) ≤ 1 (un solo dígito OCR dudoso; nunca dos o más).
+  (4) Si hay monto, cédula o fecha en ambos lados y alguno difiere → NO duplicado.
+  Ejemplo duplicado: 7400874101194 y 7400874101195 (n=13, R=12/13, H=1).
+  Ejemplo NO duplicado: 7400874101194 y 7400874101284 (H=2).
+  Al transcribir: copia fiel al papel; no completes dígitos dudosos para “acercarte” al 70%.
+""".strip()
+
+
+def hamming_digitos_misma_longitud(ca: str, cb: str) -> int:
+    """Cantidad de posiciones con dígito distinto (misma longitud)."""
+    if not ca or not cb or len(ca) != len(cb):
+        return max(len(ca or ""), len(cb or ""))
+    return sum(1 for i in range(len(ca)) if ca[i] != cb[i])
+
+
+def _diferencias_solo_en_sufijo(ca: str, cb: str, *, tail: int) -> bool:
+    """True si cada posición distinta está en el sufijo de longitud `tail`."""
+    n = len(ca)
+    if n != len(cb) or n == 0:
+        return False
+    tail = min(n, max(1, tail))
+    start = n - tail
+    for i in range(n):
+        if ca[i] != cb[i] and i < start:
+            return False
+    return True
+
+
+def ratio_digitos_misma_secuencia(ca: str, cb: str) -> float:
+    """Proporción de dígitos iguales en la misma posición (0..1). Requiere misma longitud."""
+    if not ca or not cb or len(ca) != len(cb):
+        return 0.0
+    return sum(1 for i in range(len(ca)) if ca[i] == cb[i]) / len(ca)
+
+
+def duplicado_digitos_misma_longitud_mas_umbral(
+    ca: str,
+    cb: str,
+    *,
+    umbral: float = UMBRAL_SIMILITUD_DIGITOS_DUPLICADO,
+) -> bool:
+    """
+    True si misma longitud, R > umbral y H acotado (OCR 1–2 dígitos en sufijo, no seriales distintos).
+
+    Con solo R > 0,70 y n=13 se permitirían H=3 (falsos positivos); por eso H ≤ 2 y sufijo si H ≥ 2.
+    """
+    if not ca or not cb or len(ca) != len(cb) or len(ca) < MIN_LONGITUD_DUPLICADO_SIMILITUD:
+        return False
+    n = len(ca)
+    ratio = ratio_digitos_misma_secuencia(ca, cb)
+    if ratio <= umbral:
+        return False
+    hamming = hamming_digitos_misma_longitud(ca, cb)
+    max_h = (
+        MAX_HAMMING_DUPLICADO_OCR_SERIAL_LARGO
+        if n >= 10
+        else MAX_HAMMING_DUPLICADO_OCR_SERIAL_CORTO
+    )
+    if hamming > max_h:
+        return False
+    return True
+
+
+# OCR legibilidad dígito a dígito (fecha 8 dígitos, serial/ref longitud variable n).
+UMBRAL_CONFIANZA_DIGITO_OCR = 0.90
+MIN_PROP_DIGITOS_INEQUIVOCOS_OCR = 0.875  # L ≥ 0,875 → máx. ⌊(1−0,875)·n⌋ dígitos ambiguos
+
+# Alias fecha (8 dígitos DDMMYYYY)
+UMBRAL_CONFIANZA_DIGITO_FECHA_OCR = UMBRAL_CONFIANZA_DIGITO_OCR
+MIN_PROP_DIGITOS_INEQUIVOCOS_FECHA = MIN_PROP_DIGITOS_INEQUIVOCOS_OCR
+MIN_DIGITOS_INEQUIVOCOS_FECHA = 7
+
+
+def min_digitos_inequivocos_ocr(total_digitos: int) -> int:
+    """Mínimo de dígitos con cᵢ ≥ umbral para no declarar borroso (⌈n·0,875⌉)."""
+    if total_digitos < 1:
+        return 1
+    import math
+
+    return max(1, math.ceil(total_digitos * MIN_PROP_DIGITOS_INEQUIVOCOS_OCR))
+
+
+def digitos_ocr_legibilidad_insuficiente(
+    digitos_inequivocos: int,
+    total_digitos: int,
+    *,
+    dos_lecturas_distintas_plausibles: bool = False,
+) -> bool:
+    """
+    True si L = digitos_inequivocos/n < 0,875 o hay dos lecturas plausibles distintas.
+    Usado por fecha (n=8) y serial/ref (n variable).
+    """
+    if total_digitos < 1:
+        return True
+    if dos_lecturas_distintas_plausibles:
+        return True
+    return (digitos_inequivocos / total_digitos) < MIN_PROP_DIGITOS_INEQUIVOCOS_OCR
+
+
+REGLA_FECHA_BORROSA_REVISION_MANUAL_PROMPT = """
+CRITERIO MATEMÁTICO — FECHA BORROSA (revisión manual; NO inventar):
+  La fecha DD/MM/AAAA = 8 dígitos d₁…d₈. Para cada posición i, confianza visual cᵢ ∈ [0,1] (solo evaluación interna; no reportes cᵢ en JSON).
+
+  Definiciones:
+  - Dígito inequívoco: cᵢ ≥ 0,90.
+  - A = {{ i | cᵢ < 0,90 }}, L = (8 − |A|) / 8.
+
+  BORROSA → vacía/NA si **cualquiera**:
+    (a) L < 0,875  (|A| ≥ 2)
+    (b) |A| ≥ 1 y ≥2 candidatos distintos dan fechas calendario válidas diferentes
+    (c) Dos lecturas completas D₁ ≠ D₂ válidas y plausibles
+    (d) DD/MM vs MM/DD ambos válidos y distintos
+
+  Si no borrosa: devuelve la **única** fecha con los 8 dígitos inequívocos.
+
+  **Anti-alucinación (obligatorio):**
+  - Prohibido inferir desde correo, metadata, hoy o serial 740087… sin bloque DCME.
+  - Si declaras borrosa en `notas`, `fecha_pago`/`fecha_deposito` debe ir vacía/NA (nunca rellenar después).
+  - El backend **rechaza** fechas con ambigüedad DD/MM vs MM/DD y **no** infiere si `notas` indican borrosura.
+  - Inferencia automática solo desde bloque DCME con regex fija …-YYYYMMDD-… (8 dígitos inequívocos en texto).
+
+  Salida: escáner/compare → ""; Gmail/cobranza → "NA". Monto/ref legibles: no bajar a "ninguno" solo por fecha borrosa.
+""".strip()
+
+
+REGLA_SERIAL_BORROSO_REVISION_MANUAL_PROMPT = """
+CRITERIO MATEMÁTICO — SERIAL / REF / Nº OPERACIÓN BORROSO (revisión manual; NO inventar):
+  El serial (solo dígitos, longitud n ≥ 3) se modela como d₁…dₙ. Para cada posición i, confianza visual cᵢ ∈ [0,1] (no reportes cᵢ en JSON).
+
+  Definiciones (mismas que fecha):
+  - Dígito inequívoco: cᵢ ≥ 0,90.
+  - A = {{ i | cᵢ < 0,90 }}, L = (n − |A|) / n.
+
+  BORROSO → vacío/NA si **cualquiera**:
+    (a) L < 0,875  (equivalente: digitos_inequivocos < ⌈n × 0,875⌉)
+    (b) |A| ≥ 1 y ≥2 candidatos distintos por dígito producen **dos seriales plausibles distintos** (lecturas D₁ ≠ D₂)
+    (c) Longitud esperada del formato no alcanzable sin adivinar (ej. Mercantil Serial **740087** incompleto: n < 15 con dígitos dudosos)
+    (d) Mezcla dígitos de Ref y Serial, repetición concatenada, o fragmento DCME usado como serial
+
+  Si no borroso: devuelve la **única** ristra de n dígitos inequívocos, conservando ceros a la izquierda.
+
+  **Anti-alucinación (obligatorio):**
+  - Prohibido completar dígitos faltantes, truncar o alargar para “llegar” a 15/8/9 cifras.
+  - Si declaras serial borroso en `notas`, `numero_operacion`/`numero_referencia` = "" o "NA".
+  - El backend **no** aplica correcciones Mercantil/BNC ni rescate desde texto auxiliar si `notas` indican serial borroso.
+  - Duplicado (>70% + H≤1) aplica solo al **comparar** dos valores ya leídos; no para rellenar huecos.
+
+  Salida: escáner/compare → ""; Gmail/cobranza → "NA". Monto/fecha legibles: no bajar a "ninguno" solo por serial borroso.
+""".strip()
+
+
+_FECHA_BORROSA_NOTAS_RE = re.compile(
+    r"(?i)(fecha\s+borros|L\s*<\s*0[,.]875|no\s+distinguible|revisi[oó]n\s+manual.*fecha|fecha.*revisi[oó]n\s+manual)"
+)
+
+_SERIAL_BORROSO_NOTAS_RE = re.compile(
+    r"(?i)(serial\s+borros|referencia\s+borros|n[uú]mero\s+de\s+operaci[oó]n\s+borros|"
+    r"ref\s+borros|numero_referencia\s+borros|L\s*<\s*0[,.]875.*serial|"
+    r"serial.*L\s*<\s*0[,.]875|revisi[oó]n\s+manual.*serial|serial.*revisi[oó]n\s+manual)"
+)
+
+
+def gemini_indico_fecha_borrosa(fecha_raw: Any, notas: Any) -> bool:
+    """True si Gemini marcó borrosura: descartar su fecha y no inferir desde texto libre."""
+    notas_s = str(notas or "").strip()
+    if notas_s and _FECHA_BORROSA_NOTAS_RE.search(notas_s):
+        return True
+    return False
+
+
+def gemini_indico_serial_borroso(serial_raw: Any, notas: Any) -> bool:
+    """True si Gemini marcó serial/ref borroso: no usar ni corregir desde texto auxiliar."""
+    notas_s = str(notas or "").strip()
+    if notas_s and _SERIAL_BORROSO_NOTAS_RE.search(notas_s):
+        return True
+    return False
+
+
+def parse_fecha_comprobante_escaner(
+    val: Any, ref_hoy: Optional[date] = None
+) -> Optional[date]:
+    """Parseo de fecha post-Gemini: rechaza ambigüedad DD/MM vs MM/DD."""
+    return parse_fecha_comprobante(val, ref_hoy, conservador=True)
+
+
+def fecha_ocr_borrosa_revision_manual(
+    *,
+    digitos_inequivocos: int,
+    total_digitos: int = 8,
+    dos_fechas_validas_distintas: bool = False,
+    digitos_ambiguos_afectan_calendario: bool = False,
+) -> bool:
+    """True si la fecha debe dejarse vacía/NA (L < 0,875 u ambigüedad calendario)."""
+    return digitos_ocr_legibilidad_insuficiente(
+        digitos_inequivocos,
+        total_digitos,
+        dos_lecturas_distintas_plausibles=(
+            dos_fechas_validas_distintas or digitos_ambiguos_afectan_calendario
+        ),
+    )
+
+
+def serial_ocr_borrosa_revision_manual(
+    *,
+    digitos_inequivocos: int,
+    total_digitos: int,
+    dos_seriales_plausibles_distintos: bool = False,
+) -> bool:
+    """True si el serial debe dejarse vacío/NA (mismo criterio L < 0,875 que fecha)."""
+    return digitos_ocr_legibilidad_insuficiente(
+        digitos_inequivocos,
+        total_digitos,
+        dos_lecturas_distintas_plausibles=dos_seriales_plausibles_distintos,
+    )
+
+
 # Montos escaneados/reportados por encima de este valor van a revisión manual (cualquier moneda/medio).
 MONTO_UMBRAL_REVISION_MANUAL = 3000.0
 
@@ -241,7 +468,29 @@ def _pick_fecha_candidata(candidates: List[Optional[date]], ref_hoy: date) -> Op
     return valid[0]
 
 
-def _parse_fecha_dmy_parts(d: int, mo: int, y: int, ref_hoy: date) -> Optional[date]:
+def _fecha_ambigua_dd_mm(d: int, mo: int, y: int) -> bool:
+    """True si día y mes intercambiables producen dos fechas calendario válidas distintas."""
+    if d == mo or d > 12 or mo > 12:
+        return False
+    ok_dmy = ok_mdy = False
+    try:
+        date(y, mo, d)
+        ok_dmy = True
+    except ValueError:
+        pass
+    try:
+        date(y, d, mo)
+        ok_mdy = True
+    except ValueError:
+        pass
+    return ok_dmy and ok_mdy
+
+
+def _parse_fecha_dmy_parts(
+    d: int, mo: int, y: int, ref_hoy: date, *, conservador: bool = False
+) -> Optional[date]:
+    if conservador and _fecha_ambigua_dd_mm(d, mo, y):
+        return None
     opts: List[Optional[date]] = []
     try:
         opts.append(date(y, mo, d))
@@ -255,11 +504,13 @@ def _parse_fecha_dmy_parts(d: int, mo: int, y: int, ref_hoy: date) -> Optional[d
     return _pick_fecha_candidata(opts, ref_hoy)
 
 
-def _parse_fecha_compacta_6(digits: str, ref_hoy: date) -> Optional[date]:
+def _parse_fecha_compacta_6(digits: str, ref_hoy: date, *, conservador: bool = False) -> Optional[date]:
     if len(digits) != 6 or not digits.isdigit():
         return None
     dd, mm, yy = int(digits[0:2]), int(digits[2:4]), int(digits[4:6])
-    cand_ddmmyy = _parse_fecha_dmy_parts(dd, mm, _year_from_two_digits(yy), ref_hoy)
+    cand_ddmmyy = _parse_fecha_dmy_parts(
+        dd, mm, _year_from_two_digits(yy), ref_hoy, conservador=conservador
+    )
     yy2, mo2, d2 = int(digits[0:2]), int(digits[2:4]), int(digits[4:6])
     cand_yymmdd: Optional[date] = None
     try:
@@ -271,7 +522,9 @@ def _parse_fecha_compacta_6(digits: str, ref_hoy: date) -> Optional[date]:
     return _pick_fecha_candidata([cand_ddmmyy, cand_yymmdd], ref_hoy)
 
 
-def parse_fecha_comprobante(val: Any, ref_hoy: Optional[date] = None) -> Optional[date]:
+def parse_fecha_comprobante(
+    val: Any, ref_hoy: Optional[date] = None, *, conservador: bool = False
+) -> Optional[date]:
     if ref_hoy is None:
         from app.services.tasa_cambio_service import fecha_hoy_caracas
 
@@ -287,7 +540,7 @@ def parse_fecha_comprobante(val: Any, ref_hoy: Optional[date] = None) -> Optiona
     try:
         if len(s10) >= 10 and s10[4] in "-/" and s10[7] in "-/" and s10[4] == s10[7]:
             y, m, d = int(s10[0:4]), int(s10[5:7]), int(s10[8:10])
-            parsed = _parse_fecha_dmy_parts(d, m, y, ref_hoy)
+            parsed = _parse_fecha_dmy_parts(d, m, y, ref_hoy, conservador=conservador)
             if parsed:
                 return parsed
     except (ValueError, TypeError):
@@ -295,7 +548,7 @@ def parse_fecha_comprobante(val: Any, ref_hoy: Optional[date] = None) -> Optiona
     m = re.match(r"^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$", s)
     if m:
         parsed = _parse_fecha_dmy_parts(
-            int(m.group(1)), int(m.group(2)), int(m.group(3)), ref_hoy
+            int(m.group(1)), int(m.group(2)), int(m.group(3)), ref_hoy, conservador=conservador
         )
         if parsed:
             return parsed
@@ -306,18 +559,23 @@ def parse_fecha_comprobante(val: Any, ref_hoy: Optional[date] = None) -> Optiona
             int(m2.group(2)),
             _year_from_two_digits(int(m2.group(3))),
             ref_hoy,
+            conservador=conservador,
         )
         if parsed:
             return parsed
     digits_only = re.sub(r"\D", "", s)
     if len(digits_only) == 6:
-        parsed = _parse_fecha_compacta_6(digits_only, ref_hoy)
+        parsed = _parse_fecha_compacta_6(digits_only, ref_hoy, conservador=conservador)
         if parsed:
             return parsed
     m_iso = re.search(r"(\d{4})-(\d{2})-(\d{2})", s)
     if m_iso:
         parsed = _parse_fecha_dmy_parts(
-            int(m_iso.group(3)), int(m_iso.group(2)), int(m_iso.group(1)), ref_hoy
+            int(m_iso.group(3)),
+            int(m_iso.group(2)),
+            int(m_iso.group(1)),
+            ref_hoy,
+            conservador=conservador,
         )
         if parsed:
             return parsed
@@ -328,13 +586,18 @@ def parse_fecha_comprobante(val: Any, ref_hoy: Optional[date] = None) -> Optiona
             int(m_merc_ref.group(2)),
             int(m_merc_ref.group(1)),
             ref_hoy,
+            conservador=conservador,
         )
         if parsed:
             return parsed
     m_lat = re.search(r"(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})", s)
     if m_lat:
         parsed = _parse_fecha_dmy_parts(
-            int(m_lat.group(1)), int(m_lat.group(2)), int(m_lat.group(3)), ref_hoy
+            int(m_lat.group(1)),
+            int(m_lat.group(2)),
+            int(m_lat.group(3)),
+            ref_hoy,
+            conservador=conservador,
         )
         if parsed:
             return parsed
@@ -434,7 +697,7 @@ def inferir_fecha_pago_mercantil_desde_texto(
     dcme = extraer_codigo_dcme_mercantil_en_texto(texto)
     if dcme:
         return inferir_fecha_pago_desde_numero_operacion(dcme, ref_hoy)
-    return inferir_fecha_pago_desde_numero_operacion(texto, ref_hoy)
+    return ""
 
 
 _LABEL_NUM_OP_PREFIX_RE = re.compile(
@@ -827,8 +1090,8 @@ def numeros_operacion_coinciden_o_evasion(
     exigir_contexto_sufijo_corto: bool = True,
 ) -> bool:
     """
-    True si es el mismo comprobante: igualdad, sufijo truncado (0993 vs …0993)
-    o prefijo/sufijo largo (7400874101194 vs 740087410119497).
+    True si es el mismo comprobante: igualdad, >70% dígitos en misma longitud/secuencia,
+    sufijo truncado (0993 vs …0993) o prefijo/sufijo largo (7400874101194 vs 740087410119497).
 
     Para sufijos cortos (≤6 dígitos) exige coherencia de monto/cédula/fecha cuando
     ambos lados aportan el dato (reduce falsos positivos).
@@ -848,6 +1111,15 @@ def numeros_operacion_coinciden_o_evasion(
         ca_canon = ca.lstrip("0") or ca[-1:]
         cb_canon = cb.lstrip("0") or cb[-1:]
         if ca_canon == cb_canon:
+            return _contexto_coherente_duplicado(
+                monto_a=monto_a,
+                monto_b=monto_b,
+                cedula_a=cedula_a,
+                cedula_b=cedula_b,
+                fecha_a=fecha_a,
+                fecha_b=fecha_b,
+            )
+        if duplicado_digitos_misma_longitud_mas_umbral(ca, cb):
             return _contexto_coherente_duplicado(
                 monto_a=monto_a,
                 monto_b=monto_b,

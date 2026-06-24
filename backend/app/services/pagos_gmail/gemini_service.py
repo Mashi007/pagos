@@ -29,6 +29,9 @@ GEMINI_SERVER_ERROR_MAX_RETRIES = 4  # Máximo 4 reintentos para 503
 from app.core.config import settings
 from app.services.pagos_gmail.helpers import get_mime_type
 from app.services.pagos_gmail.parse_campos_comprobante import (
+    REGLA_DUPLICADO_NUMERO_OPERACION_PROMPT,
+    REGLA_FECHA_BORROSA_REVISION_MANUAL_PROMPT,
+    REGLA_SERIAL_BORROSO_REVISION_MANUAL_PROMPT,
     corregir_numero_operacion_bnc,
     corregir_numero_operacion_mercantil,
     extraer_ref_etiquetado_bnc,
@@ -40,6 +43,9 @@ from app.services.pagos_gmail.parse_campos_comprobante import (
     normalizar_campos_gemini_gmail,
     numero_operacion_mercantil_solo_dcme,
     parse_fecha_comprobante as _parse_fecha_escaner_desde_gemini,
+    parse_fecha_comprobante_escaner,
+    gemini_indico_fecha_borrosa,
+    gemini_indico_serial_borroso,
     parse_monto_comprobante as _parse_monto_escaner,
     sanitizar_numero_operacion_comprobante,
     serial_mercantil_requiere_rescate,
@@ -52,7 +58,8 @@ logger = logging.getLogger(__name__)
 PAGOS_NA = "NA"
 
 # Reglas OCR compartidas: Gmail (A–F), escáner Infopagos, compare_form (cobros público), cobranza.
-GEMINI_REGLAS_MONTO_FECHA_OCR = """
+GEMINI_REGLAS_MONTO_FECHA_OCR = (
+    """
 REGLAS MONTO Y FECHA (OCR — aplican al extraer o comparar monto/cantidad y fecha de operación):
 
 MONTO — coma venezolana y asteriscos de cajero; NO concatenar decimales al entero:
@@ -69,17 +76,27 @@ FECHA — Venezuela DD/MM/YYYY; no confundir con MM/DD ni inventar desde metadat
   - Conflicto manuscrito vs tira impresa → **tira manda** (fecha, monto, serial/referencia).
   - Prohibido usar fecha del correo (cabecera Date), metadata del archivo o nombre del archivo para rellenar fecha.
   - El modelo no usa el asunto; si falta fecha en imagen A/B/D/E/F, el **backend** puede completar solo con DD/MM/YYYY **explícito** en el asunto del correo (no inventa desde Date).
+  - Si la fecha en imagen es **borrosa** según el CRITERIO MATEMÁTICO (bloque siguiente): deja `fecha_pago`/`fecha_deposito` vacía o "NA"; no adivines dígitos.
 """.strip()
+    + "\n\n"
+    + REGLA_FECHA_BORROSA_REVISION_MANUAL_PROMPT
+)
 
 # Reglas compartidas Serial/Ref (escáner Infopagos, compare formulario vs imagen).
-GEMINI_REGLAS_NUMERO_OPERACION_OCR = """
+GEMINI_REGLAS_NUMERO_OPERACION_OCR = (
+    """
 NÚMERO DE OPERACIÓN / SERIAL / REFERENCIA (copiar del comprobante — no inventar):
   - Un solo valor: no concatenes Ref y Serial (BNC); en recibo **cajero BNC** con ambas etiquetas, copia **solo Serial:** (nunca Ref).
   - No repitas el mismo número dos veces (ej. 113907169113907169 → solo 113907169).
   - Conserva ceros a la izquierda tal como en el papel (ej. 0000091316488).
   - Mercantil DEPÓSITO DIVISAS / RECAUDACIÓN: el número de operación es **siempre** la línea **Serial:** con ristra larga que **empieza por 740087** (**exactamente 15 dígitos**, ej. 740087408543435). **Prohibido** devolver 13-14 dígitos truncados (lectura vertical errónea). Si la tira térmica está girada, **rote mentalmente** la imagen y lea el Serial **en línea horizontal** (todos los dígitos seguidos junto a la etiqueta Serial); **no** mezcles cifras de monto, cuenta 0105 ni código DCME. **Prohibido** usar como `numero_operacion` el código guionado del validador (ej. `9276-20260424-140259-DCME-7819-A`): ese bloque DCME solo sirve para inferir fecha, no es el serial del depósito. Si coexisten DCME y Serial 740087…, copia **solo** el Serial completo de 15 dígitos.
   - BNC **cajero** (papel, Depósito US$, asteriscos): si coexisten **Ref:** y **Serial:**, usa **solo Serial:** (ej. Ref 105137683 y Serial 105137674 → 105137674). **App BNC** (Bs., sin Serial): usa **Referencia**/**Ref**. Nunca cuenta 0191 ni RIF del banco.
+  - **Duplicado de documento** (misma operación ya registrada): dos números son el mismo comprobante si, solo con dígitos, tienen **la misma cantidad (longitud)** y **más del 70%** coinciden en la **misma secuencia** posición a posición (ej. 7400874101194 vs 7400874101195). Al transcribir, un solo valor fiel al papel.
+  - Si el serial/ref es **borroso** según el CRITERIO MATEMÁTICO (bloque SERIAL BORROSO): deja vacío/NA; no completes dígitos.
 """.strip()
+    + "\n\n"
+    + REGLA_SERIAL_BORROSO_REVISION_MANUAL_PROMPT
+)
 
 # Recibo manuscrito ventanilla (TORO MOTORCYCLES / INVERSIONES GUIGUE 2 RUEDAS) — formato G / banco «Recibo».
 GEMINI_REGLAS_RECIBO_MANUSCRITO = """
@@ -182,7 +199,7 @@ Prohibido usar otro valor en "formato" (ni numeros, ni texto libre).
 
 REGLA SISTEMA A/B/D/E/F (imagen 1, 2, 4, 5 y 6): Devuelve "A", "B", "D", "E" o "F" solo si el comprobante coincide con esa plantilla y puedes extraer con valor real
 fecha_pago, monto y numero_referencia desde la imagen/PDF. El campo cedula en JSON debe ser siempre "NA" (ver REGLA CEDULA).
-  Si la plantilla parece A, B, D, E o F pero falta fecha, monto o referencia legible, formato "ninguno" y NA.
+  Si la plantilla parece A, B, D, E o F pero falta monto legible, formato "ninguno" y NA. Si solo la **fecha** o el **serial/ref** es borroso (CRITERIO MATEMÁTICO L < 0,875), mantén el formato y deja fecha_pago o numero_referencia en "NA".
 
 REGLA SISTEMA G (Recibo manuscrito TORO MOTORCYCLES): Devuelve "G" si ves nucleo G (titulo **RECIBO** + **№** numero + fecha Dia/Mes/Año + **C.I./RIF** + caja **Por:**) y con certeza: fecha_pago, monto, numero_referencia (numero recibo) y cedula (CI/RIF pagador).
   En JSON: banco **Recibo**; cedula con digitos del pagador (no NA); no uses RIF empresa emisor.
@@ -421,7 +438,7 @@ PASO 4 - Desempate si queda duda entre A y B (si ya clasificaste C en 2b, no use
   Cedula+nombre misma linea (DP:... + V-/E-/J- + nombre) + ticket **vertical** RECAUDACION + serial YYYYMMDD **sin** evidencia de recibo BNC cajero -> A.
   Si aplica la REGLA FIJA del PASO 2 (DP + contexto BNC) -> B; no uses esta linea para forzar A.
 
-PASO 5 - Extraccion: A, B o D si fecha_pago, monto y numero_referencia son legibles (cedula en JSON siempre NA); C si monto + numero_referencia son legibles con fecha_pago, cedula y email_cliente en NA; si falta monto o referencia -> ninguno y NA.
+PASO 5 - Extraccion: A, B o D si **monto** es legible (cedula en JSON siempre NA); **numero_referencia** y **fecha_pago** solo si pasan el CRITERIO MATEMÁTICO L ≥ 0,875 (si serial o fecha borrosos → "NA" para revisión manual, sin bajar a ninguno). C si monto + numero_referencia legibles con fecha_pago, cedula y email_cliente en NA; si falta monto -> ninguno y NA.
   En **D (BDV)**, la ausencia de datos del **depositante** en el papel **no** cuenta como "falta de dato" para fecha/monto/ref.
 
 DISCRIMINADOR SERIAL — imagen 1 (A) vs imagen 2 (B) (aplica ademas de RAPI-CREDIT/BNC):
@@ -638,6 +655,8 @@ Salida: solo JSON, sin markdown.
     + GEMINI_REGLAS_RECIBO_MANUSCRITO
     + "\n\n"
     + GEMINI_REGLAS_MONTO_FECHA_OCR
+    + "\n\n"
+    + REGLA_DUPLICADO_NUMERO_OPERACION_PROMPT
 )
 
 # Estos formatos pasan a BD/etiquetas Gmail MERCANTIL + BNC + BINANCE + BNV (D = BDV) + BANCAMIGA (E) + TESORO (F) + RECIBO (G); cedula en Excel por remitente De en clientes (G: CI/RIF del recibo).
@@ -686,6 +705,8 @@ GEMINI_PROMPT = (
     "No inventes datos. Si el contenido no es un comprobante ni un mensaje de pago (solo logo, firma, publicidad), devuelve los cuatro campos con 'NA'. "
     "FORMATO: Responde ÚNICAMENTE con un objeto JSON válido, sin texto antes ni después, sin markdown (no uses ```json). Responde SOLO el JSON.\n\n"
     + GEMINI_REGLAS_MONTO_FECHA_OCR
+    + "\n\n"
+    + REGLA_DUPLICADO_NUMERO_OPERACION_PROMPT
 )
 
 
@@ -2188,14 +2209,16 @@ COBRANZA_NA = "NA"
 GEMINI_COBRANZA_PROMPT = (
     "Esta imagen es una papeleta de depósito, recibo de pago o comprobante bancario. "
     "Extrae exactamente estos campos en formato JSON (usa 'NA' si no encuentras el dato): "
-    '"fecha_deposito" (fecha del depósito, formato dd/mm/yyyy o yyyy-mm-dd), '
+    '"fecha_deposito" (fecha del depósito, formato dd/mm/yyyy o yyyy-mm-dd; "NA" si borrosa según CRITERIO MATEMÁTICO L < 0,875), '
     '"nombre_banco" (nombre del banco, institución financiera, o "Recibo"/recibo/REcibo si solo aparece esa palabra), '
-    '"numero_deposito" (número de depósito, referencia o transacción, muchos dígitos), '
-    '"numero_documento" (número de documento, recibo o comprobante de venta), '
+    '"numero_deposito" (número de depósito, referencia o transacción, muchos dígitos; "NA" si borroso según CRITERIO MATEMÁTICO L < 0,875), '
+    '"numero_documento" (número de documento, recibo o comprobante de venta; "NA" si borroso), '
     '"cantidad" (monto total en números, ej. 150.00 o 1.234,56), '
     '"aceptable" (true si el documento es claramente un comprobante de pago legible; false si está ilegible o no es comprobante). '
     "Responde SOLO con el JSON, sin texto adicional ni markdown. "
     + GEMINI_REGLAS_MONTO_FECHA_OCR
+    + "\n\n"
+    + REGLA_DUPLICADO_NUMERO_OPERACION_PROMPT
 )
 
 
@@ -2536,9 +2559,9 @@ Paso 1 — Extraer de la imagen: Lee el comprobante y extrae con precisión esto
 - cedula_pagador: cédula de quien paga/deposita. En el comprobante puede aparecer como "DP:V-015989899", "Cédula Dep.:", "Nro. de Cédula", "DP:", "C.I.", etc. Reglas: ignorar guión; NUNCA tomar en cuenta ceros después de la letra (ej. V-015989899 → V15989899). Normaliza a tipo (V, E, G o J) + dígitos sin guión y sin ceros a la izquierda; si solo ves dígitos (ej. 015989899), antepón V. Resultado para comparar: tipo + número sin ceros a la izquierda (ej. V15989899).
 
 Paso 2 — Comparar campo por campo: Para cada dato extraído de la imagen, compáralo con el valor que la persona ingresó en el formulario (listado abajo). Reglas:
-- Fecha pago: La fecha del formulario debe coincidir con la fecha de la operación en la imagen. Si difiere, es divergencia (incluir "Fecha pago" en comentario). EXCEPCIÓN: si Banco = BINANCE (o Binance), NO comparar fecha ni incluir "Fecha pago" en comentario; en comprobantes BINANCE no hay fecha que comprobar. Ignorar solo el formato (ej. 10/03/2026 vs 2026-03-10 = misma fecha).
+- Fecha pago: La fecha del formulario debe coincidir con la fecha de la operación en la imagen. Si difiere, es divergencia (incluir "Fecha pago" en comentario). EXCEPCIÓN: si Banco = BINANCE (o Binance), NO comparar fecha ni incluir "Fecha pago" en comentario; en comprobantes BINANCE no hay fecha que comprobar. Ignorar solo el formato (ej. 10/03/2026 vs 2026-03-10 = misma fecha). Si la fecha en imagen es **borrosa** (CRITERIO MATEMÁTICO: L < 0,875 o ambigüedad calendario), **no** compares ni marques divergencia: deja fecha vacía en extracción y **requiere_revision_humana** = true con comentario que incluya "Fecha pago" solo si el formulario trae fecha y la imagen no permite verificarla.
 - Institución: mismo banco o entidad (sinónimos o nombre abreviado = válido). Recibo/Recibos (y variaciones de mayúsculas/minúsculas) se consideran el mismo valor (coinciden entre sí).
-- Número de operación: el formulario tiene "numero_operacion"; en el comprobante puede estar como "Serial", "Referencia", "Nº operación", etc. Es el mismo dato. Compara los dígitos/código; si coinciden (ignorar espacios o guiones intermedios), COINCIDE. No marques divergencia solo porque la etiqueta en el recibo diga "Serial" en vez de "Número de operación".
+- Número de operación: el formulario tiene "numero_operacion"; en el comprobante puede estar como "Serial", "Referencia", "Nº operación", etc. Es el mismo dato. Compara los dígitos/código; si coinciden (ignorar espacios o guiones intermedios), COINCIDE. No marques divergencia solo porque la etiqueta en el recibo diga "Serial" en vez de "Número de operación". Si el serial en imagen es **borroso** (CRITERIO MATEMÁTICO L < 0,875), no compares ni inventes: deja vacío en extracción y **requiere_revision_humana** = true si el formulario trae número y la imagen no permite verificarlo.
 - Monto y moneda: mismo valor numérico. Para moneda: BS/Bs/bolívares = misma familia; USD/USDT/US$/Dólares/$/Tether = misma familia (USDT=USD siempre). No marques columna Moneda solo por USDT vs USD.
 - Cédula: aplicar las REGLAS DEL VALIDADOR DE CÉDULA anteriores. Ejemplo: comprobante DP:V-015989899 → normalizado V15989899 (ignorar guión; nunca ceros después de la letra). Comparar tipo (V/E/G/J) y número sin ceros a la izquierda. Si en imagen ves V-015989899 o 015989899 y en formulario V15989899 → COINCIDE. Solo es divergencia si el tipo o el número (normalizado) son distintos. Verifica haber quitado guión y ceros a la izquierda antes de marcar Cédula en comentario.
 
@@ -2556,6 +2579,8 @@ Responde ÚNICAMENTE con un JSON válido, sin markdown ni texto antes o después
     + GEMINI_REGLAS_NUMERO_OPERACION_OCR
     + "\n\n"
     + GEMINI_REGLAS_MONTO_FECHA_OCR
+    + "\n\n"
+    + REGLA_DUPLICADO_NUMERO_OPERACION_PROMPT
 )
 
 
@@ -2774,7 +2799,8 @@ REGLAS:
   - Si hay dos fechas en el comprobante (ej. sello y fecha transacción), prioriza la fecha del bloque principal de la operación/transferencia.
   - FORMATO VENEZOLANO / AMBIGÜEDAD: en boletos y apps locales casi siempre verás **día/mes/año** (o día-mes-año). Si ves **6 dígitos seguidos sin separadores** (ej. 191226), no asumas YYMMDD si con ello la operación quedaría **años incoherentes** respecto a otras fechas visibles del mismo boleto (sello, vigencia, año impreso, texto “202x”) o **en el futuro** respecto a {fecha_hoy_iso}. En ese caso prefiere la lectura **DDMMYY** (día/mes/año de dos dígitos) cuando encaje con el resto del comprobante; si sigue habiendo duda razonable, devuelve `fecha_pago` "" y explica en `notas`.
   - La fecha de operación inferida **no puede ser posterior** a {fecha_hoy_iso}; si una lectura lleva a futuro, corrige interpretación o deja "".
-  - Si la fecha no es legible con suficiente certeza, deja `fecha_pago` como "" y explícitalo en `notas`.
+  - Si la fecha no es legible con suficiente certeza (aplica CRITERIO MATEMÁTICO: L < 0,875 o ambigüedad calendario), deja `fecha_pago` como "" y explícitalo en `notas` (ej. "fecha borrosa, revisión manual").
+  - Si el serial/ref no es legible con suficiente certeza (mismo CRITERIO MATEMÁTICO con n = cantidad de dígitos del serial: L < 0,875), deja `numero_operacion` como "" y explícitalo en `notas` (ej. "serial borroso, revisión manual").
   - Responde ÚNICAMENTE con un objeto JSON válido, sin markdown ni texto extra, con exactamente estas claves:
   fecha_pago, institucion_financiera, numero_operacion, monto, moneda, cedula_pagador_en_comprobante, notas, control_usuario_operaciones
   - SALIDA OBLIGATORIA: solo el objeto JSON; ningún párrafo ni razonamiento antes ni después. Sin fences markdown ni texto extra.
@@ -2782,7 +2808,11 @@ REGLAS:
     + "\n\n"
     + GEMINI_REGLAS_MONTO_FECHA_OCR
     + "\n\n"
+    + GEMINI_REGLAS_NUMERO_OPERACION_OCR
+    + "\n\n"
     + GEMINI_REGLAS_RECIBO_MANUSCRITO
+    + "\n\n"
+    + REGLA_DUPLICADO_NUMERO_OPERACION_PROMPT
 )
 
 # Siempre se añade al escáner: clasificación visual → institucion_financiera (sin elegir banco a mano).
@@ -3060,42 +3090,48 @@ def extract_infopagos_campos_desde_comprobante(
                 else:
                     mon_norm = "BS"
 
-                notas = str(data.get("notas") or "").strip()[:300]
+                notas_pre = str(data.get("notas") or "").strip()
                 raw_num_op = str(data.get("numero_operacion") or "").strip()
-                num_op = sanitizar_numero_operacion_comprobante(raw_num_op)[:100]
-
-                inst = _resolver_institucion_escaner(
-                    str(data.get("institucion_financiera") or "").strip(),
-                    institucion_plantilla,
-                    notas,
-                    num_op,
-                )
-                num_op = corregir_numero_operacion_mercantil(
-                    num_op,
-                    institucion=inst,
-                    texto_auxiliar=f"{raw_num_op}\n{notas}",
-                )[:100]
-                num_op = corregir_numero_operacion_bnc(
-                    num_op,
-                    institucion=inst,
-                    texto_auxiliar=f"{raw_num_op}\n{notas}",
-                )[:100]
-                fecha = _parse_fecha_escaner_desde_gemini(data.get("fecha_pago"), ref_hoy)
-                blob_fecha = f"{raw_num_op}\n{notas}"
-                if fecha is None:
-                    inst_canon_fecha = _canonical_institucion_escaner(inst)
-                    if inst_canon_fecha == "Mercantil" or extraer_codigo_dcme_mercantil_en_texto(
-                        blob_fecha
-                    ):
-                        f_inf = inferir_fecha_pago_mercantil_desde_texto(
-                            blob_fecha, ref_hoy
-                        )
-                    else:
-                        f_inf = inferir_fecha_pago_desde_numero_operacion(
-                            num_op or raw_num_op, ref_hoy
-                        )
-                    if f_inf:
-                        fecha = _parse_fecha_escaner_desde_gemini(f_inf, ref_hoy)
+                serial_borroso = gemini_indico_serial_borroso(raw_num_op, notas_pre)
+                if serial_borroso:
+                    num_op = ""
+                    inst = _resolver_institucion_escaner(
+                        str(data.get("institucion_financiera") or "").strip(),
+                        institucion_plantilla,
+                        notas_pre,
+                        raw_num_op,
+                    )
+                else:
+                    num_op = sanitizar_numero_operacion_comprobante(raw_num_op)[:100]
+                    inst = _resolver_institucion_escaner(
+                        str(data.get("institucion_financiera") or "").strip(),
+                        institucion_plantilla,
+                        notas_pre,
+                        num_op,
+                    )
+                    num_op = corregir_numero_operacion_mercantil(
+                        num_op,
+                        institucion=inst,
+                        texto_auxiliar=f"{raw_num_op}\n{notas_pre}",
+                    )[:100]
+                    num_op = corregir_numero_operacion_bnc(
+                        num_op,
+                        institucion=inst,
+                        texto_auxiliar=f"{raw_num_op}\n{notas_pre}",
+                    )[:100]
+                fecha = None
+                fecha_raw = data.get("fecha_pago")
+                if not gemini_indico_fecha_borrosa(fecha_raw, notas_pre):
+                    fecha = parse_fecha_comprobante_escaner(fecha_raw, ref_hoy)
+                    if fecha is None:
+                        blob_fecha = f"{raw_num_op}\n{notas_pre}"
+                        dcme = extraer_codigo_dcme_mercantil_en_texto(blob_fecha)
+                        if dcme:
+                            f_inf = inferir_fecha_pago_mercantil_desde_texto(
+                                dcme, ref_hoy
+                            )
+                            if f_inf:
+                                fecha = parse_fecha_comprobante_escaner(f_inf, ref_hoy)
                 monto = _parse_monto_escaner(
                     data.get("monto"),
                     moneda=mon_norm,
@@ -3106,6 +3142,11 @@ def extract_infopagos_campos_desde_comprobante(
                         "[ESCANER] fecha_pago descartada (ilegible/futura/lejana): raw=%r ref=%s",
                         str(data.get("fecha_pago"))[:40],
                         ref_hoy.isoformat(),
+                    )
+                if serial_borroso and raw_num_op:
+                    logger.info(
+                        "[ESCANER] numero_operacion omitido (serial borroso en notas): raw=%r",
+                        raw_num_op[:40],
                     )
                 ced_raw = str(data.get("cedula_pagador_en_comprobante") or "").strip()
                 # Solo dígitos; sin ceros a la izquierda (OCR: 0006832631 → 6832631).
