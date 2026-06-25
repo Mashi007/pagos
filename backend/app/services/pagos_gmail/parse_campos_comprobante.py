@@ -1163,6 +1163,19 @@ def _parecen_ref_serial_bnc_concatenados(digits_only: str) -> bool:
     return common >= 6 and common >= min_len - 3
 
 
+# Sufijo admin Visto (carga masiva / Cobros): _A#### / _P#### — misma convención que control 5.
+_SUFIJO_VISTO_ADMIN_NUM_OP_RE = re.compile(r"_([AP]\d{4})$", re.IGNORECASE)
+
+
+def _separar_sufijo_visto_admin_num_op(s: str) -> tuple[str, str]:
+    """Devuelve (base, sufijo) donde sufijo es '' o '_A0042' / '_P1234'."""
+    t = (s or "").strip()
+    m = _SUFIJO_VISTO_ADMIN_NUM_OP_RE.search(t)
+    if not m:
+        return t, ""
+    return t[: m.start()].rstrip(), m.group(0)
+
+
 def _preferir_serial_mercantil_largo(s: str) -> str:
     """
     Si coexisten código DCME guionado y Serial largo 7400…, prioriza el Serial (regla Gmail A1).
@@ -1197,9 +1210,18 @@ def sanitizar_numero_operacion_comprobante(raw: Any) -> str:
     if not s or s.upper() in ("NA", "N/A", "NONE"):
         return ""
 
+    # Visto admin: no aplicar extracción Mercantil 740087… sobre el token _A####/_P####.
+    s, sufijo_visto_admin = _separar_sufijo_visto_admin_num_op(s)
+
     serial_etiquetado = extraer_serial_etiquetado_bnc(s)
     if serial_etiquetado and re.search(r"(?i)\bserial\b", s):
-        return serial_etiquetado[:100]
+        out = serial_etiquetado[:100]
+        if sufijo_visto_admin:
+            max_base = max(0, 100 - len(sufijo_visto_admin))
+            if len(out) > max_base:
+                out = out[:max_base]
+            out = f"{out}{sufijo_visto_admin}"
+        return out[:100]
 
     parts = [p.strip() for p in re.split(r"[\s,;|/]+", s) if p.strip()]
     if len(parts) >= 2 and len(set(parts)) == 1:
@@ -1232,6 +1254,11 @@ def sanitizar_numero_operacion_comprobante(raw: Any) -> str:
             s = right if re.fullmatch(r"\d+", compact) else s[half:]
 
     s = _preferir_serial_mercantil_largo(s)
+    if sufijo_visto_admin:
+        max_base = max(0, 100 - len(sufijo_visto_admin))
+        if len(s) > max_base:
+            s = s[:max_base]
+        s = f"{s}{sufijo_visto_admin}"
     return s[:100]
 
 

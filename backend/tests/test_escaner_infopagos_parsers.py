@@ -363,6 +363,15 @@ def test_clave_numero_operacion_canonico():
     assert clave_numero_operacion_canonico("ABC-123") == "ABC-123"
 
 
+def test_sanitizar_mercantil_preserva_sufijo_visto_admin():
+    """Visto Cobros: serial 740087… + _A####/_P#### no debe perderse al sanitizar."""
+    serial = "740087405835596"
+    assert sanitizar_numero_operacion_comprobante(serial) == serial
+    assert sanitizar_numero_operacion_comprobante(f"{serial}_A0042") == f"{serial}_A0042"
+    assert sanitizar_numero_operacion_comprobante(f"{serial}_P1234") == f"{serial}_P1234"
+    assert clave_numero_operacion_canonico(f"{serial}_A0042") == f"{serial}_A0042"
+
+
 def test_normalizar_referencia_conserva_ceros():
     from app.services.pagos_gmail.helpers import normalizar_referencia
 
