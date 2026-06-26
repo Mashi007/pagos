@@ -26,6 +26,15 @@ if TYPE_CHECKING:
 
 # Referencia interna automática (RPC-YYYYMMDD-NNNNN), con o sin prefijo COB-.
 _REF_INTERNA_RPC_RECIBO = re.compile(r"^(COB-)?RPC-\d{8}-\d{5}$", re.IGNORECASE)
+_SUFIJO_ADMIN_VISTO_DOC_RE = re.compile(r"_[AP]\d{4}$", re.IGNORECASE)
+
+
+def numero_operacion_sin_sufijo_admin_visto(raw: Optional[str]) -> str:
+    """Quita sufijo _A#### / _P#### (revision manual Cobros / carga masiva)."""
+    s = (raw or "").strip()
+    if not s:
+        return ""
+    return _SUFIJO_ADMIN_VISTO_DOC_RE.sub("", s).strip()
 
 
 def _es_solo_referencia_interna_rpc_automatica(s: str) -> bool:
@@ -271,6 +280,27 @@ def primer_reportado_id_por_norm_batch(
     if pending:
         _scan_phase(None, max(10_000, max_rows_scan // 2))
     return first
+
+
+def pago_reportado_colisiona_tabla_pagos_documento_base(
+    db: "Session",
+    pr: PagoReportado,
+) -> bool:
+    """
+    Colision con cartera usando el comprobante **sin** sufijo admin (_A#### / _P####).
+
+    En bancos distintos a Mercantil no se permite reaplicar aunque el operador
+    anada sufijo al numero de operacion.
+    """
+    op_raw = (getattr(pr, "numero_operacion", None) or "").strip()
+    op_base = numero_operacion_sin_sufijo_admin_visto(op_raw)
+    if op_base and op_base != op_raw:
+        pr_base = SimpleNamespace(
+            numero_operacion=op_base,
+            referencia_interna=getattr(pr, "referencia_interna", None),
+        )
+        return pago_reportado_colisiona_tabla_pagos(db, pr_base)  # type: ignore[arg-type]
+    return pago_reportado_colisiona_tabla_pagos(db, pr)
 
 
 def pago_reportado_colisiona_tabla_pagos(db: "Session", pr: PagoReportado) -> bool:

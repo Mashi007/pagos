@@ -101,6 +101,12 @@ function baseYTokenNumeroOperacion(raw: string): {
   return { base: s, token: '' }
 }
 
+const isMercantilBank = (value: string) =>
+  String(value ?? '')
+    .trim()
+    .toLowerCase()
+    .includes('mercantil')
+
 function detalleErrorApi(e: unknown): string {
   const any = e as {
     message?: string
@@ -645,6 +651,9 @@ export default function CobrosEditarPage() {
   }
 
   const duplicadoActual = duplicadoDiagnostico ?? detalle
+  const duplicadoEnCartera = Boolean(duplicadoActual.duplicado_en_pagos)
+  const esMercantil = isMercantilBank(detalle.institucion_financiera)
+  const vistoPermitido = !duplicadoEnCartera || esMercantil
 
   if (detalle.estado === 'aprobado' || detalle.estado === 'importado') {
     return (
@@ -814,6 +823,17 @@ export default function CobrosEditarPage() {
                 operación. Revise la tabla y los préstamos antes de usar sufijos
                 o «Visto».
               </p>
+              {!esMercantil ? (
+                <p className="mt-2 text-xs font-semibold text-rose-800">
+                  En bancos distintos a Mercantil no se puede reaplicar este
+                  comprobante (Visto y aprobación bloqueados).
+                </p>
+              ) : (
+                <p className="mt-2 text-xs text-amber-900">
+                  Excepción Mercantil: compare préstamos y use Visto solo si
+                  corresponde aplicar a otro préstamo o desambiguar el serial.
+                </p>
+              )}
               <DuplicadoPrestamosComparacion
                 prestamoExistenteId={duplicadoActual.prestamo_existente_id}
                 pagoExistenteId={duplicadoActual.pago_existente_id}
@@ -1167,6 +1187,11 @@ export default function CobrosEditarPage() {
                     <span className="font-medium">Revisión manual:</span> Visto
                     asigna el código (_A#### / _P####) y guarda en el servidor
                     de inmediato.
+                    {!vistoPermitido ? (
+                      <span className="mt-1 block font-semibold text-rose-800">
+                        Bloqueado: duplicado en cartera fuera de Mercantil.
+                      </span>
+                    ) : null}
                   </p>
                   <div className="flex shrink-0 items-center gap-2">
                     <button
@@ -1185,8 +1210,13 @@ export default function CobrosEditarPage() {
                     <Button
                       type="button"
                       size="sm"
-                      disabled={saving || vistoSaving}
+                      disabled={saving || vistoSaving || !vistoPermitido}
                       className="h-8 min-w-[4.5rem] bg-violet-600 px-3 text-xs font-medium text-white hover:bg-violet-700 disabled:opacity-50"
+                      title={
+                        vistoPermitido
+                          ? 'Asignar sufijo y guardar'
+                          : 'Solo Mercantil permite Visto con duplicado en cartera'
+                      }
                       onClick={() => void handleVistoRellenarSufijoYGuardar()}
                     >
                       {vistoSaving ? (
@@ -1202,8 +1232,13 @@ export default function CobrosEditarPage() {
                   <Button
                     type="button"
                     variant="outline"
+                    disabled={!vistoPermitido}
                     onClick={() => handleAplicarSufijoOperacion('A')}
-                    title="Sufijo en borrador: _A#### (luego Guardar y continuar)"
+                    title={
+                      vistoPermitido
+                        ? 'Sufijo en borrador: _A#### (luego Guardar y continuar)'
+                        : 'Solo Mercantil con duplicado en cartera'
+                    }
                   >
                     <Eye className="mr-2 h-4 w-4" />
                     Agregar sufijo A
@@ -1211,8 +1246,13 @@ export default function CobrosEditarPage() {
                   <Button
                     type="button"
                     variant="outline"
+                    disabled={!vistoPermitido}
                     onClick={() => handleAplicarSufijoOperacion('P')}
-                    title="Sufijo en borrador: _P#### (luego Guardar y continuar)"
+                    title={
+                      vistoPermitido
+                        ? 'Sufijo en borrador: _P#### (luego Guardar y continuar)'
+                        : 'Solo Mercantil con duplicado en cartera'
+                    }
                   >
                     <Eye className="mr-2 h-4 w-4" />
                     Agregar sufijo P

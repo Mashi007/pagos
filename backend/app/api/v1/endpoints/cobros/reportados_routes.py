@@ -1422,15 +1422,8 @@ class EditarPagoReportadoBody(BaseModel):
 
 
 def _rechazar_si_documento_reportado_duplicado_en_pagos(db: Session, pr: PagoReportado) -> None:
-    """
-    Misma colisión que aprobar/importar: `pago_reportado_colisiona_tabla_pagos`
-    (doc_canon_* + respaldo legacy en numero_documento / referencia_pago y claves del reporte).
-    """
-    if pago_reportado_colisiona_tabla_pagos(db, pr):
-        raise HTTPException(
-            status_code=400,
-            detail="DUPLICADO: ese número de operación / documento / serial ya está registrado en la tabla de pagos (no se permite duplicar).",
-        )
+    """Misma regla que aprobar: colision con cartera segun banco (Mercantil vs resto)."""
+    _rechazar_aprobacion_si_documento_ya_en_pagos(db, pr)
 
 
 def _normalizar_cedula_editar(tipo: Optional[str], numero: Optional[str]) -> Tuple[str, str]:

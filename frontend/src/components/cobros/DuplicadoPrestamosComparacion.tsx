@@ -21,6 +21,67 @@ function esMismaFechaQueHoyLocal(iso: string | null | undefined): boolean {
   return d === `${y}-${m}-${day}`
 }
 
+export type DuplicadoPrestamosResumenProps = {
+  prestamoExistenteId?: number | null
+  pagoExistenteId?: number | null
+  prestamoObjetivoId?: number | null
+  prestamoDuplicadoEsObjetivo?: boolean | null
+  esMercantil?: boolean
+}
+
+/**
+ * Resumen compacto para listado: donde esta el serial en cartera y a que prestamo iria.
+ */
+export function DuplicadoPrestamosResumen({
+  prestamoExistenteId,
+  pagoExistenteId,
+  prestamoObjetivoId,
+  prestamoDuplicadoEsObjetivo,
+  esMercantil = false,
+}: DuplicadoPrestamosResumenProps) {
+  const prestEx =
+    typeof prestamoExistenteId === 'number' ? `#${prestamoExistenteId}` : null
+  const prestObj =
+    typeof prestamoObjetivoId === 'number' ? `#${prestamoObjetivoId}` : null
+
+  if (!prestEx && !prestObj) return null
+
+  return (
+    <div className="mt-1.5 space-y-0.5 text-[11px] leading-snug text-orange-950 dark:text-orange-100">
+      {prestEx ? (
+        <p>
+          <span className="font-semibold">En cartera:</span> préstamo {prestEx}
+          {typeof pagoExistenteId === 'number'
+            ? ` · pago #${pagoExistenteId}`
+            : ''}
+        </p>
+      ) : null}
+      {prestObj ? (
+        <p>
+          <span className="font-semibold">Iría a aplicar:</span> préstamo{' '}
+          {prestObj}
+        </p>
+      ) : null}
+      {typeof prestamoDuplicadoEsObjetivo === 'boolean' ? (
+        <p className="font-medium">
+          {prestamoDuplicadoEsObjetivo
+            ? 'Mismo préstamo que el actual.'
+            : 'Otro préstamo (distinto al actual).'}
+        </p>
+      ) : null}
+      {esMercantil ? (
+        <p className="text-amber-800">
+          Excepción Mercantil: revise y use Visto en Editar solo si corresponde.
+        </p>
+      ) : (
+        <p className="font-semibold text-rose-800">
+          No se puede reaplicar (solo Mercantil admite revisión manual).
+        </p>
+      )}
+    </div>
+  )
+}
+
 export type DuplicadoPrestamosComparacionProps = {
   prestamoExistenteId?: number | null
   pagoExistenteId?: number | null

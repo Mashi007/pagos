@@ -65,6 +65,8 @@ import { Badge } from '../components/ui/badge'
 
 import toast from 'react-hot-toast'
 
+import { DuplicadoPrestamosResumen } from '../components/cobros/DuplicadoPrestamosComparacion'
+
 import { getErrorMessage } from '../types/errors'
 
 /** Toast según envío real del correo de rechazo (API devuelve mensaje + flags). */
@@ -366,6 +368,15 @@ const isMercantilBank = (value: string) =>
 function puedeAprobarMasivoRow(row: PagoReportadoItem): boolean {
   if (row.estado !== 'pendiente' && row.estado !== 'en_revision') return false
   if (esDuplicadoCarteraRow(row)) return false
+  return true
+}
+
+/** Aprobacion individual por fila: Mercantil con duplicado en cartera puede forzar tras Visto. */
+function puedeAprobarIndividualRow(row: PagoReportadoItem): boolean {
+  if (row.estado !== 'pendiente' && row.estado !== 'en_revision') return false
+  if (esDuplicadoCarteraRow(row) && !isMercantilBank(row.institucion_financiera)) {
+    return false
+  }
   return true
 }
 
@@ -2281,7 +2292,9 @@ export default function CobrosPagosReportadosPage() {
                                 className="text-muted-foreground"
                                 title={
                                   esDuplicadoCarteraRow(row)
-                                    ? 'No seleccionable en lote: el comprobante ya existe en cartera (PAGO DUPLICADO). Si necesita forzarlo, use el botón Aprobar por fila.'
+                                    ? isMercantilBank(row.institucion_financiera)
+                                      ? 'No seleccionable en lote: duplicado en cartera (Mercantil: use Aprobar por fila tras Visto si corresponde).'
+                                      : 'No seleccionable: duplicado en cartera; en este banco no se puede reaplicar.'
                                     : 'Solo se puede marcar pendiente o en revisión'
                                 }
                               >
@@ -2502,6 +2515,17 @@ export default function CobrosPagosReportadosPage() {
                                 {row.prestamo_existente_id != null
                                   ? ` · préstamo #${row.prestamo_existente_id}`
                                   : ''}
+                                <DuplicadoPrestamosResumen
+                                  prestamoExistenteId={row.prestamo_existente_id}
+                                  pagoExistenteId={row.pago_existente_id}
+                                  prestamoObjetivoId={row.prestamo_objetivo_id}
+                                  prestamoDuplicadoEsObjetivo={
+                                    row.prestamo_duplicado_es_objetivo
+                                  }
+                                  esMercantil={isMercantilBank(
+                                    row.institucion_financiera
+                                  )}
+                                />
                               </div>
                             ) : null}
                             {row.observacion ? (
@@ -2660,7 +2684,9 @@ export default function CobrosPagosReportadosPage() {
                                     En revisión
                                   </option>
 
-                                  <option value="aprobado">Aprobar</option>
+                                  {puedeAprobarIndividualRow(row) ? (
+                                    <option value="aprobado">Aprobar</option>
+                                  ) : null}
 
                                   {!diagnosticoNoEmail ? (
                                     <option value="rechazado">Rechazar</option>

@@ -53,6 +53,7 @@ from app.services.cobros.pago_reportado_documento import (
     claves_documento_pago_para_reportado,
     documento_numero_desde_pago_reportado,
     pago_reportado_colisiona_tabla_pagos,
+    pago_reportado_colisiona_tabla_pagos_documento_base,
     primer_pago_id_si_existe_para_claves_reportado,
     primer_reportado_id_por_norm_batch,
     primer_reportado_id_por_norm_peer_first_map,
@@ -522,11 +523,26 @@ def _prestamo_objetivo_por_cedula_norm_batch(
 
 
 def _rechazar_aprobacion_si_documento_ya_en_pagos(db: Session, pr: PagoReportado) -> None:
-    """Regla operativa: no aprobar si el comprobante ya existe en cartera (`pagos`)."""
-    if pago_reportado_colisiona_tabla_pagos(db, pr):
+    """
+    No aprobar si el comprobante ya existe en cartera (`pagos`).
+
+    Mercantil: colision por documento tal cual (sufijo _A#### / _P#### puede desambiguar).
+    Otros bancos: colision por documento base sin sufijo; no se permite reaplicar.
+    """
+    mercantil = _es_banco_mercantil(getattr(pr, "institucion_financiera", None))
+    colisiona = (
+        pago_reportado_colisiona_tabla_pagos(db, pr)
+        if mercantil
+        else pago_reportado_colisiona_tabla_pagos_documento_base(db, pr)
+    )
+    if colisiona:
         raise HTTPException(
             status_code=400,
-            detail="No se puede aprobar: el número de documento / comprobante ya consta en la tabla de pagos.",
+            detail=(
+                "No se puede aprobar: el número de documento / comprobante ya consta en la tabla de pagos."
+                if mercantil
+                else "DUPLICADO: ese comprobante ya está en cartera. Solo Mercantil permite revisión manual; en otros bancos no se puede reaplicar."
+            ),
         )
 
 
@@ -781,7 +797,14 @@ def _observacion_reglas_carga(
                     dup_entre_reportados = True
                     break
         if dup_pagos or dup_entre_reportados:
-            partes.append("DUPLICADO")
+            # DUPLICADO en observacion: excepcion Mercantil (cartera o entre reportados).
+            # Otros bancos con comprobante en cartera: bloqueo via duplicado_en_pagos (sin reaplicar).
+            if dup_pagos and not _es_banco_mercantil(
+                getattr(r, "institucion_financiera", None)
+            ):
+                pass
+            else:
+                partes.append("DUPLICADO")
         result.append(partes)
     return result
 
@@ -845,8 +868,6 @@ def _pago_reportado_list_items_from_rows(
         if info is None:
             continue
         pago_info_por_reportado[int(r.id)] = info
-        if not _es_banco_mercantil(getattr(r, "institucion_financiera", None)):
-            continue
         ced_norm = cedula_norms[idx] if idx < len(cedula_norms) else ""
         if ced_norm:
             cedulas_con_dup.add(ced_norm)

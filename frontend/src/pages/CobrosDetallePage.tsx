@@ -307,6 +307,9 @@ export default function CobrosDetallePage() {
   const hasDuplicado = /DUPLICADO/i.test(detalle.observacion || '')
   const showMercantilExceptionTag =
     hasDuplicado && isMercantilBank(detalle.institucion_financiera)
+  const puedeAprobarDetalle =
+    !detalle.duplicado_en_pagos ||
+    isMercantilBank(detalle.institucion_financiera)
 
   return (
     <div className="max-w-4xl space-y-6 p-6">
@@ -413,6 +416,17 @@ export default function CobrosDetallePage() {
                 operación. Use la tabla para comparar préstamos y fechas antes
                 de aprobar o aplicar sufijos.
               </p>
+              {!isMercantilBank(detalle.institucion_financiera) ? (
+                <p className="mt-2 text-xs font-semibold text-rose-800">
+                  En bancos distintos a Mercantil no se puede reaplicar este
+                  comprobante.
+                </p>
+              ) : (
+                <p className="mt-2 text-xs text-amber-900">
+                  Excepción Mercantil: compare préstamos; use Editar y Visto
+                  solo si corresponde.
+                </p>
+              )}
               <DuplicadoPrestamosComparacion
                 prestamoExistenteId={detalle.prestamo_existente_id}
                 pagoExistenteId={detalle.pago_existente_id}
@@ -576,7 +590,15 @@ export default function CobrosDetallePage() {
 
             <CardContent className="space-y-4">
               <div className="flex gap-2">
-                <Button onClick={handleAprobar} disabled={accion !== 'idle'}>
+                <Button
+                  onClick={handleAprobar}
+                  disabled={accion !== 'idle' || !puedeAprobarDetalle}
+                  title={
+                    puedeAprobarDetalle
+                      ? 'Aprobar y enviar recibo'
+                      : 'Duplicado en cartera: solo Mercantil permite reaplicar'
+                  }
+                >
                   {accion === 'aprobar' ? 'Procesando...' : 'Aprobar'}
                 </Button>
 
