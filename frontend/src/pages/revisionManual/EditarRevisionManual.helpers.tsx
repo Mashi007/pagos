@@ -587,6 +587,19 @@ function esMotivoAlertaReescaneoIgnorable(motivo: string): boolean {
     return true
   }
   if (/digitado coincide con el valor ya guardado/i.test(t)) return true
+  // Duplicado ya resuelto con codigo P{id} (misma regla que Visto).
+  if (/serial ocr repetido en cartera;\s*guardado con codigo p\d+/i.test(t)) {
+    return true
+  }
+  if (/serial ocr repetido en cartera;\s*se guard[oó] con c[oó]digo p\d+/i.test(t)) {
+    return true
+  }
+  if (/posible duplicado en cartera;\s*revise y use visto/i.test(t)) {
+    return true
+  }
+  if (/n[uú]mero de documento ocr ya registrado en otro pago;\s*se aplicaron los dem[aá]s campos/i.test(t)) {
+    return true
+  }
   return false
 }
 

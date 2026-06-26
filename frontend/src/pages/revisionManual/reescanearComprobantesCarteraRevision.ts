@@ -289,17 +289,16 @@ export function resultadoPersistenciaReescaneoOcr(
 export function evaluarAlertaReescaneoTrasPersistencia(
   pago: Pago,
   res: EscanerInfopagosExtraerResponse,
-  camposAplicados: CampoReescaneoOcr[]
+  camposAplicados: CampoReescaneoOcr[],
+  opts?: { duplicadoResueltoConCodigoP?: boolean }
 ): string[] {
   if (!res.ok || !res.sugerencia) {
     return evaluarAlertaReescaneoCartera(pago, res)
   }
   const validacion = validacionReescaneoEfectiva(pago, res)
-  const bloquearNumero = duplicadoBloqueaReescaneo(
-    Number(pago.id),
-    res,
-    validacion
-  )
+  const bloquearNumero =
+    !opts?.duplicadoResueltoConCodigoP &&
+    duplicadoBloqueaReescaneo(Number(pago.id), res, validacion)
   const parciales = motivosCamposDigitadosNoAplicadosReescaneo(
     pago,
     res.sugerencia,
@@ -318,7 +317,7 @@ export function evaluarAlertaReescaneoTrasPersistencia(
       'Fecha no detectada en el comprobante; indíquela manualmente (no se usa la fecha de hoy).'
     )
   }
-  if (duplicadoBloqueaReescaneo(Number(pago.id), res, validacion)) {
+  if (bloquearNumero) {
     motivos.push(
       'Posible duplicado en cartera; revise y use Visto si corresponde.'
     )
@@ -483,9 +482,8 @@ export async function reescanearComprobantesCarteraPrestamo(opts: {
             ...evaluarAlertaReescaneoTrasPersistencia(
               pago,
               res,
-              colisionDuplicado && !codigoDisambiguacion
-                ? persistencia.camposAplicados.filter(c => c !== 'numero')
-                : persistencia.camposAplicados
+              persistencia.camposAplicados,
+              { duplicadoResueltoConCodigoP: Boolean(codigoDisambiguacion) }
             ),
           ]
           if (motivos.length) {
