@@ -114,7 +114,7 @@ from .reportados_dedup_helpers import (
     _es_banco_mercantil,
     _gemini_coincide_exacto_ok,
     _normalize_cedula_for_client_lookup,
-    _pago_existente_info_para_reportado,
+    _pago_existente_info_resuelto,
     _pago_reportado_list_items_from_rows,
     _pagos_existentes_info_por_clave,
     _referencia_display,
@@ -307,7 +307,8 @@ def _diagnostico_duplicado_reportado(
     tipo_cedula: Optional[str],
     numero_cedula: Optional[str],
 ) -> PagoReportadoDuplicadoDiagnostico:
-    pago_existente_info = _pago_existente_info_para_reportado(
+    pago_existente_info = _pago_existente_info_resuelto(
+        db,
         pr_like,
         _pagos_existentes_info_por_clave(
             db,

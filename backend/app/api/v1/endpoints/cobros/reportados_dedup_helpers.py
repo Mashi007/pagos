@@ -459,6 +459,41 @@ def _pago_existente_info_para_reportado(
     return None
 
 
+def _pago_existente_info_resuelto(
+    db: Session,
+    pr: PagoReportado,
+    info_por_clave: Dict[str, PagoExistenteInfo],
+) -> Optional[PagoExistenteInfo]:
+    """
+    Préstamo/pago en cartera que colisiona con este reporte.
+
+    1) Claves canónicas indexadas (rápido, mismo criterio que ``claves_doc_en_pagos``).
+    2) ``primer_pago_cartera_por_documento`` con evasión (serial base vs §CD:/P####).
+       Necesario cuando ``documento_colisiona_evasion_registrado`` marca DUPLICADO pero el
+       IN exacto no enlaza el serial del reporte con el valor almacenado en ``pagos``.
+    """
+    info = _pago_existente_info_para_reportado(pr, info_por_clave)
+    if info is not None:
+        return info
+    from app.services.pago_numero_documento import primer_pago_cartera_por_documento
+
+    seen_doc: Set[str] = set()
+    for raw in claves_documento_pago_para_reportado(pr):
+        r = (raw or "").strip()
+        if not r or r in seen_doc:
+            continue
+        seen_doc.add(r)
+        pid, prid = primer_pago_cartera_por_documento(db, r)
+        if pid is not None:
+            nd = db.scalar(select(Pago.numero_documento).where(Pago.id == int(pid)))
+            return (
+                int(pid),
+                int(prid) if prid is not None else None,
+                (nd or "").strip() or None,
+            )
+    return None
+
+
 def _prestamo_objetivo_por_cedula_norm_batch(
     db: Session,
     cedulas_norm: Set[str],
@@ -864,7 +899,7 @@ def _pago_reportado_list_items_from_rows(
     pago_info_por_reportado: Dict[int, PagoExistenteInfo] = {}
     cedulas_para_prestamo_objetivo: Set[str] = set()
     for idx, r in enumerate(rows):
-        info = _pago_existente_info_para_reportado(r, pagos_info_por_clave)
+        info = _pago_existente_info_resuelto(db, r, pagos_info_por_clave)
         if info is not None:
             pago_info_por_reportado[int(r.id)] = info
         ced_norm = cedula_norms[idx] if idx < len(cedula_norms) else ""
