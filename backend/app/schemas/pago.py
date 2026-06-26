@@ -102,6 +102,7 @@ class PagoUpdate(BaseModel):
     conciliado: Optional[bool] = None
     verificado_concordancia: Optional[str] = None  # SI / NO
     moneda_registro: Optional[str] = None
+    monto_bs_original: Optional[Decimal] = None
     tasa_cambio_manual: Optional[Decimal] = None
     link_comprobante: Optional[str] = None
     # Re-escaneo OCR en revision manual: permite limpiar campos antes de reaplicar.

@@ -597,20 +597,29 @@ def actualizar_pago(
     limpiar_fecha_pago_ocr = bool(data.pop("limpiar_fecha_pago_ocr", False))
     limpiar_monto_pago_ocr = bool(data.pop("limpiar_monto_pago_ocr", False))
 
-    if limpiar_fecha_pago_ocr and reescaneo_ocr:
-        row.fecha_pago = None
-
+    # fecha_pago y monto_pagado son NOT NULL en BD: no poner NULL ni 0 al limpiar OCR.
     if limpiar_monto_pago_ocr and reescaneo_ocr:
-        row.monto_pagado = Decimal("0")
         row.monto_bs_original = None
         row.moneda_registro = "USD"
         row.tasa_cambio_bs_usd = None
         row.fecha_tasa_referencia = None
 
+    def _referencia_pago_sintetica_ocr(valor: Optional[str]) -> bool:
+        t = (valor or "").strip().upper()
+        if not t:
+            return False
+        if t.startswith("ABONOS-DRIVE-"):
+            return True
+        if re.search(r"-\d{8}-\d{6}-DCME-", t, re.I):
+            return True
+        return False
+
     _doc_touch = False
 
     if limpiar_numero_documento_ocr and reescaneo_ocr:
         row.numero_documento = None
+        if _referencia_pago_sintetica_ocr(row.referencia_pago):
+            row.referencia_pago = ""
 
     if "numero_documento" in data:
 
@@ -681,6 +690,14 @@ def actualizar_pago(
                 )
 
             row.numero_documento = new_stored
+            if reescaneo_ocr:
+                ref_prev = (row.referencia_pago or "").strip()
+                if (
+                    not ref_prev
+                    or _referencia_pago_sintetica_ocr(ref_prev)
+                    or ref_prev == (b0 or "").strip()
+                ):
+                    row.referencia_pago = (new_stored or "")[:100]
 
         data.pop("numero_documento", None)
 
@@ -690,7 +707,13 @@ def actualizar_pago(
 
     aplicar_conciliado = False
 
-    _put_mon_keys = ("monto_pagado", "moneda_registro", "tasa_cambio_manual", "fecha_pago")
+    _put_mon_keys = (
+        "monto_pagado",
+        "moneda_registro",
+        "monto_bs_original",
+        "tasa_cambio_manual",
+        "fecha_pago",
+    )
 
     monetario_up = {k: data.pop(k) for k in _put_mon_keys if k in data}
 
@@ -780,7 +803,17 @@ def actualizar_pago(
 
                 )
 
-            if "monto_pagado" in monetario_up:
+            if "monto_bs_original" in monetario_up and monetario_up["monto_bs_original"] is not None:
+
+                es_valido, monto_val, err_msg = _validar_monto(monetario_up["monto_bs_original"])
+
+                if not es_valido:
+
+                    raise HTTPException(status_code=400, detail=err_msg)
+
+                monto_bs_input = Decimal(str(round(monto_val, 2)))
+
+            elif "monto_pagado" in monetario_up:
 
                 es_valido, monto_val, err_msg = _validar_monto(monetario_up["monto_pagado"])
 

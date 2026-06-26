@@ -850,7 +850,6 @@ export function payloadUpdatePagoDesdeReescaneoOcrCartera(
     out.moneda_registro = moneda
     if (moneda === 'BS') {
       out.monto_bs_original = montoBs
-      out.monto_pagado = 0
     } else {
       out.monto_pagado = montoUsd
     }

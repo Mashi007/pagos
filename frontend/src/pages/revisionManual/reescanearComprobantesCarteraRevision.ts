@@ -268,6 +268,7 @@ export type ReescaneoCarteraResultado = {
   alertas: Record<number, string[]>
   escaneados: number
   actualizados: number
+  fallidosPersistencia: number
   omitidosSinImagen: number
 }
 
@@ -298,6 +299,7 @@ export async function reescanearComprobantesCarteraPrestamo(opts: {
       alertas: {},
       escaneados: 0,
       actualizados: 0,
+      fallidosPersistencia: 0,
       omitidosSinImagen,
     }
   }
@@ -306,6 +308,7 @@ export async function reescanearComprobantesCarteraPrestamo(opts: {
   const alertas: Record<number, string[]> = {}
   let hecho = 0
   let actualizados = 0
+  let fallidosPersistencia = 0
   const total = ids.length
   opts.onProgreso?.({ hecho: 0, total, fase: 'ocr' })
 
@@ -400,7 +403,13 @@ export async function reescanearComprobantesCarteraPrestamo(opts: {
           }
         }
       } catch (err) {
-        alertas[item.pago_id] = [mensajeErrorExtraccionEscaner(err)]
+        fallidosPersistencia++
+        const msg = mensajeErrorExtraccionEscaner(err)
+        alertas[item.pago_id] = [msg]
+        console.warn(
+          `[reescaneo] PUT/OCR fallo pago_id=${item.pago_id}:`,
+          err
+        )
       }
 
       hecho++
@@ -413,6 +422,7 @@ export async function reescanearComprobantesCarteraPrestamo(opts: {
     alertas: sanitizarAlertasReescaneoPorPagoId(alertas),
     escaneados: total,
     actualizados,
+    fallidosPersistencia,
     omitidosSinImagen,
   }
 }

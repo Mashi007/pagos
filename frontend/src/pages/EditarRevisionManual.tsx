@@ -1104,6 +1104,9 @@ export function EditarRevisionManual() {
       const nAlertas = Object.keys(resultado.alertas).length
       const partesMsg = [
         `${resultado.actualizados}/${resultado.escaneados} comprobante(s) actualizado(s) desde OCR.`,
+        resultado.fallidosPersistencia > 0
+          ? `${resultado.fallidosPersistencia} no se guardaron (revise el aviso en la fila).`
+          : null,
         resultado.omitidosSinImagen > 0
           ? `${resultado.omitidosSinImagen} pago(s) sin imagen no se modificaron.`
           : null,
