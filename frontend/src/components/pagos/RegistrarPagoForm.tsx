@@ -115,6 +115,7 @@ import { normalizarComprobanteArchivoParaEscaneo } from '../../utils/normalizarC
 import { escanerInfopagosExtraerComprobante } from '../../services/cobrosService'
 import {
   buildFormDataEscanerComprobante,
+  camposVaciosOcrRegistrar,
   mergePagoRegistrarDesdeSugerenciaOcr,
   mensajeErrorExtraccionEscaner,
   mensajeFalloExtraccionEscaner,
@@ -886,7 +887,7 @@ export function RegistrarPagoForm({
     if (
       isEditing &&
       !window.confirm(
-        'Escanear actualizara los campos que el modelo detecte en el comprobante (fecha, banco, numero, monto y moneda). Los datos no detectados se conservan. Desea continuar?'
+        'Escanear vaciara fecha, banco, numero, monto y moneda, y digitalizara el comprobante desde cero. Desea continuar?'
       )
     ) {
       return
@@ -967,8 +968,17 @@ export function RegistrarPagoForm({
         extraccionSinCliente,
         prestamoObjetivoId:
           formData.prestamo_id ?? prestamoIdFormulario ?? null,
-        institucionPlantillaHint: formData.institucion_bancaria,
       })
+
+      setMonedaRegistro('USD')
+      setMontoStr('')
+      setFormData(prev => ({
+        ...prev,
+        fecha_pago: '',
+        institucion_bancaria: null,
+        numero_documento: '',
+        monto_pagado: 0,
+      }))
 
       const res = await escanerInfopagosExtraerComprobante(fd)
       if (rescanSeq !== rescanSeqRef.current) return
@@ -982,21 +992,7 @@ export function RegistrarPagoForm({
 
       const s = res.sugerencia
       const merged = mergePagoRegistrarDesdeSugerenciaOcr(
-        {
-          fecha_pago: formData.fecha_pago,
-          institucion_bancaria: formData.institucion_bancaria,
-          numero_documento: formData.numero_documento,
-          monto_pagado:
-            monedaRegistro === 'USD'
-              ? (parseMontoLatam(montoStr) ?? formData.monto_pagado)
-              : formData.monto_pagado,
-          monto_bs_original:
-            monedaRegistro === 'BS'
-              ? parseMontoLatam(montoStr)
-              : ((pagoInicial as PagoInicialRegistrar | undefined)
-                  ?.monto_bs_original ?? null),
-          moneda_registro: monedaRegistro === 'BS' ? 'BS' : 'USD',
-        },
+        camposVaciosOcrRegistrar(),
         s,
         { modoReescaneo: true }
       )

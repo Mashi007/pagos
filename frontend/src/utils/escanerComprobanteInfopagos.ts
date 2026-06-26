@@ -1,6 +1,6 @@
 /**
- * Ruta unificada Escanear / Reescanear: FormData, mensajes y merge conservador
- * (misma API extraer-comprobante + prompts Gmail; no sobrescribir con vacío).
+ * Ruta unificada Escanear / Reescanear: FormData, mensajes y merge.
+ * Alta de pago: merge conservador. Re-escaneo (`modoReescaneo`): vacía y solo OCR.
  */
 import type {
   EscanerInfopagosExtraerResponse,
@@ -234,15 +234,29 @@ export type CamposPagoRegistrarEscaner = {
   moneda_registro: 'BS' | 'USD'
 }
 
-/** Merge conservador para RegistrarPagoForm / modal Editar Pago. */
+/** Base vacía antes de re-escanear (fecha, banco, documento, monto, moneda). */
+export function camposVaciosOcrRegistrar(): CamposPagoRegistrarEscaner {
+  return {
+    fecha_pago: '',
+    institucion_bancaria: null,
+    numero_documento: '',
+    monto_pagado: 0,
+    monto_bs_original: null,
+    moneda_registro: 'USD',
+  }
+}
+
+/** Merge para RegistrarPagoForm / modal Editar Pago. */
 export function mergePagoRegistrarDesdeSugerenciaOcr(
   actual: CamposPagoRegistrarEscaner,
   sugerencia: EscanerInfopagosSugerencia,
   opts?: { modoReescaneo?: boolean }
 ): CamposPagoRegistrarEscaner {
+  const soloOcr = Boolean(opts?.modoReescaneo)
+  const base = soloOcr ? camposVaciosOcrRegistrar() : actual
   const inst =
     institucionDesdeSugerenciaOcr(sugerencia) ||
-    (opts?.modoReescaneo
+    (soloOcr
       ? null
       : normalizarInstitucionBancoEscaneo(
           (actual.institucion_bancaria || '').trim()
@@ -254,10 +268,9 @@ export function mergePagoRegistrarDesdeSugerenciaOcr(
     sugerencia.monto != null && Number.isFinite(Number(sugerencia.monto))
       ? Number(sugerencia.monto)
       : null
-  const soloOcr = Boolean(opts?.modoReescaneo)
 
   const next: CamposPagoRegistrarEscaner = {
-    ...actual,
+    ...base,
     fecha_pago: soloOcr ? fechaOcr : fechaOcr || actual.fecha_pago,
     institucion_bancaria: soloOcr
       ? inst || null

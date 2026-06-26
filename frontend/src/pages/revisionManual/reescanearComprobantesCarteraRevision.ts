@@ -264,8 +264,8 @@ export type ReescaneoCarteraResultado = {
 
 /**
  * Re-escanea solo comprobantes ya insertados en el préstamo (OCR + actualización).
- * Pagos sin imagen no se tocan. Por cada pago: escanea y persiste solo campos
- * detectados por Gemini (merge conservador, sin borrar datos previos con vacío).
+ * Pagos sin imagen no se tocan. Por cada pago: vacía campos OCR y persiste solo
+ * lo detectado en esta pasada (digitalización desde cero, sin hint de banco previo).
  */
 export async function reescanearComprobantesCarteraPrestamo(opts: {
   cedula: string
@@ -354,7 +354,6 @@ export async function reescanearComprobantesCarteraPrestamo(opts: {
         comprobante: archivo,
         extraccionSinCliente: true,
         prestamoObjetivoId: opts.prestamoId,
-        institucionPlantillaHint: pago.institucion_bancaria,
       })
 
       try {
