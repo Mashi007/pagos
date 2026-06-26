@@ -5,6 +5,7 @@ from app.services.pago_autoconciliacion import (
     marcar_pago_autoconciliado,
     pago_preserva_autoconciliacion_sin_cuotas,
 )
+from app.services.pago_reescaneo_ocr import sin_documento_real_tras_reocr
 
 from .cascada_estado import _estado_pago_tras_aplicar_cascada
 
@@ -51,11 +52,10 @@ def _estado_conciliacion_post_cascada(pago: Pago, cuotas_completadas: int, cuota
 
 def _alinear_estado_tras_quitar_numero_documento_ocr(row: Pago) -> bool:
     """
-    Re-escaneo OCR sin numero_documento: cumplir chk_pagos_numero_documento_obligatorio_activo
-    (pagos PAGADO/conciliado exigen comprobante en BD).
+    Re-escaneo OCR sin numero_documento real: cumplir chk_pagos_numero_documento_obligatorio_activo
+    (pagos activos exigen comprobante en BD; se usa marcador REOCR-PEND-{id}).
     """
-    num = (row.numero_documento or "").strip()
-    if num:
+    if not sin_documento_real_tras_reocr(row.numero_documento):
         return False
     est_u = str(getattr(row, "estado", "") or "").strip().upper()
     if est_u in ("DUPLICADO", "ANULADO_IMPORT", "CANCELADO", "RECHAZADO", "REVERSADO"):

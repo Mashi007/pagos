@@ -329,6 +329,12 @@ export function claveDocumentoPagoListaNormalizada(
     .toLowerCase()
 }
 
+export function esDocumentoMarcadorPendienteReocr(
+  numero: string | null | undefined
+): boolean {
+  return /^REOCR-PEND-\d+$/i.test(String(numero ?? '').trim())
+}
+
 /**
  * Celda de lista / Excel: comprobante que ve el usuario + código (sin marcador interno §CD:).
  */
@@ -338,7 +344,7 @@ export function textoDocumentoPagoParaListado(
 ): string {
   const base = (numero_documento ?? '').trim()
   const c = (codigo_documento ?? '').trim()
-  if (!base) return '-'
+  if (!base || esDocumentoMarcadorPendienteReocr(base)) return '-'
   if (!c) return base
   return `${base} · ${c}`
 }

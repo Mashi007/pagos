@@ -180,6 +180,11 @@ from app.services.pago_huella_funcional import (
     primer_par_huella_duplicada_prestamo,
     ref_norm_desde_campos,
 )
+from app.services.pago_reescaneo_ocr import (
+    documento_marcador_pendiente_reocr,
+    es_documento_marcador_pendiente_reocr,
+    sin_documento_real_tras_reocr,
+)
 from app.services.pago_huella_metricas import (
     registrar_rechazo_huella_funcional,
     snapshot_rechazos_huella_funcional,
@@ -619,12 +624,16 @@ def actualizar_pago(
     def _documento_ocr_invalido_reescaneo(valor: Optional[str]) -> bool:
         return _referencia_pago_sintetica_ocr(valor)
 
+    def _vaciar_documento_reescaneo_ocr(row: Pago) -> None:
+        marcador = documento_marcador_pendiente_reocr(pago_id)
+        row.numero_documento = marcador
+        if _referencia_pago_sintetica_ocr(row.referencia_pago):
+            row.referencia_pago = marcador[:100]
+
     _doc_touch = False
 
     if limpiar_numero_documento_ocr and reescaneo_ocr:
-        row.numero_documento = None
-        if _referencia_pago_sintetica_ocr(row.referencia_pago):
-            row.referencia_pago = ""
+        _vaciar_documento_reescaneo_ocr(row)
 
     if "numero_documento" in data:
 
@@ -651,7 +660,7 @@ def actualizar_pago(
         if not nb:
 
             if reescaneo_ocr:
-                row.numero_documento = None
+                _vaciar_documento_reescaneo_ocr(row)
             else:
                 raise HTTPException(status_code=400, detail="numero_documento no puede estar vacio.")
 
@@ -694,9 +703,7 @@ def actualizar_pago(
                         "Revise duplicados o use Visto."
                     )
                     if _documento_ocr_invalido_reescaneo(row.numero_documento):
-                        row.numero_documento = None
-                        if _referencia_pago_sintetica_ocr(row.referencia_pago):
-                            row.referencia_pago = ""
+                        _vaciar_documento_reescaneo_ocr(row)
                 else:
                     raise HTTPException(
 
