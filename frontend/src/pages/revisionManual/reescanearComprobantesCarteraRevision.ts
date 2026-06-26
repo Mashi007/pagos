@@ -138,16 +138,16 @@ async function updatePagoReescaneoCartera(
   } catch (err) {
     const msg = mensajeErrorExtraccionEscaner(err)
     if (esErrorNumeroDocumentoDuplicado(msg) && payload.numero_documento) {
-      const { numero_documento: _omit, ...rest } = payload
-      const fallback: PayloadReescaneoCartera = {
-        ...rest,
-        limpiar_numero_documento_ocr: true,
+      const retry: PayloadReescaneoCartera = {
+        ...payload,
+        codigo_documento: `P${pagoId}`,
       }
-      const res = (await pagoService.updatePago(pagoId, fallback)) as Pago & {
+      const res = (await pagoService.updatePago(pagoId, retry)) as Pago & {
         reescaneo_advertencias?: string[]
       }
       advertencias.push(
-        'Nº documento OCR ya registrado en otro pago; se aplicaron banco/fecha/monto y se limpió el documento sintético anterior.'
+        'Serial OCR repetido en cartera; se guardó con código P' +
+          `${pagoId} (misma regla que Visto).`
       )
       if (Array.isArray(res.reescaneo_advertencias)) {
         advertencias.push(...res.reescaneo_advertencias.filter(Boolean))
@@ -451,24 +451,26 @@ export async function reescanearComprobantesCarteraPrestamo(opts: {
         const persistencia = resultadoPersistenciaReescaneoOcr(pago, res)
         if (persistencia) {
           const validacion = validacionReescaneoEfectiva(pago, res)
-          const omitirNumero = duplicadoBloqueaReescaneo(
+          const colisionDuplicado = duplicadoBloqueaReescaneo(
             item.pago_id,
             res,
             validacion
           )
+          const numeroOcr = String(
+            persistencia.patch.numero_documento ?? ''
+          ).trim()
+          const codigoDisambiguacion =
+            colisionDuplicado && numeroOcr ? `P${item.pago_id}` : undefined
           const limpiarNumero =
-            persistencia.limpiarNumeroDocumentoOcr ||
-            (omitirNumero &&
-              esNumeroDocumentoSinteticoOcrInvalido(
-                pago.numero_documento || ''
-              ))
+            persistencia.limpiarNumeroDocumentoOcr && !codigoDisambiguacion
           const payload = payloadUpdatePagoDesdeReescaneoOcrCartera(
             persistencia.patch,
             {
               limpiarNumeroDocumentoOcr: limpiarNumero,
               limpiarFechaPagoOcr: persistencia.limpiarFechaPagoOcr,
               limpiarMontoPagoOcr: persistencia.limpiarMontoPagoOcr,
-              omitirNumeroDocumento: omitirNumero,
+              omitirNumeroDocumento: false,
+              codigoDocumentoDisambiguacion: codigoDisambiguacion,
             }
           )
           const advertenciasPut = await updatePagoReescaneoCartera(
@@ -481,7 +483,7 @@ export async function reescanearComprobantesCarteraPrestamo(opts: {
             ...evaluarAlertaReescaneoTrasPersistencia(
               pago,
               res,
-              omitirNumero
+              colisionDuplicado && !codigoDisambiguacion
                 ? persistencia.camposAplicados.filter(c => c !== 'numero')
                 : persistencia.camposAplicados
             ),

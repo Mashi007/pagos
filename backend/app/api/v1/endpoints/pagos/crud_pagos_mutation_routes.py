@@ -681,8 +681,11 @@ def actualizar_pago(
             codigo_cambio = (nc or "") != (codigo_anterior or "")
 
             if codigo_cambio and (
-                bool(row.conciliado)
-                or str(row.estado or "").upper() in ("PAGADO", "PAGO_ADELANTADO")
+                not reescaneo_ocr
+                and (
+                    bool(row.conciliado)
+                    or str(row.estado or "").upper() in ("PAGADO", "PAGO_ADELANTADO")
+                )
             ):
                 if canonical_rol(getattr(current_user, "rol", None)) != "admin":
                     raise HTTPException(
@@ -697,13 +700,23 @@ def actualizar_pago(
             if new_stored and numero_documento_ya_registrado(db, new_stored, exclude_pago_id=pago_id):
 
                 if reescaneo_ocr:
-                    omitir_numero_por_duplicado = True
-                    reescaneo_advertencias.append(
-                        "Nº documento OCR ya registrado en otro pago; se aplicaron los demás campos. "
-                        "Revise duplicados o use Visto."
-                    )
-                    if _documento_ocr_invalido_reescaneo(row.numero_documento):
-                        _vaciar_documento_reescaneo_ocr(row)
+                    codigo_auto = f"P{pago_id}"
+                    new_dis = compose_numero_documento_almacenado(nb, codigo_auto)
+                    if new_dis and not numero_documento_ya_registrado(
+                        db, new_dis, exclude_pago_id=pago_id
+                    ):
+                        new_stored = new_dis
+                        reescaneo_advertencias.append(
+                            f"Serial OCR repetido en cartera; guardado con codigo {codigo_auto}."
+                        )
+                    else:
+                        omitir_numero_por_duplicado = True
+                        reescaneo_advertencias.append(
+                            "Nº documento OCR ya registrado en otro pago; se aplicaron los demás campos. "
+                            "Revise duplicados o use Visto."
+                        )
+                        if _documento_ocr_invalido_reescaneo(row.numero_documento):
+                            _vaciar_documento_reescaneo_ocr(row)
                 else:
                     raise HTTPException(
 

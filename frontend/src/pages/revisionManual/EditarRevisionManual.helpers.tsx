@@ -814,6 +814,8 @@ export function payloadUpdatePagoDesdeReescaneoOcrCartera(
     limpiarFechaPagoOcr: boolean
     limpiarMontoPagoOcr: boolean
     omitirNumeroDocumento?: boolean
+    /** Mismo serial en otro pago: §CD:P{id} (politica revision manual / Visto). */
+    codigoDocumentoDisambiguacion?: string | null
   }
 ): Partial<PagoCreate> & {
   monto_bs_original?: number | null
@@ -828,8 +830,12 @@ export function payloadUpdatePagoDesdeReescaneoOcrCartera(
   out.institucion_bancaria = inst
 
   const num = String(patch.numero_documento ?? '').trim()
+  const codigo = String(opts.codigoDocumentoDisambiguacion ?? '').trim()
   if (num && !opts.omitirNumeroDocumento) {
     out.numero_documento = num
+    if (codigo) {
+      out.codigo_documento = codigo
+    }
   } else if (opts.limpiarNumeroDocumentoOcr || opts.omitirNumeroDocumento) {
     out.limpiar_numero_documento_ocr = true
   }
