@@ -251,6 +251,7 @@ from .pago_zona_horaria import _calcular_dias_mora, _hoy_local
 from .pago_usuario_registro import _usuario_registro_desde_current_user
 from .pago_conciliacion_estado import (
     _alinear_estado_si_toggle_conciliado_actualizar_pago,
+    _alinear_estado_tras_quitar_numero_documento_ocr,
     _estado_conciliacion_post_cascada,
 )
 from .pago_cascada_reglas import _debe_aplicar_cascada_pago
@@ -986,6 +987,11 @@ def actualizar_pago(
         raise HTTPException(status_code=400, detail=str(e)) from e
 
     _mark_fase("cedula_fk")
+
+    if reescaneo_ocr and _alinear_estado_tras_quitar_numero_documento_ocr(row):
+        reescaneo_advertencias.append(
+            "Sin Nº documento el pago quedó en Pendiente; complete el comprobante y valide de nuevo (Visto)."
+        )
 
     try:
 

@@ -47,3 +47,29 @@ def _estado_conciliacion_post_cascada(pago: Pago, cuotas_completadas: int, cuota
         # verificado_concordancia se mantiene (p. ej. SI) para no bloquear «Aplicar a cuotas» masivo.
 
     return estado
+
+
+def _alinear_estado_tras_quitar_numero_documento_ocr(row: Pago) -> bool:
+    """
+    Re-escaneo OCR sin numero_documento: cumplir chk_pagos_numero_documento_obligatorio_activo
+    (pagos PAGADO/conciliado exigen comprobante en BD).
+    """
+    num = (row.numero_documento or "").strip()
+    if num:
+        return False
+    est_u = str(getattr(row, "estado", "") or "").strip().upper()
+    if est_u in ("DUPLICADO", "ANULADO_IMPORT", "CANCELADO", "RECHAZADO", "REVERSADO"):
+        return False
+    if "ANUL" in est_u or "REVERS" in est_u:
+        return False
+    cambio = False
+    if est_u in ("PAGADO", "PAGO_ADELANTADO"):
+        row.estado = "PENDIENTE"
+        cambio = True
+    if bool(row.conciliado):
+        row.conciliado = False
+        row.fecha_conciliacion = None
+        if str(row.verificado_concordancia or "").strip().upper() == "SI":
+            row.verificado_concordancia = "NO"
+        cambio = True
+    return cambio
