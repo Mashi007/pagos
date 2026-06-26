@@ -596,6 +596,7 @@ def actualizar_pago(
     limpiar_numero_documento_ocr = bool(data.pop("limpiar_numero_documento_ocr", False))
     limpiar_fecha_pago_ocr = bool(data.pop("limpiar_fecha_pago_ocr", False))
     limpiar_monto_pago_ocr = bool(data.pop("limpiar_monto_pago_ocr", False))
+    reescaneo_advertencias: list[str] = []
 
     # fecha_pago y monto_pagado son NOT NULL en BD: no poner NULL ni 0 al limpiar OCR.
     if limpiar_monto_pago_ocr and reescaneo_ocr:
@@ -613,6 +614,9 @@ def actualizar_pago(
         if re.search(r"-\d{8}-\d{6}-DCME-", t, re.I):
             return True
         return False
+
+    def _documento_ocr_invalido_reescaneo(valor: Optional[str]) -> bool:
+        return _referencia_pago_sintetica_ocr(valor)
 
     _doc_touch = False
 
@@ -679,25 +683,38 @@ def actualizar_pago(
                         ),
                     )
 
+            omitir_numero_por_duplicado = False
             if new_stored and numero_documento_ya_registrado(db, new_stored, exclude_pago_id=pago_id):
 
-                raise HTTPException(
+                if reescaneo_ocr:
+                    omitir_numero_por_duplicado = True
+                    reescaneo_advertencias.append(
+                        "Nº documento OCR ya registrado en otro pago; se aplicaron los demás campos. "
+                        "Revise duplicados o use Visto."
+                    )
+                    if _documento_ocr_invalido_reescaneo(row.numero_documento):
+                        row.numero_documento = None
+                        if _referencia_pago_sintetica_ocr(row.referencia_pago):
+                            row.referencia_pago = ""
+                else:
+                    raise HTTPException(
 
-                    status_code=409,
+                        status_code=409,
 
-                    detail="Ya existe otro pago con la misma combinación comprobante + código.",
+                        detail="Ya existe otro pago con la misma combinación comprobante + código.",
 
-                )
+                    )
 
-            row.numero_documento = new_stored
-            if reescaneo_ocr:
-                ref_prev = (row.referencia_pago or "").strip()
-                if (
-                    not ref_prev
-                    or _referencia_pago_sintetica_ocr(ref_prev)
-                    or ref_prev == (b0 or "").strip()
-                ):
-                    row.referencia_pago = (new_stored or "")[:100]
+            if new_stored and not omitir_numero_por_duplicado:
+                row.numero_documento = new_stored
+                if reescaneo_ocr:
+                    ref_prev = (row.referencia_pago or "").strip()
+                    if (
+                        not ref_prev
+                        or _referencia_pago_sintetica_ocr(ref_prev)
+                        or ref_prev == (b0 or "").strip()
+                    ):
+                        row.referencia_pago = (new_stored or "")[:100]
 
         data.pop("numero_documento", None)
 
@@ -1149,6 +1166,8 @@ def actualizar_pago(
 
         _mark_fase("response_enriquecido")
         out = _pago_response_enriquecido(db, row)
+        if reescaneo_advertencias:
+            out["reescaneo_advertencias"] = reescaneo_advertencias
         total_ms = round((time.perf_counter() - t0_put) * 1000.0, 2)
         logger.info(
             "[PAGOS_PUT_TIMING] pago_id=%s total_ms=%s fases_ms=%s had_cuota_pagos=%s articulacion_afectada=%s",
@@ -1229,6 +1248,8 @@ def actualizar_pago(
 
     _mark_fase("response_enriquecido")
     out = _pago_response_enriquecido(db, row)
+    if reescaneo_advertencias:
+        out["reescaneo_advertencias"] = reescaneo_advertencias
     total_ms = round((time.perf_counter() - t0_put) * 1000.0, 2)
     logger.info(
         "[PAGOS_PUT_TIMING] pago_id=%s total_ms=%s fases_ms=%s had_cuota_pagos=%s articulacion_afectada=%s",

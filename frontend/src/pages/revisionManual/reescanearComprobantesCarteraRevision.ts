@@ -15,6 +15,7 @@ import {
 import { normalizarComprobanteArchivoParaEscaneo } from '../../utils/normalizarComprobanteArchivo'
 import {
   buildFormDataEscanerComprobante,
+  esNumeroDocumentoSinteticoOcrInvalido,
   fechaPagoDesdeExtraccionOcrConfiable,
   fechaPagoDesdeSugerenciaOcrReescaneo,
   mensajeErrorExtraccionEscaner,
@@ -80,6 +81,50 @@ function yieldToMain(): Promise<void> {
   return new Promise(resolve => {
     setTimeout(resolve, 0)
   })
+}
+
+function esErrorNumeroDocumentoDuplicado(msg: string): boolean {
+  return /misma combinaci[oó]n comprobante/i.test(msg)
+}
+
+type PayloadReescaneoCartera = ReturnType<
+  typeof payloadUpdatePagoDesdeReescaneoOcrCartera
+>
+
+async function updatePagoReescaneoCartera(
+  pagoId: number,
+  payload: PayloadReescaneoCartera
+): Promise<string[]> {
+  const advertencias: string[] = []
+  try {
+    const res = (await pagoService.updatePago(pagoId, payload)) as Pago & {
+      reescaneo_advertencias?: string[]
+    }
+    if (Array.isArray(res.reescaneo_advertencias)) {
+      advertencias.push(...res.reescaneo_advertencias.filter(Boolean))
+    }
+    return advertencias
+  } catch (err) {
+    const msg = mensajeErrorExtraccionEscaner(err)
+    if (esErrorNumeroDocumentoDuplicado(msg) && payload.numero_documento) {
+      const { numero_documento: _omit, ...rest } = payload
+      const fallback: PayloadReescaneoCartera = {
+        ...rest,
+        limpiar_numero_documento_ocr: true,
+      }
+      const res = (await pagoService.updatePago(pagoId, fallback)) as Pago & {
+        reescaneo_advertencias?: string[]
+      }
+      advertencias.push(
+        'Nº documento OCR ya registrado en otro pago; se aplicaron banco/fecha/monto y se limpió el documento sintético anterior.'
+      )
+      if (Array.isArray(res.reescaneo_advertencias)) {
+        advertencias.push(...res.reescaneo_advertencias.filter(Boolean))
+      }
+      return advertencias
+    }
+    throw err
+  }
 }
 
 function validacionReescaneoEfectiva(
@@ -372,27 +417,47 @@ export async function reescanearComprobantesCarteraPrestamo(opts: {
         const res = await escanerInfopagosExtraerComprobante(fd)
         const persistencia = resultadoPersistenciaReescaneoOcr(pago, res)
         if (persistencia) {
+          const validacion = validacionReescaneoEfectiva(pago, res)
+          const omitirNumero = duplicadoBloqueaReescaneo(
+            item.pago_id,
+            res,
+            validacion
+          )
+          const limpiarNumero =
+            persistencia.limpiarNumeroDocumentoOcr ||
+            (omitirNumero &&
+              esNumeroDocumentoSinteticoOcrInvalido(
+                pago.numero_documento || ''
+              ))
           const payload = payloadUpdatePagoDesdeReescaneoOcrCartera(
             persistencia.patch,
             {
-              limpiarNumeroDocumentoOcr:
-                persistencia.limpiarNumeroDocumentoOcr,
+              limpiarNumeroDocumentoOcr: limpiarNumero,
               limpiarFechaPagoOcr: persistencia.limpiarFechaPagoOcr,
               limpiarMontoPagoOcr: persistencia.limpiarMontoPagoOcr,
+              omitirNumeroDocumento: omitirNumero,
             }
           )
-          await pagoService.updatePago(item.pago_id, payload)
-          actualizados++
-          const motivos = evaluarAlertaReescaneoTrasPersistencia(
-            pago,
-            res,
-            persistencia.camposAplicados
+          const advertenciasPut = await updatePagoReescaneoCartera(
+            item.pago_id,
+            payload
           )
+          actualizados++
+          const motivos = [
+            ...advertenciasPut,
+            ...evaluarAlertaReescaneoTrasPersistencia(
+              pago,
+              res,
+              omitirNumero
+                ? persistencia.camposAplicados.filter(c => c !== 'numero')
+                : persistencia.camposAplicados
+            ),
+          ]
           if (motivos.length) {
             alertas[item.pago_id] = motivos
           }
         } else {
-          await pagoService.updatePago(
+          await updatePagoReescaneoCartera(
             item.pago_id,
             payloadLimpiarCamposOcrTrasFalloEscaneoCartera()
           )
