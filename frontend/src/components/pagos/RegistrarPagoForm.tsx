@@ -119,7 +119,6 @@ import {
   mergePagoRegistrarDesdeSugerenciaOcr,
   mensajeErrorExtraccionEscaner,
   mensajeFalloExtraccionEscaner,
-  numeroOperacionOcrParaReescaneo,
 } from '../../utils/escanerComprobanteInfopagos'
 import { eliminarPagoRevisionOConError } from '../../utils/eliminarPagoRevision'
 
@@ -994,10 +993,7 @@ export function RegistrarPagoForm({
       const s = res.sugerencia
       const merged = mergePagoRegistrarDesdeSugerenciaOcr(
         camposVaciosOcrRegistrar(),
-        {
-          ...s,
-          numero_operacion: numeroOperacionOcrParaReescaneo(s),
-        },
+        s,
         { modoReescaneo: true }
       )
       const nextMoneda = merged.moneda_registro

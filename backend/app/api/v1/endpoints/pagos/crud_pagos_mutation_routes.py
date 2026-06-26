@@ -594,6 +594,18 @@ def actualizar_pago(
 
     reescaneo_ocr = bool(data.pop("reescaneo_ocr", False))
     limpiar_numero_documento_ocr = bool(data.pop("limpiar_numero_documento_ocr", False))
+    limpiar_fecha_pago_ocr = bool(data.pop("limpiar_fecha_pago_ocr", False))
+    limpiar_monto_pago_ocr = bool(data.pop("limpiar_monto_pago_ocr", False))
+
+    if limpiar_fecha_pago_ocr and reescaneo_ocr:
+        row.fecha_pago = None
+
+    if limpiar_monto_pago_ocr and reescaneo_ocr:
+        row.monto_pagado = Decimal("0")
+        row.monto_bs_original = None
+        row.moneda_registro = "USD"
+        row.tasa_cambio_bs_usd = None
+        row.fecha_tasa_referencia = None
 
     _doc_touch = False
 

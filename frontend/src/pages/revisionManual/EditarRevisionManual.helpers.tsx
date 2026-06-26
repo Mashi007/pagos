@@ -13,6 +13,7 @@ import {
   normalizarInstitucionBancoEscaneo,
   fechaPagoDesdeExtraccionOcrConfiable,
   numeroOperacionOcrParaReescaneo,
+  fechaPagoDesdeSugerenciaOcrReescaneo,
 } from '../../utils/escanerComprobanteInfopagos'
 
 /** Estados de negocio del préstamo (tabla prestamos.estado); alineado con backend y fechas obligatorias. */
@@ -666,21 +667,15 @@ export function omitirValidacionInstitucionReescaneoCartera(
 }
 
 export function institucionEfectivaReescaneoCartera(
-  pago: Pick<Pago, 'institucion_bancaria' | 'numero_documento'>,
+  _pago: Pick<Pago, 'institucion_bancaria' | 'numero_documento'>,
   res?: {
     sugerencia?: Pick<
       EscanerInfopagosSugerencia,
-      'institucion_financiera' | 'numero_operacion'
+      'institucion_financiera' | 'numero_operacion' | 'notas_modelo'
     > | null
   } | null
 ): string {
-  return (
-    institucionDesdeSugerenciaOcr(res?.sugerencia ?? null) ||
-    normalizarInstitucionBancoEscaneo(
-      (pago.institucion_bancaria || '').trim()
-    ) ||
-    ''
-  )
+  return institucionDesdeSugerenciaOcr(res?.sugerencia ?? null) || ''
 }
 
 export {
@@ -733,7 +728,7 @@ export function camposDigitadosOcrReescaneo(
   }
   if (
     !esInstitucionBinanceReescaneo(inst || '') &&
-    fechaPagoDesdeExtraccionOcrConfiable(sugerencia.fecha_pago)
+    fechaPagoDesdeSugerenciaOcrReescaneo(sugerencia)
   ) {
     out.push('fecha')
   }
@@ -789,6 +784,8 @@ export type PatchReescaneoOcrResult = {
   camposAplicados: CampoReescaneoOcr[]
   hayCambios: boolean
   limpiarNumeroDocumentoOcr: boolean
+  limpiarFechaPagoOcr: boolean
+  limpiarMontoPagoOcr: boolean
 }
 
 /** Vacía campos OCR del pago; conserva identidad (cédula, préstamo, comprobante, notas). */
@@ -809,36 +806,82 @@ export function patchLimpiarCamposOcrReescaneoCartera(
   }
 }
 
-/** Payload PUT con flags de re-escaneo (evita 400 por numero vacío). */
+/** Payload PUT re-escaneo: limpia lo no detectado; nunca envia monto 0 (el API lo rechaza). */
 export function payloadUpdatePagoDesdeReescaneoOcrCartera(
   patch: Partial<PagoCreate> & { monto_bs_original?: number | null },
-  opts: { limpiarNumeroDocumentoOcr: boolean }
+  opts: {
+    limpiarNumeroDocumentoOcr: boolean
+    limpiarFechaPagoOcr: boolean
+    limpiarMontoPagoOcr: boolean
+  }
 ): Partial<PagoCreate> & {
   monto_bs_original?: number | null
   reescaneo_ocr: boolean
   limpiar_numero_documento_ocr?: boolean
+  limpiar_fecha_pago_ocr?: boolean
+  limpiar_monto_pago_ocr?: boolean
 } {
-  const out: Record<string, unknown> = {
-    ...patch,
-    reescaneo_ocr: true,
+  const out: Record<string, unknown> = { reescaneo_ocr: true }
+
+  const inst = String(patch.institucion_bancaria ?? '').trim()
+  out.institucion_bancaria = inst
+
+  const num = String(patch.numero_documento ?? '').trim()
+  if (num) {
+    out.numero_documento = num
+  } else if (opts.limpiarNumeroDocumentoOcr) {
+    out.limpiar_numero_documento_ocr = true
   }
-  const num = String(out.numero_documento ?? '').trim()
-  if (!num) {
-    delete out.numero_documento
-    if (opts.limpiarNumeroDocumentoOcr) {
-      out.limpiar_numero_documento_ocr = true
+
+  const fecha = String(patch.fecha_pago ?? '').trim()
+  if (fecha) {
+    out.fecha_pago = fecha
+  } else if (opts.limpiarFechaPagoOcr) {
+    out.limpiar_fecha_pago_ocr = true
+  }
+
+  const moneda = (patch.moneda_registro || 'USD').toUpperCase() === 'BS' ? 'BS' : 'USD'
+  const montoUsd = Number(patch.monto_pagado ?? 0)
+  const montoBs = Number(patch.monto_bs_original ?? 0)
+  const tieneMontoOcr =
+    moneda === 'BS' ? montoBs > 0 : montoUsd > 0
+
+  if (tieneMontoOcr) {
+    out.moneda_registro = moneda
+    if (moneda === 'BS') {
+      out.monto_bs_original = montoBs
+      out.monto_pagado = 0
+    } else {
+      out.monto_pagado = montoUsd
     }
+  } else if (opts.limpiarMontoPagoOcr) {
+    out.limpiar_monto_pago_ocr = true
+    out.moneda_registro = 'USD'
   }
-  if (!String(out.fecha_pago ?? '').trim()) {
-    delete out.fecha_pago
-  }
-  if (out.institucion_bancaria == null) {
-    out.institucion_bancaria = ''
-  }
+
   return out as Partial<PagoCreate> & {
     monto_bs_original?: number | null
     reescaneo_ocr: boolean
     limpiar_numero_documento_ocr?: boolean
+    limpiar_fecha_pago_ocr?: boolean
+    limpiar_monto_pago_ocr?: boolean
+  }
+}
+
+/** Vacia campos OCR en BD cuando Gemini no digitalizo (sin inventar datos). */
+export function payloadLimpiarCamposOcrTrasFalloEscaneoCartera(): {
+  reescaneo_ocr: boolean
+  limpiar_numero_documento_ocr: boolean
+  limpiar_fecha_pago_ocr: boolean
+  limpiar_monto_pago_ocr: boolean
+  institucion_bancaria: string
+} {
+  return {
+    reescaneo_ocr: true,
+    limpiar_numero_documento_ocr: true,
+    limpiar_fecha_pago_ocr: true,
+    limpiar_monto_pago_ocr: true,
+    institucion_bancaria: '',
   }
 }
 
@@ -858,9 +901,8 @@ export function patchCompletoPagoDesdeOcrReescaneoCartera(
       ? Number(sugerencia.monto)
       : null
   const numeroOcr = numeroOperacionOcrParaReescaneo(sugerencia)
-  const fechaOcr = fechaPagoDesdeExtraccionOcrConfiable(sugerencia.fecha_pago)
+  const fechaOcr = fechaPagoDesdeSugerenciaOcrReescaneo(sugerencia)
   const camposAplicados: CampoReescaneoOcr[] = []
-  const teniaNumero = Boolean((pago.numero_documento || '').trim())
 
   if (inst) {
     patch.institucion_bancaria = inst
@@ -881,9 +923,6 @@ export function patchCompletoPagoDesdeOcrReescaneoCartera(
       patch.monto_bs_original = null
     }
     camposAplicados.push('monto', 'moneda')
-  } else if (sugerencia.moneda === 'BS' || sugerencia.moneda === 'USD') {
-    patch.moneda_registro = monedaOcr
-    camposAplicados.push('moneda')
   }
   if (fechaOcr && !esInstitucionBinanceReescaneo(inst || '')) {
     patch.fecha_pago = fechaOcr
@@ -908,13 +947,21 @@ export function patchCompletoPagoDesdeOcrReescaneoCartera(
     (patch.moneda_registro || 'USD').toUpperCase() !==
       (pago.moneda_registro || 'USD').toUpperCase()
 
-  const limpiarNumeroDocumentoOcr = teniaNumero && !numeroOcr
+  const limpiarNumeroDocumentoOcr = !numeroOcr
+  const limpiarFechaPagoOcr = !fechaOcr
+  const limpiarMontoPagoOcr = !camposAplicados.includes('monto')
 
   return {
     patch,
     camposAplicados: [...new Set(camposAplicados)],
-    hayCambios: hayCambios || limpiarNumeroDocumentoOcr,
+    hayCambios:
+      hayCambios ||
+      limpiarNumeroDocumentoOcr ||
+      limpiarFechaPagoOcr ||
+      limpiarMontoPagoOcr,
     limpiarNumeroDocumentoOcr,
+    limpiarFechaPagoOcr,
+    limpiarMontoPagoOcr,
   }
 }
 

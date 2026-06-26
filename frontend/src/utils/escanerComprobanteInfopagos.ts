@@ -57,9 +57,18 @@ export function extraerSerialMercantil7400(texto: string): string {
   return m15 ? m15[0] : ''
 }
 
+/** Referencias que no son numero de operacion del comprobante (sistema / validador). */
+export function esNumeroDocumentoSinteticoOcrInvalido(num: string): boolean {
+  const t = (num || '').trim().toUpperCase()
+  if (!t) return false
+  if (t.startsWith('ABONOS-DRIVE-')) return true
+  if (esCodigoDcmeMercantil(num)) return true
+  return false
+}
+
 /**
  * Numero de documento utilizable tras re-escaneo: prioriza Serial 740087…;
- * descarta solo-DCME (el backend hace lo mismo antes de persistir).
+ * descarta DCME, ABONOS-DRIVE y otros sinteticos (solo lo leido en imagen).
  */
 export function numeroOperacionOcrParaReescaneo(
   sugerencia: Pick<
@@ -72,8 +81,30 @@ export function numeroOperacionOcrParaReescaneo(
   const aux = `${raw}\n${(sugerencia.notas_modelo || '').trim()}`
   const serial = extraerSerialMercantil7400(raw) || extraerSerialMercantil7400(aux)
   if (serial) return serial
-  if (raw && esCodigoDcmeMercantil(raw)) return ''
+  if (!raw || esNumeroDocumentoSinteticoOcrInvalido(raw)) return ''
   return raw
+}
+
+/** Fecha impresa en bloque DCME Mercantil (2º bloque YYYYMMDD del papel). */
+export function fechaPagoDesdeBloqueDcmeMercantil(texto: string): string {
+  const m = (texto || '').match(/-\d{4}-(\d{8})-\d{6}-DCME-/i)
+  if (!m?.[1] || m[1].length !== 8) return ''
+  const ymd = m[1]
+  const iso = `${ymd.slice(0, 4)}-${ymd.slice(4, 6)}-${ymd.slice(6, 8)}`
+  return fechaPagoDesdeExtraccionOcrConfiable(iso) || iso
+}
+
+/** Fecha desde OCR: campo fecha_pago o bloque DCME visible en numero/notas. */
+export function fechaPagoDesdeSugerenciaOcrReescaneo(
+  sugerencia: Pick<
+    EscanerInfopagosSugerencia,
+    'fecha_pago' | 'numero_operacion' | 'notas_modelo'
+  >
+): string {
+  const directa = fechaPagoDesdeExtraccionOcrConfiable(sugerencia.fecha_pago)
+  if (directa) return directa
+  const ctx = `${sugerencia.numero_operacion || ''} ${sugerencia.notas_modelo || ''}`
+  return fechaPagoDesdeBloqueDcmeMercantil(ctx)
 }
 
 /**
@@ -307,8 +338,12 @@ export function mergePagoRegistrarDesdeSugerenciaOcr(
       : normalizarInstitucionBancoEscaneo(
           (actual.institucion_bancaria || '').trim()
         ))
-  const fechaOcr = fechaPagoDesdeExtraccionOcrConfiable(sugerencia.fecha_pago)
-  const numeroOcr = (sugerencia.numero_operacion || '').trim()
+  const fechaOcr = soloOcr
+    ? fechaPagoDesdeSugerenciaOcrReescaneo(sugerencia)
+    : fechaPagoDesdeExtraccionOcrConfiable(sugerencia.fecha_pago)
+  const numeroOcr = soloOcr
+    ? numeroOperacionOcrParaReescaneo(sugerencia)
+    : (sugerencia.numero_operacion || '').trim()
   const monedaOcr = sugerencia.moneda === 'BS' ? 'BS' : 'USD'
   const montoOcr =
     sugerencia.monto != null && Number.isFinite(Number(sugerencia.monto))

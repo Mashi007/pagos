@@ -107,6 +107,8 @@ class PagoUpdate(BaseModel):
     # Re-escaneo OCR en revision manual: permite limpiar campos antes de reaplicar.
     reescaneo_ocr: Optional[bool] = False
     limpiar_numero_documento_ocr: Optional[bool] = False
+    limpiar_fecha_pago_ocr: Optional[bool] = False
+    limpiar_monto_pago_ocr: Optional[bool] = False
 
     @field_validator("link_comprobante", mode="before")
     @classmethod

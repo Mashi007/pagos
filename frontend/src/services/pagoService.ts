@@ -491,6 +491,8 @@ class PagoService {
         estado?: string
         reescaneo_ocr?: boolean
         limpiar_numero_documento_ocr?: boolean
+        limpiar_fecha_pago_ocr?: boolean
+        limpiar_monto_pago_ocr?: boolean
       }
     >
   ): Promise<Pago> {

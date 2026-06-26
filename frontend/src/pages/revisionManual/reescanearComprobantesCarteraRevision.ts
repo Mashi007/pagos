@@ -16,6 +16,7 @@ import { normalizarComprobanteArchivoParaEscaneo } from '../../utils/normalizarC
 import {
   buildFormDataEscanerComprobante,
   fechaPagoDesdeExtraccionOcrConfiable,
+  fechaPagoDesdeSugerenciaOcrReescaneo,
   mensajeErrorExtraccionEscaner,
 } from '../../utils/escanerComprobanteInfopagos'
 import {
@@ -33,6 +34,7 @@ import {
   filtrarMotivosAlertaReescaneo,
   sanitizarAlertasReescaneoPorPagoId,
   payloadUpdatePagoDesdeReescaneoOcrCartera,
+  payloadLimpiarCamposOcrTrasFalloEscaneoCartera,
   type CampoReescaneoOcr,
   cedulaPartesReescaneoCartera,
   partesCedulaParaEscaneoRevision,
@@ -190,6 +192,8 @@ export function resultadoPersistenciaReescaneoOcr(
   hayCambios: boolean
   camposAplicados: CampoReescaneoOcr[]
   limpiarNumeroDocumentoOcr: boolean
+  limpiarFechaPagoOcr: boolean
+  limpiarMontoPagoOcr: boolean
 } | null {
   if (!res.ok || !res.sugerencia) return null
   const completo = patchCompletoPagoDesdeOcrReescaneoCartera(
@@ -201,6 +205,8 @@ export function resultadoPersistenciaReescaneoOcr(
     hayCambios: completo.hayCambios,
     camposAplicados: completo.camposAplicados,
     limpiarNumeroDocumentoOcr: completo.limpiarNumeroDocumentoOcr,
+    limpiarFechaPagoOcr: completo.limpiarFechaPagoOcr,
+    limpiarMontoPagoOcr: completo.limpiarMontoPagoOcr,
   }
 }
 
@@ -230,7 +236,7 @@ export function evaluarAlertaReescaneoTrasPersistencia(
   if (
     !esInstitucionBinanceReescaneo(instOcr || '') &&
     !camposAplicados.includes('fecha') &&
-    !fechaPagoDesdeExtraccionOcrConfiable(res.sugerencia.fecha_pago)
+    !fechaPagoDesdeSugerenciaOcrReescaneo(res.sugerencia)
   ) {
     motivos.push(
       'Fecha no detectada en el comprobante; indíquela manualmente (no se usa la fecha de hoy).'
@@ -368,30 +374,26 @@ export async function reescanearComprobantesCarteraPrestamo(opts: {
             {
               limpiarNumeroDocumentoOcr:
                 persistencia.limpiarNumeroDocumentoOcr,
+              limpiarFechaPagoOcr: persistencia.limpiarFechaPagoOcr,
+              limpiarMontoPagoOcr: persistencia.limpiarMontoPagoOcr,
             }
           )
-          const debePersistir =
-            persistencia.hayCambios ||
-            persistencia.camposAplicados.length > 0 ||
-            persistencia.limpiarNumeroDocumentoOcr
-          if (debePersistir) {
-            await pagoService.updatePago(item.pago_id, payload)
-            actualizados++
-            const motivos = evaluarAlertaReescaneoTrasPersistencia(
-              pago,
-              res,
-              persistencia.camposAplicados
-            )
-            if (motivos.length) {
-              alertas[item.pago_id] = motivos
-            }
-          } else {
-            const motivos = evaluarAlertaReescaneoCartera(pago, res)
-            if (motivos.length) {
-              alertas[item.pago_id] = motivos
-            }
+          await pagoService.updatePago(item.pago_id, payload)
+          actualizados++
+          const motivos = evaluarAlertaReescaneoTrasPersistencia(
+            pago,
+            res,
+            persistencia.camposAplicados
+          )
+          if (motivos.length) {
+            alertas[item.pago_id] = motivos
           }
         } else {
+          await pagoService.updatePago(
+            item.pago_id,
+            payloadLimpiarCamposOcrTrasFalloEscaneoCartera()
+          )
+          actualizados++
           const motivos = evaluarAlertaReescaneoCartera(pago, res)
           if (motivos.length) {
             alertas[item.pago_id] = motivos
