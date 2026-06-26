@@ -42,23 +42,69 @@ export function esSerialMercantil740087(digitsOnly: string): boolean {
   return /^740087\d{9}$/.test(digitsOnly)
 }
 
+/** Codigo validador Mercantil (ej. 9824-20260528-105636-DCME-…), no es el Serial. */
+export function esCodigoDcmeMercantil(s: string): boolean {
+  const t = (s || '').trim()
+  if (!t) return false
+  return /-\d{8}-\d{6}-DCME-/i.test(t)
+}
+
+/** Serial Mercantil 740087 + 9 digitos (15) desde cualquier fragmento OCR. */
+export function extraerSerialMercantil7400(texto: string): string {
+  if (!texto) return ''
+  const compact = texto.replace(/\D/g, '')
+  const m15 = compact.match(/740087\d{9}/)
+  return m15 ? m15[0] : ''
+}
+
 /**
- * Banco inferido desde la respuesta OCR (Gemini + post-proceso backend).
- * Serial 740087… solo si vino en numero_operacion del OCR.
+ * Numero de documento utilizable tras re-escaneo: prioriza Serial 740087…;
+ * descarta solo-DCME (el backend hace lo mismo antes de persistir).
  */
-export function institucionDesdeSugerenciaOcr(
+export function numeroOperacionOcrParaReescaneo(
   sugerencia: Pick<
     EscanerInfopagosSugerencia,
-    'institucion_financiera' | 'numero_operacion'
-  > | null
+    'numero_operacion' | 'institucion_financiera'
+  > &
+    Partial<Pick<EscanerInfopagosSugerencia, 'notas_modelo'>>
+): string {
+  const raw = (sugerencia.numero_operacion || '').trim()
+  const aux = `${raw}\n${(sugerencia.notas_modelo || '').trim()}`
+  const serial = extraerSerialMercantil7400(raw) || extraerSerialMercantil7400(aux)
+  if (serial) return serial
+  if (raw && esCodigoDcmeMercantil(raw)) return ''
+  return raw
+}
+
+/**
+ * Banco inferido desde la respuesta OCR (Gemini + post-proceso backend).
+ * Serial 740087…, codigo DCME o marcadores 0105 / RECAUDACION en notas.
+ */
+export function institucionDesdeSugerenciaOcr(
+  sugerencia:
+    | (Pick<
+        EscanerInfopagosSugerencia,
+        'institucion_financiera' | 'numero_operacion'
+      > &
+        Partial<Pick<EscanerInfopagosSugerencia, 'notas_modelo'>>)
+    | null
 ): string | null {
   const ocr = normalizarInstitucionBancoEscaneo(
     (sugerencia?.institucion_financiera || '').trim()
   )
   if (ocr) return ocr
 
-  const numOcr = (sugerencia?.numero_operacion || '').replace(/\D/g, '')
-  if (esSerialMercantil740087(numOcr)) return 'Mercantil'
+  const numRaw = (sugerencia?.numero_operacion || '').trim()
+  const ctx = `${numRaw} ${(sugerencia?.notas_modelo || '').trim()}`
+  if (extraerSerialMercantil7400(ctx)) return 'Mercantil'
+  if (esCodigoDcmeMercantil(numRaw)) return 'Mercantil'
+  if (
+    /mercantil|0105|rapi-credit|deposito divisas|depósito divisas|recaudaci/i.test(
+      ctx
+    )
+  ) {
+    return 'Mercantil'
+  }
   return null
 }
 

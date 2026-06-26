@@ -12,6 +12,7 @@ import {
   institucionPlantillaConfirmadaEscaneo,
   normalizarInstitucionBancoEscaneo,
   fechaPagoDesdeExtraccionOcrConfiable,
+  numeroOperacionOcrParaReescaneo,
 } from '../../utils/escanerComprobanteInfopagos'
 
 /** Estados de negocio del préstamo (tabla prestamos.estado); alineado con backend y fechas obligatorias. */
@@ -723,7 +724,8 @@ export function camposDigitadosOcrReescaneo(
   const out: CampoReescaneoOcr[] = []
   const inst = institucionDesdeSugerenciaOcr(sugerencia)
   if (inst) out.push('banco')
-  if ((sugerencia.numero_operacion || '').trim()) out.push('numero')
+  const numero = numeroOperacionOcrParaReescaneo(sugerencia)
+  if (numero) out.push('numero')
   const m = sugerencia.monto
   if (m != null && Number.isFinite(Number(m)) && Number(m) > 0) {
     out.push('monto')
@@ -786,6 +788,7 @@ export type PatchReescaneoOcrResult = {
   patch: Partial<PagoCreate> & { monto_bs_original?: number | null }
   camposAplicados: CampoReescaneoOcr[]
   hayCambios: boolean
+  limpiarNumeroDocumentoOcr: boolean
 }
 
 /** Vacía campos OCR del pago; conserva identidad (cédula, préstamo, comprobante, notas). */
@@ -798,11 +801,44 @@ export function patchLimpiarCamposOcrReescaneoCartera(
     link_comprobante: pago.link_comprobante ?? null,
     notas: pago.notas ?? null,
     fecha_pago: '',
-    institucion_bancaria: null,
+    institucion_bancaria: '',
     numero_documento: '',
     monto_pagado: 0,
     monto_bs_original: null,
     moneda_registro: 'USD',
+  }
+}
+
+/** Payload PUT con flags de re-escaneo (evita 400 por numero vacío). */
+export function payloadUpdatePagoDesdeReescaneoOcrCartera(
+  patch: Partial<PagoCreate> & { monto_bs_original?: number | null },
+  opts: { limpiarNumeroDocumentoOcr: boolean }
+): Partial<PagoCreate> & {
+  monto_bs_original?: number | null
+  reescaneo_ocr: boolean
+  limpiar_numero_documento_ocr?: boolean
+} {
+  const out: Record<string, unknown> = {
+    ...patch,
+    reescaneo_ocr: true,
+  }
+  const num = String(out.numero_documento ?? '').trim()
+  if (!num) {
+    delete out.numero_documento
+    if (opts.limpiarNumeroDocumentoOcr) {
+      out.limpiar_numero_documento_ocr = true
+    }
+  }
+  if (!String(out.fecha_pago ?? '').trim()) {
+    delete out.fecha_pago
+  }
+  if (out.institucion_bancaria == null) {
+    out.institucion_bancaria = ''
+  }
+  return out as Partial<PagoCreate> & {
+    monto_bs_original?: number | null
+    reescaneo_ocr: boolean
+    limpiar_numero_documento_ocr?: boolean
   }
 }
 
@@ -821,9 +857,10 @@ export function patchCompletoPagoDesdeOcrReescaneoCartera(
     sugerencia.monto != null && Number.isFinite(Number(sugerencia.monto))
       ? Number(sugerencia.monto)
       : null
-  const numeroOcr = (sugerencia.numero_operacion || '').trim()
+  const numeroOcr = numeroOperacionOcrParaReescaneo(sugerencia)
   const fechaOcr = fechaPagoDesdeExtraccionOcrConfiable(sugerencia.fecha_pago)
   const camposAplicados: CampoReescaneoOcr[] = []
+  const teniaNumero = Boolean((pago.numero_documento || '').trim())
 
   if (inst) {
     patch.institucion_bancaria = inst
@@ -871,10 +908,13 @@ export function patchCompletoPagoDesdeOcrReescaneoCartera(
     (patch.moneda_registro || 'USD').toUpperCase() !==
       (pago.moneda_registro || 'USD').toUpperCase()
 
+  const limpiarNumeroDocumentoOcr = teniaNumero && !numeroOcr
+
   return {
     patch,
     camposAplicados: [...new Set(camposAplicados)],
-    hayCambios,
+    hayCambios: hayCambios || limpiarNumeroDocumentoOcr,
+    limpiarNumeroDocumentoOcr,
   }
 }
 

@@ -32,6 +32,7 @@ import {
   motivosCamposDigitadosNoAplicadosReescaneo,
   filtrarMotivosAlertaReescaneo,
   sanitizarAlertasReescaneoPorPagoId,
+  payloadUpdatePagoDesdeReescaneoOcrCartera,
   type CampoReescaneoOcr,
   cedulaPartesReescaneoCartera,
   partesCedulaParaEscaneoRevision,
@@ -188,6 +189,7 @@ export function resultadoPersistenciaReescaneoOcr(
   patch: Partial<PagoCreate> & { monto_bs_original?: number | null }
   hayCambios: boolean
   camposAplicados: CampoReescaneoOcr[]
+  limpiarNumeroDocumentoOcr: boolean
 } | null {
   if (!res.ok || !res.sugerencia) return null
   const completo = patchCompletoPagoDesdeOcrReescaneoCartera(
@@ -198,6 +200,7 @@ export function resultadoPersistenciaReescaneoOcr(
     patch: completo.patch,
     hayCambios: completo.hayCambios,
     camposAplicados: completo.camposAplicados,
+    limpiarNumeroDocumentoOcr: completo.limpiarNumeroDocumentoOcr,
   }
 }
 
@@ -359,16 +362,34 @@ export async function reescanearComprobantesCarteraPrestamo(opts: {
       try {
         const res = await escanerInfopagosExtraerComprobante(fd)
         const persistencia = resultadoPersistenciaReescaneoOcr(pago, res)
-        if (persistencia?.hayCambios) {
-          await pagoService.updatePago(item.pago_id, persistencia.patch)
-          actualizados++
-          const motivos = evaluarAlertaReescaneoTrasPersistencia(
-            pago,
-            res,
-            persistencia.camposAplicados
+        if (persistencia) {
+          const payload = payloadUpdatePagoDesdeReescaneoOcrCartera(
+            persistencia.patch,
+            {
+              limpiarNumeroDocumentoOcr:
+                persistencia.limpiarNumeroDocumentoOcr,
+            }
           )
-          if (motivos.length) {
-            alertas[item.pago_id] = motivos
+          const debePersistir =
+            persistencia.hayCambios ||
+            persistencia.camposAplicados.length > 0 ||
+            persistencia.limpiarNumeroDocumentoOcr
+          if (debePersistir) {
+            await pagoService.updatePago(item.pago_id, payload)
+            actualizados++
+            const motivos = evaluarAlertaReescaneoTrasPersistencia(
+              pago,
+              res,
+              persistencia.camposAplicados
+            )
+            if (motivos.length) {
+              alertas[item.pago_id] = motivos
+            }
+          } else {
+            const motivos = evaluarAlertaReescaneoCartera(pago, res)
+            if (motivos.length) {
+              alertas[item.pago_id] = motivos
+            }
           }
         } else {
           const motivos = evaluarAlertaReescaneoCartera(pago, res)

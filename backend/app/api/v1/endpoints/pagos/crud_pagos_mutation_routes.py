@@ -592,7 +592,13 @@ def actualizar_pago(
 
     data = payload.model_dump(exclude_unset=True)
 
+    reescaneo_ocr = bool(data.pop("reescaneo_ocr", False))
+    limpiar_numero_documento_ocr = bool(data.pop("limpiar_numero_documento_ocr", False))
+
     _doc_touch = False
+
+    if limpiar_numero_documento_ocr and reescaneo_ocr:
+        row.numero_documento = None
 
     if "numero_documento" in data:
 
@@ -618,50 +624,55 @@ def actualizar_pago(
 
         if not nb:
 
-            raise HTTPException(status_code=400, detail="numero_documento no puede estar vacio.")
+            if reescaneo_ocr:
+                row.numero_documento = None
+            else:
+                raise HTTPException(status_code=400, detail="numero_documento no puede estar vacio.")
 
-        if "codigo_documento" in data:
+        elif nb:
 
-            nc = normalize_codigo_documento(data["codigo_documento"])
+            if "codigo_documento" in data:
 
-        else:
+                nc = normalize_codigo_documento(data["codigo_documento"])
 
-            nc = normalize_codigo_documento(c0) if c0 else None
+            else:
 
-        new_stored = compose_numero_documento_almacenado(nb, nc)
+                nc = normalize_codigo_documento(c0) if c0 else None
 
-        codigo_anterior = normalize_codigo_documento(c0) if c0 else None
+            new_stored = compose_numero_documento_almacenado(nb, nc)
 
-        codigo_cambio = (nc or "") != (codigo_anterior or "")
+            codigo_anterior = normalize_codigo_documento(c0) if c0 else None
 
-        if codigo_cambio and (
-            bool(row.conciliado)
-            or str(row.estado or "").upper() in ("PAGADO", "PAGO_ADELANTADO")
-        ):
-            if canonical_rol(getattr(current_user, "rol", None)) != "admin":
+            codigo_cambio = (nc or "") != (codigo_anterior or "")
+
+            if codigo_cambio and (
+                bool(row.conciliado)
+                or str(row.estado or "").upper() in ("PAGADO", "PAGO_ADELANTADO")
+            ):
+                if canonical_rol(getattr(current_user, "rol", None)) != "admin":
+                    raise HTTPException(
+                        status_code=409,
+                        detail=(
+                            "No se permite cambiar código en pagos conciliados o pagados. "
+                            "Solo administración puede hacerlo."
+                        ),
+                    )
+
+            if new_stored and numero_documento_ya_registrado(db, new_stored, exclude_pago_id=pago_id):
+
                 raise HTTPException(
+
                     status_code=409,
-                    detail=(
-                        "No se permite cambiar código en pagos conciliados o pagados. "
-                        "Solo administración puede hacerlo."
-                    ),
+
+                    detail="Ya existe otro pago con la misma combinación comprobante + código.",
+
                 )
 
-        if new_stored and numero_documento_ya_registrado(db, new_stored, exclude_pago_id=pago_id):
-
-            raise HTTPException(
-
-                status_code=409,
-
-                detail="Ya existe otro pago con la misma combinación comprobante + código.",
-
-            )
+            row.numero_documento = new_stored
 
         data.pop("numero_documento", None)
 
         data.pop("codigo_documento", None)
-
-        row.numero_documento = new_stored
 
     _mark_fase("validacion_documento")
 
@@ -677,9 +688,11 @@ def actualizar_pago(
 
             setattr(row, k, v.strip() or None)
 
-        elif k == "institucion_bancaria" and v is not None:
-
-            setattr(row, k, v.strip() or None)
+        elif k == "institucion_bancaria":
+            if reescaneo_ocr:
+                setattr(row, k, (str(v).strip() or None) if v is not None else None)
+            elif v is not None:
+                setattr(row, k, v.strip() or None)
 
         elif k == "cedula_cliente" and v is not None:
 

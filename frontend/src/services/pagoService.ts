@@ -489,6 +489,8 @@ class PagoService {
         verificado_concordancia?: string | null
         /** Texto operativo en BD (p. ej. auditoría / corrección manual). */
         estado?: string
+        reescaneo_ocr?: boolean
+        limpiar_numero_documento_ocr?: boolean
       }
     >
   ): Promise<Pago> {

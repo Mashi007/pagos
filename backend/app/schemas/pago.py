@@ -104,6 +104,9 @@ class PagoUpdate(BaseModel):
     moneda_registro: Optional[str] = None
     tasa_cambio_manual: Optional[Decimal] = None
     link_comprobante: Optional[str] = None
+    # Re-escaneo OCR en revision manual: permite limpiar campos antes de reaplicar.
+    reescaneo_ocr: Optional[bool] = False
+    limpiar_numero_documento_ocr: Optional[bool] = False
 
     @field_validator("link_comprobante", mode="before")
     @classmethod
