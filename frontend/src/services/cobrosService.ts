@@ -694,13 +694,24 @@ export interface EscanerInfopagosExtraerResponse {
   borrador_id?: string | null
 }
 
+/** Gemini + visión en escáner Infopagos (alinear con api.ts / server.js). */
+export const COBROS_ESCANER_EXTRAER_TIMEOUT_MS = 180_000
+/** Re-escaneo cartera: margen extra por cola Gemini en Render. */
+export const COBROS_ESCANER_EXTRAER_REESCANEO_TIMEOUT_MS = 240_000
+
 /** Escáner Infopagos (auth): Gemini sugiere campos desde el comprobante; no guarda el reporte. */
 export async function escanerInfopagosExtraerComprobante(
-  formData: FormData
+  formData: FormData,
+  opts?: { timeoutMs?: number }
 ): Promise<EscanerInfopagosExtraerResponse> {
   return apiClient.post<EscanerInfopagosExtraerResponse>(
     `${BASE_COBROS}/escaner/extraer-comprobante`,
-    formData
+    formData,
+    {
+      timeout:
+        opts?.timeoutMs ??
+        COBROS_ESCANER_EXTRAER_TIMEOUT_MS,
+    }
   )
 }
 

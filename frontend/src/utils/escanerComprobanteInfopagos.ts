@@ -194,6 +194,9 @@ export function traducirDetalleTecnicoExtraccionEscaner(
   if (!raw) return raw
   const t = raw.toLowerCase()
 
+  if (t.includes('timeout') || t.includes('econnaborted')) {
+    return 'La digitalización tardó demasiado. Espere un momento y vuelva a escanear.'
+  }
   const faltaFecha =
     t.includes('valid date or datetime') ||
     t.includes('fecha_pago') ||

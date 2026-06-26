@@ -595,7 +595,7 @@ if (API_URL) {
         // run-now debe responder al instante; margen por cola del worker API en Render.
         proxyTimeoutMs = 120000
       } else if (isLongJobCobrosPublicOrEscaner) {
-        proxyTimeoutMs = 180000
+        proxyTimeoutMs = 240000
       }
       proxyReq.setTimeout(proxyTimeoutMs)
     },

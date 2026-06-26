@@ -5,6 +5,7 @@
 import {
   escanerInfopagosExtraerComprobante,
   escanerInfopagosLoteContextoRevision,
+  COBROS_ESCANER_EXTRAER_REESCANEO_TIMEOUT_MS,
   type EscanerInfopagosExtraerResponse,
 } from '../../services/cobrosService'
 import {
@@ -81,6 +82,36 @@ function yieldToMain(): Promise<void> {
   return new Promise(resolve => {
     setTimeout(resolve, 0)
   })
+}
+
+function esErrorTimeoutEscaneo(err: unknown): boolean {
+  if (err && typeof err === 'object' && 'code' in err) {
+    const code = String((err as { code?: string }).code || '')
+    if (code === 'ECONNABORTED') return true
+  }
+  const msg =
+    err instanceof Error
+      ? err.message
+      : typeof err === 'object' && err && 'message' in err
+        ? String((err as { message?: string }).message || '')
+        : String(err || '')
+  return /timeout/i.test(msg)
+}
+
+async function limpiarSinteticoTrasTimeoutOcr(
+  pago: Pago,
+  pagoId: number
+): Promise<string[] | null> {
+  if (!esNumeroDocumentoSinteticoOcrInvalido(pago.numero_documento || '')) {
+    return null
+  }
+  await updatePagoReescaneoCartera(
+    pagoId,
+    payloadLimpiarCamposOcrTrasFalloEscaneoCartera()
+  )
+  return [
+    'OCR tardó demasiado; se limpió el documento sintético anterior. Complete manualmente o pulse Reescanear de nuevo.',
+  ]
 }
 
 function esErrorNumeroDocumentoDuplicado(msg: string): boolean {
@@ -414,7 +445,9 @@ export async function reescanearComprobantesCarteraPrestamo(opts: {
       })
 
       try {
-        const res = await escanerInfopagosExtraerComprobante(fd)
+        const res = await escanerInfopagosExtraerComprobante(fd, {
+          timeoutMs: COBROS_ESCANER_EXTRAER_REESCANEO_TIMEOUT_MS,
+        })
         const persistencia = resultadoPersistenciaReescaneoOcr(pago, res)
         if (persistencia) {
           const validacion = validacionReescaneoEfectiva(pago, res)
@@ -468,13 +501,28 @@ export async function reescanearComprobantesCarteraPrestamo(opts: {
           }
         }
       } catch (err) {
-        fallidosPersistencia++
-        const msg = mensajeErrorExtraccionEscaner(err)
-        alertas[item.pago_id] = [msg]
-        console.warn(
-          `[reescaneo] PUT/OCR fallo pago_id=${item.pago_id}:`,
-          err
-        )
+        if (esErrorTimeoutEscaneo(err)) {
+          const limpiadoTimeout = await limpiarSinteticoTrasTimeoutOcr(
+            pago,
+            item.pago_id
+          ).catch(() => null)
+          if (limpiadoTimeout) {
+            actualizados++
+            alertas[item.pago_id] = limpiadoTimeout
+          } else {
+            fallidosPersistencia++
+            alertas[item.pago_id] = [
+              'OCR tardó demasiado (Gemini). Espere un momento y pulse Reescanear de nuevo.',
+            ]
+          }
+        } else {
+          fallidosPersistencia++
+          alertas[item.pago_id] = [mensajeErrorExtraccionEscaner(err)]
+          console.warn(
+            `[reescaneo] PUT/OCR fallo pago_id=${item.pago_id}:`,
+            err
+          )
+        }
       }
 
       hecho++

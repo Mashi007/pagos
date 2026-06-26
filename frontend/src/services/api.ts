@@ -69,6 +69,9 @@ const PAGOS_TAB_READ_TIMEOUT_MS = 90000
 /** Borradores escáner Infopagos (lectura al abrir pagos reportados). */
 const COBROS_ESCANER_READ_TIMEOUT_MS = 90000
 
+/** POST extraer-comprobante (Gemini + visión); alinear con proxy Node (server.js 180s+). */
+const COBROS_ESCANER_GEMINI_TIMEOUT_MS = 180000
+
 /** Revisión manual: lecturas y escrituras en Render frío + BD pesada (alinear GET/PUT/PATCH/POST). */
 const REVISION_MANUAL_TIMEOUT_MS = 120000
 
@@ -462,6 +465,17 @@ class ApiClient {
           config.timeout = COBROS_ESCANER_READ_TIMEOUT_MS
         }
 
+        if (
+          config.method?.toLowerCase() === 'post' &&
+          config.url &&
+          (config.url.includes('/cobros/escaner/extraer-comprobante') ||
+            config.url.includes('/cobros/escaner/lote/drive-digitalizar')) &&
+          (config.timeout == null ||
+            config.timeout < COBROS_ESCANER_GEMINI_TIMEOUT_MS)
+        ) {
+          config.timeout = COBROS_ESCANER_GEMINI_TIMEOUT_MS
+        }
+
         // Cobros: PATCH estado (aprobar/rechazar) puede tardar (cascada, correo, PDF).
         if (
           config.method?.toLowerCase() === 'patch' &&
@@ -632,6 +646,11 @@ class ApiClient {
           methodLc === 'post' &&
           (reqUrl.includes('/cobros/escaner/extraer-comprobante') ||
             reqUrl.includes('/cobros/escaner/lote/drive-digitalizar'))
+        const isScannerTimeoutRetry =
+          isScannerReadOnlyPost &&
+          (errorCodeEarly === 'ECONNABORTED' ||
+            errorMessageEarly.includes('timeout')) &&
+          retryCount < 1
         const isAuthSessionPost =
           methodLc === 'post' &&
           (reqUrl.includes('/auth/login') || reqUrl.includes('/auth/refresh'))
@@ -721,7 +740,8 @@ class ApiClient {
           isGmailStatusTimeoutRetry ||
           isPrestamoDetailGetRetry ||
           isColdStartSafeGetTimeoutRetry ||
-          isAuthSessionTimeoutRetry
+          isAuthSessionTimeoutRetry ||
+          isScannerTimeoutRetry
         if (shouldRetry) {
           ;(requestConfigForRetry as any)._retryCount = retryCount + 1
 
@@ -745,7 +765,8 @@ class ApiClient {
             isGmailStatusTimeoutRetry ||
             isPrestamoDetailGetRetry ||
             isColdStartSafeGetTimeoutRetry ||
-            isAuthSessionTimeoutRetry
+            isAuthSessionTimeoutRetry ||
+            isScannerTimeoutRetry
               ? 2500
               : st === 502 || st === 503
                 ? useLong502Delay
@@ -1649,7 +1670,7 @@ class ApiClient {
 
       let defaultTimeout = DEFAULT_TIMEOUT_MS
       if (isCobrosEscanerGemini) {
-        defaultTimeout = 120000 // Gemini + lectura comprobante
+        defaultTimeout = COBROS_ESCANER_GEMINI_TIMEOUT_MS
       } else if (isCobrosPagosReportadosHeavyPost) {
         defaultTimeout = 180000 // 3 min: PDF + SMTP + import; PATCH detalle ya visto ~35s en producción
       } else if (isConciliacionSheetSyncPost) {
