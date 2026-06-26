@@ -155,6 +155,18 @@ function esDuplicadoCarteraRow(row: PagoReportadoItem): boolean {
   return Boolean(String(row.numero_documento_pago_existente ?? '').trim())
 }
 
+/** Muestra tabla préstamo cartera → préstamo destino (decisión Visto). */
+function debeMostrarComparacionPrestamos(row: PagoReportadoItem): boolean {
+  if (esDuplicadoCarteraRow(row)) return true
+  if (
+    isMercantilBank(row.institucion_financiera) &&
+    /DUPLICADO/i.test(String(row.observacion ?? ''))
+  ) {
+    return true
+  }
+  return false
+}
+
 type ComprobanteResizeCorner = 'nw' | 'ne' | 'sw' | 'se'
 type ComprobantePreviewState = {
   open: boolean
@@ -387,7 +399,7 @@ const COBROS_REPORTADOS_COL_WIDTHS_KEY =
 const COBROS_REPORTADOS_COL_COUNT = 11
 
 const COBROS_REPORTADOS_DEFAULT_COL_WIDTHS: readonly number[] = [
-  44, 96, 168, 88, 110, 150, 110, 100, 260, 108, 132,
+  44, 96, 168, 88, 110, 150, 110, 100, 320, 108, 132,
 ]
 
 function readCobrosReportadosColWidths(): number[] {
@@ -2502,19 +2514,31 @@ export default function CobrosPagosReportadosPage() {
                                       : (row.observacion ?? '')
                             }
                           >
-                            {esDuplicadoCarteraRow(row) ? (
-                              <div className="mb-1.5 rounded border border-orange-300 bg-orange-50 px-2 py-1.5 text-[11px] font-semibold leading-snug text-orange-950 dark:border-orange-800 dark:bg-orange-950/40 dark:text-orange-100">
-                                PAGO DUPLICADO - En cartera Nº{' '}
-                                <span className="break-all font-mono font-normal">
-                                  {row.numero_documento_pago_existente?.trim() ||
-                                    '-'}
-                                </span>
-                                {row.pago_existente_id != null
-                                  ? ` · pago #${row.pago_existente_id}`
-                                  : ''}
-                                {row.prestamo_existente_id != null
-                                  ? ` · préstamo #${row.prestamo_existente_id}`
-                                  : ''}
+                            {debeMostrarComparacionPrestamos(row) ? (
+                              <div
+                                className={
+                                  'mb-1.5 rounded border px-2 py-1.5 text-[11px] leading-snug ' +
+                                  (esDuplicadoCarteraRow(row)
+                                    ? 'border-orange-300 bg-orange-50 font-semibold text-orange-950 dark:border-orange-800 dark:bg-orange-950/40 dark:text-orange-100'
+                                    : 'border-amber-300 bg-amber-50 text-amber-950')
+                                }
+                              >
+                                {esDuplicadoCarteraRow(row) ? (
+                                  <>
+                                    PAGO DUPLICADO - En cartera Nº{' '}
+                                    <span className="break-all font-mono font-normal">
+                                      {row.numero_documento_pago_existente?.trim() ||
+                                        '-'}
+                                    </span>
+                                    {row.pago_existente_id != null
+                                      ? ` · pago #${row.pago_existente_id}`
+                                      : ''}
+                                  </>
+                                ) : (
+                                  <span className="font-semibold">
+                                    DUPLICADO Mercantil — compare préstamos
+                                  </span>
+                                )}
                                 <DuplicadoPrestamosResumen
                                   prestamoExistenteId={row.prestamo_existente_id}
                                   pagoExistenteId={row.pago_existente_id}
@@ -2522,6 +2546,10 @@ export default function CobrosPagosReportadosPage() {
                                   prestamoDuplicadoEsObjetivo={
                                     row.prestamo_duplicado_es_objetivo
                                   }
+                                  prestamoObjetivoMultiple={
+                                    row.prestamo_objetivo_multiple
+                                  }
+                                  fechaPagoReporteIso={row.fecha_pago}
                                   esMercantil={isMercantilBank(
                                     row.institucion_financiera
                                   )}
@@ -2550,7 +2578,7 @@ export default function CobrosPagosReportadosPage() {
                                     </span>
                                   ))}
                               </div>
-                            ) : !esDuplicadoCarteraRow(row) ? (
+                            ) : !debeMostrarComparacionPrestamos(row) ? (
                               '-'
                             ) : null}
                           </td>

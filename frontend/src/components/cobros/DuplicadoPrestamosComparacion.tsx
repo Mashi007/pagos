@@ -26,56 +26,115 @@ export type DuplicadoPrestamosResumenProps = {
   pagoExistenteId?: number | null
   prestamoObjetivoId?: number | null
   prestamoDuplicadoEsObjetivo?: boolean | null
+  prestamoObjetivoMultiple?: boolean | null
+  fechaPagoReporteIso?: string | null
   esMercantil?: boolean
 }
 
 /**
- * Resumen compacto para listado: donde esta el serial en cartera y a que prestamo iria.
+ * Tabla compacta en listado Cobros: préstamo donde ya está el serial vs préstamo
+ * al que iría este reporte (decisión Visto).
  */
 export function DuplicadoPrestamosResumen({
   prestamoExistenteId,
   pagoExistenteId,
   prestamoObjetivoId,
   prestamoDuplicadoEsObjetivo,
+  prestamoObjetivoMultiple,
+  fechaPagoReporteIso,
   esMercantil = false,
 }: DuplicadoPrestamosResumenProps) {
   const prestEx =
-    typeof prestamoExistenteId === 'number' ? `#${prestamoExistenteId}` : null
+    typeof prestamoExistenteId === 'number' ? prestamoExistenteId : null
   const prestObj =
-    typeof prestamoObjetivoId === 'number' ? `#${prestamoObjetivoId}` : null
+    typeof prestamoObjetivoId === 'number' ? prestamoObjetivoId : null
+  const fechaReporteFmt = formatoFechaDdMmYyyy(fechaPagoReporteIso || undefined)
 
-  if (!prestEx && !prestObj) return null
+  if (prestEx == null && prestObj == null) {
+    return (
+      <p className="mt-1.5 text-[11px] text-orange-900">
+        No se pudo resolver préstamos (revise cédula en Editar).
+      </p>
+    )
+  }
 
   return (
-    <div className="mt-1.5 space-y-0.5 text-[11px] leading-snug text-orange-950 dark:text-orange-100">
-      {prestEx ? (
-        <p>
-          <span className="font-semibold">En cartera:</span> préstamo {prestEx}
-          {typeof pagoExistenteId === 'number'
-            ? ` · pago #${pagoExistenteId}`
-            : ''}
+    <div className="mt-2 space-y-1.5">
+      <div className="overflow-x-auto rounded border border-orange-400/60 bg-white/90">
+        <table className="w-full min-w-[240px] border-collapse text-left text-[11px]">
+          <caption className="caption-top border-b border-orange-200 bg-orange-100/80 px-2 py-1 text-left font-semibold text-orange-950">
+            Compare préstamos antes de Visto
+          </caption>
+          <thead>
+            <tr className="border-b border-orange-100 bg-orange-50/80">
+              <th className="p-1.5 font-semibold">Situación</th>
+              <th className="p-1.5 font-semibold">Préstamo</th>
+              <th className="hidden p-1.5 font-semibold sm:table-cell">Pago</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr className="border-b border-orange-50">
+              <td className="p-1.5 align-top font-medium text-orange-950">
+                Serial ya en cartera
+              </td>
+              <td className="p-1.5 align-top font-mono font-semibold">
+                {prestEx != null ? `#${prestEx}` : '—'}
+              </td>
+              <td className="hidden p-1.5 align-top font-mono sm:table-cell">
+                {typeof pagoExistenteId === 'number'
+                  ? `#${pagoExistenteId}`
+                  : '—'}
+              </td>
+            </tr>
+            <tr>
+              <td className="p-1.5 align-top font-medium text-orange-950">
+                Este reporte iría a
+              </td>
+              <td className="p-1.5 align-top font-mono font-semibold text-emerald-800">
+                {prestObj != null ? `#${prestObj}` : 'Sin APROBADO'}
+              </td>
+              <td className="hidden whitespace-nowrap p-1.5 align-top sm:table-cell">
+                {fechaReporteFmt}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      {prestamoObjetivoMultiple ? (
+        <p className="text-[10px] text-amber-800">
+          Varias cédulas con préstamo APROBADO: se usa el más reciente.
         </p>
       ) : null}
-      {prestObj ? (
-        <p>
-          <span className="font-semibold">Iría a aplicar:</span> préstamo{' '}
-          {prestObj}
-        </p>
-      ) : null}
+
       {typeof prestamoDuplicadoEsObjetivo === 'boolean' ? (
-        <p className="font-medium">
-          {prestamoDuplicadoEsObjetivo
-            ? 'Mismo préstamo que el actual.'
-            : 'Otro préstamo (distinto al actual).'}
+        <p className="text-[11px] font-semibold">
+          {prestamoDuplicadoEsObjetivo ? (
+            <span className="text-amber-800">
+              Mismo préstamo: el serial ya está aplicado ahí.
+            </span>
+          ) : (
+            <span className="text-emerald-800">
+              Otro préstamo: puede valorar Visto (_P####) en Editar.
+            </span>
+          )}
+        </p>
+      ) : prestEx != null && prestObj != null ? (
+        <p className="text-[11px] font-semibold text-muted-foreground">
+          {prestEx === prestObj
+            ? 'Mismo préstamo.'
+            : 'Préstamos distintos.'}
         </p>
       ) : null}
+
       {esMercantil ? (
-        <p className="text-amber-800">
-          Excepción Mercantil: revise y use Visto en Editar solo si corresponde.
+        <p className="text-[10px] leading-snug text-amber-900">
+          Excepción Mercantil: abra Editar, confirme la tabla y pulse Visto solo
+          si corresponde aplicar a otro préstamo.
         </p>
       ) : (
-        <p className="font-semibold text-rose-800">
-          No se puede reaplicar (solo Mercantil admite revisión manual).
+        <p className="text-[10px] font-semibold leading-snug text-rose-800">
+          No se puede reaplicar (solo Mercantil admite Visto).
         </p>
       )}
     </div>

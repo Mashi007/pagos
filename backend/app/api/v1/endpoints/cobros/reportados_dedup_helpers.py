@@ -862,18 +862,17 @@ def _pago_reportado_list_items_from_rows(
             db, set(claves_doc_en_pagos), pagos_info_acum
         )
     pago_info_por_reportado: Dict[int, PagoExistenteInfo] = {}
-    cedulas_con_dup: Set[str] = set()
+    cedulas_para_prestamo_objetivo: Set[str] = set()
     for idx, r in enumerate(rows):
         info = _pago_existente_info_para_reportado(r, pagos_info_por_clave)
-        if info is None:
-            continue
-        pago_info_por_reportado[int(r.id)] = info
+        if info is not None:
+            pago_info_por_reportado[int(r.id)] = info
         ced_norm = cedula_norms[idx] if idx < len(cedula_norms) else ""
         if ced_norm:
-            cedulas_con_dup.add(ced_norm)
+            cedulas_para_prestamo_objetivo.add(ced_norm)
     prestamo_objetivo_por_cedula, prestamo_objetivo_multiple_cedulas = (
-        _prestamo_objetivo_por_cedula_norm_batch(db, cedulas_con_dup)
-        if cedulas_con_dup
+        _prestamo_objetivo_por_cedula_norm_batch(db, cedulas_para_prestamo_objetivo)
+        if cedulas_para_prestamo_objetivo
         else ({}, set())
     )
     norm_por_fila = []
