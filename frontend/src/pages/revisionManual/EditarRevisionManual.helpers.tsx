@@ -500,6 +500,21 @@ export function pagoValidadoCarteraRevisionRow(pago: Pago): boolean {
   )
 }
 
+/** True si GET /pagos indicó otro registro en cartera con el mismo serial. */
+export function pagoSerialYaAplicadoEnOtroRegistroCartera(pago: Pago): boolean {
+  return (
+    pago.duplicado_serial_en_cartera === true &&
+    typeof pago.duplicado_en_cartera_pago_id === 'number' &&
+    pago.duplicado_en_cartera_pago_id > 0
+  )
+}
+
+export function esInstitucionMercantilRevision(
+  nombre?: string | null
+): boolean {
+  return /mercantil/i.test(String(nombre ?? '').trim())
+}
+
 /**
  * Pago cerrado en operación: abonado en cuotas y cartera alineada.
  * Sin `tiene_aplicacion_cuotas` en la API se trata como false (compatibilidad).

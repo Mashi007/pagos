@@ -199,6 +199,45 @@ def _enriquecer_items_duplicado_clave_misma_pagina(rows: list, items: list) -> N
         it["dup_misma_pagina_otro_numero_documento"] = (ob or "").strip() or None
 
 
+def _enriquecer_items_duplicado_serial_cartera(
+    db: Session,
+    rows: list,
+    items: list,
+) -> None:
+    """
+    Otro ``Pago`` en cartera con el mismo serial (exacto o evasión Mercantil).
+
+    Usado en revisión manual y listado operativo: indica préstamo/pago donde ya
+    está aplicado el comprobante, distinto del registro actual.
+    """
+    if not rows or not items or len(rows) != len(items):
+        return
+    from app.services.pago_numero_documento import primer_pago_cartera_por_documento
+
+    for i, row in enumerate(rows):
+        it = items[i]
+        it["duplicado_serial_en_cartera"] = False
+        it["duplicado_en_cartera_pago_id"] = None
+        it["duplicado_en_cartera_prestamo_id"] = None
+        it["duplicado_en_cartera_numero_documento"] = None
+        raw = (getattr(row, "numero_documento", None) or "").strip()
+        if not raw:
+            continue
+        pid, prid = primer_pago_cartera_por_documento(
+            db, raw, exclude_pago_id=int(row.id)
+        )
+        if pid is None:
+            continue
+        nd = db.scalar(select(Pago.numero_documento).where(Pago.id == int(pid)))
+        base, _ = split_numero_documento_almacenado((nd or raw).strip())
+        it["duplicado_serial_en_cartera"] = True
+        it["duplicado_en_cartera_pago_id"] = int(pid)
+        it["duplicado_en_cartera_prestamo_id"] = (
+            int(prid) if prid is not None else None
+        )
+        it["duplicado_en_cartera_numero_documento"] = (base or nd or "").strip() or None
+
+
 def _pago_response_enriquecido(
     db: Session,
     row: Pago,

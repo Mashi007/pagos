@@ -65,6 +65,15 @@ export interface Pago {
   dup_misma_pagina_otro_prestamo_id?: number | null
 
   dup_misma_pagina_otro_numero_documento?: string | null
+
+  /** GET /pagos: otro pago en cartera con el mismo serial (evasión incluida). */
+  duplicado_serial_en_cartera?: boolean
+
+  duplicado_en_cartera_pago_id?: number | null
+
+  duplicado_en_cartera_prestamo_id?: number | null
+
+  duplicado_en_cartera_numero_documento?: string | null
 }
 
 export interface PagoCreate {

@@ -41,7 +41,12 @@ import {
   abrirStaffComprobanteDesdeHref,
   esUrlComprobanteImagenConAuth,
 } from '../../utils/comprobanteImagenAuth'
-import { COHERENCIA_USD_TOL } from './EditarRevisionManual.helpers'
+import { DuplicadoPrestamosResumen } from '../../components/cobros/DuplicadoPrestamosComparacion'
+import {
+  COHERENCIA_USD_TOL,
+  esInstitucionMercantilRevision,
+  pagoSerialYaAplicadoEnOtroRegistroCartera,
+} from './EditarRevisionManual.helpers'
 import type { PagosRegistradosRevisionSectionProps } from './pagosRegistradosRevisionTypes'
 
 export function PagosRegistradosRevisionSection(
@@ -359,6 +364,22 @@ export function PagosRegistradosRevisionSection(
                       const documentoDuplicadoEnPagina =
                         !!docKey &&
                         (conteoDocumentoPagosRevision.get(docKey) || 0) > 1
+                      const serialDuplicadoCartera =
+                        pagoSerialYaAplicadoEnOtroRegistroCartera(pago)
+                      const prestObjRevision =
+                        typeof pago.prestamo_id === 'number'
+                          ? pago.prestamo_id
+                          : null
+                      const prestExRevision =
+                        pago.duplicado_en_cartera_prestamo_id ?? null
+                      const prestamoDupEsObjetivoRevision =
+                        prestExRevision != null && prestObjRevision != null
+                          ? prestExRevision === prestObjRevision
+                          : null
+                      const fechaPagoIsoRevision =
+                        pago.fecha_pago != null
+                          ? String(pago.fecha_pago).slice(0, 10)
+                          : null
                       const recienConciliado = (
                         conciliarTablaUi?.idsRecreados ?? []
                       ).includes(Number(pago.id))
@@ -394,14 +415,16 @@ export function PagosRegistradosRevisionSection(
                           </TableCell>
                           <TableCell
                             className={`max-w-[240px] font-mono text-xs ${
-                              documentoDuplicadoEnPagina
+                              documentoDuplicadoEnPagina || serialDuplicadoCartera
                                 ? 'bg-orange-100 text-orange-950'
                                 : ''
                             }`}
                             title={
-                              documentoDuplicadoEnPagina
-                                ? 'Misma clave comprobante + código aparece más de una vez en esta página.'
-                                : undefined
+                              serialDuplicadoCartera
+                                ? 'Serial ya aplicado en otro pago de cartera.'
+                                : documentoDuplicadoEnPagina
+                                  ? 'Misma clave comprobante + código aparece más de una vez en esta página.'
+                                  : undefined
                             }
                           >
                             <div className="flex min-w-0 items-center gap-1">
@@ -454,8 +477,46 @@ export function PagosRegistradosRevisionSection(
                           <TableCell className="whitespace-nowrap">
                             {pago.prestamo_id != null ? pago.prestamo_id : '-'}
                           </TableCell>
-                          <TableCell className="max-w-[220px] truncate text-sm text-muted-foreground">
-                            {pago.notas?.trim() ? pago.notas : '-'}
+                          <TableCell className="max-w-[320px] align-top text-sm">
+                            {serialDuplicadoCartera ? (
+                              <div className="space-y-1.5">
+                                <div className="rounded border border-orange-300 bg-orange-50 px-2 py-1.5 text-[11px] font-semibold leading-snug text-orange-950">
+                                  PAGO DUPLICADO — En cartera Nº{' '}
+                                  <span className="break-all font-mono font-normal">
+                                    {pago.duplicado_en_cartera_numero_documento?.trim() ||
+                                      '-'}
+                                  </span>
+                                  {pago.duplicado_en_cartera_pago_id != null
+                                    ? ` · pago #${pago.duplicado_en_cartera_pago_id}`
+                                    : ''}
+                                  <DuplicadoPrestamosResumen
+                                    prestamoExistenteId={prestExRevision}
+                                    pagoExistenteId={
+                                      pago.duplicado_en_cartera_pago_id
+                                    }
+                                    prestamoObjetivoId={prestObjRevision}
+                                    prestamoDuplicadoEsObjetivo={
+                                      prestamoDupEsObjetivoRevision
+                                    }
+                                    fechaPagoReporteIso={fechaPagoIsoRevision}
+                                    esMercantil={esInstitucionMercantilRevision(
+                                      pago.institucion_bancaria
+                                    )}
+                                  />
+                                </div>
+                                {pago.notas?.trim() ? (
+                                  <p className="truncate text-muted-foreground">
+                                    {pago.notas}
+                                  </p>
+                                ) : null}
+                              </div>
+                            ) : pago.notas?.trim() ? (
+                              <span className="truncate text-muted-foreground">
+                                {pago.notas}
+                              </span>
+                            ) : (
+                              '-'
+                            )}
                           </TableCell>
                           <TableCell className="text-right">
                             <div className="flex flex-wrap items-center justify-end gap-1">
