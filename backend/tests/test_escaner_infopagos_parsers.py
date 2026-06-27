@@ -80,14 +80,15 @@ def test_monto_requiere_revision_manual_umbral():
         monto_requiere_revision_manual,
     )
 
-    assert MONTO_UMBRAL_REVISION_MANUAL == 3000.0
-    assert not monto_requiere_revision_manual(3000)
-    assert monto_requiere_revision_manual(3000.01)
-    assert monto_requiere_revision_manual(3500, moneda="BS")
-    assert monto_requiere_revision_manual(3500, moneda="USD")
-    msg = fusionar_validacion_reglas_monto_alto_escaneo(None, 3500, moneda="USD")
+    assert MONTO_UMBRAL_REVISION_MANUAL == 1000.0
+    assert monto_requiere_revision_manual(1000)
+    assert monto_requiere_revision_manual(1000.01)
+    assert not monto_requiere_revision_manual(999.99)
+    assert monto_requiere_revision_manual(1500, moneda="BS")
+    assert monto_requiere_revision_manual(1500, moneda="USD")
+    msg = fusionar_validacion_reglas_monto_alto_escaneo(None, 1500, moneda="USD")
     assert msg is not None
-    assert "3,000" in msg or "3000" in msg
+    assert "1,000" in msg or "1000" in msg
 
 
 def test_parse_fecha_comprobante():

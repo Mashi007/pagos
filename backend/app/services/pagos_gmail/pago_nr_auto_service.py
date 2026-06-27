@@ -115,6 +115,13 @@ def crear_pago_conciliado_y_aplicar_cuotas_gmail_plantilla_nr(
     if fecha_pago is None:
         return _fail("fecha_invalida", (fecha_pago_str or "")[:80])
 
+    from app.services.pagos_gmail.parse_campos_comprobante import (
+        fecha_pago_es_futura_revision_manual,
+    )
+
+    if fecha_pago_es_futura_revision_manual(fecha_pago):
+        return _fail("fecha_futura", fecha_pago.isoformat())
+
     monto_dec_in = _monto_operacion_decimal(
         monto_operacion_str,
         float(_MIN_MONTO_PAGADO),
@@ -131,7 +138,7 @@ def crear_pago_conciliado_y_aplicar_cuotas_gmail_plantilla_nr(
     if monto_gmail_sync_requiere_revision_manual_usd(monto_operacion_str):
         return _fail(
             "monto_umbral_revision_manual",
-            f"Monto > {PAGOS_GMAIL_UMBRAL_REVISION_MANUAL_USD}: requiere revision manual.",
+            f"Monto >= {PAGOS_GMAIL_UMBRAL_REVISION_MANUAL_USD}: requiere revision manual.",
         )
 
     ref_raw = (numero_referencia or "").strip()

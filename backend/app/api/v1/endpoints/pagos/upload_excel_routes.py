@@ -1565,6 +1565,32 @@ def importar_un_pago_reportado_a_pagos(
 
 
 
+    if pr.fecha_pago:
+        from app.services.pagos_gmail.parse_campos_comprobante import (
+            fecha_pago_es_futura_revision_manual,
+            mensaje_fecha_futura_revision_manual,
+            mensaje_monto_revision_manual,
+            monto_requiere_revision_manual,
+        )
+
+        if fecha_pago_es_futura_revision_manual(pr.fecha_pago):
+            return _err_con_pce(
+                mensaje_fecha_futura_revision_manual(pr.fecha_pago),
+                cedula_cliente=cedula_raw,
+            )
+
+        moneda_chk = (getattr(pr, "moneda", None) or "USD").strip().upper()
+        if moneda_chk == "USDT":
+            moneda_chk = "USD"
+        monto_chk = float(pr.monto or 0)
+        if monto_requiere_revision_manual(monto_chk, moneda=moneda_chk):
+            return _err_con_pce(
+                mensaje_monto_revision_manual(monto_chk, moneda=moneda_chk),
+                cedula_cliente=cedula_raw,
+            )
+
+
+
     numero_doc_raw, numero_doc_norm = documento_numero_desde_pago_reportado(pr)
 
     claves_pr = claves_documento_pago_para_reportado(pr)

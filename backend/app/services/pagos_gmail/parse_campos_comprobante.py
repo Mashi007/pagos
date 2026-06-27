@@ -479,8 +479,8 @@ def aplicar_reglas_ocr_post_gemini(
     return out
 
 
-# Montos escaneados/reportados por encima de este valor van a revisión manual (cualquier moneda/medio).
-MONTO_UMBRAL_REVISION_MANUAL = 3000.0
+# Montos escaneados/reportados >= este valor van a revisión manual (cualquier moneda/medio).
+MONTO_UMBRAL_REVISION_MANUAL = 1000.0
 
 _RANGO_CUOTA_USD_MIN = 30.0
 _RANGO_CUOTA_USD_MAX = 500.0
@@ -869,18 +869,32 @@ def _monto_numerico_para_revision(val: Any, *, moneda: Optional[str] = None) -> 
 
 
 def monto_requiere_revision_manual(val: Any, *, moneda: Optional[str] = None) -> bool:
-    """True si el monto parseado es estrictamente mayor al umbral de revisión manual."""
+    """True si el monto parseado es >= umbral de revisión manual (sin distinguir moneda)."""
     n = _monto_numerico_para_revision(val, moneda=moneda)
     if n is None:
         return False
-    return n > MONTO_UMBRAL_REVISION_MANUAL
+    return n >= MONTO_UMBRAL_REVISION_MANUAL
 
 
 def mensaje_monto_revision_manual(val: Any, *, moneda: Optional[str] = None) -> str:
     n = _monto_numerico_para_revision(val, moneda=moneda) or 0.0
     return (
-        f"El monto ({n:,.2f}) supera {MONTO_UMBRAL_REVISION_MANUAL:,.0f}; "
+        f"El monto ({n:,.2f}) es igual o superior a {MONTO_UMBRAL_REVISION_MANUAL:,.0f}; "
         "requiere revisión manual antes de guardar o aplicar."
+    )
+
+
+def fecha_pago_es_futura_revision_manual(fecha_pago: date) -> bool:
+    """True si la fecha de pago es posterior a hoy (America/Caracas)."""
+    from app.services.tasa_cambio_service import fecha_hoy_caracas
+
+    return fecha_pago > fecha_hoy_caracas()
+
+
+def mensaje_fecha_futura_revision_manual(fecha_pago: date) -> str:
+    return (
+        f"Fecha de pago ({fecha_pago.isoformat()}) es futura; "
+        "requiere revisión manual antes de autoconciliar o aplicar."
     )
 
 

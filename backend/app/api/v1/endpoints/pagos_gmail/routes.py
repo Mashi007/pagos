@@ -617,6 +617,20 @@ def _migrar_pendientes_gmail_a_con_errores_core(db: Session) -> dict:
                     observaciones = (
                         f"{observaciones}; {PAGOS_GMAIL_OBS_USUARIO_OPERACIONES}"
                     )[:255]
+                if monto_gmail_sync_requiere_revision_manual_usd(row.monto):
+                    observaciones = (
+                        f"{observaciones}; monto >= {PAGOS_GMAIL_UMBRAL_REVISION_MANUAL_USD} "
+                        "(revision manual obligatoria)"
+                    )[:255]
+                from app.services.pagos_gmail.parse_campos_comprobante import (
+                    fecha_pago_es_futura_revision_manual,
+                )
+
+                fp_date = fecha_pago.date() if hasattr(fecha_pago, "date") else fecha_pago
+                if fecha_pago_es_futura_revision_manual(fp_date):
+                    observaciones = (
+                        f"{observaciones}; fecha futura (revision manual)"
+                    )[:255]
                 if monto_num <= 0:
                     observaciones = (
                         f"{observaciones}; monto no interpretable: {(row.monto or '').strip() or 'vacío'}"
@@ -1431,8 +1445,17 @@ def _pago_con_error_desde_sync_item(
         )[:255]
     if monto_gmail_sync_requiere_revision_manual_usd(item.monto):
         observaciones = (
-            f"{observaciones}; monto > {PAGOS_GMAIL_UMBRAL_REVISION_MANUAL_USD} "
+            f"{observaciones}; monto >= {PAGOS_GMAIL_UMBRAL_REVISION_MANUAL_USD} "
             "(revision manual obligatoria)"
+        )[:255]
+    from app.services.pagos_gmail.parse_campos_comprobante import (
+        fecha_pago_es_futura_revision_manual,
+    )
+
+    fp_date = fecha_pago.date() if hasattr(fecha_pago, "date") else fecha_pago
+    if fecha_pago_es_futura_revision_manual(fp_date):
+        observaciones = (
+            f"{observaciones}; fecha futura (revision manual)"
         )[:255]
     if monto_num <= 0:
         observaciones = (
@@ -1676,12 +1699,39 @@ def guardar_sync_item(
             "cuotas_aplicadas": 0,
             "pago_con_error_pendiente": False,
             "errores": [
-                f"Pagos mayores a {PAGOS_GMAIL_UMBRAL_REVISION_MANUAL_USD} requieren "
+                f"Pagos con monto >= {PAGOS_GMAIL_UMBRAL_REVISION_MANUAL_USD} requieren "
                 "revision manual. Use Editar para validar y aplicar con cascada."
             ],
             "mensaje": (
-                f"Monto > {PAGOS_GMAIL_UMBRAL_REVISION_MANUAL_USD}: no se puede "
+                f"Monto >= {PAGOS_GMAIL_UMBRAL_REVISION_MANUAL_USD}: no se puede "
                 "autoconciliar con Guardar. Use Editar."
+            ),
+        }
+
+    from app.services.pagos_gmail.parse_campos_comprobante import (
+        fecha_pago_es_futura_revision_manual,
+    )
+
+    fallback_dt = item.created_at or datetime.utcnow()
+    fecha_pago_guardar = _parse_fecha_pago_gmail_temporal(item.fecha_pago, fallback_dt)
+    fp_guardar = (
+        fecha_pago_guardar.date()
+        if hasattr(fecha_pago_guardar, "date")
+        else fecha_pago_guardar
+    )
+    if fecha_pago_es_futura_revision_manual(fp_guardar):
+        return {
+            "ok": False,
+            "movido_a_pagos": False,
+            "cuotas_aplicadas": 0,
+            "pago_con_error_pendiente": False,
+            "errores": [
+                f"Fecha de pago futura ({fp_guardar.isoformat()}): requiere revision manual. "
+                "Use Editar para validar y aplicar con cascada."
+            ],
+            "mensaje": (
+                f"Fecha futura ({fp_guardar.isoformat()}): no se puede autoconciliar con Guardar. "
+                "Use Editar."
             ),
         }
 

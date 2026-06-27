@@ -112,7 +112,10 @@ import {
   pathApiComprobanteImagenDesdeHref,
 } from '../../utils/comprobanteImagenAuth'
 import { normalizarComprobanteArchivoParaEscaneo } from '../../utils/normalizarComprobanteArchivo'
-import { escanerInfopagosExtraerComprobante } from '../../services/cobrosService'
+import {
+  COBROS_ESCANER_EXTRAER_REESCANEO_TIMEOUT_MS,
+  escanerInfopagosExtraerComprobante,
+} from '../../services/cobrosService'
 import {
   buildFormDataEscanerComprobante,
   camposVaciosOcrRegistrar,
@@ -900,7 +903,14 @@ export function RegistrarPagoForm({
       Boolean(archivoComprobante) ||
       Boolean(linkComprobanteParaVista && !archivoComprobante)
 
-    let extraccionSinCliente = false
+    /** Revisión manual / Revisar pagos: no exigir cliente único APROBADO (misma regla que re-escaneo cartera). */
+    const escaneoRevisionSinValidarCliente = Boolean(
+      esRevisionManualPagosCartera ||
+        esPagoConError ||
+        mostrarCampoCodigoDocumento
+    )
+
+    let extraccionSinCliente = escaneoRevisionSinValidarCliente
 
     if (!cedulaPartes && !tieneComprobanteParaEscanear) {
       toast.error('Ingrese una cédula válida antes de escanear.')
@@ -913,6 +923,12 @@ export function RegistrarPagoForm({
       cedulaPartes = { tipo: 'V', numero: '12345678' }
       extraccionSinCliente = true
       toast.info('Re-escaneando para extraer cédula del comprobante...')
+    }
+
+    const snapshotAntesEscaneo = {
+      formData,
+      monedaRegistro,
+      montoStr,
     }
 
     const rescanSeq = ++rescanSeqRef.current
@@ -967,7 +983,10 @@ export function RegistrarPagoForm({
         comprobante: fileToScan,
         extraccionSinCliente,
         prestamoObjetivoId:
-          formData.prestamo_id ?? prestamoIdFormulario ?? null,
+          formData.prestamo_id ??
+          prestamoIdFormulario ??
+          (pidRevisionCtx > 0 ? pidRevisionCtx : null),
+        institucionPlantillaHint: formData.institucion_bancaria,
       })
 
       setMonedaRegistro('USD')
@@ -980,9 +999,14 @@ export function RegistrarPagoForm({
         monto_pagado: 0,
       }))
 
-      const res = await escanerInfopagosExtraerComprobante(fd)
+      const res = await escanerInfopagosExtraerComprobante(fd, {
+        timeoutMs: COBROS_ESCANER_EXTRAER_REESCANEO_TIMEOUT_MS,
+      })
       if (rescanSeq !== rescanSeqRef.current) return
       if (!res.ok || !res.sugerencia) {
+        setFormData(snapshotAntesEscaneo.formData)
+        setMonedaRegistro(snapshotAntesEscaneo.monedaRegistro)
+        setMontoStr(snapshotAntesEscaneo.montoStr)
         toast.error(
           mensajeFalloExtraccionEscaner(res) ||
             'No se pudo digitalizar el comprobante en este momento.'
@@ -1092,6 +1116,9 @@ export function RegistrarPagoForm({
       }
     } catch (error) {
       console.error('Error re-escaneando:', error)
+      setFormData(snapshotAntesEscaneo.formData)
+      setMonedaRegistro(snapshotAntesEscaneo.monedaRegistro)
+      setMontoStr(snapshotAntesEscaneo.montoStr)
       toast.error(mensajeErrorExtraccionEscaner(error))
     } finally {
       setIsRescanning(false)

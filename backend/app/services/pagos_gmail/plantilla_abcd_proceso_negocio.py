@@ -60,10 +60,10 @@ si hay 0 o varios, no se inserta `Pago` (revisión manual / `pagos_con_errores`)
 
 ---
 
-### 4) Monto alto (> 3000)
+### 4) Monto alto (>= 1000)
 
 Si el valor numérico del comprobante (columna `monto` / `monto_operacion`, sin importar
-moneda en el texto: USD, Bs, USDT, etc.) es **mayor a 3000**, el ítem **no** sigue
+moneda en el texto: USD, Bs, USDT, etc.) es **igual o mayor a 1000**, el ítem **no** sigue
 alta automática ni el botón **Guardar** del módulo Actualizaciones > Gmail: permanece para
 **revisión manual** (vía **Editar** → `pagos_con_errores` → modal de revisión).
 
@@ -91,7 +91,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# Umbral numerico: pagos > este valor van a revision manual (sin distinguir moneda).
+# Umbral numerico: pagos >= este valor van a revision manual (sin distinguir moneda).
 PAGOS_GMAIL_UMBRAL_REVISION_MANUAL_USD = Decimal(str(MONTO_UMBRAL_REVISION_MANUAL))
 
 # Binance Pay (C): correo beneficiario operaciones@ debe verse arriba del ID de orden.
@@ -139,7 +139,7 @@ BANCOS_PLANTILLA_ABCD = frozenset(
 
 def monto_gmail_sync_requiere_revision_manual_usd(monto_str: Optional[str]) -> bool:
     """
-    True si el valor numerico parseado del comprobante es > 3000 (cualquier moneda en el texto).
+    True si el valor numerico parseado del comprobante es >= 1000 (cualquier moneda en el texto).
     """
     raw = (monto_str or "").strip()
     if not raw or raw.upper() in ("NA", "NR"):
@@ -198,7 +198,7 @@ def resumen_log_linea_plantilla_abcd(
         )
     if revision_manual_monto:
         partes.append(
-            f"monto > {PAGOS_GMAIL_UMBRAL_REVISION_MANUAL_USD} → revisión manual (pagos_con_errores)"
+            f"monto >= {PAGOS_GMAIL_UMBRAL_REVISION_MANUAL_USD} → revisión manual (pagos_con_errores)"
         )
     if len(partes) == 1:
         partes.append("sin bloqueo duplicado ni umbral de monto")
