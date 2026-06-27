@@ -1056,7 +1056,12 @@ export function motivosCamposDigitadosNoAplicadosReescaneo(
 export function pagoInicialDesdeSugerenciaEscaneoRevision(
   cedulaPagina: string,
   prestamoId: number | null | undefined,
-  sugerencia: EscanerInfopagosSugerencia
+  sugerencia: EscanerInfopagosSugerencia,
+  opts?: {
+    duplicado_en_pagos?: boolean
+    pago_existente_id?: number | null
+    prestamo_existente_id?: number | null
+  }
 ): PagoInicialRegistrar {
   const moneda = sugerencia.moneda === 'BS' ? 'BS' : 'USD'
   const montoRaw =
@@ -1079,12 +1084,19 @@ export function pagoInicialDesdeSugerenciaEscaneoRevision(
   const base: PagoInicialRegistrar = {
     cedula_cliente: cedula,
     prestamo_id: pid,
-    fecha_pago: fechaPagoDesdeExtraccionOcrConfiable(sugerencia.fecha_pago),
-    numero_documento: (sugerencia.numero_operacion || '').trim(),
+    fecha_pago: fechaPagoDesdeSugerenciaOcrReescaneo(sugerencia),
+    numero_documento: numeroOperacionOcrParaReescaneo(sugerencia),
     institucion_bancaria: inst || null,
     notas: (sugerencia.notas_modelo || '').trim() || null,
     link_comprobante: null,
     moneda_registro: moneda,
+    duplicado_documento_en_pagos: opts?.duplicado_en_pagos === true,
+    duplicado_en_cartera_pago_id:
+      typeof opts?.pago_existente_id === 'number' ? opts.pago_existente_id : null,
+    duplicado_en_cartera_prestamo_id:
+      typeof opts?.prestamo_existente_id === 'number'
+        ? opts.prestamo_existente_id
+        : null,
   }
 
   if (moneda === 'BS') {

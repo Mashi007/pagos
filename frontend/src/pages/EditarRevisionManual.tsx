@@ -142,7 +142,10 @@ import {
   mensajeValidacionCampoLocal,
 } from '../utils/validadoresCampoLocal'
 
-import { escanerInfopagosExtraerComprobante } from '../services/cobrosService'
+import {
+  escanerInfopagosExtraerComprobante,
+  COBROS_ESCANER_EXTRAER_REESCANEO_TIMEOUT_MS,
+} from '../services/cobrosService'
 
 import { normalizarComprobanteArchivoParaEscaneo } from '../utils/normalizarComprobanteArchivo'
 import {
@@ -1167,7 +1170,9 @@ export function EditarRevisionManual() {
         prestamoObjetivoId: pid,
       })
 
-      const res = await escanerInfopagosExtraerComprobante(fd)
+      const res = await escanerInfopagosExtraerComprobante(fd, {
+        timeoutMs: COBROS_ESCANER_EXTRAER_REESCANEO_TIMEOUT_MS,
+      })
       if (!res.ok || !res.sugerencia) {
         toast.error(mensajeFalloExtraccionEscaner(res))
         return
@@ -1176,7 +1181,11 @@ export function EditarRevisionManual() {
       setPagoModalId(undefined)
       setPagoModalComprobanteInicial(archivo)
       setPagoModalInicial(
-        pagoInicialDesdeSugerenciaEscaneoRevision(ced, pid, res.sugerencia)
+        pagoInicialDesdeSugerenciaEscaneoRevision(ced, pid, res.sugerencia, {
+          duplicado_en_pagos: res.duplicado_en_pagos,
+          pago_existente_id: res.pago_existente_id,
+          prestamo_existente_id: res.prestamo_existente_id,
+        })
       )
       setPagoModalAbierto(true)
 
