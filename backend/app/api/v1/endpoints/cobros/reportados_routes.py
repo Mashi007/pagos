@@ -570,6 +570,8 @@ def get_pago_reportado_detalle(pago_id: int, db: Session = Depends(get_db)):
         prestamo_objetivo_id=duplicado_diag.prestamo_objetivo_id,
         prestamo_objetivo_multiple=duplicado_diag.prestamo_objetivo_multiple,
         prestamo_duplicado_es_objetivo=duplicado_diag.prestamo_duplicado_es_objetivo,
+        prestamo_objetivo_motivo=duplicado_diag.prestamo_objetivo_motivo,
+        prestamo_referencia_id=duplicado_diag.prestamo_referencia_id,
     )
 
 

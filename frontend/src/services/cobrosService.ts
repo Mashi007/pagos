@@ -985,6 +985,12 @@ export interface PagoReportadoItem {
   prestamo_objetivo_multiple?: boolean | null
 
   prestamo_duplicado_es_objetivo?: boolean | null
+
+  /** liquidado | sin_aprobado | cedula_no_registrada cuando no hay APROBADO objetivo. */
+  prestamo_objetivo_motivo?: string | null
+
+  /** Préstamo LIQUIDADO de referencia en BD (motivo=liquidado). */
+  prestamo_referencia_id?: number | null
 }
 
 /** Etiqueta legible para columna Origen en Pagos reportados. */
@@ -1419,6 +1425,12 @@ export interface PagoReportadoDetalleResponse {
   prestamo_objetivo_multiple?: boolean | null
 
   prestamo_duplicado_es_objetivo?: boolean | null
+
+  /** liquidado | sin_aprobado | cedula_no_registrada cuando no hay APROBADO objetivo. */
+  prestamo_objetivo_motivo?: string | null
+
+  /** Préstamo LIQUIDADO de referencia en BD (motivo=liquidado). */
+  prestamo_referencia_id?: number | null
 }
 
 export interface PagoReportadoDuplicadoDiagnostico {
@@ -1430,6 +1442,8 @@ export interface PagoReportadoDuplicadoDiagnostico {
   prestamo_objetivo_id?: number | null
   prestamo_objetivo_multiple?: boolean | null
   prestamo_duplicado_es_objetivo?: boolean | null
+  prestamo_objetivo_motivo?: string | null
+  prestamo_referencia_id?: number | null
 }
 
 /**

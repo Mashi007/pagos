@@ -2543,6 +2543,10 @@ export default function CobrosPagosReportadosPage() {
                                   prestamoExistenteId={row.prestamo_existente_id}
                                   pagoExistenteId={row.pago_existente_id}
                                   prestamoObjetivoId={row.prestamo_objetivo_id}
+                                  prestamoObjetivoMotivo={
+                                    row.prestamo_objetivo_motivo
+                                  }
+                                  prestamoReferenciaId={row.prestamo_referencia_id}
                                   prestamoDuplicadoEsObjetivo={
                                     row.prestamo_duplicado_es_objetivo
                                   }

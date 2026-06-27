@@ -266,7 +266,7 @@ def _prestamo_objetivo_desde_cedula(
     db: Session,
     tipo_cedula: Optional[str],
     numero_cedula: Optional[str],
-) -> Tuple[Optional[int], Optional[bool]]:
+) -> Tuple[Optional[int], Optional[bool], Optional[str], Optional[int]]:
     cedula_norm = _normalize_cedula_for_client_lookup(
         ((tipo_cedula or "") + (numero_cedula or ""))
         .replace("-", "")
@@ -276,7 +276,7 @@ def _prestamo_objetivo_desde_cedula(
     )
     variants = _cedula_lookup_variants(cedula_norm)
     if not variants:
-        return None, None
+        return None, None, "cedula_no_registrada", None
 
     cedula_lookup = func.upper(
         func.replace(func.replace(Cliente.cedula, "-", ""), " ", "")
@@ -285,7 +285,7 @@ def _prestamo_objetivo_desde_cedula(
         select(Cliente).where(cedula_lookup.in_(variants))
     ).scalars().first()
     if not cliente:
-        return None, None
+        return None, None, "cedula_no_registrada", None
 
     prestamos_aprob = db.execute(
         select(Prestamo.id)
@@ -295,9 +295,22 @@ def _prestamo_objetivo_desde_cedula(
         )
         .order_by(Prestamo.id.desc())
     ).scalars().all()
-    if not prestamos_aprob:
-        return None, None
-    return int(prestamos_aprob[0]), len(prestamos_aprob) > 1
+    if prestamos_aprob:
+        return int(prestamos_aprob[0]), len(prestamos_aprob) > 1, None, None
+
+    prestamo_liquidado = db.execute(
+        select(Prestamo.id)
+        .where(
+            Prestamo.cliente_id == cliente.id,
+            func.upper(Prestamo.estado) == "LIQUIDADO",
+        )
+        .order_by(Prestamo.id.desc())
+        .limit(1)
+    ).scalars().first()
+    if prestamo_liquidado is not None:
+        return None, None, "liquidado", int(prestamo_liquidado)
+
+    return None, None, "sin_aprobado", None
 
 
 def _diagnostico_duplicado_reportado(
@@ -335,12 +348,17 @@ def _diagnostico_duplicado_reportado(
                 )
 
     try:
-        prestamo_objetivo_id, prestamo_objetivo_multiple = (
-            _prestamo_objetivo_desde_cedula(db, tipo_cedula, numero_cedula)
-        )
+        (
+            prestamo_objetivo_id,
+            prestamo_objetivo_multiple,
+            prestamo_objetivo_motivo,
+            prestamo_referencia_id,
+        ) = _prestamo_objetivo_desde_cedula(db, tipo_cedula, numero_cedula)
     except Exception:
         prestamo_objetivo_id = None
         prestamo_objetivo_multiple = None
+        prestamo_objetivo_motivo = None
+        prestamo_referencia_id = None
 
     prestamo_duplicado_es_objetivo: Optional[bool] = None
     if prestamo_existente_id is not None and prestamo_objetivo_id is not None:
@@ -357,6 +375,8 @@ def _diagnostico_duplicado_reportado(
         prestamo_objetivo_id=prestamo_objetivo_id,
         prestamo_objetivo_multiple=prestamo_objetivo_multiple,
         prestamo_duplicado_es_objetivo=prestamo_duplicado_es_objetivo,
+        prestamo_objetivo_motivo=prestamo_objetivo_motivo,
+        prestamo_referencia_id=prestamo_referencia_id,
     )
 
 

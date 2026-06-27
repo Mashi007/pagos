@@ -433,6 +433,8 @@ export default function CobrosDetallePage() {
                 pagoExistenteEstado={detalle.pago_existente_estado}
                 pagoExistenteFechaPago={detalle.pago_existente_fecha_pago}
                 prestamoObjetivoId={detalle.prestamo_objetivo_id}
+                prestamoObjetivoMotivo={detalle.prestamo_objetivo_motivo}
+                prestamoReferenciaId={detalle.prestamo_referencia_id}
                 fechaPagoReporteIso={detalle.fecha_pago}
                 prestamoDuplicadoEsObjetivo={
                   detalle.prestamo_duplicado_es_objetivo

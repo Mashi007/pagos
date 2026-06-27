@@ -21,12 +21,49 @@ function esMismaFechaQueHoyLocal(iso: string | null | undefined): boolean {
   return d === `${y}-${m}-${day}`
 }
 
+export type PrestamoObjetivoMotivoSinAprobado =
+  | 'liquidado'
+  | 'sin_aprobado'
+  | 'cedula_no_registrada'
+
+/** Etiqueta de la columna «Este reporte iría a» cuando no hay APROBADO objetivo. */
+export function etiquetaPrestamoObjetivoReportado(opts: {
+  prestamoObjetivoId?: number | null
+  prestamoObjetivoMotivo?: PrestamoObjetivoMotivoSinAprobado | string | null
+  prestamoReferenciaId?: number | null
+}): string {
+  const prestObj =
+    typeof opts.prestamoObjetivoId === 'number' ? opts.prestamoObjetivoId : null
+  if (prestObj != null) return `#${prestObj}`
+
+  const motivo = (opts.prestamoObjetivoMotivo || '').trim().toLowerCase()
+  const ref =
+    typeof opts.prestamoReferenciaId === 'number'
+      ? opts.prestamoReferenciaId
+      : null
+
+  if (motivo === 'liquidado') {
+    return ref != null
+      ? `No aplica: LIQUIDADO #${ref}`
+      : 'No aplica: préstamo LIQUIDADO'
+  }
+  if (motivo === 'cedula_no_registrada') {
+    return 'Cédula no registrada'
+  }
+  if (motivo === 'sin_aprobado') {
+    return 'Sin APROBADO'
+  }
+  return 'Sin APROBADO'
+}
+
 export type DuplicadoPrestamosResumenProps = {
   prestamoExistenteId?: number | null
   pagoExistenteId?: number | null
   prestamoObjetivoId?: number | null
   prestamoDuplicadoEsObjetivo?: boolean | null
   prestamoObjetivoMultiple?: boolean | null
+  prestamoObjetivoMotivo?: PrestamoObjetivoMotivoSinAprobado | string | null
+  prestamoReferenciaId?: number | null
   fechaPagoReporteIso?: string | null
   esMercantil?: boolean
 }
@@ -41,6 +78,8 @@ export function DuplicadoPrestamosResumen({
   prestamoObjetivoId,
   prestamoDuplicadoEsObjetivo,
   prestamoObjetivoMultiple,
+  prestamoObjetivoMotivo,
+  prestamoReferenciaId,
   fechaPagoReporteIso,
   esMercantil = false,
 }: DuplicadoPrestamosResumenProps) {
@@ -48,9 +87,16 @@ export function DuplicadoPrestamosResumen({
     typeof prestamoExistenteId === 'number' ? prestamoExistenteId : null
   const prestObj =
     typeof prestamoObjetivoId === 'number' ? prestamoObjetivoId : null
+  const etiquetaObjetivo = etiquetaPrestamoObjetivoReportado({
+    prestamoObjetivoId: prestObj,
+    prestamoObjetivoMotivo,
+    prestamoReferenciaId,
+  })
+  const esLiquidado =
+    (prestamoObjetivoMotivo || '').trim().toLowerCase() === 'liquidado'
   const fechaReporteFmt = formatoFechaDdMmYyyy(fechaPagoReporteIso || undefined)
 
-  if (prestEx == null && prestObj == null) {
+  if (prestEx == null && prestObj == null && !prestamoObjetivoMotivo) {
     return (
       <p className="mt-1.5 text-[11px] text-orange-900">
         No se pudo resolver préstamos (revise cédula en Editar).
@@ -90,8 +136,12 @@ export function DuplicadoPrestamosResumen({
               <td className="p-1.5 align-top font-medium text-orange-950">
                 Este reporte iría a
               </td>
-              <td className="p-1.5 align-top font-mono font-semibold text-emerald-800">
-                {prestObj != null ? `#${prestObj}` : 'Sin APROBADO'}
+              <td
+                className={`p-1.5 align-top font-mono font-semibold ${
+                  esLiquidado ? 'text-rose-800' : 'text-emerald-800'
+                }`}
+              >
+                {etiquetaObjetivo}
               </td>
               <td className="hidden whitespace-nowrap p-1.5 align-top sm:table-cell">
                 {fechaReporteFmt}
@@ -104,6 +154,16 @@ export function DuplicadoPrestamosResumen({
       {prestamoObjetivoMultiple ? (
         <p className="text-[10px] text-amber-800">
           Varias cédulas con préstamo APROBADO: se usa el más reciente.
+        </p>
+      ) : null}
+
+      {esLiquidado ? (
+        <p className="text-[11px] font-semibold text-rose-800">
+          No se aplica a cartera: el crédito del cliente está LIQUIDADO en BD
+          {typeof prestamoReferenciaId === 'number'
+            ? ` (#${prestamoReferenciaId})`
+            : ''}
+          .
         </p>
       ) : null}
 
@@ -147,6 +207,8 @@ export type DuplicadoPrestamosComparacionProps = {
   pagoExistenteEstado?: string | null
   pagoExistenteFechaPago?: string | null
   prestamoObjetivoId?: number | null
+  prestamoObjetivoMotivo?: PrestamoObjetivoMotivoSinAprobado | string | null
+  prestamoReferenciaId?: number | null
   fechaPagoReporteIso?: string | null
   prestamoDuplicadoEsObjetivo?: boolean | null
   prestamoObjetivoMultiple?: boolean | null
@@ -162,14 +224,19 @@ export function DuplicadoPrestamosComparacion({
   pagoExistenteEstado,
   pagoExistenteFechaPago,
   prestamoObjetivoId,
+  prestamoObjetivoMotivo,
+  prestamoReferenciaId,
   fechaPagoReporteIso,
   prestamoDuplicadoEsObjetivo,
   prestamoObjetivoMultiple,
 }: DuplicadoPrestamosComparacionProps) {
   const prestEx =
     typeof prestamoExistenteId === 'number' ? `#${prestamoExistenteId}` : '-'
-  const prestObj =
-    typeof prestamoObjetivoId === 'number' ? `#${prestamoObjetivoId}` : '-'
+  const prestObj = etiquetaPrestamoObjetivoReportado({
+    prestamoObjetivoId,
+    prestamoObjetivoMotivo,
+    prestamoReferenciaId,
+  })
   const pagoTxt =
     typeof pagoExistenteId === 'number'
       ? `#${pagoExistenteId}${

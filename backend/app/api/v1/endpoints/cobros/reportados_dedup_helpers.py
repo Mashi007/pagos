@@ -497,20 +497,23 @@ def _pago_existente_info_resuelto(
 def _prestamo_objetivo_por_cedula_norm_batch(
     db: Session,
     cedulas_norm: Set[str],
-) -> Tuple[Dict[str, int], Set[str]]:
+) -> Tuple[Dict[str, int], Set[str], Dict[str, str], Dict[str, int]]:
     """
     Para cada cedula normalizada del lote, devuelve el prestamo APROBADO mas reciente.
     Se usa para saber si un duplicado de Mercantil ya pertenece al mismo prestamo.
+
+    Si no hay APROBADO, devuelve motivo en BD (liquidado, sin_aprobado, cedula_no_registrada)
+    y opcionalmente prestamo_referencia_id (LIQUIDADO mas reciente).
     """
     if not cedulas_norm:
-        return {}, set()
+        return {}, set(), {}, {}
 
     variant_to_norms: Dict[str, Set[str]] = defaultdict(set)
     for norm in cedulas_norm:
         for variant in _cedula_lookup_variants(norm):
             variant_to_norms[variant].add(norm)
     if not variant_to_norms:
-        return {}, set()
+        return {}, set(), {}, {}
 
     cedula_lookup = func.upper(
         func.replace(func.replace(Cliente.cedula, "-", ""), " ", "")
@@ -530,7 +533,8 @@ def _prestamo_objetivo_por_cedula_norm_batch(
 
     client_ids = {cid for ids in client_ids_by_norm.values() for cid in ids}
     if not client_ids:
-        return {}, set()
+        motivo_by_norm = {norm: "cedula_no_registrada" for norm in cedulas_norm}
+        return {}, set(), motivo_by_norm, {}
 
     target_by_client: Dict[int, int] = {}
     for cliente_id, prestamo_id in db.execute(
@@ -545,16 +549,43 @@ def _prestamo_objetivo_por_cedula_norm_batch(
         if cid not in target_by_client:
             target_by_client[cid] = int(prestamo_id)
 
+    liquidado_by_client: Dict[int, int] = {}
+    for cliente_id, prestamo_id in db.execute(
+        select(Prestamo.cliente_id, Prestamo.id)
+        .where(
+            Prestamo.cliente_id.in_(client_ids),
+            func.upper(Prestamo.estado) == "LIQUIDADO",
+        )
+        .order_by(Prestamo.cliente_id.asc(), Prestamo.id.desc())
+    ).all():
+        cid = int(cliente_id)
+        if cid not in liquidado_by_client:
+            liquidado_by_client[cid] = int(prestamo_id)
+
     target_by_norm: Dict[str, int] = {}
     multiple_by_norm: Set[str] = set()
+    motivo_by_norm: Dict[str, str] = {}
+    referencia_by_norm: Dict[str, int] = {}
     for norm, ids in client_ids_by_norm.items():
         targets = [target_by_client[cid] for cid in ids if cid in target_by_client]
-        if not targets:
+        if targets:
+            target_by_norm[norm] = max(targets)
+            if len(set(targets)) > 1:
+                multiple_by_norm.add(norm)
             continue
-        target_by_norm[norm] = max(targets)
-        if len(set(targets)) > 1:
-            multiple_by_norm.add(norm)
-    return target_by_norm, multiple_by_norm
+        liq_ids = [liquidado_by_client[cid] for cid in ids if cid in liquidado_by_client]
+        if liq_ids:
+            referencia_by_norm[norm] = max(liq_ids)
+            motivo_by_norm[norm] = "liquidado"
+        else:
+            motivo_by_norm[norm] = "sin_aprobado"
+
+    for norm in cedulas_norm:
+        if norm in target_by_norm or norm in motivo_by_norm:
+            continue
+        motivo_by_norm[norm] = "cedula_no_registrada"
+
+    return target_by_norm, multiple_by_norm, motivo_by_norm, referencia_by_norm
 
 
 def _rechazar_aprobacion_si_documento_ya_en_pagos(db: Session, pr: PagoReportado) -> None:
@@ -905,10 +936,13 @@ def _pago_reportado_list_items_from_rows(
         ced_norm = cedula_norms[idx] if idx < len(cedula_norms) else ""
         if ced_norm:
             cedulas_para_prestamo_objetivo.add(ced_norm)
-    prestamo_objetivo_por_cedula, prestamo_objetivo_multiple_cedulas = (
+    prestamo_objetivo_por_cedula, prestamo_objetivo_multiple_cedulas, (
+        prestamo_objetivo_motivo_por_cedula,
+        prestamo_referencia_por_cedula,
+    ) = (
         _prestamo_objetivo_por_cedula_norm_batch(db, cedulas_para_prestamo_objetivo)
         if cedulas_para_prestamo_objetivo
-        else ({}, set())
+        else ({}, set(), {}, {})
     )
     norm_por_fila = []
     for r in rows:
@@ -967,6 +1001,16 @@ def _pago_reportado_list_items_from_rows(
         )
         cedula_norm = cedula_norms[i] if i < len(cedula_norms) else ""
         prestamo_objetivo_id = prestamo_objetivo_por_cedula.get(cedula_norm)
+        prestamo_objetivo_motivo = (
+            None
+            if prestamo_objetivo_id is not None
+            else prestamo_objetivo_motivo_por_cedula.get(cedula_norm)
+        )
+        prestamo_referencia_id = (
+            None
+            if prestamo_objetivo_id is not None
+            else prestamo_referencia_por_cedula.get(cedula_norm)
+        )
         prestamo_objetivo_multiple = (
             cedula_norm in prestamo_objetivo_multiple_cedulas
             if prestamo_objetivo_id is not None
@@ -1005,6 +1049,8 @@ def _pago_reportado_list_items_from_rows(
             prestamo_objetivo_id=prestamo_objetivo_id,
             prestamo_objetivo_multiple=prestamo_objetivo_multiple,
             prestamo_duplicado_es_objetivo=prestamo_duplicado_es_objetivo,
+            prestamo_objetivo_motivo=prestamo_objetivo_motivo,
+            prestamo_referencia_id=prestamo_referencia_id,
         ))
     return items
 

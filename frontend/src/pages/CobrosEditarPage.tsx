@@ -362,6 +362,8 @@ export default function CobrosEditarPage() {
         duplicado_en_pagos: false,
         prestamo_objetivo_id: detalle.prestamo_objetivo_id,
         prestamo_objetivo_multiple: detalle.prestamo_objetivo_multiple,
+        prestamo_objetivo_motivo: detalle.prestamo_objetivo_motivo,
+        prestamo_referencia_id: detalle.prestamo_referencia_id,
       })
       return
     }
@@ -485,6 +487,8 @@ export default function CobrosEditarPage() {
           prestamo_objetivo_multiple: detalle?.prestamo_objetivo_multiple,
           prestamo_duplicado_es_objetivo:
             detalle?.prestamo_duplicado_es_objetivo,
+          prestamo_objetivo_motivo: detalle?.prestamo_objetivo_motivo,
+          prestamo_referencia_id: detalle?.prestamo_referencia_id,
         })
       }
       return true
@@ -842,6 +846,8 @@ export default function CobrosEditarPage() {
                   duplicadoActual.pago_existente_fecha_pago
                 }
                 prestamoObjetivoId={duplicadoActual.prestamo_objetivo_id}
+                prestamoObjetivoMotivo={duplicadoActual.prestamo_objetivo_motivo}
+                prestamoReferenciaId={duplicadoActual.prestamo_referencia_id}
                 fechaPagoReporteIso={detalle.fecha_pago}
                 prestamoDuplicadoEsObjetivo={
                   duplicadoActual.prestamo_duplicado_es_objetivo

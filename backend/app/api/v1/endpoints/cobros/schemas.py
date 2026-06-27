@@ -64,6 +64,16 @@ class PagoReportadoListItem(BaseModel):
     prestamo_objetivo_id: Optional[int] = None
     prestamo_objetivo_multiple: Optional[bool] = None
     prestamo_duplicado_es_objetivo: Optional[bool] = None
+    prestamo_objetivo_motivo: Optional[str] = Field(
+        None,
+        description=(
+            "Si no hay préstamo APROBADO objetivo: liquidado | sin_aprobado | cedula_no_registrada."
+        ),
+    )
+    prestamo_referencia_id: Optional[int] = Field(
+        None,
+        description="Préstamo de referencia cuando motivo=liquidado (más reciente LIQUIDADO en BD).",
+    )
 
 
 class PagoReportadoDetalle(BaseModel):
@@ -113,6 +123,8 @@ class PagoReportadoDetalle(BaseModel):
     prestamo_objetivo_id: Optional[int] = None
     prestamo_objetivo_multiple: Optional[bool] = None
     prestamo_duplicado_es_objetivo: Optional[bool] = None
+    prestamo_objetivo_motivo: Optional[str] = None
+    prestamo_referencia_id: Optional[int] = None
 
 
 class PagoReportadoDuplicadoDiagnostico(BaseModel):
@@ -124,6 +136,8 @@ class PagoReportadoDuplicadoDiagnostico(BaseModel):
     prestamo_objetivo_id: Optional[int] = None
     prestamo_objetivo_multiple: Optional[bool] = None
     prestamo_duplicado_es_objetivo: Optional[bool] = None
+    prestamo_objetivo_motivo: Optional[str] = None
+    prestamo_referencia_id: Optional[int] = None
 
 
 class AprobarRechazarBody(BaseModel):
