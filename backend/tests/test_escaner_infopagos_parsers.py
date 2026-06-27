@@ -532,3 +532,50 @@ def test_aplicar_reglas_ocr_post_gemini_perfiles():
     )
     assert cob["fecha_deposito"] == "NA"
     assert cob["numero_deposito"] == "105137674"
+
+
+def test_escaner_imagen_aparenta_portrait():
+    import io
+
+    from PIL import Image
+
+    from app.services.pagos_gmail.gemini_service import _escaner_imagen_aparenta_portrait
+
+    buf_land = io.BytesIO()
+    Image.new("RGB", (800, 400), "white").save(buf_land, format="JPEG")
+    buf_port = io.BytesIO()
+    Image.new("RGB", (400, 800), "white").save(buf_port, format="JPEG")
+
+    assert _escaner_imagen_aparenta_portrait(buf_land.getvalue(), "land.jpg", "image/jpeg") is False
+    assert _escaner_imagen_aparenta_portrait(buf_port.getvalue(), "port.jpg", "image/jpeg") is True
+
+
+def test_escaner_necesita_rescate_rotacion_mercantil_sin_serial():
+    from app.services.pagos_gmail.gemini_service import _escaner_necesita_rescate_rotacion
+
+    assert _escaner_necesita_rescate_rotacion({"ok": False}) is True
+    assert (
+        _escaner_necesita_rescate_rotacion(
+            {
+                "ok": True,
+                "numero_operacion": "9818-20251111-111511-DCME-3280-A",
+                "institucion_financiera": "Mercantil",
+                "fecha_pago": REF,
+                "monto": 20.0,
+            }
+        )
+        is True
+    )
+    assert (
+        _escaner_necesita_rescate_rotacion(
+            {
+                "ok": True,
+                "numero_operacion": "740087404834849",
+                "institucion_financiera": "Mercantil",
+                "fecha_pago": REF,
+                "monto": 20.0,
+            }
+        )
+        is False
+    )
+

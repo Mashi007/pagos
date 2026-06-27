@@ -181,12 +181,12 @@ CORREO CON MAS DE UNA IMAGEN O MAS DE UN PDF:
   MEZCLA EN UN SOLO BINARIO (collage, captura de bandeja, correo escaneado, PDF de hilo Gmail): Si se ven **varias** miniaturas o trozos de **distintos** documentos y **no** puedes aislar **un solo** comprobante cuyo **fecha_pago**, **monto** y **numero_referencia** pertenezcan sin ambiguedad al **mismo** ticket (sin mezclar cifras de dos depositos) -> **formato "ninguno"** y NA. No inventes una fila "promedio" ni cruces datos entre recortes.
     Excepcion (misma regla para A/B/C/D/E/F): Si **un** nucleo de comprobante es **claramente dominante y legible** (ej. recibo BNC con 0191 + RAPI + Serial/Ref + monto + fecha; **pantalla Binance Pay** con USDT/USD + Id de orden + exito; **comprobante BDV** con **0102** + titular empresa + **SECUENCIAL NRO** o secuencial legible + **Total Efectivo/Deposito** + **FECHA/HORA** del mismo bloque; **modal Bancamiga** con **Transacción procesada** + **NUMERO DE REFERENCIA** + **MONTO DE LA OPERACIÓN** + cuentas debito/credito; **comprobante Banco del Tesoro** con logo **Banco del Tesoro** + **Resumen de la operación** + **Monto Bs.** + **Número de Referencia** + **Cuenta debitada** prefijo **0163**) y el resto es chrome de correo (cabeceras Gmail, botones Responder/Reenviar), barra de estado movil, firma, icono o un segundo documento **borroso o parcial sin datos operativos utiles**, clasifica **solo** ese nucleo (BNC -> **B**, Binance -> **C**, BDV -> **D**, Bancamiga -> **E**, Tesoro -> **F**) y extrae campos **unicamente** de ese bloque; no rellenes huecos con el trozo ilegible.
     Si en la misma pieza hay **dos o mas** comprobantes del mismo tipo (ej. dos recibos BNC; dos pantallas Binance; **dos comprobantes BDV** enteros) y asignar monto/referencia (y fecha si aplica) obligaria a **adivinar** cual corresponde a cual -> **ninguno** (el backend manda **una** peticion por archivo: **un pago = una imagen/pagina = una fila**; no generes dos JSON en una sola respuesta).
-  ORIENTACION / ROTACION — Mercantil (A): El mismo comprobante (A1 papel **DEPOSITO DIVISAS** o A2 **tira RECAUDACION** con 0105) puede llegar **fotografiado o escaneado en cualquier angulo** (0°, 90°, 180°, 270°) o levemente inclinado. Clasifica por **texto y diseno** (etiquetas Cédula Dep., Monto, Fondos RECAUDACION, cuenta 0105, RAPI-CREDIT, bloque DCME/YYYYMMDD en codigo guionado, pie **PDP. 056** cuando aparezca), no por si el papel esta "vertical" u "horizontal" respecto a la foto. Si tras mentalmente rotar la imagen el nucleo A (Mercantil) es claro y los campos obligatorios son legibles -> **A**; si sigue ilegible -> **ninguno**.
+  ORIENTACION / ROTACION — Mercantil (A): El mismo comprobante (A1 papel **DEPOSITO DIVISAS** o A2 **tira RECAUDACION** con 0105) puede llegar **fotografiado o escaneado en cualquier angulo** (0°, 90°, 180°, 270°) o levemente inclinado. **Orientacion ideal A1 (papel)**: foto **horizontal** con la palabra/logo **Mercantil** en la **parte superior izquierda**, tira termica/validador a la **izquierda** y formulario ancho a la derecha. Si la foto llego girada, **rote mentalmente** hasta esa disposicion antes de leer Serial/monto/fecha. Clasifica por **texto y diseno** (etiquetas Cédula Dep., Monto, Fondos RECAUDACION, cuenta 0105, RAPI-CREDIT, bloque DCME/YYYYMMDD en codigo guionado, pie **PDP. 056** cuando aparezca), no por si el papel esta "vertical" u "horizontal" respecto a la foto. Si tras mentalmente rotar la imagen el nucleo A (Mercantil) es claro y los campos obligatorios son legibles -> **A**; si sigue ilegible -> **ninguno**.
   Regla anti-falso-negativo Mercantil A1 (fotos reales): si ves formulario **DEPOSITO DIVISAS** + marca **Mercantil** + cuenta **0105** + titular **RAPI-CREDIT** y un bloque operativo impreso (tira/validador) con **Monto USD** y **Serial**,
   clasifica **A** aunque haya sombras, reflejos, imagen oscura, pliegues del papel, manuscritos grandes o parte del borde recortado.
-  ORIENTACION / ROTACION — BNC (B / imagen 2): El **recibo de cajero BNC** (papel seguridad, logo **BNC**, cuenta **0191**/..., **Deposito Us$**) puede llegar en **cualquier giro** (horizontal, vertical, 90°/180°/270°, leve inclinacion). Lee el bloque como si rotaras mentalmente la foto hasta alinear lineas **Agencia/Terminal/Cajero**, **Cuenta**, **DP:**, **Serial/Ref** y la linea de **monto** con asteriscos; no rechaces por "el logo quedo de lado". Si con esa lectura el nucleo B (PASO 2) es claro y fecha/monto/ref salen de **ese** mismo ticket -> **B**; si tras rotar sigue ilegible o ambiguo entre dos depositos -> **ninguno**.
+  ORIENTACION / ROTACION — BNC (B / imagen 2): El **recibo de cajero BNC** (papel seguridad, logo **BNC**, cuenta **0191**/..., **Deposito Us$**) puede llegar en **cualquier giro** (horizontal, vertical, 90°/180°/270°, leve inclinacion). **Orientacion ideal B (cajero papel)**: foto **horizontal** con logo **BNC** (sol azul + letras) en la **parte superior izquierda**, bloque izquierdo Agencia/Terminal/Cuenta/DP y fecha/Serial a la derecha; rote mentalmente hasta esa disposicion antes de leer **Serial:**, monto con asteriscos y fecha. Lee el bloque como si rotaras mentalmente la foto hasta alinear lineas **Agencia/Terminal/Cajero**, **Cuenta**, **DP:**, **Serial/Ref** y la linea de **monto** con asteriscos; no rechaces por "el logo quedo de lado". Si con esa lectura el nucleo B (PASO 2) es claro y fecha/monto/ref salen de **ese** mismo ticket -> **B**; si tras rotar sigue ilegible o ambiguo entre dos depositos -> **ninguno**.
   ORIENTACION / ROTACION — Binance Pay (C / imagen 3): La **captura de app** (fondo oscuro o **modal blanco** sobre oscuro, barra de estado, flecha **atras** arriba, circulo **verde** con tilde, bloque **Pago exitoso** / Payment successful, importe **USDT** o USD grande, **ID de orden**) puede llegar **rotada o inclinada** como foto de telefono. Lee mentalmente **0°/90°/180°/270°** hasta que titulos, monto e id queden legibles; no descartes por "el check quedo arriba o abajo". Si tras rotar ves nucleo C (PASO 2b) con **monto** e **identificador de orden** sin ambiguedad -> **C**; si solo queda un trozo con check verde **sin** monto **y sin** ristra larga de orden -> **ninguno** (no inventes USDT ni Order ID desde asunto/cuerpo del correo).
-  ORIENTACION / ROTACION — BDV (D / imagen 4 / **BNV**): En este prompt **BNV** y **BDV** designan el mismo banco (**Banco de Venezuela**). El **comprobante impreso BDV** llega como **hoja horizontal ancha** (franja roja izquierda, logo, bloques DATOS DE LA CUENTA / TRANSACCION) o como **tira termica estrecha vertical** (agujeros de archivo, texto en columnas, SECUENCIAL NRO a veces impreso **siguiendo el borde** del papel). Puede estar **fotografiado girado 90°/180°/270°** o inclinado. Lee mentalmente rotando hasta alinear **0102-...**, **TITULAR DE LA CUENTA**, **SECUENCIAL NRO** / numero rojo de operacion, **TOTAL EFECTIVO**/**TOTAL DEPOSITO** y **FECHA**/**HORA**; no confundas **orientacion de la foto** con tipo de banco. Si tras rotar el nucleo D (PASO 2a) es claro y fecha/monto/ref salen del **mismo** comprobante -> **D**; si hay dos depositos BDV completos en un solo binario y mezclarias cifras -> **ninguno**.
+  ORIENTACION / ROTACION — BDV (D / imagen 4 / **BNV**): En este prompt **BNV** y **BDV** designan el mismo banco (**Banco de Venezuela**). El **comprobante impreso BDV** llega como **hoja horizontal ancha** (franja roja izquierda, logo, bloques DATOS DE LA CUENTA / TRANSACCION) o como **tira termica estrecha vertical** (agujeros de archivo, texto en columnas, SECUENCIAL NRO a veces impreso **siguiendo el borde** del papel). **Orientacion ideal D2 (hoja ancha)**: foto **horizontal** con logo **Banco de Venezuela** arriba a la **izquierda**, franja vertical **DEPOSITOS/PAGOS/TARJETAS** en margen izquierdo, titulo **COMPROBANTE DE TRANSACCION** / **DEPOSITO EN CUENTA / PAGO**, bloque **DATOS DE LA CUENTA** con cuenta **0102-...** y titular **RAPI CREDIT**, **SECUENCIAL NRO** y **FECHA** en cabecera (a menudo derecha). Puede estar **fotografiado girado 90°/180°/270°** o inclinado. Lee mentalmente rotando hasta alinear **0102-...**, **TITULAR DE LA CUENTA**, **SECUENCIAL NRO** / numero rojo de operacion, **TOTAL EFECTIVO**/**TOTAL DEPOSITO** y **FECHA**/**HORA**; no confundas **orientacion de la foto** con tipo de banco. Si tras rotar el nucleo D (PASO 2a) es claro y fecha/monto/ref salen del **mismo** comprobante -> **D**; si hay dos depositos BDV completos en un solo binario y mezclarias cifras -> **ninguno**.
   Caso limite BDV (muy tenue): si la impresion esta lavada o de bajo contraste pero todavia se reconoce marca BDV/Banco de Venezuela + estructura de comprobante de transaccion + numero operativo rojo/lateral, conserva D cuando puedas leer con certeza monto y una referencia operativa del mismo documento.
 
 OBLIGATORIO — campo "formato" en el JSON: SOLO uno de estos nueve valores exactos: A, B, C, D, E, F, G, NR, ninguno.
@@ -363,7 +363,8 @@ PASO 2a - D (imagen 4 / Banco de Venezuela **BDV** / **BNV**) si PASO 2 NO aplic
     Manuscrito al pie (**"Nombre y Apellido:"**, nombre del depositante cuando **DATOS DEL DEPOSITANTE** van **en blanco** impreso): **muy frecuente** en ventanilla BDV; **no** invalida D. **cedula** en JSON **siempre "NA"** (no copies nombre ni CI/RIF desde boligrafo al campo cedula). Notas tipo **"R.F-..."** al margen: no uses como **numero_referencia** unica.
     No es imagen 1 (A): aunque la tira sea vertical, si dice **Banco de Venezuela** + **0102** + titular empresa en cuenta -> **D**, no Mercantil ni RECAUDACION SPD.
 
-  VARIANTE D2 — **Comprobante horizontal / hoja ancha BDV (imagen 4)** — mismo formato D:
+  VARIANTE D2 — **Comprobante horizontal / hoja ancha BDV (imagen 4 / BNV)** — mismo formato D:
+    **Orientacion ideal (foto)**: hoja **horizontal** ancha; logo **Banco de Venezuela** arriba a la **izquierda**; titulo centrado **COMPROBANTE DE TRANSACCION** / **DEPOSITO EN CUENTA** / **PAGO**; **FECHA** y **SECUENCIAL NRO** en cabecera (frecuente arriba-derecha); bloques **DATOS DE LA CUENTA** (cuenta **0102-...**, titular **RAPI CREDIT**, moneda **USD**) y **DATOS DE LA TRANSACCION**; totales **TOTAL EFECTIVO** / **TOTAL DEPOSITO** / **MONTO TOTAL** abajo; manuscrito central (X, cifra $) **no** sustituye monto impreso.
     Logo **Banco de Venezuela** arriba a la izquierda; titulo centrado **COMPROBANTE DE TRANSACCION** / **DEPOSITO EN CUENTA** / **PAGO**; fuente matriz de puntos.
     **Franja vertical roja** (u otro color fuerte) en margen izquierdo con texto **DEPOSITOS / PAGOS / TARJETAS** (con o sin tilde en Deposito) — patron **muy frecuente** en hoja ancha BDV; refuerza D junto con **0102**.
     **SECUENCIAL NRO** suele ir arriba a la derecha; a veces **duplicado**: numero largo con ceros **y** numero en **tinta roja** mas corto (mismo operativo) — preferir el valor bajo etiqueta **SECUENCIAL NRO** con todos los digitos visibles.
@@ -493,7 +494,7 @@ VARIANTE A — MERCANTIL (dos caras tipicas; ambas son formato A / imagen 1, ban
   (A1) **Formulario papel DEPOSITO DIVISAS**: logo o nombre **Mercantil**; titulo "DEPOSITO DIVISAS" o "DEPÓSITO DIVISAS" (a menudo en **franja o texto vertical** en el margen izquierdo del formulario); formulario **horizontal** con cabecera azul/blanca y casillas para **Código Cuenta Cliente** (0105... en cajitas o ristra continua), **Fecha** (manuscrita o en tres grupos DD MM AA), **Monto**, **Titular de la cuenta** (RAPICREDIT / RAPI-CREDIT C.A / RAPI CREDIT C-A — variantes OCR sin guiones), **Depositante**, **Nro. de Cédula del Depositante** (manuscrito con o sin **CI** / puntos miles), **Causa o motivo del depósito**, **Origen de los fondos**, firma.
     Campo **Origen de los fondos** a menudo **vacío**: es **normal**; **no** invalida **A**.
     **Tipo de Moneda**: casilla **$** o **USD** marcada con **X** o aspa — refuerza divisa USD aunque el monto manuscrito omita "USD".
-    Pista explicita de layout (prioridad alta): **foto horizontal de formulario Mercantil con tira vertical a la izquierda** (bloque termico gris con lineas Cedula Dep./Serial/Monto/Fondos y pie tipo PDP.056). Este layout coincide con A1 aunque la foto llegue girada o con perspectiva.
+    Pista explicita de layout (prioridad alta): **foto horizontal** de formulario Mercantil con la palabra/logo **Mercantil** en la **parte superior izquierda**, **tira vertical del validador a la izquierda** (bloque termico gris con lineas Cedula Dep./Serial/Monto/Fondos y pie tipo PDP.056) y casillas del formulario a la derecha. Este layout coincide con A1 aunque la foto llegue girada o con perspectiva (rote mentalmente hasta alinear Mercantil arriba-izquierda).
     Tira o sello del validador **superpuesto a la izquierda** (termico o gris): linea superior puede ser codigo **alfanumerico con guiones** (ej. `9340-20260416-141957-DCME-3122-A`: 2do bloque fecha YYYYMMDD); **Cta. / cuenta** 0105-....; **Serial:** ristra larga solo digitos (7400...); **Monto** `***********NN,00` USD; linea **Fondos:** suele ser **RECAUDACIÓN** / **RECAUDACION**; en operaciones exoneradas puede aparecer **COMIS. EXONERAD** / **COMIS. EXONERADA** u OCR roto — **sigue siendo A1** Mercantil si el resto del nucleo (0105, RAPI, USD, serial/monto legibles) es claro. beneficiario **RAPI-CREDIT**; etiquetas tipo **Cédula Dep.**, nombre depositante abreviado. Pie de formulario frecuente **PDP. 056** / **PDP: 056** / **PDP. 056(09-02-2021)** u OCR sucio — refuerza A1, no obligatorio.
     Verificacion **sin inventar** (A1 / papel + tira): en **esta** imagen deben leerse **Mercantil** (logo o nombre) + **DEPOSITO DIVISAS** + cuenta **0105** + **RAPI-CREDIT** como titular + **USD**. La palabra **RECAUDACION** en tira/sello es un refuerzo fuerte, pero en fotos movidas/rotadas puede estar parcialmente tapada o borrosa: si el resto del nucleo A1 es claro y puedes extraer **fecha_pago**, **monto** y **numero_referencia** de forma consistente, mantiene **A** (no fuerces "ninguno" solo por OCR incompleto de RECAUDACION).
     Patrones de campo frecuentes en A1 real: (i) casillas superiores con fecha/monto manuscritos, (ii) bloque termico lateral con lineas **Cedula Dep. / Serial / Monto / Fondos**, (iii) leyenda inferior tipo **PDP. 056**.
@@ -517,8 +518,9 @@ VARIANTE A — MERCANTIL (dos caras tipicas; ambas son formato A / imagen 1, ban
   fecha_pago: usar fecha de la operacion en tira (2do bloque YYYYMMDD si aparece en el codigo guionado) o fecha manuscrita "31/3/2026" en el formulario si la tira es ilegible — una sola fecha coherente DD/MM/YYYY.
   Si cumple esta variante Mercantil, clasifica A (no "ninguno" por ser banco Mercantil; no B salvo que cumpla nucleo BNC completo de PASO 2).
 
-FORMATO B — comprobante BNC de deposito a favor de RAPI-CREDIT (segunda plantilla valida; horizontal, tira vertical corta, o foto rotada):
+FORMATO B — comprobante BNC de deposito a favor de RAPI-CREDIT (segunda plantilla valida; horizontal ideal, tira vertical corta, o foto rotada):
   Plantilla tipica (reconoce aunque el orden de lineas varie un poco):
+    - **Orientacion ideal (cajero papel)**: foto **horizontal** con logo **BNC** (icono sol + letras) en la **esquina superior izquierda**; **Ref:** arriba a la derecha; bloque izquierdo Agencia/Terminal/Cuenta **0191**/.../RAPI-CREDIT/DP:; bloque derecho fecha/hora y **Serial:**; monto **Deposito Us$** con asteriscos abajo o al centro.
     - Esquina superior izquierda o cabecera: logo/texto BNC.
     - **Ref.** / **Ref:** / **Rif. N°** en cabecera o margen (numero de control; puede diferir en 1-3 digitos del **Serial** impreso).
     - Lineas tipo: Agencia: ... | Terminal: ... | Cajero: ... (nombres de cajero frecuentes).
@@ -1045,11 +1047,37 @@ def _escaner_normalize_long_edge_pil(img: Any, filename: str) -> Any:
     return out
 
 
+def _escaner_imagen_aparenta_portrait(
+    file_content: bytes,
+    filename: str,
+    mime: str,
+) -> bool:
+    """True si tras EXIF la foto es claramente vertical (h > w). Típico en Mercantil sin orientación."""
+    is_pdf = mime == "application/pdf" or (filename or "").lower().endswith(".pdf")
+    if is_pdf:
+        return False
+    _ensure_pillow_heif_opener()
+    try:
+        from PIL import Image as _PIL
+        from PIL import ImageOps
+
+        img = _PIL.open(io.BytesIO(file_content))
+        try:
+            img = ImageOps.exif_transpose(img)
+        except Exception:
+            pass
+        w, h = img.size
+        return h > int(w * 1.08)
+    except Exception:
+        return False
+
+
 def _build_image_part_escaner_infopagos(
     file_content: bytes,
     filename: str,
     mime: str,
     max_long_edge: int = 0,
+    rotate_cw_deg: int = 0,
 ):
     """
     Part de Gemini para **solo** el escáner Infopagos (personal): prepara la imagen antes del OCR.
@@ -1078,6 +1106,9 @@ def _build_image_part_escaner_infopagos(
             img = ImageOps.exif_transpose(img)
         except Exception:
             pass
+        rot = int(rotate_cw_deg or 0) % 360
+        if rot:
+            img = img.rotate(-rot, expand=True)
         img = _pil_image_to_rgb_for_jpeg(img)
         w0, h0 = img.size
 
@@ -2823,7 +2854,7 @@ REGLAS:
   - Si la fecha no es legible con suficiente certeza (aplica CRITERIO MATEMÁTICO: L < 0,875 o ambigüedad calendario), deja `fecha_pago` como "" y explícitalo en `notas` (ej. "fecha borrosa, revisión manual").
   - Si el serial/ref no es legible con suficiente certeza (mismo CRITERIO MATEMÁTICO con n = cantidad de dígitos del serial: L < 0,875), deja `numero_operacion` como "" y explícitalo en `notas` (ej. "serial borroso, revisión manual").
   - Si el monto no es legible con suficiente certeza (CRITERIO MATEMÁTICO del bloque MONTO BORROSO; ej. duda 600 vs 60), deja `monto` como `null` y explícitalo en `notas` (ej. "monto borroso, revisión manual").
-  - ORIENTACIÓN: recibos, tiras Mercantil y capturas pueden llegar en **cualquier giro** (0°/90°/180°/270°). Rote mentalmente la imagen antes de leer monto, fecha y serial; no trunques dígitos por leer el texto en vertical.
+  - ORIENTACIÓN: recibos, tiras Mercantil y capturas pueden llegar en **cualquier giro** (0°/90°/180°/270°). Rote mentalmente la imagen antes de leer monto, fecha y serial; no trunques dígitos por leer el texto en vertical. **Mercantil DEPÓSITO DIVISAS (A1) — orientación ideal**: foto horizontal con palabra/logo **Mercantil** arriba a la **izquierda**, tira térmica a la **izquierda** y formulario ancho. **BNC cajero (B) — orientación ideal**: foto horizontal con logo **BNC** (sol + letras) arriba a la **izquierda**, cuenta **0191**/RAPI a la izquierda, **Serial:** y fecha a la derecha, monto con asteriscos legible. **Banco de Venezuela / BNV (D2 hoja ancha) — orientación ideal**: foto horizontal con logo **Banco de Venezuela** arriba a la **izquierda**, franja roja **DEPOSITOS/PAGOS/TARJETAS** a la izquierda, **COMPROBANTE DE TRANSACCION** / **DEPOSITO EN CUENTA / PAGO**, cuenta **0102** y titular **RAPI CREDIT**; monto desde **TOTAL EFECTIVO**/**TOTAL DEPOSITO** impreso (no manuscrito). Si la imagen llegó girada, rote hasta esa disposición antes de copiar campos.
   - Responde ÚNICAMENTE con un objeto JSON válido, sin markdown ni texto extra, con exactamente estas claves:
   fecha_pago, institucion_financiera, numero_operacion, monto, moneda, cedula_pagador_en_comprobante, notas, control_usuario_operaciones
   - SALIDA OBLIGATORIA: solo el objeto JSON; ningún párrafo ni razonamiento antes ni después. Sin fences markdown ni texto extra.
@@ -2842,8 +2873,8 @@ REGLAS:
 GEMINI_ESCANER_PLANTILLAS_AUTO_BLOQUE = """
 PLANTILLAS CONOCIDAS (misma lógica que clasificación Gmail A/B/C/D/G; **obligatorio** rellenar `institucion_financiera`):
   - **Mercantil** → formato **A**: DEPÓSITO DIVISAS, RECAUDACIÓN, cuenta **0105**, RAPI-CREDIT, logo/texto Mercantil, tira validador Mercantil (monto/fecha: ver REGLAS MONTO Y FECHA OCR del prompt).
-  - **BNC** → formato **B**: recibo cajero **BNC**, cuenta **0191**, línea RAPI, logo BNC, bloque Depósito US$.
-  - **Banco de Venezuela** → formato **D**: **0102**, SECUENCIAL, Total Efectivo/Depósito, logo BDV.
+  - **BNC** → formato **B**: recibo cajero **BNC**, cuenta **0191**, línea RAPI, logo **BNC** arriba-izquierda (ideal), bloque Depósito US$.
+  - **Banco de Venezuela** / **BNV** → formato **D**: hoja horizontal **COMPROBANTE DE TRANSACCION**, cuenta **0102**, titular **RAPI CREDIT**, **SECUENCIAL NRO**, Total Efectivo/Depósito, logo BDV arriba-izquierda (ideal).
   - **BINANCE** → formato **C**: Binance Pay, USDT, **Id. de orden completo** (15-19 dígitos; no truncar). **Control obligatorio:** **operaciones@rapicreditca.com** debe verse **arriba** del bloque **ID de orden**; si no cumple, indica en `notas` **Usuario operaciones** y `control_usuario_operaciones`: false.
   - **Recibo** → formato **G**: recibo manuscrito **TORO MOTORCYCLES** / **INVERSIONES GUIGUE 2 RUEDAS**; título **RECIBO**; **№** en rojo (00972); fecha cajas Dia/Mes/Año; **C.I. / RIF**; monto caja **Por:** (200 $); concepto Cuota Rapi-Credit.
   - Otros bancos (Banesco, Bancamiga, Tesoro, Pago Móvil): nombre corto tal como aparece en el comprobante.
@@ -2954,9 +2985,11 @@ def _extra_prompt_plantilla_escaner(institucion_plantilla: str) -> str:
     if "mercantil" in low:
         chunks.append(
             "MERCANTIL (mismos patrones que clasificación **A** en el pipeline Gmail): "
-            "DEPÓSITO DIVISAS / RECAUDACIÓN / tira 0105 RAPI; para `numero_operacion` use "
-            "exclusivamente la línea **Serial:** con ristra larga **740087…** (**15 dígitos** exactos). "
-            "Si la tira está vertical en la foto, rote mentalmente y lea el Serial en línea horizontal; "
+            "DEPÓSITO DIVISAS / RECAUDACIÓN / tira 0105 RAPI; orientación ideal: foto horizontal con "
+            "palabra/logo **Mercantil** arriba a la **izquierda** y tira del validador a la izquierda. "
+            "Para `numero_operacion` use exclusivamente la línea **Serial:** con ristra larga **740087…** "
+            "(**15 dígitos** exactos). Si la foto llegó girada, rote mentalmente hasta Mercantil "
+            "arriba-izquierda y lea el Serial en línea horizontal; "
             "no mezcle cifras de monto/cuenta/DCME ni devuelva 13-14 dígitos truncados. "
             "Ignore el código guionado DCME del validador (ej. …-DCME-…-A) para `numero_operacion`, "
             "pero use su **2º bloque YYYYMMDD** (recuadro superior, 1ª fila) para `fecha_pago` "
@@ -2964,16 +2997,26 @@ def _extra_prompt_plantilla_escaner(institucion_plantilla: str) -> str:
             "`cedula_pagador_en_comprobante` use solo dígitos en DP:V-/E-/J-, Cédula Dep., "
             "Nro. de Cédula del Depositante (sin inventar). Monto desde la tira con asteriscos."
         )
-    if ("bnc" in low or "bnv" in low) and "venezuela" not in low:
+    if "bnc" in low and "venezuela" not in low:
         chunks.append(
-            "BNC / BNV (mismos patrones que clasificación **B** en el pipeline Gmail): "
-            "recibo cajero BNC; para `numero_operacion` use **exclusivamente Serial:** "
-            "(todos los dígitos; ej. 105137674), nunca Ref: ni RIF. "
+            "BNC (mismos patrones que clasificación **B** en el pipeline Gmail): "
+            "recibo cajero BNC; orientación ideal: foto horizontal con logo **BNC** (sol + letras) "
+            "arriba a la **izquierda**, bloque Agencia/Cuenta **0191**/RAPI a la izquierda, "
+            "**Serial:** y fecha a la derecha. Para `numero_operacion` use **exclusivamente Serial:** "
+            "(todos los dígitos; ej. 105137674, 150327942), nunca Ref: ni RIF. "
+            "Si la foto llegó girada, rote mentalmente hasta BNC arriba-izquierda. "
             "Línea DP:V-/E-/J- + dígitos del depositante en `cedula_pagador_en_comprobante`."
         )
-    if "banco de venezuela" in low or re.search(r"\bbdv\b", low):
+    if "banco de venezuela" in low or re.search(r"\bbdv\b", low) or re.search(r"\bbnv\b", low):
         chunks.append(
-            "BANCO DE VENEZUELA (BDV): localice código de autorización, referencia y monto en Bs. del bloque principal."
+            "BANCO DE VENEZUELA / BNV / BDV (formato **D**, hoja ancha D2): orientación ideal — "
+            "foto horizontal con logo **Banco de Venezuela** arriba a la **izquierda**, franja "
+            "**DEPOSITOS/PAGOS/TARJETAS** en margen izquierdo, título **COMPROBANTE DE TRANSACCION** / "
+            "**DEPOSITO EN CUENTA / PAGO**, bloque **DATOS DE LA CUENTA** con cuenta **0102-...** y "
+            "titular **RAPI CREDIT**, moneda **USD**. Para `numero_operacion` use **SECUENCIAL NRO** "
+            "(todos los dígitos visibles). Para `fecha_pago` use **FECHA** impresa (ej. 23-06-2023). "
+            "Para `monto` use **TOTAL EFECTIVO** / **TOTAL DEPOSITO** / **MONTO TOTAL** impreso "
+            "(ej. 160,00 USD), no cifra manuscrita central. **No** confundir con BNC (**0191**)."
         )
     if "banesco" in low:
         chunks.append(
@@ -3012,6 +3055,7 @@ def extract_infopagos_campos_desde_comprobante(
     filename: str = "comprobante.jpg",
     api_key: Optional[str] = None,
     institucion_plantilla: Optional[str] = None,
+    rotate_cw_deg: int = 0,
 ) -> Dict[str, Any]:
     """
     Solo lectura OCR/visión: sugiere campos del formulario Infopagos a partir del comprobante.
@@ -3049,6 +3093,16 @@ def extract_infopagos_campos_desde_comprobante(
     )
     if extra_plantilla:
         prompt = prompt + extra_plantilla
+    rot_hint = int(rotate_cw_deg or 0) % 360
+    if rot_hint:
+        prompt = (
+            prompt
+            + f"\n\nNOTA: la imagen fue pre-rotada {rot_hint}° en sentido horario. "
+            "Orientación de lectura ideal: **Mercantil A1** — logo Mercantil arriba-izquierda, "
+            "tira térmica a la izquierda; **BNC cajero B** — logo BNC arriba-izquierda, "
+            "Serial y fecha a la derecha; **BDV/BNV D2** — logo Banco de Venezuela arriba-izquierda, "
+            "COMPROBANTE DE TRANSACCION horizontal, cuenta 0102."
+        )
 
     model_name = getattr(settings, "GEMINI_MODEL", "gemini-2.5-flash")
     mime = get_mime_type(filename)
@@ -3059,7 +3113,7 @@ def extract_infopagos_campos_desde_comprobante(
         client = _gemini_client(key)
         # Escáner: recorte de márgenes, escala heurística, contraste/nitidez y tope de tamaño (PDF intacto).
         image_part = _build_image_part_escaner_infopagos(
-            image_bytes, filename, mime
+            image_bytes, filename, mime, rotate_cw_deg=rotate_cw_deg
         )
         _max_gemini_attempts = max(GEMINI_RATE_LIMIT_MAX_RETRIES, GEMINI_SERVER_ERROR_MAX_RETRIES) + 1
         last_error: Optional[Exception] = None
@@ -3279,6 +3333,21 @@ def _escaner_gem_resultado_mas_completo(
     return seg if score_seg > score_prim else prim
 
 
+def _escaner_necesita_rescate_rotacion(gem: Dict[str, Any]) -> bool:
+    """Foto vertical sin EXIF: tira Mercantil u otros comprobantes quedan girados ~90°."""
+    if not gem.get("ok"):
+        return True
+    if _escaner_puntaje_serial_mercantil(gem) < 2:
+        return True
+    if gem.get("fecha_pago") is None:
+        return True
+    if gem.get("monto") is None:
+        return True
+    if not str(gem.get("institucion_financiera") or "").strip():
+        return True
+    return False
+
+
 def extract_infopagos_campos_desde_comprobante_con_rescate_plantilla(
     cedula_deudor_contexto: str,
     image_bytes: bytes,
@@ -3292,6 +3361,13 @@ def extract_infopagos_campos_desde_comprobante_con_rescate_plantilla(
     campos críticos como fecha o número de operación, o cayó en errores conocidos
     de Mercantil/BNC.
     """
+    from app.services.tasa_cambio_service import fecha_hoy_caracas
+
+    ref_hoy_rescate = fecha_hoy_caracas()
+    mime = get_mime_type(filename)
+    portrait = _escaner_imagen_aparenta_portrait(image_bytes, filename, mime)
+    rotation_used = 0
+
     gem = extract_infopagos_campos_desde_comprobante(
         cedula_deudor_contexto,
         image_bytes,
@@ -3299,6 +3375,41 @@ def extract_infopagos_campos_desde_comprobante_con_rescate_plantilla(
         api_key=api_key,
         institucion_plantilla=institucion_plantilla,
     )
+    if portrait and _escaner_necesita_rescate_rotacion(gem):
+        inst_rot_hint = (institucion_plantilla or gem.get("institucion_financiera") or "").strip()
+        if not inst_rot_hint:
+            inst_rot_hint = _inferir_institucion_heuristica_escaner(
+                f"{filename}\n{gem.get('notas') or ''}\n{gem.get('numero_operacion') or ''}"
+            )
+        for rot in (90, 270):
+            gem_rot = extract_infopagos_campos_desde_comprobante(
+                cedula_deudor_contexto,
+                image_bytes,
+                filename,
+                api_key=api_key,
+                institucion_plantilla=inst_rot_hint or None,
+                rotate_cw_deg=rot,
+            )
+            winner = _escaner_gem_resultado_mas_completo(
+                gem, gem_rot, ref_hoy=ref_hoy_rescate
+            )
+            if id(winner) == id(gem_rot):
+                gem = gem_rot
+                rotation_used = rot
+            logger.info(
+                "[ESCANER] Rescate rotación portrait cw=%s ok=%s serial_score=%s archivo=%s",
+                rot,
+                bool(gem.get("ok")),
+                _escaner_puntaje_serial_mercantil(gem),
+                filename,
+            )
+            if (
+                gem.get("ok")
+                and _escaner_puntaje_serial_mercantil(gem) >= 2
+                and gem.get("fecha_pago")
+                and gem.get("monto") is not None
+            ):
+                break
     inst_hint = (gem.get("institucion_financiera") or "").strip()
     if not inst_hint:
         inst_hint = _inferir_institucion_heuristica_escaner(
@@ -3327,9 +3438,6 @@ def extract_infopagos_campos_desde_comprobante_con_rescate_plantilla(
             and (not serial_bnc or serial_bnc != num_gem)
         )
     falta_fecha = bool(gem.get("ok") and gem.get("fecha_pago") is None)
-    from app.services.tasa_cambio_service import fecha_hoy_caracas
-
-    ref_hoy_rescate = fecha_hoy_caracas()
     fecha_hoy_sospechosa = bool(
         gem.get("ok")
         and isinstance(gem.get("fecha_pago"), date)
@@ -3359,6 +3467,7 @@ def extract_infopagos_campos_desde_comprobante_con_rescate_plantilla(
         filename,
         api_key=api_key,
         institucion_plantilla=inst_canon,
+        rotate_cw_deg=rotation_used,
     )
     return _escaner_gem_resultado_mas_completo(gem, gem2, ref_hoy=ref_hoy_rescate)
 
