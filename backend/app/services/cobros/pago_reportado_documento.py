@@ -166,7 +166,21 @@ def primer_pago_id_si_existe_para_claves_reportado(db: "Session", pr: PagoReport
     found = db.execute(
         select(Pago.id).where(Pago.referencia_pago.in_(claves)).limit(1)
     ).scalar()
-    return int(found) if found is not None else None
+    if found is not None:
+        return int(found)
+    # Misma regla que escaneo/listados: evasión Mercantil (serial base vs §CD:/P####).
+    from app.services.pago_numero_documento import primer_pago_cartera_por_documento
+
+    seen: Set[str] = set()
+    for raw in claves:
+        r = (raw or "").strip()
+        if not r or r in seen:
+            continue
+        seen.add(r)
+        pid, _ = primer_pago_cartera_por_documento(db, r)
+        if pid is not None:
+            return int(pid)
+    return None
 
 
 _ESTADOS_REPORTADO_DUP_PEER = ("pendiente", "en_revision", "aprobado")
