@@ -71,6 +71,7 @@ import {
   debeMostrarComparacionPrestamosEnListado,
   esDuplicadoEnCartera,
   esDuplicadoEntrePrestamosDistintos,
+  tituloDuplicadoNoSeleccionableLote,
 } from '../components/cobros/DuplicadoPrestamosComparacion'
 
 import { getErrorMessage } from '../types/errors'
@@ -2174,11 +2175,15 @@ export default function CobrosPagosReportadosPage() {
                               <span
                                 className="text-muted-foreground"
                                 title={
-                                  esDuplicadoCarteraRow(row)
+                                  tituloDuplicadoNoSeleccionableLote(
+                                    row,
+                                    isMercantilBank
+                                  ) ??
+                                  (esDuplicadoCarteraRow(row)
                                     ? isMercantilBank(row.institucion_financiera)
                                       ? 'No seleccionable en lote: duplicado en cartera (Mercantil: use Aprobar por fila tras Visto si corresponde).'
                                       : 'No seleccionable: duplicado en cartera; en este banco no se puede reaplicar.'
-                                    : 'Solo se puede marcar pendiente o en revisión'
+                                    : 'Solo se puede marcar pendiente o en revisión')
                                 }
                               >
                                 -

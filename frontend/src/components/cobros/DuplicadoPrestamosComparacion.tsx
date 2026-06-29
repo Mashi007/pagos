@@ -400,3 +400,119 @@ export function DuplicadoPrestamosComparacion({
     </div>
   )
 }
+
+export type DuplicadoCarteraAvisoProps = DuplicadoPrestamosComparacionProps & {
+  esMercantil: boolean
+  numeroDocumentoExistente?: string | null
+  /** Botones (abrir préstamo, eliminar, etc.) debajo del aviso. */
+  footer?: React.ReactNode
+}
+
+/**
+ * Aviso unificado en Editar/Detalle: informativo si mismo préstamo;
+ * alerta + tabla solo si el serial está en otro préstamo que el destino del reporte.
+ */
+export function DuplicadoCarteraAviso({
+  prestamoExistenteId,
+  pagoExistenteId,
+  pagoExistenteEstado,
+  pagoExistenteFechaPago,
+  prestamoObjetivoId,
+  prestamoObjetivoMotivo,
+  prestamoReferenciaId,
+  fechaPagoReporteIso,
+  prestamoDuplicadoEsObjetivo,
+  prestamoObjetivoMultiple,
+  esMercantil,
+  numeroDocumentoExistente,
+  footer,
+}: DuplicadoCarteraAvisoProps) {
+  const campos: PrestamoDuplicadoCampos = {
+    duplicado_en_pagos: true,
+    pago_existente_id: pagoExistenteId,
+    numero_documento_pago_existente: numeroDocumentoExistente,
+    prestamo_existente_id: prestamoExistenteId,
+    prestamo_objetivo_id: prestamoObjetivoId,
+    prestamo_duplicado_es_objetivo: prestamoDuplicadoEsObjetivo,
+  }
+
+  if (!esDuplicadoEnCartera(campos)) return null
+
+  if (esDuplicadoMismoPrestamo(campos)) {
+    const prestId = prestamoExistenteId ?? prestamoObjetivoId
+    const doc = String(numeroDocumentoExistente ?? '').trim()
+    return (
+      <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+        <p>
+          Este comprobante ya está registrado en cartera en el mismo préstamo
+          {prestId != null ? (
+            <>
+              {' '}
+              <strong>#{prestId}</strong>
+            </>
+          ) : null}
+          {pagoExistenteId != null ? <> (pago #{pagoExistenteId})</> : null}
+          {doc ? (
+            <>
+              {' '}
+              · Nº <span className="font-mono">{doc}</span>
+            </>
+          ) : null}
+          .
+        </p>
+        {footer ? <div className="mt-2 flex flex-wrap gap-2">{footer}</div> : null}
+      </div>
+    )
+  }
+
+  return (
+    <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-900">
+      <p className="font-medium text-rose-950">
+        Hay un pago en cartera que coincide con esta referencia u operación, en
+        un <strong>préstamo distinto</strong> al que iría este reporte. Revise
+        la tabla antes de usar sufijos o «Visto».
+      </p>
+      {!esMercantil ? (
+        <p className="mt-2 text-xs font-semibold text-rose-800">
+          En bancos distintos a Mercantil no se puede reaplicar este comprobante
+          (Visto y aprobación bloqueados).
+        </p>
+      ) : (
+        <p className="mt-2 text-xs text-amber-900">
+          Excepción Mercantil: compare préstamos y use Visto solo si corresponde
+          aplicar a otro préstamo o desambiguar el serial.
+        </p>
+      )}
+      <DuplicadoPrestamosComparacion
+        prestamoExistenteId={prestamoExistenteId}
+        pagoExistenteId={pagoExistenteId}
+        pagoExistenteEstado={pagoExistenteEstado}
+        pagoExistenteFechaPago={pagoExistenteFechaPago}
+        prestamoObjetivoId={prestamoObjetivoId}
+        prestamoObjetivoMotivo={prestamoObjetivoMotivo}
+        prestamoReferenciaId={prestamoReferenciaId}
+        fechaPagoReporteIso={fechaPagoReporteIso}
+        prestamoDuplicadoEsObjetivo={prestamoDuplicadoEsObjetivo}
+        prestamoObjetivoMultiple={prestamoObjetivoMultiple}
+      />
+      {footer ? <div className="mt-2 flex flex-wrap gap-2">{footer}</div> : null}
+    </div>
+  )
+}
+
+/** Texto para tooltip cuando la fila no es seleccionable en aprobación masiva. */
+export function tituloDuplicadoNoSeleccionableLote(
+  row: PrestamoDuplicadoCampos & { institucion_financiera?: string | null },
+  esMercantil: (institucion?: string | null) => boolean
+): string | undefined {
+  if (!esDuplicadoEnCartera(row)) return undefined
+  if (esDuplicadoMismoPrestamo(row)) {
+    return 'No seleccionable en lote: el serial ya está aplicado en este préstamo.'
+  }
+  if (esDuplicadoEntrePrestamosDistintos(row)) {
+    return esMercantil(row.institucion_financiera)
+      ? 'No seleccionable en lote: serial en otro préstamo (Mercantil: use Aprobar por fila tras Visto si corresponde).'
+      : 'No seleccionable en lote: serial en otro préstamo; en este banco no se puede reaplicar.'
+  }
+  return 'No seleccionable en lote: duplicado en cartera.'
+}

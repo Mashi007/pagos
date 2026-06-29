@@ -41,7 +41,10 @@ import {
   abrirStaffComprobanteDesdeHref,
   esUrlComprobanteImagenConAuth,
 } from '../../utils/comprobanteImagenAuth'
-import { DuplicadoPrestamosResumen } from '../../components/cobros/DuplicadoPrestamosComparacion'
+import {
+  DuplicadoPrestamosResumen,
+  esDuplicadoEntrePrestamosDistintos,
+} from '../../components/cobros/DuplicadoPrestamosComparacion'
 import {
   COHERENCIA_USD_TOL,
   esInstitucionMercantilRevision,
@@ -378,7 +381,20 @@ export function PagosRegistradosRevisionSection(
                           : null
                       const duplicadoEntrePrestamosDistintos =
                         serialDuplicadoCartera &&
-                        prestamoDupEsObjetivoRevision !== true
+                        esDuplicadoEntrePrestamosDistintos({
+                          duplicado_en_pagos: true,
+                          pago_existente_id: pago.duplicado_en_cartera_pago_id,
+                          prestamo_existente_id:
+                            pago.duplicado_en_cartera_prestamo_id,
+                          prestamo_objetivo_id:
+                            typeof pago.prestamo_id === 'number'
+                              ? pago.prestamo_id
+                              : null,
+                          prestamo_duplicado_es_objetivo:
+                            prestExRevision != null && prestObjRevision != null
+                              ? prestExRevision === prestObjRevision
+                              : null,
+                        })
                       const fechaPagoIsoRevision =
                         pago.fecha_pago != null
                           ? String(pago.fecha_pago).slice(0, 10)

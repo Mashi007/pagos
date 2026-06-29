@@ -70,7 +70,7 @@ import {
 
 import { normalizarNumeroDocumento } from '../utils/pagoExcelValidation'
 
-import { DuplicadoPrestamosComparacion } from '../components/cobros/DuplicadoPrestamosComparacion'
+import { DuplicadoCarteraAviso } from '../components/cobros/DuplicadoPrestamosComparacion'
 import { blobComprobanteAFileParaEscaneo } from '../utils/comprobanteImagenAuth'
 import { normalizarComprobanteArchivoParaEscaneo } from '../utils/normalizarComprobanteArchivo'
 
@@ -820,96 +820,84 @@ export default function CobrosEditarPage() {
             </p>
           )}
 
-          {duplicadoActual.duplicado_en_pagos && (
-            <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-900">
-              <p className="font-medium text-rose-950">
-                Hay un pago en cartera que coincide con esta referencia u
-                operación. Revise la tabla y los préstamos antes de usar sufijos
-                o «Visto».
-              </p>
-              {!esMercantil ? (
-                <p className="mt-2 text-xs font-semibold text-rose-800">
-                  En bancos distintos a Mercantil no se puede reaplicar este
-                  comprobante (Visto y aprobación bloqueados).
-                </p>
-              ) : (
-                <p className="mt-2 text-xs text-amber-900">
-                  Excepción Mercantil: compare préstamos y use Visto solo si
-                  corresponde aplicar a otro préstamo o desambiguar el serial.
-                </p>
-              )}
-              <DuplicadoPrestamosComparacion
-                prestamoExistenteId={duplicadoActual.prestamo_existente_id}
-                pagoExistenteId={duplicadoActual.pago_existente_id}
-                pagoExistenteEstado={duplicadoActual.pago_existente_estado}
-                pagoExistenteFechaPago={
-                  duplicadoActual.pago_existente_fecha_pago
-                }
-                prestamoObjetivoId={duplicadoActual.prestamo_objetivo_id}
-                prestamoObjetivoMotivo={duplicadoActual.prestamo_objetivo_motivo}
-                prestamoReferenciaId={duplicadoActual.prestamo_referencia_id}
-                fechaPagoReporteIso={detalle.fecha_pago}
-                prestamoDuplicadoEsObjetivo={
-                  duplicadoActual.prestamo_duplicado_es_objetivo
-                }
-                prestamoObjetivoMultiple={
-                  duplicadoActual.prestamo_objetivo_multiple
-                }
-              />
-              <div className="mt-2 flex flex-wrap gap-2">
-                {typeof duplicadoActual.prestamo_existente_id === 'number' ? (
+          {duplicadoActual.duplicado_en_pagos ? (
+            <DuplicadoCarteraAviso
+              prestamoExistenteId={duplicadoActual.prestamo_existente_id}
+              pagoExistenteId={duplicadoActual.pago_existente_id}
+              pagoExistenteEstado={duplicadoActual.pago_existente_estado}
+              pagoExistenteFechaPago={duplicadoActual.pago_existente_fecha_pago}
+              prestamoObjetivoId={duplicadoActual.prestamo_objetivo_id}
+              prestamoObjetivoMotivo={duplicadoActual.prestamo_objetivo_motivo}
+              prestamoReferenciaId={duplicadoActual.prestamo_referencia_id}
+              fechaPagoReporteIso={detalle.fecha_pago}
+              prestamoDuplicadoEsObjetivo={
+                duplicadoActual.prestamo_duplicado_es_objetivo
+              }
+              prestamoObjetivoMultiple={
+                duplicadoActual.prestamo_objetivo_multiple
+              }
+              esMercantil={esMercantil}
+              numeroDocumentoExistente={
+                'numero_documento_pago_existente' in duplicadoActual
+                  ? duplicadoActual.numero_documento_pago_existente
+                  : undefined
+              }
+              footer={
+                <>
+                  {typeof duplicadoActual.prestamo_existente_id === 'number' ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={eliminandoReporte}
+                      onClick={() =>
+                        navigate(
+                          `/prestamos?filtro_prestamo_id=${duplicadoActual.prestamo_existente_id}`
+                        )
+                      }
+                    >
+                      Abrir préstamo #{duplicadoActual.prestamo_existente_id}
+                    </Button>
+                  ) : null}
+                  {typeof duplicadoActual.prestamo_objetivo_id === 'number' &&
+                  typeof duplicadoActual.prestamo_existente_id === 'number' &&
+                  duplicadoActual.prestamo_objetivo_id !==
+                    duplicadoActual.prestamo_existente_id ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={eliminandoReporte}
+                      onClick={() =>
+                        navigate(
+                          `/prestamos?filtro_prestamo_id=${duplicadoActual.prestamo_objetivo_id}`
+                        )
+                      }
+                    >
+                      Abrir préstamo actual #
+                      {duplicadoActual.prestamo_objetivo_id}
+                    </Button>
+                  ) : null}
                   <Button
                     type="button"
-                    variant="outline"
+                    variant="destructive"
                     size="sm"
-                    disabled={eliminandoReporte}
-                    onClick={() =>
-                      navigate(
-                        `/prestamos?filtro_prestamo_id=${duplicadoActual.prestamo_existente_id}`
-                      )
-                    }
+                    disabled={eliminandoReporte || saving || vistoSaving}
+                    onClick={() => void handleEliminarReporteDuplicado()}
                   >
-                    Abrir préstamo #{duplicadoActual.prestamo_existente_id}
+                    {eliminandoReporte ? (
+                      <>
+                        <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+                        Eliminando…
+                      </>
+                    ) : (
+                      'Eliminar'
+                    )}
                   </Button>
-                ) : null}
-                {typeof duplicadoActual.prestamo_objetivo_id === 'number' &&
-                typeof duplicadoActual.prestamo_existente_id === 'number' &&
-                duplicadoActual.prestamo_objetivo_id !==
-                  duplicadoActual.prestamo_existente_id ? (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={eliminandoReporte}
-                    onClick={() =>
-                      navigate(
-                        `/prestamos?filtro_prestamo_id=${duplicadoActual.prestamo_objetivo_id}`
-                      )
-                    }
-                  >
-                    Abrir préstamo actual #
-                    {duplicadoActual.prestamo_objetivo_id}
-                  </Button>
-                ) : null}
-                <Button
-                  type="button"
-                  variant="destructive"
-                  size="sm"
-                  disabled={eliminandoReporte || saving || vistoSaving}
-                  onClick={() => void handleEliminarReporteDuplicado()}
-                >
-                  {eliminandoReporte ? (
-                    <>
-                      <Loader2 className="mr-1 h-4 w-4 animate-spin" />
-                      Eliminando…
-                    </>
-                  ) : (
-                    'Eliminar'
-                  )}
-                </Button>
-              </div>
-            </div>
-          )}
+                </>
+              }
+            />
+          ) : null}
 
           <Card>
             <CardHeader>
