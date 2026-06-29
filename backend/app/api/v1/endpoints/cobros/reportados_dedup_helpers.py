@@ -936,7 +936,9 @@ def _pago_reportado_list_items_from_rows(
         ced_norm = cedula_norms[idx] if idx < len(cedula_norms) else ""
         if ced_norm:
             cedulas_para_prestamo_objetivo.add(ced_norm)
-    prestamo_objetivo_por_cedula, prestamo_objetivo_multiple_cedulas, (
+    (
+        prestamo_objetivo_por_cedula,
+        prestamo_objetivo_multiple_cedulas,
         prestamo_objetivo_motivo_por_cedula,
         prestamo_referencia_por_cedula,
     ) = (

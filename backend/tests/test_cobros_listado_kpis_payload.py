@@ -23,34 +23,30 @@ def test_regularizar_reportados_guarded_no_name_error():
     _regularizar_reportados_guarded(db)
 
 
-def test_listado_y_kpis_payload_no_name_error_en_regularizar_guarded():
-    """Tras split de reportados_helpers, _regularizar_reportados_guarded no debe lanzar NameError."""
+def test_listado_y_kpis_payload_armado_basico():
+    """Listado + KPIs: payload mínimo sin barrido real (mocks)."""
     db = MagicMock()
     with patch(
-        "app.api.v1.endpoints.cobros.reportados_listado_payload._regularizar_reportados_guarded"
-    ) as reg:
+        "app.api.v1.endpoints.cobros.reportados_listado_payload._get_primer_triple_cached",
+        return_value=({}, {}, frozenset()),
+    ):
         with patch(
-            "app.api.v1.endpoints.cobros.reportados_listado_payload._get_primer_triple_cached",
-            return_value=({}, {}, frozenset()),
+            "app.api.v1.endpoints.cobros.reportados_listado_payload._pago_reportado_list_items_from_rows",
+            return_value=[],
         ):
-            with patch(
-                "app.api.v1.endpoints.cobros.reportados_listado_payload._pago_reportado_list_items_from_rows",
-                return_value=[],
-            ):
-                db.execute.return_value.scalars.return_value.all.return_value = []
-                out = _list_pagos_reportados_payload(
-                    db,
-                    estado=None,
-                    fecha_desde=date(2026, 3, 25),
-                    fecha_hasta=date(2026, 6, 23),
-                    cedula=None,
-                    institucion=None,
-                    page=1,
-                    per_page=20,
-                    incluir_exportados=False,
-                    emit_manual_estado_counts_for_kpis=True,
-                )
-    reg.assert_called_once()
+            db.execute.return_value.scalars.return_value.all.return_value = []
+            out = _list_pagos_reportados_payload(
+                db,
+                estado=None,
+                fecha_desde=date(2026, 3, 25),
+                fecha_hasta=date(2026, 6, 23),
+                cedula=None,
+                institucion=None,
+                page=1,
+                per_page=20,
+                incluir_exportados=False,
+                emit_manual_estado_counts_for_kpis=True,
+            )
     assert "items" in out
     assert "total" in out
 

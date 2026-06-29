@@ -234,6 +234,11 @@ def list_pagos_reportados_y_kpis(
     Sin filtro `estado`: un solo barrido de la cola manual alimenta listado + KPIs (mitad de trabajo BD vs antes).
     Con `estado` o pestaña filtrada: listado acotado + KPIs con barrido completo (misma semántica que antes).
     """
+    try:
+        db.execute(text("SET LOCAL statement_timeout = 240000"))
+    except Exception:
+        pass
+
     cache_payload = _cobros_listado_kpis_cache_key_payload(
         estado=estado,
         fecha_desde=fecha_desde,

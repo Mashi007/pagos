@@ -1328,15 +1328,21 @@ export async function listPagosReportadosConKpis(
   }
 
   try {
-    const data = await apiClient.get<ListPagosReportadosConKpisResponse>(url)
+    const data = await apiClient.get<ListPagosReportadosConKpisResponse>(url, {
+      timeout: 70_000,
+    })
     return persist(data)
   } catch (e: unknown) {
     if (!opts?.bypassCache) {
       const stale = peekListadoKpisCacheStale(params)
       if (stale) return stale
     }
-    const st = (e as { response?: { status?: number } })?.response?.status
-    if (st === 404 || st === 405 || st === 500 || st === 503) {
+    const ax = e as { response?: { status?: number }; code?: string; message?: string }
+    const st = ax?.response?.status
+    const isTimeout =
+      ax?.code === 'ECONNABORTED' ||
+      String(ax?.message ?? '').toLowerCase().includes('timeout')
+    if (st === 404 || st === 405 || st === 500 || st === 503 || isTimeout) {
       const filterParams = {
         fecha_desde: params.fecha_desde,
 

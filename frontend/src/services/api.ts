@@ -697,9 +697,15 @@ class ApiClient {
         /**
          * Dyno API en Render: 502/503 pueden durar >15s (arranque Gunicorn + init BD).
          * Reintentos cortos no alcanzan; GET seguros y PATCH estado cobros-reportados usan hasta 6 con backoff.
+         * listado-y-kpis: NO reintentar 503 (cada intento ~90s); cobrosService hace fallback.
          */
+        const isListadoKpisPagosReportadosGet =
+          isSafeTransientRetryGet &&
+          reqUrl.includes('/cobros/pagos-reportados/listado-y-kpis')
         const isColdStartProxySafeGet =
-          isSafeTransientRetryGet && (st === 502 || st === 503)
+          isSafeTransientRetryGet &&
+          !isListadoKpisPagosReportadosGet &&
+          (st === 502 || st === 503)
         /**
          * PATCH cambio de estado (aprobar/rechazar flujo UI). 502 del proxy sin cuerpo JSON
          * suele ser TCP/deploy; el backend puede no haber aplicado el cambio.
@@ -720,13 +726,10 @@ class ApiClient {
           (isCobrosPagoReportadoEstadoPatch ||
             isCobrosPagoReportadoEditarPatch) &&
           (st === 502 || st === 503)
-        const isListadoKpisPagosReportadosGet =
-          isSafeTransientRetryGet &&
-          reqUrl.includes('/cobros/pagos-reportados/listado-y-kpis')
         const maxRetries =
           isColdStartProxySafeGet || isCobrosEstadoPatch502Storm ? 6 : 3
         const canRetryBecauseStatus =
-          st === 503 ||
+          (st === 503 && !isListadoKpisPagosReportadosGet) ||
           st === 504 ||
           (st === 500 &&
             (methodLc !== 'get' ||

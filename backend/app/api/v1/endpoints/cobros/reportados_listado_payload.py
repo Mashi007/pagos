@@ -122,15 +122,13 @@ from .reportados_dedup_helpers import (
     _reportado_pasa_filtro_dedup_num_op,
 )
 from .reportados_validadores_helpers import (
-    _backfill_falla_validadores_pre_listado,
     _item_falla_validadores_cola_manual,
-    _regularizar_reportados_guarded,
     reportado_falla_validadores_cobros,
 )
 from .schemas import PagoReportadoListItem
 
-_LISTADO_KPIS_MAX_RANGO_DIAS = 45
-_LISTADO_KPIS_STATEMENT_TIMEOUT_MS = 180_000
+_LISTADO_KPIS_MAX_RANGO_DIAS = 21
+_LISTADO_KPIS_STATEMENT_TIMEOUT_MS = 240_000
 _falla_validadores_col_disponible: Optional[bool] = None
 
 
@@ -548,9 +546,7 @@ def _list_pagos_reportados_payload(
             fecha_desde=fecha_desde,
             fecha_hasta=fecha_hasta,
         )
-    _regularizar_reportados_guarded(db)
-    if _dias_rango_fechas_reportados(fecha_desde, fecha_hasta) <= 35:
-        _backfill_falla_validadores_pre_listado(db)
+    # Lectura: no regularizar ni backfill en el hot path (mutaciones y scheduler lo hacen).
     exportados_subq = select(PagoReportadoExportado.pago_reportado_id)
     filtros = _filtros_fecha_cedula_institucion_reportados(
         fecha_desde=fecha_desde,

@@ -86,7 +86,7 @@ function toastAfterRechazoCobros(data: CambiarEstadoPagoResponse) {
 }
 
 /** Alineado con filtros `fecha_desde` / `fecha_hasta` del API (fecha local del navegador). */
-const COBROS_REPORTADOS_FILTRO_FECHA_DIAS = 30
+const COBROS_REPORTADOS_FILTRO_FECHA_DIAS = 21
 
 function cobrosFechaLocalYMD(d: Date): string {
   const y = d.getFullYear()
