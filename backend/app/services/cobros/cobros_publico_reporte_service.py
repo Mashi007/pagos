@@ -103,17 +103,17 @@ def aplicar_revision_manual_por_monto_alto_en_reportado(
     pr: PagoReportado,
 ) -> bool:
     """
-    Si el monto supera el umbral global de escaneo, anota el reporte y devuelve True
+    Si aplica excepcion de negocio (BS o monto >= umbral), anota el reporte y devuelve True
     (el caller debe forzar estado en_revision / falla_validadores).
     """
     from app.services.pagos_gmail.parse_campos_comprobante import (
-        mensaje_monto_revision_manual,
-        monto_requiere_revision_manual,
+        reportado_exento_autoconciliacion,
+        mensaje_excepcion_autoconciliacion,
     )
 
-    if not monto_requiere_revision_manual(monto, moneda=moneda_upper):
+    if not reportado_exento_autoconciliacion(monto, moneda=moneda_upper):
         return False
-    extra = mensaje_monto_revision_manual(monto, moneda=moneda_upper)
+    extra = mensaje_excepcion_autoconciliacion(monto, moneda=moneda_upper)
     prev = (getattr(pr, "gemini_comentario", None) or "").strip()
     pr.gemini_comentario = (f"{prev} {extra}".strip() if prev else extra)[:500]
     return True

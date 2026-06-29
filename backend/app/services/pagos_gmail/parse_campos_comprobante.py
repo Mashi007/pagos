@@ -479,8 +479,8 @@ def aplicar_reglas_ocr_post_gemini(
     return out
 
 
-# Montos escaneados/reportados >= este valor van a revisión manual (cualquier moneda/medio).
-MONTO_UMBRAL_REVISION_MANUAL = 1000.0
+# Montos escaneados/reportados >= este valor van a revision manual (USD o BS, sin convertir moneda).
+MONTO_UMBRAL_REVISION_MANUAL = 500.0
 
 _RANGO_CUOTA_USD_MIN = 30.0
 _RANGO_CUOTA_USD_MAX = 500.0
@@ -869,11 +869,33 @@ def _monto_numerico_para_revision(val: Any, *, moneda: Optional[str] = None) -> 
 
 
 def monto_requiere_revision_manual(val: Any, *, moneda: Optional[str] = None) -> bool:
-    """True si el monto parseado es >= umbral de revisión manual (sin distinguir moneda)."""
+    """True si el monto parseado es >= umbral de revision manual (sin convertir moneda)."""
     n = _monto_numerico_para_revision(val, moneda=moneda)
     if n is None:
         return False
     return n >= MONTO_UMBRAL_REVISION_MANUAL
+
+
+def moneda_reportado_es_bolivares(moneda: Optional[str]) -> bool:
+    return (moneda or "").strip().upper() == "BS"
+
+
+def reportado_exento_autoconciliacion(val: Any, *, moneda: Optional[str] = None) -> bool:
+    """
+    Excepciones de negocio: no autoconciliar aunque el resto de validadores cuadre.
+
+    - Pago en bolivares (BS).
+    - Monto >= umbral en la moneda reportada (500 USD o 500 Bs; sin conversion).
+    """
+    if moneda_reportado_es_bolivares(moneda):
+        return True
+    return monto_requiere_revision_manual(val, moneda=moneda)
+
+
+def mensaje_excepcion_autoconciliacion(val: Any, *, moneda: Optional[str] = None) -> str:
+    if moneda_reportado_es_bolivares(moneda):
+        return "Pago en bolivares (Bs.); requiere revision manual antes de autoconciliar."
+    return mensaje_monto_revision_manual(val, moneda=moneda)
 
 
 def mensaje_monto_revision_manual(val: Any, *, moneda: Optional[str] = None) -> str:
@@ -904,10 +926,10 @@ def fusionar_validacion_reglas_monto_alto_escaneo(
     *,
     moneda: Optional[str] = None,
 ) -> Optional[str]:
-    """Añade observación de revisión manual al escaneo Infopagos/lote si el monto supera el umbral."""
-    if not monto_requiere_revision_manual(monto, moneda=moneda):
+    """Añade observación de revision manual al escaneo si aplica excepcion BS o monto alto."""
+    if not reportado_exento_autoconciliacion(monto, moneda=moneda):
         return validacion_reglas
-    msg = mensaje_monto_revision_manual(monto, moneda=moneda)
+    msg = mensaje_excepcion_autoconciliacion(monto, moneda=moneda)
     prev = (validacion_reglas or "").strip()
     if not prev:
         return msg

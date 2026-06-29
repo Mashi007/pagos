@@ -613,8 +613,19 @@ def _list_pagos_reportados_payload(
     take_need = per_page
     page_ids_ordered: List[int] = []
     total = 0
-    pagos_canon_acum: Dict[str, Set[str]] = {"queried": set(), "present": set()}
+    pagos_canon_acum: Dict[str, Any] = {
+        "queried": set(),
+        "present": set(),
+        "evasion_cache": {},
+    }
     pagos_info_acum: Dict[str, Any] = {"info_queried": set(), "info_by_key": {}}
+    prestamo_objetivo_acum: Dict[str, Any] = {
+        "cedulas_done": set(),
+        "target_by_norm": {},
+        "multiple_by_norm": set(),
+        "motivo_by_norm": {},
+        "referencia_by_norm": {},
+    }
     while True:
         rows = db.execute(q.offset(offset_scan).limit(batch)).scalars().all()
         if not rows:
@@ -626,6 +637,7 @@ def _list_pagos_reportados_payload(
             include_financial_fields=False,
             pagos_canon_acum=pagos_canon_acum,
             pagos_info_acum=pagos_info_acum,
+            prestamo_objetivo_acum=prestamo_objetivo_acum,
         ):
             if not _reportado_pasa_filtro_dedup_num_op(it, primer_num_op):
                 continue
@@ -664,6 +676,7 @@ def _list_pagos_reportados_payload(
                 include_financial_fields=True,
                 pagos_canon_acum=pagos_canon_acum,
                 pagos_info_acum=pagos_info_acum,
+                prestamo_objetivo_acum=prestamo_objetivo_acum,
             )
 
     out: Dict[str, Any] = {"items": page_items, "total": total, "page": page, "per_page": per_page}
@@ -741,8 +754,19 @@ def _kpis_pagos_reportados_payload(
 
         batch = _dedup._COBROS_LISTADO_SCAN_BATCH
         offset_scan = 0
-        pagos_canon_acum_kpi: Dict[str, Set[str]] = {"queried": set(), "present": set()}
+        pagos_canon_acum_kpi: Dict[str, Any] = {
+            "queried": set(),
+            "present": set(),
+            "evasion_cache": {},
+        }
         pagos_info_acum_kpi: Dict[str, Any] = {"info_queried": set(), "info_by_key": {}}
+        prestamo_objetivo_acum_kpi: Dict[str, Any] = {
+            "cedulas_done": set(),
+            "target_by_norm": {},
+            "multiple_by_norm": set(),
+            "motivo_by_norm": {},
+            "referencia_by_norm": {},
+        }
         while True:
             rows_b = db.execute(q_scan.offset(offset_scan).limit(batch)).scalars().all()
             if not rows_b:
@@ -754,6 +778,7 @@ def _kpis_pagos_reportados_payload(
                 include_financial_fields=False,
                 pagos_canon_acum=pagos_canon_acum_kpi,
                 pagos_info_acum=pagos_info_acum_kpi,
+                prestamo_objetivo_acum=prestamo_objetivo_acum_kpi,
             ):
                 if not _reportado_pasa_filtro_dedup_num_op(it, primer_num_op_kpi):
                     continue

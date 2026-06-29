@@ -418,6 +418,8 @@ def _item_falla_validadores_cola_manual(it: PagoReportadoListItem) -> bool:
     Los reportes en estado ``en_revision`` siempre entran en cola (p. ej. escáner Infopagos con
     confirmación humana): Cobros debe aprobar/rechazar aunque Gemini y las reglas automáticas cuadren.
 
+    Excepciones de negocio (sin autoconciliar): bolivares (BS) o monto >= 500 en la moneda reportada.
+
     Si Gemini marcó coincidencia exacta (`true`/`1`), solo falla si queda observación de **reglas**
     (DUPLICADO, NO CLIENTES, etc.); el texto residual de Gemini no cuenta en ese caso (se omite al armar la observación).
 
@@ -429,7 +431,14 @@ def _item_falla_validadores_cola_manual(it: PagoReportadoListItem) -> bool:
 
     `error` (fallo de API / sin clave) sigue exigiendo revisión manual.
     """
+    from app.services.pagos_gmail.parse_campos_comprobante import reportado_exento_autoconciliacion
+
     if (getattr(it, "estado", None) or "").strip() == "en_revision":
+        return True
+    if reportado_exento_autoconciliacion(
+        getattr(it, "monto", None),
+        moneda=getattr(it, "moneda", None),
+    ):
         return True
     obs = _obs_efectiva_para_validadores(
         (it.observacion or "").strip(),
@@ -454,6 +463,13 @@ def reportado_falla_validadores_cobros(db: Session, pr: PagoReportado) -> bool:
     True si el reportado NO cumple los mismos validadores que el listado de cola manual (Gemini + reglas de carga).
     Usado al registrar desde formulario público / Infopagos para no mandar a revisión manual lo que ya cumple.
     """
+    from app.services.pagos_gmail.parse_campos_comprobante import reportado_exento_autoconciliacion
+
+    if reportado_exento_autoconciliacion(
+        getattr(pr, "monto", None),
+        moneda=getattr(pr, "moneda", None),
+    ):
+        return True
     items = _pago_reportado_list_items_from_rows(db, [pr])
     if not items:
         return True

@@ -49,6 +49,7 @@ from app.services.notificaciones_exclusion_desistimiento import (
 from app.core.email_config_holder import get_email_activo_servicio
 from app.api.v1.endpoints.validadores import validate_cedula
 from app.api.v1.endpoints.pagos import _aplicar_pago_a_cuotas_interno
+from app.services.pago_numero_documento import documento_colisiona_evasion_registrado
 from app.services.cobros.pago_reportado_documento import (
     claves_documento_pago_para_reportado,
     documento_numero_desde_pago_reportado,
@@ -221,7 +222,7 @@ _cobros_list_aux_lock = threading.Lock()
 
 # Mapas de precálculo duplicados (norm global, nº operación, presencia en pagos): costosos en GET listado/KPIs.
 # Cache en proceso con token de revisión barato + TTL para no servir datos obsoletos si cambia cola/exportados/pagos.
-_PRIMER_MAPS_CACHE_TTL_SEC = 90.0
+_PRIMER_MAPS_CACHE_TTL_SEC = 300.0
 
 # Filas SQL por iteración al barrer la cola manual (validadores en Python). Subir reduce round-trips a BD por lote.
 _COBROS_LISTADO_SCAN_BATCH = 1200
@@ -588,6 +589,34 @@ def _prestamo_objetivo_por_cedula_norm_batch(
     return target_by_norm, multiple_by_norm, motivo_by_norm, referencia_by_norm
 
 
+def _merge_prestamo_objetivo_acum(
+    db: Session,
+    cedulas_norm: Set[str],
+    acum: Optional[Dict[str, Any]],
+) -> Tuple[Dict[str, int], Set[str], Dict[str, str], Dict[str, int]]:
+    """Reusa mapas de prestamo objetivo entre lotes del mismo barrido listado/KPIs."""
+    if not cedulas_norm:
+        return {}, set(), {}, {}
+    if acum is None:
+        return _prestamo_objetivo_por_cedula_norm_batch(db, cedulas_norm)
+    pending = cedulas_norm - acum.get("cedulas_done", set())
+    if pending:
+        target, multiple, motivo, referencia = _prestamo_objetivo_por_cedula_norm_batch(
+            db, pending
+        )
+        acum.setdefault("target_by_norm", {}).update(target)
+        acum.setdefault("multiple_by_norm", set()).update(multiple)
+        acum.setdefault("motivo_by_norm", {}).update(motivo)
+        acum.setdefault("referencia_by_norm", {}).update(referencia)
+        acum.setdefault("cedulas_done", set()).update(pending)
+    return (
+        acum.get("target_by_norm", {}),
+        acum.get("multiple_by_norm", set()),
+        acum.get("motivo_by_norm", {}),
+        acum.get("referencia_by_norm", {}),
+    )
+
+
 def _rechazar_aprobacion_si_documento_ya_en_pagos(db: Session, pr: PagoReportado) -> None:
     """
     No aprobar si el comprobante ya existe en cartera (`pagos`).
@@ -787,6 +816,7 @@ def _observacion_reglas_carga(
     claves_doc_en_pagos: frozenset,
     conteo_norm_en_pagina: Counter,
     primer_id_por_norm: Dict[str, int],
+    evasion_cache: Optional[Dict[str, bool]] = None,
 ) -> list:
     """
     Para cada fila: NO CLIENTES, No pag Bs., DUPLICADO.
@@ -818,14 +848,18 @@ def _observacion_reglas_carga(
         if moneda == "BS" and cedula_norm and not cedula_coincide_autorizados_bs(cedula_norm, cedulas_bolivares):
             partes.append("No pag Bs.")
         dup_pagos = reportado_toca_claves_canonicas_en_pagos(r, claves_doc_en_pagos)
-        if not dup_pagos and (getattr(r, "numero_operacion", None) or "").strip():
-            from app.services.pago_numero_documento import documento_colisiona_evasion_registrado
-
-            dup_pagos = documento_colisiona_evasion_registrado(
-                db,
-                r.numero_operacion,
-                incluir_reportados_activos=False,
-            )
+        op_raw = (getattr(r, "numero_operacion", None) or "").strip()
+        if not dup_pagos and op_raw:
+            if evasion_cache is not None and op_raw in evasion_cache:
+                dup_pagos = evasion_cache[op_raw]
+            else:
+                dup_pagos = documento_colisiona_evasion_registrado(
+                    db,
+                    r.numero_operacion,
+                    incluir_reportados_activos=False,
+                )
+                if evasion_cache is not None:
+                    evasion_cache[op_raw] = dup_pagos
         n_doc_eff = documento_numero_desde_pago_reportado(r)[1]
         dup_entre_reportados = False
         if n_doc_eff:
@@ -881,15 +915,17 @@ def _pago_reportado_list_items_from_rows(
     *,
     primer_id_por_norm_precalc: Optional[Dict[str, int]] = None,
     include_financial_fields: bool = True,
-    pagos_canon_acum: Optional[Dict[str, Set[str]]] = None,
+    pagos_canon_acum: Optional[Dict[str, Any]] = None,
     pagos_info_acum: Optional[Dict[str, Any]] = None,
+    prestamo_objetivo_acum: Optional[Dict[str, Any]] = None,
 ) -> List[PagoReportadoListItem]:
     """Misma lógica de observaciones / tasa que el listado paginado.
 
     Si ``include_financial_fields`` es False, no calcula tasa Bs/USD ni equivalente (ahorra trabajo
     en barridos masivos donde solo se usa ``observacion`` + Gemini para ``_item_falla_validadores_cola_manual``).
 
-    ``pagos_canon_acum``: opcional, mismo dict en todo un barrido por lotes; claves ``queried`` y ``present``.
+    ``pagos_canon_acum``: opcional, mismo dict en todo un barrido por lotes; claves ``queried``,
+    ``present`` y ``evasion_cache`` (colisiones por evasion de nº operacion, reusadas entre lotes).
     """
     if not rows:
         return []
@@ -941,11 +977,7 @@ def _pago_reportado_list_items_from_rows(
         prestamo_objetivo_multiple_cedulas,
         prestamo_objetivo_motivo_por_cedula,
         prestamo_referencia_por_cedula,
-    ) = (
-        _prestamo_objetivo_por_cedula_norm_batch(db, cedulas_para_prestamo_objetivo)
-        if cedulas_para_prestamo_objetivo
-        else ({}, set(), {}, {})
-    )
+    ) = _merge_prestamo_objetivo_acum(db, cedulas_para_prestamo_objetivo, prestamo_objetivo_acum)
     norm_por_fila = []
     for r in rows:
         _, n_eff = documento_numero_desde_pago_reportado(r)
@@ -967,6 +999,10 @@ def _pago_reportado_list_items_from_rows(
             created_at_desde=created_at_desde,
         )
 
+    evasion_cache: Optional[Dict[str, bool]] = None
+    if pagos_canon_acum is not None:
+        evasion_cache = pagos_canon_acum.setdefault("evasion_cache", {})
+
     partes_por_fila = _observacion_reglas_carga(
         db,
         rows,
@@ -975,6 +1011,7 @@ def _pago_reportado_list_items_from_rows(
         claves_doc_en_pagos,
         conteo_norm_en_pagina,
         primer_id_por_norm,
+        evasion_cache=evasion_cache,
     )
 
     items: List[PagoReportadoListItem] = []

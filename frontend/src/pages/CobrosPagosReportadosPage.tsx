@@ -1942,9 +1942,9 @@ export default function CobrosPagosReportadosPage() {
                   Consultando cola de reportes…
                 </p>
                 <p className="max-w-md text-center text-sm">
-                  Si la cartera es grande, el servidor puede tardar hasta un
-                  minuto en el primer análisis; las siguientes búsquedas suelen
-                  ir más rápido.
+                  La primera consulta puede tardar hasta 2 minutos mientras el
+                  servidor analiza la cola; las siguientes cargas con los mismos
+                  filtros suelen ser mucho más rápidas.
                 </p>
               </div>
             ) : !itemsTabla.length ? (
