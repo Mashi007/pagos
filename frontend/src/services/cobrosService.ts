@@ -1213,7 +1213,8 @@ export async function getPagosReportadosKpis(
     institucion?: string
 
     incluir_exportados?: boolean
-  } = {}
+  } = {},
+  opts?: { timeoutMs?: number }
 ): Promise<PagosReportadosKpis> {
   const q = new URLSearchParams()
 
@@ -1230,29 +1231,33 @@ export async function getPagosReportadosKpis(
   // Sin `_rq`: permite deduplicar GET concurrentes a `/kpis` (mismos filtros) en apiClient.
 
   const data = await apiClient.get<PagosReportadosKpis>(
-    `${BASE_COBROS}/pagos-reportados/kpis?${q}`
+    `${BASE_COBROS}/pagos-reportados/kpis?${q}`,
+    opts?.timeoutMs != null ? { timeout: opts.timeoutMs } : undefined
   )
 
   return data
 }
 
-export async function listPagosReportados(params: {
-  estado?: string
+export async function listPagosReportados(
+  params: {
+    estado?: string
 
-  fecha_desde?: string
+    fecha_desde?: string
 
-  fecha_hasta?: string
+    fecha_hasta?: string
 
-  cedula?: string
+    cedula?: string
 
-  institucion?: string
+    institucion?: string
 
-  page?: number
+    page?: number
 
-  per_page?: number
+    per_page?: number
 
-  incluir_exportados?: boolean
-}): Promise<ListPagosReportadosResponse> {
+    incluir_exportados?: boolean
+  },
+  opts?: { timeoutMs?: number }
+): Promise<ListPagosReportadosResponse> {
   const q = new URLSearchParams()
 
   if (params.estado) q.set('estado', params.estado)
@@ -1275,7 +1280,8 @@ export async function listPagosReportados(params: {
   q.set('_rq', String(Date.now()))
 
   const data = await apiClient.get<ListPagosReportadosResponse>(
-    `${BASE_COBROS}/pagos-reportados?${q}`
+    `${BASE_COBROS}/pagos-reportados?${q}`,
+    opts?.timeoutMs != null ? { timeout: opts.timeoutMs } : undefined
   )
 
   return data
@@ -1327,9 +1333,11 @@ export async function listPagosReportadosConKpis(
     }
   }
 
+  const listadoReadTimeoutMs = 120_000
+
   try {
     const data = await apiClient.get<ListPagosReportadosConKpisResponse>(url, {
-      timeout: 70_000,
+      timeout: listadoReadTimeoutMs,
     })
     return persist(data)
   } catch (e: unknown) {
@@ -1356,17 +1364,22 @@ export async function listPagosReportadosConKpis(
       }
 
       const [lista, kpis] = await Promise.all([
-        listPagosReportados({
-          estado: params.estado,
+        listPagosReportados(
+          {
+            estado: params.estado,
 
-          ...filterParams,
+            ...filterParams,
 
-          page: params.page,
+            page: params.page,
 
-          per_page: params.per_page,
+            per_page: params.per_page,
+          },
+          { timeoutMs: listadoReadTimeoutMs }
+        ),
+
+        getPagosReportadosKpis(filterParams, {
+          timeoutMs: listadoReadTimeoutMs,
         }),
-
-        getPagosReportadosKpis(filterParams),
       ])
 
       return persist({ ...lista, kpis })

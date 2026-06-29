@@ -670,7 +670,7 @@ class ApiClient {
             reqUrl.includes('/concesionarios/activos') ||
             reqUrl.includes('/analistas/activos') ||
             reqUrl.includes('/modelos-vehiculos/activos') ||
-            reqUrl.includes('/cobros/pagos-reportados/listado-y-kpis') ||
+            // listado-y-kpis: sin retry automatico (cada fallo ~90s); cobrosService hace fallback.
             // Detalle del reporte y comprobante/recibo: idempotentes (lectura). El detalle es el primer
             // request al entrar a /editar; el comprobante/recibo lo descarga la página de revisión.
             // Sin retry, un 502 transitorio dejaba la página rota.
