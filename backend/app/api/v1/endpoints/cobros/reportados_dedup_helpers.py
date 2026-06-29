@@ -660,6 +660,142 @@ def _rechazar_si_duplicado_mismo_prestamo_en_cartera(db: Session, pr: PagoReport
     )
 
 
+def _mensaje_duplicado_mismo_prestamo_ya_en_cartera(diag: Any) -> str:
+    prest = getattr(diag, "prestamo_existente_id", None) or getattr(
+        diag, "prestamo_objetivo_id", None
+    )
+    pago_id = getattr(diag, "pago_existente_id", None)
+    detalle_prest = f" (préstamo #{prest}" + (f", pago #{pago_id})" if pago_id else ")")
+    return (
+        f"{DUPLICADO_MISMO_PRESTAMO_OBS}: serial ya aplicado en este crédito"
+        f"{detalle_prest}. No se admite reaplicar (ningún banco)."
+    )
+
+
+def _diagnostico_duplicado_mismo_prestamo_antes_de_crear(
+    db: Session,
+    *,
+    tipo_cedula: str,
+    numero_cedula: str,
+    numero_operacion: str,
+    referencia_interna: str = "",
+    institucion_financiera: str = "",
+) -> Optional[Any]:
+    """None si no hay duplicado mismo préstamo; si no, el diagnóstico completo."""
+    from .reportados_validadores_helpers import _diagnostico_duplicado_reportado
+
+    pr_like = SimpleNamespace(
+        tipo_cedula=tipo_cedula,
+        numero_cedula=numero_cedula,
+        numero_operacion=numero_operacion,
+        referencia_interna=referencia_interna or "",
+        institucion_financiera=institucion_financiera or "",
+    )
+    diag = _diagnostico_duplicado_reportado(
+        db,
+        pr_like,
+        tipo_cedula=tipo_cedula,
+        numero_cedula=numero_cedula,
+    )
+    if _es_duplicado_mismo_prestamo_en_cartera(diag):
+        return diag
+    return None
+
+
+def _eliminar_reportado_duplicado_mismo_prestamo(
+    db: Session,
+    pr: PagoReportado,
+    *,
+    via: str = "auto",
+) -> bool:
+    """
+    Borra el reporte si el serial ya está en cartera sobre el mismo préstamo objetivo.
+    Misma acción que DELETE manual del operador: no debe volver a la cola.
+    """
+    from .reportados_validadores_helpers import _diagnostico_duplicado_reportado
+
+    diag = _diagnostico_duplicado_reportado(
+        db,
+        pr,
+        tipo_cedula=getattr(pr, "tipo_cedula", None),
+        numero_cedula=getattr(pr, "numero_cedula", None),
+    )
+    if not _es_duplicado_mismo_prestamo_en_cartera(diag):
+        return False
+    ref = getattr(pr, "referencia_interna", None)
+    pid = int(pr.id)
+    estado_prev = (getattr(pr, "estado", None) or "").strip()
+    db.delete(pr)
+    db.commit()
+    logger.info(
+        "[COBROS] Reporte duplicado mismo préstamo eliminado (%s): id=%s ref=%s",
+        via,
+        pid,
+        ref,
+    )
+    try:
+        from .listado_kpis_cache import _drop_pagos_from_listado_kpis_cache
+
+        _drop_pagos_from_listado_kpis_cache(
+            [pid],
+            estados_previos={pid: estado_prev} if estado_prev else None,
+        )
+    except Exception as e:
+        logger.warning(
+            "[COBROS] parche cache tras eliminar duplicado mismo préstamo id=%s: %s",
+            pid,
+            e,
+        )
+    return True
+
+
+def _purgar_duplicados_mismo_prestamo_en_cola(
+    db: Session,
+    *,
+    limit: int = 24,
+    fecha_desde: Optional[date] = None,
+    fecha_hasta: Optional[date] = None,
+) -> int:
+    """
+    Elimina de la cola (pendiente / en_revision) reportes cuyo serial ya está en `pagos`
+    sobre el mismo préstamo. Evita que reaparezcan tras borrarlos manualmente cuando
+    Infopagos o el formulario público reenvían el mismo comprobante.
+    """
+    from .reportados_listado_payload import _filtros_fecha_cedula_institucion_reportados
+
+    filtros = _filtros_fecha_cedula_institucion_reportados(
+        fecha_desde=fecha_desde,
+        fecha_hasta=fecha_hasta,
+        cedula=None,
+        institucion=None,
+    )
+    wh = [PagoReportado.estado.in_(("pendiente", "en_revision"))] + filtros
+    rows = (
+        db.execute(
+            select(PagoReportado)
+            .where(*wh)
+            .order_by(PagoReportado.created_at.desc())
+            .limit(max(limit * 3, 48))
+        )
+        .scalars()
+        .all()
+    )
+    n = 0
+    for pr in rows:
+        if n >= limit:
+            break
+        if _eliminar_reportado_duplicado_mismo_prestamo(db, pr, via="purgar_cola"):
+            n += 1
+    if n:
+        try:
+            from .listado_kpis_cache import _invalidate_cobros_listado_kpis_cache
+
+            _invalidate_cobros_listado_kpis_cache()
+        except Exception as e:
+            logger.warning("[COBROS] invalidate cache tras purgar duplicados mismo préstamo: %s", e)
+    return n
+
+
 def _rechazar_aprobacion_si_documento_ya_en_pagos(db: Session, pr: PagoReportado) -> None:
     """
     No aprobar si el comprobante ya existe en cartera (`pagos`).
