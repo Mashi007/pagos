@@ -18,6 +18,8 @@ function isChunkLoadError(err: Error | null): boolean {
     msg.includes('error loading dynamically imported module') ||
     msg.includes('failed to load module') ||
     msg.includes('missing js chunk') ||
+    msg.includes("doesn't provide an export named") ||
+    msg.includes('does not provide an export named') ||
     msg.includes('mime no permitido') ||
     msg.includes('tipo mime') ||
     (msg.includes('text/html') && msg.includes('module'))

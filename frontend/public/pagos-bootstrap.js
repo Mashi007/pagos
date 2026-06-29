@@ -229,9 +229,20 @@
     return (u.indexOf('/assets/') !== -1 || u.indexOf('/pagos/assets/') !== -1) && u.indexOf('.js') !== -1
   }
 
+  function isStaleChunkExportMismatch(msg) {
+    if (!msg || typeof msg !== 'string') return false
+    var m = msg.toLowerCase()
+    return (
+      m.indexOf("doesn't provide an export named") !== -1 ||
+      m.indexOf('does not provide an export named') !== -1 ||
+      m.indexOf('missing js chunk') !== -1
+    )
+  }
+
   function isDynamicChunkLoadFailure(msg, sourceUrl) {
     if (!msg || typeof msg !== 'string') return false
     var m = msg.toLowerCase()
+    if (isStaleChunkExportMismatch(msg)) return true
     var mimeHtml =
       (m.indexOf('text/html') !== -1 || m.indexOf('tipo mime') !== -1 || m.indexOf('mime no permitido') !== -1) &&
       (m.indexOf('m?dulo') !== -1 ||
@@ -328,6 +339,10 @@
         reloadPage()
         return
       }
+      if (isStaleChunkExportMismatch(errorMessage)) {
+        reloadPage()
+        return
+      }
       var target = event.target
       var isModuleScript =
         target && target.tagName === 'SCRIPT' && target.type === 'module'
@@ -377,6 +392,7 @@
           msg.indexOf('/pagos/assets/') !== -1 ||
           msg.indexOf('.js') !== -1)
       var isChunk =
+        isStaleChunkExportMismatch(msg) ||
         msg.indexOf('dynamically imported module') !== -1 ||
         (msg.indexOf('failed to fetch') !== -1 && msg.indexOf('module') !== -1) ||
         (msg.indexOf('error loading') !== -1 && msg.indexOf('module') !== -1) ||

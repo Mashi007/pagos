@@ -19,6 +19,8 @@ export function RouteChunkError({ error, reset }: Props) {
       msg.includes('dynamically imported module') ||
       msg.includes('error loading') ||
       msg.includes('missing js chunk') ||
+      msg.includes("doesn't provide an export named") ||
+      msg.includes('does not provide an export named') ||
       msg.includes('mime no permitido') ||
       msg.includes('text/html')
     if (isChunk) {
