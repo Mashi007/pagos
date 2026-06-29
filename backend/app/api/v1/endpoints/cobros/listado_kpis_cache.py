@@ -93,7 +93,7 @@ from app.services.cobros.pago_reportado_comprobante_unico import (
 logger = logging.getLogger(__name__)
 _COBROS_LISTADO_KPIS_CACHE_TTL_SEC = 900  # 15 minutos
 _COBROS_LISTADO_KPIS_CACHE_STALE_TTL_SEC = 7200  # 2 horas (fallback resiliente)
-_COBROS_LISTADO_KPIS_SINGLEFLIGHT_WAIT_SEC = 1.5
+_COBROS_LISTADO_KPIS_SINGLEFLIGHT_WAIT_SEC = 28.0
 _COBROS_LISTADO_KPIS_SINGLEFLIGHT_STALE_SEC = 30.0
 _COBROS_LISTADO_KPIS_CACHE_PREFIX = "cobros:listado_y_kpis:v2:"
 _COBROS_LISTADO_KPIS_CACHE_STALE_SUFFIX = ":stale"

@@ -46,6 +46,7 @@ import {
   invalidateCobrosListadoKpisCache,
   patchListadoKpisCacheDropPagoReportado,
   peekListadoKpisCache,
+  peekListadoKpisCacheStale,
   getRecentlyHiddenPagoReportadoIds,
   getPagoReportadoComprobanteBlob,
   COBROS_LISTADO_KPIS_CACHE_TTL_MS,
@@ -85,7 +86,7 @@ function toastAfterRechazoCobros(data: CambiarEstadoPagoResponse) {
 }
 
 /** Alineado con filtros `fecha_desde` / `fecha_hasta` del API (fecha local del navegador). */
-const COBROS_REPORTADOS_FILTRO_FECHA_DIAS = 90
+const COBROS_REPORTADOS_FILTRO_FECHA_DIAS = 60
 
 function cobrosFechaLocalYMD(d: Date): string {
   const y = d.getFullYear()
@@ -744,7 +745,15 @@ export default function CobrosPagosReportadosPage() {
         return
       }
 
-      const initialLoad = dataRef.current === null
+      const staleSnapshot =
+        !opts?.bypassCache ? peekListadoKpisCacheStale(queryParams) : null
+      if (staleSnapshot && dataRef.current === null) {
+        setData(staleSnapshot)
+        setKpis(staleSnapshot.kpis)
+        setLoading(false)
+      }
+
+      const initialLoad = dataRef.current === null && staleSnapshot === null
       const silent = Boolean(opts?.silent) && dataRef.current !== null
       setLoading(initialLoad)
       // Sin overlay "Actualizando listado…" en refrescos silenciosos (p. ej. tras aprobar o intervalo automático).
@@ -829,12 +838,8 @@ export default function CobrosPagosReportadosPage() {
   ])
 
   /**
-   * Refresco en segundo plano. El intervalo coincide con el TTL del caché cliente
-   * (`COBROS_LISTADO_KPIS_CACHE_TTL_MS`); si no forzamos `bypassCache`, por carrera
-   * de tiempo a veces el `listPagosReportadosConKpis` devuelve la copia local y el
-   * "refresco cada 15 min" se vuelve cada ~30 min reales. Pasamos `bypassCache: true`
-   * SOLO en este tick (no afecta a "Buscar" ni a la carga inicial); el backend tiene
-   * su propio caché Redis + single-flight para absorber la carga.
+   * Refresco en segundo plano cada 15 min. Usa caché Redis/backend cuando existe;
+   * no forzar `fresh=1` salvo en «Actualizar ahora» o tras mutaciones.
    */
   useEffect(() => {
     const tick = () => {
@@ -844,7 +849,7 @@ export default function CobrosPagosReportadosPage() {
       ) {
         return
       }
-      void fetchListado({ silent: true, bypassCache: true })
+      void fetchListado({ silent: true })
     }
     const id = window.setInterval(tick, COBROS_LISTADO_KPIS_CACHE_TTL_MS)
     return () => window.clearInterval(id)

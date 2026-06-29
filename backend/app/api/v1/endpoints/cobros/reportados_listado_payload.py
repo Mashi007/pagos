@@ -122,6 +122,7 @@ from .reportados_dedup_helpers import (
     _reportado_pasa_filtro_dedup_num_op,
 )
 from .reportados_validadores_helpers import (
+    _backfill_falla_validadores_pre_listado,
     _item_falla_validadores_cola_manual,
     _regularizar_reportados_guarded,
     reportado_falla_validadores_cobros,
@@ -463,6 +464,7 @@ def _list_pagos_reportados_payload(
             fecha_hasta=fecha_hasta,
         )
     _regularizar_reportados_guarded(db)
+    _backfill_falla_validadores_pre_listado(db)
     exportados_subq = select(PagoReportadoExportado.pago_reportado_id)
     filtros = _filtros_fecha_cedula_institucion_reportados(
         fecha_desde=fecha_desde,

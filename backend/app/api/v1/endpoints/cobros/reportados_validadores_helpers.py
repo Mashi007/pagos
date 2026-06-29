@@ -551,3 +551,68 @@ def _backfill_falla_validadores_lote(db: Session) -> int:
     return updated
 
 
+_backfill_pre_listado_last_run = 0.0
+_BACKFILL_PRE_LISTADO_COOLDOWN_SEC = 20.0
+_BACKFILL_PRE_LISTADO_BATCH = 35
+_BACKFILL_PRE_LISTADO_BUDGET_SEC = 5.0
+
+
+def _backfill_falla_validadores_pre_listado(db: Session) -> int:
+    """
+    Antes del barrido del listado: rellena `falla_validadores_manual` en más filas
+    que el backfill ligero (menos filas con NULL → menos validación Python en el scan).
+    """
+    global _backfill_pre_listado_last_run
+    now = time.monotonic()
+    if now - _backfill_pre_listado_last_run < _BACKFILL_PRE_LISTADO_COOLDOWN_SEC:
+        return 0
+    _backfill_pre_listado_last_run = now
+
+    gem_col = func.lower(func.trim(func.coalesce(PagoReportado.gemini_coincide_exacto, "")))
+    ids = list(
+        db.execute(
+            select(PagoReportado.id).where(
+                or_(
+                    PagoReportado.falla_validadores_manual.is_(None),
+                    and_(
+                        PagoReportado.falla_validadores_manual == False,
+                        PagoReportado.estado.in_(("pendiente", "en_revision", "aprobado")),
+                        gem_col.in_(("true", "1")),
+                    ),
+                ),
+            )
+            .order_by(PagoReportado.id.desc())
+            .limit(_BACKFILL_PRE_LISTADO_BATCH)
+        ).scalars().all()
+    )
+    if not ids:
+        return 0
+
+    deadline = time.monotonic() + _BACKFILL_PRE_LISTADO_BUDGET_SEC
+    updated = 0
+    for pid in ids:
+        if time.monotonic() > deadline:
+            break
+        try:
+            pr = db.get(PagoReportado, pid)
+            if pr is None:
+                continue
+            actualizar_flag_falla_validadores(db, pr)
+            updated += 1
+        except Exception:
+            try:
+                db.rollback()
+            except Exception:
+                pass
+    if updated:
+        try:
+            db.commit()
+        except Exception:
+            try:
+                db.rollback()
+            except Exception:
+                pass
+    if updated:
+        logger.info("[COBROS_FLAG] Pre-listado backfill: %d filas.", updated)
+    return updated
+

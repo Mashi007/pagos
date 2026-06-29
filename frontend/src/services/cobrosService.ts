@@ -1041,6 +1041,8 @@ export interface ListPagosReportadosConKpisResponse extends ListPagosReportadosR
 
 /** TTL compartido con el intervalo de refresco en CobrosPagosReportadosPage (15 min, alineado con cache backend). */
 export const COBROS_LISTADO_KPIS_CACHE_TTL_MS = 15 * 60 * 1000
+/** Datos viejos del cliente aún útiles para pintar mientras llega el fetch (alineado con stale Redis ~2h). */
+export const COBROS_LISTADO_KPIS_STALE_CLIENT_MS = 2 * 60 * 60 * 1000
 
 type CobrosListadoKpisParams = {
   estado?: string
@@ -1108,7 +1110,23 @@ export function peekListadoKpisCache(
     const hit = cobrosListadoKpisCache.get(key)
     if (!hit) return null
     if (Date.now() - hit.storedAt >= COBROS_LISTADO_KPIS_CACHE_TTL_MS) {
-      cobrosListadoKpisCache.delete(key)
+      return null
+    }
+    return cloneListadoConKpis(hit.payload)
+  } catch {
+    return null
+  }
+}
+
+/** Cache cliente expirado pero reciente: stale-while-revalidate sin spinner en blanco. */
+export function peekListadoKpisCacheStale(
+  params: CobrosListadoKpisParams
+): ListPagosReportadosConKpisResponse | null {
+  try {
+    const key = cobrosListadoKpisCacheKey(params)
+    const hit = cobrosListadoKpisCache.get(key)
+    if (!hit) return null
+    if (Date.now() - hit.storedAt >= COBROS_LISTADO_KPIS_STALE_CLIENT_MS) {
       return null
     }
     return cloneListadoConKpis(hit.payload)
@@ -1313,6 +1331,10 @@ export async function listPagosReportadosConKpis(
     const data = await apiClient.get<ListPagosReportadosConKpisResponse>(url)
     return persist(data)
   } catch (e: unknown) {
+    if (!opts?.bypassCache) {
+      const stale = peekListadoKpisCacheStale(params)
+      if (stale) return stale
+    }
     const st = (e as { response?: { status?: number } })?.response?.status
     if (st === 404 || st === 405) {
       const filterParams = {
