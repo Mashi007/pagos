@@ -129,6 +129,89 @@ from .reportados_validadores_helpers import (
 )
 from .schemas import PagoReportadoListItem
 
+_LISTADO_KPIS_MAX_RANGO_DIAS = 45
+_LISTADO_KPIS_STATEMENT_TIMEOUT_MS = 180_000
+_falla_validadores_col_disponible: Optional[bool] = None
+
+
+def _extender_timeout_listado_cobros(db: Session) -> None:
+    """Evita QueryCanceled ~90s si PG_STATEMENT_TIMEOUT_MS global es bajo en Render."""
+    try:
+        db.execute(
+            text(f"SET LOCAL statement_timeout = {int(_LISTADO_KPIS_STATEMENT_TIMEOUT_MS)}")
+        )
+    except Exception as e:
+        logger.debug("[COBROS listado] SET LOCAL statement_timeout omitido: %s", e)
+
+
+def _clamp_fechas_listado_cobros(
+    fecha_desde: Optional[date],
+    fecha_hasta: Optional[date],
+) -> tuple[Optional[date], Optional[date]]:
+    """Acota ventana para no barrer meses enteros en cada GET listado-y-kpis."""
+    hoy = date.today()
+    hasta = fecha_hasta or hoy
+    if hasta > hoy:
+        hasta = hoy
+    desde = fecha_desde
+    if desde is None:
+        desde = hasta - timedelta(days=_LISTADO_KPIS_MAX_RANGO_DIAS)
+    max_desde = hasta - timedelta(days=_LISTADO_KPIS_MAX_RANGO_DIAS)
+    if desde < max_desde:
+        logger.info(
+            "[COBROS listado] fecha_desde acotada %s -> %s (max %s dias)",
+            desde.isoformat(),
+            max_desde.isoformat(),
+            _LISTADO_KPIS_MAX_RANGO_DIAS,
+        )
+        desde = max_desde
+    return desde, hasta
+
+
+def _dias_rango_fechas_reportados(
+    fecha_desde: Optional[date], fecha_hasta: Optional[date]
+) -> int:
+    if fecha_desde is None or fecha_hasta is None:
+        return _LISTADO_KPIS_MAX_RANGO_DIAS
+    return max(0, (fecha_hasta - fecha_desde).days)
+
+
+def _falla_validadores_columna_disponible(db: Session) -> bool:
+    global _falla_validadores_col_disponible
+    if _falla_validadores_col_disponible is not None:
+        return _falla_validadores_col_disponible
+    try:
+        db.execute(
+            select(PagoReportado.id)
+            .where(PagoReportado.falla_validadores_manual.is_(None))
+            .limit(1)
+        )
+        _falla_validadores_col_disponible = True
+    except ProgrammingError:
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        _falla_validadores_col_disponible = False
+        logger.warning(
+            "[COBROS listado] Columna falla_validadores_manual ausente; "
+            "se omite filtro SQL (aplique migracion 070)."
+        )
+    return _falla_validadores_col_disponible
+
+
+def _clausulas_filtro_falla_validadores_scan(db: Session) -> List[Any]:
+    if not _falla_validadores_columna_disponible(db):
+        return []
+    return [
+        or_(
+            PagoReportado.estado == "en_revision",
+            PagoReportado.falla_validadores_manual.is_(True),
+            PagoReportado.falla_validadores_manual.is_(None),
+        )
+    ]
+
+
 def _persist_marcar_exportados_y_cola(db: Session, ids: List[int]) -> dict:
     """
     Inserta exportados + quita de pagos_pendiente_descargar y hace commit.
@@ -456,6 +539,8 @@ def _list_pagos_reportados_payload(
     pendiente+en_revision+aprobado), se añade `_manual_kpi_counts` al dict de retorno
     para evitar un segundo barrido completo en listado-y-kpis (solo uso interno).
     """
+    _extender_timeout_listado_cobros(db)
+    fecha_desde, fecha_hasta = _clamp_fechas_listado_cobros(fecha_desde, fecha_hasta)
     if cedula and str(cedula).strip():
         _reencolar_escaner_infopagos_aprobado_sin_gestion_por_cedula(
             db,
@@ -464,7 +549,8 @@ def _list_pagos_reportados_payload(
             fecha_hasta=fecha_hasta,
         )
     _regularizar_reportados_guarded(db)
-    _backfill_falla_validadores_pre_listado(db)
+    if _dias_rango_fechas_reportados(fecha_desde, fecha_hasta) <= 35:
+        _backfill_falla_validadores_pre_listado(db)
     exportados_subq = select(PagoReportadoExportado.pago_reportado_id)
     filtros = _filtros_fecha_cedula_institucion_reportados(
         fecha_desde=fecha_desde,
@@ -516,13 +602,7 @@ def _list_pagos_reportados_payload(
     # se sigue calculando sobre `wh_primer_scope` SIN este filtro, para que un duplicado
     # "lider" con `falla=False` siga liderando su cadena y los "seguidores" se descarten
     # por dedup como hoy (semantica preservada).
-    wh_scan = list(wh) + [
-        or_(
-            PagoReportado.estado == "en_revision",
-            PagoReportado.falla_validadores_manual.is_(True),
-            PagoReportado.falla_validadores_manual.is_(None),
-        )
-    ]
+    wh_scan = list(wh) + _clausulas_filtro_falla_validadores_scan(db)
     q = select(PagoReportado).where(*wh_scan).order_by(
         case((PagoReportado.estado == "rechazado", 1), else_=0),
         PagoReportado.created_at.asc(),
@@ -617,6 +697,8 @@ def _kpis_pagos_reportados_payload(
 
     Si `manual_queue_counts` viene del listado (mismo barrido), no se vuelve a escanear la cola.
     """
+    _extender_timeout_listado_cobros(db)
+    fecha_desde, fecha_hasta = _clamp_fechas_listado_cobros(fecha_desde, fecha_hasta)
     filtros = _filtros_fecha_cedula_institucion_reportados(
         fecha_desde=fecha_desde,
         fecha_hasta=fecha_hasta,
@@ -658,13 +740,7 @@ def _kpis_pagos_reportados_payload(
         # cola (`falla=True` o NULL pendiente de backfill). El precalc de dedup (primer_kpi)
         # se calcula sobre el scope completo `wh_kpi` SIN filtro, para que un duplicado
         # "lider" con `falla=False` siga liderando y sus "seguidores" se descarten igual.
-        wh_kpi_scan = list(wh_kpi) + [
-            or_(
-                PagoReportado.estado == "en_revision",
-                PagoReportado.falla_validadores_manual.is_(True),
-                PagoReportado.falla_validadores_manual.is_(None),
-            )
-        ]
+        wh_kpi_scan = list(wh_kpi) + _clausulas_filtro_falla_validadores_scan(db)
         q_scan = select(PagoReportado).where(*wh_kpi_scan).order_by(PagoReportado.created_at.asc())
 
         batch = _dedup._COBROS_LISTADO_SCAN_BATCH

@@ -1336,7 +1336,7 @@ export async function listPagosReportadosConKpis(
       if (stale) return stale
     }
     const st = (e as { response?: { status?: number } })?.response?.status
-    if (st === 404 || st === 405) {
+    if (st === 404 || st === 405 || st === 500 || st === 503) {
       const filterParams = {
         fecha_desde: params.fecha_desde,
 

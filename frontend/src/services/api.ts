@@ -720,12 +720,17 @@ class ApiClient {
           (isCobrosPagoReportadoEstadoPatch ||
             isCobrosPagoReportadoEditarPatch) &&
           (st === 502 || st === 503)
+        const isListadoKpisPagosReportadosGet =
+          isSafeTransientRetryGet &&
+          reqUrl.includes('/cobros/pagos-reportados/listado-y-kpis')
         const maxRetries =
           isColdStartProxySafeGet || isCobrosEstadoPatch502Storm ? 6 : 3
         const canRetryBecauseStatus =
           st === 503 ||
           st === 504 ||
-          (st === 500 && (methodLc !== 'get' || isSafeTransientRetryGet)) ||
+          (st === 500 &&
+            (methodLc !== 'get' ||
+              (isSafeTransientRetryGet && !isListadoKpisPagosReportadosGet))) ||
           (st === 502 &&
             (isScannerReadOnlyPost ||
               isSafeTransientRetryGet ||

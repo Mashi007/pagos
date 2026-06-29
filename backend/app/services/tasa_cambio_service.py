@@ -102,13 +102,31 @@ def ultimo_viernes_anterior(fecha: date) -> date:
     raise ValueError("ultimo_viernes_anterior solo aplica a sábado o domingo")
 
 
+def _columnas_tasa_copiadas_desde_origen(
+    origen: TasaCambioDiaria,
+) -> tuple[Optional[float], Optional[float], Optional[float]]:
+    """Euro/BCV/Binance del origen que sean válidos para copiar (sin inventar)."""
+    euro: Optional[float] = None
+    if _columna_tasa_presente_y_valida(origen.tasa_oficial):
+        euro = float(origen.tasa_oficial)
+    bcv_raw = getattr(origen, "tasa_bcv", None)
+    bcv: Optional[float] = (
+        float(bcv_raw) if _columna_tasa_presente_y_valida(bcv_raw) else None
+    )
+    bin_raw = getattr(origen, "tasa_binance", None)
+    binance: Optional[float] = (
+        float(bin_raw) if _columna_tasa_presente_y_valida(bin_raw) else None
+    )
+    return euro, bcv, binance
+
+
 def asegurar_tasa_fin_semana_desde_viernes(
     db: Session,
     fecha: date,
 ) -> Optional[TasaCambioDiaria]:
     """
-    Sábado/domingo: si no hay fila completa para `fecha`, copia Euro/BCV/Binance
-    del último viernes anterior (misma fila, nueva fecha). No inventa valores.
+    Sábado/domingo: si no hay fila completa para `fecha`, copia del viernes anterior
+    las columnas válidas (Euro obligatorio en origen; BCV/Binance si existen). No inventa.
     """
     if not es_fin_de_semana_caracas(fecha):
         return obtener_tasa_por_fecha_sin_fin_semana(db, fecha)
@@ -119,19 +137,20 @@ def asegurar_tasa_fin_semana_desde_viernes(
 
     viernes = ultimo_viernes_anterior(fecha)
     origen = obtener_tasa_por_fecha_sin_fin_semana(db, viernes)
-    if origen is None or not fila_tasa_multifuente_completa_hoy(origen):
+    if origen is None:
         return existente
 
-    tasa_bcv = getattr(origen, "tasa_bcv", None)
-    tasa_binance = getattr(origen, "tasa_binance", None)
-    if tasa_bcv is None or tasa_binance is None:
+    euro, tasa_bcv, tasa_binance = _columnas_tasa_copiadas_desde_origen(origen)
+    if euro is None:
         return existente
 
     ref_email = f"sistema:fin_semana<-{viernes.isoformat()}"
     if existente:
-        existente.tasa_oficial = origen.tasa_oficial
-        existente.tasa_bcv = tasa_bcv
-        existente.tasa_binance = tasa_binance
+        existente.tasa_oficial = euro
+        if tasa_bcv is not None:
+            existente.tasa_bcv = tasa_bcv
+        if tasa_binance is not None:
+            existente.tasa_binance = tasa_binance
         existente.usuario_email = ref_email
         existente.updated_at = datetime.now()
         db.commit()
@@ -140,7 +159,7 @@ def asegurar_tasa_fin_semana_desde_viernes(
 
     nueva = TasaCambioDiaria(
         fecha=fecha,
-        tasa_oficial=origen.tasa_oficial,
+        tasa_oficial=euro,
         tasa_bcv=tasa_bcv,
         tasa_binance=tasa_binance,
         usuario_id=getattr(origen, "usuario_id", None),
@@ -297,10 +316,22 @@ def rellenar_tasas_problematicas_desde_vecino(
     }
 
 
+def _fila_tasa_usable_para_operacion(row: Optional[TasaCambioDiaria]) -> bool:
+    """Mínimo Euro válido para convertir reportes Bs."""
+    return row is not None and _columna_tasa_presente_y_valida(row.tasa_oficial)
+
+
 def obtener_tasa_por_fecha(db: Session, fecha: date) -> Optional[TasaCambioDiaria]:
     """Obtiene la tasa oficial para una fecha (fecha de pago = clave en tasas_cambio_diaria)."""
     if es_fin_de_semana_caracas(fecha):
-        return asegurar_tasa_fin_semana_desde_viernes(db, fecha)
+        copiada = asegurar_tasa_fin_semana_desde_viernes(db, fecha)
+        if _fila_tasa_usable_para_operacion(copiada):
+            return copiada
+        viernes = ultimo_viernes_anterior(fecha)
+        origen = obtener_tasa_por_fecha_sin_fin_semana(db, viernes)
+        if _fila_tasa_usable_para_operacion(origen):
+            return origen
+        return copiada
     return obtener_tasa_por_fecha_sin_fin_semana(db, fecha)
 
 
@@ -381,6 +412,14 @@ def guardar_tasa_para_fecha(
         validar_tasa_oficial_antes_de_guardar(float(tasa_bcv))
     if tasa_binance is not None:
         validar_tasa_oficial_antes_de_guardar(float(tasa_binance))
+
+    hoy = fecha_hoy_caracas()
+    if fecha == hoy and not es_fin_de_semana_caracas(hoy):
+        if tasa_bcv is None or tasa_binance is None:
+            raise ValueError(
+                "Para hoy (lunes a viernes) debe registrar Euro, BCV y Binance. "
+                "Use el ingreso diario obligatorio o complete las tres tasas."
+            )
 
     existente = db.execute(
         select(TasaCambioDiaria).where(TasaCambioDiaria.fecha == fecha)

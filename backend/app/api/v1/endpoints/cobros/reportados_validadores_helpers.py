@@ -552,9 +552,9 @@ def _backfill_falla_validadores_lote(db: Session) -> int:
 
 
 _backfill_pre_listado_last_run = 0.0
-_BACKFILL_PRE_LISTADO_COOLDOWN_SEC = 20.0
-_BACKFILL_PRE_LISTADO_BATCH = 35
-_BACKFILL_PRE_LISTADO_BUDGET_SEC = 5.0
+_BACKFILL_PRE_LISTADO_COOLDOWN_SEC = 45.0
+_BACKFILL_PRE_LISTADO_BATCH = 20
+_BACKFILL_PRE_LISTADO_BUDGET_SEC = 2.0
 
 
 def _backfill_falla_validadores_pre_listado(db: Session) -> int:

@@ -54,6 +54,10 @@ export function AgregarTasaFechaPagoPanel() {
     10
   )
 
+  const hoyIso = new Date().toISOString().split('T')[0]
+  const esHoyLaboral =
+    Boolean(fechaTasaForm && fechaTasaForm === hoyIso) && !esFinDeSemana
+
   const handleGuardarTasa = async () => {
     if (!fechaTasaForm.trim()) {
       toast.error('Seleccione una fecha')
@@ -66,6 +70,12 @@ export function AgregarTasaFechaPagoPanel() {
     }
     const bcvOpt = tasaBcvForm.trim() ? parseFloat(tasaBcvForm) : NaN
     const binOpt = tasaBinanceForm.trim() ? parseFloat(tasaBinanceForm) : NaN
+    if (esHoyLaboral && (!tasaBcvForm.trim() || !tasaBinanceForm.trim())) {
+      toast.error(
+        'Para hoy (lunes a viernes) debe registrar Euro, BCV y Binance'
+      )
+      return
+    }
     if (tasaBcvForm.trim() && (isNaN(bcvOpt) || bcvOpt <= 0)) {
       toast.error('Tasa BCV inválida (deje vacío si no aplica)')
       return
@@ -120,10 +130,22 @@ export function AgregarTasaFechaPagoPanel() {
   const handleConfirmarEditarTasa = async () => {
     if (!tasaExistenteDialogo) return
 
+    const esHoyLaboralConfirm =
+      tasaExistenteDialogo.fecha === hoyIso && !esFinDeSemana
+    const bcvOpt = tasaBcvForm.trim() ? parseFloat(tasaBcvForm) : NaN
+    const binOpt = tasaBinanceForm.trim() ? parseFloat(tasaBinanceForm) : NaN
+    if (
+      esHoyLaboralConfirm &&
+      (!tasaBcvForm.trim() || !tasaBinanceForm.trim())
+    ) {
+      toast.error(
+        'Para hoy (lunes a viernes) debe registrar Euro, BCV y Binance'
+      )
+      return
+    }
+
     setIsGuardandoTasa(true)
     try {
-      const bcvOpt = tasaBcvForm.trim() ? parseFloat(tasaBcvForm) : NaN
-      const binOpt = tasaBinanceForm.trim() ? parseFloat(tasaBinanceForm) : NaN
       const opts: { tasa_bcv?: number; tasa_binance?: number } = {}
       if (tasaBcvForm.trim() && !isNaN(bcvOpt) && bcvOpt > 0)
         opts.tasa_bcv = bcvOpt
@@ -269,7 +291,7 @@ export function AgregarTasaFechaPagoPanel() {
 
               <div className="flex flex-col gap-2">
                 <label className="text-sm font-medium text-gray-700">
-                  Tasa BCV (opcional)
+                  Tasa BCV{esHoyLaboral ? '' : ' (opcional)'}
                 </label>
                 <input
                   type="number"
@@ -284,7 +306,7 @@ export function AgregarTasaFechaPagoPanel() {
 
               <div className="flex flex-col gap-2">
                 <label className="text-sm font-medium text-gray-700">
-                  Tasa Binance (opcional)
+                  Tasa Binance{esHoyLaboral ? '' : ' (opcional)'}
                 </label>
                 <input
                   type="number"

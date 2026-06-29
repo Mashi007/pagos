@@ -86,7 +86,7 @@ function toastAfterRechazoCobros(data: CambiarEstadoPagoResponse) {
 }
 
 /** Alineado con filtros `fecha_desde` / `fecha_hasta` del API (fecha local del navegador). */
-const COBROS_REPORTADOS_FILTRO_FECHA_DIAS = 60
+const COBROS_REPORTADOS_FILTRO_FECHA_DIAS = 30
 
 function cobrosFechaLocalYMD(d: Date): string {
   const y = d.getFullYear()
@@ -505,11 +505,6 @@ export default function CobrosPagosReportadosPage() {
 
   /** Recarga con datos previos en pantalla (evita pantalla en blanco "Cargando..." durante listado-y-kpis lento). */
   const [refreshing, setRefreshing] = useState(false)
-  const [soloCedulasDuplicadas, setSoloCedulasDuplicadas] = useState(false)
-  /** Cliente: filas cuya observación incluye falla de lista autorizada para pagos en Bs. */
-  const [soloFallaListaBs, setSoloFallaListaBs] = useState(false)
-  /** Cliente: filas marcadas DUPLICADO (misma regla que el listado / validadores). */
-  const [soloDuplicadoDocumento, setSoloDuplicadoDocumento] = useState(false)
 
   const [changingEstadoId, setChangingEstadoId] = useState<number | null>(null)
 
@@ -824,18 +819,7 @@ export default function CobrosPagosReportadosPage() {
 
   useEffect(() => {
     setSelectedIds([])
-  }, [
-    page,
-    estado,
-    fechaDesde,
-    fechaHasta,
-    cedula,
-    institucion,
-    incluirExportados,
-    soloCedulasDuplicadas,
-    soloFallaListaBs,
-    soloDuplicadoDocumento,
-  ])
+  }, [page, estado, fechaDesde, fechaHasta, cedula, institucion, incluirExportados])
 
   /**
    * Refresco en segundo plano cada 15 min. Usa caché Redis/backend cuando existe;
@@ -1391,31 +1375,6 @@ export default function CobrosPagosReportadosPage() {
         .toUpperCase()
         .trim()
 
-    const frecuencia = new Map<string, number>()
-    base.forEach(row => {
-      const key = normalizarCedula(row.cedula_display)
-      if (!key) return
-      frecuencia.set(key, (frecuencia.get(key) ?? 0) + 1)
-    })
-
-    let filtrados = soloCedulasDuplicadas
-      ? base.filter(row => {
-          const key = normalizarCedula(row.cedula_display)
-          return !!key && (frecuencia.get(key) ?? 0) > 1
-        })
-      : base
-
-    if (soloFallaListaBs) {
-      filtrados = filtrados.filter(row =>
-        /No pag Bs\.?/i.test(String(row.observacion ?? ''))
-      )
-    }
-    if (soloDuplicadoDocumento) {
-      filtrados = filtrados.filter(row =>
-        /DUPLICADO/i.test(String(row.observacion ?? ''))
-      )
-    }
-
     // Cola operativa: primero la entrada más vieja.
     // Pre-decoramos cada fila con `_ts` y `_ck` para que el comparador no instancie
     // `Date` ni normalice cédulas O(n log n) veces durante el sort.
@@ -1424,7 +1383,7 @@ export default function CobrosPagosReportadosPage() {
       ts: number
       ck: string
     }
-    const decorated: DecoratedRow[] = filtrados.map(row => {
+    const decorated: DecoratedRow[] = base.map(row => {
       const t = new Date(row.fecha_reporte).getTime()
       return {
         row,
@@ -1443,14 +1402,7 @@ export default function CobrosPagosReportadosPage() {
     })
 
     return decorated.map(d => d.row)
-  }, [
-    data?.items,
-    estado,
-    soloCedulasDuplicadas,
-    soloFallaListaBs,
-    soloDuplicadoDocumento,
-    hiddenIdsTick,
-  ])
+  }, [data?.items, estado, hiddenIdsTick])
 
   const porGestionarKpi = useMemo(() => {
     if (!kpis) return 0
@@ -1742,9 +1694,7 @@ export default function CobrosPagosReportadosPage() {
                 onChange={e => setEstado(e.target.value)}
                 aria-label="Filtrar por estado del reporte"
               >
-                <option value="">
-                  Por gestionar (pendientes y en revisión)
-                </option>
+                <option value="">Por gestionar</option>
 
                 <option value="en_revision">En revisión</option>
 
@@ -1752,18 +1702,6 @@ export default function CobrosPagosReportadosPage() {
 
                 <option value="importado">Importado a Pagos</option>
               </select>
-
-              <p className="text-xs text-muted-foreground">
-                <strong>Cola de revisión manual:</strong> por defecto se listan{' '}
-                <em>pendientes y en revisión</em> en una sola cola ("Por
-                gestionar"); el contador "Pendiente" individual quedaba
-                inconsistente cuando se aprobaban filas fuera de la página
-                actual y se retiró. Los aprobados ya están en cartera y se
-                consultan desde el histórico de cobros; los importados y
-                rechazados se eligen aquí explícitamente. Use &quot;Incluir ya
-                exportados&quot; para volver a ver filas marcadas como
-                exportadas a corrección.
-              </p>
             </div>
 
             <div className="flex min-w-[min(100%,320px)] flex-col gap-1">
@@ -1844,16 +1782,6 @@ export default function CobrosPagosReportadosPage() {
                   Sin límite de fechas
                 </Button>
               </div>
-
-              <p className="text-xs text-muted-foreground">
-                Por defecto se filtra por{' '}
-                <strong>fecha de creación del reporte</strong> (mismo criterio
-                que el API). Acota el volumen que revisa el servidor sin cambiar
-                validadores ni la cola manual. Use «Sin límite de fechas» solo
-                cuando necesite todo el historial. Tras cambiar fechas, cédula o
-                institución a mano, pulse <strong>Buscar</strong> para consultar
-                el servidor (evita una petición por cada tecla).
-              </p>
             </div>
 
             <Input
@@ -1901,54 +1829,6 @@ export default function CobrosPagosReportadosPage() {
               <span>
                 Incluir filas ya marcadas como exportadas a corrección (ocultas
                 en la vista normal hasta activar esta opción).
-              </span>
-            </label>
-
-            <label
-              htmlFor="cobros-solo-cedulas-duplicadas"
-              className="flex max-w-xs cursor-pointer items-start gap-2 text-xs text-muted-foreground"
-            >
-              <input
-                id="cobros-solo-cedulas-duplicadas"
-                type="checkbox"
-                className="mt-0.5 shrink-0 rounded border-input"
-                checked={soloCedulasDuplicadas}
-                onChange={e => setSoloCedulasDuplicadas(e.target.checked)}
-              />
-              <span>Mostrar solo cédulas duplicadas en esta página.</span>
-            </label>
-
-            <label
-              htmlFor="cobros-solo-falla-lista-bs"
-              className="flex max-w-xs cursor-pointer items-start gap-2 text-xs text-muted-foreground"
-            >
-              <input
-                id="cobros-solo-falla-lista-bs"
-                type="checkbox"
-                className="mt-0.5 shrink-0 rounded border-input"
-                checked={soloFallaListaBs}
-                onChange={e => setSoloFallaListaBs(e.target.checked)}
-              />
-              <span>
-                Solo filas con falla de lista para pago en Bs. (texto «No pag
-                Bs.» en observación; moneda Bs. y cédula no autorizada).
-              </span>
-            </label>
-
-            <label
-              htmlFor="cobros-solo-duplicado-documento"
-              className="flex max-w-xs cursor-pointer items-start gap-2 text-xs text-muted-foreground"
-            >
-              <input
-                id="cobros-solo-duplicado-documento"
-                type="checkbox"
-                className="mt-0.5 shrink-0 rounded border-input"
-                checked={soloDuplicadoDocumento}
-                onChange={e => setSoloDuplicadoDocumento(e.target.checked)}
-              />
-              <span>
-                Solo filas con DUPLICADO en observación (documento ya en cartera
-                o repetido entre reportados en la página).
               </span>
             </label>
 
@@ -2075,19 +1955,13 @@ export default function CobrosPagosReportadosPage() {
                   Boolean(institucion.trim()) ||
                   Boolean(fechaDesde) ||
                   Boolean(fechaHasta) ||
-                  incluirExportados ||
-                  soloCedulasDuplicadas ||
-                  soloFallaListaBs ||
-                  soloDuplicadoDocumento
-                const hayItemsBackend = (data?.items?.length ?? 0) > 0
+                  incluirExportados
                 return (
                   <div className="flex flex-col items-center gap-2 py-10 text-center text-muted-foreground">
                     <p className="text-sm">
-                      {hayItemsBackend
-                        ? 'No hay registros que cumplan los filtros locales (cédulas duplicadas / falla Bs. / DUPLICADO).'
-                        : hayFiltrosActivos
-                          ? 'No hay registros con los filtros aplicados. Pruebe a quitar restricciones (estado, cédula, institución o ampliar el rango de fechas).'
-                          : 'No hay registros.'}
+                      {hayFiltrosActivos
+                        ? 'No hay registros con los filtros aplicados. Pruebe a quitar restricciones (estado, cédula, institución o ampliar el rango de fechas).'
+                        : 'No hay registros.'}
                     </p>
                     {hayFiltrosActivos ? (
                       <Button

@@ -274,6 +274,7 @@ def list_pagos_reportados_y_kpis(
 
     try:
         def _compute_payload() -> dict:
+            t0 = time.monotonic()
             emit_kpi_from_list = estado is None
             lista = _list_pagos_reportados_payload(
                 db,
@@ -287,6 +288,7 @@ def list_pagos_reportados_y_kpis(
                 incluir_exportados=incluir_exportados,
                 emit_manual_estado_counts_for_kpis=emit_kpi_from_list,
             )
+            t_lista = time.monotonic()
             manual_queue = (
                 lista.pop("_manual_kpi_counts", None) if emit_kpi_from_list else None
             )
@@ -299,6 +301,14 @@ def list_pagos_reportados_y_kpis(
                 incluir_exportados=incluir_exportados,
                 manual_queue_counts=manual_queue,
             )
+            logger.info(
+                "[COBROS listado-y-kpis] listado_ms=%.0f kpis_ms=%.0f total_ms=%.0f page=%s per_page=%s",
+                (t_lista - t0) * 1000,
+                (time.monotonic() - t_lista) * 1000,
+                (time.monotonic() - t0) * 1000,
+                page,
+                per_page,
+            )
             return {**lista, "kpis": kpis}
 
         payload = run_db_with_transient_retry(
@@ -310,6 +320,8 @@ def list_pagos_reportados_y_kpis(
         if not skip_cache:
             _cobros_listado_kpis_cache_set(cache_payload, payload)
         return payload
+    except HTTPException:
+        raise
     except Exception as e:
         fallback = _cobros_listado_kpis_cache_get_stale(cache_payload)
         if fallback is not None:
@@ -318,7 +330,24 @@ def list_pagos_reportados_y_kpis(
                 e,
             )
             return fallback
-        raise
+        logger.exception(
+            "[COBROS listado-y-kpis] error sin cache stale (key=%s): %s",
+            _cobros_listado_kpis_storage_key(cache_payload),
+            e,
+        )
+        msg = str(e).lower()
+        if "statement timeout" in msg or "query canceled" in msg or "canceling statement" in msg:
+            raise HTTPException(
+                status_code=503,
+                detail=(
+                    "El listado tardó demasiado. Reduzca el rango de fechas o pulse "
+                    "«Actualizar» en unos segundos (caché en servidor)."
+                ),
+            ) from e
+        raise HTTPException(
+            status_code=503,
+            detail="No se pudo calcular el listado de pagos reportados. Intente de nuevo.",
+        ) from e
     finally:
         if acquired:
             _cobros_listado_kpis_release_singleflight(cache_payload)

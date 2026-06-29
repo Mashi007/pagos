@@ -18,7 +18,9 @@ from app.services.tasa_cambio_service import (
     obtener_tasa_hoy,
     obtener_tasa_por_fecha,
     debe_ingresar_tasa,
+    es_fin_de_semana_caracas,
     fecha_hoy_caracas,
+    ultimo_viernes_anterior,
 )
 from app.models.tasa_cambio_diaria import TasaCambioDiaria
 
@@ -125,7 +127,7 @@ def validar_tasa_para_pago(
             ],
         )
 
-    # Caso 2: Tasa no existe y estamos en horario de ingreso obligatorio
+    # Caso 2: Tasa no existe y estamos en horario de ingreso obligatorio (lun–vie)
     if debe_ingresar:
         return ValidacionTasaResponse(
             puede_procesar_pagos_bs=False,
@@ -141,8 +143,29 @@ def validar_tasa_para_pago(
                 "Ubicación: Panel Principal → Ingreso de Tasa de Cambio"
             ]
         )
+
+    hoy = fecha_hoy_caracas()
+    if es_fin_de_semana_caracas(hoy):
+        viernes = ultimo_viernes_anterior(hoy).isoformat()
+        return ValidacionTasaResponse(
+            puede_procesar_pagos_bs=False,
+            tasa_actual=None,
+            fecha_tasa=None,
+            hora_obligatoria_desde="01:00",
+            hora_obligatoria_hasta="23:59",
+            mensaje=(
+                "Fin de semana: no hay tasas del viernes "
+                f"({viernes}) para usar hoy. Registre el viernes en Tasas de cambio; "
+                "sábado y domingo copian automáticamente (sin ingreso manual)."
+            ),
+            acciones_recomendadas=[
+                f"Registrar Euro, BCV y Binance del viernes {viernes}",
+                "No es necesario cargar tasas del sábado o domingo manualmente",
+                "O solicitar al cliente que reporte en USD",
+            ],
+        )
     
-    # Caso 3: Tasa no existe pero NO estamos en horario de ingreso aún
+    # Caso 3: Tasa no existe pero NO estamos en horario de ingreso aún (lun–vie antes de 01:00)
     return ValidacionTasaResponse(
         puede_procesar_pagos_bs=False,
         tasa_actual=None,
