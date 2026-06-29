@@ -1975,9 +1975,6 @@ export default function CobrosPagosReportadosPage() {
                           setFechaDesde('')
                           setFechaHasta('')
                           setIncluirExportados(false)
-                          setSoloCedulasDuplicadas(false)
-                          setSoloFallaListaBs(false)
-                          setSoloDuplicadoDocumento(false)
                           handleBuscar()
                         }}
                       >
