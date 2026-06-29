@@ -506,8 +506,14 @@ if (API_URL) {
           p
         ) ||
           /\/cobros\/pagos-reportados\/\d+(?:\?|$)/.test(p))
+      const isCobrosPagosReportadosListOrKpisGet =
+        req.method === 'GET' &&
+        (p.includes('pagos-reportados/kpis') ||
+          (p.includes('pagos-reportados') &&
+            !/\/pagos-reportados\/\d+/.test(p)))
       const isCobrosPagosReportadosSlowPath =
         p.includes('pagos-reportados/listado-y-kpis') ||
+        isCobrosPagosReportadosListOrKpisGet ||
         /\/cobros\/pagos-reportados\/\d+\/estado\b/.test(p) ||
         isCobrosPagoReportadoPatchEditarBase ||
         isCobrosPagoReportadoReadHeavyGet
@@ -583,11 +589,15 @@ if (API_URL) {
       } else if (isPagosTabReadGetProxy || isCobrosEscanerBorradoresGetProxy) {
         proxyTimeoutMs = 90000
       } else if (isCobrosPagosReportadosSlowPath || isRevisionManualSlowPath) {
-        // Listado+KPIs (barrido), PATCH estado (aprobar puede tardar), PATCH editar (validadores +
+        // Listado+KPIs (barrido), listado/kpis fallback, PATCH estado (aprobar puede tardar), PATCH editar (validadores +
         // dedup documento + commit BD) y GET detalle/comprobante/recibo (regeneración PDF + descarga
         // imagen): evitar corte a 60s en el proxy frente a cold start del API.
         // Revisión manual: PUT guardar/finalizar y GET detalle comparten el mismo margen (120s).
-        proxyTimeoutMs = 120000
+        proxyTimeoutMs = p.includes('pagos-reportados/listado-y-kpis')
+          ? 300000
+          : isCobrosPagosReportadosListOrKpisGet
+            ? 300000
+            : 120000
       } else if (isConciliacionSheetSlowPost || isCandidatosDriveSlowPost) {
         // Google Sheets + snapshot BD / Drive masivo: hoja grande puede superar 5 min en Render.
         proxyTimeoutMs = 600000

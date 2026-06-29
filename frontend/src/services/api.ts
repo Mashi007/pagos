@@ -422,13 +422,13 @@ class ApiClient {
           config.timeout = 180000 // 3 minutos
         }
 
-        // Cobros: listado+KPIs recorre la cola en servidor; con cola grande puede superar 60s en picos.
+        // Cobros: listado+KPIs recorre la cola en servidor; con cola grande puede superar 120s en picos.
         if (
           config.method?.toLowerCase() === 'get' &&
           config.url?.includes('/cobros/pagos-reportados/listado-y-kpis') &&
-          (config.timeout == null || config.timeout < 120000)
+          (config.timeout == null || config.timeout < 240000)
         ) {
-          config.timeout = 120000
+          config.timeout = 240000
         }
 
         if (
@@ -1445,7 +1445,7 @@ class ApiClient {
     // Cobros listado+KPIs: muchas filas + validadores por lote pueden superar 60s en Render frío.
     const isListadoKpisPagosReportados = url.includes('listado-y-kpis')
 
-    const listadoKpisPagosReportadosTimeout = 180000
+    const listadoKpisPagosReportadosTimeout = 240000
 
     // Préstamos Drive: snapshot lee tabla cache + validaciones; en Render frío puede acercarse a 60s.
     const isCandidatosDriveSnapshot = url.includes(

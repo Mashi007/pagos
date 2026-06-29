@@ -70,6 +70,9 @@ const ENVIAR_REPORTE_REINTENTO_DELAY_MS = 1500
 /** Descarga de recibo PDF tras guardar (puede ser lenta si el API está frío). */
 const FETCH_TIMEOUT_RECIBO_INFOPAGOS_MS = 120000
 
+/** Lecturas listado/KPIs cobros: alinear con SET LOCAL statement_timeout=240s del API. */
+export const COBROS_LISTADO_READ_TIMEOUT_MS = 240_000
+
 /**
  * Traduce fallos de red del navegador (no vienen del JSON del API).
  * Texto corto para móvil; en desarrollo se añade una pista técnica en consola.
@@ -1333,7 +1336,7 @@ export async function listPagosReportadosConKpis(
     }
   }
 
-  const listadoReadTimeoutMs = 120_000
+  const listadoReadTimeoutMs = COBROS_LISTADO_READ_TIMEOUT_MS
 
   try {
     const data = await apiClient.get<ListPagosReportadosConKpisResponse>(url, {
