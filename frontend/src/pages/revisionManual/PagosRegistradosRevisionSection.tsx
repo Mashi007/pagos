@@ -376,6 +376,9 @@ export function PagosRegistradosRevisionSection(
                         prestExRevision != null && prestObjRevision != null
                           ? prestExRevision === prestObjRevision
                           : null
+                      const duplicadoEntrePrestamosDistintos =
+                        serialDuplicadoCartera &&
+                        prestamoDupEsObjetivoRevision !== true
                       const fechaPagoIsoRevision =
                         pago.fecha_pago != null
                           ? String(pago.fecha_pago).slice(0, 10)
@@ -415,13 +418,14 @@ export function PagosRegistradosRevisionSection(
                           </TableCell>
                           <TableCell
                             className={`max-w-[240px] font-mono text-xs ${
-                              documentoDuplicadoEnPagina || serialDuplicadoCartera
+                              documentoDuplicadoEnPagina ||
+                              duplicadoEntrePrestamosDistintos
                                 ? 'bg-orange-100 text-orange-950'
                                 : ''
                             }`}
                             title={
-                              serialDuplicadoCartera
-                                ? 'Serial ya aplicado en otro pago de cartera.'
+                              duplicadoEntrePrestamosDistintos
+                                ? 'Serial ya aplicado en cartera en otro préstamo.'
                                 : documentoDuplicadoEnPagina
                                   ? 'Misma clave comprobante + código aparece más de una vez en esta página.'
                                   : undefined
@@ -478,7 +482,7 @@ export function PagosRegistradosRevisionSection(
                             {pago.prestamo_id != null ? pago.prestamo_id : '-'}
                           </TableCell>
                           <TableCell className="max-w-[320px] align-top text-sm">
-                            {serialDuplicadoCartera ? (
+                            {duplicadoEntrePrestamosDistintos ? (
                               <div className="space-y-1.5">
                                 <div className="rounded border border-orange-300 bg-orange-50 px-2 py-1.5 text-[11px] font-semibold leading-snug text-orange-950">
                                   PAGO DUPLICADO — En cartera Nº{' '}

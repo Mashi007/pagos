@@ -66,7 +66,12 @@ import { Badge } from '../components/ui/badge'
 
 import toast from 'react-hot-toast'
 
-import { DuplicadoPrestamosResumen } from '../components/cobros/DuplicadoPrestamosComparacion'
+import {
+  DuplicadoPrestamosResumen,
+  debeMostrarComparacionPrestamosEnListado,
+  esDuplicadoEnCartera,
+  esDuplicadoEntrePrestamosDistintos,
+} from '../components/cobros/DuplicadoPrestamosComparacion'
 
 import { getErrorMessage } from '../types/errors'
 
@@ -150,22 +155,12 @@ function clampComprobanteFloat(n: number, lo: number, hi: number): number {
 
 /** Duplicado contra cartera (`pagos`): API puede mandar flags y/o IDs/Nº documento. */
 function esDuplicadoCarteraRow(row: PagoReportadoItem): boolean {
-  if (row.duplicado_en_pagos === true) return true
-  const pid = row.pago_existente_id
-  if (pid != null && Number(pid) > 0) return true
-  return Boolean(String(row.numero_documento_pago_existente ?? '').trim())
+  return esDuplicadoEnCartera(row)
 }
 
-/** Muestra tabla préstamo cartera → préstamo destino (decisión Visto). */
+/** Tabla préstamo cartera → préstamo destino solo si son préstamos distintos. */
 function debeMostrarComparacionPrestamos(row: PagoReportadoItem): boolean {
-  if (esDuplicadoCarteraRow(row)) return true
-  if (
-    isMercantilBank(row.institucion_financiera) &&
-    /DUPLICADO/i.test(String(row.observacion ?? ''))
-  ) {
-    return true
-  }
-  return false
+  return debeMostrarComparacionPrestamosEnListado(row, isMercantilBank)
 }
 
 type ComprobanteResizeCorner = 'nw' | 'ne' | 'sw' | 'se'
@@ -2355,14 +2350,14 @@ export default function CobrosPagosReportadosPage() {
                           <td
                             className={
                               'min-w-0 px-2 py-2 align-middle ' +
-                              (esDuplicadoCarteraRow(row)
+                              (esDuplicadoEntrePrestamosDistintos(row)
                                 ? 'bg-orange-50/90 dark:bg-orange-950/25'
                                 : (row.observacion || '').trim().length > 0
                                   ? 'bg-destructive/10'
                                   : '')
                             }
                             title={
-                              esDuplicadoCarteraRow(row)
+                              esDuplicadoEntrePrestamosDistintos(row)
                                 ? [
                                     'PAGO DUPLICADO: ya existe en cartera (tabla pagos).',
                                     row.numero_documento_pago_existente

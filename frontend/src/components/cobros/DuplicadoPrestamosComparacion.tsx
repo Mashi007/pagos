@@ -26,6 +26,68 @@ export type PrestamoObjetivoMotivoSinAprobado =
   | 'sin_aprobado'
   | 'cedula_no_registrada'
 
+/** Campos mínimos para decidir si el duplicado es entre préstamos distintos. */
+export type PrestamoDuplicadoCampos = {
+  duplicado_en_pagos?: boolean | null
+  pago_existente_id?: number | null
+  numero_documento_pago_existente?: string | null
+  prestamo_existente_id?: number | null
+  prestamo_objetivo_id?: number | null
+  prestamo_duplicado_es_objetivo?: boolean | null
+}
+
+/** El comprobante ya existe en tabla `pagos`. */
+export function esDuplicadoEnCartera(row: PrestamoDuplicadoCampos): boolean {
+  if (row.duplicado_en_pagos === true) return true
+  const pid = row.pago_existente_id
+  if (pid != null && Number(pid) > 0) return true
+  return Boolean(String(row.numero_documento_pago_existente ?? '').trim())
+}
+
+/** Serial en cartera y destino del reporte apuntan al mismo préstamo. */
+export function esDuplicadoMismoPrestamo(row: PrestamoDuplicadoCampos): boolean {
+  if (!esDuplicadoEnCartera(row)) return false
+  if (row.prestamo_duplicado_es_objetivo === true) return true
+  const pe = row.prestamo_existente_id
+  const po = row.prestamo_objetivo_id
+  if (pe != null && po != null) return Number(pe) === Number(po)
+  return false
+}
+
+/**
+ * Duplicado con conflicto real: el serial está en un préstamo y el reporte iría a otro.
+ * Ahí sí corresponde la tabla comparativa (Visto Mercantil / bloqueo otros bancos).
+ */
+export function esDuplicadoEntrePrestamosDistintos(
+  row: PrestamoDuplicadoCampos
+): boolean {
+  if (!esDuplicadoEnCartera(row)) return false
+  if (esDuplicadoMismoPrestamo(row)) return false
+  if (row.prestamo_duplicado_es_objetivo === false) return true
+  const pe = row.prestamo_existente_id
+  const po = row.prestamo_objetivo_id
+  if (pe != null && po != null) return Number(pe) !== Number(po)
+  return false
+}
+
+export function debeMostrarComparacionPrestamosEnListado(
+  row: PrestamoDuplicadoCampos & {
+    institucion_financiera?: string | null
+    observacion?: string | null
+  },
+  esMercantil: (institucion?: string | null) => boolean
+): boolean {
+  if (esDuplicadoEntrePrestamosDistintos(row)) return true
+  if (
+    esMercantil(row.institucion_financiera) &&
+    /DUPLICADO/i.test(String(row.observacion ?? '')) &&
+    !esDuplicadoMismoPrestamo(row)
+  ) {
+    return true
+  }
+  return false
+}
+
 /** Etiqueta de la columna «Este reporte iría a» cuando no hay APROBADO objetivo. */
 export function etiquetaPrestamoObjetivoReportado(opts: {
   prestamoObjetivoId?: number | null
@@ -83,6 +145,9 @@ export function DuplicadoPrestamosResumen({
   fechaPagoReporteIso,
   esMercantil = false,
 }: DuplicadoPrestamosResumenProps) {
+  if (prestamoDuplicadoEsObjetivo === true) {
+    return null
+  }
   const prestEx =
     typeof prestamoExistenteId === 'number' ? prestamoExistenteId : null
   const prestObj =
@@ -230,6 +295,9 @@ export function DuplicadoPrestamosComparacion({
   prestamoDuplicadoEsObjetivo,
   prestamoObjetivoMultiple,
 }: DuplicadoPrestamosComparacionProps) {
+  if (prestamoDuplicadoEsObjetivo === true) {
+    return null
+  }
   const prestEx =
     typeof prestamoExistenteId === 'number' ? `#${prestamoExistenteId}` : '-'
   const prestObj = etiquetaPrestamoObjetivoReportado({
