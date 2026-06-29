@@ -24,7 +24,7 @@ import {
   validarCedulaPublico,
   type EscanerInfopagosExtraerResponse,
 } from '../services/cobrosService'
-import { DuplicadoPrestamosComparacion } from '../components/cobros/DuplicadoPrestamosComparacion'
+import { DuplicadoCarteraAviso } from '../components/cobros/DuplicadoPrestamosComparacion'
 import { formatMontoBsVe, parseMontoLatam } from '../utils/montoLatam'
 import {
   extraerCaracteresCedulaPublica,
@@ -1402,67 +1402,73 @@ export default function EscanerInfopagosPage() {
                       onChange={e => setNumeroOperacion(e.target.value)}
                       maxLength={MAX_LENGTH_NUMERO_OPERACION}
                     />
-                    {hayDuplicadoOperacion ? (
-                      <div className="space-y-2 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-900">
-                        <p className="font-medium text-rose-950">
-                          Hay coincidencia o posible duplicado con cartera.
-                          Compare préstamo y fecha antes de sufijo o guardar
-                          (misma vista que Cobros).
+                    {hayDuplicadoOperacion &&
+                    escanerColision?.duplicado_en_pagos ? (
+                      <DuplicadoCarteraAviso
+                        prestamoExistenteId={
+                          escanerColision.prestamo_existente_id
+                        }
+                        pagoExistenteId={escanerColision.pago_existente_id}
+                        pagoExistenteEstado={null}
+                        pagoExistenteFechaPago={null}
+                        prestamoObjetivoId={
+                          escanerColision.prestamo_objetivo_id
+                        }
+                        fechaPagoReporteIso={fechaComparacionDup}
+                        prestamoDuplicadoEsObjetivo={
+                          prestamoDuplicadoEsObjetivoEscaneer
+                        }
+                        prestamoObjetivoMultiple={null}
+                        esMercantil={String(institucion ?? '')
+                          .toLowerCase()
+                          .includes('mercantil')}
+                        footer={
+                          <>
+                            {typeof escanerColision.prestamo_existente_id ===
+                            'number' ? (
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() =>
+                                  navigate(
+                                    `/prestamos?filtro_prestamo_id=${escanerColision.prestamo_existente_id}`
+                                  )
+                                }
+                              >
+                                Abrir préstamo #
+                                {escanerColision.prestamo_existente_id}
+                              </Button>
+                            ) : null}
+                            {typeof escanerColision.prestamo_objetivo_id ===
+                              'number' &&
+                            typeof escanerColision.prestamo_existente_id ===
+                              'number' &&
+                            escanerColision.prestamo_objetivo_id !==
+                              escanerColision.prestamo_existente_id ? (
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() =>
+                                  navigate(
+                                    `/prestamos?filtro_prestamo_id=${escanerColision.prestamo_objetivo_id}`
+                                  )
+                                }
+                              >
+                                Abrir préstamo actual #
+                                {escanerColision.prestamo_objetivo_id}
+                              </Button>
+                            ) : null}
+                          </>
+                        }
+                      />
+                    ) : hayDuplicadoOperacion ? (
+                      <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                        <p className="font-medium">
+                          La validación indica posible duplicado. Revise el Nº
+                          de operación antes de guardar.
                         </p>
-                        <DuplicadoPrestamosComparacion
-                          prestamoExistenteId={
-                            escanerColision?.prestamo_existente_id
-                          }
-                          pagoExistenteId={escanerColision?.pago_existente_id}
-                          pagoExistenteEstado={null}
-                          pagoExistenteFechaPago={null}
-                          prestamoObjetivoId={
-                            escanerColision?.prestamo_objetivo_id
-                          }
-                          fechaPagoReporteIso={fechaComparacionDup}
-                          prestamoDuplicadoEsObjetivo={
-                            prestamoDuplicadoEsObjetivoEscaneer
-                          }
-                          prestamoObjetivoMultiple={null}
-                        />
-                        <div className="flex flex-wrap gap-2">
-                          {typeof escanerColision?.prestamo_existente_id ===
-                          'number' ? (
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={() =>
-                                navigate(
-                                  `/prestamos?filtro_prestamo_id=${escanerColision.prestamo_existente_id}`
-                                )
-                              }
-                            >
-                              Abrir préstamo #
-                              {escanerColision.prestamo_existente_id}
-                            </Button>
-                          ) : null}
-                          {typeof escanerColision?.prestamo_objetivo_id ===
-                            'number' &&
-                          typeof escanerColision?.prestamo_existente_id ===
-                            'number' &&
-                          escanerColision.prestamo_objetivo_id !==
-                            escanerColision.prestamo_existente_id ? (
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={() =>
-                                navigate(
-                                  `/prestamos?filtro_prestamo_id=${escanerColision.prestamo_objetivo_id}`
-                                )
-                              }
-                            >
-                              Abrir préstamo actual #
-                              {escanerColision.prestamo_objetivo_id}
-                            </Button>
-                          ) : null}
-                        </div>
                       </div>
                     ) : null}
                     {hayDuplicadoOperacion ? (

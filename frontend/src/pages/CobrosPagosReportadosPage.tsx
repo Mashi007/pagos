@@ -67,7 +67,7 @@ import { Badge } from '../components/ui/badge'
 import toast from 'react-hot-toast'
 
 import {
-  DuplicadoPrestamosResumen,
+  DuplicadoCarteraAlertaInline,
   debeMostrarComparacionPrestamosEnListado,
   esDuplicadoEnCartera,
   esDuplicadoEntrePrestamosDistintos,
@@ -358,7 +358,7 @@ const normalizeEstadoValue = (value: string) =>
 
     .toLowerCase()
 
-const isMercantilBank = (value: string) =>
+const isMercantilBank = (value?: string | null) =>
   String(value ?? '')
     .trim()
     .toLowerCase()
@@ -2391,50 +2391,33 @@ export default function CobrosPagosReportadosPage() {
                             }
                           >
                             {debeMostrarComparacionPrestamos(row) ? (
-                              <div
-                                className={
-                                  'mb-1.5 rounded border px-2 py-1.5 text-[11px] leading-snug ' +
-                                  (esDuplicadoCarteraRow(row)
-                                    ? 'border-orange-300 bg-orange-50 font-semibold text-orange-950 dark:border-orange-800 dark:bg-orange-950/40 dark:text-orange-100'
-                                    : 'border-amber-300 bg-amber-50 text-amber-950')
+                              <DuplicadoCarteraAlertaInline
+                                duplicado_en_pagos={row.duplicado_en_pagos}
+                                pago_existente_id={row.pago_existente_id}
+                                numero_documento_pago_existente={
+                                  row.numero_documento_pago_existente
                                 }
-                              >
-                                {esDuplicadoCarteraRow(row) ? (
-                                  <>
-                                    PAGO DUPLICADO - En cartera Nº{' '}
-                                    <span className="break-all font-mono font-normal">
-                                      {row.numero_documento_pago_existente?.trim() ||
-                                        '-'}
-                                    </span>
-                                    {row.pago_existente_id != null
-                                      ? ` · pago #${row.pago_existente_id}`
-                                      : ''}
-                                  </>
-                                ) : (
-                                  <span className="font-semibold">
-                                    DUPLICADO Mercantil — compare préstamos
-                                  </span>
+                                prestamo_existente_id={row.prestamo_existente_id}
+                                prestamo_objetivo_id={row.prestamo_objetivo_id}
+                                prestamo_duplicado_es_objetivo={
+                                  row.prestamo_duplicado_es_objetivo
+                                }
+                                prestamoObjetivoMotivo={
+                                  row.prestamo_objetivo_motivo
+                                }
+                                prestamoReferenciaId={row.prestamo_referencia_id}
+                                prestamoObjetivoMultiple={
+                                  row.prestamo_objetivo_multiple
+                                }
+                                fechaPagoReporteIso={row.fecha_pago}
+                                institucion_financiera={
+                                  row.institucion_financiera
+                                }
+                                observacion={row.observacion}
+                                esMercantil={isMercantilBank(
+                                  row.institucion_financiera
                                 )}
-                                <DuplicadoPrestamosResumen
-                                  prestamoExistenteId={row.prestamo_existente_id}
-                                  pagoExistenteId={row.pago_existente_id}
-                                  prestamoObjetivoId={row.prestamo_objetivo_id}
-                                  prestamoObjetivoMotivo={
-                                    row.prestamo_objetivo_motivo
-                                  }
-                                  prestamoReferenciaId={row.prestamo_referencia_id}
-                                  prestamoDuplicadoEsObjetivo={
-                                    row.prestamo_duplicado_es_objetivo
-                                  }
-                                  prestamoObjetivoMultiple={
-                                    row.prestamo_objetivo_multiple
-                                  }
-                                  fechaPagoReporteIso={row.fecha_pago}
-                                  esMercantil={isMercantilBank(
-                                    row.institucion_financiera
-                                  )}
-                                />
-                              </div>
+                              />
                             ) : null}
                             {row.observacion ? (
                               <div

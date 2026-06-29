@@ -88,6 +88,144 @@ export function debeMostrarComparacionPrestamosEnListado(
   return false
 }
 
+/** Campos de duplicado desde fila de revisión manual (pagos registrados). */
+export function camposDuplicadoDesdePagoRevision(pago: {
+  duplicado_en_cartera_pago_id?: number | null
+  duplicado_en_cartera_prestamo_id?: number | null
+  duplicado_en_cartera_numero_documento?: string | null
+  prestamo_id?: number | null
+}): PrestamoDuplicadoCampos {
+  const prestEx = pago.duplicado_en_cartera_prestamo_id ?? null
+  const prestObj = typeof pago.prestamo_id === 'number' ? pago.prestamo_id : null
+  return {
+    duplicado_en_pagos: true,
+    pago_existente_id: pago.duplicado_en_cartera_pago_id,
+    numero_documento_pago_existente: pago.duplicado_en_cartera_numero_documento,
+    prestamo_existente_id: prestEx,
+    prestamo_objetivo_id: prestObj,
+    prestamo_duplicado_es_objetivo:
+      prestEx != null && prestObj != null ? prestEx === prestObj : null,
+  }
+}
+
+export type DuplicadoCarteraAlertaInlineProps = PrestamoDuplicadoCampos & {
+  /** Nº documento en cartera (alias usado en revisión manual). */
+  numeroDocumentoEnCartera?: string | null
+  prestamoObjetivoMotivo?: PrestamoObjetivoMotivoSinAprobado | string | null
+  prestamoReferenciaId?: number | null
+  prestamoObjetivoMultiple?: boolean | null
+  fechaPagoReporteIso?: string | null
+  institucion_financiera?: string | null
+  observacion?: string | null
+  esMercantil?: boolean
+  /** Notas del pago debajo del aviso (revisión manual). */
+  notas?: string | null
+}
+
+function numeroDocumentoCarteraDesdeProps(
+  props: DuplicadoCarteraAlertaInlineProps
+): string {
+  return String(
+    props.numeroDocumentoEnCartera ??
+      props.numero_documento_pago_existente ??
+      ''
+  ).trim()
+}
+
+/**
+ * Recuadro naranja + tabla comparativa en celdas de listado (Cobros, revisión manual).
+ * No renderiza nada si el serial ya está en el mismo préstamo destino.
+ */
+export function DuplicadoCarteraAlertaInline(
+  props: DuplicadoCarteraAlertaInlineProps
+) {
+  const campos: PrestamoDuplicadoCampos = {
+    duplicado_en_pagos: props.duplicado_en_pagos,
+    pago_existente_id: props.pago_existente_id,
+    numero_documento_pago_existente:
+      props.numeroDocumentoEnCartera ?? props.numero_documento_pago_existente,
+    prestamo_existente_id: props.prestamo_existente_id,
+    prestamo_objetivo_id: props.prestamo_objetivo_id,
+    prestamo_duplicado_es_objetivo: props.prestamo_duplicado_es_objetivo,
+  }
+
+  if (!esDuplicadoEnCartera(campos) && !/DUPLICADO/i.test(props.observacion ?? '')) {
+    return props.notas?.trim() ? (
+      <span className="truncate text-muted-foreground">{props.notas}</span>
+    ) : null
+  }
+
+  if (esDuplicadoMismoPrestamo(campos)) {
+    return props.notas?.trim() ? (
+      <span className="truncate text-muted-foreground">{props.notas}</span>
+    ) : null
+  }
+
+  const mostrar = debeMostrarComparacionPrestamosEnListado(
+    {
+      ...campos,
+      institucion_financiera: props.institucion_financiera,
+      observacion: props.observacion,
+    },
+    inst =>
+      typeof props.esMercantil === 'boolean'
+        ? props.esMercantil
+        : String(inst ?? props.institucion_financiera ?? '')
+            .toLowerCase()
+            .includes('mercantil')
+  )
+
+  if (!mostrar) {
+    return props.notas?.trim() ? (
+      <span className="truncate text-muted-foreground">{props.notas}</span>
+    ) : null
+  }
+
+  const numDoc = numeroDocumentoCarteraDesdeProps(props)
+  const enCartera = esDuplicadoEnCartera(campos)
+
+  return (
+    <div className="space-y-1.5">
+      <div
+        className={
+          'rounded border px-2 py-1.5 text-[11px] leading-snug ' +
+          (enCartera
+            ? 'border-orange-300 bg-orange-50 font-semibold text-orange-950 dark:border-orange-800 dark:bg-orange-950/40 dark:text-orange-100'
+            : 'border-amber-300 bg-amber-50 font-semibold text-amber-950')
+        }
+      >
+        {enCartera ? (
+          <>
+            PAGO DUPLICADO — En cartera Nº{' '}
+            <span className="break-all font-mono font-normal">
+              {numDoc || '-'}
+            </span>
+            {props.pago_existente_id != null
+              ? ` · pago #${props.pago_existente_id}`
+              : ''}
+          </>
+        ) : (
+          <span>DUPLICADO Mercantil — compare préstamos</span>
+        )}
+        <DuplicadoPrestamosResumen
+          prestamoExistenteId={props.prestamo_existente_id}
+          pagoExistenteId={props.pago_existente_id}
+          prestamoObjetivoId={props.prestamo_objetivo_id}
+          prestamoObjetivoMotivo={props.prestamoObjetivoMotivo}
+          prestamoReferenciaId={props.prestamoReferenciaId}
+          prestamoDuplicadoEsObjetivo={props.prestamo_duplicado_es_objetivo}
+          prestamoObjetivoMultiple={props.prestamoObjetivoMultiple}
+          fechaPagoReporteIso={props.fechaPagoReporteIso}
+          esMercantil={props.esMercantil}
+        />
+      </div>
+      {props.notas?.trim() ? (
+        <p className="truncate text-muted-foreground">{props.notas}</p>
+      ) : null}
+    </div>
+  )
+}
+
 /** Etiqueta de la columna «Este reporte iría a» cuando no hay APROBADO objetivo. */
 export function etiquetaPrestamoObjetivoReportado(opts: {
   prestamoObjetivoId?: number | null
@@ -145,7 +283,14 @@ export function DuplicadoPrestamosResumen({
   fechaPagoReporteIso,
   esMercantil = false,
 }: DuplicadoPrestamosResumenProps) {
-  if (prestamoDuplicadoEsObjetivo === true) {
+  const campos: PrestamoDuplicadoCampos = {
+    duplicado_en_pagos: true,
+    pago_existente_id: pagoExistenteId,
+    prestamo_existente_id: prestamoExistenteId,
+    prestamo_objetivo_id: prestamoObjetivoId,
+    prestamo_duplicado_es_objetivo: prestamoDuplicadoEsObjetivo,
+  }
+  if (esDuplicadoMismoPrestamo(campos)) {
     return null
   }
   const prestEx =
@@ -232,23 +377,16 @@ export function DuplicadoPrestamosResumen({
         </p>
       ) : null}
 
-      {typeof prestamoDuplicadoEsObjetivo === 'boolean' ? (
+      {typeof prestamoDuplicadoEsObjetivo === 'boolean' &&
+      prestamoDuplicadoEsObjetivo === false ? (
         <p className="text-[11px] font-semibold">
-          {prestamoDuplicadoEsObjetivo ? (
-            <span className="text-amber-800">
-              Mismo préstamo: el serial ya está aplicado ahí.
-            </span>
-          ) : (
-            <span className="text-emerald-800">
-              Otro préstamo: puede valorar Visto (_P####) en Editar.
-            </span>
-          )}
+          <span className="text-emerald-800">
+            Otro préstamo: puede valorar Visto (_P####) en Editar.
+          </span>
         </p>
-      ) : prestEx != null && prestObj != null ? (
+      ) : prestEx != null && prestObj != null && prestEx !== prestObj ? (
         <p className="text-[11px] font-semibold text-muted-foreground">
-          {prestEx === prestObj
-            ? 'Mismo préstamo.'
-            : 'Préstamos distintos.'}
+          Préstamos distintos.
         </p>
       ) : null}
 
@@ -295,7 +433,14 @@ export function DuplicadoPrestamosComparacion({
   prestamoDuplicadoEsObjetivo,
   prestamoObjetivoMultiple,
 }: DuplicadoPrestamosComparacionProps) {
-  if (prestamoDuplicadoEsObjetivo === true) {
+  const campos: PrestamoDuplicadoCampos = {
+    duplicado_en_pagos: true,
+    pago_existente_id: pagoExistenteId,
+    prestamo_existente_id: prestamoExistenteId,
+    prestamo_objetivo_id: prestamoObjetivoId,
+    prestamo_duplicado_es_objetivo: prestamoDuplicadoEsObjetivo,
+  }
+  if (esDuplicadoMismoPrestamo(campos)) {
     return null
   }
   const prestEx =

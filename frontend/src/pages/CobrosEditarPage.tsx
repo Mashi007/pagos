@@ -837,11 +837,6 @@ export default function CobrosEditarPage() {
                 duplicadoActual.prestamo_objetivo_multiple
               }
               esMercantil={esMercantil}
-              numeroDocumentoExistente={
-                'numero_documento_pago_existente' in duplicadoActual
-                  ? duplicadoActual.numero_documento_pago_existente
-                  : undefined
-              }
               footer={
                 <>
                   {typeof duplicadoActual.prestamo_existente_id === 'number' ? (

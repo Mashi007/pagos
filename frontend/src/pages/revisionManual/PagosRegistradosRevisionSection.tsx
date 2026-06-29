@@ -42,8 +42,10 @@ import {
   esUrlComprobanteImagenConAuth,
 } from '../../utils/comprobanteImagenAuth'
 import {
-  DuplicadoPrestamosResumen,
+  DuplicadoCarteraAlertaInline,
+  camposDuplicadoDesdePagoRevision,
   esDuplicadoEntrePrestamosDistintos,
+  esDuplicadoMismoPrestamo,
 } from '../../components/cobros/DuplicadoPrestamosComparacion'
 import {
   COHERENCIA_USD_TOL,
@@ -369,32 +371,11 @@ export function PagosRegistradosRevisionSection(
                         (conteoDocumentoPagosRevision.get(docKey) || 0) > 1
                       const serialDuplicadoCartera =
                         pagoSerialYaAplicadoEnOtroRegistroCartera(pago)
-                      const prestObjRevision =
-                        typeof pago.prestamo_id === 'number'
-                          ? pago.prestamo_id
-                          : null
-                      const prestExRevision =
-                        pago.duplicado_en_cartera_prestamo_id ?? null
-                      const prestamoDupEsObjetivoRevision =
-                        prestExRevision != null && prestObjRevision != null
-                          ? prestExRevision === prestObjRevision
-                          : null
+                      const camposDupRevision =
+                        camposDuplicadoDesdePagoRevision(pago)
                       const duplicadoEntrePrestamosDistintos =
                         serialDuplicadoCartera &&
-                        esDuplicadoEntrePrestamosDistintos({
-                          duplicado_en_pagos: true,
-                          pago_existente_id: pago.duplicado_en_cartera_pago_id,
-                          prestamo_existente_id:
-                            pago.duplicado_en_cartera_prestamo_id,
-                          prestamo_objetivo_id:
-                            typeof pago.prestamo_id === 'number'
-                              ? pago.prestamo_id
-                              : null,
-                          prestamo_duplicado_es_objetivo:
-                            prestExRevision != null && prestObjRevision != null
-                              ? prestExRevision === prestObjRevision
-                              : null,
-                        })
+                        esDuplicadoEntrePrestamosDistintos(camposDupRevision)
                       const fechaPagoIsoRevision =
                         pago.fecha_pago != null
                           ? String(pago.fecha_pago).slice(0, 10)
@@ -498,38 +479,26 @@ export function PagosRegistradosRevisionSection(
                             {pago.prestamo_id != null ? pago.prestamo_id : '-'}
                           </TableCell>
                           <TableCell className="max-w-[320px] align-top text-sm">
-                            {duplicadoEntrePrestamosDistintos ? (
-                              <div className="space-y-1.5">
-                                <div className="rounded border border-orange-300 bg-orange-50 px-2 py-1.5 text-[11px] font-semibold leading-snug text-orange-950">
-                                  PAGO DUPLICADO — En cartera Nº{' '}
-                                  <span className="break-all font-mono font-normal">
-                                    {pago.duplicado_en_cartera_numero_documento?.trim() ||
-                                      '-'}
-                                  </span>
-                                  {pago.duplicado_en_cartera_pago_id != null
-                                    ? ` · pago #${pago.duplicado_en_cartera_pago_id}`
-                                    : ''}
-                                  <DuplicadoPrestamosResumen
-                                    prestamoExistenteId={prestExRevision}
-                                    pagoExistenteId={
-                                      pago.duplicado_en_cartera_pago_id
-                                    }
-                                    prestamoObjetivoId={prestObjRevision}
-                                    prestamoDuplicadoEsObjetivo={
-                                      prestamoDupEsObjetivoRevision
-                                    }
-                                    fechaPagoReporteIso={fechaPagoIsoRevision}
-                                    esMercantil={esInstitucionMercantilRevision(
-                                      pago.institucion_bancaria
-                                    )}
-                                  />
-                                </div>
-                                {pago.notas?.trim() ? (
-                                  <p className="truncate text-muted-foreground">
-                                    {pago.notas}
-                                  </p>
-                                ) : null}
-                              </div>
+                            {serialDuplicadoCartera ? (
+                              esDuplicadoMismoPrestamo(camposDupRevision) &&
+                              !pago.notas?.trim() ? (
+                                '-'
+                              ) : (
+                                <DuplicadoCarteraAlertaInline
+                                  {...camposDupRevision}
+                                  numeroDocumentoEnCartera={
+                                    pago.duplicado_en_cartera_numero_documento
+                                  }
+                                  fechaPagoReporteIso={fechaPagoIsoRevision}
+                                  institucion_financiera={
+                                    pago.institucion_bancaria
+                                  }
+                                  esMercantil={esInstitucionMercantilRevision(
+                                    pago.institucion_bancaria
+                                  )}
+                                  notas={pago.notas}
+                                />
+                              )
                             ) : pago.notas?.trim() ? (
                               <span className="truncate text-muted-foreground">
                                 {pago.notas}
