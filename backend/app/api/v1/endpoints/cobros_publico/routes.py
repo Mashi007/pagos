@@ -199,6 +199,60 @@ class EnviarReporteResponse(BaseModel):
     recibo_enviado: Optional[bool] = None
 
 
+def _respuesta_envio_reporte_recuperado_en_revision(
+    referencia: str,
+) -> EnviarReporteResponse:
+    return EnviarReporteResponse(
+        ok=True,
+        referencia_interna=referencia,
+        mensaje=(
+            "Su reporte fue recibido. El comprobante quedará en revisión manual "
+            "antes de confirmarse; guarde su número de referencia."
+        ),
+        estado_reportado="en_revision",
+        recibo_enviado=None,
+    )
+
+
+def _marcar_reporte_en_revision_tras_fallo_post_creacion(
+    pago_reportado_id: int,
+    referencia: str,
+    error: Exception,
+) -> bool:
+    """Si el INSERT ya commitió pero falló Gemini/validadores/import, no devolver error genérico."""
+    db_rec = SessionLocal()
+    try:
+        pr_rec = db_rec.get(PagoReportado, int(pago_reportado_id))
+        if pr_rec is None:
+            return False
+        pr_rec.estado = "en_revision"
+        pr_rec.falla_validadores_manual = True
+        prev = (getattr(pr_rec, "gemini_comentario", None) or "").strip()
+        nota = f"Error post-proceso: {str(error)[:200]}"
+        pr_rec.gemini_comentario = (f"{prev} {nota}".strip() if prev else nota)[:500]
+        db_rec.commit()
+        logger.warning(
+            "[COBROS_PUBLIC] Reporte ref=%s id=%s marcado en_revision tras fallo post-creacion: %s",
+            referencia,
+            pago_reportado_id,
+            error,
+        )
+        return True
+    except Exception:
+        logger.exception(
+            "[COBROS_PUBLIC] No se pudo recuperar reporte ref=%s id=%s",
+            referencia,
+            pago_reportado_id,
+        )
+        try:
+            db_rec.rollback()
+        except Exception:
+            pass
+        return False
+    finally:
+        db_rec.close()
+
+
 class EnviarReporteInfopagosResponse(BaseModel):
     """Respuesta de Infopagos. Token y recibo solo si quedo aprobado (misma politica que cobros publico)."""
 
@@ -928,7 +982,17 @@ async def enviar_reporte_publico(
             if confirmo_humano:
                 pr.gemini_coincide_exacto = "true"
                 pr.gemini_comentario = ""
-            falla_validadores = False if confirmo_humano else reportado_falla_validadores_cobros(db_post, pr)
+                falla_validadores = False
+            else:
+                try:
+                    falla_validadores = reportado_falla_validadores_cobros(db_post, pr)
+                except Exception as val_err:
+                    logger.warning(
+                        "[COBROS_PUBLIC] Validadores post-Gemini ref=%s (revision manual): %s",
+                        referencia,
+                        val_err,
+                    )
+                    falla_validadores = True
             if cpr.aplicar_revision_manual_por_monto_alto_en_reportado(
                 monto=monto,
                 moneda_upper=mon_norm.moneda_upper,
@@ -970,6 +1034,16 @@ async def enviar_reporte_publico(
             db_post.close()
     except Exception as e:
         logger.exception("[COBROS_PUBLIC] Error en enviar-reporte: %s", e)
+        if (
+            "pr_id" in locals()
+            and "referencia" in locals()
+            and pr_id
+            and referencia
+            and _marcar_reporte_en_revision_tras_fallo_post_creacion(
+                int(pr_id), str(referencia), e
+            )
+        ):
+            return _respuesta_envio_reporte_recuperado_en_revision(str(referencia))
         try:
             db.rollback()
         except Exception:

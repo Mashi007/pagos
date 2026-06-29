@@ -15,7 +15,7 @@ from time import perf_counter
 from typing import Optional, Tuple
 
 from sqlalchemy import func, select, text, update
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, ProgrammingError
 from sqlalchemy.orm import Session
 
 from app.core.documento import normalize_documento
@@ -956,6 +956,20 @@ def crear_pago_reportado_con_referencia_o_retry(
             db.commit()
             db.refresh(pr)
             return pr, referencia, None
+        except ProgrammingError as pe:
+            db.rollback()
+            err_msg = str(pe.orig) if getattr(pe, "orig", None) else str(pe)
+            if "fuente_tasa_cambio" in err_msg:
+                logger.error(
+                    "[%s] Columna pagos_reportados.fuente_tasa_cambio ausente (ejecutar migracion 077)",
+                    log_tag_duplicate,
+                )
+                return (
+                    None,
+                    None,
+                    "El servicio requiere actualizar la base de datos. Intente en unos minutos o contacte por WhatsApp 424-4579934.",
+                )
+            raise
         except IntegrityError as ie:
             db.rollback()
             err_msg = str(ie.orig) if getattr(ie, "orig", None) else str(ie)
