@@ -70,7 +70,10 @@ import {
 
 import { normalizarNumeroDocumento } from '../utils/pagoExcelValidation'
 
-import { DuplicadoCarteraAviso } from '../components/cobros/DuplicadoPrestamosComparacion'
+import {
+  DuplicadoCarteraAviso,
+  esDuplicadoEntrePrestamosDistintos,
+} from '../components/cobros/DuplicadoPrestamosComparacion'
 import { blobComprobanteAFileParaEscaneo } from '../utils/comprobanteImagenAuth'
 import { normalizarComprobanteArchivoParaEscaneo } from '../utils/normalizarComprobanteArchivo'
 
@@ -657,7 +660,16 @@ export default function CobrosEditarPage() {
   const duplicadoActual = duplicadoDiagnostico ?? detalle
   const duplicadoEnCartera = Boolean(duplicadoActual.duplicado_en_pagos)
   const esMercantil = isMercantilBank(detalle.institucion_financiera)
-  const vistoPermitido = !duplicadoEnCartera || esMercantil
+  const camposDupEditar = {
+    duplicado_en_pagos: duplicadoEnCartera,
+    pago_existente_id: duplicadoActual.pago_existente_id,
+    prestamo_existente_id: duplicadoActual.prestamo_existente_id,
+    prestamo_objetivo_id: duplicadoActual.prestamo_objetivo_id,
+    prestamo_duplicado_es_objetivo: duplicadoActual.prestamo_duplicado_es_objetivo,
+  }
+  const vistoPermitido =
+    !duplicadoEnCartera ||
+    (esMercantil && esDuplicadoEntrePrestamosDistintos(camposDupEditar))
 
   if (detalle.estado === 'aprobado' || detalle.estado === 'importado') {
     return (
@@ -1178,7 +1190,10 @@ export default function CobrosEditarPage() {
                     de inmediato.
                     {!vistoPermitido ? (
                       <span className="mt-1 block font-semibold text-rose-800">
-                        Bloqueado: duplicado en cartera fuera de Mercantil.
+                        {duplicadoEnCartera &&
+                        !esDuplicadoEntrePrestamosDistintos(camposDupEditar)
+                          ? 'Bloqueado: duplicado en el mismo préstamo (no se admite Visto).'
+                          : 'Bloqueado: duplicado en cartera fuera de Mercantil u otro préstamo.'}
                       </span>
                     ) : null}
                   </p>
@@ -1204,7 +1219,7 @@ export default function CobrosEditarPage() {
                       title={
                         vistoPermitido
                           ? 'Asignar sufijo y guardar'
-                          : 'Solo Mercantil permite Visto con duplicado en cartera'
+                          : 'Visto solo si Mercantil y el serial está en otro préstamo (_P####)'
                       }
                       onClick={() => void handleVistoRellenarSufijoYGuardar()}
                     >

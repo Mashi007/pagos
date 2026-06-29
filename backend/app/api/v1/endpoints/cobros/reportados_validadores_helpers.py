@@ -398,14 +398,14 @@ def _obs_efectiva_para_validadores(
     DUPLICADO de banco distinto a Mercantil → toda la observación se descarta (auto-desestimar).
     El pago original ya está siendo gestionado; revisar el duplicado no aporta valor.
     Mercantil mantiene duplicados en cola salvo que el pago existente sea del mismo
-    préstamo objetivo; en ese caso "DUPLICADO" no cuenta como falla manual.
+    préstamo objetivo; en ese caso se conserva la observación (no autoconciliar).
     """
     if not obs:
         return ""
     if "DUPLICADO" not in obs:
         return obs
     if duplicado_mismo_prestamo:
-        return _obs_sin_duplicado(obs)
+        return obs
     if _es_banco_mercantil(institucion):
         return obs
     return ""
@@ -440,6 +440,14 @@ def _item_falla_validadores_cola_manual(it: PagoReportadoListItem) -> bool:
         moneda=getattr(it, "moneda", None),
     ):
         return True
+    if getattr(it, "duplicado_en_pagos", False):
+        pe = getattr(it, "prestamo_existente_id", None)
+        po = getattr(it, "prestamo_objetivo_id", None)
+        mismo_prestamo = getattr(it, "prestamo_duplicado_es_objetivo", None) is True or (
+            pe is not None and po is not None and int(pe) == int(po)
+        )
+        if mismo_prestamo:
+            return True
     obs = _obs_efectiva_para_validadores(
         (it.observacion or "").strip(),
         getattr(it, "institucion_financiera", "") or "",

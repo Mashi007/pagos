@@ -71,6 +71,7 @@ import {
   debeMostrarComparacionPrestamosEnListado,
   esDuplicadoEnCartera,
   esDuplicadoEntrePrestamosDistintos,
+  esDuplicadoMismoPrestamo,
   tituloDuplicadoNoSeleccionableLote,
 } from '../components/cobros/DuplicadoPrestamosComparacion'
 
@@ -380,11 +381,15 @@ function puedeAprobarMasivoRow(row: PagoReportadoItem): boolean {
   return true
 }
 
-/** Aprobacion individual por fila: Mercantil con duplicado en cartera puede forzar tras Visto. */
+/** Aprobación individual: solo Mercantil si el duplicado está en otro préstamo (Visto _P). */
 function puedeAprobarIndividualRow(row: PagoReportadoItem): boolean {
   if (row.estado !== 'pendiente' && row.estado !== 'en_revision') return false
-  if (esDuplicadoCarteraRow(row) && !isMercantilBank(row.institucion_financiera)) {
-    return false
+  if (esDuplicadoCarteraRow(row)) {
+    if (esDuplicadoMismoPrestamo(row)) return false
+    return (
+      isMercantilBank(row.institucion_financiera) &&
+      esDuplicadoEntrePrestamosDistintos(row)
+    )
   }
   return true
 }
@@ -2390,7 +2395,8 @@ export default function CobrosPagosReportadosPage() {
                                       : (row.observacion ?? '')
                             }
                           >
-                            {debeMostrarComparacionPrestamos(row) ? (
+                            {(debeMostrarComparacionPrestamos(row) ||
+                              esDuplicadoMismoPrestamo(row)) ? (
                               <DuplicadoCarteraAlertaInline
                                 duplicado_en_pagos={row.duplicado_en_pagos}
                                 pago_existente_id={row.pago_existente_id}
@@ -2441,7 +2447,8 @@ export default function CobrosPagosReportadosPage() {
                                     </span>
                                   ))}
                               </div>
-                            ) : !debeMostrarComparacionPrestamos(row) ? (
+                            ) : !debeMostrarComparacionPrestamos(row) &&
+                              !esDuplicadoMismoPrestamo(row) ? (
                               '-'
                             ) : null}
                           </td>

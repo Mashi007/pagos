@@ -617,13 +617,59 @@ def _merge_prestamo_objetivo_acum(
     )
 
 
+DUPLICADO_MISMO_PRESTAMO_OBS = "DUPLICADO MISMO PRESTAMO"
+
+
+def _es_duplicado_mismo_prestamo_en_cartera(
+    diag: Any,
+) -> bool:
+    if not getattr(diag, "duplicado_en_pagos", False):
+        return False
+    if getattr(diag, "prestamo_duplicado_es_objetivo", None) is True:
+        return True
+    pe = getattr(diag, "prestamo_existente_id", None)
+    po = getattr(diag, "prestamo_objetivo_id", None)
+    if pe is not None and po is not None:
+        return int(pe) == int(po)
+    return False
+
+
+def _rechazar_si_duplicado_mismo_prestamo_en_cartera(db: Session, pr: PagoReportado) -> None:
+    """Serial ya en el mismo crédito objetivo: no reaplicar (sin excepción Mercantil)."""
+    from .reportados_validadores_helpers import _diagnostico_duplicado_reportado
+
+    diag = _diagnostico_duplicado_reportado(
+        db,
+        pr,
+        tipo_cedula=getattr(pr, "tipo_cedula", None),
+        numero_cedula=getattr(pr, "numero_cedula", None),
+    )
+    if not _es_duplicado_mismo_prestamo_en_cartera(diag):
+        return
+    prest = getattr(diag, "prestamo_existente_id", None) or getattr(
+        diag, "prestamo_objetivo_id", None
+    )
+    pago_id = getattr(diag, "pago_existente_id", None)
+    detalle_prest = f" (préstamo #{prest}" + (f", pago #{pago_id})" if pago_id else ")")
+    raise HTTPException(
+        status_code=400,
+        detail=(
+            f"{DUPLICADO_MISMO_PRESTAMO_OBS}: el comprobante ya está aplicado en este crédito"
+            f"{detalle_prest}. No se admite reaplicar; Mercantil solo admite Visto si el serial está en otro préstamo."
+        ),
+    )
+
+
 def _rechazar_aprobacion_si_documento_ya_en_pagos(db: Session, pr: PagoReportado) -> None:
     """
     No aprobar si el comprobante ya existe en cartera (`pagos`).
 
-    Mercantil: colision por documento tal cual (sufijo _A#### / _P#### puede desambiguar).
+    Duplicado en el mismo préstamo objetivo: bloqueo total (sin excepción Mercantil / Visto _A).
+
+    Mercantil con serial en otro préstamo: colision por documento tal cual (sufijo _P#### puede desambiguar).
     Otros bancos: colision por documento base sin sufijo; no se permite reaplicar.
     """
+    _rechazar_si_duplicado_mismo_prestamo_en_cartera(db, pr)
     mercantil = _es_banco_mercantil(getattr(pr, "institucion_financiera", None))
     colisiona = (
         pago_reportado_colisiona_tabla_pagos(db, pr)
@@ -1060,6 +1106,12 @@ def _pago_reportado_list_items_from_rows(
             if prestamo_existente_id is not None and prestamo_objetivo_id is not None
             else None
         )
+        if dup_pagos and prestamo_duplicado_es_objetivo is True:
+            if observacion:
+                if DUPLICADO_MISMO_PRESTAMO_OBS.upper() not in (observacion or "").upper():
+                    observacion = f"{DUPLICADO_MISMO_PRESTAMO_OBS} / {observacion}"
+            else:
+                observacion = DUPLICADO_MISMO_PRESTAMO_OBS
         items.append(PagoReportadoListItem(
             id=r.id,
             referencia_interna=r.referencia_interna,

@@ -45,7 +45,6 @@ import {
   DuplicadoCarteraAlertaInline,
   camposDuplicadoDesdePagoRevision,
   esDuplicadoEntrePrestamosDistintos,
-  esDuplicadoMismoPrestamo,
 } from '../../components/cobros/DuplicadoPrestamosComparacion'
 import {
   COHERENCIA_USD_TOL,
@@ -480,25 +479,20 @@ export function PagosRegistradosRevisionSection(
                           </TableCell>
                           <TableCell className="max-w-[320px] align-top text-sm">
                             {serialDuplicadoCartera ? (
-                              esDuplicadoMismoPrestamo(camposDupRevision) &&
-                              !pago.notas?.trim() ? (
-                                '-'
-                              ) : (
-                                <DuplicadoCarteraAlertaInline
-                                  {...camposDupRevision}
-                                  numeroDocumentoEnCartera={
-                                    pago.duplicado_en_cartera_numero_documento
-                                  }
-                                  fechaPagoReporteIso={fechaPagoIsoRevision}
-                                  institucion_financiera={
-                                    pago.institucion_bancaria
-                                  }
-                                  esMercantil={esInstitucionMercantilRevision(
-                                    pago.institucion_bancaria
-                                  )}
-                                  notas={pago.notas}
-                                />
-                              )
+                              <DuplicadoCarteraAlertaInline
+                                {...camposDupRevision}
+                                numeroDocumentoEnCartera={
+                                  pago.duplicado_en_cartera_numero_documento
+                                }
+                                fechaPagoReporteIso={fechaPagoIsoRevision}
+                                institucion_financiera={
+                                  pago.institucion_bancaria
+                                }
+                                esMercantil={esInstitucionMercantilRevision(
+                                  pago.institucion_bancaria
+                                )}
+                                notas={pago.notas}
+                              />
                             ) : pago.notas?.trim() ? (
                               <span className="truncate text-muted-foreground">
                                 {pago.notas}

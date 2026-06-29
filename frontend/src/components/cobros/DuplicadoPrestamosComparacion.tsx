@@ -26,6 +26,18 @@ export type PrestamoObjetivoMotivoSinAprobado =
   | 'sin_aprobado'
   | 'cedula_no_registrada'
 
+/** Etiqueta de observación / catálogo cuando el serial ya está en el mismo préstamo. */
+export const OBSERVACION_DUPLICADO_MISMO_PRESTAMO = 'DUPLICADO MISMO PRESTAMO'
+
+export function mensajeDuplicadoMismoPrestamoCorto(
+  prestamoId?: number | null,
+  pagoId?: number | null
+): string {
+  const prest = prestamoId != null ? ` #${prestamoId}` : ''
+  const pago = pagoId != null ? ` (pago #${pagoId})` : ''
+  return `${OBSERVACION_DUPLICADO_MISMO_PRESTAMO}: serial ya aplicado en este préstamo${prest}${pago}. No se admite reaplicar (ningún banco).`
+}
+
 /** Campos mínimos para decidir si el duplicado es entre préstamos distintos. */
 export type PrestamoDuplicadoCampos = {
   duplicado_en_pagos?: boolean | null
@@ -157,8 +169,23 @@ export function DuplicadoCarteraAlertaInline(
 
   if (esDuplicadoMismoPrestamo(campos)) {
     return props.notas?.trim() ? (
-      <span className="truncate text-muted-foreground">{props.notas}</span>
-    ) : null
+      <div className="space-y-1">
+        <p className="text-[11px] font-medium leading-snug text-slate-700">
+          {mensajeDuplicadoMismoPrestamoCorto(
+            props.prestamo_existente_id ?? props.prestamo_objetivo_id,
+            props.pago_existente_id
+          )}
+        </p>
+        <span className="truncate text-muted-foreground">{props.notas}</span>
+      </div>
+    ) : (
+      <p className="text-[11px] font-medium leading-snug text-slate-700">
+        {mensajeDuplicadoMismoPrestamoCorto(
+          props.prestamo_existente_id ?? props.prestamo_objetivo_id,
+          props.pago_existente_id
+        )}
+      </p>
+    )
   }
 
   const mostrar = debeMostrarComparacionPrestamosEnListado(
@@ -587,24 +614,15 @@ export function DuplicadoCarteraAviso({
     const prestId = prestamoExistenteId ?? prestamoObjetivoId
     const doc = String(numeroDocumentoExistente ?? '').trim()
     return (
-      <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
-        <p>
-          Este comprobante ya está registrado en cartera en el mismo préstamo
-          {prestId != null ? (
-            <>
-              {' '}
-              <strong>#{prestId}</strong>
-            </>
-          ) : null}
-          {pagoExistenteId != null ? <> (pago #{pagoExistenteId})</> : null}
-          {doc ? (
-            <>
-              {' '}
-              · Nº <span className="font-mono">{doc}</span>
-            </>
-          ) : null}
-          .
+      <div className="rounded-md border border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-800">
+        <p className="font-medium text-slate-900">
+          {mensajeDuplicadoMismoPrestamoCorto(prestId, pagoExistenteId)}
         </p>
+        {doc ? (
+          <p className="mt-1 text-xs text-slate-600">
+            Nº en cartera: <span className="font-mono">{doc}</span>
+          </p>
+        ) : null}
         {footer ? <div className="mt-2 flex flex-wrap gap-2">{footer}</div> : null}
       </div>
     )
@@ -652,7 +670,7 @@ export function tituloDuplicadoNoSeleccionableLote(
 ): string | undefined {
   if (!esDuplicadoEnCartera(row)) return undefined
   if (esDuplicadoMismoPrestamo(row)) {
-    return 'No seleccionable en lote: el serial ya está aplicado en este préstamo.'
+    return 'No seleccionable: duplicado en el mismo préstamo; no se admite reaplicar (ningún banco).'
   }
   if (esDuplicadoEntrePrestamosDistintos(row)) {
     return esMercantil(row.institucion_financiera)
