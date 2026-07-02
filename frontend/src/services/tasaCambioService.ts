@@ -69,6 +69,44 @@ const ADMIN_TASAS = '/api/v1/admin/tasas-cambio'
  */
 const TASAS_CAMBIO_API = '/api/v1/tasas-cambio'
 
+/** TTL corto en cliente: evita golpear /estado y /hoy en cada layout mount. */
+const TASA_LECTURA_CLIENT_CACHE_MS = 5 * 60 * 1000
+
+type TasaCacheEntry<T> = { storedAt: number; data: T }
+
+const tasaEstadoClientCache: { entry: TasaCacheEntry<TasaCambioEstado> | null } = {
+  entry: null,
+}
+const tasaHoyClientCache: {
+  entry: TasaCacheEntry<TasaCambioResponse | null> | null
+} = { entry: null }
+
+function readTasaClientCache<T>(
+  box: { entry: TasaCacheEntry<T> | null },
+  ttlMs: number
+): T | null {
+  const hit = box.entry
+  if (!hit) return null
+  if (Date.now() - hit.storedAt > ttlMs) {
+    box.entry = null
+    return null
+  }
+  return hit.data
+}
+
+function writeTasaClientCache<T>(
+  box: { entry: TasaCacheEntry<T> | null },
+  data: T
+): T {
+  box.entry = { storedAt: Date.now(), data }
+  return data
+}
+
+export function invalidateTasaLecturaClientCache(): void {
+  tasaEstadoClientCache.entry = null
+  tasaHoyClientCache.entry = null
+}
+
 function throwFromAxios(e: unknown, fallback: string): never {
   if (isAxiosError(e)) {
     const status = e.response?.status
@@ -101,8 +139,14 @@ async function getTasaLecturaFlexible<T>(rutaRelativa: string): Promise<T> {
 }
 
 export async function getTasaHoy(): Promise<TasaCambioResponse | null> {
+  const cached = readTasaClientCache(
+    tasaHoyClientCache,
+    TASA_LECTURA_CLIENT_CACHE_MS
+  )
+  if (cached !== null) return cached
   try {
-    return await getTasaLecturaFlexible<TasaCambioResponse | null>('/hoy')
+    const data = await getTasaLecturaFlexible<TasaCambioResponse | null>('/hoy')
+    return writeTasaClientCache(tasaHoyClientCache, data)
   } catch (e) {
     if (isAxiosError(e) && e.response?.status === 404) return null
     console.error('Error fetching tasa hoy:', e)
@@ -111,8 +155,14 @@ export async function getTasaHoy(): Promise<TasaCambioResponse | null> {
 }
 
 export async function getEstadoTasa(): Promise<TasaCambioEstado> {
+  const cached = readTasaClientCache(
+    tasaEstadoClientCache,
+    TASA_LECTURA_CLIENT_CACHE_MS
+  )
+  if (cached !== null) return cached
   try {
-    return await getTasaLecturaFlexible<TasaCambioEstado>('/estado')
+    const data = await getTasaLecturaFlexible<TasaCambioEstado>('/estado')
+    return writeTasaClientCache(tasaEstadoClientCache, data)
   } catch (e) {
     console.error('Error fetching estado tasa:', e)
     throwFromAxios(e, 'Error al obtener estado de tasa')
@@ -130,17 +180,21 @@ export async function guardarTasa(params: {
     tasa_binance: params.tasa_binance,
   }
   try {
-    return await apiClient.post<TasaCambioResponse>(
+    const resultado = await apiClient.post<TasaCambioResponse>(
       ADMIN_TASAS + '/guardar',
       body
     )
+    invalidateTasaLecturaClientCache()
+    return resultado
   } catch (e) {
     if (isAxiosError(e) && e.response?.status === 403) {
       try {
-        return await apiClient.post<TasaCambioResponse>(
+        const resultado = await apiClient.post<TasaCambioResponse>(
           TASAS_CAMBIO_API + '/guardar',
           body
         )
+        invalidateTasaLecturaClientCache()
+        return resultado
       } catch (e2) {
         console.error('Error guardando tasa (ruta amplia):', e2)
         throwFromAxios(e2, 'Error al guardar la tasa')

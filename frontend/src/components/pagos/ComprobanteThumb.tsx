@@ -101,12 +101,15 @@ export function ComprobanteThumb({
       return
     }
     let cancelado = false
+    const abortController = new AbortController()
     setLoading(true)
     setError(false)
     setIsPdf(false)
     ;(async () => {
       try {
-        const blob = await apiClient.getBlob(pathAuth)
+        const blob = await apiClient.getBlob(pathAuth, {
+          signal: abortController.signal,
+        })
         if (cancelado) return
         const head = new Uint8Array(await blob.slice(0, 16).arrayBuffer())
         const sniff = sniffMime(head)
@@ -133,6 +136,7 @@ export function ComprobanteThumb({
     })()
     return () => {
       cancelado = true
+      abortController.abort()
       setBlobUrl(prev => {
         if (prev) URL.revokeObjectURL(prev)
         return null

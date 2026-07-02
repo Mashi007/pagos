@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.database import get_db
+from app.core.deps import staff_user_from_access_token_payload
 from app.core.env_admin_auth import is_configured_env_admin_email
 from app.core.email import send_email
 from app.core.email_config_holder import get_tickets_notify_emails
@@ -330,27 +331,7 @@ def me(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token inválido o expirado",
         )
-    if payload.get("scope") == "finiquito":
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Use el token solo en el portal Finiquito",
-        )
-    sub = payload.get("sub") or payload.get("email")
-    if not sub:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token inválido",
-        )
-    email = sub if "@" in sub else f"{sub}@admin.local"
-    u = db.query(User).filter(User.email == email).first()
-    if u and u.is_active:
-        return user_to_response(u)
-    if is_configured_env_admin_email(email):
-        return _fake_user(email)
-    raise HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Usuario no encontrado o inactivo",
-    )
+    return staff_user_from_access_token_payload(db, payload)
 
 
 @router.post("/clear-rate-limits")

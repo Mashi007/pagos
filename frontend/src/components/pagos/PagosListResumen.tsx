@@ -69,7 +69,7 @@ interface UltimoPago {
   total_prestamos: number
 }
 
-export function PagosListResumen() {
+export function PagosListResumen({ fetchEnabled = true }: { fetchEnabled?: boolean }) {
   const [page, setPage] = useState(1)
 
   const [perPage] = useState(10)
@@ -98,6 +98,8 @@ export function PagosListResumen() {
     refetchOnMount: true,
 
     refetchOnWindowFocus: false,
+
+    enabled: fetchEnabled,
   })
 
   // Query para detalle de pagos de un cliente (más reciente a más antiguo, paginado)

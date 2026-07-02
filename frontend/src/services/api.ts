@@ -136,6 +136,23 @@ function isCobrosEscanerBorradoresGet(url?: string): boolean {
   )
 }
 
+/**
+ * GET de fondo o lecturas pesadas: no reintentar automáticamente (saturación del worker).
+ * auth/me tiene sesión local; tasas tienen caché; comprobante aborta al desmontar el thumb.
+ */
+function isNeverAutoRetryBackgroundGet(url?: string): boolean {
+  const u = String(url || '')
+  return (
+    u.includes('/api/v1/auth/me') ||
+    u.includes('/tasas-cambio/') ||
+    u.includes('/admin/tasas-cambio/') ||
+    /\/pagos\/comprobante-imagen\/[a-f0-9]+/i.test(u) ||
+    isPagosListReadGet(u) ||
+    isPagosConErroresGet(u) ||
+    u.includes('/cedulas-reportar-bs')
+  )
+}
+
 // Base URL de la API. CSP permite same-origin y orígenes Render; usar VITE_API_URL cuando front y back estén en servicios distintos.
 
 function getEffectiveApiBaseUrl(): string {
@@ -629,6 +646,15 @@ class ApiClient {
         ).toLowerCase()
         const errorCodeEarly = String((error as { code?: string }).code || '')
         const errorMessageEarly = String(error.message || '')
+        if (!requestConfigForRetry) {
+          return Promise.reject(error)
+        }
+        const requestAborted =
+          errorCodeEarly === 'ERR_CANCELED' ||
+          errorMessageEarly.toLowerCase().includes('abort') ||
+          Boolean(
+            (requestConfigForRetry as { signal?: AbortSignal }).signal?.aborted
+          )
         const isGmailStatusGet =
           methodLc === 'get' && isGmailStatusPollRequest(requestConfigForRetry)
         const isGmailStatusTimeoutRetry =
@@ -665,8 +691,8 @@ class ApiClient {
          */
         const isSafeTransientRetryGet =
           methodLc === 'get' &&
-          (reqUrl.includes('/api/v1/auth/me') ||
-            reqUrl.includes('/api/v1/clientes') ||
+          !isNeverAutoRetryBackgroundGet(reqUrl) &&
+          (reqUrl.includes('/api/v1/clientes') ||
             reqUrl.includes('/concesionarios/activos') ||
             reqUrl.includes('/analistas/activos') ||
             reqUrl.includes('/modelos-vehiculos/activos') ||
@@ -680,16 +706,11 @@ class ApiClient {
             ) ||
             isPrestamoDetailGet(reqUrl) ||
             isPrestamoCedulaGet(reqUrl) ||
-            isPagosTabReadGet(reqUrl) ||
             isCobrosEscanerBorradoresGet(reqUrl) ||
-            /\/pagos\/comprobante-imagen\/[a-f0-9]+/i.test(reqUrl) ||
             reqUrl.includes('/prestamos/candidatos-drive/snapshot') ||
-            reqUrl.includes('/pagos/gmail/status') ||
-            reqUrl.includes('/admin/tasas-cambio/estado') ||
-            reqUrl.includes('/admin/tasas-cambio/hoy') ||
-            reqUrl.includes('/tasas-cambio/estado') ||
-            reqUrl.includes('/tasas-cambio/hoy'))
+            reqUrl.includes('/pagos/gmail/status'))
         const isColdStartSafeGetTimeoutRetry =
+          !requestAborted &&
           isSafeTransientRetryGet &&
           (errorCodeEarly === 'ECONNABORTED' ||
             errorMessageEarly.includes('timeout')) &&
@@ -742,14 +763,18 @@ class ApiClient {
         const mayRetryThisRequest =
           methodLc !== 'get' || isSafeTransientRetryGet
         const shouldRetry =
-          (canRetryBecauseStatus &&
+          !requestAborted &&
+          !(
+            methodLc === 'get' && isNeverAutoRetryBackgroundGet(reqUrl)
+          ) &&
+          ((canRetryBecauseStatus &&
             retryCount < maxRetries &&
             mayRetryThisRequest) ||
-          isGmailStatusTimeoutRetry ||
-          isPrestamoDetailGetRetry ||
-          isColdStartSafeGetTimeoutRetry ||
-          isAuthSessionTimeoutRetry ||
-          isScannerTimeoutRetry
+            isGmailStatusTimeoutRetry ||
+            isPrestamoDetailGetRetry ||
+            isColdStartSafeGetTimeoutRetry ||
+            isAuthSessionTimeoutRetry ||
+            isScannerTimeoutRetry)
         if (shouldRetry) {
           ;(requestConfigForRetry as any)._retryCount = retryCount + 1
 

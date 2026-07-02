@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 
+import { useLocation } from 'react-router-dom'
+
 import { AlertTriangle } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -8,10 +10,26 @@ import {
   getEstadoTasa,
   getTasaHoy,
   guardarTasa,
+  invalidateTasaLecturaClientCache,
   type TasaCambioResponse,
 } from '../services/tasaCambioService'
 
 const STORAGE_PREFIX = 'rapicredit_tasa_vigente_toast_'
+const TASA_CHECK_SESSION_KEY = 'rapicredit_tasa_estado_checked_at'
+/** En rutas de cobros/pagos pesadas, diferir para no competir con listado-y-kpis. */
+const TASA_DEFER_MS_COBROS = 12_000
+const TASA_DEFER_MS_DEFAULT = 4_000
+
+function tasaDeferMsForPath(pathname: string): number {
+  if (
+    pathname.includes('/cobros/') ||
+    pathname.includes('/pagos/pagos') ||
+    pathname.endsWith('/pagos')
+  ) {
+    return TASA_DEFER_MS_COBROS
+  }
+  return TASA_DEFER_MS_DEFAULT
+}
 
 function formatTasaBsUsd(val: number): string {
   if (!Number.isFinite(val)) return String(val)
@@ -28,6 +46,7 @@ interface TasaCambioNotificacionProps {
 export const TasaCambioNotificacion: React.FC<TasaCambioNotificacionProps> = ({
   onTasaCargada,
 }) => {
+  const location = useLocation()
   const [mostrarModal, setMostrarModal] = useState(false)
   const [debeIngresar, setDebeIngresar] = useState(false)
   const [tasaHoyRow, setTasaHoyRow] = useState<TasaCambioResponse | null>(null)
@@ -39,6 +58,17 @@ export const TasaCambioNotificacion: React.FC<TasaCambioNotificacionProps> = ({
     const verificarTasa = async () => {
       if (typeof document !== 'undefined' && document.hidden) return
       if (verificarEnCursoRef.current) return
+      try {
+        const checkedAt = Number(
+          sessionStorage.getItem(TASA_CHECK_SESSION_KEY) || '0'
+        )
+        if (checkedAt > 0 && Date.now() - checkedAt < 5 * 60 * 1000) {
+          setLoading(false)
+          return
+        }
+      } catch {
+        /* ignore */
+      }
       verificarEnCursoRef.current = true
       try {
         const estado = await getEstadoTasa()
@@ -90,6 +120,11 @@ export const TasaCambioNotificacion: React.FC<TasaCambioNotificacionProps> = ({
         if (estado.debe_ingresar && !estado.tasa_ya_ingresada) {
           setMostrarModal(true)
         }
+        try {
+          sessionStorage.setItem(TASA_CHECK_SESSION_KEY, String(Date.now()))
+        } catch {
+          /* ignore */
+        }
       } catch (err: unknown) {
         // Evitar ruido en consola si el API está saturado (p. ej. pipeline Gmail largo).
         if (import.meta.env.DEV) {
@@ -101,7 +136,10 @@ export const TasaCambioNotificacion: React.FC<TasaCambioNotificacionProps> = ({
       }
     }
 
-    void verificarTasa()
+    const deferMs = tasaDeferMsForPath(location.pathname)
+    const startTimer = window.setTimeout(() => {
+      void verificarTasa()
+    }, deferMs)
 
     const interval = setInterval(
       () => {
@@ -110,8 +148,11 @@ export const TasaCambioNotificacion: React.FC<TasaCambioNotificacionProps> = ({
       5 * 60 * 1000
     )
 
-    return () => clearInterval(interval)
-  }, [onTasaCargada])
+    return () => {
+      window.clearTimeout(startTimer)
+      clearInterval(interval)
+    }
+  }, [onTasaCargada, location.pathname])
 
   const handleGuardarTasa = async (p: {
     tasa_oficial: number
@@ -119,6 +160,8 @@ export const TasaCambioNotificacion: React.FC<TasaCambioNotificacionProps> = ({
     tasa_binance: number
   }) => {
     const resultado = await guardarTasa(p)
+
+    invalidateTasaLecturaClientCache()
 
     setTasaHoyRow(resultado)
 

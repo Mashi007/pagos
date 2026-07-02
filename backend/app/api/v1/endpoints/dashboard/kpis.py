@@ -27,6 +27,11 @@ from app.services.prestamos.prestamo_fecha_referencia_query import (
     prestamo_fecha_referencia_por_aprobacion,
 )
 
+from .cuotas_mensual_agg import (
+    _fetch_agregados_mensuales_cuotas,
+    _mes_lookup,
+    _resolver_meses_con_fechas,
+)
 from .utils import (
     _CACHE_KPIS,
     _CACHE_OPCIONES_FILTROS,
@@ -731,84 +736,16 @@ def _compute_dashboard_admin(
     fecha_fin: Optional[str],
 ) -> dict:
     """Calcula la respuesta de dashboard/admin (evolucion_mensual desde cuotas)."""
-    if fecha_inicio and fecha_fin:
-        try:
-            inicio = date.fromisoformat(fecha_inicio)
-            fin = date.fromisoformat(fecha_fin)
-            if inicio <= fin:
-                meses = _meses_desde_rango(inicio, fin)
-            else:
-                meses = _etiquetas_12_meses()
-        except ValueError:
-            meses = _etiquetas_12_meses()
-    else:
-        meses = _etiquetas_12_meses()
+    meses = _resolver_meses_con_fechas(fecha_inicio, fecha_fin)
 
     evolucion = []
     try:
-        for i, m in enumerate(meses):
-            if "year" in m and "month" in m:
-                y, mo = m["year"], m["month"]
-                inicio_d = date(y, mo, 1)
-                if mo == 12:
-                    fin_d = date(y, 12, 31)
-                else:
-                    fin_d = date(y, mo + 1, 1) - timedelta(days=1)
-            else:
-                hoy = datetime.now(timezone.utc)
-                fin_mes = hoy - timedelta(days=30 * (len(meses) - 1 - i))
-                if fin_mes.tzinfo is None:
-                    fin_mes = fin_mes.replace(tzinfo=timezone.utc)
-                inicio_d, fin_d = _primer_ultimo_dia_mes(fin_mes)
-            # PROGRAMADOS (cartera): suma de cuotas con vencimiento en este mes
-            cartera = db.scalar(
-                select(func.coalesce(func.sum(Cuota.monto), 0))
-                .select_from(Cuota)
-                .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
-                .join(Cliente, Prestamo.cliente_id == Cliente.id)
-                .where(
-                    Prestamo.estado == "APROBADO",
-                    Cuota.fecha_vencimiento >= inicio_d,
-                    Cuota.fecha_vencimiento <= fin_d,
-                )
-            ) or 0
-            
-            # CONCILIADOS DEL MES: cuotas con vencimiento en este mes y ya pagadas (fecha_pago no nula).
-            # No incluye cobros de cuotas vencidas en meses anteriores (eso va en pagos_atrasos).
-            cobrado = db.scalar(
-                select(func.coalesce(func.sum(Cuota.monto), 0))
-                .select_from(Cuota)
-                .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
-                .join(Cliente, Prestamo.cliente_id == Cliente.id)
-                .where(
-                    Prestamo.estado == "APROBADO",
-                    Cuota.fecha_vencimiento >= inicio_d,
-                    Cuota.fecha_vencimiento <= fin_d,
-                    Cuota.fecha_pago.isnot(None),
-                )
-            ) or 0
-
-            # Pagos de meses anteriores: vencieron antes de este mes pero se pagaron dentro del mes (solo para la barra naranja).
-            pagos_atrasos = db.scalar(
-                select(func.coalesce(func.sum(Cuota.monto), 0))
-                .select_from(Cuota)
-                .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
-                .join(Cliente, Prestamo.cliente_id == Cliente.id)
-                .where(
-                    Prestamo.estado == "APROBADO",
-                    Cuota.fecha_vencimiento < inicio_d,
-                    Cuota.fecha_pago >= inicio_d,
-                    Cuota.fecha_pago <= fin_d,
-                    Cuota.fecha_pago.isnot(None),
-                )
-            ) or 0
-
-            cartera_f = _safe_float(cartera)
-            cobrado_f = _safe_float(cobrado)
-            pagos_atrasos_f = _safe_float(pagos_atrasos)
-
-            # Cuentas por cobrar (línea): únicamente programados del mes menos conciliados del mes.
-            # pagos_atrasos no participa en este cálculo.
+        cartera_by, cobrado_by, atrasos_by = _fetch_agregados_mensuales_cuotas(db, meses)
+        for m in meses:
+            key = _mes_lookup(m)
+            cartera_f = cartera_by.get(key, 0.0)
+            cobrado_f = cobrado_by.get(key, 0.0)
+            pagos_atrasos_f = atrasos_by.get(key, 0.0)
             cuentas_por_cobrar_f = cartera_f - cobrado_f
             evolucion.append({
                 "mes": m["mes"],
@@ -852,87 +789,18 @@ def _compute_analisis_cuentas_por_cobrar(
     fecha_fin: Optional[str],
 ) -> dict:
     """Calcula análisis de cuentas por cobrar: lo programado vs pagos de atrasos."""
-    if fecha_inicio and fecha_fin:
-        try:
-            inicio = date.fromisoformat(fecha_inicio)
-            fin = date.fromisoformat(fecha_fin)
-            if inicio <= fin:
-                meses = _meses_desde_rango(inicio, fin)
-            else:
-                meses = _etiquetas_12_meses()
-        except ValueError:
-            meses = _etiquetas_12_meses()
-    else:
-        meses = _etiquetas_12_meses()
+    meses = _resolver_meses_con_fechas(fecha_inicio, fecha_fin)
 
     analisis = []
     try:
-        for i, m in enumerate(meses):
-            if "year" in m and "month" in m:
-                y, mo = m["year"], m["month"]
-                inicio_d = date(y, mo, 1)
-                if mo == 12:
-                    fin_d = date(y, 12, 31)
-                else:
-                    fin_d = date(y, mo + 1, 1) - timedelta(days=1)
-            else:
-                hoy = datetime.now(timezone.utc)
-                fin_mes = hoy - timedelta(days=30 * (len(meses) - 1 - i))
-                if fin_mes.tzinfo is None:
-                    fin_mes = fin_mes.replace(tzinfo=timezone.utc)
-                inicio_d, fin_d = _primer_ultimo_dia_mes(fin_mes)
-
-            # 1. LO QUE DEBERÍA COBRARSE: Cuotas programadas en este mes
-            cartera = db.scalar(
-                select(func.coalesce(func.sum(Cuota.monto), 0))
-                .select_from(Cuota)
-                .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
-                .join(Cliente, Prestamo.cliente_id == Cliente.id)
-                .where(
-                    Prestamo.estado == "APROBADO",
-                    Cuota.fecha_vencimiento >= inicio_d,
-                    Cuota.fecha_vencimiento <= fin_d,
-                )
-            ) or 0
-
-            # Cobrado del mes (misma regla que evolución mensual /admin): vencimiento en el mes y cuota pagada
-            cobrado_mes = db.scalar(
-                select(func.coalesce(func.sum(Cuota.monto), 0))
-                .select_from(Cuota)
-                .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
-                .join(Cliente, Prestamo.cliente_id == Cliente.id)
-                .where(
-                    Prestamo.estado == "APROBADO",
-                    Cuota.fecha_vencimiento >= inicio_d,
-                    Cuota.fecha_vencimiento <= fin_d,
-                    Cuota.fecha_pago.isnot(None),
-                )
-            ) or 0
-
-            # 2. PAGOS DE MESES ANTERIORES: Cuotas que vencieron ANTES de este mes pero se pagaron EN este mes
-            pagos_atrasos = db.scalar(
-                select(func.coalesce(func.sum(Cuota.monto), 0))
-                .select_from(Cuota)
-                .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
-                .join(Cliente, Prestamo.cliente_id == Cliente.id)
-                .where(
-                    Prestamo.estado == "APROBADO",
-                    Cuota.fecha_vencimiento < inicio_d,  # Vencimiento ANTES de este mes
-                    Cuota.fecha_pago >= inicio_d,        # Pero se pagó EN este mes
-                    Cuota.fecha_pago <= fin_d,
-                    Cuota.fecha_pago.isnot(None),
-                )
-            ) or 0
-
-            cartera_f = _safe_float(cartera)
-            cobrado_f = _safe_float(cobrado_mes)
-            pagos_atrasos_f = _safe_float(pagos_atrasos)
-
+        cartera_by, cobrado_by, atrasos_by = _fetch_agregados_mensuales_cuotas(db, meses)
+        for m in meses:
+            key = _mes_lookup(m)
             analisis.append({
                 "mes": m["mes"],
-                "cartera": cartera_f,
-                "cobrado_mes": cobrado_f,
-                "pagos_atrasos": pagos_atrasos_f,
+                "cartera": cartera_by.get(key, 0.0),
+                "cobrado_mes": cobrado_by.get(key, 0.0),
+                "pagos_atrasos": atrasos_by.get(key, 0.0),
             })
         origen = "bd"
     except Exception as e:
@@ -955,78 +823,16 @@ def _compute_tendencia_programado_vs_total_cobrado(
     fecha_fin: Optional[str],
 ) -> dict:
     """Línea 1: cuotas programadas (vencimiento en el mes). Línea 2: cobrado del mes + atrasos cobrados en el mes."""
-    if fecha_inicio and fecha_fin:
-        try:
-            inicio = date.fromisoformat(fecha_inicio)
-            fin = date.fromisoformat(fecha_fin)
-            if inicio <= fin:
-                meses = _meses_desde_rango(inicio, fin)
-            else:
-                meses = _etiquetas_12_meses()
-        except ValueError:
-            meses = _etiquetas_12_meses()
-    else:
-        meses = _etiquetas_12_meses()
+    meses = _resolver_meses_con_fechas(fecha_inicio, fecha_fin)
 
     series = []
     try:
-        for i, m in enumerate(meses):
-            if "year" in m and "month" in m:
-                y, mo = m["year"], m["month"]
-                inicio_d = date(y, mo, 1)
-                if mo == 12:
-                    fin_d = date(y, 12, 31)
-                else:
-                    fin_d = date(y, mo + 1, 1) - timedelta(days=1)
-            else:
-                hoy = datetime.now(timezone.utc)
-                fin_mes = hoy - timedelta(days=30 * (len(meses) - 1 - i))
-                if fin_mes.tzinfo is None:
-                    fin_mes = fin_mes.replace(tzinfo=timezone.utc)
-                inicio_d, fin_d = _primer_ultimo_dia_mes(fin_mes)
-
-            programadas = db.scalar(
-                select(func.coalesce(func.sum(Cuota.monto), 0))
-                .select_from(Cuota)
-                .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
-                .join(Cliente, Prestamo.cliente_id == Cliente.id)
-                .where(
-                    Prestamo.estado == "APROBADO",
-                    Cuota.fecha_vencimiento >= inicio_d,
-                    Cuota.fecha_vencimiento <= fin_d,
-                )
-            ) or 0
-
-            conciliados_mes = db.scalar(
-                select(func.coalesce(func.sum(Cuota.monto), 0))
-                .select_from(Cuota)
-                .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
-                .join(Cliente, Prestamo.cliente_id == Cliente.id)
-                .where(
-                    Prestamo.estado == "APROBADO",
-                    Cuota.fecha_vencimiento >= inicio_d,
-                    Cuota.fecha_vencimiento <= fin_d,
-                    Cuota.fecha_pago.isnot(None),
-                )
-            ) or 0
-
-            pagos_meses_anteriores = db.scalar(
-                select(func.coalesce(func.sum(Cuota.monto), 0))
-                .select_from(Cuota)
-                .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
-                .join(Cliente, Prestamo.cliente_id == Cliente.id)
-                .where(
-                    Prestamo.estado == "APROBADO",
-                    Cuota.fecha_vencimiento < inicio_d,
-                    Cuota.fecha_pago >= inicio_d,
-                    Cuota.fecha_pago <= fin_d,
-                    Cuota.fecha_pago.isnot(None),
-                )
-            ) or 0
-
-            prog_f = _safe_float(programadas)
-            conc_f = _safe_float(conciliados_mes)
-            atras_f = _safe_float(pagos_meses_anteriores)
+        cartera_by, cobrado_by, atrasos_by = _fetch_agregados_mensuales_cuotas(db, meses)
+        for m in meses:
+            key = _mes_lookup(m)
+            prog_f = cartera_by.get(key, 0.0)
+            conc_f = cobrado_by.get(key, 0.0)
+            atras_f = atrasos_by.get(key, 0.0)
             series.append({
                 "mes": m["mes"],
                 "cuotas_programadas": prog_f,

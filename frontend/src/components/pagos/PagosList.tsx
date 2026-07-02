@@ -1914,7 +1914,7 @@ export function PagosList() {
           </TabsList>
           {/* Tab: Detalle por Cliente (resumen + ver pagos del cliente, más reciente a más antiguo) */}
           <TabsContent value="resumen" forceMount>
-            <PagosListResumen />
+            <PagosListResumen fetchEnabled={activeTab === 'resumen'} />
           </TabsContent>
           <TabsContent value="revision" forceMount>
             <PagosRevisionTab

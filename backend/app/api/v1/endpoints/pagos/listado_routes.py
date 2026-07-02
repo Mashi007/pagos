@@ -894,164 +894,160 @@ def get_ultimos_pagos(
 
     hoy = _hoy_local()
 
-    # Subconsulta: cédulas distintas ordenadas por pago más reciente (más actual a más antiguo)
-
+    # Cédulas únicas ordenadas por su pago más reciente. El listado previo hacía un
+    # N+1 severo: 1 query para la página y luego 3 queries por cada cédula.
     subq = (
-
         select(
-
             Pago.cedula_cliente,
-
             func.max(Pago.fecha_pago).label("max_fecha"),
-
             func.max(Pago.id).label("max_id"),
-
         )
-
         .where(
-
             Pago.cedula_cliente.isnot(None),
-
             Pago.cedula_cliente != "",
-
         )
-
         .group_by(Pago.cedula_cliente)
-
     )
-
     if cedula and cedula.strip():
-
         subq = subq.where(Pago.cedula_cliente.ilike(f"%{cedula.strip()}%"))
-
     subq = subq.subquery()
 
     total_cedulas = db.scalar(select(func.count()).select_from(subq)) or 0
-
     total_pages = (total_cedulas + per_page - 1) // per_page if total_cedulas else 0
 
-    q_cedulas = (
-
-        select(subq.c.cedula_cliente)
-
-        .order_by(subq.c.max_fecha.desc(), subq.c.max_id.desc())
-
-        .offset((page - 1) * per_page)
-
-        .limit(per_page)
-
-    )
-
-    cedulas_page = db.execute(q_cedulas).scalars().all()
-
-    cedulas_list = [c[0] for c in cedulas_page if c[0]]
-
-    items = []
-
-    for ced in cedulas_list:
-
-        row_ultimo = db.execute(
-
-            select(Pago)
-
-            .where(Pago.cedula_cliente == ced)
-
-            .order_by(Pago.id.desc())
-
-            .limit(1)
-
-        ).first()
-
-        ultimo = row_ultimo[0] if row_ultimo else None
-
-        if not ultimo:
-
-            continue
-
-        if estado and estado.strip() and (ultimo.estado or "").upper() != estado.strip().upper():
-
-            continue
-
-        prestamo_id = ultimo.prestamo_id
-
-        # Cuotas atrasadas y saldo vencido para este cliente (por prestamos con esa cedula)
-
-        prestamos_cliente = db.execute(
-
-            select(Prestamo.id).select_from(Prestamo).join(Cliente, Prestamo.cliente_id == Cliente.id).where(Cliente.cedula == ced)
-
+    cedulas_list = list(
+        db.execute(
+            select(subq.c.cedula_cliente)
+            .order_by(subq.c.max_fecha.desc(), subq.c.max_id.desc())
+            .offset((page - 1) * per_page)
+            .limit(per_page)
         ).scalars().all()
+    )
+    if not cedulas_list:
+        return {
+            "items": [],
+            "total": total_cedulas,
+            "page": page,
+            "per_page": per_page,
+            "total_pages": total_pages,
+        }
 
-        prestamo_ids = [p[0] for p in prestamos_cliente]
-
-        cuotas_atrasadas = 0
-
-        saldo_vencido = 0.0
-
-        if prestamo_ids:
-
-            q_mora = (
-
-                select(func.count(), func.coalesce(func.sum(Cuota.monto), 0))
-
-                .select_from(Cuota)
-
-                .where(
-
-                    Cuota.prestamo_id.in_(prestamo_ids),
-
-                    Cuota.fecha_pago.is_(None),
-
-                    Cuota.fecha_vencimiento < hoy,
-
-                )
-
+    # Último pago por cédula de la página en una sola consulta.
+    ultimos_subq = (
+        select(
+            Pago.id.label("pago_id"),
+            Pago.cedula_cliente.label("cedula_cliente"),
+            func.row_number()
+            .over(
+                partition_by=Pago.cedula_cliente,
+                order_by=(Pago.id.desc(),),
             )
+            .label("rn"),
+        )
+        .where(Pago.cedula_cliente.in_(cedulas_list))
+        .subquery()
+    )
+    ultimos_rows = db.execute(
+        select(Pago)
+        .join(ultimos_subq, ultimos_subq.c.pago_id == Pago.id)
+        .where(ultimos_subq.c.rn == 1)
+    ).scalars().all()
+    ultimo_por_cedula = {
+        str(p.cedula_cliente): p
+        for p in ultimos_rows
+        if getattr(p, "cedula_cliente", None)
+    }
 
-            row_mora = db.execute(q_mora).first()
+    # Todos los préstamos asociados a las cédulas de la página.
+    prestamo_rows = db.execute(
+        select(Cliente.cedula, Prestamo.id)
+        .select_from(Prestamo)
+        .join(Cliente, Prestamo.cliente_id == Cliente.id)
+        .where(Cliente.cedula.in_(cedulas_list))
+        .order_by(Cliente.cedula, Prestamo.id)
+    ).all()
+    prestamo_ids_por_cedula: dict[str, list[int]] = {}
+    all_prestamo_ids: list[int] = []
+    for cedula_row, prestamo_id_row in prestamo_rows:
+        if cedula_row is None or prestamo_id_row is None:
+            continue
+        key = str(cedula_row)
+        prestamo_ids_por_cedula.setdefault(key, []).append(int(prestamo_id_row))
+        all_prestamo_ids.append(int(prestamo_id_row))
 
-            if row_mora:
+    # Mora agregada por préstamo para todas las cédulas de la página.
+    mora_por_prestamo: dict[int, tuple[int, float]] = {}
+    if all_prestamo_ids:
+        mora_rows = db.execute(
+            select(
+                Cuota.prestamo_id,
+                func.count().label("cuotas_atrasadas"),
+                func.coalesce(func.sum(Cuota.monto), 0).label("saldo_vencido"),
+            )
+            .select_from(Cuota)
+            .where(
+                Cuota.prestamo_id.in_(all_prestamo_ids),
+                Cuota.fecha_pago.is_(None),
+                Cuota.fecha_vencimiento < hoy,
+            )
+            .group_by(Cuota.prestamo_id)
+        ).all()
+        mora_por_prestamo = {
+            int(prestamo_id_row): (
+                int(cuotas_atrasadas or 0),
+                _safe_float(saldo_vencido),
+            )
+            for prestamo_id_row, cuotas_atrasadas, saldo_vencido in mora_rows
+            if prestamo_id_row is not None
+        }
 
-                cuotas_atrasadas = int(row_mora[0] or 0)
+    estado_filtrado = (estado or "").strip().upper()
+    items = []
+    for ced in cedulas_list:
+        ultimo = ultimo_por_cedula.get(str(ced))
+        if not ultimo:
+            continue
+        if estado_filtrado and (ultimo.estado or "").upper() != estado_filtrado:
+            continue
 
-                saldo_vencido = _safe_float(row_mora[1])
+        prestamo_ids = prestamo_ids_por_cedula.get(str(ced), [])
+        cuotas_atrasadas = 0
+        saldo_vencido = 0.0
+        for prestamo_id in prestamo_ids:
+            mora = mora_por_prestamo.get(prestamo_id)
+            if not mora:
+                continue
+            cuotas_atrasadas += int(mora[0] or 0)
+            saldo_vencido += float(mora[1] or 0)
 
-        total_prestamos = len(prestamo_ids)
-
-        items.append({
-
-            "cedula": ced,
-
-            "pago_id": ultimo.id,
-
-            "prestamo_id": prestamo_id,
-
-            "estado_pago": ultimo.estado or "PENDIENTE",
-
-            "monto_ultimo_pago": _safe_float(ultimo.monto_pagado),
-
-            "fecha_ultimo_pago": ultimo.fecha_pago.date().isoformat() if hasattr(ultimo.fecha_pago, "date") and ultimo.fecha_pago else (ultimo.fecha_pago.isoformat()[:10] if ultimo.fecha_pago else None),
-
-            "cuotas_atrasadas": cuotas_atrasadas,
-
-            "saldo_vencido": saldo_vencido,
-
-            "total_prestamos": total_prestamos,
-
-        })
+        items.append(
+            {
+                "cedula": ced,
+                "pago_id": ultimo.id,
+                "prestamo_id": ultimo.prestamo_id,
+                "estado_pago": ultimo.estado or "PENDIENTE",
+                "monto_ultimo_pago": _safe_float(ultimo.monto_pagado),
+                "fecha_ultimo_pago": (
+                    ultimo.fecha_pago.date().isoformat()
+                    if hasattr(ultimo.fecha_pago, "date") and ultimo.fecha_pago
+                    else (
+                        ultimo.fecha_pago.isoformat()[:10]
+                        if ultimo.fecha_pago
+                        else None
+                    )
+                ),
+                "cuotas_atrasadas": cuotas_atrasadas,
+                "saldo_vencido": round(saldo_vencido, 2),
+                "total_prestamos": len(prestamo_ids),
+            }
+        )
 
     return {
-
         "items": items,
-
         "total": total_cedulas,
-
         "page": page,
-
         "per_page": per_page,
-
         "total_pages": total_pages,
-
     }
 
 

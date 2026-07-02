@@ -33,6 +33,11 @@ import {
   type DashboardFiltros,
 } from '../hooks/useDashboardFiltros'
 
+import {
+  DASHBOARD_STAGGER,
+  useStaggeredEnable,
+} from '../hooks/useStaggeredEnable'
+
 import { DashboardFiltrosPanel } from '../components/dashboard/DashboardFiltrosPanel'
 
 import { useNavigate } from 'react-router-dom'
@@ -105,6 +110,8 @@ export function DashboardAnalisis() {
 
   const { construirParams, construirFiltrosObject } =
     useDashboardFiltros(filtros)
+
+  const enableSecondaryCharts = useStaggeredEnable(DASHBOARD_STAGGER.secondary)
 
   const [isTreemapMorosidadOpen, setIsTreemapMorosidadOpen] = useState(false)
 
@@ -239,6 +246,8 @@ export function DashboardAnalisis() {
       staleTime: 2 * 60 * 1000, // âœ… ACTUALIZADO: 2 minutos para datos más frescos
 
       refetchOnWindowFocus: true, // âœ… ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
+
+      enabled: enableSecondaryCharts,
     }
   )
 

@@ -69,6 +69,11 @@ export function extractUserFromAuthMePayload(raw: unknown): User | null {
 }
 
 export class AuthService {
+  private _meInFlight: Promise<User> | null = null
+  private _meCached: User | null = null
+  private _meCachedAt = 0
+  private static readonly ME_CLIENT_CACHE_MS = 30_000
+
   // Login de usuario - CON PERSISTENCIA SEGURA
 
   async login(credentials: LoginForm): Promise<LoginResponse> {
@@ -237,6 +242,31 @@ export class AuthService {
   // Obtener información del usuario actual - CON PERSISTENCIA SEGURA
 
   async getCurrentUser(): Promise<User> {
+    const now = Date.now()
+    if (
+      this._meCached &&
+      now - this._meCachedAt < AuthService.ME_CLIENT_CACHE_MS
+    ) {
+      return this._meCached
+    }
+    if (this._meInFlight) {
+      return this._meInFlight
+    }
+
+    this._meInFlight = this._fetchCurrentUserFromApi()
+      .then(user => {
+        this._meCached = user
+        this._meCachedAt = Date.now()
+        return user
+      })
+      .finally(() => {
+        this._meInFlight = null
+      })
+
+    return this._meInFlight
+  }
+
+  private async _fetchCurrentUserFromApi(): Promise<User> {
     try {
       const response = await apiClient.get<unknown>('/api/v1/auth/me')
 
@@ -245,8 +275,6 @@ export class AuthService {
       if (!user) {
         throw new Error('Usuario no encontrado en la respuesta')
       }
-
-      // Actualizar usuario en el almacenamiento correspondiente
 
       const rememberMe = safeGetItem('remember_me', false)
 

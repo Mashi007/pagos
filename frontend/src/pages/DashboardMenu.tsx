@@ -65,6 +65,11 @@ import {
 } from '../hooks/useDashboardFiltros'
 
 import {
+  DASHBOARD_STAGGER,
+  useStaggeredEnable,
+} from '../hooks/useStaggeredEnable'
+
+import {
   FINANCIAMIENTO_BANDAS_GRAFICO_TITULO,
   FINANCIAMIENTO_BANDAS_ORDEN_CATEGORIAS,
   getPeriodoEtiqueta,
@@ -278,6 +283,9 @@ export function DashboardMenu() {
     cantidadFiltrosActivos,
   } = useDashboardFiltros(filtros)
 
+  const enableSecondaryCharts = useStaggeredEnable(DASHBOARD_STAGGER.secondary)
+  const enableTertiaryCharts = useStaggeredEnable(DASHBOARD_STAGGER.tertiary)
+
   /** Período efectivo para un gráfico: el del gráfico si está definido, si no el general */
 
   const getPeriodoGrafico = (chartId: string) =>
@@ -420,7 +428,7 @@ export function DashboardMenu() {
 
     refetchOnWindowFocus: false,
 
-    enabled: true,
+    enabled: enableSecondaryCharts,
 
     retry: 1, // Permitir 1 reintento para errores de red
 
@@ -461,7 +469,7 @@ export function DashboardMenu() {
 
     staleTime: 15 * 60 * 1000,
 
-    enabled: true,
+    enabled: enableSecondaryCharts,
 
     refetchOnWindowFocus: false,
   })
@@ -490,7 +498,7 @@ export function DashboardMenu() {
 
     refetchOnWindowFocus: false,
 
-    enabled: true,
+    enabled: enableSecondaryCharts,
   })
 
   const periodoAnalisisCuentas = getPeriodoGrafico('analisis-cuentas')
@@ -527,7 +535,7 @@ export function DashboardMenu() {
 
       refetchOnWindowFocus: false,
 
-      enabled: true,
+      enabled: enableSecondaryCharts,
     })
 
   const periodoTendenciaCobranza = getPeriodoGrafico(
@@ -566,7 +574,7 @@ export function DashboardMenu() {
 
       refetchOnWindowFocus: false,
 
-      enabled: true,
+      enabled: enableSecondaryCharts,
     })
 
   const NOTIFICACIONES_ENVIOS_TENDENCIA_DIAS = 90
@@ -605,7 +613,7 @@ export function DashboardMenu() {
 
     retry: 1,
 
-    enabled: true,
+    enabled: enableTertiaryCharts,
   })
 
   const serieNotificacionesGrafico = useMemo(
@@ -622,7 +630,7 @@ export function DashboardMenu() {
       staleTime: 5 * 60 * 1000,
       refetchOnWindowFocus: false,
       retry: 1,
-      enabled: true,
+      enabled: enableTertiaryCharts,
     })
 
   const serieFlujoFiniquito = useMemo<FiniquitoFlujoDia[]>(
