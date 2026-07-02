@@ -5,8 +5,6 @@ get_current_user: exige Bearer token válido; se usa en routers protegidos.
 from dataclasses import dataclass
 from datetime import datetime, timezone
 import logging
-import threading
-import time
 from typing import Optional
 
 from fastapi import Depends, HTTPException, Request, status
@@ -28,33 +26,6 @@ security_optional_bearer = HTTPBearer(auto_error=False)
 
 
 logger = logging.getLogger(__name__)
-
-# Cache corto de UserResponse por email (reduce golpes a BD en auth/me y dependencias).
-_AUTH_USER_CACHE_TTL_SEC = 45
-_auth_user_cache: dict[str, tuple[UserResponse, float]] = {}
-_auth_user_cache_lock = threading.Lock()
-
-
-def _auth_user_cache_get(email: str) -> Optional[UserResponse]:
-    key = email.lower()
-    now = time.monotonic()
-    with _auth_user_cache_lock:
-        entry = _auth_user_cache.get(key)
-        if entry is None:
-            return None
-        user, expires_at = entry
-        if now >= expires_at:
-            _auth_user_cache.pop(key, None)
-            return None
-        return user
-
-
-def _auth_user_cache_set(email: str, user: UserResponse) -> None:
-    key = email.lower()
-    expires_at = time.monotonic() + _AUTH_USER_CACHE_TTL_SEC
-    with _auth_user_cache_lock:
-        _auth_user_cache[key] = (user, expires_at)
-
 
 # Roles estándar (RBAC - Role-Based Access Control)
 # admin: Full access
@@ -82,6 +53,35 @@ def _fake_user_response(email: str) -> UserResponse:
     )
 
 
+def _inactive_user_exception() -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Usuario no encontrado o inactivo",
+    )
+
+
+def resolve_staff_user_by_email(db: Session, email: str) -> UserResponse:
+    """
+    Resuelve un usuario de personal sin elevar usuarios inactivos a admin sintetico.
+    El admin desde env solo aplica cuando no existe fila en usuarios.
+    """
+    try:
+        u = db.query(User).filter(User.email == email).first()
+    except OperationalError as e:
+        logger.warning("get_current_user: fallo de BD al cargar usuario: %s", e)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Servicio no disponible. Reintente en unos segundos.",
+        )
+    if u:
+        if not u.is_active:
+            raise _inactive_user_exception()
+        return user_to_response(u)
+    if is_configured_env_admin_email(email):
+        return _fake_user_response(email)
+    raise _inactive_user_exception()
+
+
 def staff_user_from_access_token_payload(db: Session, payload: dict) -> UserResponse:
     """
     Resuelve UserResponse desde un JWT de acceso de personal (no scope finiquito).
@@ -98,29 +98,7 @@ def staff_user_from_access_token_payload(db: Session, payload: dict) -> UserResp
             detail="Token inválido",
         )
     email = sub if "@" in sub else f"{sub}@admin.local"
-    cached = _auth_user_cache_get(email)
-    if cached is not None:
-        return cached
-    try:
-        u = db.query(User).filter(User.email == email).first()
-    except OperationalError as e:
-        logger.warning("get_current_user: fallo de BD al cargar usuario: %s", e)
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Servicio no disponible. Reintente en unos segundos.",
-        )
-    if u and u.is_active:
-        result = user_to_response(u)
-        _auth_user_cache_set(email, result)
-        return result
-    if is_configured_env_admin_email(email):
-        result = _fake_user_response(email)
-        _auth_user_cache_set(email, result)
-        return result
-    raise HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Usuario no encontrado o inactivo",
-    )
+    return resolve_staff_user_by_email(db, email)
 
 
 def get_current_user(
@@ -317,9 +295,13 @@ def get_current_user_optional(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Servicio no disponible. Reintente en unos segundos.",
         )
-    if u and u.is_active:
+    if u:
+        if not u.is_active:
+            return None
         return user_to_response(u)
-    return _fake_user_response(email)
+    if is_configured_env_admin_email(email):
+        return _fake_user_response(email)
+    return None
 
 
 @dataclass
