@@ -104,7 +104,7 @@ export function PagosRegistradosRevisionSection(
               <CreditCard className="h-5 w-5" />
               Pagos registrados en cartera
             </CardTitle>
-            {vieneDesdeFiniquitos ? (
+            {vieneDesdeFiniquitos && isAdmin ? (
               <p className="mt-1 max-w-2xl text-xs text-muted-foreground">
                 Desde finiquitos: puede usar{' '}
                 <strong className="text-amber-950">Reescanear</strong> (OCR
@@ -178,35 +178,37 @@ export function PagosRegistradosRevisionSection(
               )}
               Escanear comprobante
             </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="gap-2 border-violet-300 bg-violet-50 text-violet-950 hover:bg-violet-100"
-              disabled={
-                soloLectura ||
-                reescaneandoCartera ||
-                !prestamoData.prestamo_id ||
-                Number(prestamoData.prestamo_id) <= 0
-              }
-              onClick={() => void ejecutarReescaneoCartera()}
-              title={
-                soloLectura
-                  ? 'Revision cerrada: solo lectura'
-                  : 'Limpia fecha, banco, Nº, monto y moneda; re-escanea comprobantes guardados y persiste solo lo devuelto por OCR (sin mezclar con valores previos). Luego aplica cascada.'
-              }
-            >
-              {reescaneandoCartera ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <RefreshCw className="h-4 w-4" />
-              )}
-              {reescaneoCarteraProgreso
-                ? reescaneoCarteraProgreso.fase === 'cascada'
-                  ? 'Aplicando cascada…'
-                  : `Reescaneando ${reescaneoCarteraProgreso.hecho}/${reescaneoCarteraProgreso.total}`
-                : 'Reescanear'}
-            </Button>
+            {isAdmin ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="gap-2 border-violet-300 bg-violet-50 text-violet-950 hover:bg-violet-100"
+                disabled={
+                  soloLectura ||
+                  reescaneandoCartera ||
+                  !prestamoData.prestamo_id ||
+                  Number(prestamoData.prestamo_id) <= 0
+                }
+                onClick={() => void ejecutarReescaneoCartera()}
+                title={
+                  soloLectura
+                    ? 'Revision cerrada: solo lectura'
+                    : 'Limpia fecha, banco, Nº, monto y moneda; re-escanea comprobantes guardados y persiste solo lo devuelto por OCR (sin mezclar con valores previos). Luego aplica cascada.'
+                }
+              >
+                {reescaneandoCartera ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-4 w-4" />
+                )}
+                {reescaneoCarteraProgreso
+                  ? reescaneoCarteraProgreso.fase === 'cascada'
+                    ? 'Aplicando cascada…'
+                    : `Reescaneando ${reescaneoCarteraProgreso.hecho}/${reescaneoCarteraProgreso.total}`
+                  : 'Reescanear'}
+              </Button>
+            ) : null}
             <Button
               type="button"
               variant="outline"
