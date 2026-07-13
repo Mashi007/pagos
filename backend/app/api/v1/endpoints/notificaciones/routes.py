@@ -1969,48 +1969,54 @@ def _get_rebotados_por_tipo(
     fecha_hasta: Optional[date] = None,
 ) -> List[dict]:
     """
-    Lista de correos no entregados (rebotados) para el tipo de pestana.
-    Datos desde tabla envios_notificacion (exito=False).
-    Filtro opcional por rango de fecha_envio (inclusive, dia calendario).
+    Lista de envios fallidos para el tipo de pestana.
+
+    Criterio de producto (misma que el KPI «Correos rebotados»):
+    - Tabla envios_notificacion
+    - tipo_tab = pestana
+    - exito = False
+
+    Importante: exito=False NO es un bounce del buzon del cliente.
+    Se marca cuando send_email (SMTP) falla al momento del envio
+    (servidor rechazo destinatario, SMTP mal configurado, timeout, etc.).
+    No prueba que el correo haya llegado y luego rebote.
+
+    Solo se proyectan columnas ligeras (sin mensaje_html / comprobante_pdf)
+    para poder exportar miles de filas sin OOM/timeout.
     """
     if tipo not in TIPOS_TAB_NOTIFICACIONES:
         return []
-    try:
-        conditions = [
-            EnvioNotificacion.tipo_tab == tipo,
-            EnvioNotificacion.exito.is_(False),
-        ]
-        if fecha_desde is not None:
-            conditions.append(
-                EnvioNotificacion.fecha_envio
-                >= datetime.combine(fecha_desde, dt_time.min)
-            )
-        if fecha_hasta is not None:
-            conditions.append(
-                EnvioNotificacion.fecha_envio
-                <= datetime.combine(fecha_hasta, dt_time.max)
-            )
-        rows = (
-            db.execute(
-                select(EnvioNotificacion)
-                .where(*conditions)
-                .order_by(EnvioNotificacion.fecha_envio.desc())
-            )
-            .scalars()
-            .all()
+    conditions = [
+        EnvioNotificacion.tipo_tab == tipo,
+        EnvioNotificacion.exito.is_(False),
+    ]
+    if fecha_desde is not None:
+        conditions.append(
+            EnvioNotificacion.fecha_envio
+            >= datetime.combine(fecha_desde, dt_time.min)
         )
-        return [
-            {
-                "cedula": r.cedula or "",
-                "nombre": r.nombre or "",
-                "correo": r.email or "",
-            }
-            for r in rows
-        ]
-    except Exception as e:
-        logger.warning("_get_rebotados_por_tipo: %s", e)
-        return []
-
+    if fecha_hasta is not None:
+        conditions.append(
+            EnvioNotificacion.fecha_envio
+            <= datetime.combine(fecha_hasta, dt_time.max)
+        )
+    rows = db.execute(
+        select(
+            EnvioNotificacion.cedula,
+            EnvioNotificacion.nombre,
+            EnvioNotificacion.email,
+        )
+        .where(*conditions)
+        .order_by(EnvioNotificacion.fecha_envio.desc())
+    ).all()
+    return [
+        {
+            "cedula": (r.cedula or ""),
+            "nombre": (r.nombre or ""),
+            "correo": (r.email or ""),
+        }
+        for r in rows
+    ]
 
 @router.get("/rebotados-por-tab", response_model=dict)
 def get_rebotados_por_tab(
