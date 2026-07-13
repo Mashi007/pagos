@@ -8,9 +8,12 @@ Ejecutar desde backend/:
 """
 import os
 import sys
+from datetime import datetime, timezone
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
+from fastapi import HTTPException
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -19,7 +22,7 @@ from sqlalchemy.orm import Session
 
 from app.main import app
 from app.core.database import SessionLocal, get_db
-from app.core.deps import get_current_user
+from app.core.deps import get_current_user, staff_user_from_access_token_payload
 from app.schemas.auth import UserResponse
 
 
@@ -138,6 +141,64 @@ def test_me_with_valid_token_returns_user(patched_settings, client: TestClient):
     r = client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {token}"})
     assert r.status_code == 200
     assert r.json()["email"] == "admin@example.com"
+
+
+def test_access_token_rechecks_user_active_status_on_each_request():
+    """Un usuario desactivado no conserva permisos por cache de autenticación."""
+
+    now = datetime.now(timezone.utc)
+    email = "cached-user@example.invalid"
+    active_user = SimpleNamespace(
+        id=42,
+        email=email,
+        nombre="Cached User",
+        cargo="Tester",
+        rol="admin",
+        is_active=True,
+        created_at=now,
+        updated_at=now,
+        last_login=None,
+    )
+    inactive_user = SimpleNamespace(
+        id=42,
+        email=email,
+        nombre="Cached User",
+        cargo="Tester",
+        rol="admin",
+        is_active=False,
+        created_at=now,
+        updated_at=now,
+        last_login=None,
+    )
+
+    class FakeQuery:
+        def __init__(self, users):
+            self.users = users
+
+        def filter(self, *_args, **_kwargs):
+            return self
+
+        def first(self):
+            return self.users.pop(0)
+
+    class FakeSession:
+        def __init__(self, users):
+            self.users = users
+
+        def query(self, *_args, **_kwargs):
+            return FakeQuery(self.users)
+
+    db = FakeSession([active_user, inactive_user])
+    payload = {"type": "access", "sub": email}
+
+    first = staff_user_from_access_token_payload(db, payload)
+    assert first.email == email
+    assert first.is_active is True
+
+    with pytest.raises(HTTPException) as exc:
+        staff_user_from_access_token_payload(db, payload)
+    assert exc.value.status_code == 401
+    assert db.users == []
 
 
 # --- Rutas protegidas exigen token ---
