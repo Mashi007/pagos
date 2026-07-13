@@ -12,7 +12,7 @@ import os
 import uuid
 import logging
 from collections import defaultdict
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time as dt_time, timedelta
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Body, Query, File, UploadFile, BackgroundTasks
@@ -1961,32 +1961,49 @@ TIPOS_TAB_NOTIFICACIONES = (
 )
 
 
-def _get_rebotados_por_tipo(db: Session, tipo: str) -> List[dict]:
+def _get_rebotados_por_tipo(
+    db: Session,
+    tipo: str,
+    *,
+    fecha_desde: Optional[date] = None,
+    fecha_hasta: Optional[date] = None,
+) -> List[dict]:
     """
-    Lista de correos no entregados (rebotados) para el tipo de pestaÃƒÂ±a.
+    Lista de correos no entregados (rebotados) para el tipo de pestana.
     Datos desde tabla envios_notificacion (exito=False).
+    Filtro opcional por rango de fecha_envio (inclusive, dia calendario).
     """
     if tipo not in TIPOS_TAB_NOTIFICACIONES:
         return []
     try:
+        conditions = [
+            EnvioNotificacion.tipo_tab == tipo,
+            EnvioNotificacion.exito.is_(False),
+        ]
+        if fecha_desde is not None:
+            conditions.append(
+                EnvioNotificacion.fecha_envio
+                >= datetime.combine(fecha_desde, dt_time.min)
+            )
+        if fecha_hasta is not None:
+            conditions.append(
+                EnvioNotificacion.fecha_envio
+                <= datetime.combine(fecha_hasta, dt_time.max)
+            )
         rows = (
             db.execute(
                 select(EnvioNotificacion)
-                .where(
-                    EnvioNotificacion.tipo_tab == tipo,
-                    EnvioNotificacion.exito.is_(False),
-                )
+                .where(*conditions)
                 .order_by(EnvioNotificacion.fecha_envio.desc())
             )
-            .scalars().all()
+            .scalars()
+            .all()
         )
         return [
             {
-                "email": r.email or "",
-                "nombre": r.nombre or "",
                 "cedula": r.cedula or "",
-                "fecha_envio": r.fecha_envio.isoformat() if r.fecha_envio else "",
-                "error_mensaje": r.error_mensaje or "",
+                "nombre": r.nombre or "",
+                "correo": r.email or "",
             }
             for r in rows
         ]
@@ -1999,33 +2016,50 @@ def _get_rebotados_por_tipo(db: Session, tipo: str) -> List[dict]:
 def get_rebotados_por_tab(
     tipo: str = Query(
         ...,
-        description="tipo_tab: dias_5, dias_3, dias_1, hoy, dias_1_retraso, dias_10_retraso, d_2_antes_vencimiento, prejudicial, masivos, liquidados",
+        description="tipo_tab",
+    ),
+    fecha_desde: Optional[date] = Query(
+        None, description="Filtrar rebotados desde esta fecha (fecha_envio)."
+    ),
+    fecha_hasta: Optional[date] = Query(
+        None, description="Filtrar rebotados hasta esta fecha (fecha_envio)."
     ),
     db: Session = Depends(get_db),
 ):
-    """Lista de correos no entregados (rebotados) para la pestaÃƒÂ±a. Para generar informe Excel en frontend o descargar Excel."""
+    """Lista de correos no entregados (rebotados) para la pestana."""
     if tipo not in TIPOS_TAB_NOTIFICACIONES:
-        raise HTTPException(status_code=400, detail=f"tipo debe ser uno de: {', '.join(TIPOS_TAB_NOTIFICACIONES)}")
-    items = _get_rebotados_por_tipo(db, tipo)
+        raise HTTPException(
+            status_code=400,
+            detail=f"tipo debe ser uno de: {', '.join(TIPOS_TAB_NOTIFICACIONES)}",
+        )
+    if fecha_desde and fecha_hasta and fecha_desde > fecha_hasta:
+        raise HTTPException(
+            status_code=400,
+            detail="fecha_desde no puede ser posterior a fecha_hasta.",
+        )
+    items = _get_rebotados_por_tipo(
+        db, tipo, fecha_desde=fecha_desde, fecha_hasta=fecha_hasta
+    )
     return {"items": items, "total": len(items)}
 
 
-def _generar_excel_rebotados(items: List[dict], tipo: str) -> bytes:
-    """Genera Excel con lista de correos rebotados (no entregados)."""
+def _generar_excel_auditoria_correos_rebotados(items: List[dict]) -> bytes:
+    """Excel de auditoria: solo cedula, nombre y correo."""
     import io
     import openpyxl
+
     wb = openpyxl.Workbook()
     ws = wb.active
-    ws.title = "Correos no entregados"
-    ws.append(["Email", "Nombre", "Cédula", "Fecha envío", "Motivo rebote"])
+    ws.title = "Auditoria de correos"
+    ws.append(["Cedula", "Nombre", "Correo"])
     for r in items:
-        ws.append([
-            r.get("email") or "",
-            r.get("nombre") or "",
-            r.get("cedula") or "",
-            r.get("fecha_envio") or "",
-            r.get("error_mensaje") or "",
-        ])
+        ws.append(
+            [
+                r.get("cedula") or "",
+                r.get("nombre") or "",
+                r.get("correo") or "",
+            ]
+        )
     buf = io.BytesIO()
     wb.save(buf)
     return buf.getvalue()
@@ -2033,19 +2067,34 @@ def _generar_excel_rebotados(items: List[dict], tipo: str) -> bytes:
 
 @router.get("/rebotados-por-tab/excel")
 def get_rebotados_por_tab_excel(
-    tipo: str = Query(..., description="Tipo de pestaÃƒÂ±a: dias_5, dias_3, dias_1, hoy, dias_1_retraso"),
+    tipo: str = Query(..., description="Tipo de pestana"),
+    fecha_desde: date = Query(..., description="Desde (fecha_envio, inclusive)."),
+    fecha_hasta: date = Query(..., description="Hasta (fecha_envio, inclusive)."),
     db: Session = Depends(get_db),
 ):
-    """Descarga informe Excel de correos no entregados (rebotados) para la pestaÃƒÂ±a."""
+    """Descarga Excel Auditoria de correos (cedula, nombre, correo) filtrado por fechas."""
     if tipo not in TIPOS_TAB_NOTIFICACIONES:
-        raise HTTPException(status_code=400, detail=f"tipo debe ser uno de: {', '.join(TIPOS_TAB_NOTIFICACIONES)}")
-    items = _get_rebotados_por_tipo(db, tipo)
-    content = _generar_excel_rebotados(items, tipo)
-    filename = f"correos_no_entregados_{tipo}.xlsx"
+        raise HTTPException(
+            status_code=400,
+            detail=f"tipo debe ser uno de: {', '.join(TIPOS_TAB_NOTIFICACIONES)}",
+        )
+    if fecha_desde > fecha_hasta:
+        raise HTTPException(
+            status_code=400,
+            detail="fecha_desde no puede ser posterior a fecha_hasta.",
+        )
+    items = _get_rebotados_por_tipo(
+        db, tipo, fecha_desde=fecha_desde, fecha_hasta=fecha_hasta
+    )
+    content = _generar_excel_auditoria_correos_rebotados(items)
+    filename = (
+        f"Auditoria_de_correos_{tipo}_"
+        f"{fecha_desde.isoformat()}_{fecha_hasta.isoformat()}.xlsx"
+    )
     return Response(
         content=content,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": f"attachment; filename={filename}"},
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
 

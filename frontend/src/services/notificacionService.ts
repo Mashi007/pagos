@@ -794,6 +794,35 @@ class NotificacionService {
     )
   }
 
+  /**
+   * Descarga Excel «Auditoria de correos» (cédula, nombre, correo)
+   * de envíos rebotados (exito=false) para la pestaña, filtrado por fechas.
+   */
+  async descargarAuditoriaCorreosRebotadosExcel(opts: {
+    tipo: string
+    fechaDesde: string
+    fechaHasta: string
+  }): Promise<void> {
+    const tipo = (opts.tipo || '').trim()
+    const fechaDesde = (opts.fechaDesde || '').trim()
+    const fechaHasta = (opts.fechaHasta || '').trim()
+    if (!tipo || !fechaDesde || !fechaHasta) {
+      throw new Error(
+        'Indique tipo de pestaña y rango de fechas (desde / hasta).'
+      )
+    }
+    const qs = new URLSearchParams({
+      tipo,
+      fecha_desde: fechaDesde,
+      fecha_hasta: fechaHasta,
+    })
+    const filename = `Auditoria_de_correos_${tipo}_${fechaDesde}_${fechaHasta}.xlsx`
+    await apiClient.downloadFile(
+      `${this.baseUrl}/rebotados-por-tab/excel?${qs.toString()}`,
+      filename
+    )
+  }
+
   /** Historial de notificaciones enviadas/fallidas por cédula (reportes y fines legales). */
 
   async getHistorialNotificacionesPorCedula(

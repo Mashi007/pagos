@@ -206,6 +206,11 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
     return raw && /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : ''
   })
 
+  const [rebotadosDesde, setRebotadosDesde] = useState('')
+  const [rebotadosHasta, setRebotadosHasta] = useState('')
+  const [descargandoAuditoriaCorreos, setDescargandoAuditoriaCorreos] =
+    useState(false)
+
   useEffect(() => {
     const raw = searchParams.get('fc')?.trim()
     if (raw && /^\d{4}-\d{2}-\d{2}$/.test(raw)) {
@@ -2186,20 +2191,112 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 p-4">
-                      <AlertTriangle className="h-8 w-8 text-red-600" />
+                    <div className="flex flex-col gap-3 rounded-lg border border-red-200 bg-red-50 p-4 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="flex items-center gap-3">
+                        <AlertTriangle className="h-8 w-8 shrink-0 text-red-600" />
 
-                      <div>
-                        <p className="text-2xl font-bold text-red-800">
-                          {statTabKey
-                            ? (estadisticasPorTab[statTabKey]?.rebotados ?? 0)
-                            : 0}
-                        </p>
+                        <div>
+                          <p className="text-2xl font-bold text-red-800">
+                            {statTabKey
+                              ? (estadisticasPorTab[statTabKey]?.rebotados ?? 0)
+                              : 0}
+                          </p>
 
-                        <p className="text-xs font-medium text-red-700">
-                          Correos rebotados
-                        </p>
+                          <p className="text-xs font-medium text-red-700">
+                            Correos rebotados
+                          </p>
+                        </div>
                       </div>
+
+                      {statTabKey ? (
+                        <div className="flex flex-wrap items-end gap-2">
+                          <div className="flex flex-col gap-0.5">
+                            <label
+                              htmlFor="rebotados-desde"
+                              className="text-[11px] font-medium text-red-800"
+                            >
+                              Desde
+                            </label>
+                            <input
+                              id="rebotados-desde"
+                              type="date"
+                              value={rebotadosDesde}
+                              onChange={e => setRebotadosDesde(e.target.value)}
+                              className="rounded border border-red-300 bg-white px-2 py-1 text-sm text-gray-900"
+                            />
+                          </div>
+                          <div className="flex flex-col gap-0.5">
+                            <label
+                              htmlFor="rebotados-hasta"
+                              className="text-[11px] font-medium text-red-800"
+                            >
+                              Hasta
+                            </label>
+                            <input
+                              id="rebotados-hasta"
+                              type="date"
+                              value={rebotadosHasta}
+                              onChange={e => setRebotadosHasta(e.target.value)}
+                              className="rounded border border-red-300 bg-white px-2 py-1 text-sm text-gray-900"
+                            />
+                          </div>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="gap-1.5 border-red-300 bg-white text-red-800 hover:bg-red-100"
+                            disabled={
+                              descargandoAuditoriaCorreos ||
+                              !rebotadosDesde ||
+                              !rebotadosHasta
+                            }
+                            title="Excel Auditoria de correos: cédula, nombre y correo"
+                            onClick={() => {
+                              if (!statTabKey) return
+                              if (!rebotadosDesde || !rebotadosHasta) {
+                                toast.error(
+                                  'Indique fechas desde y hasta para descargar.'
+                                )
+                                return
+                              }
+                              if (rebotadosDesde > rebotadosHasta) {
+                                toast.error(
+                                  'La fecha desde no puede ser posterior a hasta.'
+                                )
+                                return
+                              }
+                              setDescargandoAuditoriaCorreos(true)
+                              void notificacionService
+                                .descargarAuditoriaCorreosRebotadosExcel({
+                                  tipo: String(statTabKey),
+                                  fechaDesde: rebotadosDesde,
+                                  fechaHasta: rebotadosHasta,
+                                })
+                                .then(() => {
+                                  toast.success(
+                                    'Auditoria de correos descargada.'
+                                  )
+                                })
+                                .catch((err: unknown) => {
+                                  toast.error(
+                                    getErrorMessage(err) ||
+                                      'No se pudo descargar el Excel.'
+                                  )
+                                })
+                                .finally(() => {
+                                  setDescargandoAuditoriaCorreos(false)
+                                })
+                            }}
+                          >
+                            {descargandoAuditoriaCorreos ? (
+                              <RefreshCw className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Download className="h-4 w-4" />
+                            )}
+                            Auditoria de correos
+                          </Button>
+                        </div>
+                      ) : null}
                     </div>
                   </div>
                 )}
