@@ -97,10 +97,35 @@ _COBROS_LISTADO_KPIS_SINGLEFLIGHT_WAIT_SEC = 240.0
 _COBROS_LISTADO_KPIS_SINGLEFLIGHT_STALE_SEC = 300.0
 _COBROS_LISTADO_KPIS_CACHE_PREFIX = "cobros:listado_y_kpis:v2:"
 _COBROS_LISTADO_KPIS_CACHE_STALE_SUFFIX = ":stale"
+# Snapshot de la ultima vista default calculada (sin filtros, page=1). La clave normal
+# incluye fecha_desde/fecha_hasta que cambian cada dia: al dia siguiente ni el cache ni
+# el stale existen para la clave nueva y el primer GET pagaba el barrido completo.
+# Este snapshot ignora las fechas y sobrevive el cambio de dia (TTL 26 h).
+_COBROS_LISTADO_KPIS_LATEST_DEFAULT_KEY = f"{_COBROS_LISTADO_KPIS_CACHE_PREFIX}latest_default"
+_COBROS_LISTADO_KPIS_LATEST_DEFAULT_TTL_SEC = 26 * 3600
+# Campo embebido en el payload cacheado para saber cuando se calculo (SWR / debug).
+_COBROS_LISTADO_KPIS_STORED_AT_FIELD = "_cache_stored_at"
 _cobros_listado_kpis_mem_cache: Dict[str, Tuple[float, dict]] = {}
 _cobros_listado_kpis_mem_stale_cache: Dict[str, Tuple[float, dict]] = {}
+_cobros_listado_kpis_mem_latest_default: Optional[Tuple[float, dict]] = None
 _cobros_listado_kpis_mem_lock = threading.Lock()
 _cobros_listado_kpis_inflight: Dict[str, float] = {}
+
+
+def _cache_payload_es_vista_default(cache_payload: str) -> bool:
+    """True si la clave corresponde a la vista por defecto del listado (solo cambian las fechas)."""
+    try:
+        p = json.loads(cache_payload)
+    except Exception:
+        return False
+    return (
+        not p.get("estado")
+        and not p.get("cedula")
+        and not p.get("institucion")
+        and int(p.get("page") or 0) == 1
+        and int(p.get("per_page") or 0) == 20
+        and not p.get("incluir_exportados")
+    )
 _ESCANER_RATE_LIMIT_WINDOW_SEC = 60
 _ESCANER_RATE_LIMIT_MAX_COUNT = 20
 _escaner_rate_limit_mem: Dict[str, Tuple[int, float]] = {}
@@ -221,12 +246,33 @@ def _cobros_listado_kpis_cache_get_stale(cache_payload: str) -> Optional[dict]:
     now = time.time()
     with _cobros_listado_kpis_mem_lock:
         hit = _cobros_listado_kpis_mem_stale_cache.get(key)
-        if not hit:
-            return None
-        exp_ts, payload = hit
-        if exp_ts > now:
-            return payload
-        _cobros_listado_kpis_mem_stale_cache.pop(key, None)
+        if hit:
+            exp_ts, payload = hit
+            if exp_ts > now:
+                return payload
+            _cobros_listado_kpis_mem_stale_cache.pop(key, None)
+
+    # Vista default sin stale propio (tipico al cambiar de dia: la ventana de fechas
+    # rota y la clave es nueva): usar el ultimo snapshot default como placeholder.
+    # El caller (SWR) recalcula en fondo con las fechas correctas y repone el cache.
+    if _cache_payload_es_vista_default(cache_payload):
+        if redis_client is not None:
+            try:
+                raw = redis_client.get(_COBROS_LISTADO_KPIS_LATEST_DEFAULT_KEY)
+                if raw:
+                    parsed = json.loads(raw)
+                    if isinstance(parsed, dict):
+                        return parsed
+            except Exception as e:
+                logger.warning(
+                    "[COBROS_CACHE] Redis get latest_default listado-y-kpis falló: %s", e
+                )
+        with _cobros_listado_kpis_mem_lock:
+            hit_def = _cobros_listado_kpis_mem_latest_default
+            if hit_def:
+                exp_ts, payload = hit_def
+                if exp_ts > now:
+                    return payload
     return None
 
 
@@ -234,23 +280,31 @@ def _cobros_listado_kpis_cache_set(cache_payload: str, data: dict) -> None:
     key = _cobros_listado_kpis_storage_key(cache_payload)
     stale_key = _cobros_listado_kpis_stale_storage_key(cache_payload)
     encoded = jsonable_encoder(data)
+    if isinstance(encoded, dict):
+        # Marca de computo (diagnostico SWR). El frontend ignora el campo.
+        encoded[_COBROS_LISTADO_KPIS_STORED_AT_FIELD] = time.time()
+    es_default = _cache_payload_es_vista_default(cache_payload)
     redis_client = get_redis_client()
     if redis_client is not None:
         try:
-            redis_client.setex(
-                key,
-                _COBROS_LISTADO_KPIS_CACHE_TTL_SEC,
-                json.dumps(encoded, ensure_ascii=False, default=str),
-            )
+            serialized = json.dumps(encoded, ensure_ascii=False, default=str)
+            redis_client.setex(key, _COBROS_LISTADO_KPIS_CACHE_TTL_SEC, serialized)
             redis_client.setex(
                 stale_key,
                 _COBROS_LISTADO_KPIS_CACHE_STALE_TTL_SEC,
-                json.dumps(encoded, ensure_ascii=False, default=str),
+                serialized,
             )
+            if es_default:
+                redis_client.setex(
+                    _COBROS_LISTADO_KPIS_LATEST_DEFAULT_KEY,
+                    _COBROS_LISTADO_KPIS_LATEST_DEFAULT_TTL_SEC,
+                    serialized,
+                )
             return
         except Exception as e:
             logger.warning("[COBROS_CACHE] Redis set listado-y-kpis falló: %s", e)
 
+    global _cobros_listado_kpis_mem_latest_default
     with _cobros_listado_kpis_mem_lock:
         _cobros_listado_kpis_mem_cache[key] = (
             time.time() + _COBROS_LISTADO_KPIS_CACHE_TTL_SEC,
@@ -260,6 +314,11 @@ def _cobros_listado_kpis_cache_set(cache_payload: str, data: dict) -> None:
             time.time() + _COBROS_LISTADO_KPIS_CACHE_STALE_TTL_SEC,
             encoded,
         )
+        if es_default:
+            _cobros_listado_kpis_mem_latest_default = (
+                time.time() + _COBROS_LISTADO_KPIS_LATEST_DEFAULT_TTL_SEC,
+                encoded,
+            )
 
 
 def _invalidate_cobros_listado_kpis_cache() -> None:
@@ -271,7 +330,19 @@ def _invalidate_cobros_listado_kpis_cache() -> None:
     if redis_client is None:
         return
     try:
-        keys = list(redis_client.scan_iter(match=f"{_COBROS_LISTADO_KPIS_CACHE_PREFIX}*"))
+        # Borrar solo las entries frescas: las `:stale` deben sobrevivir para que el
+        # siguiente GET sirva al instante (stale-while-revalidate) en vez de bloquear
+        # al operador 30-120s durante el recalculo. Antes el match prefijo* arrasaba
+        # tambien los `:stale` y cada invalidacion (aprobar, exportar, purga de
+        # duplicados) dejaba la pantalla sin ningun respaldo instantaneo.
+        keys = []
+        for k in redis_client.scan_iter(match=f"{_COBROS_LISTADO_KPIS_CACHE_PREFIX}*"):
+            k_str = k.decode("utf-8", "ignore") if isinstance(k, (bytes, bytearray)) else str(k)
+            if k_str.endswith(_COBROS_LISTADO_KPIS_CACHE_STALE_SUFFIX):
+                continue
+            if k_str == _COBROS_LISTADO_KPIS_LATEST_DEFAULT_KEY:
+                continue
+            keys.append(k)
         if keys:
             redis_client.delete(*keys)
     except Exception as e:

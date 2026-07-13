@@ -207,6 +207,93 @@ def kpis_pagos_reportados(
     )
 
 
+def _lanzar_revalidacion_listado_kpis_background(
+    cache_payload: str,
+    *,
+    estado: Optional[str],
+    fecha_desde: Optional[date],
+    fecha_hasta: Optional[date],
+    cedula: Optional[str],
+    institucion: Optional[str],
+    page: int,
+    per_page: int,
+    incluir_exportados: bool,
+) -> None:
+    """
+    Recalcula listado+KPIs en un hilo daemon con sesion propia y repone el cache.
+
+    El caller ya adquirio el singleflight de `cache_payload`; este hilo lo libera
+    al terminar (exito o error). Con 1 worker Gunicorn el barrido de la cola
+    (30-120s) no debe bloquear la respuesta HTTP: el operador recibe el stale al
+    instante y la siguiente carga encuentra el cache fresco.
+    """
+
+    def _run() -> None:
+        from app.core.database import SessionLocal
+
+        db_bg = SessionLocal()
+        t0 = time.monotonic()
+        try:
+            def _compute() -> dict:
+                emit_kpi_from_list = estado is None
+                lista = _list_pagos_reportados_payload(
+                    db_bg,
+                    estado=estado,
+                    fecha_desde=fecha_desde,
+                    fecha_hasta=fecha_hasta,
+                    cedula=cedula,
+                    institucion=institucion,
+                    page=page,
+                    per_page=per_page,
+                    incluir_exportados=incluir_exportados,
+                    emit_manual_estado_counts_for_kpis=emit_kpi_from_list,
+                )
+                manual_queue = (
+                    lista.pop("_manual_kpi_counts", None) if emit_kpi_from_list else None
+                )
+                kpis = _kpis_pagos_reportados_payload(
+                    db_bg,
+                    fecha_desde=fecha_desde,
+                    fecha_hasta=fecha_hasta,
+                    cedula=cedula,
+                    institucion=institucion,
+                    incluir_exportados=incluir_exportados,
+                    manual_queue_counts=manual_queue,
+                )
+                return {**lista, "kpis": kpis}
+
+            payload = run_db_with_transient_retry(
+                db_bg,
+                _compute,
+                attempts=3,
+                log_prefix="[COBROS listado-y-kpis SWR]",
+            )
+            _cobros_listado_kpis_cache_set(cache_payload, payload)
+            logger.info(
+                "[COBROS_CACHE] revalidacion SWR completada en %.0f ms (key=%s)",
+                (time.monotonic() - t0) * 1000,
+                _cobros_listado_kpis_storage_key(cache_payload),
+            )
+        except Exception as e:
+            logger.exception(
+                "[COBROS_CACHE] revalidacion SWR fallo (key=%s): %s",
+                _cobros_listado_kpis_storage_key(cache_payload),
+                e,
+            )
+        finally:
+            try:
+                db_bg.close()
+            except Exception:
+                pass
+            _cobros_listado_kpis_release_singleflight(cache_payload)
+
+    threading.Thread(
+        target=_run,
+        name="cobros-listado-kpis-swr",
+        daemon=True,
+    ).start()
+
+
 @router.get("/pagos-reportados/listado-y-kpis", response_model=dict)
 def list_pagos_reportados_y_kpis(
     db: Session = Depends(get_db),
@@ -262,20 +349,50 @@ def list_pagos_reportados_y_kpis(
         cached = None
 
     acquired = False if skip_cache else _cobros_listado_kpis_try_acquire_singleflight(cache_payload)
-    if not acquired:
+    if not acquired and not skip_cache:
+        # Otro request ya esta recalculando esta key: servir el stale AL INSTANTE
+        # (antes se esperaba hasta 240s en un poll; el operador veia "Cargando..."
+        # minutos enteros). El calculo en curso repondra el cache fresco.
+        stale_wait = _cobros_listado_kpis_cache_get_stale(cache_payload)
+        if stale_wait is not None:
+            logger.info(
+                "[COBROS_CACHE] listado-y-kpis stale inmediato (single-flight en curso, key=%s)",
+                _cobros_listado_kpis_storage_key(cache_payload),
+            )
+            return stale_wait
         wait_deadline = time.monotonic() + _COBROS_LISTADO_KPIS_SINGLEFLIGHT_WAIT_SEC
         while time.monotonic() < wait_deadline:
             cached_wait = _cobros_listado_kpis_cache_get(cache_payload)
             if cached_wait is not None:
                 return cached_wait
             time.sleep(0.1)
-        stale_wait = _cobros_listado_kpis_cache_get_stale(cache_payload)
-        if stale_wait is not None:
-            logger.warning(
-                "[COBROS_CACHE] listado-y-kpis devolviendo stale por single-flight en curso (key=%s)",
+
+    # Stale-while-revalidate: en un cache miss normal (sin `fresh` ni busqueda por
+    # cedula/institucion), si existe snapshot stale se devuelve YA y el recalculo
+    # (30-120s de barrido de cola) corre en un hilo de fondo que repone el cache.
+    # El operador nunca espera el barrido: los flujos que exigen datos frescos
+    # (Actualizar ahora, Buscar, post-mutacion) mandan fresh=true y no pasan por aqui.
+    if acquired and not skip_cache and not fresh:
+        stale_now = _cobros_listado_kpis_cache_get_stale(cache_payload)
+        if stale_now is not None:
+            _lanzar_revalidacion_listado_kpis_background(
+                cache_payload,
+                estado=estado,
+                fecha_desde=fecha_desde,
+                fecha_hasta=fecha_hasta,
+                cedula=cedula,
+                institucion=institucion,
+                page=page,
+                per_page=per_page,
+                incluir_exportados=incluir_exportados,
+            )
+            # El hilo de fondo libera el singleflight al terminar.
+            acquired = False
+            logger.info(
+                "[COBROS_CACHE] listado-y-kpis stale-while-revalidate (key=%s)",
                 _cobros_listado_kpis_storage_key(cache_payload),
             )
-            return stale_wait
+            return stale_now
 
     try:
         def _compute_payload() -> dict:
