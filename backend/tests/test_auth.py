@@ -9,17 +9,23 @@ Ejecutar desde backend/:
 import os
 import sys
 from unittest.mock import patch
+from datetime import datetime
 
 import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
 from app.main import app
 from app.core.database import SessionLocal, get_db
-from app.core.deps import get_current_user
+from app.core.deps import get_current_user, staff_user_from_access_token_payload
+from app.core.security import create_refresh_token
+from app.api.v1.endpoints.auth import routes as auth_routes
+from app.models.user import User
+from app.schemas.auth import RefreshRequest
 from app.schemas.auth import UserResponse
 
 
@@ -45,6 +51,21 @@ def _fake_user():
         created_at="2025-01-01T00:00:00Z",
         updated_at="2025-01-01T00:00:00Z",
         last_login="2025-01-01T00:00:00Z",
+    )
+
+
+def _inactive_user(email: str) -> User:
+    now = datetime.utcnow()
+    return User(
+        email=email,
+        cedula=f"test-{email}",
+        password_hash="not-used",
+        nombre="Inactive Admin",
+        cargo="Tester",
+        rol="admin",
+        is_active=False,
+        created_at=now,
+        updated_at=now,
     )
 
 
@@ -168,3 +189,32 @@ def test_protected_route_with_valid_token_succeeds(client: TestClient):
     """Con usuario inyectado (override), la ruta protegida responde 200."""
     r = client.get("/api/v1/configuracion/notificaciones/envios")
     assert r.status_code == 200
+
+
+def test_access_token_for_inactive_admin_email_db_user_does_not_fallback_to_env_admin(db: Session):
+    """Un usuario BD inactivo con ADMIN_EMAIL no debe elevarse a admin sintetico."""
+    email = "inactive-admin-access@example.com"
+    db.add(_inactive_user(email))
+    db.flush()
+
+    with patch("app.core.env_admin_auth.settings") as patched_settings:
+        patched_settings.ADMIN_EMAIL = email
+        with pytest.raises(HTTPException) as exc:
+            staff_user_from_access_token_payload(db, {"type": "access", "sub": email})
+
+    assert exc.value.status_code == 401
+
+
+def test_refresh_token_for_inactive_admin_email_db_user_does_not_fallback_to_env_admin(db: Session):
+    """El refresh token de un usuario inactivo con ADMIN_EMAIL debe ser rechazado."""
+    email = "inactive-admin-refresh@example.com"
+    db.add(_inactive_user(email))
+    db.flush()
+
+    token = create_refresh_token(subject=email)
+    with patch("app.core.env_admin_auth.settings") as patched_settings:
+        patched_settings.ADMIN_EMAIL = email
+        with pytest.raises(HTTPException) as exc:
+            auth_routes.refresh(RefreshRequest(refresh_token=token), db=db)
+
+    assert exc.value.status_code == 401
