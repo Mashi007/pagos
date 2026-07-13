@@ -2068,17 +2068,30 @@ def _generar_excel_auditoria_correos_rebotados(items: List[dict]) -> bytes:
 @router.get("/rebotados-por-tab/excel")
 def get_rebotados_por_tab_excel(
     tipo: str = Query(..., description="Tipo de pestana"),
-    fecha_desde: date = Query(..., description="Desde (fecha_envio, inclusive)."),
-    fecha_hasta: date = Query(..., description="Hasta (fecha_envio, inclusive)."),
+    fecha_desde: Optional[date] = Query(
+        None, description="Desde (fecha_envio, inclusive). Sin fechas = todos (como el KPI)."
+    ),
+    fecha_hasta: Optional[date] = Query(
+        None, description="Hasta (fecha_envio, inclusive). Sin fechas = todos (como el KPI)."
+    ),
     db: Session = Depends(get_db),
 ):
-    """Descarga Excel Auditoria de correos (cedula, nombre, correo) filtrado por fechas."""
+    """Descarga Excel Auditoria de correos (cedula, nombre, correo).
+
+    Sin fecha_desde/fecha_hasta: mismos rebotados que el KPI (historico del tipo_tab).
+    Con ambas fechas: solo envios fallidos en ese rango.
+    """
     if tipo not in TIPOS_TAB_NOTIFICACIONES:
         raise HTTPException(
             status_code=400,
             detail=f"tipo debe ser uno de: {', '.join(TIPOS_TAB_NOTIFICACIONES)}",
         )
-    if fecha_desde > fecha_hasta:
+    if (fecha_desde is None) ^ (fecha_hasta is None):
+        raise HTTPException(
+            status_code=400,
+            detail="Indique ambas fechas (desde y hasta) o ninguna para exportar todos.",
+        )
+    if fecha_desde is not None and fecha_hasta is not None and fecha_desde > fecha_hasta:
         raise HTTPException(
             status_code=400,
             detail="fecha_desde no puede ser posterior a fecha_hasta.",
@@ -2087,10 +2100,11 @@ def get_rebotados_por_tab_excel(
         db, tipo, fecha_desde=fecha_desde, fecha_hasta=fecha_hasta
     )
     content = _generar_excel_auditoria_correos_rebotados(items)
-    filename = (
-        f"Auditoria_de_correos_{tipo}_"
-        f"{fecha_desde.isoformat()}_{fecha_hasta.isoformat()}.xlsx"
-    )
+    if fecha_desde is not None and fecha_hasta is not None:
+        rango = f"{fecha_desde.isoformat()}_{fecha_hasta.isoformat()}"
+    else:
+        rango = "todos"
+    filename = f"Auditoria_de_correos_{tipo}_{rango}.xlsx"
     return Response(
         content=content,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

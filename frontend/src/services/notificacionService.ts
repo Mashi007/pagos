@@ -796,27 +796,33 @@ class NotificacionService {
 
   /**
    * Descarga Excel «Auditoria de correos» (cédula, nombre, correo)
-   * de envíos rebotados (exito=false) para la pestaña, filtrado por fechas.
+   * de envíos rebotados (exito=false) para la pestaña.
+   * Sin fechas: mismo universo que el KPI (histórico). Con ambas: filtra por rango.
    */
   async descargarAuditoriaCorreosRebotadosExcel(opts: {
     tipo: string
-    fechaDesde: string
-    fechaHasta: string
+    fechaDesde?: string
+    fechaHasta?: string
   }): Promise<void> {
     const tipo = (opts.tipo || '').trim()
     const fechaDesde = (opts.fechaDesde || '').trim()
     const fechaHasta = (opts.fechaHasta || '').trim()
-    if (!tipo || !fechaDesde || !fechaHasta) {
+    if (!tipo) {
+      throw new Error('Indique el tipo de pestaña.')
+    }
+    if (Boolean(fechaDesde) !== Boolean(fechaHasta)) {
       throw new Error(
-        'Indique tipo de pestaña y rango de fechas (desde / hasta).'
+        'Indique ambas fechas (desde y hasta) o ninguna para exportar todos.'
       )
     }
-    const qs = new URLSearchParams({
-      tipo,
-      fecha_desde: fechaDesde,
-      fecha_hasta: fechaHasta,
-    })
-    const filename = `Auditoria_de_correos_${tipo}_${fechaDesde}_${fechaHasta}.xlsx`
+    const qs = new URLSearchParams({ tipo })
+    if (fechaDesde && fechaHasta) {
+      qs.set('fecha_desde', fechaDesde)
+      qs.set('fecha_hasta', fechaHasta)
+    }
+    const rango =
+      fechaDesde && fechaHasta ? `${fechaDesde}_${fechaHasta}` : 'todos'
+    const filename = `Auditoria_de_correos_${tipo}_${rango}.xlsx`
     await apiClient.downloadFile(
       `${this.baseUrl}/rebotados-por-tab/excel?${qs.toString()}`,
       filename

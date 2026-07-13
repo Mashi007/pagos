@@ -2245,21 +2245,23 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                             variant="outline"
                             size="sm"
                             className="gap-1.5 border-red-300 bg-white text-red-800 hover:bg-red-100"
-                            disabled={
-                              descargandoAuditoriaCorreos ||
-                              !rebotadosDesde ||
-                              !rebotadosHasta
-                            }
-                            title="Excel Auditoria de correos: cédula, nombre y correo"
+                            disabled={descargandoAuditoriaCorreos}
+                            title="Sin fechas = todos los rebotados del KPI. Con desde/hasta = solo ese rango."
                             onClick={() => {
                               if (!statTabKey) return
-                              if (!rebotadosDesde || !rebotadosHasta) {
+                              const tieneDesde = Boolean(rebotadosDesde)
+                              const tieneHasta = Boolean(rebotadosHasta)
+                              if (tieneDesde !== tieneHasta) {
                                 toast.error(
-                                  'Indique fechas desde y hasta para descargar.'
+                                  'Indique ambas fechas o déjelas vacías para exportar todos (KPI).'
                                 )
                                 return
                               }
-                              if (rebotadosDesde > rebotadosHasta) {
+                              if (
+                                tieneDesde &&
+                                tieneHasta &&
+                                rebotadosDesde > rebotadosHasta
+                              ) {
                                 toast.error(
                                   'La fecha desde no puede ser posterior a hasta.'
                                 )
@@ -2269,12 +2271,18 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                               void notificacionService
                                 .descargarAuditoriaCorreosRebotadosExcel({
                                   tipo: String(statTabKey),
-                                  fechaDesde: rebotadosDesde,
-                                  fechaHasta: rebotadosHasta,
+                                  ...(tieneDesde && tieneHasta
+                                    ? {
+                                        fechaDesde: rebotadosDesde,
+                                        fechaHasta: rebotadosHasta,
+                                      }
+                                    : {}),
                                 })
                                 .then(() => {
                                   toast.success(
-                                    'Auditoria de correos descargada.'
+                                    tieneDesde
+                                      ? 'Auditoria de correos descargada (rango de fechas).'
+                                      : 'Auditoria de correos descargada (todos, como el KPI).'
                                   )
                                 })
                                 .catch((err: unknown) => {
