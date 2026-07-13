@@ -709,9 +709,17 @@ class ApiClient {
             isCobrosEscanerBorradoresGet(reqUrl) ||
             reqUrl.includes('/prestamos/candidatos-drive/snapshot') ||
             reqUrl.includes('/pagos/gmail/status'))
+        /**
+         * Clientes (listado/stats/estados): un timeout aquí casi siempre significa API
+         * saturada (worker ocupado/reciclándose), no cold start; reintentar solo agrega
+         * carga a la cola. Sí se reintenta con 502/503 (isColdStartProxySafeGet).
+         */
+        const isClientesReadGet =
+          methodLc === 'get' && reqUrl.includes('/api/v1/clientes')
         const isColdStartSafeGetTimeoutRetry =
           !requestAborted &&
           isSafeTransientRetryGet &&
+          !isClientesReadGet &&
           (errorCodeEarly === 'ECONNABORTED' ||
             errorMessageEarly.includes('timeout')) &&
           retryCount < 3

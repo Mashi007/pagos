@@ -179,14 +179,16 @@ export async function invalidatePagosPrestamosRevisionYCuotas(
       exact: false,
     }),
     /**
-     * `refetchType: 'all'` también baja a queries inactivas: la pestaña de Préstamos puede
-     * estar montada en otra ruta o con un saldo cacheado; esto fuerza el refresco de
-     * `PENDIENTE POR PAGAR` aunque la lista no sea la vista actual al guardar el pago.
+     * Solo refetch de queries ACTIVAS (default `refetchType: 'active'`). Las inactivas
+     * (búsquedas viejas `search=Nombre`, detalles cerrados) quedan marcadas stale y
+     * usePrestamos (staleTime: 0 + refetchOnMount) las refresca al volver a montarse.
+     * Con `refetchType: 'all'` cada guardado en revisión manual disparaba en ráfaga
+     * TODAS las búsquedas históricas de préstamos cacheadas (decenas de GET /prestamos
+     * simultáneos) y saturaba el worker único de Render.
      */
     queryClient.invalidateQueries({
       queryKey: ['prestamos'],
       exact: false,
-      refetchType: 'all',
     }),
     queryClient.invalidateQueries({
       queryKey: [...NOTIFICACIONES_RECIBOS_LISTADO_QUERY_KEY_PREFIX],
