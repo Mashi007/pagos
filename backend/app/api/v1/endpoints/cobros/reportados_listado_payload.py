@@ -22,7 +22,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Reques
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, defer
 from sqlalchemy import select, func, or_, and_, case, delete, text, update
 from sqlalchemy.exc import ProgrammingError, OperationalError, IntegrityError
 
@@ -130,6 +130,31 @@ from .schemas import PagoReportadoListItem
 _LISTADO_KPIS_MAX_RANGO_DIAS = 21
 _LISTADO_KPIS_STATEMENT_TIMEOUT_MS = 240_000
 _falla_validadores_col_disponible: Optional[bool] = None
+
+
+def _select_reportados_sin_blob() -> Any:
+    """
+    SELECT de PagoReportado sin hidratar ``recibo_pdf`` (LargeBinary ~100 KB por fila).
+
+    Los barridos del listado/KPIs recorren toda la cola; cargar el blob por fila
+    convertia cada primer GET listado-y-kpis en decenas/cientos de MB leidos de
+    Postgres (misma causa raiz documentada en ``primer_reportado_id_por_norm_batch``).
+    Se difiere la columna y se selecciona un booleano SQL que los armadores de items
+    leen via ``_row_tiene_recibo_pdf`` (sin N+1).
+    """
+    return select(
+        PagoReportado,
+        PagoReportado.recibo_pdf.isnot(None).label("_tiene_recibo_pdf"),
+    ).options(defer(PagoReportado.recibo_pdf))
+
+
+def _rows_reportados_sin_blob(db: Session, stmt: Any) -> List[PagoReportado]:
+    """Ejecuta un stmt de `_select_reportados_sin_blob` y anota el flag en cada entidad."""
+    out: List[PagoReportado] = []
+    for pr, tiene in db.execute(stmt).all():
+        pr._tiene_recibo_pdf = bool(tiene)
+        out.append(pr)
+    return out
 
 
 def _extender_timeout_listado_cobros(db: Session) -> None:
@@ -566,7 +591,7 @@ def _list_pagos_reportados_payload(
 
     # Rechazado / importado: listado sin filtro de validadores (auditoría por estado).
     if estado in ("rechazado", "importado"):
-        q = select(PagoReportado).where(PagoReportado.estado == estado)
+        q = _select_reportados_sin_blob().where(PagoReportado.estado == estado)
         count_q = select(func.count(PagoReportado.id)).where(PagoReportado.estado == estado)
         for w in filtros:
             q = q.where(w)
@@ -576,7 +601,7 @@ def _list_pagos_reportados_payload(
             case((PagoReportado.estado == "rechazado", 1), else_=0),
             PagoReportado.created_at.asc(),
         ).offset((page - 1) * per_page).limit(per_page)
-        rows = db.execute(q).scalars().all()
+        rows = _rows_reportados_sin_blob(db, q)
         items = _pago_reportado_list_items_from_rows(db, rows)
         return {"items": items, "total": total, "page": page, "per_page": per_page}
 
@@ -608,7 +633,7 @@ def _list_pagos_reportados_payload(
     # "lider" con `falla=False` siga liderando su cadena y los "seguidores" se descarten
     # por dedup como hoy (semantica preservada).
     wh_scan = list(wh) + _clausulas_filtro_falla_validadores_scan(db)
-    q = select(PagoReportado).where(*wh_scan).order_by(
+    q = _select_reportados_sin_blob().where(*wh_scan).order_by(
         case((PagoReportado.estado == "rechazado", 1), else_=0),
         PagoReportado.created_at.asc(),
     )
@@ -636,7 +661,7 @@ def _list_pagos_reportados_payload(
         "referencia_by_norm": {},
     }
     while True:
-        rows = db.execute(q.offset(offset_scan).limit(batch)).scalars().all()
+        rows = _rows_reportados_sin_blob(db, q.offset(offset_scan).limit(batch))
         if not rows:
             break
         for it in _pago_reportado_list_items_from_rows(
@@ -674,7 +699,9 @@ def _list_pagos_reportados_payload(
                 continue
             seen.add(pid)
             uniq_ids.append(pid)
-        rows_page = db.execute(select(PagoReportado).where(PagoReportado.id.in_(uniq_ids))).scalars().all()
+        rows_page = _rows_reportados_sin_blob(
+            db, _select_reportados_sin_blob().where(PagoReportado.id.in_(uniq_ids))
+        )
         by_id = {int(r.id): r for r in rows_page}
         ordered_pr = [by_id[i] for i in uniq_ids if i in by_id]
         if ordered_pr:
@@ -759,7 +786,9 @@ def _kpis_pagos_reportados_payload(
         # se calcula sobre el scope completo `wh_kpi` SIN filtro, para que un duplicado
         # "lider" con `falla=False` siga liderando y sus "seguidores" se descarten igual.
         wh_kpi_scan = list(wh_kpi) + _clausulas_filtro_falla_validadores_scan(db)
-        q_scan = select(PagoReportado).where(*wh_kpi_scan).order_by(PagoReportado.created_at.asc())
+        q_scan = _select_reportados_sin_blob().where(*wh_kpi_scan).order_by(
+            PagoReportado.created_at.asc()
+        )
 
         batch = _dedup._COBROS_LISTADO_SCAN_BATCH
         offset_scan = 0
@@ -777,7 +806,7 @@ def _kpis_pagos_reportados_payload(
             "referencia_by_norm": {},
         }
         while True:
-            rows_b = db.execute(q_scan.offset(offset_scan).limit(batch)).scalars().all()
+            rows_b = _rows_reportados_sin_blob(db, q_scan.offset(offset_scan).limit(batch))
             if not rows_b:
                 break
             for it in _pago_reportado_list_items_from_rows(

@@ -22,7 +22,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Reques
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, defer
 from sqlalchemy import select, func, or_, and_, case, delete, text, update
 from sqlalchemy.exc import ProgrammingError, OperationalError, IntegrityError
 
@@ -111,6 +111,20 @@ from .schemas import (
     PagoReportadoListItem,
 )
 from .schemas import PagoReportadoListItem
+
+def _row_tiene_recibo_pdf(r: Any) -> bool:
+    """
+    True si la fila tiene recibo PDF, sin hidratar el blob.
+
+    Los barridos del listado/KPIs difieren la columna ``recibo_pdf`` (LargeBinary ~100 KB
+    por fila) y anotan ``_tiene_recibo_pdf`` con un booleano calculado en SQL; acceder a
+    ``r.recibo_pdf`` con la columna diferida dispararia un SELECT extra por fila (N+1).
+    """
+    flag = getattr(r, "_tiene_recibo_pdf", None)
+    if flag is not None:
+        return bool(flag)
+    return bool(r.recibo_pdf)
+
 
 def _referencia_display(referencia_interna: str) -> str:
     ref = (referencia_interna or "").strip()
@@ -773,6 +787,7 @@ def _purgar_duplicados_mismo_prestamo_en_cola(
     rows = (
         db.execute(
             select(PagoReportado)
+            .options(defer(PagoReportado.recibo_pdf))
             .where(*wh)
             .order_by(PagoReportado.created_at.desc())
             .limit(max(limit * 3, 48))
@@ -1266,7 +1281,7 @@ def _pago_reportado_list_items_from_rows(
             gemini_coincide_exacto=r.gemini_coincide_exacto,
             observacion=observacion,
             correo_enviado_a=r.correo_enviado_a,
-            tiene_recibo_pdf=bool(r.recibo_pdf),
+            tiene_recibo_pdf=_row_tiene_recibo_pdf(r),
             tiene_comprobante=bool(getattr(r, "comprobante_imagen_id", None)),
             canal_ingreso=getattr(r, "canal_ingreso", None),
             duplicado_en_pagos=bool(dup_pagos),
