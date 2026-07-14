@@ -397,9 +397,9 @@ def _cobros_listado_kpis_cache_set_if_generation(
             pipe = redis_client.pipeline()
             try:
                 pipe.watch(_COBROS_LISTADO_KPIS_GENERATION_KEY)
-                current_redis_generation = int(
-                    pipe.get(_COBROS_LISTADO_KPIS_GENERATION_KEY) or 0
-                )
+                # Mantener el lock local hasta EXEC: si INCR Redis falla durante
+                # una mutación del mismo proceso, el contador en memoria igualmente
+                # impide que este writer publique entre el check y el EXEC.
                 with _cobros_listado_kpis_mem_lock:
                     if (
                         _cobros_listado_kpis_mem_generation
@@ -407,23 +407,30 @@ def _cobros_listado_kpis_cache_set_if_generation(
                     ):
                         pipe.unwatch()
                         return False
-                if current_redis_generation != expected_redis_generation:
-                    pipe.unwatch()
-                    return False
-                pipe.multi()
-                pipe.setex(key, _COBROS_LISTADO_KPIS_CACHE_TTL_SEC, serialized)
-                pipe.setex(
-                    stale_key,
-                    _COBROS_LISTADO_KPIS_CACHE_STALE_TTL_SEC,
-                    serialized,
-                )
-                if es_default:
+                    current_redis_generation = int(
+                        pipe.get(_COBROS_LISTADO_KPIS_GENERATION_KEY) or 0
+                    )
+                    if current_redis_generation != expected_redis_generation:
+                        pipe.unwatch()
+                        return False
+                    pipe.multi()
                     pipe.setex(
-                        _COBROS_LISTADO_KPIS_LATEST_DEFAULT_KEY,
-                        _COBROS_LISTADO_KPIS_LATEST_DEFAULT_TTL_SEC,
+                        key,
+                        _COBROS_LISTADO_KPIS_CACHE_TTL_SEC,
                         serialized,
                     )
-                pipe.execute()
+                    pipe.setex(
+                        stale_key,
+                        _COBROS_LISTADO_KPIS_CACHE_STALE_TTL_SEC,
+                        serialized,
+                    )
+                    if es_default:
+                        pipe.setex(
+                            _COBROS_LISTADO_KPIS_LATEST_DEFAULT_KEY,
+                            _COBROS_LISTADO_KPIS_LATEST_DEFAULT_TTL_SEC,
+                            serialized,
+                        )
+                    pipe.execute()
                 return True
             finally:
                 pipe.reset()
