@@ -98,6 +98,8 @@ from .listado_kpis_cache import (
     _cobros_listado_kpis_cache_get_stale,
     _cobros_listado_kpis_cache_key_payload,
     _cobros_listado_kpis_cache_set,
+    _cobros_listado_kpis_cache_set_if_generation,
+    _cobros_listado_kpis_generation_snapshot,
     _cobros_listado_kpis_release_singleflight,
     _cobros_listado_kpis_storage_key,
     _cobros_listado_kpis_try_acquire_singleflight,
@@ -227,6 +229,7 @@ def _lanzar_revalidacion_listado_kpis_background(
     (30-120s) no debe bloquear la respuesta HTTP: el operador recibe el stale al
     instante y la siguiente carga encuentra el cache fresco.
     """
+    cache_generation = _cobros_listado_kpis_generation_snapshot()
 
     def _run() -> None:
         from app.core.database import SessionLocal
@@ -268,12 +271,23 @@ def _lanzar_revalidacion_listado_kpis_background(
                 attempts=3,
                 log_prefix="[COBROS listado-y-kpis SWR]",
             )
-            _cobros_listado_kpis_cache_set(cache_payload, payload)
-            logger.info(
-                "[COBROS_CACHE] revalidacion SWR completada en %.0f ms (key=%s)",
-                (time.monotonic() - t0) * 1000,
-                _cobros_listado_kpis_storage_key(cache_payload),
+            cache_updated = _cobros_listado_kpis_cache_set_if_generation(
+                cache_payload,
+                payload,
+                cache_generation,
             )
+            if cache_updated:
+                logger.info(
+                    "[COBROS_CACHE] revalidacion SWR completada en %.0f ms (key=%s)",
+                    (time.monotonic() - t0) * 1000,
+                    _cobros_listado_kpis_storage_key(cache_payload),
+                )
+            else:
+                logger.info(
+                    "[COBROS_CACHE] revalidacion SWR descartada tras mutacion "
+                    "concurrente (key=%s)",
+                    _cobros_listado_kpis_storage_key(cache_payload),
+                )
         except Exception as e:
             logger.exception(
                 "[COBROS_CACHE] revalidacion SWR fallo (key=%s): %s",
