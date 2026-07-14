@@ -97,6 +97,9 @@ _COBROS_LISTADO_KPIS_SINGLEFLIGHT_WAIT_SEC = 240.0
 _COBROS_LISTADO_KPIS_SINGLEFLIGHT_STALE_SEC = 300.0
 _COBROS_LISTADO_KPIS_CACHE_PREFIX = "cobros:listado_y_kpis:v2:"
 _COBROS_LISTADO_KPIS_CACHE_STALE_SUFFIX = ":stale"
+_COBROS_LISTADO_KPIS_GENERATION_KEY = (
+    f"{_COBROS_LISTADO_KPIS_CACHE_PREFIX}generation"
+)
 # Snapshot de la ultima vista default calculada (sin filtros, page=1). La clave normal
 # incluye fecha_desde/fecha_hasta que cambian cada dia: al dia siguiente ni el cache ni
 # el stale existen para la clave nueva y el primer GET pagaba el barrido completo.
@@ -110,6 +113,48 @@ _cobros_listado_kpis_mem_stale_cache: Dict[str, Tuple[float, dict]] = {}
 _cobros_listado_kpis_mem_latest_default: Optional[Tuple[float, dict]] = None
 _cobros_listado_kpis_mem_lock = threading.Lock()
 _cobros_listado_kpis_inflight: Dict[str, float] = {}
+_cobros_listado_kpis_mem_generation = 0
+
+
+def _cobros_listado_kpis_generation_snapshot() -> Tuple[int, Optional[int]]:
+    """
+    Captura la generación de mutaciones en memoria y Redis.
+
+    El par permite detectar tanto mutaciones del proceso actual como las de otros
+    workers antes de publicar un cálculo SWR de larga duración.
+    """
+    with _cobros_listado_kpis_mem_lock:
+        mem_generation = _cobros_listado_kpis_mem_generation
+
+    redis_client = get_redis_client()
+    if redis_client is None:
+        return mem_generation, None
+    try:
+        raw_generation = redis_client.get(_COBROS_LISTADO_KPIS_GENERATION_KEY)
+        return mem_generation, int(raw_generation or 0)
+    except Exception as e:
+        logger.warning(
+            "[COBROS_CACHE] Redis get generation listado-y-kpis falló: %s", e
+        )
+        return mem_generation, None
+
+
+def _advance_cobros_listado_kpis_generation() -> None:
+    """Invalida cualquier cálculo SWR iniciado antes de una mutación."""
+    global _cobros_listado_kpis_mem_generation
+
+    with _cobros_listado_kpis_mem_lock:
+        _cobros_listado_kpis_mem_generation += 1
+
+    redis_client = get_redis_client()
+    if redis_client is None:
+        return
+    try:
+        redis_client.incr(_COBROS_LISTADO_KPIS_GENERATION_KEY)
+    except Exception as e:
+        logger.warning(
+            "[COBROS_CACHE] Redis incr generation listado-y-kpis falló: %s", e
+        )
 
 
 def _cache_payload_es_vista_default(cache_payload: str) -> bool:
@@ -321,7 +366,103 @@ def _cobros_listado_kpis_cache_set(cache_payload: str, data: dict) -> None:
             )
 
 
+def _cobros_listado_kpis_cache_set_if_generation(
+    cache_payload: str,
+    data: dict,
+    expected_generation: Tuple[int, Optional[int]],
+) -> bool:
+    """
+    Publica un cálculo SWR solo si no hubo mutaciones desde que comenzó.
+
+    Redis usa WATCH/MULTI para que comparar la generación y escribir las tres
+    variantes del cache sea atómico. Sin Redis, el mismo lock protege la
+    generación y las escrituras en memoria.
+    """
+    expected_mem_generation, expected_redis_generation = expected_generation
+    key = _cobros_listado_kpis_storage_key(cache_payload)
+    stale_key = _cobros_listado_kpis_stale_storage_key(cache_payload)
+    encoded = jsonable_encoder(data)
+    if isinstance(encoded, dict):
+        encoded[_COBROS_LISTADO_KPIS_STORED_AT_FIELD] = time.time()
+    es_default = _cache_payload_es_vista_default(cache_payload)
+    redis_client = get_redis_client()
+
+    if redis_client is not None:
+        # Si Redis no estaba disponible al capturar la generación, no es seguro
+        # publicar luego: podrían existir mutaciones de otros workers no observadas.
+        if expected_redis_generation is None:
+            return False
+        try:
+            serialized = json.dumps(encoded, ensure_ascii=False, default=str)
+            pipe = redis_client.pipeline()
+            try:
+                pipe.watch(_COBROS_LISTADO_KPIS_GENERATION_KEY)
+                current_redis_generation = int(
+                    pipe.get(_COBROS_LISTADO_KPIS_GENERATION_KEY) or 0
+                )
+                with _cobros_listado_kpis_mem_lock:
+                    if (
+                        _cobros_listado_kpis_mem_generation
+                        != expected_mem_generation
+                    ):
+                        pipe.unwatch()
+                        return False
+                if current_redis_generation != expected_redis_generation:
+                    pipe.unwatch()
+                    return False
+                pipe.multi()
+                pipe.setex(key, _COBROS_LISTADO_KPIS_CACHE_TTL_SEC, serialized)
+                pipe.setex(
+                    stale_key,
+                    _COBROS_LISTADO_KPIS_CACHE_STALE_TTL_SEC,
+                    serialized,
+                )
+                if es_default:
+                    pipe.setex(
+                        _COBROS_LISTADO_KPIS_LATEST_DEFAULT_KEY,
+                        _COBROS_LISTADO_KPIS_LATEST_DEFAULT_TTL_SEC,
+                        serialized,
+                    )
+                pipe.execute()
+                return True
+            finally:
+                pipe.reset()
+        except Exception as e:
+            # Incluye WatchError: una mutación concurrente ganó la carrera.
+            logger.info(
+                "[COBROS_CACHE] cálculo SWR descartado por generation/Redis: %s",
+                e,
+            )
+            return False
+
+    # No mezclar un snapshot que observó Redis con un fallback posterior en
+    # memoria: al perder Redis ya no se puede validar la generación distribuida.
+    if expected_redis_generation is not None:
+        return False
+
+    global _cobros_listado_kpis_mem_latest_default
+    now = time.time()
+    with _cobros_listado_kpis_mem_lock:
+        if _cobros_listado_kpis_mem_generation != expected_mem_generation:
+            return False
+        _cobros_listado_kpis_mem_cache[key] = (
+            now + _COBROS_LISTADO_KPIS_CACHE_TTL_SEC,
+            encoded,
+        )
+        _cobros_listado_kpis_mem_stale_cache[stale_key] = (
+            now + _COBROS_LISTADO_KPIS_CACHE_STALE_TTL_SEC,
+            encoded,
+        )
+        if es_default:
+            _cobros_listado_kpis_mem_latest_default = (
+                now + _COBROS_LISTADO_KPIS_LATEST_DEFAULT_TTL_SEC,
+                encoded,
+            )
+    return True
+
+
 def _invalidate_cobros_listado_kpis_cache() -> None:
+    _advance_cobros_listado_kpis_generation()
     with _cobros_listado_kpis_mem_lock:
         _cobros_listado_kpis_mem_cache.clear()
         # Mantener stale cache para fallback resiliente durante picos/redeploy.
@@ -341,6 +482,8 @@ def _invalidate_cobros_listado_kpis_cache() -> None:
             if k_str.endswith(_COBROS_LISTADO_KPIS_CACHE_STALE_SUFFIX):
                 continue
             if k_str == _COBROS_LISTADO_KPIS_LATEST_DEFAULT_KEY:
+                continue
+            if k_str == _COBROS_LISTADO_KPIS_GENERATION_KEY:
                 continue
             keys.append(k)
         if keys:
@@ -386,6 +529,7 @@ def _drop_pagos_from_listado_kpis_cache(
     ids: Set[int] = {int(x) for x in pago_ids if x is not None}
     if not ids:
         return
+    _advance_cobros_listado_kpis_generation()
     prev_states: Dict[int, str] = {
         int(k): (v or "").strip()
         for k, v in (estados_previos or {}).items()
