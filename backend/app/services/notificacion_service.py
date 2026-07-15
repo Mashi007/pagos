@@ -2,8 +2,8 @@
 Servicios para notificaciones de cuotas vencidas y en mora.
 Centraliza la lógica de serialización y filtrado de cuotas.
 Listados por pestaña: get_cuotas_pendientes_por_vencimientos (filtra en SQL por fechas);
-build_cuotas_pendiente_2_dias_antes_items (solo estado PENDIENTE, vence en 2 días; excluye préstamos
-    sin cuotas en atraso según contar_cuotas_atraso_por_prestamos, p. ej. adelantados al corriente).
+build_cuotas_pendiente_2_dias_antes_items (solo estado PENDIENTE, vence en 2 días; incluye
+    clientes al corriente — es el recordatorio preventivo de la pestaña «2 días antes»).
 """
 import logging
 from collections import defaultdict
@@ -108,8 +108,8 @@ def build_cuotas_pendiente_2_dias_antes_items(
     Cuotas con columna estado = PENDIENTE cuya fecha_vencimiento es exactamente
     hoy + 2 días (Caracas). Sin fecha_pago, saldo > tolerancia, préstamo no liquidado/desistimiento.
 
-    No incluye el préstamo si ``cuotas_atrasadas`` (misma regla que estado de cuenta / mora) es 0:
-    en la práctica el cliente va al corriente respecto a vencimientos pasados y no debe recibir este aviso.
+    Incluye también clientes al corriente (cuotas_atrasadas = 0): el aviso «2 días antes»
+    es preventivo; antes se excluían y el envío quedaba vacío la mayoría de los días.
     Una fila por cuota (misma forma que otras pestañas de notificaciones).
     """
     hoy = fecha_referencia or hoy_negocio()
@@ -133,8 +133,6 @@ def build_cuotas_pendiente_2_dias_antes_items(
     out: List[dict] = []
     for cuota, cliente in rows:
         ca = int(counts.get(cuota.prestamo_id, 0) or 0)
-        if ca <= 0:
-            continue
         tp = totales.get(cuota.prestamo_id)
         out.append(
             format_cuota_item(
