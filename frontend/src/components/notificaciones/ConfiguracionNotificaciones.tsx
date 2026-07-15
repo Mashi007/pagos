@@ -1325,11 +1325,12 @@ export function ConfiguracionNotificaciones({
             ) : alcance === 'solo_pago_10_dias_atrasado' ? (
               <>
                 Configuración solo para <strong>10 días de atraso</strong> (caso{' '}
-                <strong>PAGO_10_DIAS_ATRASADO</strong>): cuotas pendientes cuya
-                atraso de 10 días calendario o más (vencimiento <= referencia − 10,
-                Caracas); el préstamo debe tener exactamente 1 cuota en mora;
-                permanece hasta pagar esa cuota; con 0 o con 2 o más no aplican. Incluye plantilla, envío, PDF y adjuntos del
-                caso{' '}
+                <strong>PAGO_10_DIAS_ATRASADO</strong>): cuotas pendientes con
+                atraso de 10 días calendario o más (vencimiento menor o igual a
+                referencia menos 10 días, Caracas); el préstamo debe tener
+                exactamente 1 cuota en mora; permanece hasta pagar esa cuota;
+                con 0 o con 2 o más no aplican. Incluye plantilla, envío, PDF y
+                adjuntos del caso{' '}
                 <code className="rounded bg-gray-100 px-1">
                   dias_10_retraso
                 </code>
