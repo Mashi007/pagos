@@ -741,8 +741,9 @@ export default function CobrosPagosReportadosPage() {
         return
       }
 
-      const staleSnapshot =
-        !opts?.bypassCache ? peekListadoKpisCacheStale(queryParams) : null
+      const staleSnapshot = !opts?.bypassCache
+        ? peekListadoKpisCacheStale(queryParams)
+        : null
       if (staleSnapshot && dataRef.current === null) {
         setData(staleSnapshot)
         setKpis(staleSnapshot.kpis)
@@ -820,7 +821,15 @@ export default function CobrosPagosReportadosPage() {
 
   useEffect(() => {
     setSelectedIds([])
-  }, [page, estado, fechaDesde, fechaHasta, cedula, institucion, incluirExportados])
+  }, [
+    page,
+    estado,
+    fechaDesde,
+    fechaHasta,
+    cedula,
+    institucion,
+    incluirExportados,
+  ])
 
   /**
    * Refresco en segundo plano cada 15 min. Usa caché Redis/backend cuando existe;
@@ -2185,7 +2194,9 @@ export default function CobrosPagosReportadosPage() {
                                     isMercantilBank
                                   ) ??
                                   (esDuplicadoCarteraRow(row)
-                                    ? isMercantilBank(row.institucion_financiera)
+                                    ? isMercantilBank(
+                                        row.institucion_financiera
+                                      )
                                       ? 'No seleccionable en lote: duplicado en cartera (Mercantil: use Aprobar por fila tras Visto si corresponde).'
                                       : 'No seleccionable: duplicado en cartera; en este banco no se puede reaplicar.'
                                     : 'Solo se puede marcar pendiente o en revisión')
@@ -2395,15 +2406,17 @@ export default function CobrosPagosReportadosPage() {
                                       : (row.observacion ?? '')
                             }
                           >
-                            {(debeMostrarComparacionPrestamos(row) ||
-                              esDuplicadoMismoPrestamo(row)) ? (
+                            {debeMostrarComparacionPrestamos(row) ||
+                            esDuplicadoMismoPrestamo(row) ? (
                               <DuplicadoCarteraAlertaInline
                                 duplicado_en_pagos={row.duplicado_en_pagos}
                                 pago_existente_id={row.pago_existente_id}
                                 numero_documento_pago_existente={
                                   row.numero_documento_pago_existente
                                 }
-                                prestamo_existente_id={row.prestamo_existente_id}
+                                prestamo_existente_id={
+                                  row.prestamo_existente_id
+                                }
                                 prestamo_objetivo_id={row.prestamo_objetivo_id}
                                 prestamo_duplicado_es_objetivo={
                                   row.prestamo_duplicado_es_objetivo
@@ -2411,7 +2424,9 @@ export default function CobrosPagosReportadosPage() {
                                 prestamoObjetivoMotivo={
                                   row.prestamo_objetivo_motivo
                                 }
-                                prestamoReferenciaId={row.prestamo_referencia_id}
+                                prestamoReferenciaId={
+                                  row.prestamo_referencia_id
+                                }
                                 prestamoObjetivoMultiple={
                                   row.prestamo_objetivo_multiple
                                 }

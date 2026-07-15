@@ -906,8 +906,8 @@ export function RegistrarPagoForm({
     /** Revisión manual / Revisar pagos: no exigir cliente único APROBADO (misma regla que re-escaneo cartera). */
     const escaneoRevisionSinValidarCliente = Boolean(
       esRevisionManualPagosCartera ||
-        esPagoConError ||
-        mostrarCampoCodigoDocumento
+      esPagoConError ||
+      mostrarCampoCodigoDocumento
     )
 
     let extraccionSinCliente = escaneoRevisionSinValidarCliente

@@ -84,7 +84,7 @@ const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms))
 
 /**
  * No bloquear toda la SPA más de esto esperando GET /auth/me (worker único en Render
- * puede tardar 30–60s si hay escáner Gemini, cascada o finiquitos en curso).
+ * puede tardar 30-60s si hay escáner Gemini, cascada o finiquitos en curso).
  */
 const AUTH_VERIFY_UI_CAP_MS = 12_000
 

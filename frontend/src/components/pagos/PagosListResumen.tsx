@@ -69,7 +69,11 @@ interface UltimoPago {
   total_prestamos: number
 }
 
-export function PagosListResumen({ fetchEnabled = true }: { fetchEnabled?: boolean }) {
+export function PagosListResumen({
+  fetchEnabled = true,
+}: {
+  fetchEnabled?: boolean
+}) {
   const [page, setPage] = useState(1)
 
   const [perPage] = useState(10)

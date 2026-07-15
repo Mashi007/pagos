@@ -1766,7 +1766,7 @@ class ReporteService {
    * usando credenciales del servidor. Requiere rol admin, operador o gerente.
    */
   async syncConciliacionSheetDesdeDrive(): Promise<Record<string, unknown>> {
-    // Hoja CONCILIACIÓN: sync Sheets→BD (1–3 min). El recálculo Fecha Q corre en background en el API.
+    // Hoja CONCILIACIÓN: sync Sheets→BD (1-3 min). El recálculo Fecha Q corre en background en el API.
     return await apiClient.post<Record<string, unknown>>(
       `${this.conciliacionSheetBaseUrl}/sync-now`,
       undefined,

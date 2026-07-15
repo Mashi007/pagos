@@ -665,7 +665,8 @@ export default function CobrosEditarPage() {
     pago_existente_id: duplicadoActual.pago_existente_id,
     prestamo_existente_id: duplicadoActual.prestamo_existente_id,
     prestamo_objetivo_id: duplicadoActual.prestamo_objetivo_id,
-    prestamo_duplicado_es_objetivo: duplicadoActual.prestamo_duplicado_es_objetivo,
+    prestamo_duplicado_es_objetivo:
+      duplicadoActual.prestamo_duplicado_es_objetivo,
   }
   const vistoPermitido =
     !duplicadoEnCartera ||

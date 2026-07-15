@@ -74,7 +74,9 @@ const TASA_LECTURA_CLIENT_CACHE_MS = 5 * 60 * 1000
 
 type TasaCacheEntry<T> = { storedAt: number; data: T }
 
-const tasaEstadoClientCache: { entry: TasaCacheEntry<TasaCambioEstado> | null } = {
+const tasaEstadoClientCache: {
+  entry: TasaCacheEntry<TasaCambioEstado> | null
+} = {
   entry: null,
 }
 const tasaHoyClientCache: {

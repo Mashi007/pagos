@@ -711,9 +711,7 @@ export async function escanerInfopagosExtraerComprobante(
     `${BASE_COBROS}/escaner/extraer-comprobante`,
     formData,
     {
-      timeout:
-        opts?.timeoutMs ??
-        COBROS_ESCANER_EXTRAER_TIMEOUT_MS,
+      timeout: opts?.timeoutMs ?? COBROS_ESCANER_EXTRAER_TIMEOUT_MS,
     }
   )
 }
@@ -1348,11 +1346,17 @@ export async function listPagosReportadosConKpis(
       const stale = peekListadoKpisCacheStale(params)
       if (stale) return stale
     }
-    const ax = e as { response?: { status?: number }; code?: string; message?: string }
+    const ax = e as {
+      response?: { status?: number }
+      code?: string
+      message?: string
+    }
     const st = ax?.response?.status
     const isTimeout =
       ax?.code === 'ECONNABORTED' ||
-      String(ax?.message ?? '').toLowerCase().includes('timeout')
+      String(ax?.message ?? '')
+        .toLowerCase()
+        .includes('timeout')
     if (st === 404 || st === 405 || st === 500 || st === 503 || isTimeout) {
       const filterParams = {
         fecha_desde: params.fecha_desde,
@@ -1824,7 +1828,8 @@ export async function eliminarPagoReportado(
     return data
   } catch (error: unknown) {
     // Tras un 500 post-commit el reintento del ApiClient devuelve 404: idempotente.
-    const status = (error as { response?: { status?: number } })?.response?.status
+    const status = (error as { response?: { status?: number } })?.response
+      ?.status
     if (status === 404) {
       markPagoReportadoRecentlyDeleted(pagoId)
       return { ok: true, mensaje: 'Pago reportado eliminado.' }

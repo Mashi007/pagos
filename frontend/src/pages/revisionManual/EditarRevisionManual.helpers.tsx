@@ -606,13 +606,19 @@ function esMotivoAlertaReescaneoIgnorable(motivo: string): boolean {
   if (/serial ocr repetido en cartera;\s*guardado con codigo p\d+/i.test(t)) {
     return true
   }
-  if (/serial ocr repetido en cartera;\s*se guard[oó] con c[oó]digo p\d+/i.test(t)) {
+  if (
+    /serial ocr repetido en cartera;\s*se guard[oó] con c[oó]digo p\d+/i.test(t)
+  ) {
     return true
   }
   if (/posible duplicado en cartera;\s*revise y use visto/i.test(t)) {
     return true
   }
-  if (/n[uú]mero de documento ocr ya registrado en otro pago;\s*se aplicaron los dem[aá]s campos/i.test(t)) {
+  if (
+    /n[uú]mero de documento ocr ya registrado en otro pago;\s*se aplicaron los dem[aá]s campos/i.test(
+      t
+    )
+  ) {
     return true
   }
   return false
@@ -875,11 +881,11 @@ export function payloadUpdatePagoDesdeReescaneoOcrCartera(
     out.limpiar_fecha_pago_ocr = true
   }
 
-  const moneda = (patch.moneda_registro || 'USD').toUpperCase() === 'BS' ? 'BS' : 'USD'
+  const moneda =
+    (patch.moneda_registro || 'USD').toUpperCase() === 'BS' ? 'BS' : 'USD'
   const montoUsd = Number(patch.monto_pagado ?? 0)
   const montoBs = Number(patch.monto_bs_original ?? 0)
-  const tieneMontoOcr =
-    moneda === 'BS' ? montoBs > 0 : montoUsd > 0
+  const tieneMontoOcr = moneda === 'BS' ? montoBs > 0 : montoUsd > 0
 
   if (tieneMontoOcr) {
     out.moneda_registro = moneda
@@ -1092,7 +1098,9 @@ export function pagoInicialDesdeSugerenciaEscaneoRevision(
     moneda_registro: moneda,
     duplicado_documento_en_pagos: opts?.duplicado_en_pagos === true,
     duplicado_en_cartera_pago_id:
-      typeof opts?.pago_existente_id === 'number' ? opts.pago_existente_id : null,
+      typeof opts?.pago_existente_id === 'number'
+        ? opts.pago_existente_id
+        : null,
     duplicado_en_cartera_prestamo_id:
       typeof opts?.prestamo_existente_id === 'number'
         ? opts.prestamo_existente_id

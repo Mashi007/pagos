@@ -419,7 +419,9 @@ export default function CobrosDetallePage() {
               prestamoObjetivoMotivo={detalle.prestamo_objetivo_motivo}
               prestamoReferenciaId={detalle.prestamo_referencia_id}
               fechaPagoReporteIso={detalle.fecha_pago}
-              prestamoDuplicadoEsObjetivo={detalle.prestamo_duplicado_es_objetivo}
+              prestamoDuplicadoEsObjetivo={
+                detalle.prestamo_duplicado_es_objetivo
+              }
               prestamoObjetivoMultiple={detalle.prestamo_objetivo_multiple}
               esMercantil={isMercantilBank(detalle.institucion_financiera)}
               footer={

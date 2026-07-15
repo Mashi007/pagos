@@ -528,7 +528,9 @@ class ApiClient {
         // Gmail: migrar pendientes temporal → pagos_con_errores (PagosList al abrir /pagos).
         if (
           config.method?.toLowerCase() === 'post' &&
-          config.url?.includes('/pagos/gmail/migrar-pendientes-a-con-errores') &&
+          config.url?.includes(
+            '/pagos/gmail/migrar-pendientes-a-con-errores'
+          ) &&
           (config.timeout == null ||
             config.timeout < GMAIL_MIGRAR_PENDIENTES_TIMEOUT_MS)
         ) {
@@ -772,9 +774,7 @@ class ApiClient {
           methodLc !== 'get' || isSafeTransientRetryGet
         const shouldRetry =
           !requestAborted &&
-          !(
-            methodLc === 'get' && isNeverAutoRetryBackgroundGet(reqUrl)
-          ) &&
+          !(methodLc === 'get' && isNeverAutoRetryBackgroundGet(reqUrl)) &&
           ((canRetryBecauseStatus &&
             retryCount < maxRetries &&
             mayRetryThisRequest) ||
@@ -1741,19 +1741,19 @@ class ApiClient {
                 /\/conciliacion-sheet\/sync(?:\?|#|$)/.test(url)
               ? CONCILIACION_SHEET_SYNC_TIMEOUT_MS
               : url.includes('/aplicar-pagos-cuotas')
-              ? 120000 // 2 min: cascada por préstamo puede exceder 30s en producción
-              : url.includes('/notificaciones/aplicar-abonos-drive-a-cuotas')
-                ? NOTIFICACIONES_ABONOS_DRIVE_CUOTAS_TIMEOUT_MS
-                : url.includes('/pagos/upload')
-                ? 120000
-                : url.includes('/pagos/batch')
-                  ? 180000 // 3 min: Render frío + muchas filas
-                  : url.includes('/pagos/gmail/run-now')
-                    ? 45000 // Debe responder al instante; si tarda, worker ocupado (polling /status)
-                    : url.includes('/clientes/check-emails') ||
-                        url.includes('/clientes/check-cedulas')
-                      ? 60000
-                      : 300000
+                ? 120000 // 2 min: cascada por préstamo puede exceder 30s en producción
+                : url.includes('/notificaciones/aplicar-abonos-drive-a-cuotas')
+                  ? NOTIFICACIONES_ABONOS_DRIVE_CUOTAS_TIMEOUT_MS
+                  : url.includes('/pagos/upload')
+                    ? 120000
+                    : url.includes('/pagos/batch')
+                      ? 180000 // 3 min: Render frío + muchas filas
+                      : url.includes('/pagos/gmail/run-now')
+                        ? 45000 // Debe responder al instante; si tarda, worker ocupado (polling /status)
+                        : url.includes('/clientes/check-emails') ||
+                            url.includes('/clientes/check-cedulas')
+                          ? 60000
+                          : 300000
       }
 
       // Priorizar timeout explícito si se proporciona, sino usar el calculado

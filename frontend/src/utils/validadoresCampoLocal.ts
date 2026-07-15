@@ -61,7 +61,9 @@ export function validarTelefonoVenezuelaRevisionLocal(
 
 /** Alineado con validate_email del backend. */
 export function validarEmailRevisionLocal(valor: string): ValidacionCampoLocal {
-  const emailClean = String(valor ?? '').trim().toLowerCase()
+  const emailClean = String(valor ?? '')
+    .trim()
+    .toLowerCase()
 
   if (!emailClean) {
     return { valido: false, error: 'Email no puede estar vacío' }

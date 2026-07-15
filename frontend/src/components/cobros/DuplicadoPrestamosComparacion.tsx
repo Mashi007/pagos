@@ -57,7 +57,9 @@ export function esDuplicadoEnCartera(row: PrestamoDuplicadoCampos): boolean {
 }
 
 /** Serial en cartera y destino del reporte apuntan al mismo préstamo. */
-export function esDuplicadoMismoPrestamo(row: PrestamoDuplicadoCampos): boolean {
+export function esDuplicadoMismoPrestamo(
+  row: PrestamoDuplicadoCampos
+): boolean {
   if (!esDuplicadoEnCartera(row)) return false
   if (row.prestamo_duplicado_es_objetivo === true) return true
   const pe = row.prestamo_existente_id
@@ -108,7 +110,8 @@ export function camposDuplicadoDesdePagoRevision(pago: {
   prestamo_id?: number | null
 }): PrestamoDuplicadoCampos {
   const prestEx = pago.duplicado_en_cartera_prestamo_id ?? null
-  const prestObj = typeof pago.prestamo_id === 'number' ? pago.prestamo_id : null
+  const prestObj =
+    typeof pago.prestamo_id === 'number' ? pago.prestamo_id : null
   return {
     duplicado_en_pagos: true,
     pago_existente_id: pago.duplicado_en_cartera_pago_id,
@@ -161,7 +164,10 @@ export function DuplicadoCarteraAlertaInline(
     prestamo_duplicado_es_objetivo: props.prestamo_duplicado_es_objetivo,
   }
 
-  if (!esDuplicadoEnCartera(campos) && !/DUPLICADO/i.test(props.observacion ?? '')) {
+  if (
+    !esDuplicadoEnCartera(campos) &&
+    !/DUPLICADO/i.test(props.observacion ?? '')
+  ) {
     return props.notas?.trim() ? (
       <span className="truncate text-muted-foreground">{props.notas}</span>
     ) : null
@@ -223,7 +229,7 @@ export function DuplicadoCarteraAlertaInline(
       >
         {enCartera ? (
           <>
-            PAGO DUPLICADO — En cartera Nº{' '}
+            PAGO DUPLICADO - En cartera Nº{' '}
             <span className="break-all font-mono font-normal">
               {numDoc || '-'}
             </span>
@@ -232,7 +238,7 @@ export function DuplicadoCarteraAlertaInline(
               : ''}
           </>
         ) : (
-          <span>DUPLICADO Mercantil — compare préstamos</span>
+          <span>DUPLICADO Mercantil - compare préstamos</span>
         )}
         <DuplicadoPrestamosResumen
           prestamoExistenteId={props.prestamo_existente_id}
@@ -361,12 +367,12 @@ export function DuplicadoPrestamosResumen({
                 Serial ya en cartera
               </td>
               <td className="p-1.5 align-top font-mono font-semibold">
-                {prestEx != null ? `#${prestEx}` : '—'}
+                {prestEx != null ? `#${prestEx}` : '-'}
               </td>
               <td className="hidden p-1.5 align-top font-mono sm:table-cell">
                 {typeof pagoExistenteId === 'number'
                   ? `#${pagoExistenteId}`
-                  : '—'}
+                  : '-'}
               </td>
             </tr>
             <tr>
@@ -623,7 +629,9 @@ export function DuplicadoCarteraAviso({
             Nº en cartera: <span className="font-mono">{doc}</span>
           </p>
         ) : null}
-        {footer ? <div className="mt-2 flex flex-wrap gap-2">{footer}</div> : null}
+        {footer ? (
+          <div className="mt-2 flex flex-wrap gap-2">{footer}</div>
+        ) : null}
       </div>
     )
   }
@@ -658,7 +666,9 @@ export function DuplicadoCarteraAviso({
         prestamoDuplicadoEsObjetivo={prestamoDuplicadoEsObjetivo}
         prestamoObjetivoMultiple={prestamoObjetivoMultiple}
       />
-      {footer ? <div className="mt-2 flex flex-wrap gap-2">{footer}</div> : null}
+      {footer ? (
+        <div className="mt-2 flex flex-wrap gap-2">{footer}</div>
+      ) : null}
     </div>
   )
 }

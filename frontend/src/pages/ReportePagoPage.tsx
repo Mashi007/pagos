@@ -16,7 +16,10 @@
 
 
 
- * En rapicredit-cobros no se pide fecha al cliente (se envía hoy Caracas). En Infopagos sí se pide fecha en el paso correspondiente.
+ * En rapicredit-cobros: escaneo autónomo (Gemini). Si el comprobante se lee completo,
+ * va directo a confirmar sin pedir banco/monto/número/fecha. Fecha siempre hoy Caracas
+ * si falta o es inválida. Solo se pide el dato que el escaneo no pudo leer.
+ * En Infopagos sí se pide fecha en el paso correspondiente.
  * institución y nº documento (longitud), archivo (PDF, JPEG, PNG, HEIC/HEIF, WebP; máx 10 MB).
 
 
@@ -247,6 +250,37 @@ function validarMonto(
 function fechaReporteEfectivaYmd(fechaPago: string): string {
   const t = (fechaPago || '').trim()
   return t || hoyYmdCaracas()
+}
+
+/**
+ * Flujo cobros (escaneo autónomo): primer paso que aún necesita un dato del
+ * cliente, o 7 (confirmación) si el comprobante digitalizado ya trae todo.
+ * La fecha nunca se pide: si falta o es inválida se usa hoy Caracas.
+ */
+function pasoFaltanteCobros(
+  inst: string,
+  montoStr: string,
+  monedaVal: 'BS' | 'USD',
+  numDoc: string
+): 3 | 4 | 5 | 7 {
+  if (!inst.trim() || inst.length > MAX_LENGTH_INSTITUCION) return 3
+  if (!validarMonto(montoStr, monedaVal).valido) return 4
+  if (!numDoc.trim() || numDoc.length > MAX_LENGTH_NUMERO_OPERACION) return 5
+  return 7
+}
+
+const MENSAJE_DATO_FALTANTE_COBROS: Record<3 | 4 | 5, string> = {
+  3: 'No pudimos leer el banco en su comprobante. Selecciónelo y presione Siguiente.',
+  4: 'No pudimos leer el monto en su comprobante. Escríbalo y presione Siguiente.',
+  5: 'No pudimos leer el número de operación en su comprobante. Escríbalo y presione Siguiente.',
+}
+
+/** Fecha del escaneo usable; si es inválida o futura, hoy Caracas (cobros no pide fecha). */
+function fechaEscaneoSeguraYmd(fechaRaw: string | null | undefined): string {
+  const t = (fechaRaw || '').trim()
+  if (!t) return hoyYmdCaracas()
+  const v = validarFechaPago(t)
+  return v.valido ? t : hoyYmdCaracas()
 }
 
 function validarFechaPago(fecha: string): { valido: boolean; error?: string } {
@@ -960,8 +994,13 @@ export default function ReportePagoPage({
     }
 
     if (!institucionFinal.trim()) {
-      showNotification('error', 'Seleccione la institución financiera.')
-
+      showNotification(
+        'error',
+        isInfopagos
+          ? 'Seleccione la institución financiera.'
+          : MENSAJE_DATO_FALTANTE_COBROS[3]
+      )
+      if (!isInfopagos) setStep(3)
       return
     }
 
@@ -970,31 +1009,44 @@ export default function ReportePagoPage({
         'error',
         'Nombre de institución demasiado largo. Redúzcalo.'
       )
-
+      if (!isInfopagos) setStep(3)
       return
     }
 
-    const fechaEfectivaParaApi = fechaReporteEfectivaYmd(fechaPago)
-
-    const vFecha = validarFechaPago(fechaEfectivaParaApi)
-
-    if (!vFecha.valido) {
-      showNotification('error', vFecha.error ?? 'Fecha inválida.')
-
-      return
+    // Cobros: fecha automática (hoy si vacía/inválida). Infopagos: valida fecha del formulario.
+    let fechaEfectivaParaApi = fechaReporteEfectivaYmd(fechaPago)
+    if (!isInfopagos) {
+      fechaEfectivaParaApi = fechaEscaneoSeguraYmd(fechaPago)
+      if (fechaPago !== fechaEfectivaParaApi) setFechaPago(fechaEfectivaParaApi)
+    } else {
+      const vFecha = validarFechaPago(fechaEfectivaParaApi)
+      if (!vFecha.valido) {
+        showNotification('error', vFecha.error ?? 'Fecha inválida.')
+        return
+      }
     }
 
     const vMonto = validarMonto(monto, moneda)
 
     if (!vMonto.valido) {
-      showNotification('error', vMonto.error ?? 'Monto inválido.')
-
+      showNotification(
+        'error',
+        isInfopagos
+          ? (vMonto.error ?? 'Monto inválido.')
+          : MENSAJE_DATO_FALTANTE_COBROS[4]
+      )
+      if (!isInfopagos) setStep(4)
       return
     }
 
     if (!numeroDocumento.trim()) {
-      showNotification('error', 'Ingrese el número de documento u operación.')
-
+      showNotification(
+        'error',
+        isInfopagos
+          ? 'Ingrese el número de documento u operación.'
+          : MENSAJE_DATO_FALTANTE_COBROS[5]
+      )
+      if (!isInfopagos) setStep(5)
       return
     }
 
@@ -1003,7 +1055,7 @@ export default function ReportePagoPage({
         'error',
         'Número de documento u operación demasiado largo.'
       )
-
+      if (!isInfopagos) setStep(5)
       return
     }
 
@@ -1149,6 +1201,7 @@ export default function ReportePagoPage({
       if (res.ok && res.sugerencia) {
         const s = res.sugerencia
 
+        let instFinalLocal = ''
         const instRaw = (s.institucion_financiera || '').trim()
         if (instRaw) {
           const match = INSTITUCIONES.find(
@@ -1157,38 +1210,60 @@ export default function ReportePagoPage({
           if (match) {
             setInstitucion(match)
             setInstitucionOtros('')
+            instFinalLocal = match
           } else {
+            const otros = instRaw.slice(0, MAX_LENGTH_INSTITUCION)
             setInstitucion('Otros')
-            setInstitucionOtros(instRaw.slice(0, MAX_LENGTH_INSTITUCION))
+            setInstitucionOtros(otros)
+            instFinalLocal = otros
           }
         }
 
-        if (s.fecha_pago) setFechaPago(s.fecha_pago)
+        // Cobros: nunca pedir fecha. Escaneo inválido/futuro → hoy Caracas.
+        const fechaSegura = fechaEscaneoSeguraYmd(s.fecha_pago)
+        setFechaPago(fechaSegura)
 
+        let monedaLocal: 'BS' | 'USD' = moneda
         if (s.moneda === 'BS' || s.moneda === 'USD') {
-          const m =
+          monedaLocal =
             s.moneda === 'BS' && !puedeReportarBs
               ? 'USD'
               : (s.moneda as 'BS' | 'USD')
-          setMoneda(m)
+          setMoneda(monedaLocal)
+        } else if (!puedeReportarBs && monedaLocal === 'BS') {
+          monedaLocal = 'USD'
+          setMoneda('USD')
         }
 
+        let montoLocal = ''
         if (typeof s.monto === 'number' && Number.isFinite(s.monto)) {
-          setMonto(
-            formatoMontoParaMostrar(s.monto, s.moneda === 'USD' ? 'USD' : 'BS')
-          )
+          montoLocal = formatoMontoParaMostrar(s.monto, monedaLocal)
+          setMonto(montoLocal)
         }
 
+        let numDocLocal = ''
         if ((s.numero_operacion || '').trim()) {
-          setNumeroDocumento(
-            s.numero_operacion.trim().slice(0, MAX_LENGTH_NUMERO_OPERACION)
-          )
+          numDocLocal = s.numero_operacion
+            .trim()
+            .slice(0, MAX_LENGTH_NUMERO_OPERACION)
+          setNumeroDocumento(numDocLocal)
         }
-        // Si Gemini digitaliza con éxito, llevar directo a confirmación
-        // para evitar pasos redundantes.
+
+        // Escaneo autónomo: si Gemini leyó todo → confirmación.
+        // Si falta un dato → solo ese paso (resto prellenado). Sin pedir fecha.
         if (!isInfopagos) {
-          dismissNotification()
-          setStep(7)
+          const next = pasoFaltanteCobros(
+            instFinalLocal,
+            montoLocal,
+            monedaLocal,
+            numDocLocal
+          )
+          if (next === 7) {
+            dismissNotification()
+          } else {
+            showNotification('error', MENSAJE_DATO_FALTANTE_COBROS[next])
+          }
+          setStep(next)
           return
         }
       } else {
@@ -1902,6 +1977,18 @@ export default function ReportePagoPage({
                       return
                     }
 
+                    if (!isInfopagos) {
+                      // Si el escaneo ya trajo monto/operación, saltar a lo faltante o confirmar.
+                      const next = pasoFaltanteCobros(
+                        institucionFinal,
+                        monto,
+                        moneda,
+                        numeroDocumento
+                      )
+                      dismissNotification()
+                      setStep(next === 3 ? 4 : next)
+                      return
+                    }
                     setStep(4)
                   }}
                 >
@@ -2048,13 +2135,18 @@ export default function ReportePagoPage({
                 <Button
                   className="min-h-[48px] min-w-0 flex-1 touch-manipulation bg-slate-900 font-semibold text-white hover:bg-slate-800"
                   onClick={() => {
-                    const vF = validarFechaPago(
-                      fechaReporteEfectivaYmd(fechaPago)
-                    )
-
-                    if (!vF.valido) {
-                      showNotification('error', vF.error ?? 'Fecha inválida.')
-                      return
+                    if (isInfopagos) {
+                      const vF = validarFechaPago(
+                        fechaReporteEfectivaYmd(fechaPago)
+                      )
+                      if (!vF.valido) {
+                        showNotification('error', vF.error ?? 'Fecha inválida.')
+                        return
+                      }
+                    } else {
+                      // Cobros: fecha automática; nunca bloquear por fecha.
+                      const fechaSegura = fechaEscaneoSeguraYmd(fechaPago)
+                      if (fechaPago !== fechaSegura) setFechaPago(fechaSegura)
                     }
 
                     const vM = validarMonto(monto, moneda)
@@ -2077,6 +2169,17 @@ export default function ReportePagoPage({
                       return
                     }
 
+                    if (!isInfopagos) {
+                      const next = pasoFaltanteCobros(
+                        institucionFinal,
+                        monto,
+                        moneda,
+                        numeroDocumento
+                      )
+                      dismissNotification()
+                      setStep(next === 4 ? 5 : next)
+                      return
+                    }
                     setStep(5)
                   }}
                 >
@@ -2426,6 +2529,27 @@ export default function ReportePagoPage({
               </div>
 
               <div className="flex flex-wrap gap-2 pt-2 sm:flex-nowrap">
+                <Button
+                  variant="outline"
+                  className="h-[52px] min-w-[100px] flex-1 touch-manipulation border-slate-300 text-slate-900 hover:bg-slate-50"
+                  onClick={() => {
+                    if (isInfopagos) {
+                      setStep(6)
+                      return
+                    }
+                    // Cobros: volver al primer dato incompleto o al monto (paso 4).
+                    const next = pasoFaltanteCobros(
+                      institucionFinal,
+                      monto,
+                      moneda,
+                      numeroDocumento
+                    )
+                    setStep(next === 7 ? 4 : next)
+                  }}
+                  disabled={loading}
+                >
+                  Atrás
+                </Button>
                 <Button
                   className="h-[52px] min-w-0 flex-1 touch-manipulation rounded-lg bg-emerald-600 px-4 text-base font-bold text-white shadow-sm transition-all hover:bg-emerald-700 hover:shadow-md"
                   onClick={handleEnviar}

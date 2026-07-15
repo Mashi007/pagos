@@ -123,7 +123,17 @@ function validadoresPantallaFlags(p: PrestamoCandidatoDriveFila['payload']) {
         p.validador_v_max_un_prestamo_ok ??
         !(esVe && nAprob >= 1)) === true
   const repetidaEnHoja = p.duplicada_en_hoja === true
-  return { formatoOk, tablaVOk, repetidaEnHoja, nPrest, nAprob, nLiq, esV, esVe, esJ }
+  return {
+    formatoOk,
+    tablaVOk,
+    repetidaEnHoja,
+    nPrest,
+    nAprob,
+    nLiq,
+    esV,
+    esVe,
+    esJ,
+  }
 }
 
 /** Parseo ligero alineado a columna Q (DD/MM/YYYY, YYYY-MM-DD o serial Sheets/Excel). */
@@ -389,7 +399,8 @@ function exportarCsvVistaActual(filas: PrestamoCandidatoDriveFila[]) {
     let estado = 'revisión'
     if (!ok) estado = `inválida: ${String(p.cedula_error ?? '')}`
     else if (!tablaVOk) estado = 'tipo_VE: ya tiene préstamo APROBADO'
-    else if (repetidaEnHoja) estado = 'listo (cédula repetida en hoja, informativo)'
+    else if (repetidaEnHoja)
+      estado = 'listo (cédula repetida en hoja, informativo)'
     else estado = 'listo'
     const fechaQNorm = colQFechaIsoDisplay(p) || strPayload(p, 'col_q_fecha')
     lines.push(
@@ -401,7 +412,7 @@ function exportarCsvVistaActual(filas: PrestamoCandidatoDriveFila[]) {
         esJ ? 'si' : 'no',
         formatoOk ? 'ok' : 'no',
         tablaVOk ? 'ok' : 'no',
-        repetidaEnHoja ? 'repetida_hoja_info' : '—',
+        repetidaEnHoja ? 'repetida_hoja_info' : '-',
         strPayload(p, 'col_n_total_financiamiento'),
         strPayload(p, 'col_s_modalidad_pago'),
         fechaQNorm,
@@ -844,7 +855,8 @@ export default function ActualizacionesPrestamosDrivePage() {
 
   const estadoFila = useCallback((fila: PrestamoCandidatoDriveFila) => {
     const p = fila.payload
-    const { formatoOk, tablaVOk, repetidaEnHoja, nAprob } = validadoresPantallaFlags(p)
+    const { formatoOk, tablaVOk, repetidaEnHoja, nAprob } =
+      validadoresPantallaFlags(p)
     const qRaw = String(p.col_q_fecha ?? '').trim()
     const qIso = String(p.col_q_fecha_iso ?? '').trim()
     if (!formatoOk) {
@@ -1068,10 +1080,10 @@ export default function ActualizacionesPrestamosDrivePage() {
           </div>
           <p className="max-w-3xl text-xs leading-snug text-muted-foreground">
             <strong className="font-medium text-foreground">Aclaración:</strong>{' '}
-            «Guardar válidas» solo persiste las filas «Guardables». Los dos ✓
-            de Val. son formato y cupo en BD (V/E: máx. un APROBADO; J: varios;
-            LIQUIDADO no cuenta). Repetir cédula en la hoja no bloquea. Si faltan
-            datos para el servidor, la fila puede verse en{' '}
+            «Guardar válidas» solo persiste las filas «Guardables». Los dos ✓ de
+            Val. son formato y cupo en BD (V/E: máx. un APROBADO; J: varios;
+            LIQUIDADO no cuenta). Repetir cédula en la hoja no bloquea. Si
+            faltan datos para el servidor, la fila puede verse en{' '}
             <strong className="font-medium text-sky-900">azul claro</strong> con
             ✓✓✓; el{' '}
             <strong className="font-medium text-emerald-900">

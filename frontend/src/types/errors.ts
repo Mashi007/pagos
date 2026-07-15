@@ -99,10 +99,8 @@ export function isNetworkOrTimeoutError(error: unknown): boolean {
   if (isAxiosTimeoutError(error)) return true
   if (isAxiosError(error) && error.response == null) return true
   const msg = getErrorMessage(error).toLowerCase()
-  return (
-    /timeout|network|econnaborted|502|503|504|failed to fetch|ns_binding_aborted|load failed/i.test(
-      msg
-    )
+  return /timeout|network|econnaborted|502|503|504|failed to fetch|ns_binding_aborted|load failed/i.test(
+    msg
   )
 }
 

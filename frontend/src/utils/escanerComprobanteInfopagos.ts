@@ -80,7 +80,8 @@ export function numeroOperacionOcrParaReescaneo(
 ): string {
   const raw = (sugerencia.numero_operacion || '').trim()
   const aux = `${raw}\n${(sugerencia.notas_modelo || '').trim()}`
-  const serial = extraerSerialMercantil7400(raw) || extraerSerialMercantil7400(aux)
+  const serial =
+    extraerSerialMercantil7400(raw) || extraerSerialMercantil7400(aux)
   if (serial) return serial
   if (!raw || esNumeroDocumentoSinteticoOcrInvalido(raw)) return ''
   return raw
@@ -283,7 +284,9 @@ export function mergeCamposFormularioDesdeSugerenciaOcr(
     actual.institucion,
     actual.otroInstitucion
   )
-  const fechaExtraida = fechaPagoDesdeExtraccionOcrConfiable(sugerencia.fecha_pago)
+  const fechaExtraida = fechaPagoDesdeExtraccionOcrConfiable(
+    sugerencia.fecha_pago
+  )
   const numeroExtraido = (sugerencia.numero_operacion || '').trim()
   const mon = sugerencia.moneda === 'BS' ? 'BS' : 'USD'
   const montoNum =
