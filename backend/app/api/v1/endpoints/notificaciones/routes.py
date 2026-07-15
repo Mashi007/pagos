@@ -2,8 +2,9 @@
 Endpoints de notificaciones a clientes retrasados.
 Todo el router exige rol admin (Depends(require_admin) a nivel de APIRouter).
 Datos reales desde BD: cuotas (fecha_vencimiento, pagado) y clientes.
-Reglas: pestañas por días hasta vencimiento y mora (retraso: 1 y 10 días calendario;
-10 días solo si el préstamo tiene entre 2 y 3 cuotas en mora (inclusive); con 1 o con 4+ no aplica).
+Reglas: pestañas por días hasta vencimiento y mora (retraso: 1 y 10+ días calendario;
+10+ días: exactamente 1 cuota en mora con atraso >= 10; permanece hasta pagar esa cuota;
+con 0 o con 2+ no aplica).
 Configuración de envíos (habilitado/CCO por tipo) desde tabla configuracion (notificaciones_envios).
 CRUD de plantillas en plantillas_notificacion; envío puede usar plantilla por tipo vía plantilla_id en config.
 """
@@ -12,7 +13,7 @@ import os
 import uuid
 import logging
 from collections import defaultdict
-from datetime import date, datetime, time as dt_time, timedelta
+from datetime import date, datetime, timedelta
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Body, Query, File, UploadFile, BackgroundTasks
@@ -1961,111 +1962,71 @@ TIPOS_TAB_NOTIFICACIONES = (
 )
 
 
-def _get_rebotados_por_tipo(
-    db: Session,
-    tipo: str,
-    *,
-    fecha_desde: Optional[date] = None,
-    fecha_hasta: Optional[date] = None,
-) -> List[dict]:
+def _get_rebotados_por_tipo(db: Session, tipo: str) -> List[dict]:
     """
-    Lista de envios fallidos para el tipo de pestana.
-
-    Criterio de producto (misma que el KPI «Correos rebotados»):
-    - Tabla envios_notificacion
-    - tipo_tab = pestana
-    - exito = False
-
-    Importante: exito=False NO es un bounce del buzon del cliente.
-    Se marca cuando send_email (SMTP) falla al momento del envio
-    (servidor rechazo destinatario, SMTP mal configurado, timeout, etc.).
-    No prueba que el correo haya llegado y luego rebote.
-
-    Solo se proyectan columnas ligeras (sin mensaje_html / comprobante_pdf)
-    para poder exportar miles de filas sin OOM/timeout.
+    Lista de correos no entregados (rebotados) para el tipo de pestaÃƒÂ±a.
+    Datos desde tabla envios_notificacion (exito=False).
     """
     if tipo not in TIPOS_TAB_NOTIFICACIONES:
         return []
-    conditions = [
-        EnvioNotificacion.tipo_tab == tipo,
-        EnvioNotificacion.exito.is_(False),
-    ]
-    if fecha_desde is not None:
-        conditions.append(
-            EnvioNotificacion.fecha_envio
-            >= datetime.combine(fecha_desde, dt_time.min)
+    try:
+        rows = (
+            db.execute(
+                select(EnvioNotificacion)
+                .where(
+                    EnvioNotificacion.tipo_tab == tipo,
+                    EnvioNotificacion.exito.is_(False),
+                )
+                .order_by(EnvioNotificacion.fecha_envio.desc())
+            )
+            .scalars().all()
         )
-    if fecha_hasta is not None:
-        conditions.append(
-            EnvioNotificacion.fecha_envio
-            <= datetime.combine(fecha_hasta, dt_time.max)
-        )
-    rows = db.execute(
-        select(
-            EnvioNotificacion.cedula,
-            EnvioNotificacion.nombre,
-            EnvioNotificacion.email,
-        )
-        .where(*conditions)
-        .order_by(EnvioNotificacion.fecha_envio.desc())
-    ).all()
-    return [
-        {
-            "cedula": (r.cedula or ""),
-            "nombre": (r.nombre or ""),
-            "correo": (r.email or ""),
-        }
-        for r in rows
-    ]
+        return [
+            {
+                "email": r.email or "",
+                "nombre": r.nombre or "",
+                "cedula": r.cedula or "",
+                "fecha_envio": r.fecha_envio.isoformat() if r.fecha_envio else "",
+                "error_mensaje": r.error_mensaje or "",
+            }
+            for r in rows
+        ]
+    except Exception as e:
+        logger.warning("_get_rebotados_por_tipo: %s", e)
+        return []
+
 
 @router.get("/rebotados-por-tab", response_model=dict)
 def get_rebotados_por_tab(
     tipo: str = Query(
         ...,
-        description="tipo_tab",
-    ),
-    fecha_desde: Optional[date] = Query(
-        None, description="Filtrar rebotados desde esta fecha (fecha_envio)."
-    ),
-    fecha_hasta: Optional[date] = Query(
-        None, description="Filtrar rebotados hasta esta fecha (fecha_envio)."
+        description="tipo_tab: dias_5, dias_3, dias_1, hoy, dias_1_retraso, dias_10_retraso, d_2_antes_vencimiento, prejudicial, masivos, liquidados",
     ),
     db: Session = Depends(get_db),
 ):
-    """Lista de correos no entregados (rebotados) para la pestana."""
+    """Lista de correos no entregados (rebotados) para la pestaÃƒÂ±a. Para generar informe Excel en frontend o descargar Excel."""
     if tipo not in TIPOS_TAB_NOTIFICACIONES:
-        raise HTTPException(
-            status_code=400,
-            detail=f"tipo debe ser uno de: {', '.join(TIPOS_TAB_NOTIFICACIONES)}",
-        )
-    if fecha_desde and fecha_hasta and fecha_desde > fecha_hasta:
-        raise HTTPException(
-            status_code=400,
-            detail="fecha_desde no puede ser posterior a fecha_hasta.",
-        )
-    items = _get_rebotados_por_tipo(
-        db, tipo, fecha_desde=fecha_desde, fecha_hasta=fecha_hasta
-    )
+        raise HTTPException(status_code=400, detail=f"tipo debe ser uno de: {', '.join(TIPOS_TAB_NOTIFICACIONES)}")
+    items = _get_rebotados_por_tipo(db, tipo)
     return {"items": items, "total": len(items)}
 
 
-def _generar_excel_auditoria_correos_rebotados(items: List[dict]) -> bytes:
-    """Excel de auditoria: solo cedula, nombre y correo."""
+def _generar_excel_rebotados(items: List[dict], tipo: str) -> bytes:
+    """Genera Excel con lista de correos rebotados (no entregados)."""
     import io
     import openpyxl
-
     wb = openpyxl.Workbook()
     ws = wb.active
-    ws.title = "Auditoria de correos"
-    ws.append(["Cedula", "Nombre", "Correo"])
+    ws.title = "Correos no entregados"
+    ws.append(["Email", "Nombre", "Cédula", "Fecha envío", "Motivo rebote"])
     for r in items:
-        ws.append(
-            [
-                r.get("cedula") or "",
-                r.get("nombre") or "",
-                r.get("correo") or "",
-            ]
-        )
+        ws.append([
+            r.get("email") or "",
+            r.get("nombre") or "",
+            r.get("cedula") or "",
+            r.get("fecha_envio") or "",
+            r.get("error_mensaje") or "",
+        ])
     buf = io.BytesIO()
     wb.save(buf)
     return buf.getvalue()
@@ -2073,48 +2034,19 @@ def _generar_excel_auditoria_correos_rebotados(items: List[dict]) -> bytes:
 
 @router.get("/rebotados-por-tab/excel")
 def get_rebotados_por_tab_excel(
-    tipo: str = Query(..., description="Tipo de pestana"),
-    fecha_desde: Optional[date] = Query(
-        None, description="Desde (fecha_envio, inclusive). Sin fechas = todos (como el KPI)."
-    ),
-    fecha_hasta: Optional[date] = Query(
-        None, description="Hasta (fecha_envio, inclusive). Sin fechas = todos (como el KPI)."
-    ),
+    tipo: str = Query(..., description="Tipo de pestaÃƒÂ±a: dias_5, dias_3, dias_1, hoy, dias_1_retraso"),
     db: Session = Depends(get_db),
 ):
-    """Descarga Excel Auditoria de correos (cedula, nombre, correo).
-
-    Sin fecha_desde/fecha_hasta: mismos rebotados que el KPI (historico del tipo_tab).
-    Con ambas fechas: solo envios fallidos en ese rango.
-    """
+    """Descarga informe Excel de correos no entregados (rebotados) para la pestaÃƒÂ±a."""
     if tipo not in TIPOS_TAB_NOTIFICACIONES:
-        raise HTTPException(
-            status_code=400,
-            detail=f"tipo debe ser uno de: {', '.join(TIPOS_TAB_NOTIFICACIONES)}",
-        )
-    if (fecha_desde is None) ^ (fecha_hasta is None):
-        raise HTTPException(
-            status_code=400,
-            detail="Indique ambas fechas (desde y hasta) o ninguna para exportar todos.",
-        )
-    if fecha_desde is not None and fecha_hasta is not None and fecha_desde > fecha_hasta:
-        raise HTTPException(
-            status_code=400,
-            detail="fecha_desde no puede ser posterior a fecha_hasta.",
-        )
-    items = _get_rebotados_por_tipo(
-        db, tipo, fecha_desde=fecha_desde, fecha_hasta=fecha_hasta
-    )
-    content = _generar_excel_auditoria_correos_rebotados(items)
-    if fecha_desde is not None and fecha_hasta is not None:
-        rango = f"{fecha_desde.isoformat()}_{fecha_hasta.isoformat()}"
-    else:
-        rango = "todos"
-    filename = f"Auditoria_de_correos_{tipo}_{rango}.xlsx"
+        raise HTTPException(status_code=400, detail=f"tipo debe ser uno de: {', '.join(TIPOS_TAB_NOTIFICACIONES)}")
+    items = _get_rebotados_por_tipo(db, tipo)
+    content = _generar_excel_rebotados(items, tipo)
+    filename = f"correos_no_entregados_{tipo}.xlsx"
     return Response(
         content=content,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
     )
 
 
@@ -2402,12 +2334,12 @@ def get_clientes_retrasados(
     Politica: no se listan avisos antes del vencimiento ni el dia del vencimiento;
     el primer seguimiento es el dia calendario siguiente (ej. vence 22 -> entra el 23).
     1. 1 dia despues del vencimiento (ayer fue la fecha de vencimiento)
-    2. 10 dias despues del vencimiento (exactamente 10 dias de atraso calendario y entre 2 y 3
-       cuotas en mora en el prestamo inclusive; con 1 o con 4 o mas cuotas atrasadas no entra)
+    2. 10 o mas dias despues del vencimiento (atraso calendario >= 10 y exactamente
+       1 cuota en mora en el prestamo; permanece hasta pagar esa cuota; con 0 o con 2+ no entra)
     3. Credito pagado (liquidados): prestamos con estado LIQUIDADO (misma columna estado en BD).
        Se muestran total_financiamiento y suma de abonos en cuotas para referencia.
     Claves dias_5, dias_3, dias_1, hoy se devuelven vacias (compatibilidad API).
-    Datos desde BD: cuotas pendientes filtradas por fecha_vencimiento (hoy-1, hoy-10)
+    Datos desde BD: cuotas pendientes (1 día: vencimiento = ayer; 10+: vencimiento <= hoy-10)
     y tabla prestamos/cuotas (liquidados).
     Solo cuotas con fecha_pago nula: si se registra un pago que liquida la cuota,
     deja de listarse en la siguiente lectura (sin depender de un job de refresco).
@@ -2510,8 +2442,8 @@ def get_cuotas_pendiente_2_dias_antes(
     ),
 ):
     """
-    Listado ligero: solo cuotas en estado PENDIENTE con fecha_vencimiento = hoy + 2 (Caracas).
-    Incluye clientes al corriente (recordatorio preventivo).
+    Listado ligero: solo cuotas en estado PENDIENTE con fecha_vencimiento = hoy + 2 (Caracas),
+    excluyendo préstamos sin cuotas en atraso (cuotas_atrasadas = 0: al corriente en vencimientos pasados).
     Submenú «2 días antes»; configuración de envíos independiente (PAGO_2_DIAS_ANTES_PENDIENTE).
     """
     try:
@@ -2796,14 +2728,14 @@ def get_notificaciones_tabs_data(
     Datos para envio de notificaciones (retrasadas, prejudicial).
     Politica: sin listas previas ni "hoy vence"; solo cuotas ya vencidas (1 y 10 dias de atraso calendario)
     y prejudicial. Claves dias_5, dias_3, dias_1, hoy van vacias (compat API).
-    Fuente: cuotas pendientes con fecha_vencimiento en {hoy-1, hoy-10} (consulta acotada).
+    Fuente: cuotas pendientes con vencimiento = ayer (1 día) o <= hoy-10 (10+ días).
     Fecha de corte: America/Caracas.
 
     Pestaña 1 día de retraso (dias_1_retraso): cuota con vencimiento = ayer (exactamente 1 día
     calendario después de la fecha de vencimiento), sin fecha_pago y con saldo pendiente.
 
-    Pestaña 10 días (dias_10_retraso): misma regla de fecha (vencimiento = hoy − 10 días) y además
-    el préstamo debe tener entre 2 y 3 cuotas en mora (inclusive); con 1 o con 4 o más no aplica.
+    Pestaña 10 días (dias_10_retraso): atraso >= 10 días (vencimiento <= hoy − 10) y exactamente
+    1 cuota en mora; permanece hasta que esa cuota se pague; con 0 o con 2 o más no aplica.
 
     Prejudicial: por titular del préstamo (prestamos.cliente_id), al menos el mínimo configurado
     de cuotas con cuotas.estado en (VENCIDO, MORA), fecha_vencimiento < hoy, sin fecha_pago y

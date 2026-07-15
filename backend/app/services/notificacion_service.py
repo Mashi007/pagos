@@ -167,6 +167,20 @@ def get_cuotas_pendientes_por_vencimientos(
     return [(row[0], row[1]) for row in rows]
 
 
+def get_cuotas_pendientes_vencidas_hasta(
+    db: Session, fecha_vencimiento_max: date
+) -> List[Tuple[Cuota, Cliente]]:
+    """
+    Cuotas pendientes notificables con fecha_vencimiento <= fecha_vencimiento_max
+    (p. ej. hoy − 10 para «10 días o más de atraso»).
+    """
+    q = _select_cuotas_pendientes_con_cliente().where(
+        Cuota.fecha_vencimiento <= fecha_vencimiento_max
+    )
+    rows = db.execute(q).all()
+    return [(row[0], row[1]) for row in rows]
+
+
 def sum_saldo_pendiente_total_por_prestamos(
     db: Session, prestamo_ids: Sequence[int]
 ) -> Dict[int, float]:
@@ -308,20 +322,31 @@ def contar_cuotas_atraso_por_prestamos(
     return out
 
 
-# Listado / envío «10 días de atraso» (calendario): solo préstamos cuyo conteo de cuotas en mora
-# (misma regla que `contar_cuotas_atraso_por_prestamos`) está en [MIN, MAX] inclusive.
-# Con 1 cuota atrasada o con 4 o más no aplica este criterio.
-MIN_CUOTAS_ATRASADAS_PARA_LISTADO_10_DIAS = 2
-MAX_CUOTAS_ATRASADAS_PARA_LISTADO_10_DIAS = 3
+# Listado / envío «10 días de atraso» (calendario): préstamo con exactamente
+# 1 cuota en mora (misma regla que `contar_cuotas_atraso_por_prestamos`) y esa cuota
+# con atraso >= 10 días (fecha_vencimiento <= hoy − 10). Permanecen en el listado
+# hasta que la cuota se pague. Con 0 o con 2 o más cuotas atrasadas no aplica.
+MIN_CUOTAS_ATRASADAS_PARA_LISTADO_10_DIAS = 1
+MAX_CUOTAS_ATRASADAS_PARA_LISTADO_10_DIAS = 1
+MIN_DIAS_ATRASO_PARA_LISTADO_10_DIAS = 10
 
 
 def prestamo_aplica_listado_10_dias_por_cuotas_atrasadas(cuotas_atrasadas: int) -> bool:
-    """True si el préstamo puede aparecer en el listado de mora a 10 días calendario."""
+    """True si el préstamo puede aparecer en el listado de mora a 10+ días calendario."""
     try:
         n = int(cuotas_atrasadas or 0)
     except (TypeError, ValueError):
         n = 0
     return MIN_CUOTAS_ATRASADAS_PARA_LISTADO_10_DIAS <= n <= MAX_CUOTAS_ATRASADAS_PARA_LISTADO_10_DIAS
+
+
+def cuota_aplica_listado_10_dias_por_dias_atraso(dias_atraso: int) -> bool:
+    """True si la cuota lleva al menos 10 días de atraso calendario."""
+    try:
+        n = int(dias_atraso or 0)
+    except (TypeError, ValueError):
+        n = 0
+    return n >= MIN_DIAS_ATRASO_PARA_LISTADO_10_DIAS
 
 
 def get_cuotas_pendientes_con_cliente(db: Session) -> List[Tuple[Cuota, Cliente]]:
@@ -345,12 +370,38 @@ def get_primer_item_ejemplo_paquete_prueba(db: Session, tipo: str) -> Optional[d
         "PAGO_1_DIA_ATRASADO",
         "PAGO_10_DIAS_ATRASADO",
     ):
-        dias_map = {
-            "PAGO_1_DIA_ATRASADO": 1,
-            "PAGO_10_DIAS_ATRASADO": 10,
-        }
-        dias = dias_map[tipo]
-        target = hoy - timedelta(days=dias)
+        if tipo == "PAGO_1_DIA_ATRASADO":
+            target = hoy - timedelta(days=1)
+            q = (
+                select(Cuota, Cliente)
+                .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+                .join(Cliente, Prestamo.cliente_id == Cliente.id)
+                .where(Cuota.fecha_pago.is_(None))
+                .where(CUOTA_ESTADO_NO_PAGADA_PARA_NOTIF)
+                .where(SALDO_PENDIENTE_CUOTA > TOL_SALDO_CUOTA_NOTIFICACION)
+                .where(~Prestamo.estado.in_(("LIQUIDADO", "DESISTIMIENTO")))
+                .where(Cuota.fecha_vencimiento == target)
+                .order_by(Cuota.id)
+                .limit(120)
+            )
+            rows = db.execute(q).all()
+            if not rows:
+                return None
+            pids = sorted({int(r[0].prestamo_id) for r in rows if r and r[0] is not None})
+            counts = contar_cuotas_atraso_por_prestamos(db, pids, fecha_referencia=hoy)
+            totales = sum_saldo_pendiente_total_por_prestamos(db, pids)
+            cuota, cliente = rows[0][0], rows[0][1]
+            return format_cuota_item(
+                cliente,
+                cuota,
+                dias_atraso=1,
+                cuotas_atrasadas=counts.get(cuota.prestamo_id, 0),
+                for_tab=True,
+                total_pendiente_pagar=totales.get(cuota.prestamo_id),
+            )
+
+        # PAGO_10_DIAS_ATRASADO: 1 cuota en mora con atraso >= 10 días (hasta que se pague).
+        fv_max = hoy - timedelta(days=MIN_DIAS_ATRASO_PARA_LISTADO_10_DIAS)
         q = (
             select(Cuota, Cliente)
             .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
@@ -359,9 +410,9 @@ def get_primer_item_ejemplo_paquete_prueba(db: Session, tipo: str) -> Optional[d
             .where(CUOTA_ESTADO_NO_PAGADA_PARA_NOTIF)
             .where(SALDO_PENDIENTE_CUOTA > TOL_SALDO_CUOTA_NOTIFICACION)
             .where(~Prestamo.estado.in_(("LIQUIDADO", "DESISTIMIENTO")))
-            .where(Cuota.fecha_vencimiento == target)
-            .order_by(Cuota.id)
-            .limit(120)
+            .where(Cuota.fecha_vencimiento <= fv_max)
+            .order_by(Cuota.fecha_vencimiento.asc(), Cuota.id.asc())
+            .limit(200)
         )
         rows = db.execute(q).all()
         if not rows:
@@ -372,14 +423,18 @@ def get_primer_item_ejemplo_paquete_prueba(db: Session, tipo: str) -> Optional[d
         for row in rows:
             cuota, cliente = row[0], row[1]
             ca = counts.get(cuota.prestamo_id, 0)
-            if tipo == "PAGO_10_DIAS_ATRASADO" and not prestamo_aplica_listado_10_dias_por_cuotas_atrasadas(
-                ca
-            ):
+            if not prestamo_aplica_listado_10_dias_por_cuotas_atrasadas(ca):
+                continue
+            fv = cuota.fecha_vencimiento
+            if not fv:
+                continue
+            dias_atraso = (hoy - fv).days
+            if not cuota_aplica_listado_10_dias_por_dias_atraso(dias_atraso):
                 continue
             return format_cuota_item(
                 cliente,
                 cuota,
-                dias_atraso=dias,
+                dias_atraso=dias_atraso,
                 cuotas_atrasadas=ca,
                 for_tab=True,
                 total_pendiente_pagar=totales.get(cuota.prestamo_id),
