@@ -972,7 +972,7 @@ class PrestamoService {
       const axiosInstance = apiClient.getAxiosInstance()
 
       const response = await axiosInstance.get(
-        `${this.baseUrl}/${prestamoId}/estado-cuenta/pdf`,
+        `${this.baseUrl}/${prestamoId}/estado-cuenta/pdf?t=${Date.now()}`,
         { responseType: 'blob' }
       )
 

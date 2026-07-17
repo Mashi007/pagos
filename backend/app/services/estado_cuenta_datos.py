@@ -311,6 +311,8 @@ def listar_pagos_realizados_estado_cuenta(db: Session, prestamo_ids: List[int]) 
     Incluye asientos Conciliar ABONOS aunque queden PENDIENTE sin filas en cuota_pagos
     (p. ej. exceso sobre cupo de cuotas tras comprobantes OCR). Antes solo entraba estado=PAGADO
     y el asiento ABONOS-NOTIF-* desaparecía del PDF frente a «Pagos registrados en cartera».
+
+    Excluye pagos cuya cédula no coincide con la del préstamo (asignación errónea a otro crédito).
   """
     if not prestamo_ids:
         return []
@@ -318,6 +320,16 @@ def listar_pagos_realizados_estado_cuenta(db: Session, prestamo_ids: List[int]) 
     if not ids:
         return []
     from app.services.pagos_sql_where import _where_pago_elegible_reaplicacion_cascada
+    from app.utils.cedula_almacenamiento import normalizar_cedula_almacenamiento
+
+    cedula_por_prestamo: Dict[int, str] = {}
+    for pr in db.execute(select(Prestamo).where(Prestamo.id.in_(ids))).scalars().all():
+        pid = int(getattr(pr, "id", 0) or 0)
+        if pid <= 0:
+            continue
+        cedula_por_prestamo[pid] = (
+            normalizar_cedula_almacenamiento(getattr(pr, "cedula", None) or "") or ""
+        ).upper().replace("-", "")
 
     rows = db.execute(
         select(Pago)
@@ -333,6 +345,22 @@ def listar_pagos_realizados_estado_cuenta(db: Session, prestamo_ids: List[int]) 
         pg = raw[0] if hasattr(raw, "__getitem__") else raw
         pago_id = int(getattr(pg, "id", 0) or 0)
         prestamo_id = getattr(pg, "prestamo_id", None)
+        if prestamo_id is not None:
+            ced_prestamo = cedula_por_prestamo.get(int(prestamo_id), "")
+            ced_pago = (
+                normalizar_cedula_almacenamiento(getattr(pg, "cedula_cliente", None) or "")
+                or ""
+            ).upper().replace("-", "")
+            if ced_prestamo and ced_pago and ced_prestamo != ced_pago:
+                logger.warning(
+                    "estado_cuenta: omitiendo pago_id=%s prestamo_id=%s "
+                    "(cedula pago %s != cedula prestamo %s)",
+                    pago_id,
+                    prestamo_id,
+                    ced_pago,
+                    ced_prestamo,
+                )
+                continue
         banco = (getattr(pg, "institucion_bancaria", None) or "").strip() or "no disponible"
         fp = getattr(pg, "fecha_pago", None)
         fr = getattr(pg, "fecha_registro", None)

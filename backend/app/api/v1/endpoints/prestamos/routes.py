@@ -6316,6 +6316,11 @@ def get_estado_cuenta_prestamo_pdf(
 
                 "X-Content-Type-Options": "nosniff",
 
+                # Evita que el navegador reutilice un PDF viejo tras cambios en pagos/cuotas.
+                "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+
+                "Pragma": "no-cache",
+
             },
 
         )
