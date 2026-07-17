@@ -982,17 +982,16 @@ async def enviar_reporte_publico(
             if confirmo_humano:
                 pr.gemini_coincide_exacto = "true"
                 pr.gemini_comentario = ""
-                falla_validadores = False
-            else:
-                try:
-                    falla_validadores = reportado_falla_validadores_cobros(db_post, pr)
-                except Exception as val_err:
-                    logger.warning(
-                        "[COBROS_PUBLIC] Validadores post-Gemini ref=%s (revision manual): %s",
-                        referencia,
-                        val_err,
-                    )
-                    falla_validadores = True
+            # Human confirmation cannot bypass deterministic duplicate rules.
+            try:
+                falla_validadores = reportado_falla_validadores_cobros(db_post, pr)
+            except Exception as val_err:
+                logger.warning(
+                    "[COBROS_PUBLIC] Validadores post-Gemini ref=%s (revision manual): %s",
+                    referencia,
+                    val_err,
+                )
+                falla_validadores = True
             if cpr.aplicar_revision_manual_por_monto_alto_en_reportado(
                 monto=monto,
                 moneda_upper=mon_norm.moneda_upper,

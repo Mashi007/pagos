@@ -889,26 +889,9 @@ def crear_pago_reportado_con_referencia_o_retry(
                     None,
                     "Ya recibimos este número de operación recientemente. Se conserva el primer reporte y se eliminaron duplicados enviados en segundos.",
                 )
-            from app.api.v1.endpoints.cobros.reportados_dedup_helpers import (
-                _diagnostico_duplicado_mismo_prestamo_antes_de_crear,
-                _eliminar_reportado_duplicado_mismo_prestamo,
-                _mensaje_duplicado_mismo_prestamo_ya_en_cartera,
-            )
-
-            dup_mismo = _diagnostico_duplicado_mismo_prestamo_antes_de_crear(
-                db,
-                tipo_cedula=tipo_cedula.strip().upper(),
-                numero_cedula=numero_cedula.strip(),
-                numero_operacion=numero_operacion_limpio,
-                institucion_financiera=institucion_financiera.strip()[:100],
-            )
-            dup_mismo_msg = (
-                _mensaje_duplicado_mismo_prestamo_ya_en_cartera(dup_mismo)
-                if dup_mismo is not None
-                else None
-            )
-            if dup_mismo_msg:
-                return None, None, dup_mismo_msg
+            # A document number already in the portfolio must not block the customer.
+            # Keep the report for manual review; approval/import safeguards still
+            # prevent applying the same payment twice.
             referencia = generar_referencia_interna(db)
             nombres, apellidos = nombres_y_apellidos_desde_cliente_nombres(cliente_nombres)
             img_ex = (comprobante_imagen_id_existente or "").strip()
@@ -975,18 +958,6 @@ def crear_pago_reportado_con_referencia_o_retry(
             db.add(pr)
             db.commit()
             db.refresh(pr)
-            if _eliminar_reportado_duplicado_mismo_prestamo(
-                db, pr, via=log_tag_duplicate
-            ):
-                return (
-                    None,
-                    None,
-                    dup_mismo_msg
-                    or (
-                        "DUPLICADO MISMO PRESTAMO: serial ya aplicado en este crédito. "
-                        "No se admite reaplicar (ningún banco)."
-                    ),
-                )
             return pr, referencia, None
         except ProgrammingError as pe:
             db.rollback()

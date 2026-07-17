@@ -564,15 +564,7 @@ def _list_pagos_reportados_payload(
     """
     _extender_timeout_listado_cobros(db)
     fecha_desde, fecha_hasta = _clamp_fechas_listado_cobros(fecha_desde, fecha_hasta)
-    if estado not in ("rechazado", "importado"):
-        from .reportados_dedup_helpers import _purgar_duplicados_mismo_prestamo_en_cola
-
-        _purgar_duplicados_mismo_prestamo_en_cola(
-            db,
-            limit=24,
-            fecha_desde=fecha_desde,
-            fecha_hasta=fecha_hasta,
-        )
+    # Repeated documents remain queued; listing them must never delete reports.
     if cedula and str(cedula).strip():
         _reencolar_escaner_infopagos_aprobado_sin_gestion_por_cedula(
             db,
