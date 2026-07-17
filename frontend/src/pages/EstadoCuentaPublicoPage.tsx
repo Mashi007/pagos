@@ -283,6 +283,11 @@ function EstadoCuentaPublicoPage() {
 
   const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null)
 
+  const [pdfGeneradoEn, setPdfGeneradoEn] = useState<Date | null>(null)
+
+  const [actualizandoEstadoCuenta, setActualizandoEstadoCuenta] =
+    useState(false)
+
   const [mensajeEnvio, setMensajeEnvio] = useState('')
 
   const [expiraEn, setExpiraEn] = useState<string | null>(null) // ISO 8601 para "Código válido hasta las HH:MM"
@@ -363,6 +368,8 @@ function EstadoCuentaPublicoPage() {
 
     setPdfDataUrl(null)
 
+    setPdfGeneradoEn(null)
+
     setMensajeEnvio('')
 
     setStep(irAStep)
@@ -386,6 +393,14 @@ function EstadoCuentaPublicoPage() {
     } catch {
       return null
     }
+  }
+
+  const formatFechaGeneracion = (fecha: Date | null): string => {
+    if (!fecha) return ''
+    return fecha.toLocaleString('es-VE', {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+    })
   }
 
   const goToStep = (newStep: number) => {
@@ -558,6 +573,8 @@ function EstadoCuentaPublicoPage() {
           setPdfBlobUrl(null)
         }
 
+        setPdfGeneradoEn(new Date())
+
         setStep(3)
       }
     } catch (e: unknown) {
@@ -567,6 +584,51 @@ function EstadoCuentaPublicoPage() {
       )
     } finally {
       setLoadingPdf(false)
+    }
+  }
+
+  const handleActualizarEstadoCuenta = async () => {
+    if (!cedula || actualizandoEstadoCuenta) return
+
+    setActualizandoEstadoCuenta(true)
+
+    try {
+      const res = await solicitarCodigo(cedula)
+
+      if (!res.ok) {
+        showNotification(
+          'error',
+          res.error || 'No se pudo solicitar la actualización.'
+        )
+        return
+      }
+
+      if (pdfBlobUrl) URL.revokeObjectURL(pdfBlobUrl)
+      setPdfBlobUrl(null)
+      setPdfDataUrl(null)
+      setPdfGeneradoEn(null)
+      setRecibosCuotas(null)
+      setComprobantesPagos(null)
+      setReciboToken(null)
+      setCodigo('')
+      setExpiraEn(res.expira_en ?? null)
+      setReenviarCooldown(REENVIAR_COOLDOWN_SEC)
+      setMensajeEnvio(
+        res.mensaje ??
+          'Recibirás un nuevo código para generar el estado de cuenta actualizado.'
+      )
+      setStep(2)
+      showNotification(
+        'success',
+        'Enviamos un nuevo código. Ingrésalo para generar el estado de cuenta actualizado.'
+      )
+    } catch (e: unknown) {
+      showNotification(
+        'error',
+        (e as Error)?.message || 'No se pudo actualizar el estado de cuenta.'
+      )
+    } finally {
+      setActualizandoEstadoCuenta(false)
     }
   }
 
@@ -999,6 +1061,20 @@ function EstadoCuentaPublicoPage() {
                   vuelves a consultar, verás los datos más recientes.
                 </p>
 
+                <div
+                  className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950"
+                  role="status"
+                >
+                  <p className="font-semibold">
+                    Generado el {formatFechaGeneracion(pdfGeneradoEn)}
+                  </p>
+                  <p className="mt-1">
+                    Este PDF es un documento fijo y no cambia mientras está
+                    abierto. Para incluir pagos posteriores, genera un nuevo
+                    estado de cuenta.
+                  </p>
+                </div>
+
                 {/* Visor PDF solo en desktop/tablet - usa <object> para mayor compatibilidad con blob URLs */}
                 {!isMobile && pdfBlobUrl && (
                   <div className="relative w-full overflow-hidden rounded-xl border border-slate-200 bg-slate-50 shadow-md">
@@ -1051,6 +1127,17 @@ function EstadoCuentaPublicoPage() {
                 onClick={() => resetForm(1)}
               >
                 Consultar otra cédula
+              </Button>
+
+              <Button
+                variant="outline"
+                className="min-h-[48px] min-w-0 flex-1 touch-manipulation rounded-xl border-2 border-amber-400 text-amber-900 hover:bg-amber-50"
+                onClick={() => void handleActualizarEstadoCuenta()}
+                disabled={actualizandoEstadoCuenta}
+              >
+                {actualizandoEstadoCuenta
+                  ? 'Solicitando código...'
+                  : 'Actualizar estado de cuenta'}
               </Button>
 
               {pdfDataUrl && (
