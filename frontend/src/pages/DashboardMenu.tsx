@@ -692,10 +692,6 @@ export function DashboardMenu() {
           FINIQUITO_GRAFICO_MAX_DIARIO,
           Number(row.cantidad_revision) || 0
         ),
-        cantidad_trabajo: Math.min(
-          FINIQUITO_GRAFICO_MAX_DIARIO,
-          Number(row.cantidad_trabajo) || 0
-        ),
         cantidad_terminados: Math.min(
           FINIQUITO_GRAFICO_MAX_DIARIO,
           Number(row.cantidad_terminados) || 0
@@ -2174,12 +2170,11 @@ export function DashboardMenu() {
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <CardTitle className="flex items-center gap-2 text-lg font-bold text-gray-800">
-                    <LineChart className="h-5 w-5 text-amber-600" />
+                    <BarChart3 className="h-5 w-5 text-amber-600" />
                     <span>Flujo de finiquitos</span>
                   </CardTitle>
                   <CardDescription>
-                    Bandeja principal, área de revisión, área de trabajo y
-                    terminados.
+                    Bandeja principal, área de revisión y terminados.
                   </CardDescription>
                 </div>
 
@@ -2189,7 +2184,7 @@ export function DashboardMenu() {
                     variant="secondary"
                     className="border border-gray-200 bg-white/80 text-xs font-medium text-gray-600"
                   >
-                    4 líneas
+                    3 barras
                   </Badge>
                 </div>
               </div>
@@ -2208,7 +2203,7 @@ export function DashboardMenu() {
                 >
                   {filteredData => (
                     <ResponsiveContainer width="100%" height="100%">
-                      <RechartsLineChart
+                      <BarChart
                         data={filteredData}
                         margin={{ top: 14, right: 24, left: 12, bottom: 14 }}
                       >
@@ -2232,6 +2227,7 @@ export function DashboardMenu() {
                         <Tooltip
                           contentStyle={chartTooltipStyle.contentStyle}
                           labelStyle={chartTooltipStyle.labelStyle}
+                          cursor={{ fill: 'rgba(148, 163, 184, 0.12)' }}
                           formatter={(
                             value: number,
                             name: string,
@@ -2252,43 +2248,25 @@ export function DashboardMenu() {
                           }
                         />
                         <Legend {...chartLegendStyle} />
-                        <Line
-                          type="monotone"
+                        <Bar
                           dataKey="cantidad_ingresados"
-                          stroke="#1d4ed8"
-                          strokeWidth={2}
-                          dot={{ r: 3 }}
-                          activeDot={{ r: 5 }}
+                          fill="#1d4ed8"
                           name="Ingresados"
+                          radius={[4, 4, 0, 0]}
                         />
-                        <Line
-                          type="monotone"
+                        <Bar
                           dataKey="cantidad_revision"
-                          stroke="#d97706"
-                          strokeWidth={2}
-                          dot={{ r: 3 }}
-                          activeDot={{ r: 5 }}
+                          fill="#d97706"
                           name="Procesados"
+                          radius={[4, 4, 0, 0]}
                         />
-                        <Line
-                          type="monotone"
-                          dataKey="cantidad_trabajo"
-                          stroke="#059669"
-                          strokeWidth={2}
-                          dot={{ r: 3 }}
-                          activeDot={{ r: 5 }}
-                          name="En finiquito"
-                        />
-                        <Line
-                          type="monotone"
+                        <Bar
                           dataKey="cantidad_terminados"
-                          stroke="#7c3aed"
-                          strokeWidth={2}
-                          dot={{ r: 3 }}
-                          activeDot={{ r: 5 }}
+                          fill="#7c3aed"
                           name="Terminados"
+                          radius={[4, 4, 0, 0]}
                         />
-                      </RechartsLineChart>
+                      </BarChart>
                     </ResponsiveContainer>
                   )}
                 </ChartWithDateRangeSlider>

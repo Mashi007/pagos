@@ -644,28 +644,17 @@ def _sustituir_variables(texto: str, item: dict) -> str:
     dias_atraso = item.get("dias_atraso")
     cuotas_atrasadas = item.get("cuotas_atrasadas")
     fecha_disp = (item.get("fecha_vencimiento_display") or "").strip() or str(fecha_v)
-    logo_url = ""
-    try:
-        from app.core.email import _logo_url_for_email
-
-        logo_url = _logo_url_for_email()
-    except Exception:
-        logo_url = "https://rapicredit.onrender.com/pagos/logos/rapicredit-public.png"
     replacements = {
         "{{nombre}}": str(nombre),
-        "{{nombre_cliente}}": str(nombre),
         "{{cedula}}": str(cedula),
         "{{fecha_vencimiento}}": str(fecha_v),
         "{{fecha_vencimiento_display}}": str(fecha_disp),
         "{{numero_cuota}}": str(numero_cuota) if numero_cuota is not None else "",
         "{{monto}}": str(monto) if monto is not None else "",
-        "{{monto_cuota}}": str(monto) if monto is not None else "",
         "{{dias_atraso}}": str(dias_atraso) if dias_atraso is not None else "",
         "{{cuotas_atrasadas}}": str(cuotas_atrasadas)
         if cuotas_atrasadas is not None
         else "",
-        "{{logo_url}}": logo_url,
-        "{{LOGO_URL}}": logo_url,
     }
     result = texto
     for key, val in replacements.items():
@@ -1561,24 +1550,78 @@ def delete_variable(variable_id: int, db: Session = Depends(get_db)):
 
 
 VARIABLES_PRECARGADAS = [
-    {"nombre_variable": "nombre_cliente", "tabla": "clientes", "campo_bd": "nombres", "descripcion": "Nombres del cliente"},
-    {"nombre_variable": "cedula", "tabla": "clientes", "campo_bd": "cedula", "descripcion": "Cédula de identidad"},
-    {"nombre_variable": "telefono", "tabla": "clientes", "campo_bd": "telefono", "descripcion": "Teléfono de contacto"},
-    {"nombre_variable": "email", "tabla": "clientes", "campo_bd": "email", "descripcion": "Correo electrónico"},
-    {"nombre_variable": "numero_cuota", "tabla": "cuotas", "campo_bd": "numero_cuota", "descripcion": "Número de cuota"},
-    {"nombre_variable": "fecha_vencimiento", "tabla": "cuotas", "campo_bd": "fecha_vencimiento", "descripcion": "Fecha de vencimiento"},
-    {"nombre_variable": "monto_cuota", "tabla": "cuotas", "campo_bd": "monto", "descripcion": "Monto de la cuota"},
+    # Claves que sustituye el envio (_sustituir_variables / item de listado)
+    {
+        "nombre_variable": "nombre",
+        "tabla": "clientes",
+        "campo_bd": "nombres",
+        "descripcion": "Nombre del cliente (saludo {{nombre}})",
+    },
+    {
+        "nombre_variable": "nombre_cliente",
+        "tabla": "clientes",
+        "campo_bd": "nombres",
+        "descripcion": "Alias de nombre (compatibilidad)",
+    },
+    {
+        "nombre_variable": "cedula",
+        "tabla": "clientes",
+        "campo_bd": "cedula",
+        "descripcion": "Cedula de identidad",
+    },
+    {
+        "nombre_variable": "telefono",
+        "tabla": "clientes",
+        "campo_bd": "telefono",
+        "descripcion": "Telefono de contacto",
+    },
+    {
+        "nombre_variable": "email",
+        "tabla": "clientes",
+        "campo_bd": "email",
+        "descripcion": "Correo electronico",
+    },
+    {
+        "nombre_variable": "numero_cuota",
+        "tabla": "cuotas",
+        "campo_bd": "numero_cuota",
+        "descripcion": "Numero de cuota",
+    },
+    {
+        "nombre_variable": "fecha_vencimiento",
+        "tabla": "cuotas",
+        "campo_bd": "fecha_vencimiento",
+        "descripcion": "Fecha de vencimiento (ISO)",
+    },
+    {
+        "nombre_variable": "fecha_vencimiento_display",
+        "tabla": "cuotas",
+        "campo_bd": "fecha_vencimiento",
+        "descripcion": "Fecha de vencimiento en texto (ej. 5 de abril de 2026)",
+    },
+    {
+        "nombre_variable": "monto",
+        "tabla": "cuotas",
+        "campo_bd": "monto_cuota",
+        "descripcion": "Monto de la cuota ({{monto}})",
+    },
+    {
+        "nombre_variable": "monto_cuota",
+        "tabla": "cuotas",
+        "campo_bd": "monto_cuota",
+        "descripcion": "Monto de la cuota (alias)",
+    },
     {
         "nombre_variable": "dias_atraso",
         "tabla": "cuotas",
         "campo_bd": "dias_mora",
-        "descripcion": "Dias desde vencimiento de la cuota de referencia (1/3/5/30; tipo de envio)",
+        "descripcion": "Dias de atraso calendario de la cuota de referencia",
     },
     {
         "nombre_variable": "cuotas_atrasadas",
         "tabla": "prestamos",
         "campo_bd": "conteo",
-        "descripcion": "Cantidad de cuotas en atraso del prestamo (misma regla que estado de cuenta)",
+        "descripcion": "Cantidad de cuotas en atraso del prestamo",
     },
 ]
 
