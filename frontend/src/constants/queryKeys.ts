@@ -35,7 +35,7 @@ export const NOTIFICACIONES_PREJUDICIAL_LISTA_QUERY_KEY = [
   'notificaciones-prejudicial-lista',
 ] as const
 
-/** Pendiente, vence en 2 días (GET /notificaciones/cuotas-pendiente-2-dias-antes); submenú 2 días antes. */
+/** Pendiente, vence en 3 días (GET /notificaciones/cuotas-pendiente-2-dias-antes); submenú 3 días antes. */
 export const NOTIFICACIONES_D2_ANTES_QUERY_KEY = [
   'notificaciones-d2-antes-vencimiento',
 ] as const

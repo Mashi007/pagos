@@ -1040,7 +1040,7 @@ export function PlantillasNotificaciones({
 
     PAGO_2_DIAS_ANTES_PENDIENTE: {
       categoria: 'Notificación previa (heredada)',
-      caso: '2 días antes (pendiente, vence en 2 días)',
+      caso: '3 días antes (pendiente, vence en 3 días)',
     },
 
     PAGO_DIA_0: {

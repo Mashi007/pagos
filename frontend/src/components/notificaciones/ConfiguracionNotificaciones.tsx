@@ -150,7 +150,7 @@ export const CRITERIOS_ENVIO_TABLA: CriterioEnvioRow[] = [
   },
   {
     tipo: 'PAGO_2_DIAS_ANTES_PENDIENTE',
-    label: '2 días antes (pendiente, vence en 2 días)',
+    label: '3 días antes (pendiente, vence en 3 días)',
     categoria: 'Por vencer',
     color: 'blue',
   },
@@ -222,7 +222,7 @@ function esConfigEnvioSeccionId(v: string | null): v is ConfigEnvioSeccionId {
 export const CRITERIOS_ENVIO_PANEL: CriterioEnvioRow[] = [
   {
     tipo: 'PAGO_2_DIAS_ANTES_PENDIENTE',
-    label: '2 días antes (pendiente, vence en 2 días)',
+    label: '3 días antes (pendiente, vence en 3 días)',
     categoria: 'Por vencer',
     color: 'blue',
   },
@@ -1162,7 +1162,7 @@ export function ConfiguracionNotificaciones({
       if (d.ok && d.paquete_completo) {
         toast.success(
           esDosDiasAntes
-            ? 'Diagnostico: listo para 2 dias antes (correo). PDFs en pestanas 2 y 3 son opcionales segun la fila de envio.'
+            ? 'Diagnostico: listo para 3 dias antes (correo). PDFs en pestanas 2 y 3 son opcionales segun la fila de envio.'
             : 'Diagnostico: paquete listo (plantilla + Carta PDF + PDFs fijos). Puede enviar la prueba con confianza.',
           { duration: 8000 }
         )
@@ -1333,7 +1333,7 @@ export function ConfiguracionNotificaciones({
               </>
             ) : alcance === 'solo_pago_2_dias_antes_pendiente' ? (
               <>
-                Configuración solo para <strong>2 días antes</strong> (caso{' '}
+                Configuración solo para <strong>3 días antes</strong> (caso{' '}
                 <strong>PAGO_2_DIAS_ANTES_PENDIENTE</strong>): cuotas en estado
                 PENDIENTE con vencimiento dentro de 2 días; plantilla, envío,
                 PDF y adjuntos del caso{' '}
@@ -1723,7 +1723,7 @@ export function ConfiguracionNotificaciones({
                     <p className="mt-2 text-sm text-gray-600">
                       Solo caso MASIVOS: un correo por contacto de la lista
                       masiva (campañas en Comunicaciones). No ejecuta día
-                      siguiente al vencimiento, prejudicial, 2 días antes ni
+                      siguiente al vencimiento, prejudicial, 3 días antes ni
                       retrasadas. En modo prueba los destinos reales se
                       redirigen al correo de pruebas. Guarde antes si cambió
                       plantillas o campañas.

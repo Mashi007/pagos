@@ -3,7 +3,7 @@
 export const TIPOS_NOTIFICACION: { tipo: string; label: string }[] = [
   {
     tipo: 'PAGO_2_DIAS_ANTES_PENDIENTE',
-    label: '2 días antes (pendiente, vence en 2 días)',
+    label: '3 días antes (pendiente, vence en 3 días)',
   },
 
   {

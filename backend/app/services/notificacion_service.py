@@ -2,8 +2,8 @@
 Servicios para notificaciones de cuotas vencidas y en mora.
 Centraliza la lógica de serialización y filtrado de cuotas.
 Listados por pestaña: get_cuotas_pendientes_por_vencimientos (filtra en SQL por fechas);
-build_cuotas_pendiente_2_dias_antes_items (solo estado PENDIENTE, vence en 2 días; incluye
-    clientes al corriente — es el recordatorio preventivo de la pestaña «2 días antes»).
+build_cuotas_pendiente_2_dias_antes_items (solo estado PENDIENTE, vence en 3 días; incluye
+    clientes al corriente — es el recordatorio preventivo de la pestaña «3 días antes»).
 """
 import logging
 from collections import defaultdict
@@ -28,8 +28,10 @@ from app.services.comparar_abonos_drive_cuotas_service import (
 )
 from app.services.comparar_fecha_entrega_q_aprobacion_service import fecha_q_desde_cache_json
 from app.constants.prestamo_estados import (
-    ESTADO_PRESTAMO_DESISTIMIENTO,
     ESTADOS_PRESTAMO_EXCLUIDOS_COBRANZA_NOTIF,
+)
+from app.services.notificaciones_exclusion_desistimiento import (
+    sql_cliente_sin_desistimiento,
 )
 from app.services.cuota_estado import (
     clasificar_estado_cuota,
@@ -104,6 +106,7 @@ def _prestamo_no_excluido_notif():
     excl = tuple(str(e).strip().upper() for e in ESTADOS_PRESTAMO_EXCLUIDOS_COBRANZA_NOTIF)
     return est.notin_(excl)
 
+
 def _select_cuotas_pendientes_con_cliente():
     """Query base: cuota pendiente + cliente vía préstamo (sin filtro de fecha de vencimiento)."""
     return (
@@ -114,6 +117,7 @@ def _select_cuotas_pendientes_con_cliente():
         .where(CUOTA_ESTADO_NO_PAGADA_PARA_NOTIF)
         .where(SALDO_PENDIENTE_CUOTA > TOL_SALDO_CUOTA_NOTIFICACION)
         .where(_prestamo_no_excluido_notif())
+        .where(sql_cliente_sin_desistimiento())
     )
 
 
@@ -122,14 +126,17 @@ def build_cuotas_pendiente_2_dias_antes_items(
 ) -> List[dict]:
     """
     Cuotas con columna estado = PENDIENTE cuya fecha_vencimiento es exactamente
-    hoy + 2 días (Caracas). Sin fecha_pago, saldo > tolerancia, préstamo no liquidado/desistimiento.
+    hoy + 3 días (Caracas). Sin fecha_pago, saldo > tolerancia, préstamo no liquidado/desistimiento.
 
-    Incluye también clientes al corriente (cuotas_atrasadas = 0): el aviso «2 días antes»
+    Incluye también clientes al corriente (cuotas_atrasadas = 0): el aviso «3 días antes»
     es preventivo; antes se excluían y el envío quedaba vacío la mayoría de los días.
     Una fila por cuota (misma forma que otras pestañas de notificaciones).
+
+    Nota: el nombre de función/ruta conserva «2_dias» por compatibilidad de API y config
+    (PAGO_2_DIAS_ANTES_PENDIENTE); el criterio de fecha es hoy + 3.
     """
     hoy = fecha_referencia or hoy_negocio()
-    fv_objetivo = hoy + timedelta(days=2)
+    fv_objetivo = hoy + timedelta(days=3)
     q = (
         select(Cuota, Cliente)
         .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
@@ -139,6 +146,7 @@ def build_cuotas_pendiente_2_dias_antes_items(
         .where(SALDO_PENDIENTE_CUOTA > TOL_SALDO_CUOTA_NOTIFICACION)
         .where(Cuota.fecha_vencimiento == fv_objetivo)
         .where(_prestamo_no_excluido_notif())
+        .where(sql_cliente_sin_desistimiento())
     )
     rows = db.execute(q).all()
     if not rows:
@@ -155,7 +163,7 @@ def build_cuotas_pendiente_2_dias_antes_items(
                 cliente,
                 cuota,
                 cuotas_atrasadas=ca,
-                dias_antes_vencimiento=2,
+                dias_antes_vencimiento=3,
                 for_tab=True,
                 total_pendiente_pagar=tp,
             )
@@ -402,6 +410,7 @@ def get_primer_item_ejemplo_paquete_prueba(db: Session, tipo: str) -> Optional[d
                 .where(CUOTA_ESTADO_NO_PAGADA_PARA_NOTIF)
                 .where(SALDO_PENDIENTE_CUOTA > TOL_SALDO_CUOTA_NOTIFICACION)
                 .where(_prestamo_no_excluido_notif())
+                .where(sql_cliente_sin_desistimiento())
                 .where(Cuota.fecha_vencimiento == target)
                 .order_by(Cuota.id)
                 .limit(120)
@@ -433,6 +442,7 @@ def get_primer_item_ejemplo_paquete_prueba(db: Session, tipo: str) -> Optional[d
             .where(CUOTA_ESTADO_NO_PAGADA_PARA_NOTIF)
             .where(SALDO_PENDIENTE_CUOTA > TOL_SALDO_CUOTA_NOTIFICACION)
             .where(_prestamo_no_excluido_notif())
+            .where(sql_cliente_sin_desistimiento())
             .where(Cuota.fecha_vencimiento <= fv_max)
             .where(Cuota.fecha_vencimiento >= fv_min)
             .order_by(Cuota.fecha_vencimiento.asc(), Cuota.id.asc())
@@ -483,11 +493,7 @@ def get_primer_item_ejemplo_paquete_prueba(db: Session, tipo: str) -> Optional[d
                 Cuota.fecha_vencimiento <= fv_max,
                 SALDO_PENDIENTE_CUOTA > TOL_SALDO_CUOTA_NOTIFICACION,
                 _prestamo_no_excluido_notif(),
-                ~Prestamo.cliente_id.in_(
-                    select(Prestamo.cliente_id).where(
-                        func.upper(func.trim(func.coalesce(Prestamo.estado, ""))) == str(ESTADO_PRESTAMO_DESISTIMIENTO).strip().upper()
-                    )
-                ),
+                sql_cliente_sin_desistimiento(),
             )
             .group_by(Prestamo.cliente_id)
             .having(func.count(Cuota.id) >= PREJUDICIAL_MIN_CUOTAS_CON_ATRASO_60)
@@ -511,6 +517,7 @@ def get_primer_item_ejemplo_paquete_prueba(db: Session, tipo: str) -> Optional[d
                 Cuota.fecha_vencimiento <= fv_max,
                 SALDO_PENDIENTE_CUOTA > TOL_SALDO_CUOTA_NOTIFICACION,
                 _prestamo_no_excluido_notif(),
+                sql_cliente_sin_desistimiento(),
             )
             .order_by(Cuota.fecha_vencimiento.asc())
             .limit(1)

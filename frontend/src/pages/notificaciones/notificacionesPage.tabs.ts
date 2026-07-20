@@ -41,7 +41,7 @@ export function tabsParaModulo(
   }
   if (modulo === 'd2antes') {
     return [
-      { id: 'd2antes', label: '2 días antes', icon: Clock },
+      { id: 'd2antes', label: '3 días antes', icon: Clock },
       { id: 'configuracion', label: 'Configuración', icon: Settings },
     ]
   }

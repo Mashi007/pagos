@@ -42,6 +42,7 @@ from app.services.notificacion_service import (
     format_cuota_item,
     sum_saldo_pendiente_total_por_prestamos,
     _item_tab,
+    _prestamo_no_excluido_notif,
 )
 from app.models.cuota import Cuota
 from app.models.cliente import Cliente
@@ -66,7 +67,8 @@ from app.services.notificaciones_envios_store import (
     get_notificaciones_envios_dict,
 )
 from app.services.notificaciones_exclusion_desistimiento import (
-    cliente_bloqueado_por_desistimiento,
+    cliente_bloqueado_para_notificacion,
+    sql_cliente_sin_desistimiento,
 )
 
 router = APIRouter(dependencies=[Depends(require_admin)])
@@ -1420,12 +1422,16 @@ def enviar_con_plantilla(
     destinos = lista_correo_principal_notificaciones_desde_objeto(cliente)
     if not destinos:
         raise HTTPException(status_code=400, detail="El cliente no tiene email valido")
-    if cliente_bloqueado_por_desistimiento(
+    bloqueado, motivo_bloq = cliente_bloqueado_para_notificacion(
         db, cliente_id=cliente.id, cedula=cliente.cedula, email=destinos[0]
-    ):
+    )
+    if bloqueado:
         raise HTTPException(
             status_code=400,
-            detail="Envio bloqueado: cliente con prestamo en estado DESISTIMIENTO.",
+            detail=(
+                f"Envio bloqueado: cliente en estado {motivo_bloq} "
+                "(LIQUIDADO/DESISTIMIENTO)."
+            ),
         )
     if not get_email_activo_servicio("notificaciones"):
         raise HTTPException(status_code=400, detail="El envio de email para notificaciones esta desactivado. Activalo en Configuracion > Email.")
@@ -1550,78 +1556,24 @@ def delete_variable(variable_id: int, db: Session = Depends(get_db)):
 
 
 VARIABLES_PRECARGADAS = [
-    # Claves que sustituye el envio (_sustituir_variables / item de listado)
-    {
-        "nombre_variable": "nombre",
-        "tabla": "clientes",
-        "campo_bd": "nombres",
-        "descripcion": "Nombre del cliente (saludo {{nombre}})",
-    },
-    {
-        "nombre_variable": "nombre_cliente",
-        "tabla": "clientes",
-        "campo_bd": "nombres",
-        "descripcion": "Alias de nombre (compatibilidad)",
-    },
-    {
-        "nombre_variable": "cedula",
-        "tabla": "clientes",
-        "campo_bd": "cedula",
-        "descripcion": "Cedula de identidad",
-    },
-    {
-        "nombre_variable": "telefono",
-        "tabla": "clientes",
-        "campo_bd": "telefono",
-        "descripcion": "Telefono de contacto",
-    },
-    {
-        "nombre_variable": "email",
-        "tabla": "clientes",
-        "campo_bd": "email",
-        "descripcion": "Correo electronico",
-    },
-    {
-        "nombre_variable": "numero_cuota",
-        "tabla": "cuotas",
-        "campo_bd": "numero_cuota",
-        "descripcion": "Numero de cuota",
-    },
-    {
-        "nombre_variable": "fecha_vencimiento",
-        "tabla": "cuotas",
-        "campo_bd": "fecha_vencimiento",
-        "descripcion": "Fecha de vencimiento (ISO)",
-    },
-    {
-        "nombre_variable": "fecha_vencimiento_display",
-        "tabla": "cuotas",
-        "campo_bd": "fecha_vencimiento",
-        "descripcion": "Fecha de vencimiento en texto (ej. 5 de abril de 2026)",
-    },
-    {
-        "nombre_variable": "monto",
-        "tabla": "cuotas",
-        "campo_bd": "monto_cuota",
-        "descripcion": "Monto de la cuota ({{monto}})",
-    },
-    {
-        "nombre_variable": "monto_cuota",
-        "tabla": "cuotas",
-        "campo_bd": "monto_cuota",
-        "descripcion": "Monto de la cuota (alias)",
-    },
+    {"nombre_variable": "nombre_cliente", "tabla": "clientes", "campo_bd": "nombres", "descripcion": "Nombres del cliente"},
+    {"nombre_variable": "cedula", "tabla": "clientes", "campo_bd": "cedula", "descripcion": "Cédula de identidad"},
+    {"nombre_variable": "telefono", "tabla": "clientes", "campo_bd": "telefono", "descripcion": "Teléfono de contacto"},
+    {"nombre_variable": "email", "tabla": "clientes", "campo_bd": "email", "descripcion": "Correo electrónico"},
+    {"nombre_variable": "numero_cuota", "tabla": "cuotas", "campo_bd": "numero_cuota", "descripcion": "Número de cuota"},
+    {"nombre_variable": "fecha_vencimiento", "tabla": "cuotas", "campo_bd": "fecha_vencimiento", "descripcion": "Fecha de vencimiento"},
+    {"nombre_variable": "monto_cuota", "tabla": "cuotas", "campo_bd": "monto", "descripcion": "Monto de la cuota"},
     {
         "nombre_variable": "dias_atraso",
         "tabla": "cuotas",
         "campo_bd": "dias_mora",
-        "descripcion": "Dias de atraso calendario de la cuota de referencia",
+        "descripcion": "Dias desde vencimiento de la cuota de referencia (1/3/5/30; tipo de envio)",
     },
     {
         "nombre_variable": "cuotas_atrasadas",
         "tabla": "prestamos",
         "campo_bd": "conteo",
-        "descripcion": "Cantidad de cuotas en atraso del prestamo",
+        "descripcion": "Cantidad de cuotas en atraso del prestamo (misma regla que estado de cuenta)",
     },
 ]
 
@@ -2694,7 +2646,8 @@ def build_prejudicial_items(
             Cuota.estado.in_(ESTADOS_CUOTA_VENCIDO_Y_MORA),
             Cuota.fecha_vencimiento < hoy,
             SALDO_PENDIENTE_CUOTA > TOL_SALDO_CUOTA_NOTIFICACION,
-            ~Prestamo.estado.in_(("LIQUIDADO", "DESISTIMIENTO")),
+            _prestamo_no_excluido_notif(),
+            sql_cliente_sin_desistimiento(),
         )
         .group_by(Prestamo.cliente_id)
         .having(func.count(Cuota.id) >= PREJUDICIAL_MIN_CUOTAS_VENCIDO_MORA)
@@ -2721,7 +2674,8 @@ def build_prejudicial_items(
             Cuota.estado.in_(ESTADOS_CUOTA_VENCIDO_Y_MORA),
             Cuota.fecha_vencimiento < hoy,
             SALDO_PENDIENTE_CUOTA > TOL_SALDO_CUOTA_NOTIFICACION,
-            ~Prestamo.estado.in_(("LIQUIDADO", "DESISTIMIENTO")),
+            _prestamo_no_excluido_notif(),
+            sql_cliente_sin_desistimiento(),
         )
     ).all()
 

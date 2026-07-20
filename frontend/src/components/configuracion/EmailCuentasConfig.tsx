@@ -774,7 +774,7 @@ export function EmailCuentasConfig() {
             Elija para cada tipo de notificación (mora, prejudicial, etc.) si
             usa <strong>Cuenta 3</strong> o <strong>Cuenta 4</strong> (servidor
             SMTP y credenciales). El caso{' '}
-            <strong>2 días antes (cuota pendiente)</strong> usa como remitente
+            <strong>3 días antes (cuota pendiente)</strong> usa como remitente
             visible{' '}
             <code className="rounded bg-muted px-1 text-xs">
               recuerda@rapicreditca.com

@@ -583,7 +583,7 @@ function App() {
                 element={<Navigate to="/notificaciones/fecha" replace />}
               />
 
-              {/* Redirect de compatibilidad: la URL anterior d-1-dia era confusa (el módulo es «2 días antes»). */}
+              {/* Redirect de compatibilidad: la URL anterior d-1-dia era confusa (el módulo es «3 días antes»). */}
               <Route
                 path="notificaciones/d-1-dia"
                 element={<Navigate to="/notificaciones/d-2-antes" replace />}

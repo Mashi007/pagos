@@ -11,7 +11,7 @@ export const ETIQUETA_SERVICIO_PLANTILLA: Record<string, string> = {
   PAGO_3_DIAS_ANTES: '3 días antes del vencimiento',
   PAGO_1_DIA_ANTES: '1 día antes del vencimiento',
   PAGO_2_DIAS_ANTES_PENDIENTE:
-    '2 días antes (cuota pendiente; vence en 2 días, calendario)',
+    '3 días antes (cuota pendiente; vence en 3 días, calendario)',
   PAGO_DIA_0: 'Día de pago (vence hoy)',
   PAGO_1_DIA_ATRASADO:
     'Día siguiente al vencimiento (1 día de atraso calendario)',

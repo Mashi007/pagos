@@ -60,7 +60,7 @@ _CONFIG_TIPO_TO_TAB = {
     "MASIVOS": "masivos",
 }
 
-# Textos por defecto si no hay plantilla en BD (PAGO_2_DIAS_ANTES_PENDIENTE / 2 dias antes).
+# Textos por defecto si no hay plantilla en BD (PAGO_2_DIAS_ANTES_PENDIENTE / 3 dias antes).
 # Variables: {nombre}, {fecha_vencimiento_display} (tambien {{nombre}}, {{fecha_vencimiento_display}} en plantillas guardadas).
 ASUNTO_DEFAULT_PAGO_2_DIAS_ANTES_PENDIENTE = (
     "Recordatorio: pr\u00f3ximo vencimiento de tu cuota - Rapicredit"
@@ -93,7 +93,7 @@ NOMBRE_PDF_CARTA_VARIABLE = "Carta_Cobranza.pdf"
 
 
 def _tipo_dos_dias_antes_solo_correo(tipo: str) -> bool:
-    """True para «2 dias antes»: envio de correo sin paquete cobranza obligatorio (plantilla opcional en BD)."""
+    """True para «3 dias antes»: envio de correo sin paquete cobranza obligatorio (plantilla opcional en BD)."""
     return tipo == "PAGO_2_DIAS_ANTES_PENDIENTE"
 
 

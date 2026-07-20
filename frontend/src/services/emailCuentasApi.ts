@@ -200,7 +200,7 @@ export const SERVICIO_POR_CUENTA: Record<number, string> = {
 export const NOTIF_TABS = [
   {
     id: 'd_2_antes_vencimiento',
-    label: '2 días antes (cuota pendiente)',
+    label: '3 días antes (cuota pendiente)',
   },
 
   { id: 'dias_1_retraso', label: 'Día siguiente al venc.' },

@@ -6,7 +6,7 @@ export function tituloEncabezadoNotificaciones(
 ): string {
   switch (modulo) {
     case 'd2antes':
-      return 'Notificaciones: 2 días antes del vencimiento'
+      return 'Notificaciones: 3 días antes del vencimiento'
     case 'a1dia':
       return 'Notificaciones: día siguiente al vencimiento'
     case 'a10dias':

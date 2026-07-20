@@ -169,13 +169,13 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
       return 'Solo fechas: listas de mora como contexto, columna Q (hoja) vs fecha de aprobación en BD, revisión y aplicación por fila; búsqueda por día de aprobación y edición puntual abajo. Sin columnas de cuotas ni montos en dólares. Auditoría total Q sigue en su enlace.'
     }
     if (modulo === 'general') {
-      return 'Solo consulta: listas unificadas (día siguiente al vencimiento, 60 días o más, 2 días antes) con columna de caso. La columna «Diferencia abono» usa caché en BD (cada domingo 04:35 Caracas o botón Recalcular; tras el job, use Actualización manual). Sin envío de correos ni ajustes de comunicación desde esta pantalla.'
+      return 'Solo consulta: listas unificadas (día siguiente al vencimiento, 60 días o más, 3 días antes) con columna de caso. La columna «Diferencia abono» usa caché en BD (cada domingo 04:35 Caracas o botón Recalcular; tras el job, use Actualización manual). Sin envío de correos ni ajustes de comunicación desde esta pantalla.'
     }
     if (modulo === 'a2cuotas') {
       return 'Clientes con al menos una cuota pendiente a 60 o más días de atraso (calendario Caracas). Permanecen todos los días mientras cumplan; salen al ponerse al día. El envío es solo manual (sin cron ni «enviar todas») y el mensaje de prueba va únicamente a itmaster@rapicreditca.com. Use Actualizar o vuelva a entrar; también se refresca al guardar pagos en el módulo Pagos.'
     }
     if (modulo === 'd2antes') {
-      return 'Solo cuotas con columna estado PENDIENTE y fecha de vencimiento dentro de 2 días (hoy + 2, zona Caracas). Al pagar o cambiar estado, dejan de listarse. Use Actualizar o vuelva a entrar; también se refresca al guardar pagos.'
+      return 'Solo cuotas con columna estado PENDIENTE y fecha de vencimiento dentro de 3 días (hoy + 3, zona Caracas). Al pagar o cambiar estado, dejan de listarse. Use Actualizar o vuelva a entrar; también se refresca al guardar pagos.'
     }
     if (modulo === 'a10dias') {
       return 'Solo cuotas pendientes con atraso entre 6 y 59 días calendario (menor a 60; fecha de vencimiento entre referencia menos 59 y referencia menos 6, America/Caracas), saldo pendiente, y el préstamo con exactamente 1 cuota en mora. Permanecen hasta que esa cuota se pague o salga del rango. Con 0 o con 2 o más cuotas atrasadas no aplica este listado. El envío es solo manual (sin cron ni «enviar todas»).'
@@ -1681,7 +1681,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                     : modulo === 'a2cuotas'
                       ? '60 días o más (atraso ≥60; 1+ cuotas)'
                       : modulo === 'd2antes'
-                        ? '2 días antes - PENDIENTE, vence en 2 días'
+                        ? '3 días antes - PENDIENTE, vence en 3 días'
                         : modulo === 'a10dias'
                           ? 'Menor a 60 días (atraso 6-59 calendario)'
                           : 'Día siguiente al vencimiento (1 día de atraso calendario)'}
@@ -1698,11 +1698,11 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                 {modulo === 'fecha'
                   ? 'Tabla reducida a fechas: sin Nº cuota, vencimiento, mora numérica ni montos. «Diferencia fecha» = días (Q − aprobación en BD). Abajo: búsqueda por día de aprobación (antes «Fechas 2»).'
                   : modulo === 'general'
-                    ? 'Se concatenan las mismas filas que en los submenús «Día siguiente al vencimiento», «60 días o más» y «2 días antes». El listado «Menor a 60 días» (atraso 6-59) es otro submenú y no entra aquí. La columna «Caso» indica el criterio. Un mismo cliente puede aparecer más de una vez si cumple varios criterios. «Diferencia abono» lee caché en BD (domingo 04:35 Caracas o Recalcular arriba; también se actualiza al aplicar ABONOS desde la balanza).'
+                    ? 'Se concatenan las mismas filas que en los submenús «Día siguiente al vencimiento», «60 días o más» y «3 días antes». El listado «Menor a 60 días» (atraso 6-59) es otro submenú y no entra aquí. La columna «Caso» indica el criterio. Un mismo cliente puede aparecer más de una vez si cumple varios criterios. «Diferencia abono» lee caché en BD (domingo 04:35 Caracas o Recalcular arriba; también se actualiza al aplicar ABONOS desde la balanza).'
                     : modulo === 'a2cuotas'
                       ? 'Una fila por cliente con al menos una cuota a 60 o más días de atraso. La cuota y fecha mostradas son la más antigua en ese rango; «Cuotas atrasadas» cuenta las cuotas del cliente que cumplen ≥60 días. Permanecen hasta ponerse al día. Envío solo manual (sin automático ni «enviar todas»); destino de prueba fijo: itmaster@rapicreditca.com.'
                       : modulo === 'd2antes'
-                        ? 'Solo filas con cuotas.estado = PENDIENTE y fecha_vencimiento = hoy + 2 (calendario Caracas), sin fecha_pago y con saldo pendiente. Se omiten préstamos con «Cuotas atrasadas» = 0 (al corriente en mora). «Cuotas atrasadas» sigue la misma regla que el estado de cuenta para el préstamo.'
+                        ? 'Solo filas con cuotas.estado = PENDIENTE y fecha_vencimiento = hoy + 3 (calendario Caracas), sin fecha_pago y con saldo pendiente. Incluye también préstamos al corriente (cuotas_atrasadas = 0): es un recordatorio preventivo. «Cuotas atrasadas» sigue la misma regla que el estado de cuenta para el préstamo.'
                         : modulo === 'a10dias'
                           ? 'Una fila por cuota pendiente con atraso entre 6 y 59 días calendario (fecha_vencimiento entre referencia menos 59 y referencia menos 6), sin fecha_pago y con saldo pendiente; préstamo no liquidado ni desistimiento. Solo si el préstamo tiene exactamente 1 cuota en mora; permanece hasta pagar esa cuota o salir del rango. Con 0 o con 2 o más no entra. Envío solo manual (sin automático ni «enviar todas»).'
                           : 'Cuotas cuya fecha de vencimiento fue ayer (hoy es el primer día después del vencimiento). La columna Cuotas atrasadas cuenta las cuotas en mora del préstamo con la misma regla que el estado de cuenta (Vencido, Mora, etc.).'}
@@ -2335,7 +2335,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
               (isError || isErrorPrej || isErrorD2) ? (
                 <div className="mb-4 rounded border border-amber-200 bg-amber-50/90 px-3 py-2 text-xs text-amber-950">
                   Parte de las listas no respondió (día siguiente, prejudicial o
-                  2 días antes). Se muestran las que sí cargaron; use Reintentar
+                  3 días antes). Se muestran las que sí cargaron; use Reintentar
                   o Actualización manual.
                 </div>
               ) : null}
@@ -2508,7 +2508,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                               {listaCargadaSinFilas ? (
                                 <span className="mx-auto mt-2 block max-w-lg text-xs text-gray-500">
                                   {modulo === 'general'
-                                    ? 'Listas ya cargadas: no hay filas en ninguno de los tres criterios (día siguiente, prejudicial, 2 días antes) para la fecha de referencia.'
+                                    ? 'Listas ya cargadas: no hay filas en ninguno de los tres criterios (día siguiente, prejudicial, 3 días antes) para la fecha de referencia.'
                                     : modulo === 'a2cuotas'
                                       ? 'Lista ya cargada: se requiere al menos 1 cuota pendiente con atraso ≥60 días (fecha de vencimiento ≤ referencia menos 60, Caracas). Si hay mora reciente (<60) no aparece aquí.'
                                       : modulo === 'd2antes'
@@ -2955,7 +2955,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                 <p>
                   {confirmEnvio.n === 0
                     ? 'No hay casos en la lista cargada. El servidor procesará PAGO_2_DIAS_ANTES_PENDIENTE (puede estar vacía).'
-                    : `Envío para 2 días antes (${confirmEnvio.n} casos en la lista completa; mismo criterio en servidor, no solo la página actual). Respeta plantilla, CCO y modo prueba en Configuración.`}
+                    : `Envío para 3 días antes (${confirmEnvio.n} casos en la lista completa; mismo criterio en servidor, no solo la página actual). Respeta plantilla, CCO y modo prueba en Configuración.`}
                 </p>
               ) : null}
 

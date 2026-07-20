@@ -348,7 +348,7 @@ export function EditorPlantillaHTML({
                 <strong>Tip:</strong> Usa variables entre llaves como {'{'}
                 nombre{'}'}, {'{'}cedula{'}'}, {'{'}monto{'}'}, {'{'}dias_atraso
                 {'}'}, {'{'}numero_cuota{'}'}, {'{'}fecha_vencimiento{'}'},{' '}
-                {'{{'}fecha_vencimiento_display{'}}'} (2 días antes y otras
+                {'{{'}fecha_vencimiento_display{'}}'} (3 días antes y otras
                 pestañas)
               </p>
             </div>
