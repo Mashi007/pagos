@@ -1087,8 +1087,6 @@ export function DashboardMenu() {
                   <CardDescription className="mt-2 text-xs text-gray-600">
                     Incluye préstamos APROBADO y LIQUIDADO. Barras del mes:
                     programadas vs cobros (a tiempo + cartera vencida y pagada).
-                    Línea roja: cuentas por cobrar = programadas acumuladas −
-                    cobros acumulados (todos) hasta ese mes.
                   </CardDescription>
                 </CardHeader>
 
@@ -1278,15 +1276,6 @@ export function DashboardMenu() {
                               fill="#f97316"
                               name="Cartera vencida y pagada"
                               radius={[4, 4, 0, 0]}
-                            />
-
-                            <Line
-                              type="monotone"
-                              dataKey="cuentas_por_cobrar"
-                              stroke="#ef4444"
-                              strokeWidth={2}
-                              name="Cuentas por Cobrar"
-                              dot={{ r: 4 }}
                             />
                           </ComposedChart>
                         </ResponsiveContainer>
