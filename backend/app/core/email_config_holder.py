@@ -25,6 +25,9 @@ from app.core.email_cuentas import (
 )
 
 # Config actual: smtp_*, from_email, from_name, tickets_notify_emails (str, emails separados por coma)
+# Remitente fijo del servicio SMTP "notificaciones" (mora, prejudicial, rechazos, etc.).
+EMAIL_FROM_NOTIFICACIONES_DEFAULT = "notificaciones@rapicreditca.com"
+
 _current: dict[str, Any] = {}
 # Version 2: 4 cuentas + asignacion (cobros=1, estado_cuenta=2, notificaciones por tab=3|4)
 _cuentas_data: dict = {}
@@ -168,7 +171,7 @@ def init_from_settings() -> None:
 def get_smtp_config(servicio: Optional[str] = None, tipo_tab: Optional[str] = None) -> dict[str, Any]:
     """Devuelve la config SMTP para el servicio/tab. Cobros=cuenta 1, Estado cuenta=2, Notificaciones=cuenta por tab (3 o 4).
     Para servicio=notificaciones: «2 dias antes» (d_2_antes_vencimiento) usa NOTIFICACIONES_FROM_EMAIL_2_DIAS_ANTES si no está vacío;
-    el resto usa NOTIFICACIONES_FROM_EMAIL si está definido."""
+    el resto fuerza NOTIFICACIONES_FROM_EMAIL (fallback notificaciones@rapicreditca.com)."""
     sync_from_db()
     cfg: dict[str, Any]
     if servicio and _cuentas_data.get("cuentas"):
@@ -216,13 +219,24 @@ def get_smtp_config(servicio: Optional[str] = None, tipo_tab: Optional[str] = No
                 cfg["from_email"],
             )
         else:
-            from_notif = getattr(settings, "NOTIFICACIONES_FROM_EMAIL", None) or ""
-            if (from_notif or "").strip():
-                cfg["from_email"] = from_notif.strip()
-                logger.info(
-                    "[EMAIL] Servicio notificaciones: remitente forzado a %s.",
-                    cfg["from_email"],
+            # Siempre From notificaciones@… (1 dia atraso, menor a 60, prejudicial/60+, etc.).
+            # Ignora from_email de la cuenta SMTP asignada al tab: el remitente visible es fijo.
+            raw_n = getattr(settings, "NOTIFICACIONES_FROM_EMAIL", None)
+            from_n = (raw_n.strip() if isinstance(raw_n, str) else "") or EMAIL_FROM_NOTIFICACIONES_DEFAULT
+            if from_n.lower() != EMAIL_FROM_NOTIFICACIONES_DEFAULT.lower():
+                logger.warning(
+                    "[EMAIL] NOTIFICACIONES_FROM_EMAIL=%s distinto del canonico; se fuerza %s (tipo_tab=%s).",
+                    from_n,
+                    EMAIL_FROM_NOTIFICACIONES_DEFAULT,
+                    (tipo_tab or "").strip() or "-",
                 )
+                from_n = EMAIL_FROM_NOTIFICACIONES_DEFAULT
+            cfg["from_email"] = EMAIL_FROM_NOTIFICACIONES_DEFAULT
+            logger.info(
+                "[EMAIL] Servicio notificaciones: remitente From=%s (tipo_tab=%s).",
+                cfg["from_email"],
+                (tipo_tab or "").strip() or "-",
+            )
     return cfg
 
 

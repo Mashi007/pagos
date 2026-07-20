@@ -677,7 +677,8 @@ def start_scheduler() -> None:
             name=f"Recibos: envío conciliación diario {_rh:02d}:{_rm:02d} Caracas",
         )
         _recibos_cron_log = f"; recibos conciliacion diario {_rh:02d}:{_rm:02d} Caracas"
-    # Otros envíos por pestaña (previas, mora, prejudicial, masivos): manual desde la UI (POST).
+    # Otros envíos por pestaña (previas, mora, masivos): manual desde la UI (POST).
+    # PREJUDICIAL (60+ días) y PAGO_10_DIAS_ATRASADO: solo manual (sin cron ni enviar-todas).
     _scheduler.start()
     _caches_notif_log = ""
     if getattr(settings, "ENABLE_ABONOS_DRIVE_CACHE_NIGHTLY", True):

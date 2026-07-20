@@ -205,7 +205,7 @@ export const NOTIF_TABS = [
 
   { id: 'dias_1_retraso', label: 'Día siguiente al venc.' },
 
-  { id: 'dias_10_retraso', label: '10 días retraso' },
+  { id: 'dias_10_retraso', label: 'Menor a 60 días' },
 
   { id: 'prejudicial', label: 'Prejudicial' },
 ] as const

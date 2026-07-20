@@ -16,8 +16,8 @@ def prestamo_estado_exige_fecha_aprobacion(estado: Optional[str]) -> bool:
         return False
     return estado.strip().upper() in ESTADOS_PRESTAMO_EXIGEN_FECHA_APROBACION
 
-# Prestamos que no deben entrar en listas de cobranza / notificaciones por cuota (misma idea que excluir LIQUIDADO).
+# Prestamos que no deben entrar en listas ni recibir envio de notificaciones por cuota.
 ESTADOS_PRESTAMO_EXCLUIDOS_COBRANZA_NOTIF = ("LIQUIDADO", ESTADO_PRESTAMO_DESISTIMIENTO)
 
-# Regla global adicional (cualquier prestamo DESISTIMIENTO): ver
-# app.services.notificaciones_exclusion_desistimiento.cliente_tiene_prestamo_desistimiento
+# Envio: corte por prestamo_id (LIQUIDADO/DESISTIMIENTO) + regla global DESISTIMIENTO por cliente:
+# app.services.notificaciones_exclusion_desistimiento

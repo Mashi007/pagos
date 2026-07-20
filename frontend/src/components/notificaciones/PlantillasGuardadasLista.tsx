@@ -26,7 +26,7 @@ const TIPO_LABEL: Record<string, string> = {
 
   PAGO_1_DIA_ATRASADO: 'Día siguiente al vencimiento',
 
-  PAGO_10_DIAS_ATRASADO: '10 días retraso',
+  PAGO_10_DIAS_ATRASADO: 'Menor a 60 días',
 
   PREJUDICIAL: 'Prejudicial',
 

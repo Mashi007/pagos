@@ -246,8 +246,8 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
           exactHref: true,
         },
         {
-          title: 'Prejudicial (5+ cuotas)',
-          href: '/notificaciones/a-3-cuotas',
+          title: '60 días o más',
+          href: '/notificaciones/a-2-cuotas',
           icon: Clock,
         },
         {
@@ -256,7 +256,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
           icon: Clock,
         },
         {
-          title: '10 días de atraso',
+          title: 'Menor a 60 días',
           href: '/notificaciones/atraso-10-dias',
           icon: Clock,
         },

@@ -27,6 +27,10 @@ from app.services.comparar_abonos_drive_cuotas_service import (
     refrescar_cache_comparar_abonos_totales_cuotas_bd,
 )
 from app.services.comparar_fecha_entrega_q_aprobacion_service import fecha_q_desde_cache_json
+from app.constants.prestamo_estados import (
+    ESTADO_PRESTAMO_DESISTIMIENTO,
+    ESTADOS_PRESTAMO_EXCLUIDOS_COBRANZA_NOTIF,
+)
 from app.services.cuota_estado import (
     clasificar_estado_cuota,
     dias_retraso_desde_vencimiento,
@@ -81,12 +85,24 @@ CUOTA_ESTADO_NO_PAGADA_PARA_NOTIF = or_(
     ~Cuota.estado.in_(_ESTADOS_CUOTA_PAGADA),
 )
 
-# Prejudicial (submenu Notificaciones «Atraso 5 cuotas»): solo cuotas con columna estado VENCIDO o MORA
-# (clasificar_estado_cuota en cuota_estado.py; MORA = morosidad por calendario).
-ESTADOS_CUOTA_VENCIDO_Y_MORA = ("VENCIDO", "MORA")
-# Clientes con al menos esta cantidad de cuotas VENCIDO/MORA vencidas (saldo > tol) entran al listado prejudicial.
-PREJUDICIAL_MIN_CUOTAS_VENCIDO_MORA = 5
+# Prejudicial (submenu Notificaciones «60 días o más» / ruta a-2-cuotas):
+# al menos 1 cuota pendiente notificable con atraso calendario >= 60 días
+# (fecha_vencimiento <= hoy − 60). Excluye prestamos LIQUIDADO/DESISTIMIENTO y
+# clientes con algun prestamo DESISTIMIENTO. Aparecen todos los días mientras
+# cumplan; salen al ponerse al día (sin cuotas con ≥60 días de atraso).
+ESTADOS_CUOTA_VENCIDO_Y_MORA = ("VENCIDO", "MORA")  # legado / diagnóstico
+MIN_DIAS_ATRASO_PREJUDICIAL = 60
+PREJUDICIAL_MIN_CUOTAS_CON_ATRASO_60 = 1
+# Alias de compatibilidad (imports antiguos): umbral de conteo = 1 cuota con ≥60 días.
+PREJUDICIAL_MIN_CUOTAS_VENCIDO_MORA = PREJUDICIAL_MIN_CUOTAS_CON_ATRASO_60
 
+
+
+def _prestamo_no_excluido_notif():
+    """Prestamo.estado no es LIQUIDADO/DESISTIMIENTO (case-insensitive)."""
+    est = func.upper(func.trim(func.coalesce(Prestamo.estado, "")))
+    excl = tuple(str(e).strip().upper() for e in ESTADOS_PRESTAMO_EXCLUIDOS_COBRANZA_NOTIF)
+    return est.notin_(excl)
 
 def _select_cuotas_pendientes_con_cliente():
     """Query base: cuota pendiente + cliente vía préstamo (sin filtro de fecha de vencimiento)."""
@@ -97,7 +113,7 @@ def _select_cuotas_pendientes_con_cliente():
         .where(Cuota.fecha_pago.is_(None))
         .where(CUOTA_ESTADO_NO_PAGADA_PARA_NOTIF)
         .where(SALDO_PENDIENTE_CUOTA > TOL_SALDO_CUOTA_NOTIFICACION)
-        .where(~Prestamo.estado.in_(("LIQUIDADO", "DESISTIMIENTO")))
+        .where(_prestamo_no_excluido_notif())
     )
 
 
@@ -122,7 +138,7 @@ def build_cuotas_pendiente_2_dias_antes_items(
         .where(Cuota.estado == "PENDIENTE")
         .where(SALDO_PENDIENTE_CUOTA > TOL_SALDO_CUOTA_NOTIFICACION)
         .where(Cuota.fecha_vencimiento == fv_objetivo)
-        .where(~Prestamo.estado.in_(("LIQUIDADO", "DESISTIMIENTO")))
+        .where(_prestamo_no_excluido_notif())
     )
     rows = db.execute(q).all()
     if not rows:
@@ -168,15 +184,20 @@ def get_cuotas_pendientes_por_vencimientos(
 
 
 def get_cuotas_pendientes_vencidas_hasta(
-    db: Session, fecha_vencimiento_max: date
+    db: Session,
+    fecha_vencimiento_max: date,
+    fecha_vencimiento_min: Optional[date] = None,
 ) -> List[Tuple[Cuota, Cliente]]:
     """
     Cuotas pendientes notificables con fecha_vencimiento <= fecha_vencimiento_max
-    (p. ej. hoy − 10 para «10 días o más de atraso»).
+    (p. ej. hoy − 6 para atraso >= 6 días). Si se pasa fecha_vencimiento_min,
+    también exige fecha_vencimiento >= ese valor (p. ej. hoy − 59 para atraso <= 59).
     """
     q = _select_cuotas_pendientes_con_cliente().where(
         Cuota.fecha_vencimiento <= fecha_vencimiento_max
     )
+    if fecha_vencimiento_min is not None:
+        q = q.where(Cuota.fecha_vencimiento >= fecha_vencimiento_min)
     rows = db.execute(q).all()
     return [(row[0], row[1]) for row in rows]
 
@@ -201,7 +222,7 @@ def sum_saldo_pendiente_total_por_prestamos(
         .where(Cuota.fecha_pago.is_(None))
         .where(CUOTA_ESTADO_NO_PAGADA_PARA_NOTIF)
         .where(pendiente_expr > TOL_SALDO_CUOTA_NOTIFICACION)
-        .where(~Prestamo.estado.in_(("LIQUIDADO", "DESISTIMIENTO")))
+        .where(_prestamo_no_excluido_notif())
         .group_by(Cuota.prestamo_id)
     )
     out: Dict[int, float] = {}
@@ -238,7 +259,7 @@ def sum_saldo_pendiente_cuotas_tabla_amortizacion_ui(
         select(Cuota.prestamo_id, func.sum(per_cuota).label("total_pend"))
         .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
         .where(Cuota.prestamo_id.in_(ids))
-        .where(~Prestamo.estado.in_(("LIQUIDADO", "DESISTIMIENTO")))
+        .where(_prestamo_no_excluido_notif())
         .group_by(Cuota.prestamo_id)
     )
     out: Dict[int, float] = {}
@@ -322,17 +343,18 @@ def contar_cuotas_atraso_por_prestamos(
     return out
 
 
-# Listado / envío «10 días de atraso» (calendario): préstamo con exactamente
-# 1 cuota en mora (misma regla que `contar_cuotas_atraso_por_prestamos`) y esa cuota
-# con atraso >= 10 días (fecha_vencimiento <= hoy − 10). Permanecen en el listado
-# hasta que la cuota se pague. Con 0 o con 2 o más cuotas atrasadas no aplica.
+# Listado / envío «menor a 60 días» (ruta atraso-10-dias / PAGO_10_DIAS_ATRASADO):
+# préstamo con exactamente 1 cuota en mora y esa cuota con atraso entre 6 y 59 días
+# calendario (fecha_vencimiento en [hoy − 59, hoy − 6]). Permanecen en el listado
+# hasta que la cuota se pague o salga del rango. Con 0 o con 2+ cuotas atrasadas no aplica.
 MIN_CUOTAS_ATRASADAS_PARA_LISTADO_10_DIAS = 1
 MAX_CUOTAS_ATRASADAS_PARA_LISTADO_10_DIAS = 1
-MIN_DIAS_ATRASO_PARA_LISTADO_10_DIAS = 10
+MIN_DIAS_ATRASO_PARA_LISTADO_10_DIAS = 6
+MAX_DIAS_ATRASO_PARA_LISTADO_10_DIAS = 59
 
 
 def prestamo_aplica_listado_10_dias_por_cuotas_atrasadas(cuotas_atrasadas: int) -> bool:
-    """True si el préstamo puede aparecer en el listado de mora a 10+ días calendario."""
+    """True si el préstamo puede aparecer en el listado de mora menor a 60 días."""
     try:
         n = int(cuotas_atrasadas or 0)
     except (TypeError, ValueError):
@@ -341,12 +363,12 @@ def prestamo_aplica_listado_10_dias_por_cuotas_atrasadas(cuotas_atrasadas: int) 
 
 
 def cuota_aplica_listado_10_dias_por_dias_atraso(dias_atraso: int) -> bool:
-    """True si la cuota lleva al menos 10 días de atraso calendario."""
+    """True si la cuota lleva entre 6 y 59 días de atraso calendario (menor a 60)."""
     try:
         n = int(dias_atraso or 0)
     except (TypeError, ValueError):
         n = 0
-    return n >= MIN_DIAS_ATRASO_PARA_LISTADO_10_DIAS
+    return MIN_DIAS_ATRASO_PARA_LISTADO_10_DIAS <= n <= MAX_DIAS_ATRASO_PARA_LISTADO_10_DIAS
 
 
 def get_cuotas_pendientes_con_cliente(db: Session) -> List[Tuple[Cuota, Cliente]]:
@@ -379,7 +401,7 @@ def get_primer_item_ejemplo_paquete_prueba(db: Session, tipo: str) -> Optional[d
                 .where(Cuota.fecha_pago.is_(None))
                 .where(CUOTA_ESTADO_NO_PAGADA_PARA_NOTIF)
                 .where(SALDO_PENDIENTE_CUOTA > TOL_SALDO_CUOTA_NOTIFICACION)
-                .where(~Prestamo.estado.in_(("LIQUIDADO", "DESISTIMIENTO")))
+                .where(_prestamo_no_excluido_notif())
                 .where(Cuota.fecha_vencimiento == target)
                 .order_by(Cuota.id)
                 .limit(120)
@@ -400,8 +422,9 @@ def get_primer_item_ejemplo_paquete_prueba(db: Session, tipo: str) -> Optional[d
                 total_pendiente_pagar=totales.get(cuota.prestamo_id),
             )
 
-        # PAGO_10_DIAS_ATRASADO: 1 cuota en mora con atraso >= 10 días (hasta que se pague).
+        # PAGO_10_DIAS_ATRASADO: 1 cuota en mora con atraso 6..59 días (menor a 60).
         fv_max = hoy - timedelta(days=MIN_DIAS_ATRASO_PARA_LISTADO_10_DIAS)
+        fv_min = hoy - timedelta(days=MAX_DIAS_ATRASO_PARA_LISTADO_10_DIAS)
         q = (
             select(Cuota, Cliente)
             .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
@@ -409,8 +432,9 @@ def get_primer_item_ejemplo_paquete_prueba(db: Session, tipo: str) -> Optional[d
             .where(Cuota.fecha_pago.is_(None))
             .where(CUOTA_ESTADO_NO_PAGADA_PARA_NOTIF)
             .where(SALDO_PENDIENTE_CUOTA > TOL_SALDO_CUOTA_NOTIFICACION)
-            .where(~Prestamo.estado.in_(("LIQUIDADO", "DESISTIMIENTO")))
+            .where(_prestamo_no_excluido_notif())
             .where(Cuota.fecha_vencimiento <= fv_max)
+            .where(Cuota.fecha_vencimiento >= fv_min)
             .order_by(Cuota.fecha_vencimiento.asc(), Cuota.id.asc())
             .limit(200)
         )
@@ -446,20 +470,27 @@ def get_primer_item_ejemplo_paquete_prueba(db: Session, tipo: str) -> Optional[d
         return items[0] if items else None
 
     if tipo == "PREJUDICIAL":
-        # Titular: prestamos.cliente_id (cuotas.cliente_id denormalizado puede divergir).
+        # Titular: prestamos.cliente_id. Al menos 1 cuota con atraso >= 60 días.
+        fv_max = hoy - timedelta(days=MIN_DIAS_ATRASO_PREJUDICIAL)
         subq = (
             select(Prestamo.cliente_id, func.count(Cuota.id).label("total"))
             .select_from(Cuota)
             .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
             .where(
                 Cuota.fecha_pago.is_(None),
-                Cuota.estado.in_(ESTADOS_CUOTA_VENCIDO_Y_MORA),
-                Cuota.fecha_vencimiento < hoy,
+                CUOTA_ESTADO_NO_PAGADA_PARA_NOTIF,
+                Cuota.fecha_vencimiento.isnot(None),
+                Cuota.fecha_vencimiento <= fv_max,
                 SALDO_PENDIENTE_CUOTA > TOL_SALDO_CUOTA_NOTIFICACION,
-                ~Prestamo.estado.in_(("LIQUIDADO", "DESISTIMIENTO")),
+                _prestamo_no_excluido_notif(),
+                ~Prestamo.cliente_id.in_(
+                    select(Prestamo.cliente_id).where(
+                        func.upper(func.trim(func.coalesce(Prestamo.estado, ""))) == str(ESTADO_PRESTAMO_DESISTIMIENTO).strip().upper()
+                    )
+                ),
             )
             .group_by(Prestamo.cliente_id)
-            .having(func.count(Cuota.id) >= PREJUDICIAL_MIN_CUOTAS_VENCIDO_MORA)
+            .having(func.count(Cuota.id) >= PREJUDICIAL_MIN_CUOTAS_CON_ATRASO_60)
             .limit(1)
         )
         row = db.execute(subq).first()
@@ -475,10 +506,11 @@ def get_primer_item_ejemplo_paquete_prueba(db: Session, tipo: str) -> Optional[d
             .where(
                 Prestamo.cliente_id == cliente_id,
                 Cuota.fecha_pago.is_(None),
-                Cuota.estado.in_(ESTADOS_CUOTA_VENCIDO_Y_MORA),
-                Cuota.fecha_vencimiento < hoy,
+                CUOTA_ESTADO_NO_PAGADA_PARA_NOTIF,
+                Cuota.fecha_vencimiento.isnot(None),
+                Cuota.fecha_vencimiento <= fv_max,
                 SALDO_PENDIENTE_CUOTA > TOL_SALDO_CUOTA_NOTIFICACION,
-                ~Prestamo.estado.in_(("LIQUIDADO", "DESISTIMIENTO")),
+                _prestamo_no_excluido_notif(),
             )
             .order_by(Cuota.fecha_vencimiento.asc())
             .limit(1)
@@ -499,9 +531,14 @@ def get_primer_item_ejemplo_paquete_prueba(db: Session, tipo: str) -> Optional[d
         totales_p = (
             sum_saldo_pendiente_total_por_prestamos(db, [pid]) if pid else {}
         )
+        dias_atraso_prej = None
+        fv_ref = getattr(cuota_ref, "fecha_vencimiento", None)
+        if fv_ref is not None:
+            dias_atraso_prej = (hoy - fv_ref).days
         item = format_cuota_item(
             cliente,
             cuota_ref,
+            dias_atraso=dias_atraso_prej,
             for_tab=True,
             total_pendiente_pagar=totales_p.get(pid) if pid else None,
         )

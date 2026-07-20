@@ -328,7 +328,11 @@ class Settings(BaseSettings):
     # Remitente forzado para el servicio "notificaciones" (rechazos, notificaciones a clientes). Si está definido, se usa como From al enviar con servicio=notificaciones.
     NOTIFICACIONES_FROM_EMAIL: Optional[str] = Field(
         default="notificaciones@rapicreditca.com",
-        description="Email remitente para notificaciones (rechazos, etc.). Por defecto notificaciones@rapicreditca.com.",
+        description=(
+            "Remitente From forzado para servicio SMTP notificaciones "
+            "(mora, prejudicial/60+, rechazos, etc.). Canonico: notificaciones@rapicreditca.com. "
+            "El holder ignora otros valores y usa siempre ese remitente (salvo 2 dias antes)."
+        ),
     )
     # Solo PAGO_2_DIAS_ANTES / tipo_tab d_2_antes_vencimiento (tiene prioridad sobre NOTIFICACIONES_FROM_EMAIL).
     NOTIFICACIONES_FROM_EMAIL_2_DIAS_ANTES: str = Field(

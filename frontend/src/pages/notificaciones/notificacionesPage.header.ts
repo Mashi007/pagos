@@ -10,9 +10,9 @@ export function tituloEncabezadoNotificaciones(
     case 'a1dia':
       return 'Notificaciones: día siguiente al vencimiento'
     case 'a10dias':
-      return 'Notificaciones: 10 días de atraso'
-    case 'a3cuotas':
-      return 'Notificaciones: prejudicial (5+ cuotas)'
+      return 'Notificaciones: menor a 60 días'
+    case 'a2cuotas':
+      return 'Notificaciones: 60 días o más'
     case 'general':
       return 'Notificaciones: vista general'
     case 'fecha':

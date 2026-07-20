@@ -6,7 +6,7 @@ type TabIcon = typeof Clock
 
 export type NotificacionesModulo =
   | 'a1dia'
-  | 'a3cuotas'
+  | 'a2cuotas'
   | 'a10dias'
   | 'd2antes'
   | 'general'
@@ -29,11 +29,11 @@ export function tabsParaModulo(
   if (modulo === 'general') {
     return [{ id: 'general_todos', label: 'General', icon: LayoutList }]
   }
-  if (modulo === 'a3cuotas') {
+  if (modulo === 'a2cuotas') {
     return [
       {
         id: 'prejudicial',
-        label: 'Prejudicial (5+ cuotas)',
+        label: '60 días o más',
         icon: Clock,
       },
       { id: 'configuracion', label: 'Configuración', icon: Settings },
@@ -49,7 +49,7 @@ export function tabsParaModulo(
     return [
       {
         id: 'atraso10dias',
-        label: '10 días de atraso',
+        label: 'Menor a 60 días',
         icon: Clock,
       },
       { id: 'configuracion', label: 'Configuración', icon: Settings },
@@ -67,7 +67,7 @@ export function tabsParaModulo(
 
 export function tabListadoDefault(modulo: NotificacionesModulo): TabId {
   if (modulo === 'general' || modulo === 'fecha') return 'general_todos'
-  if (modulo === 'a3cuotas') return 'prejudicial'
+  if (modulo === 'a2cuotas') return 'prejudicial'
   if (modulo === 'd2antes') return 'd2antes'
   if (modulo === 'a10dias') return 'atraso10dias'
   return 'dias_1_atraso'

@@ -246,11 +246,9 @@ def get_notificaciones_retrasadas(
 
 
 def _tipo_retrasadas(item: dict) -> str:
-    d = item.get("dias_atraso")
-    return {
-        1: "PAGO_1_DIA_ATRASADO",
-        10: "PAGO_10_DIAS_ATRASADO",
-    }.get(d, "PAGO_1_DIA_ATRASADO")
+    # Solo 1 dia de atraso en este lote agregado. PAGO_10_DIAS_ATRASADO (menor a 60)
+    # es exclusivamente manual via enviar-caso-manual; no mapear por dias_atraso aqui.
+    return "PAGO_1_DIA_ATRASADO"
 
 
 @router_retrasadas.post("/enviar")
@@ -286,7 +284,7 @@ def enviar_notificaciones_retrasadas(
     return {"mensaje": "Env�o de notificaciones retrasadas finalizado.", **res}
 
 
-# --- Notificaciones prejudiciales (5+ cuotas en VENCIDO o MORA) ---
+# --- Notificaciones prejudiciales (60+ días de atraso en 1+ cuotas) ---
 
 @router_prejudicial.get("")
 def get_notificaciones_prejudicial(
@@ -294,7 +292,7 @@ def get_notificaciones_prejudicial(
     fecha_caracas: Optional[str] = _FC_Q,
     db: Session = Depends(get_db),
 ):
-    """Lista de clientes con 5+ cuotas en estado VENCIDO o MORA (prejudicial). Email desde tabla clientes."""
+    """Lista de clientes con 1+ cuotas a 60+ días de atraso (prejudicial). Email desde tabla clientes."""
     fecha_ref = _fecha_referencia_desde_query(fecha_caracas)
     items = build_prejudicial_items(db, fecha_referencia=fecha_ref)
     return {"items": items, "total": len(items)}
@@ -309,7 +307,7 @@ def enviar_notificaciones_prejudicial(
     fecha_caracas: Optional[str] = _FC_Q,
     db: Session = Depends(get_db),
 ):
-    """Env�a correo a cada cliente en situaci�n prejudicial. Respeta config env�os (habilitado/CCO) desde BD."""
+    "Envio MANUAL de correos PREJUDICIAL (60 dias o mas). Sin cron ni enviar-todas; solo este POST o enviar-caso-manual. Respeta config envios (habilitado/CCO) desde BD.""Env�a correo a cada cliente en situaci�n prejudicial. Respeta config env�os (habilitado/CCO) desde BD."""
     fecha_ref = _fecha_referencia_desde_query(fecha_caracas)
     config_envios = get_notificaciones_envios_config(db)
     items = build_prejudicial_items(db, fecha_referencia=fecha_ref)
@@ -613,6 +611,19 @@ TIPOS_CASO_MANUAL = frozenset(
     }
 )
 
+# Solo POST /enviar-caso-manual (submodulo dedicado). Nunca cron ni POST /enviar-todas.
+TIPOS_NOTIFICACION_SOLO_ENVIO_MANUAL = frozenset(
+    {
+        "PAGO_10_DIAS_ATRASADO",
+        "PREJUDICIAL",
+    }
+)
+
+
+def tipo_permite_envio_automatico_o_lote(tipo: str) -> bool:
+    """False si el tipo solo admite disparo manual (sin cron ni enviar-todas)."""
+    return (tipo or "").strip() not in TIPOS_NOTIFICACION_SOLO_ENVIO_MANUAL
+
 
 def _config_envios_forzar_habilitado_caso(config_envios: dict, tipo: str) -> dict:
     """
@@ -826,15 +837,21 @@ def ejecutar_envio_caso_manual(
 
 def ejecutar_envio_todas_notificaciones(db: Session) -> dict:
     """
-    Ejecuta en un solo batch varias familias de notificacion: previas, dia de pago, retrasadas,
-    prejudicial y masivos. Cada tipo usa su propia configuracion en notificaciones_envios (habilitado,
+    Ejecuta en un solo batch varias familias de notificacion: previas, dia de pago, retrasadas
+    (1 dia) y masivos. Sin PREJUDICIAL ni PAGO_10_DIAS_ATRASADO (solo manual). Cada tipo usa su propia configuracion en notificaciones_envios (habilitado,
     CCO, modo pruebas, etc.); no se mezclan entre si.
 
     No incluye PAGO_2_DIAS_ANTES_PENDIENTE (2 dias antes del vencimiento), que tiene envio propio.
-    No incluye PAGO_10_DIAS_ATRASADO (10 dias de atraso): solo POST /notificaciones/enviar-caso-manual desde el submodulo dedicado.
+    No incluye tipos en TIPOS_NOTIFICACION_SOLO_ENVIO_MANUAL (PAGO_10_DIAS_ATRASADO /
+    menor a 60 dias, PREJUDICIAL / 60 dias o mas): solo POST /enviar-caso-manual
+    (o POST notificaciones-prejudicial/enviar) desde el submodulo dedicado.
+    Sin cron ni programador de servidor para esos tipos.
 
     Solo desde POST /notificaciones/enviar-todas (BackgroundTasks); sin envio automatico por hora.
     """
+    # Defensa: TIPOS_NOTIFICACION_SOLO_ENVIO_MANUAL (PAGO_10_DIAS_ATRASADO, PREJUDICIAL)
+    # no se incluyen abajo; el lote usa dias_1_retraso + previas/hoy/masivos.
+
     config_envios = get_notificaciones_envios_config(db)
     data = get_notificaciones_tabs_data(db)
     total_enviados = 0
@@ -913,27 +930,9 @@ def ejecutar_envio_todas_notificaciones(db: Session) -> dict:
     total_whatsapp_fail += r.get("fallidos_whatsapp", 0)
     detalles["retrasadas"] = r
 
-    # Prejudicial
-    items_prejudicial = data["prejudicial"]
-    asunto_pre = "Aviso prejudicial - Rapicredit"
-    cuerpo_pre = (
-        "Estimado/a {nombre} (c�dula {cedula}),\n\n"
-        "Le informamos que su cuenta presenta varias cuotas en mora.\n"
-        "Fecha de vencimiento de referencia: {fecha_vencimiento}\n"
-        "Cuota de referencia: {numero_cuota}\n"
-        "Monto de referencia: {monto}\n\n"
-        "Por favor contacte a la entidad para regularizar su situaci�n.\n\n"
-        "Saludos,\nRapicredit"
-    )
-    r = _enviar_correos_items(items_prejudicial, asunto_pre, cuerpo_pre, config_envios, _tipo_prejudicial, db)
-    total_enviados += r.get("enviados", 0)
-    total_fallidos += r.get("fallidos", 0)
-    total_sin_email += r.get("sin_email", 0)
-    total_omitidos_config += r.get("omitidos_config", 0)
-    total_omitidos_paquete += r.get("omitidos_paquete_incompleto", 0)
-    total_whatsapp_ok += r.get("enviados_whatsapp", 0)
-    total_whatsapp_fail += r.get("fallidos_whatsapp", 0)
-    detalles["prejudicial"] = r
+    # Sin prejudicial en enviar-todas: PREJUDICIAL (60 dias o mas) solo por
+    # enviar-caso-manual / POST notificaciones-prejudicial/enviar (submodulo dedicado).
+    # Esta en TIPOS_NOTIFICACION_SOLO_ENVIO_MANUAL: sin cron ni lote automatico.
 
     # Masivos (comunicaciones generales): misma plantilla/CCO que campañas + fila MASIVOS.
     # enviar-todas y "Envios masivos prueba" leian solo config["MASIVOS"] e ignoraban

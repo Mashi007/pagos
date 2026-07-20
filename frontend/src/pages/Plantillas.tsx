@@ -200,7 +200,7 @@ export function Plantillas() {
                   <li>
                     <strong>Documentos PDF anexos</strong> - PDFs fijos que se
                     suben aquí y se vinculan a cada caso (día siguiente al
-                    venc., 10 días de retraso calendario, prejudicial). Junto
+                    venc., menor a 60 días (atraso 6-59), prejudicial). Junto
                     con el PDF global de cobranza (si está configurado) cumplen
                     el requisito de documento fijo del paquete.
                   </li>

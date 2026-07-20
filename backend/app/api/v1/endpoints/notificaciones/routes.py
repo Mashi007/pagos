@@ -2,9 +2,9 @@
 Endpoints de notificaciones a clientes retrasados.
 Todo el router exige rol admin (Depends(require_admin) a nivel de APIRouter).
 Datos reales desde BD: cuotas (fecha_vencimiento, pagado) y clientes.
-Reglas: pestañas por días hasta vencimiento y mora (retraso: 1 y 10+ días calendario;
-10+ días: exactamente 1 cuota en mora con atraso >= 10; permanece hasta pagar esa cuota;
-con 0 o con 2+ no aplica).
+Reglas: pestañas por días hasta vencimiento y mora (retraso: 1 día exacto y menor a 60
+días calendario: atraso 6..59; exactamente 1 cuota en mora; permanece hasta pagar o salir
+del rango; con 0 o con 2+ no aplica).
 Configuración de envíos (habilitado/CCO por tipo) desde tabla configuracion (notificaciones_envios).
 CRUD de plantillas en plantillas_notificacion; envío puede usar plantilla por tipo vía plantilla_id en config.
 """
@@ -34,8 +34,8 @@ from app.services.comparar_fecha_entrega_q_aprobacion_service import (
 )
 from app.services.notificacion_service import (
     CUOTA_ESTADO_NO_PAGADA_PARA_NOTIF,
-    ESTADOS_CUOTA_VENCIDO_Y_MORA,
-    PREJUDICIAL_MIN_CUOTAS_VENCIDO_MORA,
+    MIN_DIAS_ATRASO_PREJUDICIAL,
+    PREJUDICIAL_MIN_CUOTAS_CON_ATRASO_60,
     SALDO_PENDIENTE_CUOTA,
     TOL_SALDO_CUOTA_NOTIFICACION,
     build_cuotas_pendiente_2_dias_antes_items,
@@ -46,6 +46,10 @@ from app.services.notificacion_service import (
 )
 from app.models.cuota import Cuota
 from app.models.cliente import Cliente
+from app.constants.prestamo_estados import (
+    ESTADO_PRESTAMO_DESISTIMIENTO,
+    ESTADOS_PRESTAMO_EXCLUIDOS_COBRANZA_NOTIF,
+)
 from app.models.prestamo import Prestamo
 from app.models.configuracion import Configuracion
 from app.models.plantilla_notificacion import PlantillaNotificacion
@@ -1421,12 +1425,24 @@ def enviar_con_plantilla(
     destinos = lista_correo_principal_notificaciones_desde_objeto(cliente)
     if not destinos:
         raise HTTPException(status_code=400, detail="El cliente no tiene email valido")
-    if cliente_bloqueado_por_desistimiento(
-        db, cliente_id=cliente.id, cedula=cliente.cedula, email=destinos[0]
-    ):
+    from app.services.notificaciones_exclusion_desistimiento import (
+        item_bloqueado_para_envio_notificacion,
+    )
+    item_bloqueo = {
+        "cliente_id": cliente.id,
+        "cedula": cliente.cedula,
+        "correo": destinos[0] if destinos else None,
+        "correo_1": destinos[0] if destinos else None,
+        "prestamo_id": (variables or {}).get("prestamo_id"),
+    }
+    bloqueado_pl, motivo_pl = item_bloqueado_para_envio_notificacion(db, item_bloqueo)
+    if bloqueado_pl:
         raise HTTPException(
             status_code=400,
-            detail="Envio bloqueado: cliente con prestamo en estado DESISTIMIENTO.",
+            detail=(
+                f"Envio bloqueado: prestamo/cliente en estado {motivo_pl} "
+                "(LIQUIDADO o DESISTIMIENTO). NUNCA se envian notificaciones."
+            ),
         )
     if not get_email_activo_servicio("notificaciones"):
         raise HTTPException(status_code=400, detail="El envio de email para notificaciones esta desactivado. Activalo en Configuracion > Email.")
@@ -1784,7 +1800,8 @@ def enviar_todas_notificaciones(background_tasks: BackgroundTasks):
     Responde 202 de inmediato para evitar timeout (el envio puede tardar muchos minutos).
     Respeta la configuracion guardada (modo_pruebas, email_pruebas, habilitado por tipo).
     No existe cron ni tarea oculta que llame a este endpoint: solo se ejecuta cuando alguien hace POST explicito.
-    PAGO_10_DIAS_ATRASADO no forma parte de este lote: solo envio manual POST /enviar-caso-manual desde el submodulo de 10 dias.
+    PAGO_10_DIAS_ATRASADO (menor a 60 dias) no forma parte de este lote ni de ningun cron:
+    solo envio manual POST /enviar-caso-manual desde el submodulo dedicado.
     """
     background_tasks.add_task(_tarea_envio_todas_notificaciones)
     return JSONResponse(
@@ -2623,13 +2640,16 @@ def build_prejudicial_items(
     db: Session, fecha_referencia: Optional[date] = None
 ) -> List[dict]:
     """
-    Solo la lista prejudicial (5+ cuotas con estado VENCIDO/MORA, vencidas, saldo pendiente).
-    No ejecuta la rama de retrasadas por dias de mora ni contar_cuotas_atraso_por_prestamos masivo.
+    Lista prejudicial «60 días o más»: al menos 1 cuota pendiente notificable con
+    atraso calendario >= 60 (fecha_vencimiento <= hoy − 60), saldo pendiente.
+    Excluye prestamos LIQUIDADO/DESISTIMIENTO y clientes con algun prestamo en
+    DESISTIMIENTO. Permanecen todos los días mientras cumplan; salen al ponerse al día.
 
     GET /notificaciones-prejudicial debe usar esto (no get_notificaciones_tabs_data entero) para
     evitar timeouts en carteras grandes / cold start en Render.
     """
     hoy = fecha_referencia or hoy_negocio()
+    fv_max = hoy - timedelta(days=MIN_DIAS_ATRASO_PREJUDICIAL)
     # Agrupar por titular del préstamo (prestamos.cliente_id). cuotas.cliente_id es denormalizado
     # y si diverge, el listado prejudicial mezclaba contacto de un titular con montos de otro crédito.
     subq = (
@@ -2638,13 +2658,20 @@ def build_prejudicial_items(
         .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
         .where(
             Cuota.fecha_pago.is_(None),
-            Cuota.estado.in_(ESTADOS_CUOTA_VENCIDO_Y_MORA),
-            Cuota.fecha_vencimiento < hoy,
+            CUOTA_ESTADO_NO_PAGADA_PARA_NOTIF,
+            Cuota.fecha_vencimiento.isnot(None),
+            Cuota.fecha_vencimiento <= fv_max,
             SALDO_PENDIENTE_CUOTA > TOL_SALDO_CUOTA_NOTIFICACION,
-            ~Prestamo.estado.in_(("LIQUIDADO", "DESISTIMIENTO")),
+            func.upper(func.trim(func.coalesce(Prestamo.estado, ""))).notin_(tuple(str(e).strip().upper() for e in ESTADOS_PRESTAMO_EXCLUIDOS_COBRANZA_NOTIF)),
+            # Cliente con algun prestamo DESISTIMIENTO: fuera del listado (misma regla que al enviar).
+            ~Prestamo.cliente_id.in_(
+                select(Prestamo.cliente_id).where(
+                    func.upper(func.trim(func.coalesce(Prestamo.estado, ""))) == str(ESTADO_PRESTAMO_DESISTIMIENTO).strip().upper()
+                )
+            ),
         )
         .group_by(Prestamo.cliente_id)
-        .having(func.count(Cuota.id) >= PREJUDICIAL_MIN_CUOTAS_VENCIDO_MORA)
+        .having(func.count(Cuota.id) >= PREJUDICIAL_MIN_CUOTAS_CON_ATRASO_60)
     )
     rows = db.execute(subq).all()
     if not rows:
@@ -2665,10 +2692,11 @@ def build_prejudicial_items(
         .where(
             Prestamo.cliente_id.in_(cliente_ids),
             Cuota.fecha_pago.is_(None),
-            Cuota.estado.in_(ESTADOS_CUOTA_VENCIDO_Y_MORA),
-            Cuota.fecha_vencimiento < hoy,
+            CUOTA_ESTADO_NO_PAGADA_PARA_NOTIF,
+            Cuota.fecha_vencimiento.isnot(None),
+            Cuota.fecha_vencimiento <= fv_max,
             SALDO_PENDIENTE_CUOTA > TOL_SALDO_CUOTA_NOTIFICACION,
-            ~Prestamo.estado.in_(("LIQUIDADO", "DESISTIMIENTO")),
+            func.upper(func.trim(func.coalesce(Prestamo.estado, ""))).notin_(tuple(str(e).strip().upper() for e in ESTADOS_PRESTAMO_EXCLUIDOS_COBRANZA_NOTIF)),
         )
     ).all()
 
@@ -2714,7 +2742,16 @@ def build_prejudicial_items(
     prejudicial: List[dict] = []
     for cliente, cuota_ref, total_cuotas, pid in bloques_prej:
         tp = totales_prej.get(int(pid)) if pid is not None else None
-        item = _item_tab(cliente, cuota_ref, total_pendiente_pagar=tp)
+        dias_atraso = None
+        fv = getattr(cuota_ref, "fecha_vencimiento", None)
+        if fv is not None:
+            dias_atraso = (hoy - fv).days
+        item = _item_tab(
+            cliente,
+            cuota_ref,
+            dias_atraso=dias_atraso,
+            total_pendiente_pagar=tp,
+        )
         item["total_cuotas_atrasadas"] = total_cuotas
         prejudicial.append(item)
     enriquecer_items_notificacion_revision_manual(db, prejudicial)
@@ -2726,20 +2763,22 @@ def get_notificaciones_tabs_data(
 ):
     """
     Datos para envio de notificaciones (retrasadas, prejudicial).
-    Politica: sin listas previas ni "hoy vence"; solo cuotas ya vencidas (1 y 10 dias de atraso calendario)
-    y prejudicial. Claves dias_5, dias_3, dias_1, hoy van vacias (compat API).
-    Fuente: cuotas pendientes con vencimiento = ayer (1 día) o <= hoy-10 (10+ días).
+    Politica: sin listas previas ni "hoy vence"; solo cuotas ya vencidas (1 día exacto y
+    menor a 60 días: atraso 6..59) y prejudicial. Claves dias_5, dias_3, dias_1, hoy van
+    vacias (compat API).
+    Fuente: vencimiento = ayer (1 día) o vencimiento en [hoy-59, hoy-6] (menor a 60).
     Fecha de corte: America/Caracas.
 
     Pestaña 1 día de retraso (dias_1_retraso): cuota con vencimiento = ayer (exactamente 1 día
     calendario después de la fecha de vencimiento), sin fecha_pago y con saldo pendiente.
 
-    Pestaña 10 días (dias_10_retraso): atraso >= 10 días (vencimiento <= hoy − 10) y exactamente
-    1 cuota en mora; permanece hasta que esa cuota se pague; con 0 o con 2 o más no aplica.
+    Pestaña menor a 60 días (dias_10_retraso): atraso entre 6 y 59 días y exactamente
+    1 cuota en mora; permanece hasta que esa cuota se pague o salga del rango; con 0 o con 2 o más no aplica.
 
-    Prejudicial: por titular del préstamo (prestamos.cliente_id), al menos el mínimo configurado
-    de cuotas con cuotas.estado en (VENCIDO, MORA), fecha_vencimiento < hoy, sin fecha_pago y
-    saldo pendiente; préstamo no liquidado/desistimiento.
+    Prejudicial (60 días o más): por titular del préstamo (prestamos.cliente_id), al menos
+    1 cuota pendiente notificable con atraso calendario >= 60 (fecha_vencimiento <= hoy − 60),
+    sin fecha_pago y saldo pendiente; préstamo no liquidado/desistimiento. Permanecen mientras
+    cumplan; salen al ponerse al día.
     """
     hoy = fecha_referencia or hoy_negocio()
     from app.services.notificaciones_listados_motor import (

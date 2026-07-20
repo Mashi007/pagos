@@ -1,4 +1,4 @@
-﻿"""
+"""
 Núcleo de envío de notificaciones por ítem (email/WhatsApp, adjuntos, paquete estricto).
 
 Extraído de ``notificaciones_tabs.routes`` para mantener routers como delegación fina
@@ -25,7 +25,7 @@ from app.models.envio_notificacion import EnvioNotificacion
 from app.services.envio_notificacion_snapshot import persistir_snapshot_envio_notificacion
 from app.services.notificaciones_envios_store import coerce_modo_pruebas_notificaciones
 from app.services.notificaciones_exclusion_desistimiento import (
-    cliente_tiene_prestamo_desistimiento,
+    item_bloqueado_para_envio_notificacion,
 )
 from app.services.carta_cobranza_pdf import generar_carta_cobranza_pdf
 from app.services.adjunto_fijo_cobranza import get_adjunto_fijo_cobranza_bytes, get_adjuntos_fijos_por_caso
@@ -95,6 +95,24 @@ NOMBRE_PDF_CARTA_VARIABLE = "Carta_Cobranza.pdf"
 def _tipo_dos_dias_antes_solo_correo(tipo: str) -> bool:
     """True para «2 dias antes»: envio de correo sin paquete cobranza obligatorio (plantilla opcional en BD)."""
     return tipo == "PAGO_2_DIAS_ANTES_PENDIENTE"
+
+
+def _tipo_prejudicial_solo_html(tipo: str) -> bool:
+    """True para PREJUDICIAL («60 días o más»): solo correo HTML/texto, sin anexos PDF."""
+    return tipo == "PREJUDICIAL"
+
+
+# Destino fijo de prueba para PREJUDICIAL (sin envío a clientes ni CCO).
+EMAIL_PRUEBA_PREJUDICIAL = "itmaster@rapicreditca.com"
+
+
+def _tipo_sin_paquete_pdf_obligatorio(tipo: str) -> bool:
+    """Tipos que no exigen Carta_Cobranza / PDF fijo en modo paquete estricto."""
+    return (
+        tipo == "MASIVOS"
+        or _tipo_dos_dias_antes_solo_correo(tipo)
+        or _tipo_prejudicial_solo_html(tipo)
+    )
 
 
 def _cfg_incluir_pdf_anexo(tipo_cfg: dict) -> bool:
@@ -241,15 +259,20 @@ def _enviar_correos_items(
         item_id_log = item.get("cedula") or str(item.get("prestamo_id") or idx)
         tipo = get_tipo_for_item(item)
         cid = item.get("cliente_id")
-        if db and cliente_tiene_prestamo_desistimiento(db, cid):
-            logger.info(
-                "[notif_excl_desist] Omitido cliente_id=%s item=%s tipo=%s (prestamo DESISTIMIENTO)",
-                cid,
-                item_id_log,
-                tipo,
-            )
-            omitidos_desistimiento += 1
-            continue
+        if db:
+            bloqueado, motivo_estado = item_bloqueado_para_envio_notificacion(db, item)
+            if bloqueado:
+                logger.info(
+                    "[notif_excl_estado] Omitido cliente_id=%s prestamo_id=%s item=%s tipo=%s "
+                    "(estado bloqueante=%s; NUNCA enviar si LIQUIDADO o DESISTIMIENTO)",
+                    cid,
+                    item.get("prestamo_id"),
+                    item_id_log,
+                    tipo,
+                    motivo_estado,
+                )
+                omitidos_desistimiento += 1
+                continue
         tipo_cfg = config_envios.get(tipo) or {}
         # Masivos: nunca carta PDF de cobranza ni contexto de préstamo (comunicación general).
         if tipo == "MASIVOS":
@@ -269,7 +292,11 @@ def _enviar_correos_items(
                     log_envio_paquete_incompleto(item_id_log, mot_plant, tipo)
                     omitidos_paquete_incompleto += 1
                     continue
-            requiere_pdf_cobranza = tipo != "MASIVOS" and not _tipo_dos_dias_antes_solo_correo(tipo)
+            requiere_pdf_cobranza = (
+                tipo != "MASIVOS"
+                and not _tipo_dos_dias_antes_solo_correo(tipo)
+                and not _tipo_prejudicial_solo_html(tipo)
+            )
             if requiere_pdf_cobranza and not _cfg_incluir_pdf_anexo(tipo_cfg):
                 log_envio_paquete_incompleto(
                     item_id_log, "incluir_pdf_anexo_desactivado_en_config", tipo
@@ -308,11 +335,15 @@ def _enviar_correos_items(
         ):
             plantilla = db.get(PlantillaNotificacion, plantilla_id) if plantilla_id else None
             solo_correo_2d = _tipo_dos_dias_antes_solo_correo(tipo)
+            solo_html_prej = _tipo_prejudicial_solo_html(tipo)
             need_ctx = (
-                (paquete_estricto and not solo_correo_2d)
-                or (plantilla and getattr(plantilla, "tipo", None) == "COBRANZA")
-                or _cfg_incluir_pdf_anexo(tipo_cfg)
-                or (plantilla and plantilla_usa_variables_cobranza(plantilla))
+                not solo_html_prej
+                and (
+                    (paquete_estricto and not solo_correo_2d)
+                    or (plantilla and getattr(plantilla, "tipo", None) == "COBRANZA")
+                    or _cfg_incluir_pdf_anexo(tipo_cfg)
+                    or (plantilla and plantilla_usa_variables_cobranza(plantilla))
+                )
             )
             if need_ctx:
                 ctx, corr = build_contexto_cobranza_para_item(
@@ -343,8 +374,12 @@ def _enviar_correos_items(
         # - PDF (pestaña 2): Carta_Cobranza.pdf generada desde Plantilla anexo PDF. Se agrega OBLIGATORIAMENTE si incluir_pdf_anexo=True.
         # - Adj. (pestaña 3): Documentos PDF fijos subidos en Documentos PDF anexos. Se agregan OBLIGATORIAMENTE si incluir_adjuntos_fijos no es False.
         if paquete_estricto:
-            # Masivos y «2 dias antes»: PDF carta y fijos no son obligatorios; se respetan flags de la fila.
-            if tipo == "MASIVOS":
+            # Masivos / «2 dias antes» / PREJUDICIAL (60+): sin paquete PDF obligatorio.
+            # PREJUDICIAL: nunca anexa PDF (solo HTML/texto).
+            if _tipo_prejudicial_solo_html(tipo):
+                incluir_pdf_anexo = False
+                incluir_adjuntos_fijos = False
+            elif tipo == "MASIVOS":
                 incluir_pdf_anexo = False
                 incluir_adjuntos_fijos = tipo_cfg.get("incluir_adjuntos_fijos", True) is not False
             elif _tipo_dos_dias_antes_solo_correo(tipo):
@@ -354,12 +389,16 @@ def _enviar_correos_items(
                 incluir_pdf_anexo = True
                 incluir_adjuntos_fijos = True
         else:
-            # Masivos: nunca Carta_Cobranza.pdf aunque la fila tenga PDF marcado (checkbox mora).
-            if tipo == "MASIVOS":
+            # Masivos / PREJUDICIAL: nunca Carta_Cobranza ni PDF fijos.
+            if _tipo_prejudicial_solo_html(tipo):
                 incluir_pdf_anexo = False
+                incluir_adjuntos_fijos = False
+            elif tipo == "MASIVOS":
+                incluir_pdf_anexo = False
+                incluir_adjuntos_fijos = tipo_cfg.get("incluir_adjuntos_fijos", True) is not False
             else:
                 incluir_pdf_anexo = _cfg_incluir_pdf_anexo(tipo_cfg)
-            incluir_adjuntos_fijos = tipo_cfg.get("incluir_adjuntos_fijos", True) is not False  # True si falta la clave (compatibilidad)
+                incluir_adjuntos_fijos = tipo_cfg.get("incluir_adjuntos_fijos", True) is not False  # True si falta la clave (compatibilidad)
         if incluir_pdf_anexo or incluir_adjuntos_fijos:
             try:
                 attachments = []
@@ -399,7 +438,7 @@ def _enviar_correos_items(
                     attachments = None
         if paquete_estricto:
             ok_pkg, mot_pkg = _adjuntos_cumplen_paquete_completo(attachments)
-            if tipo == "MASIVOS" or _tipo_dos_dias_antes_solo_correo(tipo):
+            if _tipo_sin_paquete_pdf_obligatorio(tipo):
                 ok_pkg = True
             if not ok_pkg:
                 relax_prueba = bool(
@@ -418,7 +457,11 @@ def _enviar_correos_items(
                     continue
 
         # Mismo HTML y adjuntos que producción; destino: prueba o cliente.
-        if forzar_destinos_prueba is not None:
+        # PREJUDICIAL: siempre mensaje de prueba solo a EMAIL_PRUEBA_PREJUDICIAL (sin clientes ni CCO).
+        if _tipo_prejudicial_solo_html(tipo):
+            to_email = [EMAIL_PRUEBA_PREJUDICIAL]
+            bcc_list = None
+        elif forzar_destinos_prueba is not None:
             to_email = [e.strip() for e in forzar_destinos_prueba if e and isinstance(e, str) and "@" in e.strip()]
             bcc_list = None
         elif usar_solo_pruebas:
@@ -450,6 +493,20 @@ def _enviar_correos_items(
 
         email_sent_ok = False
         if to_email:
+            # Red de seguridad final: NUNCA enviar si LIQUIDADO/DESISTIMIENTO
+            # (aunque el item haya pasado filtros de listado o modo prueba).
+            if db:
+                bloqueado2, motivo2 = item_bloqueado_para_envio_notificacion(db, item)
+                if bloqueado2:
+                    logger.info(
+                        "[notif_excl_estado] BLOQUEO_FINAL pre-send item=%s tipo=%s motivo=%s "
+                        "(NUNCA enviar LIQUIDADO/DESISTIMIENTO)",
+                        item_id_log,
+                        tipo,
+                        motivo2,
+                    )
+                    omitidos_desistimiento += 1
+                    continue
             tipo_tab_envio = _tipo_tab_para_persistencia(tipo)
             if tipo == "PAGO_2_DIAS_ANTES_PENDIENTE":
                 tipo_tab_envio = "d_2_antes_vencimiento"
@@ -463,7 +520,9 @@ def _enviar_correos_items(
                 attachments=attachments,
                 servicio="notificaciones",
                 tipo_tab=tipo_tab_envio,
-                respetar_destinos_manuales=bool(forzar_destinos_prueba),
+                respetar_destinos_manuales=bool(
+                    forzar_destinos_prueba or _tipo_prejudicial_solo_html(tipo)
+                ),
                 smtp_session_metadata=smtp_meta,
             )
             log_envio_email(item_id_log, to_email[0], ok, None if ok else msg)
@@ -502,8 +561,14 @@ def _enviar_correos_items(
             if not usar_solo_pruebas:
                 sin_email += 1
         # WhatsApp solo si el correo se envio OK (paquete ya validado arriba).
+        # PREJUDICIAL: sin WhatsApp a clientes (solo email de prueba a itmaster).
         telefono = (item.get("telefono") or "").strip()
-        if telefono and email_sent_ok and forzar_destinos_prueba is None:
+        if (
+            telefono
+            and email_sent_ok
+            and forzar_destinos_prueba is None
+            and not _tipo_prejudicial_solo_html(tipo)
+        ):
             ok, _ = send_whatsapp_text(telefono, cuerpo)
             if ok:
                 enviados_whatsapp += 1

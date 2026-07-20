@@ -1,5 +1,6 @@
 """
-Motor único de elegibilidad para listados de mora por calendario (1 y 10+ días de atraso).
+Motor único de elegibilidad para listados de mora por calendario
+(1 día exacto y menor a 60 días: atraso 6..59).
 
 Misma regla de negocio para:
 - GET /notificaciones/clientes-retrasados (serialización ``_item``)
@@ -15,6 +16,7 @@ from typing import List, Literal, Tuple
 from sqlalchemy.orm import Session
 
 from app.services.notificacion_service import (
+    MAX_DIAS_ATRASO_PARA_LISTADO_10_DIAS,
     MIN_DIAS_ATRASO_PARA_LISTADO_10_DIAS,
     contar_cuotas_atraso_por_prestamos,
     cuota_aplica_listado_10_dias_por_dias_atraso,
@@ -39,8 +41,8 @@ def build_items_retraso_uno_y_diez_dias(
     Devuelve (lista_1_dia_atraso, lista_10_dias_atraso) según fecha de referencia (Caracas).
 
     - 1 día: cuota con vencimiento = ayer (exactamente 1 día de atraso).
-    - 10+ días: exactamente 1 cuota en mora en el préstamo y atraso >= 10 días
-      (permanece hasta que esa cuota se pague).
+    - Menor a 60 días (clave API dias_10_*): exactamente 1 cuota en mora y atraso
+      entre 6 y 59 días (permanece hasta pagar o salir del rango).
 
     ``formato``:
       - ``item_tab``: mismas filas que ``get_notificaciones_tabs_data`` (envío / tabs).
@@ -48,9 +50,12 @@ def build_items_retraso_uno_y_diez_dias(
     """
     fv_ayer = fecha_referencia - timedelta(days=1)
     fv_max_10 = fecha_referencia - timedelta(days=MIN_DIAS_ATRASO_PARA_LISTADO_10_DIAS)
+    fv_min_10 = fecha_referencia - timedelta(days=MAX_DIAS_ATRASO_PARA_LISTADO_10_DIAS)
 
     rows_1 = get_cuotas_pendientes_por_vencimientos(db, (fv_ayer,))
-    rows_10 = get_cuotas_pendientes_vencidas_hasta(db, fv_max_10)
+    rows_10 = get_cuotas_pendientes_vencidas_hasta(
+        db, fv_max_10, fecha_vencimiento_min=fv_min_10
+    )
 
     pids = [c.prestamo_id for c, _ in rows_1] + [c.prestamo_id for c, _ in rows_10]
     counts = contar_cuotas_atraso_por_prestamos(

@@ -168,7 +168,7 @@ export const CRITERIOS_ENVIO_TABLA: CriterioEnvioRow[] = [
   },
   {
     tipo: 'PAGO_10_DIAS_ATRASADO',
-    label: '10 días de retraso',
+    label: 'Menor a 60 días',
     categoria: 'Retrasada',
     color: 'orange',
   },
@@ -234,7 +234,7 @@ export const CRITERIOS_ENVIO_PANEL: CriterioEnvioRow[] = [
   },
   {
     tipo: 'PAGO_10_DIAS_ATRASADO',
-    label: '10 días de retraso',
+    label: 'Menor a 60 días',
     categoria: 'Retrasada',
     color: 'orange',
   },
@@ -761,6 +761,10 @@ export function ConfiguracionNotificaciones({
     if (tipo === 'MASIVOS') {
       return { ...row, incluir_pdf_anexo: false }
     }
+    // PREJUDICIAL (60 días o más): solo HTML/texto, sin anexos PDF.
+    if (tipo === 'PREJUDICIAL') {
+      return { ...row, incluir_pdf_anexo: false, incluir_adjuntos_fijos: false }
+    }
 
     return row
   }
@@ -872,8 +876,13 @@ export function ConfiguracionNotificaciones({
           ;(payload as Record<string, ConfigEnvioItem>)[tipo] = {
             ...c,
             incluir_pdf_anexo:
-              tipo === 'MASIVOS' ? false : c.incluir_pdf_anexo !== false,
-            incluir_adjuntos_fijos: c.incluir_adjuntos_fijos !== false,
+              tipo === 'MASIVOS' || tipo === 'PREJUDICIAL'
+                ? false
+                : c.incluir_pdf_anexo !== false,
+            incluir_adjuntos_fijos:
+              tipo === 'PREJUDICIAL'
+                ? false
+                : c.incluir_adjuntos_fijos !== false,
           }
         }
       } else {
@@ -900,8 +909,13 @@ export function ConfiguracionNotificaciones({
           p[tipo] = {
             ...c,
             incluir_pdf_anexo:
-              tipo === 'MASIVOS' ? false : c.incluir_pdf_anexo !== false,
-            incluir_adjuntos_fijos: c.incluir_adjuntos_fijos !== false,
+              tipo === 'MASIVOS' || tipo === 'PREJUDICIAL'
+                ? false
+                : c.incluir_pdf_anexo !== false,
+            incluir_adjuntos_fijos:
+              tipo === 'PREJUDICIAL'
+                ? false
+                : c.incluir_adjuntos_fijos !== false,
           }
         }
       }
@@ -1296,12 +1310,14 @@ export function ConfiguracionNotificaciones({
             {alcance === 'solo_prejudicial' ? (
               <>
                 Configuración solo para el listado{' '}
-                <strong>Prejudicial (5+ cuotas)</strong> (caso{' '}
+                <strong>60 días o más</strong> (caso{' '}
                 <strong>PREJUDICIAL</strong>
-                ): plantilla, envío, PDF y adjuntos de ese criterio. Las
-                plantillas COBRANZA se crean en Plantillas. El backend exige
-                plantilla activa, PDF variable válido y al menos un PDF fijo
-                adicional.
+                ): plantilla HTML y envío manual de prueba. Solo texto/HTML
+                (sin PDF). Destino fijo:{' '}
+                <code className="rounded bg-gray-100 px-1">
+                  itmaster@rapicreditca.com
+                </code>
+                . Sin cron ni «Enviar todas».
               </>
             ) : alcance === 'solo_pago_2_dias_antes_pendiente' ? (
               <>
@@ -1324,21 +1340,22 @@ export function ConfiguracionNotificaciones({
               </>
             ) : alcance === 'solo_pago_10_dias_atrasado' ? (
               <>
-                Configuración solo para <strong>10 días de atraso</strong> (caso{' '}
+                Configuración solo para <strong>menor a 60 días</strong> (caso{' '}
                 <strong>PAGO_10_DIAS_ATRASADO</strong>): cuotas pendientes con
-                atraso de 10 días calendario o más (vencimiento menor o igual a
-                referencia menos 10 días, Caracas); el préstamo debe tener
-                exactamente 1 cuota en mora; permanece hasta pagar esa cuota;
-                con 0 o con 2 o más no aplican. Incluye plantilla, envío, PDF y
-                adjuntos del caso{' '}
+                atraso entre 6 y 59 días calendario (vencimiento entre referencia
+                menos 59 y referencia menos 6, Caracas); el préstamo debe tener
+                exactamente 1 cuota en mora; permanece hasta pagar esa cuota o
+                salir del rango; con 0 o con 2 o más no aplican. Incluye plantilla,
+                envío, PDF y adjuntos del caso{' '}
                 <code className="rounded bg-gray-100 px-1">
                   dias_10_retraso
                 </code>
                 . Al pulsar Guardar solo se persisten esta fila y el bloque
                 global de modo prueba (no se modifican otros criterios ni
-                campañas masivas). El envío de correos de este criterio es solo
-                manual desde la pestaña de listado del submódulo (no entra en
-                «enviar todas» ni en el POST agregado legacy de retrasadas).
+                campañas masivas). <strong>Solo disparo manual</strong> desde
+                la pestaña de listado del submódulo: no hay cron, no hay envío
+                automático por hora/programador y no entra en «enviar todas»
+                ni en el POST agregado legacy de retrasadas.
               </>
             ) : (
               <>
@@ -1400,6 +1417,37 @@ export function ConfiguracionNotificaciones({
               prueba/producción y los correos de prueba son <em>globales</em> en
               la base de datos (afectan a todos los criterios al enviar). Las
               campañas masivas y el resto de casos no se modifican desde aquí.
+            </div>
+          )}
+
+          {alcance === 'solo_pago_10_dias_atrasado' && (
+            <div className="rounded-lg border border-sky-300 bg-sky-50 p-3 text-xs text-sky-950">
+              <strong className="font-semibold">Solo envío manual.</strong>{' '}
+              Este criterio (menor a 60 días / PAGO_10_DIAS_ATRASADO) no tiene
+              función automática: no hay cron de servidor ni lote «Enviar
+              todas». El disparo es únicamente el botón «Enviar notificaciones
+              (manual)» del listado (POST /enviar-caso-manual). El interruptor
+              «Envío» de la fila no programa envíos; solo afecta la
+              configuración del caso.
+            </div>
+          )}
+
+          {alcance === 'solo_prejudicial' && (
+            <div className="rounded-lg border border-sky-300 bg-sky-50 p-3 text-xs text-sky-950">
+              <strong className="font-semibold">Solo envío manual · modo prueba fijo.</strong>{' '}
+              Este criterio (60 días o más / PREJUDICIAL) no tiene función
+              automática: no hay cron ni lote «Enviar todas». El disparo es el
+              botón «Enviar notificaciones (manual)» del listado. Solo
+              texto/HTML, sin anexos PDF. Todo correo de este caso va{' '}
+              <strong>únicamente</strong> a{' '}
+              <code className="rounded bg-white/80 px-1">
+                itmaster@rapicreditca.com
+              </code>{' '}
+              (no a clientes ni CCO). Remitente From:{' '}
+              <code className="rounded bg-white/80 px-1">
+                notificaciones@rapicreditca.com
+              </code>
+              .
             </div>
           )}
 
@@ -1522,12 +1570,8 @@ export function ConfiguracionNotificaciones({
               <p className="text-xs text-gray-600">
                 {alcance === 'solo_prejudicial' ? (
                   <>
-                    Pestaña 1 = cuerpo HTML; pestaña 2 = carta PDF; pestaña 3 =
-                    PDF fijo del caso prejudicial (
-                    <code className="rounded bg-gray-100 px-1">
-                      prejudicial
-                    </code>
-                    ), subido abajo o en Plantillas; se guarda en base de datos.
+                    Solo cuerpo HTML/texto (pestaña 1). No se anexan PDF
+                    (ni carta ni documentos fijos) en el caso PREJUDICIAL.
                   </>
                 ) : alcance === 'solo_pago_2_dias_antes_pendiente' ? (
                   <>
@@ -2056,7 +2100,14 @@ export function ConfiguracionNotificaciones({
                       type="button"
                       onClick={() => toggleEnvio(tipo)}
                       title={
-                        config.habilitado ? 'Desactivar envío' : 'Activar envío'
+                        tipo === 'PAGO_10_DIAS_ATRASADO' ||
+                        tipo === 'PREJUDICIAL'
+                          ? config.habilitado
+                            ? 'Configuración activa (solo dispara envío manual desde el listado; sin cron)'
+                            : 'Configuración inactiva (sigue sin haber envío automático; el listado puede forzar al enviar manual)'
+                          : config.habilitado
+                            ? 'Desactivar envío'
+                            : 'Activar envío'
                       }
                       className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 ${
                         config.habilitado ? 'bg-blue-600' : 'bg-gray-300'
@@ -2077,11 +2128,17 @@ export function ConfiguracionNotificaciones({
                           incluir_pdf_anexo: !config.incluir_pdf_anexo,
                         })
                       }
-                      disabled={!config.habilitado || tipo === 'MASIVOS'}
+                      disabled={
+                        !config.habilitado ||
+                        tipo === 'MASIVOS' ||
+                        tipo === 'PREJUDICIAL'
+                      }
                       title={
                         tipo === 'MASIVOS'
                           ? 'No aplica: comunicaciones masivas no adjuntan Carta_Cobranza.pdf'
-                          : 'Carta_Cobranza.pdf (plantilla PDF cobranza). El servidor exige este PDF y un PDF fijo para enviar; debe estar activado.'
+                          : tipo === 'PREJUDICIAL'
+                            ? 'No aplica: 60 días o más envía solo HTML/texto, sin PDF'
+                            : 'Carta_Cobranza.pdf (plantilla PDF cobranza). El servidor exige este PDF y un PDF fijo para enviar; debe estar activado.'
                       }
                       className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                     />
@@ -2098,8 +2155,14 @@ export function ConfiguracionNotificaciones({
                           ),
                         })
                       }
-                      disabled={!config.habilitado}
-                      title="PDFs fijos (global + por caso). El servidor exige al menos un PDF fijo valido ademas de la carta; no desactivar."
+                      disabled={
+                        !config.habilitado || tipo === 'PREJUDICIAL'
+                      }
+                      title={
+                        tipo === 'PREJUDICIAL'
+                          ? 'No aplica: 60 días o más envía solo HTML/texto, sin PDF fijos'
+                          : 'PDFs fijos (global + por caso). El servidor exige al menos un PDF fijo valido ademas de la carta; no desactivar.'
+                      }
                       className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                     />
                   </td>
