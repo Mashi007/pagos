@@ -36,6 +36,7 @@ export interface ProcesarRebotesGmailResponse {
   mensaje?: string | null
   query?: string | null
   etiqueta?: string | null
+  candidatos: number
   revisados: number
   guardados: number
   omitidos: number

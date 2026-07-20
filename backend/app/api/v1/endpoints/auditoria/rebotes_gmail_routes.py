@@ -49,6 +49,7 @@ class ProcesarRebotesResponse(BaseModel):
     mensaje: Optional[str] = None
     query: Optional[str] = None
     etiqueta: Optional[str] = None
+    candidatos: int = 0
     revisados: int = 0
     guardados: int = 0
     omitidos: int = 0
@@ -90,7 +91,7 @@ def procesar_rebotes_gmail(
     db: Session = Depends(get_db),
     admin: UserResponse = Depends(require_admin),
 ):
-    """Escaneo manual: Primary de itmaster (leidos y no leidos), cuerpo con notificaciones@, etiqueta GMAIL, guarda en BD."""
+    """Escaneo manual: Inbox con etiqueta GMAIL (leidos y no leidos), parsea rebotes y guarda en BD."""
     result = svc.procesar_rebotes_gmail(
         db,
         procesado_por=admin.email,

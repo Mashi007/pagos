@@ -1,9 +1,9 @@
 """
-Escaneo manual de rebotes Gmail en bandeja Principal de itmaster.
+Escaneo manual de rebotes Gmail etiquetados GMAIL en Inbox de itmaster.
 
-Clave: el cuerpo debe mencionar notificaciones@rapicreditca.com.
+Condicion de busqueda: etiqueta GMAIL (leidos y no leidos).
 Clasifica segun texto de Gmail (mal / lleno / temporal / otro),
-cruza con clientes (cedula NULL si no hay match), etiqueta GMAIL y persiste.
+cruza con clientes (cedula NULL si no hay match) y persiste.
 """
 from __future__ import annotations
 
@@ -26,11 +26,8 @@ NOTIFICACIONES_EMAIL = "notificaciones@rapicreditca.com"
 ETIQUETA_GMAIL = "GMAIL"
 FRAGMENTO_MAX = 2000
 
-# Bandeja Principal + notificaciones@ (leidos y no leidos; sin filtro is:unread/is:read).
-# La etiqueta GMAIL se aplica al procesar; no se usa como filtro de busqueda.
-GMAIL_LIST_QUERY = (
-    f'in:inbox category:primary ("{NOTIFICACIONES_EMAIL}")'
-)
+# Condicion de escaneo: etiqueta GMAIL en Inbox (leidos y no leidos).
+GMAIL_LIST_QUERY = f"in:inbox label:{ETIQUETA_GMAIL}"
 
 _RE_EMAIL = re.compile(
     r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}",
@@ -54,6 +51,18 @@ _RE_DELIVERED_TO = re.compile(
     re.IGNORECASE,
 )
 
+_RE_FAILED_RECIPIENTS = re.compile(
+    r"(?:X-Failed-Recipients|Failed[- ]Recipients?)\s*:\s*<*([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})>*",
+    re.IGNORECASE,
+)
+
+_RE_DSN_EN = re.compile(
+    r"(?:recipient\s+failed(?:\s+permanently)?|following\s+recipient|could\s+not\s+be\s+delivered\s+to|"
+    r"wasn'?t\s+delivered\s+to|Delivery\s+to\s+the\s+following)\s*:?\s*"
+    r"<*([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})>*",
+    re.IGNORECASE,
+)
+
 _BOUNCE_MARKERS = (
     "mailer-daemon",
     "mail delivery subsystem",
@@ -69,6 +78,11 @@ _BOUNCE_MARKERS = (
     "could not be delivered",
     "wasn't delivered",
     "was not delivered",
+    "dsn",
+    "(failure)",
+    "(delay)",
+    "failure)",
+    "delay)",
 )
 
 
@@ -79,17 +93,24 @@ def _norm_email(raw: Optional[str]) -> str:
     return (addr or raw).strip().lower()
 
 
+def remitente_es_notificaciones(remitente: str) -> bool:
+    em = _norm_email(remitente)
+    if em == NOTIFICACIONES_EMAIL.lower():
+        return True
+    return NOTIFICACIONES_EMAIL.lower() in (remitente or "").lower()
+
+
 def cuerpo_menciona_notificaciones(texto: str) -> bool:
     return NOTIFICACIONES_EMAIL.lower() in (texto or "").lower()
 
 
-def parece_rebote_gmail(texto: str, remitente: str = "") -> bool:
-    blob = f"{remitente}\n{texto}".lower()
+def parece_rebote_gmail(texto: str, remitente: str = "", asunto: str = "") -> bool:
+    blob = f"{remitente}\n{asunto}\n{texto}".lower()
     return any(m in blob for m in _BOUNCE_MARKERS)
 
 
-def clasificar_observacion(texto: str) -> str:
-    t = (texto or "").lower()
+def clasificar_observacion(texto: str, asunto: str = "") -> str:
+    t = f"{asunto}\n{texto}".lower()
     if any(
         x in t
         for x in (
@@ -102,6 +123,8 @@ def clasificar_observacion(texto: str) -> str:
             "recipient address rejected",
             "mailbox unavailable",
             "invalid recipient",
+            "(failure)",
+            "delivery status notification (failure)",
         )
     ):
         return "mal"
@@ -129,7 +152,8 @@ def clasificar_observacion(texto: str) -> str:
             "will keep trying",
             "seguirá intentando",
             "seguira intentando",
-            "delay",
+            "(delay)",
+            "delivery status notification (delay)",
         )
     ):
         return "temporal"
@@ -141,7 +165,13 @@ def extraer_correo_rebotado(texto: str) -> Optional[str]:
     if not texto:
         return None
 
-    for rx in (_RE_FINAL_RECIPIENT, _RE_ENTREGA_ES, _RE_DELIVERED_TO):
+    for rx in (
+        _RE_FINAL_RECIPIENT,
+        _RE_FAILED_RECIPIENTS,
+        _RE_ENTREGA_ES,
+        _RE_DELIVERED_TO,
+        _RE_DSN_EN,
+    ):
         m = rx.search(texto)
         if m:
             em = _norm_email(m.group(1))
@@ -275,6 +305,7 @@ def procesar_rebotes_gmail(
             "ok": False,
             "error": "no_credentials",
             "mensaje": "No hay credenciales Gmail configuradas (misma conexion que Actualizaciones > Gmail).",
+            "candidatos": 0,
             "revisados": 0,
             "guardados": 0,
             "omitidos": 0,
@@ -307,6 +338,7 @@ def procesar_rebotes_gmail(
                 "ok": False,
                 "error": "gmail_list_failed",
                 "mensaje": str(e),
+                "candidatos": 0,
                 "revisados": 0,
                 "guardados": 0,
                 "omitidos": 0,
@@ -321,10 +353,11 @@ def procesar_rebotes_gmail(
             break
 
     msg_refs = msg_refs[:hard_cap]
+    candidatos = len(msg_refs)
     logger.info(
         "[AUDITORIA_REBOTES_GMAIL] q=%r candidatos=%s",
         GMAIL_LIST_QUERY,
-        len(msg_refs),
+        candidatos,
     )
 
     revisados = 0
@@ -360,11 +393,8 @@ def procesar_rebotes_gmail(
         remitente = headers.get("from") or ""
         asunto = headers.get("subject") or ""
 
-        if not cuerpo_menciona_notificaciones(texto):
-            omitidos += 1
-            continue
-
-        if not parece_rebote_gmail(texto, remitente):
+        # Con etiqueta GMAIL ya entraron al escaneo; el cuerpo/asunto deben parecer rebote.
+        if not parece_rebote_gmail(texto, remitente, asunto):
             omitidos += 1
             continue
 
@@ -374,7 +404,7 @@ def procesar_rebotes_gmail(
             omitidos += 1
             continue
 
-        obs = clasificar_observacion(texto)
+        obs = clasificar_observacion(texto, asunto)
         cedula = _cedula_por_correo(db, correo)
         fecha_msg = _fecha_mensaje(headers, full.get("internalDate"))
 
@@ -429,9 +459,18 @@ def procesar_rebotes_gmail(
     return {
         "ok": True,
         "error": None,
-        "mensaje": None,
+        "mensaje": (
+            None
+            if candidatos
+            else (
+                f"Gmail no devolvio mensajes con q={GMAIL_LIST_QUERY!r}. "
+                "Verifique que la cuenta OAuth sea itmaster@rapicreditca.com "
+                "y que los correos tengan la etiqueta GMAIL en Inbox."
+            )
+        ),
         "query": GMAIL_LIST_QUERY,
         "etiqueta": ETIQUETA_GMAIL,
+        "candidatos": candidatos,
         "revisados": revisados,
         "guardados": guardados,
         "omitidos": omitidos,

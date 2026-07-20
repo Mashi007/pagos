@@ -86,9 +86,16 @@ export function AuditoriaRebotesGmailTab() {
     try {
       const res = await auditoriaService.procesarRebotesGmail(200)
       setUltimoProceso(res)
-      toast.success(
-        `Procesado: ${res.guardados} nuevos, ${res.ya_existentes} ya en BD, ${res.omitidos} omitidos`
-      )
+      if (res.candidatos === 0) {
+        toast.message(
+          res.mensaje ||
+            'Gmail no devolvio candidatos. Revise cuenta OAuth / Inbox.'
+        )
+      } else {
+        toast.success(
+          `Procesado: ${res.candidatos} candidatos, ${res.guardados} nuevos, ${res.ya_existentes} ya en BD, ${res.omitidos} omitidos`
+        )
+      }
       await cargar(1)
     } catch (e: unknown) {
       const msg =
@@ -154,13 +161,10 @@ export function AuditoriaRebotesGmailTab() {
         </CardHeader>
         <CardContent className="space-y-3">
           <p className="text-sm text-muted-foreground">
-            Escanea la bandeja Principal de itmaster@rapicreditca.com (leidos y
-            no leidos). Condicion basica: mensajes con
-            notificaciones@rapicreditca.com en el cuerpo. Clasifica segun el
-            aviso de Gmail (mal, lleno, temporal, otro), cruza con clientes
-            (cedula vacia si no hay match), etiqueta GMAIL y guarda en BD. El
-            Excel se genera desde lo guardado. Si el mensaje ya esta en BD no se
-            duplica.
+            Escanea Inbox de itmaster@rapicreditca.com (leidos y no leidos) con
+            la etiqueta GMAIL. Extrae el correo fallido del cuerpo/asunto DSN
+            (Failure/Delay), clasifica mal/lleno/temporal/otro, cruza clientes y
+            guarda en BD. El Excel sale de lo guardado.
           </p>
           <div className="flex flex-wrap gap-2">
             <Button onClick={() => void handleProcesar()} disabled={procesando}>
@@ -204,11 +208,12 @@ export function AuditoriaRebotesGmailTab() {
           </div>
           {ultimoProceso ? (
             <p className="text-xs text-muted-foreground">
-              Ultima corrida: revisados {ultimoProceso.revisados}, guardados{' '}
-              {ultimoProceso.guardados}, ya existentes{' '}
-              {ultimoProceso.ya_existentes}, etiquetados{' '}
+              Ultima corrida: candidatos {ultimoProceso.candidatos}, revisados{' '}
+              {ultimoProceso.revisados}, guardados {ultimoProceso.guardados}, ya
+              existentes {ultimoProceso.ya_existentes}, etiquetados{' '}
               {ultimoProceso.etiquetados}, omitidos {ultimoProceso.omitidos},
               sin correo {ultimoProceso.sin_correo}
+              {ultimoProceso.query ? ` | q=${ultimoProceso.query}` : ''}
             </p>
           ) : null}
         </CardContent>
