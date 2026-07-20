@@ -238,7 +238,7 @@ export function AuditoriaRebotesGmailTab() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {items.map((row) => (
+                  {items.map(row => (
                     <TableRow key={row.id}>
                       <TableCell className="font-mono text-sm">
                         {row.cedula || '-'}

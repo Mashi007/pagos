@@ -1324,8 +1324,8 @@ export function ConfiguracionNotificaciones({
                 Configuración solo para el listado{' '}
                 <strong>60 días o más</strong> (caso{' '}
                 <strong>PREJUDICIAL</strong>
-                ): plantilla HTML y envío manual de prueba. Solo texto/HTML
-                (sin PDF). Destino fijo:{' '}
+                ): plantilla HTML y envío manual de prueba. Solo texto/HTML (sin
+                PDF). Destino fijo:{' '}
                 <code className="rounded bg-gray-100 px-1">
                   itmaster@rapicreditca.com
                 </code>
@@ -1354,20 +1354,20 @@ export function ConfiguracionNotificaciones({
               <>
                 Configuración solo para <strong>menor a 60 días</strong> (caso{' '}
                 <strong>PAGO_10_DIAS_ATRASADO</strong>): cuotas pendientes con
-                atraso entre 6 y 59 días calendario (vencimiento entre referencia
-                menos 59 y referencia menos 6, Caracas); el préstamo debe tener
-                exactamente 1 cuota en mora; permanece hasta pagar esa cuota o
-                salir del rango; con 0 o con 2 o más no aplican. Incluye plantilla,
-                envío, PDF y adjuntos del caso{' '}
+                atraso entre 6 y 59 días calendario (vencimiento entre
+                referencia menos 59 y referencia menos 6, Caracas); el préstamo
+                debe tener exactamente 1 cuota en mora; permanece hasta pagar
+                esa cuota o salir del rango; con 0 o con 2 o más no aplican.
+                Incluye plantilla, envío, PDF y adjuntos del caso{' '}
                 <code className="rounded bg-gray-100 px-1">
                   dias_10_retraso
                 </code>
                 . Al pulsar Guardar solo se persisten esta fila y el bloque
                 global de modo prueba (no se modifican otros criterios ni
-                campañas masivas). <strong>Solo disparo manual</strong> desde
-                la pestaña de listado del submódulo: no hay cron, no hay envío
-                automático por hora/programador y no entra en «enviar todas»
-                ni en el POST agregado legacy de retrasadas.
+                campañas masivas). <strong>Solo disparo manual</strong> desde la
+                pestaña de listado del submódulo: no hay cron, no hay envío
+                automático por hora/programador y no entra en «enviar todas» ni
+                en el POST agregado legacy de retrasadas.
               </>
             ) : (
               <>
@@ -1434,8 +1434,8 @@ export function ConfiguracionNotificaciones({
 
           {alcance === 'solo_pago_10_dias_atrasado' && (
             <div className="rounded-lg border border-sky-300 bg-sky-50 p-3 text-xs text-sky-950">
-              <strong className="font-semibold">Solo envío manual.</strong>{' '}
-              Este criterio (menor a 60 días / PAGO_10_DIAS_ATRASADO) no tiene
+              <strong className="font-semibold">Solo envío manual.</strong> Este
+              criterio (menor a 60 días / PAGO_10_DIAS_ATRASADO) no tiene
               función automática: no hay cron de servidor ni lote «Enviar
               todas». El disparo es únicamente el botón «Enviar notificaciones
               (manual)» del listado (POST /enviar-caso-manual). El interruptor
@@ -1448,7 +1448,9 @@ export function ConfiguracionNotificaciones({
 
           {alcance === 'solo_prejudicial' && (
             <div className="rounded-lg border border-sky-300 bg-sky-50 p-3 text-xs text-sky-950">
-              <strong className="font-semibold">Solo envío manual · modo prueba fijo.</strong>{' '}
+              <strong className="font-semibold">
+                Solo envío manual · modo prueba fijo.
+              </strong>{' '}
               Este criterio (60 días o más / PREJUDICIAL) no tiene función
               automática: no hay cron ni lote «Enviar todas». El disparo es el
               botón «Enviar notificaciones (manual)» del listado. Solo
@@ -1584,8 +1586,8 @@ export function ConfiguracionNotificaciones({
               <p className="text-xs text-gray-600">
                 {alcance === 'solo_prejudicial' ? (
                   <>
-                    Solo cuerpo HTML/texto (pestaña 1). No se anexan PDF
-                    (ni carta ni documentos fijos) en el caso PREJUDICIAL.
+                    Solo cuerpo HTML/texto (pestaña 1). No se anexan PDF (ni
+                    carta ni documentos fijos) en el caso PREJUDICIAL.
                   </>
                 ) : alcance === 'solo_pago_2_dias_antes_pendiente' ? (
                   <>

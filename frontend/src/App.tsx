@@ -480,9 +480,7 @@ function App() {
 
               <Route
                 path="notificaciones/a-3-cuotas"
-                element={
-                  <Navigate to="/notificaciones/a-2-cuotas" replace />
-                }
+                element={<Navigate to="/notificaciones/a-2-cuotas" replace />}
               />
 
               <Route

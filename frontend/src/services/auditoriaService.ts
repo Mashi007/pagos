@@ -788,10 +788,7 @@ class AuditoriaService {
   }
 
   async descargarRebotesGmailExcel(): Promise<void> {
-    const stamp = new Date()
-      .toISOString()
-      .slice(0, 19)
-      .replace(/[:-]/g, '')
+    const stamp = new Date().toISOString().slice(0, 19).replace(/[:-]/g, '')
     await apiClient.downloadFile(
       `${this.baseUrl}/rebotes-gmail/excel`,
       `auditoria_rebotes_gmail_${stamp}.xlsx`

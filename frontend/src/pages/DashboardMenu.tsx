@@ -716,10 +716,19 @@ export function DashboardMenu() {
   const evolucionMensual = useMemo(() => {
     const raw = datosDashboard?.evolucion_mensual ?? []
 
-    return raw.map((e: EvolucionMensualItem) => ({
-      ...e,
-      cuentas_por_cobrar: e.cartera - e.cobrado,
-    }))
+    return raw.map((e: EvolucionMensualItem) => {
+      const cobrado = e.cobrado ?? 0
+      const pagos_atrasos = e.pagos_atrasos ?? 0
+
+      return {
+        ...e,
+        cobrado,
+        pagos_atrasos,
+        /** Cobros = Cuotas del mes + Cuotas atrasadas (otros meses) */
+        cobros: cobrado + pagos_atrasos,
+        cuentas_por_cobrar: e.cartera - cobrado,
+      }
+    })
   }, [datosDashboard?.evolucion_mensual])
 
   const COLORS_CONCESIONARIOS = [
@@ -1044,12 +1053,11 @@ export function DashboardMenu() {
                   </div>
 
                   <CardDescription className="mt-2 text-xs text-gray-600">
-                    Azul: cuotas con vencimiento en ese mes. Verde: de esas,
-                    solo las pagadas <strong>en el mismo mes</strong> (vencimiento
-                    y pago en el mismo mes calendario). Naranja: pagos del mes
-                    con vencimiento de meses anteriores (informativo;{' '}
-                    <strong>no</strong> entra en la línea roja). Roja: programados
-                    menos conciliados del mismo mes.
+                    Dos barras por mes: <strong>Cuotas programadas</strong>{' '}
+                    (azul) vs <strong>Cobros</strong> = Cuotas del mes (verde) +
+                    Cuotas atrasadas de otros meses (naranja). Línea roja:{' '}
+                    <strong>Cuentas por cobrar</strong> = programadas − cuotas
+                    del mes (el cobro de atrasos no reduce esa línea).
                   </CardDescription>
                 </CardHeader>
 
@@ -1093,22 +1101,85 @@ export function DashboardMenu() {
                             />
 
                             <Tooltip
-                              contentStyle={chartTooltipStyle.contentStyle}
-                              labelStyle={chartTooltipStyle.labelStyle}
-                              formatter={(value: number, name: string) => {
-                                const suffix =
-                                  name === 'Cuentas por Cobrar'
-                                    ? ' (programados − conciliados mismo mes)'
-                                    : name === 'Pagos conciliados'
-                                      ? ' (vencimiento y pago en el mismo mes)'
-                                      : name === 'Pagos de meses anteriores'
-                                        ? ' (pago este mes, vencimiento anterior)'
-                                        : ''
-
-                                return [
-                                  formatCurrency(value),
-                                  `${name}${suffix}`,
+                              content={({ active, payload, label }) => {
+                                if (!active || !payload?.length) return null
+                                const row = payload[0]?.payload as {
+                                  cartera?: number
+                                  cobrado?: number
+                                  pagos_atrasos?: number
+                                  cobros?: number
+                                  cuentas_por_cobrar?: number
+                                }
+                                if (!row) return null
+                                const cobros =
+                                  row.cobros ??
+                                  (row.cobrado ?? 0) + (row.pagos_atrasos ?? 0)
+                                const rows: {
+                                  color: string
+                                  label: string
+                                  value: number
+                                  indent?: boolean
+                                }[] = [
+                                  {
+                                    color: '#3b82f6',
+                                    label: 'Cuotas programadas',
+                                    value: row.cartera ?? 0,
+                                  },
+                                  {
+                                    color: '#059669',
+                                    label: 'Cobros (total)',
+                                    value: cobros,
+                                  },
+                                  {
+                                    color: '#10b981',
+                                    label: 'Cuotas del mes',
+                                    value: row.cobrado ?? 0,
+                                    indent: true,
+                                  },
+                                  {
+                                    color: '#f97316',
+                                    label: 'Cuotas atrasadas (otros meses)',
+                                    value: row.pagos_atrasos ?? 0,
+                                    indent: true,
+                                  },
+                                  {
+                                    color: '#ef4444',
+                                    label:
+                                      'Cuentas por Cobrar (programadas − del mes)',
+                                    value: row.cuentas_por_cobrar ?? 0,
+                                  },
                                 ]
+                                return (
+                                  <div style={chartTooltipStyle.contentStyle}>
+                                    <p style={chartTooltipStyle.labelStyle}>
+                                      {label}
+                                    </p>
+                                    <ul className="m-0 list-none space-y-1.5 p-0">
+                                      {rows.map(r => (
+                                        <li
+                                          key={r.label}
+                                          className={`flex items-center justify-between gap-4 text-[13px] ${
+                                            r.indent ? 'pl-3' : ''
+                                          }`}
+                                          style={{ color: '#4b5563' }}
+                                        >
+                                          <span className="flex items-center gap-2">
+                                            <span
+                                              className="inline-block h-2.5 w-2.5 shrink-0 rounded-sm"
+                                              style={{
+                                                backgroundColor: r.color,
+                                              }}
+                                            />
+                                            {r.label}
+                                          </span>
+                                          <span className="font-semibold tabular-nums text-gray-900">
+                                            {formatCurrency(r.value)}
+                                          </span>
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  </div>
+                                )
                               }}
                             />
 
@@ -1118,7 +1189,7 @@ export function DashboardMenu() {
                               stackId="programado"
                               dataKey="cartera"
                               fill="#3b82f6"
-                              name="Pagos programados"
+                              name="Cuotas programadas"
                               radius={[4, 4, 0, 0]}
                             />
 
@@ -1126,7 +1197,7 @@ export function DashboardMenu() {
                               stackId="cobros"
                               dataKey="cobrado"
                               fill="#10b981"
-                              name="Pagos conciliados"
+                              name="Cuotas del mes"
                               radius={[0, 0, 0, 0]}
                             />
 
@@ -1134,7 +1205,7 @@ export function DashboardMenu() {
                               stackId="cobros"
                               dataKey="pagos_atrasos"
                               fill="#f97316"
-                              name="Pagos de meses anteriores"
+                              name="Cuotas atrasadas (otros meses)"
                               radius={[4, 4, 0, 0]}
                             />
 
@@ -1440,7 +1511,7 @@ export function DashboardMenu() {
           </Card>
         </motion.div>
 
-        {/* Notificaciones por día — menor a 60 días */}
+        {/* Notificaciones por día - menor a 60 días */}
 
         <motion.div
           initial={{ opacity: 0, y: 20 }}

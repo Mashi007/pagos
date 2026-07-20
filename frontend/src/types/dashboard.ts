@@ -74,16 +74,16 @@ export interface OpcionesFiltrosResponse {
 export interface EvolucionMensualItem {
   mes: string
 
-  /** Pagos programados: cuotas con vencimiento en el mes */
+  /** Cuotas programadas: Σ monto con fecha_vencimiento en el mes */
   cartera: number
 
-  /** Pagos conciliados: vencimiento en el mes y fecha_pago en el mismo mes calendario */
+  /** Cuotas del mes: vencimiento y fecha_pago en el mismo mes calendario */
   cobrado: number
 
-  /** Cobros en el mes de cuotas con vencimiento de meses anteriores (informativo; no entra en la línea roja) */
+  /** Cuotas atrasadas (otros meses): pago en el mes, vencimiento anterior (no entra en CxC) */
   pagos_atrasos: number
 
-  /** Debe ser cartera - cobrado; la UI lo recalcula así para la línea roja */
+  /** Cuentas por cobrar = cartera - cobrado; la UI lo recalcula para la línea roja */
   cuentas_por_cobrar: number
 }
 
