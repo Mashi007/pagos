@@ -83,6 +83,9 @@ export interface EvolucionMensualItem {
   /** Cuotas atrasadas (otros meses): pago en el mes, vencimiento anterior (no entra en CxC) */
   pagos_atrasos: number
 
+  /** Anticipos: pago en el mes, vencimiento en un mes posterior */
+  pagos_anticipados?: number
+
   /** Cuentas por cobrar = cartera - cobrado; la UI lo recalcula para la línea roja */
   cuentas_por_cobrar: number
 }

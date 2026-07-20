@@ -719,13 +719,18 @@ export function DashboardMenu() {
     return raw.map((e: EvolucionMensualItem) => {
       const cobrado = e.cobrado ?? 0
       const pagos_atrasos = e.pagos_atrasos ?? 0
+      const pagos_anticipados = e.pagos_anticipados ?? 0
+      /** Mes + anticipos → una sola cifra "Cuotas cobradas a tiempo" */
+      const cobrado_a_tiempo = cobrado + pagos_anticipados
 
       return {
         ...e,
         cobrado,
         pagos_atrasos,
-        /** Cobros = Cuotas del mes + Cuotas atrasadas (otros meses) */
-        cobros: cobrado + pagos_atrasos,
+        pagos_anticipados,
+        cobrado_a_tiempo,
+        /** Cobros = a tiempo + atrasadas */
+        cobros: cobrado_a_tiempo + pagos_atrasos,
         cuentas_por_cobrar: e.cartera - cobrado,
       }
     })
@@ -991,7 +996,10 @@ export function DashboardMenu() {
             {!datosDashboard?.evolucion_mensual?.length ||
             datosDashboard.evolucion_mensual.every(
               (e: EvolucionMensualItem) =>
-                !e.cartera && !e.cobrado && !(e.pagos_atrasos ?? 0)
+                !e.cartera &&
+                  !e.cobrado &&
+                  !(e.pagos_atrasos ?? 0) &&
+                  !(e.pagos_anticipados ?? 0)
             ) ? (
               <motion.div
                 initial={{ opacity: 0 }}
@@ -1054,10 +1062,11 @@ export function DashboardMenu() {
 
                   <CardDescription className="mt-2 text-xs text-gray-600">
                     Dos barras por mes: <strong>Cuotas programadas</strong>{' '}
-                    (azul) vs <strong>Cobros</strong> = Cuotas del mes (verde) +
-                    Cuotas atrasadas de otros meses (naranja). Línea roja:{' '}
-                    <strong>Cuentas por cobrar</strong> = programadas − cuotas
-                    del mes (el cobro de atrasos no reduce esa línea).
+                    (azul) vs <strong>Cobros</strong> = Cuotas cobradas a tiempo
+                    (verde: del mes + anticipos) + Cuotas atrasadas (naranja).
+                    Línea roja: <strong>Cuentas por cobrar</strong> =
+                    programadas − cuotas del mes (atrasos y anticipos no reducen
+                    esa línea).
                   </CardDescription>
                 </CardHeader>
 
@@ -1106,14 +1115,20 @@ export function DashboardMenu() {
                                 const row = payload[0]?.payload as {
                                   cartera?: number
                                   cobrado?: number
+                                  pagos_anticipados?: number
+                                  cobrado_a_tiempo?: number
                                   pagos_atrasos?: number
                                   cobros?: number
                                   cuentas_por_cobrar?: number
                                 }
                                 if (!row) return null
+                                const aTiempo =
+                                  row.cobrado_a_tiempo ??
+                                  (row.cobrado ?? 0) +
+                                    (row.pagos_anticipados ?? 0)
                                 const cobros =
                                   row.cobros ??
-                                  (row.cobrado ?? 0) + (row.pagos_atrasos ?? 0)
+                                  aTiempo + (row.pagos_atrasos ?? 0)
                                 const rows: {
                                   color: string
                                   label: string
@@ -1132,13 +1147,14 @@ export function DashboardMenu() {
                                   },
                                   {
                                     color: '#10b981',
-                                    label: 'Cuotas del mes',
-                                    value: row.cobrado ?? 0,
+                                    label:
+                                      'Cuotas cobradas a tiempo (mes + anticipos)',
+                                    value: aTiempo,
                                     indent: true,
                                   },
                                   {
                                     color: '#f97316',
-                                    label: 'Cuotas atrasadas (otros meses)',
+                                    label: 'Cuotas atrasadas',
                                     value: row.pagos_atrasos ?? 0,
                                     indent: true,
                                   },
@@ -1195,9 +1211,9 @@ export function DashboardMenu() {
 
                             <Bar
                               stackId="cobros"
-                              dataKey="cobrado"
+                              dataKey="cobrado_a_tiempo"
                               fill="#10b981"
-                              name="Cuotas del mes"
+                              name="Cuotas cobradas a tiempo"
                               radius={[0, 0, 0, 0]}
                             />
 
@@ -1205,7 +1221,7 @@ export function DashboardMenu() {
                               stackId="cobros"
                               dataKey="pagos_atrasos"
                               fill="#f97316"
-                              name="Cuotas atrasadas (otros meses)"
+                              name="Cuotas atrasadas"
                               radius={[4, 4, 0, 0]}
                             />
 

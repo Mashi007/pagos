@@ -70,7 +70,7 @@ def _sum_cuotas_por_mes_vencimiento(
     Si solo_pagadas=True (barra verde / cobrado del mes): exige fecha_pago
     informada y en el **mismo mes calendario** que fecha_vencimiento.
     No incluye pagos tardios ni anticipados de otro mes (esos van a atrasos
-    u otros buckets segun el caso).
+    o anticipados segun el caso).
     """
     anio = cast(func.extract("year", Cuota.fecha_vencimiento), Integer)
     mes_num = cast(func.extract("month", Cuota.fecha_vencimiento), Integer)
@@ -142,25 +142,69 @@ def _sum_pagos_atrasos_por_mes_pago(
     return out
 
 
+def _sum_pagos_anticipados_por_mes_pago(
+    db: Session,
+    min_d: date,
+    max_d: date,
+) -> dict[tuple[int, int], float]:
+    """Pago en el mes con vencimiento en un mes posterior (anticipos)."""
+    anio = cast(func.extract("year", Cuota.fecha_pago), Integer)
+    mes_num = cast(func.extract("month", Cuota.fecha_pago), Integer)
+    inicio_mes_pago = cast(func.date_trunc("month", Cuota.fecha_pago), Date)
+    inicio_mes_venc = cast(func.date_trunc("month", Cuota.fecha_vencimiento), Date)
+
+    stmt = (
+        select(
+            anio.label("anio"),
+            mes_num.label("mes"),
+            func.coalesce(func.sum(Cuota.monto), 0).label("total"),
+        )
+        .select_from(Cuota)
+        .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+        .join(Cliente, Prestamo.cliente_id == Cliente.id)
+        .where(
+            Prestamo.estado == "APROBADO",
+            Cuota.fecha_pago.isnot(None),
+            Cuota.fecha_pago >= min_d,
+            Cuota.fecha_pago <= max_d,
+            inicio_mes_venc > inicio_mes_pago,
+        )
+        .group_by(anio, mes_num)
+    )
+    out: dict[tuple[int, int], float] = {}
+    for row in db.execute(stmt).all():
+        if row.anio is None or row.mes is None:
+            continue
+        out[_mes_key(int(row.anio), int(row.mes))] = _safe_float(row.total)
+    return out
+
+
 def _fetch_agregados_mensuales_cuotas(
     db: Session,
     meses: list[dict],
-) -> tuple[dict[tuple[int, int], float], dict[tuple[int, int], float], dict[tuple[int, int], float]]:
+) -> tuple[
+    dict[tuple[int, int], float],
+    dict[tuple[int, int], float],
+    dict[tuple[int, int], float],
+    dict[tuple[int, int], float],
+]:
     """
-    Devuelve (cartera_by, cobrado_by, atrasos_by) por (anio, mes).
+    Devuelve (cartera_by, cobrado_by, atrasos_by, anticipados_by) por (anio, mes).
 
     - cartera: vencimiento en el mes
     - cobrado: vencimiento en el mes y pago en el mismo mes
     - atrasos: pago en el mes con vencimiento de un mes anterior
+    - anticipados: pago en el mes con vencimiento de un mes posterior
     """
     if not meses:
-        return {}, {}, {}
+        return {}, {}, {}, {}
     min_d = min(m["inicio_d"] for m in meses)
     max_d = max(m["fin_d"] for m in meses)
     cartera_by = _sum_cuotas_por_mes_vencimiento(db, min_d, max_d, solo_pagadas=False)
     cobrado_by = _sum_cuotas_por_mes_vencimiento(db, min_d, max_d, solo_pagadas=True)
     atrasos_by = _sum_pagos_atrasos_por_mes_pago(db, min_d, max_d)
-    return cartera_by, cobrado_by, atrasos_by
+    anticipados_by = _sum_pagos_anticipados_por_mes_pago(db, min_d, max_d)
+    return cartera_by, cobrado_by, atrasos_by, anticipados_by
 
 
 def _mes_lookup(m: dict) -> tuple[int, int]:

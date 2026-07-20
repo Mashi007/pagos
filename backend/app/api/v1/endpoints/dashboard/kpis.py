@@ -738,25 +738,30 @@ def _compute_dashboard_admin(
     """Calcula la respuesta de dashboard/admin (evolucion_mensual desde cuotas).
 
     cobrado = cuotas con vencimiento en el mes y fecha_pago en el mismo mes.
-    pagos_atrasos = pagos del mes con vencimiento de un mes anterior (informativo).
+    pagos_atrasos = pagos del mes con vencimiento de un mes anterior.
+    pagos_anticipados = pagos del mes con vencimiento de un mes posterior.
     cuentas_por_cobrar = cartera - cobrado.
     """
     meses = _resolver_meses_con_fechas(fecha_inicio, fecha_fin)
 
     evolucion = []
     try:
-        cartera_by, cobrado_by, atrasos_by = _fetch_agregados_mensuales_cuotas(db, meses)
+        cartera_by, cobrado_by, atrasos_by, anticipados_by = _fetch_agregados_mensuales_cuotas(
+            db, meses
+        )
         for m in meses:
             key = _mes_lookup(m)
             cartera_f = cartera_by.get(key, 0.0)
             cobrado_f = cobrado_by.get(key, 0.0)
             pagos_atrasos_f = atrasos_by.get(key, 0.0)
+            pagos_anticipados_f = anticipados_by.get(key, 0.0)
             cuentas_por_cobrar_f = cartera_f - cobrado_f
             evolucion.append({
                 "mes": m["mes"],
                 "cartera": cartera_f,
                 "cobrado": cobrado_f,
                 "pagos_atrasos": pagos_atrasos_f,
+                "pagos_anticipados": pagos_anticipados_f,
                 "cuentas_por_cobrar": cuentas_por_cobrar_f,
             })
         origen = "bd"
@@ -768,6 +773,7 @@ def _compute_dashboard_admin(
                 "cartera": 0.0,
                 "cobrado": 0.0,
                 "pagos_atrasos": 0.0,
+                "pagos_anticipados": 0.0,
                 "cuentas_por_cobrar": 0.0,
             }
             for m in meses
@@ -798,7 +804,9 @@ def _compute_analisis_cuentas_por_cobrar(
 
     analisis = []
     try:
-        cartera_by, cobrado_by, atrasos_by = _fetch_agregados_mensuales_cuotas(db, meses)
+        cartera_by, cobrado_by, atrasos_by, _anticipados_by = _fetch_agregados_mensuales_cuotas(
+            db, meses
+        )
         for m in meses:
             key = _mes_lookup(m)
             analisis.append({
@@ -828,23 +836,27 @@ def _compute_tendencia_programado_vs_total_cobrado(
     fecha_fin: Optional[str],
 ) -> dict:
     """Línea 1: cuotas programadas (vencimiento en el mes).
-    Línea 2: cobrado del mes (vencimiento y pago en el mismo mes) + atrasos cobrados en el mes.
+    Línea 2: cobrado a tiempo (mismo mes + anticipados) + atrasos cobrados en el mes.
     """
     meses = _resolver_meses_con_fechas(fecha_inicio, fecha_fin)
 
     series = []
     try:
-        cartera_by, cobrado_by, atrasos_by = _fetch_agregados_mensuales_cuotas(db, meses)
+        cartera_by, cobrado_by, atrasos_by, anticipados_by = _fetch_agregados_mensuales_cuotas(
+            db, meses
+        )
         for m in meses:
             key = _mes_lookup(m)
             prog_f = cartera_by.get(key, 0.0)
             conc_f = cobrado_by.get(key, 0.0)
             atras_f = atrasos_by.get(key, 0.0)
+            antic_f = anticipados_by.get(key, 0.0)
             series.append({
                 "mes": m["mes"],
                 "cuotas_programadas": prog_f,
-                "total_cobrado": conc_f + atras_f,
+                "total_cobrado": conc_f + antic_f + atras_f,
                 "conciliados_mes": conc_f,
+                "pagos_anticipados": antic_f,
                 "pagos_meses_anteriores": atras_f,
             })
         origen = "bd"
@@ -856,6 +868,7 @@ def _compute_tendencia_programado_vs_total_cobrado(
                 "cuotas_programadas": 0.0,
                 "total_cobrado": 0.0,
                 "conciliados_mes": 0.0,
+                "pagos_anticipados": 0.0,
                 "pagos_meses_anteriores": 0.0,
             }
             for mm in meses
