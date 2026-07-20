@@ -64,6 +64,14 @@ def _sum_cuotas_por_mes_vencimiento(
     *,
     solo_pagadas: bool,
 ) -> dict[tuple[int, int], float]:
+    """
+    Suma Cuota.monto agrupada por mes calendario de fecha_vencimiento.
+
+    Si solo_pagadas=True (barra verde / cobrado del mes): exige fecha_pago
+    informada y en el **mismo mes calendario** que fecha_vencimiento.
+    No incluye pagos tardios ni anticipados de otro mes (esos van a atrasos
+    u otros buckets segun el caso).
+    """
     anio = cast(func.extract("year", Cuota.fecha_vencimiento), Integer)
     mes_num = cast(func.extract("month", Cuota.fecha_vencimiento), Integer)
     conds = [
@@ -72,7 +80,11 @@ def _sum_cuotas_por_mes_vencimiento(
         Cuota.fecha_vencimiento <= max_d,
     ]
     if solo_pagadas:
+        # Mismo mes de vencimiento y de pago (no "pagada en cualquier fecha").
+        inicio_mes_venc = cast(func.date_trunc("month", Cuota.fecha_vencimiento), Date)
+        inicio_mes_pago = cast(func.date_trunc("month", Cuota.fecha_pago), Date)
         conds.append(Cuota.fecha_pago.isnot(None))
+        conds.append(inicio_mes_pago == inicio_mes_venc)
 
     stmt = (
         select(
@@ -134,6 +146,13 @@ def _fetch_agregados_mensuales_cuotas(
     db: Session,
     meses: list[dict],
 ) -> tuple[dict[tuple[int, int], float], dict[tuple[int, int], float], dict[tuple[int, int], float]]:
+    """
+    Devuelve (cartera_by, cobrado_by, atrasos_by) por (anio, mes).
+
+    - cartera: vencimiento en el mes
+    - cobrado: vencimiento en el mes y pago en el mismo mes
+    - atrasos: pago en el mes con vencimiento de un mes anterior
+    """
     if not meses:
         return {}, {}, {}
     min_d = min(m["inicio_d"] for m in meses)

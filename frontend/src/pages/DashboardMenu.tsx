@@ -1044,11 +1044,12 @@ export function DashboardMenu() {
                   </div>
 
                   <CardDescription className="mt-2 text-xs text-gray-600">
-                    La línea roja <strong>Cuentas por cobrar</strong> es cada
-                    mes: <strong>pagos programados</strong> (azul) menos{' '}
-                    <strong>pagos conciliados</strong> del mismo mes (verde).
-                    Los <strong>pagos de meses anteriores</strong> (naranja) son
-                    informativos y <strong>no</strong> entran en ese cálculo.
+                    Azul: cuotas con vencimiento en ese mes. Verde: de esas,
+                    solo las pagadas <strong>en el mismo mes</strong> (vencimiento
+                    y pago en el mismo mes calendario). Naranja: pagos del mes
+                    con vencimiento de meses anteriores (informativo;{' '}
+                    <strong>no</strong> entra en la línea roja). Roja: programados
+                    menos conciliados del mismo mes.
                   </CardDescription>
                 </CardHeader>
 
@@ -1097,8 +1098,12 @@ export function DashboardMenu() {
                               formatter={(value: number, name: string) => {
                                 const suffix =
                                   name === 'Cuentas por Cobrar'
-                                    ? ' (programados - conciliados del mes)'
-                                    : ''
+                                    ? ' (programados − conciliados mismo mes)'
+                                    : name === 'Pagos conciliados'
+                                      ? ' (vencimiento y pago en el mismo mes)'
+                                      : name === 'Pagos de meses anteriores'
+                                        ? ' (pago este mes, vencimiento anterior)'
+                                        : ''
 
                                 return [
                                   formatCurrency(value),

@@ -735,7 +735,12 @@ def _compute_dashboard_admin(
     fecha_inicio: Optional[str],
     fecha_fin: Optional[str],
 ) -> dict:
-    """Calcula la respuesta de dashboard/admin (evolucion_mensual desde cuotas)."""
+    """Calcula la respuesta de dashboard/admin (evolucion_mensual desde cuotas).
+
+    cobrado = cuotas con vencimiento en el mes y fecha_pago en el mismo mes.
+    pagos_atrasos = pagos del mes con vencimiento de un mes anterior (informativo).
+    cuentas_por_cobrar = cartera - cobrado.
+    """
     meses = _resolver_meses_con_fechas(fecha_inicio, fecha_fin)
 
     evolucion = []
@@ -822,7 +827,9 @@ def _compute_tendencia_programado_vs_total_cobrado(
     fecha_inicio: Optional[str],
     fecha_fin: Optional[str],
 ) -> dict:
-    """Línea 1: cuotas programadas (vencimiento en el mes). Línea 2: cobrado del mes + atrasos cobrados en el mes."""
+    """Línea 1: cuotas programadas (vencimiento en el mes).
+    Línea 2: cobrado del mes (vencimiento y pago en el mismo mes) + atrasos cobrados en el mes.
+    """
     meses = _resolver_meses_con_fechas(fecha_inicio, fecha_fin)
 
     series = []

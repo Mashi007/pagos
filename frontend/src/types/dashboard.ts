@@ -77,10 +77,10 @@ export interface EvolucionMensualItem {
   /** Pagos programados: cuotas con vencimiento en el mes */
   cartera: number
 
-  /** Pagos conciliados del mes: mismas cuotas (vencimiento en el mes) ya pagadas */
+  /** Pagos conciliados: vencimiento en el mes y fecha_pago en el mismo mes calendario */
   cobrado: number
 
-  /** Cobros en el mes de cuotas vencidas en meses anteriores (no entra en cuentas por cobrar de la línea) */
+  /** Cobros en el mes de cuotas con vencimiento de meses anteriores (informativo; no entra en la línea roja) */
   pagos_atrasos: number
 
   /** Debe ser cartera - cobrado; la UI lo recalcula así para la línea roja */

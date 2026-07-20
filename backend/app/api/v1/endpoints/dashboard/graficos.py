@@ -1096,14 +1096,19 @@ def get_cuotas_con_pago_aplicado_por_mes_cuota(
     Por mes **calendario** de `cuotas.fecha_vencimiento` (igual criterio de “cuota de ese mes” que
     `analisis-cuentas-por-cobrar`: vencimiento dentro del mes).
 
-    Monto por cuota (una sola vez por cuota en ese mes), coherente con la barra verde de Evolución mensual
-    cuando la cuota está marcada pagada:
-    1) Si `fecha_pago` está informada → **Cuota.monto** (igual que `evolucion_mensual.cobrado` en dashboard/admin).
+    Monto por cuota (una sola vez por cuota en ese mes). Nota: la barra verde de
+    Evolución mensual (`evolucion_mensual.cobrado`) exige además que `fecha_pago`
+    caiga en el **mismo mes** de vencimiento; este endpoint de `evolucion-pagos`
+    sigue midiendo cobertura de la cartera del mes de vencimiento (pagada en
+    cualquier fecha), más abonos parciales vía `cuota_pagos` / `total_pagado`.
+
+    1) Si `fecha_pago` está informada → **Cuota.monto**.
     2) Si no, pero hay `cuota_pagos` → **sum(monto_aplicado)** (abonos sin cerrar fecha_pago aún).
     3) Si no, pero `total_pagado` > 0 → **total_pagado**.
 
-    El bucket sigue siendo el mes de **vencimiento**, no el mes del pago: cuota de abril pagada en mayo suma el
-    cobrado en **abril** (y no en la barra naranja “mes del pago” de Evolución).
+    El bucket sigue siendo el mes de **vencimiento**, no el mes del pago: cuota de abril
+    pagada en mayo suma el cobrado en **abril** aquí (distinto de Evolución mensual,
+    donde esa cuota ya no entra en el verde de abril).
 
     Por cada mes calendario de vencimiento se devuelve:
     - **monto_programado**: suma de `Cuota.monto` de las cuotas con vencimiento en ese mes.
