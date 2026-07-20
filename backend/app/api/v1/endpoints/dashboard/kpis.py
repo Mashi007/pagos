@@ -740,21 +740,29 @@ def _compute_dashboard_admin(
     cobrado = cuotas con vencimiento en el mes y fecha_pago en el mismo mes.
     pagos_atrasos = pagos del mes con vencimiento de un mes anterior.
     pagos_anticipados = pagos del mes con vencimiento de un mes posterior.
+    pagos_no_conciliados_* = Pago.conciliado=False clasificados por vencimiento de cuota.
     cuentas_por_cobrar = cartera - cobrado.
     """
     meses = _resolver_meses_con_fechas(fecha_inicio, fecha_fin)
 
     evolucion = []
     try:
-        cartera_by, cobrado_by, atrasos_by, anticipados_by = _fetch_agregados_mensuales_cuotas(
-            db, meses
-        )
+        (
+            cartera_by,
+            cobrado_by,
+            atrasos_by,
+            anticipados_by,
+            no_conc_a_tiempo_by,
+            no_conc_atrasados_by,
+        ) = _fetch_agregados_mensuales_cuotas(db, meses)
         for m in meses:
             key = _mes_lookup(m)
             cartera_f = cartera_by.get(key, 0.0)
             cobrado_f = cobrado_by.get(key, 0.0)
             pagos_atrasos_f = atrasos_by.get(key, 0.0)
             pagos_anticipados_f = anticipados_by.get(key, 0.0)
+            no_conc_a_tiempo_f = no_conc_a_tiempo_by.get(key, 0.0)
+            no_conc_atrasados_f = no_conc_atrasados_by.get(key, 0.0)
             cuentas_por_cobrar_f = cartera_f - cobrado_f
             evolucion.append({
                 "mes": m["mes"],
@@ -762,6 +770,8 @@ def _compute_dashboard_admin(
                 "cobrado": cobrado_f,
                 "pagos_atrasos": pagos_atrasos_f,
                 "pagos_anticipados": pagos_anticipados_f,
+                "pagos_no_conciliados_a_tiempo": no_conc_a_tiempo_f,
+                "pagos_no_conciliados_atrasados": no_conc_atrasados_f,
                 "cuentas_por_cobrar": cuentas_por_cobrar_f,
             })
         origen = "bd"
@@ -774,6 +784,8 @@ def _compute_dashboard_admin(
                 "cobrado": 0.0,
                 "pagos_atrasos": 0.0,
                 "pagos_anticipados": 0.0,
+                "pagos_no_conciliados_a_tiempo": 0.0,
+                "pagos_no_conciliados_atrasados": 0.0,
                 "cuentas_por_cobrar": 0.0,
             }
             for m in meses
@@ -804,8 +816,8 @@ def _compute_analisis_cuentas_por_cobrar(
 
     analisis = []
     try:
-        cartera_by, cobrado_by, atrasos_by, _anticipados_by = _fetch_agregados_mensuales_cuotas(
-            db, meses
+        cartera_by, cobrado_by, atrasos_by, _anticipados_by, _nc_at, _nc_atr = (
+            _fetch_agregados_mensuales_cuotas(db, meses)
         )
         for m in meses:
             key = _mes_lookup(m)
@@ -842,8 +854,8 @@ def _compute_tendencia_programado_vs_total_cobrado(
 
     series = []
     try:
-        cartera_by, cobrado_by, atrasos_by, anticipados_by = _fetch_agregados_mensuales_cuotas(
-            db, meses
+        cartera_by, cobrado_by, atrasos_by, anticipados_by, _nc_at, _nc_atr = (
+            _fetch_agregados_mensuales_cuotas(db, meses)
         )
         for m in meses:
             key = _mes_lookup(m)

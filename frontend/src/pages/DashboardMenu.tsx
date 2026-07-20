@@ -720,17 +720,27 @@ export function DashboardMenu() {
       const cobrado = e.cobrado ?? 0
       const pagos_atrasos = e.pagos_atrasos ?? 0
       const pagos_anticipados = e.pagos_anticipados ?? 0
-      /** Mes + anticipos → una sola cifra "Cuotas cobradas a tiempo" */
-      const cobrado_a_tiempo = cobrado + pagos_anticipados
+      const pagos_no_conciliados_a_tiempo = e.pagos_no_conciliados_a_tiempo ?? 0
+      const pagos_no_conciliados_atrasados =
+        e.pagos_no_conciliados_atrasados ?? 0
+      /** Cuotas del mes + anticipos (sin no conciliados) */
+      const cuotas_a_tiempo = cobrado + pagos_anticipados
+      /** Barra: a tiempo = cuotas a tiempo + pagos no conciliados a tiempo */
+      const cobrado_a_tiempo = cuotas_a_tiempo + pagos_no_conciliados_a_tiempo
+      /** Barra: atrasadas = cuotas atrasadas + pagos no conciliados atrasados */
+      const atrasadas_total = pagos_atrasos + pagos_no_conciliados_atrasados
 
       return {
         ...e,
         cobrado,
         pagos_atrasos,
         pagos_anticipados,
+        pagos_no_conciliados_a_tiempo,
+        pagos_no_conciliados_atrasados,
+        cuotas_a_tiempo,
         cobrado_a_tiempo,
-        /** Cobros = a tiempo + atrasadas */
-        cobros: cobrado_a_tiempo + pagos_atrasos,
+        atrasadas_total,
+        cobros: cobrado_a_tiempo + atrasadas_total,
         cuentas_por_cobrar: e.cartera - cobrado,
       }
     })
@@ -997,9 +1007,11 @@ export function DashboardMenu() {
             datosDashboard.evolucion_mensual.every(
               (e: EvolucionMensualItem) =>
                 !e.cartera &&
-                  !e.cobrado &&
-                  !(e.pagos_atrasos ?? 0) &&
-                  !(e.pagos_anticipados ?? 0)
+                !e.cobrado &&
+                !(e.pagos_atrasos ?? 0) &&
+                !(e.pagos_anticipados ?? 0) &&
+                !(e.pagos_no_conciliados_a_tiempo ?? 0) &&
+                !(e.pagos_no_conciliados_atrasados ?? 0)
             ) ? (
               <motion.div
                 initial={{ opacity: 0 }}
@@ -1061,12 +1073,10 @@ export function DashboardMenu() {
                   </div>
 
                   <CardDescription className="mt-2 text-xs text-gray-600">
-                    Dos barras por mes: <strong>Cuotas programadas</strong>{' '}
-                    (azul) vs <strong>Cobros</strong> = Cuotas cobradas a tiempo
-                    (verde: del mes + anticipos) + Cuotas atrasadas (naranja).
-                    Línea roja: <strong>Cuentas por cobrar</strong> =
-                    programadas − cuotas del mes (atrasos y anticipos no reducen
-                    esa línea).
+                    Incluye préstamos APROBADO y LIQUIDADO. Barra azul: cuotas
+                    programadas. Barra de cobros: a tiempo + cartera vencida y
+                    pagada (+ no conciliados). Línea roja: cuentas por cobrar =
+                    programadas − cobradas a tiempo.
                   </CardDescription>
                 </CardHeader>
 
@@ -1115,54 +1125,102 @@ export function DashboardMenu() {
                                 const row = payload[0]?.payload as {
                                   cartera?: number
                                   cobrado?: number
-                                  pagos_anticipados?: number
+                                  cuotas_a_tiempo?: number
+                                  pagos_no_conciliados_a_tiempo?: number
                                   cobrado_a_tiempo?: number
                                   pagos_atrasos?: number
+                                  pagos_no_conciliados_atrasados?: number
+                                  atrasadas_total?: number
                                   cobros?: number
                                   cuentas_por_cobrar?: number
                                 }
                                 if (!row) return null
+                                const programadas = row.cartera ?? 0
+                                const cobradoMes = row.cobrado ?? 0
+                                const cuotasATiempo = row.cuotas_a_tiempo ?? 0
+                                const noConcATiempo =
+                                  row.pagos_no_conciliados_a_tiempo ?? 0
                                 const aTiempo =
                                   row.cobrado_a_tiempo ??
-                                  (row.cobrado ?? 0) +
-                                    (row.pagos_anticipados ?? 0)
-                                const cobros =
-                                  row.cobros ??
-                                  aTiempo + (row.pagos_atrasos ?? 0)
+                                  cuotasATiempo + noConcATiempo
+                                const carteraVencida = row.pagos_atrasos ?? 0
+                                const noConcAtrasadas =
+                                  row.pagos_no_conciliados_atrasados ?? 0
+                                const atrasadas =
+                                  row.atrasadas_total ??
+                                  carteraVencida + noConcAtrasadas
+                                const cobros = row.cobros ?? aTiempo + atrasadas
+                                const cxc =
+                                  row.cuentas_por_cobrar ??
+                                  programadas - cobradoMes
                                 const rows: {
                                   color: string
                                   label: string
                                   value: number
+                                  sign?: '+' | '-' | '='
                                   indent?: boolean
+                                  section?: string
                                 }[] = [
-                                  {
-                                    color: '#3b82f6',
-                                    label: 'Cuotas programadas',
-                                    value: row.cartera ?? 0,
-                                  },
                                   {
                                     color: '#059669',
                                     label: 'Cobros (total)',
                                     value: cobros,
+                                    sign: '=',
+                                    section: 'cobros',
                                   },
                                   {
                                     color: '#10b981',
-                                    label:
-                                      'Cuotas cobradas a tiempo (mes + anticipos)',
-                                    value: aTiempo,
+                                    label: 'Cuotas cobradas a tiempo',
+                                    value: cuotasATiempo,
+                                    sign: '+',
                                     indent: true,
+                                    section: 'cobros',
+                                  },
+                                  {
+                                    color: '#8b5cf6',
+                                    label: 'Pagos no conciliados a tiempo',
+                                    value: noConcATiempo,
+                                    sign: '+',
+                                    indent: true,
+                                    section: 'cobros',
                                   },
                                   {
                                     color: '#f97316',
-                                    label: 'Cuotas atrasadas',
-                                    value: row.pagos_atrasos ?? 0,
+                                    label: 'Cartera vencida y pagada',
+                                    value: carteraVencida,
+                                    sign: '+',
                                     indent: true,
+                                    section: 'cobros',
+                                  },
+                                  {
+                                    color: '#a855f7',
+                                    label:
+                                      'Pagos no conciliados (cartera vencida)',
+                                    value: noConcAtrasadas,
+                                    sign: '+',
+                                    indent: true,
+                                    section: 'cobros',
+                                  },
+                                  {
+                                    color: '#3b82f6',
+                                    label: 'Cuotas programadas',
+                                    value: programadas,
+                                    sign: '+',
+                                    section: 'cxc',
+                                  },
+                                  {
+                                    color: '#10b981',
+                                    label: 'Cuotas cobradas a tiempo',
+                                    value: cobradoMes,
+                                    sign: '-',
+                                    section: 'cxc',
                                   },
                                   {
                                     color: '#ef4444',
-                                    label:
-                                      'Cuentas por Cobrar (programadas − del mes)',
-                                    value: row.cuentas_por_cobrar ?? 0,
+                                    label: 'Cuentas por Cobrar',
+                                    value: cxc,
+                                    sign: '=',
+                                    section: 'cxc',
                                   },
                                 ]
                                 return (
@@ -1171,21 +1229,26 @@ export function DashboardMenu() {
                                       {label}
                                     </p>
                                     <ul className="m-0 list-none space-y-1.5 p-0">
-                                      {rows.map(r => (
+                                      {rows.map((r, idx) => (
                                         <li
-                                          key={r.label}
+                                          key={`${r.section}-${r.sign}-${r.label}-${idx}`}
                                           className={`flex items-center justify-between gap-4 text-[13px] ${
                                             r.indent ? 'pl-3' : ''
+                                          } ${
+                                            r.section === 'cxc' &&
+                                            r.sign === '+'
+                                              ? 'mt-2 border-t border-gray-200 pt-2'
+                                              : ''
                                           }`}
                                           style={{ color: '#4b5563' }}
                                         >
                                           <span className="flex items-center gap-2">
                                             <span
-                                              className="inline-block h-2.5 w-2.5 shrink-0 rounded-sm"
-                                              style={{
-                                                backgroundColor: r.color,
-                                              }}
-                                            />
+                                              className="inline-flex w-4 shrink-0 justify-center font-bold tabular-nums"
+                                              style={{ color: r.color }}
+                                            >
+                                              {r.sign}
+                                            </span>
                                             {r.label}
                                           </span>
                                           <span className="font-semibold tabular-nums text-gray-900">
@@ -1211,7 +1274,7 @@ export function DashboardMenu() {
 
                             <Bar
                               stackId="cobros"
-                              dataKey="cobrado_a_tiempo"
+                              dataKey="cuotas_a_tiempo"
                               fill="#10b981"
                               name="Cuotas cobradas a tiempo"
                               radius={[0, 0, 0, 0]}
@@ -1219,9 +1282,25 @@ export function DashboardMenu() {
 
                             <Bar
                               stackId="cobros"
+                              dataKey="pagos_no_conciliados_a_tiempo"
+                              fill="#8b5cf6"
+                              name="No conciliados a tiempo"
+                              radius={[0, 0, 0, 0]}
+                            />
+
+                            <Bar
+                              stackId="cobros"
                               dataKey="pagos_atrasos"
                               fill="#f97316"
-                              name="Cuotas atrasadas"
+                              name="Cartera vencida y pagada"
+                              radius={[0, 0, 0, 0]}
+                            />
+
+                            <Bar
+                              stackId="cobros"
+                              dataKey="pagos_no_conciliados_atrasados"
+                              fill="#a855f7"
+                              name="No conciliados (cartera vencida)"
                               radius={[4, 4, 0, 0]}
                             />
 
