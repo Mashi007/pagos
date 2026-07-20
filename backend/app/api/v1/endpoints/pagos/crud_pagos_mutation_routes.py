@@ -340,9 +340,8 @@ def crear_pago(payload: PagoCreate, db: Session = Depends(get_db), current_user:
 
     fecha_pago_ts = datetime.combine(payload.fecha_pago, dt_time.min)
 
-    # Autoconciliar cuando se asigna a un préstamo y no se indica explícitamente conciliado
-
-    conciliado = payload.conciliado if payload.conciliado is not None else (True if payload.prestamo_id else False)
+    # Todo pago ingresado se autoconcilia (salvo que el payload envíe conciliado=false).
+    conciliado = True if payload.conciliado is None else bool(payload.conciliado)
 
     usuario_registro = _usuario_registro_desde_current_user(current_user)
 
@@ -480,6 +479,11 @@ def crear_pago(payload: PagoCreate, db: Session = Depends(get_db), current_user:
         db.flush()
 
         db.refresh(row)
+
+        if conciliado:
+            from app.services.pago_autoconciliacion import marcar_pago_autoconciliado
+
+            marcar_pago_autoconciliado(row)
 
         # [C3] Aplicar cascada a cuotas en la misma transacción para que préstamos y estado de cuenta se actualicen
 

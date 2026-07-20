@@ -715,6 +715,8 @@ export function DashboardMenu() {
 
   const evolucionMensual = useMemo(() => {
     const raw = datosDashboard?.evolucion_mensual ?? []
+    let acumProgramadas = 0
+    let acumCobros = 0
 
     return raw.map((e: EvolucionMensualItem) => {
       const cobrado = e.cobrado ?? 0
@@ -723,12 +725,20 @@ export function DashboardMenu() {
       const pagos_no_conciliados_a_tiempo = e.pagos_no_conciliados_a_tiempo ?? 0
       const pagos_no_conciliados_atrasados =
         e.pagos_no_conciliados_atrasados ?? 0
-      /** Cuotas del mes + anticipos (sin no conciliados) */
+      /** Solo cuotas (mes + anticipos); sin pendientes de conciliar */
       const cuotas_a_tiempo = cobrado + pagos_anticipados
-      /** Barra: a tiempo = cuotas a tiempo + pagos no conciliados a tiempo */
-      const cobrado_a_tiempo = cuotas_a_tiempo + pagos_no_conciliados_a_tiempo
-      /** Barra: atrasadas = cuotas atrasadas + pagos no conciliados atrasados */
-      const atrasadas_total = pagos_atrasos + pagos_no_conciliados_atrasados
+      /**
+       * Cartera vencida y pagada: atrasos de cuotas + todos los pendientes
+       * de conciliar (a tiempo y atrasados).
+       */
+      const cartera_vencida_pagada =
+        pagos_atrasos +
+        pagos_no_conciliados_a_tiempo +
+        pagos_no_conciliados_atrasados
+      const cobros = cuotas_a_tiempo + cartera_vencida_pagada
+
+      acumProgramadas += e.cartera ?? 0
+      acumCobros += cobros
 
       return {
         ...e,
@@ -738,10 +748,12 @@ export function DashboardMenu() {
         pagos_no_conciliados_a_tiempo,
         pagos_no_conciliados_atrasados,
         cuotas_a_tiempo,
-        cobrado_a_tiempo,
-        atrasadas_total,
-        cobros: cobrado_a_tiempo + atrasadas_total,
-        cuentas_por_cobrar: e.cartera - cobrado,
+        cartera_vencida_pagada,
+        cobros,
+        /** Acumulados desde el primer mes de la serie hasta este mes */
+        programadas_acumuladas: acumProgramadas,
+        cobros_acumulados: acumCobros,
+        cuentas_por_cobrar: acumProgramadas - acumCobros,
       }
     })
   }, [datosDashboard?.evolucion_mensual])
@@ -1073,10 +1085,10 @@ export function DashboardMenu() {
                   </div>
 
                   <CardDescription className="mt-2 text-xs text-gray-600">
-                    Incluye préstamos APROBADO y LIQUIDADO. Barra azul: cuotas
-                    programadas. Barra de cobros: a tiempo + cartera vencida y
-                    pagada (+ no conciliados). Línea roja: cuentas por cobrar =
-                    programadas − cobradas a tiempo.
+                    Incluye préstamos APROBADO y LIQUIDADO. Barras del mes:
+                    programadas vs cobros (a tiempo + cartera vencida y pagada).
+                    Línea roja: cuentas por cobrar = programadas acumuladas −
+                    cobros acumulados (todos) hasta ese mes.
                   </CardDescription>
                 </CardHeader>
 
@@ -1124,35 +1136,25 @@ export function DashboardMenu() {
                                 if (!active || !payload?.length) return null
                                 const row = payload[0]?.payload as {
                                   cartera?: number
-                                  cobrado?: number
                                   cuotas_a_tiempo?: number
-                                  pagos_no_conciliados_a_tiempo?: number
-                                  cobrado_a_tiempo?: number
-                                  pagos_atrasos?: number
-                                  pagos_no_conciliados_atrasados?: number
-                                  atrasadas_total?: number
+                                  cartera_vencida_pagada?: number
                                   cobros?: number
+                                  programadas_acumuladas?: number
+                                  cobros_acumulados?: number
                                   cuentas_por_cobrar?: number
                                 }
                                 if (!row) return null
-                                const programadas = row.cartera ?? 0
-                                const cobradoMes = row.cobrado ?? 0
+                                const programadasMes = row.cartera ?? 0
                                 const cuotasATiempo = row.cuotas_a_tiempo ?? 0
-                                const noConcATiempo =
-                                  row.pagos_no_conciliados_a_tiempo ?? 0
-                                const aTiempo =
-                                  row.cobrado_a_tiempo ??
-                                  cuotasATiempo + noConcATiempo
-                                const carteraVencida = row.pagos_atrasos ?? 0
-                                const noConcAtrasadas =
-                                  row.pagos_no_conciliados_atrasados ?? 0
-                                const atrasadas =
-                                  row.atrasadas_total ??
-                                  carteraVencida + noConcAtrasadas
-                                const cobros = row.cobros ?? aTiempo + atrasadas
+                                const carteraVencida =
+                                  row.cartera_vencida_pagada ?? 0
+                                const cobrosMes =
+                                  row.cobros ?? cuotasATiempo + carteraVencida
+                                const progAcum = row.programadas_acumuladas ?? 0
+                                const cobrosAcum = row.cobros_acumulados ?? 0
                                 const cxc =
                                   row.cuentas_por_cobrar ??
-                                  programadas - cobradoMes
+                                  progAcum - cobrosAcum
                                 const rows: {
                                   color: string
                                   label: string
@@ -1162,11 +1164,18 @@ export function DashboardMenu() {
                                   section?: string
                                 }[] = [
                                   {
+                                    color: '#3b82f6',
+                                    label: 'Cuotas programadas',
+                                    value: programadasMes,
+                                    sign: '+',
+                                    section: 'mes',
+                                  },
+                                  {
                                     color: '#059669',
-                                    label: 'Cobros (total)',
-                                    value: cobros,
+                                    label: 'Cobros (total del mes)',
+                                    value: cobrosMes,
                                     sign: '=',
-                                    section: 'cobros',
+                                    section: 'mes',
                                   },
                                   {
                                     color: '#10b981',
@@ -1174,15 +1183,7 @@ export function DashboardMenu() {
                                     value: cuotasATiempo,
                                     sign: '+',
                                     indent: true,
-                                    section: 'cobros',
-                                  },
-                                  {
-                                    color: '#8b5cf6',
-                                    label: 'Pagos no conciliados a tiempo',
-                                    value: noConcATiempo,
-                                    sign: '+',
-                                    indent: true,
-                                    section: 'cobros',
+                                    section: 'mes',
                                   },
                                   {
                                     color: '#f97316',
@@ -1190,28 +1191,19 @@ export function DashboardMenu() {
                                     value: carteraVencida,
                                     sign: '+',
                                     indent: true,
-                                    section: 'cobros',
-                                  },
-                                  {
-                                    color: '#a855f7',
-                                    label:
-                                      'Pagos no conciliados (cartera vencida)',
-                                    value: noConcAtrasadas,
-                                    sign: '+',
-                                    indent: true,
-                                    section: 'cobros',
+                                    section: 'mes',
                                   },
                                   {
                                     color: '#3b82f6',
-                                    label: 'Cuotas programadas',
-                                    value: programadas,
+                                    label: 'Cuotas programadas (acumuladas)',
+                                    value: progAcum,
                                     sign: '+',
                                     section: 'cxc',
                                   },
                                   {
-                                    color: '#10b981',
-                                    label: 'Cuotas cobradas a tiempo',
-                                    value: cobradoMes,
+                                    color: '#059669',
+                                    label: 'Cobros acumulados (todos)',
+                                    value: cobrosAcum,
                                     sign: '-',
                                     section: 'cxc',
                                   },
@@ -1282,25 +1274,9 @@ export function DashboardMenu() {
 
                             <Bar
                               stackId="cobros"
-                              dataKey="pagos_no_conciliados_a_tiempo"
-                              fill="#8b5cf6"
-                              name="No conciliados a tiempo"
-                              radius={[0, 0, 0, 0]}
-                            />
-
-                            <Bar
-                              stackId="cobros"
-                              dataKey="pagos_atrasos"
+                              dataKey="cartera_vencida_pagada"
                               fill="#f97316"
                               name="Cartera vencida y pagada"
-                              radius={[0, 0, 0, 0]}
-                            />
-
-                            <Bar
-                              stackId="cobros"
-                              dataKey="pagos_no_conciliados_atrasados"
-                              fill="#a855f7"
-                              name="No conciliados (cartera vencida)"
                               radius={[4, 4, 0, 0]}
                             />
 

@@ -31,21 +31,25 @@ def _alinear_estado_si_toggle_conciliado_actualizar_pago(row: Pago, conciliado_n
 
 
 def _estado_conciliacion_post_cascada(pago: Pago, cuotas_completadas: int, cuotas_parciales: int) -> str:
+    """
+    Alinea estado tras cascada.
+
+    Política de ingreso: un pago ya marcado conciliado (alta / autoconciliación)
+    permanece conciliado y en PAGADO aunque la cascada no genere cuota_pagos
+    (cupo cubierto, sin cuotas pendientes, etc.). No bajar a PENDIENTE+!conciliado.
+    """
     estado = _estado_pago_tras_aplicar_cascada(cuotas_completadas, cuotas_parciales)
 
     if estado == "PAGADO":
+        # Cascada con abono: el flag debe coincidir (evita PAGADO + conciliado=False).
+        marcar_pago_autoconciliado(pago)
         return estado
 
-    # ABONOS y demás autoconciliados: mantener conciliado + PAGADO aunque no haya cuota_pagos.
-    if pago_preserva_autoconciliacion_sin_cuotas(pago):
+    if pago_preserva_autoconciliacion_sin_cuotas(pago) or bool(
+        getattr(pago, "conciliado", False)
+    ):
         marcar_pago_autoconciliado(pago)
         return "PAGADO"
-
-    # Sin aplicación real: no dejar conciliado=True con PENDIENTE (CHECK en BD).
-    if bool(getattr(pago, "conciliado", False)):
-        pago.conciliado = False
-        pago.fecha_conciliacion = None
-        # verificado_concordancia se mantiene (p. ej. SI) para no bloquear «Aplicar a cuotas» masivo.
 
     return estado
 

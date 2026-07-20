@@ -86,10 +86,10 @@ export interface EvolucionMensualItem {
   /** Anticipos: pago en el mes, vencimiento en un mes posterior */
   pagos_anticipados?: number
 
-  /** Pagos conciliado=False aplicados a cuotas del mes o anticipadas */
+  /** Pagos PENDIENTE aún no conciliados, aplicados a cuotas del mes o anticipadas */
   pagos_no_conciliados_a_tiempo?: number
 
-  /** Pagos conciliado=False aplicados a cuotas con vencimiento anterior */
+  /** Pagos PENDIENTE aún no conciliados, cartera vencida */
   pagos_no_conciliados_atrasados?: number
 
   /** Cuentas por cobrar = cartera - cobrado; la UI lo recalcula para la línea roja */

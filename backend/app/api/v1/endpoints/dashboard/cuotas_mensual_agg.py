@@ -189,10 +189,10 @@ def _sum_pagos_no_conciliados_por_categoria(
     max_d: date,
 ) -> tuple[dict[tuple[int, int], float], dict[tuple[int, int], float]]:
     """
-    Pagos con conciliado=False (excl. anulados/duplicados), por mes de fecha_pago.
+    Pagos PENDIENTE con conciliado=False, por mes de fecha_pago.
 
-    Solo montos aún no cerrados en Evolución (cuota sin fecha_pago), para no
-    duplicar cobrado/atrasos/anticipados.
+    No incluye PAGADO+!conciliado (inconsistencia de flag; la regla de ingreso
+    autoconcilia). Solo montos aún no cerrados en Evolución (cuota sin fecha_pago).
 
     Clasifica monto_aplicado vs vencimiento:
     - a_tiempo: mismo mes o posterior
@@ -208,12 +208,12 @@ def _sum_pagos_no_conciliados_por_categoria(
     inicio_mes_pago = cast(func.date_trunc("month", Pago.fecha_pago), Date)
     inicio_mes_venc = cast(func.date_trunc("month", Cuota.fecha_vencimiento), Date)
 
-    excluir_estados = ("ANULADO", "ANULADO_IMPORT", "DUPLICADO")
+    # Solo pendientes reales de conciliar (no PAGADO con flag mal alineado).
     base_pago = and_(
         Pago.conciliado.is_(False),
+        Pago.estado == "PENDIENTE",
         Pago.fecha_pago >= min_d,
         Pago.fecha_pago <= max_d,
-        or_(Pago.estado.is_(None), Pago.estado.notin_(excluir_estados)),
     )
 
     a_tiempo_expr = and_(
