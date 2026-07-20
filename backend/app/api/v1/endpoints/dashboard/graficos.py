@@ -548,68 +548,148 @@ def get_proyeccion_cobro_30_dias(db: Session = Depends(get_db)):
         return {"dias": []}
 
 
-@router.get("/monto-programado-proxima-semana")
-def get_monto_programado_proxima_semana(db: Session = Depends(get_db)):
+def _compute_tendencia_programado_cobrado_diario(
+    db: Session, *, dias_atras: int = 30
+) -> dict:
     """
-    Ventana diaria: desde hoy-10 hasta hoy (Caracas), 11 puntos.
-    - monto_programado: solo en el día hoy (suma monto_cuota con vencimiento hoy).
-    - pagos_conciliados_dia: cuotas con vencimiento = día d y fecha_pago = d.
-    - pagos_dias_anteriores_dia: cuotas con vencimiento < d y fecha_pago = d
-      (análogo diario a pagos de meses anteriores del análisis de cuentas por cobrar).
+    Serie diaria: hoy y los `dias_atras` dias anteriores (Caracas).
+
+    Solo cartera del dia (lo que se debia cobrar ese dia):
+    - cuotas_programadas: suma monto con fecha_vencimiento = dia
+    - total_cobrado / conciliados_dia: misma cuota con fecha_pago = dia
+      (vencimiento = pago). NO incluye atrasos de otros dias cobrados ese dia.
     """
-    try:
-        hoy_date = hoy_negocio()
-        inicio_date = hoy_date - timedelta(days=10)
-        resultado = []
-        nombres_mes = ("Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic")
-        d = inicio_date
-        while d <= hoy_date:
-            pagos_conciliados = db.scalar(
-                select(func.coalesce(func.sum(Cuota.monto), 0))
-                .select_from(Cuota)
-                .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
-                .join(Cliente, Prestamo.cliente_id == Cliente.id)
-                .where(
-                    Prestamo.estado == "APROBADO",
-                    Cuota.fecha_vencimiento == d,
-                    Cuota.fecha_pago == d,
-                )
-            ) or 0
-            pagos_dias_anteriores = db.scalar(
-                select(func.coalesce(func.sum(Cuota.monto), 0))
-                .select_from(Cuota)
-                .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
-                .join(Cliente, Prestamo.cliente_id == Cliente.id)
-                .where(
-                    Prestamo.estado == "APROBADO",
-                    Cuota.fecha_vencimiento < d,
-                    Cuota.fecha_pago == d,
-                )
-            ) or 0
-            programado = 0.0
-            if d == hoy_date:
-                programado = (
-                    db.scalar(
-                        select(func.coalesce(func.sum(Cuota.monto), 0))
-                        .select_from(Cuota)
-                        .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
-                        .join(Cliente, Prestamo.cliente_id == Cliente.id)
-                        .where(Prestamo.estado == "APROBADO", Cuota.fecha_vencimiento == d)
-                    )
-                    or 0
-                )
-            resultado.append({
+    dias_atras = max(0, min(int(dias_atras or 30), 90))
+    hoy_date = hoy_negocio()
+    inicio_date = hoy_date - timedelta(days=dias_atras)
+    nombres_mes = (
+        "Ene",
+        "Feb",
+        "Mar",
+        "Abr",
+        "May",
+        "Jun",
+        "Jul",
+        "Ago",
+        "Sep",
+        "Oct",
+        "Nov",
+        "Dic",
+    )
+
+    prog_rows = db.execute(
+        select(
+            Cuota.fecha_vencimiento,
+            func.coalesce(func.sum(Cuota.monto), 0),
+        )
+        .select_from(Cuota)
+        .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+        .where(
+            Prestamo.estado == "APROBADO",
+            Cuota.fecha_vencimiento >= inicio_date,
+            Cuota.fecha_vencimiento <= hoy_date,
+        )
+        .group_by(Cuota.fecha_vencimiento)
+    ).all()
+    prog_by = {r[0]: _safe_float(r[1]) for r in prog_rows if r[0] is not None}
+
+    # Solo cobrado de cuotas que vencian ese mismo dia (no atrasos de otros vencimientos).
+    conc_rows = db.execute(
+        select(
+            Cuota.fecha_vencimiento,
+            func.coalesce(func.sum(Cuota.monto), 0),
+        )
+        .select_from(Cuota)
+        .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+        .where(
+            Prestamo.estado == "APROBADO",
+            Cuota.fecha_pago.isnot(None),
+            Cuota.fecha_vencimiento >= inicio_date,
+            Cuota.fecha_vencimiento <= hoy_date,
+            Cuota.fecha_pago == Cuota.fecha_vencimiento,
+        )
+        .group_by(Cuota.fecha_vencimiento)
+    ).all()
+    conc_by = {r[0]: _safe_float(r[1]) for r in conc_rows if r[0] is not None}
+
+    series = []
+    d = inicio_date
+    while d <= hoy_date:
+        prog = prog_by.get(d, 0.0)
+        conc = conc_by.get(d, 0.0)
+        series.append(
+            {
                 "fecha": d.isoformat(),
                 "dia": f"{d.day} {nombres_mes[d.month - 1]}",
-                "monto_programado": round(_safe_float(programado), 2),
-                "pagos_conciliados_dia": round(_safe_float(pagos_conciliados), 2),
-                "pagos_dias_anteriores_dia": round(_safe_float(pagos_dias_anteriores), 2),
-            })
-            d += timedelta(days=1)
-        return {"dias": resultado}
+                "cuotas_programadas": round(prog, 2),
+                "conciliados_dia": round(conc, 2),
+                "pagos_dias_anteriores": 0.0,
+                "total_cobrado": round(conc, 2),
+                # Compat con endpoint legacy monto-programado-proxima-semana
+                "monto_programado": round(prog, 2),
+                "pagos_conciliados_dia": round(conc, 2),
+                "pagos_dias_anteriores_dia": 0.0,
+            }
+        )
+        d += timedelta(days=1)
+
+    return {
+        "series": series,
+        "dias": series,
+        "desde": inicio_date.isoformat(),
+        "hasta": hoy_date.isoformat(),
+        "origen": "bd",
+    }
+
+
+@router.get("/tendencia-programado-total-cobrado-diario")
+def get_tendencia_programado_total_cobrado_diario(
+    dias: int = Query(
+        30,
+        ge=0,
+        le=90,
+        description="Dias anteriores a hoy (Caracas). 30 = hoy + 30 dias previos.",
+    ),
+    db: Session = Depends(get_db),
+):
+    """
+    Programado vs cobrado por dia: hoy y los N dias anteriores (default 30).
+    Misma semantica diaria que la tendencia mensual.
+    """
+    try:
+        return _compute_tendencia_programado_cobrado_diario(db, dias_atras=dias)
+    except Exception as e:
+        logger.exception("Error en tendencia-programado-total-cobrado-diario: %s", e)
+        return {
+            "series": [],
+            "dias": [],
+            "desde": None,
+            "hasta": None,
+            "origen": "bd",
+        }
+
+
+@router.get("/monto-programado-proxima-semana")
+def get_monto_programado_proxima_semana(
+    dias: int = Query(
+        30,
+        ge=0,
+        le=90,
+        description="Dias anteriores a hoy. Default 30 (hoy + 30 previos).",
+    ),
+    db: Session = Depends(get_db),
+):
+    """
+    Ventana diaria: desde hoy-N hasta hoy (Caracas).
+    - monto_programado / cuotas_programadas: vencimiento = dia
+    - pagos_conciliados_dia: vencimiento = dia y fecha_pago = dia
+    - pagos_dias_anteriores_dia: vencimiento < dia y fecha_pago = dia
+    """
+    try:
+        return _compute_tendencia_programado_cobrado_diario(db, dias_atras=dias)
     except Exception as e:
         logger.exception("Error en monto-programado-proxima-semana: %s", e)
-        return {"dias": []}
+        return {"dias": [], "series": [], "origen": "bd"}
 
 
 def _compute_prestamos_por_concesionario(

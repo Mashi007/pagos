@@ -231,6 +231,26 @@ export interface TendenciaProgramadoTotalCobradoResponse {
   origen: 'demo' | 'bd'
 }
 
+/** GET /api/v1/dashboard/tendencia-programado-total-cobrado-diario */
+export interface TendenciaProgramadoCobradoDiarioItem {
+  fecha: string
+  dia: string
+  cuotas_programadas: number
+  /** Solo cuotas con vencimiento = dia y fecha_pago = dia (sin atrasos). */
+  total_cobrado: number
+  conciliados_dia: number
+  /** Siempre 0 en este endpoint (atrasos excluidos a proposito). */
+  pagos_dias_anteriores: number
+}
+
+export interface TendenciaProgramadoCobradoDiarioResponse {
+  series: TendenciaProgramadoCobradoDiarioItem[]
+  dias: TendenciaProgramadoCobradoDiarioItem[]
+  desde?: string | null
+  hasta?: string | null
+  origen: 'demo' | 'bd'
+}
+
 export interface RecibosPagosMensualUsdItem {
   mes: string
 
