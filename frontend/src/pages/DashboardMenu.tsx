@@ -616,10 +616,52 @@ export function DashboardMenu() {
     enabled: enableTertiaryCharts,
   })
 
+  const {
+    data: datosNotificacionesMenor60PorDia,
+    isLoading: loadingNotificacionesMenor60PorDia,
+    isError: errorNotificacionesMenor60PorDia,
+  } = useQuery({
+    queryKey: [
+      'notificaciones-envios-por-dia',
+      'dias_10_retraso',
+      NOTIFICACIONES_ENVIOS_TENDENCIA_DIAS,
+    ],
+
+    queryFn: async (): Promise<NotificacionesEnviosPorDiaResponse> => {
+      const params = new URLSearchParams({
+        tipo_tab: 'dias_10_retraso',
+        dias: String(NOTIFICACIONES_ENVIOS_TENDENCIA_DIAS),
+      })
+
+      const response = await apiClient.get(
+        `/api/v1/dashboard/notificaciones-envios-por-dia?${params.toString()}`,
+        { timeout: 60000 }
+      )
+
+      return response as NotificacionesEnviosPorDiaResponse
+    },
+
+    staleTime: 5 * 60 * 1000,
+
+    refetchOnWindowFocus: false,
+
+    retry: 1,
+
+    enabled: enableTertiaryCharts,
+  })
+
   const serieNotificacionesGrafico = useMemo(
     () =>
       serieNotificacionesEjeDesde5Abril(datosNotificacionesPorDia?.serie ?? []),
     [datosNotificacionesPorDia?.serie]
+  )
+
+  const serieNotificacionesMenor60Grafico = useMemo(
+    () =>
+      serieNotificacionesEjeDesde5Abril(
+        datosNotificacionesMenor60PorDia?.serie ?? []
+      ),
+    [datosNotificacionesMenor60PorDia?.serie]
   )
 
   const { data: datosFlujoFiniquito, isLoading: loadingFlujoFiniquito } =
@@ -667,6 +709,12 @@ export function DashboardMenu() {
     [serieNotificacionesGrafico]
   )
 
+  const serieNotificacionesMenor60ConTendencia = useMemo(
+    () =>
+      notificacionesSerieConTendenciaLineal(serieNotificacionesMenor60Grafico),
+    [serieNotificacionesMenor60Grafico]
+  )
+
   const etiquetaRangoNotificacionesEjeX = useMemo(() => {
     const s = serieNotificacionesGrafico
 
@@ -680,6 +728,20 @@ export function DashboardMenu() {
 
     return `${NOTIFICACIONES_ENVIOS_TENDENCIA_DIAS} d · Caracas`
   }, [serieNotificacionesGrafico])
+
+  const etiquetaRangoNotificacionesMenor60EjeX = useMemo(() => {
+    const s = serieNotificacionesMenor60Grafico
+
+    if (!s.length) return `${NOTIFICACIONES_ENVIOS_TENDENCIA_DIAS} d · Caracas`
+
+    const a = s[0]?.fecha
+
+    const b = s[s.length - 1]?.fecha
+
+    if (a && b) return a === b ? `${a} · Caracas` : `${a} - ${b} · Caracas`
+
+    return `${NOTIFICACIONES_ENVIOS_TENDENCIA_DIAS} d · Caracas`
+  }, [serieNotificacionesMenor60Grafico])
 
   const [isRefreshing, setIsRefreshing] = useState(false)
 
@@ -1597,6 +1659,153 @@ export function DashboardMenu() {
                   <ResponsiveContainer width="100%" height={320}>
                     <RechartsLineChart
                       data={serieNotificacionesConTendencia}
+                      margin={{
+                        top: 12,
+                        right: 20,
+                        left: 12,
+                        bottom: 12,
+                      }}
+                    >
+                      <CartesianGrid {...chartCartesianGrid} />
+
+                      <XAxis
+                        dataKey="dia"
+                        tick={chartAxisTick}
+                        interval="preserveStartEnd"
+                        minTickGap={16}
+                      />
+
+                      <YAxis
+                        tick={chartAxisTick}
+                        allowDecimals={false}
+                        width={40}
+                        label={{
+                          value: 'Enviados',
+                          angle: -90,
+                          position: 'insideLeft',
+                          style: { fill: '#374151', fontSize: 13 },
+                        }}
+                      />
+
+                      <Tooltip
+                        contentStyle={chartTooltipStyle.contentStyle}
+                        labelStyle={chartTooltipStyle.labelStyle}
+                        formatter={(value: number, name: string) => {
+                          const rounded =
+                            typeof value === 'number'
+                              ? Math.round(value * 100) / 100
+                              : value
+
+                          if (
+                            name === 'Tendencia (regresión lineal)' ||
+                            name === 'tendencia'
+                          ) {
+                            return [rounded, name]
+                          }
+
+                          return [rounded, 'Enviados (éxito SMTP)']
+                        }}
+                        labelFormatter={(_, payload) =>
+                          payload?.[0]?.payload?.fecha
+                            ? String(payload[0].payload.fecha)
+                            : ''
+                        }
+                      />
+
+                      <Legend {...chartLegendStyle} />
+
+                      <Line
+                        type="monotone"
+                        dataKey="enviados"
+                        name="Correos enviados (SMTP)"
+                        stroke="#0ea5e9"
+                        strokeWidth={2}
+                        dot={{ r: 4 }}
+                        activeDot={{ r: 6 }}
+                      />
+
+                      <Line
+                        type="linear"
+                        dataKey="tendencia"
+                        name="Tendencia (regresión lineal)"
+                        stroke="#64748b"
+                        strokeWidth={2}
+                        strokeDasharray="6 4"
+                        dot={false}
+                        isAnimationActive={false}
+                      />
+                    </RechartsLineChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </motion.div>
+
+        {/* Notificaciones por día — menor a 60 días */}
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.34 }}
+          className="mt-6"
+          id="dashboard-notificaciones-dia-menor-60"
+        >
+          <Card className="overflow-hidden rounded-xl border border-gray-200/90 bg-white shadow-lg">
+            <CardHeader className="border-b border-gray-200/80 bg-gradient-to-r from-sky-50/90 to-indigo-50/90 pb-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <CardTitle className="flex items-center gap-2 text-lg font-bold text-gray-800">
+                  <Mail className="h-5 w-5 shrink-0 text-sky-600" />
+
+                  <span className="leading-tight">
+                    Cobranzas entre 5 y 59 días
+                  </span>
+                </CardTitle>
+
+                <Badge
+                  variant="secondary"
+                  className="shrink-0 border border-gray-200 bg-white/80 text-xs font-medium text-gray-600"
+                >
+                  {etiquetaRangoNotificacionesMenor60EjeX}
+                </Badge>
+              </div>
+
+              <CardDescription className="mt-2 text-xs text-gray-600">
+                Historial{' '}
+                <code className="rounded bg-gray-100 px-1 py-0.5 text-[11px]">
+                  dias_10_retraso
+                </code>
+                : correos aceptados por SMTP (enviados) por día. Eje X desde el{' '}
+                <strong>5 de abril</strong> del año del último día con datos
+                (muestra de {NOTIFICACIONES_ENVIOS_TENDENCIA_DIAS} d recortada).
+                Línea gris discontinua: <strong>tendencia</strong> (regresión
+                lineal sobre la serie mostrada).
+              </CardDescription>
+            </CardHeader>
+
+            <CardContent className="p-6 pt-4">
+              {loadingNotificacionesMenor60PorDia ? (
+                <div className="flex items-center justify-center py-16 text-sm text-gray-500">
+                  Cargando…
+                </div>
+              ) : errorNotificacionesMenor60PorDia ? (
+                <div className="flex flex-col items-center justify-center gap-2 py-12 text-center text-red-700">
+                  <AlertTriangle className="h-8 w-8" />
+
+                  <p className="text-sm font-medium">
+                    No se pudo cargar la tendencia.
+                  </p>
+                </div>
+              ) : (datosNotificacionesMenor60PorDia?.serie?.length ?? 0) ===
+                0 ? (
+                <div className="flex items-center justify-center py-16 text-sm text-gray-500">
+                  Sin envíos en el período.
+                </div>
+              ) : (
+                <div className="h-[320px] w-full">
+                  <ResponsiveContainer width="100%" height={320}>
+                    <RechartsLineChart
+                      data={serieNotificacionesMenor60ConTendencia}
                       margin={{
                         top: 12,
                         right: 20,

@@ -1405,13 +1405,18 @@ def get_cuentas_cobrar_tendencias(
 
 
 # Tipo(s) de pestaña permitidos para la tendencia diaria (ampliar cuando se agreguen más series en UI).
-TIPOS_NOTIFICACIONES_ENVIOS_TENDENCIA = frozenset({"dias_1_retraso"})
+TIPOS_NOTIFICACIONES_ENVIOS_TENDENCIA = frozenset(
+    {
+        "dias_1_retraso",  # día siguiente al vencimiento
+        "dias_10_retraso",  # menor a 60 días
+    }
+)
 
 
 def _compute_notificaciones_envios_por_dia(db: Session, tipo_tab: str, dias: int) -> dict:
     """
     Cuenta envíos registrados en envios_notificacion por día calendario (America/Caracas).
-    dias_1_retraso = notificaciones «día siguiente al vencimiento» en la UI.
+    dias_1_retraso = «día siguiente al vencimiento»; dias_10_retraso = «menor a 60 días».
     """
     try:
         dias_ef = min(366, max(7, int(dias)))
@@ -1487,7 +1492,10 @@ def _compute_notificaciones_envios_por_dia(db: Session, tipo_tab: str, dias: int
 def get_notificaciones_envios_por_dia(
     tipo_tab: str = Query(
         "dias_1_retraso",
-        description="tipo_tab en envíos. Por ahora solo dias_1_retraso (día siguiente al vencimiento).",
+        description=(
+            "tipo_tab en envíos: dias_1_retraso (día siguiente al vencimiento) "
+            "o dias_10_retraso (menor a 60 días)."
+        ),
     ),
     dias: int = Query(90, ge=7, le=366),
     db: Session = Depends(get_db),
