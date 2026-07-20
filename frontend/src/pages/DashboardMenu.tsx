@@ -70,8 +70,6 @@ import {
 } from '../hooks/useStaggeredEnable'
 
 import {
-  FINANCIAMIENTO_BANDAS_GRAFICO_TITULO,
-  FINANCIAMIENTO_BANDAS_ORDEN_CATEGORIAS,
   getPeriodoEtiqueta,
   PERIODOS_VALORES,
   PERIODO_DIA,
@@ -80,7 +78,6 @@ import {
 import type {
   OpcionesFiltrosResponse,
   DashboardAdminResponse,
-  FinanciamientoPorRangosResponse,
   CobranzasSemanalesResponse,
   AnalisisCuentasPorCobrarResponse,
   TendenciaProgramadoTotalCobradoResponse,
@@ -106,7 +103,6 @@ import {
   Line,
   PieChart as RechartsPieChart,
   Pie,
-  Cell,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -158,6 +154,36 @@ function serieNotificacionesEjeDesde5Abril<
   if (!max) return serie
 
   const cutoff = new Date(max.getFullYear(), 3, 5)
+
+  const out = serie.filter(row => {
+    const dt = parseIsoDateLocal(row.fecha)
+
+    return dt != null && dt >= cutoff
+  })
+
+  return out.length > 0 ? out : serie
+}
+
+/**
+ * Deja solo puntos con fecha >= 20 de julio del año del último dato (calendario local).
+ * Usado en «Cobranzas entre 5 y 59 días». Si no quedara ninguno, devuelve la serie original.
+ */
+function serieNotificacionesEjeDesde20Julio<
+  T extends { fecha: string; enviados: number },
+>(serie: T[]): T[] {
+  if (!serie.length) return serie
+
+  let max: Date | null = null
+
+  for (const row of serie) {
+    const dt = parseIsoDateLocal(row.fecha)
+
+    if (dt && (!max || dt.getTime() > max.getTime())) max = dt
+  }
+
+  if (!max) return serie
+
+  const cutoff = new Date(max.getFullYear(), 6, 20)
 
   const out = serie.filter(row => {
     const dt = parseIsoDateLocal(row.fecha)
@@ -366,75 +392,6 @@ export function DashboardMenu() {
 
   // Batch 3: Gráficos secundarios rápidos. Período por gráfico; filtros (fecha_inicio/fecha_fin) se envían siempre.
 
-  // Batch 4: BAJA - Gráficos menos críticos. Período con fallback para incluir 2025.
-
-  const periodoRangos =
-    getPeriodoGrafico('rangos') || periodo || 'ultimos_12_meses'
-
-  const {
-    data: datosFinanciamientoRangos,
-    isLoading: loadingFinanciamientoRangos,
-    isError: errorFinanciamientoRangos,
-    error: errorFinanciamientoRangosDetail,
-    refetch: refetchFinanciamientoRangos,
-  } = useQuery({
-    queryKey: ['financiamiento-rangos', periodoRangos, JSON.stringify(filtros)],
-
-    queryFn: async () => {
-      try {
-        const params = construirFiltrosObject(periodoRangos)
-
-        const queryParams = new URLSearchParams()
-
-        Object.entries(params).forEach(([key, value]) => {
-          if (value) queryParams.append(key, value.toString())
-        })
-
-        const response = await apiClient.get(
-          `/api/v1/dashboard/financiamiento-por-rangos?${queryParams.toString()}`,
-
-          { timeout: 60000 }
-        )
-
-        return response as FinanciamientoPorRangosResponse
-      } catch (error: unknown) {
-        // Si el error es 500 o de red, lanzar el error para que React Query lo maneje
-
-        // Si es otro error, retornar respuesta vacía para no romper el dashboard
-
-        const err = error as { response?: { status?: number }; code?: string }
-
-        const status = err?.response?.status
-
-        if (
-          (status != null && status >= 500) ||
-          err?.code === 'ERR_NETWORK' ||
-          err?.code === 'ECONNABORTED'
-        ) {
-          throw error
-        }
-
-        return {
-          rangos: [],
-
-          total_prestamos: 0,
-
-          total_monto: 0.0,
-        } satisfies FinanciamientoPorRangosResponse
-      }
-    },
-
-    staleTime: 4 * 60 * 60 * 1000, // 4 h: alineado con refresh backend
-
-    refetchOnWindowFocus: false,
-
-    enabled: enableSecondaryCharts,
-
-    retry: 1, // Permitir 1 reintento para errores de red
-
-    retryDelay: 2000, // Esperar 2 segundos antes de reintentar
-  })
-
   const periodoCobranzasSemanales = getPeriodoGrafico('cobranzas-semanales')
 
   const {
@@ -472,33 +429,6 @@ export function DashboardMenu() {
     enabled: enableSecondaryCharts,
 
     refetchOnWindowFocus: false,
-  })
-
-  const {
-    data: datosMontoProgramadoSemana,
-    isLoading: loadingMontoProgramadoSemana,
-  } = useQuery({
-    queryKey: ['monto-programado-proxima-semana'],
-
-    queryFn: async () => {
-      const response = await apiClient.get<{
-        dias: {
-          fecha: string
-          dia: string
-          monto_programado: number
-          pagos_conciliados_dia: number
-          pagos_dias_anteriores_dia: number
-        }[]
-      }>('/api/v1/dashboard/monto-programado-proxima-semana')
-
-      return response.dias ?? []
-    },
-
-    staleTime: 5 * 60 * 1000,
-
-    refetchOnWindowFocus: false,
-
-    enabled: enableSecondaryCharts,
   })
 
   const periodoAnalisisCuentas = getPeriodoGrafico('analisis-cuentas')
@@ -658,7 +588,7 @@ export function DashboardMenu() {
 
   const serieNotificacionesMenor60Grafico = useMemo(
     () =>
-      serieNotificacionesEjeDesde5Abril(
+      serieNotificacionesEjeDesde20Julio(
         datosNotificacionesMenor60PorDia?.serie ?? []
       ),
     [datosNotificacionesMenor60PorDia?.serie]
@@ -769,17 +699,7 @@ export function DashboardMenu() {
       })
 
       await queryClient.invalidateQueries({
-        queryKey: ['financiamiento-rangos'],
-        exact: false,
-      })
-
-      await queryClient.invalidateQueries({
         queryKey: ['cobranzas-semanales'],
-        exact: false,
-      })
-
-      await queryClient.invalidateQueries({
-        queryKey: ['monto-programado-proxima-semana'],
         exact: false,
       })
 
@@ -811,17 +731,7 @@ export function DashboardMenu() {
       })
 
       await queryClient.refetchQueries({
-        queryKey: ['financiamiento-rangos'],
-        exact: false,
-      })
-
-      await queryClient.refetchQueries({
         queryKey: ['cobranzas-semanales'],
-        exact: false,
-      })
-
-      await queryClient.refetchQueries({
-        queryKey: ['monto-programado-proxima-semana'],
         exact: false,
       })
 
@@ -978,54 +888,6 @@ export function DashboardMenu() {
     iconType: 'rect' as const,
     iconSize: 12,
   }
-
-  // Bandas desde backend: pasos de $300 desde $800 hasta $4.000 + colas (alineado con API)
-
-  const datosBandasFinanciamiento = useMemo(() => {
-    try {
-      if (
-        !datosFinanciamientoRangos?.rangos ||
-        datosFinanciamientoRangos.rangos.length === 0
-      ) {
-        return []
-      }
-
-      // Eje Y: arriba mayor banda, abajo "Menos de $800" (Recharts: primera fila = arriba)
-
-      const ordenPrioridadMayorArriba = [
-        ...FINANCIAMIENTO_BANDAS_ORDEN_CATEGORIAS,
-      ]
-
-      return [...datosFinanciamientoRangos.rangos]
-
-        .sort((a, b) => {
-          const ia = ordenPrioridadMayorArriba.indexOf(a.categoria)
-
-          const ib = ordenPrioridadMayorArriba.indexOf(b.categoria)
-
-          const sa = ia === -1 ? 999 : ia
-
-          const sb = ib === -1 ? 999 : ib
-
-          return sa - sb
-        })
-
-        .map(r => ({
-          ...r,
-
-          categoriaFormateada: r.categoria.replace(/,/g, ''),
-
-          cantidad: r.cantidad_prestamos,
-        }))
-    } catch (error) {
-      console.error(
-        'Error procesando datos de financiamiento por rangos:',
-        error
-      )
-
-      return []
-    }
-  }, [datosFinanciamientoRangos])
 
   // Asegurar que el componente siempre renderice, incluso si hay errores
 
@@ -1772,7 +1634,7 @@ export function DashboardMenu() {
                   dias_10_retraso
                 </code>
                 : correos aceptados por SMTP (enviados) por día. Eje X desde el{' '}
-                <strong>5 de abril</strong> del año del último día con datos
+                <strong>20 de julio</strong> del año del último día con datos
                 (muestra de {NOTIFICACIONES_ENVIOS_TENDENCIA_DIAS} d recortada).
                 Línea gris discontinua: <strong>tendencia</strong> (regresión
                 lineal sobre la serie mostrada).
@@ -1884,280 +1746,6 @@ export function DashboardMenu() {
             </CardContent>
           </Card>
         </motion.div>
-
-        {/* GRÁFICOS: BANDAS DE FINANCIAMIENTO Y COBRANZA PLANIFICADA VS REAL */}
-
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          {datosDashboard ? (
-            <>
-              {/* Cobranza diaria + monto programado solo hoy (hoy-10 .. hoy, Caracas) */}
-
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.36 }}
-              >
-                <Card className="flex h-full flex-col overflow-hidden rounded-xl border border-gray-200/90 bg-white shadow-lg">
-                  <CardHeader className="border-b border-gray-200/80 bg-gradient-to-r from-emerald-50/90 to-teal-50/90 pb-3">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <CardTitle className="flex items-center gap-2 text-lg font-bold text-gray-800">
-                        <DollarSign className="h-5 w-5 text-emerald-600" />
-
-                        <span>Cobranza diaria y monto programado (hoy)</span>
-                      </CardTitle>
-
-                      <Badge
-                        variant="secondary"
-                        className="border border-gray-200 bg-white/80 text-xs font-medium text-gray-600"
-                      >
-                        11 días · hoy-10 → hoy · Caracas
-                      </Badge>
-                    </div>
-
-                    <CardDescription className="text-sm text-gray-600">
-                      Por cada día: barras apiladas{' '}
-                      <strong>Pagos conciliados</strong> (vencimiento = ese día
-                      y pago ese día) y <strong>Pagos días anteriores</strong>{' '}
-                      (vencimiento anterior, pago ese día), como el análisis
-                      mensual pero en escala diaria.{' '}
-                      <strong>Monto programado</strong>: suma de monto_cuota con
-                      vencimiento <strong>solo en hoy</strong> (barra aparte,
-                      resto de días en cero).
-                    </CardDescription>
-                  </CardHeader>
-
-                  <CardContent className="p-6 pt-4">
-                    {loadingMontoProgramadoSemana ? (
-                      <div className="flex items-center justify-center py-16 text-gray-500">
-                        Cargando...
-                      </div>
-                    ) : datosMontoProgramadoSemana &&
-                      datosMontoProgramadoSemana.length > 0 ? (
-                      <ResponsiveContainer width="100%" height={420}>
-                        <BarChart
-                          data={datosMontoProgramadoSemana}
-                          margin={{ top: 14, right: 24, left: 8, bottom: 56 }}
-                        >
-                          <CartesianGrid {...chartCartesianGrid} />
-
-                          <XAxis
-                            dataKey="dia"
-                            tick={chartAxisTick}
-                            interval={0}
-                            angle={-32}
-                            textAnchor="end"
-                            height={68}
-                            minTickGap={4}
-                          />
-
-                          <YAxis
-                            tick={chartAxisTick}
-                            tickFormatter={value =>
-                              `$${value >= 1000 ? (value / 1000).toFixed(1) + 'K' : value}`
-                            }
-                            label={{
-                              value: 'Monto (USD)',
-                              angle: -90,
-                              position: 'insideLeft',
-                              style: { fill: '#374151', fontSize: 13 },
-                            }}
-                          />
-
-                          <Tooltip
-                            contentStyle={chartTooltipStyle.contentStyle}
-                            labelStyle={chartTooltipStyle.labelStyle}
-                            formatter={(value: number, name: string) => [
-                              formatCurrency(value),
-                              name,
-                            ]}
-                            labelFormatter={(_, payload) =>
-                              payload?.[0]?.payload?.fecha
-                                ? `Fecha: ${payload[0].payload.fecha}`
-                                : ''
-                            }
-                          />
-
-                          <Legend {...chartLegendStyle} />
-
-                          <Bar
-                            stackId="cobranza"
-                            dataKey="pagos_conciliados_dia"
-                            name="Pagos conciliados (venc. = día, pago = día)"
-                            fill="#10b981"
-                            radius={[0, 0, 0, 0]}
-                            maxBarSize={44}
-                          />
-
-                          <Bar
-                            stackId="cobranza"
-                            dataKey="pagos_dias_anteriores_dia"
-                            name="Pagos días anteriores (pago = día)"
-                            fill="#f97316"
-                            radius={[4, 4, 0, 0]}
-                            maxBarSize={44}
-                          />
-
-                          <Bar
-                            stackId="programado"
-                            dataKey="monto_programado"
-                            name="Monto programado (solo hoy)"
-                            fill="#06b6d4"
-                            radius={[4, 4, 0, 0]}
-                            maxBarSize={36}
-                          />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    ) : (
-                      <div className="flex items-center justify-center py-16 text-gray-500">
-                        No hay datos en la ventana de 11 días (Caracas).
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              </motion.div>
-            </>
-          ) : null}
-
-          {/* GRÁFICO DE BANDAS (financiamiento, pasos $300 desde $800 hasta $4.000) */}
-
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.4 }}
-          >
-            <Card className="flex h-full flex-col overflow-hidden rounded-xl border border-gray-200/90 bg-white shadow-lg">
-              <CardHeader className="border-b border-gray-200/80 bg-gradient-to-r from-indigo-50/90 to-purple-50/90 pb-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <CardTitle className="flex items-center gap-2 text-lg font-bold text-gray-800">
-                    <BarChart3 className="h-5 w-5 text-indigo-600" />
-
-                    <span>{FINANCIAMIENTO_BANDAS_GRAFICO_TITULO}</span>
-                  </CardTitle>
-
-                  <div className="flex items-center gap-2">
-                    <SelectorPeriodoGrafico chartId="rangos" />
-
-                    <Badge
-                      variant="secondary"
-                      className="border border-gray-200 bg-white/80 text-xs font-medium text-gray-600"
-                    >
-                      {getRangoFechasLabelGrafico('rangos')}
-                    </Badge>
-                  </div>
-                </div>
-
-                <CardDescription className="px-6 pb-1 pt-0 text-xs text-gray-600">
-                  Clasificación en el gráfico: tramos de{' '}
-                  <strong>USD 300</strong> desde <strong>800</strong> hasta{' '}
-                  <strong>4.000</strong>, más Menos de $800 (todo lo inferior) y
-                  Más de $4.000 (misma lógica que el endpoint{' '}
-                  <code className="rounded bg-gray-100 px-1 py-0.5 text-[10px]">
-                    /api/v1/dashboard/financiamiento-por-rangos
-                  </code>
-                  ).
-                </CardDescription>
-              </CardHeader>
-
-              <CardContent className="flex-1 p-6">
-                {datosBandasFinanciamiento &&
-                datosBandasFinanciamiento.length > 0 ? (
-                  <ChartWithDateRangeSlider
-                    data={datosBandasFinanciamiento}
-                    dataKey="categoriaFormateada"
-                    chartHeight={560}
-                  >
-                    {filteredData => (
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart
-                          data={filteredData}
-                          layout="vertical"
-                          margin={{ top: 14, right: 24, left: 132, bottom: 24 }}
-                        >
-                          <CartesianGrid {...chartCartesianGrid} />
-
-                          <XAxis
-                            type="number"
-                            domain={[0, 'dataMax']}
-                            tick={chartAxisTick}
-                            tickFormatter={value =>
-                              value.toLocaleString('es-EC')
-                            }
-                            label={{
-                              value: 'Cantidad de Préstamos',
-                              position: 'insideBottom',
-                              offset: -10,
-                              style: {
-                                textAnchor: 'middle',
-                                fill: '#374151',
-                                fontSize: 13,
-                                fontWeight: 600,
-                              },
-                            }}
-                            allowDecimals={false}
-                          />
-
-                          <YAxis
-                            type="category"
-                            dataKey="categoriaFormateada"
-                            width={128}
-                            tick={{
-                              fontSize: 10,
-                              fill: '#4b5563',
-                              fontWeight: 500,
-                            }}
-                            interval={0}
-                            tickLine={false}
-                          />
-
-                          <Tooltip
-                            contentStyle={chartTooltipStyle.contentStyle}
-                            labelStyle={chartTooltipStyle.labelStyle}
-                            formatter={(value: number) => [
-                              `${value.toLocaleString('es-EC')} préstamos`,
-                              'Cantidad',
-                            ]}
-                            labelFormatter={label => `Banda: ${label}`}
-                            cursor={{ fill: 'rgba(99, 102, 241, 0.08)' }}
-                          />
-
-                          <Legend {...chartLegendStyle} />
-
-                          <Bar
-                            dataKey="cantidad"
-                            radius={[0, 6, 6, 0]}
-                            name="Cantidad de Préstamos"
-                          >
-                            {filteredData.map((entry, index) => {
-                              const maxCant = Math.max(
-                                ...filteredData.map(d => d.cantidad)
-                              )
-
-                              const intensity =
-                                maxCant > 0 ? entry.cantidad / maxCant : 0
-
-                              const opacity = 0.6 + intensity * 0.4
-
-                              return (
-                                <Cell
-                                  key={`cell-${index}`}
-                                  fill={`rgba(99, 102, 241, ${opacity})`}
-                                />
-                              )
-                            })}
-                          </Bar>
-                        </BarChart>
-                      </ResponsiveContainer>
-                    )}
-                  </ChartWithDateRangeSlider>
-                ) : (
-                  <div className="flex items-center justify-center py-16 text-gray-500">
-                    No hay datos para mostrar
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </motion.div>
-        </div>
 
         <motion.div
           initial={{ opacity: 0, y: 10 }}
