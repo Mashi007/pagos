@@ -2,9 +2,8 @@
 Endpoints de notificaciones a clientes retrasados.
 Todo el router exige rol admin (Depends(require_admin) a nivel de APIRouter).
 Datos reales desde BD: cuotas (fecha_vencimiento, pagado) y clientes.
-Reglas: pestañas por días hasta vencimiento y mora (retraso: 1 día exacto y menor a 60
-días calendario: atraso 6..59; exactamente 1 cuota en mora; permanece hasta pagar o salir
-del rango; con 0 o con 2+ no aplica).
+Reglas: pestañas por días hasta vencimiento y mora (retraso: 1 y 10 días calendario;
+10 días solo si el préstamo tiene entre 2 y 3 cuotas en mora (inclusive); con 1 o con 4+ no aplica).
 Configuración de envíos (habilitado/CCO por tipo) desde tabla configuracion (notificaciones_envios).
 CRUD de plantillas en plantillas_notificacion; envío puede usar plantilla por tipo vía plantilla_id en config.
 """
@@ -34,8 +33,8 @@ from app.services.comparar_fecha_entrega_q_aprobacion_service import (
 )
 from app.services.notificacion_service import (
     CUOTA_ESTADO_NO_PAGADA_PARA_NOTIF,
-    MIN_DIAS_ATRASO_PREJUDICIAL,
-    PREJUDICIAL_MIN_CUOTAS_CON_ATRASO_60,
+    ESTADOS_CUOTA_VENCIDO_Y_MORA,
+    PREJUDICIAL_MIN_CUOTAS_VENCIDO_MORA,
     SALDO_PENDIENTE_CUOTA,
     TOL_SALDO_CUOTA_NOTIFICACION,
     build_cuotas_pendiente_2_dias_antes_items,
@@ -46,10 +45,6 @@ from app.services.notificacion_service import (
 )
 from app.models.cuota import Cuota
 from app.models.cliente import Cliente
-from app.constants.prestamo_estados import (
-    ESTADO_PRESTAMO_DESISTIMIENTO,
-    ESTADOS_PRESTAMO_EXCLUIDOS_COBRANZA_NOTIF,
-)
 from app.models.prestamo import Prestamo
 from app.models.configuracion import Configuracion
 from app.models.plantilla_notificacion import PlantillaNotificacion
@@ -651,11 +646,13 @@ def _sustituir_variables(texto: str, item: dict) -> str:
     fecha_disp = (item.get("fecha_vencimiento_display") or "").strip() or str(fecha_v)
     replacements = {
         "{{nombre}}": str(nombre),
+        "{{nombre_cliente}}": str(nombre),
         "{{cedula}}": str(cedula),
         "{{fecha_vencimiento}}": str(fecha_v),
         "{{fecha_vencimiento_display}}": str(fecha_disp),
         "{{numero_cuota}}": str(numero_cuota) if numero_cuota is not None else "",
         "{{monto}}": str(monto) if monto is not None else "",
+        "{{monto_cuota}}": str(monto) if monto is not None else "",
         "{{dias_atraso}}": str(dias_atraso) if dias_atraso is not None else "",
         "{{cuotas_atrasadas}}": str(cuotas_atrasadas)
         if cuotas_atrasadas is not None
@@ -870,8 +867,20 @@ def get_plantillas(
     solo_activas: bool = True,
     db: Session = Depends(get_db),
 ):
-    """Lista de plantillas de notificaciÃƒÂ³n. Filtro por tipo y solo activas."""
+    """Lista de plantillas de notificación. Filtro por tipo y solo activas.
+    Si tipo=PREJUDICIAL, asegura variables + plantilla unica del modulo."""
     try:
+        if (tipo or "").strip().upper() == "PREJUDICIAL":
+            try:
+                from app.services.notificacion_plantilla_prejudicial import (
+                    asegurar_modulo_prejudicial,
+                )
+
+                asegurar_modulo_prejudicial(db, forzar_contenido_plantilla=False)
+                db.commit()
+            except Exception as e:
+                db.rollback()
+                logger.warning("get_plantillas: asegurar PREJUDICIAL: %s", e)
         q = select(PlantillaNotificacion)
         if solo_activas:
             q = q.where(PlantillaNotificacion.activa.is_(True))
@@ -1425,24 +1434,12 @@ def enviar_con_plantilla(
     destinos = lista_correo_principal_notificaciones_desde_objeto(cliente)
     if not destinos:
         raise HTTPException(status_code=400, detail="El cliente no tiene email valido")
-    from app.services.notificaciones_exclusion_desistimiento import (
-        item_bloqueado_para_envio_notificacion,
-    )
-    item_bloqueo = {
-        "cliente_id": cliente.id,
-        "cedula": cliente.cedula,
-        "correo": destinos[0] if destinos else None,
-        "correo_1": destinos[0] if destinos else None,
-        "prestamo_id": (variables or {}).get("prestamo_id"),
-    }
-    bloqueado_pl, motivo_pl = item_bloqueado_para_envio_notificacion(db, item_bloqueo)
-    if bloqueado_pl:
+    if cliente_bloqueado_por_desistimiento(
+        db, cliente_id=cliente.id, cedula=cliente.cedula, email=destinos[0]
+    ):
         raise HTTPException(
             status_code=400,
-            detail=(
-                f"Envio bloqueado: prestamo/cliente en estado {motivo_pl} "
-                "(LIQUIDADO o DESISTIMIENTO). NUNCA se envian notificaciones."
-            ),
+            detail="Envio bloqueado: cliente con prestamo en estado DESISTIMIENTO.",
         )
     if not get_email_activo_servicio("notificaciones"):
         raise HTTPException(status_code=400, detail="El envio de email para notificaciones esta desactivado. Activalo en Configuracion > Email.")
@@ -1567,13 +1564,31 @@ def delete_variable(variable_id: int, db: Session = Depends(get_db)):
 
 
 VARIABLES_PRECARGADAS = [
+    {
+        "nombre_variable": "nombre",
+        "tabla": "clientes",
+        "campo_bd": "nombres",
+        "descripcion": "Nombre del cliente (token {{nombre}} en plantillas)",
+    },
     {"nombre_variable": "nombre_cliente", "tabla": "clientes", "campo_bd": "nombres", "descripcion": "Nombres del cliente"},
-    {"nombre_variable": "cedula", "tabla": "clientes", "campo_bd": "cedula", "descripcion": "Cédula de identidad"},
-    {"nombre_variable": "telefono", "tabla": "clientes", "campo_bd": "telefono", "descripcion": "Teléfono de contacto"},
-    {"nombre_variable": "email", "tabla": "clientes", "campo_bd": "email", "descripcion": "Correo electrónico"},
-    {"nombre_variable": "numero_cuota", "tabla": "cuotas", "campo_bd": "numero_cuota", "descripcion": "Número de cuota"},
+    {"nombre_variable": "cedula", "tabla": "clientes", "campo_bd": "cedula", "descripcion": "Cedula de identidad"},
+    {"nombre_variable": "telefono", "tabla": "clientes", "campo_bd": "telefono", "descripcion": "Telefono de contacto"},
+    {"nombre_variable": "email", "tabla": "clientes", "campo_bd": "email", "descripcion": "Correo electronico"},
+    {"nombre_variable": "numero_cuota", "tabla": "cuotas", "campo_bd": "numero_cuota", "descripcion": "Numero de cuota"},
     {"nombre_variable": "fecha_vencimiento", "tabla": "cuotas", "campo_bd": "fecha_vencimiento", "descripcion": "Fecha de vencimiento"},
+    {
+        "nombre_variable": "fecha_vencimiento_display",
+        "tabla": "cuotas",
+        "campo_bd": "fecha_vencimiento",
+        "descripcion": "Fecha de vencimiento legible",
+    },
     {"nombre_variable": "monto_cuota", "tabla": "cuotas", "campo_bd": "monto", "descripcion": "Monto de la cuota"},
+    {
+        "nombre_variable": "monto",
+        "tabla": "cuotas",
+        "campo_bd": "monto",
+        "descripcion": "Monto de la cuota (alias {{monto}})",
+    },
     {
         "nombre_variable": "dias_atraso",
         "tabla": "cuotas",
@@ -1591,7 +1606,8 @@ VARIABLES_PRECARGADAS = [
 
 @router.post("/variables/inicializar-precargadas")
 def inicializar_variables_precargadas(db: Session = Depends(get_db)):
-    """Inserta variables precargadas si no existen (por nombre_variable). Idempotente."""
+    """Inserta variables precargadas si no existen (por nombre_variable). Idempotente.
+    Tambien asegura plantilla unica PREJUDICIAL y su vinculo en envios."""
     creadas = 0
     existentes = 0
     for item in VARIABLES_PRECARGADAS:
@@ -1614,13 +1630,49 @@ def inicializar_variables_precargadas(db: Session = Depends(get_db)):
         except Exception as e:
             db.rollback()
             logger.warning("inicializar_variables_precargadas: %s para %s", e, nombre)
+
+    prejudicial_info: dict = {}
+    try:
+        from app.services.notificacion_plantilla_prejudicial import asegurar_modulo_prejudicial
+
+        prejudicial_info = asegurar_modulo_prejudicial(db, forzar_contenido_plantilla=False)
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        logger.warning("inicializar_variables_precargadas: modulo PREJUDICIAL: %s", e)
+
     total = creadas + existentes
     return {
-        "mensaje": f"Variables precargadas: {creadas} creadas, {existentes} ya existían.",
+        "mensaje": f"Variables precargadas: {creadas} creadas, {existentes} ya existian.",
         "variables_creadas": creadas,
         "variables_existentes": existentes,
         "total": total,
+        "prejudicial": prejudicial_info,
     }
+
+
+@router.post("/plantillas/asegurar-prejudicial")
+def asegurar_plantilla_prejudicial_endpoint(
+    forzar_contenido: bool = Query(False, description="Reescribe asunto/cuerpo de la plantilla canonica"),
+    db: Session = Depends(get_db),
+):
+    """
+    Genera/actualiza variables del modulo, la plantilla unica PREJUDICIAL
+    ({{nombre}}) y vincula plantilla_id en notificaciones_envios si falta.
+    """
+    try:
+        from app.services.notificacion_plantilla_prejudicial import asegurar_modulo_prejudicial
+
+        info = asegurar_modulo_prejudicial(db, forzar_contenido_plantilla=forzar_contenido)
+        db.commit()
+        return {
+            "mensaje": "Modulo PREJUDICIAL configurado (variables + plantilla unica).",
+            **info,
+        }
+    except Exception as e:
+        db.rollback()
+        logger.exception("asegurar_plantilla_prejudicial_endpoint: %s", e)
+        raise HTTPException(status_code=500, detail="Error al asegurar plantilla PREJUDICIAL")
 
 
 @router.get("")
@@ -1800,8 +1852,7 @@ def enviar_todas_notificaciones(background_tasks: BackgroundTasks):
     Responde 202 de inmediato para evitar timeout (el envio puede tardar muchos minutos).
     Respeta la configuracion guardada (modo_pruebas, email_pruebas, habilitado por tipo).
     No existe cron ni tarea oculta que llame a este endpoint: solo se ejecuta cuando alguien hace POST explicito.
-    PAGO_10_DIAS_ATRASADO (menor a 60 dias) no forma parte de este lote ni de ningun cron:
-    solo envio manual POST /enviar-caso-manual desde el submodulo dedicado.
+    PAGO_10_DIAS_ATRASADO no forma parte de este lote: solo envio manual POST /enviar-caso-manual desde el submodulo de 10 dias.
     """
     background_tasks.add_task(_tarea_envio_todas_notificaciones)
     return JSONResponse(
@@ -2351,12 +2402,12 @@ def get_clientes_retrasados(
     Politica: no se listan avisos antes del vencimiento ni el dia del vencimiento;
     el primer seguimiento es el dia calendario siguiente (ej. vence 22 -> entra el 23).
     1. 1 dia despues del vencimiento (ayer fue la fecha de vencimiento)
-    2. 10 o mas dias despues del vencimiento (atraso calendario >= 10 y exactamente
-       1 cuota en mora en el prestamo; permanece hasta pagar esa cuota; con 0 o con 2+ no entra)
+    2. 10 dias despues del vencimiento (exactamente 10 dias de atraso calendario y entre 2 y 3
+       cuotas en mora en el prestamo inclusive; con 1 o con 4 o mas cuotas atrasadas no entra)
     3. Credito pagado (liquidados): prestamos con estado LIQUIDADO (misma columna estado en BD).
        Se muestran total_financiamiento y suma de abonos en cuotas para referencia.
     Claves dias_5, dias_3, dias_1, hoy se devuelven vacias (compatibilidad API).
-    Datos desde BD: cuotas pendientes (1 día: vencimiento = ayer; 10+: vencimiento <= hoy-10)
+    Datos desde BD: cuotas pendientes filtradas por fecha_vencimiento (hoy-1, hoy-10)
     y tabla prestamos/cuotas (liquidados).
     Solo cuotas con fecha_pago nula: si se registra un pago que liquida la cuota,
     deja de listarse en la siguiente lectura (sin depender de un job de refresco).
@@ -2640,16 +2691,13 @@ def build_prejudicial_items(
     db: Session, fecha_referencia: Optional[date] = None
 ) -> List[dict]:
     """
-    Lista prejudicial «60 días o más»: al menos 1 cuota pendiente notificable con
-    atraso calendario >= 60 (fecha_vencimiento <= hoy − 60), saldo pendiente.
-    Excluye prestamos LIQUIDADO/DESISTIMIENTO y clientes con algun prestamo en
-    DESISTIMIENTO. Permanecen todos los días mientras cumplan; salen al ponerse al día.
+    Solo la lista prejudicial (5+ cuotas con estado VENCIDO/MORA, vencidas, saldo pendiente).
+    No ejecuta la rama de retrasadas por dias de mora ni contar_cuotas_atraso_por_prestamos masivo.
 
     GET /notificaciones-prejudicial debe usar esto (no get_notificaciones_tabs_data entero) para
     evitar timeouts en carteras grandes / cold start en Render.
     """
     hoy = fecha_referencia or hoy_negocio()
-    fv_max = hoy - timedelta(days=MIN_DIAS_ATRASO_PREJUDICIAL)
     # Agrupar por titular del préstamo (prestamos.cliente_id). cuotas.cliente_id es denormalizado
     # y si diverge, el listado prejudicial mezclaba contacto de un titular con montos de otro crédito.
     subq = (
@@ -2658,20 +2706,13 @@ def build_prejudicial_items(
         .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
         .where(
             Cuota.fecha_pago.is_(None),
-            CUOTA_ESTADO_NO_PAGADA_PARA_NOTIF,
-            Cuota.fecha_vencimiento.isnot(None),
-            Cuota.fecha_vencimiento <= fv_max,
+            Cuota.estado.in_(ESTADOS_CUOTA_VENCIDO_Y_MORA),
+            Cuota.fecha_vencimiento < hoy,
             SALDO_PENDIENTE_CUOTA > TOL_SALDO_CUOTA_NOTIFICACION,
-            func.upper(func.trim(func.coalesce(Prestamo.estado, ""))).notin_(tuple(str(e).strip().upper() for e in ESTADOS_PRESTAMO_EXCLUIDOS_COBRANZA_NOTIF)),
-            # Cliente con algun prestamo DESISTIMIENTO: fuera del listado (misma regla que al enviar).
-            ~Prestamo.cliente_id.in_(
-                select(Prestamo.cliente_id).where(
-                    func.upper(func.trim(func.coalesce(Prestamo.estado, ""))) == str(ESTADO_PRESTAMO_DESISTIMIENTO).strip().upper()
-                )
-            ),
+            ~Prestamo.estado.in_(("LIQUIDADO", "DESISTIMIENTO")),
         )
         .group_by(Prestamo.cliente_id)
-        .having(func.count(Cuota.id) >= PREJUDICIAL_MIN_CUOTAS_CON_ATRASO_60)
+        .having(func.count(Cuota.id) >= PREJUDICIAL_MIN_CUOTAS_VENCIDO_MORA)
     )
     rows = db.execute(subq).all()
     if not rows:
@@ -2692,11 +2733,10 @@ def build_prejudicial_items(
         .where(
             Prestamo.cliente_id.in_(cliente_ids),
             Cuota.fecha_pago.is_(None),
-            CUOTA_ESTADO_NO_PAGADA_PARA_NOTIF,
-            Cuota.fecha_vencimiento.isnot(None),
-            Cuota.fecha_vencimiento <= fv_max,
+            Cuota.estado.in_(ESTADOS_CUOTA_VENCIDO_Y_MORA),
+            Cuota.fecha_vencimiento < hoy,
             SALDO_PENDIENTE_CUOTA > TOL_SALDO_CUOTA_NOTIFICACION,
-            func.upper(func.trim(func.coalesce(Prestamo.estado, ""))).notin_(tuple(str(e).strip().upper() for e in ESTADOS_PRESTAMO_EXCLUIDOS_COBRANZA_NOTIF)),
+            ~Prestamo.estado.in_(("LIQUIDADO", "DESISTIMIENTO")),
         )
     ).all()
 
@@ -2742,16 +2782,7 @@ def build_prejudicial_items(
     prejudicial: List[dict] = []
     for cliente, cuota_ref, total_cuotas, pid in bloques_prej:
         tp = totales_prej.get(int(pid)) if pid is not None else None
-        dias_atraso = None
-        fv = getattr(cuota_ref, "fecha_vencimiento", None)
-        if fv is not None:
-            dias_atraso = (hoy - fv).days
-        item = _item_tab(
-            cliente,
-            cuota_ref,
-            dias_atraso=dias_atraso,
-            total_pendiente_pagar=tp,
-        )
+        item = _item_tab(cliente, cuota_ref, total_pendiente_pagar=tp)
         item["total_cuotas_atrasadas"] = total_cuotas
         prejudicial.append(item)
     enriquecer_items_notificacion_revision_manual(db, prejudicial)
@@ -2763,22 +2794,20 @@ def get_notificaciones_tabs_data(
 ):
     """
     Datos para envio de notificaciones (retrasadas, prejudicial).
-    Politica: sin listas previas ni "hoy vence"; solo cuotas ya vencidas (1 día exacto y
-    menor a 60 días: atraso 6..59) y prejudicial. Claves dias_5, dias_3, dias_1, hoy van
-    vacias (compat API).
-    Fuente: vencimiento = ayer (1 día) o vencimiento en [hoy-59, hoy-6] (menor a 60).
+    Politica: sin listas previas ni "hoy vence"; solo cuotas ya vencidas (1 y 10 dias de atraso calendario)
+    y prejudicial. Claves dias_5, dias_3, dias_1, hoy van vacias (compat API).
+    Fuente: cuotas pendientes con fecha_vencimiento en {hoy-1, hoy-10} (consulta acotada).
     Fecha de corte: America/Caracas.
 
     Pestaña 1 día de retraso (dias_1_retraso): cuota con vencimiento = ayer (exactamente 1 día
     calendario después de la fecha de vencimiento), sin fecha_pago y con saldo pendiente.
 
-    Pestaña menor a 60 días (dias_10_retraso): atraso entre 6 y 59 días y exactamente
-    1 cuota en mora; permanece hasta que esa cuota se pague o salga del rango; con 0 o con 2 o más no aplica.
+    Pestaña 10 días (dias_10_retraso): misma regla de fecha (vencimiento = hoy − 10 días) y además
+    el préstamo debe tener entre 2 y 3 cuotas en mora (inclusive); con 1 o con 4 o más no aplica.
 
-    Prejudicial (60 días o más): por titular del préstamo (prestamos.cliente_id), al menos
-    1 cuota pendiente notificable con atraso calendario >= 60 (fecha_vencimiento <= hoy − 60),
-    sin fecha_pago y saldo pendiente; préstamo no liquidado/desistimiento. Permanecen mientras
-    cumplan; salen al ponerse al día.
+    Prejudicial: por titular del préstamo (prestamos.cliente_id), al menos el mínimo configurado
+    de cuotas con cuotas.estado en (VENCIDO, MORA), fecha_vencimiento < hoy, sin fecha_pago y
+    saldo pendiente; préstamo no liquidado/desistimiento.
     """
     hoy = fecha_referencia or hoy_negocio()
     from app.services.notificaciones_listados_motor import (

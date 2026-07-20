@@ -228,6 +228,16 @@ export function GeneraVariables() {
   const inicializarVariablesPrecargadas = async () => {
     try {
       await notificacionService.inicializarVariablesPrecargadas()
+      try {
+        await notificacionService.asegurarPlantillaPrejudicial(false)
+      } catch (e: any) {
+        if (e?.response?.status !== 404) {
+          console.warn(
+            'No se pudo asegurar plantilla PREJUDICIAL:',
+            e?.response?.data?.detail || e.message
+          )
+        }
+      }
 
       // Recargar variables después de inicializar
 

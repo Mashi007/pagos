@@ -167,6 +167,10 @@ def ejecutar_diagnostico_paquete_prueba(db: Session, tipo: str) -> Dict[str, Any
     from app.models.plantilla_notificacion import PlantillaNotificacion
     from app.services.carta_cobranza_pdf import generar_carta_cobranza_pdf
     from app.services.adjunto_fijo_cobranza import get_adjunto_fijo_cobranza_bytes, get_adjuntos_fijos_por_caso
+    from app.services.notificaciones_envio_pipeline import (
+        _tipo_dos_dias_antes_solo_correo,
+        _tipo_prejudicial_solo_html,
+    )
 
     tipo = (tipo or "PAGO_1_DIA_ATRASADO").strip()
     if tipo not in TIPOS_PRUEBA_PAQUETE:
@@ -227,8 +231,9 @@ def ejecutar_diagnostico_paquete_prueba(db: Session, tipo: str) -> Dict[str, Any
         out["motivo"] = "envio_desactivado_para_este_tipo"
         return out
 
-    solo_2d = nt._tipo_dos_dias_antes_solo_correo(tipo)
-    solo_html_prej = nt._tipo_prejudicial_solo_html(tipo)
+    # Import directo del pipeline: evita AttributeError si tabs no reexporta el helper.
+    solo_2d = _tipo_dos_dias_antes_solo_correo(tipo)
+    solo_html_prej = _tipo_prejudicial_solo_html(tipo)
     if paquete_estricto:
         if solo_2d:
             out["plantilla_ok"] = True
@@ -268,7 +273,7 @@ def ejecutar_diagnostico_paquete_prueba(db: Session, tipo: str) -> Dict[str, Any
     correlativos_en_batch: dict = {}
     if db and item.get("prestamo_id") and not item.get("contexto_cobranza"):
         plantilla = db.get(PlantillaNotificacion, plantilla_id) if plantilla_id else None
-        solo_correo_2d = nt._tipo_dos_dias_antes_solo_correo(tipo)
+        solo_correo_2d = _tipo_dos_dias_antes_solo_correo(tipo)
         need_ctx = (
             not solo_html_prej
             and (

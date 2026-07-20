@@ -81,6 +81,7 @@ from app.services.notificaciones_envio_pipeline import (
     _enviar_correos_items,
     _parse_plantilla_id_desde_config,
     _tipo_dos_dias_antes_solo_correo,
+    _tipo_prejudicial_solo_html,
     _tipo_tab_para_persistencia,
     _validar_plantilla_email_estricta,
 )
@@ -307,20 +308,22 @@ def enviar_notificaciones_prejudicial(
     fecha_caracas: Optional[str] = _FC_Q,
     db: Session = Depends(get_db),
 ):
-    "Envio MANUAL de correos PREJUDICIAL (60 dias o mas). Sin cron ni enviar-todas; solo este POST o enviar-caso-manual. Respeta config envios (habilitado/CCO) desde BD.""Env�a correo a cada cliente en situaci�n prejudicial. Respeta config env�os (habilitado/CCO) desde BD."""
+    """Envio MANUAL de correos PREJUDICIAL (60 dias o mas). Sin cron ni enviar-todas; solo este POST o enviar-caso-manual. Respeta config envios (habilitado/CCO) desde BD."""
     fecha_ref = _fecha_referencia_desde_query(fecha_caracas)
+    from app.services.notificacion_plantilla_prejudicial import (
+        ASUNTO_PREJUDICIAL_FALLBACK,
+        CUERPO_PREJUDICIAL_FALLBACK,
+        asegurar_modulo_prejudicial,
+    )
+    try:
+        asegurar_modulo_prejudicial(db, forzar_contenido_plantilla=False)
+        db.commit()
+    except Exception:
+        db.rollback()
     config_envios = get_notificaciones_envios_config(db)
     items = build_prejudicial_items(db, fecha_referencia=fecha_ref)
-    asunto = "Aviso prejudicial - Rapicredit"
-    cuerpo = (
-        "Estimado/a {nombre} (c�dula {cedula}),\n\n"
-        "Le informamos que su cuenta presenta varias cuotas en mora.\n"
-        "Fecha de vencimiento de referencia: {fecha_vencimiento}\n"
-        "Cuota de referencia: {numero_cuota}\n"
-        "Monto de referencia: {monto}\n\n"
-        "Por favor contacte a la entidad para regularizar su situaci�n.\n\n"
-        "Saludos,\nRapicredit"
-    )
+    asunto = ASUNTO_PREJUDICIAL_FALLBACK
+    cuerpo = CUERPO_PREJUDICIAL_FALLBACK
     res = _enviar_correos_items(
         items,
         asunto,
@@ -330,7 +333,7 @@ def enviar_notificaciones_prejudicial(
         db,
         fecha_referencia=fecha_ref,
     )
-    return {"mensaje": "Env�o de notificaciones prejudiciales finalizado.", **res}
+    return {"mensaje": "Envio de notificaciones prejudiciales finalizado.", **res}
 
 
 def get_items_masivos(db: Session) -> List[dict]:
@@ -712,17 +715,11 @@ def ejecutar_envio_caso_manual(
         "Por favor regularice su pago lo antes posible.\n\n"
         "Saludos,\nRapicredit"
     )
-    asunto_prej = "Aviso prejudicial - Rapicredit"
-    asunto_mas = "Comunicado oficial - Rapicredit"
-    cuerpo_prej = (
-        "Estimado/a {nombre} (c\u00e9dula {cedula}),\n\n"
-        "Le informamos que su cuenta presenta varias cuotas en mora.\n"
-        "Fecha de vencimiento de referencia: {fecha_vencimiento}\n"
-        "Cuota de referencia: {numero_cuota}\n"
-        "Monto de referencia: {monto}\n\n"
-        "Por favor contacte a la entidad para regularizar su situaci\u00f3n.\n\n"
-        "Saludos,\nRapicredit"
+    from app.services.notificacion_plantilla_prejudicial import (
+        ASUNTO_PREJUDICIAL_FALLBACK as asunto_prej,
+        CUERPO_PREJUDICIAL_FALLBACK as cuerpo_prej,
     )
+    asunto_mas = "Comunicado oficial - Rapicredit"
     cuerpo_mas = (
         "Estimado/a {nombre} (cedula {cedula}),\n\n"
         "Le compartimos este comunicado oficial de Rapicredit.\n"

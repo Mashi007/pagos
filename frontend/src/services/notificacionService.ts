@@ -1473,13 +1473,43 @@ class NotificacionService {
     variables_creadas: number
     variables_existentes: number
     total: number
+    prejudicial?: {
+      plantilla_id?: number
+      plantilla_nombre?: string
+      envios_vinculado?: boolean
+      variables_creadas?: number
+      variables_existentes?: number
+    }
   }> {
     return await apiClient.post<{
       mensaje: string
       variables_creadas: number
       variables_existentes: number
       total: number
+      prejudicial?: {
+        plantilla_id?: number
+        plantilla_nombre?: string
+        envios_vinculado?: boolean
+        variables_creadas?: number
+        variables_existentes?: number
+      }
     }>(`${this.baseUrl}/variables/inicializar-precargadas`)
+  }
+
+  /** Asegura variables + plantilla unica PREJUDICIAL ({{nombre}}) y vinculo en envios. */
+  async asegurarPlantillaPrejudicial(forzarContenido = false): Promise<{
+    mensaje: string
+    plantilla_id: number
+    plantilla_nombre: string
+    plantilla_asunto: string
+    envios_vinculado: boolean
+    variables_creadas: number
+    variables_existentes: number
+  }> {
+    const q = forzarContenido ? '?forzar_contenido=true' : ''
+    return await apiClient.post(
+      `${this.baseUrl}/plantillas/asegurar-prejudicial${q}`
+    )
   }
 
   /** ABONOS (hoja CONCILIACIÓN) vs sum(cuotas.total_pagado) del préstamo. */
