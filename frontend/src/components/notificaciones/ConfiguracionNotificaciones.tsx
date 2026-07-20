@@ -765,6 +765,10 @@ export function ConfiguracionNotificaciones({
     if (tipo === 'PREJUDICIAL') {
       return { ...row, incluir_pdf_anexo: false, incluir_adjuntos_fijos: false }
     }
+    // Menor a 60 días: sin Carta_Cobranza; sí PDF fijo del caso dias_10_retraso.
+    if (tipo === 'PAGO_10_DIAS_ATRASADO') {
+      return { ...row, incluir_pdf_anexo: false, incluir_adjuntos_fijos: true }
+    }
 
     return row
   }
@@ -876,13 +880,17 @@ export function ConfiguracionNotificaciones({
           ;(payload as Record<string, ConfigEnvioItem>)[tipo] = {
             ...c,
             incluir_pdf_anexo:
-              tipo === 'MASIVOS' || tipo === 'PREJUDICIAL'
+              tipo === 'MASIVOS' ||
+              tipo === 'PREJUDICIAL' ||
+              tipo === 'PAGO_10_DIAS_ATRASADO'
                 ? false
                 : c.incluir_pdf_anexo !== false,
             incluir_adjuntos_fijos:
               tipo === 'PREJUDICIAL'
                 ? false
-                : c.incluir_adjuntos_fijos !== false,
+                : tipo === 'PAGO_10_DIAS_ATRASADO'
+                  ? true
+                  : c.incluir_adjuntos_fijos !== false,
           }
         }
       } else {
@@ -909,13 +917,17 @@ export function ConfiguracionNotificaciones({
           p[tipo] = {
             ...c,
             incluir_pdf_anexo:
-              tipo === 'MASIVOS' || tipo === 'PREJUDICIAL'
+              tipo === 'MASIVOS' ||
+              tipo === 'PREJUDICIAL' ||
+              tipo === 'PAGO_10_DIAS_ATRASADO'
                 ? false
                 : c.incluir_pdf_anexo !== false,
             incluir_adjuntos_fijos:
               tipo === 'PREJUDICIAL'
                 ? false
-                : c.incluir_adjuntos_fijos !== false,
+                : tipo === 'PAGO_10_DIAS_ATRASADO'
+                  ? true
+                  : c.incluir_adjuntos_fijos !== false,
           }
         }
       }
@@ -1428,7 +1440,9 @@ export function ConfiguracionNotificaciones({
               todas». El disparo es únicamente el botón «Enviar notificaciones
               (manual)» del listado (POST /enviar-caso-manual). El interruptor
               «Envío» de la fila no programa envíos; solo afecta la
-              configuración del caso.
+              configuración del caso. Adjuntos: solo PDF fijo (
+              <code className="rounded bg-sky-100 px-1">dias_10_retraso</code>
+              ); no se anexa Carta_Cobranza.pdf.
             </div>
           )}
 
@@ -2131,14 +2145,17 @@ export function ConfiguracionNotificaciones({
                       disabled={
                         !config.habilitado ||
                         tipo === 'MASIVOS' ||
-                        tipo === 'PREJUDICIAL'
+                        tipo === 'PREJUDICIAL' ||
+                        tipo === 'PAGO_10_DIAS_ATRASADO'
                       }
                       title={
                         tipo === 'MASIVOS'
                           ? 'No aplica: comunicaciones masivas no adjuntan Carta_Cobranza.pdf'
                           : tipo === 'PREJUDICIAL'
                             ? 'No aplica: 60 días o más envía solo HTML/texto, sin PDF'
-                            : 'Carta_Cobranza.pdf (plantilla PDF cobranza). El servidor exige este PDF y un PDF fijo para enviar; debe estar activado.'
+                            : tipo === 'PAGO_10_DIAS_ATRASADO'
+                              ? 'No aplica: menor a 60 días no adjunta Carta_Cobranza.pdf (solo PDF fijo)'
+                              : 'Carta_Cobranza.pdf (plantilla PDF cobranza). Con paquete estricto el servidor exige este PDF valido para enviar.'
                       }
                       className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                     />
@@ -2156,12 +2173,16 @@ export function ConfiguracionNotificaciones({
                         })
                       }
                       disabled={
-                        !config.habilitado || tipo === 'PREJUDICIAL'
+                        !config.habilitado ||
+                        tipo === 'PREJUDICIAL' ||
+                        tipo === 'PAGO_10_DIAS_ATRASADO'
                       }
                       title={
                         tipo === 'PREJUDICIAL'
                           ? 'No aplica: 60 días o más envía solo HTML/texto, sin PDF fijos'
-                          : 'PDFs fijos (global + por caso). El servidor exige al menos un PDF fijo valido ademas de la carta; no desactivar.'
+                          : tipo === 'PAGO_10_DIAS_ATRASADO'
+                            ? 'Obligatorio: menor a 60 días adjunta PDF fijo (dias_10_retraso), sin Carta_Cobranza'
+                            : 'PDFs fijos (global + por caso). Se anexan si estan cargados; no bloquean el envio si faltan.'
                       }
                       className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                     />

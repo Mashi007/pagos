@@ -180,7 +180,7 @@ def _sanitize_html_for_email(html: str, logo_url: str) -> str:
     """
     Asegura que el HTML del correo no esté corrupto al cargarse en el cliente:
     - Reemplaza imágenes inline base64 largas por la URL del logo (evita payload enorme y fallos de render).
-    - Sustituye {{LOGO_URL}} por la URL real por si no se reemplazó en plantilla.
+    - Sustituye {{LOGO_URL}} / {{logo_url}} por la URL real por si no se reemplazó en plantilla.
     - Corrige typo base64/ -> base64,.
     Soporta src con comillas dobles y simples.
     """
@@ -189,8 +189,10 @@ def _sanitize_html_for_email(html: str, logo_url: str) -> str:
     # Corregir typo que rompe data URL
     if "base64/" in html:
         html = html.replace("base64/", "base64,")
-    # Reemplazar {{LOGO_URL}} por la URL real
+    # Reemplazar tokens de logo (plantillas usan LOGO_URL o logo_url)
     html = html.replace("{{LOGO_URL}}", logo_url)
+    html = html.replace("{{logo_url}}", logo_url)
+    html = html.replace("{{Logo_Url}}", logo_url)
     # Reemplazar src="data:image/..." o src='data:image/...' (solo si es largo = logo/foto, no icono SVG pequeño)
     def replace_data_url(match):
         quote, content = match.group(1), match.group(2)
@@ -199,6 +201,13 @@ def _sanitize_html_for_email(html: str, logo_url: str) -> str:
         return match.group(0)
     html = re.sub(r'src\s*=\s*(")(data:image/[^"]+)"', replace_data_url, html, flags=re.IGNORECASE)
     html = re.sub(r"src\s*=\s*(')(data:image/[^']+)'", replace_data_url, html, flags=re.IGNORECASE)
+    # Si quedo un src con token sin sustituir, forzar URL del logo
+    html = re.sub(
+        r'src\s*=\s*(["\'])\{\{\s*logo[_-]?url\s*\}\}\1',
+        rf'src=\1{logo_url}\1',
+        html,
+        flags=re.IGNORECASE,
+    )
     return html
 
 

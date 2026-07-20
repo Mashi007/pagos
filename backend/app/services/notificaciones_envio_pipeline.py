@@ -102,12 +102,20 @@ def _tipo_prejudicial_solo_html(tipo: str) -> bool:
     return tipo == "PREJUDICIAL"
 
 
+def _tipo_menor_60_solo_pdf_fijo(tipo: str) -> bool:
+    """
+    True para PAGO_10_DIAS_ATRASADO («menor a 60 días»):
+    sin Carta_Cobranza.pdf; sí PDF(s) fijo(s) del caso dias_10_retraso.
+    """
+    return tipo == "PAGO_10_DIAS_ATRASADO"
+
+
 # Destino fijo de prueba para PREJUDICIAL (sin envío a clientes ni CCO).
 EMAIL_PRUEBA_PREJUDICIAL = "itmaster@rapicreditca.com"
 
 
 def _tipo_sin_paquete_pdf_obligatorio(tipo: str) -> bool:
-    """Tipos que no exigen Carta_Cobranza / PDF fijo en modo paquete estricto."""
+    """Tipos que no exigen Carta_Cobranza ni PDF fijo en modo paquete estricto."""
     return (
         tipo == "MASIVOS"
         or _tipo_dos_dias_antes_solo_correo(tipo)
@@ -170,21 +178,61 @@ def _validar_plantilla_email_estricta(db, plantilla_id: Optional[int]) -> tuple[
 
 def _adjuntos_cumplen_paquete_completo(
     attachments: Optional[List[Tuple[str, bytes]]],
+    *,
+    exigir_carta: bool = True,
+    exigir_pdf_fijo: bool = False,
 ) -> tuple[bool, str]:
     """
-    Debe existir el PDF variable (Carta_Cobranza.pdf) valido.
-    Ya no se exige un PDF fijo adicional para permitir operación estable en entornos
-    con disco efímero (p. ej. Render sin volumen persistente).
+    Valida adjuntos del paquete.
+    - exigir_carta: Carta_Cobranza.pdf valido (mora dia siguiente, etc.).
+    - exigir_pdf_fijo: al menos un PDF distinto de la carta (menor a 60 dias).
     """
-    if not attachments:
-        return False, "sin_adjuntos"
-    carta: Optional[bytes] = None
-    for nombre, data in attachments:
-        if nombre == NOMBRE_PDF_CARTA_VARIABLE:
-            carta = data
-    if not _bytes_son_pdf_valido(carta):
-        return False, "falta_pdf_variable_o_invalido"
+    if exigir_carta:
+        if not attachments:
+            return False, "sin_adjuntos"
+        carta: Optional[bytes] = None
+        for nombre, data in attachments:
+            if nombre == NOMBRE_PDF_CARTA_VARIABLE:
+                carta = data
+        if not _bytes_son_pdf_valido(carta):
+            return False, "falta_pdf_variable_o_invalido"
+    if exigir_pdf_fijo:
+        if not attachments:
+            return False, "falta_pdf_fijo_o_invalido"
+        tiene_fijo = False
+        for nombre, data in attachments:
+            if nombre == NOMBRE_PDF_CARTA_VARIABLE:
+                continue
+            if _bytes_son_pdf_valido(data):
+                tiene_fijo = True
+                break
+        if not tiene_fijo:
+            return False, "falta_pdf_fijo_o_invalido"
     return True, ""
+
+
+def _flags_adjuntos_envio(tipo: str, tipo_cfg: dict, paquete_estricto: bool) -> tuple[bool, bool]:
+    """
+    Devuelve (incluir_pdf_anexo / Carta_Cobranza, incluir_adjuntos_fijos).
+    """
+    if _tipo_prejudicial_solo_html(tipo):
+        return False, False
+    if _tipo_menor_60_solo_pdf_fijo(tipo):
+        # Menor a 60: nunca carta; siempre PDF fijo del caso.
+        return False, True
+    if tipo == "MASIVOS":
+        return False, tipo_cfg.get("incluir_adjuntos_fijos", True) is not False
+    if paquete_estricto:
+        if _tipo_dos_dias_antes_solo_correo(tipo):
+            return (
+                _cfg_incluir_pdf_anexo(tipo_cfg),
+                tipo_cfg.get("incluir_adjuntos_fijos", True) is not False,
+            )
+        return True, True
+    return (
+        _cfg_incluir_pdf_anexo(tipo_cfg),
+        tipo_cfg.get("incluir_adjuntos_fijos", True) is not False,
+    )
 
 
 def _enviar_correos_items(
@@ -296,6 +344,7 @@ def _enviar_correos_items(
                 tipo != "MASIVOS"
                 and not _tipo_dos_dias_antes_solo_correo(tipo)
                 and not _tipo_prejudicial_solo_html(tipo)
+                and not _tipo_menor_60_solo_pdf_fijo(tipo)
             )
             if requiere_pdf_cobranza and not _cfg_incluir_pdf_anexo(tipo_cfg):
                 log_envio_paquete_incompleto(
@@ -303,7 +352,10 @@ def _enviar_correos_items(
                 )
                 omitidos_paquete_incompleto += 1
                 continue
-            if requiere_pdf_cobranza and tipo_cfg.get("incluir_adjuntos_fijos", True) is False:
+            if (
+                (requiere_pdf_cobranza or _tipo_menor_60_solo_pdf_fijo(tipo))
+                and tipo_cfg.get("incluir_adjuntos_fijos", True) is False
+            ):
                 log_envio_paquete_incompleto(
                     item_id_log, "incluir_adjuntos_fijos_no_puede_desactivarse", tipo
                 )
@@ -336,15 +388,26 @@ def _enviar_correos_items(
             plantilla = db.get(PlantillaNotificacion, plantilla_id) if plantilla_id else None
             solo_correo_2d = _tipo_dos_dias_antes_solo_correo(tipo)
             solo_html_prej = _tipo_prejudicial_solo_html(tipo)
-            need_ctx = (
-                not solo_html_prej
-                and (
-                    (paquete_estricto and not solo_correo_2d)
-                    or (plantilla and getattr(plantilla, "tipo", None) == "COBRANZA")
-                    or _cfg_incluir_pdf_anexo(tipo_cfg)
-                    or (plantilla and plantilla_usa_variables_cobranza(plantilla))
+            solo_pdf_fijo_m60 = _tipo_menor_60_solo_pdf_fijo(tipo)
+            if solo_pdf_fijo_m60:
+                # Sin carta: contexto solo si la plantilla email usa variables de cobranza.
+                need_ctx = bool(
+                    plantilla
+                    and (
+                        getattr(plantilla, "tipo", None) == "COBRANZA"
+                        or plantilla_usa_variables_cobranza(plantilla)
+                    )
                 )
-            )
+            else:
+                need_ctx = (
+                    not solo_html_prej
+                    and (
+                        (paquete_estricto and not solo_correo_2d)
+                        or (plantilla and getattr(plantilla, "tipo", None) == "COBRANZA")
+                        or _cfg_incluir_pdf_anexo(tipo_cfg)
+                        or (plantilla and plantilla_usa_variables_cobranza(plantilla))
+                    )
+                )
             if need_ctx:
                 ctx, corr = build_contexto_cobranza_para_item(
                     db, item, correlativos_en_batch, fecha_referencia=fecha_referencia
@@ -370,35 +433,10 @@ def _enviar_correos_items(
         # La lista antigua omitia <p>, <ul>, etc.; con adjuntos Gmail mostraba solo texto plano.
         if body_html is None and cuerpo and cuerpo_parece_html(cuerpo):
             body_html = cuerpo
-        # Adjuntos obligatorios cuando están seleccionados en Config (Notificaciones → Envíos):
-        # - PDF (pestaña 2): Carta_Cobranza.pdf generada desde Plantilla anexo PDF. Se agrega OBLIGATORIAMENTE si incluir_pdf_anexo=True.
-        # - Adj. (pestaña 3): Documentos PDF fijos subidos en Documentos PDF anexos. Se agregan OBLIGATORIAMENTE si incluir_adjuntos_fijos no es False.
-        if paquete_estricto:
-            # Masivos / «2 dias antes» / PREJUDICIAL (60+): sin paquete PDF obligatorio.
-            # PREJUDICIAL: nunca anexa PDF (solo HTML/texto).
-            if _tipo_prejudicial_solo_html(tipo):
-                incluir_pdf_anexo = False
-                incluir_adjuntos_fijos = False
-            elif tipo == "MASIVOS":
-                incluir_pdf_anexo = False
-                incluir_adjuntos_fijos = tipo_cfg.get("incluir_adjuntos_fijos", True) is not False
-            elif _tipo_dos_dias_antes_solo_correo(tipo):
-                incluir_pdf_anexo = _cfg_incluir_pdf_anexo(tipo_cfg)
-                incluir_adjuntos_fijos = tipo_cfg.get("incluir_adjuntos_fijos", True) is not False
-            else:
-                incluir_pdf_anexo = True
-                incluir_adjuntos_fijos = True
-        else:
-            # Masivos / PREJUDICIAL: nunca Carta_Cobranza ni PDF fijos.
-            if _tipo_prejudicial_solo_html(tipo):
-                incluir_pdf_anexo = False
-                incluir_adjuntos_fijos = False
-            elif tipo == "MASIVOS":
-                incluir_pdf_anexo = False
-                incluir_adjuntos_fijos = tipo_cfg.get("incluir_adjuntos_fijos", True) is not False
-            else:
-                incluir_pdf_anexo = _cfg_incluir_pdf_anexo(tipo_cfg)
-                incluir_adjuntos_fijos = tipo_cfg.get("incluir_adjuntos_fijos", True) is not False  # True si falta la clave (compatibilidad)
+        # Adjuntos: carta (pestaña 2) y/o PDF fijos (pestaña 3). Menor a 60: solo fijos.
+        incluir_pdf_anexo, incluir_adjuntos_fijos = _flags_adjuntos_envio(
+            tipo, tipo_cfg, paquete_estricto
+        )
         if incluir_pdf_anexo or incluir_adjuntos_fijos:
             try:
                 attachments = []
@@ -433,13 +471,20 @@ def _enviar_correos_items(
                     len(attachments) if attachments else 0,
                     error=str(e),
                 )
-                log_envio_fallo("adjuntos", str(e), exc=e)
+                log_envio_fallo("adjuntos", str(e))
                 if not attachments:
                     attachments = None
         if paquete_estricto:
-            ok_pkg, mot_pkg = _adjuntos_cumplen_paquete_completo(attachments)
             if _tipo_sin_paquete_pdf_obligatorio(tipo):
-                ok_pkg = True
+                ok_pkg, mot_pkg = True, ""
+            elif _tipo_menor_60_solo_pdf_fijo(tipo):
+                ok_pkg, mot_pkg = _adjuntos_cumplen_paquete_completo(
+                    attachments, exigir_carta=False, exigir_pdf_fijo=True
+                )
+            else:
+                ok_pkg, mot_pkg = _adjuntos_cumplen_paquete_completo(
+                    attachments, exigir_carta=True, exigir_pdf_fijo=False
+                )
             if not ok_pkg:
                 relax_prueba = bool(
                     getattr(settings, "NOTIFICACIONES_PAQUETE_RELAX_SOLO_PRUEBA_DESTINO", False)

@@ -168,7 +168,9 @@ def ejecutar_diagnostico_paquete_prueba(db: Session, tipo: str) -> Dict[str, Any
     from app.services.carta_cobranza_pdf import generar_carta_cobranza_pdf
     from app.services.adjunto_fijo_cobranza import get_adjunto_fijo_cobranza_bytes, get_adjuntos_fijos_por_caso
     from app.services.notificaciones_envio_pipeline import (
+        _flags_adjuntos_envio,
         _tipo_dos_dias_antes_solo_correo,
+        _tipo_menor_60_solo_pdf_fijo,
         _tipo_prejudicial_solo_html,
     )
 
@@ -207,6 +209,9 @@ def ejecutar_diagnostico_paquete_prueba(db: Session, tipo: str) -> Dict[str, Any
     item = deepcopy(item)
     paquete_estricto = bool(getattr(settings, "NOTIFICACIONES_PAQUETE_ESTRICTO", True))
     tipo_res = tipo
+    solo_2d = _tipo_dos_dias_antes_solo_correo(tipo)
+    solo_html_prej = _tipo_prejudicial_solo_html(tipo)
+    solo_pdf_fijo_m60 = _tipo_menor_60_solo_pdf_fijo(tipo)
     config_envios = nt._config_envios_forzar_habilitado_caso(
         get_notificaciones_envios_config(db),
         tipo_res,
@@ -214,26 +219,64 @@ def ejecutar_diagnostico_paquete_prueba(db: Session, tipo: str) -> Dict[str, Any
     tipo_cfg = config_envios.get(tipo_res) or {}
     habilitado = tipo_cfg.get("habilitado", True) is not False
     plantilla_id = nt._parse_plantilla_id_desde_config(tipo_cfg.get("plantilla_id"))
+    tipo_caso = nt._CONFIG_TIPO_TO_TAB.get(tipo_res)
+
+    if solo_pdf_fijo_m60:
+        nota_reglas = (
+            "Menor a 60 dias: plantilla email + PDF fijo del caso dias_10_retraso. "
+            "No se adjunta Carta_Cobranza.pdf."
+        )
+    elif solo_html_prej:
+        nota_reglas = "PREJUDICIAL: solo HTML/texto, sin PDF."
+    elif solo_2d:
+        nota_reglas = "2 dias antes: correo; plantilla y PDFs opcionales segun config."
+    else:
+        nota_reglas = (
+            "Paquete estricto exige plantilla email activa + Carta_Cobranza.pdf valido. "
+            "Los PDF fijos se anexan si estan configurados."
+        )
 
     out: Dict[str, Any] = {
         "tipo_solicitado": tipo,
         "tipo_config": tipo_res,
+        "tipo_caso_adjuntos": tipo_caso,
         "habilitado_envio": habilitado,
         "plantilla_id": plantilla_id,
         "paquete_estricto": paquete_estricto,
         "relax_solo_prueba_destino": bool(
             getattr(settings, "NOTIFICACIONES_PAQUETE_RELAX_SOLO_PRUEBA_DESTINO", False)
         ),
+        "item_ejemplo": {
+            "nombre": item.get("nombre"),
+            "cedula": item.get("cedula"),
+            "prestamo_id": item.get("prestamo_id"),
+            "numero_cuota": item.get("numero_cuota"),
+            "dias_atraso": item.get("dias_atraso"),
+            "cuotas_atrasadas": item.get("cuotas_atrasadas"),
+            "fecha_vencimiento": item.get("fecha_vencimiento"),
+        },
+        "reglas_estricto": {
+            "exige_plantilla_activa": (not solo_2d) and (not solo_html_prej),
+            "exige_carta_cobranza_pdf": (
+                (not solo_2d) and (not solo_html_prej) and (not solo_pdf_fijo_m60)
+            ),
+            "exige_pdf_fijo_adicional": solo_pdf_fijo_m60,
+            "nota": nota_reglas,
+        },
     }
+
+    if plantilla_id:
+        p_meta = db.get(PlantillaNotificacion, plantilla_id)
+        if p_meta:
+            out["plantilla_nombre"] = p_meta.nombre
+            out["plantilla_tipo"] = p_meta.tipo
+            out["plantilla_activa"] = bool(p_meta.activa)
 
     if not habilitado:
         out["ok"] = False
         out["motivo"] = "envio_desactivado_para_este_tipo"
         return out
 
-    # Import directo del pipeline: evita AttributeError si tabs no reexporta el helper.
-    solo_2d = _tipo_dos_dias_antes_solo_correo(tipo)
-    solo_html_prej = _tipo_prejudicial_solo_html(tipo)
     if paquete_estricto:
         if solo_2d:
             out["plantilla_ok"] = True
@@ -248,7 +291,7 @@ def ejecutar_diagnostico_paquete_prueba(db: Session, tipo: str) -> Dict[str, Any
                 out["ok"] = False
                 out["motivo"] = mot_plant
                 return out
-            if not solo_html_prej:
+            if not solo_html_prej and not solo_pdf_fijo_m60:
                 if not nt._cfg_incluir_pdf_anexo(tipo_cfg):
                     out["ok"] = False
                     out["motivo"] = "incluir_pdf_anexo_desactivado_en_config"
@@ -261,6 +304,10 @@ def ejecutar_diagnostico_paquete_prueba(db: Session, tipo: str) -> Dict[str, Any
                     out["ok"] = False
                     out["motivo"] = "sin_prestamo_id_para_pdf_carta"
                     return out
+            elif solo_pdf_fijo_m60 and tipo_cfg.get("incluir_adjuntos_fijos", True) is False:
+                out["ok"] = False
+                out["motivo"] = "incluir_adjuntos_fijos_desactivado"
+                return out
 
     if db and item.get("prestamo_id"):
         ctx_existente = item.get("contexto_cobranza")
@@ -273,16 +320,24 @@ def ejecutar_diagnostico_paquete_prueba(db: Session, tipo: str) -> Dict[str, Any
     correlativos_en_batch: dict = {}
     if db and item.get("prestamo_id") and not item.get("contexto_cobranza"):
         plantilla = db.get(PlantillaNotificacion, plantilla_id) if plantilla_id else None
-        solo_correo_2d = _tipo_dos_dias_antes_solo_correo(tipo)
-        need_ctx = (
-            not solo_html_prej
-            and (
-                (paquete_estricto and not solo_correo_2d)
-                or (plantilla and getattr(plantilla, "tipo", None) == "COBRANZA")
-                or nt._cfg_incluir_pdf_anexo(tipo_cfg)
-                or (plantilla and plantilla_usa_variables_cobranza(plantilla))
+        if solo_pdf_fijo_m60:
+            need_ctx = bool(
+                plantilla
+                and (
+                    getattr(plantilla, "tipo", None) == "COBRANZA"
+                    or plantilla_usa_variables_cobranza(plantilla)
+                )
             )
-        )
+        else:
+            need_ctx = (
+                not solo_html_prej
+                and (
+                    (paquete_estricto and not solo_2d)
+                    or (plantilla and getattr(plantilla, "tipo", None) == "COBRANZA")
+                    or nt._cfg_incluir_pdf_anexo(tipo_cfg)
+                    or (plantilla and plantilla_usa_variables_cobranza(plantilla))
+                )
+            )
         if need_ctx:
             ctx, corr = build_contexto_cobranza_para_item(db, item, correlativos_en_batch)
             if ctx is not None:
@@ -291,22 +346,16 @@ def ejecutar_diagnostico_paquete_prueba(db: Session, tipo: str) -> Dict[str, Any
 
     get_plantilla_asunto_cuerpo(db, plantilla_id, item, asunto_base, cuerpo_base, modo_pruebas=False)
 
-    attachments = None
-    if solo_html_prej:
-        incluir_pdf_anexo = False
-        incluir_adjuntos_fijos = False
-    elif paquete_estricto:
-        if solo_2d:
-            incluir_pdf_anexo = nt._cfg_incluir_pdf_anexo(tipo_cfg)
-            incluir_adjuntos_fijos = tipo_cfg.get("incluir_adjuntos_fijos", True) is not False
-        else:
-            incluir_pdf_anexo = True
-            incluir_adjuntos_fijos = True
-    else:
-        incluir_pdf_anexo = nt._cfg_incluir_pdf_anexo(tipo_cfg)
-        incluir_adjuntos_fijos = tipo_cfg.get("incluir_adjuntos_fijos", True) is not False
+    incluir_pdf_anexo, incluir_adjuntos_fijos = _flags_adjuntos_envio(
+        tipo, tipo_cfg, paquete_estricto
+    )
+    out["incluir_pdf_anexo"] = incluir_pdf_anexo
+    out["incluir_adjuntos_fijos"] = incluir_adjuntos_fijos
 
+    attachments = None
     detalles_adj: list = []
+    adjunto_global_ok = False
+    adjuntos_caso_ok = 0
     if incluir_pdf_anexo or incluir_adjuntos_fijos:
         attachments = []
         try:
@@ -318,6 +367,7 @@ def ejecutar_diagnostico_paquete_prueba(db: Session, tipo: str) -> Dict[str, Any
                     detalles_adj.append(
                         {
                             "nombre": nt.NOMBRE_PDF_CARTA_VARIABLE,
+                            "origen": "carta_variable",
                             "bytes": len(pdf_bytes) if pdf_bytes else 0,
                             "cabecera_pdf": pdf_bytes[:4] == b"%PDF" if pdf_bytes else False,
                         }
@@ -327,20 +377,24 @@ def ejecutar_diagnostico_paquete_prueba(db: Session, tipo: str) -> Dict[str, Any
                 if adjunto_fijo:
                     nombre, data = adjunto_fijo[0], adjunto_fijo[1]
                     attachments.append(adjunto_fijo)
+                    adjunto_global_ok = bool(data and data[:4] == b"%PDF")
                     detalles_adj.append(
                         {
                             "nombre": nombre,
+                            "origen": "adjunto_global",
                             "bytes": len(data) if data else 0,
                             "cabecera_pdf": data[:4] == b"%PDF" if data else False,
                         }
                     )
-                tipo_caso = nt._CONFIG_TIPO_TO_TAB.get(tipo_res)
                 if tipo_caso:
                     for nombre, contenido in get_adjuntos_fijos_por_caso(db, tipo_caso):
                         attachments.append((nombre, contenido))
+                        if contenido and contenido[:4] == b"%PDF":
+                            adjuntos_caso_ok += 1
                         detalles_adj.append(
                             {
                                 "nombre": nombre,
+                                "origen": f"adjunto_caso:{tipo_caso}",
                                 "bytes": len(contenido) if contenido else 0,
                                 "cabecera_pdf": contenido[:4] == b"%PDF" if contenido else False,
                             }
@@ -350,12 +404,28 @@ def ejecutar_diagnostico_paquete_prueba(db: Session, tipo: str) -> Dict[str, Any
             out["motivo"] = "error_generando_adjuntos"
             out["error_adjuntos"] = str(e)[:500]
             out["adjuntos_previstos"] = detalles_adj
+            out["adjunto_global_ok"] = adjunto_global_ok
+            out["adjuntos_caso_ok"] = adjuntos_caso_ok
             return out
 
-    ok_pkg, mot_pkg = nt._adjuntos_cumplen_paquete_completo(attachments)
+    out["adjunto_global_ok"] = adjunto_global_ok
+    out["adjuntos_caso_ok"] = adjuntos_caso_ok
+    if incluir_adjuntos_fijos and not adjunto_global_ok and adjuntos_caso_ok == 0:
+        out["aviso_pdf_fijo"] = (
+            "No hay PDF fijo global ni por caso; configure adjuntos en dias_10_retraso "
+            "(o global) para este criterio."
+        )
+
     if solo_2d or solo_html_prej:
-        ok_pkg = True
-        mot_pkg = ""
+        ok_pkg, mot_pkg = True, ""
+    elif solo_pdf_fijo_m60:
+        ok_pkg, mot_pkg = nt._adjuntos_cumplen_paquete_completo(
+            attachments, exigir_carta=False, exigir_pdf_fijo=True
+        )
+    else:
+        ok_pkg, mot_pkg = nt._adjuntos_cumplen_paquete_completo(
+            attachments, exigir_carta=True, exigir_pdf_fijo=False
+        )
     out["adjuntos_previstos"] = detalles_adj
     out["paquete_completo"] = ok_pkg
     out["paquete_motivo"] = mot_pkg or None
@@ -363,9 +433,12 @@ def ejecutar_diagnostico_paquete_prueba(db: Session, tipo: str) -> Dict[str, Any
     if not ok_pkg:
         out["motivo"] = mot_pkg
     else:
-        out["motivo"] = (
-            "listo_para_envio_solo_correo_2_dias_antes"
-            if solo_2d
-            else "listo_para_envio_estricto"
-        )
+        if solo_2d:
+            out["motivo"] = "listo_para_envio_solo_correo_2_dias_antes"
+        elif solo_html_prej:
+            out["motivo"] = "listo_para_envio_solo_html_prejudicial"
+        elif solo_pdf_fijo_m60:
+            out["motivo"] = "listo_para_envio_solo_pdf_fijo_menor_60"
+        else:
+            out["motivo"] = "listo_para_envio_estricto"
     return out
