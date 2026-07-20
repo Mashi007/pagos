@@ -26,9 +26,10 @@ NOTIFICACIONES_EMAIL = "notificaciones@rapicreditca.com"
 ETIQUETA_GMAIL = "GMAIL"
 FRAGMENTO_MAX = 2000
 
-# Bandeja Principal + menciones a notificaciones; excluye ya etiquetados GMAIL.
+# Bandeja Principal + notificaciones@ (leidos y no leidos; sin filtro is:unread/is:read).
+# La etiqueta GMAIL se aplica al procesar; no se usa como filtro de busqueda.
 GMAIL_LIST_QUERY = (
-    f'in:inbox category:primary ("{NOTIFICACIONES_EMAIL}") -label:{ETIQUETA_GMAIL}'
+    f'in:inbox category:primary ("{NOTIFICACIONES_EMAIL}")'
 )
 
 _RE_EMAIL = re.compile(

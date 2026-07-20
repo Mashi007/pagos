@@ -154,11 +154,13 @@ export function AuditoriaRebotesGmailTab() {
         </CardHeader>
         <CardContent className="space-y-3">
           <p className="text-sm text-muted-foreground">
-            Escanea la bandeja Principal de itmaster@rapicreditca.com. Solo
-            mensajes cuyo cuerpo menciona notificaciones@rapicreditca.com.
-            Clasifica segun el aviso de Gmail (mal, lleno, temporal, otro),
-            cruza con clientes (cedula vacia si no hay match), etiqueta GMAIL y
-            guarda en BD. El Excel se genera desde lo guardado.
+            Escanea la bandeja Principal de itmaster@rapicreditca.com (leidos y
+            no leidos). Condicion basica: mensajes con
+            notificaciones@rapicreditca.com en el cuerpo. Clasifica segun el
+            aviso de Gmail (mal, lleno, temporal, otro), cruza con clientes
+            (cedula vacia si no hay match), etiqueta GMAIL y guarda en BD. El
+            Excel se genera desde lo guardado. Si el mensaje ya esta en BD no se
+            duplica.
           </p>
           <div className="flex flex-wrap gap-2">
             <Button onClick={() => void handleProcesar()} disabled={procesando}>

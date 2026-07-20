@@ -90,7 +90,7 @@ def procesar_rebotes_gmail(
     db: Session = Depends(get_db),
     admin: UserResponse = Depends(require_admin),
 ):
-    """Escaneo manual: Primary de itmaster, cuerpo con notificaciones@, etiqueta GMAIL, guarda en BD."""
+    """Escaneo manual: Primary de itmaster (leidos y no leidos), cuerpo con notificaciones@, etiqueta GMAIL, guarda en BD."""
     result = svc.procesar_rebotes_gmail(
         db,
         procesado_por=admin.email,
