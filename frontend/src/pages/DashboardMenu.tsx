@@ -79,7 +79,6 @@ import type {
   OpcionesFiltrosResponse,
   DashboardAdminResponse,
   CobranzasSemanalesResponse,
-  AnalisisCuentasPorCobrarResponse,
   EvolucionMensualItem,
   NotificacionesEnviosPorDiaResponse,
 } from '../types/dashboard'
@@ -430,43 +429,6 @@ export function DashboardMenu() {
     refetchOnWindowFocus: false,
   })
 
-  const periodoAnalisisCuentas = getPeriodoGrafico('analisis-cuentas')
-
-  const { data: datosAnalisisCuentas, isLoading: loadingAnalisisCuentas } =
-    useQuery({
-      queryKey: [
-        'analisis-cuentas-por-cobrar',
-        periodoAnalisisCuentas,
-        JSON.stringify(filtros),
-      ],
-
-      queryFn: async () => {
-        const params = construirFiltrosObject(periodoAnalisisCuentas)
-
-        const queryParams = new URLSearchParams()
-
-        Object.entries(params).forEach(([key, value]) => {
-          if (value) queryParams.append(key, value.toString())
-        })
-
-        if (!queryParams.has('periodo') && periodoAnalisisCuentas)
-          queryParams.append('periodo', periodoAnalisisCuentas)
-
-        const response = await apiClient.get(
-          `/api/v1/dashboard/analisis-cuentas-por-cobrar${queryParams.toString() ? `?${queryParams.toString()}` : ''}`,
-          { timeout: 60000 }
-        )
-
-        return response as AnalisisCuentasPorCobrarResponse
-      },
-
-      staleTime: 4 * 60 * 60 * 1000,
-
-      refetchOnWindowFocus: false,
-
-      enabled: enableSecondaryCharts,
-    })
-
   const NOTIFICACIONES_ENVIOS_TENDENCIA_DIAS = 90
   const diasGraficoFlujoFiniquito = diasVentanaFiniquito(
     getPeriodoGrafico('finiquito-flujo')
@@ -664,11 +626,6 @@ export function DashboardMenu() {
       })
 
       await queryClient.invalidateQueries({
-        queryKey: ['analisis-cuentas-por-cobrar'],
-        exact: false,
-      })
-
-      await queryClient.invalidateQueries({
         queryKey: ['notificaciones-envios-por-dia'],
         exact: false,
       })
@@ -687,11 +644,6 @@ export function DashboardMenu() {
 
       await queryClient.refetchQueries({
         queryKey: ['cobranzas-semanales'],
-        exact: false,
-      })
-
-      await queryClient.refetchQueries({
-        queryKey: ['analisis-cuentas-por-cobrar'],
         exact: false,
       })
 
@@ -1290,7 +1242,7 @@ export function DashboardMenu() {
               </Card>
             </motion.div>
 
-            {/* Análisis de Cuentas por Cobrar - Cartera vs Pagos de Atrasos */}
+            {/* Cobrados acumulados vs por cobrar */}
 
             <motion.div
               initial={{ opacity: 0, y: 20 }}
@@ -1298,42 +1250,47 @@ export function DashboardMenu() {
               transition={{ delay: 0.25 }}
             >
               <Card className="overflow-hidden rounded-xl border border-gray-200/90 bg-white shadow-lg">
-                <CardHeader className="border-b border-gray-200/80 bg-gradient-to-r from-amber-50/90 to-orange-50/90 pb-3">
+                <CardHeader className="border-b border-gray-200/80 bg-gradient-to-r from-emerald-50/90 to-teal-50/90 pb-3">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <CardTitle className="flex items-center gap-2 text-lg font-bold text-gray-800">
-                      <DollarSign className="h-5 w-5 text-amber-600" />
+                      <DollarSign className="h-5 w-5 text-emerald-600" />
 
-                      <span>Análisis de Cuentas por Cobrar</span>
+                      <span>Cobrados acumulados y por cobrar</span>
                     </CardTitle>
 
                     <div className="flex items-center gap-2">
-                      <SelectorPeriodoGrafico chartId="analisis-cuentas" />
+                      <SelectorPeriodoGrafico chartId="evolucion" />
 
                       <Badge
                         variant="secondary"
                         className="border border-gray-200 bg-white/80 text-xs font-medium text-gray-600"
                       >
-                        Últimos 12 meses
+                        {getRangoFechasLabelGrafico('evolucion')}
                       </Badge>
                     </div>
                   </div>
+
+                  <CardDescription className="mt-2 text-xs text-gray-600">
+                    Áreas acumuladas hasta cada mes: cobrados (todos) y por
+                    cobrar (= programadas acumuladas − cobros acumulados). Mismo
+                    período que Evolución Mensual.
+                  </CardDescription>
                 </CardHeader>
 
                 <CardContent className="p-6 pt-4">
-                  {loadingAnalisisCuentas ? (
+                  {loadingDashboard ? (
                     <div className="flex items-center justify-center py-16 text-gray-500">
-                      Cargando análisis de cuentas por cobrar...
+                      Cargando acumulados...
                     </div>
-                  ) : datosAnalisisCuentas?.analisis &&
-                    datosAnalisisCuentas.analisis.length > 0 ? (
+                  ) : evolucionMensual.length > 0 ? (
                     <ChartWithDateRangeSlider
-                      data={datosAnalisisCuentas.analisis}
+                      data={evolucionMensual}
                       dataKey="mes"
                       chartHeight={400}
                     >
                       {filteredData => (
                         <ResponsiveContainer width="100%" height="100%">
-                          <BarChart
+                          <AreaChart
                             data={filteredData}
                             margin={{
                               top: 14,
@@ -1348,7 +1305,6 @@ export function DashboardMenu() {
 
                             <YAxis
                               tick={chartAxisTick}
-                              domain={[0, 500000]}
                               tickFormatter={value => {
                                 if (value >= 1000) {
                                   return `$${(value / 1000).toFixed(0)}K`
@@ -1375,42 +1331,26 @@ export function DashboardMenu() {
 
                             <Legend {...chartLegendStyle} />
 
-                            <Bar
-                              stackId="cobros-analisis"
-                              dataKey="cobrado_mes"
+                            <Area
+                              type="monotone"
+                              stackId="acum"
+                              dataKey="cobros_acumulados"
+                              stroke="#059669"
                               fill="#10b981"
-                              name="Pagos conciliados"
-                              radius={[0, 0, 0, 0]}
+                              fillOpacity={0.55}
+                              name="Cobrados acumulados"
                             />
 
-                            <Bar
-                              stackId="cobros-analisis"
-                              dataKey="pagos_atrasos"
-                              fill="#f97316"
-                              name="Pagos de meses anteriores"
-                              radius={[4, 4, 0, 0]}
-                            />
-
-                            <Line
+                            <Area
                               type="monotone"
-                              dataKey="cobrado_mes"
-                              stroke="#10b981"
-                              strokeWidth={2}
-                              dot={{ r: 3 }}
-                              name="Tendencia pagos conciliados"
-                              isAnimationActive={false}
+                              stackId="acum"
+                              dataKey="cuentas_por_cobrar"
+                              stroke="#d97706"
+                              fill="#f59e0b"
+                              fillOpacity={0.45}
+                              name="Por cobrar"
                             />
-
-                            <Line
-                              type="monotone"
-                              dataKey="pagos_atrasos"
-                              stroke="#f97316"
-                              strokeWidth={2}
-                              dot={{ r: 3 }}
-                              name="Tendencia atrasos"
-                              isAnimationActive={false}
-                            />
-                          </BarChart>
+                          </AreaChart>
                         </ResponsiveContainer>
                       )}
                     </ChartWithDateRangeSlider>
