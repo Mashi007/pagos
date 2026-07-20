@@ -5,6 +5,45 @@ const AUDITORIA_CARTERA_EJECUTAR_TIMEOUT_MS = 180000
 
 const AUDITORIA_CARTERA_CORREGIR_TIMEOUT_MS = 300000
 
+const AUDITORIA_REBOTES_GMAIL_TIMEOUT_MS = 300000
+
+export interface ReboteGmailItem {
+  id: number
+  gmail_message_id: string
+  gmail_thread_id?: string | null
+  cedula?: string | null
+  correo: string
+  observaciones: string
+  asunto_gmail?: string | null
+  remitente_detectado?: string | null
+  etiqueta_gmail?: string | null
+  fecha_mensaje?: string | null
+  fecha_registro?: string | null
+  procesado_por?: string | null
+}
+
+export interface ReboteGmailListResponse {
+  items: ReboteGmailItem[]
+  total: number
+  page: number
+  page_size: number
+  total_pages: number
+}
+
+export interface ProcesarRebotesGmailResponse {
+  ok: boolean
+  error?: string | null
+  mensaje?: string | null
+  query?: string | null
+  etiqueta?: string | null
+  revisados: number
+  guardados: number
+  omitidos: number
+  ya_existentes: number
+  etiquetados: number
+  sin_correo: number
+}
+
 export interface Auditoria {
   id: number
 
@@ -721,6 +760,47 @@ class AuditoriaService {
   ): Promise<{ items: Control15PagoSinAplicacionItem[] }> {
     return apiClient.get<{ items: Control15PagoSinAplicacionItem[] }>(
       `${this.baseUrl}/prestamos/cartera/control-15-pagos-sin-aplicacion-cuotas/${prestamoId}`
+    )
+  }
+
+  /** Solo admin. Escaneo manual rebotes Gmail (bandeja Principal itmaster). */
+  async procesarRebotesGmail(
+    maxMessages: number = 200
+  ): Promise<ProcesarRebotesGmailResponse> {
+    return apiClient.post<ProcesarRebotesGmailResponse>(
+      `${this.baseUrl}/rebotes-gmail/procesar`,
+      undefined,
+      {
+        params: { max_messages: maxMessages },
+        timeout: AUDITORIA_REBOTES_GMAIL_TIMEOUT_MS,
+      }
+    )
+  }
+
+  async listarRebotesGmail(params?: {
+    skip?: number
+    limit?: number
+  }): Promise<ReboteGmailListResponse> {
+    return apiClient.get<ReboteGmailListResponse>(
+      `${this.baseUrl}/rebotes-gmail`,
+      { params }
+    )
+  }
+
+  async descargarRebotesGmailExcel(): Promise<void> {
+    const stamp = new Date()
+      .toISOString()
+      .slice(0, 19)
+      .replace(/[:-]/g, '')
+    await apiClient.downloadFile(
+      `${this.baseUrl}/rebotes-gmail/excel`,
+      `auditoria_rebotes_gmail_${stamp}.xlsx`
+    )
+  }
+
+  async borrarTodosRebotesGmail(): Promise<{ borrados: number }> {
+    return apiClient.delete<{ borrados: number }>(
+      `${this.baseUrl}/rebotes-gmail`
     )
   }
 }

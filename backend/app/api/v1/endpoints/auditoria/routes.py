@@ -66,6 +66,13 @@ from app.services.prestamo_cartera_auditoria import (
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
 
+# Paths fijos del submodulo rebotes-gmail (antes de GET /{auditoria_id}).
+from app.api.v1.endpoints.auditoria.rebotes_gmail_routes import (  # noqa: E402
+    router as rebotes_gmail_router,
+)
+
+router.include_router(rebotes_gmail_router)
+
 
 def _codigo_control_cartera_opcional(raw: Optional[str]) -> Optional[str]:
     if raw is None or not str(raw).strip():

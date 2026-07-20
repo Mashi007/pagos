@@ -854,6 +854,35 @@ def get_message_body_text(payload: dict) -> str:
     return ""
 
 
+def get_message_all_text_parts(payload: dict, max_chars: int = 30000) -> str:
+    """
+    Concatena text/plain, text/html (a plano) y partes message/delivery-status / rfc822
+    para parsear DSN de rebote (notificaciones@ suele estar en el mensaje original anidado).
+    """
+    chunks: list[str] = []
+
+    def _collect(part: dict) -> None:
+        mime = (part.get("mimeType") or "").strip().lower()
+        body = part.get("body") or {}
+        data_b64 = body.get("data")
+        if data_b64:
+            try:
+                raw = base64.urlsafe_b64decode(data_b64 + "==")
+                text = raw.decode("utf-8", errors="replace")
+                if mime == "text/html":
+                    text = _html_to_plain(text)
+                if text.strip():
+                    chunks.append(text.strip())
+            except Exception:
+                pass
+        for sub in part.get("parts") or []:
+            _collect(sub)
+
+    _collect(payload or {})
+    joined = "\n\n".join(chunks)
+    return joined[:max_chars]
+
+
 def get_message_raw_bytes(service: Any, message_id: str) -> Optional[bytes]:
     """
     Obtiene el correo completo en formato raw (RFC 2822) para guardarlo como .eml en Drive.
