@@ -56,7 +56,7 @@ import {
   emailCuentasApi,
   SERVICIO_POR_CUENTA,
   PANEL_SERVICIOS_EMAIL,
-  ASIGNACION_NOTIF_GRUPOS,
+  PANEL_NOTIF_TAB_FILAS,
   ASIGNACION_NOTIF_DEFAULTS,
   NUM_CUENTAS_EMAIL,
   normalizarIndiceCuenta,
@@ -561,9 +561,9 @@ export function EmailCuentasConfig() {
           </CardTitle>
 
           <CardDescription>
-            Un solo lugar para encender cada servicio, elegir qué cuenta SMTP usa
-            y si redirige al correo de pruebas. Los casos de Notificaciones
-            eligen cuenta en la tabla inferior.
+            Un solo lugar: servicios principales, módulos del menú Notificaciones y
+            recordatorios antes de vencimiento. Active cada servicio, elija cuenta SMTP
+            y modo pruebas.
           </CardDescription>
         </CardHeader>
 
@@ -610,7 +610,9 @@ export function EmailCuentasConfig() {
                       <td className="p-3 align-middle">
                         {'sinSelectorCuenta' in row && row.sinSelectorCuenta ? (
                           <span className="text-xs text-muted-foreground">
-                            Por caso (tabla abajo)
+                            {'hintCuenta' in row && row.hintCuenta
+                              ? row.hintCuenta
+                              : 'Por módulo (filas siguientes)'}
                           </span>
                         ) : 'asignacionDesde' in row && row.asignacionDesde ? (
                           <span className="text-xs text-muted-foreground">
@@ -656,6 +658,46 @@ export function EmailCuentasConfig() {
                     </tr>
                   )
                 })}
+                {PANEL_NOTIF_TAB_FILAS.map((fila, idx) =>
+                  fila.type === 'header' ? (
+                    <tr
+                      key={`hdr-${fila.label}-${idx}`}
+                      className="border-b bg-muted/25"
+                    >
+                      <td
+                        colSpan={4}
+                        className="p-2 pl-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+                      >
+                        {fila.label}
+                      </td>
+                    </tr>
+                  ) : (
+                    <tr key={fila.tabId} className="border-b last:border-0">
+                      <td className="p-3 pl-6 align-middle text-sm font-medium">
+                        {fila.label}
+                      </td>
+                      <td className="p-3 align-middle">
+                        <span className="text-xs text-muted-foreground">
+                          Usa «Notificaciones» arriba
+                        </span>
+                      </td>
+                      <td className="p-3 align-middle">
+                        <SelectCuentaAsignacion
+                          id={`panel-cuenta-notif-${fila.tabId}`}
+                          value={normalizarIndiceCuenta(
+                            asignacion[fila.tabId] ?? fila.defaultCuenta
+                          )}
+                          onChange={v => setNotifTabCuenta(fila.tabId, v)}
+                        />
+                      </td>
+                      <td className="p-3 align-middle">
+                        <span className="text-xs text-muted-foreground">
+                          Usa «Notificaciones» arriba
+                        </span>
+                      </td>
+                    </tr>
+                  )
+                )}
               </tbody>
             </table>
           </div>
@@ -922,35 +964,6 @@ export function EmailCuentasConfig() {
                   onChange={e => updateCuenta(i, 'from_name', e.target.value)}
                 />
               </div>
-            </div>
-          </CardContent>
-        </Card>
-      ))}
-
-      {ASIGNACION_NOTIF_GRUPOS.map(grupo => (
-        <Card key={grupo.titulo}>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base">
-              <AlertCircle className="h-4 w-4" />
-              {grupo.titulo}
-            </CardTitle>
-            <CardDescription>{grupo.descripcion}</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid gap-3 sm:grid-cols-2">
-              {grupo.items.map(({ id, label, defaultCuenta }) => (
-                <div
-                  key={id}
-                  className="flex items-center justify-between rounded border p-3"
-                >
-                  <span className="pr-2 text-sm font-medium">{label}</span>
-                  <SelectCuentaAsignacion
-                    id={`asig-notif-${id}`}
-                    value={normalizarIndiceCuenta(asignacion[id] ?? defaultCuenta)}
-                    onChange={v => setNotifTabCuenta(id, v)}
-                  />
-                </div>
-              ))}
             </div>
           </CardContent>
         </Card>

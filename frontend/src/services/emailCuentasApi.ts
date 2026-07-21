@@ -274,6 +274,7 @@ export const PANEL_SERVICIOS_EMAIL = [
     activoKey: 'email_activo_notificaciones' as const,
     modoPruebasKey: 'modo_pruebas_notificaciones' as const,
     sinSelectorCuenta: true,
+    hintCuenta: 'Por módulo (filas siguientes)',
   },
   {
     id: 'recibos',
@@ -326,6 +327,29 @@ export const ASIGNACION_NOTIF_GRUPOS = [
     ],
   },
 ] as const
+
+/** Filas del panel unificado: encabezados de grupo + tabs de notificaciones. */
+export type PanelNotifTabFila =
+  | { type: 'header'; label: string }
+  | {
+      type: 'tab'
+      tabId: string
+      label: string
+      defaultCuenta: number
+      grupo: string
+    }
+
+export const PANEL_NOTIF_TAB_FILAS: PanelNotifTabFila[] =
+  ASIGNACION_NOTIF_GRUPOS.flatMap(grupo => [
+    { type: 'header' as const, label: grupo.titulo },
+    ...grupo.items.map(it => ({
+      type: 'tab' as const,
+      tabId: it.id,
+      label: it.label,
+      defaultCuenta: it.defaultCuenta,
+      grupo: grupo.titulo,
+    })),
+  ])
 
 /** Defaults planos tipo_tab → cuenta (1-3). */
 export const ASIGNACION_NOTIF_DEFAULTS: Record<string, number> =
