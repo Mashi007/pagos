@@ -60,6 +60,67 @@ def mask_email_for_log(addr: str) -> str:
     return f"{local[:2]}***@{domain}"
 
 
+
+# Auditoria notificaciones/recibos: nunca itmaster@; notificaciones@ via To dedicado + Cc.
+EMAIL_BLOCKED_DEST = frozenset({"itmaster@rapicreditca.com"})
+EMAIL_AUDIT_NOTIFICACIONES = "notificaciones@rapicreditca.com"
+EMAIL_AUDIT_COBRANZA = "cobranza@rapicreditca.com"
+
+
+def _sin_destinos_bloqueados(emails: List[str]) -> List[str]:
+    out: List[str] = []
+    for e in emails or []:
+        s = (e or "").strip()
+        if not s or "@" not in s:
+            continue
+        if s.lower() in EMAIL_BLOCKED_DEST:
+            continue
+        out.append(s)
+    return out
+
+
+def _set_header_unico(msg: Any, name: str, value: str) -> None:
+    """Evita cabeceras duplicadas (Gmail 550 multiple To)."""
+    if name in msg:
+        del msg[name]
+    msg[name] = value
+
+
+def _aplicar_auditoria_notificaciones_recibos(
+    *,
+    to_emails: List[str],
+    cc_list: List[str],
+    bcc_list: List[str],
+) -> Tuple[List[str], List[str], List[str], List[str]]:
+    """
+    Estrategia v4 (sin depender de BCC a notificaciones@):
+    - Quita itmaster@ de To/Cc/Bcc.
+    - Pone notificaciones@ y cobranza@ en Cc (visible, entrega fiable).
+    - Saca esas direcciones del BCC (evita RCPT duplicado / CCO ignorado).
+    - force_to: siempre correo independiente To=notificaciones@ desde pagos@.
+    """
+    to_emails = _sin_destinos_bloqueados(list(to_emails))
+    cc_list = _sin_destinos_bloqueados(list(cc_list))
+    bcc_list = _sin_destinos_bloqueados(list(bcc_list))
+    if not to_emails:
+        to_emails = [EMAIL_AUDIT_NOTIFICACIONES]
+
+    audit = {EMAIL_AUDIT_NOTIFICACIONES, EMAIL_AUDIT_COBRANZA}
+    to_low = {x.lower() for x in to_emails}
+    cc_low = {x.lower() for x in cc_list}
+
+    # Auditoria en Cc (no BCC).
+    for addr in (EMAIL_AUDIT_NOTIFICACIONES, EMAIL_AUDIT_COBRANZA):
+        low = addr.lower()
+        if low not in to_low and low not in cc_low:
+            cc_list.append(addr)
+            cc_low.add(low)
+
+    bcc_list = [b for b in bcc_list if b.lower() not in audit]
+
+    force_to = [EMAIL_AUDIT_NOTIFICACIONES]
+    return to_emails, cc_list, bcc_list, force_to
+
 def _normalize_attachments_for_smtp(
     attachments: Optional[List[AttachmentType]],
 ) -> List[AttachmentType]:
@@ -881,41 +942,18 @@ def send_email(
         return False, "Falta contrasena SMTP. Configura en Configuracion > Email."
     log_phase(logger, FASE_SMTP_CONFIG, True, "host=%s port=%s" % (cfg.get("smtp_host"), cfg.get("smtp_port")))
 
-    # notificaciones@: Gmail/Workspace suele ignorar CCO-only. Se deja en BCC (por si llega)
-    # Y ademas se fuerza copia To desde cuenta cobros/pagos@.
+    # v4: auditoria por Cc + To dedicado a notificaciones@ (no depender de BCC/Gmail).
     if aplicar_cco_automatica and svc_low in ("notificaciones", "recibos"):
-        _sender_ids = {
-            (cfg.get("smtp_user") or "").strip().lower(),
-            (cfg.get("from_email") or "").strip().lower(),
-        }
-        _to_low = {str(x).strip().lower() for x in to_emails if x}
-        _kept: List[str] = []
-        _seen_force: set[str] = {x.lower() for x in force_to_cco}
-        for _b in bcc_list:
-            _bl = (_b or "").lower()
-            if not _bl:
-                continue
-            # Autoenvio (mismo From/smtp): no sirve en BCC; solo copia To aparte.
-            if _bl in _sender_ids and _bl not in _to_low:
-                if _bl not in _seen_force:
-                    force_to_cco.append(_b)
-                    _seen_force.add(_bl)
-                continue
-            _kept.append(_b)
-            if _bl == "notificaciones@rapicreditca.com" and _bl not in _to_low and _bl not in _seen_force:
-                force_to_cco.append(_b)
-                _seen_force.add(_bl)
-        # Garantizar copia a notificaciones@ aunque no estuviera en BCC.
-        if "notificaciones@rapicreditca.com" not in _to_low and "notificaciones@rapicreditca.com" not in _seen_force:
-            force_to_cco.append("notificaciones@rapicreditca.com")
-            _seen_force.add("notificaciones@rapicreditca.com")
-        if "cobranza@rapicreditca.com" not in {x.lower() for x in _kept} and "cobranza@rapicreditca.com" not in _to_low:
-            _kept.append("cobranza@rapicreditca.com")
-        bcc_list = _kept
+        to_emails, cc_list, bcc_list, force_to_cco = _aplicar_auditoria_notificaciones_recibos(
+            to_emails=to_emails,
+            cc_list=cc_list,
+            bcc_list=bcc_list,
+        )
         logger.info(
-            "[SMTP_ENVIO] cco_final servicio=%s to=%s bcc=%s force_to=%s",
+            "[SMTP_ENVIO] auditoria_v4 servicio=%s to=%s cc=%s bcc=%s force_to=%s",
             svc_low,
             list(to_emails),
+            cc_list,
             bcc_list,
             force_to_cco,
         )
@@ -1008,37 +1046,28 @@ def send_email(
             smtp_session_metadata["message_id_rfc5322"] = _message_id
         msg["Date"] = formatdate(localtime=True)
 
-        # === GATE ABSOLUTO notificaciones/recibos (ANTES de escribir To/Cc; no duplicar cabeceras) ===
-        if svc_low in ("notificaciones", "recibos"):
-            _itm = "itmaster@rapicreditca.com"
-            _not = "notificaciones@rapicreditca.com"
-            _cob = "cobranza@rapicreditca.com"
-            to_emails = [e for e in to_emails if (e or "").strip().lower() != _itm]
-            cc_list = [e for e in cc_list if (e or "").strip().lower() != _itm]
-            bcc_list = [e for e in bcc_list if (e or "").strip().lower() != _itm]
-            if not to_emails:
-                to_emails = [_not]
-            _bcc_low = {x.lower() for x in bcc_list}
-            _to_low = {x.lower() for x in to_emails}
-            if _cob not in _bcc_low and _cob not in _to_low:
-                bcc_list.append(_cob)
-            if _not not in _to_low:
-                if _not not in {x.lower() for x in force_to_cco}:
-                    force_to_cco.append(_not)
+        # Reafirma auditoria v4 justo antes de cabeceras (por si lists mutaron).
+        if aplicar_cco_automatica and svc_low in ("notificaciones", "recibos"):
+            to_emails, cc_list, bcc_list, force_to_cco = _aplicar_auditoria_notificaciones_recibos(
+                to_emails=to_emails,
+                cc_list=cc_list,
+                bcc_list=bcc_list,
+            )
             logger.info(
-                "[SMTP_ENVIO] GATE_ABSOLUTO v3-single-to servicio=%s to=%s bcc=%s force_to=%s from=%s",
+                "[SMTP_ENVIO] GATE_V4_CC servicio=%s to=%s cc=%s bcc=%s force_to=%s from=%s",
                 svc_low,
                 to_emails,
+                cc_list,
                 bcc_list,
                 force_to_cco,
                 cfg.get("from_email") or cfg.get("smtp_user"),
             )
 
-        # Una sola cabecera To (Gmail 550 si hay To duplicado).
-        msg["To"] = ", ".join(to_emails)
+        # Cabeceras unicas (del previo si existiera) — Gmail 550 con To duplicado.
+        _set_header_unico(msg, "To", ", ".join(to_emails))
         if cc_list:
-            msg["Cc"] = ", ".join(cc_list)
-        # CCO/BCC: no escribir cabecera "Bcc" en el RFC822. Va solo en el sobre SMTP (sendmail RCPT TO).
+            _set_header_unico(msg, "Cc", ", ".join(cc_list))
+        # CCO/BCC: no escribir cabecera Bcc; solo RCPT TO en sendmail.
 
         if has_attachments:
             for filename, content in attachments_norm:
@@ -1057,6 +1086,39 @@ def send_email(
         use_tls = (cfg.get("smtp_use_tls") or "true").lower() == "true"
         msg_str = msg.as_string(policy=__import__("email").policy.SMTP)
         msg_bytes = msg_str.replace("\r\n", "\n").replace("\n", "\r\n").encode("utf-8")
+
+        # Copia a notificaciones@ ANTES del envio principal: asi llega aunque el To del cliente falle.
+        if force_to_cco and aplicar_cco_automatica and svc_low in ("notificaciones", "recibos"):
+            subj_cco = subject or ""
+            if not subj_cco.lower().startswith("[copia cco]"):
+                subj_cco = "[Copia CCO] " + subj_cco
+            for _addr_cco in force_to_cco:
+                try:
+                    ok_cco, err_cco = _enviar_copia_cco_desde_cuenta_cobros(
+                        to_email=_addr_cco,
+                        subject=subj_cco,
+                        body_text=body_text,
+                        body_html=body_html,
+                        attachments=attachments_norm if has_attachments else None,
+                    )
+                    if ok_cco:
+                        logger.info(
+                            "[SMTP_ENVIO] copia_cco_previa to=%s ok=True via=cobros",
+                            _addr_cco,
+                        )
+                    else:
+                        logger.error(
+                            "[SMTP_ENVIO] copia_cco_previa FALLO to=%s err=%s",
+                            _addr_cco,
+                            (err_cco or "")[:300],
+                        )
+                except Exception as _e_cco:
+                    logger.error(
+                        "[SMTP_ENVIO] copia_cco_previa excepcion to=%s err=%s",
+                        _addr_cco,
+                        _e_cco,
+                    )
+
         t0_smtp = time.time()
         refused: dict = {}
         last_exc: Optional[BaseException] = None
@@ -1138,35 +1200,7 @@ def send_email(
         if smtp_session_metadata is not None:
             smtp_session_metadata["resultado"] = "aceptado_por_servidor_smtp"
 
-        # Copia aparte (To) para buzones que no reciben CCO-only (p. ej. notificaciones@).
-        # Se envia desde cuenta cobros/pagos@ (no desde notificaciones@) para que Gmail
-        # lo entregue en bandeja de entrada y no lo trague como autoenvio/CCO de grupo.
-        if force_to_cco and aplicar_cco_automatica:
-            subj_cco = subject or ""
-            if not subj_cco.lower().startswith("[copia cco]"):
-                subj_cco = "[Copia CCO] " + subj_cco
-            for _addr_cco in force_to_cco:
-                try:
-                    ok_cco, err_cco = _enviar_copia_cco_desde_cuenta_cobros(
-                        to_email=_addr_cco,
-                        subject=subj_cco,
-                        body_text=body_text,
-                        body_html=body_html,
-                        attachments=attachments_norm if has_attachments else None,
-                    )
-                    logger.info(
-                        "[SMTP_ENVIO] copia_cco_forzada to=%s ok=%s err=%s via=cobros",
-                        _addr_cco,
-                        ok_cco,
-                        (err_cco or "")[:200],
-                    )
-                except Exception as _e_cco:
-                    logger.warning(
-                        "[SMTP_ENVIO] copia_cco_forzada fallo to=%s err=%s",
-                        _addr_cco,
-                        _e_cco,
-                    )
-
+        # Copia a notificaciones@ ya se intento ANTES del envio principal (auditoria_v4).
         return True, None
     except Exception as e:
         err_msg = _sanitize_smtp_error(e)

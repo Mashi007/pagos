@@ -411,11 +411,14 @@ def get_recibos_bcc_emails() -> List[str]:
         return []
     out: List[str] = []
     seen: set[str] = set()
+    blocked = {"itmaster@rapicreditca.com"}
     for x in raw:
         s = (str(x) if x is not None else "").strip()
         if not s or "@" not in s:
             continue
         low = s.lower()
+        if low in blocked:
+            continue
         if low in seen:
             continue
         seen.add(low)
