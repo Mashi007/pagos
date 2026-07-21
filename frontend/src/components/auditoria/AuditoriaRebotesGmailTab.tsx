@@ -27,7 +27,7 @@ import {
   type RebotesGmailKpis,
 } from '../../services/auditoriaService'
 
-const PAGE_SIZE = 50
+const PAGE_SIZE = 20
 
 const KPI_CERO: RebotesGmailKpis = {
   total_escaneados: 0,
@@ -166,7 +166,8 @@ export function AuditoriaRebotesGmailTab() {
         )
       } else {
         toast.success(
-          `Procesado: ${res.guardados} nuevos, ${res.ya_existentes} ya en BD, ${res.omitidos} omitidos (lote ${res.candidatos})`
+          `Procesado: ${res.guardados} nuevos, ${res.ya_existentes} ya en BD, ${res.omitidos} omitidos` +
+            ` (sin cedula ${res.sin_cedula}, sin correo ${res.sin_correo}, cedula dup. ${res.cedula_duplicada}, lote ${res.candidatos})`
         )
       }
       await Promise.all([cargar(1), cargarKpis()])
@@ -265,11 +266,11 @@ export function AuditoriaRebotesGmailTab() {
         <CardContent className="space-y-3">
           <p className="text-sm text-muted-foreground">
             Escanea Inbox de itmaster@rapicreditca.com (leidos y no leidos) con
-            la etiqueta GMAIL. Solo guarda si el correo matchea un cliente con
-            cedula, y no repite cedulas ya guardadas en BD. Al descargar Excel
-            se pide autorizacion para borrar: si no acepta, las filas se
-            conservan y los proximos escaneos se agregan a continuacion. Los
-            KPIs acumulados son permanentes.
+            la etiqueta GMAIL. Si el correo esta en clientes guarda la cedula; si
+            no, guarda el correo con cedula vacia. No repite la misma cedula
+            cuando si hay match. Al descargar Excel se pide autorizacion para
+            borrar: si no acepta, las filas se conservan. Los KPIs acumulados
+            son permanentes.
           </p>
           <div className="flex flex-wrap gap-2">
             <Button onClick={() => void handleProcesar()} disabled={procesando}>

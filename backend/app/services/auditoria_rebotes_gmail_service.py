@@ -610,27 +610,47 @@ def procesar_rebotes_gmail(
 
         if not parece_rebote_gmail(texto, remitente, asunto):
             omitidos += 1
+            logger.debug(
+                "[AUDITORIA_REBOTES_GMAIL] omitido no_rebote id=%s asunto=%r",
+                mid,
+                (asunto or "")[:80],
+            )
             continue
 
         correo = extraer_correo_rebotado(texto)
         if not correo:
             sin_correo += 1
             omitidos += 1
+            logger.info(
+                "[AUDITORIA_REBOTES_GMAIL] omitido sin_correo id=%s asunto=%r",
+                mid,
+                (asunto or "")[:80],
+            )
             continue
 
         obs = clasificar_observacion(texto, asunto)
         cedula_raw = _cedula_por_correo(db, correo)
         cedula = normalizar_cedula_almacenamiento(cedula_raw) if cedula_raw else None
         if not cedula:
-            sin_cedula += 1
-            omitidos += 1
-            continue
+            sin_cedula += 1  # se guarda igual con cedula NULL
+            logger.info(
+                "[AUDITORIA_REBOTES_GMAIL] guardara sin_cedula correo=%s id=%s",
+                correo,
+                mid,
+            )
 
         fecha_msg = _fecha_mensaje(headers, full.get("internalDate"))
 
-        if _cedula_ya_registrada(db, cedula):
+        # No repetir cedula solo cuando hay cedula (NULL se permite varias veces).
+        if cedula and _cedula_ya_registrada(db, cedula):
             cedula_duplicada += 1
             ya_existentes += 1
+            logger.info(
+                "[AUDITORIA_REBOTES_GMAIL] omitido cedula_duplicada cedula=%s correo=%s id=%s",
+                cedula,
+                correo,
+                mid,
+            )
             continue
 
         row = AuditoriaReboteGmail(
@@ -697,12 +717,16 @@ def procesar_rebotes_gmail(
 
     logger.info(
         "[AUDITORIA_REBOTES_GMAIL] fin pendientes=%s revisados=%s guardados=%s "
-        "omitidos=%s ya_existentes=%s listados_gmail=%s truncado=%s elapsed=%.1fs",
+        "omitidos=%s (sin_correo=%s sin_cedula=%s) ya_existentes=%s "
+        "cedula_duplicada=%s listados_gmail=%s truncado=%s elapsed=%.1fs",
         candidatos,
         revisados,
         guardados,
         omitidos,
+        sin_correo,
+        sin_cedula,
         ya_existentes,
+        cedula_duplicada,
         listados_gmail,
         truncado,
         time.monotonic() - t0,
