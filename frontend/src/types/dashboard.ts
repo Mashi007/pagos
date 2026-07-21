@@ -341,10 +341,6 @@ export interface PagosIngresadosPorDiaItem {
 
   BNV?: number
 
-  Bancamiga?: number
-
-  Tesoro?: number
-
   Recibos?: number
 
   Otros?: number

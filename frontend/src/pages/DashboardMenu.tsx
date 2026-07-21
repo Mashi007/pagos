@@ -417,7 +417,7 @@ export function DashboardMenu() {
   })
 
   const NOTIFICACIONES_ENVIOS_TENDENCIA_DIAS = 90
-  const PAGOS_INGRESADOS_POR_DIA_DIAS = 90
+  const PAGOS_INGRESADOS_POR_DIA_DIAS = 60
 
   const {
     data: datosPagosIngresadosPorDia,
@@ -555,8 +555,6 @@ export function DashboardMenu() {
             'BNC',
             'Binance',
             'BNV',
-            'Bancamiga',
-            'Tesoro',
             'Recibos',
             'Otros',
           ],
@@ -846,8 +844,6 @@ export function DashboardMenu() {
     BNC: '#ea580c',
     Binance: '#ca8a04',
     BNV: '#7c3aed',
-    Bancamiga: '#0d9488',
-    Tesoro: '#db2777',
     Recibos: '#0891b2',
     Otros: '#64748b',
   }
@@ -1372,7 +1368,7 @@ export function DashboardMenu() {
               </Card>
             </motion.div>
 
-            {/* Pagos ingresados por día (últimos 90 días) */}
+            {/* Pagos ingresados por día (últimos 60 días) */}
 
             <motion.div
               initial={{ opacity: 0, y: 20 }}
@@ -1399,9 +1395,9 @@ export function DashboardMenu() {
                   <CardDescription className="mt-2 text-xs text-gray-600">
                     Monto en USD (suma de monto_pagado) por día de fecha de
                     pago, apilado por institución (institucion_bancaria):
-                    Mercantil, BNC, Binance, BNV, Bancamiga, Tesoro, Recibos.
-                    Sin clasificación o no reconocida → Otros. Hoy y 90 días
-                    atrás; todos los estados de pago/préstamo.
+                    Mercantil, BNC, Binance, BNV, Recibos. Sin clasificación o
+                    no reconocida → Otros. Hoy y 60 días atrás; todos los
+                    estados de pago/préstamo.
                   </CardDescription>
                 </CardHeader>
 
@@ -1506,7 +1502,7 @@ export function DashboardMenu() {
                     </ChartWithDateRangeSlider>
                   ) : (
                     <div className="flex items-center justify-center py-16 text-gray-500">
-                      No hay datos para los últimos 90 días
+                      No hay datos para los últimos 60 días
                     </div>
                   )}
                 </CardContent>

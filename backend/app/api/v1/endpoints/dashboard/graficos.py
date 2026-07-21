@@ -1706,8 +1706,6 @@ PAGOS_INGRESADOS_CATEGORIAS = (
     "BNC",
     "Binance",
     "BNV",
-    "Bancamiga",
-    "Tesoro",
     "Recibos",
     "Otros",
 )
@@ -1728,8 +1726,6 @@ def _expr_categoria_institucion_pago():
             ),
             "BNV",
         ),
-        (inst.like("%bancamiga%"), "Bancamiga"),
-        (or_(inst.like("%tesoro%"), inst.like("%banco del tesoro%")), "Tesoro"),
         (or_(inst.like("%recibo%"), inst.like("%recibos%")), "Recibos"),
         else_="Otros",
     )
@@ -1741,7 +1737,7 @@ def _compute_pagos_ingresados_por_dia(db: Session, dias: int) -> dict:
 
     Ventana: hoy (America/Caracas) y los (dias - 1) días anteriores.
     Sin filtro de Prestamo.estado ni de Pago.estado/conciliado.
-    Categorías: Mercantil, BNC, Binance, BNV, Bancamiga, Tesoro, Recibos; resto → Otros.
+    Categorías: Mercantil, BNC, Binance, BNV, Recibos; resto → Otros.
     """
     try:
         dias_ef = min(90, max(7, int(dias)))
@@ -1814,7 +1810,7 @@ def _compute_pagos_ingresados_por_dia(db: Session, dias: int) -> dict:
     except Exception as e:
         logger.exception("Error en pagos-ingresados-por-dia: %s", e)
         return {
-            "dias": int(dias) if dias else 90,
+            "dias": int(dias) if dias else 60,
             "categorias": list(PAGOS_INGRESADOS_CATEGORIAS),
             "serie": [],
         }
@@ -1823,10 +1819,10 @@ def _compute_pagos_ingresados_por_dia(db: Session, dias: int) -> dict:
 @router.get("/pagos-ingresados-por-dia")
 def get_pagos_ingresados_por_dia(
     dias: int = Query(
-        90,
+        60,
         ge=7,
         le=90,
-        description="Días calendario inclusive (hoy atrás). Default 90.",
+        description="Días calendario inclusive (hoy atrás). Default 60.",
     ),
     db: Session = Depends(get_db),
 ):
