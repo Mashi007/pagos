@@ -822,10 +822,10 @@ class NotificacionService {
       qs.set('fecha_hasta', fechaHasta)
     }
     const rango =
-      fechaDesde && fechaHasta ? ${fechaDesde}_ : 'todos'
-    const filename = Auditoria_de_correos__.xlsx
+      fechaDesde && fechaHasta ? `${fechaDesde}_${fechaHasta}` : 'todos'
+    const filename = `Auditoria_de_correos_${tipo}_${rango}.xlsx`
     await apiClient.downloadFile(
-      ${this.baseUrl}/rebotados-por-tab/excel?,
+      `${this.baseUrl}/rebotados-por-tab/excel?${qs.toString()}`,
       filename
     )
   }
@@ -1511,7 +1511,7 @@ class NotificacionService {
   }> {
     const q = forzarContenido ? '?forzar_contenido=true' : ''
     return await apiClient.post(
-      ${this.baseUrl}/plantillas/asegurar-prejudicial
+      `${this.baseUrl}/plantillas/asegurar-prejudicial${q}`
     )
   }
 
