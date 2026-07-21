@@ -172,7 +172,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
       return 'Solo consulta: listas unificadas (día siguiente al vencimiento, 60 días o más, 3 días antes) con columna de caso. La columna «Diferencia abono» usa caché en BD (cada domingo 04:35 Caracas o botón Recalcular; tras el job, use Actualización manual). Sin envío de correos ni ajustes de comunicación desde esta pantalla.'
     }
     if (modulo === 'a2cuotas') {
-      return 'Clientes con al menos una cuota pendiente a 60 o más días de atraso (calendario Caracas). Permanecen todos los días mientras cumplan; salen al ponerse al día. El envío es solo manual (sin cron ni «enviar todas») y el mensaje de prueba va únicamente a itmaster@rapicreditca.com. Use Actualizar o vuelva a entrar; también se refresca al guardar pagos en el módulo Pagos.'
+      return 'Clientes con al menos una cuota pendiente a 60 o más días de atraso (calendario Caracas). Permanecen todos los días mientras cumplan; salen al ponerse al día. El envío es solo manual (sin cron ni «enviar todas») To = cliente; CCO = cobranza@ y notificaciones@. Use Actualizar o vuelva a entrar; también se refresca al guardar pagos en el módulo Pagos.'
     }
     if (modulo === 'd2antes') {
       return 'Solo cuotas con columna estado PENDIENTE y fecha de vencimiento dentro de 3 días (hoy + 3, zona Caracas). Al pagar o cambiar estado, dejan de listarse. Use Actualizar o vuelva a entrar; también se refresca al guardar pagos.'
@@ -1700,7 +1700,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                   : modulo === 'general'
                     ? 'Se concatenan las mismas filas que en los submenús «Día siguiente al vencimiento», «60 días o más» y «3 días antes». El listado «Menor a 60 días» (atraso 6-59) es otro submenú y no entra aquí. La columna «Caso» indica el criterio. Un mismo cliente puede aparecer más de una vez si cumple varios criterios. «Diferencia abono» lee caché en BD (domingo 04:35 Caracas o Recalcular arriba; también se actualiza al aplicar ABONOS desde la balanza).'
                     : modulo === 'a2cuotas'
-                      ? 'Una fila por cliente con al menos una cuota a 60 o más días de atraso. La cuota y fecha mostradas son la más antigua en ese rango; «Cuotas atrasadas» cuenta las cuotas del cliente que cumplen ≥60 días. Permanecen hasta ponerse al día. Envío solo manual (sin automático ni «enviar todas»); destino de prueba fijo: itmaster@rapicreditca.com.'
+                      ? 'Una fila por cliente con al menos una cuota a 60 o más días de atraso. La cuota y fecha mostradas son la más antigua en ese rango; «Cuotas atrasadas» cuenta las cuotas del cliente que cumplen ≥60 días. Permanecen hasta ponerse al día. Envío solo manual (sin automático ni «enviar todas»); To = cliente; CCO = cobranza@ y notificaciones@.'
                       : modulo === 'd2antes'
                         ? 'Solo filas con cuotas.estado = PENDIENTE y fecha_vencimiento = hoy + 3 (calendario Caracas), sin fecha_pago y con saldo pendiente. Incluye también préstamos al corriente (cuotas_atrasadas = 0): es un recordatorio preventivo. «Cuotas atrasadas» sigue la misma regla que el estado de cuenta para el préstamo.'
                         : modulo === 'a10dias'
@@ -2947,7 +2947,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                 <p>
                   {confirmEnvio.n === 0
                     ? 'No hay casos en la lista cargada. El servidor procesará la lista prejudicial actual (puede estar vacía).'
-                    : `Envío de prueba PREJUDICIAL (${confirmEnvio.n} casos en la lista; el servidor usa la misma regla). Todos los correos van únicamente a itmaster@rapicreditca.com (HTML sin PDF; sin envío a clientes).`}
+                    : `Envío de prueba PREJUDICIAL (${confirmEnvio.n} casos en la lista; el servidor usa la misma regla). To = cliente; CCO = cobranza@ y notificaciones@ (HTML sin PDF).`}
                 </p>
               ) : null}
 

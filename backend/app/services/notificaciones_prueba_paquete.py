@@ -29,7 +29,20 @@ def parse_destinos_prueba(payload: dict) -> List[str]:
         out = [str(x).strip() for x in raw if x]
     else:
         out = [str(raw).strip()] if raw else []
-    return [d for d in out if d and "@" in d]
+    cleaned: List[str] = []
+    seen: set[str] = set()
+    for d in out:
+        if not d or "@" not in d:
+            continue
+        # itmaster@ no es destino de prueba de notificaciones: sustituir por notificaciones@.
+        if d.lower() == "itmaster@rapicreditca.com":
+            d = "notificaciones@rapicreditca.com"
+        low = d.lower()
+        if low in seen:
+            continue
+        seen.add(low)
+        cleaned.append(d)
+    return cleaned
 
 
 def ejecutar_enviar_prueba_paquete(db: Session, payload: dict) -> Dict[str, Any]:

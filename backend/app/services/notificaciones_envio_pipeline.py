@@ -112,7 +112,7 @@ def _tipo_menor_60_solo_pdf_fijo(tipo: str) -> bool:
 
 
 # Legacy (ya no se usa como To): PREJUDICIAL envia al cliente + CCO global.
-EMAIL_PRUEBA_PREJUDICIAL = "itmaster@rapicreditca.com"
+EMAIL_PRUEBA_PREJUDICIAL = "notificaciones@rapicreditca.com"  # legacy; To real = cliente / CCO
 
 
 def _merge_bcc_tipo(tipo_cfg: dict) -> List[str]:
@@ -534,7 +534,20 @@ def _enviar_correos_items(
         if forzar_destinos_prueba is not None:
             to_email = [e.strip() for e in forzar_destinos_prueba if e and isinstance(e, str) and "@" in e.strip()]
             # Nunca forzar itmaster como destino de prueba de notificaciones.
-            to_email = [e for e in to_email if e.lower() != "itmaster@rapicreditca.com"]
+            to_email = [
+                ("notificaciones@rapicreditca.com" if e.lower() == "itmaster@rapicreditca.com" else e)
+                for e in to_email
+            ]
+            # dedupe
+            _seen_to: set[str] = set()
+            _dedup: list = []
+            for e in to_email:
+                low = e.lower()
+                if low in _seen_to:
+                    continue
+                _seen_to.add(low)
+                _dedup.append(e)
+            to_email = _dedup or ["notificaciones@rapicreditca.com"]
         elif usar_solo_pruebas:
             ep = (email_pruebas or "").strip()
             if ep and "@" in ep and ep.lower() != "itmaster@rapicreditca.com":

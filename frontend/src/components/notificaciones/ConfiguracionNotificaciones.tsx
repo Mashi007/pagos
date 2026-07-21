@@ -1051,13 +1051,29 @@ export function ConfiguracionNotificaciones({
   /** Prueba de paquete (mora/prejudicial): un correo por criterio con plantilla guardada en BD. Masivos usa otro boton. */
 
   const handleEnviarNotificacionesPrueba = async () => {
-    const destinos = [
+    const destinosRaw = [
       emailsPruebas[0]?.trim(),
       emailsPruebas[1]?.trim(),
     ].filter(Boolean) as string[]
+    // itmaster@ no es destino de prueba: sustituir por notificaciones@
+    const destinosMapped = destinosRaw.map(e =>
+      e.toLowerCase() === 'itmaster@rapicreditca.com'
+        ? 'notificaciones@rapicreditca.com'
+        : e
+    )
+    const destinos: string[] = []
+    const seenDest = new Set<string>()
+    for (const e of destinosMapped) {
+      const low = e.toLowerCase()
+      if (seenDest.has(low)) continue
+      seenDest.add(low)
+      destinos.push(e)
+    }
 
     if (!modoPruebas || destinos.length === 0) {
-      toast.error('Configura al menos un correo de pruebas para enviar.')
+      toast.error(
+        'Configura al menos un correo de pruebas (no use itmaster@; use notificaciones@rapicreditca.com).'
+      )
 
       return
     }
@@ -1325,11 +1341,8 @@ export function ConfiguracionNotificaciones({
                 <strong>60 días o más</strong> (caso{' '}
                 <strong>PREJUDICIAL</strong>
                 ): plantilla HTML y envío manual de prueba. Solo texto/HTML (sin
-                PDF). Destino fijo:{' '}
-                <code className="rounded bg-gray-100 px-1">
-                  itmaster@rapicreditca.com
-                </code>
-                . Sin cron ni «Enviar todas».
+                PDF). To = cliente; CCO = cobranza@ y notificaciones@. Sin cron
+                ni «Enviar todas».
               </>
             ) : alcance === 'solo_pago_2_dias_antes_pendiente' ? (
               <>
@@ -1454,12 +1467,9 @@ export function ConfiguracionNotificaciones({
               Este criterio (60 días o más / PREJUDICIAL) no tiene función
               automática: no hay cron ni lote «Enviar todas». El disparo es el
               botón «Enviar notificaciones (manual)» del listado. Solo
-              texto/HTML, sin anexos PDF. Todo correo de este caso va{' '}
-              <strong>únicamente</strong> a{' '}
-              <code className="rounded bg-white/80 px-1">
-                itmaster@rapicreditca.com
-              </code>{' '}
-              (no a clientes ni CCO). Remitente From:{' '}
+              texto/HTML, sin anexos PDF. Destino To = correo del cliente; CCO
+              obligatoria a cobranza@rapicreditca.com y
+              notificaciones@rapicreditca.com. Remitente From:{' '}
               <code className="rounded bg-white/80 px-1">
                 notificaciones@rapicreditca.com
               </code>
