@@ -397,6 +397,12 @@ def put_email_cuentas(payload: EmailCuentasUpdate = Body(...), db: Session = Dep
         ok, err = test_smtp_connection(c)
         smtp_verificaciones.append({"cuenta": i + 1, "ok": ok, "mensaje": err or "Conexion SMTP OK"})
         if not ok:
+            logger.warning(
+                "PUT email/cuentas: verificacion SMTP fallida cuenta %d user=%s: %s",
+                i + 1,
+                (c.get("smtp_user") or "").strip(),
+                err,
+            )
             raise HTTPException(
                 status_code=400,
                 detail="Cuenta %d: no se pudo conectar por SMTP. %s"

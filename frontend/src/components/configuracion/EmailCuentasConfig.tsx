@@ -366,18 +366,53 @@ export function EmailCuentasConfig() {
     </label>
   )
 
-  const handleSave = async () => {
+  const handleSave = async (soloCuentaClave?: number) => {
     if (!data) return
+
+    if (soloCuentaClave !== undefined) {
+      const c = data.cuentas[soloCuentaClave]
+      if (!cuentaTieneClavePendiente(c)) {
+        toast.warning(
+          `Cuenta ${soloCuentaClave + 1}: escriba la clave nueva antes de guardar.`
+        )
+        return
+      }
+      if (!smtpTestOk[soloCuentaClave]) {
+        toast.warning(
+          `Cuenta ${soloCuentaClave + 1}: pulse «Probar conexión SMTP» con esa clave antes de guardar.`
+        )
+        return
+      }
+    }
 
     setSaving(true)
 
     try {
-      const cuentas = data.cuentas.slice(0, CUENTAS_COUNT).map(c => {
+      const omitidasSinProbar: number[] = []
+      const cuentas = data.cuentas.slice(0, CUENTAS_COUNT).map((c, idx) => {
         const {
           smtp_password_guardada: _sg,
           imap_password_guardada: _ig,
           ...rest
         } = c
+        const pendiente = cuentaTieneClavePendiente(c)
+        const guardarClaveEsta =
+          soloCuentaClave === undefined
+            ? pendiente && smtpTestOk[idx] === true
+            : idx === soloCuentaClave
+        if (pendiente && !guardarClaveEsta) {
+          delete rest.smtp_password
+          delete rest.imap_password
+          if (soloCuentaClave === undefined) omitidasSinProbar.push(idx + 1)
+        }
+        if (
+          soloCuentaClave !== undefined &&
+          idx !== soloCuentaClave &&
+          pendiente
+        ) {
+          delete rest.smtp_password
+          delete rest.imap_password
+        }
         return rest
       })
 
@@ -456,6 +491,12 @@ export function EmailCuentasConfig() {
         )
       } else {
         toast.success('Configuración de 3 cuentas guardada')
+      }
+
+      if (omitidasSinProbar.length) {
+        toast.info(
+          `Asignación y demás campos guardados. Clave(s) no persistida(s) en cuenta(s) ${omitidasSinProbar.join(', ')}: pruebe SMTP y guarde cada una por separado.`
+        )
       }
 
       await queryClient.invalidateQueries({
@@ -925,7 +966,7 @@ export function EmailCuentasConfig() {
                       size="sm"
                       className="bg-blue-600 text-white hover:bg-blue-700"
                       disabled={saving}
-                      onClick={() => void handleSave()}
+                      onClick={() => void handleSave(i)}
                     >
                       {saving ? 'Guardando…' : 'Guardar clave en servidor'}
                     </Button>
@@ -961,7 +1002,7 @@ export function EmailCuentasConfig() {
       ))}
 
       <div className="flex justify-end">
-        <Button onClick={handleSave} disabled={saving}>
+        <Button onClick={() => void handleSave()} disabled={saving}>
           <Save className="mr-2 h-4 w-4" />
 
           {saving ? 'Guardando...' : 'Guardar configuración de 3 cuentas'}
