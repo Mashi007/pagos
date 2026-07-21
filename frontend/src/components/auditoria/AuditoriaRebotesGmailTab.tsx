@@ -241,53 +241,13 @@ export function AuditoriaRebotesGmailTab() {
   }
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
-  const ultimaCorrida = kpis.ultima_corrida_at
-    ? kpis.ultima_corrida_at.replace('T', ' ').slice(0, 19)
-    : '-'
 
   return (
     <div className="space-y-4">
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <KpiTile
-          label="Total escaneados"
-          value={kpis.total_escaneados}
-          hint="Acumulado historico"
-        />
-        <KpiTile
-          label="Total guardados"
-          value={kpis.total_guardados}
-          hint="Acumulado historico"
-        />
-        <KpiTile
-          label="Registros actuales"
-          value={kpis.registros_actuales}
-          hint="En listado / Excel"
-        />
-        <KpiTile
-          label="Corridas"
-          value={kpis.total_corridas}
-          hint={`Ultima: ${ultimaCorrida}`}
-        />
-      </div>
-
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <KpiTile label="Mal (acum.)" value={kpis.total_mal} />
-        <KpiTile label="Lleno (acum.)" value={kpis.total_lleno} />
-        <KpiTile label="Temporal (acum.)" value={kpis.total_temporal} />
-        <KpiTile label="Otro (acum.)" value={kpis.total_otro} />
-      </div>
-
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <KpiTile label="Omitidos (acum.)" value={kpis.total_omitidos} />
-        <KpiTile label="Sin cedula (acum.)" value={kpis.total_sin_cedula} />
-        <KpiTile
-          label="Cedula duplicada (acum.)"
-          value={kpis.total_cedula_duplicada}
-        />
-        <KpiTile
-          label="Ya existentes (acum.)"
-          value={kpis.total_ya_existentes}
-        />
+      <div className="grid gap-3 sm:grid-cols-3">
+        <KpiTile label="Total" value={kpis.total_guardados} />
+        <KpiTile label="Mal" value={kpis.total_mal} />
+        <KpiTile label="Temporal" value={kpis.total_temporal} />
       </div>
 
       <Card>
