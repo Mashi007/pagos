@@ -30,6 +30,27 @@ export interface ReboteGmailListResponse {
   total_pages: number
 }
 
+export interface RebotesGmailKpis {
+  total_escaneados: number
+  total_guardados: number
+  total_omitidos: number
+  total_sin_correo: number
+  total_sin_cedula: number
+  total_cedula_duplicada: number
+  total_ya_existentes: number
+  total_mal: number
+  total_lleno: number
+  total_temporal: number
+  total_otro: number
+  total_corridas: number
+  ultima_corrida_at?: string | null
+  registros_actuales: number
+  actual_mal: number
+  actual_lleno: number
+  actual_temporal: number
+  actual_otro: number
+}
+
 export interface ProcesarRebotesGmailResponse {
   ok: boolean
   error?: string | null
@@ -788,6 +809,10 @@ class AuditoriaService {
       `${this.baseUrl}/rebotes-gmail`,
       { params }
     )
+  }
+
+  async obtenerKpisRebotesGmail(): Promise<RebotesGmailKpis> {
+    return apiClient.get<RebotesGmailKpis>(`${this.baseUrl}/rebotes-gmail/kpis`)
   }
 
   async descargarRebotesGmailExcel(): Promise<void> {

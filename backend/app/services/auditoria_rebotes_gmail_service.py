@@ -18,6 +18,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models.auditoria_rebote_gmail import AuditoriaReboteGmail
+from app.models.auditoria_rebote_gmail_kpi import AuditoriaReboteGmailKpi
 from app.models.cliente import Cliente
 from app.utils.cedula_almacenamiento import (
     expr_cedula_normalizada_para_comparar,
@@ -300,6 +301,90 @@ def borrar_todos(db: Session) -> int:
     return int(result.rowcount or 0)
 
 
+def _ensure_kpi_row(db: Session) -> AuditoriaReboteGmailKpi:
+    row = db.get(AuditoriaReboteGmailKpi, 1)
+    if row is None:
+        row = AuditoriaReboteGmailKpi(id=1)
+        db.add(row)
+        db.commit()
+        db.refresh(row)
+    return row
+
+
+def obtener_kpis(db: Session) -> dict[str, Any]:
+    """
+    KPIs permanentes (acumulados, sobreviven a borrar detalle) + inventario actual.
+    """
+    kpi = _ensure_kpi_row(db)
+    total_actual = db.execute(select(func.count()).select_from(AuditoriaReboteGmail)).scalar() or 0
+    obs_rows = db.execute(
+        select(AuditoriaReboteGmail.observaciones, func.count())
+        .group_by(AuditoriaReboteGmail.observaciones)
+    ).all()
+    actual_por_obs = {"mal": 0, "lleno": 0, "temporal": 0, "otro": 0}
+    for obs, cnt in obs_rows:
+        key = (obs or "otro").strip().lower()
+        if key not in actual_por_obs:
+            key = "otro"
+        actual_por_obs[key] = int(cnt or 0)
+
+    return {
+        "total_escaneados": int(kpi.total_escaneados or 0),
+        "total_guardados": int(kpi.total_guardados or 0),
+        "total_omitidos": int(kpi.total_omitidos or 0),
+        "total_sin_correo": int(kpi.total_sin_correo or 0),
+        "total_sin_cedula": int(kpi.total_sin_cedula or 0),
+        "total_cedula_duplicada": int(kpi.total_cedula_duplicada or 0),
+        "total_ya_existentes": int(kpi.total_ya_existentes or 0),
+        "total_mal": int(kpi.total_mal or 0),
+        "total_lleno": int(kpi.total_lleno or 0),
+        "total_temporal": int(kpi.total_temporal or 0),
+        "total_otro": int(kpi.total_otro or 0),
+        "total_corridas": int(kpi.total_corridas or 0),
+        "ultima_corrida_at": kpi.ultima_corrida_at.isoformat() if kpi.ultima_corrida_at else None,
+        "registros_actuales": int(total_actual),
+        "actual_mal": actual_por_obs["mal"],
+        "actual_lleno": actual_por_obs["lleno"],
+        "actual_temporal": actual_por_obs["temporal"],
+        "actual_otro": actual_por_obs["otro"],
+    }
+
+
+def _aplicar_kpis_corrida(
+    db: Session,
+    *,
+    revisados: int,
+    guardados: int,
+    omitidos: int,
+    sin_correo: int,
+    sin_cedula: int,
+    cedula_duplicada: int,
+    ya_existentes: int,
+    guardados_por_obs: dict[str, int],
+) -> None:
+    kpi = _ensure_kpi_row(db)
+    kpi.total_escaneados = int(kpi.total_escaneados or 0) + int(revisados or 0)
+    kpi.total_guardados = int(kpi.total_guardados or 0) + int(guardados or 0)
+    kpi.total_omitidos = int(kpi.total_omitidos or 0) + int(omitidos or 0)
+    kpi.total_sin_correo = int(kpi.total_sin_correo or 0) + int(sin_correo or 0)
+    kpi.total_sin_cedula = int(kpi.total_sin_cedula or 0) + int(sin_cedula or 0)
+    kpi.total_cedula_duplicada = int(kpi.total_cedula_duplicada or 0) + int(
+        cedula_duplicada or 0
+    )
+    kpi.total_ya_existentes = int(kpi.total_ya_existentes or 0) + int(ya_existentes or 0)
+    kpi.total_mal = int(kpi.total_mal or 0) + int(guardados_por_obs.get("mal", 0))
+    kpi.total_lleno = int(kpi.total_lleno or 0) + int(guardados_por_obs.get("lleno", 0))
+    kpi.total_temporal = int(kpi.total_temporal or 0) + int(
+        guardados_por_obs.get("temporal", 0)
+    )
+    kpi.total_otro = int(kpi.total_otro or 0) + int(guardados_por_obs.get("otro", 0))
+    kpi.total_corridas = int(kpi.total_corridas or 0) + 1
+    kpi.ultima_corrida_at = datetime.utcnow()
+    kpi.actualizado_en = datetime.utcnow()
+    db.add(kpi)
+    db.commit()
+
+
 def procesar_rebotes_gmail(
     db: Session,
     *,
@@ -391,6 +476,7 @@ def procesar_rebotes_gmail(
     sin_correo = 0
     sin_cedula = 0
     cedula_duplicada = 0
+    guardados_por_obs: dict[str, int] = {"mal": 0, "lleno": 0, "temporal": 0, "otro": 0}
 
     for ref in msg_refs:
         mid = ref.get("id")
@@ -484,6 +570,10 @@ def procesar_rebotes_gmail(
         try:
             db.commit()
             guardados += 1
+            obs_key = (obs or "otro").strip().lower()
+            if obs_key not in guardados_por_obs:
+                obs_key = "otro"
+            guardados_por_obs[obs_key] = guardados_por_obs.get(obs_key, 0) + 1
         except IntegrityError:
             db.rollback()
             ya_existentes += 1
@@ -499,6 +589,21 @@ def procesar_rebotes_gmail(
                 etiquetados += 1
             except Exception as e:
                 logger.warning("[AUDITORIA_REBOTES_GMAIL] label %s: %s", mid, e)
+
+    try:
+        _aplicar_kpis_corrida(
+            db,
+            revisados=revisados,
+            guardados=guardados,
+            omitidos=omitidos,
+            sin_correo=sin_correo,
+            sin_cedula=sin_cedula,
+            cedula_duplicada=cedula_duplicada,
+            ya_existentes=ya_existentes,
+            guardados_por_obs=guardados_por_obs,
+        )
+    except Exception as e:
+        logger.warning("[AUDITORIA_REBOTES_GMAIL] actualizar kpis: %s", e)
 
     return {
         "ok": True,

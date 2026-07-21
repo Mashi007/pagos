@@ -64,6 +64,27 @@ class BorrarRebotesResponse(BaseModel):
     borrados: int
 
 
+class RebotesGmailKpisResponse(BaseModel):
+    total_escaneados: int = 0
+    total_guardados: int = 0
+    total_omitidos: int = 0
+    total_sin_correo: int = 0
+    total_sin_cedula: int = 0
+    total_cedula_duplicada: int = 0
+    total_ya_existentes: int = 0
+    total_mal: int = 0
+    total_lleno: int = 0
+    total_temporal: int = 0
+    total_otro: int = 0
+    total_corridas: int = 0
+    ultima_corrida_at: Optional[str] = None
+    registros_actuales: int = 0
+    actual_mal: int = 0
+    actual_lleno: int = 0
+    actual_temporal: int = 0
+    actual_otro: int = 0
+
+
 def _iso(dt: Optional[datetime]) -> Optional[str]:
     if dt is None:
         return None
@@ -104,6 +125,15 @@ def procesar_rebotes_gmail(
     if not result.get("ok") and result.get("error") == "gmail_list_failed":
         raise HTTPException(status_code=502, detail=result.get("mensaje") or "Error listando Gmail")
     return ProcesarRebotesResponse(**result)
+
+
+@router.get("/kpis", response_model=RebotesGmailKpisResponse)
+def obtener_kpis_rebotes_gmail(
+    db: Session = Depends(get_db),
+    _admin: UserResponse = Depends(require_admin),
+):
+    """KPIs permanentes del escaneo (acumulados) + inventario actual en BD."""
+    return RebotesGmailKpisResponse(**svc.obtener_kpis(db))
 
 
 @router.get("", response_model=ReboteGmailListResponse)

@@ -24,9 +24,31 @@ import {
   auditoriaService,
   type ReboteGmailItem,
   type ProcesarRebotesGmailResponse,
+  type RebotesGmailKpis,
 } from '../../services/auditoriaService'
 
 const PAGE_SIZE = 50
+
+const KPI_CERO: RebotesGmailKpis = {
+  total_escaneados: 0,
+  total_guardados: 0,
+  total_omitidos: 0,
+  total_sin_correo: 0,
+  total_sin_cedula: 0,
+  total_cedula_duplicada: 0,
+  total_ya_existentes: 0,
+  total_mal: 0,
+  total_lleno: 0,
+  total_temporal: 0,
+  total_otro: 0,
+  total_corridas: 0,
+  ultima_corrida_at: null,
+  registros_actuales: 0,
+  actual_mal: 0,
+  actual_lleno: 0,
+  actual_temporal: 0,
+  actual_otro: 0,
+}
 
 function obsBadgeClass(obs: string): string {
   switch ((obs || '').toLowerCase()) {
@@ -41,6 +63,28 @@ function obsBadgeClass(obs: string): string {
   }
 }
 
+function KpiTile({
+  label,
+  value,
+  hint,
+}: {
+  label: string
+  value: number | string
+  hint?: string
+}) {
+  return (
+    <Card>
+      <CardContent className="pt-4 pb-3">
+        <p className="text-xs text-muted-foreground">{label}</p>
+        <p className="text-2xl font-semibold tabular-nums">{value}</p>
+        {hint ? (
+          <p className="mt-1 text-[11px] text-muted-foreground">{hint}</p>
+        ) : null}
+      </CardContent>
+    </Card>
+  )
+}
+
 export function AuditoriaRebotesGmailTab() {
   const { user } = useSimpleAuth()
   const esAdmin = isAdminRole(user?.rol)
@@ -51,8 +95,18 @@ export function AuditoriaRebotesGmailTab() {
   const [loading, setLoading] = useState(false)
   const [procesando, setProcesando] = useState(false)
   const [borrando, setBorrando] = useState(false)
+  const [kpis, setKpis] = useState<RebotesGmailKpis>(KPI_CERO)
   const [ultimoProceso, setUltimoProceso] =
     useState<ProcesarRebotesGmailResponse | null>(null)
+
+  const cargarKpis = useCallback(async () => {
+    try {
+      const data = await auditoriaService.obtenerKpisRebotesGmail()
+      setKpis(data)
+    } catch {
+      /* KPIs se muestran en cero si falla */
+    }
+  }, [])
 
   const cargar = useCallback(async (pagina: number) => {
     setLoading(true)
@@ -78,8 +132,9 @@ export function AuditoriaRebotesGmailTab() {
   useEffect(() => {
     if (esAdmin) {
       void cargar(1)
+      void cargarKpis()
     }
-  }, [esAdmin, cargar])
+  }, [esAdmin, cargar, cargarKpis])
 
   const handleProcesar = async () => {
     setProcesando(true)
@@ -96,7 +151,7 @@ export function AuditoriaRebotesGmailTab() {
           `Procesado: ${res.candidatos} candidatos, ${res.guardados} nuevos, ${res.ya_existentes} ya en BD, ${res.omitidos} omitidos`
         )
       }
-      await cargar(1)
+      await Promise.all([cargar(1), cargarKpis()])
     } catch (e: unknown) {
       const msg =
         e && typeof e === 'object' && 'message' in e
@@ -120,7 +175,7 @@ export function AuditoriaRebotesGmailTab() {
   const handleBorrarTodos = async () => {
     if (
       !window.confirm(
-        'Se borraran TODOS los registros de rebotes Gmail guardados en la BD. Continuar?'
+        'Se borraran TODOS los registros del listado. Los KPIs acumulados de escaneo se mantienen. Continuar?'
       )
     ) {
       return
@@ -130,7 +185,7 @@ export function AuditoriaRebotesGmailTab() {
       const res = await auditoriaService.borrarTodosRebotesGmail()
       toast.success(`Borrados: ${res.borrados}`)
       setUltimoProceso(null)
-      await cargar(1)
+      await Promise.all([cargar(1), cargarKpis()])
     } catch {
       toast.error('No se pudo borrar')
     } finally {
@@ -149,9 +204,55 @@ export function AuditoriaRebotesGmailTab() {
   }
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
+  const ultimaCorrida = kpis.ultima_corrida_at
+    ? kpis.ultima_corrida_at.replace('T', ' ').slice(0, 19)
+    : '-'
 
   return (
     <div className="space-y-4">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <KpiTile
+          label="Total escaneados"
+          value={kpis.total_escaneados}
+          hint="Acumulado historico"
+        />
+        <KpiTile
+          label="Total guardados"
+          value={kpis.total_guardados}
+          hint="Acumulado historico"
+        />
+        <KpiTile
+          label="Registros actuales"
+          value={kpis.registros_actuales}
+          hint="En listado / Excel"
+        />
+        <KpiTile
+          label="Corridas"
+          value={kpis.total_corridas}
+          hint={`Ultima: ${ultimaCorrida}`}
+        />
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <KpiTile label="Mal (acum.)" value={kpis.total_mal} />
+        <KpiTile label="Lleno (acum.)" value={kpis.total_lleno} />
+        <KpiTile label="Temporal (acum.)" value={kpis.total_temporal} />
+        <KpiTile label="Otro (acum.)" value={kpis.total_otro} />
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <KpiTile label="Omitidos (acum.)" value={kpis.total_omitidos} />
+        <KpiTile label="Sin cedula (acum.)" value={kpis.total_sin_cedula} />
+        <KpiTile
+          label="Cedula duplicada (acum.)"
+          value={kpis.total_cedula_duplicada}
+        />
+        <KpiTile
+          label="Ya existentes (acum.)"
+          value={kpis.total_ya_existentes}
+        />
+      </div>
+
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-base">
@@ -163,8 +264,8 @@ export function AuditoriaRebotesGmailTab() {
           <p className="text-sm text-muted-foreground">
             Escanea Inbox de itmaster@rapicreditca.com (leidos y no leidos) con
             la etiqueta GMAIL. Solo guarda si el correo matchea un cliente con
-            cedula, y no repite cedulas ya guardadas en BD. Clasifica
-            mal/lleno/temporal/otro. El Excel sale de lo guardado.
+            cedula, y no repite cedulas ya guardadas en BD. Los KPIs de arriba
+            son permanentes (no se borran con el listado).
           </p>
           <div className="flex flex-wrap gap-2">
             <Button onClick={() => void handleProcesar()} disabled={procesando}>
@@ -197,24 +298,26 @@ export function AuditoriaRebotesGmailTab() {
             </Button>
             <Button
               variant="ghost"
-              onClick={() => void cargar(page)}
+              onClick={() => {
+                void cargar(page)
+                void cargarKpis()
+              }}
               disabled={loading}
             >
               {loading ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               ) : null}
-              Actualizar listado
+              Actualizar
             </Button>
           </div>
           {ultimoProceso ? (
             <p className="text-xs text-muted-foreground">
-              Ultima corrida: candidatos {ultimoProceso.candidatos}, revisados{' '}
-              {ultimoProceso.revisados}, guardados {ultimoProceso.guardados}, ya
-              existentes {ultimoProceso.ya_existentes}, cedula duplicada{' '}
+              Ultima corrida (sesion): candidatos {ultimoProceso.candidatos},
+              revisados {ultimoProceso.revisados}, guardados{' '}
+              {ultimoProceso.guardados}, ya existentes{' '}
+              {ultimoProceso.ya_existentes}, cedula duplicada{' '}
               {ultimoProceso.cedula_duplicada}, sin cedula{' '}
-              {ultimoProceso.sin_cedula}, etiquetados{' '}
-              {ultimoProceso.etiquetados}, omitidos {ultimoProceso.omitidos},
-              sin correo {ultimoProceso.sin_correo}
+              {ultimoProceso.sin_cedula}, omitidos {ultimoProceso.omitidos}
               {ultimoProceso.query ? ` | q=${ultimoProceso.query}` : ''}
             </p>
           ) : null}
