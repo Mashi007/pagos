@@ -794,6 +794,41 @@ class NotificacionService {
     )
   }
 
+  /**
+   * Descarga Excel «Auditoria de correos» (cédula, nombre, correo)
+   * de envíos rebotados (exito=false) para la pestaña.
+   * Sin fechas: mismo universo que el KPI (histórico). Con ambas: filtra por rango.
+   */
+  async descargarAuditoriaCorreosRebotadosExcel(opts: {
+    tipo: string
+    fechaDesde?: string
+    fechaHasta?: string
+  }): Promise<void> {
+    const tipo = (opts.tipo || '').trim()
+    const fechaDesde = (opts.fechaDesde || '').trim()
+    const fechaHasta = (opts.fechaHasta || '').trim()
+    if (!tipo) {
+      throw new Error('Indique el tipo de pestaña.')
+    }
+    if (Boolean(fechaDesde) !== Boolean(fechaHasta)) {
+      throw new Error(
+        'Indique ambas fechas (desde y hasta) o ninguna para exportar todos.'
+      )
+    }
+    const qs = new URLSearchParams({ tipo })
+    if (fechaDesde && fechaHasta) {
+      qs.set('fecha_desde', fechaDesde)
+      qs.set('fecha_hasta', fechaHasta)
+    }
+    const rango =
+      fechaDesde && fechaHasta ? `${fechaDesde}_${fechaHasta}` : 'todos'
+    const filename = `Auditoria_de_correos_${tipo}_${rango}.xlsx`
+    await apiClient.downloadFile(
+      `${this.baseUrl}/rebotados-por-tab/excel?${qs.toString()}`,
+      filename
+    )
+  }
+
   /** Historial de notificaciones enviadas/fallidas por cédula (reportes y fines legales). */
 
   async getHistorialNotificacionesPorCedula(
@@ -1352,19 +1387,6 @@ class NotificacionService {
         ultimo.origen === 'api_enviar_caso_manual' &&
         tokenUltimo === token
       ) {
-        const estado = String(ultimo.estado || '').trim().toLowerCase()
-        const detEnProceso =
-          detRec &&
-          'en_proceso' in detRec &&
-          Boolean((detRec as Record<string, unknown>).en_proceso)
-        const sigueEnProceso =
-          estado === 'en_proceso' || detEnProceso || !ultimo.fin_utc
-        if (sigueEnProceso) {
-          await new Promise<void>(resolve => {
-            window.setTimeout(resolve, pollMs)
-          })
-          continue
-        }
         const err = ultimo.error
         if (err != null && String(err).trim()) {
           throw new Error(String(err).trim())
@@ -1389,11 +1411,9 @@ class NotificacionService {
         window.setTimeout(resolve, pollMs)
       })
     }
-    const soft = new Error(
-      'ESPERA_ENVIO_AGOTADA: el envío puede seguir en el servidor. Revise «Último envío por lote» en Configuración > Notificaciones antes de reintentar (evite duplicar).'
-    ) as Error & { code?: string }
-    soft.code = 'ESPERA_ENVIO_AGOTADA'
-    throw soft
+    throw new Error(
+      'Tiempo máximo de espera del envío agotado. Revise «Último envío por lote» en Configuración > Notificaciones o reintente.'
+    )
   }
 
   /** Ultimo resumen persistido tras enviar-todas o enviar-caso-manual (sin depender solo de logs). */
@@ -1460,6 +1480,22 @@ class NotificacionService {
       variables_existentes: number
       total: number
     }>(`${this.baseUrl}/variables/inicializar-precargadas`)
+  }
+
+  /** Crea/actualiza plantilla unica PREJUDICIAL y vincula envios si falta. */
+  async asegurarPlantillaPrejudicial(forzarContenido = false): Promise<{
+    mensaje: string
+    plantilla_id: number
+    plantilla_nombre: string
+    plantilla_asunto: string
+    envios_vinculado: boolean
+    variables_creadas: number
+    variables_existentes: number
+  }> {
+    const q = forzarContenido ? '?forzar_contenido=true' : ''
+    return await apiClient.post(
+      `${this.baseUrl}/plantillas/asegurar-prejudicial${q}`
+    )
   }
 
   /** ABONOS (hoja CONCILIACIÓN) vs sum(cuotas.total_pagado) del préstamo. */
