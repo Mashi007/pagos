@@ -33,7 +33,7 @@ router = APIRouter()
 
 # Valores por defecto al crear email_config v2 por primera vez (sin fila previa).
 _DEFAULTS_EMAIL_V2_GLOBALS: dict[str, Any] = {
-    "modo_pruebas": "true",
+    "modo_pruebas": "false",
     "email_pruebas": "",
     "email_activo": "true",
     "email_activo_notificaciones": "true",
@@ -268,7 +268,7 @@ def put_email_cuentas(payload: EmailCuentasUpdate = Body(...), db: Session = Dep
 
     for i, c in enumerate(cuentas_dict):
         if (c.get("smtp_user") or "").strip():
-            valido, errores = validar_config_email_para_guardar({**c, "modo_pruebas": payload.modo_pruebas or "true", "email_pruebas": payload.email_pruebas or ""})
+            valido, errores = validar_config_email_para_guardar({**c, "modo_pruebas": payload.modo_pruebas if payload.modo_pruebas is not None else "false", "email_pruebas": payload.email_pruebas or ""})
             if not valido:
                 raise HTTPException(
                     status_code=400,

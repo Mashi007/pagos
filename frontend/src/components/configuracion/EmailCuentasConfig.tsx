@@ -547,7 +547,7 @@ export function EmailCuentasConfig() {
             <label className="relative inline-flex cursor-pointer items-center">
               <input
                 type="checkbox"
-                checked={(data?.modo_pruebas ?? 'true') === 'true'}
+                checked={(data?.modo_pruebas ?? 'false') === 'true'}
                 onChange={e =>
                   setData(
                     data
@@ -564,7 +564,7 @@ export function EmailCuentasConfig() {
               <div className="peer h-6 w-11 rounded-full bg-gray-200 after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:border after:border-gray-300 after:bg-white after:transition-all after:content-[''] peer-checked:bg-amber-600 peer-checked:after:translate-x-full peer-checked:after:border-white peer-focus:outline-none dark:border-gray-600 dark:bg-gray-700" />
 
               <span className="ml-2 text-sm">
-                {(data?.modo_pruebas ?? 'true') === 'true'
+                {(data?.modo_pruebas ?? 'false') === 'true'
                   ? 'Activo'
                   : 'Inactivo'}
               </span>
@@ -597,6 +597,30 @@ export function EmailCuentasConfig() {
               envía al correo del colaborador registrado (no se redirige a
               pruebas).
             </p>
+            <label className="flex items-center justify-between gap-2 rounded border border-amber-100 bg-white/60 p-2">
+              <span className="text-sm">
+                Notificaciones (plantillas a clientes) → pruebas
+              </span>
+              <input
+                type="checkbox"
+                checked={
+                  (data?.modo_pruebas_notificaciones ?? 'false') === 'true'
+                }
+                onChange={e =>
+                  setData(
+                    data
+                      ? {
+                          ...data,
+                          modo_pruebas_notificaciones: e.target.checked
+                            ? 'true'
+                            : 'false',
+                        }
+                      : data
+                  )
+                }
+                className="rounded border-gray-300"
+              />
+            </label>
             <label className="flex items-center justify-between gap-2 rounded border border-amber-100 bg-white/60 p-2">
               <span className="text-sm">Estado de cuenta (PDF) → pruebas</span>
               <input

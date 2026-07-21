@@ -87,7 +87,7 @@ def migrar_config_v1_a_v2(data: Dict[str, Any]) -> Dict[str, Any]:
         "version": 2,
         "cuentas": cuentas,
         "asignacion": asignacion,
-        "modo_pruebas": data.get("modo_pruebas", "true"),
+        "modo_pruebas": data.get("modo_pruebas", "false"),
         "email_pruebas": data.get("email_pruebas", ""),
         "emails_pruebas": data.get("emails_pruebas"),
         "email_activo": data.get("email_activo", "true"),
