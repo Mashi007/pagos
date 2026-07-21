@@ -8,17 +8,8 @@
 
 
 
- * Configuración de 4 cuentas de correo con asignación por servicio.
-
-
-
-
-
-
-
-
-
- * Cuenta 1 = Cobros, 2 = Estado de cuenta, 3 y 4 = Notificaciones (por pestaña).
+ * Configuración de 3 cuentas de correo con asignación por servicio.
+ * Cuenta 1 = pagos@, 2 = tucuenta@, 3 = notificaciones@.
 
 
 

@@ -29,7 +29,7 @@ from app.core.email_cuentas import (
 EMAIL_FROM_NOTIFICACIONES_DEFAULT = "notificaciones@rapicreditca.com"
 
 _current: dict[str, Any] = {}
-# Version 2: 4 cuentas + asignacion (cobros=1, estado_cuenta=2, notificaciones por tab=3|4)
+# Version 2: 3 cuentas + asignacion (cobros=1, estado_cuenta=2, notificaciones por tab)
 _cuentas_data: dict = {}
 
 logger = logging.getLogger(__name__)
@@ -284,7 +284,7 @@ def get_email_activo_servicio(servicio: str) -> bool:
 def update_from_api(data: dict[str, Any]) -> None:
     global _last_sync_time
     _last_sync_time = 0.0  # invalidar cache
-    """Actualiza el holder desde la API de configuracion (PUT /configuracion/email/configuracion). Soporta version 2 (4 cuentas)."""
+    """Actualiza el holder desde la API de configuracion (PUT /configuracion/email/configuracion). Soporta version 2 (3 cuentas)."""
     global _cuentas_data
     if data.get("version") == 2 and "cuentas" in data:
         _cuentas_data.clear()
@@ -478,7 +478,7 @@ def get_modo_pruebas_servicio(servicio: str) -> bool:
 
 def _get_emails_pruebas_solo_email_config() -> List[str]:
     """
-    Correos de prueba solo desde ``email_config`` (holder / 4 cuentas).
+    Correos de prueba solo desde ``email_config`` (holder / 3 cuentas).
     No usa ``notificaciones_envios`` (módulo Notificaciones), para desacoplar Recibos.
     """
     sync_from_db()

@@ -36,6 +36,7 @@ import {
 
 import {
   emailCuentasApi,
+  normalizarIndiceCuenta,
   type EmailCuentasResponse,
 } from '../../services/emailCuentasApi'
 import {
@@ -87,7 +88,7 @@ function buildPutPayload(
       cobros: a.cobros ?? 1,
       estado_cuenta: a.estado_cuenta ?? 2,
       notificaciones_tab: { ...(a.notificaciones_tab ?? {}) },
-      recibos: patch.recibos_cuenta,
+      recibos: normalizarIndiceCuenta(patch.recibos_cuenta),
     },
     modo_pruebas: cur.modo_pruebas,
     email_pruebas: cur.email_pruebas,
@@ -164,7 +165,7 @@ export function ConfiguracionRecibos({ emergencyResetSeq = 0 }: Props) {
 
   const [emailActivoRecibos, setEmailActivoRecibos] = useState(true)
   const [modoPruebasRecibos, setModoPruebasRecibos] = useState(false)
-  const [cuentaRecibos, setCuentaRecibos] = useState(3)
+  const [cuentaRecibos, setCuentaRecibos] = useState(1)
   const [guardando, setGuardando] = useState(false)
   const [emailPrueba, setEmailPrueba] = useState('')
   const [probando, setProbando] = useState(false)
@@ -276,7 +277,9 @@ export function ConfiguracionRecibos({ emergencyResetSeq = 0 }: Props) {
     setEmailActivoRecibos((data.email_activo_recibos ?? 'true') === 'true')
     setModoPruebasRecibos((data.modo_pruebas_recibos ?? 'false') === 'true')
     setCuentaRecibos(
-      typeof data.asignacion?.recibos === 'number' ? data.asignacion.recibos : 3
+      normalizarIndiceCuenta(
+        typeof data.asignacion?.recibos === 'number' ? data.asignacion.recibos : 1
+      )
     )
     const bcc = Array.isArray(data.recibos_bcc_emails)
       ? data.recibos_bcc_emails
@@ -565,7 +568,7 @@ export function ConfiguracionRecibos({ emergencyResetSeq = 0 }: Props) {
               htmlFor="rec-cuenta-sel"
               className="w-40 shrink-0 whitespace-nowrap text-sm font-medium text-gray-700"
             >
-              Cuenta SMTP (1-4)
+              Cuenta SMTP (1-3)
             </label>
 
             <Select

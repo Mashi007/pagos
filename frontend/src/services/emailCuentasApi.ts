@@ -57,7 +57,7 @@ export interface EmailCuentasResponse {
 
     estado_cuenta: number
 
-    /** Índice 1-4: cuenta SMTP para envíos automáticos Recibos (post-conciliación). */
+    /** Índice 1-3: cuenta SMTP para envíos automáticos Recibos (post-conciliación). */
     recibos?: number
 
     notificaciones_tab?: Record<string, number>
@@ -171,7 +171,7 @@ export const emailCuentasApi = {
     return apiClient.put(`${BASE}/email/cuentas`, payload, { timeout: 60000 })
   },
 
-  /** Prueba login SMTP de una cuenta (1-4) sin enviar correo. */
+  /** Prueba login SMTP de una cuenta (1-3) sin enviar correo. */
   async probarSmtpCuenta(payload: {
     cuenta: number
     smtp_host?: string

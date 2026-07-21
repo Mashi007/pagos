@@ -15,6 +15,7 @@ from app.core.database import get_db
 from app.core.email_config_holder import (
     CLAVE_EMAIL_CONFIG,
     SENSITIVE_FIELDS,
+    invalidate_email_config_cache,
     prepare_for_db_storage,
     update_from_api,
 )
@@ -117,6 +118,75 @@ def _load_raw_from_db(db) -> Optional[dict]:
         return None
 
 
+def _asignacion_tiene_indice_legacy(raw: dict) -> bool:
+    asig = raw.get("asignacion") or {}
+    for key in ("cobros", "estado_cuenta", "recibos"):
+        try:
+            if int(asig.get(key, 0)) > NUM_CUENTAS:
+                return True
+        except (TypeError, ValueError):
+            pass
+    for val in (asig.get("notificaciones_tab") or {}).values():
+        try:
+            if int(val) > NUM_CUENTAS:
+                return True
+        except (TypeError, ValueError):
+            pass
+    return False
+
+
+def _email_config_needs_migration_persist(raw: dict) -> bool:
+    if not raw or not isinstance(raw, dict):
+        return False
+    if raw.get("version") != 2:
+        return True
+    if len(raw.get("cuentas") or []) > NUM_CUENTAS:
+        return True
+    if _asignacion_tiene_indice_legacy(raw):
+        return True
+    migrated = migrar_config_v1_a_v2(raw)
+    return normalizar_asignacion(migrated.get("asignacion")) != normalizar_asignacion(
+        raw.get("asignacion")
+    )
+
+
+def _persist_migrated_email_config(db: Session, raw: dict) -> dict:
+    """Normaliza v1/4 cuentas a v2/3 en BD sin perder claves encriptadas."""
+    migrated = migrar_config_v1_a_v2(raw)
+    payload_data: dict[str, Any] = dict(raw)
+    payload_data["version"] = 2
+    payload_data["asignacion"] = normalizar_asignacion(migrated.get("asignacion"))
+
+    raw_cuentas = list(raw.get("cuentas") or [])
+    mig_cuentas = migrated.get("cuentas") or []
+    cuentas_bd: List[dict] = []
+    for i in range(NUM_CUENTAS):
+        if raw.get("version") == 2 and i < len(raw_cuentas) and isinstance(raw_cuentas[i], dict):
+            cuentas_bd.append(dict(raw_cuentas[i]))
+        else:
+            base = dict(mig_cuentas[i] if i < len(mig_cuentas) else cuenta_vacia())
+            cuentas_bd.append(prepare_for_db_storage(base))
+    payload_data["cuentas"] = cuentas_bd
+
+    try:
+        row = db.get(Configuracion, CLAVE_EMAIL_CONFIG)
+        payload_str = json.dumps(payload_data, ensure_ascii=False)
+        if row:
+            row.valor = payload_str
+        else:
+            db.add(Configuracion(clave=CLAVE_EMAIL_CONFIG, valor=payload_str))
+        db.commit()
+        invalidate_email_config_cache()
+        logger.info(
+            "email_config migrado y persistido en BD (version=2, cuentas=%d)",
+            len(cuentas_bd),
+        )
+    except Exception as e:
+        logger.warning("No se pudo auto-persistir migracion email_config: %s", e)
+        db.rollback()
+    return migrated
+
+
 @router.get("/cuentas")
 def get_email_cuentas(db: Session = Depends(get_db)):
     """Devuelve la configuracion de 3 cuentas y asignacion. contrasenas enmascaradas."""
@@ -131,7 +201,10 @@ def get_email_cuentas(db: Session = Depends(get_db)):
         for c in out["cuentas"]:
             _mask_cuenta(c)
         return out
-    migrated = migrar_config_v1_a_v2(data)
+    if _email_config_needs_migration_persist(data):
+        migrated = _persist_migrated_email_config(db, data)
+    else:
+        migrated = migrar_config_v1_a_v2(data)
     cuentas = list(migrated["cuentas"])
     for i, c in enumerate(cuentas):
         if isinstance(c, dict):
@@ -214,12 +287,6 @@ def _normalizar_recibos_bcc_emails(raw: Any) -> List[str]:
     return out
 
 
-def _is_password_masked(v: Any) -> bool:
-    if v is None or not isinstance(v, str):
-        return True
-    s = (v or "").strip()
-    return s in ("", "***")
-
 def _get_existing_decrypted_password(existing_data: Optional[dict], account_index: int, field: str) -> Optional[str]:
     """Obtiene la contrasena ya guardada (desencriptada) para no sobrescribirla cuando el usuario no la cambia (***)."""
     if not existing_data or account_index < 0:
@@ -249,7 +316,7 @@ def _get_existing_decrypted_password(existing_data: Optional[dict], account_inde
 
 @router.put("/cuentas")
 def put_email_cuentas(payload: EmailCuentasUpdate = Body(...), db: Session = Depends(get_db)):
-    """Guarda las 4 cuentas y la asignacion. Encripta contrasenas en BD."""
+    """Guarda las 3 cuentas y la asignacion. Encripta contrasenas en BD."""
     existing_data = _load_raw_from_db(db)
     cuentas = payload.cuentas or []
     if len(cuentas) < NUM_CUENTAS:
@@ -426,7 +493,7 @@ def put_email_cuentas(payload: EmailCuentasUpdate = Body(...), db: Session = Dep
 
 
 class ProbarSmtpCuentaRequest(BaseModel):
-    """Prueba login SMTP de una cuenta (1-4) sin enviar correo."""
+    """Prueba login SMTP de una cuenta (1-3) sin enviar correo."""
     cuenta: int = 1
     smtp_host: Optional[str] = None
     smtp_port: Optional[str] = None
