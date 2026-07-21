@@ -14,7 +14,7 @@ class EnvioNotificacion(Base):
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     fecha_envio = Column(DateTime(timezone=False), nullable=False, server_default=func.now())
-    tipo_tab = Column(String(20), nullable=False, index=True)  # dias_5, hoy, dias_1_retraso, prejudicial, ...
+    tipo_tab = Column(String(40), nullable=False, index=True)  # dias_5, d_2_antes_vencimiento, dias_10_retraso, ...
     asunto = Column(String(500), nullable=True)  # asunto del email enviado (historial/legal)
     email = Column(String(255), nullable=False)
     nombre = Column(String(255), nullable=True)
