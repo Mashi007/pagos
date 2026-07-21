@@ -71,7 +71,6 @@ import {
 import {
   getPeriodoEtiqueta,
   PERIODOS_VALORES,
-  PERIODO_DIA,
 } from '../constants/dashboard'
 
 import type {
@@ -82,11 +81,6 @@ import type {
   NotificacionesEnviosPorDiaResponse,
   PagosIngresadosPorDiaResponse,
 } from '../types/dashboard'
-import {
-  finiquitoAdminResumenFlujoDiario,
-  type FiniquitoFlujoDia,
-  type FiniquitoFlujoResumenDiario,
-} from '../services/finiquitoService'
 
 import { DashboardFiltrosPanel } from '../components/dashboard/DashboardFiltrosPanel'
 
@@ -108,8 +102,6 @@ import {
   Legend,
   ResponsiveContainer,
   ComposedChart,
-  ScatterChart,
-  Scatter,
 } from 'recharts'
 
 // Submenús eliminados: financiamiento, cuotas, cobranza, analisis, pagos
@@ -254,16 +246,6 @@ function notificacionesSerieConTendenciaLineal<T extends { enviados: number }>(
 ): Array<T & { tendencia: number }> {
   return serieConTendenciaLineal(serie, 'enviados')
 }
-
-function diasVentanaFiniquito(periodo: string): number {
-  if (periodo === PERIODO_DIA || periodo === 'dia') return 7
-  if (periodo === 'semana') return 14
-  if (periodo === 'mes') return 31
-  if (periodo === 'año') return 180
-  return 90
-}
-
-const FINIQUITO_GRAFICO_MAX_DIARIO = 50
 
 export function DashboardMenu() {
   const { user } = useSimpleAuth()
@@ -436,9 +418,6 @@ export function DashboardMenu() {
 
   const NOTIFICACIONES_ENVIOS_TENDENCIA_DIAS = 90
   const PAGOS_INGRESADOS_POR_DIA_DIAS = 30
-  const diasGraficoFlujoFiniquito = diasVentanaFiniquito(
-    getPeriodoGrafico('finiquito-flujo')
-  )
 
   const {
     data: datosPagosIngresadosPorDia,
@@ -551,42 +530,6 @@ export function DashboardMenu() {
     [datosNotificacionesMenor60PorDia?.serie]
   )
 
-  const { data: datosFlujoFiniquito, isLoading: loadingFlujoFiniquito } =
-    useQuery({
-      queryKey: ['finiquito-flujo-diario', diasGraficoFlujoFiniquito],
-      queryFn: async (): Promise<FiniquitoFlujoResumenDiario> =>
-        finiquitoAdminResumenFlujoDiario(undefined, diasGraficoFlujoFiniquito),
-      staleTime: 5 * 60 * 1000,
-      refetchOnWindowFocus: false,
-      retry: 1,
-      enabled: enableTertiaryCharts,
-    })
-
-  const serieFlujoFiniquito = useMemo<FiniquitoFlujoDia[]>(
-    () => datosFlujoFiniquito?.dias ?? [],
-    [datosFlujoFiniquito?.dias]
-  )
-
-  const serieFlujoFiniquitoCapada = useMemo(
-    () =>
-      serieFlujoFiniquito.map(row => ({
-        ...row,
-        cantidad_ingresados: Math.min(
-          FINIQUITO_GRAFICO_MAX_DIARIO,
-          Number(row.cantidad_ingresados) || 0
-        ),
-        cantidad_revision: Math.min(
-          FINIQUITO_GRAFICO_MAX_DIARIO,
-          Number(row.cantidad_revision) || 0
-        ),
-        cantidad_terminados: Math.min(
-          FINIQUITO_GRAFICO_MAX_DIARIO,
-          Number(row.cantidad_terminados) || 0
-        ),
-      })),
-    [serieFlujoFiniquito]
-  )
-
   const serieNotificacionesConTendencia = useMemo(
     () => notificacionesSerieConTendenciaLineal(serieNotificacionesGrafico),
     [serieNotificacionesGrafico]
@@ -686,7 +629,7 @@ export function DashboardMenu() {
       })
 
       await queryClient.invalidateQueries({
-        queryKey: ['finiquito-flujo-diario'],
+        queryKey: ['pagos-ingresados-por-dia'],
         exact: false,
       })
 
@@ -708,7 +651,7 @@ export function DashboardMenu() {
       })
 
       await queryClient.refetchQueries({
-        queryKey: ['finiquito-flujo-diario'],
+        queryKey: ['pagos-ingresados-por-dia'],
         exact: false,
       })
 
@@ -1830,127 +1773,6 @@ export function DashboardMenu() {
                       />
                     </RechartsLineChart>
                   </ResponsiveContainer>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.45 }}
-          className="mt-2"
-        >
-          <Card className="overflow-hidden rounded-xl border border-gray-200/90 bg-white shadow-lg">
-            <CardHeader className="border-b border-gray-200/80 bg-gradient-to-r from-amber-50/80 to-emerald-50/80 pb-3">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div>
-                  <CardTitle className="flex items-center gap-2 text-lg font-bold text-gray-800">
-                    <BarChart3 className="h-5 w-5 text-amber-600" />
-                    <span>Flujo de finiquitos</span>
-                  </CardTitle>
-                  <CardDescription>
-                    Bandeja principal, área de revisión y terminados.
-                  </CardDescription>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <SelectorPeriodoGrafico chartId="finiquito-flujo" />
-                  <Badge
-                    variant="secondary"
-                    className="border border-gray-200 bg-white/80 text-xs font-medium text-gray-600"
-                  >
-                    3 barras
-                  </Badge>
-                </div>
-              </div>
-            </CardHeader>
-
-            <CardContent className="p-6 pt-4">
-              {loadingFlujoFiniquito ? (
-                <div className="flex items-center justify-center py-16 text-gray-500">
-                  Cargando flujo de finiquitos...
-                </div>
-              ) : serieFlujoFiniquitoCapada.length > 0 ? (
-                <ChartWithDateRangeSlider
-                  data={serieFlujoFiniquitoCapada}
-                  dataKey="fecha"
-                  chartHeight={360}
-                >
-                  {filteredData => (
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart
-                        data={filteredData}
-                        margin={{ top: 14, right: 24, left: 12, bottom: 14 }}
-                      >
-                        <CartesianGrid {...chartCartesianGrid} />
-                        <XAxis
-                          dataKey="etiqueta"
-                          tick={chartAxisTick}
-                          minTickGap={18}
-                        />
-                        <YAxis
-                          tick={chartAxisTick}
-                          allowDecimals={false}
-                          domain={[0, FINIQUITO_GRAFICO_MAX_DIARIO]}
-                          label={{
-                            value: 'Casos',
-                            angle: -90,
-                            position: 'insideLeft',
-                            style: { fill: '#374151', fontSize: 13 },
-                          }}
-                        />
-                        <Tooltip
-                          contentStyle={chartTooltipStyle.contentStyle}
-                          labelStyle={chartTooltipStyle.labelStyle}
-                          cursor={{ fill: 'rgba(148, 163, 184, 0.12)' }}
-                          formatter={(
-                            value: number,
-                            name: string,
-                            item: any
-                          ) => {
-                            const original =
-                              Number(item?.payload?.[item?.dataKey]) || 0
-                            const shown = Number(value) || 0
-                            return [
-                              original > FINIQUITO_GRAFICO_MAX_DIARIO
-                                ? `${shown} (real: ${original})`
-                                : shown,
-                              name,
-                            ]
-                          }}
-                          labelFormatter={(_, payload) =>
-                            payload?.[0]?.payload?.fecha || ''
-                          }
-                        />
-                        <Legend {...chartLegendStyle} />
-                        <Bar
-                          dataKey="cantidad_ingresados"
-                          fill="#1d4ed8"
-                          name="Ingresados"
-                          radius={[4, 4, 0, 0]}
-                        />
-                        <Bar
-                          dataKey="cantidad_revision"
-                          fill="#d97706"
-                          name="Procesados"
-                          radius={[4, 4, 0, 0]}
-                        />
-                        <Bar
-                          dataKey="cantidad_terminados"
-                          fill="#7c3aed"
-                          name="Terminados"
-                          radius={[4, 4, 0, 0]}
-                        />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  )}
-                </ChartWithDateRangeSlider>
-              ) : (
-                <div className="flex items-center justify-center py-16 text-gray-500">
-                  No hay datos de flujo de finiquitos para el período
-                  seleccionado
                 </div>
               )}
             </CardContent>
