@@ -327,15 +327,6 @@ export const ASIGNACION_NOTIF_GRUPOS = [
       { id: 'hoy', label: 'Día de vencimiento (hoy)', defaultCuenta: 4 },
     ],
   },
-  {
-    titulo: 'Otros casos de mora',
-    descripcion: 'Tabs adicionales usados en estadísticas y envíos legacy.',
-    items: [
-      { id: 'dias_3_retraso', label: '3 días de atraso', defaultCuenta: 3 },
-      { id: 'dias_5_retraso', label: '5 días de atraso', defaultCuenta: 3 },
-      { id: 'mora_90', label: 'Mora 90+ días', defaultCuenta: 3 },
-    ],
-  },
 ] as const
 
 /** Defaults planos tipo_tab → cuenta (1-4). */
