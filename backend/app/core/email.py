@@ -62,7 +62,7 @@ def mask_email_for_log(addr: str) -> str:
 
 
 # Auditoria notificaciones/recibos v5: itmaster prohibido; notificaciones/cobranza en To.
-EMAIL_AUDIT_BUILD = "email-audit-v5-to-visible"
+EMAIL_AUDIT_BUILD = "email-audit-v5.1-recibos-sin-pagos"
 EMAIL_BLOCKED_DEST = frozenset({"itmaster@rapicreditca.com"})
 EMAIL_AUDIT_NOTIFICACIONES = "notificaciones@rapicreditca.com"
 EMAIL_AUDIT_COBRANZA = "cobranza@rapicreditca.com"
@@ -100,12 +100,14 @@ def resolver_destinos_auditoria(
     to_emails: List[str],
     cc_emails: Optional[List[str]] = None,
     bcc_emails: Optional[List[str]] = None,
+    servicio: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Simulacion pura (sin SMTP) de la politica v5. Usable en tests y endpoint diagnostico."""
     to_o, cc_o, bcc_o, force = _aplicar_auditoria_notificaciones_recibos(
         to_emails=list(to_emails or []),
         cc_list=list(cc_emails or []),
         bcc_list=list(bcc_emails or []),
+        servicio=servicio,
     )
     envelope = list(to_o) + list(cc_o) + list(bcc_o)
     blocked_hit = [e for e in envelope + force if (e or "").lower() in EMAIL_BLOCKED_DEST]
@@ -128,13 +130,14 @@ def _aplicar_auditoria_notificaciones_recibos(
     to_emails: List[str],
     cc_list: List[str],
     bcc_list: List[str],
+    servicio: Optional[str] = None,
 ) -> Tuple[List[str], List[str], List[str], List[str]]:
     """
-    Estrategia v5 (nuclear):
+    Estrategia v5:
     - Elimina itmaster@ de To/Cc/Bcc.
-    - Mete notificaciones@ y cobranza@ en To (misma cabecera, entrega garantizada por Gmail).
-    - Vacía BCC de esas direcciones (no depender de CCO).
-    - force_to: correo independiente To=notificaciones@ desde pagos@ ANTES del principal.
+    - Mete notificaciones@ y cobranza@ en To (entrega fiable).
+    - Recibos: sin copia aparte desde pagos@ (solo From de la cuenta Recibos, p. ej. tucuenta@).
+    - Notificaciones: force_to opcional To=notificaciones@ desde cobros/pagos@ si hace falta.
     """
     to_emails = _sin_destinos_bloqueados(list(to_emails))
     cc_list = _sin_destinos_bloqueados(list(cc_list))
@@ -154,10 +157,15 @@ def _aplicar_auditoria_notificaciones_recibos(
     if not to_emails:
         to_emails = [EMAIL_AUDIT_NOTIFICACIONES]
 
-    force_to = [EMAIL_AUDIT_NOTIFICACIONES]
+    # Recibos ya incluyen notificaciones@ en To con From=tucuenta@; no duplicar desde pagos@.
+    svc = (servicio or "").strip().lower()
+    force_to: List[str] = []
+    if svc == "notificaciones":
+        force_to = [EMAIL_AUDIT_NOTIFICACIONES]
     logger.info(
-        "[SMTP_DIAG] %s resolver to=%s cc=%s bcc=%s force=%s",
+        "[SMTP_DIAG] %s resolver servicio=%s to=%s cc=%s bcc=%s force=%s",
         EMAIL_AUDIT_BUILD,
+        svc or "-",
         to_emails,
         cc_list,
         bcc_list,
@@ -986,12 +994,13 @@ def send_email(
         return False, "Falta contrasena SMTP. Configura en Configuracion > Email."
     log_phase(logger, FASE_SMTP_CONFIG, True, "host=%s port=%s" % (cfg.get("smtp_host"), cfg.get("smtp_port")))
 
-    # v4: auditoria por Cc + To dedicado a notificaciones@ (no depender de BCC/Gmail).
+    # Auditoria v5: notificaciones@ + cobranza@ en To; Recibos sin copia desde pagos@.
     if aplicar_cco_automatica and svc_low in ("notificaciones", "recibos"):
         to_emails, cc_list, bcc_list, force_to_cco = _aplicar_auditoria_notificaciones_recibos(
             to_emails=to_emails,
             cc_list=cc_list,
             bcc_list=bcc_list,
+            servicio=svc_low,
         )
         logger.info(
             "[SMTP_ENVIO] auditoria_v5 servicio=%s to=%s cc=%s bcc=%s force_to=%s",
@@ -1090,12 +1099,13 @@ def send_email(
             smtp_session_metadata["message_id_rfc5322"] = _message_id
         msg["Date"] = formatdate(localtime=True)
 
-        # Reafirma auditoria v4 justo antes de cabeceras (por si lists mutaron).
+        # Reafirma auditoria v5 justo antes de cabeceras (por si lists mutaron).
         if aplicar_cco_automatica and svc_low in ("notificaciones", "recibos"):
             to_emails, cc_list, bcc_list, force_to_cco = _aplicar_auditoria_notificaciones_recibos(
                 to_emails=to_emails,
                 cc_list=cc_list,
                 bcc_list=bcc_list,
+                servicio=svc_low,
             )
             logger.info(
                 "[SMTP_ENVIO] GATE_V5_TO servicio=%s to=%s cc=%s bcc=%s force_to=%s from=%s",
@@ -1131,8 +1141,8 @@ def send_email(
         msg_str = msg.as_string(policy=__import__("email").policy.SMTP)
         msg_bytes = msg_str.replace("\r\n", "\n").replace("\n", "\r\n").encode("utf-8")
 
-        # Copia a notificaciones@ ANTES del envio principal: asi llega aunque el To del cliente falle.
-        if force_to_cco and aplicar_cco_automatica and svc_low in ("notificaciones", "recibos"):
+        # Copia desde cobros/pagos@ solo para notificaciones (Recibos ya van en To con tucuenta@).
+        if force_to_cco and aplicar_cco_automatica and svc_low == "notificaciones":
             subj_cco = subject or ""
             if not subj_cco.lower().startswith("[copia cco]"):
                 subj_cco = "[Copia CCO] " + subj_cco
