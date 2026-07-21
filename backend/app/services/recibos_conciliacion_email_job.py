@@ -605,6 +605,15 @@ def enviar_correo_prueba_recibos_datos_reales(
     dest = (email_destino or "").strip()
     if not dest or "@" not in dest:
         return {"success": False, "mensaje": "Indique un correo de destino válido."}
+    if dest.lower() == "itmaster@rapicreditca.com":
+        return {
+            "success": False,
+            "mensaje": (
+                "No use itmaster@ como destino de prueba Recibos. "
+                "Indique notificaciones@rapicreditca.com (o el correo del cliente). "
+                "La CCO a cobranza@ se aplica automaticamente."
+            ),
+        }
 
     pagos = listar_pagos_recibos_ventana(
         db,

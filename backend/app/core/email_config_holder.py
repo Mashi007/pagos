@@ -444,8 +444,15 @@ def get_modo_pruebas_email(servicio: Optional[str] = None) -> Tuple[bool, List[s
         if not use_modo:
             return (False, [])
         if servicio == "recibos":
-            return (True, _get_emails_pruebas_solo_email_config())
-        return (True, _get_emails_pruebas_list())
+            emails_rec = _get_emails_pruebas_solo_email_config()
+            # Si solo estaba itmaster@ (filtrado), no redirigir: enviar a destinos reales.
+            if not emails_rec:
+                return (False, [])
+            return (True, emails_rec)
+        emails_np = _get_emails_pruebas_list()
+        if not emails_np:
+            return (False, [])
+        return (True, emails_np)
     # Modo global (legacy)
     envios = _load_notificaciones_envios()
     raw_modo = envios.get("modo_pruebas") or _current.get("modo_pruebas") or getattr(settings, "MODO_PRUEBAS_EMAIL", None) or "false"
@@ -485,6 +492,9 @@ def _get_emails_pruebas_solo_email_config() -> List[str]:
     """
     Correos de prueba solo desde ``email_config`` (holder / 3 cuentas).
     No usa ``notificaciones_envios`` (módulo Notificaciones), para desacoplar Recibos.
+
+    itmaster@ se excluye: no es destino valido de prueba/modo prueba para Recibos
+    (la auditoria CCO va a cobranza@ + notificaciones@).
     """
     sync_from_db()
     emails: List[str] = []
@@ -499,11 +509,22 @@ def _get_emails_pruebas_solo_email_config() -> List[str]:
         single = (_current.get("email_pruebas") or "").strip()
         if single and "@" in single:
             emails = [single]
-    return emails
+    blocked = {"itmaster@rapicreditca.com"}
+    filtered = [e for e in emails if e.lower() not in blocked]
+    if emails and not filtered:
+        logger.warning(
+            "[EMAIL] Recibos: email_pruebas solo tenia itmaster@; se ignora. "
+            "Configure otro correo de prueba o desactive modo prueba Recibos."
+        )
+    return filtered
 
 
 def _get_emails_pruebas_list() -> List[str]:
-    """Lista de correos de pruebas (desde notificaciones_envios o email_config)."""
+    """Lista de correos de pruebas (desde notificaciones_envios o email_config).
+
+    Excluye itmaster@: no es destino valido de modo prueba para notificaciones
+    (CCO de auditoria = cobranza@ + notificaciones@).
+    """
     envios = _load_notificaciones_envios()
     emails: List[str] = []
     raw_emails = envios.get("emails_pruebas")
@@ -518,5 +539,12 @@ def _get_emails_pruebas_list() -> List[str]:
         single = (_current.get("email_pruebas") or "").strip()
         if single and "@" in single:
             emails = [single]
-    return emails
+    blocked = {"itmaster@rapicreditca.com"}
+    filtered = [e for e in emails if e.lower() not in blocked]
+    if emails and not filtered:
+        logger.warning(
+            "[EMAIL] Notificaciones: email_pruebas solo tenia itmaster@; se ignora. "
+            "Configure otro correo de prueba o desactive modo prueba."
+        )
+    return filtered
 

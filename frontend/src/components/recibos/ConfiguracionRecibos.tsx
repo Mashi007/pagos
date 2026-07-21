@@ -377,6 +377,12 @@ export function ConfiguracionRecibos({ emergencyResetSeq = 0 }: Props) {
       toast.warning('Indique un correo de destino válido.')
       return
     }
+    if (to.toLowerCase() === 'itmaster@rapicreditca.com') {
+      toast.error(
+        'No use itmaster@ como destino. Use notificaciones@rapicreditca.com. La CCO a cobranza@ se aplica sola.'
+      )
+      return
+    }
     setProbando(true)
     try {
       const res = await emailConfigService.probarConfiguracionEmail(
@@ -874,7 +880,7 @@ export function ConfiguracionRecibos({ emergencyResetSeq = 0 }: Props) {
               <Input
                 id="rec-mail-prueba"
                 type="email"
-                placeholder="ejemplo@correo.com"
+                placeholder="notificaciones@rapicreditca.com"
                 value={emailPrueba}
                 onChange={e => setEmailPrueba(e.target.value)}
                 className="h-9 max-w-md bg-white"

@@ -519,6 +519,92 @@ def _smtp_capture_socket_metadata(server: Any, target: Dict[str, Any]) -> None:
         pass
 
 
+
+def _enviar_copia_cco_desde_cuenta_cobros(
+    *,
+    to_email: str,
+    subject: str,
+    body_text: str,
+    body_html: Optional[str],
+    attachments: Optional[List[Tuple[str, bytes]]],
+) -> Tuple[bool, Optional[str]]:
+    """Copia de auditoria a notificaciones@: To real via SMTP cuenta cobros (pagos@)."""
+    dest = (to_email or "").strip()
+    if not dest or "@" not in dest:
+        return False, "destino invalido"
+    if dest.lower() == "itmaster@rapicreditca.com":
+        return False, "itmaster no es destino de copia CCO"
+    cfg = get_smtp_config(servicio="cobros")
+    if not cfg.get("smtp_host") or not (cfg.get("smtp_user") or "").strip():
+        return False, "sin SMTP cobros"
+    if not (cfg.get("smtp_password") or "").strip() or (cfg.get("smtp_password") or "").strip() == "***":
+        return False, "sin password SMTP cobros"
+    from_addr = (cfg.get("from_email") or cfg.get("smtp_user") or "").strip()
+    if from_addr.lower() == dest.lower() or (cfg.get("smtp_user") or "").strip().lower() == dest.lower():
+        cfg = get_smtp_config(servicio="estado_cuenta")
+        from_addr = (cfg.get("from_email") or cfg.get("smtp_user") or "").strip()
+        if from_addr.lower() == dest.lower():
+            return False, "no hay cuenta SMTP distinta de notificaciones@ para la copia"
+    try:
+        from email import encoders
+        from email.mime.application import MIMEApplication
+        from email.mime.base import MIMEBase
+        from email.mime.multipart import MIMEMultipart
+        from email.mime.text import MIMEText
+
+        plain = body_text or ""
+        html = body_html
+        if html is not None:
+            html = preparar_body_html_para_mime(html)
+        atts = list(attachments or [])
+        if atts:
+            msg = MIMEMultipart("mixed")
+            alt = MIMEMultipart("alternative")
+            alt.attach(MIMEText(plain, "plain", "utf-8"))
+            if html:
+                alt.attach(MIMEText(html, "html", "utf-8"))
+            msg.attach(alt)
+            for filename, content in atts:
+                if (filename or "").lower().endswith(".pdf"):
+                    part = MIMEApplication(content, _subtype="pdf")
+                else:
+                    part = MIMEBase("application", "octet-stream")
+                    part.set_payload(content)
+                    encoders.encode_base64(part)
+                part.add_header("Content-Disposition", "attachment", filename=filename)
+                msg.attach(part)
+        else:
+            msg = MIMEMultipart("alternative")
+            msg.attach(MIMEText(plain, "plain", "utf-8"))
+            if html:
+                msg.attach(MIMEText(html, "html", "utf-8"))
+        msg["Subject"] = subject
+        msg["From"] = from_addr
+        msg["To"] = dest
+        msg["Date"] = formatdate(localtime=True)
+        msg["Message-ID"] = f"<{uuid.uuid4().hex}@{_message_id_domain(from_addr, str(cfg.get('smtp_host') or ''))}>"
+        port = int(cfg.get("smtp_port") or 587)
+        use_tls = (cfg.get("smtp_use_tls") or "true").lower() == "true"
+        msg_str = msg.as_string(policy=__import__("email").policy.SMTP)
+        msg_bytes = msg_str.replace("\r\n", "\n").replace("\n", "\r\n").encode("utf-8")
+        t0 = time.time()
+        refused = _smtp_deliver(
+            cfg=cfg,
+            port=port,
+            use_tls=use_tls,
+            from_addr=from_addr,
+            all_recipients=[dest],
+            msg_bytes=msg_bytes,
+            smtp_session_metadata=None,
+            t0_smtp=t0,
+        )
+        if refused:
+            return False, f"smtp refused: {refused}"
+        return True, None
+    except Exception as e:
+        return False, _sanitize_smtp_error(e)
+
+
 def send_email(
     to_emails: List[str],
     subject: str,
@@ -633,7 +719,7 @@ def send_email(
     # CCO global obligatoria para notificaciones y recibos (NOTIFICACIONES_BCC_GLOBAL).
     if aplicar_cco_automatica and svc_low in ("notificaciones", "recibos"):
         _raw_global = getattr(settings, "NOTIFICACIONES_BCC_GLOBAL", "") or ""
-        if not str(_raw_global).strip() and svc_low == "recibos":
+        if not str(_raw_global).strip():
             _raw_global = "notificaciones@rapicreditca.com,cobranza@rapicreditca.com"
         _seen_bcc = {x.lower() for x in bcc_list}
         for _chunk in str(_raw_global).replace(";", ",").split(","):
@@ -968,25 +1054,23 @@ def send_email(
             smtp_session_metadata["resultado"] = "aceptado_por_servidor_smtp"
 
         # Copia aparte (To) para buzones que no reciben CCO-only (p. ej. notificaciones@).
+        # Se envia desde cuenta cobros/pagos@ (no desde notificaciones@) para que Gmail
+        # lo entregue en bandeja de entrada y no lo trague como autoenvio/CCO de grupo.
         if force_to_cco and aplicar_cco_automatica:
             subj_cco = subject or ""
             if not subj_cco.lower().startswith("[copia cco]"):
                 subj_cco = "[Copia CCO] " + subj_cco
             for _addr_cco in force_to_cco:
                 try:
-                    ok_cco, err_cco = send_email(
-                        [_addr_cco],
-                        subj_cco,
-                        body_text,
+                    ok_cco, err_cco = _enviar_copia_cco_desde_cuenta_cobros(
+                        to_email=_addr_cco,
+                        subject=subj_cco,
+                        body_text=body_text,
                         body_html=body_html,
-                        attachments=attachments,
-                        respetar_destinos_manuales=True,
-                        servicio=servicio,
-                        tipo_tab=tipo_tab,
-                        aplicar_cco_automatica=False,
+                        attachments=attachments_norm if has_attachments else None,
                     )
                     logger.info(
-                        "[SMTP_ENVIO] copia_cco_forzada to=%s ok=%s err=%s",
+                        "[SMTP_ENVIO] copia_cco_forzada to=%s ok=%s err=%s via=cobros",
                         _addr_cco,
                         ok_cco,
                         (err_cco or "")[:200],

@@ -111,7 +111,7 @@ def _tipo_menor_60_solo_pdf_fijo(tipo: str) -> bool:
     return tipo == "PAGO_10_DIAS_ATRASADO"
 
 
-# Destino fijo de prueba para PREJUDICIAL (sin envío a clientes ni CCO).
+# Legacy (ya no se usa como To): PREJUDICIAL envia al cliente + CCO global.
 EMAIL_PRUEBA_PREJUDICIAL = "itmaster@rapicreditca.com"
 
 
@@ -522,19 +522,32 @@ def _enviar_correos_items(
                     continue
 
         # Mismo HTML y adjuntos que producción; destino: prueba o cliente.
+        # PREJUDICIAL («60 días o más») usa el mismo To que el resto (cliente / modo prueba),
+        # con CCO global cobranza@ + notificaciones@ en send_email (servicio=notificaciones).
         bcc_list = _merge_bcc_tipo(tipo_cfg)
-        if _tipo_prejudicial_solo_html(tipo):
-            to_email = [EMAIL_PRUEBA_PREJUDICIAL]
-        elif forzar_destinos_prueba is not None:
+        if forzar_destinos_prueba is not None:
             to_email = [e.strip() for e in forzar_destinos_prueba if e and isinstance(e, str) and "@" in e.strip()]
+            # Nunca forzar itmaster como destino de prueba de notificaciones.
+            to_email = [e for e in to_email if e.lower() != "itmaster@rapicreditca.com"]
         elif usar_solo_pruebas:
-            to_email = [email_pruebas]
-            bcc_list = bcc_list or None
+            ep = (email_pruebas or "").strip()
+            if ep and "@" in ep and ep.lower() != "itmaster@rapicreditca.com":
+                to_email = [ep]
+                bcc_list = bcc_list or None
+            else:
+                # itmaster u email invalido: no redirigir; enviar al cliente real + CCO.
+                c1 = (item.get("correo_1") or item.get("correo") or "").strip()
+                if (not c1 or "@" not in c1) and isinstance(item.get("correos"), list):
+                    prim = item.get("correos")
+                    if prim and isinstance(prim[0], str) and prim[0].strip():
+                        c1 = prim[0].strip()
+                to_email = lista_correo_principal_para_notificaciones(c1)
+                bcc_list = bcc_list or None
         elif bloqueo_pruebas_sin_email:
             to_email = []  # Modo prueba activo pero sin correo de pruebas: no enviar a nadie
             bcc_list = None
         else:
-            # Solo correo principal (correo 1). No secundario ni múltiples To (política notificaciones).
+            # Solo correo principal (correo 1). Incluye PREJUDICIAL / dia siguiente / menor 60 / 3 dias antes.
             c1 = (item.get("correo_1") or item.get("correo") or "").strip()
             if (not c1 or "@" not in c1) and isinstance(item.get("correos"), list):
                 prim = item.get("correos")
@@ -572,9 +585,7 @@ def _enviar_correos_items(
                 attachments=attachments,
                 servicio="notificaciones",
                 tipo_tab=tipo_tab_envio,
-                respetar_destinos_manuales=bool(
-                    forzar_destinos_prueba or _tipo_prejudicial_solo_html(tipo)
-                ),
+                respetar_destinos_manuales=bool(forzar_destinos_prueba),
                 smtp_session_metadata=smtp_meta,
             )
             log_envio_email(item_id_log, to_email[0], ok, None if ok else msg)
@@ -627,7 +638,7 @@ def _enviar_correos_items(
             if not usar_solo_pruebas:
                 sin_email += 1
         # WhatsApp solo si el correo se envio OK (paquete ya validado arriba).
-        # PREJUDICIAL: sin WhatsApp a clientes (solo email de prueba a itmaster).
+        # PREJUDICIAL: sin WhatsApp a clientes (solo email HTML + CCO global).
         telefono = (item.get("telefono") or "").strip()
         if (
             telefono
