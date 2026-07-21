@@ -417,7 +417,7 @@ export function DashboardMenu() {
   })
 
   const NOTIFICACIONES_ENVIOS_TENDENCIA_DIAS = 90
-  const PAGOS_INGRESADOS_POR_DIA_DIAS = 30
+  const PAGOS_INGRESADOS_POR_DIA_DIAS = 90
 
   const {
     data: datosPagosIngresadosPorDia,
@@ -541,14 +541,30 @@ export function DashboardMenu() {
     [serieNotificacionesMenor60Grafico]
   )
 
-  const seriePagosIngresadosConTendencia = useMemo(
-    () =>
-      serieConTendenciaLineal(datosPagosIngresadosPorDia?.serie ?? [], 'monto'),
+  const seriePagosIngresadosPorDia = useMemo(
+    () => datosPagosIngresadosPorDia?.serie ?? [],
     [datosPagosIngresadosPorDia?.serie]
   )
 
+  const categoriasPagosIngresados = useMemo(
+    () =>
+      datosPagosIngresadosPorDia?.categorias?.length
+        ? datosPagosIngresadosPorDia.categorias
+        : [
+            'Mercantil',
+            'BNC',
+            'Binance',
+            'BNV',
+            'Bancamiga',
+            'Tesoro',
+            'Recibos',
+            'Otros',
+          ],
+    [datosPagosIngresadosPorDia?.categorias]
+  )
+
   const etiquetaRangoPagosIngresados = useMemo(() => {
-    const s = datosPagosIngresadosPorDia?.serie ?? []
+    const s = seriePagosIngresadosPorDia
 
     if (!s.length) return `Últimos ${PAGOS_INGRESADOS_POR_DIA_DIAS} d`
 
@@ -559,7 +575,7 @@ export function DashboardMenu() {
     if (a && b) return a === b ? a : `${a} – ${b}`
 
     return `Últimos ${PAGOS_INGRESADOS_POR_DIA_DIAS} d`
-  }, [datosPagosIngresadosPorDia?.serie])
+  }, [seriePagosIngresadosPorDia])
 
   const etiquetaRangoNotificacionesEjeX = useMemo(() => {
     const s = serieNotificacionesGrafico
@@ -823,6 +839,17 @@ export function DashboardMenu() {
     wrapperStyle: { paddingTop: 14 },
     iconType: 'rect' as const,
     iconSize: 12,
+  }
+
+  const coloresInstitucionPago: Record<string, string> = {
+    Mercantil: '#1d4ed8',
+    BNC: '#ea580c',
+    Binance: '#ca8a04',
+    BNV: '#7c3aed',
+    Bancamiga: '#0d9488',
+    Tesoro: '#db2777',
+    Recibos: '#0891b2',
+    Otros: '#64748b',
   }
 
   // Asegurar que el componente siempre renderice, incluso si hay errores
@@ -1345,7 +1372,7 @@ export function DashboardMenu() {
               </Card>
             </motion.div>
 
-            {/* Pagos ingresados por día (últimos 30 días) */}
+            {/* Pagos ingresados por día (últimos 90 días) */}
 
             <motion.div
               initial={{ opacity: 0, y: 20 }}
@@ -1356,7 +1383,7 @@ export function DashboardMenu() {
                 <CardHeader className="border-b border-gray-200/80 bg-gradient-to-r from-violet-50/90 to-indigo-50/90 pb-3">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <CardTitle className="flex items-center gap-2 text-lg font-bold text-gray-800">
-                      <LineChart className="h-5 w-5 text-violet-600" />
+                      <BarChart3 className="h-5 w-5 text-violet-600" />
 
                       <span>Pagos ingresados por día</span>
                     </CardTitle>
@@ -1371,10 +1398,10 @@ export function DashboardMenu() {
 
                   <CardDescription className="mt-2 text-xs text-gray-600">
                     Monto en USD (suma de monto_pagado) por día de fecha de
-                    pago. Hoy y 30 días atrás. Incluye todos: conciliados y no
-                    conciliados; préstamos APROBADO, LIQUIDADO, DESISTIMIENTO,
-                    etc.; también sin préstamo. Línea gris = tendencia
-                    (regresión lineal).
+                    pago, apilado por institución (institucion_bancaria):
+                    Mercantil, BNC, Binance, BNV, Bancamiga, Tesoro, Recibos.
+                    Sin clasificación o no reconocida → Otros. Hoy y 90 días
+                    atrás; todos los estados de pago/préstamo.
                   </CardDescription>
                 </CardHeader>
 
@@ -1387,92 +1414,99 @@ export function DashboardMenu() {
                     <div className="flex items-center justify-center py-16 text-red-600">
                       No se pudo cargar la serie diaria de pagos
                     </div>
-                  ) : seriePagosIngresadosConTendencia.length > 0 ? (
-                    <div className="h-[320px] w-full">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <RechartsLineChart
-                          data={seriePagosIngresadosConTendencia}
-                          margin={{
-                            top: 8,
-                            right: 16,
-                            left: 8,
-                            bottom: 12,
-                          }}
-                        >
-                          <CartesianGrid {...chartCartesianGrid} />
-
-                          <XAxis
-                            dataKey="dia"
-                            tick={chartAxisTick}
-                            interval="preserveStartEnd"
-                            minTickGap={16}
-                          />
-
-                          <YAxis
-                            tick={chartAxisTick}
-                            width={52}
-                            tickFormatter={value => {
-                              if (value >= 1000) {
-                                return `$${(value / 1000).toFixed(0)}K`
-                              }
-
-                              return `$${value}`
+                  ) : seriePagosIngresadosPorDia.length > 0 ? (
+                    <ChartWithDateRangeSlider
+                      data={seriePagosIngresadosPorDia}
+                      dataKey="dia"
+                      chartHeight={360}
+                    >
+                      {filteredData => (
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart
+                            data={filteredData}
+                            margin={{
+                              top: 8,
+                              right: 16,
+                              left: 8,
+                              bottom: 12,
                             }}
-                            label={{
-                              value: 'Monto (USD)',
-                              angle: -90,
-                              position: 'insideLeft',
-                              style: { fill: '#374151', fontSize: 13 },
-                            }}
-                          />
+                          >
+                            <CartesianGrid {...chartCartesianGrid} />
 
-                          <Tooltip
-                            contentStyle={chartTooltipStyle.contentStyle}
-                            labelStyle={chartTooltipStyle.labelStyle}
-                            formatter={(value: number, name: string) => [
-                              formatCurrency(
-                                typeof value === 'number' ? value : Number(value) || 0
-                              ),
-                              name === 'Tendencia (regresión lineal)' ||
-                              name === 'tendencia'
-                                ? name
-                                : 'Pagos ingresados',
-                            ]}
-                            labelFormatter={(_, payload) =>
-                              payload?.[0]?.payload?.fecha
-                                ? String(payload[0].payload.fecha)
-                                : ''
-                            }
-                          />
+                            <XAxis
+                              dataKey="dia"
+                              tick={chartAxisTick}
+                              interval="preserveStartEnd"
+                              minTickGap={16}
+                            />
 
-                          <Legend {...chartLegendStyle} />
+                            <YAxis
+                              tick={chartAxisTick}
+                              width={52}
+                              tickFormatter={value => {
+                                if (value >= 1000) {
+                                  return `$${(value / 1000).toFixed(0)}K`
+                                }
 
-                          <Line
-                            type="monotone"
-                            dataKey="monto"
-                            name="Pagos ingresados"
-                            stroke="#7c3aed"
-                            strokeWidth={2}
-                            dot={{ r: 3 }}
-                            activeDot={{ r: 5 }}
-                          />
+                                return `$${value}`
+                              }}
+                              label={{
+                                value: 'Monto (USD)',
+                                angle: -90,
+                                position: 'insideLeft',
+                                style: { fill: '#374151', fontSize: 13 },
+                              }}
+                            />
 
-                          <Line
-                            type="linear"
-                            dataKey="tendencia"
-                            name="Tendencia (regresión lineal)"
-                            stroke="#64748b"
-                            strokeWidth={2}
-                            strokeDasharray="6 4"
-                            dot={false}
-                            isAnimationActive={false}
-                          />
-                        </RechartsLineChart>
-                      </ResponsiveContainer>
-                    </div>
+                            <Tooltip
+                              contentStyle={chartTooltipStyle.contentStyle}
+                              labelStyle={chartTooltipStyle.labelStyle}
+                              formatter={(value: number, name: string) => [
+                                formatCurrency(
+                                  typeof value === 'number'
+                                    ? value
+                                    : Number(value) || 0
+                                ),
+                                name,
+                              ]}
+                              labelFormatter={(_, payload) => {
+                                const row = payload?.[0]?.payload as
+                                  | { fecha?: string; monto?: number }
+                                  | undefined
+                                if (!row?.fecha) return ''
+                                const total =
+                                  typeof row.monto === 'number'
+                                    ? ` · Total ${formatCurrency(row.monto)}`
+                                    : ''
+                                return `${row.fecha}${total}`
+                              }}
+                            />
+
+                            <Legend {...chartLegendStyle} />
+
+                            {categoriasPagosIngresados.map((cat, idx) => (
+                              <Bar
+                                key={cat}
+                                dataKey={cat}
+                                name={cat}
+                                stackId="institucion"
+                                fill={
+                                  coloresInstitucionPago[cat] || '#94a3b8'
+                                }
+                                radius={
+                                  idx === categoriasPagosIngresados.length - 1
+                                    ? [4, 4, 0, 0]
+                                    : [0, 0, 0, 0]
+                                }
+                              />
+                            ))}
+                          </BarChart>
+                        </ResponsiveContainer>
+                      )}
+                    </ChartWithDateRangeSlider>
                   ) : (
                     <div className="flex items-center justify-center py-16 text-gray-500">
-                      No hay datos para los últimos 30 días
+                      No hay datos para los últimos 90 días
                     </div>
                   )}
                 </CardContent>

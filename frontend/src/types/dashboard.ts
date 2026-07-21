@@ -330,12 +330,32 @@ export interface PagosIngresadosPorDiaItem {
 
   dia: string
 
-  /** Suma de Pago.monto_pagado (USD) del día */
+  /** Total USD del día (suma de categorías) */
   monto: number
+
+  Mercantil?: number
+
+  BNC?: number
+
+  Binance?: number
+
+  BNV?: number
+
+  Bancamiga?: number
+
+  Tesoro?: number
+
+  Recibos?: number
+
+  Otros?: number
+
+  [key: string]: string | number | undefined
 }
 
 export interface PagosIngresadosPorDiaResponse {
   dias: number
+
+  categorias: string[]
 
   serie: PagosIngresadosPorDiaItem[]
 }

@@ -1700,13 +1700,48 @@ def get_notificaciones_envios_por_dia(
     return _compute_notificaciones_envios_por_dia(db, tipo_tab, dias)
 
 
+# Categorías de institución para pagos ingresados por día (orden de apilado).
+PAGOS_INGRESADOS_CATEGORIAS = (
+    "Mercantil",
+    "BNC",
+    "Binance",
+    "BNV",
+    "Bancamiga",
+    "Tesoro",
+    "Recibos",
+    "Otros",
+)
+
+
+def _expr_categoria_institucion_pago():
+    """Clasifica Pago.institucion_bancaria; sin match o vacío → Otros."""
+    inst = func.lower(func.trim(func.coalesce(Pago.institucion_bancaria, "")))
+    return case(
+        (inst.like("%mercantil%"), "Mercantil"),
+        (or_(inst.like("%bnc%"), inst == "banco nacional de credito"), "BNC"),
+        (inst.like("%binance%"), "Binance"),
+        (
+            or_(
+                inst.like("%bnv%"),
+                inst.like("%bdv%"),
+                inst.like("%banco de venezuela%"),
+            ),
+            "BNV",
+        ),
+        (inst.like("%bancamiga%"), "Bancamiga"),
+        (or_(inst.like("%tesoro%"), inst.like("%banco del tesoro%")), "Tesoro"),
+        (or_(inst.like("%recibo%"), inst.like("%recibos%")), "Recibos"),
+        else_="Otros",
+    )
+
+
 def _compute_pagos_ingresados_por_dia(db: Session, dias: int) -> dict:
     """
-    Suma de Pago.monto_pagado (USD) por día de fecha_pago.
+    Suma de Pago.monto_pagado (USD) por día de fecha_pago, apilado por institución.
 
     Ventana: hoy (America/Caracas) y los (dias - 1) días anteriores.
-    Sin filtro de Prestamo.estado ni de Pago.estado/conciliado: incluye
-    APROBADO, LIQUIDADO, DESISTIMIENTO, conciliados, no conciliados, sin préstamo, etc.
+    Sin filtro de Prestamo.estado ni de Pago.estado/conciliado.
+    Categorías: Mercantil, BNC, Binance, BNV, Bancamiga, Tesoro, Recibos; resto → Otros.
     """
     try:
         dias_ef = min(90, max(7, int(dias)))
@@ -1727,9 +1762,11 @@ def _compute_pagos_ingresados_por_dia(db: Session, dias: int) -> dict:
             "Dic",
         )
         dia_expr = cast(Pago.fecha_pago, Date)
+        cat_expr = _expr_categoria_institucion_pago()
         stmt = (
             select(
                 dia_expr.label("dia"),
+                cat_expr.label("categoria"),
                 func.coalesce(func.sum(Pago.monto_pagado), 0).label("monto"),
             )
             .where(
@@ -1737,46 +1774,63 @@ def _compute_pagos_ingresados_por_dia(db: Session, dias: int) -> dict:
                 dia_expr >= inicio,
                 dia_expr <= hoy_c,
             )
-            .group_by(dia_expr)
+            .group_by(dia_expr, cat_expr)
             .order_by(dia_expr)
         )
-        montos: dict[date, float] = {}
+        buckets: dict[date, dict[str, float]] = {}
         for row in db.execute(stmt).all():
             d = row.dia
             if isinstance(d, datetime):
                 d = d.date()
             if not isinstance(d, date):
                 continue
-            montos[d] = round(_safe_float(row.monto), 2)
+            cat = str(row.categoria or "Otros")
+            if cat not in PAGOS_INGRESADOS_CATEGORIAS:
+                cat = "Otros"
+            day_map = buckets.setdefault(d, {})
+            day_map[cat] = round(day_map.get(cat, 0.0) + _safe_float(row.monto), 2)
 
         serie = []
         d = inicio
         while d <= hoy_c:
-            serie.append(
-                {
-                    "fecha": d.isoformat(),
-                    "dia": f"{d.day} {nombres_mes[d.month - 1]}",
-                    "monto": montos.get(d, 0.0),
-                }
-            )
+            day_map = buckets.get(d, {})
+            punto: dict = {
+                "fecha": d.isoformat(),
+                "dia": f"{d.day} {nombres_mes[d.month - 1]}",
+            }
+            total = 0.0
+            for cat in PAGOS_INGRESADOS_CATEGORIAS:
+                val = round(float(day_map.get(cat, 0.0)), 2)
+                punto[cat] = val
+                total += val
+            punto["monto"] = round(total, 2)
+            serie.append(punto)
             d += timedelta(days=1)
-        return {"dias": dias_ef, "serie": serie}
+        return {
+            "dias": dias_ef,
+            "categorias": list(PAGOS_INGRESADOS_CATEGORIAS),
+            "serie": serie,
+        }
     except Exception as e:
         logger.exception("Error en pagos-ingresados-por-dia: %s", e)
-        return {"dias": int(dias) if dias else 30, "serie": []}
+        return {
+            "dias": int(dias) if dias else 90,
+            "categorias": list(PAGOS_INGRESADOS_CATEGORIAS),
+            "serie": [],
+        }
 
 
 @router.get("/pagos-ingresados-por-dia")
 def get_pagos_ingresados_por_dia(
     dias: int = Query(
-        30,
+        90,
         ge=7,
         le=90,
-        description="Días calendario inclusive (hoy atrás). Default 30.",
+        description="Días calendario inclusive (hoy atrás). Default 90.",
     ),
     db: Session = Depends(get_db),
 ):
-    """Monto diario (USD) de pagos ingresados (todos los estados) con ventana hasta hoy."""
+    """Monto diario (USD) de pagos ingresados por institución (barras apiladas)."""
     return _compute_pagos_ingresados_por_dia(db, dias)
 
 
