@@ -323,3 +323,18 @@ export interface NotificacionesEnviosPorDiaResponse {
 
   serie: NotificacionesEnviosPorDiaItem[]
 }
+
+/** GET /api/v1/dashboard/pagos-ingresados-por-dia */
+export interface PagosIngresadosPorDiaItem {
+  fecha: string
+
+  dia: string
+
+  pagos: number
+}
+
+export interface PagosIngresadosPorDiaResponse {
+  dias: number
+
+  serie: PagosIngresadosPorDiaItem[]
+}

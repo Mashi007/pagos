@@ -18,7 +18,6 @@ import {
   XCircle,
   X,
   Settings,
-  DollarSign,
   Mail,
 } from 'lucide-react'
 
@@ -81,6 +80,7 @@ import type {
   CobranzasSemanalesResponse,
   EvolucionMensualItem,
   NotificacionesEnviosPorDiaResponse,
+  PagosIngresadosPorDiaResponse,
 } from '../types/dashboard'
 import {
   finiquitoAdminResumenFlujoDiario,
@@ -107,8 +107,6 @@ import {
   Tooltip,
   Legend,
   ResponsiveContainer,
-  Area,
-  AreaChart,
   ComposedChart,
   ScatterChart,
   Scatter,
@@ -193,20 +191,21 @@ function serieNotificacionesEjeDesde20Julio<
 }
 
 /**
- * Añade `tendencia`: regresión lineal por índice (0..n-1) sobre `enviados`.
- * Valores mostrados no negativos (conteo de correos). Con menos de 2 puntos, coincide con el dato.
+ * Añade `tendencia`: regresión lineal por índice (0..n-1) sobre `valueKey`.
+ * Valores mostrados no negativos. Con menos de 2 puntos, coincide con el dato.
  */
-function notificacionesSerieConTendenciaLineal<T extends { enviados: number }>(
-  serie: T[]
+function serieConTendenciaLineal<T extends object>(
+  serie: T[],
+  valueKey: keyof T
 ): Array<T & { tendencia: number }> {
   const n = serie.length
 
   if (n === 0) return []
 
-  if (n === 1) {
-    const y0 = Math.max(0, Number(serie[0].enviados) || 0)
+  const yAt = (row: T) => Math.max(0, Number(row[valueKey]) || 0)
 
-    return [{ ...serie[0], tendencia: y0 }]
+  if (n === 1) {
+    return [{ ...serie[0], tendencia: yAt(serie[0]) }]
   }
 
   let sumX = 0
@@ -220,7 +219,7 @@ function notificacionesSerieConTendenciaLineal<T extends { enviados: number }>(
   for (let i = 0; i < n; i++) {
     const x = i
 
-    const y = Math.max(0, Number(serie[i].enviados) || 0)
+    const y = yAt(serie[i])
 
     sumX += x
 
@@ -248,6 +247,12 @@ function notificacionesSerieConTendenciaLineal<T extends { enviados: number }>(
 
     tendencia: Math.max(0, a + b * i),
   }))
+}
+
+function notificacionesSerieConTendenciaLineal<T extends { enviados: number }>(
+  serie: T[]
+): Array<T & { tendencia: number }> {
+  return serieConTendenciaLineal(serie, 'enviados')
 }
 
 function diasVentanaFiniquito(periodo: string): number {
@@ -430,9 +435,39 @@ export function DashboardMenu() {
   })
 
   const NOTIFICACIONES_ENVIOS_TENDENCIA_DIAS = 90
+  const PAGOS_INGRESADOS_POR_DIA_DIAS = 30
   const diasGraficoFlujoFiniquito = diasVentanaFiniquito(
     getPeriodoGrafico('finiquito-flujo')
   )
+
+  const {
+    data: datosPagosIngresadosPorDia,
+    isLoading: loadingPagosIngresadosPorDia,
+    isError: errorPagosIngresadosPorDia,
+  } = useQuery({
+    queryKey: ['pagos-ingresados-por-dia', PAGOS_INGRESADOS_POR_DIA_DIAS],
+
+    queryFn: async (): Promise<PagosIngresadosPorDiaResponse> => {
+      const params = new URLSearchParams({
+        dias: String(PAGOS_INGRESADOS_POR_DIA_DIAS),
+      })
+
+      const response = await apiClient.get(
+        `/api/v1/dashboard/pagos-ingresados-por-dia?${params.toString()}`,
+        { timeout: 60000 }
+      )
+
+      return response as PagosIngresadosPorDiaResponse
+    },
+
+    staleTime: 5 * 60 * 1000,
+
+    refetchOnWindowFocus: false,
+
+    retry: 1,
+
+    enabled: enableSecondaryCharts,
+  })
 
   const {
     data: datosNotificacionesPorDia,
@@ -562,6 +597,26 @@ export function DashboardMenu() {
       notificacionesSerieConTendenciaLineal(serieNotificacionesMenor60Grafico),
     [serieNotificacionesMenor60Grafico]
   )
+
+  const seriePagosIngresadosConTendencia = useMemo(
+    () =>
+      serieConTendenciaLineal(datosPagosIngresadosPorDia?.serie ?? [], 'pagos'),
+    [datosPagosIngresadosPorDia?.serie]
+  )
+
+  const etiquetaRangoPagosIngresados = useMemo(() => {
+    const s = datosPagosIngresadosPorDia?.serie ?? []
+
+    if (!s.length) return `Últimos ${PAGOS_INGRESADOS_POR_DIA_DIAS} d`
+
+    const a = s[0]?.fecha
+
+    const b = s[s.length - 1]?.fecha
+
+    if (a && b) return a === b ? a : `${a} – ${b}`
+
+    return `Últimos ${PAGOS_INGRESADOS_POR_DIA_DIAS} d`
+  }, [datosPagosIngresadosPorDia?.serie])
 
   const etiquetaRangoNotificacionesEjeX = useMemo(() => {
     const s = serieNotificacionesGrafico
@@ -1347,121 +1402,134 @@ export function DashboardMenu() {
               </Card>
             </motion.div>
 
-            {/* Cobrados acumulados vs por cobrar */}
+            {/* Pagos ingresados por día (últimos 30 días) */}
 
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.25 }}
+              transition={{ delay: 0.29 }}
             >
               <Card className="overflow-hidden rounded-xl border border-gray-200/90 bg-white shadow-lg">
-                <CardHeader className="border-b border-gray-200/80 bg-gradient-to-r from-emerald-50/90 to-teal-50/90 pb-3">
+                <CardHeader className="border-b border-gray-200/80 bg-gradient-to-r from-violet-50/90 to-indigo-50/90 pb-3">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <CardTitle className="flex items-center gap-2 text-lg font-bold text-gray-800">
-                      <DollarSign className="h-5 w-5 text-emerald-600" />
+                      <LineChart className="h-5 w-5 text-violet-600" />
 
-                      <span>Cobrados acumulados y por cobrar</span>
+                      <span>Pagos ingresados por día</span>
                     </CardTitle>
 
-                    <div className="flex items-center gap-2">
-                      <SelectorPeriodoGrafico chartId="evolucion" />
-
-                      <Badge
-                        variant="secondary"
-                        className="border border-gray-200 bg-white/80 text-xs font-medium text-gray-600"
-                      >
-                        {getRangoFechasLabelGrafico('evolucion')}
-                      </Badge>
-                    </div>
+                    <Badge
+                      variant="secondary"
+                      className="border border-gray-200 bg-white/80 text-xs font-medium text-gray-600"
+                    >
+                      {etiquetaRangoPagosIngresados}
+                    </Badge>
                   </div>
 
                   <CardDescription className="mt-2 text-xs text-gray-600">
-                    Áreas acumuladas hasta cada mes: cobrados (todos) y por
-                    cobrar (= programadas acumuladas − cobros acumulados). Mismo
-                    período que Evolución Mensual.
+                    Número de pagos registrados (tabla pagos) por día de fecha
+                    de pago. Hoy y 30 días atrás. Incluye todos: conciliados y
+                    no conciliados; préstamos APROBADO, LIQUIDADO,
+                    DESISTIMIENTO, etc.; también sin préstamo. Línea gris =
+                    tendencia (regresión lineal).
                   </CardDescription>
                 </CardHeader>
 
                 <CardContent className="p-6 pt-4">
-                  {loadingDashboard ? (
+                  {loadingPagosIngresadosPorDia ? (
                     <div className="flex items-center justify-center py-16 text-gray-500">
-                      Cargando acumulados...
+                      Cargando…
                     </div>
-                  ) : evolucionMensual.length > 0 ? (
-                    <ChartWithDateRangeSlider
-                      data={evolucionMensual}
-                      dataKey="mes"
-                      chartHeight={400}
-                    >
-                      {filteredData => (
-                        <ResponsiveContainer width="100%" height="100%">
-                          <AreaChart
-                            data={filteredData}
-                            margin={{
-                              top: 14,
-                              right: 24,
-                              left: 12,
-                              bottom: 14,
+                  ) : errorPagosIngresadosPorDia ? (
+                    <div className="flex items-center justify-center py-16 text-red-600">
+                      No se pudo cargar la serie diaria de pagos
+                    </div>
+                  ) : seriePagosIngresadosConTendencia.length > 0 ? (
+                    <div className="h-[320px] w-full">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <RechartsLineChart
+                          data={seriePagosIngresadosConTendencia}
+                          margin={{
+                            top: 8,
+                            right: 16,
+                            left: 8,
+                            bottom: 12,
+                          }}
+                        >
+                          <CartesianGrid {...chartCartesianGrid} />
+
+                          <XAxis
+                            dataKey="dia"
+                            tick={chartAxisTick}
+                            interval="preserveStartEnd"
+                            minTickGap={16}
+                          />
+
+                          <YAxis
+                            tick={chartAxisTick}
+                            allowDecimals={false}
+                            width={44}
+                            label={{
+                              value: 'Cantidad',
+                              angle: -90,
+                              position: 'insideLeft',
+                              style: { fill: '#374151', fontSize: 13 },
                             }}
-                          >
-                            <CartesianGrid {...chartCartesianGrid} />
+                          />
 
-                            <XAxis dataKey="mes" tick={chartAxisTick} />
+                          <Tooltip
+                            contentStyle={chartTooltipStyle.contentStyle}
+                            labelStyle={chartTooltipStyle.labelStyle}
+                            formatter={(value: number, name: string) => {
+                              const rounded =
+                                typeof value === 'number'
+                                  ? Math.round(value * 100) / 100
+                                  : value
 
-                            <YAxis
-                              tick={chartAxisTick}
-                              tickFormatter={value => {
-                                if (value >= 1000) {
-                                  return `$${(value / 1000).toFixed(0)}K`
-                                }
+                              if (
+                                name === 'Tendencia (regresión lineal)' ||
+                                name === 'tendencia'
+                              ) {
+                                return [rounded, name]
+                              }
 
-                                return `$${value}`
-                              }}
-                              label={{
-                                value: 'Monto (USD)',
-                                angle: -90,
-                                position: 'insideLeft',
-                                style: { fill: '#374151', fontSize: 13 },
-                              }}
-                            />
+                              return [rounded, 'Pagos ingresados']
+                            }}
+                            labelFormatter={(_, payload) =>
+                              payload?.[0]?.payload?.fecha
+                                ? String(payload[0].payload.fecha)
+                                : ''
+                            }
+                          />
 
-                            <Tooltip
-                              contentStyle={chartTooltipStyle.contentStyle}
-                              labelStyle={chartTooltipStyle.labelStyle}
-                              formatter={(value: number, name: string) => [
-                                formatCurrency(value),
-                                name,
-                              ]}
-                            />
+                          <Legend {...chartLegendStyle} />
 
-                            <Legend {...chartLegendStyle} />
+                          <Line
+                            type="monotone"
+                            dataKey="pagos"
+                            name="Pagos ingresados"
+                            stroke="#7c3aed"
+                            strokeWidth={2}
+                            dot={{ r: 3 }}
+                            activeDot={{ r: 5 }}
+                          />
 
-                            <Area
-                              type="monotone"
-                              stackId="acum"
-                              dataKey="cobros_acumulados"
-                              stroke="#059669"
-                              fill="#10b981"
-                              fillOpacity={0.55}
-                              name="Cobrados acumulados"
-                            />
-
-                            <Area
-                              type="monotone"
-                              stackId="acum"
-                              dataKey="cuentas_por_cobrar"
-                              stroke="#d97706"
-                              fill="#f59e0b"
-                              fillOpacity={0.45}
-                              name="Por cobrar"
-                            />
-                          </AreaChart>
-                        </ResponsiveContainer>
-                      )}
-                    </ChartWithDateRangeSlider>
+                          <Line
+                            type="linear"
+                            dataKey="tendencia"
+                            name="Tendencia (regresión lineal)"
+                            stroke="#64748b"
+                            strokeWidth={2}
+                            strokeDasharray="6 4"
+                            dot={false}
+                            isAnimationActive={false}
+                          />
+                        </RechartsLineChart>
+                      </ResponsiveContainer>
+                    </div>
                   ) : (
                     <div className="flex items-center justify-center py-16 text-gray-500">
-                      No hay datos para el período seleccionado
+                      No hay datos para los últimos 30 días
                     </div>
                   )}
                 </CardContent>

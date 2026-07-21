@@ -1700,6 +1700,86 @@ def get_notificaciones_envios_por_dia(
     return _compute_notificaciones_envios_por_dia(db, tipo_tab, dias)
 
 
+def _compute_pagos_ingresados_por_dia(db: Session, dias: int) -> dict:
+    """
+    Cantidad de filas en `pagos` por día de fecha_pago.
+
+    Ventana: hoy (America/Caracas) y los (dias - 1) días anteriores.
+    Sin filtro de Prestamo.estado ni de Pago.estado/conciliado: incluye
+    APROBADO, LIQUIDADO, DESISTIMIENTO, conciliados, no conciliados, sin préstamo, etc.
+    """
+    try:
+        dias_ef = min(90, max(7, int(dias)))
+        hoy_c = hoy_negocio()
+        inicio = hoy_c - timedelta(days=dias_ef - 1)
+        nombres_mes = (
+            "Ene",
+            "Feb",
+            "Mar",
+            "Abr",
+            "May",
+            "Jun",
+            "Jul",
+            "Ago",
+            "Sep",
+            "Oct",
+            "Nov",
+            "Dic",
+        )
+        dia_expr = cast(Pago.fecha_pago, Date)
+        stmt = (
+            select(
+                dia_expr.label("dia"),
+                func.count(Pago.id).label("pagos"),
+            )
+            .where(
+                Pago.fecha_pago.isnot(None),
+                dia_expr >= inicio,
+                dia_expr <= hoy_c,
+            )
+            .group_by(dia_expr)
+            .order_by(dia_expr)
+        )
+        counts: dict[date, int] = {}
+        for row in db.execute(stmt).all():
+            d = row.dia
+            if isinstance(d, datetime):
+                d = d.date()
+            if not isinstance(d, date):
+                continue
+            counts[d] = int(row.pagos or 0)
+
+        serie = []
+        d = inicio
+        while d <= hoy_c:
+            serie.append(
+                {
+                    "fecha": d.isoformat(),
+                    "dia": f"{d.day} {nombres_mes[d.month - 1]}",
+                    "pagos": counts.get(d, 0),
+                }
+            )
+            d += timedelta(days=1)
+        return {"dias": dias_ef, "serie": serie}
+    except Exception as e:
+        logger.exception("Error en pagos-ingresados-por-dia: %s", e)
+        return {"dias": int(dias) if dias else 30, "serie": []}
+
+
+@router.get("/pagos-ingresados-por-dia")
+def get_pagos_ingresados_por_dia(
+    dias: int = Query(
+        30,
+        ge=7,
+        le=90,
+        description="Días calendario inclusive (hoy atrás). Default 30.",
+    ),
+    db: Session = Depends(get_db),
+):
+    """Cantidad diaria de pagos ingresados (todos los estados) con ventana hasta hoy."""
+    return _compute_pagos_ingresados_por_dia(db, dias)
+
+
 @router.get("/distribucion-prestamos", summary="[Stub] Devuelve distribucion vacía hasta tener datos.")
 def get_distribucion_prestamos(
     fecha_inicio: Optional[str] = Query(None),
