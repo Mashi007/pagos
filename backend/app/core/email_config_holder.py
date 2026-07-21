@@ -222,45 +222,12 @@ def get_smtp_config(servicio: Optional[str] = None, tipo_tab: Optional[str] = No
         )
     elif servicio == "notificaciones":
         tab = (tipo_tab or "").strip()
-        tabs_recuerda = {
-            "d_2_antes_vencimiento",
-            "dias_5",
-            "dias_3",
-            "dias_1",
-            "hoy",
-        }
-        if tab in tabs_recuerda:
-            raw_2d = getattr(settings, "NOTIFICACIONES_FROM_EMAIL_2_DIAS_ANTES", None)
-            from_recuerda = (raw_2d.strip() if isinstance(raw_2d, str) else "") or "recuerda@rapicreditca.com"
-            cfg["from_email"] = from_recuerda
-            logger.info(
-                "[EMAIL] Notificaciones (antes de vencimiento / 2 dias): remitente From=%s (tipo_tab=%s).",
-                cfg["from_email"],
-                tab or "-",
-            )
-        elif tab == "dias_1_retraso":
-            # Dia despues de vencimiento: From de la cuenta asignada (tucuenta@).
-            logger.info(
-                "[EMAIL] Notificaciones 1 dia atraso: remitente From=%s (cuenta asignada).",
-                cfg["from_email"],
-            )
-        else:
-            # 6-59 dias, prejudicial, etc.: From notificaciones@.
-            raw_n = getattr(settings, "NOTIFICACIONES_FROM_EMAIL", None)
-            from_n = (raw_n.strip() if isinstance(raw_n, str) else "") or EMAIL_FROM_NOTIFICACIONES_DEFAULT
-            if from_n.lower() != EMAIL_FROM_NOTIFICACIONES_DEFAULT.lower():
-                logger.warning(
-                    "[EMAIL] NOTIFICACIONES_FROM_EMAIL=%s distinto del canonico; se fuerza %s (tipo_tab=%s).",
-                    from_n,
-                    EMAIL_FROM_NOTIFICACIONES_DEFAULT,
-                    tab or "-",
-                )
-            cfg["from_email"] = EMAIL_FROM_NOTIFICACIONES_DEFAULT
-            logger.info(
-                "[EMAIL] Servicio notificaciones: remitente From=%s (tipo_tab=%s).",
-                cfg["from_email"],
-                tab or "-",
-            )
+        logger.info(
+            "[EMAIL] Notificaciones tipo_tab=%s: smtp_user=%s remitente From=%s (cuenta asignada).",
+            tab or "-",
+            cfg.get("smtp_user") or "-",
+            cfg.get("from_email") or "-",
+        )
     return cfg
 
 

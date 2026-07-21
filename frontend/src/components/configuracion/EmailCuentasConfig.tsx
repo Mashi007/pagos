@@ -238,6 +238,19 @@ export function EmailCuentasConfig() {
 
   const setNotifTabCuenta = (tabId: string, cuenta: number) => {
     setAsignacion(prev => ({ ...prev, [tabId]: cuenta }))
+    if (!data) return
+    setData({
+      ...data,
+      asignacion: {
+        cobros: data.asignacion?.cobros ?? 1,
+        estado_cuenta: data.asignacion?.estado_cuenta ?? 2,
+        recibos: data.asignacion?.recibos ?? 1,
+        notificaciones_tab: {
+          ...(data.asignacion?.notificaciones_tab ?? {}),
+          [tabId]: cuenta,
+        },
+      },
+    })
   }
 
   const setServicioCuenta = (key: AsignacionServicioKey, cuenta: number) => {
@@ -370,10 +383,7 @@ export function EmailCuentasConfig() {
         asignacion: {
           cobros: data.asignacion?.cobros ?? 1,
           estado_cuenta: data.asignacion?.estado_cuenta ?? 2,
-          notificaciones_tab: {
-            ...(data.asignacion?.notificaciones_tab ?? {}),
-            ...asignacion,
-          },
+          notificaciones_tab: { ...asignacion },
           recibos: data.asignacion?.recibos ?? 1,
         },
         modo_pruebas: data.modo_pruebas,
@@ -404,6 +414,25 @@ export function EmailCuentasConfig() {
 
       const resPut = await emailCuentasApi.put(payloadPut)
       const verifs = resPut.smtp_verificaciones
+
+      if (resPut.asignacion?.notificaciones_tab) {
+        const savedAsig = resPut.asignacion
+        setAsignacion(mergeAsignacionTabs(savedAsig.notificaciones_tab))
+        setData(prev =>
+          prev
+            ? {
+                ...prev,
+                asignacion: {
+                  cobros: savedAsig.cobros ?? prev.asignacion?.cobros ?? 1,
+                  estado_cuenta:
+                    savedAsig.estado_cuenta ?? prev.asignacion?.estado_cuenta ?? 2,
+                  recibos: savedAsig.recibos ?? prev.asignacion?.recibos ?? 1,
+                  notificaciones_tab: savedAsig.notificaciones_tab,
+                },
+              }
+            : prev
+        )
+      }
 
       if (verifs?.length) {
         const okN = verifs.filter(v => v.ok).map(v => v.cuenta)

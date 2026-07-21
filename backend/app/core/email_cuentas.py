@@ -121,7 +121,7 @@ def obtener_indice_cuenta(servicio: Optional[str], tipo_tab: Optional[str], asig
     if servicio in (SERVICIO_ESTADO_CUENTA, SERVICIO_FINIQUITO):
         return int(asignacion.get("estado_cuenta", 2))
     if servicio == SERVICIO_RECIBOS:
-        return int(asignacion.get("recibos", 3))
+        return int(asignacion.get("recibos", 1))
     if servicio == SERVICIO_NOTIFICACIONES and tipo_tab:
         tab_map = asignacion.get("notificaciones_tab") or {}
         return int(tab_map.get(tipo_tab, 3))

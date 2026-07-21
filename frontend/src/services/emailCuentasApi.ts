@@ -172,7 +172,7 @@ export const emailCuentasApi = {
     emails_pruebas?: string[]
 
     recibos_bcc_emails?: string[]
-  }): Promise<{ message: string; version: number; smtp_verificaciones?: { cuenta: number; ok: boolean; mensaje?: string }[] }> {
+  }): Promise<{ message: string; version: number; asignacion?: EmailCuentasResponse['asignacion']; smtp_verificaciones?: { cuenta: number; ok: boolean; mensaje?: string }[] }> {
     return apiClient.put(`${BASE}/email/cuentas`, payload, { timeout: 60000 })
   },
 

@@ -267,11 +267,21 @@ def put_email_cuentas(payload: EmailCuentasUpdate = Body(...), db: Session = Dep
     raw_asig = dict(payload.asignacion or {})
     asignacion = {**ASIGNACION_DEFAULT, **raw_asig}
     nt_default = dict(ASIGNACION_DEFAULT.get("notificaciones_tab") or {})
+    existing_asig = (existing_data or {}).get("asignacion") if isinstance(existing_data, dict) else {}
+    existing_nt = (
+        (existing_asig.get("notificaciones_tab") or {})
+        if isinstance(existing_asig, dict)
+        else {}
+    )
     nt_in = raw_asig.get("notificaciones_tab")
     if isinstance(nt_in, dict):
-        asignacion["notificaciones_tab"] = {**nt_default, **nt_in}
+        merged_nt = {**existing_nt, **nt_in}
+        for k, v in nt_default.items():
+            if k not in merged_nt:
+                merged_nt[k] = v
+        asignacion["notificaciones_tab"] = merged_nt
     else:
-        asignacion["notificaciones_tab"] = nt_default
+        asignacion["notificaciones_tab"] = {**nt_default, **existing_nt}
 
     cuentas_dict: List[dict] = []
     password_changed_indices: List[int] = []
@@ -399,7 +409,7 @@ def put_email_cuentas(payload: EmailCuentasUpdate = Body(...), db: Session = Dep
         logger.exception("Error guardando cuentas email: %s", e)
         db.rollback()
         raise HTTPException(status_code=500, detail="Error al guardar en BD")
-    return {"message": "configuracion de 4 cuentas guardada", "version": 2, "smtp_verificaciones": smtp_verificaciones}
+    return {"message": "configuracion de 4 cuentas guardada", "version": 2, "asignacion": asignacion, "smtp_verificaciones": smtp_verificaciones}
 
 
 class ProbarSmtpCuentaRequest(BaseModel):
