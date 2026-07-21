@@ -274,8 +274,13 @@ def put_email_cuentas(payload: EmailCuentasUpdate = Body(...), db: Session = Dep
         asignacion["notificaciones_tab"] = nt_default
 
     cuentas_dict: List[dict] = []
+    password_changed_indices: List[int] = []
     for i, c in enumerate(cuentas):
         d = c.model_dump(exclude_none=True) if hasattr(c, "model_dump") else dict(c)
+        pwd_in_payload = d.get("smtp_password")
+        password_changed = bool(
+            pwd_in_payload and not _is_password_masked(str(pwd_in_payload))
+        )
         base = cuenta_vacia()
         for k, v in d.items():
             if k in base and v is not None:
@@ -288,7 +293,38 @@ def put_email_cuentas(payload: EmailCuentasUpdate = Body(...), db: Session = Dep
                 if existing_val:
                     base[field] = existing_val
 
+        if password_changed:
+            password_changed_indices.append(i)
+        elif (
+            (base.get("smtp_user") or "").strip()
+            and (base.get("smtp_password") or "").strip()
+            and existing_data
+            and not _secret_field_stored(
+                (existing_data.get("cuentas") or [{}])[i]
+                if i < len(existing_data.get("cuentas") or [])
+                else {},
+                "smtp_password",
+            )
+        ):
+            password_changed_indices.append(i)
+
         cuentas_dict.append(base)
+
+    from app.core.email import test_smtp_connection
+
+    smtp_verificaciones: List[dict] = []
+    for i in password_changed_indices:
+        c = cuentas_dict[i]
+        if not (c.get("smtp_user") or "").strip():
+            continue
+        ok, err = test_smtp_connection(c)
+        smtp_verificaciones.append({"cuenta": i + 1, "ok": ok, "mensaje": err or "Conexion SMTP OK"})
+        if not ok:
+            raise HTTPException(
+                status_code=400,
+                detail="Cuenta %d: no se pudo conectar por SMTP. %s"
+                % (i + 1, err or "Revise host, puerto, usuario y contraseña."),
+            )
 
     for i, c in enumerate(cuentas_dict):
         if (c.get("smtp_user") or "").strip():
@@ -363,7 +399,58 @@ def put_email_cuentas(payload: EmailCuentasUpdate = Body(...), db: Session = Dep
         logger.exception("Error guardando cuentas email: %s", e)
         db.rollback()
         raise HTTPException(status_code=500, detail="Error al guardar en BD")
-    return {"message": "configuracion de 4 cuentas guardada", "version": 2}
+    return {"message": "configuracion de 4 cuentas guardada", "version": 2, "smtp_verificaciones": smtp_verificaciones}
+
+
+class ProbarSmtpCuentaRequest(BaseModel):
+    """Prueba login SMTP de una cuenta (1-4) sin enviar correo."""
+    cuenta: int = 1
+    smtp_host: Optional[str] = None
+    smtp_port: Optional[str] = None
+    smtp_user: Optional[str] = None
+    smtp_password: Optional[str] = None
+    smtp_use_tls: Optional[str] = None
+
+
+@router.post("/cuentas/probar-smtp")
+def post_cuenta_probar_smtp(payload: ProbarSmtpCuentaRequest = Body(...), db: Session = Depends(get_db)):
+    """Verifica conexion SMTP (login) para la cuenta indicada. Usa clave del body o la guardada en BD."""
+    from app.core.email import test_smtp_connection
+
+    idx = max(1, min(int(payload.cuenta or 1), NUM_CUENTAS)) - 1
+    base = cuenta_vacia()
+    if payload.smtp_host:
+        base["smtp_host"] = payload.smtp_host
+    if payload.smtp_port:
+        base["smtp_port"] = payload.smtp_port
+    if payload.smtp_user:
+        base["smtp_user"] = payload.smtp_user
+    if payload.smtp_use_tls:
+        base["smtp_use_tls"] = payload.smtp_use_tls
+    pwd = (payload.smtp_password or "").strip()
+    if pwd and not _is_password_masked(pwd):
+        base["smtp_password"] = pwd
+    else:
+        existing = _load_raw_from_db(db)
+        if existing and existing.get("version") == 2:
+            dec = _get_existing_decrypted_password(existing, idx, "smtp_password")
+            if dec:
+                base["smtp_password"] = dec
+        if not base.get("smtp_password") and existing:
+            migrated = migrar_config_v1_a_v2(existing) if "cuentas" not in existing else existing
+            cu = (migrated.get("cuentas") or [{}])[idx]
+            if isinstance(cu, dict):
+                for k in ("smtp_host", "smtp_port", "smtp_user", "smtp_use_tls", "from_email"):
+                    if not base.get(k) and cu.get(k):
+                        base[k] = cu[k]
+                if not base.get("smtp_user"):
+                    base["smtp_user"] = cu.get("smtp_user") or ""
+    ok, err = test_smtp_connection(base)
+    return {
+        "success": ok,
+        "cuenta": idx + 1,
+        "mensaje": "Conexion SMTP correcta (login aceptado)." if ok else (err or "Error SMTP"),
+    }
 
 
 

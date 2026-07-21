@@ -449,6 +449,48 @@ def test_imap_connection(
         return False, error_msg, None
 
 
+def test_smtp_connection(cfg: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
+    """
+    Prueba login SMTP (connect + auth) sin enviar correo.
+    cfg: smtp_host, smtp_port, smtp_user, smtp_password, smtp_use_tls.
+    """
+    host = (cfg.get("smtp_host") or "").strip()
+    user = (cfg.get("smtp_user") or "").strip()
+    pwd = (cfg.get("smtp_password") or "").strip()
+    if not host:
+        return False, "Falta servidor SMTP."
+    if not user:
+        return False, "Falta usuario SMTP."
+    if not pwd or pwd == "***":
+        return False, "Falta contrasena SMTP (use contrasena de aplicacion en Gmail)."
+    try:
+        port = int(cfg.get("smtp_port") or 587)
+    except (TypeError, ValueError):
+        port = 587
+    use_tls = str(cfg.get("smtp_use_tls", "true")).lower() in ("true", "1", "yes")
+    t0 = time.time()
+    try:
+        if port == 465:
+            with smtplib.SMTP_SSL(host, port, timeout=SMTP_TIMEOUT_SECONDS) as server:
+                server.login(user, pwd)
+        else:
+            with smtplib.SMTP(host, port, timeout=SMTP_TIMEOUT_SECONDS) as server:
+                if use_tls:
+                    server.starttls()
+                server.login(user, pwd)
+        log_phase(
+            logger,
+            FASE_SMTP_CONEXION,
+            True,
+            f"test SMTP OK {host}:{port} user={user}",
+            duration_ms=(time.time() - t0) * 1000,
+        )
+        return True, None
+    except Exception as e:
+        log_phase(logger, FASE_SMTP_CONEXION, False, str(e))
+        return False, _sanitize_smtp_error(e)
+
+
 def _message_id_domain(from_header: str, smtp_host: str) -> str:
     if from_header and "@" in from_header:
         dom = from_header.split("@")[-1].strip().rstrip(">").strip()

@@ -172,8 +172,22 @@ export const emailCuentasApi = {
     emails_pruebas?: string[]
 
     recibos_bcc_emails?: string[]
-  }): Promise<{ message: string; version: number }> {
+  }): Promise<{ message: string; version: number; smtp_verificaciones?: { cuenta: number; ok: boolean; mensaje?: string }[] }> {
     return apiClient.put(`${BASE}/email/cuentas`, payload, { timeout: 60000 })
+  },
+
+  /** Prueba login SMTP de una cuenta (1-4) sin enviar correo. */
+  async probarSmtpCuenta(payload: {
+    cuenta: number
+    smtp_host?: string
+    smtp_port?: string
+    smtp_user?: string
+    smtp_password?: string
+    smtp_use_tls?: string
+  }): Promise<{ success: boolean; cuenta: number; mensaje: string }> {
+    return apiClient.post(`${BASE}/email/cuentas/probar-smtp`, payload, {
+      timeout: 35000,
+    })
   },
 
   /** Envia un correo de prueba a todos los correos de pruebas registrados. */
@@ -229,6 +243,49 @@ export const ASIGNACION_SERVICIOS = [
 ] as const
 
 export type AsignacionServicioKey = (typeof ASIGNACION_SERVICIOS)[number]['key']
+
+/** Panel unificado: activo + cuenta + modo pruebas por servicio principal. */
+export const PANEL_SERVICIOS_EMAIL = [
+  {
+    id: 'cobros',
+    label: 'Cobros (formulario público)',
+    activoKey: 'email_activo_cobros' as const,
+    asignacionKey: 'cobros' as AsignacionServicioKey,
+    modoPruebasKey: 'modo_pruebas_cobros' as const,
+    defaultCuenta: 1,
+  },
+  {
+    id: 'estado_cuenta',
+    label: 'Estado de cuenta (código y PDF)',
+    activoKey: 'email_activo_estado_cuenta' as const,
+    asignacionKey: 'estado_cuenta' as AsignacionServicioKey,
+    modoPruebasKey: 'modo_pruebas_estado_cuenta' as const,
+    defaultCuenta: 2,
+  },
+  {
+    id: 'finiquito',
+    label: 'Finiquito (OTP portal colaborador)',
+    activoKey: 'email_activo_finiquito' as const,
+    asignacionDesde: 'estado_cuenta' as AsignacionServicioKey,
+    modoPruebasKey: 'modo_pruebas_finiquito' as const,
+    defaultCuenta: 2,
+  },
+  {
+    id: 'notificaciones',
+    label: 'Notificaciones (plantillas a clientes)',
+    activoKey: 'email_activo_notificaciones' as const,
+    modoPruebasKey: 'modo_pruebas_notificaciones' as const,
+    sinSelectorCuenta: true,
+  },
+  {
+    id: 'recibos',
+    label: 'Recibos (PDF tras conciliación, 15:00 Caracas)',
+    activoKey: 'email_activo_recibos' as const,
+    asignacionKey: 'recibos' as AsignacionServicioKey,
+    modoPruebasKey: 'modo_pruebas_recibos' as const,
+    defaultCuenta: 1,
+  },
+] as const
 
 /** Grupos alineados con el menú Notificaciones y submódulos General/Fechas. */
 export const ASIGNACION_NOTIF_GRUPOS = [

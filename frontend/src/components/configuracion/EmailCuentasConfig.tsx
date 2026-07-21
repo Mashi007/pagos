@@ -55,7 +55,7 @@ import { toast } from 'sonner'
 import {
   emailCuentasApi,
   SERVICIO_POR_CUENTA,
-  ASIGNACION_SERVICIOS,
+  PANEL_SERVICIOS_EMAIL,
   ASIGNACION_NOTIF_GRUPOS,
   ASIGNACION_NOTIF_DEFAULTS,
   CUENTA_OPCIONES_ASIGNACION,
@@ -172,6 +172,10 @@ export function EmailCuentasConfig() {
 
   const [sendingTest, setSendingTest] = useState(false)
 
+  const [testingSmtp, setTestingSmtp] = useState<Record<number, boolean>>({})
+
+  const [smtpTestOk, setSmtpTestOk] = useState<Record<number, boolean>>({})
+
   const [asignacion, setAsignacion] = useState<Record<string, number>>({})
 
   useEffect(() => {
@@ -261,55 +265,88 @@ export function EmailCuentasConfig() {
     setData({ ...data, [key]: value })
   }
 
+  const setModoPruebasServicio = (
+    key: keyof EmailCuentasResponse,
+    checked: boolean
+  ) => {
+    if (!data) return
+    setData({ ...data, [key]: checked ? 'true' : 'false' })
+  }
+
+  const probarConexionCuenta = async (index: number) => {
+    if (!data) return
+    const c = data.cuentas[index] ?? emptyCuenta()
+    setTestingSmtp(prev => ({ ...prev, [index]: true }))
+    try {
+      const res = await emailCuentasApi.probarSmtpCuenta({
+        cuenta: index + 1,
+        smtp_host: c.smtp_host,
+        smtp_port: c.smtp_port,
+        smtp_user: c.smtp_user,
+        smtp_password:
+          c.smtp_password && c.smtp_password !== '***'
+            ? c.smtp_password
+            : undefined,
+        smtp_use_tls: c.smtp_use_tls,
+      })
+      setSmtpTestOk(prev => ({ ...prev, [index]: res.success }))
+      if (res.success) {
+        toast.success(`Cuenta ${index + 1}: ${res.mensaje}`)
+      } else {
+        toast.error(`Cuenta ${index + 1}: ${res.mensaje}`)
+      }
+    } catch (e: unknown) {
+      setSmtpTestOk(prev => ({ ...prev, [index]: false }))
+      const msg =
+        (e as { response?: { data?: { detail?: string } } })?.response?.data
+          ?.detail ??
+        (e as Error)?.message ??
+        'Error al probar SMTP'
+      toast.error(`Cuenta ${index + 1}: ${String(msg)}`)
+    } finally {
+      setTestingSmtp(prev => ({ ...prev, [index]: false }))
+    }
+  }
+
   const etiquetaCuenta = (n: number) =>
     CUENTA_OPCIONES_ASIGNACION.find(o => o.value === n)?.label ?? `Cuenta ${n}`
 
-  const cuentaServicio = (servicio: string): number | string => {
-    const a = data?.asignacion
-    if (servicio === 'cobros') return a?.cobros ?? 1
-    if (servicio === 'estado_cuenta' || servicio === 'finiquito')
-      return a?.estado_cuenta ?? 2
-    if (servicio === 'recibos') return a?.recibos ?? 1
-    if (servicio === 'notificaciones') return 'por caso (ver abajo)'
-    return 1
+  const cuentaAsignadaServicio = (
+    row: (typeof PANEL_SERVICIOS_EMAIL)[number]
+  ): number | null => {
+    if ('sinSelectorCuenta' in row && row.sinSelectorCuenta) return null
+    if ('asignacionDesde' in row && row.asignacionDesde) {
+      return data?.asignacion?.[row.asignacionDesde] ?? row.defaultCuenta ?? 2
+    }
+    if ('asignacionKey' in row && row.asignacionKey) {
+      return data?.asignacion?.[row.asignacionKey] ?? row.defaultCuenta ?? 1
+    }
+    return null
   }
 
-  const SERVICIOS_DISPONIBLES: {
-    key: keyof EmailCuentasResponse
-    label: string
-    servicio: string
-  }[] = [
-    {
-      key: 'email_activo_cobros',
-      label: 'Cobros (formulario público, recibos)',
-      servicio: 'cobros',
-    },
-
-    {
-      key: 'email_activo_estado_cuenta',
-      label: 'Estado de cuenta (código y envío PDF)',
-      servicio: 'estado_cuenta',
-    },
-
-    {
-      key: 'email_activo_finiquito',
-      label: 'Finiquito (código OTP portal colaborador)',
-      servicio: 'finiquito',
-    },
-
-    {
-      key: 'email_activo_notificaciones',
-      label: 'Notificaciones (plantillas a clientes)',
-      servicio: 'notificaciones',
-    },
-
-    {
-      key: 'email_activo_recibos',
-      label:
-        'Recibos (estado de cuenta tras conciliación, job diario 15:00 Caracas)',
-      servicio: 'recibos',
-    },
-  ]
+  const ToggleActivo = ({
+    checked,
+    onChange,
+    id,
+  }: {
+    checked: boolean
+    onChange: (v: boolean) => void
+    id?: string
+  }) => (
+    <label className="relative inline-flex cursor-pointer items-center">
+      <input
+        id={id}
+        type="checkbox"
+        checked={checked}
+        onChange={e => onChange(e.target.checked)}
+        className="peer sr-only"
+      />
+      <div className="peer h-6 w-11 rounded-full bg-gray-200 after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:border after:border-gray-300 after:bg-white after:transition-all after:content-[''] peer-checked:bg-blue-600 peer-checked:after:translate-x-full peer-checked:after:border-white peer-focus:outline-none dark:border-gray-600 dark:bg-gray-700" />
+      <span className="ml-2 text-xs sm:text-sm">
+        {checked ? 'Activo' : 'Inactivo'}
+      </span>
+    </label>
+  )
 
   const handleSave = async () => {
     if (!data) return
@@ -328,70 +365,59 @@ export function EmailCuentasConfig() {
 
       while (cuentas.length < CUENTAS_COUNT) cuentas.push(emptyCuenta())
 
-      await emailCuentasApi.put({
+      const payloadPut = {
         cuentas,
-
         asignacion: {
           cobros: data.asignacion?.cobros ?? 1,
-
           estado_cuenta: data.asignacion?.estado_cuenta ?? 2,
-
           notificaciones_tab: {
             ...(data.asignacion?.notificaciones_tab ?? {}),
             ...asignacion,
           },
-
           recibos: data.asignacion?.recibos ?? 1,
         },
-
         modo_pruebas: data.modo_pruebas,
-
         email_pruebas: data.email_pruebas,
-
         emails_pruebas: data.emails_pruebas,
-
         email_activo: data.email_activo,
-
         email_activo_notificaciones: data.email_activo_notificaciones,
-
         email_activo_informe_pagos: data.email_activo_informe_pagos,
-
         email_activo_estado_cuenta: data.email_activo_estado_cuenta,
-
         email_activo_finiquito: data.email_activo_finiquito,
-
         email_activo_cobros: data.email_activo_cobros,
-
         email_activo_campanas: data.email_activo_campanas,
-
         email_activo_tickets: data.email_activo_tickets,
-
         email_activo_recibos: data.email_activo_recibos,
-
         modo_pruebas_notificaciones: data.modo_pruebas_notificaciones,
-
         modo_pruebas_informe_pagos: data.modo_pruebas_informe_pagos,
-
         modo_pruebas_estado_cuenta: data.modo_pruebas_estado_cuenta,
-
         modo_pruebas_finiquito: data.modo_pruebas_finiquito,
-
         modo_pruebas_cobros: data.modo_pruebas_cobros,
-
         modo_pruebas_campanas: data.modo_pruebas_campanas,
-
         modo_pruebas_tickets: data.modo_pruebas_tickets,
-
         modo_pruebas_recibos: data.modo_pruebas_recibos,
-
         tickets_notify_emails: data.tickets_notify_emails,
-
         recibos_bcc_emails: Array.isArray(data.recibos_bcc_emails)
           ? data.recibos_bcc_emails
           : [],
-      })
+      }
 
-      toast.success('Configuración de 4 cuentas guardada')
+      const resPut = await emailCuentasApi.put(payloadPut)
+      const verifs = resPut.smtp_verificaciones
+
+      if (verifs?.length) {
+        const okN = verifs.filter(v => v.ok).map(v => v.cuenta)
+        const okMap: Record<number, boolean> = {}
+        verifs.forEach(v => {
+          okMap[v.cuenta - 1] = v.ok
+        })
+        setSmtpTestOk(prev => ({ ...prev, ...okMap }))
+        toast.success(
+          `Clave verificada por SMTP en cuenta(s): ${okN.join(', ')}`
+        )
+      } else {
+        toast.success('Configuración de 4 cuentas guardada')
+      }
 
       await queryClient.invalidateQueries({
         queryKey: NOTIFICACIONES_QUERY_KEYS.emailEstado,
@@ -481,98 +507,107 @@ export function EmailCuentasConfig() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
             <CheckCircle className="h-4 w-4" />
-            Servicios disponibles
+            Panel de servicios (activo, cuenta SMTP, modo pruebas)
           </CardTitle>
 
           <CardDescription>
-            La configuración se guarda en la base de datos (tabla{' '}
-            <code className="rounded bg-muted px-1 text-xs">configuracion</code>
-            , clave{' '}
-            <code className="rounded bg-muted px-1 text-xs">email_config</code>
-            ): sobrevive reinicios y despliegues. Las contraseñas SMTP/IMAP se
-            guardan cifradas cuando el servidor define clave de cifrado.{' '}
-            <span className="block pt-2 text-foreground/90">
-              Active o desactive el envío por servicio. Cobros → pagos@ (1);
-              Estado de cuenta / Finiquito → tucuenta@ (2); Recibos → pagos@
-              (1); Notificaciones → según caso (2/3/4).
-            </span>
+            Un solo lugar para encender cada servicio, elegir qué cuenta SMTP usa
+            y si redirige al correo de pruebas. Los casos de Notificaciones
+            eligen cuenta en la tabla inferior.
           </CardDescription>
         </CardHeader>
 
-        <CardContent>
-          <div className="mb-4 flex flex-col justify-between gap-2 rounded border border-primary/25 bg-muted/30 p-3 sm:flex-row sm:items-center">
+        <CardContent className="space-y-4">
+          <div className="flex flex-col justify-between gap-2 rounded border border-primary/25 bg-muted/30 p-3 sm:flex-row sm:items-center">
             <div>
-              <p className="text-sm font-medium">
-                Correo electrónico (maestro)
-              </p>
-
+              <p className="text-sm font-medium">Correo electrónico (maestro)</p>
               <p className="text-xs text-muted-foreground">
-                Si está inactivo, no se envía ningún e-mail (anula los
-                interruptores de abajo).
+                Si está inactivo, ningún servicio envía correo.
               </p>
             </div>
-
-            <label className="relative inline-flex cursor-pointer items-center">
-              <input
-                type="checkbox"
-                checked={(data?.email_activo ?? 'true') === 'true'}
-                onChange={e =>
-                  setServicioActivo(
-                    'email_activo',
-                    e.target.checked ? 'true' : 'false'
-                  )
-                }
-                className="peer sr-only"
-              />
-
-              <div className="peer h-6 w-11 rounded-full bg-gray-200 after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:border after:border-gray-300 after:bg-white after:transition-all after:content-[''] peer-checked:bg-blue-600 peer-checked:after:translate-x-full peer-checked:after:border-white peer-focus:outline-none dark:border-gray-600 dark:bg-gray-700" />
-
-              <span className="ml-2 text-sm">
-                {(data?.email_activo ?? 'true') === 'true'
-                  ? 'Activo'
-                  : 'Inactivo'}
-              </span>
-            </label>
+            <ToggleActivo
+              checked={(data?.email_activo ?? 'true') === 'true'}
+              onChange={v =>
+                setServicioActivo('email_activo', v ? 'true' : 'false')
+              }
+            />
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2">
-            {SERVICIOS_DISPONIBLES.map(({ key, label, servicio }) => {
-              const cuenta = cuentaServicio(servicio)
-              const cuentaTxt =
-                typeof cuenta === 'number' ? etiquetaCuenta(cuenta) : cuenta
-              return (
-              <div
-                key={key}
-                className="flex items-center justify-between rounded border p-3"
-              >
-                <div>
-                  <p className="text-sm font-medium">{label}</p>
-
-                  <p className="text-xs text-muted-foreground">{cuentaTxt}</p>
-                </div>
-
-                <label className="relative inline-flex cursor-pointer items-center">
-                  <input
-                    type="checkbox"
-                    checked={(data?.[key] ?? 'true') === 'true'}
-                    onChange={e =>
-                      setServicioActivo(
-                        key,
-                        e.target.checked ? 'true' : 'false'
-                      )
-                    }
-                    className="peer sr-only"
-                  />
-
-                  <div className="peer h-6 w-11 rounded-full bg-gray-200 after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:border after:border-gray-300 after:bg-white after:transition-all after:content-[''] peer-checked:bg-blue-600 peer-checked:after:translate-x-full peer-checked:after:border-white peer-focus:outline-none dark:border-gray-600 dark:bg-gray-700" />
-
-                  <span className="ml-2 text-sm">
-                    {(data?.[key] ?? 'true') === 'true' ? 'Activo' : 'Inactivo'}
-                  </span>
-                </label>
-              </div>
-              )
-            })}
+          <div className="overflow-x-auto rounded border">
+            <table className="w-full min-w-[640px] text-sm">
+              <thead>
+                <tr className="border-b bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
+                  <th className="p-3 font-medium">Servicio</th>
+                  <th className="p-3 font-medium">Activo</th>
+                  <th className="p-3 font-medium">Cuenta SMTP</th>
+                  <th className="p-3 font-medium">→ Pruebas</th>
+                </tr>
+              </thead>
+              <tbody>
+                {PANEL_SERVICIOS_EMAIL.map(row => {
+                  const cuentaN = cuentaAsignadaServicio(row)
+                  return (
+                    <tr key={row.id} className="border-b last:border-0">
+                      <td className="p-3 align-middle font-medium">{row.label}</td>
+                      <td className="p-3 align-middle">
+                        <ToggleActivo
+                          checked={(data?.[row.activoKey] ?? 'true') === 'true'}
+                          onChange={v =>
+                            setServicioActivo(row.activoKey, v ? 'true' : 'false')
+                          }
+                        />
+                      </td>
+                      <td className="p-3 align-middle">
+                        {'sinSelectorCuenta' in row && row.sinSelectorCuenta ? (
+                          <span className="text-xs text-muted-foreground">
+                            Por caso (tabla abajo)
+                          </span>
+                        ) : 'asignacionDesde' in row && row.asignacionDesde ? (
+                          <span className="text-xs text-muted-foreground">
+                            Igual que Estado de cuenta (
+                            {etiquetaCuenta(cuentaN ?? row.defaultCuenta ?? 2)})
+                          </span>
+                        ) : 'asignacionKey' in row ? (
+                          <SelectCuentaAsignacion
+                            id={`panel-cuenta-${row.id}`}
+                            value={
+                              data?.asignacion?.[row.asignacionKey] ??
+                              row.defaultCuenta ??
+                              1
+                            }
+                            onChange={v =>
+                              setServicioCuenta(row.asignacionKey, v)
+                            }
+                          />
+                        ) : null}
+                      </td>
+                      <td className="p-3 align-middle">
+                        <label className="inline-flex cursor-pointer items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={
+                              (data?.[row.modoPruebasKey] ?? 'false') === 'true'
+                            }
+                            onChange={e =>
+                              setModoPruebasServicio(
+                                row.modoPruebasKey,
+                                e.target.checked
+                              )
+                            }
+                            className="rounded border-gray-300"
+                          />
+                          <span className="text-xs">
+                            {(data?.[row.modoPruebasKey] ?? 'false') === 'true'
+                              ? 'Sí'
+                              : 'No'}
+                          </span>
+                        </label>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
           </div>
         </CardContent>
       </Card>
@@ -584,16 +619,15 @@ export function EmailCuentasConfig() {
           </CardTitle>
 
           <CardDescription>
-            Si "Modo pruebas" está activo, todos los envíos se redirigen al
-            correo indicado. El correo de pruebas es obligatorio cuando el modo
-            pruebas está activado.
+            Modo pruebas global redirige envíos al correo indicado (si el
+            servicio también tiene «→ Pruebas» activo en el panel de arriba).
           </CardDescription>
         </CardHeader>
 
         <CardContent className="space-y-4">
           <div className="flex items-center justify-between rounded border p-3">
             <span className="text-sm font-medium">
-              Modo pruebas (redirigir envíos al correo de pruebas)
+              Modo pruebas global (redirigir al correo de pruebas)
             </span>
 
             <label className="relative inline-flex cursor-pointer items-center">
@@ -623,9 +657,7 @@ export function EmailCuentasConfig() {
             </label>
           </div>
           <div>
-            <Label>
-              Correo de pruebas (obligatorio si modo pruebas está activo)
-            </Label>
+            <Label>Correo de pruebas</Label>
 
             <Input
               type="email"
@@ -639,85 +671,10 @@ export function EmailCuentasConfig() {
               className="mt-1"
             />
           </div>
-          <div className="space-y-2 border-t border-amber-200/80 pt-3">
-            <p className="text-xs font-medium text-amber-900/90">
-              Modo prueba: PDF de estado de cuenta (cuenta 2)
-            </p>
-            <p className="text-xs text-muted-foreground">
-              Si activa esta opción, los envíos de estado de cuenta pueden ir al
-              correo de pruebas. El código OTP del portal Finiquito siempre se
-              envía al correo del colaborador registrado (no se redirige a
-              pruebas).
-            </p>
-            <label className="flex items-center justify-between gap-2 rounded border border-amber-100 bg-white/60 p-2">
-              <span className="text-sm">
-                Notificaciones (plantillas a clientes) → pruebas
-              </span>
-              <input
-                type="checkbox"
-                checked={
-                  (data?.modo_pruebas_notificaciones ?? 'false') === 'true'
-                }
-                onChange={e =>
-                  setData(
-                    data
-                      ? {
-                          ...data,
-                          modo_pruebas_notificaciones: e.target.checked
-                            ? 'true'
-                            : 'false',
-                        }
-                      : data
-                  )
-                }
-                className="rounded border-gray-300"
-              />
-            </label>
-            <label className="flex items-center justify-between gap-2 rounded border border-amber-100 bg-white/60 p-2">
-              <span className="text-sm">Estado de cuenta (PDF) → pruebas</span>
-              <input
-                type="checkbox"
-                checked={
-                  (data?.modo_pruebas_estado_cuenta ?? 'false') === 'true'
-                }
-                onChange={e =>
-                  setData(
-                    data
-                      ? {
-                          ...data,
-                          modo_pruebas_estado_cuenta: e.target.checked
-                            ? 'true'
-                            : 'false',
-                        }
-                      : data
-                  )
-                }
-                className="rounded border-gray-300"
-              />
-            </label>
-            <label className="flex items-center justify-between gap-2 rounded border border-amber-100 bg-white/60 p-2">
-              <span className="text-sm">
-                Recibos (post-conciliación) → pruebas
-              </span>
-              <input
-                type="checkbox"
-                checked={(data?.modo_pruebas_recibos ?? 'false') === 'true'}
-                onChange={e =>
-                  setData(
-                    data
-                      ? {
-                          ...data,
-                          modo_pruebas_recibos: e.target.checked
-                            ? 'true'
-                            : 'false',
-                        }
-                      : data
-                  )
-                }
-                className="rounded border-gray-300"
-              />
-            </label>
-          </div>
+          <p className="text-xs text-muted-foreground">
+            El OTP de Finiquito no se redirige: siempre llega al correo del
+            colaborador.
+          </p>
           <div className="flex justify-end pt-2">
             <Button
               type="button"
@@ -788,6 +745,16 @@ export function EmailCuentasConfig() {
                 pendiente={cuentaTieneClavePendiente(cuentas[i])}
                 smtpUser={cuentas[i]?.smtp_user}
               />
+              {smtpTestOk[i] === true ? (
+                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-xs text-emerald-900">
+                  SMTP verificado
+                </span>
+              ) : null}
+              {smtpTestOk[i] === false ? (
+                <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs text-red-900">
+                  SMTP falló
+                </span>
+              ) : null}
             </div>
           </CardHeader>
 
@@ -860,6 +827,21 @@ export function EmailCuentasConfig() {
                     desea cambiarla.
                   </p>
                 ) : null}
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={testingSmtp[i] || !(cuentas[i]?.smtp_user ?? '').trim()}
+                    onClick={() => probarConexionCuenta(i)}
+                  >
+                    {testingSmtp[i] ? 'Comprobando…' : 'Probar conexión SMTP'}
+                  </Button>
+                  <span className="self-center text-xs text-muted-foreground">
+                    Login al servidor (sin enviar correo). Al guardar una clave
+                    nueva también se verifica automáticamente.
+                  </span>
+                </div>
               </div>
 
               <div>
@@ -885,35 +867,6 @@ export function EmailCuentasConfig() {
           </CardContent>
         </Card>
       ))}
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">
-            Asignación por servicio (Cobros, Estado de cuenta, Recibos)
-          </CardTitle>
-          <CardDescription>
-            Servicios con una sola cuenta SMTP. Finiquito usa la misma cuenta que
-            Estado de cuenta (Cuenta 2 por defecto).
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-3 sm:grid-cols-2">
-            {ASIGNACION_SERVICIOS.map(({ key, label, defaultCuenta }) => (
-              <div
-                key={key}
-                className="flex items-center justify-between rounded border p-3"
-              >
-                <span className="pr-2 text-sm font-medium">{label}</span>
-                <SelectCuentaAsignacion
-                  id={`asig-servicio-${key}`}
-                  value={data?.asignacion?.[key] ?? defaultCuenta}
-                  onChange={v => setServicioCuenta(key, v)}
-                />
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
 
       {ASIGNACION_NOTIF_GRUPOS.map(grupo => (
         <Card key={grupo.titulo}>
