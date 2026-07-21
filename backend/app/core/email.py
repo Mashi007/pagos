@@ -642,27 +642,42 @@ def send_email(
     log_phase(logger, FASE_MODO_PRUEBAS, True, "modo_pruebas=%s servicio=%s" % (modo_pruebas, servicio or "global"))
     redirigido_modo_pruebas = bool(modo_pruebas and emails_pruebas_list and not respetar_destinos_manuales)
     if redirigido_modo_pruebas:
-        to_emails = emails_pruebas_list
-        cc_list = []
-        # Conservar CCO de la config del caso (copias a correos registrados).
-        # Antes se vaciaba bcc_list y las copias nunca salían en modo prueba.
-        bcc_list = [
-            e.strip()
-            for e in (bcc_emails or [])
-            if e and isinstance(e, str) and "@" in e.strip()
+        _svc_pre = (servicio or "").strip().lower()
+        _pruebas_ok = [
+            e for e in emails_pruebas_list
+            if e and str(e).strip().lower() != "itmaster@rapicreditca.com"
         ]
-        # Evitar duplicar el mismo destino de prueba en To y BCC
-        to_low = {str(x).strip().lower() for x in to_emails if x}
-        bcc_list = [b for b in bcc_list if b.lower() not in to_low]
-        logger.info(
-            "[SMTP_ENVIO] modo_pruebas=1 redirigido=1 servicio=%s tipo_tab=%s solicitados_MASK=%s efectivos=%s bcc=%s",
-            servicio or "",
-            tipo_tab or "",
-            [mask_email_for_log(x) for x in dest_solicitados_originales],
-            list(to_emails),
-            [mask_email_for_log(x) for x in bcc_list],
-        )
-        logger.info("Modo Pruebas: envio redirigido a %s (CCO conservado: %s)", emails_pruebas_list, bcc_list)
+        # Notificaciones/Recibos: NUNCA redirigir a itmaster@ (mantener To original del cliente).
+        if _svc_pre in ("notificaciones", "recibos") and not _pruebas_ok:
+            redirigido_modo_pruebas = False
+            cc_list = [e.strip() for e in (cc_emails or []) if e and isinstance(e, str) and "@" in e.strip()]
+            bcc_list = [e.strip() for e in (bcc_emails or []) if e and isinstance(e, str) and "@" in e.strip()]
+            logger.warning(
+                "[SMTP_ENVIO] modo_pruebas IGNORADO servicio=%s: email_pruebas solo itmaster@; "
+                "se mantiene To original=%s",
+                _svc_pre,
+                [mask_email_for_log(x) for x in dest_solicitados_originales],
+            )
+        else:
+            to_emails = _pruebas_ok if (_svc_pre in ("notificaciones", "recibos") and _pruebas_ok) else emails_pruebas_list
+            to_emails = [e for e in to_emails if str(e).strip().lower() != "itmaster@rapicreditca.com"] or list(dest_solicitados_originales)
+            cc_list = []
+            bcc_list = [
+                e.strip()
+                for e in (bcc_emails or [])
+                if e and isinstance(e, str) and "@" in e.strip()
+            ]
+            to_low = {str(x).strip().lower() for x in to_emails if x}
+            bcc_list = [b for b in bcc_list if b.lower() not in to_low]
+            logger.info(
+                "[SMTP_ENVIO] modo_pruebas=1 redirigido=1 servicio=%s tipo_tab=%s solicitados_MASK=%s efectivos=%s bcc=%s",
+                servicio or "",
+                tipo_tab or "",
+                [mask_email_for_log(x) for x in dest_solicitados_originales],
+                list(to_emails),
+                [mask_email_for_log(x) for x in bcc_list],
+            )
+            logger.info("Modo Pruebas: envio redirigido a %s (CCO conservado: %s)", to_emails, bcc_list)
     else:
         # Destino explícito (p. ej. «Enviar prueba» con To manual): no exigir lista de pruebas aunque el servicio esté en modo pruebas.
         if modo_pruebas and not emails_pruebas_list and not respetar_destinos_manuales:
@@ -799,6 +814,27 @@ def send_email(
 
     to_emails = to_emails_filtrados
 
+    # Bloqueo final: notificaciones/recibos NUNCA envian To a itmaster@.
+    if (servicio or "").strip().lower() in ("notificaciones", "recibos"):
+        _before = list(to_emails)
+        to_emails = [e for e in to_emails if (e or "").strip().lower() != "itmaster@rapicreditca.com"]
+        if _before and not to_emails:
+            # Restaurar solicitados originales sin itmaster
+            to_emails = [
+                e for e in dest_solicitados_originales
+                if e and e.lower() != "itmaster@rapicreditca.com" and _es_destino_smtp_valido(e)
+            ]
+            logger.warning(
+                "[SMTP_ENVIO] To itmaster@ bloqueado servicio=%s; To efectivo=%s",
+                (servicio or "").strip().lower(),
+                to_emails,
+            )
+        if not to_emails:
+            return False, (
+                "Destino itmaster@ bloqueado para notificaciones/recibos. "
+                "Configure otro correo de prueba o desactive modo prueba."
+            )
+
     attachments_norm = _normalize_attachments_for_smtp(attachments)
     has_attachments = len(attachments_norm) > 0
     if attachments and not attachments_norm:
@@ -835,32 +871,44 @@ def send_email(
         return False, "Falta contrasena SMTP. Configura en Configuracion > Email."
     log_phase(logger, FASE_SMTP_CONFIG, True, "host=%s port=%s" % (cfg.get("smtp_host"), cfg.get("smtp_port")))
 
-    # notificaciones@ (y el propio From/smtp_user) no reciben bien CCO en Gmail/Workspace:
-    # se sacan del sobre BCC y se reenvian como To tras el envio principal.
-    if aplicar_cco_automatica and bcc_list:
+    # notificaciones@: Gmail/Workspace suele ignorar CCO-only. Se deja en BCC (por si llega)
+    # Y ademas se fuerza copia To desde cuenta cobros/pagos@.
+    if aplicar_cco_automatica and svc_low in ("notificaciones", "recibos"):
         _sender_ids = {
             (cfg.get("smtp_user") or "").strip().lower(),
             (cfg.get("from_email") or "").strip().lower(),
         }
-        _force_always = {"notificaciones@rapicreditca.com"}
+        _to_low = {str(x).strip().lower() for x in to_emails if x}
         _kept: List[str] = []
-        _seen_force: set[str] = set()
+        _seen_force: set[str] = {x.lower() for x in force_to_cco}
         for _b in bcc_list:
-            _bl = _b.lower()
-            if _bl in _force_always or (_bl and _bl in _sender_ids):
-                if _bl not in _seen_force and _bl not in {str(x).strip().lower() for x in to_emails if x}:
+            _bl = (_b or "").lower()
+            if not _bl:
+                continue
+            # Autoenvio (mismo From/smtp): no sirve en BCC; solo copia To aparte.
+            if _bl in _sender_ids and _bl not in _to_low:
+                if _bl not in _seen_force:
                     force_to_cco.append(_b)
                     _seen_force.add(_bl)
-            else:
-                _kept.append(_b)
-        if force_to_cco:
-            logger.info(
-                "[SMTP_ENVIO] cco_como_to_aparte servicio=%s addrs=%s (BCC residual=%s)",
-                svc_low,
-                force_to_cco,
-                _kept,
-            )
+                continue
+            _kept.append(_b)
+            if _bl == "notificaciones@rapicreditca.com" and _bl not in _to_low and _bl not in _seen_force:
+                force_to_cco.append(_b)
+                _seen_force.add(_bl)
+        # Garantizar copia a notificaciones@ aunque no estuviera en BCC.
+        if "notificaciones@rapicreditca.com" not in _to_low and "notificaciones@rapicreditca.com" not in _seen_force:
+            force_to_cco.append("notificaciones@rapicreditca.com")
+            _seen_force.add("notificaciones@rapicreditca.com")
+        if "cobranza@rapicreditca.com" not in {x.lower() for x in _kept} and "cobranza@rapicreditca.com" not in _to_low:
+            _kept.append("cobranza@rapicreditca.com")
         bcc_list = _kept
+        logger.info(
+            "[SMTP_ENVIO] cco_final servicio=%s to=%s bcc=%s force_to=%s",
+            svc_low,
+            list(to_emails),
+            bcc_list,
+            force_to_cco,
+        )
 
     solicitados_mask = [mask_email_for_log(x) for x in dest_solicitados_originales]
     efectivos_para_smtp = list(to_emails) + cc_list + bcc_list

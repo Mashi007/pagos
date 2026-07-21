@@ -304,12 +304,6 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
           icon: Calendar,
           adminOnly: true,
         },
-        {
-          title: 'Gmail',
-          href: '/actualizaciones/gmail',
-          icon: Mail,
-          adminOnly: true,
-        },
       ],
     },
 

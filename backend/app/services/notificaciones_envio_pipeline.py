@@ -283,9 +283,15 @@ def _enviar_correos_items(
     paquete_estricto = bool(getattr(settings, "NOTIFICACIONES_PAQUETE_ESTRICTO", True))
     log_envio_inicio(len(items), "batch", modo_pruebas=modo_pruebas)
     email_pruebas = (config_envios.get("email_pruebas") or "").strip()
+    if email_pruebas.lower() == "itmaster@rapicreditca.com":
+        logger.warning(
+            "[notif_envio] email_pruebas=itmaster@ ignorado; se enviara al cliente + CCO cobranza/notificaciones"
+        )
+        email_pruebas = ""
     usar_solo_pruebas = modo_pruebas and email_pruebas and "@" in email_pruebas
-    # Si modo prueba activo pero sin correo v�lido: no enviar a clientes (evitar env�o por error)
-    bloqueo_pruebas_sin_email = modo_pruebas and not (email_pruebas and "@" in email_pruebas)
+    # Si modo prueba activo pero sin correo valido (o solo itmaster): enviar a clientes reales + CCO.
+    # Antes bloqueaba todo; ahora no bloquea para no caer en itmaster ni silenciar envios.
+    bloqueo_pruebas_sin_email = False
     # Solo filas de criterio (PAGO_*, PREJUDICIAL, MASIVOS, COBRANZA, …); no contar cron ni masivos_campanas.
     _keys_no_fila_envio = frozenset(
         {

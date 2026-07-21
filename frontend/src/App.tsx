@@ -112,7 +112,6 @@ import { RouteErrorBoundary } from './app/RouteErrorBoundary'
 
 import {
   AccesoLimitadoPage,
-  ActualizacionesGmailPage,
   ActualizacionesPrestamosDrivePage,
   AdminTasaCambioPage,
   AmortizacionPage,
@@ -565,14 +564,10 @@ function App() {
                   </SimpleProtectedRoute>
                 }
               />
-
+              {/* Compatibilidad: modulo Actualizaciones > Gmail retirado; pipeline Gmail sigue en Pagos. */}
               <Route
                 path="actualizaciones/gmail"
-                element={
-                  <SimpleProtectedRoute requireAdmin={true}>
-                    <ActualizacionesGmailPage />
-                  </SimpleProtectedRoute>
-                }
+                element={<Navigate to="/pagos" replace />}
               />
 
               {/* Compatibilidad: «Fechas 2» redirige al módulo Fechas (Q vs BD + panel por día). */}
