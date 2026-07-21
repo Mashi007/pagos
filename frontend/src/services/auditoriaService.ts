@@ -43,6 +43,8 @@ export interface ProcesarRebotesGmailResponse {
   ya_existentes: number
   etiquetados: number
   sin_correo: number
+  sin_cedula: number
+  cedula_duplicada: number
 }
 
 export interface Auditoria {

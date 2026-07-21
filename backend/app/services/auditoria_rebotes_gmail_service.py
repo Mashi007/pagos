@@ -19,6 +19,11 @@ from sqlalchemy.orm import Session
 
 from app.models.auditoria_rebote_gmail import AuditoriaReboteGmail
 from app.models.cliente import Cliente
+from app.utils.cedula_almacenamiento import (
+    expr_cedula_normalizada_para_comparar,
+    normalizar_cedula_almacenamiento,
+    texto_cedula_comparable_bd,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -192,6 +197,20 @@ def extraer_correo_rebotado(texto: str) -> Optional[str]:
     return None
 
 
+def _cedula_ya_registrada(db: Session, cedula_raw: str) -> bool:
+    """True si ya existe una fila con la misma cedula (normalizada) en auditoria_rebotes_gmail."""
+    key = texto_cedula_comparable_bd(cedula_raw)
+    if not key:
+        return False
+    encontrado = db.execute(
+        select(AuditoriaReboteGmail.id)
+        .where(AuditoriaReboteGmail.cedula.isnot(None))
+        .where(expr_cedula_normalizada_para_comparar(AuditoriaReboteGmail.cedula) == key)
+        .limit(1)
+    ).scalar_one_or_none()
+    return encontrado is not None
+
+
 def _cedula_por_correo(db: Session, email_raw: str) -> Optional[str]:
     em = _norm_email(email_raw)
     if not em:
@@ -312,6 +331,8 @@ def procesar_rebotes_gmail(
             "ya_existentes": 0,
             "etiquetados": 0,
             "sin_correo": 0,
+            "sin_cedula": 0,
+            "cedula_duplicada": 0,
         }
 
     service = build_gmail_service(creds)
@@ -345,6 +366,8 @@ def procesar_rebotes_gmail(
                 "ya_existentes": 0,
                 "etiquetados": 0,
                 "sin_correo": 0,
+                "sin_cedula": 0,
+                "cedula_duplicada": 0,
             }
         batch = resp.get("messages") or []
         msg_refs.extend(batch)
@@ -366,6 +389,8 @@ def procesar_rebotes_gmail(
     ya_existentes = 0
     etiquetados = 0
     sin_correo = 0
+    sin_cedula = 0
+    cedula_duplicada = 0
 
     for ref in msg_refs:
         mid = ref.get("id")
@@ -405,7 +430,14 @@ def procesar_rebotes_gmail(
             continue
 
         obs = clasificar_observacion(texto, asunto)
-        cedula = _cedula_por_correo(db, correo)
+        cedula_raw = _cedula_por_correo(db, correo)
+        cedula = normalizar_cedula_almacenamiento(cedula_raw) if cedula_raw else None
+        if not cedula:
+            # Regla: solo se guarda si hay cedula en clientes.
+            sin_cedula += 1
+            omitidos += 1
+            continue
+
         fecha_msg = _fecha_mensaje(headers, full.get("internalDate"))
 
         existente = db.execute(
@@ -414,6 +446,18 @@ def procesar_rebotes_gmail(
             )
         ).scalar_one_or_none()
         if existente:
+            ya_existentes += 1
+            if label_id:
+                try:
+                    add_message_user_labels_only(service, mid, [label_id])
+                    etiquetados += 1
+                except Exception:
+                    pass
+            continue
+
+        # Regla: no repetir cedula ya guardada en esta tabla.
+        if _cedula_ya_registrada(db, cedula):
+            cedula_duplicada += 1
             ya_existentes += 1
             if label_id:
                 try:
@@ -477,4 +521,6 @@ def procesar_rebotes_gmail(
         "ya_existentes": ya_existentes,
         "etiquetados": etiquetados,
         "sin_correo": sin_correo,
+        "sin_cedula": sin_cedula,
+        "cedula_duplicada": cedula_duplicada,
     }

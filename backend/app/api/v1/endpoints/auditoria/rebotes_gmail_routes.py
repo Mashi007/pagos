@@ -56,6 +56,8 @@ class ProcesarRebotesResponse(BaseModel):
     ya_existentes: int = 0
     etiquetados: int = 0
     sin_correo: int = 0
+    sin_cedula: int = 0
+    cedula_duplicada: int = 0
 
 
 class BorrarRebotesResponse(BaseModel):

@@ -162,9 +162,9 @@ export function AuditoriaRebotesGmailTab() {
         <CardContent className="space-y-3">
           <p className="text-sm text-muted-foreground">
             Escanea Inbox de itmaster@rapicreditca.com (leidos y no leidos) con
-            la etiqueta GMAIL. Extrae el correo fallido del cuerpo/asunto DSN
-            (Failure/Delay), clasifica mal/lleno/temporal/otro, cruza clientes y
-            guarda en BD. El Excel sale de lo guardado.
+            la etiqueta GMAIL. Solo guarda si el correo matchea un cliente con
+            cedula, y no repite cedulas ya guardadas en BD. Clasifica
+            mal/lleno/temporal/otro. El Excel sale de lo guardado.
           </p>
           <div className="flex flex-wrap gap-2">
             <Button onClick={() => void handleProcesar()} disabled={procesando}>
@@ -210,7 +210,9 @@ export function AuditoriaRebotesGmailTab() {
             <p className="text-xs text-muted-foreground">
               Ultima corrida: candidatos {ultimoProceso.candidatos}, revisados{' '}
               {ultimoProceso.revisados}, guardados {ultimoProceso.guardados}, ya
-              existentes {ultimoProceso.ya_existentes}, etiquetados{' '}
+              existentes {ultimoProceso.ya_existentes}, cedula duplicada{' '}
+              {ultimoProceso.cedula_duplicada}, sin cedula{' '}
+              {ultimoProceso.sin_cedula}, etiquetados{' '}
               {ultimoProceso.etiquetados}, omitidos {ultimoProceso.omitidos},
               sin correo {ultimoProceso.sin_correo}
               {ultimoProceso.query ? ` | q=${ultimoProceso.query}` : ''}
