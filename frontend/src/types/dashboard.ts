@@ -92,6 +92,9 @@ export interface EvolucionMensualItem {
   /** Pagos PENDIENTE aún no conciliados, cartera vencida */
   pagos_no_conciliados_atrasados?: number
 
+  /** Cantidad de registros en tabla pagos con fecha_pago en el mes (cualquier estado/conciliado) */
+  cantidad_pagos?: number
+
   /** Cuentas por cobrar = cartera - cobrado; la UI lo recalcula para la línea roja */
   cuentas_por_cobrar: number
 }
@@ -288,6 +291,19 @@ export interface RecibosPagosMensualUsdResponse {
 
   estadistica: RecibosPagosMensualUsdEstadistica
 
+  origen: 'demo' | 'bd'
+}
+
+/** GET /api/v1/dashboard/pagos-realizados-mensual — conteo de filas en `pagos` por mes. */
+export interface PagosRealizadosMensualItem {
+  mes: string
+  cantidad_pagos: number
+  /** Suma de monto_pagado (USD) del mes; informativo en tooltip. */
+  monto_total: number
+}
+
+export interface PagosRealizadosMensualResponse {
+  series: PagosRealizadosMensualItem[]
   origen: 'demo' | 'bd'
 }
 

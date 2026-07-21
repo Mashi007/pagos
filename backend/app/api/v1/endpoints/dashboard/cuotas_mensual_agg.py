@@ -16,9 +16,7 @@ from .utils import (
     _safe_float,
 )
 
-# Cartera operativa del gráfico Evolución Mensual (cuotas): aprobado + liquidado.
-_ESTADOS_PRESTAMO_EVOLUCION = ("APROBADO", "LIQUIDADO")
-_prestamo_en_evolucion = Prestamo.estado.in_(_ESTADOS_PRESTAMO_EVOLUCION)
+# Evolución Mensual: todas las cuotas con préstamo/cliente (cualquier Prestamo.estado).
 
 
 def _resolver_meses_con_fechas(
@@ -79,7 +77,6 @@ def _sum_cuotas_por_mes_vencimiento(
     anio = cast(func.extract("year", Cuota.fecha_vencimiento), Integer)
     mes_num = cast(func.extract("month", Cuota.fecha_vencimiento), Integer)
     conds = [
-        _prestamo_en_evolucion,
         Cuota.fecha_vencimiento >= min_d,
         Cuota.fecha_vencimiento <= max_d,
     ]
@@ -130,7 +127,6 @@ def _sum_pagos_atrasos_por_mes_pago(
         .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
         .join(Cliente, Prestamo.cliente_id == Cliente.id)
         .where(
-            _prestamo_en_evolucion,
             Cuota.fecha_pago.isnot(None),
             Cuota.fecha_pago >= min_d,
             Cuota.fecha_pago <= max_d,
@@ -167,7 +163,6 @@ def _sum_pagos_anticipados_por_mes_pago(
         .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
         .join(Cliente, Prestamo.cliente_id == Cliente.id)
         .where(
-            _prestamo_en_evolucion,
             Cuota.fecha_pago.isnot(None),
             Cuota.fecha_pago >= min_d,
             Cuota.fecha_pago <= max_d,
@@ -276,6 +271,41 @@ def _sum_pagos_no_conciliados_por_categoria(
         a_tiempo_by[key] = a_tiempo_by.get(key, 0.0) + _safe_float(row.total)
 
     return a_tiempo_by, atrasados_by
+
+
+def _count_pagos_por_mes_fecha_pago(
+    db: Session,
+    min_d: date,
+    max_d: date,
+) -> dict[tuple[int, int], int]:
+    """
+    Cantidad de filas en `pagos` por mes de fecha_pago.
+
+    Sin filtro de Prestamo.estado ni de Pago.estado/conciliado: incluye
+    pagos ligados a APROBADO, LIQUIDADO, DESISTIMIENTO, sin préstamo, etc.
+    """
+    from app.models.pago import Pago
+
+    anio = cast(func.extract("year", Pago.fecha_pago), Integer)
+    mes_num = cast(func.extract("month", Pago.fecha_pago), Integer)
+    stmt = (
+        select(
+            anio.label("anio"),
+            mes_num.label("mes"),
+            func.count(Pago.id).label("cantidad"),
+        )
+        .where(
+            Pago.fecha_pago >= min_d,
+            Pago.fecha_pago <= max_d,
+        )
+        .group_by(anio, mes_num)
+    )
+    out: dict[tuple[int, int], int] = {}
+    for row in db.execute(stmt).all():
+        if row.anio is None or row.mes is None:
+            continue
+        out[_mes_key(int(row.anio), int(row.mes))] = int(row.cantidad or 0)
+    return out
 
 
 def _fetch_agregados_mensuales_cuotas(

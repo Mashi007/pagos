@@ -28,6 +28,7 @@ from app.services.prestamos.prestamo_fecha_referencia_query import (
 )
 
 from .cuotas_mensual_agg import (
+    _count_pagos_por_mes_fecha_pago,
     _fetch_agregados_mensuales_cuotas,
     _mes_lookup,
     _resolver_meses_con_fechas,
@@ -755,6 +756,13 @@ def _compute_dashboard_admin(
             no_conc_a_tiempo_by,
             no_conc_atrasados_by,
         ) = _fetch_agregados_mensuales_cuotas(db, meses)
+        min_d = min(m["inicio_d"] for m in meses) if meses else None
+        max_d = max(m["fin_d"] for m in meses) if meses else None
+        cantidad_pagos_by = (
+            _count_pagos_por_mes_fecha_pago(db, min_d, max_d)
+            if min_d and max_d
+            else {}
+        )
         for m in meses:
             key = _mes_lookup(m)
             cartera_f = cartera_by.get(key, 0.0)
@@ -773,6 +781,7 @@ def _compute_dashboard_admin(
                 "pagos_no_conciliados_a_tiempo": no_conc_a_tiempo_f,
                 "pagos_no_conciliados_atrasados": no_conc_atrasados_f,
                 "cuentas_por_cobrar": cuentas_por_cobrar_f,
+                "cantidad_pagos": cantidad_pagos_by.get(key, 0),
             })
         origen = "bd"
     except Exception as e:
@@ -787,6 +796,7 @@ def _compute_dashboard_admin(
                 "pagos_no_conciliados_a_tiempo": 0.0,
                 "pagos_no_conciliados_atrasados": 0.0,
                 "cuentas_por_cobrar": 0.0,
+                "cantidad_pagos": 0,
             }
             for m in meses
         ]

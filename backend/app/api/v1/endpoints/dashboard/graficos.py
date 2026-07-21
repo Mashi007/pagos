@@ -13,7 +13,7 @@ from typing import Optional
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import Date, Float, and_, case, cast, distinct, exists, extract, func, literal, literal_column, or_, select
+from sqlalchemy import Date, Float, and_, case, cast, distinct, exists, extract, func, literal, literal_column, not_, or_, select
 from sqlalchemy.orm import Session, aliased
 
 from app.core.database import get_db, SessionLocal
@@ -1422,6 +1422,112 @@ def get_recibos_pagos_mensual_usd(
         if pfi and pff:
             fi, ff = pfi, pff
     return _compute_recibos_pagos_mensual_usd(db, fi, ff)
+
+
+def _compute_pagos_realizados_mensual(
+    db: Session,
+    fecha_inicio: Optional[str],
+    fecha_fin: Optional[str],
+) -> dict:
+    """
+    Conteos de filas en `pagos` por mes calendario de `fecha_pago`.
+
+    Incluye conciliados y no conciliados, y cualquier contexto de préstamo
+    (APROBADO, LIQUIDADO/finiquito, DESISTIMIENTO, sin préstamo, etc.).
+    Excluye solo estados operativos nulos (anulados, duplicados, cancelados, etc.).
+    """
+    from app.services.pagos_sql_where import _where_pago_excluido_operacion
+
+    if fecha_inicio and fecha_fin:
+        try:
+            inicio = date.fromisoformat(fecha_inicio)
+            fin = date.fromisoformat(fecha_fin)
+            if inicio <= fin:
+                meses = _meses_desde_rango(inicio, fin)
+            else:
+                meses = _etiquetas_12_meses()
+        except ValueError:
+            meses = _etiquetas_12_meses()
+    else:
+        meses = _etiquetas_12_meses()
+
+    min_date: Optional[date] = None
+    max_date: Optional[date] = None
+    for m in meses:
+        y, mo = m["year"], m["month"]
+        id_ = date(y, mo, 1)
+        fd_ = date(y, 12, 31) if mo == 12 else date(y, mo + 1, 1) - timedelta(days=1)
+        min_date = id_ if min_date is None or id_ < min_date else min_date
+        max_date = fd_ if max_date is None or fd_ > max_date else max_date
+
+    buckets: dict[tuple[int, int], dict[str, float | int]] = {}
+    try:
+        yr = extract("year", Pago.fecha_pago)
+        mo = extract("month", Pago.fecha_pago)
+        q = (
+            select(
+                yr.label("anio"),
+                mo.label("mes_num"),
+                func.count(Pago.id).label("cantidad_pagos"),
+                func.coalesce(func.sum(Pago.monto_pagado), 0).label("monto_total"),
+            )
+            .select_from(Pago)
+            .where(
+                Pago.fecha_pago.isnot(None),
+                func.date(Pago.fecha_pago) >= min_date,
+                func.date(Pago.fecha_pago) <= max_date,
+                not_(_where_pago_excluido_operacion()),
+            )
+            .group_by(yr, mo)
+        )
+        for row in db.execute(q).all():
+            yk, mk = int(row.anio), int(row.mes_num)
+            buckets[(yk, mk)] = {
+                "cantidad_pagos": int(row.cantidad_pagos or 0),
+                "monto_total": _safe_float(row.monto_total),
+            }
+
+        series: list[dict] = []
+        for m in meses:
+            yk, mk = m["year"], m["month"]
+            b = buckets.get((yk, mk), {"cantidad_pagos": 0, "monto_total": 0.0})
+            series.append({
+                "mes": m["mes"],
+                "cantidad_pagos": int(b["cantidad_pagos"]),
+                "monto_total": round(float(b["monto_total"]), 2),
+            })
+        return {"series": series, "origen": "bd"}
+    except Exception as e:
+        logger.exception("Error en pagos-realizados-mensual: %s", e)
+        return {
+            "series": [
+                {"mes": mm["mes"], "cantidad_pagos": 0, "monto_total": 0.0}
+                for mm in meses
+            ],
+            "origen": "bd",
+        }
+
+
+@router.get(
+    "/pagos-realizados-mensual",
+    summary=(
+        "Cantidad de pagos (tabla pagos) por mes de fecha_pago. "
+        "Sin filtro de estado de préstamo ni conciliado; excluye anulados/duplicados."
+    ),
+)
+def get_pagos_realizados_mensual(
+    periodo: Optional[str] = Query(None),
+    fecha_inicio: Optional[str] = Query(None),
+    fecha_fin: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+):
+    """Resumen mensual: número de pagos realizados (cualquier contexto operativo)."""
+    fi, ff = fecha_inicio, fecha_fin
+    if not (fi and ff):
+        pfi, pff = _fechas_iso_desde_periodo_dashboard(periodo)
+        if pfi and pff:
+            fi, ff = pfi, pff
+    return _compute_pagos_realizados_mensual(db, fi, ff)
 
 
 @router.get("/cobranza-por-dia", summary="[Stub] Devuelve dias vacíos hasta tener tabla pagos/cobranzas.")
