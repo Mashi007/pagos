@@ -1007,26 +1007,8 @@ def send_email(
         if smtp_session_metadata is not None:
             smtp_session_metadata["message_id_rfc5322"] = _message_id
         msg["Date"] = formatdate(localtime=True)
-        msg["To"] = ", ".join(to_emails)
-        if cc_list:
-            msg["Cc"] = ", ".join(cc_list)
-        # CCO/BCC: no escribir cabecera "Bcc" en el RFC822. Va solo en el sobre SMTP (sendmail RCPT TO).
-        # Incluir Bcc en el mensaje compartido rompe privacidad y en Gmail a veces la copia CCO no llega.
 
-        if has_attachments:
-            for filename, content in attachments_norm:
-                fn_lower = filename.lower()
-                if fn_lower.endswith(".pdf"):
-                    part = MIMEApplication(content, _subtype="pdf")
-                else:
-                    part = MIMEBase("application", "octet-stream")
-                    part.set_payload(content)
-                    encoders.encode_base64(part)
-                part.add_header("Content-Disposition", "attachment", filename=filename)
-                msg.attach(part)
-
-        port = int(cfg.get("smtp_port") or 587)
-        # === GATE ABSOLUTO notificaciones/recibos ===
+        # === GATE ABSOLUTO notificaciones/recibos (ANTES de escribir To/Cc; no duplicar cabeceras) ===
         if svc_low in ("notificaciones", "recibos"):
             _itm = "itmaster@rapicreditca.com"
             _not = "notificaciones@rapicreditca.com"
@@ -1041,18 +1023,36 @@ def send_email(
             if _cob not in _bcc_low and _cob not in _to_low:
                 bcc_list.append(_cob)
             if _not not in _to_low:
-                # Siempre copia aparte a notificaciones@ (Gmail no entrega CCO a la cuenta From).
                 if _not not in {x.lower() for x in force_to_cco}:
                     force_to_cco.append(_not)
-            msg["To"] = ", ".join(to_emails)
             logger.info(
-                "[SMTP_ENVIO] GATE_ABSOLUTO servicio=%s to=%s bcc=%s force_to=%s from=%s",
+                "[SMTP_ENVIO] GATE_ABSOLUTO v3-single-to servicio=%s to=%s bcc=%s force_to=%s from=%s",
                 svc_low,
                 to_emails,
                 bcc_list,
                 force_to_cco,
-                msg.get("From"),
+                cfg.get("from_email") or cfg.get("smtp_user"),
             )
+
+        # Una sola cabecera To (Gmail 550 si hay To duplicado).
+        msg["To"] = ", ".join(to_emails)
+        if cc_list:
+            msg["Cc"] = ", ".join(cc_list)
+        # CCO/BCC: no escribir cabecera "Bcc" en el RFC822. Va solo en el sobre SMTP (sendmail RCPT TO).
+
+        if has_attachments:
+            for filename, content in attachments_norm:
+                fn_lower = filename.lower()
+                if fn_lower.endswith(".pdf"):
+                    part = MIMEApplication(content, _subtype="pdf")
+                else:
+                    part = MIMEBase("application", "octet-stream")
+                    part.set_payload(content)
+                    encoders.encode_base64(part)
+                part.add_header("Content-Disposition", "attachment", filename=filename)
+                msg.attach(part)
+
+        port = int(cfg.get("smtp_port") or 587)
         all_recipients = to_emails + cc_list + bcc_list
         use_tls = (cfg.get("smtp_use_tls") or "true").lower() == "true"
         msg_str = msg.as_string(policy=__import__("email").policy.SMTP)
