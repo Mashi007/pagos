@@ -175,40 +175,53 @@ export function EmailCuentasConfig() {
     setData({ ...data, [key]: value })
   }
 
+  const etiquetaCuenta = (n: number) =>
+    CUENTA_OPCIONES_ASIGNACION.find(o => o.value === n)?.label ?? `Cuenta ${n}`
+
+  const cuentaServicio = (servicio: string): number | string => {
+    const a = data?.asignacion
+    if (servicio === 'cobros') return a?.cobros ?? 1
+    if (servicio === 'estado_cuenta' || servicio === 'finiquito')
+      return a?.estado_cuenta ?? 2
+    if (servicio === 'recibos') return a?.recibos ?? 1
+    if (servicio === 'notificaciones') return 'por caso (2 / 3 / 4)'
+    return 1
+  }
+
   const SERVICIOS_DISPONIBLES: {
     key: keyof EmailCuentasResponse
     label: string
-    cuenta: number
+    servicio: string
   }[] = [
     {
       key: 'email_activo_cobros',
       label: 'Cobros (formulario público, recibos)',
-      cuenta: 1,
+      servicio: 'cobros',
     },
 
     {
       key: 'email_activo_estado_cuenta',
       label: 'Estado de cuenta (código y envío PDF)',
-      cuenta: 2,
+      servicio: 'estado_cuenta',
     },
 
     {
       key: 'email_activo_finiquito',
       label: 'Finiquito (código OTP portal colaborador)',
-      cuenta: 2,
+      servicio: 'finiquito',
     },
 
     {
       key: 'email_activo_notificaciones',
       label: 'Notificaciones (plantillas a clientes)',
-      cuenta: 3,
+      servicio: 'notificaciones',
     },
 
     {
       key: 'email_activo_recibos',
       label:
         'Recibos (estado de cuenta tras conciliación, job diario 15:00 Caracas)',
-      cuenta: 1,
+      servicio: 'recibos',
     },
   ]
 
@@ -386,9 +399,9 @@ export function EmailCuentasConfig() {
             ): sobrevive reinicios y despliegues. Las contraseñas SMTP/IMAP se
             guardan cifradas cuando el servidor define clave de cifrado.{' '}
             <span className="block pt-2 text-foreground/90">
-              Active o desactive el envío por servicio (cuenta 1, 2 o 3/4).
-              Cobros: recibo al aprobar y &quot;Enviar recibo&quot;. Rechazo de
-              pagos reportados: Notificaciones (cuenta 3/4).
+              Active o desactive el envío por servicio. Cobros → pagos@ (1);
+              Estado de cuenta / Finiquito → tucuenta@ (2); Recibos → pagos@
+              (1); Notificaciones → según caso (2/3/4).
             </span>
           </CardDescription>
         </CardHeader>
@@ -430,7 +443,11 @@ export function EmailCuentasConfig() {
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2">
-            {SERVICIOS_DISPONIBLES.map(({ key, label, cuenta }) => (
+            {SERVICIOS_DISPONIBLES.map(({ key, label, servicio }) => {
+              const cuenta = cuentaServicio(servicio)
+              const cuentaTxt =
+                typeof cuenta === 'number' ? etiquetaCuenta(cuenta) : cuenta
+              return (
               <div
                 key={key}
                 className="flex items-center justify-between rounded border p-3"
@@ -438,9 +455,7 @@ export function EmailCuentasConfig() {
                 <div>
                   <p className="text-sm font-medium">{label}</p>
 
-                  <p className="text-xs text-muted-foreground">
-                    Cuenta {cuenta}
-                  </p>
+                  <p className="text-xs text-muted-foreground">{cuentaTxt}</p>
                 </div>
 
                 <label className="relative inline-flex cursor-pointer items-center">
@@ -463,7 +478,8 @@ export function EmailCuentasConfig() {
                   </span>
                 </label>
               </div>
-            ))}
+              )
+            })}
           </div>
         </CardContent>
       </Card>

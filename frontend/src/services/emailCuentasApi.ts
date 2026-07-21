@@ -186,13 +186,13 @@ export const emailCuentasApi = {
 /** Etiquetas de servicio por cuenta (para UI). */
 
 export const SERVICIO_POR_CUENTA: Record<number, string> = {
-  1: 'Cobros (formulario público de reporte de pago)',
+  1: 'pagos@ — Cobros y Recibos',
 
-  2: 'Estado de cuenta y Finiquito (OTP + PDF; misma cuenta SMTP)',
+  2: 'tucuenta@ — Estado de cuenta, Finiquito y día siguiente al venc.',
 
-  3: 'Notificaciones (pestañas asignadas a esta cuenta)',
+  3: 'notificaciones@ — Menor a 60 días, prejudicial, etc.',
 
-  4: 'Notificaciones (casos de envío asignados a esta cuenta)',
+  4: 'recuerda@ — Antes de vencimiento (3 días / 5 / 3 / 1 / hoy)',
 }
 
 /** Casos de envío de notificaciones (cuentas 1-4). */
