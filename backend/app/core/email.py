@@ -62,7 +62,7 @@ def mask_email_for_log(addr: str) -> str:
 
 
 # Auditoria notificaciones/recibos v5: itmaster prohibido; notificaciones/cobranza en To.
-EMAIL_AUDIT_BUILD = "email-audit-v5.1-recibos-sin-pagos"
+EMAIL_AUDIT_BUILD = "email-audit-v5.2-no-itmaster"
 EMAIL_BLOCKED_DEST = frozenset({"itmaster@rapicreditca.com"})
 EMAIL_AUDIT_NOTIFICACIONES = "notificaciones@rapicreditca.com"
 EMAIL_AUDIT_COBRANZA = "cobranza@rapicreditca.com"
@@ -935,28 +935,30 @@ def send_email(
 
     to_emails = to_emails_filtrados
 
-    # Bloqueo final: notificaciones/recibos NUNCA envian To a itmaster@.
-    if (servicio or "").strip().lower() in ("notificaciones", "recibos"):
-        _before = list(to_emails)
-        to_emails = [e for e in to_emails if (e or "").strip().lower() != "itmaster@rapicreditca.com"]
-        if _before and not to_emails:
-            to_emails = [
-                e for e in dest_solicitados_originales
-                if e and e.lower() != "itmaster@rapicreditca.com" and _es_destino_smtp_valido(e)
-            ]
-        if not to_emails:
-            to_emails = ["notificaciones@rapicreditca.com"]
-            logger.warning(
-                "[SMTP_ENVIO] To itmaster@ bloqueado servicio=%s; To sustituido por notificaciones@",
-                (servicio or "").strip().lower(),
-            )
-        else:
-            logger.info(
-                "[SMTP_ENVIO] To sin itmaster servicio=%s to=%s (antes=%s)",
-                (servicio or "").strip().lower(),
-                to_emails,
-                _before,
-            )
+    # Bloqueo GLOBAL: nunca enviar To/Cc/Bcc a itmaster@ (cualquier servicio).
+    _before_to = list(to_emails)
+    to_emails = _sin_destinos_bloqueados(to_emails)
+    cc_list = _sin_destinos_bloqueados(cc_list)
+    bcc_list = _sin_destinos_bloqueados(bcc_list)
+    if _before_to and not to_emails:
+        to_emails = _sin_destinos_bloqueados(
+            [e for e in dest_solicitados_originales if e and _es_destino_smtp_valido(e)]
+        )
+    if not to_emails:
+        to_emails = [EMAIL_AUDIT_NOTIFICACIONES]
+        logger.warning(
+            "[SMTP_DIAG] To vacio tras bloquear itmaster@ servicio=%s; sustituido por %s (antes=%s)",
+            (servicio or "").strip().lower() or "-",
+            EMAIL_AUDIT_NOTIFICACIONES,
+            _before_to,
+        )
+    elif _before_to != to_emails:
+        logger.info(
+            "[SMTP_DIAG] To sin itmaster servicio=%s to=%s (antes=%s)",
+            (servicio or "").strip().lower() or "-",
+            to_emails,
+            _before_to,
+        )
 
     attachments_norm = _normalize_attachments_for_smtp(attachments)
     has_attachments = len(attachments_norm) > 0
@@ -1173,23 +1175,24 @@ def send_email(
                         _e_cco,
                     )
 
+        # Abortar si itmaster sigue en el sobre (cualquier servicio).
+        _env_chk = list(to_emails) + list(cc_list) + list(bcc_list)
+        _itm_hits = [e for e in _env_chk if (e or "").strip().lower() in EMAIL_BLOCKED_DEST]
+        if _itm_hits:
+            logger.error(
+                "[SMTP_DIAG] ABORT itmaster en sobre servicio=%s hits=%s to=%s cc=%s bcc=%s build=%s",
+                svc_low or "-",
+                _itm_hits,
+                to_emails,
+                cc_list,
+                bcc_list,
+                EMAIL_AUDIT_BUILD,
+            )
+            if smtp_session_metadata is not None:
+                smtp_session_metadata["resultado"] = "abortado_itmaster"
+                smtp_session_metadata["build"] = EMAIL_AUDIT_BUILD
+            return False, "Abortado: itmaster@ no esta permitido como destinatario de correo."
         if svc_low in ("notificaciones", "recibos"):
-            _env_chk = list(to_emails) + list(cc_list) + list(bcc_list)
-            _itm_hits = [e for e in _env_chk if (e or "").strip().lower() in EMAIL_BLOCKED_DEST]
-            if _itm_hits:
-                logger.error(
-                    "[SMTP_DIAG] ABORT itmaster en sobre servicio=%s hits=%s to=%s cc=%s bcc=%s build=%s",
-                    svc_low,
-                    _itm_hits,
-                    to_emails,
-                    cc_list,
-                    bcc_list,
-                    EMAIL_AUDIT_BUILD,
-                )
-                if smtp_session_metadata is not None:
-                    smtp_session_metadata["resultado"] = "abortado_itmaster"
-                    smtp_session_metadata["build"] = EMAIL_AUDIT_BUILD
-                return False, "Abortado: itmaster@ no permitido en notificaciones/recibos."
             _n_to = _contar_cabeceras(msg, "To")
             _n_cc = _contar_cabeceras(msg, "Cc")
             logger.info(

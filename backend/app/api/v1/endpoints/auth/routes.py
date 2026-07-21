@@ -106,7 +106,7 @@ def auth_status():
 def forgot_password(body: ForgotPasswordRequest, request: Request, db: Session = Depends(get_db)):
     """
     Solicitud de olvido de contraseña. Envía un correo a FORGOT_PASSWORD_NOTIFY_EMAIL
-    (por defecto itmaster@rapicreditca.com) con el email del solicitante para que el
+    (por defecto notificaciones@rapicreditca.com) con el email del solicitante para que el
     administrador pueda enviar una nueva contraseña o restablecerla.
     Siempre devuelve 200 para no revelar si el email existe en el sistema.
     Rate limit: 3 solicitudes por IP cada 15 minutos.
@@ -119,7 +119,9 @@ def forgot_password(body: ForgotPasswordRequest, request: Request, db: Session =
     if destinos_config:
         destino = destinos_config[0].strip()
     else:
-        destino = (getattr(settings, "FORGOT_PASSWORD_NOTIFY_EMAIL", None) or "itmaster@rapicreditca.com").strip()
+        destino = (getattr(settings, "FORGOT_PASSWORD_NOTIFY_EMAIL", None) or "notificaciones@rapicreditca.com").strip()
+    if destino.strip().lower() == "itmaster@rapicreditca.com":
+        destino = "notificaciones@rapicreditca.com"
     if not destino or "@" not in destino:
         logger.warning("FORGOT_PASSWORD_NOTIFY_EMAIL no configurado. No se envía correo de olvido de contraseña.")
         return {"message": "Solicitud registrada. Si el correo está registrado, recibirá instrucciones."}

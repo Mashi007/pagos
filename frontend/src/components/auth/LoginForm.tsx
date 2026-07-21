@@ -84,7 +84,7 @@ const forgotSchema = z.object({
   email: z.string().min(1, 'Indique su correo').email('Correo inválido'),
 })
 
-const FORGOT_EMAIL_DESTINO = 'itmaster@rapicreditca.com'
+const FORGOT_EMAIL_DESTINO = 'notificaciones@rapicreditca.com'
 
 export function LoginForm() {
   const [showPassword, setShowPassword] = useState(false)
@@ -376,7 +376,7 @@ export function LoginForm() {
               </Button>
             </form>
 
-            {/* Modal Olvidó su contraseña: envía notificación a itmaster@rapicreditca.com */}
+            {/* Modal Olvidó su contraseña: envía notificación a notificaciones@rapicreditca.com */}
 
             <Dialog open={forgotOpen} onOpenChange={setForgotOpen}>
               <DialogContent className="max-w-md">

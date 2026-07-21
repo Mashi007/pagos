@@ -168,7 +168,7 @@ export class AuthService {
     }
   }
 
-  // Olvido de contraseña: notifica a itmaster@rapicreditca.com para envío de nueva contraseña
+  // Olvido de contraseña: notifica a notificaciones@rapicreditca.com para envío de nueva contraseña
 
   async forgotPassword(email: string): Promise<{ message: string }> {
     const normalized = email.toLowerCase().trim()
