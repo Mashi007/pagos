@@ -66,6 +66,7 @@ export interface ProcesarRebotesGmailResponse {
   sin_correo: number
   sin_cedula: number
   cedula_duplicada: number
+  truncado?: boolean
 }
 
 export interface Auditoria {
@@ -789,7 +790,7 @@ class AuditoriaService {
 
   /** Solo admin. Escaneo manual rebotes Gmail (bandeja Principal itmaster). */
   async procesarRebotesGmail(
-    maxMessages: number = 200
+    maxMessages: number = 40
   ): Promise<ProcesarRebotesGmailResponse> {
     return apiClient.post<ProcesarRebotesGmailResponse>(
       `${this.baseUrl}/rebotes-gmail/procesar`,

@@ -152,12 +152,17 @@ export function AuditoriaRebotesGmailTab() {
   const handleProcesar = async () => {
     setProcesando(true)
     try {
-      const res = await auditoriaService.procesarRebotesGmail(200)
+      const res = await auditoriaService.procesarRebotesGmail(40)
       setUltimoProceso(res)
       if (res.candidatos === 0) {
         toast.message(
           res.mensaje ||
             'Gmail no devolvio candidatos. Revise cuenta OAuth / Inbox.'
+        )
+      } else if (res.truncado) {
+        toast.message(
+          res.mensaje ||
+            `Lote parcial: ${res.guardados} nuevos. Pulse Procesar de nuevo.`
         )
       } else {
         toast.success(

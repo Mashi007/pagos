@@ -389,11 +389,15 @@ def procesar_rebotes_gmail(
     db: Session,
     *,
     procesado_por: str,
-    max_messages: int = 200,
+    max_messages: int = 40,
+    presupuesto_segundos: float = 50.0,
 ) -> dict[str, Any]:
     """
-    Escanea Primary de la cuenta Gmail conectada (itmaster), guarda filas nuevas y etiqueta GMAIL.
+    Escanea Inbox con etiqueta GMAIL, guarda filas nuevas.
+    Limita lote y tiempo para no morir por timeout/SIGTERM en Render.
     """
+    import time
+
     from app.services.pagos_gmail.credentials import get_pagos_gmail_credentials
     from app.services.pagos_gmail.gmail_service import (
         add_message_user_labels_only,
@@ -418,6 +422,7 @@ def procesar_rebotes_gmail(
             "sin_correo": 0,
             "sin_cedula": 0,
             "cedula_duplicada": 0,
+            "truncado": False,
         }
 
     service = build_gmail_service(creds)
@@ -425,7 +430,7 @@ def procesar_rebotes_gmail(
 
     msg_refs: list[dict] = []
     page_token: Optional[str] = None
-    hard_cap = max(1, min(int(max_messages), 1000))
+    hard_cap = max(1, min(int(max_messages), 200))
 
     while len(msg_refs) < hard_cap:
         params: dict[str, Any] = {
@@ -453,6 +458,7 @@ def procesar_rebotes_gmail(
                 "sin_correo": 0,
                 "sin_cedula": 0,
                 "cedula_duplicada": 0,
+                "truncado": False,
             }
         batch = resp.get("messages") or []
         msg_refs.extend(batch)
@@ -463,10 +469,26 @@ def procesar_rebotes_gmail(
     msg_refs = msg_refs[:hard_cap]
     candidatos = len(msg_refs)
     logger.info(
-        "[AUDITORIA_REBOTES_GMAIL] q=%r candidatos=%s",
+        "[AUDITORIA_REBOTES_GMAIL] q=%r candidatos=%s max=%s presupuesto_s=%s",
         GMAIL_LIST_QUERY,
         candidatos,
+        hard_cap,
+        presupuesto_segundos,
     )
+
+    ids = [r.get("id") for r in msg_refs if r.get("id")]
+    ids_en_bd: set[str] = set()
+    if ids:
+        rows_exist = (
+            db.execute(
+                select(AuditoriaReboteGmail.gmail_message_id).where(
+                    AuditoriaReboteGmail.gmail_message_id.in_(ids)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        ids_en_bd = {str(x) for x in rows_exist if x}
 
     revisados = 0
     guardados = 0
@@ -476,13 +498,43 @@ def procesar_rebotes_gmail(
     sin_correo = 0
     sin_cedula = 0
     cedula_duplicada = 0
+    truncado = False
     guardados_por_obs: dict[str, int] = {"mal": 0, "lleno": 0, "temporal": 0, "otro": 0}
+    t0 = time.monotonic()
+    deadline = t0 + max(15.0, float(presupuesto_segundos))
 
     for ref in msg_refs:
+        if time.monotonic() >= deadline:
+            truncado = True
+            logger.warning(
+                "[AUDITORIA_REBOTES_GMAIL] presupuesto agotado tras %.1fs "
+                "(revisados=%s guardados=%s candidatos=%s). Pulse Procesar de nuevo.",
+                time.monotonic() - t0,
+                revisados,
+                guardados,
+                candidatos,
+            )
+            break
+
         mid = ref.get("id")
         if not mid:
             continue
+
+        if mid in ids_en_bd:
+            ya_existentes += 1
+            revisados += 1
+            continue
+
         revisados += 1
+        if revisados % 10 == 0:
+            logger.info(
+                "[AUDITORIA_REBOTES_GMAIL] progreso revisados=%s/%s guardados=%s elapsed=%.1fs",
+                revisados,
+                candidatos,
+                guardados,
+                time.monotonic() - t0,
+            )
+
         try:
             full = (
                 service.users()
@@ -504,7 +556,6 @@ def procesar_rebotes_gmail(
         remitente = headers.get("from") or ""
         asunto = headers.get("subject") or ""
 
-        # Con etiqueta GMAIL ya entraron al escaneo; el cuerpo/asunto deben parecer rebote.
         if not parece_rebote_gmail(texto, remitente, asunto):
             omitidos += 1
             continue
@@ -519,38 +570,15 @@ def procesar_rebotes_gmail(
         cedula_raw = _cedula_por_correo(db, correo)
         cedula = normalizar_cedula_almacenamiento(cedula_raw) if cedula_raw else None
         if not cedula:
-            # Regla: solo se guarda si hay cedula en clientes.
             sin_cedula += 1
             omitidos += 1
             continue
 
         fecha_msg = _fecha_mensaje(headers, full.get("internalDate"))
 
-        existente = db.execute(
-            select(AuditoriaReboteGmail.id).where(
-                AuditoriaReboteGmail.gmail_message_id == mid
-            )
-        ).scalar_one_or_none()
-        if existente:
-            ya_existentes += 1
-            if label_id:
-                try:
-                    add_message_user_labels_only(service, mid, [label_id])
-                    etiquetados += 1
-                except Exception:
-                    pass
-            continue
-
-        # Regla: no repetir cedula ya guardada en esta tabla.
         if _cedula_ya_registrada(db, cedula):
             cedula_duplicada += 1
             ya_existentes += 1
-            if label_id:
-                try:
-                    add_message_user_labels_only(service, mid, [label_id])
-                    etiquetados += 1
-                except Exception:
-                    pass
             continue
 
         row = AuditoriaReboteGmail(
@@ -570,6 +598,7 @@ def procesar_rebotes_gmail(
         try:
             db.commit()
             guardados += 1
+            ids_en_bd.add(mid)
             obs_key = (obs or "otro").strip().lower()
             if obs_key not in guardados_por_obs:
                 obs_key = "otro"
@@ -577,6 +606,7 @@ def procesar_rebotes_gmail(
         except IntegrityError:
             db.rollback()
             ya_existentes += 1
+            ids_en_bd.add(mid)
         except Exception as e:
             db.rollback()
             logger.warning("[AUDITORIA_REBOTES_GMAIL] insert %s: %s", mid, e)
@@ -605,18 +635,36 @@ def procesar_rebotes_gmail(
     except Exception as e:
         logger.warning("[AUDITORIA_REBOTES_GMAIL] actualizar kpis: %s", e)
 
+    mensaje = None
+    if candidatos == 0:
+        mensaje = (
+            f"Gmail no devolvio mensajes con q={GMAIL_LIST_QUERY!r}. "
+            "Verifique que la cuenta OAuth sea itmaster@rapicreditca.com "
+            "y que los correos tengan la etiqueta GMAIL en Inbox."
+        )
+    elif truncado:
+        mensaje = (
+            f"Lote parcial por limite de tiempo (~{int(presupuesto_segundos)}s): "
+            f"revisados {revisados}/{candidatos}, guardados {guardados}. "
+            "Pulse Procesar ahora de nuevo para continuar."
+        )
+
+    logger.info(
+        "[AUDITORIA_REBOTES_GMAIL] fin candidatos=%s revisados=%s guardados=%s "
+        "omitidos=%s ya_existentes=%s truncado=%s elapsed=%.1fs",
+        candidatos,
+        revisados,
+        guardados,
+        omitidos,
+        ya_existentes,
+        truncado,
+        time.monotonic() - t0,
+    )
+
     return {
         "ok": True,
         "error": None,
-        "mensaje": (
-            None
-            if candidatos
-            else (
-                f"Gmail no devolvio mensajes con q={GMAIL_LIST_QUERY!r}. "
-                "Verifique que la cuenta OAuth sea itmaster@rapicreditca.com "
-                "y que los correos tengan la etiqueta GMAIL en Inbox."
-            )
-        ),
+        "mensaje": mensaje,
         "query": GMAIL_LIST_QUERY,
         "etiqueta": ETIQUETA_GMAIL,
         "candidatos": candidatos,
@@ -628,4 +676,5 @@ def procesar_rebotes_gmail(
         "sin_correo": sin_correo,
         "sin_cedula": sin_cedula,
         "cedula_duplicada": cedula_duplicada,
+        "truncado": truncado,
     }

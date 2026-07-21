@@ -58,6 +58,7 @@ class ProcesarRebotesResponse(BaseModel):
     sin_correo: int = 0
     sin_cedula: int = 0
     cedula_duplicada: int = 0
+    truncado: bool = False
 
 
 class BorrarRebotesResponse(BaseModel):
@@ -110,15 +111,16 @@ def _to_item(row) -> ReboteGmailItem:
 
 @router.post("/procesar", response_model=ProcesarRebotesResponse)
 def procesar_rebotes_gmail(
-    max_messages: int = Query(200, ge=1, le=1000),
+    max_messages: int = Query(40, ge=1, le=200),
     db: Session = Depends(get_db),
     admin: UserResponse = Depends(require_admin),
 ):
-    """Escaneo manual: Inbox con etiqueta GMAIL (leidos y no leidos), parsea rebotes y guarda en BD."""
+    """Escaneo manual por lotes (Render-safe): etiqueta GMAIL, parsea rebotes y guarda en BD."""
     result = svc.procesar_rebotes_gmail(
         db,
         procesado_por=admin.email,
         max_messages=max_messages,
+        presupuesto_segundos=50.0,
     )
     if not result.get("ok") and result.get("error") == "no_credentials":
         raise HTTPException(status_code=503, detail=result.get("mensaje") or "Sin credenciales Gmail")
