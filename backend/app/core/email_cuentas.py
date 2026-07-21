@@ -26,7 +26,6 @@ ASIGNACION_DEFAULT = {
     "notificaciones_tab": {
         "d_2_antes_vencimiento": 1,
         "dias_5": 1,
-        "dias_3": 1,
         "dias_1": 1,
         "hoy": 1,
         "dias_1_retraso": 2,
@@ -155,7 +154,11 @@ def obtener_indice_cuenta(servicio: Optional[str], tipo_tab: Optional[str], asig
         return asig["recibos"]
     if servicio == SERVICIO_NOTIFICACIONES and tipo_tab:
         tab_map = asig.get("notificaciones_tab") or {}
-        return int(tab_map.get(tipo_tab, 3))
+        tab = (tipo_tab or "").strip()
+        # PAGO_3_DIAS_ANTES (General/Fechas) usa la misma cuenta que sidebar 3 dias antes.
+        if tab == "dias_3":
+            tab = "d_2_antes_vencimiento"
+        return int(tab_map.get(tab, 3))
     if servicio == SERVICIO_NOTIFICACIONES:
         return int(asig.get("notificaciones_tab", {}).get("dias_5", 3))
     return 1
