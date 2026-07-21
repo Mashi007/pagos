@@ -115,6 +115,48 @@ def _tipo_menor_60_solo_pdf_fijo(tipo: str) -> bool:
 EMAIL_PRUEBA_PREJUDICIAL = "itmaster@rapicreditca.com"
 
 
+def _bcc_global_notificaciones() -> List[str]:
+    raw = getattr(settings, "NOTIFICACIONES_BCC_GLOBAL", "") or ""
+    out: List[str] = []
+    seen: set[str] = set()
+    for chunk in str(raw).replace(";", ",").split(","):
+        email = chunk.strip()
+        if not email or "@" not in email:
+            continue
+        low = email.lower()
+        if low in seen:
+            continue
+        seen.add(low)
+        out.append(email)
+    return out
+
+
+def _merge_bcc_notificaciones(tipo_cfg: dict) -> List[str]:
+    out: List[str] = []
+    seen: set[str] = set()
+
+    cco_tipo = tipo_cfg.get("cco") or []
+    if isinstance(cco_tipo, list):
+        for raw in cco_tipo:
+            email = raw.strip() if isinstance(raw, str) else ""
+            if not email or "@" not in email:
+                continue
+            low = email.lower()
+            if low in seen:
+                continue
+            seen.add(low)
+            out.append(email)
+
+    for email in _bcc_global_notificaciones():
+        low = email.lower()
+        if low in seen:
+            continue
+        seen.add(low)
+        out.append(email)
+
+    return out
+
+
 def _tipo_sin_paquete_pdf_obligatorio(tipo: str) -> bool:
     """Tipos que no exigen Carta_Cobranza ni PDF fijo en modo paquete estricto."""
     return (
@@ -503,25 +545,13 @@ def _enviar_correos_items(
                     continue
 
         # Mismo HTML y adjuntos que producción; destino: prueba o cliente.
-        # PREJUDICIAL: siempre mensaje de prueba solo a EMAIL_PRUEBA_PREJUDICIAL (sin clientes ni CCO).
+        bcc_list = _merge_bcc_notificaciones(tipo_cfg)
         if _tipo_prejudicial_solo_html(tipo):
             to_email = [EMAIL_PRUEBA_PREJUDICIAL]
-            bcc_list = None
         elif forzar_destinos_prueba is not None:
             to_email = [e.strip() for e in forzar_destinos_prueba if e and isinstance(e, str) and "@" in e.strip()]
-            bcc_list = None
         elif usar_solo_pruebas:
             to_email = [email_pruebas]
-            cco = tipo_cfg.get("cco") or []
-            bcc_list = (
-                [
-                    e.strip()
-                    for e in cco
-                    if e and isinstance(e, str) and "@" in e.strip()
-                ]
-                if isinstance(cco, list)
-                else []
-            )
             bcc_list = bcc_list or None
         elif bloqueo_pruebas_sin_email:
             to_email = []  # Modo prueba activo pero sin correo de pruebas: no enviar a nadie
@@ -534,8 +564,7 @@ def _enviar_correos_items(
                 if prim and isinstance(prim[0], str) and prim[0].strip():
                     c1 = prim[0].strip()
             to_email = lista_correo_principal_para_notificaciones(c1)
-            cco = tipo_cfg.get("cco") or []
-            bcc_list = [e.strip() for e in cco if e and isinstance(e, str) and "@" in e.strip()] if isinstance(cco, list) else []
+            bcc_list = bcc_list or None
 
         email_sent_ok = False
         if to_email:

@@ -342,6 +342,14 @@ class Settings(BaseSettings):
             "Vacío = From de la cuenta SMTP asignada en configuracion."
         ),
     )
+    NOTIFICACIONES_BCC_GLOBAL: str = Field(
+        default="notificaciones@rapicreditca.com,cobranza@rapicreditca.com",
+        description=(
+            "Correos en CCO/BCC que se agregan siempre a todos los envios del "
+            "servicio notificaciones, ademas de la CCO configurada por tipo. "
+            "Separar por coma."
+        ),
+    )
     # Submódulo Recibos: envío manual (UI / POST) y, si se activa, cron diario en servidor (misma lógica que ejecutar).
     ENABLE_RECIBOS_CONCILIACION_EMAIL_JOBS: bool = Field(
         default=False,
