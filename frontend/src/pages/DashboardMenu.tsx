@@ -81,7 +81,6 @@ import type {
   CobranzasSemanalesResponse,
   EvolucionMensualItem,
   NotificacionesEnviosPorDiaResponse,
-  PagosRealizadosMensualResponse,
 } from '../types/dashboard'
 import {
   finiquitoAdminResumenFlujoDiario,
@@ -388,48 +387,6 @@ export function DashboardMenu() {
 
     enabled: true,
   })
-
-  const periodoPagosRealizados =
-    getPeriodoGrafico('pagos-realizados') || periodo || 'ultimos_12_meses'
-
-  const {
-    data: datosPagosRealizados,
-    isLoading: loadingPagosRealizados,
-    isError: errorPagosRealizados,
-  } = useQuery({
-    queryKey: [
-      'pagos-realizados-mensual',
-      periodoPagosRealizados,
-      JSON.stringify(filtros),
-    ],
-    queryFn: async (): Promise<PagosRealizadosMensualResponse> => {
-      const obj = construirFiltrosObject(periodoPagosRealizados)
-      const params = new URLSearchParams()
-      Object.entries(obj).forEach(([key, value]) => {
-        if (value != null && value !== '') params.append(key, String(value))
-      })
-      if (!params.has('periodo') && periodoPagosRealizados) {
-        params.append('periodo', periodoPagosRealizados)
-      }
-      const queryString = params.toString()
-      const response = await apiClient.get(
-        `/api/v1/dashboard/pagos-realizados-mensual${
-          queryString ? `?${queryString}` : ''
-        }`,
-        { timeout: 60000 }
-      )
-      return response as PagosRealizadosMensualResponse
-    },
-    staleTime: 15 * 60 * 1000,
-    retry: 1,
-    refetchOnWindowFocus: false,
-    enabled: enableSecondaryCharts,
-  })
-
-  const seriePagosRealizados = useMemo(
-    () => datosPagosRealizados?.series ?? [],
-    [datosPagosRealizados?.series]
-  )
 
   // Batch 3: Gráficos secundarios rápidos. Período por gráfico; filtros (fecha_inicio/fecha_fin) se envían siempre.
 
@@ -1384,137 +1341,6 @@ export function DashboardMenu() {
                   ) : (
                     <div className="flex items-center justify-center py-16 text-gray-500">
                       No hay datos para el período seleccionado
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </motion.div>
-
-            {/* Pagos realizados por mes (conteo tabla pagos) */}
-
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.32 }}
-            >
-              <Card className="overflow-hidden rounded-xl border border-gray-200/90 bg-white shadow-lg">
-                <CardHeader className="border-b border-gray-200/80 bg-gradient-to-r from-violet-50/90 to-indigo-50/90 pb-3">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <CardTitle className="flex items-center gap-2 text-lg font-bold text-gray-800">
-                      <BarChart3 className="h-5 w-5 text-violet-600" />
-                      <span>Pagos realizados por mes</span>
-                    </CardTitle>
-
-                    <div className="flex flex-wrap items-center gap-2">
-                      <SelectorPeriodoGrafico chartId="pagos-realizados" />
-                      <Badge
-                        variant="secondary"
-                        className="border border-gray-200 bg-white/80 text-xs font-medium text-gray-600"
-                      >
-                        {getRangoFechasLabelGrafico('pagos-realizados')}
-                      </Badge>
-                    </div>
-                  </div>
-
-                  <CardDescription className="mt-2 text-xs text-gray-600">
-                    Número de registros en pagos por mes de fecha de pago.
-                    Incluye conciliados y no conciliados, y cualquier contexto
-                    (APROBADO, finiquito/LIQUIDADO, DESISTIMIENTO, etc.).
-                    Excluye anulados, duplicados y cancelados.
-                  </CardDescription>
-                </CardHeader>
-
-                <CardContent className="p-6 pt-4">
-                  {loadingPagosRealizados ? (
-                    <div className="flex items-center justify-center py-16 text-gray-500">
-                      Cargando pagos realizados...
-                    </div>
-                  ) : errorPagosRealizados ? (
-                    <div className="flex items-center justify-center py-16 text-red-600">
-                      No se pudo cargar el conteo de pagos
-                    </div>
-                  ) : seriePagosRealizados.length > 0 ? (
-                    <ChartWithDateRangeSlider
-                      data={seriePagosRealizados}
-                      dataKey="mes"
-                      chartHeight={320}
-                    >
-                      {filteredData => (
-                        <ResponsiveContainer width="100%" height="100%">
-                          <BarChart
-                            data={filteredData}
-                            margin={{
-                              top: 12,
-                              right: 20,
-                              left: 12,
-                              bottom: 12,
-                            }}
-                          >
-                            <CartesianGrid {...chartCartesianGrid} />
-                            <XAxis dataKey="mes" tick={chartAxisTick} />
-                            <YAxis
-                              tick={chartAxisTick}
-                              allowDecimals={false}
-                              label={{
-                                value: 'Cantidad de pagos',
-                                angle: -90,
-                                position: 'insideLeft',
-                                style: { fill: '#374151', fontSize: 13 },
-                              }}
-                            />
-                            <Tooltip
-                              content={({ active, payload, label }) => {
-                                if (!active || !payload?.length) return null
-                                const row = payload[0]?.payload as {
-                                  cantidad_pagos?: number
-                                  monto_total?: number
-                                }
-                                if (!row) return null
-                                return (
-                                  <div style={chartTooltipStyle.contentStyle}>
-                                    <p style={chartTooltipStyle.labelStyle}>
-                                      {label}
-                                    </p>
-                                    <ul className="m-0 list-none space-y-1.5 p-0">
-                                      <li
-                                        className="flex items-center justify-between gap-4 text-[13px]"
-                                        style={{ color: '#4b5563' }}
-                                      >
-                                        <span>Pagos realizados</span>
-                                        <span className="font-semibold tabular-nums text-gray-900">
-                                          {(
-                                            row.cantidad_pagos ?? 0
-                                          ).toLocaleString('es-ES')}
-                                        </span>
-                                      </li>
-                                      <li
-                                        className="flex items-center justify-between gap-4 text-[13px]"
-                                        style={{ color: '#4b5563' }}
-                                      >
-                                        <span>Monto total (USD)</span>
-                                        <span className="font-semibold tabular-nums text-gray-900">
-                                          {formatCurrency(row.monto_total ?? 0)}
-                                        </span>
-                                      </li>
-                                    </ul>
-                                  </div>
-                                )
-                              }}
-                            />
-                            <Legend {...chartLegendStyle} />
-                            <Bar
-                              dataKey="cantidad_pagos"
-                              fill="#7c3aed"
-                              name="Pagos realizados"
-                              radius={[4, 4, 0, 0]}
-                            />
-                          </BarChart>
-                        </ResponsiveContainer>
-                      )}
-                    </ChartWithDateRangeSlider>
-                  ) : (
-                    <div className="flex items-center justify-center py-16 text-gray-500">
-                      No hay pagos en el período seleccionado
                     </div>
                   )}
                 </CardContent>
