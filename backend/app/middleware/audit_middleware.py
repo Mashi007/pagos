@@ -8,7 +8,7 @@ Intercepta todos los POST/PUT/DELETE/PATCH y registra en tabla auditoria.
 """
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Callable, Optional
 
 from fastapi import Request
@@ -91,7 +91,7 @@ def _persist_auditoria_row(
                 user_agent=ua,
                 exito=exito,
                 mensaje_error=(mensaje_error[:2000] if mensaje_error else None),
-                fecha=datetime.now(),
+                fecha=datetime.now(timezone.utc),
             )
         )
         db.commit()

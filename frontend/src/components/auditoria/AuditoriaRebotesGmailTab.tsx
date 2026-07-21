@@ -154,10 +154,10 @@ export function AuditoriaRebotesGmailTab() {
     try {
       const res = await auditoriaService.procesarRebotesGmail(40)
       setUltimoProceso(res)
-      if (res.candidatos === 0) {
+      if (res.candidatos === 0 && res.guardados === 0) {
         toast.message(
           res.mensaje ||
-            'Gmail no devolvio candidatos. Revise cuenta OAuth / Inbox.'
+            'No hay pendientes nuevos: los de GMAIL ya estan en BD o no hay mas en Inbox.'
         )
       } else if (res.truncado) {
         toast.message(
@@ -166,7 +166,7 @@ export function AuditoriaRebotesGmailTab() {
         )
       } else {
         toast.success(
-          `Procesado: ${res.candidatos} candidatos, ${res.guardados} nuevos, ${res.ya_existentes} ya en BD, ${res.omitidos} omitidos`
+          `Procesado: ${res.guardados} nuevos, ${res.ya_existentes} ya en BD, ${res.omitidos} omitidos (lote ${res.candidatos})`
         )
       }
       await Promise.all([cargar(1), cargarKpis()])

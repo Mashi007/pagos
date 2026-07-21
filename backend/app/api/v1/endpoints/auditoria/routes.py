@@ -133,13 +133,21 @@ class RegistrarAuditoriaBody(BaseModel):
     registro_id: Optional[int] = None
 
 
-def _row_to_item(r: Auditoria) -> AuditoriaItem:
+def _emails_by_usuario_ids(db: Session, ids: List[int]) -> dict[int, str]:
+    """Resuelve email de usuarios del sistema (tabla usuarios) por id."""
+    uniq = sorted({int(i) for i in ids if i is not None})
+    if not uniq:
+        return {}
+    rows = db.execute(select(User.id, User.email).where(User.id.in_(uniq))).all()
+    return {int(r[0]): str(r[1]) for r in rows if r[1]}
+
+
+def _row_to_item(r: Auditoria, usuario_email: Optional[str] = None) -> AuditoriaItem:
     """Convierte fila BD a AuditoriaItem (entidad->modulo, entidad_id->registro_id, detalles->descripcion, exito->resultado)."""
-    fecha_str = r.fecha.isoformat() + "Z" if r.fecha else ""
     return AuditoriaItem(
         id=r.id,
         usuario_id=r.usuario_id,
-        usuario_email=None,
+        usuario_email=usuario_email,
         accion=r.accion,
         modulo=r.entidad or "",
         tabla=r.entidad or "",
@@ -152,8 +160,13 @@ def _row_to_item(r: Auditoria) -> AuditoriaItem:
         user_agent=r.user_agent,
         resultado="EXITOSO" if r.exito else "ERROR",
         mensaje_error=r.mensaje_error,
-        fecha=fecha_str,
+        fecha=iso_utc(r.fecha),
     )
+
+
+def _items_from_rows(db: Session, rows: List[Auditoria]) -> List[AuditoriaItem]:
+    emails = _emails_by_usuario_ids(db, [r.usuario_id for r in rows])
+    return [_row_to_item(r, emails.get(r.usuario_id)) for r in rows]
 
 
 @router.get("", response_model=AuditoriaListResponse)
@@ -173,6 +186,9 @@ def listar_auditoria(
 ):
     """Lista registros de auditoría con filtros y paginación. Datos desde BD."""
     q = select(Auditoria)
+    if usuario_email and usuario_email.strip():
+        email_q = f"%{usuario_email.strip()}%"
+        q = q.join(User, User.id == Auditoria.usuario_id).where(User.email.ilike(email_q))
     if modulo:
         q = q.where(Auditoria.entidad == modulo)
     if registro_id is not None:
@@ -199,8 +215,8 @@ def listar_auditoria(
     else:
         q = q.order_by(order_col.asc())
     q = q.offset(skip).limit(limit)
-    rows = db.execute(q).scalars().all()
-    items = [_row_to_item(r) for r in rows]
+    rows = list(db.execute(q).scalars().all())
+    items = _items_from_rows(db, rows)
     total_pages = (total + limit - 1) // limit if limit else 0
     return AuditoriaListResponse(
         items=items,
@@ -235,7 +251,11 @@ def obtener_estadisticas(
     rows_usr = db.execute(
         select(Auditoria.usuario_id, func.count()).select_from(Auditoria).group_by(Auditoria.usuario_id)
     ).all()
-    acciones_por_usuario = {str(r[0]) if r[0] is not None else "": r[1] for r in rows_usr}
+    emails = _emails_by_usuario_ids(db, [r[0] for r in rows_usr if r[0] is not None])
+    acciones_por_usuario = {
+        (emails.get(int(r[0])) or f"usuario_id={r[0]}") if r[0] is not None else "": r[1]
+        for r in rows_usr
+    }
     return AuditoriaStats(
         total_acciones=total_acciones,
         acciones_por_modulo=acciones_por_modulo,
@@ -270,6 +290,9 @@ def exportar_auditoria(
             headers={"Content-Disposition": "attachment; filename=auditoria.xlsx"},
         )
     q = select(Auditoria).order_by(Auditoria.fecha.desc()).limit(10000)
+    if usuario_email and usuario_email.strip():
+        email_q = f"%{usuario_email.strip()}%"
+        q = q.join(User, User.id == Auditoria.usuario_id).where(User.email.ilike(email_q))
     if modulo:
         q = q.where(Auditoria.entidad == modulo)
     if accion:
@@ -286,16 +309,20 @@ def exportar_auditoria(
             q = q.where(func.date(Auditoria.fecha) <= fh)
         except ValueError:
             pass
-    rows = db.execute(q).scalars().all()
+    rows = list(db.execute(q).scalars().all())
+    emails = _emails_by_usuario_ids(db, [r.usuario_id for r in rows])
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "Auditoría"
-    ws.append(["id", "fecha", "usuario_id", "entidad", "accion", "entidad_id", "detalles", "exito"])
+    ws.append(
+        ["id", "fecha", "usuario_id", "usuario_email", "entidad", "accion", "entidad_id", "detalles", "exito"]
+    )
     for r in rows:
         ws.append([
             r.id,
-            r.fecha.isoformat() if r.fecha else "",
+            iso_utc(r.fecha),
             r.usuario_id or "",
+            emails.get(r.usuario_id) or "",
             r.entidad or "",
             r.accion or "",
             r.entidad_id or "",
@@ -1283,7 +1310,8 @@ def obtener_auditoria(
     row = db.get(Auditoria, auditoria_id)
     if not row:
         raise HTTPException(status_code=404, detail="Registro de auditoría no encontrado")
-    return _row_to_item(row)
+    emails = _emails_by_usuario_ids(db, [row.usuario_id])
+    return _row_to_item(row, emails.get(row.usuario_id))
 
 
 @router.post("/registrar", response_model=AuditoriaItem)
@@ -1306,4 +1334,7 @@ def registrar_evento(
     db.add(row)
     db.commit()
     db.refresh(row)
-    return _row_to_item(row)
+    email = getattr(current_user, "email", None) or _emails_by_usuario_ids(db, [row.usuario_id]).get(
+        row.usuario_id
+    )
+    return _row_to_item(row, email)

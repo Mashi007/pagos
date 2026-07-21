@@ -428,15 +428,27 @@ def procesar_rebotes_gmail(
     service = build_gmail_service(creds)
     label_id = ensure_user_label_id(service, ETIQUETA_GMAIL)
 
+    # IDs ya guardados: hay que paginar Gmail mas alla de los primeros N
+    # (Gmail siempre devuelve primero los mas recientes; si esos ya estan en BD
+    # el lote quedaba en "40 ya en BD" y nunca avanzaba).
+    ids_en_bd: set[str] = {
+        str(x)
+        for x in db.execute(select(AuditoriaReboteGmail.gmail_message_id)).scalars().all()
+        if x
+    }
+
+    lote_objetivo = max(1, min(int(max_messages), 200))
+    list_scan_cap = 1000  # max mensajes Gmail a recorrer buscando pendientes
     msg_refs: list[dict] = []
     page_token: Optional[str] = None
-    hard_cap = max(1, min(int(max_messages), 200))
+    listados_gmail = 0
+    saltados_ya_bd = 0
 
-    while len(msg_refs) < hard_cap:
+    while len(msg_refs) < lote_objetivo and listados_gmail < list_scan_cap:
         params: dict[str, Any] = {
             "userId": "me",
             "q": GMAIL_LIST_QUERY,
-            "maxResults": min(100, hard_cap - len(msg_refs)),
+            "maxResults": min(100, list_scan_cap - listados_gmail),
             "includeSpamTrash": False,
         }
         if page_token:
@@ -461,39 +473,41 @@ def procesar_rebotes_gmail(
                 "truncado": False,
             }
         batch = resp.get("messages") or []
-        msg_refs.extend(batch)
+        if not batch:
+            break
+        for ref in batch:
+            listados_gmail += 1
+            mid = ref.get("id")
+            if not mid:
+                continue
+            if mid in ids_en_bd:
+                saltados_ya_bd += 1
+                continue
+            msg_refs.append(ref)
+            if len(msg_refs) >= lote_objetivo:
+                break
+            if listados_gmail >= list_scan_cap:
+                break
         page_token = resp.get("nextPageToken")
-        if not page_token or not batch:
+        if not page_token:
             break
 
-    msg_refs = msg_refs[:hard_cap]
     candidatos = len(msg_refs)
     logger.info(
-        "[AUDITORIA_REBOTES_GMAIL] q=%r candidatos=%s max=%s presupuesto_s=%s",
+        "[AUDITORIA_REBOTES_GMAIL] q=%r pendientes=%s listados_gmail=%s "
+        "saltados_ya_bd=%s lote=%s presupuesto_s=%s",
         GMAIL_LIST_QUERY,
         candidatos,
-        hard_cap,
+        listados_gmail,
+        saltados_ya_bd,
+        lote_objetivo,
         presupuesto_segundos,
     )
-
-    ids = [r.get("id") for r in msg_refs if r.get("id")]
-    ids_en_bd: set[str] = set()
-    if ids:
-        rows_exist = (
-            db.execute(
-                select(AuditoriaReboteGmail.gmail_message_id).where(
-                    AuditoriaReboteGmail.gmail_message_id.in_(ids)
-                )
-            )
-            .scalars()
-            .all()
-        )
-        ids_en_bd = {str(x) for x in rows_exist if x}
 
     revisados = 0
     guardados = 0
     omitidos = 0
-    ya_existentes = 0
+    ya_existentes = saltados_ya_bd  # ya contabilizados en el listado
     etiquetados = 0
     sin_correo = 0
     sin_cedula = 0
@@ -502,6 +516,44 @@ def procesar_rebotes_gmail(
     guardados_por_obs: dict[str, int] = {"mal": 0, "lleno": 0, "temporal": 0, "otro": 0}
     t0 = time.monotonic()
     deadline = t0 + max(15.0, float(presupuesto_segundos))
+
+    if candidatos == 0:
+        mensaje = (
+            f"No hay pendientes nuevos con q={GMAIL_LIST_QUERY!r} "
+            f"(recorridos {listados_gmail} en Gmail, {saltados_ya_bd} ya en BD)."
+        )
+        try:
+            _aplicar_kpis_corrida(
+                db,
+                revisados=0,
+                guardados=0,
+                omitidos=0,
+                sin_correo=0,
+                sin_cedula=0,
+                cedula_duplicada=0,
+                ya_existentes=saltados_ya_bd,
+                guardados_por_obs=guardados_por_obs,
+            )
+        except Exception as e:
+            logger.warning("[AUDITORIA_REBOTES_GMAIL] actualizar kpis: %s", e)
+        return {
+            "ok": True,
+            "error": None,
+            "mensaje": mensaje,
+            "query": GMAIL_LIST_QUERY,
+            "etiqueta": ETIQUETA_GMAIL,
+            "candidatos": 0,
+            "revisados": 0,
+            "guardados": 0,
+            "omitidos": 0,
+            "ya_existentes": saltados_ya_bd,
+            "etiquetados": 0,
+            "sin_correo": 0,
+            "sin_cedula": 0,
+            "cedula_duplicada": 0,
+            "truncado": False,
+            "listados_gmail": listados_gmail,
+        }
 
     for ref in msg_refs:
         if time.monotonic() >= deadline:
@@ -636,13 +688,7 @@ def procesar_rebotes_gmail(
         logger.warning("[AUDITORIA_REBOTES_GMAIL] actualizar kpis: %s", e)
 
     mensaje = None
-    if candidatos == 0:
-        mensaje = (
-            f"Gmail no devolvio mensajes con q={GMAIL_LIST_QUERY!r}. "
-            "Verifique que la cuenta OAuth sea itmaster@rapicreditca.com "
-            "y que los correos tengan la etiqueta GMAIL en Inbox."
-        )
-    elif truncado:
+    if truncado:
         mensaje = (
             f"Lote parcial por limite de tiempo (~{int(presupuesto_segundos)}s): "
             f"revisados {revisados}/{candidatos}, guardados {guardados}. "
@@ -650,13 +696,14 @@ def procesar_rebotes_gmail(
         )
 
     logger.info(
-        "[AUDITORIA_REBOTES_GMAIL] fin candidatos=%s revisados=%s guardados=%s "
-        "omitidos=%s ya_existentes=%s truncado=%s elapsed=%.1fs",
+        "[AUDITORIA_REBOTES_GMAIL] fin pendientes=%s revisados=%s guardados=%s "
+        "omitidos=%s ya_existentes=%s listados_gmail=%s truncado=%s elapsed=%.1fs",
         candidatos,
         revisados,
         guardados,
         omitidos,
         ya_existentes,
+        listados_gmail,
         truncado,
         time.monotonic() - t0,
     )
@@ -677,4 +724,5 @@ def procesar_rebotes_gmail(
         "sin_cedula": sin_cedula,
         "cedula_duplicada": cedula_duplicada,
         "truncado": truncado,
+        "listados_gmail": listados_gmail,
     }

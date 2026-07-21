@@ -52,6 +52,25 @@ import { AuditoriaCarteraTab } from '../components/auditoria/AuditoriaCarteraTab
 import { AuditoriaLiquidadosIntensivaTab } from '../components/auditoria/AuditoriaLiquidadosIntensivaTab'
 import { AuditoriaRebotesGmailTab } from '../components/auditoria/AuditoriaRebotesGmailTab'
 
+function formatAuditoriaFecha(fecha: string | null | undefined): string {
+  if (!fecha) return '-'
+  const d = new Date(fecha)
+  if (Number.isNaN(d.getTime())) return '-'
+  return d.toLocaleString('es-VE', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
+function labelUsuarioAuditoria(a: AuditoriaType): string {
+  if (a.usuario_email) return a.usuario_email
+  if (a.usuario_id != null) return `usuario #${a.usuario_id}`
+  return 'N/A'
+}
+
 export function Auditoria() {
   const [auditorias, setAuditorias] = useState<AuditoriaType[]>([])
 
@@ -653,7 +672,7 @@ export function Auditoria() {
                             <User className="mr-1 h-3 w-3 flex-shrink-0 text-gray-400" />
 
                             <span className="truncate">
-                              {auditoria.usuario_email || 'N/A'}
+                              {labelUsuarioAuditoria(auditoria)}
                             </span>
                           </div>
                         </TableCell>
@@ -700,17 +719,7 @@ export function Auditoria() {
                         </TableCell>
 
                         <TableCell className="w-[160px] whitespace-nowrap text-sm text-gray-600">
-                          {new Date(auditoria.fecha).toLocaleString('es-VE', {
-                            year: 'numeric',
-
-                            month: 'short',
-
-                            day: 'numeric',
-
-                            hour: '2-digit',
-
-                            minute: '2-digit',
-                          })}
+                          {formatAuditoriaFecha(auditoria.fecha)}
                         </TableCell>
                       </TableRow>
                     ))
