@@ -58,6 +58,8 @@ import {
   PANEL_SERVICIOS_EMAIL,
   ASIGNACION_NOTIF_GRUPOS,
   ASIGNACION_NOTIF_DEFAULTS,
+  NUM_CUENTAS_EMAIL,
+  normalizarIndiceCuenta,
   CUENTA_OPCIONES_ASIGNACION,
   type EmailCuentasResponse,
   type CuentaEmailItem,
@@ -66,7 +68,7 @@ import {
 
 import { NOTIFICACIONES_QUERY_KEYS } from '../../queries/notificaciones'
 
-const CUENTAS_COUNT = 4
+const CUENTAS_COUNT = NUM_CUENTAS_EMAIL
 
 const emptyCuenta = (): CuentaEmailItem => ({
   smtp_host: 'smtp.gmail.com',
@@ -86,7 +88,10 @@ const emptyCuenta = (): CuentaEmailItem => ({
 function mergeAsignacionTabs(
   tab: Record<string, number> | undefined
 ): Record<string, number> {
-  return { ...ASIGNACION_NOTIF_DEFAULTS, ...(tab ?? {}) }
+  const merged = { ...ASIGNACION_NOTIF_DEFAULTS, ...(tab ?? {}) }
+  return Object.fromEntries(
+    Object.entries(merged).map(([k, v]) => [k, normalizarIndiceCuenta(v)])
+  )
 }
 
 function SelectCuentaAsignacion({
@@ -188,7 +193,10 @@ export function EmailCuentasConfig() {
     try {
       const res = await emailCuentasApi.get()
 
-      setData(res)
+      setData({
+        ...res,
+        cuentas: (res.cuentas ?? []).slice(0, CUENTAS_COUNT),
+      })
 
       const tab = res.asignacion?.notificaciones_tab ?? {}
 
@@ -383,7 +391,12 @@ export function EmailCuentasConfig() {
         asignacion: {
           cobros: data.asignacion?.cobros ?? 1,
           estado_cuenta: data.asignacion?.estado_cuenta ?? 2,
-          notificaciones_tab: { ...asignacion },
+          notificaciones_tab: Object.fromEntries(
+            Object.entries(asignacion).map(([k, v]) => [
+              k,
+              normalizarIndiceCuenta(v),
+            ])
+          ),
           recibos: data.asignacion?.recibos ?? 1,
         },
         modo_pruebas: data.modo_pruebas,
@@ -445,7 +458,7 @@ export function EmailCuentasConfig() {
           `Clave verificada por SMTP en cuenta(s): ${okN.join(', ')}`
         )
       } else {
-        toast.success('Configuración de 4 cuentas guardada')
+        toast.success('Configuración de 3 cuentas guardada')
       }
 
       await queryClient.invalidateQueries({
@@ -729,7 +742,7 @@ export function EmailCuentasConfig() {
           </CardTitle>
 
             <CardDescription>
-            Configure hasta 4 cuentas SMTP. Asigne abajo qué buzón usa cada
+            Configure hasta 3 cuentas SMTP. Asigne abajo qué buzón usa cada
             módulo del menú Notificaciones y cada servicio (Cobros, Estado de
             cuenta, Recibos). En Gmail con 2FA use contraseña de aplicación.
           </CardDescription>
@@ -753,7 +766,7 @@ export function EmailCuentasConfig() {
         </CardHeader>
       </Card>
 
-      {[0, 1, 2, 3].map(i => (
+      {Array.from({ length: CUENTAS_COUNT }, (_, i) => i).map(i => (
         <Card key={i}>
           <CardHeader className="pb-2">
             <div className="flex flex-wrap items-start justify-between gap-2">
@@ -766,7 +779,6 @@ export function EmailCuentasConfig() {
                   {i === 0 && `SMTP: ${SERVICIO_POR_CUENTA[1]}`}
                   {i === 1 && `SMTP: ${SERVICIO_POR_CUENTA[2]}`}
                   {i === 2 && `SMTP: ${SERVICIO_POR_CUENTA[3]}`}
-                  {i === 3 && `SMTP: ${SERVICIO_POR_CUENTA[4]}`}
                 </CardDescription>
               </div>
               <CuentaClaveIndicador
@@ -916,7 +928,7 @@ export function EmailCuentasConfig() {
                   <span className="pr-2 text-sm font-medium">{label}</span>
                   <SelectCuentaAsignacion
                     id={`asig-notif-${id}`}
-                    value={asignacion[id] ?? defaultCuenta}
+                    value={normalizarIndiceCuenta(asignacion[id] ?? defaultCuenta)}
                     onChange={v => setNotifTabCuenta(id, v)}
                   />
                 </div>
@@ -930,7 +942,7 @@ export function EmailCuentasConfig() {
         <Button onClick={handleSave} disabled={saving}>
           <Save className="mr-2 h-4 w-4" />
 
-          {saving ? 'Guardando...' : 'Guardar configuración de 4 cuentas'}
+          {saving ? 'Guardando...' : 'Guardar configuración de 3 cuentas'}
         </Button>
       </div>
     </div>

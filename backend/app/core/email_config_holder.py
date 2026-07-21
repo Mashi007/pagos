@@ -171,7 +171,7 @@ def init_from_settings() -> None:
 def get_smtp_config(servicio: Optional[str] = None, tipo_tab: Optional[str] = None) -> dict[str, Any]:
     """Devuelve la config SMTP para el servicio/tab.
     Cobros=cuenta 1 (pagos@), Estado cuenta=2 (tucuenta@), Recibos=cuenta asignada (pagos@),
-    Notificaciones=por tab (1 dia atraso=tucuenta@; antes vencimiento=recuerda@; 6-59=notificaciones@)."""
+    Notificaciones=por tab (cuenta asignada en email_config)."""
     sync_from_db()
     cfg: dict[str, Any]
     if servicio and _cuentas_data.get("cuentas"):

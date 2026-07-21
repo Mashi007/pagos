@@ -336,10 +336,10 @@ class Settings(BaseSettings):
     )
     # Solo PAGO_2_DIAS_ANTES / tipo_tab d_2_antes_vencimiento (tiene prioridad sobre NOTIFICACIONES_FROM_EMAIL).
     NOTIFICACIONES_FROM_EMAIL_2_DIAS_ANTES: str = Field(
-        default="recuerda@rapicreditca.com",
+        default="",
         description=(
-            "Remitente From para «2 dias antes» (d_2_antes_vencimiento). "
-            "Valor vacío en .env se sustituye por recuerda@rapicreditca.com en el holder SMTP."
+            "Remitente From opcional para d_2_antes_vencimiento. "
+            "Vacío = From de la cuenta SMTP asignada en configuracion."
         ),
     )
     # Submódulo Recibos: envío manual (UI / POST) y, si se activa, cron diario en servidor (misma lógica que ejecutar).

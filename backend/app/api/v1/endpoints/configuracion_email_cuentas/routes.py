@@ -1,7 +1,7 @@
 """
-Endpoints para configuracion de 4 cuentas de email.
-GET/PUT /configuracion/email/cuentas devuelven/aceptan { version: 2, cuentas: [c1,c2,c3,c4], asignacion }.
-Cuenta 1 = Cobros, 2 = Estado de cuenta, 3 y 4 = Notificaciones (por pestana).
+Endpoints para configuracion de 3 cuentas de email.
+GET/PUT /configuracion/email/cuentas devuelven/aceptan { version: 2, cuentas: [c1,c2,c3], asignacion }.
+Cuenta 1 = pagos@, 2 = tucuenta@, 3 = notificaciones@.
 """
 import json
 import logging
@@ -24,6 +24,8 @@ from app.core.email_cuentas import (
     SERVICIO_FINIQUITO,
     cuenta_vacia,
     migrar_config_v1_a_v2,
+    normalizar_asignacion,
+    normalizar_indice_cuenta,
 )
 from app.models.configuracion import Configuracion
 from app.api.v1.endpoints.email_config_validacion import validar_config_email_para_guardar
@@ -117,7 +119,7 @@ def _load_raw_from_db(db) -> Optional[dict]:
 
 @router.get("/cuentas")
 def get_email_cuentas(db: Session = Depends(get_db)):
-    """Devuelve la configuracion de 4 cuentas y asignacion. contrasenas enmascaradas."""
+    """Devuelve la configuracion de 3 cuentas y asignacion. contrasenas enmascaradas."""
     data = _load_raw_from_db(db)
     if not data:
         out = {
@@ -129,17 +131,6 @@ def get_email_cuentas(db: Session = Depends(get_db)):
         for c in out["cuentas"]:
             _mask_cuenta(c)
         return out
-    if data.get("version") == 2 and "cuentas" in data:
-        cuentas = list(data["cuentas"])
-        for i, c in enumerate(cuentas):
-            if isinstance(c, dict):
-                cuentas[i] = _mask_cuenta(dict(c))
-        return {
-            "version": 2,
-            "cuentas": cuentas,
-            "asignacion": data.get("asignacion") or ASIGNACION_DEFAULT,
-            **_email_v2_globals_for_api(data),
-        }
     migrated = migrar_config_v1_a_v2(data)
     cuentas = list(migrated["cuentas"])
     for i, c in enumerate(cuentas):
@@ -265,7 +256,7 @@ def put_email_cuentas(payload: EmailCuentasUpdate = Body(...), db: Session = Dep
         cuentas = list(cuentas) + [{} for _ in range(NUM_CUENTAS - len(cuentas))]
     cuentas = cuentas[:NUM_CUENTAS]
     raw_asig = dict(payload.asignacion or {})
-    asignacion = {**ASIGNACION_DEFAULT, **raw_asig}
+    asignacion = normalizar_asignacion({**ASIGNACION_DEFAULT, **raw_asig})
     nt_default = dict(ASIGNACION_DEFAULT.get("notificaciones_tab") or {})
     existing_asig = (existing_data or {}).get("asignacion") if isinstance(existing_data, dict) else {}
     existing_nt = (
@@ -275,13 +266,22 @@ def put_email_cuentas(payload: EmailCuentasUpdate = Body(...), db: Session = Dep
     )
     nt_in = raw_asig.get("notificaciones_tab")
     if isinstance(nt_in, dict):
-        merged_nt = {**existing_nt, **nt_in}
+        merged_nt = {
+            k: normalizar_indice_cuenta(v)
+            for k, v in {**existing_nt, **nt_in}.items()
+        }
         for k, v in nt_default.items():
             if k not in merged_nt:
                 merged_nt[k] = v
         asignacion["notificaciones_tab"] = merged_nt
     else:
-        asignacion["notificaciones_tab"] = {**nt_default, **existing_nt}
+        asignacion["notificaciones_tab"] = {
+            k: normalizar_indice_cuenta(v)
+            for k, v in {**nt_default, **existing_nt}.items()
+        }
+    for svc_key in ("cobros", "estado_cuenta", "recibos"):
+        if svc_key in raw_asig:
+            asignacion[svc_key] = normalizar_indice_cuenta(raw_asig[svc_key])
 
     cuentas_dict: List[dict] = []
     password_changed_indices: List[int] = []
@@ -375,7 +375,9 @@ def put_email_cuentas(payload: EmailCuentasUpdate = Body(...), db: Session = Dep
             continue
         payload_data[k] = v
     payload_data["version"] = 2
-    payload_data["cuentas"] = cuentas_para_bd
+    payload_data["cuentas"] = cuentas_para_bd[:NUM_CUENTAS]
+    while len(payload_data["cuentas"]) < NUM_CUENTAS:
+        payload_data["cuentas"].append(prepare_for_db_storage(cuenta_vacia()))
     payload_data["asignacion"] = asignacion
     if "recibos_bcc_emails" in body:
         payload_data["recibos_bcc_emails"] = _normalizar_recibos_bcc_emails(body.get("recibos_bcc_emails"))
@@ -409,7 +411,7 @@ def put_email_cuentas(payload: EmailCuentasUpdate = Body(...), db: Session = Dep
         logger.exception("Error guardando cuentas email: %s", e)
         db.rollback()
         raise HTTPException(status_code=500, detail="Error al guardar en BD")
-    return {"message": "configuracion de 4 cuentas guardada", "version": 2, "asignacion": asignacion, "smtp_verificaciones": smtp_verificaciones}
+    return {"message": "configuracion de 3 cuentas guardada", "version": 2, "asignacion": asignacion, "smtp_verificaciones": smtp_verificaciones}
 
 
 class ProbarSmtpCuentaRequest(BaseModel):
@@ -506,18 +508,17 @@ def post_email_enviar_prueba(db: Session = Depends(get_db)):
         )
 
     sync_from_db()
-    asignacion = migrated.get("asignacion") or ASIGNACION_DEFAULT
+    asignacion = normalizar_asignacion(migrated.get("asignacion"))
     tab_map = asignacion.get("notificaciones_tab") or {}
-    tab_para_3 = next((t for t, c in tab_map.items() if c == 3), "dias_5")
-    tab_para_4 = next((t for t, c in tab_map.items() if c == 4), None)
+    tab_para_3 = next((t for t, c in tab_map.items() if c == 3), "dias_10_retraso")
+    tab_para_1 = next((t for t, c in tab_map.items() if c == 1), "d_2_antes_vencimiento")
     pares_cuentas = [
         (1, "cobros", None),
+        (1, "notificaciones", tab_para_1),
         (2, "estado_cuenta", None),
         (2, SERVICIO_FINIQUITO, None),
         (3, "notificaciones", tab_para_3),
     ]
-    if tab_para_4:
-        pares_cuentas.append((4, "notificaciones", tab_para_4))
 
     subject_base = "Prueba Cuenta {} - RapiCredit"
     body_base = "Prueba enviada con la Cuenta {}. Si recibes este correo, la cuenta esta operativa."

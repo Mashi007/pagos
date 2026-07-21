@@ -474,7 +474,7 @@ export function ConfiguracionRecibos({ emergencyResetSeq = 0 }: Props) {
               to="/configuracion?tab=email"
               className="font-medium text-blue-600 underline underline-offset-2"
             >
-              Configuración → Email (4 cuentas)
+              Configuración → Email (3 cuentas)
             </Link>
             . El modo prueba y los envíos de Recibos no toman el JSON de
             Notificaciones → Envíos; solo sus propias claves y el correo maestro
@@ -583,7 +583,6 @@ export function ConfiguracionRecibos({ emergencyResetSeq = 0 }: Props) {
                 <SelectItem value="1">Cuenta 1 (Cobros)</SelectItem>
                 <SelectItem value="2">Cuenta 2 (Estado de cuenta)</SelectItem>
                 <SelectItem value="3">Cuenta 3 (Notificaciones)</SelectItem>
-                <SelectItem value="4">Cuenta 4 (Notificaciones)</SelectItem>
               </SelectContent>
             </Select>
           </div>
