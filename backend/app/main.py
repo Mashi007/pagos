@@ -778,7 +778,12 @@ async def root_head():
 @app.get("/health")
 async def health_check():
     """Endpoint de salud"""
-    return {"status": "healthy"}
+    import os
+    return {
+        "status": "healthy",
+        "git": (os.environ.get("RENDER_GIT_COMMIT") or os.environ.get("GIT_COMMIT") or "")[:12],
+        "build": "cco-gate-v2",
+    }
 
 
 @app.post("/api/admin/run-migration-auditoria-fk")
