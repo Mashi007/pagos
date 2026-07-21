@@ -1,7 +1,7 @@
 import { apiClient } from '../services/api'
 
 /** Envíos masivos sincrónicos (PDF + SMTP): listas grandes suelen superar 3 min. */
-export const TIMEOUT_MS_ENVIO_NOTIFICACIONES_MANUAL = 900_000
+export const TIMEOUT_MS_ENVIO_NOTIFICACIONES_MANUAL = 3_600_000
 
 export interface NotificacionPlantilla {
   id: number
@@ -794,6 +794,42 @@ class NotificacionService {
     )
   }
 
+
+  /**
+   * Descarga Excel «Auditoria de correos» (cédula, nombre, correo)
+   * de envíos rebotados (exito=false) para la pestaña.
+   * Sin fechas: mismo universo que el KPI (histórico). Con ambas: filtra por rango.
+   */
+  async descargarAuditoriaCorreosRebotadosExcel(opts: {
+    tipo: string
+    fechaDesde?: string
+    fechaHasta?: string
+  }): Promise<void> {
+    const tipo = (opts.tipo || '').trim()
+    const fechaDesde = (opts.fechaDesde || '').trim()
+    const fechaHasta = (opts.fechaHasta || '').trim()
+    if (!tipo) {
+      throw new Error('Indique el tipo de pestaña.')
+    }
+    if (Boolean(fechaDesde) !== Boolean(fechaHasta)) {
+      throw new Error(
+        'Indique ambas fechas (desde y hasta) o ninguna para exportar todos.'
+      )
+    }
+    const qs = new URLSearchParams({ tipo })
+    if (fechaDesde && fechaHasta) {
+      qs.set('fecha_desde', fechaDesde)
+      qs.set('fecha_hasta', fechaHasta)
+    }
+    const rango =
+      fechaDesde && fechaHasta ? ${fechaDesde}_ : 'todos'
+    const filename = Auditoria_de_correos__.xlsx
+    await apiClient.downloadFile(
+      ${this.baseUrl}/rebotados-por-tab/excel?,
+      filename
+    )
+  }
+
   /** Historial de notificaciones enviadas/fallidas por cédula (reportes y fines legales). */
 
   async getHistorialNotificacionesPorCedula(
@@ -1460,6 +1496,23 @@ class NotificacionService {
       variables_existentes: number
       total: number
     }>(`${this.baseUrl}/variables/inicializar-precargadas`)
+  }
+
+
+  /** Crea/actualiza plantilla unica PREJUDICIAL y vincula envios si falta. */
+  async asegurarPlantillaPrejudicial(forzarContenido = false): Promise<{
+    mensaje: string
+    plantilla_id: number
+    plantilla_nombre: string
+    plantilla_asunto: string
+    envios_vinculado: boolean
+    variables_creadas: number
+    variables_existentes: number
+  }> {
+    const q = forzarContenido ? '?forzar_contenido=true' : ''
+    return await apiClient.post(
+      ${this.baseUrl}/plantillas/asegurar-prejudicial
+    )
   }
 
   /** ABONOS (hoja CONCILIACIÓN) vs sum(cuotas.total_pagado) del préstamo. */
