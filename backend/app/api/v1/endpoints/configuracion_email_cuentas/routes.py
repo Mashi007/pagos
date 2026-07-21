@@ -356,6 +356,17 @@ def put_email_cuentas(payload: EmailCuentasUpdate = Body(...), db: Session = Dep
                     if enc_key not in stored or not stored.get(enc_key):
                         if existing_cuenta.get(enc_key):
                             stored[enc_key] = existing_cuenta.get(enc_key)
+        plain_pwd = (c.get("smtp_password") or "").strip()
+        if plain_pwd and not _is_password_masked(plain_pwd):
+            if not _secret_field_stored(stored, "smtp_password"):
+                raise HTTPException(
+                    status_code=500,
+                    detail=(
+                        "Cuenta %d: la contraseña SMTP no se pudo guardar en la base de datos. "
+                        "Revise los logs del servidor."
+                    )
+                    % (idx + 1),
+                )
         cuentas_para_bd.append(stored)
 
     # Persistencia: fusionar con JSON existente para no perder claves que el cliente no envía

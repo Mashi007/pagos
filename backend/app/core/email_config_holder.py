@@ -369,8 +369,11 @@ def prepare_for_db_storage(data: dict[str, Any]) -> dict[str, Any]:
                 # Limpiar el valor original para no guardarlo en texto plano
                 result[field] = None
             else:
-                # Encriptación falló: no persistir en claro; el PUT preserva _encriptado existente.
-                result[field] = None
+                # Sin ENCRYPTION_KEY o crypto falló: persistir en claro (legacy) para no perder la clave.
+                logger.warning(
+                    "Encriptacion no disponible para %s; se guardara en claro en BD.",
+                    field,
+                )
     
     return result
 

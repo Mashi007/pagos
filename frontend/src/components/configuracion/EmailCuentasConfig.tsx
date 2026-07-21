@@ -312,7 +312,13 @@ export function EmailCuentasConfig() {
       })
       setSmtpTestOk(prev => ({ ...prev, [index]: res.success }))
       if (res.success) {
-        toast.success(`Cuenta ${index + 1}: ${res.mensaje}`)
+        const pendiente = cuentaTieneClavePendiente(c)
+        toast.success(`Cuenta ${index + 1}: ${res.mensaje}`, {
+          description: pendiente
+            ? 'Prueba OK, pero la clave NO está guardada. Pulse «Guardar configuración de 3 cuentas» (abajo).'
+            : undefined,
+          duration: pendiente ? 12000 : 5000,
+        })
       } else {
         toast.error(`Cuenta ${index + 1}: ${res.mensaje}`)
       }
@@ -543,8 +549,10 @@ export function EmailCuentasConfig() {
   const cuentas =
     data?.cuentas ?? Array.from({ length: CUENTAS_COUNT }, emptyCuenta)
 
+  const hayClavesPendientes = cuentas.some(c => cuentaTieneClavePendiente(c))
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-24">
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
@@ -878,9 +886,19 @@ export function EmailCuentasConfig() {
                   >
                     {testingSmtp[i] ? 'Comprobando…' : 'Probar conexión SMTP'}
                   </Button>
+                  {cuentaTieneClavePendiente(cuentas[i]) ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="bg-blue-600 text-white hover:bg-blue-700"
+                      disabled={saving}
+                      onClick={() => void handleSave()}
+                    >
+                      {saving ? 'Guardando…' : 'Guardar clave en servidor'}
+                    </Button>
+                  ) : null}
                   <span className="self-center text-xs text-muted-foreground">
-                    Login al servidor (sin enviar correo). Al guardar una clave
-                    nueva también se verifica automáticamente.
+                    Probar solo valida login. Debe guardar para que producción use la clave.
                   </span>
                 </div>
               </div>
@@ -945,6 +963,26 @@ export function EmailCuentasConfig() {
           {saving ? 'Guardando...' : 'Guardar configuración de 3 cuentas'}
         </Button>
       </div>
+
+      {hayClavesPendientes ? (
+        <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-amber-300 bg-amber-50 px-4 py-3 shadow-lg dark:border-amber-800 dark:bg-amber-950">
+          <div className="mx-auto flex max-w-4xl flex-wrap items-center justify-between gap-3">
+            <p className="text-sm text-amber-950 dark:text-amber-100">
+              <strong>Claves sin guardar.</strong> «Probar conexión» no las persiste en el
+              servidor.
+            </p>
+            <Button
+              type="button"
+              className="shrink-0 bg-blue-600 text-white hover:bg-blue-700"
+              disabled={saving}
+              onClick={() => void handleSave()}
+            >
+              <Save className="mr-2 h-4 w-4" />
+              {saving ? 'Guardando…' : 'Guardar ahora'}
+            </Button>
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }
