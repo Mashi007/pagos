@@ -532,6 +532,7 @@ def send_email(
     servicio: Optional[str] = None,
     tipo_tab: Optional[str] = None,
     smtp_session_metadata: Optional[Dict[str, Any]] = None,
+    aplicar_cco_automatica: bool = True,
 ) -> Tuple[bool, Optional[str]]:
     """
     Env�a un correo v�a SMTP (desde el email configurado en Configuraci�n > Email o .env).
@@ -611,8 +612,11 @@ def send_email(
         bcc_list = [e.strip() for e in (bcc_emails or []) if e and isinstance(e, str) and "@" in e.strip()]
 
     svc_low = (servicio or "").strip().lower()
+    # Direcciones que Workspace/Gmail a menudo no entregan si van solo en BCC
+    # (grupo, misma cuenta SMTP, alias). Se reenvian luego como To aparte.
+    force_to_cco: List[str] = []
 
-    if svc_low == "recibos":
+    if aplicar_cco_automatica and svc_low == "recibos":
         extra_bcc = get_recibos_bcc_emails()
         if extra_bcc:
             seen_b = {x.lower() for x in bcc_list}
@@ -627,8 +631,7 @@ def send_email(
                 bcc_list.append(a)
 
     # CCO global obligatoria para notificaciones y recibos (NOTIFICACIONES_BCC_GLOBAL).
-    # Default: notificaciones@ + cobranza@. Se suma a la CCO por tipo / recibos_bcc_emails.
-    if svc_low in ("notificaciones", "recibos"):
+    if aplicar_cco_automatica and svc_low in ("notificaciones", "recibos"):
         _raw_global = getattr(settings, "NOTIFICACIONES_BCC_GLOBAL", "") or ""
         if not str(_raw_global).strip() and svc_low == "recibos":
             _raw_global = "notificaciones@rapicreditca.com,cobranza@rapicreditca.com"
@@ -642,7 +645,6 @@ def send_email(
                 continue
             _seen_bcc.add(_low)
             bcc_list.append(_addr)
-        # Evitar duplicar el mismo correo en To y BCC (p. ej. prueba a itmaster).
         to_low_final = {str(x).strip().lower() for x in to_emails if x}
         bcc_list = [b for b in bcc_list if b.lower() not in to_low_final]
         logger.info(
@@ -746,6 +748,33 @@ def send_email(
             smtp_session_metadata.update({"resultado": "no_intentado", "motivo": "sin_smtp_password"})
         return False, "Falta contrasena SMTP. Configura en Configuracion > Email."
     log_phase(logger, FASE_SMTP_CONFIG, True, "host=%s port=%s" % (cfg.get("smtp_host"), cfg.get("smtp_port")))
+
+    # notificaciones@ (y el propio From/smtp_user) no reciben bien CCO en Gmail/Workspace:
+    # se sacan del sobre BCC y se reenvian como To tras el envio principal.
+    if aplicar_cco_automatica and bcc_list:
+        _sender_ids = {
+            (cfg.get("smtp_user") or "").strip().lower(),
+            (cfg.get("from_email") or "").strip().lower(),
+        }
+        _force_always = {"notificaciones@rapicreditca.com"}
+        _kept: List[str] = []
+        _seen_force: set[str] = set()
+        for _b in bcc_list:
+            _bl = _b.lower()
+            if _bl in _force_always or (_bl and _bl in _sender_ids):
+                if _bl not in _seen_force and _bl not in {str(x).strip().lower() for x in to_emails if x}:
+                    force_to_cco.append(_b)
+                    _seen_force.add(_bl)
+            else:
+                _kept.append(_b)
+        if force_to_cco:
+            logger.info(
+                "[SMTP_ENVIO] cco_como_to_aparte servicio=%s addrs=%s (BCC residual=%s)",
+                svc_low,
+                force_to_cco,
+                _kept,
+            )
+        bcc_list = _kept
 
     solicitados_mask = [mask_email_for_log(x) for x in dest_solicitados_originales]
     efectivos_para_smtp = list(to_emails) + cc_list + bcc_list
@@ -937,6 +966,38 @@ def send_email(
         )
         if smtp_session_metadata is not None:
             smtp_session_metadata["resultado"] = "aceptado_por_servidor_smtp"
+
+        # Copia aparte (To) para buzones que no reciben CCO-only (p. ej. notificaciones@).
+        if force_to_cco and aplicar_cco_automatica:
+            subj_cco = subject or ""
+            if not subj_cco.lower().startswith("[copia cco]"):
+                subj_cco = "[Copia CCO] " + subj_cco
+            for _addr_cco in force_to_cco:
+                try:
+                    ok_cco, err_cco = send_email(
+                        [_addr_cco],
+                        subj_cco,
+                        body_text,
+                        body_html=body_html,
+                        attachments=attachments,
+                        respetar_destinos_manuales=True,
+                        servicio=servicio,
+                        tipo_tab=tipo_tab,
+                        aplicar_cco_automatica=False,
+                    )
+                    logger.info(
+                        "[SMTP_ENVIO] copia_cco_forzada to=%s ok=%s err=%s",
+                        _addr_cco,
+                        ok_cco,
+                        (err_cco or "")[:200],
+                    )
+                except Exception as _e_cco:
+                    logger.warning(
+                        "[SMTP_ENVIO] copia_cco_forzada fallo to=%s err=%s",
+                        _addr_cco,
+                        _e_cco,
+                    )
+
         return True, None
     except Exception as e:
         err_msg = _sanitize_smtp_error(e)
