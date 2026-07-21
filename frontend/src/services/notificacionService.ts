@@ -794,7 +794,6 @@ class NotificacionService {
     )
   }
 
-
   /**
    * Descarga Excel «Auditoria de correos» (cédula, nombre, correo)
    * de envíos rebotados (exito=false) para la pestaña.
@@ -1388,7 +1387,9 @@ class NotificacionService {
         ultimo.origen === 'api_enviar_caso_manual' &&
         tokenUltimo === token
       ) {
-        const estado = String(ultimo.estado || '').trim().toLowerCase()
+        const estado = String(ultimo.estado || '')
+          .trim()
+          .toLowerCase()
         const detEnProceso =
           detRec &&
           'en_proceso' in detRec &&
@@ -1497,7 +1498,6 @@ class NotificacionService {
       total: number
     }>(`${this.baseUrl}/variables/inicializar-precargadas`)
   }
-
 
   /** Crea/actualiza plantilla unica PREJUDICIAL y vincula envios si falta. */
   async asegurarPlantillaPrejudicial(forzarContenido = false): Promise<{

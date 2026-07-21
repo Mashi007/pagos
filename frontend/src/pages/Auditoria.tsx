@@ -76,8 +76,7 @@ function labelUsuarioAuditoria(a: AuditoriaType): string {
 export function Auditoria() {
   const { user } = useSimpleAuth()
   const rolCanon = canonicalRol(user?.rol)
-  const puedeTabsAvanzadas =
-    rolCanon === 'admin' || rolCanon === 'manager'
+  const puedeTabsAvanzadas = rolCanon === 'admin' || rolCanon === 'manager'
   const puedeRebotesGmail = rolCanon === 'admin'
 
   const [auditorias, setAuditorias] = useState<AuditoriaType[]>([])
@@ -361,7 +360,9 @@ export function Auditoria() {
           {puedeTabsAvanzadas && (
             <>
               <TabsTrigger value="cartera">Revision de cartera</TabsTrigger>
-              <TabsTrigger value="liquidados">Liquidados (intensiva)</TabsTrigger>
+              <TabsTrigger value="liquidados">
+                Liquidados (intensiva)
+              </TabsTrigger>
             </>
           )}
           {puedeRebotesGmail && (

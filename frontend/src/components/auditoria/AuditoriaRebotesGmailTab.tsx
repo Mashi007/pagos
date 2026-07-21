@@ -87,7 +87,7 @@ function KpiTile({
 }) {
   return (
     <Card>
-      <CardContent className="pt-4 pb-3">
+      <CardContent className="pb-3 pt-4">
         <p className="text-xs text-muted-foreground">{label}</p>
         <p className="text-2xl font-semibold tabular-nums">{value}</p>
         {hint ? (
@@ -266,8 +266,8 @@ export function AuditoriaRebotesGmailTab() {
         <CardContent className="space-y-3">
           <p className="text-sm text-muted-foreground">
             Escanea Inbox de itmaster@rapicreditca.com (leidos y no leidos) con
-            la etiqueta GMAIL. Si el correo esta en clientes guarda la cedula; si
-            no, guarda el correo con cedula vacia. No repite la misma cedula
+            la etiqueta GMAIL. Si el correo esta en clientes guarda la cedula;
+            si no, guarda el correo con cedula vacia. No repite la misma cedula
             cuando si hay match. Al descargar Excel se pide autorizacion para
             borrar: si no acepta, las filas se conservan. Los KPIs acumulados
             son permanentes.

@@ -66,7 +66,11 @@ export function toastErrorTrasEnvioManual(
       ? String((e as { code?: unknown }).code || '')
       : ''
   const msg = getErrorMessage(e)
-  if (isAxiosTimeoutError(e) || code === 'ESPERA_ENVIO_AGOTADA' || msg.includes('ESPERA_ENVIO_AGOTADA')) {
+  if (
+    isAxiosTimeoutError(e) ||
+    code === 'ESPERA_ENVIO_AGOTADA' ||
+    msg.includes('ESPERA_ENVIO_AGOTADA')
+  ) {
     const min = Math.max(
       1,
       Math.round(TIMEOUT_MS_ENVIO_NOTIFICACIONES_MANUAL / 60000)
@@ -78,7 +82,5 @@ export function toastErrorTrasEnvioManual(
     return
   }
 
-  toast.error(
-    `No se pudo completar el envío: ${msg}. ${fraseRevisionConfig}`
-  )
+  toast.error(`No se pudo completar el envío: ${msg}. ${fraseRevisionConfig}`)
 }
