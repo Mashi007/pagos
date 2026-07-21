@@ -62,10 +62,11 @@ def mask_email_for_log(addr: str) -> str:
 
 
 # Auditoria notificaciones/recibos v5: itmaster prohibido; notificaciones/cobranza en To.
-EMAIL_AUDIT_BUILD = "email-audit-v5.2-no-itmaster"
+EMAIL_AUDIT_BUILD = "email-audit-v5.3-cco-unico"
 EMAIL_BLOCKED_DEST = frozenset({"itmaster@rapicreditca.com"})
 EMAIL_AUDIT_NOTIFICACIONES = "notificaciones@rapicreditca.com"
 EMAIL_AUDIT_COBRANZA = "cobranza@rapicreditca.com"
+EMAIL_AUDIT_CCO = (EMAIL_AUDIT_NOTIFICACIONES, EMAIL_AUDIT_COBRANZA)
 
 
 def _sin_destinos_bloqueados(emails: List[str]) -> List[str]:
@@ -77,6 +78,21 @@ def _sin_destinos_bloqueados(emails: List[str]) -> List[str]:
         if s.lower() in EMAIL_BLOCKED_DEST:
             logger.warning("[SMTP_DIAG] descartado_bloqueado=%s", s)
             continue
+        out.append(s)
+    return out
+
+
+def _dedupe_emails(emails: List[str]) -> List[str]:
+    out: List[str] = []
+    seen: set[str] = set()
+    for e in emails or []:
+        s = (e or "").strip()
+        if not s or "@" not in s:
+            continue
+        low = s.lower()
+        if low in seen:
+            continue
+        seen.add(low)
         out.append(s)
     return out
 
@@ -102,7 +118,7 @@ def resolver_destinos_auditoria(
     bcc_emails: Optional[List[str]] = None,
     servicio: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Simulacion pura (sin SMTP) de la politica v5. Usable en tests y endpoint diagnostico."""
+    """Simulacion pura (sin SMTP) de la politica v5.3 CCO unico."""
     to_o, cc_o, bcc_o, force = _aplicar_auditoria_notificaciones_recibos(
         to_emails=list(to_emails or []),
         cc_list=list(cc_emails or []),
@@ -111,6 +127,7 @@ def resolver_destinos_auditoria(
     )
     envelope = list(to_o) + list(cc_o) + list(bcc_o)
     blocked_hit = [e for e in envelope + force if (e or "").lower() in EMAIL_BLOCKED_DEST]
+    bcc_low = {x.lower() for x in bcc_o}
     return {
         "build": EMAIL_AUDIT_BUILD,
         "to": to_o,
@@ -122,6 +139,8 @@ def resolver_destinos_auditoria(
         "bloqueados_encontrados": blocked_hit,
         "notificaciones_en_to": EMAIL_AUDIT_NOTIFICACIONES.lower() in {x.lower() for x in to_o},
         "cobranza_en_to": EMAIL_AUDIT_COBRANZA.lower() in {x.lower() for x in to_o},
+        "notificaciones_en_bcc": EMAIL_AUDIT_NOTIFICACIONES.lower() in bcc_low,
+        "cobranza_en_bcc": EMAIL_AUDIT_COBRANZA.lower() in bcc_low,
     }
 
 
@@ -133,35 +152,39 @@ def _aplicar_auditoria_notificaciones_recibos(
     servicio: Optional[str] = None,
 ) -> Tuple[List[str], List[str], List[str], List[str]]:
     """
-    Estrategia v5:
-    - Elimina itmaster@ de To/Cc/Bcc.
-    - Mete notificaciones@ y cobranza@ en To (entrega fiable).
-    - Recibos: sin copia aparte desde pagos@ (solo From de la cuenta Recibos, p. ej. tucuenta@).
-    - Notificaciones: force_to opcional To=notificaciones@ desde cobros/pagos@ si hace falta.
+    Politica unica notificaciones/recibos (sin solapes):
+    - To = solo cliente(s); nunca itmaster@ ni auditoria.
+    - CCO/BCC = notificaciones@ + cobranza@ (+ otros CCO de UI, dedupe).
+    - Sin segunda copia SMTP desde pagos@ (force_to vacio).
+    - Auditoria no va en Cc ni se duplica en To+BCC.
     """
+    audit_low = {EMAIL_AUDIT_NOTIFICACIONES.lower(), EMAIL_AUDIT_COBRANZA.lower()}
     to_emails = _sin_destinos_bloqueados(list(to_emails))
     cc_list = _sin_destinos_bloqueados(list(cc_list))
     bcc_list = _sin_destinos_bloqueados(list(bcc_list))
 
-    audit_low = {EMAIL_AUDIT_NOTIFICACIONES.lower(), EMAIL_AUDIT_COBRANZA.lower()}
-    # Quitar auditoria de Cc/Bcc; viviran en To.
+    # Auditoria fuera de To/Cc (el cliente no debe verlas; van en CCO).
+    to_emails = [e for e in to_emails if e.lower() not in audit_low]
     cc_list = [c for c in cc_list if c.lower() not in audit_low]
-    bcc_list = [b for b in bcc_list if b.lower() not in audit_low]
-
-    to_low = {x.lower() for x in to_emails}
-    for addr in (EMAIL_AUDIT_NOTIFICACIONES, EMAIL_AUDIT_COBRANZA):
-        if addr.lower() not in to_low:
-            to_emails.append(addr)
-            to_low.add(addr.lower())
 
     if not to_emails:
+        # Sin cliente valido: To de respaldo a notificaciones@ (no dejar el envio vacio).
         to_emails = [EMAIL_AUDIT_NOTIFICACIONES]
 
-    # Recibos ya incluyen notificaciones@ en To con From=tucuenta@; no duplicar desde pagos@.
+    bcc_list = _dedupe_emails(bcc_list)
+    bcc_low = {b.lower() for b in bcc_list}
+    to_low = {t.lower() for t in to_emails}
+    for addr in EMAIL_AUDIT_CCO:
+        low = addr.lower()
+        if low in to_low:
+            # Ya es To de respaldo; no duplicar en BCC.
+            continue
+        if low not in bcc_low:
+            bcc_list.append(addr)
+            bcc_low.add(low)
+
+    force_to: List[str] = []  # sin copia pagos@ (evita solape tucuenta + pagos)
     svc = (servicio or "").strip().lower()
-    force_to: List[str] = []
-    if svc == "notificaciones":
-        force_to = [EMAIL_AUDIT_NOTIFICACIONES]
     logger.info(
         "[SMTP_DIAG] %s resolver servicio=%s to=%s cc=%s bcc=%s force=%s",
         EMAIL_AUDIT_BUILD,
@@ -1144,7 +1167,7 @@ def send_email(
         msg_bytes = msg_str.replace("\r\n", "\n").replace("\n", "\r\n").encode("utf-8")
 
         # Copia desde cobros/pagos@ solo para notificaciones (Recibos ya van en To con tucuenta@).
-        if force_to_cco and aplicar_cco_automatica and svc_low == "notificaciones":
+        if False and force_to_cco and aplicar_cco_automatica and svc_low == "notificaciones":  # v5.3: CCO en BCC, sin copia pagos@
             subj_cco = subject or ""
             if not subj_cco.lower().startswith("[copia cco]"):
                 subj_cco = "[Copia CCO] " + subj_cco
@@ -1197,7 +1220,7 @@ def send_email(
             _n_cc = _contar_cabeceras(msg, "Cc")
             logger.info(
                 "[SMTP_DIAG] pre_sendmail build=%s servicio=%s n_To_headers=%s n_Cc_headers=%s "
-                "to=%s cc=%s bcc=%s from=%s notif_en_to=%s",
+                "to=%s cc=%s bcc=%s from=%s notif_en_bcc=%s cob_en_bcc=%s",
                 EMAIL_AUDIT_BUILD,
                 svc_low,
                 _n_to,
@@ -1206,7 +1229,8 @@ def send_email(
                 cc_list,
                 bcc_list,
                 msg.get("From"),
-                EMAIL_AUDIT_NOTIFICACIONES.lower() in {x.lower() for x in to_emails},
+                EMAIL_AUDIT_NOTIFICACIONES.lower() in {x.lower() for x in bcc_list},
+                EMAIL_AUDIT_COBRANZA.lower() in {x.lower() for x in bcc_list},
             )
             if _n_to != 1:
                 logger.error(

@@ -116,8 +116,8 @@ EMAIL_PRUEBA_PREJUDICIAL = "notificaciones@rapicreditca.com"  # legacy; To real 
 
 
 def _merge_bcc_tipo(tipo_cfg: dict) -> List[str]:
-    """CCO del tipo (configurada en UI Notificaciones > Configuración por caso).
-    La CCO global se agrega en send_email() centralizado."""
+    """CCO del tipo (UI). Global notificaciones@+cobranza@ se agrega en send_email (sin itmaster)."""
+    blocked = {"itmaster@rapicreditca.com"}
     out: List[str] = []
     seen: set[str] = set()
     cco_tipo = tipo_cfg.get("cco") or []
@@ -127,7 +127,7 @@ def _merge_bcc_tipo(tipo_cfg: dict) -> List[str]:
             if not email or "@" not in email:
                 continue
             low = email.lower()
-            if low in seen:
+            if low in blocked or low in seen:
                 continue
             seen.add(low)
             out.append(email)

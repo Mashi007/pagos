@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Simulacion politica email audit v5 (sin SMTP)."""
+"""Simulacion politica email audit v5.3: CCO unico sin solapes."""
 from app.core.email import (
     EMAIL_AUDIT_BUILD,
     EMAIL_AUDIT_COBRANZA,
@@ -8,37 +8,35 @@ from app.core.email import (
 )
 
 
-def test_itmaster_eliminado_y_notif_en_to_recibos_sin_copia_pagos():
+def test_recibos_cco_sin_to_auditoria_ni_pagos():
     r = resolver_destinos_auditoria(
         to_emails=["cliente@gmail.com", "itmaster@rapicreditca.com"],
         cc_emails=["itmaster@rapicreditca.com"],
-        bcc_emails=["itmaster@rapicreditca.com", "otro@x.com"],
+        bcc_emails=["itmaster@rapicreditca.com", "otro@x.com", "notificaciones@rapicreditca.com"],
         servicio="recibos",
     )
     assert r["build"] == EMAIL_AUDIT_BUILD
     assert r["itmaster_presente"] is False
-    assert "itmaster@rapicreditca.com" not in r["envelope_rcpt"]
-    assert "itmaster@rapicreditca.com" not in r["to"]
-    assert EMAIL_AUDIT_NOTIFICACIONES in r["to"]
-    assert EMAIL_AUDIT_COBRANZA in r["to"]
-    assert r["notificaciones_en_to"] is True
-    assert r["cobranza_en_to"] is True
-    # Recibos: no copia aparte desde pagos@
+    assert r["to"] == ["cliente@gmail.com"]
+    assert r["notificaciones_en_to"] is False
+    assert r["cobranza_en_to"] is False
+    assert r["notificaciones_en_bcc"] is True
+    assert r["cobranza_en_bcc"] is True
+    assert "otro@x.com" in r["bcc"]
+    assert r["bcc"].count(EMAIL_AUDIT_NOTIFICACIONES) == 1
     assert r["force_to_copia"] == []
-    assert EMAIL_AUDIT_NOTIFICACIONES not in r["bcc"]
-    assert EMAIL_AUDIT_COBRANZA not in r["bcc"]
 
 
-def test_notificaciones_si_fuerza_copia_pagos():
+def test_notificaciones_tambien_cco_sin_copia_pagos():
     r = resolver_destinos_auditoria(to_emails=["a@b.com"], servicio="notificaciones")
-    assert EMAIL_AUDIT_NOTIFICACIONES in r["to"]
-    assert EMAIL_AUDIT_COBRANZA in r["to"]
-    assert r["force_to_copia"] == [EMAIL_AUDIT_NOTIFICACIONES]
-
-
-def test_cliente_solo_sigue_y_auditoria_en_to():
-    r = resolver_destinos_auditoria(to_emails=["a@b.com"], servicio="recibos")
-    assert r["to"][0] == "a@b.com"
-    assert EMAIL_AUDIT_NOTIFICACIONES in r["to"]
-    assert EMAIL_AUDIT_COBRANZA in r["to"]
+    assert r["to"] == ["a@b.com"]
+    assert r["notificaciones_en_bcc"] is True
+    assert r["cobranza_en_bcc"] is True
     assert r["force_to_copia"] == []
+
+
+def test_sin_cliente_to_respaldo_notif():
+    r = resolver_destinos_auditoria(to_emails=["itmaster@rapicreditca.com"], servicio="recibos")
+    assert r["to"] == [EMAIL_AUDIT_NOTIFICACIONES]
+    assert EMAIL_AUDIT_NOTIFICACIONES not in r["bcc"]
+    assert EMAIL_AUDIT_COBRANZA in r["bcc"]

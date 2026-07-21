@@ -782,8 +782,8 @@ async def health_check():
     return {
         "status": "healthy",
         "git": (os.environ.get("RENDER_GIT_COMMIT") or os.environ.get("GIT_COMMIT") or "")[:12],
-        "build": "email-audit-v5.2-no-itmaster",
-        "email_audit": "v5.2-no-itmaster",
+        "build": "email-audit-v5.3-cco-unico",
+        "email_audit": "v5.3-cco-unico",
     }
 
 
