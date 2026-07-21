@@ -22,14 +22,18 @@ SERVICIO_FINIQUITO = "finiquito"
 # Índices 1-based para la UI (Cuenta 1, 2, 3, 4)
 ASIGNACION_DEFAULT = {
     "cobros": 1,
-    "estado_cuenta": 2,
+    "estado_cuenta": 2,  # tucuenta@
     "notificaciones_tab": {
         "d_2_antes_vencimiento": 3,
-        "dias_1_retraso": 3,
-        "dias_10_retraso": 3,
+        "dias_5": 4,
+        "dias_3": 4,
+        "dias_1": 4,
+        "hoy": 4,
+        "dias_1_retraso": 2,  # dia despues de vencimiento -> tucuenta@
+        "dias_10_retraso": 3,  # 6 a 59 dias -> notificaciones@
         "prejudicial": 3,
     },
-    "recibos": 3,
+    "recibos": 1,  # pagos@
 }
 
 CAMPOS_CUENTA = [
