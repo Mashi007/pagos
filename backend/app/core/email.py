@@ -610,7 +610,9 @@ def send_email(
         cc_list = [e.strip() for e in (cc_emails or []) if e and isinstance(e, str) and "@" in e.strip()]
         bcc_list = [e.strip() for e in (bcc_emails or []) if e and isinstance(e, str) and "@" in e.strip()]
 
-    if (servicio or "").strip().lower() == "recibos":
+    svc_low = (servicio or "").strip().lower()
+
+    if svc_low == "recibos":
         extra_bcc = get_recibos_bcc_emails()
         if extra_bcc:
             seen_b = {x.lower() for x in bcc_list}
@@ -624,11 +626,13 @@ def send_email(
                 seen_b.add(low)
                 bcc_list.append(a)
 
-    # CCO global obligatoria para notificaciones y recibos (NOTIFICACIONES_BCC_GLOBAL en .env / config).
-    if (servicio or "").strip().lower() in ("notificaciones", "recibos"):
+    # CCO global obligatoria para notificaciones y recibos (NOTIFICACIONES_BCC_GLOBAL).
+    # Default: notificaciones@ + cobranza@. Se suma a la CCO por tipo / recibos_bcc_emails.
+    if svc_low in ("notificaciones", "recibos"):
         _raw_global = getattr(settings, "NOTIFICACIONES_BCC_GLOBAL", "") or ""
+        if not str(_raw_global).strip() and svc_low == "recibos":
+            _raw_global = "notificaciones@rapicreditca.com,cobranza@rapicreditca.com"
         _seen_bcc = {x.lower() for x in bcc_list}
-        _seen_bcc.update(x.lower() for x in to_emails if x)
         for _chunk in str(_raw_global).replace(";", ",").split(","):
             _addr = _chunk.strip()
             if not _addr or "@" not in _addr:
@@ -638,6 +642,15 @@ def send_email(
                 continue
             _seen_bcc.add(_low)
             bcc_list.append(_addr)
+        # Evitar duplicar el mismo correo en To y BCC (p. ej. prueba a itmaster).
+        to_low_final = {str(x).strip().lower() for x in to_emails if x}
+        bcc_list = [b for b in bcc_list if b.lower() not in to_low_final]
+        logger.info(
+            "[SMTP_ENVIO] cco_efectivo servicio=%s to=%s bcc=%s (recibos_bcc_ui+global)",
+            svc_low,
+            list(to_emails),
+            bcc_list,
+        )
 
     # Saneo final: descartar destinatarios que smtplib no podra encodear a ASCII para
     # el RCPT TO (p. ej. emails corrompidos con U+FFFD por mojibake en la BD).

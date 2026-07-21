@@ -398,7 +398,7 @@ export function ConfiguracionRecibos({ emergencyResetSeq = 0 }: Props) {
       if (ok) {
         toast.success(
           msg ||
-            'Muestra Recibos enviada: mismo HTML que el envío masivo (plantilla guardada) + PDF, primer cliente en ventana.'
+            'Muestra Recibos enviada (To = correo indicado; CCO = cobranza@ y notificaciones@ si están configurados).'
         )
       } else {
         toast.error(msg || 'No se pudo enviar la muestra Recibos.')
@@ -855,8 +855,9 @@ export function ConfiguracionRecibos({ emergencyResetSeq = 0 }: Props) {
             Un solo correo de muestra: plantilla HTML{' '}
             <strong>ya guardada</strong> (misma que el envío masivo) más PDF de
             estado de cuenta del primer cliente válido en la ventana (Caracas).
-            Destino: solo el correo que indique abajo. CCO según Recibos. Guarde
-            la plantilla antes si acaba de editarla.
+            El correo de abajo es el destinatario principal (To). La CCO
+            configurada arriba (cobranza@ / notificaciones@) también se envía
+            en copia oculta. Guarde la plantilla y la CCO antes de probar.
           </CardDescription>
         </CardHeader>
 

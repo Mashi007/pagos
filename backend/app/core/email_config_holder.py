@@ -399,7 +399,12 @@ def prepare_for_api_response(data: dict[str, Any]) -> dict[str, Any]:
 
 
 def get_recibos_bcc_emails() -> List[str]:
-    """Correos en copia oculta (CCO/BCC) para envíos del servicio Recibos (máx. 2, desde email_config)."""
+    """Correos en copia oculta (CCO/BCC) para envios del servicio Recibos (max. 2, desde email_config).
+
+    Fuerza recarga desde BD: el cache de 5 min del holder hacia que, tras guardar CCO en la UI,
+    otro worker (o el mismo con TTL vigente) enviara sin BCC y solo llegara el To (p. ej. itmaster).
+    """
+    invalidate_email_config_cache()
     sync_from_db()
     raw = _current.get("recibos_bcc_emails")
     if not isinstance(raw, list):

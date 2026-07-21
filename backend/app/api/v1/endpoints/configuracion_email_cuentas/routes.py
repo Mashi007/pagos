@@ -486,10 +486,12 @@ def put_email_cuentas(payload: EmailCuentasUpdate = Body(...), db: Session = Dep
         else:
             db.add(Configuracion(clave=CLAVE_EMAIL_CONFIG, valor=payload_str))
         db.commit()
+        invalidate_email_config_cache()
         logger.info(
-            "email_config persistido en BD (clave=%s, cuentas=%d, utf8=True)",
+            "email_config persistido en BD (clave=%s, cuentas=%d, utf8=True, recibos_bcc=%s)",
             CLAVE_EMAIL_CONFIG,
             len(cuentas_para_bd),
+            payload_data.get("recibos_bcc_emails") or [],
         )
     except Exception as e:
         logger.exception("Error guardando cuentas email: %s", e)
