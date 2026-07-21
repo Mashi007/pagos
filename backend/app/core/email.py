@@ -13,9 +13,12 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 from email.utils import formatdate
 
-# Timeout para conexi�n y env�o SMTP/IMAP (evita 502 por proxy cuando Gmail/red tardan)
+# Timeout para conexion y envio SMTP/IMAP (evita 502 por proxy cuando Gmail/red tardan)
 SMTP_TIMEOUT_SECONDS = 25
 IMAP_TIMEOUT_SECONDS = 25
+# Gmail en lotes grandes: cierra el login tras muchos connect+auth seguidos.
+SMTP_SEND_MAX_ATTEMPTS = 4
+SMTP_RETRY_BASE_SECONDS = 2.5
 
 from app.core.email_config_holder import (
     get_smtp_config,
@@ -319,6 +322,74 @@ def _sanitize_smtp_error(exc: Exception) -> str:
     if "daily user sending limit exceeded" in lower or "5.4.5" in msg:
         return "Limite diario de envio de Gmail alcanzado (550 5.4.5). Gmail personal: ~100-500/dia. Espera 24h o usa Google Workspace / otro SMTP para mas envios."
     return msg[:300] if len(msg) <= 300 else msg[:297] + "..."
+
+
+def _smtp_error_is_transient(exc: BaseException) -> bool:
+    """True si conviene reintentar (Gmail cierra sesion tras rafagas / rate limit corto)."""
+    raw = str(exc).lower()
+    safe = _sanitize_smtp_error(exc).lower() if isinstance(exc, Exception) else raw
+    needles = (
+        "connection unexpectedly closed",
+        "connection closed",
+        "serverdisconnected",
+        "cerro la conexion",
+        "broken pipe",
+        "connection reset",
+        "timed out",
+        "timeout",
+        "eof occurred",
+        "temporarily unavailable",
+        "try again later",
+        "421",
+        "454",
+    )
+    blob = raw + " " + safe
+    return any(n in blob for n in needles)
+
+
+def _smtp_deliver(
+    *,
+    cfg: Dict[str, Any],
+    port: int,
+    use_tls: bool,
+    from_addr: str,
+    all_recipients: List[str],
+    msg_bytes: bytes,
+    smtp_session_metadata: Optional[Dict[str, Any]],
+    t0_smtp: float,
+) -> dict:
+    """Una sesion SMTP: connect + login + sendmail. Devuelve refused dict."""
+    if port == 465:
+        with smtplib.SMTP_SSL(cfg["smtp_host"], port, timeout=SMTP_TIMEOUT_SECONDS) as server:
+            log_phase(
+                logger,
+                FASE_SMTP_CONEXION,
+                True,
+                f"SMTP_SSL {cfg['smtp_host']}:{port}",
+                duration_ms=(time.time() - t0_smtp) * 1000,
+            )
+            server.login(cfg["smtp_user"], cfg["smtp_password"])
+            if smtp_session_metadata is not None:
+                _smtp_capture_socket_metadata(server, smtp_session_metadata)
+                smtp_session_metadata["tls"] = True
+                smtp_session_metadata["tipo_conexion"] = "SMTP_SSL"
+            return server.sendmail(from_addr, all_recipients, msg_bytes) or {}
+    with smtplib.SMTP(cfg["smtp_host"], port, timeout=SMTP_TIMEOUT_SECONDS) as server:
+        if use_tls:
+            server.starttls()
+        log_phase(
+            logger,
+            FASE_SMTP_CONEXION,
+            True,
+            f"SMTP {cfg['smtp_host']}:{port} TLS={use_tls}",
+            duration_ms=(time.time() - t0_smtp) * 1000,
+        )
+        server.login(cfg["smtp_user"], cfg["smtp_password"])
+        if smtp_session_metadata is not None:
+            _smtp_capture_socket_metadata(server, smtp_session_metadata)
+            smtp_session_metadata["tls"] = bool(use_tls)
+            smtp_session_metadata["tipo_conexion"] = "SMTP_STARTTLS" if use_tls else "SMTP"
+        return server.sendmail(from_addr, all_recipients, msg_bytes) or {}
 
 
 def test_imap_connection(
@@ -716,26 +787,37 @@ def send_email(
         msg_str = msg.as_string(policy=__import__("email").policy.SMTP)
         msg_bytes = msg_str.replace("\r\n", "\n").replace("\n", "\r\n").encode("utf-8")
         t0_smtp = time.time()
-        if port == 465:
-            with smtplib.SMTP_SSL(cfg["smtp_host"], port, timeout=SMTP_TIMEOUT_SECONDS) as server:
-                log_phase(logger, FASE_SMTP_CONEXION, True, f"SMTP_SSL {cfg['smtp_host']}:{port}", duration_ms=(time.time() - t0_smtp) * 1000)
-                server.login(cfg["smtp_user"], cfg["smtp_password"])
-                if smtp_session_metadata is not None:
-                    _smtp_capture_socket_metadata(server, smtp_session_metadata)
-                    smtp_session_metadata["tls"] = True
-                    smtp_session_metadata["tipo_conexion"] = "SMTP_SSL"
-                refused = server.sendmail(msg["From"], all_recipients, msg_bytes)
-        else:
-            with smtplib.SMTP(cfg["smtp_host"], port, timeout=SMTP_TIMEOUT_SECONDS) as server:
-                if use_tls:
-                    server.starttls()
-                log_phase(logger, FASE_SMTP_CONEXION, True, f"SMTP {cfg['smtp_host']}:{port} TLS={use_tls}", duration_ms=(time.time() - t0_smtp) * 1000)
-                server.login(cfg["smtp_user"], cfg["smtp_password"])
-                if smtp_session_metadata is not None:
-                    _smtp_capture_socket_metadata(server, smtp_session_metadata)
-                    smtp_session_metadata["tls"] = bool(use_tls)
-                    smtp_session_metadata["tipo_conexion"] = "SMTP_STARTTLS" if use_tls else "SMTP"
-                refused = server.sendmail(msg["From"], all_recipients, msg_bytes)
+        refused: dict = {}
+        last_exc: Optional[BaseException] = None
+        for attempt in range(1, SMTP_SEND_MAX_ATTEMPTS + 1):
+            try:
+                refused = _smtp_deliver(
+                    cfg=cfg,
+                    port=port,
+                    use_tls=use_tls,
+                    from_addr=msg["From"],
+                    all_recipients=all_recipients,
+                    msg_bytes=msg_bytes,
+                    smtp_session_metadata=smtp_session_metadata,
+                    t0_smtp=t0_smtp,
+                )
+                last_exc = None
+                break
+            except Exception as e:
+                last_exc = e
+                if attempt >= SMTP_SEND_MAX_ATTEMPTS or not _smtp_error_is_transient(e):
+                    raise
+                wait_s = SMTP_RETRY_BASE_SECONDS * attempt
+                logger.warning(
+                    "[SMTP_ENVIO] reintento %s/%s en %.1fs tras error transitorio: %s",
+                    attempt,
+                    SMTP_SEND_MAX_ATTEMPTS,
+                    wait_s,
+                    _sanitize_smtp_error(e)[:200],
+                )
+                time.sleep(wait_s)
+        if last_exc is not None:
+            raise last_exc
         if refused:
             log_phase(logger, FASE_SMTP_ENVIO, False, f"smtp_rechazo_destinatarios={refused}", duration_ms=(time.time() - t0_smtp) * 1000)
             logger.warning(

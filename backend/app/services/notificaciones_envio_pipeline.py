@@ -5,6 +5,7 @@ Extraído de ``notificaciones_tabs.routes`` para mantener routers como delegaci�
 y facilitar pruebas unitarias sobre el pipeline sin montar FastAPI.
 """
 import logging
+import time
 from datetime import date
 from typing import Callable, Dict, List, Optional, Tuple
 
@@ -576,6 +577,8 @@ def _enviar_correos_items(
                 enviados += 1
             else:
                 fallidos += 1
+            # Pausa corta entre SMTP: Gmail cierra login si hay cientos de connect+auth seguidos.
+            time.sleep(0.75)
             tipo_tab = _tipo_tab_para_persistencia(tipo)
             if tipo_tab and db is not None:
                 # Commit por ítem: lotes de ~1000+ con PDF en memoria reventaban el worker
