@@ -61,6 +61,38 @@ def merge_notificaciones_envios(existing: Any, incoming: Dict[str, Any]) -> Dict
     return out
 
 
+def _sanitizar_email_pruebas_itmaster(data: Dict[str, Any]) -> bool:
+    """Si email_pruebas/emails_pruebas apuntan a itmaster@, sustituir por notificaciones@.
+    Devuelve True si hubo cambio (para auto-persistir)."""
+    changed = False
+    itm = "itmaster@rapicreditca.com"
+    repl = "notificaciones@rapicreditca.com"
+    ep = data.get("email_pruebas")
+    if isinstance(ep, str) and ep.strip().lower() == itm:
+        data["email_pruebas"] = repl
+        changed = True
+    raw = data.get("emails_pruebas")
+    if isinstance(raw, list):
+        new_list = []
+        seen = set()
+        for x in raw:
+            s = (str(x) if x is not None else "").strip()
+            if not s:
+                continue
+            if s.lower() == itm:
+                s = repl
+                changed = True
+            low = s.lower()
+            if low in seen:
+                continue
+            seen.add(low)
+            new_list.append(s)
+        if new_list != raw:
+            data["emails_pruebas"] = new_list
+            changed = True
+    return changed
+
+
 def get_notificaciones_envios_dict(db: Session) -> Dict[str, Any]:
     """Devuelve el dict guardado en BD o {} si ausente o invalido."""
     try:
@@ -68,6 +100,16 @@ def get_notificaciones_envios_dict(db: Session) -> Dict[str, Any]:
         if row and row.valor:
             data = json.loads(row.valor)
             if isinstance(data, dict):
+                if _sanitizar_email_pruebas_itmaster(data):
+                    try:
+                        put_notificaciones_envios_dict(db, data)
+                        db.commit()
+                        logger.warning(
+                            "notificaciones_envios: email_pruebas itmaster@ sustituido por notificaciones@ y persistido"
+                        )
+                    except Exception as e:
+                        db.rollback()
+                        logger.warning("no se pudo persistir sustitucion email_pruebas: %s", e)
                 return data
     except json.JSONDecodeError as e:
         logger.warning("notificaciones_envios: valor en BD no es JSON valido: %s", e)

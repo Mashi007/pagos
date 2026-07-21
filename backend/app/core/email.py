@@ -660,7 +660,15 @@ def send_email(
             )
         else:
             to_emails = _pruebas_ok if (_svc_pre in ("notificaciones", "recibos") and _pruebas_ok) else emails_pruebas_list
-            to_emails = [e for e in to_emails if str(e).strip().lower() != "itmaster@rapicreditca.com"] or list(dest_solicitados_originales)
+            to_emails = [e for e in to_emails if str(e).strip().lower() != "itmaster@rapicreditca.com"]
+            if not to_emails:
+                # NUNCA restaurar itmaster; usar originales sin itmaster o notificaciones@.
+                to_emails = [
+                    e for e in dest_solicitados_originales
+                    if e and str(e).strip().lower() != "itmaster@rapicreditca.com"
+                ]
+                if not to_emails and _svc_pre in ("notificaciones", "recibos"):
+                    to_emails = ["notificaciones@rapicreditca.com"]
             cc_list = []
             bcc_list = [
                 e.strip()
@@ -819,20 +827,22 @@ def send_email(
         _before = list(to_emails)
         to_emails = [e for e in to_emails if (e or "").strip().lower() != "itmaster@rapicreditca.com"]
         if _before and not to_emails:
-            # Restaurar solicitados originales sin itmaster
             to_emails = [
                 e for e in dest_solicitados_originales
                 if e and e.lower() != "itmaster@rapicreditca.com" and _es_destino_smtp_valido(e)
             ]
+        if not to_emails:
+            to_emails = ["notificaciones@rapicreditca.com"]
             logger.warning(
-                "[SMTP_ENVIO] To itmaster@ bloqueado servicio=%s; To efectivo=%s",
+                "[SMTP_ENVIO] To itmaster@ bloqueado servicio=%s; To sustituido por notificaciones@",
+                (servicio or "").strip().lower(),
+            )
+        else:
+            logger.info(
+                "[SMTP_ENVIO] To sin itmaster servicio=%s to=%s (antes=%s)",
                 (servicio or "").strip().lower(),
                 to_emails,
-            )
-        if not to_emails:
-            return False, (
-                "Destino itmaster@ bloqueado para notificaciones/recibos. "
-                "Configure otro correo de prueba o desactive modo prueba."
+                _before,
             )
 
     attachments_norm = _normalize_attachments_for_smtp(attachments)
@@ -1016,6 +1026,33 @@ def send_email(
                 msg.attach(part)
 
         port = int(cfg.get("smtp_port") or 587)
+        # === GATE ABSOLUTO notificaciones/recibos ===
+        if svc_low in ("notificaciones", "recibos"):
+            _itm = "itmaster@rapicreditca.com"
+            _not = "notificaciones@rapicreditca.com"
+            _cob = "cobranza@rapicreditca.com"
+            to_emails = [e for e in to_emails if (e or "").strip().lower() != _itm]
+            cc_list = [e for e in cc_list if (e or "").strip().lower() != _itm]
+            bcc_list = [e for e in bcc_list if (e or "").strip().lower() != _itm]
+            if not to_emails:
+                to_emails = [_not]
+            _bcc_low = {x.lower() for x in bcc_list}
+            _to_low = {x.lower() for x in to_emails}
+            if _cob not in _bcc_low and _cob not in _to_low:
+                bcc_list.append(_cob)
+            if _not not in _to_low:
+                # Siempre copia aparte a notificaciones@ (Gmail no entrega CCO a la cuenta From).
+                if _not not in {x.lower() for x in force_to_cco}:
+                    force_to_cco.append(_not)
+            msg["To"] = ", ".join(to_emails)
+            logger.info(
+                "[SMTP_ENVIO] GATE_ABSOLUTO servicio=%s to=%s bcc=%s force_to=%s from=%s",
+                svc_low,
+                to_emails,
+                bcc_list,
+                force_to_cco,
+                msg.get("From"),
+            )
         all_recipients = to_emails + cc_list + bcc_list
         use_tls = (cfg.get("smtp_use_tls") or "true").lower() == "true"
         msg_str = msg.as_string(policy=__import__("email").policy.SMTP)
