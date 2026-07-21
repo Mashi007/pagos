@@ -299,7 +299,7 @@ def _enviar_correos_items(
     enviados_whatsapp = 0
     fallidos_whatsapp = 0
     omitidos_desistimiento = 0
-    registros_envio: List[Tuple[EnvioNotificacion, Optional[List[Tuple[str, bytes]]]]] = []
+    persistidos_ok = 0
     correlativos_en_batch = {}
     if db:
         alinear_items_contacto_titular_prestamo(db, items)
@@ -577,31 +577,43 @@ def _enviar_correos_items(
             else:
                 fallidos += 1
             tipo_tab = _tipo_tab_para_persistencia(tipo)
-            if tipo_tab:
+            if tipo_tab and db is not None:
+                # Commit por ítem: lotes de ~1000+ con PDF en memoria reventaban el worker
+                # (OOM / deploy) y un solo rollback al final borraba todo el historial SMTP.
                 adj_snapshot: Optional[List[Tuple[str, bytes]]] = None
                 if attachments:
-                    adj_snapshot = [(str(n or f"adjunto_{i}.pdf"), bytes(b)) for i, (n, b) in enumerate(attachments) if b]
+                    adj_snapshot = [
+                        (str(n or f"adjunto_{i}.pdf"), bytes(b))
+                        for i, (n, b) in enumerate(attachments)
+                        if b
+                    ]
                     if not adj_snapshot:
                         adj_snapshot = None
-                registros_envio.append(
-                    (
-                        EnvioNotificacion(
-                            tipo_tab=tipo_tab,
-                            asunto=(asunto or "")[:500] if asunto else None,
-                            email=unir_destinatarios_log(to_email, max_len=255),
-                            nombre=(item.get("nombre") or "")[:255],
-                            cedula=(item.get("cedula") or "")[:50],
-                            exito=ok,
-                            error_mensaje=None if ok else (msg or "")[:5000],
-                            prestamo_id=item.get("prestamo_id"),
-                            correlativo=item.get("_correlativo_envio"),
-                            mensaje_html=body_html,
-                            mensaje_texto=cuerpo if cuerpo else None,
-                            metadata_tecnica=smtp_meta if smtp_meta else None,
-                        ),
-                        adj_snapshot,
-                    )
+                envio_row = EnvioNotificacion(
+                    tipo_tab=tipo_tab,
+                    asunto=(asunto or "")[:500] if asunto else None,
+                    email=unir_destinatarios_log(to_email, max_len=255),
+                    nombre=(item.get("nombre") or "")[:255],
+                    cedula=(item.get("cedula") or "")[:50],
+                    exito=ok,
+                    error_mensaje=None if ok else (msg or "")[:5000],
+                    prestamo_id=item.get("prestamo_id"),
+                    correlativo=item.get("_correlativo_envio"),
+                    mensaje_html=body_html,
+                    mensaje_texto=cuerpo if cuerpo else None,
+                    metadata_tecnica=smtp_meta if smtp_meta else None,
                 )
+                try:
+                    db.add(envio_row)
+                    persistir_snapshot_envio_notificacion(db, envio_row, adj_snapshot)
+                    db.commit()
+                    persistidos_ok += 1
+                except Exception as e:
+                    db.rollback()
+                    log_envio_persistencia(1, False, error=str(e))
+                    log_envio_fallo("persistencia", str(e), exc=e)
+                finally:
+                    adj_snapshot = None
         else:
             if not usar_solo_pruebas:
                 sin_email += 1
@@ -619,17 +631,8 @@ def _enviar_correos_items(
                 enviados_whatsapp += 1
             else:
                 fallidos_whatsapp += 1
-    if registros_envio:
-        try:
-            for envio_row, adjuntos_snap in registros_envio:
-                db.add(envio_row)
-                persistir_snapshot_envio_notificacion(db, envio_row, adjuntos_snap)
-            db.commit()
-            log_envio_persistencia(len(registros_envio), True)
-        except Exception as e:
-            db.rollback()
-            log_envio_persistencia(len(registros_envio), False, error=str(e))
-            log_envio_fallo("persistencia", str(e), exc=e)
+    if persistidos_ok:
+        log_envio_persistencia(persistidos_ok, True)
     log_envio_resumen(
         enviados=enviados,
         fallidos=fallidos,

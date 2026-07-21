@@ -26,12 +26,18 @@ def persist_ultimo_envio_batch(
     inicio_utc: Optional[str] = None,
     omitido: bool = False,
     omitido_motivo: Optional[str] = None,
+    en_proceso: bool = False,
 ) -> None:
-    """Guarda resumen. El llamador hace commit."""
-    fin = datetime.now(timezone.utc).isoformat()
+    """Guarda resumen. El llamador hace commit.
+
+    en_proceso=True: lote aún enviando (heartbeat); fin_utc queda null para que el
+    cliente no trate el resumen como terminado.
+    """
+    fin = None if en_proceso else datetime.now(timezone.utc).isoformat()
     body: Dict[str, Any] = {
-        "inicio_utc": inicio_utc or fin,
+        "inicio_utc": inicio_utc or datetime.now(timezone.utc).isoformat(),
         "fin_utc": fin,
+        "estado": "en_proceso" if en_proceso else "finalizado",
         "origen": origen,
         "omitido": omitido,
         "omitido_motivo": omitido_motivo,

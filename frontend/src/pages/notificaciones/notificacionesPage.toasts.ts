@@ -61,19 +61,24 @@ export function toastErrorTrasEnvioManual(
   e: unknown,
   fraseRevisionConfig: string
 ): void {
-  if (isAxiosTimeoutError(e)) {
+  const code =
+    e && typeof e === 'object' && 'code' in e
+      ? String((e as { code?: unknown }).code || '')
+      : ''
+  const msg = getErrorMessage(e)
+  if (isAxiosTimeoutError(e) || code === 'ESPERA_ENVIO_AGOTADA' || msg.includes('ESPERA_ENVIO_AGOTADA')) {
     const min = Math.max(
       1,
       Math.round(TIMEOUT_MS_ENVIO_NOTIFICACIONES_MANUAL / 60000)
     )
     toast.warning(
-      `El navegador dejó de esperar tras ${min} min (timeout). Con muchas filas y adjuntos el envío puede seguir en el servidor: antes de reintentar, revise «Último envío por lote» o el historial para no duplicar correos. ${fraseRevisionConfig}`,
-      { duration: 20000 }
+      `El navegador dejó de esperar tras ${min} min. Con ~1000 filas el lote puede seguir horas en el servidor: revise «Último envío por lote» antes de reintentar (no duplicar). ${fraseRevisionConfig}`,
+      { duration: 22000 }
     )
     return
   }
 
   toast.error(
-    `No se pudo completar el envío: ${getErrorMessage(e)}. ${fraseRevisionConfig}`
+    `No se pudo completar el envío: ${msg}. ${fraseRevisionConfig}`
   )
 }

@@ -644,12 +644,6 @@ def _sustituir_variables(texto: str, item: dict) -> str:
     dias_atraso = item.get("dias_atraso")
     cuotas_atrasadas = item.get("cuotas_atrasadas")
     fecha_disp = (item.get("fecha_vencimiento_display") or "").strip() or str(fecha_v)
-    try:
-        from app.core.email import _logo_url_for_email
-
-        logo_url = _logo_url_for_email()
-    except Exception:
-        logo_url = "https://rapicredit.onrender.com/pagos/logos/rapicredit-public.png"
     replacements = {
         "{{nombre}}": str(nombre),
         "{{cedula}}": str(cedula),
@@ -661,9 +655,6 @@ def _sustituir_variables(texto: str, item: dict) -> str:
         "{{cuotas_atrasadas}}": str(cuotas_atrasadas)
         if cuotas_atrasadas is not None
         else "",
-        "{{logo_url}}": logo_url,
-        "{{LOGO_URL}}": logo_url,
-        "{{Logo_Url}}": logo_url,
     }
     result = texto
     for key, val in replacements.items():
@@ -1713,6 +1704,24 @@ def _tarea_enviar_caso_manual(
 
     db = SessionLocal()
     try:
+        # Marca en_proceso de inmediato para que el poll del front no confunda con el lote anterior
+        # y se vea progreso aunque el cliente agote su espera (lotes ~1000 pueden superar 15–40 min).
+        persist_ultimo_envio_batch(
+            db,
+            resultado={
+                "tipo_caso": tipo,
+                "enviados": 0,
+                "detalles": {
+                    "tipo_caso": tipo,
+                    "token_seguimiento": token_seguimiento,
+                    "en_proceso": True,
+                },
+            },
+            origen="api_enviar_caso_manual",
+            inicio_utc=inicio_utc,
+            en_proceso=True,
+        )
+        db.commit()
         try:
             fecha_ref = parse_fecha_referencia_negocio(fecha_caracas_raw)
         except ValueError as e:
@@ -1738,6 +1747,7 @@ def _tarea_enviar_caso_manual(
         det = dict(para_persist["detalles"]) if isinstance(para_persist.get("detalles"), dict) else {}
         det["token_seguimiento"] = token_seguimiento
         det["tipo_caso"] = tipo
+        det.pop("en_proceso", None)
         para_persist["detalles"] = det
         persist_ultimo_envio_batch(
             db,
