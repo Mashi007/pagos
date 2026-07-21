@@ -1540,15 +1540,20 @@ export function DashboardMenu() {
               </div>
 
               <CardDescription className="mt-2 text-xs text-gray-600">
-                Historial{' '}
+                Cuenta filas del historial en BD (
+                <code className="rounded bg-gray-100 px-1 py-0.5 text-[11px]">
+                  envios_notificacion
+                </code>
+                /{' '}
                 <code className="rounded bg-gray-100 px-1 py-0.5 text-[11px]">
                   dias_10_retraso
                 </code>
-                : correos aceptados por SMTP (enviados) por día. Eje X desde el{' '}
-                <strong>20 de julio</strong> del año del último día con datos
-                (muestra de {NOTIFICACIONES_ENVIOS_TENDENCIA_DIAS} d recortada).
-                Línea gris discontinua: <strong>tendencia</strong> (regresión
-                lineal sobre la serie mostrada).
+                ), no el buzón de Gmail. Si un lote SMTP se cortó antes de
+                persistir, Gmail puede tener cientos y esta gráfica pocos. Eje X
+                desde el <strong>20 de julio</strong> del año del último día con
+                datos (muestra de {NOTIFICACIONES_ENVIOS_TENDENCIA_DIAS} d
+                recortada). Línea gris discontinua: <strong>tendencia</strong>{' '}
+                (regresión lineal sobre la serie mostrada).
               </CardDescription>
             </CardHeader>
 
