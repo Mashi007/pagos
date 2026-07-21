@@ -32,6 +32,9 @@ ASIGNACION_DEFAULT = {
         "dias_1_retraso": 2,  # dia despues de vencimiento -> tucuenta@
         "dias_10_retraso": 3,  # 6 a 59 dias -> notificaciones@
         "prejudicial": 3,
+        "dias_3_retraso": 3,
+        "dias_5_retraso": 3,
+        "mora_90": 3,
     },
     "recibos": 1,  # pagos@
 }

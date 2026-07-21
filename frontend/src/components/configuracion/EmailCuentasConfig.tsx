@@ -55,10 +55,13 @@ import { toast } from 'sonner'
 import {
   emailCuentasApi,
   SERVICIO_POR_CUENTA,
-  NOTIF_TABS,
+  ASIGNACION_SERVICIOS,
+  ASIGNACION_NOTIF_GRUPOS,
+  ASIGNACION_NOTIF_DEFAULTS,
   CUENTA_OPCIONES_ASIGNACION,
   type EmailCuentasResponse,
   type CuentaEmailItem,
+  type AsignacionServicioKey,
 } from '../../services/emailCuentasApi'
 
 import { NOTIFICACIONES_QUERY_KEYS } from '../../queries/notificaciones'
@@ -67,29 +70,51 @@ const CUENTAS_COUNT = 4
 
 const emptyCuenta = (): CuentaEmailItem => ({
   smtp_host: 'smtp.gmail.com',
-
   smtp_port: '587',
-
   smtp_user: '',
-
   smtp_password: '',
-
   from_email: '',
-
   from_name: 'RapiCredit',
-
   smtp_use_tls: 'true',
-
   imap_host: '',
-
   imap_port: '993',
-
   imap_user: '',
-
   imap_password: '',
-
   imap_use_ssl: 'true',
 })
+
+function mergeAsignacionTabs(
+  tab: Record<string, number> | undefined
+): Record<string, number> {
+  return { ...ASIGNACION_NOTIF_DEFAULTS, ...(tab ?? {}) }
+}
+
+function SelectCuentaAsignacion({
+  id,
+  value,
+  onChange,
+  className = 'rounded border bg-background px-2 py-1 text-sm',
+}: {
+  id?: string
+  value: number
+  onChange: (v: number) => void
+  className?: string
+}) {
+  return (
+    <select
+      id={id}
+      className={className}
+      value={value}
+      onChange={e => onChange(Number(e.target.value))}
+    >
+      {CUENTA_OPCIONES_ASIGNACION.map(o => (
+        <option key={o.value} value={o.value}>
+          {o.label}
+        </option>
+      ))}
+    </select>
+  )
+}
 
 export function EmailCuentasConfig() {
   const queryClient = useQueryClient()
@@ -118,7 +143,7 @@ export function EmailCuentasConfig() {
 
       const tab = res.asignacion?.notificaciones_tab ?? {}
 
-      setAsignacion({ ...tab })
+      setAsignacion(mergeAsignacionTabs(tab))
     } catch (e) {
       console.error(e)
 
@@ -166,6 +191,22 @@ export function EmailCuentasConfig() {
     setAsignacion(prev => ({ ...prev, [tabId]: cuenta }))
   }
 
+  const setServicioCuenta = (key: AsignacionServicioKey, cuenta: number) => {
+    if (!data) return
+    setData({
+      ...data,
+      asignacion: {
+        cobros: data.asignacion?.cobros ?? 1,
+        estado_cuenta: data.asignacion?.estado_cuenta ?? 2,
+        recibos: data.asignacion?.recibos ?? 1,
+        notificaciones_tab: {
+          ...(data.asignacion?.notificaciones_tab ?? {}),
+        },
+        [key]: cuenta,
+      },
+    })
+  }
+
   const setServicioActivo = (
     key: keyof EmailCuentasResponse,
     value: string
@@ -184,7 +225,7 @@ export function EmailCuentasConfig() {
     if (servicio === 'estado_cuenta' || servicio === 'finiquito')
       return a?.estado_cuenta ?? 2
     if (servicio === 'recibos') return a?.recibos ?? 1
-    if (servicio === 'notificaciones') return 'por caso (2 / 3 / 4)'
+    if (servicio === 'notificaciones') return 'por caso (ver abajo)'
     return 1
   }
 
@@ -625,18 +666,10 @@ export function EmailCuentasConfig() {
             Cuentas de correo por servicio
           </CardTitle>
 
-          <CardDescription>
-            Configure hasta 4 cuentas. Cada servicio usa una cuenta:{' '}
-            <strong>Cuenta 1</strong> = Cobros (formulario público, recibos al
-            aprobar pagos reportados),
-            <strong> Cuenta 2</strong> = Estado de cuenta,{' '}
-            <strong>Cuentas 3 y 4</strong> = Notificaciones (puede elegir por
-            pestaña; también rechazo de pagos reportados).{' '}
-            <span className="block pt-2 text-amber-900 dark:text-amber-200">
-              Gmail con verificación en dos pasos: en SMTP debe usar una{' '}
-              <strong>contraseña de aplicación</strong> (16 caracteres) desde
-              Seguridad de la cuenta de Google, no la contraseña habitual.
-            </span>
+            <CardDescription>
+            Configure hasta 4 cuentas SMTP. Asigne abajo qué buzón usa cada
+            módulo del menú Notificaciones y cada servicio (Cobros, Estado de
+            cuenta, Recibos). En Gmail con 2FA use contraseña de aplicación.
           </CardDescription>
         </CardHeader>
       </Card>
@@ -649,14 +682,10 @@ export function EmailCuentasConfig() {
             </CardTitle>
 
             <CardDescription>
-              {i === 0 &&
-                'Usada en: Cobros (reporte público, recibo al aprobar y envío manual de recibo).'}
-
-              {i === 1 &&
-                'Usada en: rapicredit-estadocuenta (consulta y envío de PDF).'}
-
-              {(i === 2 || i === 3) &&
-                `Usada en: Notificaciones (pestañas que elija como "Cuenta ${i + 1}" abajo).`}
+              {i === 0 && `SMTP: ${SERVICIO_POR_CUENTA[1]}`}
+              {i === 1 && `SMTP: ${SERVICIO_POR_CUENTA[2]}`}
+              {i === 2 && `SMTP: ${SERVICIO_POR_CUENTA[3]}`}
+              {i === 3 && `SMTP: ${SERVICIO_POR_CUENTA[4]}`}
             </CardDescription>
           </CardHeader>
 
@@ -739,90 +768,61 @@ export function EmailCuentasConfig() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Asignación: Recibos</CardTitle>
-          <CardDescription>
-            Correos automáticos con PDF de estado de cuenta (servicio{' '}
-            <code>recibos</code>). Por defecto Cuenta 1 (pagos@).
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex max-w-md flex-col gap-2">
-            <Label htmlFor="asig-recibos-cuenta">
-              Cuenta SMTP para Recibos
-            </Label>
-            <select
-              id="asig-recibos-cuenta"
-              className="flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
-              value={data?.asignacion?.recibos ?? 1}
-              onChange={e => {
-                const v = Number(e.target.value)
-                setData(d =>
-                  d
-                    ? {
-                        ...d,
-                        asignacion: {
-                          cobros: d.asignacion?.cobros ?? 1,
-                          estado_cuenta: d.asignacion?.estado_cuenta ?? 2,
-                          notificaciones_tab: {
-                            ...(d.asignacion?.notificaciones_tab ?? {}),
-                          },
-                          recibos: v,
-                        },
-                      }
-                    : d
-                )
-              }}
-            >
-              {CUENTA_OPCIONES_ASIGNACION.map(o => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <AlertCircle className="h-4 w-4" />
-            Asignación Notificaciones: qué cuenta usa cada caso de envío
+          <CardTitle className="text-base">
+            Asignación por servicio (Cobros, Estado de cuenta, Recibos)
           </CardTitle>
-
           <CardDescription>
-            Elija qué cuenta SMTP usa cada caso. Valores actuales: día siguiente
-            → Cuenta 2 (tucuenta@); menor a 60 → Cuenta 3 (notificaciones@); 3
-            días antes → Cuenta 4 (recuerda@); prejudicial → Cuenta 3. El
-            remitente visible puede forzarse en backend según el caso.
+            Servicios con una sola cuenta SMTP. Finiquito usa la misma cuenta que
+            Estado de cuenta (Cuenta 2 por defecto).
           </CardDescription>
         </CardHeader>
-
         <CardContent>
           <div className="grid gap-3 sm:grid-cols-2">
-            {NOTIF_TABS.map(({ id, label }) => (
+            {ASIGNACION_SERVICIOS.map(({ key, label, defaultCuenta }) => (
               <div
-                key={id}
+                key={key}
                 className="flex items-center justify-between rounded border p-3"
               >
-                <span className="text-sm font-medium">{label}</span>
-
-                <select
-                  className="rounded border bg-background px-2 py-1 text-sm"
-                  value={asignacion[id] ?? 3}
-                  onChange={e => setNotifTabCuenta(id, Number(e.target.value))}
-                >
-                  {CUENTA_OPCIONES_ASIGNACION.map(o => (
-                    <option key={o.value} value={o.value}>
-                      {o.label}
-                    </option>
-                  ))}
-                </select>
+                <span className="pr-2 text-sm font-medium">{label}</span>
+                <SelectCuentaAsignacion
+                  id={`asig-servicio-${key}`}
+                  value={data?.asignacion?.[key] ?? defaultCuenta}
+                  onChange={v => setServicioCuenta(key, v)}
+                />
               </div>
             ))}
           </div>
         </CardContent>
       </Card>
+
+      {ASIGNACION_NOTIF_GRUPOS.map(grupo => (
+        <Card key={grupo.titulo}>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <AlertCircle className="h-4 w-4" />
+              {grupo.titulo}
+            </CardTitle>
+            <CardDescription>{grupo.descripcion}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {grupo.items.map(({ id, label, defaultCuenta }) => (
+                <div
+                  key={id}
+                  className="flex items-center justify-between rounded border p-3"
+                >
+                  <span className="pr-2 text-sm font-medium">{label}</span>
+                  <SelectCuentaAsignacion
+                    id={`asig-notif-${id}`}
+                    value={asignacion[id] ?? defaultCuenta}
+                    onChange={v => setNotifTabCuenta(id, v)}
+                  />
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      ))}
 
       <div className="flex justify-end">
         <Button onClick={handleSave} disabled={saving}>

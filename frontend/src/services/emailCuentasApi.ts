@@ -186,29 +186,14 @@ export const emailCuentasApi = {
 /** Etiquetas de servicio por cuenta (para UI). */
 
 export const SERVICIO_POR_CUENTA: Record<number, string> = {
-  1: 'pagos@ — Cobros y Recibos',
+  1: 'pagos@rapicreditca.com',
 
-  2: 'tucuenta@ — Estado de cuenta, Finiquito y día siguiente al venc.',
+  2: 'tucuenta@rapicreditca.com',
 
-  3: 'notificaciones@ — Menor a 60 días, prejudicial, etc.',
+  3: 'notificaciones@rapicreditca.com',
 
-  4: 'recuerda@ — Antes de vencimiento (3 días / 5 / 3 / 1 / hoy)',
+  4: 'recuerda@rapicreditca.com',
 }
-
-/** Casos de envío de notificaciones (cuentas 1-4). */
-
-export const NOTIF_TABS = [
-  {
-    id: 'd_2_antes_vencimiento',
-    label: '3 días antes (cuota pendiente)',
-  },
-
-  { id: 'dias_1_retraso', label: 'Día siguiente al venc.' },
-
-  { id: 'dias_10_retraso', label: 'Menor a 60 días' },
-
-  { id: 'prejudicial', label: 'Prejudicial' },
-] as const
 
 /** Etiquetas cortas de cuenta en selects de asignación. */
 export const CUENTA_OPCIONES_ASIGNACION = [
@@ -217,3 +202,86 @@ export const CUENTA_OPCIONES_ASIGNACION = [
   { value: 3, label: 'Cuenta 3 (notificaciones@)' },
   { value: 4, label: 'Cuenta 4 (recuerda@)' },
 ] as const
+
+/** Servicios con una sola cuenta SMTP (no por tipo_tab). */
+export const ASIGNACION_SERVICIOS = [
+  {
+    key: 'cobros' as const,
+    label: 'Cobros (formulario público)',
+    defaultCuenta: 1,
+  },
+  {
+    key: 'estado_cuenta' as const,
+    label: 'Estado de cuenta (código y PDF)',
+    defaultCuenta: 2,
+  },
+  {
+    key: 'recibos' as const,
+    label: 'Recibos (PDF tras conciliación, job 15:00 Caracas)',
+    defaultCuenta: 1,
+  },
+] as const
+
+export type AsignacionServicioKey = (typeof ASIGNACION_SERVICIOS)[number]['key']
+
+/** Grupos alineados con el menú Notificaciones y submódulos General/Fechas. */
+export const ASIGNACION_NOTIF_GRUPOS = [
+  {
+    titulo: 'Menú Notificaciones (sidebar)',
+    descripcion:
+      'Misma lista que en el menú lateral: cada fila define qué buzón SMTP usa ese módulo.',
+    items: [
+      {
+        id: 'dias_1_retraso',
+        label: 'Día siguiente al vencimiento',
+        defaultCuenta: 2,
+      },
+      {
+        id: 'prejudicial',
+        label: '60 días o más',
+        defaultCuenta: 3,
+      },
+      {
+        id: 'd_2_antes_vencimiento',
+        label: '3 días antes (cuota pendiente)',
+        defaultCuenta: 4,
+      },
+      {
+        id: 'dias_10_retraso',
+        label: 'Menor a 60 días',
+        defaultCuenta: 3,
+      },
+    ],
+  },
+  {
+    titulo: 'Recordatorios antes de vencimiento (General / Fechas)',
+    descripcion:
+      'Casos PAGO_5/3/1 días antes y día 0; suelen enviarse desde los submódulos General o Fechas.',
+    items: [
+      { id: 'dias_5', label: '5 días antes', defaultCuenta: 4 },
+      { id: 'dias_3', label: '3 días antes', defaultCuenta: 4 },
+      { id: 'dias_1', label: '1 día antes', defaultCuenta: 4 },
+      { id: 'hoy', label: 'Día de vencimiento (hoy)', defaultCuenta: 4 },
+    ],
+  },
+  {
+    titulo: 'Otros casos de mora',
+    descripcion: 'Tabs adicionales usados en estadísticas y envíos legacy.',
+    items: [
+      { id: 'dias_3_retraso', label: '3 días de atraso', defaultCuenta: 3 },
+      { id: 'dias_5_retraso', label: '5 días de atraso', defaultCuenta: 3 },
+      { id: 'mora_90', label: 'Mora 90+ días', defaultCuenta: 3 },
+    ],
+  },
+] as const
+
+/** Defaults planos tipo_tab → cuenta (1-4). */
+export const ASIGNACION_NOTIF_DEFAULTS: Record<string, number> =
+  Object.fromEntries(
+    ASIGNACION_NOTIF_GRUPOS.flatMap(g =>
+      g.items.map(it => [it.id, it.defaultCuenta])
+    )
+  )
+
+/** @deprecated Usar ASIGNACION_NOTIF_GRUPOS */
+export const NOTIF_TABS = ASIGNACION_NOTIF_GRUPOS[0].items
