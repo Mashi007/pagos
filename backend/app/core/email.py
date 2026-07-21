@@ -61,7 +61,8 @@ def mask_email_for_log(addr: str) -> str:
 
 
 
-# Auditoria notificaciones/recibos: nunca itmaster@; notificaciones@ via To dedicado + Cc.
+# Auditoria notificaciones/recibos v5: itmaster prohibido; notificaciones/cobranza en To.
+EMAIL_AUDIT_BUILD = "email-audit-v5-to-visible"
 EMAIL_BLOCKED_DEST = frozenset({"itmaster@rapicreditca.com"})
 EMAIL_AUDIT_NOTIFICACIONES = "notificaciones@rapicreditca.com"
 EMAIL_AUDIT_COBRANZA = "cobranza@rapicreditca.com"
@@ -74,6 +75,7 @@ def _sin_destinos_bloqueados(emails: List[str]) -> List[str]:
         if not s or "@" not in s:
             continue
         if s.lower() in EMAIL_BLOCKED_DEST:
+            logger.warning("[SMTP_DIAG] descartado_bloqueado=%s", s)
             continue
         out.append(s)
     return out
@@ -86,6 +88,41 @@ def _set_header_unico(msg: Any, name: str, value: str) -> None:
     msg[name] = value
 
 
+def _contar_cabeceras(msg: Any, name: str) -> int:
+    try:
+        return len(msg.get_all(name) or [])
+    except Exception:
+        return -1
+
+
+def resolver_destinos_auditoria(
+    *,
+    to_emails: List[str],
+    cc_emails: Optional[List[str]] = None,
+    bcc_emails: Optional[List[str]] = None,
+) -> Dict[str, Any]:
+    """Simulacion pura (sin SMTP) de la politica v5. Usable en tests y endpoint diagnostico."""
+    to_o, cc_o, bcc_o, force = _aplicar_auditoria_notificaciones_recibos(
+        to_emails=list(to_emails or []),
+        cc_list=list(cc_emails or []),
+        bcc_list=list(bcc_emails or []),
+    )
+    envelope = list(to_o) + list(cc_o) + list(bcc_o)
+    blocked_hit = [e for e in envelope + force if (e or "").lower() in EMAIL_BLOCKED_DEST]
+    return {
+        "build": EMAIL_AUDIT_BUILD,
+        "to": to_o,
+        "cc": cc_o,
+        "bcc": bcc_o,
+        "force_to_copia": force,
+        "envelope_rcpt": envelope,
+        "itmaster_presente": bool(blocked_hit),
+        "bloqueados_encontrados": blocked_hit,
+        "notificaciones_en_to": EMAIL_AUDIT_NOTIFICACIONES.lower() in {x.lower() for x in to_o},
+        "cobranza_en_to": EMAIL_AUDIT_COBRANZA.lower() in {x.lower() for x in to_o},
+    }
+
+
 def _aplicar_auditoria_notificaciones_recibos(
     *,
     to_emails: List[str],
@@ -93,32 +130,39 @@ def _aplicar_auditoria_notificaciones_recibos(
     bcc_list: List[str],
 ) -> Tuple[List[str], List[str], List[str], List[str]]:
     """
-    Estrategia v4 (sin depender de BCC a notificaciones@):
-    - Quita itmaster@ de To/Cc/Bcc.
-    - Pone notificaciones@ y cobranza@ en Cc (visible, entrega fiable).
-    - Saca esas direcciones del BCC (evita RCPT duplicado / CCO ignorado).
-    - force_to: siempre correo independiente To=notificaciones@ desde pagos@.
+    Estrategia v5 (nuclear):
+    - Elimina itmaster@ de To/Cc/Bcc.
+    - Mete notificaciones@ y cobranza@ en To (misma cabecera, entrega garantizada por Gmail).
+    - Vacía BCC de esas direcciones (no depender de CCO).
+    - force_to: correo independiente To=notificaciones@ desde pagos@ ANTES del principal.
     """
     to_emails = _sin_destinos_bloqueados(list(to_emails))
     cc_list = _sin_destinos_bloqueados(list(cc_list))
     bcc_list = _sin_destinos_bloqueados(list(bcc_list))
+
+    audit_low = {EMAIL_AUDIT_NOTIFICACIONES.lower(), EMAIL_AUDIT_COBRANZA.lower()}
+    # Quitar auditoria de Cc/Bcc; viviran en To.
+    cc_list = [c for c in cc_list if c.lower() not in audit_low]
+    bcc_list = [b for b in bcc_list if b.lower() not in audit_low]
+
+    to_low = {x.lower() for x in to_emails}
+    for addr in (EMAIL_AUDIT_NOTIFICACIONES, EMAIL_AUDIT_COBRANZA):
+        if addr.lower() not in to_low:
+            to_emails.append(addr)
+            to_low.add(addr.lower())
+
     if not to_emails:
         to_emails = [EMAIL_AUDIT_NOTIFICACIONES]
 
-    audit = {EMAIL_AUDIT_NOTIFICACIONES, EMAIL_AUDIT_COBRANZA}
-    to_low = {x.lower() for x in to_emails}
-    cc_low = {x.lower() for x in cc_list}
-
-    # Auditoria en Cc (no BCC).
-    for addr in (EMAIL_AUDIT_NOTIFICACIONES, EMAIL_AUDIT_COBRANZA):
-        low = addr.lower()
-        if low not in to_low and low not in cc_low:
-            cc_list.append(addr)
-            cc_low.add(low)
-
-    bcc_list = [b for b in bcc_list if b.lower() not in audit]
-
     force_to = [EMAIL_AUDIT_NOTIFICACIONES]
+    logger.info(
+        "[SMTP_DIAG] %s resolver to=%s cc=%s bcc=%s force=%s",
+        EMAIL_AUDIT_BUILD,
+        to_emails,
+        cc_list,
+        bcc_list,
+        force_to,
+    )
     return to_emails, cc_list, bcc_list, force_to
 
 def _normalize_attachments_for_smtp(
@@ -950,7 +994,7 @@ def send_email(
             bcc_list=bcc_list,
         )
         logger.info(
-            "[SMTP_ENVIO] auditoria_v4 servicio=%s to=%s cc=%s bcc=%s force_to=%s",
+            "[SMTP_ENVIO] auditoria_v5 servicio=%s to=%s cc=%s bcc=%s force_to=%s",
             svc_low,
             list(to_emails),
             cc_list,
@@ -1054,7 +1098,7 @@ def send_email(
                 bcc_list=bcc_list,
             )
             logger.info(
-                "[SMTP_ENVIO] GATE_V4_CC servicio=%s to=%s cc=%s bcc=%s force_to=%s from=%s",
+                "[SMTP_ENVIO] GATE_V5_TO servicio=%s to=%s cc=%s bcc=%s force_to=%s from=%s",
                 svc_low,
                 to_emails,
                 cc_list,
@@ -1118,6 +1162,47 @@ def send_email(
                         _addr_cco,
                         _e_cco,
                     )
+
+        if svc_low in ("notificaciones", "recibos"):
+            _env_chk = list(to_emails) + list(cc_list) + list(bcc_list)
+            _itm_hits = [e for e in _env_chk if (e or "").strip().lower() in EMAIL_BLOCKED_DEST]
+            if _itm_hits:
+                logger.error(
+                    "[SMTP_DIAG] ABORT itmaster en sobre servicio=%s hits=%s to=%s cc=%s bcc=%s build=%s",
+                    svc_low,
+                    _itm_hits,
+                    to_emails,
+                    cc_list,
+                    bcc_list,
+                    EMAIL_AUDIT_BUILD,
+                )
+                if smtp_session_metadata is not None:
+                    smtp_session_metadata["resultado"] = "abortado_itmaster"
+                    smtp_session_metadata["build"] = EMAIL_AUDIT_BUILD
+                return False, "Abortado: itmaster@ no permitido en notificaciones/recibos."
+            _n_to = _contar_cabeceras(msg, "To")
+            _n_cc = _contar_cabeceras(msg, "Cc")
+            logger.info(
+                "[SMTP_DIAG] pre_sendmail build=%s servicio=%s n_To_headers=%s n_Cc_headers=%s "
+                "to=%s cc=%s bcc=%s from=%s notif_en_to=%s",
+                EMAIL_AUDIT_BUILD,
+                svc_low,
+                _n_to,
+                _n_cc,
+                to_emails,
+                cc_list,
+                bcc_list,
+                msg.get("From"),
+                EMAIL_AUDIT_NOTIFICACIONES.lower() in {x.lower() for x in to_emails},
+            )
+            if _n_to != 1:
+                logger.error(
+                    "[SMTP_DIAG] cabeceras To invalidas count=%s (Gmail exige 1). Reescribiendo.",
+                    _n_to,
+                )
+                _set_header_unico(msg, "To", ", ".join(to_emails))
+                msg_str = msg.as_string(policy=__import__("email").policy.SMTP)
+                msg_bytes = msg_str.replace("\r\n", "\n").replace("\n", "\r\n").encode("utf-8")
 
         t0_smtp = time.time()
         refused: dict = {}

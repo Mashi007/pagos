@@ -401,7 +401,7 @@ def _crear_ticket_recibo_no_claro(
         return None
 
 
-EMAIL_TICKET_REVISAR = "itmaster@rapicreditca.com"
+EMAIL_TICKET_REVISAR = "notificaciones@rapicreditca.com"
 
 
 def _crear_ticket_informe_revisar(

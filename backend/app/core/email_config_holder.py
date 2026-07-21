@@ -247,7 +247,15 @@ def _fallback_smtp_config() -> dict[str, Any]:
 def get_tickets_notify_emails() -> List[str]:
     """Lista de emails a los que notificar cuando se crea/actualiza un ticket (contactos prestablecidos)."""
     raw = _current.get("tickets_notify_emails") or getattr(settings, "TICKETS_NOTIFY_EMAIL", None) or ""
-    return [e.strip() for e in raw.split(",") if e.strip()]
+    blocked = {"itmaster@rapicreditca.com"}
+    out = [
+        e.strip()
+        for e in raw.split(",")
+        if e.strip() and e.strip().lower() not in blocked
+    ]
+    if not out:
+        out = ["notificaciones@rapicreditca.com"]
+    return out
 
 
 

@@ -217,7 +217,7 @@ class Settings(BaseSettings):
     MIGRATION_AUDITORIA_SECRET: Optional[str] = Field(None, description="Secreto para ejecutar migración auditoria FK (una sola vez)")
     # Email al que se envía la notificación cuando un usuario solicita "Olvidé mi contraseña" (para envío de nueva).
     FORGOT_PASSWORD_NOTIFY_EMAIL: str = Field(
-        default="itmaster@rapicreditca.com",
+        default="notificaciones@rapicreditca.com",
         description="Destino del correo de solicitud de restablecimiento de contraseña",
     )
     # False = exige JWT cobros_public (OTP por correo) en validar-cedula y enviar-reporte publicos.
@@ -380,8 +380,8 @@ class Settings(BaseSettings):
     )
     # Correo(s) para notificaciones de tickets CRM (varios separados por coma). Incluye tickets automáticos por recibo no claro (3 intentos).
     TICKETS_NOTIFY_EMAIL: Optional[str] = Field(
-        default="itmaster@rapicreditca.com",
-        description="Email(s) para notificar cuando se crea o actualiza un ticket (separados por coma). Por defecto itmaster@rapicreditca.com."
+        default="notificaciones@rapicreditca.com",
+        description="Email(s) para notificar cuando se crea o actualiza un ticket (separados por coma). Por defecto notificaciones@rapicreditca.com."
     )
     # URL pública del frontend (para enlaces y logo en emails de cobranza). Ej: https://rapicredit.onrender.com/pagos
     # Ruta al logo PNG para generar el PDF de carta de cobranza (adjunto al email). Opcional; si no existe se omite el logo en el PDF.
