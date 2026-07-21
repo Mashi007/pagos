@@ -40,6 +40,8 @@ const OPERATOR_PREFIXES = [
   '/cobros',
   '/cobranzas',
   '/finiquitos',
+  /** Registro del sistema: ver acciones propias y de otros roles operativos. */
+  '/auditoria',
 ]
 
 /** Visualizador: solo consulta general y reportes (ajustar aquí si se delegan más módulos) */

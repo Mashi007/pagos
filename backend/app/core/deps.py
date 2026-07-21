@@ -11,6 +11,7 @@ from typing import Optional
 
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from sqlalchemy import func as sa_func
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
@@ -97,12 +98,12 @@ def staff_user_from_access_token_payload(db: Session, payload: dict) -> UserResp
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token inválido",
         )
-    email = sub if "@" in sub else f"{sub}@admin.local"
+    email = (sub if "@" in str(sub) else f"{sub}@admin.local").strip().lower()
     cached = _auth_user_cache_get(email)
     if cached is not None:
         return cached
     try:
-        u = db.query(User).filter(User.email == email).first()
+        u = db.query(User).filter(sa_func.lower(User.email) == email).first()
     except OperationalError as e:
         logger.warning("get_current_user: fallo de BD al cargar usuario: %s", e)
         raise HTTPException(

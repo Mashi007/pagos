@@ -20,7 +20,12 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.deps import get_current_user, require_admin, require_auditoria_cartera_access
+from app.core.deps import (
+    get_current_user,
+    require_admin,
+    require_auditoria_cartera_access,
+    require_operator_or_higher,
+)
 from app.core.rol_normalization import canonical_rol
 from app.models.auditoria import Auditoria
 from app.models.auditoria_cartera_revision import AuditoriaCarteraRevision
@@ -182,7 +187,7 @@ def listar_auditoria(
     ordenar_por: str = Query("fecha"),
     orden: str = Query("desc"),
     db: Session = Depends(get_db),
-    _admin: UserResponse = Depends(require_admin),
+    _staff: UserResponse = Depends(require_operator_or_higher),
 ):
     """Lista registros de auditoría con filtros y paginación. Datos desde BD."""
     q = select(Auditoria)
@@ -230,7 +235,7 @@ def listar_auditoria(
 @router.get("/stats", response_model=AuditoriaStats)
 def obtener_estadisticas(
     db: Session = Depends(get_db),
-    _admin: UserResponse = Depends(require_admin),
+    _staff: UserResponse = Depends(require_operator_or_higher),
 ):
     """Estadísticas de auditoría desde BD (totales, por módulo, por usuario, hoy/semana/mes)."""
     hoy = datetime.now(timezone.utc).replace(tzinfo=None)
@@ -274,7 +279,7 @@ def exportar_auditoria(
     fecha_desde: Optional[str] = Query(None),
     fecha_hasta: Optional[str] = Query(None),
     db: Session = Depends(get_db),
-    _admin: UserResponse = Depends(require_admin),
+    _staff: UserResponse = Depends(require_operator_or_higher),
 ):
     """Exporta auditoría a Excel. Datos desde BD."""
     try:
@@ -1304,7 +1309,7 @@ def listar_control15_pagos_sin_aplicacion_cuotas_por_prestamo(
 def obtener_auditoria(
     auditoria_id: int,
     db: Session = Depends(get_db),
-    _admin: UserResponse = Depends(require_admin),
+    _staff: UserResponse = Depends(require_operator_or_higher),
 ):
     """Obtiene un registro de auditoría por ID desde BD."""
     row = db.get(Auditoria, auditoria_id)

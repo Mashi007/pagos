@@ -51,6 +51,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
 import { AuditoriaCarteraTab } from '../components/auditoria/AuditoriaCarteraTab'
 import { AuditoriaLiquidadosIntensivaTab } from '../components/auditoria/AuditoriaLiquidadosIntensivaTab'
 import { AuditoriaRebotesGmailTab } from '../components/auditoria/AuditoriaRebotesGmailTab'
+import { useSimpleAuth } from '../store/simpleAuthStore'
+import { canonicalRol } from '../utils/rol'
 
 function formatAuditoriaFecha(fecha: string | null | undefined): string {
   if (!fecha) return '-'
@@ -72,6 +74,12 @@ function labelUsuarioAuditoria(a: AuditoriaType): string {
 }
 
 export function Auditoria() {
+  const { user } = useSimpleAuth()
+  const rolCanon = canonicalRol(user?.rol)
+  const puedeTabsAvanzadas =
+    rolCanon === 'admin' || rolCanon === 'manager'
+  const puedeRebotesGmail = rolCanon === 'admin'
+
   const [auditorias, setAuditorias] = useState<AuditoriaType[]>([])
 
   const [stats, setStats] = useState<AuditoriaStats | null>(null)
@@ -86,7 +94,9 @@ export function Auditoria() {
 
   const [pageSize] = useState(50)
 
-  const [tabAuditoria, setTabAuditoria] = useState('cartera')
+  const [tabAuditoria, setTabAuditoria] = useState(
+    puedeTabsAvanzadas ? 'cartera' : 'sistema'
+  )
 
   // Filtros
 
@@ -339,27 +349,44 @@ export function Auditoria() {
         onValueChange={setTabAuditoria}
         className="w-full"
       >
-        <TabsList className="grid w-full max-w-4xl grid-cols-4">
-          <TabsTrigger value="cartera">Revision de cartera</TabsTrigger>
-
-          <TabsTrigger value="liquidados">Liquidados (intensiva)</TabsTrigger>
-
-          <TabsTrigger value="rebotes-gmail">Rebotes Gmail</TabsTrigger>
-
+        <TabsList
+          className={
+            rolCanon === 'admin'
+              ? 'grid w-full max-w-4xl grid-cols-4'
+              : puedeTabsAvanzadas
+                ? 'grid w-full max-w-3xl grid-cols-3'
+                : 'grid w-full max-w-md grid-cols-1'
+          }
+        >
+          {puedeTabsAvanzadas && (
+            <>
+              <TabsTrigger value="cartera">Revision de cartera</TabsTrigger>
+              <TabsTrigger value="liquidados">Liquidados (intensiva)</TabsTrigger>
+            </>
+          )}
+          {puedeRebotesGmail && (
+            <TabsTrigger value="rebotes-gmail">Rebotes Gmail</TabsTrigger>
+          )}
           <TabsTrigger value="sistema">Registro del sistema</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="cartera" className="mt-4" forceMount>
-          <AuditoriaCarteraTab />
-        </TabsContent>
+        {puedeTabsAvanzadas && (
+          <>
+            <TabsContent value="cartera" className="mt-4" forceMount>
+              <AuditoriaCarteraTab />
+            </TabsContent>
 
-        <TabsContent value="liquidados" className="mt-4" forceMount>
-          <AuditoriaLiquidadosIntensivaTab />
-        </TabsContent>
+            <TabsContent value="liquidados" className="mt-4" forceMount>
+              <AuditoriaLiquidadosIntensivaTab />
+            </TabsContent>
+          </>
+        )}
 
-        <TabsContent value="rebotes-gmail" className="mt-4">
-          <AuditoriaRebotesGmailTab />
-        </TabsContent>
+        {puedeRebotesGmail && (
+          <TabsContent value="rebotes-gmail" className="mt-4">
+            <AuditoriaRebotesGmailTab />
+          </TabsContent>
+        )}
 
         <TabsContent value="sistema" className="mt-4 space-y-6">
           <div className="flex flex-wrap gap-2">

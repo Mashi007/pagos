@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 from typing import Callable, Optional
 
 from fastapi import Request
+from sqlalchemy import func
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
 
@@ -29,6 +30,7 @@ from app.middleware.audit_helpers import (
 logger = logging.getLogger(__name__)
 
 def _usuario_id_desde_bearer(request: Request, db) -> Optional[int]:
+    """Resuelve usuario de personal (admin, manager, operator, viewer) desde JWT Bearer."""
     auth = (request.headers.get("authorization") or "").strip()
     if not auth.lower().startswith("bearer "):
         return None
@@ -39,10 +41,24 @@ def _usuario_id_desde_bearer(request: Request, db) -> Optional[int]:
     sub = payload.get("sub") or payload.get("email")
     if not sub:
         return None
-    email = str(sub).strip().lower()
+    raw = str(sub).strip()
+    # sub numerico (id de usuarios)
+    if raw.isdigit():
+        u = (
+            db.query(User)
+            .filter(User.id == int(raw), User.is_active.is_(True))
+            .first()
+        )
+        return int(u.id) if u else None
+    email = raw.lower()
     if "@" not in email:
         email = f"{email}@admin.local"
-    u = db.query(User).filter(User.email == email, User.is_active.is_(True)).first()
+    # Comparacion case-insensitive: operadores/admins pueden tener email mixto en BD
+    u = (
+        db.query(User)
+        .filter(func.lower(User.email) == email, User.is_active.is_(True))
+        .first()
+    )
     return int(u.id) if u else None
 
 
@@ -51,7 +67,9 @@ def _resolve_usuario_id(request: Request, db) -> int:
     try:
         usuario_info = getattr(request.state, "user", None)
         if usuario_info and hasattr(usuario_info, "id"):
-            usuario_id = usuario_info.id
+            uid = getattr(usuario_info, "id", None)
+            if uid is not None:
+                usuario_id = int(uid)
     except Exception:
         pass
     if not usuario_id:
