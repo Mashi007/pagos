@@ -207,8 +207,19 @@ def get_smtp_config(servicio: Optional[str] = None, tipo_tab: Optional[str] = No
         raw_r = getattr(settings, "RECIBOS_FROM_EMAIL", None)
         from_r = (raw_r.strip() if isinstance(raw_r, str) else "")
         if from_r:
-            cfg["from_email"] = from_r
-        logger.info("[EMAIL] Servicio recibos: remitente From=%s.", cfg["from_email"])
+            if from_r.lower() in ("notificacion@rapicreditca.com", "notificaciones@rapicreditca.com"):
+                logger.warning(
+                    "[EMAIL] RECIBOS_FROM_EMAIL=%s no aplica a recibos; se usa From de cuenta asignada %s.",
+                    from_r,
+                    cfg.get("from_email") or cfg.get("smtp_user") or "-",
+                )
+            else:
+                cfg["from_email"] = from_r
+        logger.info(
+            "[EMAIL] Servicio recibos: smtp_user=%s remitente From=%s.",
+            cfg.get("smtp_user") or "-",
+            cfg.get("from_email") or "-",
+        )
     elif servicio == "notificaciones":
         tab = (tipo_tab or "").strip()
         tabs_recuerda = {

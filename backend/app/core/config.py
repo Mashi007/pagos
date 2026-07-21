@@ -364,8 +364,11 @@ class Settings(BaseSettings):
         description="Minuto Caracas del envío automático diario Recibos.",
     )
     RECIBOS_FROM_EMAIL: str = Field(
-        default="notificacion@rapicreditca.com",
-        description='Remitente From para envíos del submódulo Recibos (servicio SMTP "recibos").',
+        default="",
+        description=(
+            'Remitente From opcional para Recibos. Vacio = From de la cuenta SMTP asignada (pagos@). '
+            'Solo definir si necesitas override explicito.'
+        ),
     )
     # Correo(s) para notificaciones de tickets CRM (varios separados por coma). Incluye tickets automáticos por recibo no claro (3 intentos).
     TICKETS_NOTIFY_EMAIL: Optional[str] = Field(
