@@ -34,7 +34,7 @@ import { useState, useEffect } from 'react'
 
 import { useQueryClient } from '@tanstack/react-query'
 
-import { Mail, Save, AlertCircle, CheckCircle } from 'lucide-react'
+import { Mail, Save, AlertCircle, CheckCircle, Key } from 'lucide-react'
 
 import {
   Card,
@@ -114,6 +114,51 @@ function SelectCuentaAsignacion({
       ))}
     </select>
   )
+}
+
+function CuentaClaveIndicador({
+  guardada,
+  pendiente,
+  smtpUser,
+}: {
+  guardada?: boolean
+  pendiente: boolean
+  smtpUser?: string
+}) {
+  if (pendiente) {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-900 dark:bg-blue-950 dark:text-blue-100">
+        <Key className="h-3 w-3 shrink-0" aria-hidden />
+        Clave nueva (pendiente de guardar)
+      </span>
+    )
+  }
+  if (guardada) {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-900 dark:bg-emerald-950 dark:text-emerald-100">
+        <CheckCircle className="h-3 w-3 shrink-0" aria-hidden />
+        Clave SMTP guardada
+      </span>
+    )
+  }
+  if ((smtpUser ?? '').trim()) {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-950 dark:bg-amber-950 dark:text-amber-100">
+        <AlertCircle className="h-3 w-3 shrink-0" aria-hidden />
+        Sin clave SMTP (requerida para enviar)
+      </span>
+    )
+  }
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+      Cuenta sin configurar
+    </span>
+  )
+}
+
+function cuentaTieneClavePendiente(cuenta: CuentaEmailItem | undefined): boolean {
+  const pwd = cuenta?.smtp_password
+  return Boolean(pwd && pwd !== '***' && pwd.trim().length > 0)
 }
 
 export function EmailCuentasConfig() {
@@ -272,7 +317,14 @@ export function EmailCuentasConfig() {
     setSaving(true)
 
     try {
-      const cuentas = data.cuentas.slice(0, CUENTAS_COUNT)
+      const cuentas = data.cuentas.slice(0, CUENTAS_COUNT).map(c => {
+        const {
+          smtp_password_guardada: _sg,
+          imap_password_guardada: _ig,
+          ...rest
+        } = c
+        return rest
+      })
 
       while (cuentas.length < CUENTAS_COUNT) cuentas.push(emptyCuenta())
 
@@ -695,22 +747,48 @@ export function EmailCuentasConfig() {
             módulo del menú Notificaciones y cada servicio (Cobros, Estado de
             cuenta, Recibos). En Gmail con 2FA use contraseña de aplicación.
           </CardDescription>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {cuentas.slice(0, CUENTAS_COUNT).map((c, idx) => (
+              <div
+                key={idx}
+                className="flex items-center gap-2 rounded-md border border-blue-200/60 bg-white/70 px-2 py-1 text-xs dark:bg-slate-900/40"
+              >
+                <span className="font-medium text-blue-900 dark:text-blue-100">
+                  Cuenta {idx + 1}
+                </span>
+                <CuentaClaveIndicador
+                  guardada={c.smtp_password_guardada}
+                  pendiente={cuentaTieneClavePendiente(c)}
+                  smtpUser={c.smtp_user}
+                />
+              </div>
+            ))}
+          </div>
         </CardHeader>
       </Card>
 
       {[0, 1, 2, 3].map(i => (
         <Card key={i}>
           <CardHeader className="pb-2">
-            <CardTitle className="text-base">
-              Cuenta {i + 1} - {SERVICIO_POR_CUENTA[i + 1] ?? `Cuenta ${i + 1}`}
-            </CardTitle>
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div>
+                <CardTitle className="text-base">
+                  Cuenta {i + 1} - {SERVICIO_POR_CUENTA[i + 1] ?? `Cuenta ${i + 1}`}
+                </CardTitle>
 
-            <CardDescription>
-              {i === 0 && `SMTP: ${SERVICIO_POR_CUENTA[1]}`}
-              {i === 1 && `SMTP: ${SERVICIO_POR_CUENTA[2]}`}
-              {i === 2 && `SMTP: ${SERVICIO_POR_CUENTA[3]}`}
-              {i === 3 && `SMTP: ${SERVICIO_POR_CUENTA[4]}`}
-            </CardDescription>
+                <CardDescription className="mt-1">
+                  {i === 0 && `SMTP: ${SERVICIO_POR_CUENTA[1]}`}
+                  {i === 1 && `SMTP: ${SERVICIO_POR_CUENTA[2]}`}
+                  {i === 2 && `SMTP: ${SERVICIO_POR_CUENTA[3]}`}
+                  {i === 3 && `SMTP: ${SERVICIO_POR_CUENTA[4]}`}
+                </CardDescription>
+              </div>
+              <CuentaClaveIndicador
+                guardada={cuentas[i]?.smtp_password_guardada}
+                pendiente={cuentaTieneClavePendiente(cuentas[i])}
+                smtpUser={cuentas[i]?.smtp_user}
+              />
+            </div>
           </CardHeader>
 
           <CardContent className="space-y-4">
@@ -748,7 +826,14 @@ export function EmailCuentasConfig() {
               </div>
 
               <div>
-                <Label>Contraseña</Label>
+                <div className="mb-1 flex flex-wrap items-center gap-2">
+                  <Label>Contraseña SMTP</Label>
+                  <CuentaClaveIndicador
+                    guardada={cuentas[i]?.smtp_password_guardada}
+                    pendiente={cuentaTieneClavePendiente(cuentas[i])}
+                    smtpUser={cuentas[i]?.smtp_user}
+                  />
+                </div>
 
                 <Input
                   type="password"
@@ -761,9 +846,20 @@ export function EmailCuentasConfig() {
                   onChange={e =>
                     updateCuenta(i, 'smtp_password', e.target.value)
                   }
-                  placeholder="***"
+                  placeholder={
+                    cuentas[i]?.smtp_password_guardada
+                      ? 'Dejar vacío para conservar la clave guardada'
+                      : 'Contraseña de aplicación Gmail'
+                  }
                   autoComplete="off"
                 />
+                {cuentas[i]?.smtp_password_guardada &&
+                !cuentaTieneClavePendiente(cuentas[i]) ? (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Hay una clave guardada en el servidor. Escriba aquí solo si
+                    desea cambiarla.
+                  </p>
+                ) : null}
               </div>
 
               <div>

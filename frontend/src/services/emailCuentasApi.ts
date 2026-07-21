@@ -44,6 +44,12 @@ export interface CuentaEmailItem {
   imap_password?: string
 
   imap_use_ssl?: string
+
+  /** Solo lectura (GET): hay contraseña SMTP persistida en BD. */
+  smtp_password_guardada?: boolean
+
+  /** Solo lectura (GET): hay contraseña IMAP persistida en BD. */
+  imap_password_guardada?: boolean
 }
 
 export interface EmailCuentasResponse {

@@ -72,12 +72,36 @@ def _email_v2_globals_for_api(data: dict) -> dict[str, Any]:
     return out
 
 
+def _is_password_masked(v: Any) -> bool:
+    if v is None or not isinstance(v, str):
+        return True
+    s = (v or "").strip()
+    return s in ("", "***")
+
+
+def _secret_field_stored(c: dict, field: str) -> bool:
+    """True si hay contraseña persistida (encriptada en BD o legacy en claro)."""
+    enc_key = f"{field}_encriptado"
+    enc = c.get(enc_key)
+    if enc is not None and str(enc).strip():
+        return True
+    val = c.get(field)
+    if val is None:
+        return False
+    s = str(val).strip()
+    return bool(s) and not _is_password_masked(s)
+
+
 def _mask_cuenta(c: dict) -> dict:
     """Copia la cuenta enmascarando contrasenas y sin exponer campos _encriptado."""
+    smtp_guardada = _secret_field_stored(c, "smtp_password")
+    imap_guardada = _secret_field_stored(c, "imap_password")
     out = {k: v for k, v in c.items() if not k.endswith("_encriptado")}
     for f in SENSITIVE_FIELDS:
         if out.get(f):
             out[f] = "***"
+    out["smtp_password_guardada"] = smtp_guardada
+    out["imap_password_guardada"] = imap_guardada
     return out
 
 
