@@ -330,7 +330,8 @@ export interface PagosIngresadosPorDiaItem {
 
   dia: string
 
-  pagos: number
+  /** Suma de Pago.monto_pagado (USD) del día */
+  monto: number
 }
 
 export interface PagosIngresadosPorDiaResponse {

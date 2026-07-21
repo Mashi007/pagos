@@ -1702,7 +1702,7 @@ def get_notificaciones_envios_por_dia(
 
 def _compute_pagos_ingresados_por_dia(db: Session, dias: int) -> dict:
     """
-    Cantidad de filas en `pagos` por día de fecha_pago.
+    Suma de Pago.monto_pagado (USD) por día de fecha_pago.
 
     Ventana: hoy (America/Caracas) y los (dias - 1) días anteriores.
     Sin filtro de Prestamo.estado ni de Pago.estado/conciliado: incluye
@@ -1730,7 +1730,7 @@ def _compute_pagos_ingresados_por_dia(db: Session, dias: int) -> dict:
         stmt = (
             select(
                 dia_expr.label("dia"),
-                func.count(Pago.id).label("pagos"),
+                func.coalesce(func.sum(Pago.monto_pagado), 0).label("monto"),
             )
             .where(
                 Pago.fecha_pago.isnot(None),
@@ -1740,14 +1740,14 @@ def _compute_pagos_ingresados_por_dia(db: Session, dias: int) -> dict:
             .group_by(dia_expr)
             .order_by(dia_expr)
         )
-        counts: dict[date, int] = {}
+        montos: dict[date, float] = {}
         for row in db.execute(stmt).all():
             d = row.dia
             if isinstance(d, datetime):
                 d = d.date()
             if not isinstance(d, date):
                 continue
-            counts[d] = int(row.pagos or 0)
+            montos[d] = round(_safe_float(row.monto), 2)
 
         serie = []
         d = inicio
@@ -1756,7 +1756,7 @@ def _compute_pagos_ingresados_por_dia(db: Session, dias: int) -> dict:
                 {
                     "fecha": d.isoformat(),
                     "dia": f"{d.day} {nombres_mes[d.month - 1]}",
-                    "pagos": counts.get(d, 0),
+                    "monto": montos.get(d, 0.0),
                 }
             )
             d += timedelta(days=1)
@@ -1776,7 +1776,7 @@ def get_pagos_ingresados_por_dia(
     ),
     db: Session = Depends(get_db),
 ):
-    """Cantidad diaria de pagos ingresados (todos los estados) con ventana hasta hoy."""
+    """Monto diario (USD) de pagos ingresados (todos los estados) con ventana hasta hoy."""
     return _compute_pagos_ingresados_por_dia(db, dias)
 
 

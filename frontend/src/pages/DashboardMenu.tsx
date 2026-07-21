@@ -543,7 +543,7 @@ export function DashboardMenu() {
 
   const seriePagosIngresadosConTendencia = useMemo(
     () =>
-      serieConTendenciaLineal(datosPagosIngresadosPorDia?.serie ?? [], 'pagos'),
+      serieConTendenciaLineal(datosPagosIngresadosPorDia?.serie ?? [], 'monto'),
     [datosPagosIngresadosPorDia?.serie]
   )
 
@@ -1370,11 +1370,11 @@ export function DashboardMenu() {
                   </div>
 
                   <CardDescription className="mt-2 text-xs text-gray-600">
-                    Número de pagos registrados (tabla pagos) por día de fecha
-                    de pago. Hoy y 30 días atrás. Incluye todos: conciliados y
-                    no conciliados; préstamos APROBADO, LIQUIDADO,
-                    DESISTIMIENTO, etc.; también sin préstamo. Línea gris =
-                    tendencia (regresión lineal).
+                    Monto en USD (suma de monto_pagado) por día de fecha de
+                    pago. Hoy y 30 días atrás. Incluye todos: conciliados y no
+                    conciliados; préstamos APROBADO, LIQUIDADO, DESISTIMIENTO,
+                    etc.; también sin préstamo. Línea gris = tendencia
+                    (regresión lineal).
                   </CardDescription>
                 </CardHeader>
 
@@ -1410,10 +1410,16 @@ export function DashboardMenu() {
 
                           <YAxis
                             tick={chartAxisTick}
-                            allowDecimals={false}
-                            width={44}
+                            width={52}
+                            tickFormatter={value => {
+                              if (value >= 1000) {
+                                return `$${(value / 1000).toFixed(0)}K`
+                              }
+
+                              return `$${value}`
+                            }}
                             label={{
-                              value: 'Cantidad',
+                              value: 'Monto (USD)',
                               angle: -90,
                               position: 'insideLeft',
                               style: { fill: '#374151', fontSize: 13 },
@@ -1423,21 +1429,15 @@ export function DashboardMenu() {
                           <Tooltip
                             contentStyle={chartTooltipStyle.contentStyle}
                             labelStyle={chartTooltipStyle.labelStyle}
-                            formatter={(value: number, name: string) => {
-                              const rounded =
-                                typeof value === 'number'
-                                  ? Math.round(value * 100) / 100
-                                  : value
-
-                              if (
-                                name === 'Tendencia (regresión lineal)' ||
-                                name === 'tendencia'
-                              ) {
-                                return [rounded, name]
-                              }
-
-                              return [rounded, 'Pagos ingresados']
-                            }}
+                            formatter={(value: number, name: string) => [
+                              formatCurrency(
+                                typeof value === 'number' ? value : Number(value) || 0
+                              ),
+                              name === 'Tendencia (regresión lineal)' ||
+                              name === 'tendencia'
+                                ? name
+                                : 'Pagos ingresados',
+                            ]}
                             labelFormatter={(_, payload) =>
                               payload?.[0]?.payload?.fecha
                                 ? String(payload[0].payload.fecha)
@@ -1449,7 +1449,7 @@ export function DashboardMenu() {
 
                           <Line
                             type="monotone"
-                            dataKey="pagos"
+                            dataKey="monto"
                             name="Pagos ingresados"
                             stroke="#7c3aed"
                             strokeWidth={2}
