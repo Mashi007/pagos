@@ -152,9 +152,13 @@ function CuentaClaveIndicador({
   )
 }
 
-function cuentaTieneClavePendiente(cuenta: CuentaEmailItem | undefined): boolean {
-  const pwd = cuenta?.smtp_password
-  return Boolean(pwd && pwd !== '***' && pwd.trim().length > 0)
+function sanitizeCuentaFromApi(c: CuentaEmailItem): CuentaEmailItem {
+  const { smtp_password: _p, imap_password: _i, ...rest } = c
+  return rest
+}
+
+function sanitizeCuentasFromApi(cuentas: CuentaEmailItem[]): CuentaEmailItem[] {
+  return cuentas.map(sanitizeCuentaFromApi)
 }
 
 export function EmailCuentasConfig() {
@@ -172,7 +176,44 @@ export function EmailCuentasConfig() {
 
   const [smtpTestOk, setSmtpTestOk] = useState<Record<number, boolean>>({})
 
+  /** Clave escrita a mano (nunca viene del servidor ni del autofill). */
+  const [claveBorrador, setClaveBorrador] = useState<Record<number, string>>({})
+
+  /** Mostrar campo contraseña al cambiar una clave ya guardada. */
+  const [editandoClave, setEditandoClave] = useState<Record<number, boolean>>({})
+
   const [asignacion, setAsignacion] = useState<Record<string, number>>({})
+
+  const clavePendienteEnCuenta = (idx: number): boolean =>
+    Boolean((claveBorrador[idx] ?? '').trim())
+
+  const setClaveBorradorCuenta = (idx: number, value: string) => {
+    setClaveBorrador(prev => ({ ...prev, [idx]: value }))
+    setSmtpTestOk(prev => ({ ...prev, [idx]: false }))
+  }
+
+  const iniciarCambioClave = (idx: number) => {
+    setEditandoClave(prev => ({ ...prev, [idx]: true }))
+    setClaveBorradorCuenta(idx, '')
+  }
+
+  const cancelarCambioClave = (idx: number) => {
+    setEditandoClave(prev => {
+      const next = { ...prev }
+      delete next[idx]
+      return next
+    })
+    setClaveBorrador(prev => {
+      const next = { ...prev }
+      delete next[idx]
+      return next
+    })
+    setSmtpTestOk(prev => {
+      const next = { ...prev }
+      delete next[idx]
+      return next
+    })
+  }
 
   useEffect(() => {
     load()
@@ -186,8 +227,14 @@ export function EmailCuentasConfig() {
 
       setData({
         ...res,
-        cuentas: (res.cuentas ?? []).slice(0, CUENTAS_COUNT),
+        cuentas: sanitizeCuentasFromApi(
+          (res.cuentas ?? []).slice(0, CUENTAS_COUNT)
+        ),
       })
+
+      setClaveBorrador({})
+      setEditandoClave({})
+      setSmtpTestOk({})
 
       const tab = res.asignacion?.notificaciones_tab ?? {}
 
@@ -288,6 +335,7 @@ export function EmailCuentasConfig() {
   const probarConexionCuenta = async (index: number) => {
     if (!data) return
     const c = data.cuentas[index] ?? emptyCuenta()
+    const draft = (claveBorrador[index] ?? '').trim()
     setTestingSmtp(prev => ({ ...prev, [index]: true }))
     try {
       const res = await emailCuentasApi.probarSmtpCuenta({
@@ -295,18 +343,15 @@ export function EmailCuentasConfig() {
         smtp_host: c.smtp_host,
         smtp_port: c.smtp_port,
         smtp_user: c.smtp_user,
-        smtp_password:
-          c.smtp_password && c.smtp_password !== '***'
-            ? c.smtp_password
-            : undefined,
+        smtp_password: draft || undefined,
         smtp_use_tls: c.smtp_use_tls,
       })
       setSmtpTestOk(prev => ({ ...prev, [index]: res.success }))
       if (res.success) {
-        const pendiente = cuentaTieneClavePendiente(c)
+        const pendiente = clavePendienteEnCuenta(index)
         toast.success(`Cuenta ${index + 1}: ${res.mensaje}`, {
           description: pendiente
-            ? 'Prueba OK, pero la clave NO está guardada. Pulse «Guardar configuración de 3 cuentas» (abajo).'
+            ? 'Prueba OK. Pulse «Guardar clave en servidor» para persistir en BD.'
             : undefined,
           duration: pendiente ? 12000 : 5000,
         })
@@ -370,8 +415,7 @@ export function EmailCuentasConfig() {
     if (!data) return
 
     if (soloCuentaClave !== undefined) {
-      const c = data.cuentas[soloCuentaClave]
-      if (!cuentaTieneClavePendiente(c)) {
+      if (!clavePendienteEnCuenta(soloCuentaClave)) {
         toast.warning(
           `Cuenta ${soloCuentaClave + 1}: escriba la clave nueva antes de guardar.`
         )
@@ -395,23 +439,17 @@ export function EmailCuentasConfig() {
           imap_password_guardada: _ig,
           ...rest
         } = c
-        const pendiente = cuentaTieneClavePendiente(c)
+        const draft = (claveBorrador[idx] ?? '').trim()
+        const pendiente = Boolean(draft)
         const guardarClaveEsta =
           soloCuentaClave === undefined
             ? pendiente && smtpTestOk[idx] === true
             : idx === soloCuentaClave
-        if (pendiente && !guardarClaveEsta) {
-          delete rest.smtp_password
-          delete rest.imap_password
-          if (soloCuentaClave === undefined) omitidasSinProbar.push(idx + 1)
+        if (guardarClaveEsta && draft) {
+          rest.smtp_password = draft
         }
-        if (
-          soloCuentaClave !== undefined &&
-          idx !== soloCuentaClave &&
-          pendiente
-        ) {
-          delete rest.smtp_password
-          delete rest.imap_password
+        if (pendiente && !guardarClaveEsta) {
+          if (soloCuentaClave === undefined) omitidasSinProbar.push(idx + 1)
         }
         return rest
       })
@@ -581,7 +619,9 @@ export function EmailCuentasConfig() {
   const cuentas =
     data?.cuentas ?? Array.from({ length: CUENTAS_COUNT }, emptyCuenta)
 
-  const hayClavesPendientes = cuentas.some(c => cuentaTieneClavePendiente(c))
+  const hayClavesPendientes = Array.from({ length: CUENTAS_COUNT }, (_, i) => i).some(
+    i => clavePendienteEnCuenta(i)
+  )
 
   return (
     <div className="space-y-6 pb-24">
@@ -839,7 +879,7 @@ export function EmailCuentasConfig() {
                 </span>
                 <CuentaClaveIndicador
                   guardada={c.smtp_password_guardada}
-                  pendiente={cuentaTieneClavePendiente(c)}
+                  pendiente={clavePendienteEnCuenta(idx)}
                   smtpUser={c.smtp_user}
                 />
               </div>
@@ -865,7 +905,7 @@ export function EmailCuentasConfig() {
               </div>
               <CuentaClaveIndicador
                 guardada={cuentas[i]?.smtp_password_guardada}
-                pendiente={cuentaTieneClavePendiente(cuentas[i])}
+                pendiente={clavePendienteEnCuenta(i)}
                 smtpUser={cuentas[i]?.smtp_user}
               />
               {smtpTestOk[i] === true ? (
@@ -920,36 +960,55 @@ export function EmailCuentasConfig() {
                   <Label>Contraseña SMTP</Label>
                   <CuentaClaveIndicador
                     guardada={cuentas[i]?.smtp_password_guardada}
-                    pendiente={cuentaTieneClavePendiente(cuentas[i])}
+                    pendiente={clavePendienteEnCuenta(i)}
                     smtpUser={cuentas[i]?.smtp_user}
                   />
                 </div>
 
-                <Input
-                  type="password"
-                  value={
-                    cuentas[i]?.smtp_password &&
-                    (cuentas[i].smtp_password as string) !== '***'
-                      ? (cuentas[i].smtp_password as string)
-                      : ''
-                  }
-                  onChange={e =>
-                    updateCuenta(i, 'smtp_password', e.target.value)
-                  }
-                  placeholder={
-                    cuentas[i]?.smtp_password_guardada
-                      ? 'Dejar vacío para conservar la clave guardada'
-                      : 'Contraseña de aplicación Gmail'
-                  }
-                  autoComplete="off"
-                />
                 {cuentas[i]?.smtp_password_guardada &&
-                !cuentaTieneClavePendiente(cuentas[i]) ? (
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Hay una clave guardada en el servidor. Escriba aquí solo si
-                    desea cambiarla.
-                  </p>
-                ) : null}
+                !editandoClave[i] &&
+                !clavePendienteEnCuenta(i) ? (
+                  <div className="space-y-2 rounded-md border border-emerald-200 bg-emerald-50/80 px-3 py-2 dark:border-emerald-900 dark:bg-emerald-950/30">
+                    <p className="text-sm text-emerald-950 dark:text-emerald-100">
+                      La clave está guardada en el servidor. No se muestra por
+                      seguridad.
+                    </p>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => iniciarCambioClave(i)}
+                    >
+                      Cambiar clave
+                    </Button>
+                  </div>
+                ) : (
+                  <>
+                    <Input
+                      type="password"
+                      value={claveBorrador[i] ?? ''}
+                      onChange={e =>
+                        setClaveBorradorCuenta(i, e.target.value)
+                      }
+                      placeholder="Contraseña de aplicación Gmail (16 caracteres)"
+                      autoComplete="new-password"
+                      name={`smtp-app-password-cuenta-${i + 1}`}
+                      data-1p-ignore="true"
+                      data-lpignore="true"
+                    />
+                    {cuentas[i]?.smtp_password_guardada ? (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="mt-1 h-auto px-0 text-xs text-muted-foreground"
+                        onClick={() => cancelarCambioClave(i)}
+                      >
+                        Cancelar cambio (conservar clave guardada)
+                      </Button>
+                    ) : null}
+                  </>
+                )}
                 <div className="mt-2 flex flex-wrap gap-2">
                   <Button
                     type="button"
@@ -960,7 +1019,7 @@ export function EmailCuentasConfig() {
                   >
                     {testingSmtp[i] ? 'Comprobando…' : 'Probar conexión SMTP'}
                   </Button>
-                  {cuentaTieneClavePendiente(cuentas[i]) ? (
+                  {clavePendienteEnCuenta(i) ? (
                     <Button
                       type="button"
                       size="sm"
@@ -972,7 +1031,10 @@ export function EmailCuentasConfig() {
                     </Button>
                   ) : null}
                   <span className="self-center text-xs text-muted-foreground">
-                    Probar solo valida login. Debe guardar para que producción use la clave.
+                    {cuentas[i]?.smtp_password_guardada &&
+                    !clavePendienteEnCuenta(i)
+                      ? 'Probar usa la clave guardada en el servidor.'
+                      : 'Probar valida login. Debe guardar para persistir la clave.'}
                   </span>
                 </div>
               </div>
