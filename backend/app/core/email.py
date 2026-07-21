@@ -443,15 +443,25 @@ def send_email(
     if redirigido_modo_pruebas:
         to_emails = emails_pruebas_list
         cc_list = []
-        bcc_list = []
+        # Conservar CCO de la config del caso (copias a correos registrados).
+        # Antes se vaciaba bcc_list y las copias nunca salían en modo prueba.
+        bcc_list = [
+            e.strip()
+            for e in (bcc_emails or [])
+            if e and isinstance(e, str) and "@" in e.strip()
+        ]
+        # Evitar duplicar el mismo destino de prueba en To y BCC
+        to_low = {str(x).strip().lower() for x in to_emails if x}
+        bcc_list = [b for b in bcc_list if b.lower() not in to_low]
         logger.info(
-            "[SMTP_ENVIO] modo_pruebas=1 redirigido=1 servicio=%s tipo_tab=%s solicitados_MASK=%s efectivos=%s",
+            "[SMTP_ENVIO] modo_pruebas=1 redirigido=1 servicio=%s tipo_tab=%s solicitados_MASK=%s efectivos=%s bcc=%s",
             servicio or "",
             tipo_tab or "",
             [mask_email_for_log(x) for x in dest_solicitados_originales],
             list(to_emails),
+            [mask_email_for_log(x) for x in bcc_list],
         )
-        logger.info("Modo Pruebas: envio redirigido a %s", emails_pruebas_list)
+        logger.info("Modo Pruebas: envio redirigido a %s (CCO conservado: %s)", emails_pruebas_list, bcc_list)
     else:
         # Destino explícito (p. ej. «Enviar prueba» con To manual): no exigir lista de pruebas aunque el servicio esté en modo pruebas.
         if modo_pruebas and not emails_pruebas_list and not respetar_destinos_manuales:
