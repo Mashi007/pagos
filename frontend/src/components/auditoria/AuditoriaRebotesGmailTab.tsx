@@ -63,6 +63,19 @@ function obsBadgeClass(obs: string): string {
   }
 }
 
+function descripcionObservacion(obs: string): string {
+  switch ((obs || '').toLowerCase()) {
+    case 'mal':
+      return 'Envio fallido de forma definitiva (Failure). El correo no sirve para notificaciones.'
+    case 'temporal':
+      return 'Problema temporal (Delay). Gmail sigue intentando; puede entregarse despues o acabar en failure.'
+    case 'lleno':
+      return 'Buzon lleno o sin espacio. El destinatario no puede recibir correo ahora.'
+    default:
+      return 'Rebote detectado sin clasificacion Failure/Delay/lleno clara.'
+  }
+}
+
 function KpiTile({
   label,
   value,
@@ -167,6 +180,30 @@ export function AuditoriaRebotesGmailTab() {
     try {
       await auditoriaService.descargarRebotesGmailExcel()
       toast.success('Excel descargado')
+
+      const borrarTrasDescarga = window.confirm(
+        'Autoriza borrar los registros del listado en BD tras la descarga?\n\n' +
+          'Aceptar = se borran las filas (los KPIs acumulados se mantienen).\n' +
+          'Cancelar = se conservan y los proximos escaneos se agregan a continuacion.'
+      )
+      if (!borrarTrasDescarga) {
+        toast.message(
+          'Registros conservados. Los proximos escaneos se guardan a continuacion.'
+        )
+        return
+      }
+
+      setBorrando(true)
+      try {
+        const res = await auditoriaService.borrarTodosRebotesGmail()
+        toast.success(`Listado borrado tras descarga (${res.borrados} filas)`)
+        setUltimoProceso(null)
+        await Promise.all([cargar(1), cargarKpis()])
+      } catch {
+        toast.error('Excel OK, pero no se pudo borrar el listado')
+      } finally {
+        setBorrando(false)
+      }
     } catch {
       toast.error('No se pudo descargar el Excel')
     }
@@ -264,8 +301,10 @@ export function AuditoriaRebotesGmailTab() {
           <p className="text-sm text-muted-foreground">
             Escanea Inbox de itmaster@rapicreditca.com (leidos y no leidos) con
             la etiqueta GMAIL. Solo guarda si el correo matchea un cliente con
-            cedula, y no repite cedulas ya guardadas en BD. Los KPIs de arriba
-            son permanentes (no se borran con el listado).
+            cedula, y no repite cedulas ya guardadas en BD. Al descargar Excel
+            se pide autorizacion para borrar: si no acepta, las filas se
+            conservan y los proximos escaneos se agregan a continuacion. Los
+            KPIs acumulados son permanentes.
           </p>
           <div className="flex flex-wrap gap-2">
             <Button onClick={() => void handleProcesar()} disabled={procesando}>
@@ -342,9 +381,7 @@ export function AuditoriaRebotesGmailTab() {
                     <TableHead>Cedula</TableHead>
                     <TableHead>Correo</TableHead>
                     <TableHead>Observaciones</TableHead>
-                    <TableHead>Asunto</TableHead>
-                    <TableHead>Fecha mensaje</TableHead>
-                    <TableHead>Registro</TableHead>
+                    <TableHead>Descripcion</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -359,18 +396,8 @@ export function AuditoriaRebotesGmailTab() {
                           {row.observaciones}
                         </Badge>
                       </TableCell>
-                      <TableCell className="max-w-[220px] truncate text-xs">
-                        {row.asunto_gmail || '-'}
-                      </TableCell>
-                      <TableCell className="whitespace-nowrap text-xs">
-                        {row.fecha_mensaje
-                          ? row.fecha_mensaje.replace('T', ' ').slice(0, 19)
-                          : '-'}
-                      </TableCell>
-                      <TableCell className="whitespace-nowrap text-xs">
-                        {row.fecha_registro
-                          ? row.fecha_registro.replace('T', ' ').slice(0, 19)
-                          : '-'}
+                      <TableCell className="max-w-[420px] text-xs text-muted-foreground">
+                        {descripcionObservacion(row.observaciones)}
                       </TableCell>
                     </TableRow>
                   ))}

@@ -161,8 +161,24 @@ def exportar_rebotes_gmail_excel(
     db: Session = Depends(get_db),
     _admin: UserResponse = Depends(require_admin),
 ):
-    """Excel desde BD: cedula, correo, observaciones (+ trazas)."""
+    """Excel desde BD: cedula, correo, observaciones, descripcion."""
     import openpyxl
+
+    def _descripcion(obs: str) -> str:
+        key = (obs or "").strip().lower()
+        if key == "mal":
+            return (
+                "Envio fallido de forma definitiva (Failure). "
+                "El correo no sirve para notificaciones."
+            )
+        if key == "temporal":
+            return (
+                "Problema temporal (Delay). Gmail sigue intentando; "
+                "puede entregarse despues o acabar en failure."
+            )
+        if key == "lleno":
+            return "Buzon lleno o sin espacio. El destinatario no puede recibir correo ahora."
+        return "Rebote detectado sin clasificacion Failure/Delay/lleno clara."
 
     rows, _total = svc.listar_rebotes(db, skip=0, limit=100000)
     wb = openpyxl.Workbook()
@@ -173,11 +189,7 @@ def exportar_rebotes_gmail_excel(
             "cedula",
             "correo",
             "observaciones",
-            "asunto_gmail",
-            "fecha_mensaje",
-            "fecha_registro",
-            "procesado_por",
-            "gmail_message_id",
+            "descripcion",
         ]
     )
     for r in rows:
@@ -186,11 +198,7 @@ def exportar_rebotes_gmail_excel(
                 r.cedula or "",
                 r.correo,
                 r.observaciones,
-                r.asunto_gmail or "",
-                _iso(r.fecha_mensaje) or "",
-                _iso(r.fecha_registro) or "",
-                r.procesado_por or "",
-                r.gmail_message_id,
+                _descripcion(r.observaciones),
             ]
         )
     buf = io.BytesIO()
