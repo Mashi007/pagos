@@ -195,7 +195,7 @@ export const SERVICIO_POR_CUENTA: Record<number, string> = {
   4: 'Notificaciones (casos de envío asignados a esta cuenta)',
 }
 
-/** Casos de envío de notificaciones que pueden usar cuenta 3 o 4. */
+/** Casos de envío de notificaciones (cuentas 1-4). */
 
 export const NOTIF_TABS = [
   {
@@ -208,4 +208,12 @@ export const NOTIF_TABS = [
   { id: 'dias_10_retraso', label: 'Menor a 60 días' },
 
   { id: 'prejudicial', label: 'Prejudicial' },
+] as const
+
+/** Etiquetas cortas de cuenta en selects de asignación. */
+export const CUENTA_OPCIONES_ASIGNACION = [
+  { value: 1, label: 'Cuenta 1 (pagos@)' },
+  { value: 2, label: 'Cuenta 2 (tucuenta@)' },
+  { value: 3, label: 'Cuenta 3 (notificaciones@)' },
+  { value: 4, label: 'Cuenta 4 (recuerda@)' },
 ] as const

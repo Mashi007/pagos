@@ -24,7 +24,7 @@ ASIGNACION_DEFAULT = {
     "cobros": 1,
     "estado_cuenta": 2,  # tucuenta@
     "notificaciones_tab": {
-        "d_2_antes_vencimiento": 3,
+        "d_2_antes_vencimiento": 4,  # 3 dias antes / recuerda@
         "dias_5": 4,
         "dias_3": 4,
         "dias_1": 4,

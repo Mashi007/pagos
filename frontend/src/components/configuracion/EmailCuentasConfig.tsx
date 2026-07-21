@@ -56,6 +56,7 @@ import {
   emailCuentasApi,
   SERVICIO_POR_CUENTA,
   NOTIF_TABS,
+  CUENTA_OPCIONES_ASIGNACION,
   type EmailCuentasResponse,
   type CuentaEmailItem,
 } from '../../services/emailCuentasApi'
@@ -132,7 +133,7 @@ export function EmailCuentasConfig() {
           cobros: 1,
           estado_cuenta: 2,
           notificaciones_tab: {},
-          recibos: 3,
+          recibos: 1,
         },
       })
 
@@ -207,7 +208,7 @@ export function EmailCuentasConfig() {
       key: 'email_activo_recibos',
       label:
         'Recibos (estado de cuenta tras conciliación, job diario 15:00 Caracas)',
-      cuenta: 3,
+      cuenta: 1,
     },
   ]
 
@@ -229,9 +230,12 @@ export function EmailCuentasConfig() {
 
           estado_cuenta: data.asignacion?.estado_cuenta ?? 2,
 
-          notificaciones_tab: asignacion,
+          notificaciones_tab: {
+            ...(data.asignacion?.notificaciones_tab ?? {}),
+            ...asignacion,
+          },
 
-          recibos: data.asignacion?.recibos ?? 3,
+          recibos: data.asignacion?.recibos ?? 1,
         },
 
         modo_pruebas: data.modo_pruebas,
@@ -722,8 +726,7 @@ export function EmailCuentasConfig() {
           <CardTitle className="text-base">Asignación: Recibos</CardTitle>
           <CardDescription>
             Correos automáticos con PDF de estado de cuenta (servicio{' '}
-            <code>recibos</code>). Por defecto Cuenta 3; puede usar la misma
-            cuenta que Notificaciones o la de Estado de cuenta.
+            <code>recibos</code>). Por defecto Cuenta 1 (pagos@).
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -734,7 +737,7 @@ export function EmailCuentasConfig() {
             <select
               id="asig-recibos-cuenta"
               className="flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
-              value={data?.asignacion?.recibos ?? 3}
+              value={data?.asignacion?.recibos ?? 1}
               onChange={e => {
                 const v = Number(e.target.value)
                 setData(d =>
@@ -754,10 +757,11 @@ export function EmailCuentasConfig() {
                 )
               }}
             >
-              <option value={1}>Cuenta 1</option>
-              <option value={2}>Cuenta 2</option>
-              <option value={3}>Cuenta 3</option>
-              <option value={4}>Cuenta 4</option>
+              {CUENTA_OPCIONES_ASIGNACION.map(o => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
             </select>
           </div>
         </CardContent>
@@ -771,17 +775,10 @@ export function EmailCuentasConfig() {
           </CardTitle>
 
           <CardDescription>
-            Elija para cada tipo de notificación (mora, prejudicial, etc.) si
-            usa <strong>Cuenta 3</strong> o <strong>Cuenta 4</strong> (servidor
-            SMTP y credenciales). El caso{' '}
-            <strong>3 días antes (cuota pendiente)</strong> usa como remitente
-            visible{' '}
-            <code className="rounded bg-muted px-1 text-xs">
-              recuerda@rapicreditca.com
-            </code>{' '}
-            en el backend; la cuenta aquí solo define con qué buzón se conecta
-            el servidor. En Google Workspace, autorice la dirección recuerda@
-            como alias Enviar correo como del usuario SMTP de esa cuenta.
+            Elija qué cuenta SMTP usa cada caso. Valores actuales: día siguiente
+            → Cuenta 2 (tucuenta@); menor a 60 → Cuenta 3 (notificaciones@); 3
+            días antes → Cuenta 4 (recuerda@); prejudicial → Cuenta 3. El
+            remitente visible puede forzarse en backend según el caso.
           </CardDescription>
         </CardHeader>
 
@@ -799,9 +796,11 @@ export function EmailCuentasConfig() {
                   value={asignacion[id] ?? 3}
                   onChange={e => setNotifTabCuenta(id, Number(e.target.value))}
                 >
-                  <option value={3}>Cuenta 3</option>
-
-                  <option value={4}>Cuenta 4</option>
+                  {CUENTA_OPCIONES_ASIGNACION.map(o => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
                 </select>
               </div>
             ))}
