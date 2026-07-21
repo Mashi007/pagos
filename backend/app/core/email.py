@@ -27,6 +27,7 @@ from app.core.email_config_holder import (
     get_recibos_bcc_emails,
     sync_from_db,
 )
+from app.core.config import settings
 from app.core.email_phases import (
     FASE_IMAP_COMPLETA,
     FASE_IMAP_CONEXION,
@@ -622,6 +623,21 @@ def send_email(
                     continue
                 seen_b.add(low)
                 bcc_list.append(a)
+
+    # CCO global obligatoria para notificaciones y recibos (NOTIFICACIONES_BCC_GLOBAL en .env / config).
+    if (servicio or "").strip().lower() in ("notificaciones", "recibos"):
+        _raw_global = getattr(settings, "NOTIFICACIONES_BCC_GLOBAL", "") or ""
+        _seen_bcc = {x.lower() for x in bcc_list}
+        _seen_bcc.update(x.lower() for x in to_emails if x)
+        for _chunk in str(_raw_global).replace(";", ",").split(","):
+            _addr = _chunk.strip()
+            if not _addr or "@" not in _addr:
+                continue
+            _low = _addr.lower()
+            if _low in _seen_bcc:
+                continue
+            _seen_bcc.add(_low)
+            bcc_list.append(_addr)
 
     # Saneo final: descartar destinatarios que smtplib no podra encodear a ASCII para
     # el RCPT TO (p. ej. emails corrompidos con U+FFFD por mojibake en la BD).

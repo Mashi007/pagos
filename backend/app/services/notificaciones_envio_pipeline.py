@@ -115,26 +115,11 @@ def _tipo_menor_60_solo_pdf_fijo(tipo: str) -> bool:
 EMAIL_PRUEBA_PREJUDICIAL = "itmaster@rapicreditca.com"
 
 
-def _bcc_global_notificaciones() -> List[str]:
-    raw = getattr(settings, "NOTIFICACIONES_BCC_GLOBAL", "") or ""
+def _merge_bcc_tipo(tipo_cfg: dict) -> List[str]:
+    """CCO del tipo (configurada en UI Notificaciones > Configuración por caso).
+    La CCO global se agrega en send_email() centralizado."""
     out: List[str] = []
     seen: set[str] = set()
-    for chunk in str(raw).replace(";", ",").split(","):
-        email = chunk.strip()
-        if not email or "@" not in email:
-            continue
-        low = email.lower()
-        if low in seen:
-            continue
-        seen.add(low)
-        out.append(email)
-    return out
-
-
-def _merge_bcc_notificaciones(tipo_cfg: dict) -> List[str]:
-    out: List[str] = []
-    seen: set[str] = set()
-
     cco_tipo = tipo_cfg.get("cco") or []
     if isinstance(cco_tipo, list):
         for raw in cco_tipo:
@@ -146,14 +131,6 @@ def _merge_bcc_notificaciones(tipo_cfg: dict) -> List[str]:
                 continue
             seen.add(low)
             out.append(email)
-
-    for email in _bcc_global_notificaciones():
-        low = email.lower()
-        if low in seen:
-            continue
-        seen.add(low)
-        out.append(email)
-
     return out
 
 
@@ -545,7 +522,7 @@ def _enviar_correos_items(
                     continue
 
         # Mismo HTML y adjuntos que producción; destino: prueba o cliente.
-        bcc_list = _merge_bcc_notificaciones(tipo_cfg)
+        bcc_list = _merge_bcc_tipo(tipo_cfg)
         if _tipo_prejudicial_solo_html(tipo):
             to_email = [EMAIL_PRUEBA_PREJUDICIAL]
         elif forzar_destinos_prueba is not None:
