@@ -1340,7 +1340,7 @@ export function ConfiguracionNotificaciones({
                 Configuración solo para el listado{' '}
                 <strong>60 días o más</strong> (caso{' '}
                 <strong>PREJUDICIAL</strong>
-                ): condiciones innegociables — atraso ≥60 días y 2 o más cuotas
+                ): condiciones innegociables — atraso ≥60 días y exactamente 2 cuotas
                 impagas. Plantilla HTML y envío manual de prueba. Solo
                 texto/HTML (sin PDF). To = cliente; CCO = cobranza@ y
                 notificaciones@. Sin cron ni «Enviar todas».

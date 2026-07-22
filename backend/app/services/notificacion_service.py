@@ -90,13 +90,14 @@ CUOTA_ESTADO_NO_PAGADA_PARA_NOTIF = or_(
 # Prejudicial (submenu Notificaciones «60 días o más» / ruta a-2-cuotas):
 # Condiciones innegociables:
 # - atraso calendario >= 60 días (fecha_vencimiento <= hoy − 60; encaja con menor-60 = 6–59)
-# - 2 o más cuotas impagas que cumplan ese atraso
+# - exactamente 2 cuotas impagas en el mismo préstamo con ese atraso
 # Excluye prestamos LIQUIDADO/DESISTIMIENTO y clientes con algun prestamo DESISTIMIENTO.
 # Permanecen todos los días mientras cumplan; salen al ponerse al día.
 ESTADOS_CUOTA_VENCIDO_Y_MORA = ("VENCIDO", "MORA")  # legado / diagnóstico
 MIN_DIAS_ATRASO_PREJUDICIAL = 60
 PREJUDICIAL_MIN_CUOTAS_CON_ATRASO_60 = 2
-# Alias de compatibilidad (imports antiguos): umbral de conteo = 2 cuotas con ≥60 días.
+PREJUDICIAL_MAX_CUOTAS_CON_ATRASO_60 = 2  # exactamente 2 cuotas (min=max)
+# Alias de compatibilidad (imports antiguos).
 PREJUDICIAL_MIN_CUOTAS_VENCIDO_MORA = PREJUDICIAL_MIN_CUOTAS_CON_ATRASO_60
 
 
@@ -104,7 +105,7 @@ def item_cumple_regla_prejudicial_estricta(item: dict, fecha_referencia: Optiona
     """
     True solo si el item cumple las condiciones innegociables PREJUDICIAL:
     - dias_atraso >= 60 (o fecha_vencimiento <= hoy-60)
-    - total_cuotas_atrasadas >= 2
+    - total_cuotas_atrasadas == 2
     """
     if not isinstance(item, dict):
         return False
@@ -113,7 +114,7 @@ def item_cumple_regla_prejudicial_estricta(item: dict, fecha_referencia: Optiona
         total = int(item.get("total_cuotas_atrasadas") or 0)
     except (TypeError, ValueError):
         total = 0
-    if total < PREJUDICIAL_MIN_CUOTAS_CON_ATRASO_60:
+    if total < PREJUDICIAL_MIN_CUOTAS_CON_ATRASO_60 or total > PREJUDICIAL_MAX_CUOTAS_CON_ATRASO_60:
         return False
     dias = item.get("dias_atraso")
     try:
@@ -539,7 +540,10 @@ def get_primer_item_ejemplo_paquete_prueba(db: Session, tipo: str) -> Optional[d
                 sql_cliente_sin_desistimiento(),
             )
             .group_by(Prestamo.id, Prestamo.cliente_id)
-            .having(func.count(Cuota.id) >= PREJUDICIAL_MIN_CUOTAS_CON_ATRASO_60)
+            .having(
+                func.count(Cuota.id) >= PREJUDICIAL_MIN_CUOTAS_CON_ATRASO_60,
+                func.count(Cuota.id) <= PREJUDICIAL_MAX_CUOTAS_CON_ATRASO_60,
+            )
             .limit(1)
         )
         row = db.execute(subq).first()

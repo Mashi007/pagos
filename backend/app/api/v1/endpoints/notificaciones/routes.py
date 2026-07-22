@@ -36,6 +36,7 @@ from app.services.notificacion_service import (
     ESTADOS_CUOTA_VENCIDO_Y_MORA,
     MIN_DIAS_ATRASO_PREJUDICIAL,
     PREJUDICIAL_MIN_CUOTAS_CON_ATRASO_60,
+    PREJUDICIAL_MAX_CUOTAS_CON_ATRASO_60,
     PREJUDICIAL_MIN_CUOTAS_VENCIDO_MORA,
     SALDO_PENDIENTE_CUOTA,
     TOL_SALDO_CUOTA_NOTIFICACION,
@@ -2629,7 +2630,7 @@ def build_prejudicial_items(
     """
     Lista prejudicial («60 días o más» / a-2-cuotas). Condiciones INNEGOCIABLES:
     - atraso calendario >= 60 días (fecha_vencimiento <= hoy − 60)
-    - 2 o más cuotas impagas **en el mismo préstamo** con ese atraso
+    - exactamente 2 cuotas impagas **en el mismo préstamo** con ese atraso
     - sin fecha_pago, saldo > 0.01, préstamo no LIQUIDADO/DESISTIMIENTO, titular sin DESISTIMIENTO
 
     Un ítem por préstamo que cumpla (no se suma 1+1 entre préstamos distintos).
@@ -2656,7 +2657,10 @@ def build_prejudicial_items(
             sql_cliente_sin_desistimiento(),
         )
         .group_by(Prestamo.id, Prestamo.cliente_id)
-        .having(func.count(Cuota.id) >= PREJUDICIAL_MIN_CUOTAS_CON_ATRASO_60)
+        .having(
+            func.count(Cuota.id) >= PREJUDICIAL_MIN_CUOTAS_CON_ATRASO_60,
+            func.count(Cuota.id) <= PREJUDICIAL_MAX_CUOTAS_CON_ATRASO_60,
+        )
     )
     rows = db.execute(subq).all()
     if not rows:
@@ -2710,7 +2714,10 @@ def build_prejudicial_items(
         if not cliente or not cuota_ref:
             omitidos += 1
             continue
-        if total_cuotas < PREJUDICIAL_MIN_CUOTAS_CON_ATRASO_60:
+        if (
+            total_cuotas < PREJUDICIAL_MIN_CUOTAS_CON_ATRASO_60
+            or total_cuotas > PREJUDICIAL_MAX_CUOTAS_CON_ATRASO_60
+        ):
             omitidos += 1
             continue
         fv = getattr(cuota_ref, "fecha_vencimiento", None)

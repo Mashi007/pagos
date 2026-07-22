@@ -172,7 +172,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
       return 'Solo consulta: listas unificadas (día siguiente al vencimiento, 60 días o más, 3 días antes) con columna de caso. La columna «Diferencia abono» usa caché en BD (cada domingo 04:35 Caracas o botón Recalcular; tras el job, use Actualización manual). Sin envío de correos ni ajustes de comunicación desde esta pantalla.'
     }
     if (modulo === 'a2cuotas') {
-      return 'Clientes con 2 o más cuotas impagas a 60 o más días de atraso en el mismo préstamo (calendario Caracas). Condiciones innegociables: atraso ≥60 días y ≥2 cuotas impagas en esa deuda. Permanecen todos los días mientras cumplan; salen al ponerse al día. El envío es solo manual (sin cron ni «enviar todas»). To = cliente; CCO = cobranza@ y notificaciones@. Use Actualizar o vuelva a entrar; también se refresca al guardar pagos en el módulo Pagos.'
+      return 'Clientes con exactamente 2 cuotas impagas a 60 o más días de atraso en el mismo préstamo (calendario Caracas). Condiciones innegociables: atraso ≥60 días y exactamente 2 cuotas impagas en esa deuda. Permanecen todos los días mientras cumplan; salen al ponerse al día. El envío es solo manual (sin cron ni «enviar todas»). To = cliente; CCO = cobranza@ y notificaciones@. Use Actualizar o vuelva a entrar; también se refresca al guardar pagos en el módulo Pagos.'
     }
     if (modulo === 'd2antes') {
       return 'Solo cuotas con columna estado PENDIENTE y fecha de vencimiento dentro de 3 días (hoy + 3, zona Caracas). Al pagar o cambiar estado, dejan de listarse. Use Actualizar o vuelva a entrar; también se refresca al guardar pagos.'
@@ -1679,7 +1679,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                   : modulo === 'general'
                     ? 'General'
                     : modulo === 'a2cuotas'
-                      ? '60 días o más (≥60d; 2+ cuotas mismo préstamo)'
+                      ? '60 días o más (≥60d; exactamente 2 cuotas)'
                       : modulo === 'd2antes'
                         ? '3 días antes - PENDIENTE, vence en 3 días'
                         : modulo === 'a10dias'
