@@ -295,7 +295,7 @@ def get_notificaciones_prejudicial(
     fecha_caracas: Optional[str] = _FC_Q,
     db: Session = Depends(get_db),
 ):
-    """Lista de clientes con 1+ cuotas a 60+ días de atraso (prejudicial). Email desde tabla clientes."""
+    """Lista PREJUDICIAL estricta: >=60 días y >=2 cuotas impagas en el mismo préstamo."""
     fecha_ref = _fecha_referencia_desde_query(fecha_caracas)
     items = build_prejudicial_items(db, fecha_referencia=fecha_ref)
     return {"items": items, "total": len(items)}
@@ -324,6 +324,9 @@ def enviar_notificaciones_prejudicial(
         db.rollback()
     config_envios = get_notificaciones_envios_config(db)
     items = build_prejudicial_items(db, fecha_referencia=fecha_ref)
+    # Defensa: no enviar nada fuera de regla aunque venga de caché/UI.
+    from app.services.notificacion_service import item_cumple_regla_prejudicial_estricta as _ok_prej
+    items = [it for it in items if _ok_prej(it, fecha_ref)]
     asunto = ASUNTO_PREJUDICIAL_FALLBACK
     cuerpo = CUERPO_PREJUDICIAL_FALLBACK
     res = _enviar_correos_items(

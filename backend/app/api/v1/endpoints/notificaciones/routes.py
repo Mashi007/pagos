@@ -34,14 +34,18 @@ from app.services.comparar_fecha_entrega_q_aprobacion_service import (
 from app.services.notificacion_service import (
     CUOTA_ESTADO_NO_PAGADA_PARA_NOTIF,
     ESTADOS_CUOTA_VENCIDO_Y_MORA,
+    MIN_DIAS_ATRASO_PREJUDICIAL,
+    PREJUDICIAL_MIN_CUOTAS_CON_ATRASO_60,
     PREJUDICIAL_MIN_CUOTAS_VENCIDO_MORA,
     SALDO_PENDIENTE_CUOTA,
     TOL_SALDO_CUOTA_NOTIFICACION,
     build_cuotas_pendiente_2_dias_antes_items,
     enriquecer_items_notificacion_revision_manual,
     format_cuota_item,
+    item_cumple_regla_prejudicial_estricta,
     sum_saldo_pendiente_total_por_prestamos,
     _item_tab,
+    _prestamo_no_excluido_notif,
 )
 from app.models.cuota import Cuota
 from app.models.cliente import Cliente
@@ -67,6 +71,7 @@ from app.services.notificaciones_envios_store import (
 )
 from app.services.notificaciones_exclusion_desistimiento import (
     cliente_bloqueado_por_desistimiento,
+    sql_cliente_sin_desistimiento,
 )
 
 router = APIRouter(dependencies=[Depends(require_admin)])
@@ -2622,18 +2627,23 @@ def build_prejudicial_items(
     db: Session, fecha_referencia: Optional[date] = None
 ) -> List[dict]:
     """
-    Lista prejudicial («60 días o más» / a-2-cuotas). Condiciones innegociables:
+    Lista prejudicial («60 días o más» / a-2-cuotas). Condiciones INNEGOCIABLES:
     - atraso calendario >= 60 días (fecha_vencimiento <= hoy − 60)
-    - 2 o más cuotas impagas que cumplan ese atraso
-    - saldo pendiente; préstamo no LIQUIDADO/DESISTIMIENTO; titular sin DESISTIMIENTO
+    - 2 o más cuotas impagas **en el mismo préstamo** con ese atraso
+    - sin fecha_pago, saldo > 0.01, préstamo no LIQUIDADO/DESISTIMIENTO, titular sin DESISTIMIENTO
 
-    GET /notificaciones-prejudicial usa esto (no get_notificaciones_tabs_data entero).
+    Un ítem por préstamo que cumpla (no se suma 1+1 entre préstamos distintos).
+    Revalida cada ítem antes de devolverlo (no escapa ningún caso fuera de regla).
     """
     hoy = fecha_referencia or hoy_negocio()
     fv_max = hoy - timedelta(days=MIN_DIAS_ATRASO_PREJUDICIAL)
-    # Agrupar por titular del préstamo (prestamos.cliente_id).
+    # Estricto: agrupar por préstamo (no por cliente) para exigir 2+ cuotas en la misma deuda.
     subq = (
-        select(Prestamo.cliente_id, func.count(Cuota.id).label("total"))
+        select(
+            Prestamo.id.label("prestamo_id"),
+            Prestamo.cliente_id.label("cliente_id"),
+            func.count(Cuota.id).label("total"),
+        )
         .select_from(Cuota)
         .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
         .where(
@@ -2645,15 +2655,16 @@ def build_prejudicial_items(
             _prestamo_no_excluido_notif(),
             sql_cliente_sin_desistimiento(),
         )
-        .group_by(Prestamo.cliente_id)
+        .group_by(Prestamo.id, Prestamo.cliente_id)
         .having(func.count(Cuota.id) >= PREJUDICIAL_MIN_CUOTAS_CON_ATRASO_60)
     )
     rows = db.execute(subq).all()
     if not rows:
         return []
 
-    cliente_ids = [int(r[0]) for r in rows if r[0] is not None]
-    totals_by_cliente = {int(r[0]): int(r[1]) for r in rows if r[0] is not None}
+    prestamo_ids = [int(r[0]) for r in rows if r[0] is not None]
+    totals_by_prestamo = {int(r[0]): int(r[2]) for r in rows if r[0] is not None}
+    cliente_ids = sorted({int(r[1]) for r in rows if r[1] is not None})
 
     clientes_map = {
         c.id: c
@@ -2665,7 +2676,7 @@ def build_prejudicial_items(
         .select_from(Cuota)
         .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
         .where(
-            Prestamo.cliente_id.in_(cliente_ids),
+            Prestamo.id.in_(prestamo_ids),
             Cuota.fecha_pago.is_(None),
             CUOTA_ESTADO_NO_PAGADA_PARA_NOTIF,
             Cuota.fecha_vencimiento.isnot(None),
@@ -2674,44 +2685,60 @@ def build_prejudicial_items(
             _prestamo_no_excluido_notif(),
             sql_cliente_sin_desistimiento(),
         )
+        .order_by(Cuota.fecha_vencimiento.asc(), Cuota.id.asc())
     ).all()
 
-    primera_por_cliente: dict[int, Cuota] = {}
+    primera_por_prestamo: dict[int, Cuota] = {}
+    cliente_por_prestamo: dict[int, int] = {}
     for c, titular_id in cuotas_rows:
-        if titular_id is None:
+        pid = int(c.prestamo_id) if c.prestamo_id is not None else None
+        if pid is None:
             continue
-        tid = int(titular_id)
-        cur = primera_por_cliente.get(tid)
-        if cur is None:
-            primera_por_cliente[tid] = c
-            continue
-        cfv = c.fecha_vencimiento
-        pfv = cur.fecha_vencimiento
-        if pfv is None or (cfv is not None and cfv < pfv):
-            primera_por_cliente[tid] = c
+        if pid not in primera_por_prestamo:
+            primera_por_prestamo[pid] = c
+            if titular_id is not None:
+                cliente_por_prestamo[pid] = int(titular_id)
 
-    bloques_prej: List[tuple] = []
-    pids_prej: List[int] = []
-    for cid in cliente_ids:
-        cliente = clientes_map.get(cid)
-        if not cliente:
-            continue
-        total_cuotas = totals_by_cliente.get(cid, 0)
-        cuota_ref = primera_por_cliente.get(cid)
-        if not cuota_ref:
-            continue
-        pid = getattr(cuota_ref, "prestamo_id", None)
-        if pid:
-            pids_prej.append(int(pid))
-        bloques_prej.append((cliente, cuota_ref, total_cuotas, pid))
-
-    totales_prej = sum_saldo_pendiente_total_por_prestamos(db, pids_prej)
+    totales_prej = sum_saldo_pendiente_total_por_prestamos(db, prestamo_ids)
     prejudicial: List[dict] = []
-    for cliente, cuota_ref, total_cuotas, pid in bloques_prej:
-        tp = totales_prej.get(int(pid)) if pid is not None else None
+    omitidos = 0
+    for pid in prestamo_ids:
+        total_cuotas = totals_by_prestamo.get(pid, 0)
+        cuota_ref = primera_por_prestamo.get(pid)
+        cid = cliente_por_prestamo.get(pid)
+        cliente = clientes_map.get(cid) if cid is not None else None
+        if not cliente or not cuota_ref:
+            omitidos += 1
+            continue
+        if total_cuotas < PREJUDICIAL_MIN_CUOTAS_CON_ATRASO_60:
+            omitidos += 1
+            continue
+        fv = getattr(cuota_ref, "fecha_vencimiento", None)
+        if fv is None:
+            omitidos += 1
+            continue
+        dias = (hoy - fv).days if hasattr(fv, "year") else -1
+        if dias < MIN_DIAS_ATRASO_PREJUDICIAL:
+            omitidos += 1
+            continue
+        tp = totales_prej.get(int(pid))
         item = _item_tab(cliente, cuota_ref, total_pendiente_pagar=tp)
         item["total_cuotas_atrasadas"] = total_cuotas
+        item["dias_atraso"] = dias
+        item["prestamo_id"] = int(pid)
+        # Cinturón: revalidación final (misma regla que envío).
+        if not item_cumple_regla_prejudicial_estricta(item, hoy):
+            omitidos += 1
+            continue
         prejudicial.append(item)
+    if omitidos:
+        logger.info(
+            "[prejudicial] omitidos_fuera_de_regla=%s incluidos=%s fv_max=%s min_cuotas=%s",
+            omitidos,
+            len(prejudicial),
+            fv_max.isoformat(),
+            PREJUDICIAL_MIN_CUOTAS_CON_ATRASO_60,
+        )
     enriquecer_items_notificacion_revision_manual(db, prejudicial)
     return prejudicial
 

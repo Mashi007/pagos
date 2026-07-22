@@ -100,6 +100,44 @@ PREJUDICIAL_MIN_CUOTAS_CON_ATRASO_60 = 2
 PREJUDICIAL_MIN_CUOTAS_VENCIDO_MORA = PREJUDICIAL_MIN_CUOTAS_CON_ATRASO_60
 
 
+def item_cumple_regla_prejudicial_estricta(item: dict, fecha_referencia: Optional[date] = None) -> bool:
+    """
+    True solo si el item cumple las condiciones innegociables PREJUDICIAL:
+    - dias_atraso >= 60 (o fecha_vencimiento <= hoy-60)
+    - total_cuotas_atrasadas >= 2
+    """
+    if not isinstance(item, dict):
+        return False
+    hoy = fecha_referencia or hoy_negocio()
+    try:
+        total = int(item.get("total_cuotas_atrasadas") or 0)
+    except (TypeError, ValueError):
+        total = 0
+    if total < PREJUDICIAL_MIN_CUOTAS_CON_ATRASO_60:
+        return False
+    dias = item.get("dias_atraso")
+    try:
+        if dias is not None and int(dias) >= MIN_DIAS_ATRASO_PREJUDICIAL:
+            return True
+    except (TypeError, ValueError):
+        pass
+    fv_raw = item.get("fecha_vencimiento")
+    fv: Optional[date] = None
+    if isinstance(fv_raw, date) and not isinstance(fv_raw, datetime):
+        fv = fv_raw
+    elif isinstance(fv_raw, datetime):
+        fv = fv_raw.date()
+    elif isinstance(fv_raw, str) and fv_raw.strip():
+        try:
+            fv = date.fromisoformat(fv_raw.strip()[:10])
+        except ValueError:
+            fv = None
+    if fv is None:
+        return False
+    return (hoy - fv).days >= MIN_DIAS_ATRASO_PREJUDICIAL
+
+
+
 
 def _prestamo_no_excluido_notif():
     """Prestamo.estado no es LIQUIDADO/DESISTIMIENTO (case-insensitive)."""
@@ -481,10 +519,14 @@ def get_primer_item_ejemplo_paquete_prueba(db: Session, tipo: str) -> Optional[d
         return items[0] if items else None
 
     if tipo == "PREJUDICIAL":
-        # Titular: prestamos.cliente_id. Al menos 2 cuotas impagas con atraso >= 60 días.
+        # Titular: al menos 2 cuotas impagas con atraso >= 60 en el MISMO préstamo.
         fv_max = hoy - timedelta(days=MIN_DIAS_ATRASO_PREJUDICIAL)
         subq = (
-            select(Prestamo.cliente_id, func.count(Cuota.id).label("total"))
+            select(
+                Prestamo.id.label("prestamo_id"),
+                Prestamo.cliente_id,
+                func.count(Cuota.id).label("total"),
+            )
             .select_from(Cuota)
             .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
             .where(
@@ -496,14 +538,14 @@ def get_primer_item_ejemplo_paquete_prueba(db: Session, tipo: str) -> Optional[d
                 _prestamo_no_excluido_notif(),
                 sql_cliente_sin_desistimiento(),
             )
-            .group_by(Prestamo.cliente_id)
+            .group_by(Prestamo.id, Prestamo.cliente_id)
             .having(func.count(Cuota.id) >= PREJUDICIAL_MIN_CUOTAS_CON_ATRASO_60)
             .limit(1)
         )
         row = db.execute(subq).first()
         if not row:
             return None
-        cliente_id, total_cuotas = row[0], int(row[1] or 0)
+        prestamo_id, cliente_id, total_cuotas = int(row[0]), row[1], int(row[2] or 0)
         cliente = db.get(Cliente, cliente_id)
         if not cliente:
             return None
@@ -511,7 +553,7 @@ def get_primer_item_ejemplo_paquete_prueba(db: Session, tipo: str) -> Optional[d
             select(Cuota)
             .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
             .where(
-                Prestamo.cliente_id == cliente_id,
+                Prestamo.id == prestamo_id,
                 Cuota.fecha_pago.is_(None),
                 CUOTA_ESTADO_NO_PAGADA_PARA_NOTIF,
                 Cuota.fecha_vencimiento.isnot(None),
@@ -525,17 +567,8 @@ def get_primer_item_ejemplo_paquete_prueba(db: Session, tipo: str) -> Optional[d
         ).scalars().first()
         cuota_ref = primera
         if not cuota_ref:
-            cuota_ref = type(
-                "DummyCuota",
-                (),
-                {
-                    "fecha_vencimiento": hoy,
-                    "numero_cuota": 0,
-                    "monto": 0,
-                    "prestamo_id": None,
-                },
-            )()
-        pid = getattr(cuota_ref, "prestamo_id", None)
+            return None
+        pid = getattr(cuota_ref, "prestamo_id", None) or prestamo_id
         totales_p = (
             sum_saldo_pendiente_total_por_prestamos(db, [pid]) if pid else {}
         )
@@ -551,6 +584,9 @@ def get_primer_item_ejemplo_paquete_prueba(db: Session, tipo: str) -> Optional[d
             total_pendiente_pagar=totales_p.get(pid) if pid else None,
         )
         item["total_cuotas_atrasadas"] = total_cuotas
+        item["prestamo_id"] = int(pid) if pid else None
+        if not item_cumple_regla_prejudicial_estricta(item, hoy):
+            return None
         return item
 
     return None
