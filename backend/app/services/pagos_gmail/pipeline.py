@@ -1423,6 +1423,7 @@ def run_pipeline(
                     def _completar_fecha_mercantil_pipeline(
                         formato: str, fecha: str, referencia: str, asunto: str
                     ) -> str:
+                        """Fecha Mercantil solo desde DCME en referencia/serial (no asunto Gmail)."""
                         fmt_u = (formato or "").strip().upper()
                         f_out = (fecha or "").strip()
                         if fmt_u != "A" or (f_out and f_out.upper() != PAGOS_NA):
@@ -1431,9 +1432,9 @@ def run_pipeline(
                             inferir_fecha_pago_mercantil_desde_texto,
                         )
 
-                        inf = inferir_fecha_pago_mercantil_desde_texto(
-                            f"{referencia}\n{asunto}"
-                        )
+                        # `asunto` se mantiene en la firma por call-sites; no se usa (evita cruzar fechas).
+                        _ = asunto
+                        inf = inferir_fecha_pago_mercantil_desde_texto(referencia or "")
                         return normalizar_fecha_pago(inf) if inf else fecha
 
                     def _ref_mercantil_inaceptable_pipeline(

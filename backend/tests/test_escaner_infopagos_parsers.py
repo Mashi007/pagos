@@ -591,3 +591,33 @@ def test_escaner_necesita_rescate_rotacion_mercantil_sin_serial():
         is False
     )
 
+def test_resolver_fecha_gmail_rechaza_hoy_sin_dcme():
+    """Perfil gmail: misma política que escáner — no inventar fecha = hoy."""
+    from datetime import date
+    from app.services.pagos_gmail.parse_campos_comprobante import (
+        _resolver_fecha_ocr_post_gemini,
+    )
+    from app.services.tasa_cambio_service import fecha_hoy_caracas
+
+    hoy = fecha_hoy_caracas()
+    parsed = _resolver_fecha_ocr_post_gemini(
+        hoy.isoformat(),
+        notas="",
+        ref_hoy=hoy,
+        blob_dcme="",
+        inferir_fecha_dcme=True,
+        rechazar_fecha_hoy_sospechosa=True,
+    )
+    assert parsed is None
+
+    dcme = f"9264-{hoy.strftime('%Y%m%d')}-115409-DCME-5574-A"
+    parsed_dcme = _resolver_fecha_ocr_post_gemini(
+        None,
+        notas=dcme,
+        ref_hoy=hoy,
+        blob_dcme=dcme,
+        inferir_fecha_dcme=True,
+        rechazar_fecha_hoy_sospechosa=True,
+    )
+    assert parsed_dcme == hoy
+

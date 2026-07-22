@@ -228,6 +228,22 @@ def _iter_fuentes_comprobante_conciliar_revision(
                 pce.cedula_cliente,
             )
 
+        # Gmail sync: no arrastrar todos los comprobantes de la cédula (otros préstamos).
+        # - Si hay refs en pagos/errores de ESTE préstamo → solo ítems con la misma ref.
+        # - Si no hay ninguna fuente local aún → permitir Gmail por cédula (recuperación).
+        refs_prestamo: set[str] = set()
+        for p in pagos:
+            for raw in (p.numero_documento, p.referencia_pago):
+                t = (raw or "").strip().upper()
+                if t:
+                    refs_prestamo.add(t)
+        for pce in pces:
+            for raw in (pce.numero_documento, pce.referencia_pago):
+                t = (raw or "").strip().upper()
+                if t:
+                    refs_prestamo.add(t)
+        tiene_fuente_local = any(f.fuente in ("pago", "pago_con_error") for f in out)
+
         gsi_rows = (
             db.execute(
                 select(PagosGmailSyncItem)
@@ -244,6 +260,13 @@ def _iter_fuentes_comprobante_conciliar_revision(
         for gsi in gsi_rows:
             url = drive_raw_a_url(gsi.drive_link)
             ref = (gsi.numero_referencia or f"gmail-sync-{gsi.id}").strip()
+            ref_u = ref.upper()
+            if refs_prestamo:
+                if ref_u not in refs_prestamo:
+                    continue
+            elif tiene_fuente_local:
+                # Ya hay imagen en pagos/errores; no mezclar historial Gmail ajeno
+                continue
             _append(
                 "gmail_sync",
                 int(gsi.id or 0),

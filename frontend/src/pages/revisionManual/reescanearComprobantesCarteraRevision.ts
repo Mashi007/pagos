@@ -398,6 +398,23 @@ export async function reescanearComprobantesCarteraPrestamo(opts: {
         opts.onProgreso?.({ hecho, total, fase: 'ocr' })
         continue
       }
+      // Defensa: OCR/PUT solo sobre el mismo pago_id (nunca contaminar otra fila).
+      if (Number(pago.id) !== Number(item.pago_id)) {
+        console.warn(
+          `[reescaneo] skip: pago.id=${pago.id} != item.pago_id=${item.pago_id}`
+        )
+        hecho++
+        opts.onProgreso?.({ hecho, total, fase: 'ocr' })
+        continue
+      }
+      if (Number(pago.prestamo_id) !== Number(opts.prestamoId)) {
+        console.warn(
+          `[reescaneo] skip: pago ${item.pago_id} prestamo_id=${pago.prestamo_id} != ${opts.prestamoId}`
+        )
+        hecho++
+        opts.onProgreso?.({ hecho, total, fase: 'ocr' })
+        continue
+      }
 
       if (!item.ok || !(item.archivo_b64 || '').trim()) {
         const motivos = evaluarAlertaReescaneoCartera(
