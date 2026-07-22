@@ -69,8 +69,8 @@ import {
   subscribeDigitacionLoteUi,
   takePendingDigitacionSession,
 } from './escanerInfopagosLoteDigitacion'
-import {
 import { mensajeSiFaltaInstitucion } from '../constants/institucionesBancariasPagos'
+import {
   filaVaciaDesdeArchivo,
   filaTrasExtraccion,
   filaDesdeRevisionPago,
