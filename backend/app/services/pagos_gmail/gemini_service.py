@@ -2830,8 +2830,9 @@ GEMINI_ESCANER_INFOPAGOS_PROMPT = (
 CONTEXTO (cédula del DEUDOR en el sistema — el cliente al que se le registra el pago; NO la confundas con la del depositante en el papel):
   "{cedula_deudor}"
 
-REFERENCIA DE CALENDARIO (solo coherencia; **no** uses este valor como `fecha_pago`):
-  - Fecha de hoy en Venezuela (America/Caracas): **{fecha_hoy_iso}** — úsala **solo** para descartar fechas futuras imposibles. **Prohibido** devolver `{fecha_hoy_iso}` como `fecha_pago` salvo que esa fecha exacta esté **impresa** en el comprobante (no en metadata ni en este prompt).
+REFERENCIA DE CALENDARIO (solo coherencia; **prohibido** inventar o copiar una fecha del sistema a `fecha_pago`):
+  - Año de referencia en Venezuela (America/Caracas): **{anio_hoy}**.
+  - Úsala **solo** para descartar lecturas con año absurdo o fechas claramente futuras. **Prohibido** inventar día/mes/año. Si la fecha impresa no es legible con certeza, `fecha_pago` = "".
 
 TAREA: Lee la imagen o PDF adjunto y extrae SOLO lo que aparezca con claridad en el comprobante para rellenar un formulario de "Infopagos" con estos campos:
   - fecha_pago: fecha de la operación en el comprobante. Devuélvela como cadena en formato **YYYY-MM-DD** si puedes inferir año/mes/día; si solo hay día/mes sin año razonable, deja fecha_pago vacía "". **Mercantil** (tira 0105 / DEPÓSITO DIVISAS): la fecha está en el **recuadro superior** (1ª fila), en el **2º bloque YYYYMMDD** del código con **DCME** (ej. `9264-20260618-115409-DCME-5574-A` → **2026-06-18**). **No** infieras la fecha desde el Serial `740087…` (ese es solo `numero_operacion`).
@@ -2846,11 +2847,11 @@ TAREA: Lee la imagen o PDF adjunto y extrae SOLO lo que aparezca con claridad en
 REGLAS:
   - No inventes datos: si un campo no está legible, usa "" o null según el tipo.
   - No copies el correo ni datos que no estén en el comprobante.
-  - FECHA OBLIGATORIA DESDE IMAGEN/PDF: `fecha_pago` debe ser la fecha **impresa** en el comprobante (Fechar, Fecha/Hora, sello de operación, bloque DCME Mercantil). Devuélvela en **YYYY-MM-DD** copiando día, mes y **año de 4 cifras** tal como aparecen. **Prohibido** usar la fecha de referencia `{fecha_hoy_iso}` del prompt si no está en el papel.
+  - FECHA OBLIGATORIA DESDE IMAGEN/PDF: `fecha_pago` debe ser la fecha **impresa** en el comprobante (Fechar, Fecha/Hora, sello de operación, bloque DCME Mercantil). Devuélvela en **YYYY-MM-DD** copiando día, mes y **año de 4 cifras** tal como aparecen. **Prohibido** inventar la fecha o usar la del sistema/prompt si no está en el papel.
   - Prohibido usar fecha del correo, asunto, metadata del archivo, nombre del archivo o contexto externo para `fecha_pago`.
   - Si hay dos fechas en el comprobante (ej. sello y fecha transacción), prioriza la fecha del bloque principal de la operación/transferencia.
-  - FORMATO VENEZOLANO / AMBIGÜEDAD: en boletos y apps locales casi siempre verás **día/mes/año** (o día-mes-año). Si ves **6 dígitos seguidos sin separadores** (ej. 191226), no asumas YYMMDD si con ello la operación quedaría **años incoherentes** respecto a otras fechas visibles del mismo boleto (sello, vigencia, año impreso, texto “202x”) o **en el futuro** respecto a {fecha_hoy_iso}. En ese caso prefiere la lectura **DDMMYY** (día/mes/año de dos dígitos) cuando encaje con el resto del comprobante; si sigue habiendo duda razonable, devuelve `fecha_pago` "" y explica en `notas`.
-  - La fecha de operación inferida **no puede ser posterior** a {fecha_hoy_iso}; si una lectura lleva a futuro, corrige interpretación o deja "".
+  - FORMATO VENEZOLANO / AMBIGÜEDAD: en boletos y apps locales casi siempre verás **día/mes/año** (o día-mes-año). Si ves **6 dígitos seguidos sin separadores** (ej. 191226), no asumas YYMMDD si con ello la operación quedaría **años incoherentes** respecto a otras fechas visibles del mismo boleto (sello, vigencia, año impreso, texto “202x”) o **claramente en el futuro** respecto al calendario actual de Venezuela (año de referencia {anio_hoy}). En ese caso prefiere la lectura **DDMMYY** (día/mes/año de dos dígitos) cuando encaje con el resto del comprobante; si sigue habiendo duda razonable, devuelve `fecha_pago` "" y explica en `notas`.
+  - La fecha de operación inferida **no puede ser futura** respecto al calendario actual de Venezuela; si una lectura lleva a futuro, corrige interpretación o deja "".
   - Si la fecha no es legible con suficiente certeza (aplica CRITERIO MATEMÁTICO: L < 0,875 o ambigüedad calendario), deja `fecha_pago` como "" y explícitalo en `notas` (ej. "fecha borrosa, revisión manual").
   - Si el serial/ref no es legible con suficiente certeza (mismo CRITERIO MATEMÁTICO con n = cantidad de dígitos del serial: L < 0,875), deja `numero_operacion` como "" y explícitalo en `notas` (ej. "serial borroso, revisión manual").
   - Si el monto no es legible con suficiente certeza (CRITERIO MATEMÁTICO del bloque MONTO BORROSO; ej. duda 600 vs 60), deja `monto` como `null` y explícitalo en `notas` (ej. "monto borroso, revisión manual").
@@ -3159,11 +3160,11 @@ def extract_infopagos_campos_desde_comprobante(
     ctx = (cedula_deudor_contexto or "").strip() or "(no indicada)"
     from app.services.tasa_cambio_service import fecha_hoy_caracas
 
-    hoy_iso = fecha_hoy_caracas().isoformat()
     ref_hoy = fecha_hoy_caracas()
+    anio_hoy = str(ref_hoy.year)
     prompt = (
         GEMINI_ESCANER_INFOPAGOS_PROMPT.replace("{cedula_deudor}", ctx)
-        .replace("{fecha_hoy_iso}", hoy_iso)
+        .replace("{anio_hoy}", anio_hoy)
         + GEMINI_ESCANER_PLANTILLAS_AUTO_BLOQUE
     )
     extra_plantilla = _extra_prompt_plantilla_escaner(

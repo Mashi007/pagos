@@ -7,11 +7,17 @@ from datetime import date
 from typing import Any, Optional, Tuple
 
 from app.services.institucion_bancaria_requerida import es_institucion_bancaria_valida
+from app.services.pagos_gmail.parse_campos_comprobante import ocr_borroso_indicado_en_texto
 
 MSG_REVISION_MANUAL_BASE = (
     "Comprobante complejo o ilegible: no se pudo digitalizar con consistencia. "
     "Pase a revisión manual, complete los campos y guarde. "
-    "El proceso no se trunca: el comprobante queda en borrador/servidor para continuar."
+    "El archivo no se trunca: el comprobante queda en borrador/servidor para continuar."
+)
+
+MSG_REVISION_MANUAL_CALIDAD = (
+    "La calidad de la imagen no permite leer el comprobante con certeza. "
+    "Complete los datos y envíe: el reporte quedará en revisión manual."
 )
 
 
@@ -66,11 +72,15 @@ def digitalizacion_requiere_revision_manual(
     institucion_financiera: Optional[str],
     numero_operacion: Optional[str],
     monto: Any,
+    notas_modelo: Any = None,
 ) -> Optional[str]:
     """
-    Si faltan campos críticos tras OCR, devuelve mensaje de revisión manual.
-    Si está completo, None.
+    Si faltan campos críticos tras OCR o el modelo indica campos borrosos
+    (calidad de imagen insuficiente), devuelve mensaje de revisión manual.
+    Si está completo y legible, None.
     """
+    if ocr_borroso_indicado_en_texto(notas_modelo):
+        return MSG_REVISION_MANUAL_CALIDAD
     faltan = campos_criticos_faltantes_digitalizacion(
         fecha_pago=fecha_pago,
         institucion_financiera=institucion_financiera,

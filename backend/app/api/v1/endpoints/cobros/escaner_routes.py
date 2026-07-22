@@ -326,6 +326,7 @@ async def escaner_extraer_comprobante_infopagos(
         institucion_financiera=inst,
         numero_operacion=num_op,
         monto=monto,
+        notas_modelo=gem.get("notas") or "",
     )
     requiere_revision_manual = bool(msg_rev)
     if msg_rev:
@@ -920,6 +921,7 @@ async def escaner_lote_drive_digitalizar(
                     institucion_financiera=inst,
                     numero_operacion=num_op,
                     monto=monto,
+                    notas_modelo=gem.get("notas") or "",
                 )
                 requiere_revision_manual = bool(msg_rev)
                 if msg_rev:

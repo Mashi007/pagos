@@ -911,8 +911,7 @@ export function useExcelUploadPagos({
         const numeroDoc = normalizarNumeroDocumento(row.numero_documento) || ''
 
         const fechaFormato =
-          convertirFechaParaBackendPago(row.fecha_pago) ||
-          new Date().toISOString().split('T')[0]
+          convertirFechaParaBackendPago(row.fecha_pago) || ''
 
         const fechaDDMMYYYY = fechaFormato.split('-').reverse().join('-')
 
@@ -1059,8 +1058,7 @@ export function useExcelUploadPagos({
           prestamo_id: prestamoId,
 
           fecha_pago:
-            convertirFechaParaBackendPago(row.fecha_pago) ||
-            new Date().toISOString().split('T')[0],
+            convertirFechaParaBackendPago(row.fecha_pago) || '',
 
           monto_pagado: Number(row.monto_pagado) || 0,
 
@@ -1176,8 +1174,7 @@ export function useExcelUploadPagos({
               prestamo_id: prestamoIdRevisar,
 
               fecha_pago:
-                convertirFechaParaBackendPago(row.fecha_pago) ||
-                new Date().toISOString().split('T')[0],
+                convertirFechaParaBackendPago(row.fecha_pago) || '',
 
               monto_pagado: Number(row.monto_pagado) || 0,
 
@@ -1255,8 +1252,7 @@ export function useExcelUploadPagos({
               prestamo_id: prestamoIdRevisar,
 
               fecha_pago:
-                convertirFechaParaBackendPago(row.fecha_pago) ||
-                new Date().toISOString().split('T')[0],
+                convertirFechaParaBackendPago(row.fecha_pago) || '',
 
               monto_pagado: Number(row.monto_pagado) || 0,
 
@@ -1351,8 +1347,7 @@ export function useExcelUploadPagos({
             prestamo_id: autoPrestamoId || null,
 
             fecha_pago:
-              convertirFechaParaBackendPago(row.fecha_pago) ||
-              new Date().toISOString().split('T')[0],
+              convertirFechaParaBackendPago(row.fecha_pago) || '',
 
             monto_pagado: Number(row.monto_pagado) || 0,
 
@@ -1392,8 +1387,7 @@ export function useExcelUploadPagos({
             prestamo_id: autoPrestamoId || null,
 
             fecha_pago:
-              convertirFechaParaBackendPago(row.fecha_pago) ||
-              new Date().toISOString().split('T')[0],
+              convertirFechaParaBackendPago(row.fecha_pago) || '',
 
             monto_pagado: Number(row.monto_pagado) || 0,
 
@@ -1512,8 +1506,7 @@ export function useExcelUploadPagos({
           cedula_cliente: cedulaLookup,
           prestamo_id: autoIdDup || null,
           fecha_pago:
-            convertirFechaParaBackendPago(row.fecha_pago) ||
-            new Date().toISOString().split('T')[0],
+            convertirFechaParaBackendPago(row.fecha_pago) || '',
           monto_pagado: Number(row.monto_pagado) || 0,
           numero_documento: numeroDoc || null,
           codigo_documento: codigoDocumentoOpcionalFila(row),
@@ -1541,8 +1534,7 @@ export function useExcelUploadPagos({
           cedula_cliente: cedulaLookup,
           prestamo_id: autoIdDup || null,
           fecha_pago:
-            convertirFechaParaBackendPago(row.fecha_pago) ||
-            new Date().toISOString().split('T')[0],
+            convertirFechaParaBackendPago(row.fecha_pago) || '',
           monto_pagado: Number(row.monto_pagado) || 0,
           numero_documento: numeroDoc || null,
           codigo_documento: codigoDocumentoOpcionalFila(row),
@@ -1641,8 +1633,7 @@ export function useExcelUploadPagos({
           cedula_cliente: cedulaLookup,
           prestamo_id: autoId || null,
           fecha_pago:
-            convertirFechaParaBackendPago(row.fecha_pago) ||
-            new Date().toISOString().split('T')[0],
+            convertirFechaParaBackendPago(row.fecha_pago) || '',
           monto_pagado: Number(row.monto_pagado) || 0,
           numero_documento: numeroDoc || null,
           codigo_documento: codigoDocumentoOpcionalFila(row),
@@ -1670,8 +1661,7 @@ export function useExcelUploadPagos({
           cedula_cliente: cedulaLookup,
           prestamo_id: autoId || null,
           fecha_pago:
-            convertirFechaParaBackendPago(row.fecha_pago) ||
-            new Date().toISOString().split('T')[0],
+            convertirFechaParaBackendPago(row.fecha_pago) || '',
           monto_pagado: Number(row.monto_pagado) || 0,
           numero_documento: numeroDoc || null,
           codigo_documento: codigoDocumentoOpcionalFila(row),
@@ -1850,8 +1840,7 @@ export function useExcelUploadPagos({
         prestamo_id: prestamoId,
 
         fecha_pago:
-          convertirFechaParaBackendPago(row.fecha_pago) ||
-          new Date().toISOString().split('T')[0],
+          convertirFechaParaBackendPago(row.fecha_pago) || '',
 
         monto_pagado: Number(row.monto_pagado) || 0,
 

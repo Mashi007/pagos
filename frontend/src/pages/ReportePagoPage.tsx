@@ -17,9 +17,9 @@
 
 
  * En rapicredit-cobros: escaneo autónomo (Gemini). Si el comprobante se lee completo,
- * va directo a confirmar sin pedir banco/monto/número/fecha. Fecha siempre hoy Caracas
- * si falta o es inválida. Solo se pide el dato que el escaneo no pudo leer.
- * En Infopagos sí se pide fecha en el paso correspondiente.
+ * va directo a confirmar. La fecha solo viene de lo impreso en el comprobante (OCR);
+ * si falta o es inválida se pide al usuario - nunca se inventa ni se usa "hoy" por defecto.
+ * En Infopagos también se pide fecha cuando el escaneo no la aporta.
  * institución y nº documento (longitud), archivo (PDF, JPEG, PNG, HEIC/HEIF, WebP; máx 10 MB).
 
 
@@ -69,6 +69,7 @@ import {
 } from '../utils/cedulaConsultaPublica'
 
 import { hoyYmdCaracas } from '../utils/fechaZona'
+import { fechaPagoDesdeSugerenciaOcrReescaneo } from '../utils/escanerComprobanteInfopagos'
 import { mensajeSiFaltaInstitucion } from '../constants/institucionesBancariasPagos'
 
 // Límites iguales al backend (cobros_publico)
@@ -182,7 +183,7 @@ function getStepAnnouncement(step: number, isInfopagos: boolean): string {
       1: 'Paso 1: Ingrese su número de cédula',
       2: 'Paso 2: Adjuntar comprobante',
       3: 'Paso 3: Institución financiera',
-      4: 'Paso 4: Monto del pago',
+      4: 'Paso 4: Fecha y monto del pago',
       5: 'Paso 5: Número de documento u operación',
       7: 'Paso 6: Confirmar y enviar',
       8: 'Reporte enviado correctamente',
@@ -247,24 +248,25 @@ function validarMonto(
 
   return { valido: true, valor: num }
 }
-/** YYYY-MM-DD elegido o hoy Caracas si el campo quedó vacío (coherente con backend TZ negocio). */
+/** YYYY-MM-DD del formulario tal cual; vacío si OCR/usuario no aportó fecha (no inventar hoy). */
 function fechaReporteEfectivaYmd(fechaPago: string): string {
-  const t = (fechaPago || '').trim()
-  return t || hoyYmdCaracas()
+  return (fechaPago || '').trim()
 }
 
 /**
  * Flujo cobros (escaneo autónomo): primer paso que aún necesita un dato del
  * cliente, o 7 (confirmación) si el comprobante digitalizado ya trae todo.
- * La fecha nunca se pide: si falta o es inválida se usa hoy Caracas.
+ * Incluye fecha: si OCR no la leyó, se pide en el paso 4.
  */
 function pasoFaltanteCobros(
   inst: string,
   montoStr: string,
   monedaVal: 'BS' | 'USD',
-  numDoc: string
+  numDoc: string,
+  fechaStr: string
 ): 3 | 4 | 5 | 7 {
   if (!inst.trim() || inst.length > MAX_LENGTH_INSTITUCION) return 3
+  if (!validarFechaPago(fechaStr).valido) return 4
   if (!validarMonto(montoStr, monedaVal).valido) return 4
   if (!numDoc.trim() || numDoc.length > MAX_LENGTH_NUMERO_OPERACION) return 5
   return 7
@@ -276,12 +278,22 @@ const MENSAJE_DATO_FALTANTE_COBROS: Record<3 | 4 | 5, string> = {
   5: 'No pudimos leer el número de operación en su comprobante. Escríbalo y presione Siguiente.',
 }
 
-/** Fecha del escaneo usable; si es inválida o futura, hoy Caracas (cobros no pide fecha). */
-function fechaEscaneoSeguraYmd(fechaRaw: string | null | undefined): string {
-  const t = (fechaRaw || '').trim()
-  if (!t) return hoyYmdCaracas()
-  const v = validarFechaPago(t)
-  return v.valido ? t : hoyYmdCaracas()
+const MENSAJE_FECHA_FALTANTE_COBROS =
+  'No pudimos leer la fecha en su comprobante. Selecciónela en el calendario y presione Siguiente.'
+
+function mensajePasoFaltanteCobros(
+  next: 3 | 4 | 5,
+  fechaStr: string,
+  montoStr: string,
+  monedaVal: 'BS' | 'USD'
+): string {
+  if (next === 4 && !validarFechaPago(fechaStr).valido) {
+    return MENSAJE_FECHA_FALTANTE_COBROS
+  }
+  if (next === 4 && !validarMonto(montoStr, monedaVal).valido) {
+    return MENSAJE_DATO_FALTANTE_COBROS[4]
+  }
+  return MENSAJE_DATO_FALTANTE_COBROS[next]
 }
 
 function validarFechaPago(fecha: string): { valido: boolean; error?: string } {
@@ -676,11 +688,14 @@ function mensajeErrorDigitalizarComprobante(msg: string): string {
   ) {
     return (
       'No se pudo digitalizar el comprobante por conexión o tiempo de espera. ' +
-      'Puede continuar: revise los datos en los pasos siguientes o use «Atrás» y complete manualmente.'
+      'Puede continuar: revise los datos en los pasos siguientes o use «Atrás» y complete manualmente. ' +
+      'Al enviar, el reporte quedará en revisión manual.'
     )
   }
   return (
-    m || 'No se pudo digitalizar el comprobante. Continúe con carga manual.'
+    m ||
+    'No se pudo leer el comprobante por la calidad de la imagen. ' +
+      'Complete los datos manualmente; al enviar, el reporte quedará en revisión manual.'
   )
 }
 
@@ -811,6 +826,10 @@ export default function ReportePagoPage({
 
   const [archivo, setArchivo] = useState<File | null>(null)
 
+  /** OCR ilegible / campos críticos incompletos → forzar cola revisión manual al enviar. */
+  const [requiereRevisionManualOcr, setRequiereRevisionManualOcr] =
+    useState(false)
+
   const [referencia, setReferencia] = useState('')
 
   const [enviado, setEnviado] = useState(false)
@@ -899,6 +918,7 @@ export default function ReportePagoPage({
     setInstitucionOtros('')
 
     setFechaPago('')
+    setRequiereRevisionManualOcr(false)
 
     setMonto('')
 
@@ -1015,15 +1035,18 @@ export default function ReportePagoPage({
       return
     }
 
-    // Cobros: fecha automática (hoy si vacía/inválida). Infopagos: valida fecha del formulario.
-    let fechaEfectivaParaApi = fechaReporteEfectivaYmd(fechaPago)
-    if (!isInfopagos) {
-      fechaEfectivaParaApi = fechaEscaneoSeguraYmd(fechaPago)
-      if (fechaPago !== fechaEfectivaParaApi) setFechaPago(fechaEfectivaParaApi)
-    } else {
+    // Fecha solo del OCR o del usuario - nunca inventar "hoy".
+    const fechaEfectivaParaApi = fechaReporteEfectivaYmd(fechaPago)
+    {
       const vFecha = validarFechaPago(fechaEfectivaParaApi)
       if (!vFecha.valido) {
-        showNotification('error', vFecha.error ?? 'Fecha inválida.')
+        showNotification(
+          'error',
+          isInfopagos
+            ? (vFecha.error ?? 'Fecha inválida.')
+            : MENSAJE_FECHA_FALTANTE_COBROS
+        )
+        if (!isInfopagos) setStep(4)
         return
       }
     }
@@ -1105,6 +1128,9 @@ export default function ReportePagoPage({
     form.append('moneda', moneda)
 
     if (archivo) form.append('comprobante', archivo)
+    if (requiereRevisionManualOcr) {
+      form.append('confirmacion_humana', 'true')
+    }
 
     setLoading(true)
 
@@ -1202,6 +1228,11 @@ export default function ReportePagoPage({
       const res = await digitalizarComprobantePublico(form)
       if (res.ok && res.sugerencia) {
         const s = res.sugerencia
+        if (res.requiere_revision_manual) {
+          setRequiereRevisionManualOcr(true)
+        } else {
+          setRequiereRevisionManualOcr(false)
+        }
 
         let instFinalLocal = ''
         const instRaw = (s.institucion_financiera || '').trim()
@@ -1221,9 +1252,13 @@ export default function ReportePagoPage({
           }
         }
 
-        // Cobros: nunca pedir fecha. Escaneo inválido/futuro → hoy Caracas.
-        const fechaSegura = fechaEscaneoSeguraYmd(s.fecha_pago)
-        setFechaPago(fechaSegura)
+        // Solo fecha impresa legible (OCR/DCME). Si falta, campo vacío → se pide en paso 4.
+        const fechaExtraida = fechaPagoDesdeSugerenciaOcrReescaneo(s)
+        const fechaOk =
+          fechaExtraida && validarFechaPago(fechaExtraida).valido
+            ? fechaExtraida
+            : ''
+        setFechaPago(fechaOk)
 
         let monedaLocal: 'BS' | 'USD' = moneda
         if (s.moneda === 'BS' || s.moneda === 'USD') {
@@ -1252,23 +1287,36 @@ export default function ReportePagoPage({
         }
 
         // Escaneo autónomo: si Gemini leyó todo → confirmación.
-        // Si falta un dato → solo ese paso (resto prellenado). Sin pedir fecha.
+        // Si falta un dato (incl. fecha) → solo ese paso (resto prellenado).
+        if (res.requiere_revision_manual) {
+          showNotification(
+            'error',
+            res.mensaje_revision_manual ||
+              'La calidad de la imagen no permite leer el comprobante con certeza. ' +
+                'Complete los datos; al enviar, el reporte quedará en revisión manual.'
+          )
+        }
         if (!isInfopagos) {
           const next = pasoFaltanteCobros(
             instFinalLocal,
             montoLocal,
             monedaLocal,
-            numDocLocal
+            numDocLocal,
+            fechaOk
           )
           if (next === 7) {
-            dismissNotification()
-          } else {
-            showNotification('error', MENSAJE_DATO_FALTANTE_COBROS[next])
+            if (!res.requiere_revision_manual) dismissNotification()
+          } else if (!res.requiere_revision_manual) {
+            showNotification(
+              'error',
+              mensajePasoFaltanteCobros(next, fechaOk, montoLocal, monedaLocal)
+            )
           }
           setStep(next)
           return
         }
       } else {
+        setRequiereRevisionManualOcr(true)
         showNotification(
           'error',
           mensajeErrorDigitalizarComprobante(res.error || '')
@@ -1276,6 +1324,7 @@ export default function ReportePagoPage({
       }
       setStep(isInfopagos ? 7 : 3)
     } catch (e: any) {
+      setRequiereRevisionManualOcr(true)
       showNotification(
         'error',
         mensajeErrorDigitalizarComprobante(e?.message || '')
@@ -1985,7 +2034,8 @@ export default function ReportePagoPage({
                         institucionFinal,
                         monto,
                         moneda,
-                        numeroDocumento
+                        numeroDocumento,
+                        fechaPago
                       )
                       dismissNotification()
                       setStep(next === 3 ? 4 : next)
@@ -2041,7 +2091,7 @@ export default function ReportePagoPage({
                   {badgePasoFormulario(4, isInfopagos)}
                 </div>
                 <CardTitle className="m-0 text-lg sm:text-xl">
-                  {isInfopagos ? 'Fecha y monto' : 'Monto'}
+                  Fecha y monto
                 </CardTitle>
               </div>
               <p className="mt-2 text-sm text-slate-600">
@@ -2051,28 +2101,26 @@ export default function ReportePagoPage({
                     {moneda === 'BS' ? 'bolivares (Bs.)' : 'dólares (USD)'}
                   </>
                 ) : (
-                  'Indique el monto del pago.'
+                  'Indique la fecha impresa en el comprobante y el monto del pago.'
                 )}
               </p>
             </CardHeader>
 
             <CardContent className="space-y-4 px-5 sm:px-6">
-              {isInfopagos ? (
-                <div>
-                  <label className="mb-2 block text-sm font-semibold text-slate-900">
-                    Fecha de pago
-                  </label>
-                  <FechaPagoTecladoRapido
-                    value={fechaPago}
-                    onChange={setFechaPago}
-                    maxYmd={hoyYmdCaracas()}
-                  />
-                  <p className="mt-1 text-xs text-slate-500">
-                    Toque el ícono de calendario para elegir otra. Si no indica
-                    fecha, se usará la de hoy (Caracas) en el registro.
-                  </p>
-                </div>
-              ) : null}
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-slate-900">
+                  Fecha de pago
+                </label>
+                <FechaPagoTecladoRapido
+                  value={fechaPago}
+                  onChange={setFechaPago}
+                  maxYmd={hoyYmdCaracas()}
+                />
+                <p className="mt-1 text-xs text-slate-500">
+                  Debe coincidir con la fecha impresa en el comprobante. No se
+                  usa la fecha de hoy automáticamente.
+                </p>
+              </div>
 
               <div>
                 <label className="mb-2 block text-sm font-semibold text-slate-900">
@@ -2137,18 +2185,17 @@ export default function ReportePagoPage({
                 <Button
                   className="min-h-[48px] min-w-0 flex-1 touch-manipulation bg-slate-900 font-semibold text-white hover:bg-slate-800"
                   onClick={() => {
-                    if (isInfopagos) {
-                      const vF = validarFechaPago(
-                        fechaReporteEfectivaYmd(fechaPago)
+                    const vF = validarFechaPago(
+                      fechaReporteEfectivaYmd(fechaPago)
+                    )
+                    if (!vF.valido) {
+                      showNotification(
+                        'error',
+                        isInfopagos
+                          ? (vF.error ?? 'Fecha inválida.')
+                          : MENSAJE_FECHA_FALTANTE_COBROS
                       )
-                      if (!vF.valido) {
-                        showNotification('error', vF.error ?? 'Fecha inválida.')
-                        return
-                      }
-                    } else {
-                      // Cobros: fecha automática; nunca bloquear por fecha.
-                      const fechaSegura = fechaEscaneoSeguraYmd(fechaPago)
-                      if (fechaPago !== fechaSegura) setFechaPago(fechaSegura)
+                      return
                     }
 
                     const vM = validarMonto(monto, moneda)
@@ -2176,7 +2223,8 @@ export default function ReportePagoPage({
                         institucionFinal,
                         monto,
                         moneda,
-                        numeroDocumento
+                        numeroDocumento,
+                        fechaPago
                       )
                       dismissNotification()
                       setStep(next === 4 ? 5 : next)
@@ -2472,14 +2520,12 @@ export default function ReportePagoPage({
                     {institucionFinal}
                   </span>
                 </div>
-                {isInfopagos ? (
-                  <div className="flex justify-between text-sm">
-                    <span className="text-slate-600">Fecha:</span>
-                    <span className="font-semibold text-slate-900">
-                      {fechaReporteEfectivaYmd(fechaPago)}
-                    </span>
-                  </div>
-                ) : null}
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-600">Fecha:</span>
+                  <span className="font-semibold text-slate-900">
+                    {fechaReporteEfectivaYmd(fechaPago) || '-'}
+                  </span>
+                </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-slate-600">Monto:</span>
                   <span className="font-semibold text-slate-900">
@@ -2541,11 +2587,12 @@ export default function ReportePagoPage({
                     }
                     // Cobros: volver al primer dato incompleto o al monto (paso 4).
                     const next = pasoFaltanteCobros(
-                      institucionFinal,
-                      monto,
-                      moneda,
-                      numeroDocumento
-                    )
+                        institucionFinal,
+                        monto,
+                        moneda,
+                        numeroDocumento,
+                        fechaPago
+                      )
                     setStep(next === 7 ? 4 : next)
                   }}
                   disabled={loading}

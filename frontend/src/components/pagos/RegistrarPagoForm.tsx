@@ -563,8 +563,7 @@ export function RegistrarPagoForm({
 
     prestamo_id: pagoInicial?.prestamo_id || null,
 
-    fecha_pago:
-      fechaPagoParaInputDate(pagoInicial?.fecha_pago) || hoyYmdCaracas(),
+    fecha_pago: fechaPagoParaInputDate(pagoInicial?.fecha_pago) || '',
 
     monto_pagado: montoInicialNumericoDesdePago(pagoInicial),
 

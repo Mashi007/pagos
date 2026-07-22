@@ -278,6 +278,8 @@ export interface DigitalizarComprobanteResponse {
   ok: boolean
   error?: string
   sugerencia?: DigitalizarComprobanteSugerencia | null
+  requiere_revision_manual?: boolean
+  mensaje_revision_manual?: string | null
 }
 
 /** Respuesta de Infopagos: incluye token para descargar recibo en la misma pantalla. */

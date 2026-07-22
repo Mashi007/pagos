@@ -54,7 +54,9 @@ from app.services.cobros.recibo_cuotas_lookup import (
     texto_cuotas_aplicadas_pago_reportado,
 )
 from app.services.cobros import cobros_publico_reporte_service as cpr
+from app.services.cobros import digitalizacion_revision_manual as drm
 from app.services.cobros import infopagos_escaner_borrador_service as ieb
+from app.services.pagos_gmail.parse_campos_comprobante import ocr_borroso_indicado_en_texto
 from app.core.email import cobros_recibo_attachments_or_oversize_note, send_email
 from app.services.notificaciones_exclusion_desistimiento import cliente_bloqueado_por_desistimiento
 from app.core.security import decode_token, create_recibo_infopagos_token, create_cobros_public_token
@@ -289,6 +291,8 @@ class DigitalizarComprobanteResponse(BaseModel):
     ok: bool
     error: Optional[str] = None
     sugerencia: Optional[DigitalizarComprobanteSugerencia] = None
+    requiere_revision_manual: bool = False
+    mensaje_revision_manual: Optional[str] = None
 
 
 MAX_CEDULA_LENGTH = 20
@@ -794,24 +798,50 @@ async def digitalizar_comprobante_publico(
 
     gem = await extract_infopagos_campos_desde_comprobante_async(ctx_ced, content, filename)
     if not gem.get("ok"):
+        msg_calidad = (
+            gem.get("error")
+            or "No se pudo leer el comprobante por la calidad de la imagen."
+        )
         return DigitalizarComprobanteResponse(
             ok=False,
-            error=gem.get("error") or "No se pudo digitalizar el comprobante.",
+            error=(
+                f"{msg_calidad} Complete los datos manualmente; "
+                "al enviar, el reporte quedará en revisión manual."
+            ),
             sugerencia=None,
+            requiere_revision_manual=True,
+            mensaje_revision_manual=drm.MSG_REVISION_MANUAL_CALIDAD,
         )
 
     fecha_d = gem.get("fecha_pago")
     fecha_iso = fecha_d.isoformat() if isinstance(fecha_d, date) else None
+    inst = str(gem.get("institucion_financiera") or "").strip()[:100]
+    num_op = str(gem.get("numero_operacion") or "").strip()[:100]
+    monto = gem.get("monto")
+    notas = str(gem.get("notas") or "").strip()[:300]
     sugerencia = DigitalizarComprobanteSugerencia(
         fecha_pago=fecha_iso,
-        institucion_financiera=str(gem.get("institucion_financiera") or "").strip()[:100],
-        numero_operacion=str(gem.get("numero_operacion") or "").strip()[:100],
-        monto=gem.get("monto"),
+        institucion_financiera=inst,
+        numero_operacion=num_op,
+        monto=monto,
         moneda=(gem.get("moneda") or "BS") if (gem.get("moneda") or "BS") in ("BS", "USD") else "BS",
         cedula_pagador_en_comprobante=str(gem.get("cedula_pagador_en_comprobante") or "").strip()[:30],
-        notas_modelo=str(gem.get("notas") or "").strip()[:300],
+        notas_modelo=notas,
     )
-    return DigitalizarComprobanteResponse(ok=True, error=None, sugerencia=sugerencia)
+    msg_rev = drm.digitalizacion_requiere_revision_manual(
+        fecha_pago=fecha_d,
+        institucion_financiera=inst,
+        numero_operacion=num_op,
+        monto=monto,
+        notas_modelo=notas,
+    )
+    return DigitalizarComprobanteResponse(
+        ok=True,
+        error=None,
+        sugerencia=sugerencia,
+        requiere_revision_manual=bool(msg_rev),
+        mensaje_revision_manual=msg_rev,
+    )
 
 
 @router.post("/enviar-reporte", response_model=EnviarReporteResponse)
@@ -979,10 +1009,8 @@ async def enviar_reporte_publico(
 
             pr.gemini_coincide_exacto = gemini_coincide_exacto
             pr.gemini_comentario = gemini_comentario
-            if confirmo_humano:
-                pr.gemini_coincide_exacto = "true"
-                pr.gemini_comentario = ""
-            # Human confirmation cannot bypass deterministic duplicate rules.
+            # OCR ilegible / confirmación humana (calidad) → cola revisión manual.
+            # No borrar el comentario Gemini: sirve de evidencia a Cobros.
             try:
                 falla_validadores = reportado_falla_validadores_cobros(db_post, pr)
             except Exception as val_err:
@@ -992,6 +1020,14 @@ async def enviar_reporte_publico(
                     val_err,
                 )
                 falla_validadores = True
+            if confirmo_humano or ocr_borroso_indicado_en_texto(gemini_comentario):
+                falla_validadores = True
+                prev = (pr.gemini_comentario or "").strip()
+                nota_calidad = drm.MSG_REVISION_MANUAL_CALIDAD
+                if nota_calidad not in prev:
+                    pr.gemini_comentario = (
+                        f"{prev} {nota_calidad}".strip() if prev else nota_calidad
+                    )[:500]
             if cpr.aplicar_revision_manual_por_monto_alto_en_reportado(
                 monto=monto,
                 moneda_upper=mon_norm.moneda_upper,
@@ -1342,11 +1378,24 @@ async def enviar_reporte_infopagos(
             pr.gemini_comentario = gemini_comentario
             validadores_started = perf_counter()
             if confirmo_humano:
-                pr.gemini_coincide_exacto = "true"
-                pr.gemini_comentario = ""
+                # Escáner / calidad insuficiente: siempre cola manual (no autoconciliar).
                 falla_validadores = True
+                prev = (pr.gemini_comentario or "").strip()
+                nota_calidad = drm.MSG_REVISION_MANUAL_CALIDAD
+                if nota_calidad not in prev:
+                    pr.gemini_comentario = (
+                        f"{prev} {nota_calidad}".strip() if prev else nota_calidad
+                    )[:500]
             else:
                 falla_validadores = reportado_falla_validadores_cobros(db_post, pr)
+            if ocr_borroso_indicado_en_texto(gemini_comentario):
+                falla_validadores = True
+                prev = (pr.gemini_comentario or "").strip()
+                nota_calidad = drm.MSG_REVISION_MANUAL_CALIDAD
+                if nota_calidad not in prev:
+                    pr.gemini_comentario = (
+                        f"{prev} {nota_calidad}".strip() if prev else nota_calidad
+                    )[:500]
             if cpr.aplicar_revision_manual_por_monto_alto_en_reportado(
                 monto=monto,
                 moneda_upper=mon_norm.moneda_upper,

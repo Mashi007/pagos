@@ -535,7 +535,7 @@ def _crear_pago_asiento_imagen_ocr(
     if isinstance(fecha_date, datetime):
         fecha_date = fecha_date.date()
     if not isinstance(fecha_date, date):
-        fecha_date = _placeholder_fecha_reserva().date()
+        return None, "OCR sin fecha en el comprobante."
 
     num_op = sanitizar_numero_operacion_comprobante(gem.get("numero_operacion"))
 
