@@ -735,6 +735,10 @@ def ejecutar_envio_caso_manual(
     ref = fecha_referencia
     if tipo == "PREJUDICIAL":
         items = build_prejudicial_items(db, fecha_referencia=ref)
+        from app.services.notificacion_service import (
+            item_cumple_regla_prejudicial_estricta as _ok_prej,
+        )
+        items = [it for it in items if _ok_prej(it, ref)]
         res = _enviar_correos_items(
             items,
             asunto_prej,
