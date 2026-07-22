@@ -392,7 +392,7 @@ def contar_cuotas_atraso_por_prestamos(
 
 
 # Listado / envío «menor a 60 días» (ruta atraso-10-dias / PAGO_10_DIAS_ATRASADO):
-# préstamo con exactamente 1 cuota en mora y esa cuota con atraso entre 6 y 59 días
+# INNEGOCIABLE: exactamente UNA cuota atrasada (ni 0 ni 2+) y atraso entre 6 y 59 días
 # calendario (fecha_vencimiento en [hoy − 59, hoy − 6]). Permanecen en el listado
 # hasta que la cuota se pague o salga del rango. Con 0 o con 2+ cuotas atrasadas no aplica.
 MIN_CUOTAS_ATRASADAS_PARA_LISTADO_10_DIAS = 1
@@ -417,6 +417,44 @@ def cuota_aplica_listado_10_dias_por_dias_atraso(dias_atraso: int) -> bool:
     except (TypeError, ValueError):
         n = 0
     return MIN_DIAS_ATRASO_PARA_LISTADO_10_DIAS <= n <= MAX_DIAS_ATRASO_PARA_LISTADO_10_DIAS
+
+
+
+def item_cumple_regla_menor_60_estricta(item: dict, fecha_referencia: Optional[date] = None) -> bool:
+    """
+    True solo si el item cumple «menor a 60 / atraso-10-dias» de forma innegociable:
+    - exactamente 1 cuota atrasada en el préstamo (cuotas_atrasadas == 1)
+    - atraso calendario de esa cuota entre 6 y 59 días
+    """
+    if not isinstance(item, dict):
+        return False
+    try:
+        ca = int(item.get("cuotas_atrasadas") if item.get("cuotas_atrasadas") is not None else item.get("total_cuotas_atrasadas") or 0)
+    except (TypeError, ValueError):
+        ca = 0
+    if not prestamo_aplica_listado_10_dias_por_cuotas_atrasadas(ca):
+        return False
+    dias = item.get("dias_atraso")
+    try:
+        if dias is not None and cuota_aplica_listado_10_dias_por_dias_atraso(int(dias)):
+            return True
+    except (TypeError, ValueError):
+        pass
+    hoy = fecha_referencia or hoy_negocio()
+    fv_raw = item.get("fecha_vencimiento")
+    fv: Optional[date] = None
+    if isinstance(fv_raw, date) and not isinstance(fv_raw, datetime):
+        fv = fv_raw
+    elif isinstance(fv_raw, datetime):
+        fv = fv_raw.date()
+    elif isinstance(fv_raw, str) and fv_raw.strip():
+        try:
+            fv = date.fromisoformat(fv_raw.strip()[:10])
+        except ValueError:
+            fv = None
+    if fv is None:
+        return False
+    return cuota_aplica_listado_10_dias_por_dias_atraso((hoy - fv).days)
 
 
 def get_cuotas_pendientes_con_cliente(db: Session) -> List[Tuple[Cuota, Cliente]]:

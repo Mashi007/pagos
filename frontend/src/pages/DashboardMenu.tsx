@@ -599,7 +599,7 @@ export function DashboardMenu() {
 
     const b = s[s.length - 1]?.fecha
 
-    if (a && b) return a === b ? a : `${a} – ${b}`
+    if (a && b) return a === b ? a : `${a} - ${b}`
 
     return `Últimos ${PAGOS_INGRESADOS_POR_DIA_DIAS} d`
   }, [seriePagosIngresadosPorDia])
@@ -619,11 +619,11 @@ export function DashboardMenu() {
 
   const etiquetaRangoPagosBsIngresados = useMemo(() => {
     const s = seriePagosBsIngresadosPorDia
-    if (!s.length) return '—'
+    if (!s.length) return '-'
     const a = s[0]?.fecha
     const b = s[s.length - 1]?.fecha
-    if (!a || !b) return '—'
-    return `${a} – ${b}`
+    if (!a || !b) return '-'
+    return `${a} - ${b}`
   }, [seriePagosBsIngresadosPorDia])
 
 

@@ -1055,10 +1055,10 @@ export function PlantillasNotificaciones({
 
     PAGO_10_DIAS_ATRASADO: {
       categoria: 'Notificación retrasada',
-      caso: 'Menor a 60 días',
+      caso: '1 Cuota',
     },
 
-    PREJUDICIAL: { categoria: 'Prejudicial', caso: 'Prejudicial' },
+    PREJUDICIAL: { categoria: '2 Cuotas', caso: '2 Cuotas' },
 
     MASIVOS: {
       categoria: 'Comunicaciones masivas',

@@ -5,8 +5,8 @@
 export const ETIQUETA_CASO_TAB_ADJUNTO: Record<string, string> = {
   dias_1_retraso: 'Día siguiente al vencimiento',
   d_2_antes_vencimiento: '3 días antes (pendiente, vence en 3 días)',
-  dias_10_retraso: 'Menor a 60 días',
-  prejudicial: 'Prejudicial',
+  dias_10_retraso: '1 Cuota',
+  prejudicial: '2 Cuotas',
   masivos: 'Comunicaciones masivas',
 }
 

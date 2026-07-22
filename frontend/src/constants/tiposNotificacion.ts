@@ -11,9 +11,9 @@ export const TIPOS_NOTIFICACION: { tipo: string; label: string }[] = [
     label: 'Día siguiente al vencimiento (1 día después)',
   },
 
-  { tipo: 'PAGO_10_DIAS_ATRASADO', label: 'Menor a 60 días (6-59, 1 cuota)' },
+  { tipo: 'PAGO_10_DIAS_ATRASADO', label: '1 Cuota' },
 
-  { tipo: 'PREJUDICIAL', label: 'Prejudicial' },
+  { tipo: 'PREJUDICIAL', label: '2 Cuotas' },
 
   { tipo: 'COBRANZA', label: 'Carta de cobranza' },
 ]

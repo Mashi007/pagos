@@ -246,7 +246,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
           exactHref: true,
         },
         {
-          title: '60 días o más',
+          title: '2 Cuotas',
           href: '/notificaciones/a-2-cuotas',
           icon: Clock,
         },
@@ -256,7 +256,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
           icon: Clock,
         },
         {
-          title: 'Menor a 60 días',
+          title: '1 Cuota',
           href: '/notificaciones/atraso-10-dias',
           icon: Clock,
         },

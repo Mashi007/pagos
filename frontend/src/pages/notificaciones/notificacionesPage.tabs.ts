@@ -33,7 +33,7 @@ export function tabsParaModulo(
     return [
       {
         id: 'prejudicial',
-        label: '60 días o más',
+        label: '2 Cuotas',
         icon: Clock,
       },
       { id: 'configuracion', label: 'Configuración', icon: Settings },
@@ -49,7 +49,7 @@ export function tabsParaModulo(
     return [
       {
         id: 'atraso10dias',
-        label: 'Menor a 60 días',
+        label: '1 Cuota',
         icon: Clock,
       },
       { id: 'configuracion', label: 'Configuración', icon: Settings },

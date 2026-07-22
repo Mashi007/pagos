@@ -237,7 +237,7 @@ export function filaTrasExtraccion(
       ? res.borrador_id.trim()
       : null
 
-  // Imagen compleja / OCR fallido: no truncar — conservar borrador y permitir edición manual.
+  // Imagen compleja / OCR fallido: no truncar - conservar borrador y permitir edición manual.
   if (!res.ok || !res.sugerencia) {
     const msg =
       res.validacion_reglas ||

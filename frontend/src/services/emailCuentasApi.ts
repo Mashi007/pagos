@@ -300,7 +300,7 @@ export const ASIGNACION_NOTIF_GRUPOS = [
       },
       {
         id: 'prejudicial',
-        label: '60 días o más',
+        label: '2 Cuotas',
         defaultCuenta: 3,
       },
       {
@@ -310,7 +310,7 @@ export const ASIGNACION_NOTIF_GRUPOS = [
       },
       {
         id: 'dias_10_retraso',
-        label: 'Menor a 60 días',
+        label: '1 Cuota',
         defaultCuenta: 3,
       },
     ],

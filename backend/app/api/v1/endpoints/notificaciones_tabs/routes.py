@@ -821,6 +821,10 @@ def ejecutar_envio_caso_manual(
             )
         elif tipo == "PAGO_10_DIAS_ATRASADO":
             items = data["dias_10_retraso"]
+            from app.services.notificacion_service import (
+                item_cumple_regla_menor_60_estricta as _ok_m60,
+            )
+            items = [it for it in items if _ok_m60(it, ref)]
             res = _enviar_correos_items(
                 items,
                 asunto_ret,

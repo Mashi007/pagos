@@ -294,7 +294,7 @@ export interface RecibosPagosMensualUsdResponse {
   origen: 'demo' | 'bd'
 }
 
-/** GET /api/v1/dashboard/pagos-realizados-mensual — conteo de filas en `pagos` por mes. */
+/** GET /api/v1/dashboard/pagos-realizados-mensual - conteo de filas en `pagos` por mes. */
 export interface PagosRealizadosMensualItem {
   mes: string
   cantidad_pagos: number
@@ -359,5 +359,5 @@ export interface PagosIngresadosPorDiaResponse {
   solo_moneda_bs?: boolean
 }
 
-/** GET /api/v1/dashboard/pagos-bs-ingresados-por-dia — misma forma que PagosIngresadosPorDiaResponse. */
+/** GET /api/v1/dashboard/pagos-bs-ingresados-por-dia - misma forma que PagosIngresadosPorDiaResponse. */
 export type PagosBsIngresadosPorDiaResponse = PagosIngresadosPorDiaResponse

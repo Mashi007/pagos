@@ -20,6 +20,7 @@ from app.services.notificacion_service import (
     MIN_DIAS_ATRASO_PARA_LISTADO_10_DIAS,
     contar_cuotas_atraso_por_prestamos,
     cuota_aplica_listado_10_dias_por_dias_atraso,
+    item_cumple_regla_menor_60_estricta,
     enriquecer_items_notificacion_revision_manual,
     get_cuotas_pendientes_por_vencimientos,
     get_cuotas_pendientes_vencidas_hasta,
@@ -134,6 +135,11 @@ def build_items_retraso_uno_y_diez_dias(
                 )
             )
 
+    # Cinturón: no devolver filas con 0 o 2+ cuotas atrasadas.
+    dias_10 = [
+        it for it in dias_10
+        if item_cumple_regla_menor_60_estricta(it, fecha_referencia)
+    ]
     if con_enriquecimiento_revision_manual:
         enriquecer_items_notificacion_revision_manual(db, dias_1 + dias_10)
     return dias_1, dias_10

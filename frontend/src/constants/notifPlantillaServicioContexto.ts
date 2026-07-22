@@ -16,8 +16,8 @@ export const ETIQUETA_SERVICIO_PLANTILLA: Record<string, string> = {
   PAGO_1_DIA_ATRASADO:
     'Día siguiente al vencimiento (1 día de atraso calendario)',
   PAGO_10_DIAS_ATRASADO:
-    'Menor a 60 días (atraso 6-59; 1 cuota; permanece hasta pagar)',
-  PREJUDICIAL: '60 días o más (atraso ≥60; 1+ cuotas)',
+    '1 Cuota (atraso 6-59; permanece hasta pagar)',
+  PREJUDICIAL: '2 Cuotas (atraso ≥60; exactamente 2)',
   MASIVOS: 'Comunicaciones masivas',
   COBRANZA: 'Carta de cobranza (COBRANZA)',
 }

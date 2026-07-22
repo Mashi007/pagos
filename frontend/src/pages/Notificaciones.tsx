@@ -169,7 +169,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
       return 'Solo fechas: listas de mora como contexto, columna Q (hoja) vs fecha de aprobación en BD, revisión y aplicación por fila; búsqueda por día de aprobación y edición puntual abajo. Sin columnas de cuotas ni montos en dólares. Auditoría total Q sigue en su enlace.'
     }
     if (modulo === 'general') {
-      return 'Solo consulta: listas unificadas (día siguiente al vencimiento, 60 días o más, 3 días antes) con columna de caso. La columna «Diferencia abono» usa caché en BD (cada domingo 04:35 Caracas o botón Recalcular; tras el job, use Actualización manual). Sin envío de correos ni ajustes de comunicación desde esta pantalla.'
+      return 'Solo consulta: listas unificadas (día siguiente al vencimiento, 2 Cuotas, 3 días antes) con columna de caso. La columna «Diferencia abono» usa caché en BD (cada domingo 04:35 Caracas o botón Recalcular; tras el job, use Actualización manual). Sin envío de correos ni ajustes de comunicación desde esta pantalla.'
     }
     if (modulo === 'a2cuotas') {
       return 'Clientes con exactamente 2 cuotas impagas a 60 o más días de atraso en el mismo préstamo (calendario Caracas). Condiciones innegociables: atraso ≥60 días y exactamente 2 cuotas impagas en esa deuda. Permanecen todos los días mientras cumplan; salen al ponerse al día. El envío es solo manual (sin cron ni «enviar todas»). To = cliente; CCO = cobranza@ y notificaciones@. Use Actualizar o vuelva a entrar; también se refresca al guardar pagos en el módulo Pagos.'
@@ -178,7 +178,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
       return 'Solo cuotas con columna estado PENDIENTE y fecha de vencimiento dentro de 3 días (hoy + 3, zona Caracas). Al pagar o cambiar estado, dejan de listarse. Use Actualizar o vuelva a entrar; también se refresca al guardar pagos.'
     }
     if (modulo === 'a10dias') {
-      return 'Solo cuotas pendientes con atraso entre 6 y 59 días calendario (menor a 60; fecha de vencimiento entre referencia menos 59 y referencia menos 6, America/Caracas), saldo pendiente, y el préstamo con exactamente 1 cuota en mora. Permanecen hasta que esa cuota se pague o salga del rango. Con 0 o con 2 o más cuotas atrasadas no aplica este listado. El envío es solo manual (sin cron ni «enviar todas»).'
+      return 'Solo cuotas pendientes con atraso entre 6 y 59 días calendario (menor a 60; fecha de vencimiento entre referencia menos 59 y referencia menos 6, America/Caracas), saldo pendiente, y el préstamo con exactamente UNA cuota atrasada (ni 0 ni 2 o más). Permanecen hasta que esa cuota se pague o salga del rango. Con 0 o con 2 o más cuotas atrasadas no aplica este listado. El envío es solo manual (sin cron ni «enviar todas»).'
     }
     return 'Cuotas pendientes en tiempo real: al registrar pagos que cubren la cuota, el cliente deja de aparecer. Use Actualizar o vuelva a entrar; también se refresca al guardar pagos en el módulo Pagos.'
   }, [modulo])
@@ -1679,11 +1679,11 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                   : modulo === 'general'
                     ? 'General'
                     : modulo === 'a2cuotas'
-                      ? '60 días o más (≥60d; exactamente 2 cuotas)'
+                      ? '2 Cuotas'
                       : modulo === 'd2antes'
                         ? '3 días antes - PENDIENTE, vence en 3 días'
                         : modulo === 'a10dias'
-                          ? 'Menor a 60 días (atraso 6-59 calendario)'
+                          ? '1 Cuota'
                           : 'Día siguiente al vencimiento (1 día de atraso calendario)'}
               </CardTitle>
 
@@ -1698,13 +1698,13 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                 {modulo === 'fecha'
                   ? 'Tabla reducida a fechas: sin Nº cuota, vencimiento, mora numérica ni montos. «Diferencia fecha» = días (Q − aprobación en BD). Abajo: búsqueda por día de aprobación (antes «Fechas 2»).'
                   : modulo === 'general'
-                    ? 'Se concatenan las mismas filas que en los submenús «Día siguiente al vencimiento», «60 días o más» y «3 días antes». El listado «Menor a 60 días» (atraso 6-59) es otro submenú y no entra aquí. La columna «Caso» indica el criterio. Un mismo cliente puede aparecer más de una vez si cumple varios criterios. «Diferencia abono» lee caché en BD (domingo 04:35 Caracas o Recalcular arriba; también se actualiza al aplicar ABONOS desde la balanza).'
+                    ? 'Se concatenan las mismas filas que en los submenús «Día siguiente al vencimiento», «2 Cuotas» y «3 días antes». El listado «1 Cuota» (atraso 6-59) es otro submenú y no entra aquí. La columna «Caso» indica el criterio. Un mismo cliente puede aparecer más de una vez si cumple varios criterios. «Diferencia abono» lee caché en BD (domingo 04:35 Caracas o Recalcular arriba; también se actualiza al aplicar ABONOS desde la balanza).'
                     : modulo === 'a2cuotas'
                       ? 'Una fila por cliente con al menos una cuota a 60 o más días de atraso. La cuota y fecha mostradas son la más antigua en ese rango; «Cuotas atrasadas» cuenta las cuotas del cliente que cumplen ≥60 días. Permanecen hasta ponerse al día. Envío solo manual (sin automático ni «enviar todas»); To = cliente; CCO = cobranza@ y notificaciones@.'
                       : modulo === 'd2antes'
                         ? 'Solo filas con cuotas.estado = PENDIENTE y fecha_vencimiento = hoy + 3 (calendario Caracas), sin fecha_pago y con saldo pendiente. Incluye también préstamos al corriente (cuotas_atrasadas = 0): es un recordatorio preventivo. «Cuotas atrasadas» sigue la misma regla que el estado de cuenta para el préstamo.'
                         : modulo === 'a10dias'
-                          ? 'Una fila por cuota pendiente con atraso entre 6 y 59 días calendario (fecha_vencimiento entre referencia menos 59 y referencia menos 6), sin fecha_pago y con saldo pendiente; préstamo no liquidado ni desistimiento. Solo si el préstamo tiene exactamente 1 cuota en mora; permanece hasta pagar esa cuota o salir del rango. Con 0 o con 2 o más no entra. Envío solo manual (sin automático ni «enviar todas»).'
+                          ? 'Una fila por cuota pendiente con atraso entre 6 y 59 días calendario (fecha_vencimiento entre referencia menos 59 y referencia menos 6), sin fecha_pago y con saldo pendiente; préstamo no liquidado ni desistimiento. Solo si el préstamo tiene exactamente UNA cuota atrasada; permanece hasta pagar esa cuota o salir del rango. Con 0 o con 2 o más no entra. Envío solo manual (sin automático ni «enviar todas»).'
                           : 'Cuotas cuya fecha de vencimiento fue ayer (hoy es el primer día después del vencimiento). La columna Cuotas atrasadas cuenta las cuotas en mora del préstamo con la misma regla que el estado de cuenta (Vencido, Mora, etc.).'}
               </CardDescription>
             </CardHeader>
@@ -2514,7 +2514,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                                       : modulo === 'd2antes'
                                         ? 'Lista ya cargada: solo cuotas en estado PENDIENTE con vencimiento exactamente dentro de 2 días (Caracas). Si la columna estado no es PENDIENTE o la fecha no coincide, no aparecerá.'
                                         : modulo === 'a10dias'
-                                          ? 'Lista ya cargada: atraso entre 6 y 59 días (menor a 60; vencimiento entre referencia menos 59 y menos 6, Caracas), saldo pendiente y exactamente 1 cuota en mora. Permanece hasta pagar esa cuota o salir del rango. Con 0 o con 2+ cuotas atrasadas no aparece.'
+                                          ? 'Lista ya cargada: atraso entre 6 y 59 días (menor a 60; vencimiento entre referencia menos 59 y menos 6, Caracas), saldo pendiente y exactamente UNA cuota atrasada. Permanece hasta pagar esa cuota o salir del rango. Con 0 o con 2+ cuotas atrasadas no aparece.'
                                           : 'Lista ya cargada: solo entran cuotas con fecha de vencimiento igual a ayer (Caracas). Si no hay ninguna, la tabla quedará vacía aunque exista mora en otros días.'}
                                 </span>
                               ) : filtroCedula.trim() ? (
@@ -2733,7 +2733,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                                       : modulo === 'd2antes'
                                         ? 'Lista ya cargada: sin cuotas PENDIENTE con vencimiento en 2 días. Revise estados en BD o el calendario de vencimientos.'
                                         : modulo === 'a10dias'
-                                          ? 'Lista ya cargada: sin cuotas con atraso entre 6 y 59 días, saldo pendiente y exactamente 1 cuota en mora, o todos los casos tienen 0 o 2+ cuotas atrasadas (no aplican aquí).'
+                                          ? 'Lista ya cargada: sin cuotas con atraso entre 6 y 59 días, saldo pendiente y exactamente UNA cuota atrasada, o todos los casos tienen 0 o 2+ cuotas atrasadas (no aplican aquí).'
                                           : 'Lista ya cargada: sin cuotas con vencimiento ayer. Use Actualizar tras registrar pagos o revise el calendario de vencimientos.'}
                                 </span>
                               ) : filtroCedula.trim() ? (
@@ -2971,7 +2971,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                 <p>
                   {confirmEnvio.n === 0
                     ? 'No hay casos en la lista cargada. El servidor procesará PAGO_10_DIAS_ATRASADO (puede estar vacía).'
-                    : `Envío para menor a 60 días (${confirmEnvio.n} casos en la lista completa; atraso 6-59; mismo criterio en servidor, no solo la página actual). Respeta plantilla, CCO y modo prueba en Configuración.`}
+                    : `Envío para 1 Cuota (${confirmEnvio.n} casos en la lista completa; atraso 6-59; mismo criterio en servidor, no solo la página actual). Respeta plantilla, CCO y modo prueba en Configuración.`}
                 </p>
               ) : null}
 

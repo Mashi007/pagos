@@ -168,13 +168,13 @@ export const CRITERIOS_ENVIO_TABLA: CriterioEnvioRow[] = [
   },
   {
     tipo: 'PAGO_10_DIAS_ATRASADO',
-    label: 'Menor a 60 días',
+    label: '1 Cuota',
     categoria: 'Retrasada',
     color: 'orange',
   },
   {
     tipo: 'PREJUDICIAL',
-    label: 'Prejudicial',
+    label: '2 Cuotas',
     categoria: 'Prejudicial',
     color: 'red',
   },
@@ -200,7 +200,7 @@ const CONFIG_ENVIO_SECCIONES = [
   { id: 'retrasada' as const, label: 'Retrasada', categorias: ['Retrasada'] },
   {
     id: 'prejudicial' as const,
-    label: 'Prejudicial',
+    label: '2 Cuotas',
     categorias: ['Prejudicial'],
   },
   {
@@ -234,13 +234,13 @@ export const CRITERIOS_ENVIO_PANEL: CriterioEnvioRow[] = [
   },
   {
     tipo: 'PAGO_10_DIAS_ATRASADO',
-    label: 'Menor a 60 días',
+    label: '1 Cuota',
     categoria: 'Retrasada',
     color: 'orange',
   },
   {
     tipo: 'PREJUDICIAL',
-    label: 'Prejudicial',
+    label: '2 Cuotas',
     categoria: 'Prejudicial',
     color: 'red',
   },
@@ -1338,9 +1338,9 @@ export function ConfiguracionNotificaciones({
             {alcance === 'solo_prejudicial' ? (
               <>
                 Configuración solo para el listado{' '}
-                <strong>60 días o más</strong> (caso{' '}
+                <strong>2 Cuotas</strong> (caso{' '}
                 <strong>PREJUDICIAL</strong>
-                ): condiciones innegociables — atraso ≥60 días y exactamente 2 cuotas
+                ): condiciones innegociables - atraso ≥60 días y exactamente 2 cuotas
                 impagas. Plantilla HTML y envío manual de prueba. Solo
                 texto/HTML (sin PDF). To = cliente; CCO = cobranza@ y
                 notificaciones@. Sin cron ni «Enviar todas».
@@ -1366,11 +1366,11 @@ export function ConfiguracionNotificaciones({
               </>
             ) : alcance === 'solo_pago_10_dias_atrasado' ? (
               <>
-                Configuración solo para <strong>menor a 60 días</strong> (caso{' '}
+                Configuración solo para <strong>1 Cuota</strong> (caso{' '}
                 <strong>PAGO_10_DIAS_ATRASADO</strong>): cuotas pendientes con
                 atraso entre 6 y 59 días calendario (vencimiento entre
                 referencia menos 59 y referencia menos 6, Caracas); el préstamo
-                debe tener exactamente 1 cuota en mora; permanece hasta pagar
+                debe tener exactamente UNA cuota atrasada; permanece hasta pagar
                 esa cuota o salir del rango; con 0 o con 2 o más no aplican.
                 Incluye plantilla, envío, PDF y adjuntos del caso{' '}
                 <code className="rounded bg-gray-100 px-1">
@@ -1449,7 +1449,7 @@ export function ConfiguracionNotificaciones({
           {alcance === 'solo_pago_10_dias_atrasado' && (
             <div className="rounded-lg border border-sky-300 bg-sky-50 p-3 text-xs text-sky-950">
               <strong className="font-semibold">Solo envío manual.</strong> Este
-              criterio (menor a 60 días / PAGO_10_DIAS_ATRASADO) no tiene
+              criterio (1 Cuota / PAGO_10_DIAS_ATRASADO) no tiene
               función automática: no hay cron de servidor ni lote «Enviar
               todas». El disparo es únicamente el botón «Enviar notificaciones
               (manual)» del listado (POST /enviar-caso-manual). El interruptor
@@ -1465,7 +1465,7 @@ export function ConfiguracionNotificaciones({
               <strong className="font-semibold">
                 Solo envío manual · modo prueba fijo.
               </strong>{' '}
-              Este criterio (60 días o más / PREJUDICIAL) no tiene función
+              Este criterio (2 Cuotas / PREJUDICIAL) no tiene función
               automática: no hay cron ni lote «Enviar todas». El disparo es el
               botón «Enviar notificaciones (manual)» del listado. Solo
               texto/HTML, sin anexos PDF. Destino To = correo del cliente; CCO
@@ -2165,9 +2165,9 @@ export function ConfiguracionNotificaciones({
                         tipo === 'MASIVOS'
                           ? 'No aplica: comunicaciones masivas no adjuntan Carta_Cobranza.pdf'
                           : tipo === 'PREJUDICIAL'
-                            ? 'No aplica: 60 días o más envía solo HTML/texto, sin PDF'
+                            ? 'No aplica: 2 Cuotas envía solo HTML/texto, sin PDF'
                             : tipo === 'PAGO_10_DIAS_ATRASADO'
-                              ? 'No aplica: menor a 60 días no adjunta Carta_Cobranza.pdf (solo PDF fijo)'
+                              ? 'No aplica: 1 Cuota no adjunta Carta_Cobranza.pdf (solo PDF fijo)'
                               : 'Carta_Cobranza.pdf (plantilla PDF cobranza). Con paquete estricto el servidor exige este PDF valido para enviar.'
                       }
                       className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
@@ -2192,9 +2192,9 @@ export function ConfiguracionNotificaciones({
                       }
                       title={
                         tipo === 'PREJUDICIAL'
-                          ? 'No aplica: 60 días o más envía solo HTML/texto, sin PDF fijos'
+                          ? 'No aplica: 2 Cuotas envía solo HTML/texto, sin PDF fijos'
                           : tipo === 'PAGO_10_DIAS_ATRASADO'
-                            ? 'Obligatorio: menor a 60 días adjunta PDF fijo (dias_10_retraso), sin Carta_Cobranza'
+                            ? 'Obligatorio: 1 Cuota adjunta PDF fijo (dias_10_retraso), sin Carta_Cobranza'
                             : 'PDFs fijos (global + por caso). Se anexan si estan cargados; no bloquean el envio si faltan.'
                       }
                       className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
