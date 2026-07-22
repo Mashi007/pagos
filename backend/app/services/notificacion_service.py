@@ -88,14 +88,15 @@ CUOTA_ESTADO_NO_PAGADA_PARA_NOTIF = or_(
 )
 
 # Prejudicial (submenu Notificaciones «60 días o más» / ruta a-2-cuotas):
-# al menos 1 cuota pendiente notificable con atraso calendario >= 60 días
-# (fecha_vencimiento <= hoy − 60). Excluye prestamos LIQUIDADO/DESISTIMIENTO y
-# clientes con algun prestamo DESISTIMIENTO. Aparecen todos los días mientras
-# cumplan; salen al ponerse al día (sin cuotas con ≥60 días de atraso).
+# Condiciones innegociables:
+# - atraso calendario >= 60 días (fecha_vencimiento <= hoy − 60; encaja con menor-60 = 6–59)
+# - 2 o más cuotas impagas que cumplan ese atraso
+# Excluye prestamos LIQUIDADO/DESISTIMIENTO y clientes con algun prestamo DESISTIMIENTO.
+# Permanecen todos los días mientras cumplan; salen al ponerse al día.
 ESTADOS_CUOTA_VENCIDO_Y_MORA = ("VENCIDO", "MORA")  # legado / diagnóstico
 MIN_DIAS_ATRASO_PREJUDICIAL = 60
-PREJUDICIAL_MIN_CUOTAS_CON_ATRASO_60 = 1
-# Alias de compatibilidad (imports antiguos): umbral de conteo = 1 cuota con ≥60 días.
+PREJUDICIAL_MIN_CUOTAS_CON_ATRASO_60 = 2
+# Alias de compatibilidad (imports antiguos): umbral de conteo = 2 cuotas con ≥60 días.
 PREJUDICIAL_MIN_CUOTAS_VENCIDO_MORA = PREJUDICIAL_MIN_CUOTAS_CON_ATRASO_60
 
 
@@ -480,7 +481,7 @@ def get_primer_item_ejemplo_paquete_prueba(db: Session, tipo: str) -> Optional[d
         return items[0] if items else None
 
     if tipo == "PREJUDICIAL":
-        # Titular: prestamos.cliente_id. Al menos 1 cuota con atraso >= 60 días.
+        # Titular: prestamos.cliente_id. Al menos 2 cuotas impagas con atraso >= 60 días.
         fv_max = hoy - timedelta(days=MIN_DIAS_ATRASO_PREJUDICIAL)
         subq = (
             select(Prestamo.cliente_id, func.count(Cuota.id).label("total"))

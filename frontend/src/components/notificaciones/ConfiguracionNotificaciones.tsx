@@ -1340,9 +1340,10 @@ export function ConfiguracionNotificaciones({
                 Configuración solo para el listado{' '}
                 <strong>60 días o más</strong> (caso{' '}
                 <strong>PREJUDICIAL</strong>
-                ): plantilla HTML y envío manual de prueba. Solo texto/HTML (sin
-                PDF). To = cliente; CCO = cobranza@ y notificaciones@. Sin cron
-                ni «Enviar todas».
+                ): condiciones innegociables — atraso ≥60 días y 2 o más cuotas
+                impagas. Plantilla HTML y envío manual de prueba. Solo
+                texto/HTML (sin PDF). To = cliente; CCO = cobranza@ y
+                notificaciones@. Sin cron ni «Enviar todas».
               </>
             ) : alcance === 'solo_pago_2_dias_antes_pendiente' ? (
               <>

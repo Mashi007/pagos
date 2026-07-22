@@ -1704,24 +1704,6 @@ def _tarea_enviar_caso_manual(
 
     db = SessionLocal()
     try:
-        # Marca en_proceso de inmediato para que el poll del front no confunda con el lote anterior
-        # y se vea progreso aunque el cliente agote su espera (lotes ~1000 pueden superar 15–40 min).
-        persist_ultimo_envio_batch(
-            db,
-            resultado={
-                "tipo_caso": tipo,
-                "enviados": 0,
-                "detalles": {
-                    "tipo_caso": tipo,
-                    "token_seguimiento": token_seguimiento,
-                    "en_proceso": True,
-                },
-            },
-            origen="api_enviar_caso_manual",
-            inicio_utc=inicio_utc,
-            en_proceso=True,
-        )
-        db.commit()
         try:
             fecha_ref = parse_fecha_referencia_negocio(fecha_caracas_raw)
         except ValueError as e:
@@ -1747,7 +1729,6 @@ def _tarea_enviar_caso_manual(
         det = dict(para_persist["detalles"]) if isinstance(para_persist.get("detalles"), dict) else {}
         det["token_seguimiento"] = token_seguimiento
         det["tipo_caso"] = tipo
-        det.pop("en_proceso", None)
         para_persist["detalles"] = det
         persist_ultimo_envio_batch(
             db,
@@ -2641,28 +2622,31 @@ def build_prejudicial_items(
     db: Session, fecha_referencia: Optional[date] = None
 ) -> List[dict]:
     """
-    Solo la lista prejudicial (5+ cuotas con estado VENCIDO/MORA, vencidas, saldo pendiente).
-    No ejecuta la rama de retrasadas por dias de mora ni contar_cuotas_atraso_por_prestamos masivo.
+    Lista prejudicial («60 días o más» / a-2-cuotas). Condiciones innegociables:
+    - atraso calendario >= 60 días (fecha_vencimiento <= hoy − 60)
+    - 2 o más cuotas impagas que cumplan ese atraso
+    - saldo pendiente; préstamo no LIQUIDADO/DESISTIMIENTO; titular sin DESISTIMIENTO
 
-    GET /notificaciones-prejudicial debe usar esto (no get_notificaciones_tabs_data entero) para
-    evitar timeouts en carteras grandes / cold start en Render.
+    GET /notificaciones-prejudicial usa esto (no get_notificaciones_tabs_data entero).
     """
     hoy = fecha_referencia or hoy_negocio()
-    # Agrupar por titular del préstamo (prestamos.cliente_id). cuotas.cliente_id es denormalizado
-    # y si diverge, el listado prejudicial mezclaba contacto de un titular con montos de otro crédito.
+    fv_max = hoy - timedelta(days=MIN_DIAS_ATRASO_PREJUDICIAL)
+    # Agrupar por titular del préstamo (prestamos.cliente_id).
     subq = (
         select(Prestamo.cliente_id, func.count(Cuota.id).label("total"))
         .select_from(Cuota)
         .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
         .where(
             Cuota.fecha_pago.is_(None),
-            Cuota.estado.in_(ESTADOS_CUOTA_VENCIDO_Y_MORA),
-            Cuota.fecha_vencimiento < hoy,
+            CUOTA_ESTADO_NO_PAGADA_PARA_NOTIF,
+            Cuota.fecha_vencimiento.isnot(None),
+            Cuota.fecha_vencimiento <= fv_max,
             SALDO_PENDIENTE_CUOTA > TOL_SALDO_CUOTA_NOTIFICACION,
-            ~Prestamo.estado.in_(("LIQUIDADO", "DESISTIMIENTO")),
+            _prestamo_no_excluido_notif(),
+            sql_cliente_sin_desistimiento(),
         )
         .group_by(Prestamo.cliente_id)
-        .having(func.count(Cuota.id) >= PREJUDICIAL_MIN_CUOTAS_VENCIDO_MORA)
+        .having(func.count(Cuota.id) >= PREJUDICIAL_MIN_CUOTAS_CON_ATRASO_60)
     )
     rows = db.execute(subq).all()
     if not rows:
@@ -2683,10 +2667,12 @@ def build_prejudicial_items(
         .where(
             Prestamo.cliente_id.in_(cliente_ids),
             Cuota.fecha_pago.is_(None),
-            Cuota.estado.in_(ESTADOS_CUOTA_VENCIDO_Y_MORA),
-            Cuota.fecha_vencimiento < hoy,
+            CUOTA_ESTADO_NO_PAGADA_PARA_NOTIF,
+            Cuota.fecha_vencimiento.isnot(None),
+            Cuota.fecha_vencimiento <= fv_max,
             SALDO_PENDIENTE_CUOTA > TOL_SALDO_CUOTA_NOTIFICACION,
-            ~Prestamo.estado.in_(("LIQUIDADO", "DESISTIMIENTO")),
+            _prestamo_no_excluido_notif(),
+            sql_cliente_sin_desistimiento(),
         )
     ).all()
 
@@ -2713,16 +2699,7 @@ def build_prejudicial_items(
         total_cuotas = totals_by_cliente.get(cid, 0)
         cuota_ref = primera_por_cliente.get(cid)
         if not cuota_ref:
-            cuota_ref = type(
-                "DummyCuota",
-                (),
-                {
-                    "fecha_vencimiento": hoy,
-                    "numero_cuota": 0,
-                    "monto": 0,
-                    "prestamo_id": None,
-                },
-            )()
+            continue
         pid = getattr(cuota_ref, "prestamo_id", None)
         if pid:
             pids_prej.append(int(pid))
