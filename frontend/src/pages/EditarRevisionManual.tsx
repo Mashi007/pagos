@@ -1041,7 +1041,7 @@ export function EditarRevisionManual() {
     setPagoModalInicial({
       cedula_cliente: ced,
       prestamo_id: pid != null && pid > 0 ? pid : null,
-      fecha_pago: new Date().toISOString().slice(0, 10),
+      fecha_pago: '',
       monto_pagado: 0,
       numero_documento: '',
       institucion_bancaria: null,

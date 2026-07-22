@@ -609,6 +609,16 @@ def actualizar_pago(
     reescaneo_advertencias: list[str] = []
 
     # fecha_pago y monto_pagado son NOT NULL en BD: no poner NULL ni 0 al limpiar OCR.
+    # Si OCR no leyó fecha: no inventar «hoy»; dejar la existente y advertir al operador.
+    if limpiar_fecha_pago_ocr and reescaneo_ocr:
+        reescaneo_advertencias.append(
+            "OCR no leyó fecha impresa en el comprobante; fecha_pago no se inventó ni se borró "
+            "(columna NOT NULL). Revise y corrija manualmente si la fecha actual no coincide con el papel."
+        )
+        prev_notas = (getattr(row, "notas", None) or "").strip()
+        marca = "[OCR] fecha no detectada — revisar manualmente"
+        if marca not in prev_notas:
+            row.notas = f"{prev_notas} {marca}".strip()[:2000] if prev_notas else marca
     if limpiar_monto_pago_ocr and reescaneo_ocr:
         row.monto_bs_original = None
         row.moneda_registro = "USD"

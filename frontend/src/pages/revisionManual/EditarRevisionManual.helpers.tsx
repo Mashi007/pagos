@@ -15,6 +15,7 @@ import {
   numeroOperacionOcrParaReescaneo,
   fechaPagoDesdeSugerenciaOcrReescaneo,
 } from '../../utils/escanerComprobanteInfopagos'
+import { fechaPagoParaInputDate } from '../../utils/fechaZona'
 
 /** Estados de negocio del préstamo (tabla prestamos.estado); alineado con backend y fechas obligatorias. */
 const OPCIONES_ESTADO_PRESTAMO_REVISION: { value: string; label: string }[] = [
@@ -392,18 +393,8 @@ export function mensajeValidacionServidor(
 }
 
 export function fechaPagoPagoRowParaInput(pago: Pago): string {
-  const fp = pago.fecha_pago
-  if (fp == null || fp === '') {
-    return new Date().toISOString().slice(0, 10)
-  }
-  if (typeof fp === 'string') {
-    return fp.length >= 10 ? fp.slice(0, 10) : fp
-  }
-  try {
-    return new Date(fp as Date).toISOString().slice(0, 10)
-  } catch {
-    return new Date().toISOString().slice(0, 10)
-  }
+  // Nunca inventar «hoy»: vacío si falta o no es parseable (Caracas / YYYY-MM-DD).
+  return fechaPagoParaInputDate(pago.fecha_pago)
 }
 
 /** Para ordenar filas: más reciente primero; sin fecha válida al final. */
@@ -969,12 +960,7 @@ export function patchCompletoPagoDesdeOcrReescaneoCartera(
     camposAplicados.push('fecha')
   }
 
-  const fechaPagoActual =
-    typeof pago.fecha_pago === 'string'
-      ? pago.fecha_pago.slice(0, 10)
-      : pago.fecha_pago instanceof Date
-        ? pago.fecha_pago.toISOString().slice(0, 10)
-        : ''
+  const fechaPagoActual = fechaPagoParaInputDate(pago.fecha_pago)
   const hayCambios =
     (patch.fecha_pago || '') !== fechaPagoActual ||
     (patch.institucion_bancaria || '').trim() !==
