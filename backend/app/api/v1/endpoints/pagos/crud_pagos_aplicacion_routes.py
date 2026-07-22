@@ -308,10 +308,11 @@ def aplicar_pagos_pendientes_cuotas_por_prestamo(
 
         from app.services.pagos_aplicacion_prestamo import aplicar_cascada_prestamo_pipeline
 
+        # Incremental por defecto (cascada por pago). Full reset solo si diagnostico lo exige.
         pipeline = aplicar_cascada_prestamo_pipeline(
             prestamo_id,
             db,
-            reconstruir_completa=True,
+            reconstruir_completa=False,
         )
 
         if not pipeline.get("ok"):

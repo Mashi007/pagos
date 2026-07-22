@@ -352,7 +352,7 @@ export type FirmaCargaRevision = {
 }
 
 /** Lotes de PUT de cuotas en revisión manual (evita ~12 s en serie contra el mismo host). */
-export const CUOTAS_REVISION_PUT_CONCURRENCY = 6
+export const CUOTAS_REVISION_PUT_CONCURRENCY = 2
 
 export async function ejecutarEnLotes<T>(
   items: T[],

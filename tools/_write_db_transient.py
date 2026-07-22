@@ -1,3 +1,5 @@
+﻿from pathlib import Path
+content = r'''
 """
 Reintentos ante errores transitorios de Postgres (Render: SSL cerrada, reset, deadlock).
 """
@@ -145,3 +147,6 @@ def run_with_deadlock_retry(
     if last is not None:
         raise last
     raise RuntimeError("run_with_deadlock_retry: sin resultado")
+'''
+Path('backend/app/core/db_transient.py').write_text(content.lstrip('\n'), encoding='utf-8')
+print('ok', Path('backend/app/core/db_transient.py').stat().st_size)

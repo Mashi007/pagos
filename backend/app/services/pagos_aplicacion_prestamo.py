@@ -234,14 +234,18 @@ def aplicar_cascada_prestamo_pipeline(
     2) Si hace falta, reset_y_reaplicar_cascada_prestamo
     3) Reglas habituales de LIQUIDADO vía cascada / reset (no hace commit).
 
-    Con reconstruir_completa=True (botón «Aplicar a cuotas (cascada)» en revisión manual)
-    siempre reinicia cuota_pagos y reaplica todos los pagos en orden FIFO.
+    Con reconstruir_completa=True reinicia cuota_pagos y reaplica todos los pagos
+    (correccion puntual; no es el flujo normal del producto).
     """
     from app.services.pagos_cascada_mensajes import _mensaje_sin_aplicacion_cascada
     from app.services.pagos_cuotas_reaplicacion import (
         prestamo_requiere_correccion_cascada,
         reset_y_reaplicar_cascada_prestamo,
     )
+
+    from app.services.pagos_cascada_lock import adquirir_lock_cascada_prestamo
+
+    adquirir_lock_cascada_prestamo(db, int(prestamo_id))
 
     prestamo = db.get(Prestamo, prestamo_id)
     if not prestamo:

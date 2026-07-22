@@ -476,6 +476,36 @@ def realinear_cuotas_prestamo_desde_cuota_pagos(db: Session, prestamo_id: int) -
 
 
 def reset_y_reaplicar_cascada_prestamo(db: Session, prestamo_id: int) -> dict[str, Any]:
+    from app.core.db_transient import is_deadlock_error, run_with_deadlock_retry
+
+    def _once() -> dict[str, Any]:
+        return _reset_y_reaplicar_cascada_prestamo_once(db, prestamo_id)
+
+    try:
+        return run_with_deadlock_retry(
+            db,
+            _once,
+            attempts=3,
+            log_prefix=f"[reset_cascada prestamo={prestamo_id}]",
+        )
+    except Exception as exc:
+        if is_deadlock_error(exc):
+            logger.exception(
+                "reset_y_reaplicar_cascada_prestamo deadlock agotado prestamo_id=%s",
+                prestamo_id,
+            )
+            from app.services.pagos_aplicacion_prestamo import detalle_excepcion_db
+
+            return {
+                "ok": False,
+                "codigo": "deadlock",
+                "error": detalle_excepcion_db(exc),
+                "prestamo_id": prestamo_id,
+            }
+        raise
+
+
+def _reset_y_reaplicar_cascada_prestamo_once(db: Session, prestamo_id: int) -> dict[str, Any]:
     from app.services.pago_huella_funcional import (
         mensaje_409_huella_funcional_con_id,
         primer_par_huella_duplicada_prestamo,
@@ -485,6 +515,9 @@ def reset_y_reaplicar_cascada_prestamo(db: Session, prestamo_id: int) -> dict[st
         detalle_excepcion_db,
     )
     from app.services.pagos_cascada_aplicacion import _marcar_prestamo_liquidado_si_corresponde
+    from app.services.pagos_cascada_lock import adquirir_lock_cascada_prestamo
+
+    adquirir_lock_cascada_prestamo(db, prestamo_id)
 
     prestamo = db.get(Prestamo, prestamo_id)
     if not prestamo:
@@ -502,8 +535,12 @@ def reset_y_reaplicar_cascada_prestamo(db: Session, prestamo_id: int) -> dict[st
             "prestamo_id": prestamo_id,
         }
 
+    # Orden estable: lock filas de cuotas ANTES de borrar cuota_pagos.
     cuotas = db.execute(
-        select(Cuota).where(Cuota.prestamo_id == prestamo_id).order_by(Cuota.numero_cuota.asc())
+        select(Cuota)
+        .where(Cuota.prestamo_id == prestamo_id)
+        .order_by(Cuota.numero_cuota.asc())
+        .with_for_update()
     ).scalars().all()
     if not cuotas:
         return {"ok": False, "error": "El prestamo no tiene cuotas", "prestamo_id": prestamo_id}
@@ -569,6 +606,11 @@ def reset_y_reaplicar_cascada_prestamo(db: Session, prestamo_id: int) -> dict[st
         sincronizar_columna_estado_cuotas(db, list(cuotas_despues), commit=False)
         _marcar_prestamo_liquidado_si_corresponde(prestamo_id, db)
     except Exception as exc:
+        # Dejar que deadlocks suban al wrapper de reintento.
+        from app.core.db_transient import is_deadlock_error
+
+        if is_deadlock_error(exc):
+            raise
         logger.exception("reset_y_reaplicar_cascada_prestamo prestamo_id=%s", prestamo_id)
         try:
             db.rollback()

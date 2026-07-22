@@ -1564,6 +1564,7 @@ export function RegistrarPagoForm({
       }
 
       let idPagoParaProcesar: number | undefined = pagoId
+      let cascadaYaSincronizada = false
 
       if (isEditing && idPagoParaProcesar) {
         if (usarApiPagosConErrores) {
@@ -1599,7 +1600,19 @@ export function RegistrarPagoForm({
             return
           }
         } else {
-          await pagoService.updatePago(idPagoParaProcesar, datosEnvio)
+          const respUpdate = await pagoService.updatePago(
+            idPagoParaProcesar,
+            datosEnvio
+          )
+          cascadaYaSincronizada =
+            Boolean(
+              (respUpdate as { cascada_sincronizada?: boolean })
+                ?.cascada_sincronizada
+            ) ||
+            Boolean(
+              (respUpdate as { tiene_aplicacion_cuotas?: boolean })
+                ?.tiene_aplicacion_cuotas
+            )
         }
       } else {
         const pagoCreado = await pagoService.createPago(datosEnvio)
@@ -1712,6 +1725,11 @@ export function RegistrarPagoForm({
 
             return
           }
+        } else if (cascadaYaSincronizada) {
+          toast.success(
+            "Pago guardado. La amortización ya quedó sincronizada en el guardado.",
+            { duration: 4500 }
+          )
         } else {
           try {
             const resultAplicar = await pagoService.aplicarPagoACuotas(

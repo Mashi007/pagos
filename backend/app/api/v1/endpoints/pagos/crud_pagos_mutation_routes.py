@@ -1196,6 +1196,7 @@ def actualizar_pago(
 
         _mark_fase("response_enriquecido")
         out = _pago_response_enriquecido(db, row)
+        out["cascada_sincronizada"] = True
         if reescaneo_advertencias:
             out["reescaneo_advertencias"] = reescaneo_advertencias
         total_ms = round((time.perf_counter() - t0_put) * 1000.0, 2)
@@ -1278,6 +1279,9 @@ def actualizar_pago(
 
     _mark_fase("response_enriquecido")
     out = _pago_response_enriquecido(db, row)
+    # Solo si ya hay cuota_pagos (PUT aplico o ya estaba articulado).
+    if out.get("tiene_aplicacion_cuotas"):
+        out["cascada_sincronizada"] = True
     if reescaneo_advertencias:
         out["reescaneo_advertencias"] = reescaneo_advertencias
     total_ms = round((time.perf_counter() - t0_put) * 1000.0, 2)

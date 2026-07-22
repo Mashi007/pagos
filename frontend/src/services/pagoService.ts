@@ -53,6 +53,8 @@ export interface Pago {
 
   /** True si existe al menos una fila en cuota_pagos para este pago (GET /pagos enriquecido). */
   tiene_aplicacion_cuotas?: boolean
+  /** PUT ya aplico/reset cascada; el cliente no debe reaplicar. */
+  cascada_sincronizada?: boolean
 
   /** Monto en USD que el préstamo rebasa sobre su total financiado (si aplica). */
   exceso_sobre_total_usd?: number | null

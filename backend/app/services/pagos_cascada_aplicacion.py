@@ -176,6 +176,10 @@ def _aplicar_pago_a_cuotas_interno(
 
     hoy = hoy_negocio()
 
+    from app.services.pagos_cascada_lock import adquirir_lock_cascada_prestamo
+
+    adquirir_lock_cascada_prestamo(db, int(prestamo_id))
+
     with db.begin_nested():
         carga_cuotas_started = perf_counter()
         cuotas_stmt = (
