@@ -157,7 +157,7 @@ export function AuditoriaRebotesGmailTab() {
       if (res.candidatos === 0 && res.guardados === 0) {
         toast.message(
           res.mensaje ||
-            'No hay pendientes nuevos: los de GMAIL ya estan en BD o no hay mas en Inbox.'
+            'No hay pendientes nuevos: los de DELIVERY ya estan en BD o no hay mas con esa etiqueta.'
         )
       } else if (res.truncado) {
         toast.message(
@@ -265,8 +265,8 @@ export function AuditoriaRebotesGmailTab() {
         </CardHeader>
         <CardContent className="space-y-3">
           <p className="text-sm text-muted-foreground">
-            Escanea Inbox de itmaster@rapicreditca.com (leidos y no leidos) con
-            la etiqueta GMAIL. Si el correo esta en clientes guarda la cedula;
+            Escanea itmaster@rapicreditca.com (leidos y no leidos) solo con
+            la etiqueta DELIVERY. Si el correo esta en clientes guarda la cedula;
             si no, guarda el correo con cedula vacia. No repite la misma cedula
             cuando si hay match. Al descargar Excel se pide autorizacion para
             borrar: si no acepta, las filas se conservan. Los KPIs acumulados

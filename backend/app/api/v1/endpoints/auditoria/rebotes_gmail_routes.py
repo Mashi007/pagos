@@ -115,7 +115,7 @@ def procesar_rebotes_gmail(
     db: Session = Depends(get_db),
     admin: UserResponse = Depends(require_admin),
 ):
-    """Escaneo manual por lotes (Render-safe): etiqueta GMAIL, parsea rebotes y guarda en BD."""
+    """Escaneo manual por lotes (Render-safe): etiqueta DELIVERY, parsea rebotes y guarda en BD."""
     result = svc.procesar_rebotes_gmail(
         db,
         procesado_por=admin.email,

@@ -1,7 +1,7 @@
 """
-Escaneo manual de rebotes Gmail etiquetados GMAIL en Inbox de itmaster.
+Escaneo manual de rebotes Gmail etiquetados DELIVERY en itmaster.
 
-Condicion de busqueda: etiqueta GMAIL (leidos y no leidos).
+Condicion de busqueda: etiqueta DELIVERY (leidos y no leidos).
 Clasifica segun texto de Gmail (mal / lleno / temporal / otro),
 cruza con clientes (cedula NULL si no hay match) y persiste.
 """
@@ -29,11 +29,11 @@ from app.utils.cedula_almacenamiento import (
 logger = logging.getLogger(__name__)
 
 NOTIFICACIONES_EMAIL = "notificaciones@rapicreditca.com"
-ETIQUETA_GMAIL = "GMAIL"
+ETIQUETA_ESCANEO = "DELIVERY"
 FRAGMENTO_MAX = 2000
 
-# Condicion de escaneo: etiqueta GMAIL en Inbox (leidos y no leidos).
-GMAIL_LIST_QUERY = f"in:inbox label:{ETIQUETA_GMAIL}"
+# Unicamente etiqueta DELIVERY; leidos y no leidos (sin is:unread / is:read).
+GMAIL_LIST_QUERY = f"label:{ETIQUETA_ESCANEO}"
 
 _RE_EMAIL = re.compile(
     r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}",
@@ -393,7 +393,7 @@ def procesar_rebotes_gmail(
     presupuesto_segundos: float = 50.0,
 ) -> dict[str, Any]:
     """
-    Escanea Inbox con etiqueta GMAIL, guarda filas nuevas.
+    Escanea mensajes con etiqueta DELIVERY (leidos y no leidos), guarda filas nuevas.
     Limita lote y tiempo para no morir por timeout/SIGTERM en Render.
     """
     import time
@@ -426,7 +426,7 @@ def procesar_rebotes_gmail(
         }
 
     service = build_gmail_service(creds)
-    label_id = ensure_user_label_id(service, ETIQUETA_GMAIL)
+    label_id = ensure_user_label_id(service, ETIQUETA_ESCANEO)
 
     # IDs ya guardados: hay que paginar Gmail mas alla de los primeros N
     # (Gmail siempre devuelve primero los mas recientes; si esos ya estan en BD
@@ -541,7 +541,7 @@ def procesar_rebotes_gmail(
             "error": None,
             "mensaje": mensaje,
             "query": GMAIL_LIST_QUERY,
-            "etiqueta": ETIQUETA_GMAIL,
+            "etiqueta": ETIQUETA_ESCANEO,
             "candidatos": 0,
             "revisados": 0,
             "guardados": 0,
@@ -661,7 +661,7 @@ def procesar_rebotes_gmail(
             observaciones=obs,
             asunto_gmail=(asunto or "")[:500] or None,
             remitente_detectado=(remitente or "")[:255] or None,
-            etiqueta_gmail=ETIQUETA_GMAIL,
+            etiqueta_gmail=ETIQUETA_ESCANEO,
             fecha_mensaje=fecha_msg,
             procesado_por=(procesado_por or "")[:150] or None,
             fragmento_cuerpo=(texto or "")[:FRAGMENTO_MAX] or None,
@@ -737,7 +737,7 @@ def procesar_rebotes_gmail(
         "error": None,
         "mensaje": mensaje,
         "query": GMAIL_LIST_QUERY,
-        "etiqueta": ETIQUETA_GMAIL,
+        "etiqueta": ETIQUETA_ESCANEO,
         "candidatos": candidatos,
         "revisados": revisados,
         "guardados": guardados,
