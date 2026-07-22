@@ -951,13 +951,21 @@ def _crear_pago_desde_reportado_y_aplicar_cuotas(db: Session, pr: PagoReportado,
     img_id = (getattr(pr, "comprobante_imagen_id", None) or "").strip()
     link_comp = url_comprobante_imagen_absoluta(img_id) if img_id else None
     doc_nom = ((pr.comprobante_nombre or "").strip()[:255] or None) if img_id else None
+    from app.services.institucion_bancaria_requerida import (
+        error_si_falta_institucion,
+        normalizar_institucion_bancaria_requerida,
+    )
+    err_inst = error_si_falta_institucion(pr.institucion_financiera)
+    if err_inst:
+        raise HTTPException(status_code=400, detail=err_inst)
+    inst_pago = normalizar_institucion_bancaria_requerida(pr.institucion_financiera, max_len=255)
     row = Pago(
         cedula_cliente=cedula_norm,
         prestamo_id=prestamo.id,
         fecha_pago=fecha_ts,
         monto_pagado=monto,
         numero_documento=num_doc,
-        institucion_bancaria=(pr.institucion_financiera or "").strip()[:255] or None,
+        institucion_bancaria=inst_pago,
         # Se crea conciliado y se aplica en cascada en la misma transaccion; no debe nacer como PENDIENTE.
         estado="PAGADO",
         referencia_pago=ref_pago,

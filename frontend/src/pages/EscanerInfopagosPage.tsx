@@ -43,6 +43,7 @@ import {
 import { resolverInstitucionDesdeExtraccion } from './escanerInfopagosLoteModel'
 import { fechaPagoDesdeExtraccionOcrConfiable } from '../utils/escanerComprobanteInfopagos'
 import { searchParamsRevisionPagosDesdeNumeroDocumento } from '../utils/linkRevisionPagosDesdeEscaner'
+import { mensajeSiFaltaInstitucion } from '../constants/institucionesBancariasPagos'
 
 type Fase = 'cedula' | 'imagen' | 'formulario' | 'exito'
 
@@ -796,9 +797,12 @@ export default function EscanerInfopagosPage() {
       toast.error(vF.error || 'Fecha inválida.')
       return
     }
-    if (!institucion.trim()) {
-      toast.error('Indique la institución financiera.')
-      return
+    {
+      const errInst = mensajeSiFaltaInstitucion(institucion)
+      if (errInst) {
+        toast.error(errInst)
+        return
+      }
     }
     if (institucion.length > MAX_LENGTH_INSTITUCION) {
       toast.error('Institución demasiado larga.')

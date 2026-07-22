@@ -400,6 +400,28 @@ def extraer_fecha_desde_asunto_pipeline(subject: str) -> str:
     return ""
 
 
+
+def _banco_gemini_es_beneficiario_rapicredit(nombre: Optional[str]) -> bool:
+    """True si Gemini devolvió RapiCredit (beneficiario) en vez del banco emisor."""
+    t = (nombre or "").strip()
+    if not t:
+        return False
+    compact = re.sub(r"[\s\-_,.]+", "", t.lower())
+    return compact in {
+        "rapicredit",
+        "rapicreditca",
+        "rapcredit",
+        "rapicredi",
+        "bapicredit",
+        "raphcredit",
+        "softcredit",
+    } or bool(re.match(
+        r"^(?:bapi|raph|rapi)[\s\-_.]*credi(?:t)?(?:[\s\-_,.]*c\.?\s*a\.?)?$",
+        t,
+        re.I,
+    ))
+
+
 def resolve_banco_para_excel_pagos_gmail(
     fmt: str,
     banco_gemini: Optional[str],
@@ -420,7 +442,7 @@ def resolve_banco_para_excel_pagos_gmail(
     f = (fmt or "").strip().upper()
     if f == "NR":
         raw = (banco_gemini or "").strip()
-        if not raw or raw.upper() == "NA":
+        if not raw or raw.upper() == "NA" or _banco_gemini_es_beneficiario_rapicredit(raw):
             return "NR"
         low = raw.lower()
         one_line = re.sub(r"\s+", " ", raw).strip()
@@ -448,6 +470,8 @@ def resolve_banco_para_excel_pagos_gmail(
             return "Banco del Tesoro"
         if "recibo" in low or "toro motorcycles" in low:
             return "Recibo"
+        if _banco_gemini_es_beneficiario_rapicredit(one_line):
+            return "NR"
         out = one_line[:max_len].strip()
         return out if out else "NR"
     if f == "C":
@@ -467,7 +491,7 @@ def resolve_banco_para_excel_pagos_gmail(
     else:
         template_default = default_a
     raw = (banco_gemini or "").strip()
-    if not raw or raw.upper() == "NA":
+    if not raw or raw.upper() == "NA" or _banco_gemini_es_beneficiario_rapicredit(raw):
         return (template_default or "")[:max_len]
     low = raw.lower()
     one_line = re.sub(r"\s+", " ", raw).strip()
@@ -493,6 +517,8 @@ def resolve_banco_para_excel_pagos_gmail(
         return "Bancamiga"
     if "banco del tesoro" in low:
         return "Banco del Tesoro"
+    if _banco_gemini_es_beneficiario_rapicredit(one_line):
+        return (template_default or "")[:max_len]
     out = one_line[:max_len].strip()
     return out if out else (template_default or "")[:max_len]
 

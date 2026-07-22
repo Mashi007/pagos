@@ -59,6 +59,7 @@ import { SEGMENTO_INFOPAGOS } from '../../constants/rutasIngresoPago'
 
 import {
   opcionesBancoConValorActual,
+  mensajeSiFaltaInstitucion,
   SIN_ESPECIFICAR_VALUE,
 } from '../../constants/institucionesBancariasPagos'
 
@@ -1396,6 +1397,13 @@ export function RegistrarPagoForm({
 
         newErrors.prestamo_id =
           'La cédula del pago debe coincidir con la cédula del préstamo seleccionado'
+      }
+    }
+
+    {
+      const errInst = mensajeSiFaltaInstitucion(fd.institucion_bancaria)
+      if (errInst) {
+        newErrors.institucion_bancaria = errInst
       }
     }
 

@@ -1826,6 +1826,16 @@ def importar_un_pago_reportado_a_pagos(
     link_comp = url_comprobante_imagen_absoluta(img_id) if img_id else None
     doc_nom = ((pr.comprobante_nombre or "").strip()[:255] or None) if img_id else None
 
+    from app.services.institucion_bancaria_requerida import (
+        error_si_falta_institucion,
+        normalizar_institucion_bancaria_requerida,
+    )
+    inst_raw = (pr.institucion_financiera or "").strip()
+    err_inst = error_si_falta_institucion(inst_raw)
+    if err_inst:
+        return _err_con_pce(err_inst, cedula_cliente=cedula_raw, prestamo_id=prestamo_id)
+    inst_pago = normalizar_institucion_bancaria_requerida(inst_raw, max_len=255)
+
     p = Pago(
 
         cedula_cliente=cedula_raw,
@@ -1837,6 +1847,8 @@ def importar_un_pago_reportado_a_pagos(
         monto_pagado=monto_dec_cobros,
 
         numero_documento=numero_doc_norm,
+
+        institucion_bancaria=inst_pago,
 
         # Evita violar chk_pagos_conciliado_pendiente_inconsistente
         estado="PAGADO",

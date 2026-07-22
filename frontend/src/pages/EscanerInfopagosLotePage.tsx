@@ -70,6 +70,7 @@ import {
   takePendingDigitacionSession,
 } from './escanerInfopagosLoteDigitacion'
 import {
+import { mensajeSiFaltaInstitucion } from '../constants/institucionesBancariasPagos'
   filaVaciaDesdeArchivo,
   filaTrasExtraccion,
   filaDesdeRevisionPago,
@@ -910,9 +911,12 @@ export default function EscanerInfopagosLotePage() {
         toast.error(vF.error || 'Fecha inválida.')
         return
       }
-      if (!fila.institucion.trim()) {
-        toast.error('Indique la institución financiera.')
-        return
+      {
+        const errInst = mensajeSiFaltaInstitucion(fila.institucion)
+        if (errInst) {
+          toast.error(errInst)
+          return
+        }
       }
       if (fila.institucion.length > MAX_LENGTH_INSTITUCION) {
         toast.error('Institución demasiado larga.')

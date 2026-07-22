@@ -1731,13 +1731,18 @@ def _expr_categoria_institucion_pago():
     )
 
 
-def _compute_pagos_ingresados_por_dia(db: Session, dias: int) -> dict:
+def _compute_pagos_ingresados_por_dia(
+    db: Session, dias: int, *, solo_moneda_bs: bool = False
+) -> dict:
     """
     Suma de Pago.monto_pagado (USD) por día de fecha_pago, apilado por institución.
 
     Ventana: hoy (America/Caracas) y los (dias - 1) días anteriores.
     Sin filtro de Prestamo.estado ni de Pago.estado/conciliado.
     Categorías: Mercantil, BNC, Binance, BNV, Recibos; resto → Otros.
+
+    Si solo_moneda_bs=True: solo pagos con moneda_registro BS (admitidos en bolívares);
+    el monto mostrado sigue siendo monto_pagado en USD (conversión ya aplicada al registrar).
     """
     try:
         dias_ef = min(90, max(7, int(dias)))
@@ -1759,17 +1764,22 @@ def _compute_pagos_ingresados_por_dia(db: Session, dias: int) -> dict:
         )
         dia_expr = cast(Pago.fecha_pago, Date)
         cat_expr = _expr_categoria_institucion_pago()
+        filtros = [
+            Pago.fecha_pago.isnot(None),
+            dia_expr >= inicio,
+            dia_expr <= hoy_c,
+        ]
+        if solo_moneda_bs:
+            filtros.append(
+                func.upper(func.trim(func.coalesce(Pago.moneda_registro, ""))) == "BS"
+            )
         stmt = (
             select(
                 dia_expr.label("dia"),
                 cat_expr.label("categoria"),
                 func.coalesce(func.sum(Pago.monto_pagado), 0).label("monto"),
             )
-            .where(
-                Pago.fecha_pago.isnot(None),
-                dia_expr >= inicio,
-                dia_expr <= hoy_c,
-            )
+            .where(*filtros)
             .group_by(dia_expr, cat_expr)
             .order_by(dia_expr)
         )
@@ -1806,13 +1816,17 @@ def _compute_pagos_ingresados_por_dia(db: Session, dias: int) -> dict:
             "dias": dias_ef,
             "categorias": list(PAGOS_INGRESADOS_CATEGORIAS),
             "serie": serie,
+            "solo_moneda_bs": solo_moneda_bs,
         }
     except Exception as e:
-        logger.exception("Error en pagos-ingresados-por-dia: %s", e)
+        logger.exception(
+            "Error en pagos-ingresados-por-dia (solo_bs=%s): %s", solo_moneda_bs, e
+        )
         return {
             "dias": int(dias) if dias else 60,
             "categorias": list(PAGOS_INGRESADOS_CATEGORIAS),
             "serie": [],
+            "solo_moneda_bs": solo_moneda_bs,
         }
 
 
@@ -1827,7 +1841,24 @@ def get_pagos_ingresados_por_dia(
     db: Session = Depends(get_db),
 ):
     """Monto diario (USD) de pagos ingresados por institución (barras apiladas)."""
-    return _compute_pagos_ingresados_por_dia(db, dias)
+    return _compute_pagos_ingresados_por_dia(db, dias, solo_moneda_bs=False)
+
+
+@router.get("/pagos-bs-ingresados-por-dia")
+def get_pagos_bs_ingresados_por_dia(
+    dias: int = Query(
+        60,
+        ge=7,
+        le=90,
+        description="Días calendario inclusive (hoy atrás). Default 60.",
+    ),
+    db: Session = Depends(get_db),
+):
+    """
+    Pagos registrados en BS (moneda_registro=BS), día a día, expresados en USD
+    (suma de monto_pagado ya convertido al ingresar). Apilado por institución.
+    """
+    return _compute_pagos_ingresados_por_dia(db, dias, solo_moneda_bs=True)
 
 
 @router.get("/distribucion-prestamos", summary="[Stub] Devuelve distribucion vacía hasta tener datos.")

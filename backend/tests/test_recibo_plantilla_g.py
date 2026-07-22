@@ -79,3 +79,91 @@ def test_guess_bank_hint_toro_recibo():
         "campos_incompletos_g",
     )
     assert hint == "G"
+
+def test_canonical_rechaza_beneficiario_rapicredit():
+    from app.services.pagos_gmail.gemini_service import (
+        _canonical_institucion_escaner,
+        _es_beneficiario_rapicredit_como_banco,
+        _resolver_institucion_escaner,
+    )
+
+    for raw in (
+        "RAPICREDIT",
+        "RAPI-CREDIT",
+        "Rapicredit",
+        "RAPI CREDIT",
+        "RAPI-CREDIT, C.A.",
+        "BAPI-CREDIT",
+        "Rapicredi",
+    ):
+        assert _es_beneficiario_rapicredit_como_banco(raw), raw
+        assert _canonical_institucion_escaner(raw) == "", raw
+
+    assert _canonical_institucion_escaner("Mercantil") == "Mercantil"
+    assert _canonical_institucion_escaner("BNC") == "BNC"
+    assert not _es_beneficiario_rapicredit_como_banco("credit")
+    assert not _es_beneficiario_rapicredit_como_banco("Banco Nacional de Credito")
+
+    # Rechaza RAPICREDIT y recupera banco por serial / patrón de operación
+    assert (
+        _resolver_institucion_escaner(
+            "RAPICREDIT",
+            notas="",
+            numero_operacion="740087408543435",
+        )
+        == "Mercantil"
+    )
+    assert (
+        _resolver_institucion_escaner(
+            "RAPICREDIT",
+            numero_operacion="444102322113560576",
+        )
+        == "BINANCE"
+    )
+    assert (
+        _resolver_institucion_escaner("RAPI-CREDIT", numero_operacion="00939")
+        == "Recibo"
+    )
+    # Sin número ni plantilla: vacio (API exige banco; no persistir RAPICREDIT)
+    assert _resolver_institucion_escaner("RAPICREDIT", notas="", numero_operacion="") == ""
+
+
+def test_inferir_no_mercantil_solo_por_rapicredit():
+    from app.services.pagos_gmail.gemini_service import _inferir_institucion_heuristica_escaner
+
+    assert _inferir_institucion_heuristica_escaner("beneficiario RAPI-CREDIT C.A.") == ""
+    assert _inferir_institucion_heuristica_escaner("0105 RAPI-CREDIT") == "Mercantil"
+
+
+def test_resolve_banco_excel_rechaza_rapicredit():
+    from app.services.pagos_gmail.helpers import resolve_banco_para_excel_pagos_gmail
+
+    assert (
+        resolve_banco_para_excel_pagos_gmail(
+            "A",
+            "RAPICREDIT",
+            default_a="Mercantil",
+            default_b="BNC",
+            default_c="BINANCE",
+        )
+        == "Mercantil"
+    )
+    assert (
+        resolve_banco_para_excel_pagos_gmail(
+            "NR",
+            "RAPI-CREDIT",
+            default_a="Mercantil",
+            default_b="BNC",
+            default_c="BINANCE",
+        )
+        == "NR"
+    )
+
+
+def test_inferir_institucion_desde_numero():
+    from app.services.pagos_gmail.gemini_service import _inferir_institucion_desde_numero_operacion
+
+    assert _inferir_institucion_desde_numero_operacion("740087408543435") == "Mercantil"
+    assert _inferir_institucion_desde_numero_operacion("444102322113560576") == "BINANCE"
+    assert _inferir_institucion_desde_numero_operacion("00939") == "Recibo"
+    assert _inferir_institucion_desde_numero_operacion("") == ""

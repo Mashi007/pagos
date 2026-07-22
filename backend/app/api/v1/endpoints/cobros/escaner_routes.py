@@ -29,6 +29,7 @@ from app.core.database import get_db
 from app.core.documento import normalize_documento
 from app.core.deps import get_current_user
 from app.services.cobros import infopagos_escaner_borrador_service as ieb
+from app.services.cobros import digitalizacion_revision_manual as drm
 from app.core.rate_limit_store import get_redis_client
 from app.api.v1.endpoints.pagos.pago_integridad_db import _integridad_error_pgcode_y_constraint
 from app.models.pago_reportado import PagoReportado, PagoReportadoHistorial
@@ -272,6 +273,7 @@ async def escaner_extraer_comprobante_infopagos(
             "validacion_campos": None,
             "validacion_reglas": validacion_manual,
             "borrador_id": borrador_id_fallo,
+            "requiere_revision_manual": True,
         }
 
     fecha_d = gem.get("fecha_pago")
@@ -319,6 +321,16 @@ async def escaner_extraer_comprobante_infopagos(
         validacion_reglas, monto, moneda=moneda
     )
 
+    msg_rev = drm.digitalizacion_requiere_revision_manual(
+        fecha_pago=fecha_d,
+        institucion_financiera=inst,
+        numero_operacion=num_op,
+        monto=monto,
+    )
+    requiere_revision_manual = bool(msg_rev)
+    if msg_rev:
+        validacion_reglas = drm.fusionar_mensaje_revision(validacion_reglas, msg_rev)
+
     sugerencia = {
         "fecha_pago": fecha_iso,
         "institucion_financiera": inst,
@@ -363,7 +375,7 @@ async def escaner_extraer_comprobante_infopagos(
         validacion_campos=validacion_campos,
         validacion_reglas=validacion_reglas,
         duplicado_en_pagos=duplicado_en_pagos,
-    )
+    ) or requiere_revision_manual
     if necesita_borrador_bd and usuario_escaner_id is not None and cliente is not None:
         try:
             payload_snap = {
@@ -374,6 +386,10 @@ async def escaner_extraer_comprobante_infopagos(
                 "pago_existente_id": pago_existente_id,
                 "prestamo_existente_id": prestamo_existente_id,
                 "prestamo_objetivo_id": prestamo_objetivo_id_ctx,
+                "motivo_digitalizacion": (
+                    "campos_criticos_incompletos" if requiere_revision_manual else None
+                ),
+                "requiere_revision_manual": requiere_revision_manual,
             }
             borrador_id = ieb.crear_borrador_escaneo(
                 db,
@@ -421,6 +437,7 @@ async def escaner_extraer_comprobante_infopagos(
         "prestamo_existente_id": prestamo_existente_id,
         "prestamo_objetivo_id": prestamo_objetivo_id_ctx,
         "borrador_id": borrador_id,
+        "requiere_revision_manual": requiere_revision_manual,
     }
 
 
@@ -851,6 +868,7 @@ async def escaner_lote_drive_digitalizar(
                         "prestamo_existente_id": None,
                         "prestamo_objetivo_id": prestamo_objetivo_id,
                         "borrador_id": borrador_id_fallo,
+                        "requiere_revision_manual": True,
                     }
                 )
             else:
@@ -897,6 +915,16 @@ async def escaner_lote_drive_digitalizar(
                     validacion_reglas, monto, moneda=moneda
                 )
 
+                msg_rev = drm.digitalizacion_requiere_revision_manual(
+                    fecha_pago=fecha_d,
+                    institucion_financiera=inst,
+                    numero_operacion=num_op,
+                    monto=monto,
+                )
+                requiere_revision_manual = bool(msg_rev)
+                if msg_rev:
+                    validacion_reglas = drm.fusionar_mensaje_revision(validacion_reglas, msg_rev)
+
                 duplicado_en_pagos = False
                 pago_existente_id: Optional[int] = None
                 prestamo_existente_id: Optional[int] = None
@@ -935,7 +963,7 @@ async def escaner_lote_drive_digitalizar(
                     validacion_campos=validacion_campos,
                     validacion_reglas=validacion_reglas,
                     duplicado_en_pagos=duplicado_en_pagos,
-                )
+                ) or requiere_revision_manual
                 if necesita_borrador_bd and usuario_escaner_id is not None:
                     try:
                         payload_snap = {
@@ -946,6 +974,10 @@ async def escaner_lote_drive_digitalizar(
                             "validacion_campos": validacion_campos,
                             "validacion_reglas": validacion_reglas,
                             "duplicado_en_pagos": duplicado_en_pagos,
+                            "motivo_digitalizacion": (
+                                "campos_criticos_incompletos" if requiere_revision_manual else None
+                            ),
+                            "requiere_revision_manual": requiere_revision_manual,
                             "pago_existente_id": pago_existente_id,
                             "prestamo_existente_id": prestamo_existente_id,
                             "prestamo_objetivo_id": prestamo_objetivo_id,
@@ -1000,14 +1032,26 @@ async def escaner_lote_drive_digitalizar(
                         "prestamo_existente_id": prestamo_existente_id,
                         "prestamo_objetivo_id": prestamo_objetivo_id,
                         "borrador_id": borrador_id,
+                        "requiere_revision_manual": requiere_revision_manual,
                     }
                 )
 
-        try:
-            drive_svc.files().delete(fileId=fid).execute()
-            delete_ok += 1
-        except Exception:
-            logger.warning("[ESCANER_LOTE_DRIVE] No se pudo eliminar file_id=%s", fid)
+        # No borrar en Drive si el OCR falló/incompleto y no hay borrador: evita truncar el proceso.
+        ultimo = items[-1] if items else {}
+        tiene_borrador = bool((ultimo.get("borrador_id") or "").strip())
+        ocr_ok = bool(ultimo.get("ok"))
+        rev_manual = bool(ultimo.get("requiere_revision_manual"))
+        if (not ocr_ok or rev_manual) and not tiene_borrador:
+            logger.warning(
+                "[ESCANER_LOTE_DRIVE] se conserva archivo Drive file_id=%s (sin borrador; revisión manual)",
+                fid,
+            )
+        else:
+            try:
+                drive_svc.files().delete(fileId=fid).execute()
+                delete_ok += 1
+            except Exception:
+                logger.warning("[ESCANER_LOTE_DRIVE] No se pudo eliminar file_id=%s", fid)
 
     return {
         "ok": True,

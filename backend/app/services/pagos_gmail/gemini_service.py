@@ -2835,7 +2835,7 @@ REFERENCIA DE CALENDARIO (solo coherencia; **no** uses este valor como `fecha_pa
 
 TAREA: Lee la imagen o PDF adjunto y extrae SOLO lo que aparezca con claridad en el comprobante para rellenar un formulario de "Infopagos" con estos campos:
   - fecha_pago: fecha de la operación en el comprobante. Devuélvela como cadena en formato **YYYY-MM-DD** si puedes inferir año/mes/día; si solo hay día/mes sin año razonable, deja fecha_pago vacía "". **Mercantil** (tira 0105 / DEPÓSITO DIVISAS): la fecha está en el **recuadro superior** (1ª fila), en el **2º bloque YYYYMMDD** del código con **DCME** (ej. `9264-20260618-115409-DCME-5574-A` → **2026-06-18**). **No** infieras la fecha desde el Serial `740087…` (ese es solo `numero_operacion`).
-  - institucion_financiera: nombre corto del banco o entidad. **Obligatorio** si reconoces una plantilla conocida (ver bloque PLANTILLAS). Valores preferidos: **Mercantil**, **BNC**, **Banco de Venezuela**, **BINANCE**, **Recibo** (recibo manuscrito TORO MOTORCYCLES / ventanilla). Máximo 100 caracteres. No dejes vacío si el diseño del comprobante coincide con Mercantil (0105/RAPI), BNC (0191/cajero BNC), BDV (0102), Binance Pay, **Recibo** (título RECIBO + C.I./RIF + Por:), etc.
+  - institucion_financiera: nombre corto del **banco emisor** del comprobante (no el beneficiario). **Obligatorio** si reconoces una plantilla conocida (ver bloque PLANTILLAS). Valores preferidos: **Mercantil**, **BNC**, **Banco de Venezuela**, **BINANCE**, **Recibo** (recibo manuscrito TORO MOTORCYCLES / ventanilla). Máximo 100 caracteres. No dejes vacío si el diseño del comprobante coincide con Mercantil (0105), BNC (0191/cajero BNC), BDV (0102), Binance Pay, **Recibo** (título RECIBO + C.I./RIF + Por:), etc. **PROHIBIDO** poner **RAPI-CREDIT** / **RAPICREDIT** / **Rapicredit** / **RAPI CREDIT** (ni OCR BAPI-/RAPH-) como `institucion_financiera`: eso es el **beneficiario/titular destino**, no el banco.
   - numero_operacion: número o código que identifica la transacción (Serial, Ref, Nº operación, referencia, código, ID de orden en Binance, **número de recibo** en formato Recibo, etc.). Sin etiquetas largas: solo el valor. Máximo 100 caracteres. **Recibo manuscrito (TORO MOTORCYCLES)**: copie el **№ / Nº** junto a RECIBO (ej. 00972, conservando ceros). **Un solo valor**: no concatenes Ref y Serial (BNC). **BNC cajero** (papel, Depósito US$): copia **solo** el valor de **Serial:** (ej. 105137674); **nunca** Ref: (ej. 105137683) ni RIF. **App BNC** (Bs., sin línea Serial): usa Referencia/Ref. No repitas el mismo número dos veces (ej. 113907169113907169). Conserva ceros a la izquierda tal como en el papel. **Mercantil** (DEPÓSITO DIVISAS / tira 0105): copia **solo** el **Serial:** largo que empieza por **740087** (**exactamente 15 dígitos** contiguos, ej. 740087408543435). Si la foto muestra la tira en vertical, rote mentalmente y lea el Serial en línea; no devuelvas 13-14 dígitos. **Nunca** uses el código guionado DCME del validador (ej. 9276-20260424-140259-DCME-7819-A) como numero_operacion. **BINANCE Pay**: copia el **Id. de orden / Order ID completo** (típicamente **15-19 dígitos**, a menudo **18**); no trunques ni uses solo el inicio (prohibido devolver 436166756 si en pantalla es 436166756159873024).
   - monto: importe **exacto** del pago principal (Total, Monto Bs., Monto USD, Efectivo). En JSON usa **solo número decimal con punto** (sin separadores de miles): impreso `1.500,00` → `1500.00`; `150,50` → `150.50`; `US$ 20,00` → `20.00`; tira Mercantil `***********96,00 USD` → `96.00` (**nunca** `969`, `965`, `980`). **BINANCE Pay**: copia el monto grande tal cual (ej. `580 USDT` → `580`, no `58`). No redondees ni cambies cifras. Si no es legible, `null`.
   - moneda: exactamente **BS** o **USD** (USDT, $ en contexto divisa fuerte, "Dólares", Binance Pay en USDT → USD).
@@ -2879,6 +2879,7 @@ PLANTILLAS CONOCIDAS (misma lógica que clasificación Gmail A/B/C/D/G; **obliga
   - **Recibo** → formato **G**: recibo manuscrito **TORO MOTORCYCLES** / **INVERSIONES GUIGUE 2 RUEDAS**; título **RECIBO**; **№** en rojo (00972); fecha cajas Dia/Mes/Año; **C.I. / RIF**; monto caja **Por:** (200 $); concepto Cuota Rapi-Credit.
   - Otros bancos (Banesco, Bancamiga, Tesoro, Pago Móvil): nombre corto tal como aparece en el comprobante.
 REGLA: Si clasificas la imagen en A/B/C/D/G o reconoces Mercantil/BNC/BDV/Binance/**Recibo** por diseño, **`institucion_financiera` no puede quedar vacía**. En `notas` puedes indicar la plantilla (ej. "plantilla G Recibo") si ayuda.
+REGLA BENEFICIARIO: **RAPI-CREDIT / RAPICREDIT / Rapicredit** (y OCR BAPI-/RAPH-) es el **destinatario**, nunca el valor de `institucion_financiera`.
 """
 
 
@@ -2892,11 +2893,44 @@ _INSTITUCION_ESCANER_CANONICAL: List[Tuple[str, str]] = [
     ("recibos", "Recibo"),
 ]
 
+# Beneficiario/titular destino (RapiCredit), no banco emisor. OCR: BAPI-, RAPH-, RAPICREDI.
+_RE_BENEFICIARIO_RAPICREDIT_SOLO = re.compile(
+    r"^(?:bapi|raph|rapi)[\s\-_.]*credi(?:t)?(?:[\s\-_,.]*c\.?\s*a\.?)?$"
+    r"|^rapicredit(?:[\s\-_,.]*c\.?\s*a\.?)?$"
+    r"|^soft[\s\-_.]*credit(?:[\s\-_,.]*c\.?\s*a\.?)?$",
+    re.IGNORECASE,
+)
+
+
+def _es_beneficiario_rapicredit_como_banco(nombre: Optional[str]) -> bool:
+    """True si el texto es solo la razón social RapiCredit (no un banco)."""
+    t = (nombre or "").strip()
+    if not t:
+        return False
+    compact = re.sub(r"[\s\-_,.]+", "", t.lower())
+    if compact in {
+        "rapicredit",
+        "rapicreditca",
+        "rapcredit",
+        "rapicredi",
+        "bapicredit",
+        "raphcredit",
+        "softcredit",
+    }:
+        return True
+    if "mercantil" in compact or "binance" in compact or "bnc" in compact:
+        return False
+    if "banco" in compact or "recibo" in compact:
+        return False
+    return bool(_RE_BENEFICIARIO_RAPICREDIT_SOLO.match(t.strip()))
+
 
 def _canonical_institucion_escaner(nombre: Optional[str]) -> str:
     """Alinea texto Gemini/plantilla con valores del formulario Infopagos."""
     t = (nombre or "").strip()
     if not t:
+        return ""
+    if _es_beneficiario_rapicredit_como_banco(t):
         return ""
     low = t.lower()
     for needle, canon in _INSTITUCION_ESCANER_CANONICAL:
@@ -2927,17 +2961,17 @@ def _inferir_institucion_heuristica_escaner(texto: str) -> str:
         return "Banco de Venezuela"
     if "banco de venezuela" in low or re.search(r"\b0102\b", low) or re.search(r"\bbdv\b", low):
         return "Banco de Venezuela"
+    # No usar "rapi-credit" solo: es beneficiario en casi todos los comprobantes.
     if (
         "mercantil" in low
         or "0105" in low
-        or "rapi-credit" in low
         or "deposito divisas" in low
         or "depósito divisas" in low
         or "recaudaci" in low
     ):
         return "Mercantil"
     if re.search(r"\b0191\b", low) or (
-        ("bnc" in low or "bnv" in low) and "venezuela" not in low
+        "bnc" in low and "venezuela" not in low
     ):
         return "BNC"
     if "plantilla g" in low or "formato g" in low or "toro motorcycles" in low:
@@ -2945,6 +2979,32 @@ def _inferir_institucion_heuristica_escaner(texto: str) -> str:
     if "binance" in low or "usdt" in low:
         return "BINANCE"
     if "recibo" in low or "ventanilla" in low or "guigue 2 ruedas" in low:
+        return "Recibo"
+    from_num = _inferir_institucion_desde_numero_operacion(raw)
+    if from_num:
+        return from_num
+    return ""
+
+
+def _inferir_institucion_desde_numero_operacion(numero_operacion: Optional[str]) -> str:
+    """
+    Infere banco emisor solo desde el número/serial del comprobante.
+    Usado cuando OCR/Gemini devolvió RAPICREDIT (beneficiario) u otro vacío.
+    """
+    raw = (numero_operacion or "").strip()
+    if not raw:
+        return ""
+    if extraer_serial_mercantil_7400(raw):
+        return "Mercantil"
+    digits = re.sub(r"\D", "", raw)
+    # Serial Mercantil típico 7400… (15 dígitos), incl. variantes 740067…
+    if re.fullmatch(r"7400\d{11}", digits):
+        return "Mercantil"
+    # Binance Pay: Id. de orden 17–19 dígitos (a menudo 18).
+    if 17 <= len(digits) <= 19 and not digits.startswith("7400"):
+        return "BINANCE"
+    # Recibo manuscrito TORO: Nº corto con ceros (00972, 00939…).
+    if re.fullmatch(r"0\d{3,5}", digits):
         return "Recibo"
     return ""
 
@@ -2956,20 +3016,38 @@ def _resolver_institucion_escaner(
     numero_operacion: Optional[str] = None,
 ) -> str:
     """
-    1) Texto explícito de Gemini (normalizado).
+    1) Texto explícito de Gemini (normalizado; rechaza RAPICREDIT beneficiario).
     2) Heurística sobre notas / número (plantilla A/B, 0105, 0191, etc.).
-    3) Solo si el operador envió institucion_plantilla (re-escaneo manual opcional).
+    3) Inferencia solo por número de operación (Mercantil/Binance/Recibo).
+    4) institucion_plantilla del operador (re-escaneo manual).
+    Nunca deja RAPICREDIT como valor; recupera banco real cuando hay anclas.
     """
+    raw_gem = (institucion_gemini or "").strip()
+    if raw_gem and _es_beneficiario_rapicredit_como_banco(raw_gem):
+        logger.info(
+            "[ESCANER] institucion_financiera rechazada (beneficiario RapiCredit, no banco): %s",
+            raw_gem[:80],
+        )
     inst = _canonical_institucion_escaner(institucion_gemini)
     if inst:
         return inst
     ctx_heur = f"{notas or ''} {numero_operacion or ''}"
     inst = _inferir_institucion_heuristica_escaner(ctx_heur)
     if inst:
-        if not (institucion_gemini or "").strip():
-            logger.info("[ESCANER] institucion_financiera inferida por plantilla/heuristica: %s", inst)
+        logger.info("[ESCANER] institucion_financiera inferida por plantilla/heuristica: %s", inst)
         return inst
-    return _canonical_institucion_escaner(institucion_plantilla)
+    inst = _inferir_institucion_desde_numero_operacion(numero_operacion)
+    if inst:
+        logger.info(
+            "[ESCANER] institucion_financiera inferida por numero_operacion: %s (op=%s)",
+            inst,
+            (numero_operacion or "")[:40],
+        )
+        return inst
+    plant = _canonical_institucion_escaner(institucion_plantilla)
+    if plant:
+        return plant
+    return ""
 
 
 def _extra_prompt_plantilla_escaner(institucion_plantilla: str) -> str:

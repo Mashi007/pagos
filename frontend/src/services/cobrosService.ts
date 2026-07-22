@@ -695,6 +695,9 @@ export interface EscanerInfopagosExtraerResponse {
 
   /** ID de borrador en BD (tabla temporal); enviar en `borrador_id` al guardar el reporte. */
   borrador_id?: string | null
+
+  /** OCR incompleto / imagen compleja: continuar en revisión manual (no truncar). */
+  requiere_revision_manual?: boolean
 }
 
 /** Gemini + visión en escáner Infopagos (alinear con api.ts / server.js). */

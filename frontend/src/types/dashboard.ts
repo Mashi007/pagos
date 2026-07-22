@@ -354,4 +354,10 @@ export interface PagosIngresadosPorDiaResponse {
   categorias: string[]
 
   serie: PagosIngresadosPorDiaItem[]
+
+  /** True si la serie filtra solo moneda_registro=BS (equiv. USD). */
+  solo_moneda_bs?: boolean
 }
+
+/** GET /api/v1/dashboard/pagos-bs-ingresados-por-dia — misma forma que PagosIngresadosPorDiaResponse. */
+export type PagosBsIngresadosPorDiaResponse = PagosIngresadosPorDiaResponse

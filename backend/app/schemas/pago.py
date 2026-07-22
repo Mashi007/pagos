@@ -7,6 +7,11 @@ from typing import Any, Optional
 from pydantic import BaseModel, ConfigDict, field_validator
 
 from app.core.documento import normalize_codigo_documento
+from app.services.institucion_bancaria_requerida import (
+    MSG_INSTITUCION_REQUERIDA,
+    error_si_falta_institucion,
+    normalizar_institucion_bancaria_requerida,
+)
 
 # Misma zona que `TZ_NEGOCIO` en endpoints de pagos (fecha calendario del negocio).
 TZ_PAGO_CARACAS = "America/Caracas"
@@ -34,7 +39,7 @@ class PagoCreate(BaseModel):
     monto_pagado: Decimal
     numero_documento: str  # Comprobante visible; con codigo_documento compone clave única en BD.
     codigo_documento: Optional[str] = None  # Opcional: desambigua mismo comprobante (p. ej. cuota/lote).
-    institucion_bancaria: Optional[str] = None
+    institucion_bancaria: str
     notas: Optional[str] = None
     conciliado: Optional[bool] = None  # Sí/No en carga masiva
     # USD (defecto): monto_pagado en dolares. BS: monto_pagado en bolivares; requiere autorizacion lista Bs + tasa (BD o manual).
@@ -46,6 +51,17 @@ class PagoCreate(BaseModel):
     @classmethod
     def link_comprobante_normalizado(cls, v: object) -> Optional[str]:
         return normalizar_link_comprobante(v)
+
+    @field_validator("institucion_bancaria", mode="before")
+    @classmethod
+    def institucion_bancaria_obligatoria(cls, v: object) -> str:
+        try:
+            return normalizar_institucion_bancaria_requerida(
+                None if v is None else str(v),
+                max_len=255,
+            )
+        except ValueError as e:
+            raise ValueError(str(e) or MSG_INSTITUCION_REQUERIDA) from e
 
     @field_validator("numero_documento", mode="before")
     @classmethod
@@ -110,6 +126,20 @@ class PagoUpdate(BaseModel):
     limpiar_numero_documento_ocr: Optional[bool] = False
     limpiar_fecha_pago_ocr: Optional[bool] = False
     limpiar_monto_pago_ocr: Optional[bool] = False
+
+    @field_validator("institucion_bancaria", mode="before")
+    @classmethod
+    def institucion_bancaria_si_presente(cls, v: object) -> Optional[str]:
+        # Omite si no viene en el payload; si viene, no puede quedar vacía/placeholder.
+        if v is None:
+            return None
+        s = str(v).strip()
+        if not s:
+            raise ValueError(MSG_INSTITUCION_REQUERIDA)
+        err = error_si_falta_institucion(s)
+        if err:
+            raise ValueError(err)
+        return s[:255]
 
     @field_validator("link_comprobante", mode="before")
     @classmethod

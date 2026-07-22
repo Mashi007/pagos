@@ -69,6 +69,7 @@ import {
 } from '../utils/cedulaConsultaPublica'
 
 import { hoyYmdCaracas } from '../utils/fechaZona'
+import { mensajeSiFaltaInstitucion } from '../constants/institucionesBancariasPagos'
 
 // Límites iguales al backend (cobros_publico)
 
@@ -993,15 +994,16 @@ export default function ReportePagoPage({
       return
     }
 
-    if (!institucionFinal.trim()) {
-      showNotification(
-        'error',
-        isInfopagos
-          ? 'Seleccione la institución financiera.'
-          : MENSAJE_DATO_FALTANTE_COBROS[3]
-      )
-      if (!isInfopagos) setStep(3)
-      return
+    {
+      const errInst = mensajeSiFaltaInstitucion(institucionFinal)
+      if (errInst) {
+        showNotification(
+          'error',
+          isInfopagos ? errInst : MENSAJE_DATO_FALTANTE_COBROS[3] || errInst
+        )
+        if (!isInfopagos) setStep(3)
+        return
+      }
     }
 
     if (institucionFinal.length > MAX_LENGTH_INSTITUCION) {
@@ -1961,12 +1963,12 @@ export default function ReportePagoPage({
                 <Button
                   className="min-h-[48px] min-w-0 flex-1 touch-manipulation bg-slate-900 font-semibold text-white hover:bg-slate-800"
                   onClick={() => {
-                    if (!institucionFinal.trim()) {
-                      showNotification(
-                        'error',
-                        'Selecciona la institución financiera.'
-                      )
-                      return
+                    {
+                      const errInst = mensajeSiFaltaInstitucion(institucionFinal)
+                      if (errInst) {
+                        showNotification('error', errInst)
+                        return
+                      }
                     }
 
                     if (institucionFinal.length > MAX_LENGTH_INSTITUCION) {

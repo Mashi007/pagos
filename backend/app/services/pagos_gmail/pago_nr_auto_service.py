@@ -220,7 +220,11 @@ def crear_pago_conciliado_y_aplicar_cuotas_gmail_plantilla_nr(
         registrar_rechazo_huella_funcional()
         return _fail("huella_funcional", msg_h[:500])
 
-    ib = (institucion_bancaria or "").strip()[:255] or None
+    from app.services.institucion_bancaria_requerida import error_si_falta_institucion
+    err_ib = error_si_falta_institucion(institucion_bancaria)
+    if err_ib:
+        return _fail("institucion_bancaria", err_ib[:500])
+    ib = (institucion_bancaria or "").strip()[:255]
     link_c = (link_comprobante or "").strip() or None
     if link_c and len(link_c) > 4000:
         link_c = link_c[:4000]

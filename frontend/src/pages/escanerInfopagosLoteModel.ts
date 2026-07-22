@@ -232,12 +232,28 @@ export function filaTrasExtraccion(
   base: FilaLote,
   res: EscanerInfopagosExtraerResponse
 ): FilaLote {
+  const borradorId =
+    typeof res.borrador_id === 'string' && res.borrador_id.trim()
+      ? res.borrador_id.trim()
+      : null
+
+  // Imagen compleja / OCR fallido: no truncar — conservar borrador y permitir edición manual.
   if (!res.ok || !res.sugerencia) {
+    const msg =
+      res.validacion_reglas ||
+      res.error ||
+      'No se pudo digitalizar el comprobante. Pase a revisión manual.'
     return {
       ...base,
-      extract: 'error',
-      errorExtraccion: res.error || 'No se pudo leer el comprobante.',
-      borradorId: null,
+      extract: borradorId ? 'listo' : 'error',
+      errorExtraccion: msg,
+      validacionCampos: res.validacion_campos ?? null,
+      validacionReglas: msg,
+      institucion: base.institucion,
+      otroInstitucion: base.otroInstitucion,
+      numeroOperacion: base.numeroOperacion,
+      montoStr: base.montoStr,
+      borradorId,
     }
   }
   const s = res.sugerencia
@@ -253,10 +269,12 @@ export function filaTrasExtraccion(
   if (s.monto != null && Number.isFinite(s.monto)) {
     montoStr = formatoMontoParaMostrar(s.monto, mon)
   }
-  const borradorId =
-    typeof res.borrador_id === 'string' && res.borrador_id.trim()
-      ? res.borrador_id.trim()
-      : null
+  const revManual = Boolean(res.requiere_revision_manual)
+  const reglas =
+    res.validacion_reglas ||
+    (revManual
+      ? 'Comprobante incompleto: pase a revisión manual y complete los campos.'
+      : null)
   return {
     ...base,
     extract: 'listo',
@@ -272,7 +290,7 @@ export function filaTrasExtraccion(
     moneda: mon,
     cedulaPagadorImg: s.cedula_pagador_en_comprobante || '',
     validacionCampos: res.validacion_campos ?? null,
-    validacionReglas: res.validacion_reglas ?? null,
+    validacionReglas: reglas,
     escanerColision: mapColision(res),
     borradorId,
   }

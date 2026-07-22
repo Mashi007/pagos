@@ -449,6 +449,35 @@ export function DashboardMenu() {
   })
 
   const {
+    data: datosPagosBsIngresadosPorDia,
+    isLoading: loadingPagosBsIngresadosPorDia,
+    isError: errorPagosBsIngresadosPorDia,
+  } = useQuery({
+    queryKey: ['pagos-bs-ingresados-por-dia', PAGOS_INGRESADOS_POR_DIA_DIAS],
+
+    queryFn: async (): Promise<PagosIngresadosPorDiaResponse> => {
+      const params = new URLSearchParams({
+        dias: String(PAGOS_INGRESADOS_POR_DIA_DIAS),
+      })
+
+      const response = await apiClient.get(
+        `/api/v1/dashboard/pagos-bs-ingresados-por-dia?${params.toString()}`,
+        { timeout: 60000 }
+      )
+
+      return response as PagosIngresadosPorDiaResponse
+    },
+
+    staleTime: 5 * 60 * 1000,
+
+    refetchOnWindowFocus: false,
+
+    retry: 1,
+
+    enabled: enableSecondaryCharts,
+  })
+
+  const {
     data: datosNotificacionesPorDia,
     isLoading: loadingNotificacionesPorDia,
     isError: errorNotificacionesPorDia,
@@ -575,6 +604,30 @@ export function DashboardMenu() {
     return `Últimos ${PAGOS_INGRESADOS_POR_DIA_DIAS} d`
   }, [seriePagosIngresadosPorDia])
 
+  const seriePagosBsIngresadosPorDia = useMemo(
+    () => datosPagosBsIngresadosPorDia?.serie ?? [],
+    [datosPagosBsIngresadosPorDia?.serie]
+  )
+
+  const categoriasPagosBsIngresados = useMemo(
+    () =>
+      datosPagosBsIngresadosPorDia?.categorias?.length
+        ? datosPagosBsIngresadosPorDia.categorias
+        : ['Mercantil', 'BNC', 'Binance', 'BNV', 'Recibos', 'Otros'],
+    [datosPagosBsIngresadosPorDia?.categorias]
+  )
+
+  const etiquetaRangoPagosBsIngresados = useMemo(() => {
+    const s = seriePagosBsIngresadosPorDia
+    if (!s.length) return '—'
+    const a = s[0]?.fecha
+    const b = s[s.length - 1]?.fecha
+    if (!a || !b) return '—'
+    return `${a} – ${b}`
+  }, [seriePagosBsIngresadosPorDia])
+
+
+
   const etiquetaRangoNotificacionesEjeX = useMemo(() => {
     const s = serieNotificacionesGrafico
 
@@ -647,6 +700,11 @@ export function DashboardMenu() {
         exact: false,
       })
 
+      await queryClient.invalidateQueries({
+        queryKey: ['pagos-bs-ingresados-por-dia'],
+        exact: false,
+      })
+
       // Refrescar todas las queries activas del dashboard
 
       await queryClient.refetchQueries({
@@ -666,6 +724,11 @@ export function DashboardMenu() {
 
       await queryClient.refetchQueries({
         queryKey: ['pagos-ingresados-por-dia'],
+        exact: false,
+      })
+
+      await queryClient.refetchQueries({
+        queryKey: ['pagos-bs-ingresados-por-dia'],
         exact: false,
       })
 
@@ -1503,6 +1566,147 @@ export function DashboardMenu() {
                   ) : (
                     <div className="flex items-center justify-center py-16 text-gray-500">
                       No hay datos para los últimos 60 días
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </motion.div>
+
+            {/* Pagos BS admitidos por día (equiv. USD, últimos 60 días) */}
+
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.3 }}
+            >
+              <Card className="overflow-hidden rounded-xl border border-gray-200/90 bg-white shadow-lg">
+                <CardHeader className="border-b border-gray-200/80 bg-gradient-to-r from-emerald-50/90 to-teal-50/90 pb-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <CardTitle className="flex items-center gap-2 text-lg font-bold text-gray-800">
+                      <BarChart3 className="h-5 w-5 text-emerald-600" />
+
+                      <span>Pagos en BS por día (equiv. USD)</span>
+                    </CardTitle>
+
+                    <Badge
+                      variant="secondary"
+                      className="border border-gray-200 bg-white/80 text-xs font-medium text-gray-600"
+                    >
+                      {etiquetaRangoPagosBsIngresados}
+                    </Badge>
+                  </div>
+
+                  <CardDescription className="mt-2 text-xs text-gray-600">
+                    Solo pagos admitidos en bolívares (moneda_registro = BS).
+                    Monto expresado en USD (suma de monto_pagado ya convertido
+                    al registrar). Apilado por institución: Mercantil, BNC,
+                    Binance, BNV, Recibos; resto → Otros. Hoy y 60 días atrás.
+                  </CardDescription>
+                </CardHeader>
+
+                <CardContent className="p-6 pt-4">
+                  {loadingPagosBsIngresadosPorDia ? (
+                    <div className="flex items-center justify-center py-16 text-gray-500">
+                      Cargando…
+                    </div>
+                  ) : errorPagosBsIngresadosPorDia ? (
+                    <div className="flex items-center justify-center py-16 text-red-600">
+                      No se pudo cargar la serie diaria de pagos en BS
+                    </div>
+                  ) : seriePagosBsIngresadosPorDia.length > 0 ? (
+                    <ChartWithDateRangeSlider
+                      data={seriePagosBsIngresadosPorDia}
+                      dataKey="dia"
+                      chartHeight={360}
+                    >
+                      {filteredData => (
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart
+                            data={filteredData}
+                            margin={{
+                              top: 8,
+                              right: 16,
+                              left: 8,
+                              bottom: 12,
+                            }}
+                          >
+                            <CartesianGrid {...chartCartesianGrid} />
+
+                            <XAxis
+                              dataKey="dia"
+                              tick={chartAxisTick}
+                              interval="preserveStartEnd"
+                              minTickGap={16}
+                            />
+
+                            <YAxis
+                              tick={chartAxisTick}
+                              width={52}
+                              tickFormatter={value => {
+                                if (value >= 1000) {
+                                  return `$${(value / 1000).toFixed(0)}K`
+                                }
+
+                                return `$${value}`
+                              }}
+                              label={{
+                                value: 'Monto (USD)',
+                                angle: -90,
+                                position: 'insideLeft',
+                                style: { fill: '#374151', fontSize: 13 },
+                              }}
+                            />
+
+                            <Tooltip
+                              contentStyle={chartTooltipStyle.contentStyle}
+                              labelStyle={chartTooltipStyle.labelStyle}
+                              formatter={(value: number, name: string) => [
+                                formatCurrency(
+                                  typeof value === 'number'
+                                    ? value
+                                    : Number(value) || 0
+                                ),
+                                name,
+                              ]}
+                              labelFormatter={(_, payload) => {
+                                const row = payload?.[0]?.payload as
+                                  | { fecha?: string; monto?: number }
+                                  | undefined
+                                if (!row?.fecha) return ''
+                                const total =
+                                  typeof row.monto === 'number'
+                                    ? ` · Total ${formatCurrency(row.monto)}`
+                                    : ''
+                                return `${row.fecha}${total}`
+                              }}
+                            />
+
+                            <Legend {...chartLegendStyle} />
+
+                            {categoriasPagosBsIngresados.map((cat, idx) => (
+                              <Bar
+                                key={cat}
+                                dataKey={cat}
+                                name={cat}
+                                stackId="institucion_bs"
+                                fill={
+                                  coloresInstitucionPago[cat] || '#94a3b8'
+                                }
+                                radius={
+                                  idx ===
+                                  categoriasPagosBsIngresados.length - 1
+                                    ? [4, 4, 0, 0]
+                                    : [0, 0, 0, 0]
+                                }
+                              />
+                            ))}
+                          </BarChart>
+                        </ResponsiveContainer>
+                      )}
+                    </ChartWithDateRangeSlider>
+                  ) : (
+                    <div className="flex items-center justify-center py-16 text-gray-500">
+                      No hay pagos en BS en los últimos 60 días
                     </div>
                   )}
                 </CardContent>

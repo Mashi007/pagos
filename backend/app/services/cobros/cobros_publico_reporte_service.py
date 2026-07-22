@@ -666,6 +666,10 @@ def normalizar_y_validar_campos_formulario(
     """
     if len(tipo_cedula.strip()) > 2 or len(numero_cedula.strip()) > 13:
         return "Datos inválidos.", MonedaObservacionNormalizados("BS", "BS", None)
+    from app.services.institucion_bancaria_requerida import error_si_falta_institucion
+    err_inst = error_si_falta_institucion(institucion_financiera)
+    if err_inst:
+        return err_inst, MonedaObservacionNormalizados("BS", "BS", None)
     if len(institucion_financiera.strip()) > 100 or len(numero_operacion.strip()) > 100:
         return "Datos inválidos.", MonedaObservacionNormalizados("BS", "BS", None)
     obs = observacion
@@ -935,6 +939,38 @@ def crear_pago_reportado_con_referencia_o_retry(
                     )
             else:
                 fuente_guardar = normalizar_fuente_tasa(fuente_tasa_cambio)
+            # RapiCredit es beneficiario, no banco: rechazar y recuperar por serial/notas.
+            from app.services.pagos_gmail.gemini_service import (
+                _es_beneficiario_rapicredit_como_banco,
+                _resolver_institucion_escaner,
+            )
+            inst_guardar = (institucion_financiera or "").strip()
+            if _es_beneficiario_rapicredit_como_banco(inst_guardar):
+                recovered = _resolver_institucion_escaner(
+                    inst_guardar,
+                    notas=observacion or "",
+                    numero_operacion=numero_operacion_limpio or numero_operacion,
+                )
+                logger.info(
+                    "[%s] institucion RAPICREDIT rechazada; recuperada=%r op=%s",
+                    log_tag_duplicate,
+                    recovered,
+                    (numero_operacion_limpio or "")[:40],
+                )
+                if not (recovered or "").strip():
+                    return (
+                        None,
+                        None,
+                        "OCR detectó RapiCredit (beneficiario, no banco). "
+                        "Indique la institución emisora (Mercantil, BNC, Binance, Recibo, etc.).",
+                    )
+                inst_guardar = recovered
+            if not (inst_guardar or "").strip():
+                return (
+                    None,
+                    None,
+                    "Institución financiera vacía. Indique el banco emisor del comprobante.",
+                )
             pr = PagoReportado(
                 referencia_interna=referencia,
                 nombres=nombres,
@@ -942,7 +978,7 @@ def crear_pago_reportado_con_referencia_o_retry(
                 tipo_cedula=tipo_cedula.strip().upper(),
                 numero_cedula=numero_cedula.strip(),
                 fecha_pago=fecha_pago,
-                institucion_financiera=institucion_financiera.strip()[:100],
+                institucion_financiera=inst_guardar[:100],
                 numero_operacion=numero_operacion_limpio[:100],
                 monto=monto,
                 moneda=moneda_guardar[:10],
