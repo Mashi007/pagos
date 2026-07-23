@@ -315,6 +315,9 @@ export default function EscanerInfopagosPage() {
   const [escaneando, setEscaneando] = useState(false)
   const [validacionCampos, setValidacionCampos] = useState<string | null>(null)
   const [validacionReglas, setValidacionReglas] = useState<string | null>(null)
+  /** OCR incompleto/calidad: solo entonces enviar confirmacion_humana (cola manual). */
+  const [requiereRevisionManualOcr, setRequiereRevisionManualOcr] =
+    useState(false)
   const [cedulaPagadorImg, setCedulaPagadorImg] = useState('')
   const [cedulaPagador, setCedulaPagador] = useState('')
 
@@ -511,6 +514,7 @@ export default function EscanerInfopagosPage() {
       setCedulaPagador(s.cedula_pagador_en_comprobante || '')
       setValidacionCampos(res.validacion_campos ?? null)
       setValidacionReglas(res.validacion_reglas ?? null)
+      setRequiereRevisionManualOcr(Boolean(res.requiere_revision_manual))
       setEscanerColision({
         duplicado_en_pagos: Boolean(res.duplicado_en_pagos),
         pago_existente_id:
@@ -649,6 +653,7 @@ export default function EscanerInfopagosPage() {
     fd.append('comprobante', archivoEnvio)
     setValidacionCampos(null)
     setValidacionReglas(null)
+    setRequiereRevisionManualOcr(false)
     setEscanerColision(null)
     try {
       const res = await escanerInfopagosExtraerComprobante(fd)
@@ -664,6 +669,7 @@ export default function EscanerInfopagosPage() {
             res.error ??
             'No se pudo digitalizar con Gemini. Pase a revisión manual.'
         )
+        setRequiereRevisionManualOcr(true)
         // Mantener al usuario en la misma pestaña y llevarlo al formulario manual.
         setFase('formulario')
         toast(
@@ -751,6 +757,7 @@ export default function EscanerInfopagosPage() {
           fuenteTasa: normalizarFuenteTasaCambio(b.fuente_tasa_cambio),
           validada: true,
         })
+        setRequiereRevisionManualOcr(true)
         toast.success(
           'Borrador cargado. El comprobante está en el servidor; corrija y guarde para pasar al flujo normal.'
         )
@@ -844,7 +851,10 @@ export default function EscanerInfopagosPage() {
     form.append('monto', montoParaApi(vM.valor))
     form.append('moneda', moneda)
     form.append('fuente_tasa_cambio', fuenteTasa)
-    form.append('confirmacion_humana', 'true')
+    // Igual que ReportePago: solo calidad/OCR incompleto fuerza cola; el resto autoconcilia.
+    if (requiereRevisionManualOcr) {
+      form.append('confirmacion_humana', 'true')
+    }
     if (borradorId) {
       form.append('borrador_id', borradorId)
     }
@@ -930,6 +940,7 @@ export default function EscanerInfopagosPage() {
   }, [
     archivo,
     borradorId,
+    requiereRevisionManualOcr,
     cedulaNormalizada,
     fechaDetectada,
     fechaPago,
@@ -978,6 +989,7 @@ export default function EscanerInfopagosPage() {
     setMoneda('USD')
     setValidacionCampos(null)
     setValidacionReglas(null)
+    setRequiereRevisionManualOcr(false)
     setCedulaPagadorImg('')
     setCedulaPagador('')
     setReferencia('')
@@ -1007,6 +1019,7 @@ export default function EscanerInfopagosPage() {
     setMoneda('USD')
     setValidacionCampos(null)
     setValidacionReglas(null)
+    setRequiereRevisionManualOcr(false)
     setCedulaPagadorImg('')
     setCedulaPagador('')
     setReferencia('')

@@ -64,6 +64,11 @@ export type FilaLote = {
   descargandoRecibo: boolean
   /** Borrador en BD (escáner); enviar al guardar el reporte si existe. */
   borradorId?: string | null
+  /**
+   * Si el OCR/extracción pidió revisión manual (calidad o campos incompletos).
+   * Solo entonces se envía confirmacion_humana al guardar; si no, puede autoconciliar.
+   */
+  requiereRevisionManual?: boolean
   /** Origen revisión /pagos (re-escaneo masivo). */
   pagoRevisionId?: number | null
   /** Cédula del deudor de esta fila (revisión con varias cédulas). Si vacío, usa la del encabezado. */
@@ -132,6 +137,7 @@ export function filaVaciaDesdeArchivo(archivo: File): FilaLote {
     editando: false,
     descargandoRecibo: false,
     borradorId: null,
+    requiereRevisionManual: false,
     pagoRevisionId: null,
   }
 }
@@ -254,6 +260,7 @@ export function filaTrasExtraccion(
       numeroOperacion: base.numeroOperacion,
       montoStr: base.montoStr,
       borradorId,
+      requiereRevisionManual: true,
     }
   }
   const s = res.sugerencia
@@ -293,6 +300,7 @@ export function filaTrasExtraccion(
     validacionReglas: reglas,
     escanerColision: mapColision(res),
     borradorId,
+    requiereRevisionManual: revManual,
   }
 }
 

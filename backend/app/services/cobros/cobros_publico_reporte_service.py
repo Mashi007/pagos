@@ -269,6 +269,31 @@ def intentar_importar_reportado_automatico(
         )
         importar_pago_ms = _elapsed_ms(importar_started)
         if not res.get("ok"):
+            # No dejar el reporte en "aprobado" a medias: vuelve a cola manual para gestión.
+            err_msg = (res.get("error") or "Auto-import omitido").strip()
+            try:
+                if (getattr(pr, "estado", None) or "").strip() == "aprobado":
+                    pr.estado = "en_revision"
+                    pr.falla_validadores_manual = True
+                    prev = (getattr(pr, "gemini_comentario", None) or "").strip()
+                    nota = f"[AUTOIMPORT] {err_msg}"[:220]
+                    if nota not in prev:
+                        pr.gemini_comentario = (
+                            f"{prev} {nota}".strip() if prev else nota
+                        )[:500]
+                    db.add(pr)
+                    db.commit()
+            except Exception as demote_err:
+                logger.warning(
+                    "[%s] No se pudo devolver a en_revision tras auto-import omitido ref=%s: %s",
+                    log_tag,
+                    referencia,
+                    demote_err,
+                )
+                try:
+                    db.rollback()
+                except Exception:
+                    pass
             result = AutoImportResultado(
                 error=res.get("error"),
                 lookup_ms=lookup_ms,
@@ -328,6 +353,32 @@ def intentar_importar_reportado_automatico(
             db.rollback()
         except Exception:
             pass
+        # Tras rollback, si quedó aprobado sin importar, devolver a cola manual.
+        try:
+            if pr is not None and (getattr(pr, "estado", None) or "").strip() == "aprobado":
+                db.refresh(pr)
+                if (getattr(pr, "estado", None) or "").strip() == "aprobado":
+                    pr.estado = "en_revision"
+                    pr.falla_validadores_manual = True
+                    prev = (getattr(pr, "gemini_comentario", None) or "").strip()
+                    nota = f"[AUTOIMPORT] {str(e)[:180]}"
+                    if nota not in prev:
+                        pr.gemini_comentario = (
+                            f"{prev} {nota}".strip() if prev else nota
+                        )[:500]
+                    db.add(pr)
+                    db.commit()
+        except Exception as demote_err:
+            logger.warning(
+                "[%s] No se pudo devolver a en_revision tras auto-import fallo ref=%s: %s",
+                log_tag,
+                referencia,
+                demote_err,
+            )
+            try:
+                db.rollback()
+            except Exception:
+                pass
         return AutoImportResultado(
             error=str(e),
             lookup_ms=lookup_ms,

@@ -971,7 +971,10 @@ export default function EscanerInfopagosLotePage() {
       form.append('monto', montoParaApi(vM.valor))
       form.append('moneda', fila.moneda)
       form.append('fuente_tasa_cambio', fuenteTasa)
-      form.append('confirmacion_humana', 'true')
+      // Solo si OCR pidió revisión: fuerza cola manual. Si no, el backend puede autoconciliar.
+      if (fila.requiereRevisionManual) {
+        form.append('confirmacion_humana', 'true')
+      }
       if (borradorIdFila) {
         form.append('borrador_id', borradorIdFila)
       }
