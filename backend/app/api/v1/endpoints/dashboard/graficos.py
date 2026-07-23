@@ -13,7 +13,7 @@ from typing import Optional
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import Date, Float, and_, case, cast, distinct, exists, extract, func, literal, literal_column, not_, or_, select
+from sqlalchemy import Date, Float, Integer, and_, case, cast, distinct, exists, extract, func, literal, literal_column, not_, or_, select
 from sqlalchemy.orm import Session, aliased
 
 from app.core.database import get_db, SessionLocal
@@ -1698,6 +1698,142 @@ def get_notificaciones_envios_por_dia(
             detail=f"tipo_tab debe ser uno de: {', '.join(sorted(TIPOS_NOTIFICACIONES_ENVIOS_TENDENCIA))}",
         )
     return _compute_notificaciones_envios_por_dia(db, tipo_tab, dias)
+
+
+def _compute_notificaciones_envios_por_intervalo(
+    db: Session, tipo_tab: str, dias: int, horas: int = 3
+) -> dict:
+    """
+    Cuenta envíos en envios_notificacion por ventanas de `horas` (p. ej. 3) en America/Caracas.
+    Útil para ver el desempeño intradía (picos SMTP) junto a la serie diaria.
+    """
+    try:
+        horas_ef = min(12, max(1, int(horas)))
+        if 24 % horas_ef != 0:
+            horas_ef = 3
+        dias_ef = min(366, max(7, int(dias)))
+        hoy_c = hoy_negocio()
+        inicio = hoy_c - timedelta(days=dias_ef - 1)
+        nombres_mes = ("Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic")
+        z = ZoneInfo(TZ_NEGOCIO)
+        start_local = datetime.combine(inicio, datetime.min.time(), tzinfo=z)
+        start_utc_naive = start_local.astimezone(timezone.utc).replace(tzinfo=None)
+
+        bind = db.get_bind()
+        dialect = bind.dialect.name if bind is not None else "postgresql"
+        fe = EnvioNotificacion.fecha_envio
+        if dialect == "postgresql":
+            local_ts = func.timezone("America/Caracas", func.timezone("UTC", fe))
+        else:
+            local_ts = fe
+        dia_expr = cast(local_ts, Date)
+        hora_bucket_expr = cast(
+            func.floor(extract("hour", local_ts) / float(horas_ef)) * horas_ef,
+            Integer,
+        )
+
+        enviados_sum = func.coalesce(
+            func.sum(case((EnvioNotificacion.exito.is_(True), 1), else_=0)),
+            0,
+        )
+        fallidos_sum = func.coalesce(
+            func.sum(case((EnvioNotificacion.exito.is_(False), 1), else_=0)),
+            0,
+        )
+        stmt = (
+            select(
+                dia_expr.label("dia"),
+                hora_bucket_expr.label("hora"),
+                enviados_sum.label("enviados"),
+                fallidos_sum.label("fallidos"),
+            )
+            .where(
+                EnvioNotificacion.tipo_tab == tipo_tab,
+                EnvioNotificacion.fecha_envio >= start_utc_naive,
+            )
+            .group_by(dia_expr, hora_bucket_expr)
+            .order_by(dia_expr, hora_bucket_expr)
+        )
+        rows = db.execute(stmt).all()
+        counts = {}
+        for row in rows:
+            d = row.dia
+            if isinstance(d, datetime):
+                d = d.date()
+            if not isinstance(d, date):
+                continue
+            try:
+                h = int(row.hora if row.hora is not None else 0)
+            except (TypeError, ValueError):
+                h = 0
+            h = max(0, min(23, (h // horas_ef) * horas_ef))
+            counts[(d, h)] = (int(row.enviados or 0), int(row.fallidos or 0))
+
+        serie = []
+        d = inicio
+        while d <= hoy_c:
+            for h in range(0, 24, horas_ef):
+                if d == hoy_c:
+                    ahora_c = datetime.now(z)
+                    if h > ahora_c.hour:
+                        break
+                ev, fa = counts.get((d, h), (0, 0))
+                h12 = 12 if (h % 12) == 0 else (h % 12)
+                ampm = "am" if h < 12 else "pm"
+                etiqueta_hora = f"{h12} {ampm}"
+                # A medianoche se antepone el día para orientar el eje multi-día.
+                etiqueta_eje = (
+                    f"{d.day} {nombres_mes[d.month - 1]} {etiqueta_hora}"
+                    if h == 0
+                    else etiqueta_hora
+                )
+                serie.append(
+                    {
+                        "fecha": f"{d.isoformat()}T{h:02d}:00:00",
+                        "fecha_dia": d.isoformat(),
+                        "dia": etiqueta_eje,
+                        "hora": h,
+                        "enviados": ev,
+                        "fallidos": fa,
+                    }
+                )
+            d += timedelta(days=1)
+        return {"tipo_tab": tipo_tab, "horas": horas_ef, "serie": serie}
+    except Exception as e:
+        logger.exception("Error en notificaciones-envios-por-intervalo: %s", e)
+        return {"tipo_tab": tipo_tab, "horas": horas, "serie": []}
+
+
+@router.get("/notificaciones-envios-por-intervalo")
+def get_notificaciones_envios_por_intervalo(
+    tipo_tab: str = Query(
+        "dias_10_retraso",
+        description=(
+            "tipo_tab en envíos: dias_1_retraso (día siguiente al vencimiento) "
+            "o dias_10_retraso (menor a 60 días)."
+        ),
+    ),
+    dias: int = Query(90, ge=7, le=366),
+    horas: int = Query(
+        3,
+        ge=1,
+        le=12,
+        description="Tamaño del bucket intradía en horas (debe dividir 24).",
+    ),
+    db: Session = Depends(get_db),
+):
+    """Desempeño de envíos por intervalos intradía (p. ej. cada 3 h) desde envios_notificacion."""
+    if tipo_tab not in TIPOS_NOTIFICACIONES_ENVIOS_TENDENCIA:
+        raise HTTPException(
+            status_code=400,
+            detail=f"tipo_tab debe ser uno de: {', '.join(sorted(TIPOS_NOTIFICACIONES_ENVIOS_TENDENCIA))}",
+        )
+    if 24 % int(horas) != 0:
+        raise HTTPException(
+            status_code=400,
+            detail="horas debe dividir 24 (1, 2, 3, 4, 6, 8 o 12).",
+        )
+    return _compute_notificaciones_envios_por_intervalo(db, tipo_tab, dias, horas)
 
 
 # Categorías de institución para pagos ingresados por día (orden de apilado).

@@ -1726,7 +1726,7 @@ export function RegistrarPagoForm({
           }
         } else if (cascadaYaSincronizada) {
           toast.success(
-            "Pago guardado. La amortización ya quedó sincronizada en el guardado.",
+            'Pago guardado. La amortización ya quedó sincronizada en el guardado.',
             { duration: 4500 }
           )
         } else {

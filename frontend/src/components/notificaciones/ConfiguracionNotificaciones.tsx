@@ -1337,11 +1337,10 @@ export function ConfiguracionNotificaciones({
           <CardDescription>
             {alcance === 'solo_prejudicial' ? (
               <>
-                Configuración solo para el listado{' '}
-                <strong>2 Cuotas</strong> (caso{' '}
-                <strong>PREJUDICIAL</strong>
-                ): condiciones innegociables - atraso ≥60 días y exactamente 2 cuotas
-                impagas. Plantilla HTML y envío manual de prueba. Solo
+                Configuración solo para el listado <strong>2 Cuotas</strong>{' '}
+                (caso <strong>PREJUDICIAL</strong>
+                ): condiciones innegociables - atraso ≥60 días y exactamente 2
+                cuotas impagas. Plantilla HTML y envío manual de prueba. Solo
                 texto/HTML (sin PDF). To = cliente; CCO = cobranza@ y
                 notificaciones@. Sin cron ni «Enviar todas».
               </>
@@ -1449,12 +1448,12 @@ export function ConfiguracionNotificaciones({
           {alcance === 'solo_pago_10_dias_atrasado' && (
             <div className="rounded-lg border border-sky-300 bg-sky-50 p-3 text-xs text-sky-950">
               <strong className="font-semibold">Solo envío manual.</strong> Este
-              criterio (1 Cuota / PAGO_10_DIAS_ATRASADO) no tiene
-              función automática: no hay cron de servidor ni lote «Enviar
-              todas». El disparo es únicamente el botón «Enviar notificaciones
-              (manual)» del listado (POST /enviar-caso-manual). El interruptor
-              «Envío» de la fila no programa envíos; solo afecta la
-              configuración del caso. Adjuntos: solo PDF fijo (
+              criterio (1 Cuota / PAGO_10_DIAS_ATRASADO) no tiene función
+              automática: no hay cron de servidor ni lote «Enviar todas». El
+              disparo es únicamente el botón «Enviar notificaciones (manual)»
+              del listado (POST /enviar-caso-manual). El interruptor «Envío» de
+              la fila no programa envíos; solo afecta la configuración del caso.
+              Adjuntos: solo PDF fijo (
               <code className="rounded bg-sky-100 px-1">dias_10_retraso</code>
               ); no se anexa Carta_Cobranza.pdf.
             </div>

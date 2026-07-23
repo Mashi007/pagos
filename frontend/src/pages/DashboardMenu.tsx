@@ -68,10 +68,7 @@ import {
   useStaggeredEnable,
 } from '../hooks/useStaggeredEnable'
 
-import {
-  getPeriodoEtiqueta,
-  PERIODOS_VALORES,
-} from '../constants/dashboard'
+import { getPeriodoEtiqueta, PERIODOS_VALORES } from '../constants/dashboard'
 
 import type {
   OpcionesFiltrosResponse,
@@ -79,6 +76,8 @@ import type {
   CobranzasSemanalesResponse,
   EvolucionMensualItem,
   NotificacionesEnviosPorDiaResponse,
+  NotificacionesEnviosPorIntervaloItem,
+  NotificacionesEnviosPorIntervaloResponse,
   PagosIngresadosPorDiaResponse,
 } from '../types/dashboard'
 
@@ -245,6 +244,124 @@ function notificacionesSerieConTendenciaLineal<T extends { enviados: number }>(
   serie: T[]
 ): Array<T & { tendencia: number }> {
   return serieConTendenciaLineal(serie, 'enviados')
+}
+
+/**
+ * Filtra la serie intradía (>= 20 jul del año del último día) para alinear con el gráfico diario.
+ */
+function serieNotificacionesIntervaloDesde20Julio(
+  serie: NotificacionesEnviosPorIntervaloItem[]
+): NotificacionesEnviosPorIntervaloItem[] {
+  if (!serie.length) return serie
+
+  let max: Date | null = null
+
+  for (const row of serie) {
+    const dt = parseIsoDateLocal(row.fecha_dia || row.fecha.slice(0, 10))
+
+    if (dt && (!max || dt.getTime() > max.getTime())) max = dt
+  }
+
+  if (!max) return serie
+
+  const cutoff = new Date(max.getFullYear(), 6, 20)
+
+  const out = serie.filter(row => {
+    const dt = parseIsoDateLocal(row.fecha_dia || row.fecha.slice(0, 10))
+
+    return dt != null && dt >= cutoff
+  })
+
+  return out.length > 0 ? out : serie
+}
+
+/** Etiqueta de hora en 12 h: 12 am, 3 am, 12 pm, 3 pm, ... */
+function etiquetaHoraAmPm(hora: number): string {
+  const h = ((Math.trunc(hora) % 24) + 24) % 24
+  const h12 = h % 12 === 0 ? 12 : h % 12
+  const ampm = h < 12 ? 'am' : 'pm'
+  return `${h12} ${ampm}`
+}
+
+/**
+ * Une totales diarios + tendencia con buckets de 3 h en el mismo eje X.
+ * El total diario y la tendencia se marcan a las 00:00 de cada día (connectNulls).
+ * Eje X: 12 am, 3 am, 6 am, 9 am, 12 pm, 3 pm, ... (en 00:00 se antepone el día).
+ */
+function serieCobranzasConDesempeno3h(
+  serieDiaria: Array<{
+    fecha: string
+    dia?: string
+    enviados: number
+    fallidos?: number
+    tendencia: number
+  }>,
+  serie3h: NotificacionesEnviosPorIntervaloItem[]
+): Array<{
+  fecha: string
+  dia: string
+  enviados: number | null
+  desempeno_3h: number
+  tendencia: number | null
+  fecha_dia: string
+  hora: number
+}> {
+  if (!serie3h.length) {
+    return serieDiaria.map(row => ({
+      fecha: row.fecha,
+      dia: row.dia || row.fecha,
+      enviados: row.enviados,
+      desempeno_3h: 0,
+      tendencia: row.tendencia,
+      fecha_dia: row.fecha,
+      hora: 0,
+    }))
+  }
+
+  const daySet = new Set(serieDiaria.map(r => r.fecha))
+  const enviadosByDay = new Map(serieDiaria.map(r => [r.fecha, r.enviados]))
+  const tendenciaByDay = new Map(serieDiaria.map(r => [r.fecha, r.tendencia]))
+  const nombresMes = [
+    'Ene',
+    'Feb',
+    'Mar',
+    'Abr',
+    'May',
+    'Jun',
+    'Jul',
+    'Ago',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dic',
+  ]
+
+  const filtered = serie3h.filter(r =>
+    daySet.has(r.fecha_dia || r.fecha.slice(0, 10))
+  )
+
+  return filtered.map(p => {
+    const fechaDia = p.fecha_dia || p.fecha.slice(0, 10)
+    const markDaily = p.hora === 0
+    const horaLabel = etiquetaHoraAmPm(p.hora)
+    let ejeLabel = horaLabel
+    if (markDaily) {
+      const dt = parseIsoDateLocal(fechaDia)
+      ejeLabel = dt
+        ? `${dt.getDate()} ${nombresMes[dt.getMonth()]} ${horaLabel}`
+        : horaLabel
+    }
+
+    return {
+      fecha: p.fecha,
+      dia: ejeLabel,
+      enviados: markDaily ? (enviadosByDay.get(fechaDia) ?? null) : null,
+      desempeno_3h: p.enviados,
+      tendencia: markDaily ? (tendenciaByDay.get(fechaDia) ?? null) : null,
+      fecha_dia: fechaDia,
+      hora: p.hora,
+    }
+  })
 }
 
 export function DashboardMenu() {
@@ -545,6 +662,42 @@ export function DashboardMenu() {
     enabled: enableTertiaryCharts,
   })
 
+  const {
+    data: datosNotificacionesMenor60PorIntervalo,
+    isLoading: loadingNotificacionesMenor60PorIntervalo,
+    isError: errorNotificacionesMenor60PorIntervalo,
+  } = useQuery({
+    queryKey: [
+      'notificaciones-envios-por-intervalo',
+      'dias_10_retraso',
+      NOTIFICACIONES_ENVIOS_TENDENCIA_DIAS,
+      3,
+    ],
+
+    queryFn: async (): Promise<NotificacionesEnviosPorIntervaloResponse> => {
+      const params = new URLSearchParams({
+        tipo_tab: 'dias_10_retraso',
+        dias: String(NOTIFICACIONES_ENVIOS_TENDENCIA_DIAS),
+        horas: '3',
+      })
+
+      const response = await apiClient.get(
+        `/api/v1/dashboard/notificaciones-envios-por-intervalo?${params.toString()}`,
+        { timeout: 60000 }
+      )
+
+      return response as NotificacionesEnviosPorIntervaloResponse
+    },
+
+    staleTime: 5 * 60 * 1000,
+
+    refetchOnWindowFocus: false,
+
+    retry: 1,
+
+    enabled: enableTertiaryCharts,
+  })
+
   const serieNotificacionesGrafico = useMemo(
     () =>
       serieNotificacionesEjeDesde5Abril(datosNotificacionesPorDia?.serie ?? []),
@@ -570,6 +723,26 @@ export function DashboardMenu() {
     [serieNotificacionesMenor60Grafico]
   )
 
+  const serieNotificacionesMenor60IntervaloGrafico = useMemo(
+    () =>
+      serieNotificacionesIntervaloDesde20Julio(
+        datosNotificacionesMenor60PorIntervalo?.serie ?? []
+      ),
+    [datosNotificacionesMenor60PorIntervalo?.serie]
+  )
+
+  const serieNotificacionesMenor60ConDesempeno3h = useMemo(
+    () =>
+      serieCobranzasConDesempeno3h(
+        serieNotificacionesMenor60ConTendencia,
+        serieNotificacionesMenor60IntervaloGrafico
+      ),
+    [
+      serieNotificacionesMenor60ConTendencia,
+      serieNotificacionesMenor60IntervaloGrafico,
+    ]
+  )
+
   const seriePagosIngresadosPorDia = useMemo(
     () => datosPagosIngresadosPorDia?.serie ?? [],
     [datosPagosIngresadosPorDia?.serie]
@@ -579,14 +752,7 @@ export function DashboardMenu() {
     () =>
       datosPagosIngresadosPorDia?.categorias?.length
         ? datosPagosIngresadosPorDia.categorias
-        : [
-            'Mercantil',
-            'BNC',
-            'Binance',
-            'BNV',
-            'Recibos',
-            'Otros',
-          ],
+        : ['Mercantil', 'BNC', 'Binance', 'BNV', 'Recibos', 'Otros'],
     [datosPagosIngresadosPorDia?.categorias]
   )
 
@@ -625,8 +791,6 @@ export function DashboardMenu() {
     if (!a || !b) return '-'
     return `${a} - ${b}`
   }, [seriePagosBsIngresadosPorDia])
-
-
 
   const etiquetaRangoNotificacionesEjeX = useMemo(() => {
     const s = serieNotificacionesGrafico
@@ -696,6 +860,11 @@ export function DashboardMenu() {
       })
 
       await queryClient.invalidateQueries({
+        queryKey: ['notificaciones-envios-por-intervalo'],
+        exact: false,
+      })
+
+      await queryClient.invalidateQueries({
         queryKey: ['pagos-ingresados-por-dia'],
         exact: false,
       })
@@ -719,6 +888,11 @@ export function DashboardMenu() {
 
       await queryClient.refetchQueries({
         queryKey: ['notificaciones-envios-por-dia'],
+        exact: false,
+      })
+
+      await queryClient.refetchQueries({
+        queryKey: ['notificaciones-envios-por-intervalo'],
         exact: false,
       })
 
@@ -1358,9 +1532,9 @@ export function DashboardMenu() {
                   <CardDescription className="mt-2 text-xs text-gray-600">
                     Número de pagos registrados (tabla pagos) por mes de fecha
                     de pago. Incluye todos: cualquier estado del pago
-                    (conciliado o no) y cualquier estado del préstamo
-                    (APROBADO, LIQUIDADO, DESISTIMIENTO, etc.), también sin
-                    préstamo asignado.
+                    (conciliado o no) y cualquier estado del préstamo (APROBADO,
+                    LIQUIDADO, DESISTIMIENTO, etc.), también sin préstamo
+                    asignado.
                   </CardDescription>
                 </CardHeader>
 
@@ -1549,9 +1723,7 @@ export function DashboardMenu() {
                                 dataKey={cat}
                                 name={cat}
                                 stackId="institucion"
-                                fill={
-                                  coloresInstitucionPago[cat] || '#94a3b8'
-                                }
+                                fill={coloresInstitucionPago[cat] || '#94a3b8'}
                                 radius={
                                   idx === categoriasPagosIngresados.length - 1
                                     ? [4, 4, 0, 0]
@@ -1689,12 +1861,9 @@ export function DashboardMenu() {
                                 dataKey={cat}
                                 name={cat}
                                 stackId="institucion_bs"
-                                fill={
-                                  coloresInstitucionPago[cat] || '#94a3b8'
-                                }
+                                fill={coloresInstitucionPago[cat] || '#94a3b8'}
                                 radius={
-                                  idx ===
-                                  categoriasPagosBsIngresados.length - 1
+                                  idx === categoriasPagosBsIngresados.length - 1
                                     ? [4, 4, 0, 0]
                                     : [0, 0, 0, 0]
                                 }
@@ -1902,17 +2071,20 @@ export function DashboardMenu() {
                 persistir, Gmail puede tener cientos y esta gráfica pocos. Eje X
                 desde el <strong>20 de julio</strong> del año del último día con
                 datos (muestra de {NOTIFICACIONES_ENVIOS_TENDENCIA_DIAS} d
-                recortada). Línea gris discontinua: <strong>tendencia</strong>{' '}
-                (regresión lineal sobre la serie mostrada).
+                recortada). Curva ámbar: <strong>desempeño cada 3 horas</strong>{' '}
+                (Caracas). Línea gris discontinua: <strong>tendencia</strong>{' '}
+                (regresión lineal sobre el total diario).
               </CardDescription>
             </CardHeader>
 
             <CardContent className="p-6 pt-4">
-              {loadingNotificacionesMenor60PorDia ? (
+              {loadingNotificacionesMenor60PorDia ||
+              loadingNotificacionesMenor60PorIntervalo ? (
                 <div className="flex items-center justify-center py-16 text-sm text-gray-500">
                   Cargando…
                 </div>
-              ) : errorNotificacionesMenor60PorDia ? (
+              ) : errorNotificacionesMenor60PorDia ||
+                errorNotificacionesMenor60PorIntervalo ? (
                 <div className="flex flex-col items-center justify-center gap-2 py-12 text-center text-red-700">
                   <AlertTriangle className="h-8 w-8" />
 
@@ -1929,7 +2101,7 @@ export function DashboardMenu() {
                 <div className="h-[320px] w-full">
                   <ResponsiveContainer width="100%" height={320}>
                     <RechartsLineChart
-                      data={serieNotificacionesMenor60ConTendencia}
+                      data={serieNotificacionesMenor60ConDesempeno3h}
                       margin={{
                         top: 12,
                         right: 20,
@@ -1962,6 +2134,10 @@ export function DashboardMenu() {
                         contentStyle={chartTooltipStyle.contentStyle}
                         labelStyle={chartTooltipStyle.labelStyle}
                         formatter={(value: number, name: string) => {
+                          if (value == null || Number.isNaN(Number(value))) {
+                            return [null, name]
+                          }
+
                           const rounded =
                             typeof value === 'number'
                               ? Math.round(value * 100) / 100
@@ -1972,6 +2148,13 @@ export function DashboardMenu() {
                             name === 'tendencia'
                           ) {
                             return [rounded, name]
+                          }
+
+                          if (
+                            name === 'Desempeño cada 3 h' ||
+                            name === 'desempeno_3h'
+                          ) {
+                            return [rounded, 'Desempeño cada 3 h']
                           }
 
                           return [rounded, 'Enviados (éxito SMTP)']
@@ -1993,6 +2176,17 @@ export function DashboardMenu() {
                         strokeWidth={2}
                         dot={{ r: 4 }}
                         activeDot={{ r: 6 }}
+                        connectNulls
+                      />
+
+                      <Line
+                        type="monotone"
+                        dataKey="desempeno_3h"
+                        name="Desempeño cada 3 h"
+                        stroke="#d97706"
+                        strokeWidth={2}
+                        dot={{ r: 3 }}
+                        activeDot={{ r: 5 }}
                       />
 
                       <Line
@@ -2003,6 +2197,7 @@ export function DashboardMenu() {
                         strokeWidth={2}
                         strokeDasharray="6 4"
                         dot={false}
+                        connectNulls
                         isAnimationActive={false}
                       />
                     </RechartsLineChart>

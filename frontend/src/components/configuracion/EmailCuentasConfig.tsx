@@ -180,7 +180,9 @@ export function EmailCuentasConfig() {
   const [claveBorrador, setClaveBorrador] = useState<Record<number, string>>({})
 
   /** Mostrar campo contraseña al cambiar una clave ya guardada. */
-  const [editandoClave, setEditandoClave] = useState<Record<number, boolean>>({})
+  const [editandoClave, setEditandoClave] = useState<Record<number, boolean>>(
+    {}
+  )
 
   const [asignacion, setAsignacion] = useState<Record<string, number>>({})
 
@@ -508,7 +510,9 @@ export function EmailCuentasConfig() {
                 asignacion: {
                   cobros: savedAsig.cobros ?? prev.asignacion?.cobros ?? 1,
                   estado_cuenta:
-                    savedAsig.estado_cuenta ?? prev.asignacion?.estado_cuenta ?? 2,
+                    savedAsig.estado_cuenta ??
+                    prev.asignacion?.estado_cuenta ??
+                    2,
                   recibos: savedAsig.recibos ?? prev.asignacion?.recibos ?? 1,
                   notificaciones_tab: savedAsig.notificaciones_tab,
                 },
@@ -619,9 +623,10 @@ export function EmailCuentasConfig() {
   const cuentas =
     data?.cuentas ?? Array.from({ length: CUENTAS_COUNT }, emptyCuenta)
 
-  const hayClavesPendientes = Array.from({ length: CUENTAS_COUNT }, (_, i) => i).some(
-    i => clavePendienteEnCuenta(i)
-  )
+  const hayClavesPendientes = Array.from(
+    { length: CUENTAS_COUNT },
+    (_, i) => i
+  ).some(i => clavePendienteEnCuenta(i))
 
   return (
     <div className="space-y-6 pb-24">
@@ -633,16 +638,18 @@ export function EmailCuentasConfig() {
           </CardTitle>
 
           <CardDescription>
-            Un solo lugar: servicios principales, módulos del menú Notificaciones y
-            recordatorios antes de vencimiento. Active cada servicio, elija cuenta SMTP
-            y modo pruebas.
+            Un solo lugar: servicios principales, módulos del menú
+            Notificaciones y recordatorios antes de vencimiento. Active cada
+            servicio, elija cuenta SMTP y modo pruebas.
           </CardDescription>
         </CardHeader>
 
         <CardContent className="space-y-4">
           <div className="flex flex-col justify-between gap-2 rounded border border-primary/25 bg-muted/30 p-3 sm:flex-row sm:items-center">
             <div>
-              <p className="text-sm font-medium">Correo electrónico (maestro)</p>
+              <p className="text-sm font-medium">
+                Correo electrónico (maestro)
+              </p>
               <p className="text-xs text-muted-foreground">
                 Si está inactivo, ningún servicio envía correo.
               </p>
@@ -670,12 +677,17 @@ export function EmailCuentasConfig() {
                   const cuentaN = cuentaAsignadaServicio(row)
                   return (
                     <tr key={row.id} className="border-b last:border-0">
-                      <td className="p-3 align-middle font-medium">{row.label}</td>
+                      <td className="p-3 align-middle font-medium">
+                        {row.label}
+                      </td>
                       <td className="p-3 align-middle">
                         <ToggleActivo
                           checked={(data?.[row.activoKey] ?? 'true') === 'true'}
                           onChange={v =>
-                            setServicioActivo(row.activoKey, v ? 'true' : 'false')
+                            setServicioActivo(
+                              row.activoKey,
+                              v ? 'true' : 'false'
+                            )
                           }
                         />
                       </td>
@@ -863,7 +875,7 @@ export function EmailCuentasConfig() {
             Cuentas de correo por servicio
           </CardTitle>
 
-            <CardDescription>
+          <CardDescription>
             Configure hasta 3 cuentas SMTP. Asigne abajo qué buzón usa cada
             módulo del menú Notificaciones y cada servicio (Cobros, Estado de
             cuenta, Recibos). En Gmail con 2FA use contraseña de aplicación.
@@ -894,7 +906,8 @@ export function EmailCuentasConfig() {
             <div className="flex flex-wrap items-start justify-between gap-2">
               <div>
                 <CardTitle className="text-base">
-                  Cuenta {i + 1} - {SERVICIO_POR_CUENTA[i + 1] ?? `Cuenta ${i + 1}`}
+                  Cuenta {i + 1} -{' '}
+                  {SERVICIO_POR_CUENTA[i + 1] ?? `Cuenta ${i + 1}`}
                 </CardTitle>
 
                 <CardDescription className="mt-1">
@@ -987,9 +1000,7 @@ export function EmailCuentasConfig() {
                     <Input
                       type="password"
                       value={claveBorrador[i] ?? ''}
-                      onChange={e =>
-                        setClaveBorradorCuenta(i, e.target.value)
-                      }
+                      onChange={e => setClaveBorradorCuenta(i, e.target.value)}
                       placeholder="Contraseña de aplicación Gmail (16 caracteres)"
                       autoComplete="new-password"
                       name={`smtp-app-password-cuenta-${i + 1}`}
@@ -1014,7 +1025,9 @@ export function EmailCuentasConfig() {
                     type="button"
                     variant="outline"
                     size="sm"
-                    disabled={testingSmtp[i] || !(cuentas[i]?.smtp_user ?? '').trim()}
+                    disabled={
+                      testingSmtp[i] || !(cuentas[i]?.smtp_user ?? '').trim()
+                    }
                     onClick={() => probarConexionCuenta(i)}
                   >
                     {testingSmtp[i] ? 'Comprobando…' : 'Probar conexión SMTP'}
@@ -1075,8 +1088,8 @@ export function EmailCuentasConfig() {
         <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-amber-300 bg-amber-50 px-4 py-3 shadow-lg dark:border-amber-800 dark:bg-amber-950">
           <div className="mx-auto flex max-w-4xl flex-wrap items-center justify-between gap-3">
             <p className="text-sm text-amber-950 dark:text-amber-100">
-              <strong>Claves sin guardar.</strong> «Probar conexión» no las persiste en el
-              servidor.
+              <strong>Claves sin guardar.</strong> «Probar conexión» no las
+              persiste en el servidor.
             </p>
             <Button
               type="button"

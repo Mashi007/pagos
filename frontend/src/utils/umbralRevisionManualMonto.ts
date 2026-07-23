@@ -4,7 +4,9 @@
  */
 export const MONTO_UMBRAL_REVISION_MANUAL = 1000
 
-export function montoRequiereRevisionManual(monto: number | null | undefined): boolean {
+export function montoRequiereRevisionManual(
+  monto: number | null | undefined
+): boolean {
   if (monto == null || !Number.isFinite(monto)) return false
   return monto >= MONTO_UMBRAL_REVISION_MANUAL
 }

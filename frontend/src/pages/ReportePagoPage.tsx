@@ -2037,7 +2037,8 @@ export default function ReportePagoPage({
                   className="min-h-[48px] min-w-0 flex-1 touch-manipulation bg-slate-900 font-semibold text-white hover:bg-slate-800"
                   onClick={() => {
                     {
-                      const errInst = mensajeSiFaltaInstitucion(institucionFinal)
+                      const errInst =
+                        mensajeSiFaltaInstitucion(institucionFinal)
                       if (errInst) {
                         showNotification('error', errInst)
                         return
@@ -2199,10 +2200,7 @@ export default function ReportePagoPage({
                       fechaReporteEfectivaYmd(fechaPago)
                     )
                     if (!vF.valido) {
-                      showNotification(
-                        'error',
-                        vF.error ?? 'Fecha inválida.'
-                      )
+                      showNotification('error', vF.error ?? 'Fecha inválida.')
                       return
                     }
 

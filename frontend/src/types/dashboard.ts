@@ -324,6 +324,29 @@ export interface NotificacionesEnviosPorDiaResponse {
   serie: NotificacionesEnviosPorDiaItem[]
 }
 
+/** GET /api/v1/dashboard/notificaciones-envios-por-intervalo */
+export interface NotificacionesEnviosPorIntervaloItem {
+  fecha: string
+
+  fecha_dia: string
+
+  dia: string
+
+  hora: number
+
+  enviados: number
+
+  fallidos: number
+}
+
+export interface NotificacionesEnviosPorIntervaloResponse {
+  tipo_tab: string
+
+  horas: number
+
+  serie: NotificacionesEnviosPorIntervaloItem[]
+}
+
 /** GET /api/v1/dashboard/pagos-ingresados-por-dia */
 export interface PagosIngresadosPorDiaItem {
   fecha: string

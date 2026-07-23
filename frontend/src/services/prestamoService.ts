@@ -1075,7 +1075,6 @@ class PrestamoService {
     if (params.limit != null) qs.set('limit', String(params.limit))
     return await apiClient.get(`${this.baseUrl}/actualizaciones-fechas-2?${qs}`)
   }
-
 }
 
 export const prestamoService = new PrestamoService()

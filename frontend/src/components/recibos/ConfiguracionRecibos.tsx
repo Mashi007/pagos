@@ -278,7 +278,9 @@ export function ConfiguracionRecibos({ emergencyResetSeq = 0 }: Props) {
     setModoPruebasRecibos((data.modo_pruebas_recibos ?? 'false') === 'true')
     setCuentaRecibos(
       normalizarIndiceCuenta(
-        typeof data.asignacion?.recibos === 'number' ? data.asignacion.recibos : 1
+        typeof data.asignacion?.recibos === 'number'
+          ? data.asignacion.recibos
+          : 1
       )
     )
     const bcc = Array.isArray(data.recibos_bcc_emails)
@@ -862,8 +864,8 @@ export function ConfiguracionRecibos({ emergencyResetSeq = 0 }: Props) {
             <strong>ya guardada</strong> (misma que el envío masivo) más PDF de
             estado de cuenta del primer cliente válido en la ventana (Caracas).
             El correo de abajo es el destinatario principal (To). La CCO
-            configurada arriba (cobranza@ / notificaciones@) también se envía
-            en copia oculta. Guarde la plantilla y la CCO antes de probar.
+            configurada arriba (cobranza@ / notificaciones@) también se envía en
+            copia oculta. Guarde la plantilla y la CCO antes de probar.
           </CardDescription>
         </CardHeader>
 
