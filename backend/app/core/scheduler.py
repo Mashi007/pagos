@@ -441,6 +441,24 @@ def _job_notificaciones_pago_2_dias_antes_cron() -> None:
     job_cron_pago_2_dias_antes_scheduler()
 
 
+
+def _job_cobros_reconciliar_reportados_cartera() -> None:
+    """Marca importado reportes cuyo comprobante ya existe en pagos (anti-huerfanos)."""
+    db = SessionLocal()
+    try:
+        from app.api.v1.endpoints.cobros.reportados_validadores_helpers import (
+            _reconciliar_reportados_ya_en_cartera,
+        )
+
+        n = _reconciliar_reportados_ya_en_cartera(db, max_ids=120)
+        if n:
+            logger.info("[cobros] reconciliar reportados cartera: %s marcados importado", n)
+    except Exception as e:
+        logger.exception("[cobros] reconciliar reportados cartera: %s", e)
+    finally:
+        db.close()
+
+
 def _job_recibos_conciliacion_email_diario() -> None:
     """Diario Caracas: envío Recibos (misma lógica que POST /notificaciones/recibos/ejecutar para hoy)."""
     if not getattr(settings, "ENABLE_RECIBOS_CONCILIACION_EMAIL_JOBS", False):
@@ -493,6 +511,22 @@ def start_scheduler() -> None:
             id="finiquito_refresh_interval",
             name=f"Finiquito: refresco periodico cada {_minutes} min",
         )
+
+
+    # Cobros: reconciliar reportados ya en cartera (no dejar aprobado/en_revision huérfanos).
+    _scheduler.add_job(
+        _wrap_job_with_timing(
+            "cobros_reconciliar_reportados_cartera",
+            _job_cobros_reconciliar_reportados_cartera,
+        ),
+        IntervalTrigger(
+            minutes=20,
+            timezone=SCHEDULER_TZ,
+        ),
+        id="cobros_reconciliar_reportados_cartera",
+        name="Cobros: marcar importado si pago ya en cartera (cada 20 min)",
+    )
+
 
     # 00:45 lun-sab — finiquito (respaldo nocturno; antes del sync Drive 01:00)
     _scheduler.add_job(

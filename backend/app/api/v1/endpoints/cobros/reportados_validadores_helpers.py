@@ -120,6 +120,61 @@ from .reportados_dedup_helpers import (
     _referencia_display,
 )
 
+def _reconciliar_reportados_ya_en_cartera(
+    db: Session, max_ids: int = 80, deadline_monotonic: Optional[float] = None
+) -> int:
+    """
+    Marca `importado` cualquier pendiente/aprobado/en_revision cuyo comprobante
+    ya exista en `pagos` (evita reportes huérfanos en estado intermedio).
+    """
+    try:
+        ids = list(
+            db.execute(
+                select(PagoReportado.id)
+                .where(PagoReportado.estado.in_(("pendiente", "aprobado", "en_revision")))
+                .order_by(PagoReportado.id.desc())
+                .limit(max_ids)
+            ).scalars().all()
+        )
+    except Exception:
+        return 0
+    ids_colision: List[int] = []
+    for pid in ids:
+        if deadline_monotonic is not None and time.monotonic() > deadline_monotonic:
+            break
+        try:
+            pr = db.get(PagoReportado, pid)
+            if pr is None:
+                continue
+            if pago_reportado_colisiona_tabla_pagos(db, pr):
+                ids_colision.append(int(pid))
+        except Exception:
+            try:
+                db.rollback()
+            except Exception:
+                pass
+    if not ids_colision:
+        return 0
+    try:
+        db.execute(
+            update(PagoReportado)
+            .where(PagoReportado.id.in_(ids_colision))
+            .values(estado="importado", falla_validadores_manual=False, updated_at=func.now())
+        )
+        db.commit()
+        logger.info(
+            "[COBROS_COLA_RECONCILIA] Marcados %s reportados como importado (comprobante ya en pagos).",
+            len(ids_colision),
+        )
+        return len(ids_colision)
+    except Exception:
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        return 0
+
+
 def _regularizar_reportados_gemini_ok_sin_falla_manual(
     db: Session, max_ids: int = 24, deadline_monotonic: Optional[float] = None
 ) -> None:
@@ -127,12 +182,21 @@ def _regularizar_reportados_gemini_ok_sin_falla_manual(
     Al listar Cobros: si un reporte ya cumple validadores (misma regla que la cola), pasa a aprobado
     e intenta importar a `pagos` + cuotas como en el flujo público.
 
-    Candidatos: estados pendiente/en_revision/aprobado con Gemini OK (`true`/`1`),
+    Candidatos: estados pendiente/aprobado con Gemini OK (`true`/`1`),
     Gemini `false` sin comentario (falso negativo frecuente), o sin Gemini (NULL/vacío).
     En todos los casos `reportado_falla_validadores_cobros` decide si pasa.
     Errores de API (`error`) no son candidatos (se excluyen por el OR).
+
+    Antes: reconcilia reportes cuyo comprobante ya está en cartera (incluye en_revision).
     """
     from app.services.cobros import cobros_publico_reporte_service as cpr
+
+    # 1) Siempre primero: no dejar aprobado/en_revision si el pago ya existe.
+    _reconciliar_reportados_ya_en_cartera(
+        db,
+        max_ids=max(max_ids * 4, 40),
+        deadline_monotonic=deadline_monotonic,
+    )
 
     gem_col = func.lower(func.trim(func.coalesce(PagoReportado.gemini_coincide_exacto, "")))
     com_trim = func.trim(func.coalesce(PagoReportado.gemini_comentario, ""))
@@ -163,16 +227,15 @@ def _regularizar_reportados_gemini_ok_sin_falla_manual(
             pr = db.get(PagoReportado, pid)
             if pr is None:
                 continue
+            # Colisión primero (antes de cualquier skip): ya en cartera → importado.
+            if pago_reportado_colisiona_tabla_pagos(db, pr):
+                ids_colision_importado.append(pid)
+                continue
             # En revisión manual explícita: no auto-aprobar al listar Cobros.
             if (getattr(pr, "estado", None) or "").strip() == "en_revision":
                 continue
             # Escáner / operador dejó falla_validadores_manual=True: no auto-aprobar al listar.
             if getattr(pr, "falla_validadores_manual", None) is True:
-                continue
-            if getattr(pr, "estado", None) in ("pendiente", "en_revision", "aprobado") and pago_reportado_colisiona_tabla_pagos(
-                db, pr
-            ):
-                ids_colision_importado.append(pid)
                 continue
             falla = reportado_falla_validadores_cobros(db, pr)
             pr.falla_validadores_manual = falla

@@ -872,6 +872,10 @@ def _crear_pago_desde_reportado_y_aplicar_cuotas(db: Session, pr: PagoReportado,
             pr.referencia_interna,
             ya,
         )
+        # El pago ya esta en cartera: el reporte no debe quedar en aprobado/en_revision.
+        pr.estado = "importado"
+        pr.falla_validadores_manual = False
+        db.add(pr)
         return
     _rechazar_aprobacion_si_documento_ya_en_pagos(db, pr)
     fecha_ts = datetime.combine(pr.fecha_pago, dt_time.min) if pr.fecha_pago else datetime.now()
@@ -1009,6 +1013,10 @@ def _crear_pago_desde_reportado_y_aplicar_cuotas(db: Session, pr: PagoReportado,
     except ValueError as e:
         raise HTTPException(status_code=409, detail=str(e)) from e
     row.estado = "PAGADO"
+    # Estado terminal del reporte: en cartera (alineado con auto-import Infopagos/publico).
+    pr.estado = "importado"
+    pr.falla_validadores_manual = False
+    db.add(pr)
     logger.info("[COBROS] Aprobar ref=%s: creado pago id=%s y aplicado a cuotas del prestamo %s.", pr.referencia_interna, row.id, prestamo.id)
 
 
@@ -1043,6 +1051,16 @@ def aprobar_pago_reportado(
         except HTTPException:
             pass
         db.refresh(pr)
+        # Si ya hay pago en cartera, no dejar el reporte en aprobado.
+        if (getattr(pr, "estado", None) or "").strip() != "importado":
+            if primer_pago_id_si_existe_para_claves_reportado(db, pr) is not None:
+                pr.estado = "importado"
+                pr.falla_validadores_manual = False
+                db.add(pr)
+                db.commit()
+                db.refresh(pr)
+        if (getattr(pr, "estado", None) or "").strip() == "importado" and getattr(pr, "recibo_pdf", None):
+            return {"ok": True, "mensaje": "Ya estaba importado a pagos."}
         if getattr(pr, "recibo_pdf", None):
             return {"ok": True, "mensaje": "Ya estaba aprobado."}
         if primer_pago_id_si_existe_para_claves_reportado(db, pr) is None:
@@ -1237,7 +1255,9 @@ def aprobar_pago_reportado(
             "no se envió el recibo. Actívelo o use 'Enviar recibo por correo' cuando lo active."
         )
     if registrar_historial_aprobacion and estado_anterior is not None:
-        _registrar_historial(db, pago_id, estado_anterior, "aprobado", usuario_email, None)
+        # Tras crear pago el reporte queda importado (no "aprobado" huérfano).
+        estado_hist = (getattr(pr, "estado", None) or "importado").strip() or "importado"
+        _registrar_historial(db, pago_id, estado_anterior, estado_hist, usuario_email, None)
     db.commit()
     # Parche quirurgico (no invalidacion total): la aprobacion lleva la fila a un estado
     # que ya no esta en la cola por defecto (aprobado). Tras commit, removerla del cache
@@ -2001,7 +2021,11 @@ def cambiar_estado_pago(
             logger.info("[COBROS] PATCH estado=rechazado ref=%s: no hay correo del cliente, no se envió notificación.", pr.referencia_interna)
             mensaje = "Estado actualizado a rechazado. No hay correo del cliente; no se envió notificación."
 
-    _registrar_historial(db, pago_id, estado_anterior, body.estado, usuario_email, body.motivo)
+    # Si se aprobo y el pago ya entro a cartera, el estado efectivo es importado.
+    estado_hist = body.estado
+    if body.estado == "aprobado":
+        estado_hist = (getattr(pr, "estado", None) or "importado").strip() or "importado"
+    _registrar_historial(db, pago_id, estado_anterior, estado_hist, usuario_email, body.motivo)
     db.commit()
     # Parche quirurgico cuando el nuevo estado deja el item fuera de la cola por defecto
     # (aprobado / rechazado): el frontend ve la fila desaparecer al instante y el siguiente

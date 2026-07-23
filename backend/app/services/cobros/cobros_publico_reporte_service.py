@@ -199,7 +199,44 @@ def intentar_importar_reportado_automatico(
     aplica a cuotas y marca el reporte como importado. Fallos solo en log (no rompe la respuesta al cliente).
     """
     started_total = perf_counter()
-    if pr is None or getattr(pr, "estado", None) != "aprobado":
+    if pr is None:
+        return AutoImportResultado(total_ms=_elapsed_ms(started_total))
+    estado0 = (getattr(pr, "estado", None) or "").strip()
+    # Si ya hay pago en cartera, cerrar el reporte aunque no este en "aprobado"
+    # (p. ej. quedo en_revision/aprobado por un flujo anterior).
+    if estado0 in ("aprobado", "en_revision", "pendiente"):
+        try:
+            from app.services.cobros.pago_reportado_documento import (
+                pago_reportado_colisiona_tabla_pagos,
+            )
+
+            if pago_reportado_colisiona_tabla_pagos(db, pr):
+                pr.estado = "importado"
+                pr.falla_validadores_manual = False
+                db.add(pr)
+                db.commit()
+                logger.info(
+                    "[%s] Reportado ref=%s marcado importado (comprobante ya en pagos, estado previo=%s).",
+                    log_tag,
+                    referencia,
+                    estado0,
+                )
+                return AutoImportResultado(
+                    ya_existia_en_pagos=True,
+                    total_ms=_elapsed_ms(started_total),
+                )
+        except Exception as e:
+            logger.warning(
+                "[%s] No se pudo reconciliar colision previa ref=%s: %s",
+                log_tag,
+                referencia,
+                e,
+            )
+            try:
+                db.rollback()
+            except Exception:
+                pass
+    if estado0 != "aprobado":
         return AutoImportResultado(total_ms=_elapsed_ms(started_total))
     lookup_ms = 0.0
     importar_pago_ms = 0.0
