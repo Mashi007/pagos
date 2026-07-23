@@ -35,6 +35,7 @@ from app.services.cobros.cedula_reportar_bs_service import (
 from app.services.pagos_gmail.parse_campos_comprobante import (
     clave_numero_operacion_canonico,
     fusionar_validacion_reglas_monto_alto_escaneo,
+    monto_requiere_revision_manual,
     sanitizar_numero_operacion_comprobante,
 )
 

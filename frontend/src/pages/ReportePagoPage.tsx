@@ -16,10 +16,11 @@
 
 
 
- * En rapicredit-cobros: escaneo autónomo (Gemini). Si el comprobante se lee completo,
- * va directo a confirmar. La fecha solo viene de lo impreso en el comprobante (OCR);
- * si falta o es inválida se pide al usuario - nunca se inventa ni se usa "hoy" por defecto.
- * En Infopagos también se pide fecha cuando el escaneo no la aporta.
+ * En rapicredit-cobros: escaneo 100% automático (cobranza). El cliente NO digita ni
+ * corrige banco/monto/fecha/operación (evita sesgo). OCR completo → confirmar y enviar
+ * (aprobación automática si validadores OK). OCR incompleto o baja calidad → cola
+ * revisión manual sin que el cliente complete campos. Nunca inventar "hoy".
+ * Infopagos (staff) sí puede completar campos manualmente.
  * institución y nº documento (longitud), archivo (PDF, JPEG, PNG, HEIC/HEIF, WebP; máx 10 MB).
 
 
@@ -174,7 +175,7 @@ function montoParaApi(num: number): string {
 /** En cobros público no existe el paso interno 2 (moneda); badges van 1..6 en lugar de 1..7. */
 function badgePasoFormulario(step: number, isInfopagos: boolean): number {
   if (!isInfopagos) {
-    if (step === 7) return 6
+    if (step === 7) return 3
     return step
   }
   return step
@@ -186,10 +187,7 @@ function getStepAnnouncement(step: number, isInfopagos: boolean): string {
       0: 'Pantalla de bienvenida: reporte de pago',
       1: 'Paso 1: Ingrese su número de cédula',
       2: 'Paso 2: Adjuntar comprobante',
-      3: 'Paso 3: Institución financiera',
-      4: 'Paso 4: Fecha y monto del pago',
-      5: 'Paso 5: Número de documento u operación',
-      7: 'Paso 6: Confirmar y enviar',
+      7: 'Paso 3: Confirmar y enviar',
       8: 'Reporte enviado correctamente',
     }
     return m[step] ?? `Paso ${step}`
@@ -258,46 +256,44 @@ function fechaReporteEfectivaYmd(fechaPago: string): string {
 }
 
 /**
- * Flujo cobros (escaneo autónomo): primer paso que aún necesita un dato del
- * cliente, o 7 (confirmación) si el comprobante digitalizado ya trae todo.
- * Incluye fecha: si OCR no la leyó, se pide en el paso 4.
+ * Cobros: el cliente no digita. True si el OCR dejó algún campo crítico sin leer
+ * (o con baja certeza) → cola revisión manual.
  */
-function pasoFaltanteCobros(
+function cobrosOcrIncompletoParaRevision(
   inst: string,
   montoStr: string,
   monedaVal: 'BS' | 'USD',
   numDoc: string,
   fechaStr: string
-): 3 | 4 | 5 | 7 {
-  if (!inst.trim() || inst.length > MAX_LENGTH_INSTITUCION) return 3
-  if (!validarFechaPago(fechaStr).valido) return 4
-  if (!validarMonto(montoStr, monedaVal).valido) return 4
-  if (!numDoc.trim() || numDoc.length > MAX_LENGTH_NUMERO_OPERACION) return 5
-  return 7
+): boolean {
+  if (!inst.trim() || inst.length > MAX_LENGTH_INSTITUCION) return true
+  if (!validarFechaPago(fechaStr).valido) return true
+  if (!validarMonto(montoStr, monedaVal).valido) return true
+  if (!numDoc.trim() || numDoc.length > MAX_LENGTH_NUMERO_OPERACION) return true
+  return false
 }
 
-const MENSAJE_DATO_FALTANTE_COBROS: Record<3 | 4 | 5, string> = {
-  3: 'No pudimos leer el banco en su comprobante. Selecciónelo y presione Siguiente.',
-  4: 'No pudimos leer el monto en su comprobante. Escríbalo y presione Siguiente.',
-  5: 'No pudimos leer el número de operación en su comprobante. Escríbalo y presione Siguiente.',
+const MENSAJE_COBROS_REVISION_MANUAL =
+  'No se pudo leer el comprobante con suficiente certeza. ' +
+  'Su reporte se enviará a revisión manual. ' +
+  'Por integridad de cobranza usted no puede modificar banco, fecha, monto ni operación.'
+
+/** Marcadores técnicos solo para BD (NOT NULL) en cola revisión. No son datos del cliente. */
+const COBROS_REV_FECHA = '1970-01-01'
+const COBROS_REV_INST = 'REVISION_MANUAL'
+const COBROS_REV_MONTO = '0.01'
+
+/** Unico por envio: evita falso duplicado en ventana anti-doble-click entre clientes distintos. */
+function cobrosRevNumOperacionUnico(): string {
+  const suf =
+    Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8)
+  return ('REV-MANUAL-' + suf).slice(0, MAX_LENGTH_NUMERO_OPERACION)
 }
 
-const MENSAJE_FECHA_FALTANTE_COBROS =
-  'No pudimos leer la fecha en su comprobante. Selecciónela en el calendario y presione Siguiente.'
-
-function mensajePasoFaltanteCobros(
-  next: 3 | 4 | 5,
-  fechaStr: string,
-  montoStr: string,
-  monedaVal: 'BS' | 'USD'
-): string {
-  if (next === 4 && !validarFechaPago(fechaStr).valido) {
-    return MENSAJE_FECHA_FALTANTE_COBROS
-  }
-  if (next === 4 && !validarMonto(montoStr, monedaVal).valido) {
-    return MENSAJE_DATO_FALTANTE_COBROS[4]
-  }
-  return MENSAJE_DATO_FALTANTE_COBROS[next]
+function etiquetaCampoCobrosOcr(valor: string, pendiente: boolean): string {
+  const t = (valor || '').trim()
+  if (pendiente || !t) return 'No leído - revisión manual'
+  return t
 }
 
 function validarFechaPago(fecha: string): { valido: boolean; error?: string } {
@@ -1018,73 +1014,92 @@ export default function ReportePagoPage({
       return
     }
 
-    {
-      const errInst = mensajeSiFaltaInstitucion(institucionFinal)
-      if (errInst) {
-        showNotification(
-          'error',
-          isInfopagos ? errInst : MENSAJE_DATO_FALTANTE_COBROS[3] || errInst
+    // Cobros: sin digitación. OCR incompleto → marcadores técnicos + revisión.
+    let institucionParaApi = institucionFinal
+    let fechaEfectivaParaApi = fechaReporteEfectivaYmd(fechaPago)
+    let numeroParaApi = numeroDocumento.trim()
+    let montoStrParaApi = monto
+    let forzarRevisionCobros = false
+
+    if (!isInfopagos) {
+      forzarRevisionCobros =
+        requiereRevisionManualOcr ||
+        cobrosOcrIncompletoParaRevision(
+          institucionFinal,
+          monto,
+          moneda,
+          numeroDocumento,
+          fechaPago
         )
-        if (!isInfopagos) setStep(3)
+      if (forzarRevisionCobros) {
+        setRequiereRevisionManualOcr(true)
+        if (mensajeSiFaltaInstitucion(institucionParaApi)) {
+          institucionParaApi = COBROS_REV_INST
+        }
+        if (!validarFechaPago(fechaEfectivaParaApi).valido) {
+          fechaEfectivaParaApi = COBROS_REV_FECHA
+        }
+        if (!numeroParaApi) {
+          numeroParaApi = cobrosRevNumOperacionUnico()
+        }
+        if (!validarMonto(montoStrParaApi, moneda).valido) {
+          montoStrParaApi = COBROS_REV_MONTO
+        }
+      }
+    }
+
+    let monedaParaApi: 'BS' | 'USD' = moneda
+    if (
+      !isInfopagos &&
+      forzarRevisionCobros &&
+      (fechaEfectivaParaApi === COBROS_REV_FECHA ||
+        montoStrParaApi === COBROS_REV_MONTO)
+    ) {
+      // Marcadores técnicos (1970 / 0.01) no pasan tasa/mínimo BS → USD en BD.
+      monedaParaApi = 'USD'
+    }
+
+    {
+      const errInst = mensajeSiFaltaInstitucion(institucionParaApi)
+      if (errInst) {
+        showNotification('error', errInst)
         return
       }
     }
 
-    if (institucionFinal.length > MAX_LENGTH_INSTITUCION) {
+    if (institucionParaApi.length > MAX_LENGTH_INSTITUCION) {
       showNotification(
         'error',
         'Nombre de institución demasiado largo. Redúzcalo.'
       )
-      if (!isInfopagos) setStep(3)
       return
     }
 
-    // Fecha solo del OCR o del usuario - nunca inventar "hoy".
-    const fechaEfectivaParaApi = fechaReporteEfectivaYmd(fechaPago)
     {
       const vFecha = validarFechaPago(fechaEfectivaParaApi)
       if (!vFecha.valido) {
-        showNotification(
-          'error',
-          isInfopagos
-            ? (vFecha.error ?? 'Fecha inválida.')
-            : MENSAJE_FECHA_FALTANTE_COBROS
-        )
-        if (!isInfopagos) setStep(4)
+        showNotification('error', vFecha.error ?? 'Fecha inválida.')
         return
       }
     }
 
-    const vMonto = validarMonto(monto, moneda)
+    const vMonto = validarMonto(montoStrParaApi, monedaParaApi)
 
     if (!vMonto.valido) {
-      showNotification(
-        'error',
-        isInfopagos
-          ? (vMonto.error ?? 'Monto inválido.')
-          : MENSAJE_DATO_FALTANTE_COBROS[4]
-      )
-      if (!isInfopagos) setStep(4)
+      showNotification('error', vMonto.error ?? 'Monto inválido.')
       return
     }
 
-    if (!numeroDocumento.trim()) {
-      showNotification(
-        'error',
-        isInfopagos
-          ? 'Ingrese el número de documento u operación.'
-          : MENSAJE_DATO_FALTANTE_COBROS[5]
-      )
-      if (!isInfopagos) setStep(5)
+    if (!numeroParaApi) {
+      showNotification('error', 'Ingrese el número de documento u operación.')
       return
     }
 
-    if (numeroDocumento.length > MAX_LENGTH_NUMERO_OPERACION) {
+    if (numeroParaApi.length > MAX_LENGTH_NUMERO_OPERACION) {
       showNotification(
         'error',
         'Número de documento u operación demasiado largo.'
       )
-      if (!isInfopagos) setStep(5)
       return
     }
 
@@ -1123,17 +1138,23 @@ export default function ReportePagoPage({
 
     form.append('fecha_pago', fechaEfectivaParaApi)
 
-    form.append('institucion_financiera', institucionFinal)
+    form.append('institucion_financiera', institucionParaApi)
 
-    form.append('numero_operacion', numeroDocumento)
+    form.append('numero_operacion', numeroParaApi)
 
     form.append('monto', montoParaApi(vMonto.valor!))
 
-    form.append('moneda', moneda)
+    form.append('moneda', monedaParaApi)
 
     if (archivo) form.append('comprobante', archivo)
     const montoAlto = montoRequiereRevisionManual(vMonto.valor)
-    if (requiereRevisionManualOcr || montoAlto) {
+    if (!isInfopagos && forzarRevisionCobros) {
+      form.append('confirmacion_humana', 'true')
+      form.append(
+        'observacion',
+        'OCR incompleto o baja certeza. Cliente no digitó (cobranza). Revisión manual.'
+      )
+    } else if (requiereRevisionManualOcr || montoAlto) {
       form.append('confirmacion_humana', 'true')
     }
 
@@ -1291,50 +1312,52 @@ export default function ReportePagoPage({
           setNumeroDocumento(numDocLocal)
         }
 
-        // Escaneo autónomo: si Gemini leyó todo → confirmación.
-        // Si falta un dato (incl. fecha) → solo ese paso (resto prellenado).
+        // Cobros: el cliente no digita. Siempre confirmación (paso 7).
+        if (!isInfopagos) {
+          const incompleto =
+            Boolean(res.requiere_revision_manual) ||
+            cobrosOcrIncompletoParaRevision(
+              instFinalLocal,
+              montoLocal,
+              monedaLocal,
+              numDocLocal,
+              fechaOk
+            )
+          if (incompleto) {
+            setRequiereRevisionManualOcr(true)
+            showNotification('error', MENSAJE_COBROS_REVISION_MANUAL)
+          } else {
+            setRequiereRevisionManualOcr(false)
+            dismissNotification()
+          }
+          setStep(7)
+          return
+        }
         if (res.requiere_revision_manual) {
           showNotification(
             'error',
-            res.mensaje_revision_manual ||
-              'La calidad de la imagen no permite leer el comprobante con certeza. ' +
-                'Complete los datos; al enviar, el reporte quedará en revisión manual.'
+            res.mensaje_revision_manual || MENSAJE_COBROS_REVISION_MANUAL
           )
-        }
-        if (!isInfopagos) {
-          const next = pasoFaltanteCobros(
-            instFinalLocal,
-            montoLocal,
-            monedaLocal,
-            numDocLocal,
-            fechaOk
-          )
-          if (next === 7) {
-            if (!res.requiere_revision_manual) dismissNotification()
-          } else if (!res.requiere_revision_manual) {
-            showNotification(
-              'error',
-              mensajePasoFaltanteCobros(next, fechaOk, montoLocal, monedaLocal)
-            )
-          }
-          setStep(next)
-          return
         }
       } else {
         setRequiereRevisionManualOcr(true)
         showNotification(
           'error',
-          mensajeErrorDigitalizarComprobante(res.error || '')
+          isInfopagos
+            ? mensajeErrorDigitalizarComprobante(res.error || '')
+            : MENSAJE_COBROS_REVISION_MANUAL
         )
       }
-      setStep(isInfopagos ? 7 : 3)
+      setStep(7)
     } catch (e: any) {
       setRequiereRevisionManualOcr(true)
       showNotification(
         'error',
-        mensajeErrorDigitalizarComprobante(e?.message || '')
+        isInfopagos
+          ? mensajeErrorDigitalizarComprobante(e?.message || '')
+          : MENSAJE_COBROS_REVISION_MANUAL
       )
-      setStep(isInfopagos ? 7 : 3)
+      setStep(7)
     } finally {
       setLoading(false)
     }
@@ -1406,19 +1429,14 @@ export default function ReportePagoPage({
             desc: '(V, E, G o J + digitos)',
           },
           {
-            icon: 'bank' as const,
-            text: 'Datos del pago',
-            desc: 'Banco, monto y número',
-          },
-          {
             icon: 'file' as const,
             text: 'Comprobante',
-            desc: 'PDF, JPEG, PNG, HEIC o WebP, máx. 10 MB',
+            desc: 'Foto o PDF; el sistema lo digitaliza solo',
           },
           {
             icon: 'check' as const,
             text: 'Confirmar y enviar',
-            desc: 'Confirmación por correo',
+            desc: 'Sin editar datos (cobranza automática)',
           },
         ]
 
@@ -1932,6 +1950,11 @@ export default function ReportePagoPage({
   }
 
   if (step === 3) {
+    // Cobros: el cliente no digita estos pasos.
+    if (!isInfopagos) {
+      setStep(7)
+      return null
+    }
     return (
       <div
         className={
@@ -1968,15 +1991,11 @@ export default function ReportePagoPage({
                   {badgePasoFormulario(3, isInfopagos)}
                 </div>
                 <CardTitle className="m-0 text-lg sm:text-xl">
-                  {!isInfopagos && nombre
-                    ? `Hola, ${nombre}`
-                    : 'Institución financiera'}
+                  Institución financiera
                 </CardTitle>
               </div>
               <p className="mt-2 text-sm text-slate-600">
-                {!isInfopagos && nombre
-                  ? `Cédula validada (${cedula}). Selecciona el banco o plataforma donde realizaste el pago.`
-                  : 'Selecciona el banco o plataforma donde se realizó el pago'}
+                Selecciona el banco o plataforma donde se realizó el pago
               </p>
             </CardHeader>
 
@@ -2033,19 +2052,6 @@ export default function ReportePagoPage({
                       return
                     }
 
-                    if (!isInfopagos) {
-                      // Si el escaneo ya trajo monto/operación, saltar a lo faltante o confirmar.
-                      const next = pasoFaltanteCobros(
-                        institucionFinal,
-                        monto,
-                        moneda,
-                        numeroDocumento,
-                        fechaPago
-                      )
-                      dismissNotification()
-                      setStep(next === 3 ? 4 : next)
-                      return
-                    }
                     setStep(4)
                   }}
                 >
@@ -2060,6 +2066,11 @@ export default function ReportePagoPage({
   }
 
   if (step === 4) {
+    // Cobros: el cliente no digita estos pasos.
+    if (!isInfopagos) {
+      setStep(7)
+      return null
+    }
     return (
       <div
         className={
@@ -2100,14 +2111,8 @@ export default function ReportePagoPage({
                 </CardTitle>
               </div>
               <p className="mt-2 text-sm text-slate-600">
-                {isInfopagos ? (
-                  <>
-                    Modalidad:{' '}
-                    {moneda === 'BS' ? 'bolivares (Bs.)' : 'dólares (USD)'}
-                  </>
-                ) : (
-                  'Indique la fecha impresa en el comprobante y el monto del pago.'
-                )}
+                Modalidad:{' '}
+                {moneda === 'BS' ? 'bolivares (Bs.)' : 'dólares (USD)'}
               </p>
             </CardHeader>
 
@@ -2196,9 +2201,7 @@ export default function ReportePagoPage({
                     if (!vF.valido) {
                       showNotification(
                         'error',
-                        isInfopagos
-                          ? (vF.error ?? 'Fecha inválida.')
-                          : MENSAJE_FECHA_FALTANTE_COBROS
+                        vF.error ?? 'Fecha inválida.'
                       )
                       return
                     }
@@ -2223,18 +2226,6 @@ export default function ReportePagoPage({
                       return
                     }
 
-                    if (!isInfopagos) {
-                      const next = pasoFaltanteCobros(
-                        institucionFinal,
-                        monto,
-                        moneda,
-                        numeroDocumento,
-                        fechaPago
-                      )
-                      dismissNotification()
-                      setStep(next === 4 ? 5 : next)
-                      return
-                    }
                     setStep(5)
                   }}
                 >
@@ -2249,6 +2240,11 @@ export default function ReportePagoPage({
   }
 
   if (step === 5) {
+    // Cobros: el cliente no digita estos pasos.
+    if (!isInfopagos) {
+      setStep(7)
+      return null
+    }
     return (
       <div
         className={
@@ -2500,11 +2496,15 @@ export default function ReportePagoPage({
                   {badgePasoFormulario(7, isInfopagos)}
                 </div>
                 <CardTitle className="m-0 text-lg sm:text-xl">
-                  Confirma tus datos
+                  {isInfopagos ? 'Confirma tus datos' : 'Confirmar reporte'}
                 </CardTitle>
               </div>
               <p className="mt-2 text-sm text-slate-600">
-                Revisa la información antes de enviar
+                {isInfopagos
+                  ? 'Revisa la información antes de enviar'
+                  : requiereRevisionManualOcr
+                    ? 'El comprobante irá a revisión manual. Usted no puede editar los datos.'
+                    : 'Datos leídos del comprobante (solo lectura). Confirme para enviar.'}
               </p>
             </CardHeader>
 
@@ -2522,13 +2522,24 @@ export default function ReportePagoPage({
                 <div className="flex justify-between text-sm">
                   <span className="text-slate-600">Institución:</span>
                   <span className="text-right font-semibold text-slate-900">
-                    {institucionFinal}
+                    {isInfopagos
+                      ? institucionFinal
+                      : etiquetaCampoCobrosOcr(
+                          institucionFinal,
+                          !institucionFinal.trim() ||
+                            Boolean(mensajeSiFaltaInstitucion(institucionFinal))
+                        )}
                   </span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-slate-600">Fecha:</span>
                   <span className="font-semibold text-slate-900">
-                    {fechaReporteEfectivaYmd(fechaPago) || '-'}
+                    {isInfopagos
+                      ? fechaReporteEfectivaYmd(fechaPago) || '-'
+                      : etiquetaCampoCobrosOcr(
+                          fechaReporteEfectivaYmd(fechaPago),
+                          !validarFechaPago(fechaPago).valido
+                        )}
                   </span>
                 </div>
                 <div className="flex justify-between text-sm">
@@ -2536,6 +2547,9 @@ export default function ReportePagoPage({
                   <span className="font-semibold text-slate-900">
                     {(() => {
                       const n = parseMontoIngresado(monto, moneda)
+                      if (!isInfopagos && n == null) {
+                        return etiquetaCampoCobrosOcr('', true)
+                      }
                       return n != null
                         ? `${formatoMontoParaMostrar(n, moneda)} ${moneda === 'BS' ? 'Bs.' : 'USD'}`
                         : `${monto} ${moneda === 'BS' ? 'Bs.' : 'USD'}`
@@ -2545,7 +2559,12 @@ export default function ReportePagoPage({
                 <div className="flex justify-between text-sm">
                   <span className="text-slate-600">Operación:</span>
                   <span className="font-semibold text-slate-900">
-                    {numeroDocumento}
+                    {isInfopagos
+                      ? numeroDocumento
+                      : etiquetaCampoCobrosOcr(
+                          numeroDocumento,
+                          !numeroDocumento.trim()
+                        )}
                   </span>
                 </div>
                 <div className="flex justify-between text-sm">
@@ -2590,15 +2609,8 @@ export default function ReportePagoPage({
                       setStep(6)
                       return
                     }
-                    // Cobros: volver al primer dato incompleto o al monto (paso 4).
-                    const next = pasoFaltanteCobros(
-                        institucionFinal,
-                        monto,
-                        moneda,
-                        numeroDocumento,
-                        fechaPago
-                      )
-                    setStep(next === 7 ? 4 : next)
+                    // Cobros: solo puede cambiar el comprobante (no digitar campos).
+                    setStep(2)
                   }}
                   disabled={loading}
                 >

@@ -9,15 +9,23 @@ from typing import Any, Optional, Tuple
 from app.services.institucion_bancaria_requerida import es_institucion_bancaria_valida
 from app.services.pagos_gmail.parse_campos_comprobante import ocr_borroso_indicado_en_texto
 
-MSG_REVISION_MANUAL_BASE = (
+# Staff (escáner interno): puede completar campos manualmente.
+MSG_REVISION_MANUAL_BASE_STAFF = (
     "Comprobante complejo o ilegible: no se pudo digitalizar con consistencia. "
     "Pase a revisión manual, complete los campos y guarde. "
     "El archivo no se trunca: el comprobante queda en borrador/servidor para continuar."
 )
 
+# Público / genérico: no pedir al cliente que complete campos (integridad cobranza).
+MSG_REVISION_MANUAL_BASE = (
+    "Comprobante complejo o ilegible: no se pudo digitalizar con consistencia. "
+    "El reporte se enviará a revisión manual. "
+    "El archivo no se trunca: el comprobante queda en borrador/servidor para continuar."
+)
+
 MSG_REVISION_MANUAL_CALIDAD = (
     "La calidad de la imagen no permite leer el comprobante con certeza. "
-    "Complete los datos y envíe: el reporte quedará en revisión manual."
+    "El reporte se enviará a revisión manual."
 )
 
 
