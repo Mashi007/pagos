@@ -138,7 +138,6 @@ import {
   EscanerInfopagosPage,
   EscanerInfopagosLotePage,
   FechaQAuditoriaTotalPage,
-  CuotasVsFechaBaseAdminPage,
   ModelosVehiculos,
   Notificaciones,
   NotificacionesClientesDrive,
@@ -556,13 +555,10 @@ function App() {
                 }
               />
 
+              {/* Compatibilidad: pantalla Cuotas vs fecha base retirada; recalculo sigue en Notificaciones > Fechas. */}
               <Route
                 path="actualizaciones/cuotas-fecha-base"
-                element={
-                  <SimpleProtectedRoute requireAdmin={true}>
-                    <CuotasVsFechaBaseAdminPage />
-                  </SimpleProtectedRoute>
-                }
+                element={<Navigate to="/notificaciones/fecha" replace />}
               />
               {/* Compatibilidad: modulo Actualizaciones > Gmail retirado; pipeline Gmail sigue en Pagos. */}
               <Route

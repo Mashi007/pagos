@@ -32,20 +32,6 @@ export interface PrestamoFechas2Item {
   fecha_base_calculo: string | null
 }
 
-/** Fila de GET /prestamos/admin/cuotas-vs-fecha-base-desalineadas */
-export interface CuotaVsFechaBaseItem {
-  prestamo_id: number
-  cedula: string
-  estado: string
-  fecha_aprobacion: string | null
-  fecha_base_calculo: string | null
-  fecha_base: string | null
-  modalidad_pago: string
-  numero_cuotas: number
-  vencimiento_cuota_1: string | null
-  dias_cuota1_menos_base: number | null
-}
-
 type ResumenPrestamos = {
   tiene_prestamos: boolean
 
@@ -1090,72 +1076,6 @@ class PrestamoService {
     return await apiClient.get(`${this.baseUrl}/actualizaciones-fechas-2?${qs}`)
   }
 
-  /** Admin. Préstamos con cuota 1 antes que fecha base de amortización. */
-  async getCuotasVsFechaBaseDesalineadas(params: {
-    limit?: number
-    offset?: number
-    cedula_q?: string
-  }): Promise<{
-    items: CuotaVsFechaBaseItem[]
-    total: number
-    limit: number
-    offset: number
-  }> {
-    const qs = new URLSearchParams()
-    if (params.limit != null) qs.set('limit', String(params.limit))
-    if (params.offset != null) qs.set('offset', String(params.offset))
-    const c = (params.cedula_q || '').trim()
-    if (c) qs.set('cedula_q', c)
-    const suffix = qs.toString() ? `?${qs}` : ''
-    return await apiClient.get(
-      `${this.baseUrl}/admin/cuotas-vs-fecha-base-desalineadas${suffix}`
-    )
-  }
-
-  /**
-   * Regenera tabla de cuotas desde datos del préstamo y reaplica pagos pendientes de vínculo.
-   * POST /api/v1/prestamos/{id}/reconstruir-tabla-cuotas-desde-prestamo
-   */
-  async postReconstruirTablaCuotasDesdePrestamo(
-    prestamoId: number
-  ): Promise<Record<string, unknown>> {
-    return apiClient.post<Record<string, unknown>>(
-      `${this.baseUrl}/${prestamoId}/reconstruir-tabla-cuotas-desde-prestamo`,
-      undefined,
-      { timeout: 180000 }
-    )
-  }
-
-  /**
-   * Recalcula solo fechas de vencimiento de cuotas existentes según fecha base / aprobación del préstamo.
-   * POST /api/v1/prestamos/{id}/recalcular-fechas-amortizacion
-   */
-  async postRecalcularFechasAmortizacion(
-    prestamoId: number
-  ): Promise<Record<string, unknown>> {
-    return apiClient.post<Record<string, unknown>>(
-      `${this.baseUrl}/${prestamoId}/recalcular-fechas-amortizacion`,
-      undefined,
-      { timeout: 120000 }
-    )
-  }
-
-  /**
-   * Misma operación que postRecalcularFechasAmortizacion por cada id (admin, un commit por préstamo).
-   * POST /api/v1/prestamos/recalcular-fechas-amortizacion-lote - máx. 80 ids por petición.
-   */
-  async postRecalcularFechasAmortizacionLote(prestamoIds: number[]): Promise<{
-    procesados: number
-    prestamo_ids_ok: number[]
-    errores: Array<{ prestamo_id: number; status_code: number; detail: string }>
-    mensaje: string
-  }> {
-    return apiClient.post(
-      `${this.baseUrl}/recalcular-fechas-amortizacion-lote`,
-      { prestamo_ids: prestamoIds },
-      { timeout: 300000 }
-    )
-  }
 }
 
 export const prestamoService = new PrestamoService()

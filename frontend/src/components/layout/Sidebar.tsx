@@ -298,12 +298,6 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
           icon: CreditCard,
           adminOnly: true,
         },
-        {
-          title: 'Cuotas vs fecha base',
-          href: '/actualizaciones/cuotas-fecha-base',
-          icon: Calendar,
-          adminOnly: true,
-        },
       ],
     },
 

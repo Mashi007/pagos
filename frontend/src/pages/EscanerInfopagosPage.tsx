@@ -861,7 +861,7 @@ export default function EscanerInfopagosPage() {
       form.append('confirmacion_humana', 'true')
     }
     if (montoAlto) {
-      toast.info(mensajeMontoRevisionManual(Number(vM.valor)))
+      toast(mensajeMontoRevisionManual(Number(vM.valor)))
     }
     if (borradorId) {
       form.append('borrador_id', borradorId)

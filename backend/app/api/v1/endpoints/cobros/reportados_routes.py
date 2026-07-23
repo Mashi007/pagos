@@ -48,6 +48,7 @@ from app.services.notificaciones_exclusion_desistimiento import (
 from app.core.email_config_holder import get_email_activo_servicio
 from app.api.v1.endpoints.validadores import validate_cedula
 from app.api.v1.endpoints.pagos import _aplicar_pago_a_cuotas_interno
+from app.services.cuota_pago_integridad import pago_tiene_aplicaciones_cuotas
 from app.services.cobros.pago_reportado_documento import (
     claves_documento_pago_para_reportado,
     documento_numero_desde_pago_reportado,
@@ -872,7 +873,23 @@ def _crear_pago_desde_reportado_y_aplicar_cuotas(db: Session, pr: PagoReportado,
             pr.referencia_interna,
             ya,
         )
-        # El pago ya esta en cartera: el reporte no debe quedar en aprobado/en_revision.
+        # El pago ya esta en cartera: forzar autoconciliacion y reporte importado (sin limbo).
+        pago_existente = db.get(Pago, int(ya))
+        if pago_existente is not None:
+            from app.services.pago_autoconciliacion import marcar_pago_autoconciliado
+
+            marcar_pago_autoconciliado(pago_existente)
+            try:
+                if not pago_tiene_aplicaciones_cuotas(db, int(pago_existente.id)):
+                    _aplicar_pago_a_cuotas_interno(pago_existente, db)
+                    marcar_pago_autoconciliado(pago_existente)
+            except Exception as e:
+                logger.warning(
+                    "[COBROS] Aprobar ref=%s: pago id=%s ya en cartera; cascada opcional fallo: %s",
+                    pr.referencia_interna,
+                    ya,
+                    e,
+                )
         pr.estado = "importado"
         pr.falla_validadores_manual = False
         db.add(pr)
@@ -1050,12 +1067,41 @@ def aprobar_pago_reportado(
         try:
             _crear_pago_desde_reportado_y_aplicar_cuotas(db, pr, usuario_email)
             db.commit()
-        except HTTPException:
-            pass
+        except HTTPException as exc:
+            db.rollback()
+            db.refresh(pr)
+            pago_ya = primer_pago_id_si_existe_para_claves_reportado(db, pr)
+            if pago_ya is not None:
+                # Pago en cartera pese al error: cerrar limbo aprobado → importado + autoconciliar.
+                pago_ex = db.get(Pago, int(pago_ya))
+                if pago_ex is not None:
+                    from app.services.pago_autoconciliacion import marcar_pago_autoconciliado
+
+                    marcar_pago_autoconciliado(pago_ex)
+                pr.estado = "importado"
+                pr.falla_validadores_manual = False
+                db.add(pr)
+                db.commit()
+                db.refresh(pr)
+            else:
+                # No dejar "aprobado" sin pago en cartera.
+                raise HTTPException(
+                    status_code=exc.status_code,
+                    detail=(
+                        "El reporte estaba en aprobado sin pago en cartera. "
+                        f"{exc.detail if isinstance(exc.detail, str) else exc.detail}"
+                    ),
+                ) from exc
         db.refresh(pr)
         # Si ya hay pago en cartera, no dejar el reporte en aprobado.
         if (getattr(pr, "estado", None) or "").strip() != "importado":
             if primer_pago_id_si_existe_para_claves_reportado(db, pr) is not None:
+                pago_ya2 = primer_pago_id_si_existe_para_claves_reportado(db, pr)
+                pago_ex2 = db.get(Pago, int(pago_ya2)) if pago_ya2 is not None else None
+                if pago_ex2 is not None:
+                    from app.services.pago_autoconciliacion import marcar_pago_autoconciliado
+
+                    marcar_pago_autoconciliado(pago_ex2)
                 pr.estado = "importado"
                 pr.falla_validadores_manual = False
                 db.add(pr)
@@ -1063,10 +1109,14 @@ def aprobar_pago_reportado(
                 db.refresh(pr)
         if (getattr(pr, "estado", None) or "").strip() == "importado" and getattr(pr, "recibo_pdf", None):
             return {"ok": True, "mensaje": "Ya estaba importado a pagos."}
-        if getattr(pr, "recibo_pdf", None):
-            return {"ok": True, "mensaje": "Ya estaba aprobado."}
-        if primer_pago_id_si_existe_para_claves_reportado(db, pr) is None:
-            return {"ok": True, "mensaje": "Ya estaba aprobado."}
+        if (getattr(pr, "estado", None) or "").strip() != "importado":
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "El reporte está en 'aprobado' pero no quedó importado a cartera. "
+                    "Verifique tasa Bs, institución, documento y préstamo; luego intente Aprobar de nuevo."
+                ),
+            )
         logger.info(
             "[COBROS] Aprobar id=%s ref=%s: aprobado y pago en cartera, sin PDF persistido; completando recibo/correo.",
             pr.id,
@@ -1140,6 +1190,15 @@ def aprobar_pago_reportado(
                         pago_ids_para_dropear_cache.add(int(_hid))
                         estados_previos_dropear_cache[int(_hid)] = str(_hst)
             db.commit()
+            db.refresh(pr)
+            if (getattr(pr, "estado", None) or "").strip() != "importado":
+                raise HTTPException(
+                    status_code=500,
+                    detail=(
+                        "Aprobación incompleta: el pago no quedó en estado importado/autoconciliado. "
+                        "Reintente Aprobar; si persiste, revise el préstamo y el documento."
+                    ),
+                )
             _log_fase_aprobacion(
                 flujo="aprobar_directo",
                 fase="db_aprobacion_commit",
@@ -1881,6 +1940,15 @@ def cambiar_estado_pago(
                         pago_ids_para_dropear_cache.add(int(_hid))
                         estados_previos_dropear_cache[int(_hid)] = str(_hst)
             db.commit()
+            db.refresh(pr)
+            if (getattr(pr, "estado", None) or "").strip() != "importado":
+                raise HTTPException(
+                    status_code=500,
+                    detail=(
+                        "Aprobación incompleta: el pago no quedó en estado importado/autoconciliado. "
+                        "Reintente aprobar desde el detalle."
+                    ),
+                )
             _log_fase_aprobacion(
                 flujo="aprobar_patch_estado",
                 fase="db_aprobacion_commit",
