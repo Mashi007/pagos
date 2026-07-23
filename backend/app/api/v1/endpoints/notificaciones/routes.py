@@ -1701,6 +1701,7 @@ def _tarea_enviar_caso_manual(
     Ejecuta POST /enviar-caso-manual en segundo plano (misma lógica que antes síncrono).
     Evita timeouts de proxy (p. ej. Render) cuando hay cientos de envíos SMTP seguidos.
     """
+    import time
     from datetime import timezone
 
     from app.core.database import SessionLocal
@@ -1728,13 +1729,91 @@ def _tarea_enviar_caso_manual(
             )
             db.commit()
             return
+
+        # Heartbeat inicial: el cliente puede sondear avance de inmediato.
+        persist_ultimo_envio_batch(
+            db,
+            resultado={
+                "tipo_caso": tipo,
+                "total_en_lista": 0,
+                "enviados": 0,
+                "fallidos": 0,
+                "sin_email": 0,
+                "detalles": {
+                    "tipo_caso": tipo,
+                    "token_seguimiento": token_seguimiento,
+                    "en_proceso": True,
+                    "procesados": 0,
+                },
+            },
+            origen="api_enviar_caso_manual",
+            inicio_utc=inicio_utc,
+            en_proceso=True,
+        )
+        db.commit()
+
+        last_hb = [0.0]
+
+        def _on_progress(p: dict) -> None:
+            now = time.monotonic()
+            procesados = int(p.get("procesados") or 0)
+            total = int(p.get("total_en_lista") or 0)
+            # Throttle ~1.5s; siempre el último ítem.
+            if (
+                now - last_hb[0] < 1.5
+                and total > 0
+                and procesados < total
+                and procesados > 0
+            ):
+                return
+            last_hb[0] = now
+            try:
+                persist_ultimo_envio_batch(
+                    db,
+                    resultado={
+                        "tipo_caso": tipo,
+                        "total_en_lista": total,
+                        "enviados": int(p.get("enviados") or 0),
+                        "fallidos": int(p.get("fallidos") or 0),
+                        "sin_email": int(p.get("sin_email") or 0),
+                        "omitidos_config": int(p.get("omitidos_config") or 0),
+                        "omitidos_paquete_incompleto": int(
+                            p.get("omitidos_paquete_incompleto") or 0
+                        ),
+                        "omitidos_desistimiento": int(
+                            p.get("omitidos_desistimiento") or 0
+                        ),
+                        "detalles": {
+                            "tipo_caso": tipo,
+                            "token_seguimiento": token_seguimiento,
+                            "en_proceso": True,
+                            "procesados": procesados,
+                            "total_en_lista": total,
+                        },
+                    },
+                    origen="api_enviar_caso_manual",
+                    inicio_utc=inicio_utc,
+                    en_proceso=True,
+                )
+                db.commit()
+            except Exception:
+                try:
+                    db.rollback()
+                except Exception:
+                    pass
+                logger.debug(
+                    "[notif] heartbeat progreso fallo tipo=%s", tipo, exc_info=True
+                )
+
         res = notificaciones_tabs.ejecutar_envio_caso_manual(
-            db, tipo, fecha_referencia=fecha_ref
+            db, tipo, fecha_referencia=fecha_ref, on_progress=_on_progress
         )
         para_persist = {k: v for k, v in res.items() if k != "mensaje"}
         det = dict(para_persist["detalles"]) if isinstance(para_persist.get("detalles"), dict) else {}
         det["token_seguimiento"] = token_seguimiento
         det["tipo_caso"] = tipo
+        det["en_proceso"] = False
+        det["procesados"] = int(para_persist.get("total_en_lista") or 0)
         para_persist["detalles"] = det
         persist_ultimo_envio_batch(
             db,

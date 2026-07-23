@@ -49,12 +49,23 @@ import {
   peekListadoKpisCacheStale,
   getRecentlyHiddenPagoReportadoIds,
   getPagoReportadoComprobanteBlob,
+  escanerInfopagosExtraerComprobante,
+  updatePagoReportado,
   COBROS_LISTADO_KPIS_CACHE_TTL_MS,
+  COBROS_ESCANER_EXTRAER_REESCANEO_TIMEOUT_MS,
   type PagoReportadoItem,
   type ListPagosReportadosResponse,
   type PagosReportadosKpis,
   type CambiarEstadoPagoResponse,
 } from '../services/cobrosService'
+import {
+  buildFormDataEscanerComprobante,
+  mergeCamposFormularioDesdeSugerenciaOcr,
+  mensajeFalloExtraccionEscaner,
+} from '../utils/escanerComprobanteInfopagos'
+import { blobComprobanteAFileParaEscaneo } from '../utils/comprobanteImagenAuth'
+import { normalizarComprobanteArchivoParaEscaneo } from '../utils/normalizarComprobanteArchivo'
+import { FUENTE_TASA_DEFAULT } from '../constants/fuenteTasaCambio'
 
 import { Button } from '../components/ui/button'
 
@@ -394,6 +405,26 @@ function puedeAprobarIndividualRow(row: PagoReportadoItem): boolean {
   return true
 }
 
+/** Cédula del listado → tipo + número para el escáner. */
+function parseCedulaListadoReportado(
+  cedulaDisplay: string
+): { tipo: string; numero: string } | null {
+  const raw = String(cedulaDisplay || '')
+    .replace(/[^0-9A-Za-z]/g, '')
+    .toUpperCase()
+    .trim()
+  if (raw.length < 7) return null
+  const tipo = raw.charAt(0)
+  const numero = raw.slice(1).replace(/\D/g, '')
+  if (!['V', 'E', 'J', 'G'].includes(tipo) || numero.length < 6) return null
+  return { tipo, numero }
+}
+
+function puedeReescanearMasivoRow(row: PagoReportadoItem): boolean {
+  if (row.estado !== 'pendiente' && row.estado !== 'en_revision') return false
+  return Boolean(row.tiene_comprobante)
+}
+
 /** Anchos por defecto (px) para la tabla de pagos reportados; el usuario puede redimensionar. */
 const COBROS_REPORTADOS_COL_WIDTHS_KEY =
   'rapicredit:cobrosPagosReportados:colWidthsV1'
@@ -521,6 +552,15 @@ export default function CobrosPagosReportadosPage() {
     fail: number
   } | null>(null)
   const bulkCancelRef = useRef(false)
+
+  const [bulkRescanning, setBulkRescanning] = useState(false)
+  const [bulkRescanProgress, setBulkRescanProgress] = useState<{
+    actual: number
+    total: number
+    ok: number
+    fail: number
+  } | null>(null)
+  const bulkRescanCancelRef = useRef(false)
 
   const headerCheckboxRef = useRef<HTMLInputElement>(null)
 
@@ -1471,7 +1511,195 @@ export default function CobrosPagosReportadosPage() {
 
   const handleCancelarBulk = useCallback(() => {
     bulkCancelRef.current = true
+    bulkRescanCancelRef.current = true
   }, [])
+
+  const handleReescanearMasivo = async () => {
+    const ids = [...selectedIds]
+    if (!ids.length) return
+    const byId = new Map(itemsTabla.map(r => [r.id, r]))
+    const elegibles = ids
+      .map(id => byId.get(id))
+      .filter((r): r is PagoReportadoItem => Boolean(r && puedeReescanearMasivoRow(r)))
+    if (!elegibles.length) {
+      toast.error(
+        'Ningún seleccionado tiene comprobante para reescanear (solo pendiente / en revisión).'
+      )
+      return
+    }
+    if (
+      !window.confirm(
+        '¿Reescanear ' +
+          String(elegibles.length) +
+          ' comprobante(s) seleccionado(s)? Se actualizarán fecha, banco, monto y número de operación con lo que lea el OCR. ' +
+          'Puede cancelar el lote; lo ya guardado permanece.'
+      )
+    ) {
+      return
+    }
+    bulkRescanCancelRef.current = false
+    setBulkRescanning(true)
+    setBulkRescanProgress({
+      actual: 0,
+      total: elegibles.length,
+      ok: 0,
+      fail: 0,
+    })
+    let ok = 0
+    let fail = 0
+    let primerError = ''
+    let cancelado = false
+    const patchById = new Map<number, Partial<PagoReportadoItem>>()
+
+    for (let i = 0; i < elegibles.length; i += 1) {
+      if (bulkRescanCancelRef.current) {
+        cancelado = true
+        break
+      }
+      const row = elegibles[i]!
+      setBulkRescanProgress({
+        actual: i + 1,
+        total: elegibles.length,
+        ok,
+        fail,
+      })
+      try {
+        const ced = parseCedulaListadoReportado(row.cedula_display)
+        if (!ced) {
+          throw new Error('Cédula inválida en el listado.')
+        }
+        const blob = await getPagoReportadoComprobanteBlob(row.id)
+        const archivo = await normalizarComprobanteArchivoParaEscaneo(
+          await blobComprobanteAFileParaEscaneo(blob, blob.type)
+        )
+        const fd = buildFormDataEscanerComprobante({
+          tipoCedula: ced.tipo,
+          numeroCedula: ced.numero,
+          comprobante: archivo,
+          fuenteTasaCambio: FUENTE_TASA_DEFAULT,
+          institucionPlantillaHint: row.institucion_financiera,
+          prestamoObjetivoId: row.prestamo_objetivo_id ?? undefined,
+        })
+        const res = await escanerInfopagosExtraerComprobante(fd, {
+          timeoutMs: COBROS_ESCANER_EXTRAER_REESCANEO_TIMEOUT_MS,
+        })
+        if (!res.ok) {
+          throw new Error(mensajeFalloExtraccionEscaner(res))
+        }
+        if (!res.sugerencia) {
+          throw new Error('Sin sugerencias del modelo.')
+        }
+        const monRow = (row.moneda || 'USD').toUpperCase()
+        const merged = mergeCamposFormularioDesdeSugerenciaOcr(
+          {
+            fechaPago: (row.fecha_pago || '').toString().slice(0, 10),
+            institucion: row.institucion_financiera || '',
+            otroInstitucion: '',
+            numeroOperacion: row.numero_operacion || '',
+            monto: row.monto != null ? String(row.monto) : '',
+            moneda: monRow === 'BS' ? 'BS' : 'USD',
+          },
+          res.sugerencia,
+          { reemplazarSinConservarPrevios: true }
+        )
+        const montoNum = merged.monto ? Number(merged.monto) : NaN
+        const payload: {
+          fecha_pago?: string
+          institucion_financiera?: string
+          numero_operacion?: string
+          monto?: number
+          moneda?: string
+        } = {}
+        if (merged.fechaPago) payload.fecha_pago = merged.fechaPago
+        if (merged.institucion.trim()) {
+          payload.institucion_financiera = merged.institucion.trim()
+        }
+        if (merged.numeroOperacion.trim()) {
+          payload.numero_operacion = merged.numeroOperacion.trim()
+        }
+        if (Number.isFinite(montoNum) && montoNum >= 0) {
+          payload.monto = montoNum
+        }
+        if (merged.moneda === 'BS' || merged.moneda === 'USD') {
+          payload.moneda = merged.moneda
+        }
+        if (!Object.keys(payload).length) {
+          throw new Error('OCR sin campos útiles para guardar.')
+        }
+        await updatePagoReportado(row.id, payload)
+        patchById.set(row.id, {
+          fecha_pago: payload.fecha_pago ?? row.fecha_pago,
+          institucion_financiera:
+            payload.institucion_financiera ?? row.institucion_financiera,
+          numero_operacion: payload.numero_operacion ?? row.numero_operacion,
+          monto: payload.monto ?? row.monto,
+          moneda: payload.moneda ?? row.moneda,
+        })
+        ok += 1
+      } catch (e: unknown) {
+        fail += 1
+        if (!primerError) {
+          primerError =
+            e instanceof Error
+              ? e.message
+              : getErrorMessage(e) || 'Error al reescanear'
+        }
+      }
+      setBulkRescanProgress({
+        actual: i + 1,
+        total: elegibles.length,
+        ok,
+        fail,
+      })
+    }
+
+    if (patchById.size > 0) {
+      setData(prev => {
+        if (!prev) return prev
+        return {
+          ...prev,
+          items: prev.items.map(r => {
+            const patch = patchById.get(r.id)
+            return patch ? { ...r, ...patch } : r
+          }),
+        }
+      })
+      invalidateCobrosListadoKpisCache()
+    }
+
+    setBulkRescanning(false)
+    setBulkRescanProgress(null)
+    bulkRescanCancelRef.current = false
+
+    if (cancelado) {
+      toast(
+        'Reescaneo cancelado. OK: ' +
+          String(ok) +
+          '. Fallidos: ' +
+          String(fail) +
+          '. Pendientes: ' +
+          String(Math.max(0, elegibles.length - ok - fail)) +
+          '.',
+        { duration: 8000 }
+      )
+    } else if (fail === 0 && ok > 0) {
+      toast.success('Reescaneo masivo: ' + String(ok) + ' correcto(s).')
+    } else if (ok > 0 && fail > 0) {
+      toast(
+        'Reescaneados: ' +
+          String(ok) +
+          '. Fallidos: ' +
+          String(fail) +
+          (primerError ? '. Ej.: ' + primerError.slice(0, 120) : ''),
+        { duration: 9000 }
+      )
+    } else if (fail > 0) {
+      toast.error(
+        'No se pudo reescanear. ' +
+          (primerError ? primerError.slice(0, 180) : 'Revise comprobantes.')
+      )
+    }
+  }
 
   const handleAprobarMasivo = async () => {
     const ids = [...selectedIds]
@@ -2011,17 +2239,26 @@ export default function CobrosPagosReportadosPage() {
                     Restaurar anchos
                   </Button>
                 </div>
-                {(selectedIds.length > 0 || bulkApproving) && (
+                {(selectedIds.length > 0 ||
+                  bulkApproving ||
+                  bulkRescanning) && (
                   <div className="mb-2 flex flex-wrap items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50/90 px-3 py-2 text-sm text-emerald-950 dark:bg-emerald-950/30 dark:text-emerald-50">
                     <span className="font-medium">
-                      {bulkApproving && bulkProgress
-                        ? `Aprobando ${bulkProgress.actual} de ${bulkProgress.total}…` +
-                          (bulkProgress.fail > 0
-                            ? ` (${bulkProgress.fail} con error)`
+                      {bulkRescanning && bulkRescanProgress
+                        ? `Reescaneando ${bulkRescanProgress.actual} de ${bulkRescanProgress.total}…` +
+                          (bulkRescanProgress.fail > 0
+                            ? ` (${bulkRescanProgress.fail} con error)`
                             : '')
-                        : bulkApproving
-                          ? 'Aprobando…'
-                          : String(selectedIds.length) + ' seleccionado(s)'}
+                        : bulkApproving && bulkProgress
+                          ? `Aprobando ${bulkProgress.actual} de ${bulkProgress.total}…` +
+                            (bulkProgress.fail > 0
+                              ? ` (${bulkProgress.fail} con error)`
+                              : '')
+                          : bulkRescanning
+                            ? 'Reescaneando…'
+                            : bulkApproving
+                              ? 'Aprobando…'
+                              : String(selectedIds.length) + ' seleccionado(s)'}
                     </span>
                     {bulkApproving && bulkProgress && bulkProgress.total > 0 ? (
                       <span
@@ -2045,11 +2282,66 @@ export default function CobrosPagosReportadosPage() {
                         />
                       </span>
                     ) : null}
+                    {bulkRescanning &&
+                    bulkRescanProgress &&
+                    bulkRescanProgress.total > 0 ? (
+                      <span
+                        className="h-2 w-32 overflow-hidden rounded-full bg-sky-200/60"
+                        role="progressbar"
+                        aria-valuemin={0}
+                        aria-valuemax={bulkRescanProgress.total}
+                        aria-valuenow={bulkRescanProgress.actual}
+                        aria-label="Progreso de reescaneo masivo"
+                      >
+                        <span
+                          className="block h-full bg-sky-600 transition-all"
+                          style={{
+                            width: `${Math.min(
+                              100,
+                              Math.round(
+                                (bulkRescanProgress.actual /
+                                  bulkRescanProgress.total) *
+                                  100
+                              )
+                            )}%`,
+                          }}
+                        />
+                      </span>
+                    ) : null}
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-8 border-sky-400 bg-white text-sky-900 hover:bg-sky-50"
+                      disabled={
+                        bulkApproving ||
+                        bulkRescanning ||
+                        selectedIds.length === 0
+                      }
+                      onClick={() => void handleReescanearMasivo()}
+                      title="Relee el comprobante de cada seleccionado (OCR) y guarda fecha, banco, monto y operación."
+                    >
+                      {bulkRescanning ? (
+                        <>
+                          <Loader2 className="mr-1.5 inline h-3.5 w-3.5 animate-spin" />
+                          Reescaneando
+                        </>
+                      ) : (
+                        <>
+                          <RefreshCw className="mr-1.5 inline h-3.5 w-3.5" />
+                          Reescanear seleccionados
+                        </>
+                      )}
+                    </Button>
                     <Button
                       type="button"
                       size="sm"
                       className="h-8 bg-emerald-600 text-white hover:bg-emerald-700"
-                      disabled={bulkApproving || selectedIds.length === 0}
+                      disabled={
+                        bulkApproving ||
+                        bulkRescanning ||
+                        selectedIds.length === 0
+                      }
                       onClick={() => void handleAprobarMasivo()}
                     >
                       {bulkApproving ? (
@@ -2061,14 +2353,14 @@ export default function CobrosPagosReportadosPage() {
                         'Aprobar seleccionados'
                       )}
                     </Button>
-                    {bulkApproving ? (
+                    {bulkApproving || bulkRescanning ? (
                       <Button
                         type="button"
                         variant="outline"
                         size="sm"
                         className="h-8 border-amber-400 text-amber-800 hover:bg-amber-50"
                         onClick={handleCancelarBulk}
-                        title="Detiene el lote tras la aprobación actual. Lo ya aprobado queda guardado."
+                        title="Detiene el lote tras el ítem actual. Lo ya procesado queda guardado."
                       >
                         Cancelar lote
                       </Button>
@@ -2140,6 +2432,7 @@ export default function CobrosPagosReportadosPage() {
                                     onChange={toggleSeleccionarTodosPagina}
                                     disabled={
                                       bulkApproving ||
+                                      bulkRescanning ||
                                       seleccionablesEnPagina.length === 0
                                     }
                                     aria-label="Seleccionar en esta página pendientes y en revisión"
@@ -2178,7 +2471,7 @@ export default function CobrosPagosReportadosPage() {
                                   toggleRowSelected(row.id, e.target.checked)
                                 }
                                 disabled={
-                                  bulkApproving || changingEstadoId === row.id
+                                  bulkApproving || bulkRescanning || changingEstadoId === row.id
                                 }
                                 aria-label={
                                   'Seleccionar reporte ' +

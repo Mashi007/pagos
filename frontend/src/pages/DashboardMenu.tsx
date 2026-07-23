@@ -275,7 +275,7 @@ function serieNotificacionesIntervaloDesde20Julio(
   return out.length > 0 ? out : serie
 }
 
-/** Etiqueta de hora en 12 h: 12 am, 3 am, 12 pm, 3 pm, ... */
+/** Etiqueta de hora en 12 h: 12 am, 1 am, ... 11 pm. */
 function etiquetaHoraAmPm(hora: number): string {
   const h = ((Math.trunc(hora) % 24) + 24) % 24
   const h12 = h % 12 === 0 ? 12 : h % 12
@@ -284,11 +284,12 @@ function etiquetaHoraAmPm(hora: number): string {
 }
 
 /**
- * Une totales diarios + tendencia con buckets de 3 h en el mismo eje X.
- * El total diario y la tendencia se marcan a las 00:00 de cada día (connectNulls).
- * Eje X: 12 am, 3 am, 6 am, 9 am, 12 pm, 3 pm, ... (en 00:00 se antepone el día).
+ * Misma ventana de días que la serie diaria (azul): 24 puntos/hora por cada día.
+ * - desempeno_1_cuota: envíos 1 cuota (dias_10_retraso) en esa hora (Caracas).
+ * - enviados / tendencia: total del día en las 24 horas (escalón día a día).
+ * - labelEje: 12 am, 1 am, ... 11 pm; a las 12 am se antepone el día.
  */
-function serieCobranzasConDesempeno3h(
+function serieCobranzasConDesempeno1Cuota(
   serieDiaria: Array<{
     fecha: string
     dia?: string
@@ -296,31 +297,17 @@ function serieCobranzasConDesempeno3h(
     fallidos?: number
     tendencia: number
   }>,
-  serie3h: NotificacionesEnviosPorIntervaloItem[]
+  serieHoraria: NotificacionesEnviosPorIntervaloItem[]
 ): Array<{
   fecha: string
   dia: string
-  enviados: number | null
-  desempeno_3h: number
-  tendencia: number | null
+  labelEje: string
+  enviados: number
+  desempeno_1_cuota: number
+  tendencia: number
   fecha_dia: string
   hora: number
 }> {
-  if (!serie3h.length) {
-    return serieDiaria.map(row => ({
-      fecha: row.fecha,
-      dia: row.dia || row.fecha,
-      enviados: row.enviados,
-      desempeno_3h: 0,
-      tendencia: row.tendencia,
-      fecha_dia: row.fecha,
-      hora: 0,
-    }))
-  }
-
-  const daySet = new Set(serieDiaria.map(r => r.fecha))
-  const enviadosByDay = new Map(serieDiaria.map(r => [r.fecha, r.enviados]))
-  const tendenciaByDay = new Map(serieDiaria.map(r => [r.fecha, r.tendencia]))
   const nombresMes = [
     'Ene',
     'Feb',
@@ -336,32 +323,51 @@ function serieCobranzasConDesempeno3h(
     'Dic',
   ]
 
-  const filtered = serie3h.filter(r =>
-    daySet.has(r.fecha_dia || r.fecha.slice(0, 10))
-  )
+  const enviadosByDay = new Map(serieDiaria.map(r => [r.fecha, r.enviados]))
+  const tendenciaByDay = new Map(serieDiaria.map(r => [r.fecha, r.tendencia]))
+  const byDayHour = new Map<string, number>()
+  for (const row of serieHoraria) {
+    const fechaDia = row.fecha_dia || row.fecha.slice(0, 10)
+    const h = Math.max(0, Math.min(23, Math.trunc(Number(row.hora) || 0)))
+    byDayHour.set(`${fechaDia}|${h}`, Number(row.enviados) || 0)
+  }
 
-  return filtered.map(p => {
-    const fechaDia = p.fecha_dia || p.fecha.slice(0, 10)
-    const markDaily = p.hora === 0
-    const horaLabel = etiquetaHoraAmPm(p.hora)
-    let ejeLabel = horaLabel
-    if (markDaily) {
-      const dt = parseIsoDateLocal(fechaDia)
-      ejeLabel = dt
-        ? `${dt.getDate()} ${nombresMes[dt.getMonth()]} ${horaLabel}`
-        : horaLabel
-    }
+  // Un punto por cada hora (0..23) de cada día de la curva azul => empatan día a día.
+  const out: Array<{
+    fecha: string
+    dia: string
+    labelEje: string
+    enviados: number
+    desempeno_1_cuota: number
+    tendencia: number
+    fecha_dia: string
+    hora: number
+  }> = []
 
-    return {
-      fecha: p.fecha,
-      dia: ejeLabel,
-      enviados: markDaily ? (enviadosByDay.get(fechaDia) ?? null) : null,
-      desempeno_3h: p.enviados,
-      tendencia: markDaily ? (tendenciaByDay.get(fechaDia) ?? null) : null,
-      fecha_dia: fechaDia,
-      hora: p.hora,
+  for (const dayRow of serieDiaria) {
+    const fechaDia = dayRow.fecha
+    const dt = parseIsoDateLocal(fechaDia)
+    for (let h = 0; h < 24; h++) {
+      const horaLabel = etiquetaHoraAmPm(h)
+      const labelEje =
+        h === 0 && dt
+          ? `${dt.getDate()} ${nombresMes[dt.getMonth()]} ${horaLabel}`
+          : horaLabel
+      const fechaHora = `${fechaDia}T${String(h).padStart(2, '0')}:00:00`
+      out.push({
+        fecha: fechaHora,
+        dia: fechaHora,
+        labelEje,
+        enviados: enviadosByDay.get(fechaDia) ?? dayRow.enviados ?? 0,
+        desempeno_1_cuota: byDayHour.get(`${fechaDia}|${h}`) ?? 0,
+        tendencia: tendenciaByDay.get(fechaDia) ?? dayRow.tendencia ?? 0,
+        fecha_dia: fechaDia,
+        hora: h,
+      })
     }
-  })
+  }
+
+  return out
 }
 
 export function DashboardMenu() {
@@ -671,14 +677,14 @@ export function DashboardMenu() {
       'notificaciones-envios-por-intervalo',
       'dias_10_retraso',
       NOTIFICACIONES_ENVIOS_TENDENCIA_DIAS,
-      3,
+      1,
     ],
 
     queryFn: async (): Promise<NotificacionesEnviosPorIntervaloResponse> => {
       const params = new URLSearchParams({
         tipo_tab: 'dias_10_retraso',
         dias: String(NOTIFICACIONES_ENVIOS_TENDENCIA_DIAS),
-        horas: '3',
+        horas: '1',
       })
 
       const response = await apiClient.get(
@@ -731,9 +737,9 @@ export function DashboardMenu() {
     [datosNotificacionesMenor60PorIntervalo?.serie]
   )
 
-  const serieNotificacionesMenor60ConDesempeno3h = useMemo(
+  const serieNotificacionesMenor60ConDesempeno1Cuota = useMemo(
     () =>
-      serieCobranzasConDesempeno3h(
+      serieCobranzasConDesempeno1Cuota(
         serieNotificacionesMenor60ConTendencia,
         serieNotificacionesMenor60IntervaloGrafico
       ),
@@ -2071,9 +2077,13 @@ export function DashboardMenu() {
                 persistir, Gmail puede tener cientos y esta gráfica pocos. Eje X
                 desde el <strong>20 de julio</strong> del año del último día con
                 datos (muestra de {NOTIFICACIONES_ENVIOS_TENDENCIA_DIAS} d
-                recortada). Curva ámbar: <strong>desempeño cada 3 horas</strong>{' '}
-                (Caracas). Línea gris discontinua: <strong>tendencia</strong>{' '}
-                (regresión lineal sobre el total diario).
+                recortada). Curva ámbar: <strong>1 cuota por hora</strong> —{' '}
+                <strong>24 horas por día</strong> (misma secuencia día a día que el
+                total azul). Fuente:{' '}
+                <code className="rounded bg-gray-100 px-1 py-0.5 text-[11px]">envios_notificacion</code>
+                /{' '}
+                <code className="rounded bg-gray-100 px-1 py-0.5 text-[11px]">dias_10_retraso</code>
+                (Caracas). Azul en escalón: total de ese día.
               </CardDescription>
             </CardHeader>
 
@@ -2101,7 +2111,7 @@ export function DashboardMenu() {
                 <div className="h-[320px] w-full">
                   <ResponsiveContainer width="100%" height={320}>
                     <RechartsLineChart
-                      data={serieNotificacionesMenor60ConDesempeno3h}
+                      data={serieNotificacionesMenor60ConDesempeno1Cuota}
                       margin={{
                         top: 12,
                         right: 20,
@@ -2114,8 +2124,15 @@ export function DashboardMenu() {
                       <XAxis
                         dataKey="dia"
                         tick={chartAxisTick}
-                        interval="preserveStartEnd"
-                        minTickGap={16}
+                        interval={0}
+                        minTickGap={4}
+                        tickFormatter={value => {
+                          const row =
+                            serieNotificacionesMenor60ConDesempeno1Cuota.find(
+                              r => r.dia === value || r.fecha === value
+                            )
+                          return row?.labelEje || ''
+                        }}
                       />
 
                       <YAxis
@@ -2151,53 +2168,53 @@ export function DashboardMenu() {
                           }
 
                           if (
-                            name === 'Desempeño cada 3 h' ||
-                            name === 'desempeno_3h'
+                            name === 'Desempeño 1 cuota / hora' ||
+                            name === 'desempeno_1_cuota'
                           ) {
-                            return [rounded, 'Desempeño cada 3 h']
+                            return [rounded, '1 cuota enviados / hora']
                           }
 
-                          return [rounded, 'Enviados (éxito SMTP)']
+                          return [rounded, 'Total del día (1 cuota)']
                         }}
-                        labelFormatter={(_, payload) =>
-                          payload?.[0]?.payload?.fecha
-                            ? String(payload[0].payload.fecha)
-                            : ''
-                        }
+                        labelFormatter={(_, payload) => {
+                          const row = payload?.[0]?.payload
+                          if (!row) return ''
+                          const h = etiquetaHoraAmPm(Number(row.hora) || 0)
+                          return `${row.fecha_dia || ''} ${h}`.trim()
+                        }}
                       />
 
                       <Legend {...chartLegendStyle} />
 
                       <Line
-                        type="monotone"
+                        type="stepAfter"
                         dataKey="enviados"
-                        name="Correos enviados (SMTP)"
+                        name="Total del día (1 cuota)"
                         stroke="#0ea5e9"
                         strokeWidth={2}
-                        dot={{ r: 4 }}
-                        activeDot={{ r: 6 }}
-                        connectNulls
+                        dot={false}
+                        activeDot={{ r: 5 }}
+                        isAnimationActive={false}
                       />
 
                       <Line
                         type="monotone"
-                        dataKey="desempeno_3h"
-                        name="Desempeño cada 3 h"
+                        dataKey="desempeno_1_cuota"
+                        name="Desempeño 1 cuota / hora"
                         stroke="#d97706"
                         strokeWidth={2}
-                        dot={{ r: 3 }}
+                        dot={{ r: 2 }}
                         activeDot={{ r: 5 }}
                       />
 
                       <Line
-                        type="linear"
+                        type="stepAfter"
                         dataKey="tendencia"
                         name="Tendencia (regresión lineal)"
                         stroke="#64748b"
                         strokeWidth={2}
                         strokeDasharray="6 4"
                         dot={false}
-                        connectNulls
                         isAnimationActive={false}
                       />
                     </RechartsLineChart>

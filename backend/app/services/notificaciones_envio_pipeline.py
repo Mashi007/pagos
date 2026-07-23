@@ -264,6 +264,7 @@ def _enviar_correos_items(
     db,
     forzar_destinos_prueba: Optional[List[str]] = None,
     fecha_referencia: Optional[date] = None,
+    on_progress: Optional[Callable[[dict], None]] = None,
 ) -> dict:
     """
     Envia por Email y/o WhatsApp por cada item.
@@ -327,6 +328,28 @@ def _enviar_correos_items(
     omitidos_desistimiento = 0
     persistidos_ok = 0
     correlativos_en_batch = {}
+    total_items = len(items)
+
+    def _report_progress(procesados: int) -> None:
+        if not on_progress:
+            return
+        try:
+            on_progress(
+                {
+                    "procesados": int(procesados),
+                    "total_en_lista": int(total_items),
+                    "enviados": int(enviados),
+                    "fallidos": int(fallidos),
+                    "sin_email": int(sin_email),
+                    "omitidos_config": int(omitidos_config),
+                    "omitidos_paquete_incompleto": int(omitidos_paquete_incompleto),
+                    "omitidos_desistimiento": int(omitidos_desistimiento),
+                }
+            )
+        except Exception:
+            logger.debug("[notif_envio] on_progress fallo", exc_info=True)
+
+    _report_progress(0)
     if db:
         alinear_items_contacto_titular_prestamo(db, items)
     for idx, item in enumerate(items):
@@ -346,6 +369,7 @@ def _enviar_correos_items(
                     motivo_estado,
                 )
                 omitidos_desistimiento += 1
+                _report_progress(idx + 1)
                 continue
         tipo_cfg = config_envios.get(tipo) or {}
         # Masivos: nunca carta PDF de cobranza ni contexto de préstamo (comunicación general).
@@ -356,6 +380,7 @@ def _enviar_correos_items(
         # Omitir solo cuando "Envío" está explícitamente desactivado (habilitado=False)
         if tipo_cfg.get("habilitado", True) is False:
             omitidos_config += 1
+            _report_progress(idx + 1)
             continue
         plantilla_id = _parse_plantilla_id_desde_config(tipo_cfg.get("plantilla_id"))
 
@@ -365,6 +390,7 @@ def _enviar_correos_items(
                 if not ok_plant:
                     log_envio_paquete_incompleto(item_id_log, mot_plant, tipo)
                     omitidos_paquete_incompleto += 1
+                    _report_progress(idx + 1)
                     continue
             requiere_pdf_cobranza = (
                 tipo != "MASIVOS"
@@ -377,6 +403,7 @@ def _enviar_correos_items(
                     item_id_log, "incluir_pdf_anexo_desactivado_en_config", tipo
                 )
                 omitidos_paquete_incompleto += 1
+                _report_progress(idx + 1)
                 continue
             if (
                 (requiere_pdf_cobranza or _tipo_menor_60_solo_pdf_fijo(tipo))
@@ -386,12 +413,14 @@ def _enviar_correos_items(
                     item_id_log, "incluir_adjuntos_fijos_no_puede_desactivarse", tipo
                 )
                 omitidos_paquete_incompleto += 1
+                _report_progress(idx + 1)
                 continue
             if requiere_pdf_cobranza and not item.get("prestamo_id"):
                 log_envio_paquete_incompleto(
                     item_id_log, "sin_prestamo_id_para_pdf_carta", tipo
                 )
                 omitidos_paquete_incompleto += 1
+                _report_progress(idx + 1)
                 continue
 
         # No reutilizar contexto de otro prestamo (mismo dict en lista, cache de UI, etc.).
@@ -525,6 +554,7 @@ def _enviar_correos_items(
                 else:
                     log_envio_paquete_incompleto(item_id_log, mot_pkg, tipo)
                     omitidos_paquete_incompleto += 1
+                    _report_progress(idx + 1)
                     continue
 
         # Mismo HTML y adjuntos que producción; destino: prueba o cliente.
@@ -544,6 +574,7 @@ def _enviar_correos_items(
             for e in to_email:
                 low = e.lower()
                 if low in _seen_to:
+                    _report_progress(idx + 1)
                     continue
                 _seen_to.add(low)
                 _dedup.append(e)
@@ -590,6 +621,7 @@ def _enviar_correos_items(
                         motivo2,
                     )
                     omitidos_desistimiento += 1
+                    _report_progress(idx + 1)
                     continue
             tipo_tab_envio = _tipo_tab_para_persistencia(tipo)
             if tipo == "PAGO_2_DIAS_ANTES_PENDIENTE":
@@ -670,6 +702,7 @@ def _enviar_correos_items(
                 enviados_whatsapp += 1
             else:
                 fallidos_whatsapp += 1
+        _report_progress(idx + 1)
     if persistidos_ok:
         log_envio_persistencia(persistidos_ok, True)
     log_envio_resumen(

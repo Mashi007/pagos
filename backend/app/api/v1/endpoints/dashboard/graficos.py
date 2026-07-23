@@ -1701,11 +1701,11 @@ def get_notificaciones_envios_por_dia(
 
 
 def _compute_notificaciones_envios_por_intervalo(
-    db: Session, tipo_tab: str, dias: int, horas: int = 3
+    db: Session, tipo_tab: str, dias: int, horas: int = 1
 ) -> dict:
     """
-    Cuenta envíos en envios_notificacion por ventanas de `horas` (p. ej. 3) en America/Caracas.
-    Útil para ver el desempeño intradía (picos SMTP) junto a la serie diaria.
+    Cuenta envíos en envios_notificacion por ventanas de `horas` (p. ej. 1) en America/Caracas.
+    Para dias_10_retraso (= 1 cuota): desempeño = cuántos envíos hubo cada hora.
     """
     try:
         horas_ef = min(12, max(1, int(horas)))
@@ -1815,14 +1815,14 @@ def get_notificaciones_envios_por_intervalo(
     ),
     dias: int = Query(90, ge=7, le=366),
     horas: int = Query(
-        3,
+        1,
         ge=1,
         le=12,
-        description="Tamaño del bucket intradía en horas (debe dividir 24).",
+        description="Tamaño del bucket intradía en horas (debe dividir 24). Usar 1 para desempeño por hora.",
     ),
     db: Session = Depends(get_db),
 ):
-    """Desempeño de envíos por intervalos intradía (p. ej. cada 3 h) desde envios_notificacion."""
+    """Desempeño de envíos por intervalos intradía (p. ej. cada 1 h) desde envios_notificacion."""
     if tipo_tab not in TIPOS_NOTIFICACIONES_ENVIOS_TENDENCIA:
         raise HTTPException(
             status_code=400,
