@@ -36,7 +36,6 @@ import {
   FileSpreadsheet,
   TrendingUp,
   LayoutList,
-  Calendar,
   FileStack,
   Scale,
 } from 'lucide-react'
