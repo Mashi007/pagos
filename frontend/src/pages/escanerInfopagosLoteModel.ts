@@ -8,6 +8,10 @@ import {
   normalizarCedulaParaProcesar,
 } from '../utils/cedulaConsultaPublica'
 import { fechaPagoDesdeExtraccionOcrConfiable } from '../utils/escanerComprobanteInfopagos'
+import {
+  mensajeMontoRevisionManual,
+  montoRequiereRevisionManual,
+} from '../utils/umbralRevisionManualMonto'
 
 const INSTITUCIONES_FINANCIERAS = [
   'BINANCE',
@@ -276,12 +280,18 @@ export function filaTrasExtraccion(
   if (s.monto != null && Number.isFinite(s.monto)) {
     montoStr = formatoMontoParaMostrar(s.monto, mon)
   }
-  const revManual = Boolean(res.requiere_revision_manual)
-  const reglas =
+  const montoNum = s.monto != null && Number.isFinite(s.monto) ? Number(s.monto) : null
+  const montoAlto = montoRequiereRevisionManual(montoNum)
+  const revManual = Boolean(res.requiere_revision_manual) || montoAlto
+  let reglas =
     res.validacion_reglas ||
     (revManual
       ? 'Comprobante incompleto: pase a revisión manual y complete los campos.'
       : null)
+  if (montoAlto && montoNum != null) {
+    const msgMonto = mensajeMontoRevisionManual(montoNum)
+    reglas = reglas && !reglas.includes('igual o superior') ? `${reglas} ${msgMonto}` : reglas || msgMonto
+  }
   return {
     ...base,
     extract: 'listo',

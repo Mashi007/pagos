@@ -42,6 +42,10 @@ import {
 } from '../constants/fuenteTasaCambio'
 import { resolverInstitucionDesdeExtraccion } from './escanerInfopagosLoteModel'
 import { fechaPagoDesdeExtraccionOcrConfiable } from '../utils/escanerComprobanteInfopagos'
+import {
+  mensajeMontoRevisionManual,
+  montoRequiereRevisionManual,
+} from '../utils/umbralRevisionManualMonto'
 import { searchParamsRevisionPagosDesdeNumeroDocumento } from '../utils/linkRevisionPagosDesdeEscaner'
 import { mensajeSiFaltaInstitucion } from '../constants/institucionesBancariasPagos'
 
@@ -851,9 +855,13 @@ export default function EscanerInfopagosPage() {
     form.append('monto', montoParaApi(vM.valor))
     form.append('moneda', moneda)
     form.append('fuente_tasa_cambio', fuenteTasa)
-    // Igual que ReportePago: solo calidad/OCR incompleto fuerza cola; el resto autoconcilia.
-    if (requiereRevisionManualOcr) {
+    // OCR incompleto o monto >= 1000 (Bs/USD) → cola manual (visible en Cobros).
+    const montoAlto = montoRequiereRevisionManual(vM.valor)
+    if (requiereRevisionManualOcr || montoAlto) {
       form.append('confirmacion_humana', 'true')
+    }
+    if (montoAlto) {
+      toast.info(mensajeMontoRevisionManual(Number(vM.valor)))
     }
     if (borradorId) {
       form.append('borrador_id', borradorId)

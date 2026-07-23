@@ -482,7 +482,7 @@ def aplicar_reglas_ocr_post_gemini(
 
 
 # Montos escaneados/reportados >= este valor van a revision manual (USD o BS, sin convertir moneda).
-MONTO_UMBRAL_REVISION_MANUAL = 500.0
+MONTO_UMBRAL_REVISION_MANUAL = 1000.0
 
 _RANGO_CUOTA_USD_MIN = 30.0
 _RANGO_CUOTA_USD_MAX = 500.0
@@ -886,16 +886,13 @@ def reportado_exento_autoconciliacion(val: Any, *, moneda: Optional[str] = None)
     """
     True si el reportado NO debe autoconciliar pese a validadores OK.
 
-    Política actual: sin excepciones de monto/BS — siempre False.
-    (``val`` / ``moneda`` se conservan por compatibilidad de firma con callers.)
+    Excepción de negocio: monto >= umbral en la moneda reportada (1000 USD, 1000 Bs,
+    etc.; sin convertir). La unidad no importa: se compara la cifra numérica.
     """
-    _ = (val, moneda)
-    return False
+    return monto_requiere_revision_manual(val, moneda=moneda)
 
 
 def mensaje_excepcion_autoconciliacion(val: Any, *, moneda: Optional[str] = None) -> str:
-    if moneda_reportado_es_bolivares(moneda):
-        return "Pago en bolivares (Bs.); requiere revision manual antes de autoconciliar."
     return mensaje_monto_revision_manual(val, moneda=moneda)
 
 
@@ -927,7 +924,7 @@ def fusionar_validacion_reglas_monto_alto_escaneo(
     *,
     moneda: Optional[str] = None,
 ) -> Optional[str]:
-    """Añade observación de revision manual al escaneo si aplica excepcion BS o monto alto."""
+    """Añade observación de revision manual al escaneo si monto >= umbral (cualquier moneda)."""
     if not reportado_exento_autoconciliacion(monto, moneda=moneda):
         return validacion_reglas
     msg = mensaje_excepcion_autoconciliacion(monto, moneda=moneda)

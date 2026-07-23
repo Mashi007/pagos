@@ -328,7 +328,9 @@ async def escaner_extraer_comprobante_infopagos(
         monto=monto,
         notas_modelo=gem.get("notas") or "",
     )
-    requiere_revision_manual = bool(msg_rev)
+    # Monto >= umbral (Bs o USD, sin convertir): cola manual visible en frontend.
+    monto_alto = cpr.monto_requiere_revision_manual(monto, moneda=moneda)
+    requiere_revision_manual = bool(msg_rev) or monto_alto
     if msg_rev:
         validacion_reglas = drm.fusionar_mensaje_revision(validacion_reglas, msg_rev)
 
@@ -923,7 +925,8 @@ async def escaner_lote_drive_digitalizar(
                     monto=monto,
                     notas_modelo=gem.get("notas") or "",
                 )
-                requiere_revision_manual = bool(msg_rev)
+                monto_alto = cpr.monto_requiere_revision_manual(monto, moneda=moneda)
+                requiere_revision_manual = bool(msg_rev) or monto_alto
                 if msg_rev:
                     validacion_reglas = drm.fusionar_mensaje_revision(validacion_reglas, msg_rev)
 

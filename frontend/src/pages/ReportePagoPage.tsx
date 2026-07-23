@@ -64,6 +64,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 
 import { formatMontoBsVe, parseMontoLatam } from '../utils/montoLatam'
 import {
+  mensajeMontoRevisionManual,
+  montoRequiereRevisionManual,
+} from '../utils/umbralRevisionManualMonto'
+import {
   extraerCaracteresCedulaPublica,
   normalizarCedulaParaProcesar,
 } from '../utils/cedulaConsultaPublica'
@@ -1128,7 +1132,8 @@ export default function ReportePagoPage({
     form.append('moneda', moneda)
 
     if (archivo) form.append('comprobante', archivo)
-    if (requiereRevisionManualOcr) {
+    const montoAlto = montoRequiereRevisionManual(vMonto.valor)
+    if (requiereRevisionManualOcr || montoAlto) {
       form.append('confirmacion_humana', 'true')
     }
 

@@ -1012,7 +1012,9 @@ def _crear_pago_desde_reportado_y_aplicar_cuotas(db: Session, pr: PagoReportado,
         _aplicar_pago_a_cuotas_interno(row, db)
     except ValueError as e:
         raise HTTPException(status_code=409, detail=str(e)) from e
-    row.estado = "PAGADO"
+    from app.services.pago_autoconciliacion import marcar_pago_autoconciliado
+
+    marcar_pago_autoconciliado(row)
     # Estado terminal del reporte: en cartera (alineado con auto-import Infopagos/publico).
     pr.estado = "importado"
     pr.falla_validadores_manual = False

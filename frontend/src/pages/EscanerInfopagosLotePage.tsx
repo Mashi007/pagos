@@ -80,6 +80,10 @@ import {
   type FilaLote,
 } from './escanerInfopagosLoteModel'
 import {
+  mensajeMontoRevisionManual,
+  montoRequiereRevisionManual,
+} from '../utils/umbralRevisionManualMonto'
+import {
   FUENTE_TASA_DEFAULT,
   normalizarFuenteTasaCambio,
   type FuenteTasaCambio,
@@ -971,9 +975,13 @@ export default function EscanerInfopagosLotePage() {
       form.append('monto', montoParaApi(vM.valor))
       form.append('moneda', fila.moneda)
       form.append('fuente_tasa_cambio', fuenteTasa)
-      // Solo si OCR pidió revisión: fuerza cola manual. Si no, el backend puede autoconciliar.
-      if (fila.requiereRevisionManual) {
+      // OCR incompleto o monto >= 1000 (Bs/USD) → cola manual.
+      const montoAlto = montoRequiereRevisionManual(vM.valor)
+      if (fila.requiereRevisionManual || montoAlto) {
         form.append('confirmacion_humana', 'true')
+      }
+      if (montoAlto) {
+        toast.info(mensajeMontoRevisionManual(Number(vM.valor)))
       }
       if (borradorIdFila) {
         form.append('borrador_id', borradorIdFila)
