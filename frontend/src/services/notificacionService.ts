@@ -1247,10 +1247,20 @@ class NotificacionService {
     }>(`${this.baseUrl}/enviar-todas`, {}, { timeout: 20000 })
   }
 
-  /** Envio masivo sincrono solo para un criterio (configuracion por fila). */
+  /** Envio masivo en segundo plano + sondeo; onProgress recibe avance del heartbeat. */
   async enviarCasoManual(
     tipo: string,
-    opts?: { signal?: AbortSignal; fechaCaracas?: string | null }
+    opts?: {
+      signal?: AbortSignal
+      fechaCaracas?: string | null
+      onProgress?: (p: {
+        procesados: number
+        total: number
+        enviados: number
+        fallidos: number
+        sin_email: number
+      }) => void
+    }
   ): Promise<{
     mensaje: string
     tipo_caso: string
@@ -1336,6 +1346,25 @@ class NotificacionService {
         const sigueEnProceso =
           estado === 'en_proceso' || detEnProceso || !ultimo.fin_utc
         if (sigueEnProceso) {
+          const totalN = Number(
+            ultimo.total_en_lista ??
+              (detRec && 'total_en_lista' in detRec
+                ? (detRec as Record<string, unknown>).total_en_lista
+                : 0) ??
+              0
+          )
+          const procesadosN = Number(
+            detRec && 'procesados' in detRec
+              ? (detRec as Record<string, unknown>).procesados
+              : ultimo.enviados ?? 0
+          )
+          opts?.onProgress?.({
+            procesados: Number.isFinite(procesadosN) ? procesadosN : 0,
+            total: Number.isFinite(totalN) ? totalN : 0,
+            enviados: Number(ultimo.enviados ?? 0),
+            fallidos: Number(ultimo.fallidos ?? 0),
+            sin_email: Number(ultimo.sin_email ?? 0),
+          })
           await new Promise<void>(resolve => {
             window.setTimeout(resolve, pollMs)
           })

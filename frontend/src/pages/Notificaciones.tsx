@@ -479,6 +479,15 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
 
   const [enviandoPago10Dias, setEnviandoPago10Dias] = useState(false)
 
+  /** Avance del envío en curso (sondeo heartbeat del servidor). */
+  const [envioProgress, setEnvioProgress] = useState<{
+    procesados: number
+    total: number
+    enviados: number
+    fallidos: number
+    sin_email: number
+  } | null>(null)
+
   /** Confirmación en pantalla (sustituye window.confirm: más clara y fiable en Firefox). */
   const [confirmEnvio, setConfirmEnvio] = useState<null | {
     kind: 'prejudicial' | 'd2antes' | 'pago1dia' | 'pago10dias'
@@ -758,12 +767,18 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
       )
 
       try {
-        const res = await notificacionService.enviarNotificacionesPrejudiciales(
-          {
-            signal: ac.signal,
-            fechaCaracas: fechaCaracasApi,
-          }
-        )
+        setEnvioProgress({
+          procesados: 0,
+          total: n,
+          enviados: 0,
+          fallidos: 0,
+          sin_email: 0,
+        })
+        const res = await notificacionService.enviarCasoManual('PREJUDICIAL', {
+          signal: ac.signal,
+          fechaCaracas: fechaCaracasApi,
+          onProgress: setEnvioProgress,
+        })
 
         toast.dismiss(loadingId)
         toastResultadoEnvioNotificaciones(res, n)
@@ -796,6 +811,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
           operacionListaAbortRef.current = null
         }
         setEnviandoPrejudicial(false)
+        setEnvioProgress(null)
       }
       return
     }
@@ -808,9 +824,20 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
       )
 
       try {
+        setEnvioProgress({
+          procesados: 0,
+          total: n,
+          enviados: 0,
+          fallidos: 0,
+          sin_email: 0,
+        })
         const res = await notificacionService.enviarCasoManual(
           'PAGO_2_DIAS_ANTES_PENDIENTE',
-          { signal: ac.signal, fechaCaracas: fechaCaracasApi }
+          {
+            signal: ac.signal,
+            fechaCaracas: fechaCaracasApi,
+            onProgress: setEnvioProgress,
+          }
         )
 
         toast.dismiss(loadingId)
@@ -844,6 +871,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
           operacionListaAbortRef.current = null
         }
         setEnviandoD2Antes(false)
+        setEnvioProgress(null)
       }
       return
     }
@@ -856,9 +884,20 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
       )
 
       try {
+        setEnvioProgress({
+          procesados: 0,
+          total: n,
+          enviados: 0,
+          fallidos: 0,
+          sin_email: 0,
+        })
         const res = await notificacionService.enviarCasoManual(
           'PAGO_10_DIAS_ATRASADO',
-          { signal: ac.signal, fechaCaracas: fechaCaracasApi }
+          {
+            signal: ac.signal,
+            fechaCaracas: fechaCaracasApi,
+            onProgress: setEnvioProgress,
+          }
         )
 
         toast.dismiss(loadingId)
@@ -892,6 +931,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
           operacionListaAbortRef.current = null
         }
         setEnviandoPago10Dias(false)
+        setEnvioProgress(null)
       }
       return
     }
@@ -903,9 +943,20 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
     )
 
     try {
+      setEnvioProgress({
+        procesados: 0,
+        total: n,
+        enviados: 0,
+        fallidos: 0,
+        sin_email: 0,
+      })
       const res = await notificacionService.enviarCasoManual(
         'PAGO_1_DIA_ATRASADO',
-        { signal: ac.signal, fechaCaracas: fechaCaracasApi }
+        {
+          signal: ac.signal,
+          fechaCaracas: fechaCaracasApi,
+          onProgress: setEnvioProgress,
+        }
       )
 
       toast.dismiss(loadingId)
@@ -939,6 +990,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
         operacionListaAbortRef.current = null
       }
       setEnviandoPago1Dia(false)
+      setEnvioProgress(null)
     }
   }
 
@@ -1955,6 +2007,70 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                       ? 'Enviando...'
                       : 'Enviar notificaciones (manual)'}
                   </Button>
+                )}
+
+
+                {(enviandoPrejudicial ||
+                  enviandoD2Antes ||
+                  enviandoPago1Dia ||
+                  enviandoPago10Dias) && (
+                  <div className="w-full min-w-[220px] max-w-md rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-sky-950 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-50">
+                    <div className="mb-1 flex items-center justify-between gap-2 text-xs font-medium">
+                      <span>
+                        {envioProgress && envioProgress.total > 0
+                          ? `Enviando ${envioProgress.procesados} de ${envioProgress.total}`
+                          : 'Enviando notificaciones…'}
+                      </span>
+                      {envioProgress ? (
+                        <span className="tabular-nums text-[11px] opacity-80">
+                          OK {envioProgress.enviados}
+                          {envioProgress.fallidos > 0
+                            ? ` · fallos ${envioProgress.fallidos}`
+                            : ''}
+                          {envioProgress.sin_email > 0
+                            ? ` · sin correo ${envioProgress.sin_email}`
+                            : ''}
+                        </span>
+                      ) : null}
+                    </div>
+                    <div
+                      className="h-2 w-full overflow-hidden rounded-full bg-sky-200/70 dark:bg-sky-900"
+                      role="progressbar"
+                      aria-valuemin={0}
+                      aria-valuemax={
+                        envioProgress && envioProgress.total > 0
+                          ? envioProgress.total
+                          : 100
+                      }
+                      aria-valuenow={
+                        envioProgress
+                          ? Math.min(
+                              envioProgress.procesados,
+                              envioProgress.total || envioProgress.procesados
+                            )
+                          : 0
+                      }
+                      aria-label="Progreso de envío de notificaciones"
+                    >
+                      <div
+                        className="h-full bg-sky-600 transition-all duration-300 dark:bg-sky-400"
+                        style={{
+                          width: `${
+                            envioProgress && envioProgress.total > 0
+                              ? Math.min(
+                                  100,
+                                  Math.round(
+                                    (envioProgress.procesados /
+                                      envioProgress.total) *
+                                      100
+                                  )
+                                )
+                              : 15
+                          }%`,
+                        }}
+                      />
+                    </div>
+                  </div>
                 )}
 
                 <Button
