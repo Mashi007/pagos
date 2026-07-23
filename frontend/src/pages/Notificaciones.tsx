@@ -1868,11 +1868,6 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                     Recalcular Diferencia fecha
                   </Button>
                 ) : null}
-                {modulo === 'fecha' ? (
-                  <Button asChild type="button" size="sm" variant="outline">
-                    <Link to="/notificaciones/fecha">Vista Q vs fecha BD</Link>
-                  </Button>
-                ) : null}
 
                 {modulo === 'a1dia' && (
                   <Button

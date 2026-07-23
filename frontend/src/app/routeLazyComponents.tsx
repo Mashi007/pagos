@@ -98,9 +98,6 @@ export const ActualizacionesPrestamosDrivePage = lazy(
 )
 
 
-export const FechaQAuditoriaTotalPage = lazy(
-  () => import('../pages/FechaQAuditoriaTotalPage')
-)
 
 
 export const ComunicacionesPage = lazy(() => import('../pages/Comunicaciones'))

@@ -1,6 +1,4 @@
 import { useCallback, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
-
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Calendar, Edit2, Loader2, Save, Search, Trash2, X } from 'lucide-react'
 
@@ -37,7 +35,7 @@ function isoDateOnly(s: string | null | undefined): string {
 }
 
 type Props = {
-  /** En página unificada de notificaciones: sin enlace duplicado a auditoría total. */
+  /** Embebido en Notificaciones u otras pantallas (sin cabecera de módulo). */
   embedded?: boolean
 }
 
@@ -236,18 +234,6 @@ export function Fechas2BusquedaPanel({ embedded = false }: Props) {
             <Search className="h-4 w-4" aria-hidden />
             Buscar
           </Button>
-          {!embedded ? (
-            <Button
-              asChild
-              type="button"
-              variant="outline"
-              className="shrink-0"
-            >
-              <Link to="/notificaciones/fecha">
-                Comparar columna Q vs fecha en BD
-              </Link>
-            </Button>
-          ) : null}
         </CardContent>
       </Card>
 

@@ -282,11 +282,6 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
           icon: LayoutList,
         },
         {
-          title: 'Fechas',
-          href: '/notificaciones/fecha',
-          icon: Calendar,
-        },
-        {
           title: 'Clientes',
           href: '/notificaciones/clientes-drive',
           icon: User,

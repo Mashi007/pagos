@@ -253,67 +253,6 @@ export interface CompararFechaEntregaQvsAprobacionResponse {
   advertencias?: string[]
 }
 
-export interface FechaQAuditoriaTotalItem {
-  prestamo_id: number
-  cedula: string
-  estado: string
-  fecha_aprobacion?: string | null
-  fecha_requerimiento?: string | null
-  fecha_base_calculo?: string | null
-  q_cache?: Record<string, unknown> | null
-  q_fecha_iso?: string | null
-  q_fecha_raw?: unknown
-  /** Q (caché) − aprobación BD al momento de la respuesta (recalculado). */
-  diferencia_dias?: number | null
-  /** Valor guardado en JSON al cerrar caché (solo auditoría; puede desfasarse si se corrigió BD después). */
-  diferencia_dias_snapshot_cache?: number | null
-  puede_aplicar?: boolean | null
-  /** Valor congelado en JSON de caché (solo contraste; `puede_aplicar` en vivo usa BD actual). */
-  puede_aplicar_snapshot_cache?: boolean | null
-  correccion_desde_q_anterior_bd?: boolean | null
-  correccion_desde_q_anterior_bd_snapshot_cache?: boolean | null
-  q_cache_at?: string | null
-}
-
-export interface FechaQAuditoriaTotalResponse {
-  total: number
-  limit: number
-  offset: number
-  filtro_cedula?: string | null
-  solo_con_diferencia: boolean
-  /** Si true, el listado excluye préstamos marcados «No aplicar Q» en caché. */
-  excluir_marcados_no?: boolean
-  items: FechaQAuditoriaTotalItem[]
-}
-
-export interface FechaQAuditoriaLoteItem {
-  lote: string
-  elegibles: number
-}
-
-export interface FechaQAuditoriaLotesResponse {
-  total_elegibles: number
-  lotes: FechaQAuditoriaLoteItem[]
-}
-
-export interface FechaQAuditoriaAplicarMasivoResponse {
-  ok: boolean
-  modo: 'todos' | 'por_lote'
-  lote: string | null
-  aplicados: number
-  errores: number
-  errores_detalle: string[]
-  omitidos: number
-}
-
-export interface FechaQAuditoriaMarcarNoMasivoResponse {
-  ok: boolean
-  modo: 'todos' | 'por_lote'
-  lote: string | null
-  marcados: number
-  errores: number
-}
-
 /** Respuesta de POST /notificaciones/aplicar-abonos-drive-a-cuotas (solo admin). */
 
 export interface AplicarAbonosDriveCuotasResponse {
@@ -1548,47 +1487,6 @@ class NotificacionService {
     )
   }
 
-  /** Auditoría total Q vs aprobación para TODO préstamos (no solo listas de mora). */
-  async getFechaQAuditoriaTotal(params?: {
-    limit?: number
-    offset?: number
-    cedula_q?: string
-    solo_con_diferencia?: boolean
-    /** Por defecto true en servidor: oculta filas marcadas «No aplicar Q». */
-    excluir_marcados_no?: boolean
-  }): Promise<FechaQAuditoriaTotalResponse> {
-    const q = new URLSearchParams()
-    if (params?.limit != null) q.set('limit', String(params.limit))
-    if (params?.offset != null) q.set('offset', String(params.offset))
-    if (params?.cedula_q && params.cedula_q.trim()) {
-      q.set('cedula_q', params.cedula_q.trim())
-    }
-    if (params?.solo_con_diferencia != null) {
-      q.set('solo_con_diferencia', String(Boolean(params.solo_con_diferencia)))
-    }
-    if (params?.excluir_marcados_no != null) {
-      q.set('excluir_marcados_no', String(Boolean(params.excluir_marcados_no)))
-    }
-    return await apiClient.get<FechaQAuditoriaTotalResponse>(
-      `${this.baseUrl}/fecha-q-auditoria-total?${q.toString()}`
-    )
-  }
-
-  /**
-   * Marca en caché «No aplicar Q» para que la fila no salga en auditoría (con `excluir_marcados_no` por defecto).
-   * No modifica `fecha_aprobacion` en BD.
-   */
-  async postFechaQAuditoriaMarcaNoAplicar(params: {
-    prestamoId: number
-  }): Promise<{ ok: boolean; prestamo_id: number }> {
-    return await apiClient.post(
-      `${this.baseUrl}/fecha-q-auditoria-marca-no-aplicar`,
-      {
-        prestamo_id: params.prestamoId,
-      }
-    )
-  }
-
   /**
    * Persiste la fecha de la columna Q como `prestamos.fecha_aprobacion` (y alinea base de cálculo);
    * `fecha_requerimiento` sigue la regla del servidor (día calendario anterior a la nueva aprobación);
@@ -1608,50 +1506,6 @@ class NotificacionService {
     return await apiClient.post(
       `${this.baseUrl}/aplicar-fecha-entrega-q-como-fecha-aprobacion`,
       body
-    )
-  }
-
-  async getFechaQAuditoriaLotes(params?: {
-    excluir_marcados_no?: boolean
-  }): Promise<FechaQAuditoriaLotesResponse> {
-    const q = new URLSearchParams()
-    if (params?.excluir_marcados_no != null) {
-      q.set('excluir_marcados_no', String(Boolean(params.excluir_marcados_no)))
-    }
-    return await apiClient.get<FechaQAuditoriaLotesResponse>(
-      `${this.baseUrl}/fecha-q-auditoria-lotes?${q.toString()}`
-    )
-  }
-
-  async postFechaQAuditoriaAplicarMasivo(params: {
-    modo: 'todos' | 'por_lote'
-    lote?: string | null
-    excluir_marcados_no?: boolean
-  }): Promise<FechaQAuditoriaAplicarMasivoResponse> {
-    const body: Record<string, unknown> = { modo: params.modo }
-    if (params.lote) body.lote = params.lote
-    if (params.excluir_marcados_no != null)
-      body.excluir_marcados_no = params.excluir_marcados_no
-    return await apiClient.post<FechaQAuditoriaAplicarMasivoResponse>(
-      `${this.baseUrl}/fecha-q-auditoria-aplicar-masivo`,
-      body,
-      { timeout: 300_000 }
-    )
-  }
-
-  async postFechaQAuditoriaMarcarNoMasivo(params: {
-    modo: 'todos' | 'por_lote'
-    lote?: string | null
-    excluir_marcados_no?: boolean
-  }): Promise<FechaQAuditoriaMarcarNoMasivoResponse> {
-    const body: Record<string, unknown> = { modo: params.modo }
-    if (params.lote) body.lote = params.lote
-    if (params.excluir_marcados_no != null)
-      body.excluir_marcados_no = params.excluir_marcados_no
-    return await apiClient.post<FechaQAuditoriaMarcarNoMasivoResponse>(
-      `${this.baseUrl}/fecha-q-auditoria-marcar-no-masivo`,
-      body,
-      { timeout: 300_000 }
     )
   }
 

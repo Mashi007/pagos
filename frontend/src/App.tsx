@@ -137,7 +137,6 @@ import {
   InfopagosPage,
   EscanerInfopagosPage,
   EscanerInfopagosLotePage,
-  FechaQAuditoriaTotalPage,
   ModelosVehiculos,
   Notificaciones,
   NotificacionesClientesDrive,
@@ -515,17 +514,14 @@ function App() {
                 }
               />
 
+              {/* Compatibilidad: pantalla Fechas (Q vs BD) retirada; jobs/cache Q y aplicar Q en General/listas siguen activos. */}
               <Route
                 path="notificaciones/fecha"
-                element={
-                  <SimpleProtectedRoute requireAdmin={true}>
-                    <FechaQAuditoriaTotalPage />
-                  </SimpleProtectedRoute>
-                }
+                element={<Navigate to="/notificaciones/general" replace />}
               />
               <Route
                 path="notificaciones/fecha-auditoria-total"
-                element={<Navigate to="/notificaciones/fecha" replace />}
+                element={<Navigate to="/notificaciones/general" replace />}
               />
 
               <Route
@@ -555,10 +551,10 @@ function App() {
                 }
               />
 
-              {/* Compatibilidad: pantalla Cuotas vs fecha base retirada; recalculo sigue en Notificaciones > Fechas. */}
+              {/* Compatibilidad: pantallas Cuotas vs fecha base y Fechas (Q vs BD) retiradas. */}
               <Route
                 path="actualizaciones/cuotas-fecha-base"
-                element={<Navigate to="/notificaciones/fecha" replace />}
+                element={<Navigate to="/notificaciones/general" replace />}
               />
               {/* Compatibilidad: modulo Actualizaciones > Gmail retirado; pipeline Gmail sigue en Pagos. */}
               <Route
@@ -566,10 +562,10 @@ function App() {
                 element={<Navigate to="/pagos" replace />}
               />
 
-              {/* Compatibilidad: «Fechas 2» redirige al módulo Fechas (Q vs BD + panel por día). */}
+              {/* Compatibilidad: «Fechas 2» retirada con /notificaciones/fecha. */}
               <Route
                 path="actualizaciones/fechas-2"
-                element={<Navigate to="/notificaciones/fecha" replace />}
+                element={<Navigate to="/notificaciones/general" replace />}
               />
 
               {/* Redirect de compatibilidad: la URL anterior d-1-dia era confusa (el módulo es «3 días antes»). */}
