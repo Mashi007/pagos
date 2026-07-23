@@ -270,7 +270,8 @@ export type CamposFormularioEscaner = {
 /**
  * Merge conservador: solo reemplaza campos que el OCR devolvió con valor;
  * conserva fecha, banco, número y monto previos si Gemini omitió el dato.
- * Con `reemplazarSinConservarPrevios` (re-escaneo): solo valores OCR confiables.
+ * Con `reemplazarSinConservarPrevios` (re-escaneo): solo valores OCR confiables
+ * (fecha: si OCR no trae una confiable, conserva la del formulario).
  */
 export function mergeCamposFormularioDesdeSugerenciaOcr(
   actual: CamposFormularioEscaner,
@@ -295,8 +296,10 @@ export function mergeCamposFormularioDesdeSugerenciaOcr(
       : null
   const soloOcr = Boolean(opts?.reemplazarSinConservarPrevios)
 
+  // Fecha: si OCR no trae fecha confiable, conservar la del formulario
+  // (evita borrar una correccion y omitir fecha_pago en PATCH → queda 1970-01-01).
   return {
-    fechaPago: soloOcr ? fechaExtraida : fechaExtraida || actual.fechaPago,
+    fechaPago: fechaExtraida || actual.fechaPago,
     institucion: soloOcr ? institucion : institucion || actual.institucion,
     otroInstitucion: soloOcr
       ? otroInstitucion

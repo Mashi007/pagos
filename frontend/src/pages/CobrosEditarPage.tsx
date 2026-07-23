@@ -77,6 +77,31 @@ import {
 import { blobComprobanteAFileParaEscaneo } from '../utils/comprobanteImagenAuth'
 import { normalizarComprobanteArchivoParaEscaneo } from '../utils/normalizarComprobanteArchivo'
 
+/** Marcador tecnico del reporte publico (OCR incompleto). No es fecha real de pago. */
+const FECHA_MARCADOR_REVISION_COBROS = '1970-01-01'
+
+function fechaPagoEditableListaParaGuardar(fecha: string): {
+  ok: boolean
+  ymd?: string
+  error?: string
+} {
+  const ymd = (fecha || '').trim().slice(0, 10)
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(ymd)) {
+    return {
+      ok: false,
+      error: 'Indique la fecha de pago real del comprobante (AAAA-MM-DD).',
+    }
+  }
+  if (ymd === FECHA_MARCADOR_REVISION_COBROS) {
+    return {
+      ok: false,
+      error:
+        'La fecha 01/01/1970 es solo un marcador tecnico. Corrijala a la fecha real del comprobante antes de guardar.',
+    }
+  }
+  return { ok: true, ymd }
+}
+
 const INSTITUCIONES_FINANCIERAS = [
   'BINANCE',
 
@@ -325,12 +350,18 @@ export default function CobrosEditarPage() {
         return
       }
 
+      const fechaChkVisto = fechaPagoEditableListaParaGuardar(form.fecha_pago)
+      if (!fechaChkVisto.ok || !fechaChkVisto.ymd) {
+        toast.error(fechaChkVisto.error || 'Indique la fecha de pago.')
+        return
+      }
+
       const res = await updatePagoReportado(Number(id), {
         nombres: form.nombres.trim() || undefined,
         apellidos: form.apellidos.trim() || undefined,
         tipo_cedula: form.tipo_cedula.trim() || undefined,
         numero_cedula: form.numero_cedula.trim() || undefined,
-        fecha_pago: form.fecha_pago || undefined,
+        fecha_pago: fechaChkVisto.ymd,
         institucion_financiera: form.institucion_financiera.trim() || undefined,
         numero_operacion: nuevo,
         monto: montoNum,
@@ -496,7 +527,15 @@ export default function CobrosEditarPage() {
       }
       return true
     },
-    [detalle, form.institucion_financiera, otroInstitucion]
+    [
+      detalle,
+      form.fecha_pago,
+      form.institucion_financiera,
+      form.numero_operacion,
+      form.monto,
+      form.moneda,
+      otroInstitucion,
+    ]
   )
 
   const handleReescanear = useCallback(async () => {
@@ -597,6 +636,12 @@ export default function CobrosEditarPage() {
 
     if (!id) return
 
+    const fechaChk = fechaPagoEditableListaParaGuardar(form.fecha_pago)
+    if (!fechaChk.ok || !fechaChk.ymd) {
+      toast.error(fechaChk.error || 'Indique la fecha de pago.')
+      return
+    }
+
     setSaving(true)
 
     try {
@@ -619,7 +664,7 @@ export default function CobrosEditarPage() {
 
         numero_cedula: form.numero_cedula.trim() || undefined,
 
-        fecha_pago: form.fecha_pago || undefined,
+        fecha_pago: fechaChk.ymd,
 
         institucion_financiera: form.institucion_financiera.trim() || undefined,
 
@@ -1037,6 +1082,14 @@ export default function CobrosEditarPage() {
                       setForm(f => ({ ...f, fecha_pago: e.target.value }))
                     }
                   />
+                  {form.fecha_pago.trim().slice(0, 10) ===
+                    FECHA_MARCADOR_REVISION_COBROS && (
+                    <p className="mt-1 text-xs text-amber-700">
+                      01/01/1970 es un marcador tecnico (OCR incompleto). Debe
+                      corregirla a la fecha real del comprobante antes de
+                      guardar.
+                    </p>
+                  )}
                 </div>
 
                 <div>
