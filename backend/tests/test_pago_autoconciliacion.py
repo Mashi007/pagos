@@ -68,12 +68,13 @@ def test_estado_post_cascada_abonos_sin_cuotas_queda_pagado_conciliado():
     assert p.fecha_conciliacion is not None
 
 
-def test_estado_post_cascada_pago_normal_sin_cuotas_baja_conciliado():
-    p = _pago(conciliado=True, verificado_concordancia="NO", estado="PAGADO")
+def test_estado_post_cascada_pago_normal_sin_cuotas_queda_autoconciliado():
+    p = _pago(conciliado=False, verificado_concordancia="NO", estado="PENDIENTE")
     estado = _estado_conciliacion_post_cascada(p, 0, 0)
-    assert estado == "PENDIENTE"
-    assert p.conciliado is False
-    assert p.fecha_conciliacion is None
+    assert estado == "PAGADO"
+    assert p.conciliado is True
+    assert (p.verificado_concordancia or "").upper() == "SI"
+    assert p.fecha_conciliacion is not None
 
 
 def test_marcar_pago_autoconciliado_fija_banderas():

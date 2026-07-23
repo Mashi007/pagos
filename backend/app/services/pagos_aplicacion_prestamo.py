@@ -166,12 +166,13 @@ def aplicar_pagos_pendientes_prestamo_con_diagnostico(
                 pago, db, marcar_liquidado=marcar_liquidado
             )
             if cc > 0 or cp > 0:
-                pago.estado = "PAGADO"
-                n += 1
-            elif pago_preserva_autoconciliacion_sin_cuotas(pago):
                 marcar_pago_autoconciliado(pago)
+                n += 1
             else:
-                sin_abono.append(int(pago.id))
+                # Sin cuota_pagos nuevo: igual se autoconcilia (cupo cubierto / sin pendientes).
+                marcar_pago_autoconciliado(pago)
+                if not pago_preserva_autoconciliacion_sin_cuotas(pago):
+                    sin_abono.append(int(pago.id))
         except Exception as e:
             logger.warning(
                 "aplicar_pagos_pendientes_prestamo prestamo_id=%s pago id=%s: %s",

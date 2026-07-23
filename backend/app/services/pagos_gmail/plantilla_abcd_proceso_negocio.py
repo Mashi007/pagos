@@ -139,15 +139,12 @@ BANCOS_PLANTILLA_ABCD = frozenset(
 
 def monto_gmail_sync_requiere_revision_manual_usd(monto_str: Optional[str]) -> bool:
     """
-    True si el valor numerico parseado del comprobante es >= 1000 (cualquier moneda en el texto).
+    True si el monto Gmail debe ir a revision manual por umbral.
+
+    Política actual: sin excepciones de monto — siempre False (autoconciliar).
     """
-    raw = (monto_str or "").strip()
-    if not raw or raw.upper() in ("NA", "NR"):
-        return False
-    txt = format_monto_excel_pagos_gmail(monto_str)
-    if txt:
-        return monto_requiere_revision_manual(txt)
-    return monto_requiere_revision_manual(monto_str)
+    _ = monto_str
+    return False
 
 
 def es_plantilla_banco_abcd(fmt: str) -> bool:

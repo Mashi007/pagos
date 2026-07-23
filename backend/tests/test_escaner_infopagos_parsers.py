@@ -86,20 +86,19 @@ def test_monto_requiere_revision_manual_umbral():
     assert not monto_requiere_revision_manual(499.99)
     assert monto_requiere_revision_manual(1500, moneda="BS")
     assert monto_requiere_revision_manual(1500, moneda="USD")
-    msg = fusionar_validacion_reglas_monto_alto_escaneo(None, 1500, moneda="USD")
-    assert msg is not None
-    assert "500" in msg
+    # Política: no hay excepción de autoconciliación por monto/BS.
+    assert fusionar_validacion_reglas_monto_alto_escaneo(None, 1500, moneda="USD") is None
 
 
-def test_reportado_exento_autoconciliacion_bs_y_monto():
+def test_reportado_exento_autoconciliacion_sin_excepciones():
     from app.services.pagos_gmail.parse_campos_comprobante import (
         reportado_exento_autoconciliacion,
     )
 
-    assert reportado_exento_autoconciliacion(100, moneda="BS")
+    assert not reportado_exento_autoconciliacion(100, moneda="BS")
     assert not reportado_exento_autoconciliacion(100, moneda="USD")
-    assert reportado_exento_autoconciliacion(500, moneda="USD")
-    assert reportado_exento_autoconciliacion(600, moneda="USDT")
+    assert not reportado_exento_autoconciliacion(500, moneda="USD")
+    assert not reportado_exento_autoconciliacion(600, moneda="USDT")
 
 
 def test_parse_fecha_comprobante():

@@ -884,14 +884,13 @@ def moneda_reportado_es_bolivares(moneda: Optional[str]) -> bool:
 
 def reportado_exento_autoconciliacion(val: Any, *, moneda: Optional[str] = None) -> bool:
     """
-    Excepciones de negocio: no autoconciliar aunque el resto de validadores cuadre.
+    True si el reportado NO debe autoconciliar pese a validadores OK.
 
-    - Pago en bolivares (BS).
-    - Monto >= umbral en la moneda reportada (500 USD o 500 Bs; sin conversion).
+    Política actual: sin excepciones de monto/BS — siempre False.
+    (``val`` / ``moneda`` se conservan por compatibilidad de firma con callers.)
     """
-    if moneda_reportado_es_bolivares(moneda):
-        return True
-    return monto_requiere_revision_manual(val, moneda=moneda)
+    _ = (val, moneda)
+    return False
 
 
 def mensaje_excepcion_autoconciliacion(val: Any, *, moneda: Optional[str] = None) -> str:

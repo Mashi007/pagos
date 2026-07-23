@@ -30,7 +30,7 @@ def db():
         session.close()
 
 
-def test_conciliacion_remanente_marca_pago_pendiente_y_no_conciliado(db: Session):
+def test_conciliacion_remanente_permanece_conciliado(db: Session):
     hoy = date.today()
     cedula = f"VCA{datetime.now().strftime('%H%M%S')}"
     cliente = Cliente(
@@ -101,8 +101,7 @@ def test_conciliacion_remanente_marca_pago_pendiente_y_no_conciliado(db: Session
 
     errores = out.get("errores") or []
     assert any(f"Pago {pago.id}: Sobra" in e for e in errores)
-    assert int(out.get("fallidas") or 0) >= 1
-    assert pago.conciliado is False
-    assert (pago.verificado_concordancia or "").upper() == "NO"
-    assert (pago.estado or "").upper() == "PENDIENTE"
+    assert pago.conciliado is True
+    assert (pago.verificado_concordancia or "").upper() == "SI"
+    assert (pago.estado or "").upper() == "PAGADO"
     assert "Remanente sin asignar en conciliación automática" in (pago.notas or "")

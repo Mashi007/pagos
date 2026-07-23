@@ -1,10 +1,7 @@
 """Alineación de estado de pago con flags de conciliación y post-cascada."""
 
 from app.models.pago import Pago
-from app.services.pago_autoconciliacion import (
-    marcar_pago_autoconciliado,
-    pago_preserva_autoconciliacion_sin_cuotas,
-)
+from app.services.pago_autoconciliacion import marcar_pago_autoconciliado
 from app.services.pago_reescaneo_ocr import sin_documento_real_tras_reocr
 
 from .cascada_estado import _estado_pago_tras_aplicar_cascada
@@ -34,24 +31,13 @@ def _estado_conciliacion_post_cascada(pago: Pago, cuotas_completadas: int, cuota
     """
     Alinea estado tras cascada.
 
-    Política de ingreso: un pago ya marcado conciliado (alta / autoconciliación)
-    permanece conciliado y en PAGADO aunque la cascada no genere cuota_pagos
-    (cupo cubierto, sin cuotas pendientes, etc.). No bajar a PENDIENTE+!conciliado.
+    Política: todo pago operativo se autoconcilia sin excepción (conciliado + SI + PAGADO),
+    aunque la cascada no genere cuota_pagos (cupo cubierto, sin pendientes, remanente, etc.).
+    ``cuotas_completadas`` / ``cuotas_parciales`` quedan para trazabilidad del caller.
     """
-    estado = _estado_pago_tras_aplicar_cascada(cuotas_completadas, cuotas_parciales)
-
-    if estado == "PAGADO":
-        # Cascada con abono: el flag debe coincidir (evita PAGADO + conciliado=False).
-        marcar_pago_autoconciliado(pago)
-        return estado
-
-    if pago_preserva_autoconciliacion_sin_cuotas(pago) or bool(
-        getattr(pago, "conciliado", False)
-    ):
-        marcar_pago_autoconciliado(pago)
-        return "PAGADO"
-
-    return estado
+    _ = (cuotas_completadas, cuotas_parciales, _estado_pago_tras_aplicar_cascada)
+    marcar_pago_autoconciliado(pago)
+    return "PAGADO"
 
 
 def _alinear_estado_tras_quitar_numero_documento_ocr(row: Pago) -> bool:
