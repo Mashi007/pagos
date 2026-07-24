@@ -1872,10 +1872,12 @@ def _tarea_enviar_caso_manual(
 
 @router.get("/envio-batch/ultimo")
 def get_ultimo_envio_batch_notificaciones(db: Session = Depends(get_db)):
-    """Ultimo resultado de ejecutar envio masivo (POST manual / BackgroundTasks). Null si nunca hubo ejecucion."""
-    from app.services.notificaciones_envio_batch_resumen import get_ultimo_envio_batch_dict
+    """Ultimo resultado de ejecutar envio masivo (POST manual / BackgroundTasks). Null si nunca hubo ejecucion.
+    Si el heartbeat esta stale (>10 min), cierra el lote fantasma para no dejar la UI en «Enviando…».
+    """
+    from app.services.notificaciones_envio_batch_resumen import finalizar_envio_batch_si_stale
 
-    return {"ultimo": get_ultimo_envio_batch_dict(db)}
+    return {"ultimo": finalizar_envio_batch_si_stale(db)}
 
 
 @router.post("/enviar-todas")

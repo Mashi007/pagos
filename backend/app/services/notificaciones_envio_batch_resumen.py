@@ -142,3 +142,73 @@ def envio_batch_sigue_activo(
     except Exception:
         return True
 
+
+def _lote_marca_en_proceso(ultimo: Dict[str, Any]) -> bool:
+    estado = str(ultimo.get("estado") or "").strip().lower()
+    if estado == "finalizado":
+        return False
+    det = ultimo.get("detalles")
+    det_rec = det if isinstance(det, dict) else {}
+    if estado == "en_proceso" or bool(det_rec.get("en_proceso")):
+        return True
+    # Legacy: sin fin_utc se consideraba activo
+    return ultimo.get("fin_utc") in (None, "")
+
+
+def finalizar_envio_batch_si_stale(
+    db: Session,
+    *,
+    stale_seconds: int = 600,
+) -> Optional[Dict[str, Any]]:
+    """
+    Cierra lotes en_proceso cuyo heartbeat supera stale_seconds (worker muerto,
+    spin-down, deploy). Evita barra «Enviando X de Y» eterna en la UI.
+    """
+    ultimo = get_ultimo_envio_batch_dict(db)
+    if not isinstance(ultimo, dict):
+        return ultimo
+    if not _lote_marca_en_proceso(ultimo):
+        return ultimo
+    # Activo con heartbeat reciente: no tocar
+    if envio_batch_sigue_activo(ultimo, stale_seconds=stale_seconds):
+        return ultimo
+    # Marcado en_proceso pero stale -> cerrar
+    det = ultimo.get("detalles") if isinstance(ultimo.get("detalles"), dict) else {}
+    detalles = dict(det)
+    detalles["en_proceso"] = False
+    detalles["cerrado_por_stale"] = True
+    resultado = {
+        "enviados": int(ultimo.get("enviados") or 0),
+        "fallidos": int(ultimo.get("fallidos") or 0),
+        "sin_email": int(ultimo.get("sin_email") or 0),
+        "omitidos_config": int(ultimo.get("omitidos_config") or 0),
+        "omitidos_paquete_incompleto": int(ultimo.get("omitidos_paquete_incompleto") or 0),
+        "enviados_whatsapp": int(ultimo.get("enviados_whatsapp") or 0),
+        "fallidos_whatsapp": int(ultimo.get("fallidos_whatsapp") or 0),
+        "detalles": detalles,
+        "total_en_lista": ultimo.get("total_en_lista"),
+        "tipo_caso": ultimo.get("tipo_caso"),
+        "omitidos_desistimiento": ultimo.get("omitidos_desistimiento"),
+        "omitidos_ya_enviado": ultimo.get("omitidos_ya_enviado"),
+    }
+    persist_ultimo_envio_batch(
+        db,
+        resultado=resultado,
+        origen=str(ultimo.get("origen") or "desconocido"),
+        error="worker_interrupted_o_heartbeat_stale",
+        inicio_utc=str(ultimo.get("inicio_utc") or "") or None,
+        en_proceso=False,
+    )
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        logger.warning("finalizar_envio_batch_si_stale: commit fallo", exc_info=True)
+        return ultimo
+    logger.info(
+        "finalizar_envio_batch_si_stale: cerrado lote stale tipo=%s procesados~=%s/%s",
+        ultimo.get("tipo_caso"),
+        detalles.get("procesados"),
+        ultimo.get("total_en_lista"),
+    )
+    return get_ultimo_envio_batch_dict(db)

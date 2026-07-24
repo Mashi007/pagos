@@ -1,0 +1,150 @@
+2785|def build_prejudicial_items(
+2786|    db: Session, fecha_referencia: Optional[date] = None
+2787|) -> List[dict]:
+2788|    """
+2789|    Lista prejudicial («60 días o más» / a-2-cuotas). Condiciones INNEGOCIABLES:
+2790|    - atraso calendario >= 60 días (fecha_vencimiento <= hoy − 60)
+2791|    - exactamente 2 cuotas impagas **en el mismo préstamo** con ese atraso
+2792|    - sin fecha_pago, saldo > 0.01, préstamo no LIQUIDADO/DESISTIMIENTO, titular sin DESISTIMIENTO
+2793|
+2794|    Un ítem por préstamo que cumpla (no se suma 1+1 entre préstamos distintos).
+2795|    Revalida cada ítem antes de devolverlo (no escapa ningún caso fuera de regla).
+2796|    """
+2797|    hoy = fecha_referencia or hoy_negocio()
+2798|    fv_max = hoy - timedelta(days=MIN_DIAS_ATRASO_PREJUDICIAL)
+2799|    # Estricto: agrupar por préstamo (no por cliente) para exigir 2+ cuotas en la misma deuda.
+2800|    subq = (
+2801|        select(
+2802|            Prestamo.id.label("prestamo_id"),
+2803|            Prestamo.cliente_id.label("cliente_id"),
+2804|            func.count(Cuota.id).label("total"),
+2805|        )
+2806|        .select_from(Cuota)
+2807|        .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+2808|        .where(
+2809|            Cuota.fecha_pago.is_(None),
+2810|            CUOTA_ESTADO_NO_PAGADA_PARA_NOTIF,
+2811|            Cuota.fecha_vencimiento.isnot(None),
+2812|            Cuota.fecha_vencimiento <= fv_max,
+2813|            SALDO_PENDIENTE_CUOTA > TOL_SALDO_CUOTA_NOTIFICACION,
+2814|            _prestamo_no_excluido_notif(),
+2815|            sql_cliente_sin_desistimiento(),
+2816|        )
+2817|        .group_by(Prestamo.id, Prestamo.cliente_id)
+2818|        .having(
+2819|            func.count(Cuota.id) >= PREJUDICIAL_MIN_CUOTAS_CON_ATRASO_60,
+2820|            func.count(Cuota.id) <= PREJUDICIAL_MAX_CUOTAS_CON_ATRASO_60,
+2821|        )
+2822|    )
+2823|    rows = db.execute(subq).all()
+2824|    if not rows:
+2825|        return []
+2826|
+2827|    prestamo_ids = [int(r[0]) for r in rows if r[0] is not None]
+2828|    totals_by_prestamo = {int(r[0]): int(r[2]) for r in rows if r[0] is not None}
+2829|    cliente_ids = sorted({int(r[1]) for r in rows if r[1] is not None})
+2830|
+2831|    clientes_map = {
+2832|        c.id: c
+2833|        for c in db.scalars(select(Cliente).where(Cliente.id.in_(cliente_ids))).all()
+2834|    }
+2835|
+2836|    cuotas_rows = db.execute(
+2837|        select(Cuota, Prestamo.cliente_id)
+2838|        .select_from(Cuota)
+2839|        .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+2840|        .where(
+2841|            Prestamo.id.in_(prestamo_ids),
+2842|            Cuota.fecha_pago.is_(None),
+2843|            CUOTA_ESTADO_NO_PAGADA_PARA_NOTIF,
+2844|            Cuota.fecha_vencimiento.isnot(None),
+2845|            Cuota.fecha_vencimiento <= fv_max,
+2846|            SALDO_PENDIENTE_CUOTA > TOL_SALDO_CUOTA_NOTIFICACION,
+2847|            _prestamo_no_excluido_notif(),
+2848|            sql_cliente_sin_desistimiento(),
+2849|        )
+2850|        .order_by(Cuota.fecha_vencimiento.asc(), Cuota.id.asc())
+2851|    ).all()
+2852|
+2853|    primera_por_prestamo: dict[int, Cuota] = {}
+2854|    cliente_por_prestamo: dict[int, int] = {}
+2855|    for c, titular_id in cuotas_rows:
+2856|        pid = int(c.prestamo_id) if c.prestamo_id is not None else None
+2857|        if pid is None:
+2858|            continue
+2859|        if pid not in primera_por_prestamo:
+2860|            primera_por_prestamo[pid] = c
+2861|            if titular_id is not None:
+2862|                cliente_por_prestamo[pid] = int(titular_id)
+2863|
+2864|    totales_prej = sum_saldo_pendiente_total_por_prestamos(db, prestamo_ids)
+2865|    prejudicial: List[dict] = []
+2866|    omitidos = 0
+2867|    for pid in prestamo_ids:
+2868|        total_cuotas = totals_by_prestamo.get(pid, 0)
+2869|        cuota_ref = primera_por_prestamo.get(pid)
+2870|        cid = cliente_por_prestamo.get(pid)
+2871|        cliente = clientes_map.get(cid) if cid is not None else None
+2872|        if not cliente or not cuota_ref:
+2873|            omitidos += 1
+2874|            continue
+2875|        if (
+2876|            total_cuotas < PREJUDICIAL_MIN_CUOTAS_CON_ATRASO_60
+2877|            or total_cuotas > PREJUDICIAL_MAX_CUOTAS_CON_ATRASO_60
+2878|        ):
+2879|            omitidos += 1
+2880|            continue
+2881|        fv = getattr(cuota_ref, "fecha_vencimiento", None)
+2882|        if fv is None:
+2883|            omitidos += 1
+2884|            continue
+2885|        dias = (hoy - fv).days if hasattr(fv, "year") else -1
+2886|        if dias < MIN_DIAS_ATRASO_PREJUDICIAL:
+2887|            omitidos += 1
+2888|            continue
+2889|        tp = totales_prej.get(int(pid))
+2890|        item = _item_tab(cliente, cuota_ref, total_pendiente_pagar=tp)
+2891|        item["total_cuotas_atrasadas"] = total_cuotas
+2892|        item["dias_atraso"] = dias
+2893|        item["prestamo_id"] = int(pid)
+2894|        # Cinturón: revalidación final (misma regla que envío).
+2895|        if not item_cumple_regla_prejudicial_estricta(item, hoy):
+2896|            omitidos += 1
+2897|            continue
+2898|        prejudicial.append(item)
+2899|    if omitidos:
+2900|        logger.info(
+2901|            "[prejudicial] omitidos_fuera_de_regla=%s incluidos=%s fv_max=%s min_cuotas=%s",
+2902|            omitidos,
+2903|            len(prejudicial),
+2904|            fv_max.isoformat(),
+2905|            PREJUDICIAL_MIN_CUOTAS_CON_ATRASO_60,
+2906|        )
+2907|    enriquecer_items_notificacion_revision_manual(db, prejudicial)
+2908|    return prejudicial
+2909|
+2910|
+2911|def get_notificaciones_tabs_data(
+2912|    db: Session, fecha_referencia: Optional[date] = None
+2913|):
+2914|    """
+2915|    Datos para envio de notificaciones (retrasadas, prejudicial).
+2916|    Politica: sin listas previas ni "hoy vence"; solo cuotas ya vencidas (1 y 10 dias de atraso calendario)
+2917|    y prejudicial. Claves dias_5, dias_3, dias_1, hoy van vacias (compat API).
+2918|    Fuente: cuotas pendientes con fecha_vencimiento en {hoy-1, hoy-10} (consulta acotada).
+2919|    Fecha de corte: America/Caracas.
+2920|
+2921|    Pestaña 1 día de retraso (dias_1_retraso): cuota con vencimiento = ayer (exactamente 1 día
+2922|    calendario después de la fecha de vencimiento), sin fecha_pago y con saldo pendiente.
+2923|
+2924|    Pestaña menor a 60 / atraso-10-dias (dias_10_retraso): atraso 6-59 días y exactamente
+2925|    UNA cuota atrasada. Con 2 o más cuotas atrasadas no entra.
+2926|
+2927|    Prejudicial: por titular del préstamo (prestamos.cliente_id), al menos el mínimo configurado
+2928|    de cuotas con cuotas.estado en (VENCIDO, MORA), fecha_vencimiento < hoy, sin fecha_pago y
+2929|    saldo pendiente; préstamo no liquidado/desistimiento.
+2930|    """
+2931|    hoy = fecha_referencia or hoy_negocio()
+2932|    from app.services.notificaciones_listados_motor import (
+2933|        build_items_retraso_uno_y_diez_dias,
+2934|    )

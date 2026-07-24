@@ -1,3 +1,4 @@
+import { envioBatchSigueActivoUi } from '../utils/envioBatchActivo'
 import { apiClient } from '../services/api'
 
 /** Envíos masivos sincrónicos (PDF + SMTP): listas grandes suelen superar 3 min. */
@@ -1336,15 +1337,7 @@ class NotificacionService {
         ultimo.origen === 'api_enviar_caso_manual' &&
         tokenUltimo === token
       ) {
-        const estado = String(ultimo.estado || '')
-          .trim()
-          .toLowerCase()
-        const detEnProceso =
-          detRec &&
-          'en_proceso' in detRec &&
-          Boolean((detRec as Record<string, unknown>).en_proceso)
-        const sigueEnProceso =
-          estado === 'en_proceso' || detEnProceso || !ultimo.fin_utc
+        const sigueEnProceso = envioBatchSigueActivoUi(ultimo)
         if (sigueEnProceso) {
           const totalN = Number(
             ultimo.total_en_lista ??

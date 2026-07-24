@@ -82,6 +82,7 @@ import {
   invalidateListasNotificacionesMora,
   invalidatePagosPrestamosRevisionYCuotas,
 } from '../constants/queryKeys'
+import { envioBatchSigueActivoUi } from '../utils/envioBatchActivo'
 
 import { NOTIFICACIONES_QUERY_KEYS } from '../queries/notificaciones'
 
@@ -569,10 +570,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
           typeof ultimo.detalles === 'object' && ultimo.detalles !== null
             ? (ultimo.detalles as Record<string, unknown>)
             : null
-        const enProceso =
-          estado === 'en_proceso' ||
-          Boolean(det && det.en_proceso) ||
-          !ultimo.fin_utc
+        const enProceso = envioBatchSigueActivoUi(ultimo)
         if (!enProceso) return
         const tipo = String(
           ultimo.tipo_caso || (det && det.tipo_caso) || ''
@@ -618,10 +616,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
           const est2 = String(u2.estado || '')
             .trim()
             .toLowerCase()
-          const sigue =
-            est2 === 'en_proceso' ||
-            Boolean(det2 && det2.en_proceso) ||
-            !u2.fin_utc
+          const sigue = envioBatchSigueActivoUi(u2)
           const total2 = Number(
             u2.total_en_lista ?? (det2 && det2.total_en_lista) ?? 0
           )
