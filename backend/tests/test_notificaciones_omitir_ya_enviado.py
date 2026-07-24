@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 """Deduplicación de envíos del día: por préstamo, no por cédula cuando hay prestamo_id."""
-from app.services.notificaciones_envio_pipeline import (
-    _debe_omitir_ya_enviado,
-    _registrar_envio_exito_en_sets,
+from app.services.notificaciones_envio_dedupe import (
+    debe_omitir_ya_enviado,
+    registrar_envio_exito_en_sets,
 )
 
 
@@ -10,7 +10,7 @@ def test_segundo_prestamo_misma_cedula_no_se_omite():
     ya_pid = {"dias_1_retraso": {100}}
     ya_ced = {"dias_1_retraso": {"V-123"}}
     assert (
-        _debe_omitir_ya_enviado(
+        debe_omitir_ya_enviado(
             prestamo_id=100,
             cedula="V-123",
             tipo_tab="dias_1_retraso",
@@ -21,7 +21,7 @@ def test_segundo_prestamo_misma_cedula_no_se_omite():
     )
     # Mismo titular, otro préstamo: debe enviarse.
     assert (
-        _debe_omitir_ya_enviado(
+        debe_omitir_ya_enviado(
             prestamo_id=200,
             cedula="V-123",
             tipo_tab="dias_1_retraso",
@@ -36,7 +36,7 @@ def test_masivos_sin_prestamo_omite_por_cedula():
     ya_pid = {"masivos": set()}
     ya_ced = {"masivos": {"V-999"}}
     assert (
-        _debe_omitir_ya_enviado(
+        debe_omitir_ya_enviado(
             prestamo_id=None,
             cedula="V-999",
             tipo_tab="masivos",
@@ -46,7 +46,7 @@ def test_masivos_sin_prestamo_omite_por_cedula():
         is True
     )
     assert (
-        _debe_omitir_ya_enviado(
+        debe_omitir_ya_enviado(
             prestamo_id=None,
             cedula="V-111",
             tipo_tab="masivos",
@@ -60,7 +60,7 @@ def test_masivos_sin_prestamo_omite_por_cedula():
 def test_registrar_exito_con_prestamo_no_bloquea_otra_cedula_loan():
     ya_pid: dict[str, set[int]] = {}
     ya_ced: dict[str, set[str]] = {}
-    _registrar_envio_exito_en_sets(
+    registrar_envio_exito_en_sets(
         prestamo_id=10,
         cedula="V-1",
         tipo_tab="prejudicial",
@@ -70,7 +70,7 @@ def test_registrar_exito_con_prestamo_no_bloquea_otra_cedula_loan():
     assert ya_pid["prejudicial"] == {10}
     assert ya_ced.get("prejudicial", set()) == set()
     assert (
-        _debe_omitir_ya_enviado(
+        debe_omitir_ya_enviado(
             prestamo_id=20,
             cedula="V-1",
             tipo_tab="prejudicial",
@@ -84,7 +84,7 @@ def test_registrar_exito_con_prestamo_no_bloquea_otra_cedula_loan():
 def test_registrar_exito_masivos_usa_cedula():
     ya_pid: dict[str, set[int]] = {}
     ya_ced: dict[str, set[str]] = {}
-    _registrar_envio_exito_en_sets(
+    registrar_envio_exito_en_sets(
         prestamo_id=None,
         cedula="V-55",
         tipo_tab="masivos",

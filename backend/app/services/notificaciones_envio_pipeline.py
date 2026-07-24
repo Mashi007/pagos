@@ -49,6 +49,10 @@ from app.services.notificacion_logging import (
     log_envio_resumen,
     log_envio_fallo,
 )
+from app.services.notificaciones_envio_dedupe import (
+    debe_omitir_ya_enviado,
+    registrar_envio_exito_en_sets,
+)
 
 logger = logging.getLogger(__name__)
 # Mapeo tipo config (PAGO_5_DIAS_ANTES, etc.) a tipo_tab para estad�sticas/rebotados (solo los 5 que muestra la UI)
@@ -91,64 +95,6 @@ CUERPO_DEFAULT_PAGO_2_DIAS_ANTES_PENDIENTE = (
 def _tipo_tab_para_persistencia(tipo_config: str) -> str | None:
     """Devuelve tipo_tab (dias_5, hoy, etc.) si se debe persistir para estad�sticas/rebotados."""
     return _CONFIG_TIPO_TO_TAB.get(tipo_config)
-
-def _debe_omitir_ya_enviado(
-    *,
-    prestamo_id,
-    cedula: str,
-    tipo_tab: str,
-    ya_pid: dict[str, set[int]],
-    ya_ced: dict[str, set[str]],
-) -> bool:
-    """True si este ítem ya tuvo envío exitoso hoy para ``tipo_tab``.
-
-    Con ``prestamo_id``: solo deduplica por préstamo. Un cliente con dos préstamos
-    activos en el mismo listado (p. ej. 1 día de retraso / prejudicial) debe recibir
-    ambos correos; omitir por cédula silenciaría el segundo préstamo y también
-    rompería el reintento tras caída del worker a mitad de lote.
-
-    Sin ``prestamo_id`` (MASIVOS / comunicación general): deduplica por cédula.
-    """
-    tt = (tipo_tab or "").strip()
-    if not tt:
-        return False
-    pid_int = None
-    if prestamo_id is not None:
-        try:
-            pid_int = int(prestamo_id)
-        except (TypeError, ValueError):
-            pid_int = None
-    if pid_int is not None:
-        return pid_int in ya_pid.get(tt, set())
-    ced = (cedula or "").strip()
-    return bool(ced) and ced in ya_ced.get(tt, set())
-
-
-def _registrar_envio_exito_en_sets(
-    *,
-    prestamo_id,
-    cedula: str,
-    tipo_tab: str,
-    ya_pid: dict[str, set[int]],
-    ya_ced: dict[str, set[str]],
-) -> None:
-    """Actualiza sets in-batch tras un SMTP exitoso (misma regla que la omisión)."""
-    tt = (tipo_tab or "").strip()
-    if not tt:
-        return
-    pid_int = None
-    if prestamo_id is not None:
-        try:
-            pid_int = int(prestamo_id)
-        except (TypeError, ValueError):
-            pid_int = None
-    if pid_int is not None:
-        ya_pid.setdefault(tt, set()).add(pid_int)
-        return
-    ced = (cedula or "").strip()
-    if ced:
-        ya_ced.setdefault(tt, set()).add(ced)
-
 
 def _sets_ya_enviados_exito_hoy(
     db: Session, tipo_tabs: Set[str]
@@ -495,7 +441,7 @@ def _enviar_correos_items(
                 continue
         tipo_tab_skip = _tipo_tab_para_persistencia(tipo)
         if tipo_tab_skip and db is not None and forzar_destinos_prueba is None:
-            if _debe_omitir_ya_enviado(
+            if debe_omitir_ya_enviado(
                 prestamo_id=item.get("prestamo_id"),
                 cedula=(item.get("cedula") or "").strip(),
                 tipo_tab=tipo_tab_skip,
@@ -779,7 +725,7 @@ def _enviar_correos_items(
                 enviados += 1
                 tt_ok = _tipo_tab_para_persistencia(tipo)
                 if tt_ok:
-                    _registrar_envio_exito_en_sets(
+                    registrar_envio_exito_en_sets(
                         prestamo_id=item.get("prestamo_id"),
                         cedula=(item.get("cedula") or "").strip(),
                         tipo_tab=tt_ok,
