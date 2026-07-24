@@ -218,7 +218,11 @@ function notificacionesSerieConTendenciaLineal<T extends { enviados: number }>(
 
 /** Eje Y comprimido al rango real de Inicio/Fin dia (sin inventar puntos). */
 function dominioYDesempenoSegmento(
-  serie: Array<{ notificaciones?: number; morosos?: number }>
+  serie: ReadonlyArray<{
+    notificaciones?: number
+    morosos?: number
+    [key: string]: unknown
+  }>
 ): { domain: [number, number]; ticks: number[] } {
   const vals: number[] = []
   for (const row of serie) {
@@ -606,7 +610,12 @@ export function DashboardMenu() {
   const serieDesempeno1CuotaDiario = useMemo(
     () =>
       serieUltimosNDias(
-        datosDesempeno1CuotaStock?.serie ?? [],
+        datosDesempeno1CuotaStock?.serie ??
+          ([] as Array<{
+            fecha: string
+            notificaciones?: number
+            morosos?: number
+          }>),
         DESEMPENO_1_CUOTA_DIAS_VISION
       ),
     [datosDesempeno1CuotaStock?.serie]
@@ -615,7 +624,12 @@ export function DashboardMenu() {
   const serieDesempeno2CuotasDiario = useMemo(
     () =>
       serieUltimosNDias(
-        datosDesempeno2CuotasStock?.serie ?? [],
+        datosDesempeno2CuotasStock?.serie ??
+          ([] as Array<{
+            fecha: string
+            notificaciones?: number
+            morosos?: number
+          }>),
         DESEMPENO_2_CUOTAS_DIAS_VISION
       ),
     [datosDesempeno2CuotasStock?.serie]
