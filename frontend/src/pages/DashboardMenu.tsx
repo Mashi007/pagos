@@ -77,6 +77,7 @@ import type {
   EvolucionMensualItem,
   NotificacionesEnviosPorDiaResponse,
   Desempeno1CuotaStockResponse,
+  Desempeno2CuotasStockResponse,
   PagosIngresadosPorDiaResponse,
 } from '../types/dashboard'
 
@@ -150,7 +151,6 @@ function serieNotificacionesEjeDesde5Abril<
   return out.length > 0 ? out : serie
 }
 
-
 /**
  * Añade `tendencia`: regresión lineal por índice (0..n-1) sobre `valueKey`.
  * Valores mostrados no negativos. Con menos de 2 puntos, coincide con el dato.
@@ -217,11 +217,13 @@ function notificacionesSerieConTendenciaLineal<T extends { enviados: number }>(
 }
 
 /** Últimos N días de la serie diaria (visión dashboard). */
-function serieUltimosNDias<T extends { fecha: string }>(serie: T[], n: number): T[] {
+function serieUltimosNDias<T extends { fecha: string }>(
+  serie: T[],
+  n: number
+): T[] {
   if (!serie.length || n <= 0) return serie
   return serie.length <= n ? serie : serie.slice(serie.length - n)
 }
-
 
 export function DashboardMenu() {
   const { user } = useSimpleAuth()
@@ -395,6 +397,7 @@ export function DashboardMenu() {
   const NOTIFICACIONES_ENVIOS_TENDENCIA_DIAS = 90
 
   const DESEMPENO_1_CUOTA_DIAS_VISION = 20
+  const DESEMPENO_2_CUOTAS_DIAS_VISION = 20
   const PAGOS_INGRESADOS_POR_DIA_DIAS = 60
 
   const {
@@ -518,6 +521,35 @@ export function DashboardMenu() {
     enabled: enableTertiaryCharts,
   })
 
+  const {
+    data: datosDesempeno2CuotasStock,
+    isLoading: loadingDesempeno2CuotasStock,
+    isError: errorDesempeno2CuotasStock,
+  } = useQuery({
+    queryKey: ['desempeno-2-cuotas-stock', DESEMPENO_2_CUOTAS_DIAS_VISION],
+
+    queryFn: async (): Promise<Desempeno2CuotasStockResponse> => {
+      const params = new URLSearchParams({
+        dias: String(DESEMPENO_2_CUOTAS_DIAS_VISION),
+      })
+
+      const response = await apiClient.get(
+        `/api/v1/dashboard/desempeno-2-cuotas-stock?${params.toString()}`,
+        { timeout: 120000 }
+      )
+
+      return response as Desempeno2CuotasStockResponse
+    },
+
+    staleTime: 5 * 60 * 1000,
+
+    refetchOnWindowFocus: false,
+
+    retry: 1,
+
+    enabled: enableTertiaryCharts,
+  })
+
   const serieNotificacionesGrafico = useMemo(
     () =>
       serieNotificacionesEjeDesde5Abril(datosNotificacionesPorDia?.serie ?? []),
@@ -536,6 +568,15 @@ export function DashboardMenu() {
         DESEMPENO_1_CUOTA_DIAS_VISION
       ),
     [datosDesempeno1CuotaStock?.serie]
+  )
+
+  const serieDesempeno2CuotasDiario = useMemo(
+    () =>
+      serieUltimosNDias(
+        datosDesempeno2CuotasStock?.serie ?? [],
+        DESEMPENO_2_CUOTAS_DIAS_VISION
+      ),
+    [datosDesempeno2CuotasStock?.serie]
   )
 
   const seriePagosIngresadosPorDia = useMemo(
@@ -610,6 +651,16 @@ export function DashboardMenu() {
     return `Últimos ${DESEMPENO_1_CUOTA_DIAS_VISION} d · Caracas`
   }, [serieDesempeno1CuotaDiario])
 
+  const etiquetaRangoDesempeno2Cuotas = useMemo(() => {
+    const s = serieDesempeno2CuotasDiario
+    if (!s.length)
+      return `Últimos ${DESEMPENO_2_CUOTAS_DIAS_VISION} d · Caracas`
+    const a = s[0]?.fecha
+    const b = s[s.length - 1]?.fecha
+    if (a && b) return a === b ? `${a} · Caracas` : `${a} - ${b} · Caracas`
+    return `Últimos ${DESEMPENO_2_CUOTAS_DIAS_VISION} d · Caracas`
+  }, [serieDesempeno2CuotasDiario])
+
   const [isRefreshing, setIsRefreshing] = useState(false)
 
   // Mostrar toast cuando falla la carga del gráfico principal (auditoría: no fallar en silencio)
@@ -655,6 +706,11 @@ export function DashboardMenu() {
       })
 
       await queryClient.invalidateQueries({
+        queryKey: ['desempeno-2-cuotas-stock'],
+        exact: false,
+      })
+
+      await queryClient.invalidateQueries({
         queryKey: ['pagos-ingresados-por-dia'],
         exact: false,
       })
@@ -683,6 +739,11 @@ export function DashboardMenu() {
 
       await queryClient.refetchQueries({
         queryKey: ['desempeno-1-cuota-stock'],
+        exact: false,
+      })
+
+      await queryClient.refetchQueries({
+        queryKey: ['desempeno-2-cuotas-stock'],
         exact: false,
       })
 
@@ -1836,7 +1897,7 @@ export function DashboardMenu() {
                   <Mail className="h-5 w-5 shrink-0 text-sky-600" />
 
                   <span className="leading-tight">
-                    Cobranzas entre 5 y 59 días
+                    Cobranzas con segmento 1 cuota
                   </span>
                 </CardTitle>
 
@@ -1850,14 +1911,11 @@ export function DashboardMenu() {
 
               <CardDescription className="mt-2 text-xs text-gray-600">
                 Dos cantidades por día (últimos {DESEMPENO_1_CUOTA_DIAS_VISION}{' '}
-                días, Caracas). <strong>Notificaciones</strong>: correos SMTP
-                enviados (1 cuota /{' '}
-                <code className="rounded bg-gray-100 px-1 py-0.5 text-[11px]">
-                  dias_10_retraso
-                </code>
-                ). <strong>Morosos 1 cuota</strong>: nivel de cartera a las{' '}
-                <strong>00:00</strong> de ese día (ej. 21 = 991, 22 = 890) — curva
-                de desempeño, no el conteo de «nuevos» del día.
+                días, Caracas). Independiente de envíos SMTP.{' '}
+                <strong>Inicio día</strong>: stock del segmento 1 cuota a las{' '}
+                <strong>00:00</strong>. <strong>Fin dia</strong>: de ese stock,
+                cuántos siguen sin pagar a las <strong>23:00</strong> (hoy:
+                valor en vivo hasta las 23:00).
               </CardDescription>
             </CardHeader>
 
@@ -1933,7 +1991,7 @@ export function DashboardMenu() {
                       <Line
                         type="monotone"
                         dataKey="notificaciones"
-                        name="Notificaciones"
+                        name="Fin dia"
                         stroke="#0ea5e9"
                         strokeWidth={2}
                         dot={{ r: 4 }}
@@ -1943,7 +2001,141 @@ export function DashboardMenu() {
                       <Line
                         type="monotone"
                         dataKey="morosos"
-                        name="Morosos 1 cuota"
+                        name="Inicio día"
+                        stroke="#d97706"
+                        strokeWidth={2}
+                        dot={{ r: 4 }}
+                        activeDot={{ r: 6 }}
+                      />
+                    </RechartsLineChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </motion.div>
+
+        {/* Desempeño 2 cuotas (PREJUDICIAL / ≥60 días) */}
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.36 }}
+          className="mt-6"
+          id="dashboard-desempeno-2-cuotas"
+        >
+          <Card className="overflow-hidden rounded-xl border border-gray-200/90 bg-white shadow-lg">
+            <CardHeader className="border-b border-gray-200/80 bg-gradient-to-r from-sky-50/90 to-indigo-50/90 pb-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <CardTitle className="flex items-center gap-2 text-lg font-bold text-gray-800">
+                  <Mail className="h-5 w-5 shrink-0 text-sky-600" />
+
+                  <span className="leading-tight">
+                    Cobranzas con segmento 2 cuotas
+                  </span>
+                </CardTitle>
+
+                <Badge
+                  variant="secondary"
+                  className="shrink-0 border border-gray-200 bg-white/80 text-xs font-medium text-gray-600"
+                >
+                  {etiquetaRangoDesempeno2Cuotas}
+                </Badge>
+              </div>
+
+              <CardDescription className="mt-2 text-xs text-gray-600">
+                Dos cantidades por día (últimos {DESEMPENO_2_CUOTAS_DIAS_VISION}{' '}
+                días, Caracas). Independiente de envíos SMTP.{' '}
+                <strong>Inicio día</strong>: stock del segmento 2 cuotas a las{' '}
+                <strong>00:00</strong>. <strong>Fin dia</strong>: de ese stock,
+                cuántos siguen sin pagar a las <strong>23:00</strong> (hoy:
+                valor en vivo hasta las 23:00).
+              </CardDescription>
+            </CardHeader>
+
+            <CardContent className="p-6 pt-4">
+              {loadingDesempeno2CuotasStock ? (
+                <div className="flex items-center justify-center py-16 text-sm text-gray-500">
+                  Cargando…
+                </div>
+              ) : errorDesempeno2CuotasStock ? (
+                <div className="flex flex-col items-center justify-center gap-2 py-12 text-center text-red-700">
+                  <AlertTriangle className="h-8 w-8" />
+
+                  <p className="text-sm font-medium">
+                    No se pudo cargar el desempeño 2 cuotas.
+                  </p>
+                </div>
+              ) : serieDesempeno2CuotasDiario.length === 0 ? (
+                <div className="flex items-center justify-center py-16 text-sm text-gray-500">
+                  Sin datos en el período.
+                </div>
+              ) : (
+                <div className="h-[320px] w-full">
+                  <ResponsiveContainer width="100%" height={320}>
+                    <RechartsLineChart
+                      data={serieDesempeno2CuotasDiario}
+                      margin={{
+                        top: 12,
+                        right: 20,
+                        left: 12,
+                        bottom: 12,
+                      }}
+                    >
+                      <CartesianGrid {...chartCartesianGrid} />
+
+                      <XAxis
+                        dataKey="dia"
+                        tick={chartAxisTick}
+                        interval="preserveStartEnd"
+                        minTickGap={12}
+                      />
+
+                      <YAxis
+                        tick={chartAxisTick}
+                        allowDecimals={false}
+                        width={40}
+                        label={{
+                          value: 'Cantidad',
+                          angle: -90,
+                          position: 'insideLeft',
+                          style: { fill: '#374151', fontSize: 13 },
+                        }}
+                      />
+
+                      <Tooltip
+                        contentStyle={chartTooltipStyle.contentStyle}
+                        labelStyle={chartTooltipStyle.labelStyle}
+                        formatter={(value: number, name: string) => {
+                          const rounded =
+                            typeof value === 'number'
+                              ? Math.round(value * 100) / 100
+                              : value
+                          return [rounded, name]
+                        }}
+                        labelFormatter={(_, payload) =>
+                          payload?.[0]?.payload?.fecha
+                            ? String(payload[0].payload.fecha)
+                            : ''
+                        }
+                      />
+
+                      <Legend {...chartLegendStyle} />
+
+                      <Line
+                        type="monotone"
+                        dataKey="notificaciones"
+                        name="Fin dia"
+                        stroke="#0ea5e9"
+                        strokeWidth={2}
+                        dot={{ r: 4 }}
+                        activeDot={{ r: 6 }}
+                      />
+
+                      <Line
+                        type="monotone"
+                        dataKey="morosos"
+                        name="Inicio día"
                         stroke="#d97706"
                         strokeWidth={2}
                         dot={{ r: 4 }}

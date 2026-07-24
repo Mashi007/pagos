@@ -1783,6 +1783,9 @@ def _tarea_enviar_caso_manual(
                         "omitidos_desistimiento": int(
                             p.get("omitidos_desistimiento") or 0
                         ),
+                        "omitidos_ya_enviado": int(
+                            p.get("omitidos_ya_enviado") or 0
+                        ),
                         "detalles": {
                             "tipo_caso": tipo,
                             "token_seguimiento": token_seguimiento,
@@ -1862,45 +1865,82 @@ def get_ultimo_envio_batch_notificaciones(db: Session = Depends(get_db)):
 
 
 @router.post("/enviar-todas")
-def enviar_todas_notificaciones(background_tasks: BackgroundTasks):
+def enviar_todas_notificaciones(db: Session = Depends(get_db)):
     """
-    Inicia el envio de todas las notificaciones en segundo plano.
-    Responde 202 de inmediato para evitar timeout (el envio puede tardar muchos minutos).
+    Inicia el envio de todas las notificaciones en segundo plano (hilo de proceso).
+    Responde 202 de inmediato; el lote no se detiene al cerrar el navegador.
     Respeta la configuracion guardada (modo_pruebas, email_pruebas, habilitado por tipo).
     No existe cron ni tarea oculta que llame a este endpoint: solo se ejecuta cuando alguien hace POST explicito.
-    PAGO_10_DIAS_ATRASADO no forma parte de este lote: solo envio manual POST /enviar-caso-manual desde el submodulo de 10 dias.
+    PAGO_10_DIAS_ATRASADO no forma parte de este lote: solo envio manual POST /enviar-caso-manual.
     """
-    background_tasks.add_task(_tarea_envio_todas_notificaciones)
+    from app.services.notificaciones_envio_batch_resumen import (
+        envio_batch_sigue_activo,
+        get_ultimo_envio_batch_dict,
+    )
+    from app.services.notificaciones_envio_bg_runner import (
+        claves_activas,
+        job_activo,
+        spawn_envio_bg,
+    )
+
+    ultimo = get_ultimo_envio_batch_dict(db)
+    if (
+        job_activo("enviar_todas")
+        or any(k.startswith("caso:") for k in claves_activas())
+        or envio_batch_sigue_activo(ultimo)
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Ya hay un envio de notificaciones en curso en el servidor. "
+                "Espere a que termine (GET /notificaciones/envio-batch/ultimo) "
+                "antes de lanzar otro."
+            ),
+        )
+    if not spawn_envio_bg("enviar_todas", _tarea_envio_todas_notificaciones):
+        raise HTTPException(
+            status_code=409,
+            detail="Ya hay un envio masivo (enviar-todas) en curso en este worker.",
+        )
     return JSONResponse(
         status_code=202,
         content={
             "mensaje": (
-                "Env\u00edo iniciado en segundo plano. Los correos se enviar\u00e1n en los pr\u00f3ximos minutos. "
-                "Puedes cerrar esta ventana."
+                "Envio iniciado en segundo plano. Puede cerrar esta ventana; "
+                "el servidor seguira hasta completar todas las notificaciones. "
+                "Consulte GET /notificaciones/envio-batch/ultimo."
             ),
             "en_proceso": True,
         },
     )
 
 
+
 @router.post("/enviar-caso-manual")
 def enviar_caso_manual(
-    background_tasks: BackgroundTasks,
     payload: dict = Body(...),
+    db: Session = Depends(get_db),
 ):
     """
-    Inicia el envío de un solo criterio por petición (una fila: PAGO_1_DIA_ANTES, PAGO_2_DIAS_ANTES_PENDIENTE, etc.).
+    Inicia el envio de un solo criterio en hilo de proceso (independiente del navegador).
 
-    Responde 202 de inmediato y procesa en segundo plano (mismo criterio que POST /enviar-todas): listas de
-    ~150+ correos SMTP superan con frecuencia el tiempo útil de conexión HTTP en hosting (p. ej. Render),
-    lo que cortaba el envío a mitad de lote. El resultado queda en GET /envio-batch/ultimo; el cliente
-    puede sondear hasta ver ``detalles.token_seguimiento`` e ``inicio_utc`` coincidentes con la respuesta 202.
+    Responde 202 de inmediato. El lote continua hasta completar aunque se cierre la
+    pestana o se cancele el seguimiento en pantalla. Resultado en GET /envio-batch/ultimo.
 
-    Opcional en JSON: fecha_caracas (YYYY-MM-DD) = fecha de referencia America/Caracas (igual que GET listados).
+    Opcional en JSON: fecha_caracas (YYYY-MM-DD) = fecha de referencia America/Caracas.
     """
     from datetime import timezone
 
     from app.api.v1.endpoints import notificaciones_tabs
+    from app.services.notificaciones_envio_batch_resumen import (
+        envio_batch_sigue_activo,
+        get_ultimo_envio_batch_dict,
+    )
+    from app.services.notificaciones_envio_bg_runner import (
+        claves_activas,
+        job_activo,
+        spawn_envio_bg,
+    )
 
     tipo = (payload.get("tipo") or "").strip()
     if tipo not in notificaciones_tabs.TIPOS_CASO_MANUAL:
@@ -1916,15 +1956,39 @@ def enviar_caso_manual(
         parse_fecha_referencia_negocio(raw_fc)
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e)) from e
+
+    ultimo = get_ultimo_envio_batch_dict(db)
+    if (
+        job_activo("enviar_todas")
+        or any(k.startswith("caso:") for k in claves_activas())
+        or envio_batch_sigue_activo(ultimo)
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Ya hay un envio de notificaciones en curso en el servidor. "
+                "Espere a que termine (GET /notificaciones/envio-batch/ultimo). "
+                "Si un lote se interrumpio por caida del worker, tras ~10 min "
+                "podra reintentar: los ya enviados hoy se omiten."
+            ),
+        )
+
     inicio = datetime.now(timezone.utc).isoformat()
     token = str(uuid.uuid4())
-    background_tasks.add_task(
+    clave = f"caso:{tipo}"
+    ok = spawn_envio_bg(
+        clave,
         _tarea_enviar_caso_manual,
         tipo,
         raw_fc,
         inicio,
         token,
     )
+    if not ok:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Ya hay un envio en curso para {tipo} en este worker.",
+        )
     logger.info(
         "[notif] enviar_caso_manual aceptado en BG tipo=%s inicio=%s token=%s",
         tipo,
@@ -1935,8 +1999,9 @@ def enviar_caso_manual(
         status_code=202,
         content={
             "mensaje": (
-                "Envío iniciado en segundo plano. Con muchas filas puede tardar varios minutos; "
-                "puede cerrar esta pestaña. Use GET /notificaciones/envio-batch/ultimo para el resumen "
+                "Envio iniciado en segundo plano. Con muchas filas puede tardar varios minutos; "
+                "puede cerrar esta pestana: el servidor seguira hasta completar el lote. "
+                "Use GET /notificaciones/envio-batch/ultimo para el resumen "
                 "(detalles.token_seguimiento coincide con el de esta respuesta)."
             ),
             "en_proceso": True,

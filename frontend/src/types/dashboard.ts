@@ -351,19 +351,25 @@ export interface NotificacionesEnviosPorIntervaloResponse {
 export interface Desempeno1CuotaStockDiaItem {
   fecha: string
   dia: string
-  /** Envíos SMTP exitosos del día (dias_10_retraso). */
+  /** Fin dia: del stock 00:00, cuantos siguen sin pagar a las 23:00 (no SMTP). */
   notificaciones: number
-  /** Nivel (stock) de préstamos en 1 cuota a las 00:00 de ese día. */
+  /** Inicio dia: nivel (stock) a las 00:00 de ese dia. */
   morosos: number
   /** Alias de morosos (compat). */
   stock_00h?: number
+  /** Alias de notificaciones / Fin dia (stock sin pagar a las 23:00). */
+  stock_23h?: number
 }
 
 export interface Desempeno1CuotaStockResponse {
   dias: number
   serie: Desempeno1CuotaStockDiaItem[]
   origen: string
+  tipo_tab?: string
 }
+
+/** GET /api/v1/dashboard/desempeno-2-cuotas-stock - misma forma que 1 cuota. */
+export type Desempeno2CuotasStockResponse = Desempeno1CuotaStockResponse
 
 /** GET /api/v1/dashboard/pagos-ingresados-por-dia */
 export interface PagosIngresadosPorDiaItem {

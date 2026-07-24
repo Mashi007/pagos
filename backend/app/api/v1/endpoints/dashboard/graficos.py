@@ -35,7 +35,10 @@ from app.services.cuota_estado import (
     TZ_NEGOCIO,
     hoy_negocio,
 )
-from app.services.desempeno_1_cuota_stock import compute_desempeno_1_cuota_stock
+from app.services.desempeno_1_cuota_stock import (
+    compute_desempeno_1_cuota_stock,
+    compute_desempeno_2_cuotas_stock,
+)
 
 from .utils import (
     _CACHE_COBRANZAS_SEMANALES,
@@ -1849,6 +1852,20 @@ def get_desempeno_1_cuota_stock(
     - morosos: nivel de cartera 1 cuota a las 00:00 de ese día (desempeño, no «nuevos»).
     """
     return compute_desempeno_1_cuota_stock(db, dias)
+
+
+@router.get("/desempeno-2-cuotas-stock")
+def get_desempeno_2_cuotas_stock(
+    dias: int = Query(20, ge=7, le=90),
+    db: Session = Depends(get_db),
+):
+    """
+    Dos cantidades por día (últimos `dias`, default 20) para 2 cuotas / PREJUDICIAL:
+
+    - notificaciones: envíos SMTP exitosos (envios_notificacion / prejudicial).
+    - morosos: nivel de cartera 2 cuotas (atraso ≥60, exactamente 2) a las 00:00.
+    """
+    return compute_desempeno_2_cuotas_stock(db, dias)
 
 
 # Categorías de institución para pagos ingresados por día (orden de apilado).

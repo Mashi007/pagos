@@ -6,8 +6,11 @@ y facilitar pruebas unitarias sobre el pipeline sin montar FastAPI.
 """
 import logging
 import time
-from datetime import date
-from typing import Callable, Dict, List, Optional, Tuple
+from datetime import date, datetime, time, timezone
+from typing import Callable, Dict, List, Optional, Set, Tuple
+from zoneinfo import ZoneInfo
+
+from sqlalchemy import select
 
 from sqlalchemy.orm import Session
 
@@ -88,6 +91,49 @@ CUERPO_DEFAULT_PAGO_2_DIAS_ANTES_PENDIENTE = (
 def _tipo_tab_para_persistencia(tipo_config: str) -> str | None:
     """Devuelve tipo_tab (dias_5, hoy, etc.) si se debe persistir para estad�sticas/rebotados."""
     return _CONFIG_TIPO_TO_TAB.get(tipo_config)
+
+def _sets_ya_enviados_exito_hoy(
+    db: Session, tipo_tabs: Set[str]
+) -> tuple[dict[str, set[int]], dict[str, set[str]]]:
+    """prestamo_id y cedula con envio exitoso hoy (America/Caracas) por tipo_tab."""
+    from app.services.cuota_estado import TZ_NEGOCIO, hoy_negocio
+
+    por_pid: dict[str, set[int]] = {tt: set() for tt in tipo_tabs}
+    por_ced: dict[str, set[str]] = {tt: set() for tt in tipo_tabs}
+    if db is None or not tipo_tabs:
+        return por_pid, por_ced
+    z = ZoneInfo(TZ_NEGOCIO)
+    hoy = hoy_negocio()
+    start_local = datetime.combine(hoy, time.min, tzinfo=z)
+    end_local = datetime.combine(hoy, time.max, tzinfo=z)
+    start_utc = start_local.astimezone(timezone.utc).replace(tzinfo=None)
+    end_utc = end_local.astimezone(timezone.utc).replace(tzinfo=None)
+    fe = EnvioNotificacion.fecha_envio
+    stmt = select(
+        EnvioNotificacion.tipo_tab,
+        EnvioNotificacion.prestamo_id,
+        EnvioNotificacion.cedula,
+    ).where(
+        EnvioNotificacion.exito.is_(True),
+        EnvioNotificacion.tipo_tab.in_(list(tipo_tabs)),
+        fe >= start_utc,
+        fe <= end_utc,
+    )
+    for tab, pid, ced in db.execute(stmt).all():
+        tt = str(tab or "").strip()
+        if tt not in por_pid:
+            continue
+        if pid is not None:
+            try:
+                por_pid[tt].add(int(pid))
+            except (TypeError, ValueError):
+                pass
+        c = (str(ced).strip() if ced is not None else "")
+        if c:
+            por_ced[tt].add(c)
+    return por_pid, por_ced
+
+
 
 
 NOMBRE_PDF_CARTA_VARIABLE = "Carta_Cobranza.pdf"
@@ -326,9 +372,18 @@ def _enviar_correos_items(
     enviados_whatsapp = 0
     fallidos_whatsapp = 0
     omitidos_desistimiento = 0
+    omitidos_ya_enviado = 0
     persistidos_ok = 0
     correlativos_en_batch = {}
     total_items = len(items)
+    tabs_lote: Set[str] = set()
+    for _it0 in items:
+        _tt0 = _tipo_tab_para_persistencia(get_tipo_for_item(_it0))
+        if _tt0:
+            tabs_lote.add(_tt0)
+    ya_pid, ya_ced = (
+        _sets_ya_enviados_exito_hoy(db, tabs_lote) if db is not None else ({}, {})
+    )
 
     def _report_progress(procesados: int) -> None:
         if not on_progress:
@@ -344,6 +399,7 @@ def _enviar_correos_items(
                     "omitidos_config": int(omitidos_config),
                     "omitidos_paquete_incompleto": int(omitidos_paquete_incompleto),
                     "omitidos_desistimiento": int(omitidos_desistimiento),
+                    "omitidos_ya_enviado": int(omitidos_ya_enviado),
                 }
             )
         except Exception:
@@ -369,6 +425,22 @@ def _enviar_correos_items(
                     motivo_estado,
                 )
                 omitidos_desistimiento += 1
+                _report_progress(idx + 1)
+                continue
+        tipo_tab_skip = _tipo_tab_para_persistencia(tipo)
+        if tipo_tab_skip and db is not None and forzar_destinos_prueba is None:
+            pid_skip = item.get("prestamo_id")
+            ced_skip = (item.get("cedula") or "").strip()
+            if pid_skip is not None:
+                try:
+                    if int(pid_skip) in ya_pid.get(tipo_tab_skip, set()):
+                        omitidos_ya_enviado += 1
+                        _report_progress(idx + 1)
+                        continue
+                except (TypeError, ValueError):
+                    pass
+            if ced_skip and ced_skip in ya_ced.get(tipo_tab_skip, set()):
+                omitidos_ya_enviado += 1
                 _report_progress(idx + 1)
                 continue
         tipo_cfg = config_envios.get(tipo) or {}
@@ -643,6 +715,17 @@ def _enviar_correos_items(
             email_sent_ok = ok
             if ok:
                 enviados += 1
+                tt_ok = _tipo_tab_para_persistencia(tipo)
+                if tt_ok:
+                    pid_ok = item.get("prestamo_id")
+                    if pid_ok is not None:
+                        try:
+                            ya_pid.setdefault(tt_ok, set()).add(int(pid_ok))
+                        except (TypeError, ValueError):
+                            pass
+                    ced_ok = (item.get("cedula") or "").strip()
+                    if ced_ok:
+                        ya_ced.setdefault(tt_ok, set()).add(ced_ok)
             else:
                 fallidos += 1
             # Pausa corta entre SMTP: Gmail cierra login si hay cientos de connect+auth seguidos.
@@ -753,6 +836,7 @@ def _enviar_correos_items(
         "omitidos_config": omitidos_config,
         "omitidos_desistimiento": omitidos_desistimiento,
         "omitidos_paquete_incompleto": omitidos_paquete_incompleto,
+        "omitidos_ya_enviado": omitidos_ya_enviado,
         "enviados_whatsapp": enviados_whatsapp,
         "fallidos_whatsapp": fallidos_whatsapp,
     }

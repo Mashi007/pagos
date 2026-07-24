@@ -509,7 +509,11 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
     setAckEnvioConListaVacia(false)
   }, [confirmEnvio])
 
+  /** Abort solo para actualizar listas (no debe cortar el sondeo de envío). */
   const operacionListaAbortRef = useRef<AbortController | null>(null)
+  /** Abort solo del seguimiento UI del envío; el lote en servidor sigue. */
+  const envioSeguimientoAbortRef = useRef<AbortController | null>(null)
+  const envioSeguimientoTokenRef = useRef<string | null>(null)
 
   const beginOperacionListaAbortable = () => {
     operacionListaAbortRef.current?.abort()
@@ -518,16 +522,26 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
     return c
   }
 
+  const beginEnvioSeguimientoAbortable = () => {
+    envioSeguimientoAbortRef.current?.abort()
+    const c = new AbortController()
+    envioSeguimientoAbortRef.current = c
+    return c
+  }
+
   const cancelarOperacionListaEmergencia = () => {
     operacionListaAbortRef.current?.abort()
     operacionListaAbortRef.current = null
+    envioSeguimientoAbortRef.current?.abort()
+    envioSeguimientoAbortRef.current = null
     setActualizandoListas(false)
     setEnviandoPrejudicial(false)
     setEnviandoD2Antes(false)
     setEnviandoPago1Dia(false)
     setEnviandoPago10Dias(false)
+    setEnvioProgress(null)
     toast.warning(
-      'Cancelación: se cortó la petición en el navegador. El servidor puede seguir unos segundos.'
+      'Se detuvo el seguimiento en pantalla. El envío en el servidor continúa hasta completar todo el lote.'
     )
   }
 
@@ -537,6 +551,123 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
     enviandoD2Antes ||
     enviandoPago1Dia ||
     enviandoPago10Dias
+
+  // Si hay un lote en curso en el servidor, reanudar barra de progreso al entrar.
+  useEffect(() => {
+    let cancelled = false
+    const ac = beginEnvioSeguimientoAbortable()
+    const poll = async () => {
+      try {
+        const { ultimo } = await notificacionService.obtenerUltimoEnvioBatch({
+          signal: ac.signal,
+        })
+        if (cancelled || !ultimo) return
+        const estado = String(ultimo.estado || '')
+          .trim()
+          .toLowerCase()
+        const det =
+          typeof ultimo.detalles === 'object' && ultimo.detalles !== null
+            ? (ultimo.detalles as Record<string, unknown>)
+            : null
+        const enProceso =
+          estado === 'en_proceso' ||
+          Boolean(det && det.en_proceso) ||
+          !ultimo.fin_utc
+        if (!enProceso) return
+        const tipo = String(
+          ultimo.tipo_caso || (det && det.tipo_caso) || ''
+        ).trim()
+        if (tipo === 'PREJUDICIAL') setEnviandoPrejudicial(true)
+        else if (tipo === 'PAGO_2_DIAS_ANTES_PENDIENTE')
+          setEnviandoD2Antes(true)
+        else if (tipo === 'PAGO_1_DIA_ATRASADO') setEnviandoPago1Dia(true)
+        else if (tipo === 'PAGO_10_DIAS_ATRASADO') setEnviandoPago10Dias(true)
+        const token = String((det && det.token_seguimiento) || '').trim()
+        envioSeguimientoTokenRef.current = token || null
+        const totalN = Number(
+          ultimo.total_en_lista ?? (det && det.total_en_lista) ?? 0
+        )
+        const procesadosN = Number(
+          (det && det.procesados) ?? ultimo.enviados ?? 0
+        )
+        setEnvioProgress({
+          procesados: Number.isFinite(procesadosN) ? procesadosN : 0,
+          total: Number.isFinite(totalN) ? totalN : 0,
+          enviados: Number(ultimo.enviados ?? 0),
+          fallidos: Number(ultimo.fallidos ?? 0),
+          sin_email: Number(ultimo.sin_email ?? 0),
+        })
+        toast.info(
+          'Hay un envío en curso en el servidor; se reanudó el seguimiento en pantalla.'
+        )
+        const deadline = Date.now() + 3_600_000
+        while (!cancelled && Date.now() < deadline) {
+          await new Promise<void>(r => window.setTimeout(r, 2000))
+          if (cancelled || ac.signal.aborted) break
+          const { ultimo: u2 } =
+            await notificacionService.obtenerUltimoEnvioBatch({
+              signal: ac.signal,
+            })
+          if (!u2) continue
+          const det2 =
+            typeof u2.detalles === 'object' && u2.detalles !== null
+              ? (u2.detalles as Record<string, unknown>)
+              : null
+          const token2 = String((det2 && det2.token_seguimiento) || '').trim()
+          if (token && token2 && token2 !== token) break
+          const est2 = String(u2.estado || '')
+            .trim()
+            .toLowerCase()
+          const sigue =
+            est2 === 'en_proceso' ||
+            Boolean(det2 && det2.en_proceso) ||
+            !u2.fin_utc
+          const total2 = Number(
+            u2.total_en_lista ?? (det2 && det2.total_en_lista) ?? 0
+          )
+          const proc2 = Number((det2 && det2.procesados) ?? u2.enviados ?? 0)
+          setEnvioProgress({
+            procesados: Number.isFinite(proc2) ? proc2 : 0,
+            total: Number.isFinite(total2) ? total2 : 0,
+            enviados: Number(u2.enviados ?? 0),
+            fallidos: Number(u2.fallidos ?? 0),
+            sin_email: Number(u2.sin_email ?? 0),
+          })
+          if (!sigue) {
+            toast.success(
+              `Envío en servidor finalizado: ${Number(u2.enviados ?? 0)} enviados.`
+            )
+            await queryClient.invalidateQueries({
+              queryKey: NOTIFICACIONES_QUERY_KEYS.envios,
+            })
+            break
+          }
+        }
+      } catch (e) {
+        if (!isRequestCanceled(e)) {
+          console.error(e)
+        }
+      } finally {
+        if (!cancelled && envioSeguimientoAbortRef.current === ac) {
+          envioSeguimientoAbortRef.current = null
+          setEnviandoPrejudicial(false)
+          setEnviandoD2Antes(false)
+          setEnviandoPago1Dia(false)
+          setEnviandoPago10Dias(false)
+          setEnvioProgress(null)
+        }
+      }
+    }
+    void poll()
+    return () => {
+      cancelled = true
+      if (envioSeguimientoAbortRef.current === ac) {
+        ac.abort()
+        envioSeguimientoAbortRef.current = null
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   useEffect(() => {
     const pausado =
@@ -760,10 +891,10 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
     const { kind, n } = p
 
     if (kind === 'prejudicial') {
-      const ac = beginOperacionListaAbortable()
+      const ac = beginEnvioSeguimientoAbortable()
       setEnviandoPrejudicial(true)
       const loadingId = toast.loading(
-        'Enviando correos… con muchas filas puede tardar más de 10 minutos. No cierre esta pestaña.'
+        'Enviando correos en el servidor… puede tardar varios minutos. Puede cerrar o cambiar de menú: el envío sigue hasta completar el lote.'
       )
 
       try {
@@ -798,7 +929,9 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
         console.error(e)
         toast.dismiss(loadingId)
         if (isRequestCanceled(e)) {
-          toast.info('Envío cancelado en el navegador.')
+          toast.info(
+            'Seguimiento detenido en pantalla. El servidor sigue enviando hasta terminar el lote.'
+          )
           return
         }
 
@@ -807,8 +940,8 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
           'Revise PREJUDICIAL en Configuración y el correo del servidor.'
         )
       } finally {
-        if (operacionListaAbortRef.current === ac) {
-          operacionListaAbortRef.current = null
+        if (envioSeguimientoAbortRef.current === ac) {
+          envioSeguimientoAbortRef.current = null
         }
         setEnviandoPrejudicial(false)
         setEnvioProgress(null)
@@ -817,10 +950,10 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
     }
 
     if (kind === 'd2antes') {
-      const ac = beginOperacionListaAbortable()
+      const ac = beginEnvioSeguimientoAbortable()
       setEnviandoD2Antes(true)
       const loadingId = toast.loading(
-        'Enviando correos en el servidor… puede tardar varios minutos. Puede minimizar esta pestaña; el avance se consulta automáticamente.'
+        'Enviando correos en el servidor… puede tardar varios minutos. Puede cerrar o cambiar de menú: el envío sigue hasta completar el lote.'
       )
 
       try {
@@ -858,7 +991,9 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
         console.error(e)
         toast.dismiss(loadingId)
         if (isRequestCanceled(e)) {
-          toast.info('Envío cancelado en el navegador.')
+          toast.info(
+            'Seguimiento detenido en pantalla. El servidor sigue enviando hasta terminar el lote.'
+          )
           return
         }
 
@@ -867,8 +1002,8 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
           'Revise PAGO_2_DIAS_ANTES_PENDIENTE en Configuración.'
         )
       } finally {
-        if (operacionListaAbortRef.current === ac) {
-          operacionListaAbortRef.current = null
+        if (envioSeguimientoAbortRef.current === ac) {
+          envioSeguimientoAbortRef.current = null
         }
         setEnviandoD2Antes(false)
         setEnvioProgress(null)
@@ -877,10 +1012,10 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
     }
 
     if (kind === 'pago10dias') {
-      const ac = beginOperacionListaAbortable()
+      const ac = beginEnvioSeguimientoAbortable()
       setEnviandoPago10Dias(true)
       const loadingId = toast.loading(
-        'Enviando correos en el servidor… puede tardar varios minutos. Puede minimizar esta pestaña; el avance se consulta automáticamente.'
+        'Enviando correos en el servidor… puede tardar varios minutos. Puede cerrar o cambiar de menú: el envío sigue hasta completar el lote.'
       )
 
       try {
@@ -918,7 +1053,9 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
         console.error(e)
         toast.dismiss(loadingId)
         if (isRequestCanceled(e)) {
-          toast.info('Envío cancelado en el navegador.')
+          toast.info(
+            'Seguimiento detenido en pantalla. El servidor sigue enviando hasta terminar el lote.'
+          )
           return
         }
 
@@ -927,8 +1064,8 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
           'Revise PAGO_10_DIAS_ATRASADO en Configuración y el correo del servidor.'
         )
       } finally {
-        if (operacionListaAbortRef.current === ac) {
-          operacionListaAbortRef.current = null
+        if (envioSeguimientoAbortRef.current === ac) {
+          envioSeguimientoAbortRef.current = null
         }
         setEnviandoPago10Dias(false)
         setEnvioProgress(null)
@@ -936,10 +1073,10 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
       return
     }
 
-    const ac = beginOperacionListaAbortable()
+    const ac = beginEnvioSeguimientoAbortable()
     setEnviandoPago1Dia(true)
     const loadingId = toast.loading(
-      'Enviando correos en el servidor… puede tardar varios minutos. Puede minimizar esta pestaña; el avance se consulta automáticamente.'
+      'Enviando correos en el servidor… puede tardar varios minutos. Puede cerrar o cambiar de menú: el envío sigue hasta completar el lote.'
     )
 
     try {
@@ -977,7 +1114,9 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
       console.error(e)
       toast.dismiss(loadingId)
       if (isRequestCanceled(e)) {
-        toast.info('Envío cancelado en el navegador.')
+        toast.info(
+          'Seguimiento detenido en pantalla. El servidor sigue enviando hasta terminar el lote.'
+        )
         return
       }
 
@@ -986,8 +1125,8 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
         'Revise PAGO_1_DIA_ATRASADO en Configuración y el correo del servidor.'
       )
     } finally {
-      if (operacionListaAbortRef.current === ac) {
-        operacionListaAbortRef.current = null
+      if (envioSeguimientoAbortRef.current === ac) {
+        envioSeguimientoAbortRef.current = null
       }
       setEnviandoPago1Dia(false)
       setEnvioProgress(null)
@@ -2009,7 +2148,6 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                   </Button>
                 )}
 
-
                 {(enviandoPrejudicial ||
                   enviandoD2Antes ||
                   enviandoPago1Dia ||
@@ -2022,7 +2160,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                           : 'Enviando notificaciones…'}
                       </span>
                       {envioProgress ? (
-                        <span className="tabular-nums text-[11px] opacity-80">
+                        <span className="text-[11px] tabular-nums opacity-80">
                           OK {envioProgress.enviados}
                           {envioProgress.fallidos > 0
                             ? ` · fallos ${envioProgress.fallidos}`
@@ -2080,7 +2218,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                   className="border-red-400 text-red-800 hover:bg-red-50"
                   disabled={!hayOperacionListaEnCurso}
                   onClick={cancelarOperacionListaEmergencia}
-                  title="Emergencia: corta actualización o envío ya en curso. No sustituye al modal de confirmación: use «Enviar correos» en la ventana que se abre al pulsar enviar."
+                  title="Detiene actualización de listas o el seguimiento en pantalla. El envío masivo en el servidor NO se cancela: sigue hasta completar el lote."
                 >
                   <X className="mr-2 h-4 w-4" />
                   Cancelar

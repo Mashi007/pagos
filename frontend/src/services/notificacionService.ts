@@ -1247,7 +1247,7 @@ class NotificacionService {
     }>(`${this.baseUrl}/enviar-todas`, {}, { timeout: 20000 })
   }
 
-  /** Envio masivo en segundo plano + sondeo; onProgress recibe avance del heartbeat. */
+  /** Envio masivo en hilo de servidor (sigue si cierra la pestaña) + sondeo UI; onProgress = heartbeat. */
   async enviarCasoManual(
     tipo: string,
     opts?: {
@@ -1356,7 +1356,7 @@ class NotificacionService {
           const procesadosN = Number(
             detRec && 'procesados' in detRec
               ? (detRec as Record<string, unknown>).procesados
-              : ultimo.enviados ?? 0
+              : (ultimo.enviados ?? 0)
           )
           opts?.onProgress?.({
             procesados: Number.isFinite(procesadosN) ? procesadosN : 0,
@@ -1395,7 +1395,7 @@ class NotificacionService {
       })
     }
     const soft = new Error(
-      'ESPERA_ENVIO_AGOTADA: el envío puede seguir en el servidor. Revise «Último envío por lote» en Configuración > Notificaciones antes de reintentar (evite duplicar).'
+      'ESPERA_ENVIO_AGOTADA: el envío sigue en el servidor hasta completar el lote. Revise «Último envío por lote» en Configuración > Notificaciones; si reintenta, los ya enviados hoy se omiten.'
     ) as Error & { code?: string }
     soft.code = 'ESPERA_ENVIO_AGOTADA'
     throw soft

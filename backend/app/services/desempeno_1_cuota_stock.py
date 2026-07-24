@@ -1,31 +1,35 @@
 """
-Desempeño diario «1 cuota» (dias_10_retraso):
+Desempeño diario de cartera (independiente de envíos SMTP):
 
-1) notificaciones — envíos SMTP exitosos ese día (envios_notificacion).
-2) morosos — nivel (stock) de préstamos en listado 1 cuota a las 00:00 de ese día
-   (ej. día 21 = 991, día 22 = 890). No es el flujo de «nuevos» del día.
+- 1 cuota (dias_10_retraso): atraso 6–59, exactamente 1 cuota atrasada.
+- 2 cuotas (prejudicial): atraso ≥60, exactamente 2 cuotas atrasadas (≥60).
 
-Dos cantidades por día, misma escala aproximada para comparar desempeño.
+Por día (últimos N, Caracas):
+1) Inicio día (morosos / stock_00h) — nivel a las 00:00.
+2) Fin dia (notificaciones / stock_23h) — del stock de las 00:00, cuántos
+   siguen en el segmento a las 23:00 (no se pagaron). No depende de si hubo correo.
 """
 from __future__ import annotations
 
 import logging
 from datetime import date, datetime, time, timedelta, timezone
-from typing import Any
+from typing import Any, Callable, Literal
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import Date, case, cast, func, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.cliente import Cliente
 from app.models.cuota import Cuota
 from app.models.cuota_pago import CuotaPago
-from app.models.envio_notificacion import EnvioNotificacion
 from app.models.prestamo import Prestamo
 from app.services.cuota_estado import TZ_NEGOCIO, hoy_negocio
 from app.services.notificacion_service import (
     MAX_DIAS_ATRASO_PARA_LISTADO_10_DIAS,
     MIN_DIAS_ATRASO_PARA_LISTADO_10_DIAS,
+    MIN_DIAS_ATRASO_PREJUDICIAL,
+    PREJUDICIAL_MAX_CUOTAS_CON_ATRASO_60,
+    PREJUDICIAL_MIN_CUOTAS_CON_ATRASO_60,
     TOL_SALDO_CUOTA_NOTIFICACION,
     _prestamo_no_excluido_notif,
 )
@@ -38,6 +42,9 @@ _NOMBRES_MES = (
     "Jul", "Ago", "Sep", "Oct", "Nov", "Dic",
 )
 TIPO_TAB_1_CUOTA = "dias_10_retraso"
+TIPO_TAB_2_CUOTAS = "prejudicial"
+
+CasoDesempeno = Literal["1_cuota", "2_cuotas"]
 
 
 def _as_aware(dt: datetime, z: ZoneInfo) -> datetime:
@@ -63,13 +70,12 @@ def _paid_at_caracas(
     return None
 
 
-def _stock_prestamo_ids_at_midnight(
-    cuotas_meta: list[dict[str, Any]],
-    d: date,
-    z: ZoneInfo,
+def _stock_1_cuota_at(
+    cuotas_meta: list[dict[str, Any]], t_ref: datetime, z: ZoneInfo
 ) -> set[int]:
-    """Préstamos en 1 cuota (atraso 6–59, exactamente 1) a las 00:00 de `d` (Caracas)."""
-    t_ref = datetime.combine(d, time(0, 0, 0), tzinfo=z)
+    """Prestamos en segmento 1 cuota en el instante t_ref (Caracas)."""
+    t_local = _as_aware(t_ref, z)
+    d = t_local.date()
     overdue: dict[int, list[int]] = {}
     for c in cuotas_meta:
         fv = c["fv"]
@@ -79,7 +85,7 @@ def _stock_prestamo_ids_at_midnight(
         if dias_atraso < 1:
             continue
         paid_at = c["paid_at"]
-        if paid_at is not None and paid_at <= t_ref:
+        if paid_at is not None and paid_at <= t_local:
             continue
         overdue.setdefault(c["prestamo_id"], []).append(dias_atraso)
 
@@ -93,143 +99,223 @@ def _stock_prestamo_ids_at_midnight(
     return out
 
 
-def _notificaciones_por_dia(db: Session, inicio: date, hoy: date, z: ZoneInfo) -> dict[date, int]:
-    start_local = datetime.combine(inicio, time.min, tzinfo=z)
-    start_utc_naive = start_local.astimezone(timezone.utc).replace(tzinfo=None)
-    bind = db.get_bind()
-    dialect = bind.dialect.name if bind is not None else "postgresql"
-    fe = EnvioNotificacion.fecha_envio
-    if dialect == "postgresql":
-        dia_expr = cast(
-            func.timezone("America/Caracas", func.timezone("UTC", fe)),
-            Date,
-        )
-    else:
-        dia_expr = cast(fe, Date)
-
-    enviados_sum = func.coalesce(
-        func.sum(case((EnvioNotificacion.exito.is_(True), 1), else_=0)),
-        0,
-    )
-    stmt = (
-        select(dia_expr.label("dia"), enviados_sum.label("enviados"))
-        .where(
-            EnvioNotificacion.tipo_tab == TIPO_TAB_1_CUOTA,
-            EnvioNotificacion.fecha_envio >= start_utc_naive,
-        )
-        .group_by(dia_expr)
-    )
-    counts: dict[date, int] = {}
-    for row in db.execute(stmt).all():
-        d = row.dia
-        if isinstance(d, datetime):
-            d = d.date()
-        if not isinstance(d, date):
+def _stock_2_cuotas_at(
+    cuotas_meta: list[dict[str, Any]], t_ref: datetime, z: ZoneInfo
+) -> set[int]:
+    """Exactamente 2 cuotas impagas con atraso >= 60 en el instante t_ref."""
+    t_local = _as_aware(t_ref, z)
+    d = t_local.date()
+    counts: dict[int, int] = {}
+    for c in cuotas_meta:
+        fv = c["fv"]
+        if fv >= d:
             continue
-        if d < inicio or d > hoy:
+        dias_atraso = (d - fv).days
+        if dias_atraso < MIN_DIAS_ATRASO_PREJUDICIAL:
             continue
-        counts[d] = int(row.enviados or 0)
-    return counts
+        paid_at = c["paid_at"]
+        if paid_at is not None and paid_at <= t_local:
+            continue
+        pid = c["prestamo_id"]
+        counts[pid] = counts.get(pid, 0) + 1
+
+    out: set[int] = set()
+    for pid, n in counts.items():
+        if PREJUDICIAL_MIN_CUOTAS_CON_ATRASO_60 <= n <= PREJUDICIAL_MAX_CUOTAS_CON_ATRASO_60:
+            out.add(pid)
+    return out
 
 
-def compute_desempeno_1_cuota_stock(db: Session, dias: int = 20) -> dict[str, Any]:
-    """
-    Compat: mismo nombre de función usado por el endpoint.
-    Devuelve serie diaria con notificaciones + morosos/stock 00:00 (últimos `dias`).
-    """
-    return compute_desempeno_1_cuota_diario(db, dias)
+def _stock_1_cuota_at_midnight(
+    cuotas_meta: list[dict[str, Any]], d: date, z: ZoneInfo
+) -> set[int]:
+    return _stock_1_cuota_at(
+        cuotas_meta, datetime.combine(d, time(0, 0, 0), tzinfo=z), z
+    )
 
 
-def compute_desempeno_1_cuota_diario(db: Session, dias: int = 20) -> dict[str, Any]:
+def _stock_2_cuotas_at_midnight(
+    cuotas_meta: list[dict[str, Any]], d: date, z: ZoneInfo
+) -> set[int]:
+    return _stock_2_cuotas_at(
+        cuotas_meta, datetime.combine(d, time(0, 0, 0), tzinfo=z), z
+    )
+
+
+def _load_cuotas_meta(
+    db: Session, *, fv_min: date | None, fv_max: date, z: ZoneInfo
+) -> list[dict[str, Any]]:
+    q = (
+        select(
+            Cuota.id,
+            Cuota.prestamo_id,
+            Cuota.fecha_vencimiento,
+            Cuota.monto,
+            Cuota.fecha_pago,
+        )
+        .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+        .join(Cliente, Prestamo.cliente_id == Cliente.id)
+        .where(Cuota.fecha_vencimiento.isnot(None))
+        .where(Cuota.fecha_vencimiento <= fv_max)
+        .where(_prestamo_no_excluido_notif())
+        .where(sql_cliente_sin_desistimiento())
+    )
+    if fv_min is not None:
+        q = q.where(Cuota.fecha_vencimiento >= fv_min)
+    rows = db.execute(q).all()
+    if not rows:
+        return []
+
+    cuota_ids = [int(r[0]) for r in rows]
+    eventos_por_cuota: dict[int, list[tuple[datetime, float, bool]]] = {
+        i: [] for i in cuota_ids
+    }
+    chunk = 2000
+    for i in range(0, len(cuota_ids), chunk):
+        batch = cuota_ids[i : i + chunk]
+        q_pagos = select(
+            CuotaPago.cuota_id,
+            CuotaPago.fecha_aplicacion,
+            CuotaPago.monto_aplicado,
+            CuotaPago.es_pago_completo,
+        ).where(CuotaPago.cuota_id.in_(batch))
+        for cid, fa, mon, completo in db.execute(q_pagos).all():
+            if fa is None:
+                continue
+            eventos_por_cuota.setdefault(int(cid), []).append(
+                (_as_aware(fa, z), float(mon or 0.0), bool(completo))
+            )
+    for cid in eventos_por_cuota:
+        eventos_por_cuota[cid].sort(key=lambda x: x[0])
+
+    out: list[dict[str, Any]] = []
+    for cid, pid, fv, monto, fp in rows:
+        if not isinstance(fv, date):
+            continue
+        paid_at = _paid_at_caracas(
+            fecha_pago=fp if isinstance(fp, date) else None,
+            monto=float(monto or 0.0),
+            eventos=eventos_por_cuota.get(int(cid), []),
+            z=z,
+        )
+        out.append({"prestamo_id": int(pid), "fv": fv, "paid_at": paid_at})
+    return out
+
+
+def _t_fin_dia(d: date, hoy: date, now_z: datetime, z: ZoneInfo) -> datetime:
+    """23:00 Caracas del dia; si es hoy y aun no son las 23:00, usa ahora (vivo)."""
+    t23 = datetime.combine(d, time(23, 0, 0), tzinfo=z)
+    if d == hoy and now_z < t23:
+        return now_z
+    return t23
+
+
+def _compute_desempeno_diario(
+    db: Session,
+    dias: int,
+    *,
+    tipo_tab: str,
+    stock_fn: Callable[[list[dict[str, Any]], datetime, ZoneInfo], set[int]],
+    fv_min: date | None,
+    fv_max: date,
+    log_label: str,
+) -> dict[str, Any]:
     try:
         dias_ef = min(90, max(7, int(dias)))
         z = ZoneInfo(TZ_NEGOCIO)
         hoy = hoy_negocio()
         inicio = hoy - timedelta(days=dias_ef - 1)
+        now_z = datetime.now(z)
 
-        # --- notificaciones por día ---
-        notif_by_day = _notificaciones_por_dia(db, inicio, hoy, z)
+        cuotas_meta = _load_cuotas_meta(db, fv_min=fv_min, fv_max=fv_max, z=z)
 
-        # --- sets de stock a cada medianoche (inicio-1 .. hoy) para medir entradas ---
-        fv_min = (inicio - timedelta(days=1)) - timedelta(days=MAX_DIAS_ATRASO_PARA_LISTADO_10_DIAS)
-        fv_max = hoy - timedelta(days=1)
-        q_cuotas = (
-            select(
-                Cuota.id,
-                Cuota.prestamo_id,
-                Cuota.fecha_vencimiento,
-                Cuota.monto,
-                Cuota.fecha_pago,
-            )
-            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
-            .join(Cliente, Prestamo.cliente_id == Cliente.id)
-            .where(Cuota.fecha_vencimiento.isnot(None))
-            .where(Cuota.fecha_vencimiento >= fv_min)
-            .where(Cuota.fecha_vencimiento <= fv_max)
-            .where(_prestamo_no_excluido_notif())
-            .where(sql_cliente_sin_desistimiento())
-        )
-        rows = db.execute(q_cuotas).all()
-        cuota_ids = [int(r[0]) for r in rows]
-        eventos_por_cuota: dict[int, list[tuple[datetime, float, bool]]] = {i: [] for i in cuota_ids}
-        chunk = 2000
-        for i in range(0, len(cuota_ids), chunk):
-            batch = cuota_ids[i : i + chunk]
-            q_pagos = select(
-                CuotaPago.cuota_id,
-                CuotaPago.fecha_aplicacion,
-                CuotaPago.monto_aplicado,
-                CuotaPago.es_pago_completo,
-            ).where(CuotaPago.cuota_id.in_(batch))
-            for cid, fa, mon, completo in db.execute(q_pagos).all():
-                if fa is None:
-                    continue
-                eventos_por_cuota.setdefault(int(cid), []).append(
-                    (_as_aware(fa, z), float(mon or 0.0), bool(completo))
-                )
-        for cid in eventos_por_cuota:
-            eventos_por_cuota[cid].sort(key=lambda x: x[0])
-
-        cuotas_meta: list[dict[str, Any]] = []
-        for cid, pid, fv, monto, fp in rows:
-            if not isinstance(fv, date):
-                continue
-            paid_at = _paid_at_caracas(
-                fecha_pago=fp if isinstance(fp, date) else None,
-                monto=float(monto or 0.0),
-                eventos=eventos_por_cuota.get(int(cid), []),
-                z=z,
-            )
-            cuotas_meta.append({"prestamo_id": int(pid), "fv": fv, "paid_at": paid_at})
-
-        prev_set = _stock_prestamo_ids_at_midnight(cuotas_meta, inicio - timedelta(days=1), z)
         serie: list[dict[str, Any]] = []
         d = inicio
         while d <= hoy:
-            cur_set = _stock_prestamo_ids_at_midnight(cuotas_meta, d, z)
-            notif = int(notif_by_day.get(d, 0))
-            morosos = len(cur_set)  # nivel a las 00:00 (desempeño / cartera 1 cuota)
+            t0 = datetime.combine(d, time(0, 0, 0), tzinfo=z)
+            t_fin = _t_fin_dia(d, hoy, now_z, z)
+            set_00 = stock_fn(cuotas_meta, t0, z) if cuotas_meta else set()
+            set_fin = stock_fn(cuotas_meta, t_fin, z) if cuotas_meta else set()
+            # Fin dia: del stock de las 00:00, los que siguen sin pagar a las 23:00.
+            sin_pagar = set_00 & set_fin
+            morosos = len(set_00)
+            fin_dia = len(sin_pagar)
             serie.append(
                 {
                     "fecha": d.isoformat(),
                     "dia": f"{d.day} {_NOMBRES_MES[d.month - 1]}",
-                    "notificaciones": notif,
+                    # Campo historico del grafico «Fin dia» (ya no es SMTP).
+                    "notificaciones": fin_dia,
                     "morosos": morosos,
                     "stock_00h": morosos,
+                    "stock_23h": fin_dia,
                 }
             )
-            prev_set = cur_set
             d += timedelta(days=1)
 
         return {
             "dias": dias_ef,
             "serie": serie,
             "origen": "bd",
-            # compat campos previos (vacíos) por si algo aún los lee
+            "tipo_tab": tipo_tab,
+            "metrica_fin_dia": "stock_sin_pagar_23h",
             "serie_diaria": [
-                {"fecha": r["fecha"], "dia": r["dia"], "stock": r["stock_00h"]} for r in serie
+                {
+                    "fecha": r["fecha"],
+                    "dia": r["dia"],
+                    "stock": r["stock_00h"],
+                    "stock_23h": r["stock_23h"],
+                }
+                for r in serie
             ],
         }
     except Exception as e:
-        logger.exception("Error en desempeno-1-cuota-diario: %s", e)
-        return {"dias": dias, "serie": [], "serie_diaria": [], "origen": "bd"}
+        logger.exception("Error en %s: %s", log_label, e)
+        return {
+            "dias": dias,
+            "serie": [],
+            "serie_diaria": [],
+            "origen": "bd",
+            "tipo_tab": tipo_tab,
+            "metrica_fin_dia": "stock_sin_pagar_23h",
+        }
+
+
+def compute_desempeno_1_cuota_diario(db: Session, dias: int = 20) -> dict[str, Any]:
+    hoy = hoy_negocio()
+    inicio = hoy - timedelta(days=min(90, max(7, int(dias))) - 1)
+    fv_min = (inicio - timedelta(days=1)) - timedelta(
+        days=MAX_DIAS_ATRASO_PARA_LISTADO_10_DIAS
+    )
+    fv_max = hoy - timedelta(days=1)
+    return _compute_desempeno_diario(
+        db,
+        dias,
+        tipo_tab=TIPO_TAB_1_CUOTA,
+        stock_fn=_stock_1_cuota_at,
+        fv_min=fv_min,
+        fv_max=fv_max,
+        log_label="desempeno-1-cuota-diario",
+    )
+
+
+def compute_desempeno_2_cuotas_diario(db: Session, dias: int = 20) -> dict[str, Any]:
+    hoy = hoy_negocio()
+    fv_max = hoy - timedelta(days=MIN_DIAS_ATRASO_PREJUDICIAL)
+    return _compute_desempeno_diario(
+        db,
+        dias,
+        tipo_tab=TIPO_TAB_2_CUOTAS,
+        stock_fn=_stock_2_cuotas_at,
+        fv_min=None,
+        fv_max=fv_max,
+        log_label="desempeno-2-cuotas-diario",
+    )
+
+
+def compute_desempeno_1_cuota_stock(db: Session, dias: int = 20) -> dict[str, Any]:
+    return compute_desempeno_1_cuota_diario(db, dias)
+
+
+def compute_desempeno_2_cuotas_stock(db: Session, dias: int = 20) -> dict[str, Any]:
+    return compute_desempeno_2_cuotas_diario(db, dias)

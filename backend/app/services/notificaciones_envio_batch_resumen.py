@@ -33,10 +33,12 @@ def persist_ultimo_envio_batch(
     en_proceso=True: lote aún enviando (heartbeat); fin_utc queda null para que el
     cliente no trate el resumen como terminado.
     """
-    fin = None if en_proceso else datetime.now(timezone.utc).isoformat()
+    ahora = datetime.now(timezone.utc).isoformat()
+    fin = None if en_proceso else ahora
     body: Dict[str, Any] = {
-        "inicio_utc": inicio_utc or datetime.now(timezone.utc).isoformat(),
+        "inicio_utc": inicio_utc or ahora,
         "fin_utc": fin,
+        "heartbeat_utc": ahora,
         "estado": "en_proceso" if en_proceso else "finalizado",
         "origen": origen,
         "omitido": omitido,
@@ -70,6 +72,11 @@ def persist_ultimo_envio_batch(
             body["omitidos_desistimiento"] = int(resultado.get("omitidos_desistimiento") or 0)
         except (TypeError, ValueError):
             pass
+    if resultado.get("omitidos_ya_enviado") is not None:
+        try:
+            body["omitidos_ya_enviado"] = int(resultado.get("omitidos_ya_enviado") or 0)
+        except (TypeError, ValueError):
+            pass
     try:
         valor = json.dumps(body, ensure_ascii=False)
     except (TypeError, ValueError) as e:
@@ -94,3 +101,44 @@ def get_ultimo_envio_batch_dict(db: Session) -> Optional[Dict[str, Any]]:
     except Exception as e:
         logger.warning("get_ultimo_envio_batch_dict: %s", e)
     return None
+
+
+def envio_batch_sigue_activo(
+    ultimo: Optional[Dict[str, Any]],
+    *,
+    tipo_caso: Optional[str] = None,
+    stale_seconds: int = 600,
+) -> bool:
+    """True si hay un lote en_proceso con heartbeat reciente.
+
+    Si tipo_caso se indica y el lote activo es de otro tipo, igual bloquea
+    (un solo envio SMTP masivo a la vez). Tras stale_seconds se puede relanzar.
+    """
+    if not isinstance(ultimo, dict):
+        return False
+    estado = str(ultimo.get("estado") or "").strip().lower()
+    det = ultimo.get("detalles")
+    det_rec = det if isinstance(det, dict) else {}
+    if estado == "finalizado":
+        return False
+    en_proc = estado == "en_proceso" or bool(det_rec.get("en_proceso"))
+    if not en_proc and ultimo.get("fin_utc") not in (None, ""):
+        return False
+    if not en_proc and ultimo.get("fin_utc") in (None, ""):
+        # Legacy / heartbeat sin estado: tratar como activo hasta stale.
+        en_proc = True
+    if not en_proc:
+        return False
+    hb = str(ultimo.get("heartbeat_utc") or ultimo.get("inicio_utc") or "").strip()
+    if not hb:
+        return True
+    try:
+        hb_norm = hb.replace("Z", "+00:00")
+        hb_dt = datetime.fromisoformat(hb_norm)
+        if hb_dt.tzinfo is None:
+            hb_dt = hb_dt.replace(tzinfo=timezone.utc)
+        age = (datetime.now(timezone.utc) - hb_dt.astimezone(timezone.utc)).total_seconds()
+        return age <= float(stale_seconds)
+    except Exception:
+        return True
+
