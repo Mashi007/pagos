@@ -62,6 +62,7 @@ import {
   buildFormDataEscanerComprobante,
   mergeCamposFormularioDesdeSugerenciaOcr,
   mensajeFalloExtraccionEscaner,
+  esFechaMarcadorRevisionCobros,
 } from '../utils/escanerComprobanteInfopagos'
 import { blobComprobanteAFileParaEscaneo } from '../utils/comprobanteImagenAuth'
 import { normalizarComprobanteArchivoParaEscaneo } from '../utils/normalizarComprobanteArchivo'
@@ -1610,7 +1611,12 @@ export default function CobrosPagosReportadosPage() {
           monto?: number
           moneda?: string
         } = {}
-        if (merged.fechaPago) payload.fecha_pago = merged.fechaPago
+        if (
+          merged.fechaPago &&
+          !esFechaMarcadorRevisionCobros(merged.fechaPago)
+        ) {
+          payload.fecha_pago = merged.fechaPago
+        }
         if (merged.institucion.trim()) {
           payload.institucion_financiera = merged.institucion.trim()
         }

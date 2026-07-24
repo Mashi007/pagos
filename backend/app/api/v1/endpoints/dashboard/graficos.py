@@ -35,6 +35,7 @@ from app.services.cuota_estado import (
     TZ_NEGOCIO,
     hoy_negocio,
 )
+from app.services.desempeno_1_cuota_stock import compute_desempeno_1_cuota_stock
 
 from .utils import (
     _CACHE_COBRANZAS_SEMANALES,
@@ -1834,6 +1835,20 @@ def get_notificaciones_envios_por_intervalo(
             detail="horas debe dividir 24 (1, 2, 3, 4, 6, 8 o 12).",
         )
     return _compute_notificaciones_envios_por_intervalo(db, tipo_tab, dias, horas)
+
+
+@router.get("/desempeno-1-cuota-stock")
+def get_desempeno_1_cuota_stock(
+    dias: int = Query(20, ge=7, le=90),
+    db: Session = Depends(get_db),
+):
+    """
+    Dos cantidades por día (últimos `dias`, default 20):
+
+    - notificaciones: envíos SMTP exitosos (envios_notificacion / dias_10_retraso).
+    - nuevos_morosos: préstamos que entran al listado 1 cuota a las 00:00 de ese día.
+    """
+    return compute_desempeno_1_cuota_stock(db, dias)
 
 
 # Categorías de institución para pagos ingresados por día (orden de apilado).

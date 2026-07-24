@@ -347,6 +347,24 @@ export interface NotificacionesEnviosPorIntervaloResponse {
   serie: NotificacionesEnviosPorIntervaloItem[]
 }
 
+/** GET /api/v1/dashboard/desempeno-1-cuota-stock */
+export interface Desempeno1CuotaStockDiaItem {
+  fecha: string
+  dia: string
+  /** Envíos SMTP exitosos del día (dias_10_retraso). */
+  notificaciones: number
+  /** Préstamos que entran a 1 cuota a las 00:00 de ese día. */
+  nuevos_morosos: number
+  /** Stock a las 00:00 (informativo). */
+  stock_00h?: number
+}
+
+export interface Desempeno1CuotaStockResponse {
+  dias: number
+  serie: Desempeno1CuotaStockDiaItem[]
+  origen: string
+}
+
 /** GET /api/v1/dashboard/pagos-ingresados-por-dia */
 export interface PagosIngresadosPorDiaItem {
   fecha: string

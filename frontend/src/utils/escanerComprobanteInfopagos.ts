@@ -13,16 +13,28 @@ import {
 import { resolverInstitucionDesdeExtraccion } from '../pages/escanerInfopagosLoteModel'
 import { hoyYmdCaracas } from './fechaZona'
 
+/** Marcador tecnico del formulario publico (OCR incompleto). No es fecha real de pago. */
+export const FECHA_MARCADOR_REVISION_COBROS = '1970-01-01'
+
+export function esFechaMarcadorRevisionCobros(
+  ymd: string | null | undefined
+): boolean {
+  return (ymd || '').trim().slice(0, 10) === FECHA_MARCADOR_REVISION_COBROS
+}
+
 /**
- * Fecha OCR para escanear/reescanear: vacía si falta o si coincide con hoy Caracas
- * (Gemini suele copiar la referencia del prompt; no sustituye la fecha impresa).
+ * Fecha OCR para escanear/reescanear: vacia si falta.
+ * Por defecto descarta hoy Caracas (Gemini suele copiar la ref. del prompt).
+ * Con permitirHoy (reescaneo si solo hay marcador 1970) si acepta hoy.
  */
 export function fechaPagoDesdeExtraccionOcrConfiable(
-  fechaRaw: string | null | undefined
+  fechaRaw: string | null | undefined,
+  opts?: { permitirHoy?: boolean }
 ): string {
   const t = (fechaRaw || '').trim().slice(0, 10)
   if (!t) return ''
-  if (t === hoyYmdCaracas()) return ''
+  if (esFechaMarcadorRevisionCobros(t)) return ''
+  if (!opts?.permitirHoy && t === hoyYmdCaracas()) return ''
   return t
 }
 
@@ -101,12 +113,24 @@ export function fechaPagoDesdeSugerenciaOcrReescaneo(
   sugerencia: Pick<
     EscanerInfopagosSugerencia,
     'fecha_pago' | 'numero_operacion' | 'notas_modelo'
-  >
+  >,
+  opts?: { permitirHoy?: boolean }
 ): string {
-  const directa = fechaPagoDesdeExtraccionOcrConfiable(sugerencia.fecha_pago)
+  const directa = fechaPagoDesdeExtraccionOcrConfiable(
+    sugerencia.fecha_pago,
+    opts
+  )
   if (directa) return directa
   const ctx = `${sugerencia.numero_operacion || ''} ${sugerencia.notas_modelo || ''}`
-  return fechaPagoDesdeBloqueDcmeMercantil(ctx)
+  const dcme = fechaPagoDesdeBloqueDcmeMercantil(ctx)
+  if (dcme) return dcme
+  if (opts?.permitirHoy) {
+    const raw = (sugerencia.fecha_pago || '').trim().slice(0, 10)
+    if (/^\d{4}-\d{2}-\d{2}$/.test(raw) && !esFechaMarcadorRevisionCobros(raw)) {
+      return raw
+    }
+  }
+  return ''
 }
 
 /**
@@ -285,9 +309,14 @@ export function mergeCamposFormularioDesdeSugerenciaOcr(
     actual.institucion,
     actual.otroInstitucion
   )
-  const fechaExtraida = fechaPagoDesdeExtraccionOcrConfiable(
-    sugerencia.fecha_pago
-  )
+  const prevFechaRaw = (actual.fechaPago || '').trim().slice(0, 10)
+  const prevFecha = esFechaMarcadorRevisionCobros(prevFechaRaw)
+    ? ''
+    : prevFechaRaw
+  const permitirHoy = !prevFecha
+  const fechaExtraida = fechaPagoDesdeSugerenciaOcrReescaneo(sugerencia, {
+    permitirHoy,
+  })
   const numeroExtraido = (sugerencia.numero_operacion || '').trim()
   const mon = sugerencia.moneda === 'BS' ? 'BS' : 'USD'
   const montoNum =
@@ -296,10 +325,9 @@ export function mergeCamposFormularioDesdeSugerenciaOcr(
       : null
   const soloOcr = Boolean(opts?.reemplazarSinConservarPrevios)
 
-  // Fecha: si OCR no trae fecha confiable, conservar la del formulario
-  // (evita borrar una correccion y omitir fecha_pago en PATCH → queda 1970-01-01).
+  // Nunca conservar 1970-01-01 como fecha de pago.
   return {
-    fechaPago: fechaExtraida || actual.fechaPago,
+    fechaPago: fechaExtraida || prevFecha,
     institucion: soloOcr ? institucion : institucion || actual.institucion,
     otroInstitucion: soloOcr
       ? otroInstitucion

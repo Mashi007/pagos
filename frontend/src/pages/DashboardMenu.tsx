@@ -76,8 +76,7 @@ import type {
   CobranzasSemanalesResponse,
   EvolucionMensualItem,
   NotificacionesEnviosPorDiaResponse,
-  NotificacionesEnviosPorIntervaloItem,
-  NotificacionesEnviosPorIntervaloResponse,
+  Desempeno1CuotaStockResponse,
   PagosIngresadosPorDiaResponse,
 } from '../types/dashboard'
 
@@ -151,35 +150,6 @@ function serieNotificacionesEjeDesde5Abril<
   return out.length > 0 ? out : serie
 }
 
-/**
- * Deja solo puntos con fecha >= 20 de julio del año del último dato (calendario local).
- * Usado en «Cobranzas entre 5 y 59 días». Si no quedara ninguno, devuelve la serie original.
- */
-function serieNotificacionesEjeDesde20Julio<
-  T extends { fecha: string; enviados: number },
->(serie: T[]): T[] {
-  if (!serie.length) return serie
-
-  let max: Date | null = null
-
-  for (const row of serie) {
-    const dt = parseIsoDateLocal(row.fecha)
-
-    if (dt && (!max || dt.getTime() > max.getTime())) max = dt
-  }
-
-  if (!max) return serie
-
-  const cutoff = new Date(max.getFullYear(), 6, 20)
-
-  const out = serie.filter(row => {
-    const dt = parseIsoDateLocal(row.fecha)
-
-    return dt != null && dt >= cutoff
-  })
-
-  return out.length > 0 ? out : serie
-}
 
 /**
  * Añade `tendencia`: regresión lineal por índice (0..n-1) sobre `valueKey`.
@@ -246,129 +216,12 @@ function notificacionesSerieConTendenciaLineal<T extends { enviados: number }>(
   return serieConTendenciaLineal(serie, 'enviados')
 }
 
-/**
- * Filtra la serie intradía (>= 20 jul del año del último día) para alinear con el gráfico diario.
- */
-function serieNotificacionesIntervaloDesde20Julio(
-  serie: NotificacionesEnviosPorIntervaloItem[]
-): NotificacionesEnviosPorIntervaloItem[] {
-  if (!serie.length) return serie
-
-  let max: Date | null = null
-
-  for (const row of serie) {
-    const dt = parseIsoDateLocal(row.fecha_dia || row.fecha.slice(0, 10))
-
-    if (dt && (!max || dt.getTime() > max.getTime())) max = dt
-  }
-
-  if (!max) return serie
-
-  const cutoff = new Date(max.getFullYear(), 6, 20)
-
-  const out = serie.filter(row => {
-    const dt = parseIsoDateLocal(row.fecha_dia || row.fecha.slice(0, 10))
-
-    return dt != null && dt >= cutoff
-  })
-
-  return out.length > 0 ? out : serie
+/** Últimos N días de la serie diaria (visión dashboard). */
+function serieUltimosNDias<T extends { fecha: string }>(serie: T[], n: number): T[] {
+  if (!serie.length || n <= 0) return serie
+  return serie.length <= n ? serie : serie.slice(serie.length - n)
 }
 
-/** Etiqueta de hora en 12 h: 12 am, 1 am, ... 11 pm. */
-function etiquetaHoraAmPm(hora: number): string {
-  const h = ((Math.trunc(hora) % 24) + 24) % 24
-  const h12 = h % 12 === 0 ? 12 : h % 12
-  const ampm = h < 12 ? 'am' : 'pm'
-  return `${h12} ${ampm}`
-}
-
-/**
- * Misma ventana de días que la serie diaria (azul): 24 puntos/hora por cada día.
- * - desempeno_1_cuota: envíos 1 cuota (dias_10_retraso) en esa hora (Caracas).
- * - enviados / tendencia: total del día en las 24 horas (escalón día a día).
- * - labelEje: 12 am, 1 am, ... 11 pm; a las 12 am se antepone el día.
- */
-function serieCobranzasConDesempeno1Cuota(
-  serieDiaria: Array<{
-    fecha: string
-    dia?: string
-    enviados: number
-    fallidos?: number
-    tendencia: number
-  }>,
-  serieHoraria: NotificacionesEnviosPorIntervaloItem[]
-): Array<{
-  fecha: string
-  dia: string
-  labelEje: string
-  enviados: number
-  desempeno_1_cuota: number
-  tendencia: number
-  fecha_dia: string
-  hora: number
-}> {
-  const nombresMes = [
-    'Ene',
-    'Feb',
-    'Mar',
-    'Abr',
-    'May',
-    'Jun',
-    'Jul',
-    'Ago',
-    'Sep',
-    'Oct',
-    'Nov',
-    'Dic',
-  ]
-
-  const enviadosByDay = new Map(serieDiaria.map(r => [r.fecha, r.enviados]))
-  const tendenciaByDay = new Map(serieDiaria.map(r => [r.fecha, r.tendencia]))
-  const byDayHour = new Map<string, number>()
-  for (const row of serieHoraria) {
-    const fechaDia = row.fecha_dia || row.fecha.slice(0, 10)
-    const h = Math.max(0, Math.min(23, Math.trunc(Number(row.hora) || 0)))
-    byDayHour.set(`${fechaDia}|${h}`, Number(row.enviados) || 0)
-  }
-
-  // Un punto por cada hora (0..23) de cada día de la curva azul => empatan día a día.
-  const out: Array<{
-    fecha: string
-    dia: string
-    labelEje: string
-    enviados: number
-    desempeno_1_cuota: number
-    tendencia: number
-    fecha_dia: string
-    hora: number
-  }> = []
-
-  for (const dayRow of serieDiaria) {
-    const fechaDia = dayRow.fecha
-    const dt = parseIsoDateLocal(fechaDia)
-    for (let h = 0; h < 24; h++) {
-      const horaLabel = etiquetaHoraAmPm(h)
-      const labelEje =
-        h === 0 && dt
-          ? `${dt.getDate()} ${nombresMes[dt.getMonth()]} ${horaLabel}`
-          : horaLabel
-      const fechaHora = `${fechaDia}T${String(h).padStart(2, '0')}:00:00`
-      out.push({
-        fecha: fechaHora,
-        dia: fechaHora,
-        labelEje,
-        enviados: enviadosByDay.get(fechaDia) ?? dayRow.enviados ?? 0,
-        desempeno_1_cuota: byDayHour.get(`${fechaDia}|${h}`) ?? 0,
-        tendencia: tendenciaByDay.get(fechaDia) ?? dayRow.tendencia ?? 0,
-        fecha_dia: fechaDia,
-        hora: h,
-      })
-    }
-  }
-
-  return out
-}
 
 export function DashboardMenu() {
   const { user } = useSimpleAuth()
@@ -540,6 +393,8 @@ export function DashboardMenu() {
   })
 
   const NOTIFICACIONES_ENVIOS_TENDENCIA_DIAS = 90
+
+  const DESEMPENO_1_CUOTA_DIAS_VISION = 20
   const PAGOS_INGRESADOS_POR_DIA_DIAS = 60
 
   const {
@@ -635,64 +490,23 @@ export function DashboardMenu() {
   })
 
   const {
-    data: datosNotificacionesMenor60PorDia,
-    isLoading: loadingNotificacionesMenor60PorDia,
-    isError: errorNotificacionesMenor60PorDia,
+    data: datosDesempeno1CuotaStock,
+    isLoading: loadingDesempeno1CuotaStock,
+    isError: errorDesempeno1CuotaStock,
   } = useQuery({
-    queryKey: [
-      'notificaciones-envios-por-dia',
-      'dias_10_retraso',
-      NOTIFICACIONES_ENVIOS_TENDENCIA_DIAS,
-    ],
+    queryKey: ['desempeno-1-cuota-stock', DESEMPENO_1_CUOTA_DIAS_VISION],
 
-    queryFn: async (): Promise<NotificacionesEnviosPorDiaResponse> => {
+    queryFn: async (): Promise<Desempeno1CuotaStockResponse> => {
       const params = new URLSearchParams({
-        tipo_tab: 'dias_10_retraso',
-        dias: String(NOTIFICACIONES_ENVIOS_TENDENCIA_DIAS),
+        dias: String(DESEMPENO_1_CUOTA_DIAS_VISION),
       })
 
       const response = await apiClient.get(
-        `/api/v1/dashboard/notificaciones-envios-por-dia?${params.toString()}`,
-        { timeout: 60000 }
+        `/api/v1/dashboard/desempeno-1-cuota-stock?${params.toString()}`,
+        { timeout: 120000 }
       )
 
-      return response as NotificacionesEnviosPorDiaResponse
-    },
-
-    staleTime: 5 * 60 * 1000,
-
-    refetchOnWindowFocus: false,
-
-    retry: 1,
-
-    enabled: enableTertiaryCharts,
-  })
-
-  const {
-    data: datosNotificacionesMenor60PorIntervalo,
-    isLoading: loadingNotificacionesMenor60PorIntervalo,
-    isError: errorNotificacionesMenor60PorIntervalo,
-  } = useQuery({
-    queryKey: [
-      'notificaciones-envios-por-intervalo',
-      'dias_10_retraso',
-      NOTIFICACIONES_ENVIOS_TENDENCIA_DIAS,
-      1,
-    ],
-
-    queryFn: async (): Promise<NotificacionesEnviosPorIntervaloResponse> => {
-      const params = new URLSearchParams({
-        tipo_tab: 'dias_10_retraso',
-        dias: String(NOTIFICACIONES_ENVIOS_TENDENCIA_DIAS),
-        horas: '1',
-      })
-
-      const response = await apiClient.get(
-        `/api/v1/dashboard/notificaciones-envios-por-intervalo?${params.toString()}`,
-        { timeout: 60000 }
-      )
-
-      return response as NotificacionesEnviosPorIntervaloResponse
+      return response as Desempeno1CuotaStockResponse
     },
 
     staleTime: 5 * 60 * 1000,
@@ -710,43 +524,18 @@ export function DashboardMenu() {
     [datosNotificacionesPorDia?.serie]
   )
 
-  const serieNotificacionesMenor60Grafico = useMemo(
-    () =>
-      serieNotificacionesEjeDesde20Julio(
-        datosNotificacionesMenor60PorDia?.serie ?? []
-      ),
-    [datosNotificacionesMenor60PorDia?.serie]
-  )
-
   const serieNotificacionesConTendencia = useMemo(
     () => notificacionesSerieConTendenciaLineal(serieNotificacionesGrafico),
     [serieNotificacionesGrafico]
   )
 
-  const serieNotificacionesMenor60ConTendencia = useMemo(
+  const serieDesempeno1CuotaDiario = useMemo(
     () =>
-      notificacionesSerieConTendenciaLineal(serieNotificacionesMenor60Grafico),
-    [serieNotificacionesMenor60Grafico]
-  )
-
-  const serieNotificacionesMenor60IntervaloGrafico = useMemo(
-    () =>
-      serieNotificacionesIntervaloDesde20Julio(
-        datosNotificacionesMenor60PorIntervalo?.serie ?? []
+      serieUltimosNDias(
+        datosDesempeno1CuotaStock?.serie ?? [],
+        DESEMPENO_1_CUOTA_DIAS_VISION
       ),
-    [datosNotificacionesMenor60PorIntervalo?.serie]
-  )
-
-  const serieNotificacionesMenor60ConDesempeno1Cuota = useMemo(
-    () =>
-      serieCobranzasConDesempeno1Cuota(
-        serieNotificacionesMenor60ConTendencia,
-        serieNotificacionesMenor60IntervaloGrafico
-      ),
-    [
-      serieNotificacionesMenor60ConTendencia,
-      serieNotificacionesMenor60IntervaloGrafico,
-    ]
+    [datosDesempeno1CuotaStock?.serie]
   )
 
   const seriePagosIngresadosPorDia = useMemo(
@@ -813,18 +602,13 @@ export function DashboardMenu() {
   }, [serieNotificacionesGrafico])
 
   const etiquetaRangoNotificacionesMenor60EjeX = useMemo(() => {
-    const s = serieNotificacionesMenor60Grafico
-
-    if (!s.length) return `${NOTIFICACIONES_ENVIOS_TENDENCIA_DIAS} d · Caracas`
-
+    const s = serieDesempeno1CuotaDiario
+    if (!s.length) return `Últimos ${DESEMPENO_1_CUOTA_DIAS_VISION} d · Caracas`
     const a = s[0]?.fecha
-
     const b = s[s.length - 1]?.fecha
-
     if (a && b) return a === b ? `${a} · Caracas` : `${a} - ${b} · Caracas`
-
-    return `${NOTIFICACIONES_ENVIOS_TENDENCIA_DIAS} d · Caracas`
-  }, [serieNotificacionesMenor60Grafico])
+    return `Últimos ${DESEMPENO_1_CUOTA_DIAS_VISION} d · Caracas`
+  }, [serieDesempeno1CuotaDiario])
 
   const [isRefreshing, setIsRefreshing] = useState(false)
 
@@ -866,7 +650,7 @@ export function DashboardMenu() {
       })
 
       await queryClient.invalidateQueries({
-        queryKey: ['notificaciones-envios-por-intervalo'],
+        queryKey: ['desempeno-1-cuota-stock'],
         exact: false,
       })
 
@@ -898,7 +682,7 @@ export function DashboardMenu() {
       })
 
       await queryClient.refetchQueries({
-        queryKey: ['notificaciones-envios-por-intervalo'],
+        queryKey: ['desempeno-1-cuota-stock'],
         exact: false,
       })
 
@@ -2065,53 +1849,40 @@ export function DashboardMenu() {
               </div>
 
               <CardDescription className="mt-2 text-xs text-gray-600">
-                Cuenta filas del historial en BD (
-                <code className="rounded bg-gray-100 px-1 py-0.5 text-[11px]">
-                  envios_notificacion
-                </code>
-                /{' '}
+                Dos cantidades por día (últimos {DESEMPENO_1_CUOTA_DIAS_VISION}{' '}
+                días, Caracas). <strong>Notificaciones</strong>: correos SMTP
+                enviados (1 cuota /{' '}
                 <code className="rounded bg-gray-100 px-1 py-0.5 text-[11px]">
                   dias_10_retraso
                 </code>
-                ), no el buzón de Gmail. Si un lote SMTP se cortó antes de
-                persistir, Gmail puede tener cientos y esta gráfica pocos. Eje X
-                desde el <strong>20 de julio</strong> del año del último día con
-                datos (muestra de {NOTIFICACIONES_ENVIOS_TENDENCIA_DIAS} d
-                recortada). Curva ámbar: <strong>1 cuota por hora</strong> —{' '}
-                <strong>24 horas por día</strong> (misma secuencia día a día que el
-                total azul). Fuente:{' '}
-                <code className="rounded bg-gray-100 px-1 py-0.5 text-[11px]">envios_notificacion</code>
-                /{' '}
-                <code className="rounded bg-gray-100 px-1 py-0.5 text-[11px]">dias_10_retraso</code>
-                (Caracas). Azul en escalón: total de ese día.
+                ). <strong>Nuevos morosos</strong>: préstamos que entran al
+                listado 1 cuota a las <strong>00:00</strong> de ese día (no
+                estaban a las 00:00 del día anterior).
               </CardDescription>
             </CardHeader>
 
             <CardContent className="p-6 pt-4">
-              {loadingNotificacionesMenor60PorDia ||
-              loadingNotificacionesMenor60PorIntervalo ? (
+              {loadingDesempeno1CuotaStock ? (
                 <div className="flex items-center justify-center py-16 text-sm text-gray-500">
                   Cargando…
                 </div>
-              ) : errorNotificacionesMenor60PorDia ||
-                errorNotificacionesMenor60PorIntervalo ? (
+              ) : errorDesempeno1CuotaStock ? (
                 <div className="flex flex-col items-center justify-center gap-2 py-12 text-center text-red-700">
                   <AlertTriangle className="h-8 w-8" />
 
                   <p className="text-sm font-medium">
-                    No se pudo cargar la tendencia.
+                    No se pudo cargar el desempeño 1 cuota.
                   </p>
                 </div>
-              ) : (datosNotificacionesMenor60PorDia?.serie?.length ?? 0) ===
-                0 ? (
+              ) : serieDesempeno1CuotaDiario.length === 0 ? (
                 <div className="flex items-center justify-center py-16 text-sm text-gray-500">
-                  Sin envíos en el período.
+                  Sin datos en el período.
                 </div>
               ) : (
                 <div className="h-[320px] w-full">
                   <ResponsiveContainer width="100%" height={320}>
                     <RechartsLineChart
-                      data={serieNotificacionesMenor60ConDesempeno1Cuota}
+                      data={serieDesempeno1CuotaDiario}
                       margin={{
                         top: 12,
                         right: 20,
@@ -2124,15 +1895,8 @@ export function DashboardMenu() {
                       <XAxis
                         dataKey="dia"
                         tick={chartAxisTick}
-                        interval={0}
-                        minTickGap={4}
-                        tickFormatter={value => {
-                          const row =
-                            serieNotificacionesMenor60ConDesempeno1Cuota.find(
-                              r => r.dia === value || r.fecha === value
-                            )
-                          return row?.labelEje || ''
-                        }}
+                        interval="preserveStartEnd"
+                        minTickGap={12}
                       />
 
                       <YAxis
@@ -2140,7 +1904,7 @@ export function DashboardMenu() {
                         allowDecimals={false}
                         width={40}
                         label={{
-                          value: 'Enviados',
+                          value: 'Cantidad',
                           angle: -90,
                           position: 'insideLeft',
                           style: { fill: '#374151', fontSize: 13 },
@@ -2151,71 +1915,39 @@ export function DashboardMenu() {
                         contentStyle={chartTooltipStyle.contentStyle}
                         labelStyle={chartTooltipStyle.labelStyle}
                         formatter={(value: number, name: string) => {
-                          if (value == null || Number.isNaN(Number(value))) {
-                            return [null, name]
-                          }
-
                           const rounded =
                             typeof value === 'number'
                               ? Math.round(value * 100) / 100
                               : value
-
-                          if (
-                            name === 'Tendencia (regresión lineal)' ||
-                            name === 'tendencia'
-                          ) {
-                            return [rounded, name]
-                          }
-
-                          if (
-                            name === 'Desempeño 1 cuota / hora' ||
-                            name === 'desempeno_1_cuota'
-                          ) {
-                            return [rounded, '1 cuota enviados / hora']
-                          }
-
-                          return [rounded, 'Total del día (1 cuota)']
+                          return [rounded, name]
                         }}
-                        labelFormatter={(_, payload) => {
-                          const row = payload?.[0]?.payload
-                          if (!row) return ''
-                          const h = etiquetaHoraAmPm(Number(row.hora) || 0)
-                          return `${row.fecha_dia || ''} ${h}`.trim()
-                        }}
+                        labelFormatter={(_, payload) =>
+                          payload?.[0]?.payload?.fecha
+                            ? String(payload[0].payload.fecha)
+                            : ''
+                        }
                       />
 
                       <Legend {...chartLegendStyle} />
 
                       <Line
-                        type="stepAfter"
-                        dataKey="enviados"
-                        name="Total del día (1 cuota)"
+                        type="monotone"
+                        dataKey="notificaciones"
+                        name="Notificaciones"
                         stroke="#0ea5e9"
                         strokeWidth={2}
-                        dot={false}
-                        activeDot={{ r: 5 }}
-                        isAnimationActive={false}
+                        dot={{ r: 4 }}
+                        activeDot={{ r: 6 }}
                       />
 
                       <Line
                         type="monotone"
-                        dataKey="desempeno_1_cuota"
-                        name="Desempeño 1 cuota / hora"
+                        dataKey="nuevos_morosos"
+                        name="Nuevos morosos"
                         stroke="#d97706"
                         strokeWidth={2}
-                        dot={{ r: 2 }}
-                        activeDot={{ r: 5 }}
-                      />
-
-                      <Line
-                        type="stepAfter"
-                        dataKey="tendencia"
-                        name="Tendencia (regresión lineal)"
-                        stroke="#64748b"
-                        strokeWidth={2}
-                        strokeDasharray="6 4"
-                        dot={false}
-                        isAnimationActive={false}
+                        dot={{ r: 4 }}
+                        activeDot={{ r: 6 }}
                       />
                     </RechartsLineChart>
                   </ResponsiveContainer>
