@@ -1846,7 +1846,7 @@ def get_desempeno_1_cuota_stock(
     Dos cantidades por día (últimos `dias`, default 20):
 
     - notificaciones: envíos SMTP exitosos (envios_notificacion / dias_10_retraso).
-    - nuevos_morosos: préstamos que entran al listado 1 cuota a las 00:00 de ese día.
+    - morosos: nivel de cartera 1 cuota a las 00:00 de ese día (desempeño, no «nuevos»).
     """
     return compute_desempeno_1_cuota_stock(db, dias)
 

@@ -1855,9 +1855,9 @@ export function DashboardMenu() {
                 <code className="rounded bg-gray-100 px-1 py-0.5 text-[11px]">
                   dias_10_retraso
                 </code>
-                ). <strong>Nuevos morosos</strong>: préstamos que entran al
-                listado 1 cuota a las <strong>00:00</strong> de ese día (no
-                estaban a las 00:00 del día anterior).
+                ). <strong>Morosos 1 cuota</strong>: nivel de cartera a las{' '}
+                <strong>00:00</strong> de ese día (ej. 21 = 991, 22 = 890) — curva
+                de desempeño, no el conteo de «nuevos» del día.
               </CardDescription>
             </CardHeader>
 
@@ -1942,8 +1942,8 @@ export function DashboardMenu() {
 
                       <Line
                         type="monotone"
-                        dataKey="nuevos_morosos"
-                        name="Nuevos morosos"
+                        dataKey="morosos"
+                        name="Morosos 1 cuota"
                         stroke="#d97706"
                         strokeWidth={2}
                         dot={{ r: 4 }}

@@ -2,10 +2,10 @@
 Desempeño diario «1 cuota» (dias_10_retraso):
 
 1) notificaciones — envíos SMTP exitosos ese día (envios_notificacion).
-2) nuevos_morosos — préstamos que entran al listado 1 cuota a las 00:00 de ese día
-   (estaban fuera a las 00:00 del día anterior). Datos reales de cuotas + cuota_pagos.
+2) morosos — nivel (stock) de préstamos en listado 1 cuota a las 00:00 de ese día
+   (ej. día 21 = 991, día 22 = 890). No es el flujo de «nuevos» del día.
 
-Dos cantidades por día, para comparar curvas en los últimos N días.
+Dos cantidades por día, misma escala aproximada para comparar desempeño.
 """
 from __future__ import annotations
 
@@ -135,7 +135,7 @@ def _notificaciones_por_dia(db: Session, inicio: date, hoy: date, z: ZoneInfo) -
 def compute_desempeno_1_cuota_stock(db: Session, dias: int = 20) -> dict[str, Any]:
     """
     Compat: mismo nombre de función usado por el endpoint.
-    Devuelve serie diaria con notificaciones + nuevos_morosos (últimos `dias`).
+    Devuelve serie diaria con notificaciones + morosos/stock 00:00 (últimos `dias`).
     """
     return compute_desempeno_1_cuota_diario(db, dias)
 
@@ -207,15 +207,15 @@ def compute_desempeno_1_cuota_diario(db: Session, dias: int = 20) -> dict[str, A
         d = inicio
         while d <= hoy:
             cur_set = _stock_prestamo_ids_at_midnight(cuotas_meta, d, z)
-            nuevos = len(cur_set - prev_set)
             notif = int(notif_by_day.get(d, 0))
+            morosos = len(cur_set)  # nivel a las 00:00 (desempeño / cartera 1 cuota)
             serie.append(
                 {
                     "fecha": d.isoformat(),
                     "dia": f"{d.day} {_NOMBRES_MES[d.month - 1]}",
                     "notificaciones": notif,
-                    "nuevos_morosos": nuevos,
-                    "stock_00h": len(cur_set),
+                    "morosos": morosos,
+                    "stock_00h": morosos,
                 }
             )
             prev_set = cur_set

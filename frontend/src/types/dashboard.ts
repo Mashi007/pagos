@@ -353,9 +353,9 @@ export interface Desempeno1CuotaStockDiaItem {
   dia: string
   /** Envíos SMTP exitosos del día (dias_10_retraso). */
   notificaciones: number
-  /** Préstamos que entran a 1 cuota a las 00:00 de ese día. */
-  nuevos_morosos: number
-  /** Stock a las 00:00 (informativo). */
+  /** Nivel (stock) de préstamos en 1 cuota a las 00:00 de ese día. */
+  morosos: number
+  /** Alias de morosos (compat). */
   stock_00h?: number
 }
 
