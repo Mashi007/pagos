@@ -216,6 +216,48 @@ function notificacionesSerieConTendenciaLineal<T extends { enviados: number }>(
   return serieConTendenciaLineal(serie, 'enviados')
 }
 
+/** Eje Y comprimido al rango real de Inicio/Fin dia (sin inventar puntos). */
+function dominioYDesempenoSegmento(
+  serie: Array<{ notificaciones?: number; morosos?: number }>
+): { domain: [number, number]; ticks: number[] } {
+  const vals: number[] = []
+  for (const row of serie) {
+    const a = Number(row.notificaciones)
+    const b = Number(row.morosos)
+    if (Number.isFinite(a)) vals.push(a)
+    if (Number.isFinite(b)) vals.push(b)
+  }
+  if (vals.length === 0) {
+    return { domain: [0, 1], ticks: [0, 1] }
+  }
+  let lo = Math.min(...vals)
+  let hi = Math.max(...vals)
+  const span = hi - lo
+  // Si Inicio y Fin estan muy cerca, ampliar un poco el marco para ver la brecha.
+  const minSpan = Math.max(25, Math.round(((lo + hi) / 2) * 0.04))
+  if (span < minSpan) {
+    const mid = (lo + hi) / 2
+    lo = mid - minSpan / 2
+    hi = mid + minSpan / 2
+  } else {
+    const pad = Math.max(5, Math.ceil(span * 0.08))
+    lo -= pad
+    hi += pad
+  }
+  lo = Math.max(0, Math.floor(lo))
+  hi = Math.ceil(hi)
+  if (hi <= lo) hi = lo + 1
+  const steps = 4
+  const step = (hi - lo) / steps
+  const ticks: number[] = []
+  for (let i = 0; i <= steps; i++) {
+    ticks.push(Math.round(lo + step * i))
+  }
+  ticks[0] = lo
+  ticks[ticks.length - 1] = hi
+  return { domain: [lo, hi], ticks }
+}
+
 /** Últimos N días de la serie diaria (visión dashboard). */
 function serieUltimosNDias<T extends { fecha: string }>(
   serie: T[],
@@ -577,6 +619,16 @@ export function DashboardMenu() {
         DESEMPENO_2_CUOTAS_DIAS_VISION
       ),
     [datosDesempeno2CuotasStock?.serie]
+  )
+
+  const ejeYDesempeno1Cuota = useMemo(
+    () => dominioYDesempenoSegmento(serieDesempeno1CuotaDiario),
+    [serieDesempeno1CuotaDiario]
+  )
+
+  const ejeYDesempeno2Cuotas = useMemo(
+    () => dominioYDesempenoSegmento(serieDesempeno2CuotasDiario),
+    [serieDesempeno2CuotasDiario]
   )
 
   const seriePagosIngresadosPorDia = useMemo(
@@ -1960,9 +2012,10 @@ export function DashboardMenu() {
                       <YAxis
                         tick={chartAxisTick}
                         allowDecimals={false}
-                        domain={[1100, 1500]}
-                        ticks={[1100, 1200, 1300, 1400, 1500]}
-                        width={44}
+                        domain={ejeYDesempeno1Cuota.domain}
+                        ticks={ejeYDesempeno1Cuota.ticks}
+                        allowDataOverflow
+                        width={48}
                         label={{
                           value: 'Cantidad',
                           angle: -90,
@@ -2096,9 +2149,10 @@ export function DashboardMenu() {
                       <YAxis
                         tick={chartAxisTick}
                         allowDecimals={false}
-                        domain={[300, 420]}
-                        ticks={[300, 330, 360, 390, 420]}
-                        width={44}
+                        domain={ejeYDesempeno2Cuotas.domain}
+                        ticks={ejeYDesempeno2Cuotas.ticks}
+                        allowDataOverflow
+                        width={48}
                         label={{
                           value: 'Cantidad',
                           angle: -90,
