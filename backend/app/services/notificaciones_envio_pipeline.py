@@ -5,8 +5,8 @@ Extraído de ``notificaciones_tabs.routes`` para mantener routers como delegaci�
 y facilitar pruebas unitarias sobre el pipeline sin montar FastAPI.
 """
 import logging
-import time
-from datetime import date, datetime, time, timezone
+import time as time_mod
+from datetime import date, datetime, time as dt_time, timezone
 from typing import Callable, Dict, List, Optional, Set, Tuple
 from zoneinfo import ZoneInfo
 
@@ -104,8 +104,8 @@ def _sets_ya_enviados_exito_hoy(
         return por_pid, por_ced
     z = ZoneInfo(TZ_NEGOCIO)
     hoy = hoy_negocio()
-    start_local = datetime.combine(hoy, time.min, tzinfo=z)
-    end_local = datetime.combine(hoy, time.max, tzinfo=z)
+    start_local = datetime.combine(hoy, dt_time.min, tzinfo=z)
+    end_local = datetime.combine(hoy, dt_time.max, tzinfo=z)
     start_utc = start_local.astimezone(timezone.utc).replace(tzinfo=None)
     end_utc = end_local.astimezone(timezone.utc).replace(tzinfo=None)
     fe = EnvioNotificacion.fecha_envio
@@ -729,7 +729,7 @@ def _enviar_correos_items(
             else:
                 fallidos += 1
             # Pausa corta entre SMTP: Gmail cierra login si hay cientos de connect+auth seguidos.
-            time.sleep(0.75)
+            time_mod.sleep(0.75)
             tipo_tab = _tipo_tab_para_persistencia(tipo)
             if tipo_tab and db is not None:
                 # Commit por ítem: lotes de ~1000+ con PDF en memoria reventaban el worker
