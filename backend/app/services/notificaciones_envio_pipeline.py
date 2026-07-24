@@ -49,6 +49,10 @@ from app.services.notificacion_logging import (
     log_envio_resumen,
     log_envio_fallo,
 )
+from app.services.notificaciones_envio_dedupe import (
+    debe_omitir_ya_enviado,
+    registrar_envio_exito_en_sets,
+)
 
 logger = logging.getLogger(__name__)
 # Mapeo tipo config (PAGO_5_DIAS_ANTES, etc.) a tipo_tab para estad�sticas/rebotados (solo los 5 que muestra la UI)
@@ -95,7 +99,11 @@ def _tipo_tab_para_persistencia(tipo_config: str) -> str | None:
 def _sets_ya_enviados_exito_hoy(
     db: Session, tipo_tabs: Set[str]
 ) -> tuple[dict[str, set[int]], dict[str, set[str]]]:
-    """prestamo_id y cedula con envio exitoso hoy (America/Caracas) por tipo_tab."""
+    """Sets de omitidos hoy (America/Caracas) por tipo_tab.
+
+    - ``por_pid``: prestamo_id con envío exitoso (ítems por préstamo).
+    - ``por_ced``: cédula con envío exitoso **sin** prestamo_id (MASIVOS).
+    """
     from app.services.cuota_estado import TZ_NEGOCIO, hoy_negocio
 
     por_pid: dict[str, set[int]] = {tt: set() for tt in tipo_tabs}
@@ -123,11 +131,15 @@ def _sets_ya_enviados_exito_hoy(
         tt = str(tab or "").strip()
         if tt not in por_pid:
             continue
+        pid_int = None
         if pid is not None:
             try:
-                por_pid[tt].add(int(pid))
+                pid_int = int(pid)
             except (TypeError, ValueError):
-                pass
+                pid_int = None
+        if pid_int is not None:
+            por_pid[tt].add(pid_int)
+            continue
         c = (str(ced).strip() if ced is not None else "")
         if c:
             por_ced[tt].add(c)
@@ -429,17 +441,13 @@ def _enviar_correos_items(
                 continue
         tipo_tab_skip = _tipo_tab_para_persistencia(tipo)
         if tipo_tab_skip and db is not None and forzar_destinos_prueba is None:
-            pid_skip = item.get("prestamo_id")
-            ced_skip = (item.get("cedula") or "").strip()
-            if pid_skip is not None:
-                try:
-                    if int(pid_skip) in ya_pid.get(tipo_tab_skip, set()):
-                        omitidos_ya_enviado += 1
-                        _report_progress(idx + 1)
-                        continue
-                except (TypeError, ValueError):
-                    pass
-            if ced_skip and ced_skip in ya_ced.get(tipo_tab_skip, set()):
+            if debe_omitir_ya_enviado(
+                prestamo_id=item.get("prestamo_id"),
+                cedula=(item.get("cedula") or "").strip(),
+                tipo_tab=tipo_tab_skip,
+                ya_pid=ya_pid,
+                ya_ced=ya_ced,
+            ):
                 omitidos_ya_enviado += 1
                 _report_progress(idx + 1)
                 continue
@@ -717,15 +725,13 @@ def _enviar_correos_items(
                 enviados += 1
                 tt_ok = _tipo_tab_para_persistencia(tipo)
                 if tt_ok:
-                    pid_ok = item.get("prestamo_id")
-                    if pid_ok is not None:
-                        try:
-                            ya_pid.setdefault(tt_ok, set()).add(int(pid_ok))
-                        except (TypeError, ValueError):
-                            pass
-                    ced_ok = (item.get("cedula") or "").strip()
-                    if ced_ok:
-                        ya_ced.setdefault(tt_ok, set()).add(ced_ok)
+                    registrar_envio_exito_en_sets(
+                        prestamo_id=item.get("prestamo_id"),
+                        cedula=(item.get("cedula") or "").strip(),
+                        tipo_tab=tt_ok,
+                        ya_pid=ya_pid,
+                        ya_ced=ya_ced,
+                    )
             else:
                 fallidos += 1
             # Pausa corta entre SMTP: Gmail cierra login si hay cientos de connect+auth seguidos.
