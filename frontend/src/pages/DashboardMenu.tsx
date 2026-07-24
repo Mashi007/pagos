@@ -1960,7 +1960,9 @@ export function DashboardMenu() {
                       <YAxis
                         tick={chartAxisTick}
                         allowDecimals={false}
-                        width={40}
+                        domain={[700, 1700]}
+                        ticks={[700, 900, 1100, 1300, 1500, 1700]}
+                        width={44}
                         label={{
                           value: 'Cantidad',
                           angle: -90,
@@ -2094,7 +2096,9 @@ export function DashboardMenu() {
                       <YAxis
                         tick={chartAxisTick}
                         allowDecimals={false}
-                        width={40}
+                        domain={[200, 600]}
+                        ticks={[200, 300, 400, 500, 600]}
+                        width={44}
                         label={{
                           value: 'Cantidad',
                           angle: -90,
