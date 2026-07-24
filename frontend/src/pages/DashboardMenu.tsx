@@ -2059,9 +2059,9 @@ export function DashboardMenu() {
 
                       <Line
                         type="monotone"
-                        dataKey="notificaciones"
-                        name="Fin dia"
-                        stroke="#0ea5e9"
+                        dataKey="morosos"
+                        name="Inicio día"
+                        stroke="#d97706"
                         strokeWidth={2}
                         dot={{ r: 4 }}
                         activeDot={{ r: 6 }}
@@ -2069,9 +2069,9 @@ export function DashboardMenu() {
 
                       <Line
                         type="monotone"
-                        dataKey="morosos"
-                        name="Inicio día"
-                        stroke="#d97706"
+                        dataKey="notificaciones"
+                        name="Fin dia"
+                        stroke="#0ea5e9"
                         strokeWidth={2}
                         dot={{ r: 4 }}
                         activeDot={{ r: 6 }}
@@ -2196,9 +2196,9 @@ export function DashboardMenu() {
 
                       <Line
                         type="monotone"
-                        dataKey="notificaciones"
-                        name="Fin dia"
-                        stroke="#0ea5e9"
+                        dataKey="morosos"
+                        name="Inicio día"
+                        stroke="#d97706"
                         strokeWidth={2}
                         dot={{ r: 4 }}
                         activeDot={{ r: 6 }}
@@ -2206,9 +2206,9 @@ export function DashboardMenu() {
 
                       <Line
                         type="monotone"
-                        dataKey="morosos"
-                        name="Inicio día"
-                        stroke="#d97706"
+                        dataKey="notificaciones"
+                        name="Fin dia"
+                        stroke="#0ea5e9"
                         strokeWidth={2}
                         dot={{ r: 4 }}
                         activeDot={{ r: 6 }}
