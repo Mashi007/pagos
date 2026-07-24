@@ -63,7 +63,9 @@ import {
   mergeCamposFormularioDesdeSugerenciaOcr,
   mensajeFalloExtraccionEscaner,
   esFechaMarcadorRevisionCobros,
+  fechaPagoDesdeBloqueDcmeMercantil,
 } from '../utils/escanerComprobanteInfopagos'
+import { hoyYmdCaracas } from '../utils/fechaZona'
 import { blobComprobanteAFileParaEscaneo } from '../utils/comprobanteImagenAuth'
 import { normalizarComprobanteArchivoParaEscaneo } from '../utils/normalizarComprobanteArchivo'
 import { FUENTE_TASA_DEFAULT } from '../constants/fuenteTasaCambio'
@@ -1611,11 +1613,28 @@ export default function CobrosPagosReportadosPage() {
           monto?: number
           moneda?: string
         } = {}
+        let fechaParaPatch = (merged.fechaPago || '').trim().slice(0, 10)
         if (
-          merged.fechaPago &&
-          !esFechaMarcadorRevisionCobros(merged.fechaPago)
+          !fechaParaPatch ||
+          esFechaMarcadorRevisionCobros(fechaParaPatch)
         ) {
-          payload.fecha_pago = merged.fechaPago
+          const desdeDcme = fechaPagoDesdeBloqueDcmeMercantil(
+            `${merged.numeroOperacion}\n${res.sugerencia.notas_modelo || ''}`
+          )
+          if (desdeDcme && !esFechaMarcadorRevisionCobros(desdeDcme)) {
+            fechaParaPatch = desdeDcme
+          } else if (esFechaMarcadorRevisionCobros(row.fecha_pago)) {
+            // Reescan no debe dejar 1970: provisional hoy Caracas.
+            fechaParaPatch = hoyYmdCaracas()
+          } else {
+            fechaParaPatch = ''
+          }
+        }
+        if (
+          fechaParaPatch &&
+          !esFechaMarcadorRevisionCobros(fechaParaPatch)
+        ) {
+          payload.fecha_pago = fechaParaPatch
         }
         if (merged.institucion.trim()) {
           payload.institucion_financiera = merged.institucion.trim()

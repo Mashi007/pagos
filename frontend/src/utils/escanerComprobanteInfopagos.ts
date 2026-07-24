@@ -101,11 +101,18 @@ export function numeroOperacionOcrParaReescaneo(
 
 /** Fecha impresa en bloque DCME Mercantil (2º bloque YYYYMMDD del papel). */
 export function fechaPagoDesdeBloqueDcmeMercantil(texto: string): string {
-  const m = (texto || '').match(/-\d{4}-(\d{8})-\d{6}-DCME-/i)
+  // Alineado con backend `_MERCANTIL_DCME_EN_TEXTO_RE`:
+  // ej. 9264-20260618-115409-DCME-5574-A (no confundir con Serial 740087…).
+  const m = (texto || '').match(/\d{3,5}-(\d{8})-\d{6}-DCME-/i)
   if (!m?.[1] || m[1].length !== 8) return ''
   const ymd = m[1]
+  const mo = Number(ymd.slice(4, 6))
+  const d = Number(ymd.slice(6, 8))
+  if (mo < 1 || mo > 12 || d < 1 || d > 31) return ''
   const iso = `${ymd.slice(0, 4)}-${ymd.slice(4, 6)}-${ymd.slice(6, 8)}`
-  return fechaPagoDesdeExtraccionOcrConfiable(iso) || iso
+  // DCME es evidencia impresa: aceptar aunque coincida con «hoy» Caracas.
+  if (esFechaMarcadorRevisionCobros(iso)) return ''
+  return iso
 }
 
 /** Fecha desde OCR: campo fecha_pago o bloque DCME visible en numero/notas. */

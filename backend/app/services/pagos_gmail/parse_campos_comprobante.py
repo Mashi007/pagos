@@ -454,9 +454,11 @@ def aplicar_reglas_ocr_post_gemini(
         ref_hoy=ref_hoy,
         blob_dcme=blob_dcme,
         inferir_fecha_dcme=inferir_fecha_dcme and not serial_borroso,
-        # Gmail 1er escaneo / rescan: misma regla que escáner (no inventar «hoy»).
-        # DCME impreso hoy sigue válido: se resuelve antes del rechazo.
-        rechazar_fecha_hoy_sospechosa=perfil_norm in ("escaner", "gmail"),
+        # Gmail: no inventar «hoy» sin DCME (alucinación frecuente del prompt).
+        # Escáner Cobros/Infopagos: conservar «hoy» si Gemini la leyó; el rescate
+        # ya reintenta cuando fecha==hoy, y vaciarla empujaba al marcador 1970-01-01
+        # en el formulario público. DCME sigue teniendo prioridad arriba.
+        rechazar_fecha_hoy_sospechosa=perfil_norm == "gmail",
     )
     if perfil_norm == "gmail":
         if gemini_indico_fecha_borrosa(fecha_raw, notas):

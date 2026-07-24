@@ -74,7 +74,10 @@ import {
 } from '../utils/cedulaConsultaPublica'
 
 import { hoyYmdCaracas } from '../utils/fechaZona'
-import { fechaPagoDesdeSugerenciaOcrReescaneo } from '../utils/escanerComprobanteInfopagos'
+import {
+  fechaPagoDesdeBloqueDcmeMercantil,
+  fechaPagoDesdeSugerenciaOcrReescaneo,
+} from '../utils/escanerComprobanteInfopagos'
 import { mensajeSiFaltaInstitucion } from '../constants/institucionesBancariasPagos'
 
 // Límites iguales al backend (cobros_publico)
@@ -278,8 +281,9 @@ const MENSAJE_COBROS_REVISION_MANUAL =
   'Su reporte se enviará a revisión manual. ' +
   'Por integridad de cobranza usted no puede modificar banco, fecha, monto ni operación.'
 
-/** Marcadores técnicos solo para BD (NOT NULL) en cola revisión. No son datos del cliente. */
-const COBROS_REV_FECHA = '1970-01-01'
+/** Marcadores técnicos solo para BD (NOT NULL) en cola revisión. No son datos del cliente.
+ * Fecha: ya no se usa 1970-01-01; si falta OCR se envía hoy Caracas (provisional).
+ */
 const COBROS_REV_INST = 'REVISION_MANUAL'
 const COBROS_REV_MONTO = '0.01'
 
@@ -1037,7 +1041,13 @@ export default function ReportePagoPage({
           institucionParaApi = COBROS_REV_INST
         }
         if (!validarFechaPago(fechaEfectivaParaApi).valido) {
-          fechaEfectivaParaApi = COBROS_REV_FECHA
+          const desdeDcme = fechaPagoDesdeBloqueDcmeMercantil(numeroParaApi)
+          if (desdeDcme && validarFechaPago(desdeDcme).valido) {
+            fechaEfectivaParaApi = desdeDcme
+          } else {
+            // Provisional (hoy Caracas). Evita el marcador 01/01/1970 en listados.
+            fechaEfectivaParaApi = hoyYmdCaracas()
+          }
         }
         if (!numeroParaApi) {
           numeroParaApi = cobrosRevNumOperacionUnico()
@@ -1052,10 +1062,9 @@ export default function ReportePagoPage({
     if (
       !isInfopagos &&
       forzarRevisionCobros &&
-      (fechaEfectivaParaApi === COBROS_REV_FECHA ||
-        montoStrParaApi === COBROS_REV_MONTO)
+      montoStrParaApi === COBROS_REV_MONTO
     ) {
-      // Marcadores técnicos (1970 / 0.01) no pasan tasa/mínimo BS → USD en BD.
+      // Monto marcador 0.01 no pasa mínimo BS → USD en BD.
       monedaParaApi = 'USD'
     }
 
@@ -1278,8 +1287,10 @@ export default function ReportePagoPage({
           }
         }
 
-        // Solo fecha impresa legible (OCR/DCME). Si falta, campo vacío → se pide en paso 4.
-        const fechaExtraida = fechaPagoDesdeSugerenciaOcrReescaneo(s)
+        // Cobros: permitir «hoy» Caracas (pagos reales del día). Infopagos: filtro anti-alucinación.
+        const fechaExtraida = fechaPagoDesdeSugerenciaOcrReescaneo(s, {
+          permitirHoy: !isInfopagos,
+        })
         const fechaOk =
           fechaExtraida && validarFechaPago(fechaExtraida).valido
             ? fechaExtraida

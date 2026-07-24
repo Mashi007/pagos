@@ -42,6 +42,40 @@ from app.services.pagos_gmail.parse_campos_comprobante import (
 logger = logging.getLogger(__name__)
 
 
+FECHA_MARCADOR_REVISION_COBROS = date(1970, 1, 1)
+
+
+def resolver_fecha_pago_si_marcador_tecnico(
+    fecha_pago: date,
+    *,
+    numero_operacion: str = "",
+    observacion: Optional[str] = None,
+) -> Tuple[date, Optional[str]]:
+    """
+    Sustituye el marcador tecnico 1970-01-01 (OCR incompleto del formulario publico).
+
+    1) Intenta fecha embebida en codigo DCME Mercantil (numero/observacion).
+    2) Si no hay evidencia, usa hoy Caracas y devuelve nota para observacion.
+    """
+    if fecha_pago != FECHA_MARCADOR_REVISION_COBROS:
+        return fecha_pago, None
+
+    from app.services.pagos_gmail.parse_campos_comprobante import (
+        inferir_fecha_pago_mercantil_desde_texto,
+        parse_fecha_comprobante,
+    )
+
+    blob = f"{numero_operacion or ''}\n{observacion or ''}"
+    ddmm = inferir_fecha_pago_mercantil_desde_texto(blob)
+    if ddmm:
+        parsed = parse_fecha_comprobante(ddmm)
+        if parsed is not None and parsed != FECHA_MARCADOR_REVISION_COBROS:
+            return parsed, None
+
+    nota = "[FECHA_PROVISIONAL_REPORTE:sustituye_marcador_1970]"
+    return fecha_hoy_caracas(), nota
+
+
 def _elapsed_ms(start_perf: float) -> float:
     return round((perf_counter() - start_perf) * 1000, 2)
 
@@ -870,6 +904,14 @@ def crear_pago_reportado_con_referencia_o_retry(
 
     pr: Optional[PagoReportado] = None
     referencia: Optional[str] = None
+    fecha_pago, nota_fecha = resolver_fecha_pago_si_marcador_tecnico(
+        fecha_pago,
+        numero_operacion=numero_operacion or "",
+        observacion=observacion,
+    )
+    if nota_fecha:
+        prev_obs = (observacion or "").strip()
+        observacion = f"{prev_obs} {nota_fecha}".strip() if prev_obs else nota_fecha
     numero_operacion_limpio = sanitizar_numero_operacion_comprobante(numero_operacion)
     num_key = clave_numero_operacion_canonico(numero_operacion_limpio)
     now_local = datetime.now()
