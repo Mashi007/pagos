@@ -1,13 +1,16 @@
 # -*- coding: utf-8 -*-
 """
-Plantilla unica y variables del modulo PREJUDICIAL (60 dias o mas).
+Plantilla unica y variables del modulo PREJUDICIAL (2 Cuotas / atraso >=60 dias).
 
 Siembra idempotente en BD: variables_notificacion + plantillas_notificacion
 y vincula plantilla_id en notificaciones_envios.PREJUDICIAL.
+
+HTML canonico: templates_email/prejudicial_2_cuotas.html
 """
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy import select
@@ -23,49 +26,46 @@ from app.services.notificaciones_envios_store import (
 logger = logging.getLogger(__name__)
 
 TIPO_PREJUDICIAL = "PREJUDICIAL"
-NOMBRE_PLANTILLA_PREJUDICIAL = "URGENTE: Pague a tiempo (60 dias o mas)"
-
-ASUNTO_PREJUDICIAL = "URGENTE: Pague a tiempo"
-
-# Cuerpo con {{nombre}} (sustituido en envio). HTML simple (sin PDF adjunto).
-CUERPO_PREJUDICIAL = (
-    "Estimado(a) {{nombre}},\n\n"
-    "Le solicitamos ponerse al dia con el pago de su cuota de manera inmediata. "
-    "Evite seguir sumando dias de retraso y prevenga el inicio de acciones legales.\n\n"
-    "Si desea regularizar su situacion, comuniquese hoy mismo por nuestras lineas oficiales:\n\n"
-    "Linea 1: 0424-4334846 — https://wa.me/584244334846\n"
-    "Linea 2: 0424-4249673 — https://wa.me/584244249673\n"
-    "Linea 3: 0424-4530836 — https://wa.me/584244530836\n\n"
-    "Si ya realizo su pago, envienos su comprobante a cobranza@rapicreditca.com "
-    "de inmediato para detener este proceso de notificaciones.\n\n"
-    "Atentamente,\n\n"
-    "Departamento de Cobranzas\n"
-    "Rapicredit"
+NOMBRE_PLANTILLA_PREJUDICIAL = "2 Cuotas - Aviso legal"
+NOMBRES_CANONICOS_PREJUDICIAL = (
+    NOMBRE_PLANTILLA_PREJUDICIAL,
+    "URGENTE: Pague a tiempo (60 dias o mas)",
 )
 
-# Fallback para textos por defecto del pipeline ({nombre} estilo format_map).
+ASUNTO_PREJUDICIAL = "Aviso legal importante — 2 cuotas vencidas | RapiCredit"
+
+
+def _cargar_cuerpo_html_prejudicial() -> str:
+    path = Path(__file__).resolve().parent / "templates_email" / "prejudicial_2_cuotas.html"
+    return path.read_text(encoding="utf-8")
+
+
+CUERPO_PREJUDICIAL = _cargar_cuerpo_html_prejudicial()
+
+# Fallback texto plano (si no hay plantilla HTML en BD / pipeline format_map).
 ASUNTO_PREJUDICIAL_FALLBACK = ASUNTO_PREJUDICIAL
 CUERPO_PREJUDICIAL_FALLBACK = (
-    "Estimado(a) {nombre},\n\n"
-    "Le solicitamos ponerse al dia con el pago de su cuota de manera inmediata. "
-    "Evite seguir sumando dias de retraso y prevenga el inicio de acciones legales.\n\n"
-    "Si desea regularizar su situacion, comuniquese hoy mismo por nuestras lineas oficiales:\n\n"
-    "Linea 1: 0424-4334846 — https://wa.me/584244334846\n"
-    "Linea 2: 0424-4249673 — https://wa.me/584244249673\n"
-    "Linea 3: 0424-4530836 — https://wa.me/584244530836\n\n"
-    "Si ya realizo su pago, envienos su comprobante a cobranza@rapicreditca.com "
-    "de inmediato para detener este proceso de notificaciones.\n\n"
-    "Atentamente,\n\n"
-    "Departamento de Cobranzas\n"
-    "Rapicredit"
+    "Estimado(a) {nombre} (cedula {cedula}),\n\n"
+    "Aviso legal: su contrato con RapiCredit registra 2 cuotas vencidas "
+    "(atraso {dias_atraso} dias; cuota N. {numero_cuota}; vence {fecha_vencimiento_display}; "
+    "monto {monto}; total pendiente {total_pendiente_pagar}).\n\n"
+    "Conforme a la Clausula Decima Segunda, la falta de pago de dos o mas cuotas "
+    "faculta a exigir el saldo total y declarar resuelto el contrato.\n\n"
+    "Lineas oficiales:\n"
+    "0424-4334846 — https://wa.me/584244334846\n"
+    "0424-4249673 — https://wa.me/584244249673\n"
+    "0424-4530836 — https://wa.me/584244530836\n\n"
+    "Si ya pago, envie su comprobante de inmediato.\n\n"
+    "Departamento de Cobranza\n"
+    "RapiCredit, C.A."
 )
 
 VARIABLES_DISPONIBLES_PREJUDICIAL = (
-    "nombre,cedula,dias_atraso,cuotas_atrasadas,"
-    "fecha_vencimiento,fecha_vencimiento_display,numero_cuota,monto"
+    "nombre,nombre_cliente,cedula,dias_atraso,cuotas_atrasadas,"
+    "fecha_vencimiento,fecha_vencimiento_display,numero_cuota,monto,"
+    "monto_cuota,total_pendiente_pagar,logo_url,LOGO_URL"
 )
 
-# Variables del modulo (token {{nombre_variable}} en plantillas).
 VARIABLES_MODULO_PREJUDICIAL: List[Dict[str, str]] = [
     {
         "nombre_variable": "nombre",
@@ -127,6 +127,24 @@ VARIABLES_MODULO_PREJUDICIAL: List[Dict[str, str]] = [
         "campo_bd": "monto",
         "descripcion": "Monto de la cuota",
     },
+    {
+        "nombre_variable": "total_pendiente_pagar",
+        "tabla": "prestamos",
+        "campo_bd": "saldo",
+        "descripcion": "Total pendiente del prestamo",
+    },
+    {
+        "nombre_variable": "logo_url",
+        "tabla": "sistema",
+        "campo_bd": "FRONTEND_PUBLIC_URL",
+        "descripcion": "URL publica del logo Rapicredit (correo)",
+    },
+    {
+        "nombre_variable": "LOGO_URL",
+        "tabla": "sistema",
+        "campo_bd": "FRONTEND_PUBLIC_URL",
+        "descripcion": "Alias de logo_url",
+    },
 ]
 
 
@@ -168,8 +186,10 @@ def _buscar_plantilla_prejudicial(db: Session) -> Optional[PlantillaNotificacion
     p = db.execute(
         select(PlantillaNotificacion).where(
             PlantillaNotificacion.tipo == TIPO_PREJUDICIAL,
-            PlantillaNotificacion.nombre == NOMBRE_PLANTILLA_PREJUDICIAL,
+            PlantillaNotificacion.nombre.in_(NOMBRES_CANONICOS_PREJUDICIAL),
         )
+        .order_by(PlantillaNotificacion.id.asc())
+        .limit(1)
     ).scalar_one_or_none()
     if p:
         return p
@@ -195,8 +215,8 @@ def asegurar_plantilla_prejudicial(db: Session, *, forzar_contenido: bool = Fals
         p = PlantillaNotificacion(
             nombre=NOMBRE_PLANTILLA_PREJUDICIAL,
             descripcion=(
-                "Plantilla unica del modulo 60 dias o mas (PREJUDICIAL). "
-                "Variable principal: {{nombre}}."
+                "Plantilla unica del modulo 2 Cuotas (PREJUDICIAL). "
+                "HTML: prejudicial_2_cuotas.html."
             ),
             tipo=TIPO_PREJUDICIAL,
             asunto=ASUNTO_PREJUDICIAL,
@@ -211,14 +231,16 @@ def asegurar_plantilla_prejudicial(db: Session, *, forzar_contenido: bool = Fals
         return p
 
     # Actualizar a contenido canonico si es la nuestra o se fuerza
-    es_nuestra = (p.nombre or "") == NOMBRE_PLANTILLA_PREJUDICIAL
+    es_nuestra = (p.nombre or "") in NOMBRES_CANONICOS_PREJUDICIAL
     if forzar_contenido or es_nuestra:
         p.nombre = NOMBRE_PLANTILLA_PREJUDICIAL
         p.asunto = ASUNTO_PREJUDICIAL
-        p.cuerpo = CUERPO_PREJUDICIAL
+        # Recargar HTML desde archivo por si cambio en deploy
+        p.cuerpo = _cargar_cuerpo_html_prejudicial()
         p.descripcion = (
-            "Plantilla unica del modulo 60 dias o mas (PREJUDICIAL). "
-            "Variable principal: {{nombre}}."
+            "Plantilla unica del modulo 2 Cuotas (PREJUDICIAL). "
+            "HTML: prejudicial_2_cuotas.html. Variables: {{nombre}}, {{cedula}}, "
+            "{{cuotas_atrasadas}}, {{dias_atraso}}, {{logo_url}}, etc."
         )
     p.tipo = TIPO_PREJUDICIAL
     p.activa = True

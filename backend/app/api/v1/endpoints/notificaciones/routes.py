@@ -650,17 +650,24 @@ def _sustituir_variables(texto: str, item: dict) -> str:
     dias_atraso = item.get("dias_atraso")
     cuotas_atrasadas = item.get("cuotas_atrasadas")
     fecha_disp = (item.get("fecha_vencimiento_display") or "").strip() or str(fecha_v)
+    total_pend = item.get("total_pendiente_pagar")
+    if total_pend is None:
+        total_pend = item.get("total_pendiente")
     replacements = {
         "{{nombre}}": str(nombre),
+        "{{nombre_cliente}}": str(nombre),
         "{{cedula}}": str(cedula),
+        "{{tratamiento}}": str(tratamiento),
         "{{fecha_vencimiento}}": str(fecha_v),
         "{{fecha_vencimiento_display}}": str(fecha_disp),
         "{{numero_cuota}}": str(numero_cuota) if numero_cuota is not None else "",
         "{{monto}}": str(monto) if monto is not None else "",
+        "{{monto_cuota}}": str(monto) if monto is not None else "",
         "{{dias_atraso}}": str(dias_atraso) if dias_atraso is not None else "",
         "{{cuotas_atrasadas}}": str(cuotas_atrasadas)
         if cuotas_atrasadas is not None
         else "",
+        "{{total_pendiente_pagar}}": str(total_pend) if total_pend is not None else "",
     }
     result = texto
     for key, val in replacements.items():
@@ -669,13 +676,20 @@ def _sustituir_variables(texto: str, item: dict) -> str:
     for k, v in item.items():
         if k in (
             "nombre",
+            "nombre_cliente",
             "cedula",
+            "tratamiento",
             "fecha_vencimiento",
             "fecha_vencimiento_display",
             "numero_cuota",
+            "monto",
             "monto_cuota",
             "dias_atraso",
             "cuotas_atrasadas",
+            "total_pendiente_pagar",
+            "total_pendiente",
+            "logo_url",
+            "LOGO_URL",
         ):
             continue
         token = "{{" + str(k) + "}}"
