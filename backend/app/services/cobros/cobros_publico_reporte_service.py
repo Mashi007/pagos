@@ -223,6 +223,34 @@ def error_si_no_puede_reportar_en_web(prestamos_aprobados: list) -> Optional[str
     return None
 
 
+
+def reportado_datos_cargables_a_cartera(pr: PagoReportado) -> bool:
+    """
+    True si el reportado tiene datos de negocio reales para crear fila en `pagos`.
+
+    Excluye marcadores tecnicos de OCR incompleto (REVISION_MANUAL, REV-MANUAL-*,
+    monto 0.01, fecha 1970). No implica aplicar cascada a cuotas.
+    """
+    if pr is None:
+        return False
+    inst = (getattr(pr, "institucion_financiera", None) or "").strip().upper()
+    if not inst or inst in {"REVISION_MANUAL", "REVISION MANUAL"}:
+        return False
+    num = (getattr(pr, "numero_operacion", None) or "").strip().upper()
+    if not num or num.startswith("REV-MANUAL"):
+        return False
+    try:
+        monto = float(getattr(pr, "monto", None) or 0)
+    except (TypeError, ValueError):
+        return False
+    if monto < 1.0:
+        return False
+    fp = getattr(pr, "fecha_pago", None)
+    if fp is None or fp == FECHA_MARCADOR_REVISION_COBROS:
+        return False
+    return True
+
+
 def intentar_importar_reportado_automatico(
     db: Session,
     pr: PagoReportado,
@@ -230,8 +258,14 @@ def intentar_importar_reportado_automatico(
     log_tag: str,
 ) -> AutoImportResultado:
     """
-    Si el reporte quedó en estado aprobado: crea Pago (mismas reglas que importar-desde-cobros),
-    aplica a cuotas y marca el reporte como importado. Fallos solo en log (no rompe la respuesta al cliente).
+    Carga el reportado a cartera (`pagos`) cuando corresponde.
+
+    - aprobado: crea Pago + cascada de **ese** pago (no FIFO de prestamo).
+    - en_revision con datos reales: crea Pago en PENDIENTE **sin** cascada
+      (evita limbo; staff aplica cuotas luego con aplicar-cuotas por pago).
+    - marcadores OCR (REVISION_MANUAL / 0.01 / 1970): no inventa pago.
+
+    Fallos solo en log (no rompe la respuesta al cliente).
     """
     started_total = perf_counter()
     if pr is None:
@@ -271,7 +305,13 @@ def intentar_importar_reportado_automatico(
                 db.rollback()
             except Exception:
                 pass
-    if estado0 != "aprobado":
+    aplicar_cascada = False
+    if estado0 == "aprobado":
+        aplicar_cascada = True
+    elif estado0 == "en_revision" and reportado_datos_cargables_a_cartera(pr):
+        # Digitalizacion con datos reales pero cola revision: cargar a pago sin cascada.
+        aplicar_cascada = False
+    else:
         return AutoImportResultado(total_ms=_elapsed_ms(started_total))
     lookup_ms = 0.0
     importar_pago_ms = 0.0
@@ -388,12 +428,30 @@ def intentar_importar_reportado_automatico(
 
         pago = res["pago"]
         cascada_started = perf_counter()
-        cc, cp = _aplicar_pago_a_cuotas_interno(pago, db)
-        cascada_ms = _elapsed_ms(cascada_started)
-        if cc > 0 or cp > 0:
-            pago.estado = "PAGADO"
+        if aplicar_cascada:
+            cc, cp = _aplicar_pago_a_cuotas_interno(pago, db)
+            cascada_ms = _elapsed_ms(cascada_started)
+            if cc > 0 or cp > 0:
+                pago.estado = "PAGADO"
+            pr.falla_validadores_manual = False
+        else:
+            # Sin cascada: no marcar PAGADO/conciliado como si ya hubiera cuotas.
+            cascada_ms = _elapsed_ms(cascada_started)
+            pago.estado = "PENDIENTE"
+            pago.conciliado = False
+            pago.fecha_conciliacion = None
+            prev = (getattr(pr, "gemini_comentario", None) or "").strip()
+            nota = "[CARGA_DIGITALIZACION:pago_sin_cascada_pendiente_aplicar]"
+            if nota not in prev:
+                pr.gemini_comentario = (f"{prev} {nota}".strip() if prev else nota)[:500]
+            pr.falla_validadores_manual = True
+            logger.info(
+                "[%s] Auto-import sin cascada ref=%s pago_id=%s (en_revision con datos cargables)",
+                log_tag,
+                referencia,
+                getattr(pago, "id", None),
+            )
         pr.estado = "importado"
-        pr.falla_validadores_manual = False
         commit_started = perf_counter()
         db.commit()
         commit_ms = _elapsed_ms(commit_started)
@@ -405,7 +463,13 @@ def intentar_importar_reportado_automatico(
             commit_ms=commit_ms,
             total_ms=_elapsed_ms(started_total),
         )
-        logger.info("[%s] Auto-import OK ref=%s pago_id=%s", log_tag, referencia, getattr(pago, "id", None))
+        logger.info(
+            "[%s] Auto-import OK ref=%s pago_id=%s cascada=%s",
+            log_tag,
+            referencia,
+            getattr(pago, "id", None),
+            aplicar_cascada,
+        )
         logger.info(
             "[%s_TIMING] ref=%s autoimport=ok pago_id=%s lookup_ms=%s importar_pago_ms=%s "
             "cascada_ms=%s commit_ms=%s total_ms=%s",

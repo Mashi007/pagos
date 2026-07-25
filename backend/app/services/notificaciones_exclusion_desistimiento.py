@@ -261,3 +261,56 @@ def item_bloqueado_para_envio_notificacion(
     if bloqueado:
         return True, motivo
     return False, ""
+
+
+def cliente_ids_bloqueados_para_notificacion(
+    db: Session, cliente_ids: Set[int]
+) -> Set[int]:
+    """
+    Subconjunto de ``cliente_ids`` bloqueados para notificacion:
+    - tienen al menos un prestamo DESISTIMIENTO, o
+    - tienen prestamos y ninguno activo (solo LIQUIDADO/DESISTIMIENTO).
+    Una pasada SQL (eficiente para listados masivos).
+    """
+    ids = sorted({int(x) for x in cliente_ids if x is not None})
+    if not ids or db is None:
+        return set()
+    estado_norm = func.upper(func.trim(func.coalesce(Prestamo.estado, "")))
+    # Con DESISTIMIENTO
+    con_des = {
+        int(r[0])
+        for r in db.execute(
+            select(Prestamo.cliente_id)
+            .where(
+                Prestamo.cliente_id.in_(ids),
+                estado_norm == str(ESTADO_PRESTAMO_DESISTIMIENTO).strip().upper(),
+            )
+            .distinct()
+        ).all()
+        if r[0] is not None
+    }
+    # Con al menos un prestamo activo (fuera de LIQUIDADO/DESISTIMIENTO)
+    con_activo = {
+        int(r[0])
+        for r in db.execute(
+            select(Prestamo.cliente_id)
+            .where(
+                Prestamo.cliente_id.in_(ids),
+                estado_norm.notin_(tuple(_ESTADOS_BLOQUEO_SET)),
+            )
+            .distinct()
+        ).all()
+        if r[0] is not None
+    }
+    # Con al menos un prestamo (cualquier estado)
+    con_prestamo = {
+        int(r[0])
+        for r in db.execute(
+            select(Prestamo.cliente_id)
+            .where(Prestamo.cliente_id.in_(ids))
+            .distinct()
+        ).all()
+        if r[0] is not None
+    }
+    solo_cerrados = {cid for cid in con_prestamo if cid not in con_activo}
+    return con_des | solo_cerrados

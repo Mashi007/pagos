@@ -150,7 +150,7 @@ export const CRITERIOS_ENVIO_TABLA: CriterioEnvioRow[] = [
   },
   {
     tipo: 'PAGO_2_DIAS_ANTES_PENDIENTE',
-    label: '3 días antes (pendiente, vence en 3 días)',
+    label: '3 días antes (solo impuntuales en última cuota)',
     categoria: 'Por vencer',
     color: 'blue',
   },
@@ -222,7 +222,7 @@ function esConfigEnvioSeccionId(v: string | null): v is ConfigEnvioSeccionId {
 export const CRITERIOS_ENVIO_PANEL: CriterioEnvioRow[] = [
   {
     tipo: 'PAGO_2_DIAS_ANTES_PENDIENTE',
-    label: '3 días antes (pendiente, vence en 3 días)',
+    label: '3 días antes (solo impuntuales en última cuota)',
     categoria: 'Por vencer',
     color: 'blue',
   },
@@ -353,7 +353,24 @@ function normalizeConfigFromApi(raw: ConfigEnvioCompleta | null): {
   for (const tipo of tiposCasoEnvio) {
     const v = (data as Record<string, unknown>)[tipo]
     if (v != null && typeof v === 'object' && !Array.isArray(v)) {
-      configEnvios[tipo] = v as ConfigEnvioItem
+      const row = v as Record<string, unknown>
+      const ccoRaw = Array.isArray(row.cco) ? row.cco : []
+      const pid = row.plantilla_id
+      configEnvios[tipo] = {
+        habilitado: row.habilitado !== false && row.habilitado !== 'false',
+        cco: ccoRaw.map(x => String(x || '').trim()).filter(Boolean),
+        plantilla_id:
+          typeof pid === 'number'
+            ? pid
+            : pid != null && String(pid).trim() !== ''
+              ? Number.isFinite(Number(pid))
+                ? Number(pid)
+                : null
+              : null,
+        programador: String(row.programador || HORA_DEFAULT),
+        incluir_pdf_anexo: row.incluir_pdf_anexo !== false,
+        incluir_adjuntos_fijos: row.incluir_adjuntos_fijos !== false,
+      }
     }
   }
 
@@ -495,7 +512,8 @@ export function ConfiguracionNotificaciones({
       case 'solo_pago_10_dias_atrasado':
         return 'dias_10_retraso'
       case 'solo_prejudicial':
-        return 'prejudicial'
+        // 2 Cuotas: solo plantilla HTML; sin Carta_Cobranza ni PDFs fijos.
+        return null
       default:
         return null
     }
@@ -640,6 +658,9 @@ export function ConfiguracionNotificaciones({
   }, [alcance, seccionConfigId])
 
   const alcanceReducido = alcance !== 'completo'
+
+  /** 2 Cuotas (PREJUDICIAL): solo HTML; no columnas ni seccion de PDFs. */
+  const muestraColumnasPdf = alcance !== 'solo_prejudicial'
 
   const {
     data: dataEnvios,
@@ -846,7 +867,14 @@ export function ConfiguracionNotificaciones({
   const guardarConfiguracionEnvios = async () => {
     if (guardandoRef.current) return
 
-    if (modoPruebas && (emailsPruebas[0]?.trim() || emailsPruebas[1]?.trim())) {
+    if (modoPruebas) {
+      const primero = (emailsPruebas[0] || '').trim()
+      if (!primero) {
+        toast.error(
+          'Modo prueba activo: indique al menos el correo de pruebas 1 (destino del lote) antes de Guardar.'
+        )
+        return
+      }
       const mal = [emailsPruebas[0], emailsPruebas[1]]
         .map(e => (e || '').trim())
         .filter(e => e && !esEmailValido(e))
@@ -863,6 +891,11 @@ export function ConfiguracionNotificaciones({
     setGuardandoEnvios(true)
 
     try {
+      // Cancela GET en vuelo para que no apliquen datos viejos tras el PUT.
+      await queryClient.cancelQueries({
+        queryKey: NOTIFICACIONES_QUERY_KEYS.envios,
+      })
+
       const tiposPersistir = tiposCasoNotificacionParaAlcance(alcance)
       const payload: ConfigEnvioCompleta = {} as ConfigEnvioCompleta
 
@@ -879,6 +912,7 @@ export function ConfiguracionNotificaciones({
           const c = getConfig(tipo)
           ;(payload as Record<string, ConfigEnvioItem>)[tipo] = {
             ...c,
+            plantilla_id: c.plantilla_id ?? null,
             incluir_pdf_anexo:
               tipo === 'MASIVOS' ||
               tipo === 'PREJUDICIAL' ||
@@ -916,6 +950,7 @@ export function ConfiguracionNotificaciones({
           const c = getConfig(tipo)
           p[tipo] = {
             ...c,
+            plantilla_id: c.plantilla_id ?? null,
             incluir_pdf_anexo:
               tipo === 'MASIVOS' ||
               tipo === 'PREJUDICIAL' ||
@@ -932,11 +967,36 @@ export function ConfiguracionNotificaciones({
         }
       }
 
-      await emailConfigService.actualizarConfiguracionEnvios(payload)
+      const res = (await emailConfigService.actualizarConfiguracionEnvios(
+        payload
+      )) as { configuracion?: ConfigEnvioCompleta; message?: string }
+
+      // Aplicar la config que el servidor acaba de persistir (evita que un GET
+      // en vuelo con datos viejos pise el estado local tras limpiar dirty).
+      const persisted =
+        res?.configuracion && typeof res.configuracion === 'object'
+          ? res.configuracion
+          : null
+      if (persisted) {
+        const {
+          modoPruebas: mp,
+          emailsPruebas: ep,
+          configEnvios: ce,
+          campanasMasivos: cm,
+        } = normalizeConfigFromApi(persisted)
+        setModoPruebas(mp)
+        setEmailsPruebas(ep)
+        setConfigEnvios(ce)
+        setCampanasMasivos(cm)
+        setCcoDraftPorTipo({})
+        setCcoDraftPorCampanaId({})
+        queryClient.setQueryData(NOTIFICACIONES_QUERY_KEYS.envios, persisted)
+      }
 
       enviosLocalDirtyRef.current = false
 
-      await queryClient.invalidateQueries({
+      // Refetch en segundo plano; si llega tarde, ya hay datos frescos en caché.
+      void queryClient.invalidateQueries({
         queryKey: NOTIFICACIONES_QUERY_KEYS.envios,
       })
 
@@ -947,8 +1007,15 @@ export function ConfiguracionNotificaciones({
           ? `Guardado: solo ${tiposPersistir.join(', ')} y modo prueba (global). Otros criterios y campañas masivas no se modificaron.`
           : 'Configuración de envíos guardada'
       )
-    } catch {
-      toast.error('Error al guardar la configuración de envíos')
+    } catch (e: unknown) {
+      const detail =
+        (e as { response?: { data?: { detail?: string } }; message?: string })
+          ?.response?.data?.detail || (e as { message?: string })?.message
+      toast.error(
+        typeof detail === 'string' && detail.trim()
+          ? detail
+          : 'Error al guardar la configuración de envíos'
+      )
     } finally {
       setGuardandoEnvios(false)
 
@@ -2034,21 +2101,25 @@ export function ConfiguracionNotificaciones({
                 Envío
               </th>
 
-              <th
-                className="w-20 px-4 py-3 text-center font-semibold text-gray-700"
-                title="Pestaña 2: Carta_Cobranza.pdf. Obligatorio para enviar (junto con plantilla email y PDF fijo). Desactivar impide el envío en modo estricto."
-                aria-label="Incluir carta cobranza PDF"
-              >
-                PDF
-              </th>
+              {muestraColumnasPdf && (
+                <th
+                  className="w-20 px-4 py-3 text-center font-semibold text-gray-700"
+                  title="Pestaña 2: Carta_Cobranza.pdf. Obligatorio para enviar (junto con plantilla email y PDF fijo). Desactivar impide el envío en modo estricto."
+                  aria-label="Incluir carta cobranza PDF"
+                >
+                  PDF
+                </th>
+              )}
 
-              <th
-                className="w-20 px-4 py-3 text-center font-semibold text-gray-700"
-                title="Sección Documentos PDF anexos: PDFs fijos por caso + global. Obligatorio para enviar (junto con plantilla y carta PDF)."
-                aria-label="Incluir documentos PDF fijos de este caso"
-              >
-                Adj.
-              </th>
+              {muestraColumnasPdf && (
+                <th
+                  className="w-20 px-4 py-3 text-center font-semibold text-gray-700"
+                  title="Sección Documentos PDF anexos: PDFs fijos por caso + global. Obligatorio para enviar (junto con plantilla y carta PDF)."
+                  aria-label="Incluir documentos PDF fijos de este caso"
+                >
+                  Adj.
+                </th>
+              )}
 
               <th className="min-w-[280px] px-4 py-3 text-left font-semibold text-gray-700">
                 Opciones
@@ -2145,60 +2216,64 @@ export function ConfiguracionNotificaciones({
                     </button>
                   </td>
 
-                  <td className="px-4 py-3 text-center">
-                    <input
-                      type="checkbox"
-                      checked={config.incluir_pdf_anexo !== false}
-                      onChange={() =>
-                        setConfig(tipo, {
-                          incluir_pdf_anexo: !config.incluir_pdf_anexo,
-                        })
-                      }
-                      disabled={
-                        !config.habilitado ||
-                        tipo === 'MASIVOS' ||
-                        tipo === 'PREJUDICIAL' ||
-                        tipo === 'PAGO_10_DIAS_ATRASADO'
-                      }
-                      title={
-                        tipo === 'MASIVOS'
-                          ? 'No aplica: comunicaciones masivas no adjuntan Carta_Cobranza.pdf'
-                          : tipo === 'PREJUDICIAL'
-                            ? 'No aplica: 2 Cuotas envía solo HTML/texto, sin PDF'
-                            : tipo === 'PAGO_10_DIAS_ATRASADO'
-                              ? 'No aplica: 1 Cuota no adjunta Carta_Cobranza.pdf (solo PDF fijo)'
-                              : 'Carta_Cobranza.pdf (plantilla PDF cobranza). Con paquete estricto el servidor exige este PDF valido para enviar.'
-                      }
-                      className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                    />
-                  </td>
+                  {muestraColumnasPdf && (
+                    <td className="px-4 py-3 text-center">
+                      <input
+                        type="checkbox"
+                        checked={config.incluir_pdf_anexo !== false}
+                        onChange={() =>
+                          setConfig(tipo, {
+                            incluir_pdf_anexo: !config.incluir_pdf_anexo,
+                          })
+                        }
+                        disabled={
+                          !config.habilitado ||
+                          tipo === 'MASIVOS' ||
+                          tipo === 'PREJUDICIAL' ||
+                          tipo === 'PAGO_10_DIAS_ATRASADO'
+                        }
+                        title={
+                          tipo === 'MASIVOS'
+                            ? 'No aplica: comunicaciones masivas no adjuntan Carta_Cobranza.pdf'
+                            : tipo === 'PREJUDICIAL'
+                              ? 'No aplica: 2 Cuotas envía solo HTML/texto, sin PDF'
+                              : tipo === 'PAGO_10_DIAS_ATRASADO'
+                                ? 'No aplica: 1 Cuota no adjunta Carta_Cobranza.pdf (solo PDF fijo)'
+                                : 'Carta_Cobranza.pdf (plantilla PDF cobranza). Con paquete estricto el servidor exige este PDF valido para enviar.'
+                        }
+                        className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      />
+                    </td>
+                  )}
 
-                  <td className="px-4 py-3 text-center">
-                    <input
-                      type="checkbox"
-                      checked={config.incluir_adjuntos_fijos !== false}
-                      onChange={() =>
-                        setConfig(tipo, {
-                          incluir_adjuntos_fijos: !(
-                            config.incluir_adjuntos_fijos !== false
-                          ),
-                        })
-                      }
-                      disabled={
-                        !config.habilitado ||
-                        tipo === 'PREJUDICIAL' ||
-                        tipo === 'PAGO_10_DIAS_ATRASADO'
-                      }
-                      title={
-                        tipo === 'PREJUDICIAL'
-                          ? 'No aplica: 2 Cuotas envía solo HTML/texto, sin PDF fijos'
-                          : tipo === 'PAGO_10_DIAS_ATRASADO'
-                            ? 'Obligatorio: 1 Cuota adjunta PDF fijo (dias_10_retraso), sin Carta_Cobranza'
-                            : 'PDFs fijos (global + por caso). Se anexan si estan cargados; no bloquean el envio si faltan.'
-                      }
-                      className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                    />
-                  </td>
+                  {muestraColumnasPdf && (
+                    <td className="px-4 py-3 text-center">
+                      <input
+                        type="checkbox"
+                        checked={config.incluir_adjuntos_fijos !== false}
+                        onChange={() =>
+                          setConfig(tipo, {
+                            incluir_adjuntos_fijos: !(
+                              config.incluir_adjuntos_fijos !== false
+                            ),
+                          })
+                        }
+                        disabled={
+                          !config.habilitado ||
+                          tipo === 'PREJUDICIAL' ||
+                          tipo === 'PAGO_10_DIAS_ATRASADO'
+                        }
+                        title={
+                          tipo === 'PREJUDICIAL'
+                            ? 'No aplica: 2 Cuotas envía solo HTML/texto, sin PDF fijos'
+                            : tipo === 'PAGO_10_DIAS_ATRASADO'
+                              ? 'Obligatorio: 1 Cuota adjunta PDF fijo (dias_10_retraso), sin Carta_Cobranza'
+                              : 'PDFs fijos (global + por caso). Se anexan si estan cargados; no bloquean el envio si faltan.'
+                        }
+                        className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      />
+                    </td>
+                  )}
 
                   <td className="px-4 py-3">
                     <div className="mb-3 space-y-1.5">
@@ -2395,6 +2470,7 @@ export function ConfiguracionNotificaciones({
         </div>
 
         <Button
+          type="button"
           onClick={guardarConfiguracionEnvios}
           disabled={guardandoEnvios}
           className="bg-blue-600 hover:bg-blue-700"

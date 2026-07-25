@@ -261,7 +261,7 @@ def vincular_plantilla_en_envios(db: Session, plantilla_id: int) -> bool:
     if not isinstance(row, dict):
         row = {
             "habilitado": True,
-            "cco": False,
+            "cco": [],
             "plantilla_id": plantilla_id,
         }
         cfg[TIPO_PREJUDICIAL] = row

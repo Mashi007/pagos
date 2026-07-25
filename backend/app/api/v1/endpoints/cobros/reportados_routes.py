@@ -834,7 +834,12 @@ def _marcar_reportados_como_eliminado_duplicado(
 
 
 def _crear_pago_desde_reportado_y_aplicar_cuotas(db: Session, pr: PagoReportado, usuario_email: Optional[str]) -> None:
-    """Tras aprobar un pago reportado: crea registro en tabla pagos y aplica a cuotas (cascada) para que prestamos y estado de cuenta se actualicen. Debe llamarse ANTES de commit; si falla lanza HTTPException."""
+    """Tras aprobar un pago reportado: crea registro en tabla pagos y aplica a cuotas (cascada).
+
+    Politica: cascada de **este** pago (`_aplicar_pago_a_cuotas_interno`).
+    Prohibido aqui: replay FIFO del prestamo (borrar cuota_pagos / reaplicar todos los pagos).
+    Debe llamarse ANTES de commit; si falla lanza HTTPException.
+    """
     cedula_norm = _normalize_cedula_for_client_lookup(
         ((pr.tipo_cedula or "") + (pr.numero_cedula or "")).replace("-", "").replace(" ", "").strip().upper()
     )

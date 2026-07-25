@@ -176,10 +176,13 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
       return 'Clientes con exactamente 2 cuotas impagas a 60 o más días de atraso en el mismo préstamo (calendario Caracas). Condiciones innegociables: atraso ≥60 días y exactamente 2 cuotas impagas en esa deuda. Permanecen todos los días mientras cumplan; salen al ponerse al día. El envío es solo manual (sin cron ni «enviar todas»). To = cliente; CCO = cobranza@ y notificaciones@. Use Actualizar o vuelva a entrar; también se refresca al guardar pagos en el módulo Pagos.'
     }
     if (modulo === 'd2antes') {
-      return 'Solo cuotas con columna estado PENDIENTE y fecha de vencimiento dentro de 3 días (hoy + 3, zona Caracas). Al pagar o cambiar estado, dejan de listarse. Use Actualizar o vuelva a entrar; también se refresca al guardar pagos.'
+      return 'Solo cuotas PENDIENTE con vencimiento en 3 días (hoy + 3, Caracas). Solo si la cuota inmediatamente anterior del mismo préstamo fue impuntual (pago después del vencimiento o sigue vencida). Si estuvo al día en esa última cuota, no se notifica. Sin cuota anterior (1.ª cuota) no entra. Use Actualizar o vuelva a entrar; también se refresca al guardar pagos.'
+    }
+    if (modulo === 'a1dia') {
+      return 'Cuotas con exactamente 1 día de atraso (fecha de vencimiento = ayer, zona Caracas) y saldo pendiente. Si el cliente ya está en «2 Cuotas» (prejudicial) no aparece aquí: un mismo cliente no recibe dos notificaciones. Use Actualizar o vuelva a entrar; también se refresca al guardar pagos en el módulo Pagos.'
     }
     if (modulo === 'a10dias') {
-      return 'Solo cuotas pendientes con atraso entre 6 y 59 días calendario (menor a 60; fecha de vencimiento entre referencia menos 59 y referencia menos 6, America/Caracas), saldo pendiente, y el préstamo con exactamente UNA cuota atrasada (ni 0 ni 2 o más). Permanecen hasta que esa cuota se pague o salga del rango. Con 0 o con 2 o más cuotas atrasadas no aplica este listado. El envío es solo manual (sin cron ni «enviar todas»).'
+      return 'Solo cuotas pendientes con atraso entre 6 y 59 días calendario (menor a 60; fecha de vencimiento entre referencia menos 59 y referencia menos 6, America/Caracas), saldo pendiente, y el préstamo con exactamente UNA cuota atrasada (ni 0 ni 2 o más). Permanecen hasta que esa cuota se pague o salga del rango. Con 0 o con 2 o más cuotas atrasadas no aplica este listado. Si el cliente ya está en «2 Cuotas» (prejudicial) no aparece aquí: un mismo cliente no recibe las dos notificaciones. El envío es solo manual (sin cron ni «enviar todas»).'
     }
     return 'Cuotas pendientes en tiempo real: al registrar pagos que cubren la cuota, el cliente deja de aparecer. Use Actualizar o vuelva a entrar; también se refresca al guardar pagos en el módulo Pagos.'
   }, [modulo])
@@ -1867,7 +1870,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                     : modulo === 'a2cuotas'
                       ? '2 Cuotas'
                       : modulo === 'd2antes'
-                        ? '3 días antes - PENDIENTE, vence en 3 días'
+                        ? '3 días antes - solo si fue impuntual en la última cuota'
                         : modulo === 'a10dias'
                           ? '1 Cuota'
                           : 'Día siguiente al vencimiento (1 día de atraso calendario)'}
@@ -1888,9 +1891,9 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                     : modulo === 'a2cuotas'
                       ? 'Una fila por cliente con al menos una cuota a 60 o más días de atraso. La cuota y fecha mostradas son la más antigua en ese rango; «Cuotas atrasadas» cuenta las cuotas del cliente que cumplen ≥60 días. Permanecen hasta ponerse al día. Envío solo manual (sin automático ni «enviar todas»); To = cliente; CCO = cobranza@ y notificaciones@.'
                       : modulo === 'd2antes'
-                        ? 'Solo filas con cuotas.estado = PENDIENTE y fecha_vencimiento = hoy + 3 (calendario Caracas), sin fecha_pago y con saldo pendiente. Incluye también préstamos al corriente (cuotas_atrasadas = 0): es un recordatorio preventivo. «Cuotas atrasadas» sigue la misma regla que el estado de cuenta para el préstamo.'
+                        ? 'Solo filas PENDIENTE con fecha_vencimiento = hoy + 3 (Caracas), sin fecha_pago y con saldo pendiente. Solo si la cuota inmediatamente anterior del mismo préstamo fue impuntual (pago después del vencimiento o sigue vencida). Si estuvo al día en esa última cuota, no entra. Sin cuota anterior (1.ª) no entra.'
                         : modulo === 'a10dias'
-                          ? 'Una fila por cuota pendiente con atraso entre 6 y 59 días calendario (fecha_vencimiento entre referencia menos 59 y referencia menos 6), sin fecha_pago y con saldo pendiente; préstamo no liquidado ni desistimiento. Solo si el préstamo tiene exactamente UNA cuota atrasada; permanece hasta pagar esa cuota o salir del rango. Con 0 o con 2 o más no entra. Envío solo manual (sin automático ni «enviar todas»).'
+                          ? 'Una fila por cuota pendiente con atraso entre 6 y 59 días calendario (fecha_vencimiento entre referencia menos 59 y referencia menos 6), sin fecha_pago y con saldo pendiente; préstamo no liquidado ni desistimiento. Solo si el préstamo tiene exactamente UNA cuota atrasada; permanece hasta pagar esa cuota o salir del rango. Con 0 o con 2 o más no entra. Si el cliente ya está en «2 Cuotas» (prejudicial) no aparece aquí: un mismo cliente no recibe las dos notificaciones. Envío solo manual (sin automático ni «enviar todas»).'
                           : 'Cuotas cuya fecha de vencimiento fue ayer (hoy es el primer día después del vencimiento). La columna Cuotas atrasadas cuenta las cuotas en mora del préstamo con la misma regla que el estado de cuenta (Vencido, Mora, etc.).'}
               </CardDescription>
             </CardHeader>

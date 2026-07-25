@@ -2790,7 +2790,7 @@ def build_prejudicial_items(
     """
     Lista prejudicial («60 días o más» / a-2-cuotas). Condiciones INNEGOCIABLES:
     - atraso calendario >= 60 días (fecha_vencimiento <= hoy − 60)
-    - exactamente 2 cuotas impagas **en el mismo préstamo** con ese atraso
+    - exactamente 2 cuotas atrasadas TOTALES en el mismo préstamo, ambas con atraso >= 60
     - sin fecha_pago, saldo > 0.01, préstamo no LIQUIDADO/DESISTIMIENTO, titular sin DESISTIMIENTO
 
     Un ítem por préstamo que cumpla (no se suma 1+1 entre préstamos distintos).
@@ -2798,37 +2798,18 @@ def build_prejudicial_items(
     """
     hoy = fecha_referencia or hoy_negocio()
     fv_max = hoy - timedelta(days=MIN_DIAS_ATRASO_PREJUDICIAL)
-    # Estricto: agrupar por préstamo (no por cliente) para exigir 2+ cuotas en la misma deuda.
-    subq = (
-        select(
-            Prestamo.id.label("prestamo_id"),
-            Prestamo.cliente_id.label("cliente_id"),
-            func.count(Cuota.id).label("total"),
-        )
-        .select_from(Cuota)
-        .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
-        .where(
-            Cuota.fecha_pago.is_(None),
-            CUOTA_ESTADO_NO_PAGADA_PARA_NOTIF,
-            Cuota.fecha_vencimiento.isnot(None),
-            Cuota.fecha_vencimiento <= fv_max,
-            SALDO_PENDIENTE_CUOTA > TOL_SALDO_CUOTA_NOTIFICACION,
-            _prestamo_no_excluido_notif(),
-            sql_cliente_sin_desistimiento(),
-        )
-        .group_by(Prestamo.id, Prestamo.cliente_id)
-        .having(
-            func.count(Cuota.id) >= PREJUDICIAL_MIN_CUOTAS_CON_ATRASO_60,
-            func.count(Cuota.id) <= PREJUDICIAL_MAX_CUOTAS_CON_ATRASO_60,
-        )
+    from app.services.notificaciones_dedup_segmentos import (
+        select_prestamos_prejudicial,
     )
-    rows = db.execute(subq).all()
+
+    # Regla unica: exactamente 2 atrasadas TOTALES y ambas >= 60 dias.
+    rows = select_prestamos_prejudicial(db, fecha_referencia=hoy)
     if not rows:
         return []
 
-    prestamo_ids = [int(r[0]) for r in rows if r[0] is not None]
-    totals_by_prestamo = {int(r[0]): int(r[2]) for r in rows if r[0] is not None}
-    cliente_ids = sorted({int(r[1]) for r in rows if r[1] is not None})
+    prestamo_ids = [pid for pid, _cid, _tot in rows]
+    totals_by_prestamo = {pid: tot for pid, _cid, tot in rows}
+    cliente_ids = sorted({cid for _pid, cid, _tot in rows})
 
     clientes_map = {
         c.id: c
@@ -2926,9 +2907,9 @@ def get_notificaciones_tabs_data(
     Pestaña menor a 60 / atraso-10-dias (dias_10_retraso): atraso 6-59 días y exactamente
     UNA cuota atrasada. Con 2 o más cuotas atrasadas no entra.
 
-    Prejudicial: por titular del préstamo (prestamos.cliente_id), al menos el mínimo configurado
-    de cuotas con cuotas.estado en (VENCIDO, MORA), fecha_vencimiento < hoy, sin fecha_pago y
-    saldo pendiente; préstamo no liquidado/desistimiento.
+    Prejudicial («2 Cuotas»): exactamente 2 cuotas atrasadas TOTALES en el mismo préstamo,
+    ambas con atraso >= 60; sin fecha_pago, saldo pendiente; préstamo no LIQUIDADO/DESISTIMIENTO
+    y titular sin DESISTIMIENTO. Titulares en 2 Cuotas no se listan en 1 Cuota ni día siguiente.
     """
     hoy = fecha_referencia or hoy_negocio()
     from app.services.notificaciones_listados_motor import (

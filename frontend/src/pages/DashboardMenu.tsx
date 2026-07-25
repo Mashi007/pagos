@@ -993,12 +993,14 @@ export function DashboardMenu() {
     iconSize: 12,
   }
 
+  // Paleta de alto contraste: rojo puro vs amarillo (antes naranja/ambar se
+  // confundian) y magenta/verde en lugar de violeta/cian (chocaban con el azul).
   const coloresInstitucionPago: Record<string, string> = {
     Mercantil: '#1d4ed8',
-    BNC: '#ea580c',
-    Binance: '#ca8a04',
-    BNV: '#7c3aed',
-    Recibos: '#0891b2',
+    BNC: '#dc2626',
+    Binance: '#eab308',
+    BNV: '#c026d3',
+    Recibos: '#059669',
     Otros: '#64748b',
   }
 
@@ -1836,7 +1838,7 @@ export function DashboardMenu() {
                 </code>
                 : correos aceptados por SMTP (enviados) por día. Eje X desde el{' '}
                 <strong>5 de abril</strong> del año del último día con datos
-                (muestra de {NOTIFICACIONES_ENVIOS_TENDENCIA_DIAS} d recortada).
+                (muestra de {NOTIFICACIONES_ENVIOS_TENDENCIA_DIAS} d recortada). El listado ya no incluye titulares en 2 cuotas.
                 Línea gris discontinua: <strong>tendencia</strong> (regresión
                 lineal sobre la serie mostrada).
               </CardDescription>
@@ -1981,7 +1983,7 @@ export function DashboardMenu() {
                 <strong>Inicio día</strong>: stock del segmento 1 cuota a las{' '}
                 <strong>00:00</strong>. <strong>Fin dia</strong>: de ese stock,
                 cuántos siguen sin pagar a las <strong>23:00</strong> (hoy:
-                valor en vivo hasta las 23:00).
+                valor en vivo hasta las 23:00). Excluye titulares que el mismo día están en <strong>2 cuotas</strong> (exclusión mutua: un cliente no cuenta en ambos segmentos).
               </CardDescription>
             </CardHeader>
 
@@ -2118,7 +2120,7 @@ export function DashboardMenu() {
                 <strong>Inicio día</strong>: stock del segmento 2 cuotas a las{' '}
                 <strong>00:00</strong>. <strong>Fin dia</strong>: de ese stock,
                 cuántos siguen sin pagar a las <strong>23:00</strong> (hoy:
-                valor en vivo hasta las 23:00).
+                valor en vivo hasta las 23:00). Prioridad frente a 1 cuota: no se recorta por exclusión mutua.
               </CardDescription>
             </CardHeader>
 

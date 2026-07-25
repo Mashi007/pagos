@@ -30,6 +30,11 @@ from app.services.notificacion_service import (
     _item_tab,
 )
 
+from app.services.notificaciones_dedup_segmentos import (
+    clientes_en_regla_prejudicial,
+    filtrar_items_sin_prejudicial,
+)
+
 
 def build_items_retraso_uno_y_diez_dias(
     db: Session,
@@ -44,6 +49,9 @@ def build_items_retraso_uno_y_diez_dias(
     - 1 día: cuota con vencimiento = ayer (exactamente 1 día de atraso).
     - Menor a 60 días (clave API dias_10_*): exactamente 1 cuota en mora y atraso
       entre 6 y 59 días (permanece hasta pagar o salir del rango).
+
+    En ambas listas se excluyen los titulares que ya cumplen «2 Cuotas» (prejudicial):
+    un mismo cliente no debe recibir dos notificaciones el mismo día.
 
     ``formato``:
       - ``item_tab``: mismas filas que ``get_notificaciones_tabs_data`` (envío / tabs).
@@ -140,6 +148,19 @@ def build_items_retraso_uno_y_diez_dias(
         it for it in dias_10
         if item_cumple_regla_menor_60_estricta(it, fecha_referencia)
     ]
+    # Un mismo cliente no recibe dos avisos: el titular que ya esta en «2 Cuotas»
+    # (prejudicial) no se lista en «1 Cuota» ni en «dia siguiente al vencimiento».
+    claves_prejudicial = (
+        clientes_en_regla_prejudicial(db, fecha_referencia)
+        if (dias_1 or dias_10)
+        else (set(), set())
+    )
+    dias_1 = filtrar_items_sin_prejudicial(
+        db, dias_1, fecha_referencia, claves=claves_prejudicial, etiqueta="dia-siguiente"
+    )
+    dias_10 = filtrar_items_sin_prejudicial(
+        db, dias_10, fecha_referencia, claves=claves_prejudicial, etiqueta="menor-60"
+    )
     if con_enriquecimiento_revision_manual:
         enriquecer_items_notificacion_revision_manual(db, dias_1 + dias_10)
     return dias_1, dias_10

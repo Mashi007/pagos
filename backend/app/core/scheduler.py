@@ -433,12 +433,12 @@ def _job_pagos_gmail_pending_scan() -> None:
 
 
 def _job_notificaciones_pago_2_dias_antes_cron() -> None:
-    """Diario (Caracas): envío automático solo «2 días antes» si ENABLE_CRON_NOTIFICACIONES_2_DIAS_ANTES."""
-    if not getattr(settings, "ENABLE_CRON_NOTIFICACIONES_2_DIAS_ANTES", False):
-        return
-    from app.services.notificaciones_cron_2_dias_antes_job import job_cron_pago_2_dias_antes_scheduler
-
-    job_cron_pago_2_dias_antes_scheduler()
+    """Reservado: politicamente desactivado. Toda cobranza es solo manual."""
+    logger.info(
+        "[scheduler] cron 2 dias antes omitido: politica solo-manual "
+        "(usar POST /notificaciones/enviar-caso-manual)"
+    )
+    return
 
 
 
@@ -460,19 +460,12 @@ def _job_cobros_reconciliar_reportados_cartera() -> None:
 
 
 def _job_recibos_conciliacion_email_diario() -> None:
-    """Diario Caracas: envío Recibos (misma lógica que POST /notificaciones/recibos/ejecutar para hoy)."""
-    if not getattr(settings, "ENABLE_RECIBOS_CONCILIACION_EMAIL_JOBS", False):
-        return
-    from app.core.database import SessionLocal
-    from app.services.recibos_conciliacion_email_job import job_recibos_programado_caracas
-
-    db = SessionLocal()
-    try:
-        job_recibos_programado_caracas(db)
-    except Exception as e:
-        logger.exception("[recibos] cron diario: %s", e)
-    finally:
-        db.close()
+    """Reservado: politicamente desactivado. Recibos solo por POST manual."""
+    logger.info(
+        "[scheduler] cron recibos omitido: politica solo-manual "
+        "(usar POST /notificaciones/recibos/ejecutar)"
+    )
+    return
 
 
 def start_scheduler() -> None:
@@ -679,40 +672,13 @@ def start_scheduler() -> None:
         _gmail_log = (
             "; Gmail pagos pendientes todos los dias cada hora :30 entre 06:30 y 19:30"
         )
-    _cron_2d_log = ""
-    if getattr(settings, "ENABLE_CRON_NOTIFICACIONES_2_DIAS_ANTES", False):
-        _h = int(getattr(settings, "CRON_2_DIAS_ANTES_HOUR", 7) or 7)
-        _m = int(getattr(settings, "CRON_2_DIAS_ANTES_MINUTE", 0) or 0)
-        _h = max(0, min(_h, 23))
-        _m = max(0, min(_m, 59))
-        _scheduler.add_job(
-            _wrap_job_with_timing(
-                "notificaciones_pago_2_dias_antes_diario",
-                _job_notificaciones_pago_2_dias_antes_cron,
-            ),
-            CronTrigger(hour=_h, minute=_m, timezone=SCHEDULER_TZ),
-            id="notificaciones_pago_2_dias_antes_diario",
-            name=f"Notificaciones: PAGO_2_DIAS_ANTES diario {_h:02d}:{_m:02d} Caracas",
-        )
-        _cron_2d_log = f"; notificaciones 2 dias antes diario {_h:02d}:{_m:02d} Caracas"
-    _recibos_cron_log = ""
-    if getattr(settings, "ENABLE_RECIBOS_CONCILIACION_EMAIL_JOBS", False):
-        _rh = int(getattr(settings, "RECIBOS_CRON_HOUR", 11) or 11)
-        _rm = int(getattr(settings, "RECIBOS_CRON_MINUTE", 50) or 50)
-        _rh = max(0, min(_rh, 23))
-        _rm = max(0, min(_rm, 59))
-        _scheduler.add_job(
-            _wrap_job_with_timing(
-                "recibos_conciliacion_email_diario",
-                _job_recibos_conciliacion_email_diario,
-            ),
-            CronTrigger(hour=_rh, minute=_rm, timezone=SCHEDULER_TZ),
-            id="recibos_conciliacion_email_diario",
-            name=f"Recibos: envío conciliación diario {_rh:02d}:{_rm:02d} Caracas",
-        )
-        _recibos_cron_log = f"; recibos conciliacion diario {_rh:02d}:{_rm:02d} Caracas"
-    # Otros envíos por pestaña (previas, mora, masivos): manual desde la UI (POST).
-    # PREJUDICIAL (60+ días) y PAGO_10_DIAS_ATRASADO: solo manual (sin cron ni enviar-todas).
+    # Politica: sin cron de notificaciones de cobranza (solo POST manual).
+    # ENABLE_CRON_NOTIFICACIONES_2_DIAS_ANTES se ignora a proposito.
+    _cron_2d_log = "; notificaciones cobranza: solo manual (cron 2d deshabilitado)"
+    # Politica: sin cron de Recibos (solo POST /notificaciones/recibos/ejecutar).
+    _recibos_cron_log = "; recibos: solo manual (cron deshabilitado)"
+    # Todos los envios de notificaciones/recibos: solo manual desde la UI (POST).
+    # Sin cron de cobranza ni de recibos aunque ENABLE_* este en True.
     _scheduler.start()
     _caches_notif_log = ""
     if getattr(settings, "ENABLE_ABONOS_DRIVE_CACHE_NIGHTLY", True):

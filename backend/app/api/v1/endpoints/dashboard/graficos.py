@@ -1846,10 +1846,11 @@ def get_desempeno_1_cuota_stock(
     db: Session = Depends(get_db),
 ):
     """
-    Dos cantidades por día (últimos `dias`, default 20):
+    Dos cantidades por día (últimos `dias`, default 20) — segmento 1 cuota:
 
-    - notificaciones: envíos SMTP exitosos (envios_notificacion / dias_10_retraso).
-    - morosos: nivel de cartera 1 cuota a las 00:00 de ese día (desempeño, no «nuevos»).
+    - morosos / stock_00h: nivel a las 00:00 (atraso 6–59, exactamente 1 cuota).
+    - notificaciones / stock_23h: de ese stock, cuántos siguen sin pagar a las 23:00.
+    Excluye titulares que el mismo día están en 2 cuotas (exclusión mutua).
     """
     return compute_desempeno_1_cuota_stock(db, dias)
 
@@ -1860,10 +1861,11 @@ def get_desempeno_2_cuotas_stock(
     db: Session = Depends(get_db),
 ):
     """
-    Dos cantidades por día (últimos `dias`, default 20) para 2 cuotas / PREJUDICIAL:
+    Dos cantidades por día (últimos `dias`, default 20) — segmento 2 cuotas:
 
-    - notificaciones: envíos SMTP exitosos (envios_notificacion / prejudicial).
-    - morosos: nivel de cartera 2 cuotas (atraso ≥60, exactamente 2) a las 00:00.
+    - morosos / stock_00h: nivel a las 00:00 (atraso ≥60, exactamente 2 cuotas).
+    - notificaciones / stock_23h: de ese stock, cuántos siguen sin pagar a las 23:00.
+    Prioridad frente a 1 cuota: no se recorta por exclusión mutua.
     """
     return compute_desempeno_2_cuotas_stock(db, dias)
 

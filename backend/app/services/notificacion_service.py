@@ -2,8 +2,8 @@
 Servicios para notificaciones de cuotas vencidas y en mora.
 Centraliza la lógica de serialización y filtrado de cuotas.
 Listados por pestaña: get_cuotas_pendientes_por_vencimientos (filtra en SQL por fechas);
-build_cuotas_pendiente_2_dias_antes_items (solo estado PENDIENTE, vence en 3 días; incluye
-    clientes al corriente — es el recordatorio preventivo de la pestaña «3 días antes»).
+build_cuotas_pendiente_2_dias_antes_items (PENDIENTE, vence en 3 días; solo si la cuota
+    anterior del préstamo fue impuntual — no notifica a quien estuvo al día).
 """
 import logging
 from collections import defaultdict
@@ -90,7 +90,7 @@ CUOTA_ESTADO_NO_PAGADA_PARA_NOTIF = or_(
 # Prejudicial (submenu Notificaciones «60 días o más» / ruta a-2-cuotas):
 # Condiciones innegociables:
 # - atraso calendario >= 60 días (fecha_vencimiento <= hoy − 60; encaja con menor-60 = 6–59)
-# - exactamente 2 cuotas impagas en el mismo préstamo con ese atraso
+# - exactamente 2 cuotas atrasadas TOTALES en el mismo préstamo, ambas con atraso >= 60
 # Excluye prestamos LIQUIDADO/DESISTIMIENTO y clientes con algun prestamo DESISTIMIENTO.
 # Permanecen todos los días mientras cumplan; salen al ponerse al día.
 ESTADOS_CUOTA_VENCIDO_Y_MORA = ("VENCIDO", "MORA")  # legado / diagnóstico
@@ -103,9 +103,12 @@ PREJUDICIAL_MIN_CUOTAS_VENCIDO_MORA = PREJUDICIAL_MIN_CUOTAS_CON_ATRASO_60
 
 def item_cumple_regla_prejudicial_estricta(item: dict, fecha_referencia: Optional[date] = None) -> bool:
     """
-    True solo si el item cumple las condiciones innegociables PREJUDICIAL:
-    - dias_atraso >= 60 (o fecha_vencimiento <= hoy-60)
+    Cinturon sobre un item ya armado (post select_prestamos_prejudicial):
     - total_cuotas_atrasadas == 2
+    - la cuota del item tiene atraso >= 60 (dias_atraso o fecha_vencimiento)
+
+    La garantia de que AMBAS cuotas van >= 60 la da select_prestamos_prejudicial
+    (n_ge_60 == 2 y total == 2); este helper no reconsulta la BD.
     """
     if not isinstance(item, dict):
         return False
@@ -161,6 +164,93 @@ def _select_cuotas_pendientes_con_cliente():
     )
 
 
+def _as_date_cuota(val) -> Optional[date]:
+    if val is None:
+        return None
+    if isinstance(val, datetime):
+        return val.date()
+    if isinstance(val, date):
+        return val
+    if isinstance(val, str) and val.strip():
+        try:
+            return date.fromisoformat(val.strip()[:10])
+        except ValueError:
+            return None
+    return None
+
+
+def cuota_fue_impuntual(cuota: Cuota, fecha_referencia: Optional[date] = None) -> bool:
+    """
+    True si la cuota NO se pago a tiempo:
+    - tiene fecha_pago posterior a fecha_vencimiento, o
+    - sigue sin fecha_pago y ya vencio (fecha_vencimiento < hoy).
+    """
+    fv = _as_date_cuota(getattr(cuota, "fecha_vencimiento", None))
+    if fv is None:
+        return False
+    hoy = fecha_referencia or hoy_negocio()
+    fp = _as_date_cuota(getattr(cuota, "fecha_pago", None))
+    if fp is not None:
+        return fp > fv
+    return fv < hoy
+
+
+def ultima_cuota_anterior_mismo_prestamo(
+    cuotas_prestamo: Sequence[Cuota], cuota_objetivo: Cuota
+) -> Optional[Cuota]:
+    """
+    Cuota inmediatamente anterior del mismo prestamo (mayor numero_cuota
+    estrictamente menor al de la cuota objetivo). Fallback por fecha_vencimiento.
+    """
+    if cuota_objetivo is None:
+        return None
+    try:
+        n_obj = int(getattr(cuota_objetivo, "numero_cuota", None) or 0)
+    except (TypeError, ValueError):
+        n_obj = 0
+    oid = getattr(cuota_objetivo, "id", None)
+    anteriores: List[Cuota] = []
+    for c in cuotas_prestamo or []:
+        if c is None or (oid is not None and getattr(c, "id", None) == oid):
+            continue
+        try:
+            n = int(getattr(c, "numero_cuota", None) or 0)
+        except (TypeError, ValueError):
+            n = 0
+        if n_obj > 0 and n > 0:
+            if n < n_obj:
+                anteriores.append(c)
+            continue
+        fv_c = _as_date_cuota(getattr(c, "fecha_vencimiento", None))
+        fv_o = _as_date_cuota(getattr(cuota_objetivo, "fecha_vencimiento", None))
+        if fv_c is not None and fv_o is not None and fv_c < fv_o:
+            anteriores.append(c)
+    if not anteriores:
+        return None
+    return max(
+        anteriores,
+        key=lambda c: (
+            int(getattr(c, "numero_cuota", None) or 0),
+            _as_date_cuota(getattr(c, "fecha_vencimiento", None)) or date.min,
+        ),
+    )
+
+
+def prestamo_califica_aviso_3_dias_antes_por_impuntualidad(
+    cuotas_prestamo: Sequence[Cuota],
+    cuota_proxima: Cuota,
+    fecha_referencia: Optional[date] = None,
+) -> bool:
+    """
+    True solo si la cuota inmediatamente anterior fue impuntual.
+    Sin cuota anterior (p. ej. primera cuota del prestamo) no califica:
+    no hay evidencia de impuntualidad.
+    """
+    prev = ultima_cuota_anterior_mismo_prestamo(cuotas_prestamo, cuota_proxima)
+    if prev is None:
+        return False
+    return cuota_fue_impuntual(prev, fecha_referencia)
+
 def build_cuotas_pendiente_2_dias_antes_items(
     db: Session, fecha_referencia: Optional[date] = None
 ) -> List[dict]:
@@ -168,9 +258,10 @@ def build_cuotas_pendiente_2_dias_antes_items(
     Cuotas con columna estado = PENDIENTE cuya fecha_vencimiento es exactamente
     hoy + 3 días (Caracas). Sin fecha_pago, saldo > tolerancia, préstamo no liquidado/desistimiento.
 
-    Incluye también clientes al corriente (cuotas_atrasadas = 0): el aviso «3 días antes»
-    es preventivo; antes se excluían y el envío quedaba vacío la mayoría de los días.
-    Una fila por cuota (misma forma que otras pestañas de notificaciones).
+    Filtro de negocio: solo clientes que fueron «impuntuales» en la cuota
+    inmediatamente anterior del mismo préstamo (fecha_pago > vencimiento, o sigue
+    vencida sin pagar). Si estuvo al día en esa última cuota, no se notifica
+    (se da por puntual). Sin cuota anterior (p. ej. 1.ª cuota) no califica.
 
     Nota: el nombre de función/ruta conserva «2_dias» por compatibilidad de API y config
     (PAGO_2_DIAS_ANTES_PENDIENTE); el criterio de fecha es hoy + 3.
@@ -189,6 +280,23 @@ def build_cuotas_pendiente_2_dias_antes_items(
         .where(sql_cliente_sin_desistimiento())
     )
     rows = db.execute(q).all()
+    if not rows:
+        return []
+    pids = sorted({int(c.prestamo_id) for c, _ in rows if c.prestamo_id is not None})
+    cuotas_por_pid: Dict[int, List[Cuota]] = defaultdict(list)
+    if pids:
+        for c in db.execute(select(Cuota).where(Cuota.prestamo_id.in_(pids))).scalars().all():
+            if c.prestamo_id is not None:
+                cuotas_por_pid[int(c.prestamo_id)].append(c)
+    rows = [
+        (cuota, cliente)
+        for cuota, cliente in rows
+        if prestamo_califica_aviso_3_dias_antes_por_impuntualidad(
+            cuotas_por_pid.get(int(cuota.prestamo_id), []) if cuota.prestamo_id is not None else [],
+            cuota,
+            hoy,
+        )
+    ]
     if not rows:
         return []
     pids = [c.prestamo_id for c, _ in rows]
@@ -499,15 +607,27 @@ def get_primer_item_ejemplo_paquete_prueba(db: Session, tipo: str) -> Optional[d
             pids = sorted({int(r[0].prestamo_id) for r in rows if r and r[0] is not None})
             counts = contar_cuotas_atraso_por_prestamos(db, pids, fecha_referencia=hoy)
             totales = sum_saldo_pendiente_total_por_prestamos(db, pids)
-            cuota, cliente = rows[0][0], rows[0][1]
-            return format_cuota_item(
-                cliente,
-                cuota,
-                dias_atraso=1,
-                cuotas_atrasadas=counts.get(cuota.prestamo_id, 0),
-                for_tab=True,
-                total_pendiente_pagar=totales.get(cuota.prestamo_id),
+            from app.services.notificaciones_dedup_segmentos import (
+                clientes_en_regla_prejudicial,
+                item_excluido_por_prejudicial_en_envio,
             )
+
+            cids_prej, ceds_prej = clientes_en_regla_prejudicial(db, hoy)
+            for cuota, cliente in ((r[0], r[1]) for r in rows):
+                item = format_cuota_item(
+                    cliente,
+                    cuota,
+                    dias_atraso=1,
+                    cuotas_atrasadas=counts.get(cuota.prestamo_id, 0),
+                    for_tab=True,
+                    total_pendiente_pagar=totales.get(cuota.prestamo_id),
+                )
+                if item_excluido_por_prejudicial_en_envio(
+                    "PAGO_1_DIA_ATRASADO", item, cids_prej, ceds_prej
+                ):
+                    continue
+                return item
+            return None
 
         # PAGO_10_DIAS_ATRASADO: 1 cuota en mora con atraso 6..59 días (menor a 60).
         fv_max = hoy - timedelta(days=MIN_DIAS_ATRASO_PARA_LISTADO_10_DIAS)
@@ -532,6 +652,12 @@ def get_primer_item_ejemplo_paquete_prueba(db: Session, tipo: str) -> Optional[d
         pids = sorted({int(r[0].prestamo_id) for r in rows if r and r[0] is not None})
         counts = contar_cuotas_atraso_por_prestamos(db, pids, fecha_referencia=hoy)
         totales = sum_saldo_pendiente_total_por_prestamos(db, pids)
+        from app.services.notificaciones_dedup_segmentos import (
+            clientes_en_regla_prejudicial,
+            item_excluido_por_prejudicial_en_envio,
+        )
+
+        cids_prej, ceds_prej = clientes_en_regla_prejudicial(db, hoy)
         for row in rows:
             cuota, cliente = row[0], row[1]
             ca = counts.get(cuota.prestamo_id, 0)
@@ -543,7 +669,7 @@ def get_primer_item_ejemplo_paquete_prueba(db: Session, tipo: str) -> Optional[d
             dias_atraso = (hoy - fv).days
             if not cuota_aplica_listado_10_dias_por_dias_atraso(dias_atraso):
                 continue
-            return format_cuota_item(
+            item = format_cuota_item(
                 cliente,
                 cuota,
                 dias_atraso=dias_atraso,
@@ -551,6 +677,11 @@ def get_primer_item_ejemplo_paquete_prueba(db: Session, tipo: str) -> Optional[d
                 for_tab=True,
                 total_pendiente_pagar=totales.get(cuota.prestamo_id),
             )
+            if item_excluido_por_prejudicial_en_envio(
+                "PAGO_10_DIAS_ATRASADO", item, cids_prej, ceds_prej
+            ):
+                continue
+            return item
         return None
 
     if tipo == "PAGO_2_DIAS_ANTES_PENDIENTE":
@@ -558,56 +689,39 @@ def get_primer_item_ejemplo_paquete_prueba(db: Session, tipo: str) -> Optional[d
         return items[0] if items else None
 
     if tipo == "PREJUDICIAL":
-        # Titular: al menos 2 cuotas impagas con atraso >= 60 en el MISMO préstamo.
-        fv_max = hoy - timedelta(days=MIN_DIAS_ATRASO_PREJUDICIAL)
-        subq = (
-            select(
-                Prestamo.id.label("prestamo_id"),
-                Prestamo.cliente_id,
-                func.count(Cuota.id).label("total"),
-            )
-            .select_from(Cuota)
-            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
-            .where(
-                Cuota.fecha_pago.is_(None),
-                CUOTA_ESTADO_NO_PAGADA_PARA_NOTIF,
-                Cuota.fecha_vencimiento.isnot(None),
-                Cuota.fecha_vencimiento <= fv_max,
-                SALDO_PENDIENTE_CUOTA > TOL_SALDO_CUOTA_NOTIFICACION,
-                _prestamo_no_excluido_notif(),
-                sql_cliente_sin_desistimiento(),
-            )
-            .group_by(Prestamo.id, Prestamo.cliente_id)
-            .having(
-                func.count(Cuota.id) >= PREJUDICIAL_MIN_CUOTAS_CON_ATRASO_60,
-                func.count(Cuota.id) <= PREJUDICIAL_MAX_CUOTAS_CON_ATRASO_60,
-            )
-            .limit(1)
+        # Misma regla canónica que listado/envio (exactamente 2 totales, ambas >= 60).
+        from app.services.notificaciones_dedup_segmentos import (
+            select_prestamos_prejudicial,
         )
-        row = db.execute(subq).first()
-        if not row:
+
+        rows = select_prestamos_prejudicial(db, fecha_referencia=hoy)
+        if not rows:
             return None
-        prestamo_id, cliente_id, total_cuotas = int(row[0]), row[1], int(row[2] or 0)
+        prestamo_id, cliente_id, total_cuotas = rows[0]
         cliente = db.get(Cliente, cliente_id)
         if not cliente:
             return None
-        primera = db.execute(
-            select(Cuota)
-            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
-            .where(
-                Prestamo.id == prestamo_id,
-                Cuota.fecha_pago.is_(None),
-                CUOTA_ESTADO_NO_PAGADA_PARA_NOTIF,
-                Cuota.fecha_vencimiento.isnot(None),
-                Cuota.fecha_vencimiento <= fv_max,
-                SALDO_PENDIENTE_CUOTA > TOL_SALDO_CUOTA_NOTIFICACION,
-                _prestamo_no_excluido_notif(),
-                sql_cliente_sin_desistimiento(),
+        fv_max = hoy - timedelta(days=MIN_DIAS_ATRASO_PREJUDICIAL)
+        cuota_ref = (
+            db.execute(
+                select(Cuota)
+                .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+                .where(
+                    Prestamo.id == prestamo_id,
+                    Cuota.fecha_pago.is_(None),
+                    CUOTA_ESTADO_NO_PAGADA_PARA_NOTIF,
+                    Cuota.fecha_vencimiento.isnot(None),
+                    Cuota.fecha_vencimiento <= fv_max,
+                    SALDO_PENDIENTE_CUOTA > TOL_SALDO_CUOTA_NOTIFICACION,
+                    _prestamo_no_excluido_notif(),
+                    sql_cliente_sin_desistimiento(),
+                )
+                .order_by(Cuota.fecha_vencimiento.asc())
+                .limit(1)
             )
-            .order_by(Cuota.fecha_vencimiento.asc())
-            .limit(1)
-        ).scalars().first()
-        cuota_ref = primera
+            .scalars()
+            .first()
+        )
         if not cuota_ref:
             return None
         pid = getattr(cuota_ref, "prestamo_id", None) or prestamo_id
@@ -625,7 +739,7 @@ def get_primer_item_ejemplo_paquete_prueba(db: Session, tipo: str) -> Optional[d
             for_tab=True,
             total_pendiente_pagar=totales_p.get(pid) if pid else None,
         )
-        item["total_cuotas_atrasadas"] = total_cuotas
+        item["total_cuotas_atrasadas"] = int(total_cuotas)
         item["prestamo_id"] = int(pid) if pid else None
         if not item_cumple_regla_prejudicial_estricta(item, hoy):
             return None

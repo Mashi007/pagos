@@ -1039,9 +1039,13 @@ async def enviar_reporte_publico(
             db_post.commit()
 
             recibo_enviado_val = None
+            # Siempre intentar cargar a `pagos` si hay datos reales (aprobado=cascada;
+            # en_revision cargable=PENDIENTE sin cascada). Evita limbo de reportado.
+            cpr.intentar_importar_reportado_automatico(
+                db_post, pr, referencia, "COBROS_PUBLIC"
+            )
+            db_post.refresh(pr)
             if not falla_validadores:
-                cpr.intentar_importar_reportado_automatico(db_post, pr, referencia, "COBROS_PUBLIC")
-                db_post.refresh(pr)
                 if (pr.estado or "").strip() == "importado":
                     pr.falla_validadores_manual = False
                 if cliente is not None:
@@ -1052,7 +1056,7 @@ async def enviar_reporte_publico(
                         int(cliente.id),
                         "COBROS_PUBLIC",
                     )
-                db_post.commit()
+            db_post.commit()
 
             db_post.refresh(pr)
             return EnviarReporteResponse(
@@ -1438,17 +1442,21 @@ async def enviar_reporte_infopagos(
             else:
                 phase_ms["marcar_borrador_ms"] = 0.0
 
+            autoimport_started = perf_counter()
+            auto_import_result = cpr.intentar_importar_reportado_automatico(
+                db_post, pr, referencia, "INFOPAGOS"
+            )
+            phase_ms["autoimport_ms"] = _elapsed_ms(autoimport_started)
+            db_post.refresh(pr)
+
             if not falla_validadores:
-                autoimport_started = perf_counter()
-                auto_import_result = cpr.intentar_importar_reportado_automatico(
-                    db_post, pr, referencia, "INFOPAGOS"
-                )
-                phase_ms["autoimport_ms"] = _elapsed_ms(autoimport_started)
                 if (pr.estado or "").strip() == "importado":
                     pr.falla_validadores_manual = False
                 cuotas_lookup_started = perf_counter()
                 if auto_import_result.pago_id:
-                    cuotas_display = texto_cuotas_aplicadas_pago_id(db_post, auto_import_result.pago_id)
+                    cuotas_display = texto_cuotas_aplicadas_pago_id(
+                        db_post, auto_import_result.pago_id
+                    )
                 else:
                     cuotas_display = texto_cuotas_aplicadas_pago_reportado(db_post, pr)
                 phase_ms["cuotas_lookup_ms"] = _elapsed_ms(cuotas_lookup_started)
@@ -1475,23 +1483,33 @@ async def enviar_reporte_infopagos(
                     mensaje="Pago registrado. El recibo se está generando y enviando al correo del deudor. Puede descargarlo aquí cuando esté listo.",
                     recibo_descarga_token=recibo_token,
                     pago_id=pr.id,
-                    aplicado_a_cuotas=(cuotas_display or "").strip() or RECIBO_TEXTO_CUOTA_EN_REVISION_CLIENTE,
+                    aplicado_a_cuotas=(cuotas_display or "").strip()
+                    or RECIBO_TEXTO_CUOTA_EN_REVISION_CLIENTE,
                     estado_reportado="aprobado",
                     recibo_listo=False,
                 )
 
+            db_post.commit()
             _log_infopagos_timing("en_revision", referencia, pr)
+            cargado = (pr.estado or "").strip() == "importado" or bool(
+                auto_import_result.pago_id
+            )
             return EnviarReporteInfopagosResponse(
                 ok=True,
                 referencia_interna=referencia,
                 mensaje=(
-                    "Reporte recibido. El comprobante quedó en revisión manual (mismo flujo que Pagos reportados). "
-                    "No se envía recibo al deudor ni descarga aquí hasta que cobranzas apruebe."
+                    "Reporte recibido y cargado a cartera como pago pendiente de aplicar a cuotas. "
+                    "No se envía recibo al deudor hasta revisión/aplicación."
+                    if cargado
+                    else (
+                        "Reporte recibido. El comprobante quedó en revisión manual "
+                        "(datos incompletos). No se envía recibo al deudor hasta que cobranzas apruebe."
+                    )
                 ),
                 recibo_descarga_token=None,
-                pago_id=None,
+                pago_id=pr.id if cargado else None,
                 aplicado_a_cuotas=None,
-                estado_reportado="en_revision",
+                estado_reportado=(pr.estado or "").strip() or "en_revision",
                 recibo_listo=None,
             )
         except Exception:

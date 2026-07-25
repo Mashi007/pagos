@@ -44,7 +44,7 @@ from app.models.envio_notificacion import EnvioNotificacion
 from app.services.envio_notificacion_snapshot import persistir_snapshot_envio_notificacion
 from app.services.notificaciones_envios_store import coerce_modo_pruebas_notificaciones
 from app.services.notificaciones_exclusion_desistimiento import (
-    cliente_tiene_prestamo_desistimiento,
+    cliente_ids_bloqueados_para_notificacion,
 )
 from app.services.carta_cobranza_pdf import generar_carta_cobranza_pdf
 from app.services.adjunto_fijo_cobranza import get_adjunto_fijo_cobranza_bytes, get_adjuntos_fijos_por_caso
@@ -287,7 +287,7 @@ def enviar_notificaciones_retrasadas(
     return {"mensaje": "Env�o de notificaciones retrasadas finalizado.", **res}
 
 
-# --- Notificaciones prejudiciales (60+ días de atraso en 1+ cuotas) ---
+# --- Notificaciones prejudiciales (2 Cuotas: exactamente 2 atrasadas, ambas >=60) ---
 
 @router_prejudicial.get("")
 def get_notificaciones_prejudicial(
@@ -295,7 +295,7 @@ def get_notificaciones_prejudicial(
     fecha_caracas: Optional[str] = _FC_Q,
     db: Session = Depends(get_db),
 ):
-    """Lista PREJUDICIAL estricta: >=60 días y >=2 cuotas impagas en el mismo préstamo."""
+    """Lista PREJUDICIAL estricta: exactamente 2 cuotas atrasadas totales, ambas >=60 días."""
     fecha_ref = _fecha_referencia_desde_query(fecha_caracas)
     items = build_prejudicial_items(db, fecha_referencia=fecha_ref)
     return {"items": items, "total": len(items)}
@@ -347,6 +347,7 @@ def get_items_masivos(db: Session) -> List[dict]:
 
     Fuente principal: vista vw_notificaciones_masivos_contactos (sincronizada en 2 vias).
     Fallback de compatibilidad: tabla clientes si la vista aun no existe.
+    Excluye clientes con DESISTIMIENTO o sin cartera activa (solo LIQUIDADO).
     """
     items: List[dict] = []
 
@@ -354,7 +355,7 @@ def get_items_masivos(db: Session) -> List[dict]:
         rows = db.execute(
             text(
                 """
-                SELECT id, cliente_id, cedula, nombre, email, email_secundario, telefono, updated_at
+                SELECT id, cliente_id, cedula, nombre, email, telefono, updated_at
                 FROM vw_notificaciones_masivos_contactos
                 ORDER BY nombre ASC, id ASC
                 """
@@ -365,7 +366,10 @@ def get_items_masivos(db: Session) -> List[dict]:
             correos = lista_correo_principal_para_notificaciones(em)
             if not correos:
                 continue
-            _, correo_sec = secundario_distinto_del_principal(em, str(r.get("email_secundario") or "").strip() or None)
+            # La vista puede no exponer email_secundario; no fallar por eso.
+            _, correo_sec = secundario_distinto_del_principal(
+                em, str(r.get("email_secundario") or "").strip() or None
+            )
             items.append(
                 {
                     "cliente_id": r.get("cliente_id"),
@@ -379,12 +383,16 @@ def get_items_masivos(db: Session) -> List[dict]:
                     "estado": "COMUNICACION_GENERAL",
                 }
             )
-        return [
-            it
-            for it in items
-            if not cliente_tiene_prestamo_desistimiento(db, it.get("cliente_id"))
-        ]
+        bloq = cliente_ids_bloqueados_para_notificacion(
+            db,
+            {it.get("cliente_id") for it in items if it.get("cliente_id") is not None},
+        )
+        return [it for it in items if it.get("cliente_id") not in bloq]
     except Exception:
+        try:
+            db.rollback()
+        except Exception:
+            pass
         logger.warning(
             "get_items_masivos: vista vw_notificaciones_masivos_contactos no disponible; usando fallback clientes",
             exc_info=True,
@@ -419,11 +427,11 @@ def get_items_masivos(db: Session) -> List[dict]:
                 "estado": "COMUNICACION_GENERAL",
             }
         )
-    return [
-        it
-        for it in items
-        if not cliente_tiene_prestamo_desistimiento(db, it.get("cliente_id"))
-    ]
+    bloq = cliente_ids_bloqueados_para_notificacion(
+        db,
+        {it.get("cliente_id") for it in items if it.get("cliente_id") is not None},
+    )
+    return [it for it in items if it.get("cliente_id") not in bloq]
 
 
 def _tipo_masivos(_item: dict) -> str:
@@ -619,9 +627,12 @@ TIPOS_CASO_MANUAL = frozenset(
     }
 )
 
-# Solo POST /enviar-caso-manual (submodulo dedicado). Nunca cron ni POST /enviar-todas.
+# Politica producto: cobranza por segmento SOLO manual (POST /enviar-caso-manual
+# o POST dedicado de la pestana). Nunca cron ni POST /enviar-todas.
 TIPOS_NOTIFICACION_SOLO_ENVIO_MANUAL = frozenset(
     {
+        "PAGO_2_DIAS_ANTES_PENDIENTE",
+        "PAGO_1_DIA_ATRASADO",
         "PAGO_10_DIAS_ATRASADO",
         "PREJUDICIAL",
     }
@@ -833,6 +844,12 @@ def ejecutar_envio_caso_manual(
                 item_cumple_regla_menor_60_estricta as _ok_m60,
             )
             items = [it for it in items if _ok_m60(it, ref)]
+            from app.services.notificaciones_dedup_segmentos import (
+                filtrar_items_menor_60_sin_prejudicial as _sin_prej,
+            )
+
+            # Sin duplicar: el titular que ya esta en 2 Cuotas no recibe 1 Cuota.
+            items = _sin_prej(db, items, ref)
             res = _enviar_correos_items(
                 items,
                 asunto_ret,
@@ -861,8 +878,7 @@ def ejecutar_envio_todas_notificaciones(db: Session) -> dict:
     CCO, modo pruebas, etc.); no se mezclan entre si.
 
     No incluye PAGO_2_DIAS_ANTES_PENDIENTE (2 dias antes del vencimiento), que tiene envio propio.
-    No incluye tipos en TIPOS_NOTIFICACION_SOLO_ENVIO_MANUAL (PAGO_10_DIAS_ATRASADO /
-    menor a 60 dias, PREJUDICIAL / 60 dias o mas): solo POST /enviar-caso-manual
+    No incluye tipos en TIPOS_NOTIFICACION_SOLO_ENVIO_MANUAL (3 dias antes, dia siguiente, 1 Cuota, 2 Cuotas): solo POST /enviar-caso-manual
     (o POST notificaciones-prejudicial/enviar) desde el submodulo dedicado.
     Sin cron ni programador de servidor para esos tipos.
 
@@ -926,28 +942,17 @@ def ejecutar_envio_todas_notificaciones(db: Session) -> dict:
     total_whatsapp_fail += r.get("fallidos_whatsapp", 0)
     detalles["dia_pago"] = r
 
-    # Retrasadas (1 dia de atraso)
-    # Sin dias_10_retraso en enviar-todas: PAGO_10_DIAS_ATRASADO solo por enviar-caso-manual (submodulo dedicado).
-    items_retrasadas = list(data["dias_1_retraso"])
-    asunto_r = "Cuenta con cuota atrasada - Rapicredit"
-    cuerpo_r = (
-        "Estimado/a {nombre} (c�dula {cedula}),\n\n"
-        "Le recordamos que tiene una cuota en mora.\n"
-        "Fecha de vencimiento: {fecha_vencimiento}\n"
-        "N�mero de cuota: {numero_cuota}\n"
-        "Monto: {monto}\n\n"
-        "Por favor regularice su pago lo antes posible.\n\n"
-        "Saludos,\nRapicredit"
-    )
-    r = _enviar_correos_items(items_retrasadas, asunto_r, cuerpo_r, config_envios, _tipo_retrasadas, db)
-    total_enviados += r.get("enviados", 0)
-    total_fallidos += r.get("fallidos", 0)
-    total_sin_email += r.get("sin_email", 0)
-    total_omitidos_config += r.get("omitidos_config", 0)
-    total_omitidos_paquete += r.get("omitidos_paquete_incompleto", 0)
-    total_whatsapp_ok += r.get("enviados_whatsapp", 0)
-    total_whatsapp_fail += r.get("fallidos_whatsapp", 0)
-    detalles["retrasadas"] = r
+    # Retrasadas (1 dia): PAGO_1_DIA_ATRASADO esta en TIPOS_NOTIFICACION_SOLO_ENVIO_MANUAL.
+    # No se envia en este lote; solo POST /enviar-caso-manual (o pestana retrasadas dedicada).
+    detalles["retrasadas"] = {
+        "enviados": 0,
+        "fallidos": 0,
+        "sin_email": 0,
+        "omitidos_config": 0,
+        "omitidos_paquete_incompleto": 0,
+        "omitido_solo_manual": True,
+        "motivo": "PAGO_1_DIA_ATRASADO solo envio manual",
+    }
 
     # Sin prejudicial en enviar-todas: PREJUDICIAL (60 dias o mas) solo por
     # enviar-caso-manual / POST notificaciones-prejudicial/enviar (submodulo dedicado).

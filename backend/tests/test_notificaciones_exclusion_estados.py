@@ -5,6 +5,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 from app.services.notificaciones_exclusion_desistimiento import (
+    cliente_ids_bloqueados_para_notificacion,
     cliente_sin_cartera_activa_notif,
     item_bloqueado_para_envio_notificacion,
     motivo_bloqueo_prestamo_notificacion,
@@ -120,3 +121,25 @@ def test_item_no_bloqueado_aprobado():
     )
     assert bloqueado is False
     assert motivo == ""
+
+
+def test_cliente_ids_bloqueados_batch():
+    """Batch: DESISTIMIENTO + solo-LIQUIDADO; deja pasar con cartera activa."""
+    db = MagicMock()
+    results = [
+        [(1,)],
+        [(2,)],
+        [(1,), (2,), (3,)],
+    ]
+    calls = {"i": 0}
+
+    def _exec(stmt):
+        i = calls["i"]
+        calls["i"] += 1
+        m = MagicMock()
+        m.all.return_value = results[i]
+        return m
+
+    db.execute.side_effect = _exec
+    bloq = cliente_ids_bloqueados_para_notificacion(db, {1, 2, 3, 4})
+    assert bloq == {1, 3}
