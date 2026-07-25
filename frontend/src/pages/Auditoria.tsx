@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 
 import {
   Shield,
@@ -10,6 +11,9 @@ import {
   Activity,
   BarChart3,
   Loader2,
+  CheckCircle,
+  Mail,
+  Scale,
 } from 'lucide-react'
 
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
@@ -46,7 +50,6 @@ import {
 } from '../services/auditoriaService'
 
 import { toast } from 'sonner'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
 
 import { AuditoriaCarteraTab } from '../components/auditoria/AuditoriaCarteraTab'
 import { AuditoriaLiquidadosIntensivaTab } from '../components/auditoria/AuditoriaLiquidadosIntensivaTab'
@@ -73,11 +76,90 @@ function labelUsuarioAuditoria(a: AuditoriaType): string {
   return 'N/A'
 }
 
+type AuditoriaTab = 'cartera' | 'liquidados' | 'rebotes-gmail' | 'sistema'
+
+const AUDITORIA_TAB_META: Record<
+  AuditoriaTab,
+  {
+    title: string
+    description: string
+    icon: typeof Shield
+  }
+> = {
+  cartera: {
+    title: 'Revisión de cartera',
+    description:
+      'Controles de cartera desde la base de datos (descuadres, estados y correcciones).',
+    icon: Scale,
+  },
+  liquidados: {
+    title: 'Liquidados (intensiva)',
+    description:
+      'Auditoría intensiva de préstamos liquidados y consistencia de pagos/cuotas.',
+    icon: CheckCircle,
+  },
+  'rebotes-gmail': {
+    title: 'Rebotes Gmail',
+    description: 'Revisión de rebotes de correo detectados en Gmail.',
+    icon: Mail,
+  },
+  sistema: {
+    title: 'Registro del sistema',
+    description: 'Histor de acciones de usuarios y módulos del sistema.',
+    icon: Shield,
+  },
+}
+
+function tabPorDefecto(puedeAvanzadas: boolean): AuditoriaTab {
+  return puedeAvanzadas ? 'cartera' : 'sistema'
+}
+
+function parseAuditoriaTab(raw: string | null): AuditoriaTab | null {
+  if (
+    raw === 'cartera' ||
+    raw === 'liquidados' ||
+    raw === 'rebotes-gmail' ||
+    raw === 'sistema'
+  ) {
+    return raw
+  }
+  return null
+}
+
 export function Auditoria() {
   const { user } = useSimpleAuth()
+  const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const rolCanon = canonicalRol(user?.rol)
   const puedeTabsAvanzadas = rolCanon === 'admin' || rolCanon === 'manager'
   const puedeRebotesGmail = rolCanon === 'admin'
+
+  const tabParam = searchParams.get('tab')
+  const tabParsed = parseAuditoriaTab(tabParam)
+  const tabAuditoria: AuditoriaTab =
+    tabParsed ?? tabPorDefecto(puedeTabsAvanzadas)
+
+  useEffect(() => {
+    const defaultTab = tabPorDefecto(puedeTabsAvanzadas)
+    const parsed = parseAuditoriaTab(tabParam)
+
+    if (!parsed) {
+      navigate(`/auditoria?tab=${defaultTab}`, { replace: true })
+      return
+    }
+
+    if (
+      (parsed === 'cartera' || parsed === 'liquidados') &&
+      !puedeTabsAvanzadas
+    ) {
+      navigate('/auditoria?tab=sistema', { replace: true })
+      return
+    }
+
+    if (parsed === 'rebotes-gmail' && !puedeRebotesGmail) {
+      navigate(`/auditoria?tab=${defaultTab}`, { replace: true })
+    }
+  }, [tabParam, puedeTabsAvanzadas, puedeRebotesGmail, navigate])
 
   const [auditorias, setAuditorias] = useState<AuditoriaType[]>([])
 
@@ -92,10 +174,6 @@ export function Auditoria() {
   const [currentPage, setCurrentPage] = useState(1)
 
   const [pageSize] = useState(50)
-
-  const [tabAuditoria, setTabAuditoria] = useState(
-    puedeTabsAvanzadas ? 'cartera' : 'sistema'
-  )
 
   // Filtros
 
@@ -335,61 +413,31 @@ export function Auditoria() {
 
   const totalPages = Math.ceil(total / pageSize)
 
+  const meta = AUDITORIA_TAB_META[tabAuditoria]
+  const HeaderIcon = meta.icon
+
   return (
     <div className="space-y-6">
       <ModulePageHeader
-        icon={Shield}
-        title="Auditoria"
-        description="Revision de cartera (controles desde la base de datos) y registro de acciones del sistema."
+        icon={HeaderIcon}
+        title={meta.title}
+        description={meta.description}
       />
 
-      <Tabs
-        value={tabAuditoria}
-        onValueChange={setTabAuditoria}
-        className="w-full"
-      >
-        <TabsList
-          className={
-            rolCanon === 'admin'
-              ? 'grid w-full max-w-4xl grid-cols-4'
-              : puedeTabsAvanzadas
-                ? 'grid w-full max-w-3xl grid-cols-3'
-                : 'grid w-full max-w-md grid-cols-1'
-          }
-        >
-          {puedeTabsAvanzadas && (
-            <>
-              <TabsTrigger value="cartera">Revision de cartera</TabsTrigger>
-              <TabsTrigger value="liquidados">
-                Liquidados (intensiva)
-              </TabsTrigger>
-            </>
-          )}
-          {puedeRebotesGmail && (
-            <TabsTrigger value="rebotes-gmail">Rebotes Gmail</TabsTrigger>
-          )}
-          <TabsTrigger value="sistema">Registro del sistema</TabsTrigger>
-        </TabsList>
+      {puedeTabsAvanzadas && tabAuditoria === 'cartera' && (
+        <AuditoriaCarteraTab />
+      )}
 
-        {puedeTabsAvanzadas && (
-          <>
-            <TabsContent value="cartera" className="mt-4" forceMount>
-              <AuditoriaCarteraTab />
-            </TabsContent>
+      {puedeTabsAvanzadas && tabAuditoria === 'liquidados' && (
+        <AuditoriaLiquidadosIntensivaTab />
+      )}
 
-            <TabsContent value="liquidados" className="mt-4" forceMount>
-              <AuditoriaLiquidadosIntensivaTab />
-            </TabsContent>
-          </>
-        )}
+      {puedeRebotesGmail && tabAuditoria === 'rebotes-gmail' && (
+        <AuditoriaRebotesGmailTab />
+      )}
 
-        {puedeRebotesGmail && (
-          <TabsContent value="rebotes-gmail" className="mt-4">
-            <AuditoriaRebotesGmailTab />
-          </TabsContent>
-        )}
-
-        <TabsContent value="sistema" className="mt-4 space-y-6">
+      {tabAuditoria === 'sistema' && (
+        <div className="space-y-6">
           <div className="flex flex-wrap gap-2">
             <Button
               onClick={() => cargarEstadisticas(true)}
@@ -792,8 +840,8 @@ export function Auditoria() {
               )}
             </CardContent>
           </Card>
-        </TabsContent>
-      </Tabs>
+        </div>
+      )}
     </div>
   )
 }

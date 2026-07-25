@@ -1523,7 +1523,9 @@ export default function CobrosPagosReportadosPage() {
     const byId = new Map(itemsTabla.map(r => [r.id, r]))
     const elegibles = ids
       .map(id => byId.get(id))
-      .filter((r): r is PagoReportadoItem => Boolean(r && puedeReescanearMasivoRow(r)))
+      .filter((r): r is PagoReportadoItem =>
+        Boolean(r && puedeReescanearMasivoRow(r))
+      )
     if (!elegibles.length) {
       toast.error(
         'Ningún seleccionado tiene comprobante para reescanear (solo pendiente / en revisión).'
@@ -1614,10 +1616,7 @@ export default function CobrosPagosReportadosPage() {
           moneda?: string
         } = {}
         let fechaParaPatch = (merged.fechaPago || '').trim().slice(0, 10)
-        if (
-          !fechaParaPatch ||
-          esFechaMarcadorRevisionCobros(fechaParaPatch)
-        ) {
+        if (!fechaParaPatch || esFechaMarcadorRevisionCobros(fechaParaPatch)) {
           const desdeDcme = fechaPagoDesdeBloqueDcmeMercantil(
             `${merged.numeroOperacion}\n${res.sugerencia.notas_modelo || ''}`
           )
@@ -1630,10 +1629,7 @@ export default function CobrosPagosReportadosPage() {
             fechaParaPatch = ''
           }
         }
-        if (
-          fechaParaPatch &&
-          !esFechaMarcadorRevisionCobros(fechaParaPatch)
-        ) {
+        if (fechaParaPatch && !esFechaMarcadorRevisionCobros(fechaParaPatch)) {
           payload.fecha_pago = fechaParaPatch
         }
         if (merged.institucion.trim()) {
@@ -2496,7 +2492,9 @@ export default function CobrosPagosReportadosPage() {
                                   toggleRowSelected(row.id, e.target.checked)
                                 }
                                 disabled={
-                                  bulkApproving || bulkRescanning || changingEstadoId === row.id
+                                  bulkApproving ||
+                                  bulkRescanning ||
+                                  changingEstadoId === row.id
                                 }
                                 aria-label={
                                   'Seleccionar reporte ' +

@@ -19,7 +19,7 @@ export function ConfigAuditoriaTab() {
     <div className="space-y-6">
       <ConfigTabManualStrip note="La auditoría operativa se consulta manualmente en el módulo correspondiente.">
         <Button variant="default" size="sm" asChild>
-          <Link to="/auditoria">
+          <Link to="/auditoria?tab=cartera">
             <FileText className="mr-2 h-4 w-4" />
             Abrir auditoría
           </Link>

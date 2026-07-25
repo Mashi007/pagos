@@ -78,6 +78,9 @@ interface MenuItem {
   /** Solo visible si el usuario es administrador (p. ej. Finiquito gestión). */
   adminOnly?: boolean
 
+  /** Solo visible para administrador o gerente (no operador/visualizador). */
+  managerOrAdminOnly?: boolean
+
   /** Si true, el href es una URL externa que abre en nueva pestaña. */
   external?: boolean
 
@@ -367,9 +370,35 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
     {
       title: 'Auditoría',
 
-      href: '/auditoria',
-
       icon: Shield,
+
+      isSubmenu: true,
+
+      children: [
+        {
+          title: 'Revisión de cartera',
+          href: '/auditoria?tab=cartera',
+          icon: Scale,
+          managerOrAdminOnly: true,
+        },
+        {
+          title: 'Liquidados (intensiva)',
+          href: '/auditoria?tab=liquidados',
+          icon: CheckCircle,
+          managerOrAdminOnly: true,
+        },
+        {
+          title: 'Rebotes Gmail',
+          href: '/auditoria?tab=rebotes-gmail',
+          icon: Mail,
+          adminOnly: true,
+        },
+        {
+          title: 'Registro del sistema',
+          href: '/auditoria?tab=sistema',
+          icon: Shield,
+        },
+      ],
     },
 
     {
@@ -460,6 +489,9 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
           if (item.isSubmenu && item.children) {
             const children = item.children.filter(child => {
               if (!child.href) return false
+              if (child.managerOrAdminOnly) {
+                if (!isAdmin && !isManagerRole(user?.rol)) return false
+              }
               if (child.adminOnly) {
                 if (isAdmin) return isHrefDelegatedForRol(user?.rol, child.href)
                 const isFiniquitosGestion =

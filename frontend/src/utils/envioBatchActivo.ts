@@ -22,9 +22,11 @@ export function envioBatchSigueActivoUi(
     typeof ultimo.detalles === 'object' && ultimo.detalles !== null
       ? (ultimo.detalles as Record<string, unknown>)
       : null
-  let enProc =
-    estado === 'en_proceso' || Boolean(det && det.en_proceso)
-  if (!enProc && (ultimo.fin_utc == null || String(ultimo.fin_utc).trim() === '')) {
+  let enProc = estado === 'en_proceso' || Boolean(det && det.en_proceso)
+  if (
+    !enProc &&
+    (ultimo.fin_utc == null || String(ultimo.fin_utc).trim() === '')
+  ) {
     enProc = true
   }
   if (!enProc) return false

@@ -133,7 +133,10 @@ export function fechaPagoDesdeSugerenciaOcrReescaneo(
   if (dcme) return dcme
   if (opts?.permitirHoy) {
     const raw = (sugerencia.fecha_pago || '').trim().slice(0, 10)
-    if (/^\d{4}-\d{2}-\d{2}$/.test(raw) && !esFechaMarcadorRevisionCobros(raw)) {
+    if (
+      /^\d{4}-\d{2}-\d{2}$/.test(raw) &&
+      !esFechaMarcadorRevisionCobros(raw)
+    ) {
       return raw
     }
   }

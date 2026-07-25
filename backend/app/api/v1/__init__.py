@@ -6,7 +6,7 @@ API v1
 
 from fastapi import APIRouter
 
-from app.api.v1.endpoints import whatsapp, auth, configuracion, configuracion_informe_pagos, pagos, pagos_gmail, pagos_con_errores, prestamos, prestamos_candidatos_drive, notificaciones, notificaciones_recibos, notificaciones_tabs, dashboard, auditoria, clientes, clientes_drive_import, tickets, crm_campanas, comunicaciones, validadores, usuarios, modelos_vehiculos, analistas, concesionarios, ai_training, revision_manual, health, cobros_publico, cobros, cobranzas, estado_cuenta_publico, finiquito, registro_cambios, conciliacion_sheet, admin_tasas_cambio, tasas_cambio_publico
+from app.api.v1.endpoints import whatsapp, auth, configuracion, configuracion_informe_pagos, pagos, pagos_gmail, pagos_con_errores, prestamos, prestamos_candidatos_drive, notificaciones, notificaciones_recibos, notificaciones_tabs, dashboard, auditoria, clientes, clientes_drive_import, tickets, crm_campanas, comunicaciones, validadores, usuarios, modelos_vehiculos, analistas, concesionarios, ai_training, revision_manual, health, cobros_publico, cobros, cobranzas, estado_cuenta_publico, finiquito, registro_cambios, conciliacion_sheet, admin_tasas_cambio, tasas_cambio_publico, conciliacion_bancos
 
 from app.api.v1.endpoints.dashboard import kpis
 
@@ -340,6 +340,16 @@ api_router.include_router(
     prefix="/auditoria",
 
     tags=["auditoria"],
+
+)
+
+# Conciliacion Bancos (Auditoria): Excel banco vs numero_documento OCR
+
+api_router.include_router(
+
+    conciliacion_bancos.router,
+
+    tags=["conciliacion-bancos"],
 
 )
 

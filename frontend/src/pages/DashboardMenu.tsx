@@ -1838,9 +1838,10 @@ export function DashboardMenu() {
                 </code>
                 : correos aceptados por SMTP (enviados) por día. Eje X desde el{' '}
                 <strong>5 de abril</strong> del año del último día con datos
-                (muestra de {NOTIFICACIONES_ENVIOS_TENDENCIA_DIAS} d recortada). El listado ya no incluye titulares en 2 cuotas.
-                Línea gris discontinua: <strong>tendencia</strong> (regresión
-                lineal sobre la serie mostrada).
+                (muestra de {NOTIFICACIONES_ENVIOS_TENDENCIA_DIAS} d recortada).
+                El listado ya no incluye titulares en 2 cuotas. Línea gris
+                discontinua: <strong>tendencia</strong> (regresión lineal sobre
+                la serie mostrada).
               </CardDescription>
             </CardHeader>
 
@@ -1983,7 +1984,9 @@ export function DashboardMenu() {
                 <strong>Inicio día</strong>: stock del segmento 1 cuota a las{' '}
                 <strong>00:00</strong>. <strong>Fin dia</strong>: de ese stock,
                 cuántos siguen sin pagar a las <strong>23:00</strong> (hoy:
-                valor en vivo hasta las 23:00). Excluye titulares que el mismo día están en <strong>2 cuotas</strong> (exclusión mutua: un cliente no cuenta en ambos segmentos).
+                valor en vivo hasta las 23:00). Excluye titulares que el mismo
+                día están en <strong>2 cuotas</strong> (exclusión mutua: un
+                cliente no cuenta en ambos segmentos).
               </CardDescription>
             </CardHeader>
 
@@ -2120,7 +2123,8 @@ export function DashboardMenu() {
                 <strong>Inicio día</strong>: stock del segmento 2 cuotas a las{' '}
                 <strong>00:00</strong>. <strong>Fin dia</strong>: de ese stock,
                 cuántos siguen sin pagar a las <strong>23:00</strong> (hoy:
-                valor en vivo hasta las 23:00). Prioridad frente a 1 cuota: no se recorta por exclusión mutua.
+                valor en vivo hasta las 23:00). Prioridad frente a 1 cuota: no
+                se recorta por exclusión mutua.
               </CardDescription>
             </CardHeader>
 
