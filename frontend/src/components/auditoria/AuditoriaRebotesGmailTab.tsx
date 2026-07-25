@@ -260,7 +260,7 @@ export function AuditoriaRebotesGmailTab() {
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-base">
             <Mail className="h-5 w-5" />
-            Rebotes Gmail (notificaciones)
+            Analista email (notificaciones)
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">

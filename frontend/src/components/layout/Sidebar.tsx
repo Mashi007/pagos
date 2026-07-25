@@ -382,13 +382,13 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
           managerOrAdminOnly: true,
         },
         {
-          title: 'Liquidados (intensiva)',
+          title: 'Liquidados',
           href: '/auditoria?tab=liquidados',
           icon: CheckCircle,
           managerOrAdminOnly: true,
         },
         {
-          title: 'Rebotes Gmail',
+          title: 'Analista email',
           href: '/auditoria?tab=rebotes-gmail',
           icon: Mail,
           adminOnly: true,
@@ -400,7 +400,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
           adminOnly: true,
         },
         {
-          title: 'Registro del sistema',
+          title: 'Actividad usuarios',
           href: '/auditoria?tab=sistema',
           icon: Shield,
         },

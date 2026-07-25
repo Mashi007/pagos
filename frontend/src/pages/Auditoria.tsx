@@ -93,18 +93,18 @@ const AUDITORIA_TAB_META: Record<
     icon: Scale,
   },
   liquidados: {
-    title: 'Liquidados (intensiva)',
+    title: 'Liquidados',
     description:
       'Auditoría intensiva de préstamos liquidados y consistencia de pagos/cuotas.',
     icon: CheckCircle,
   },
   'rebotes-gmail': {
-    title: 'Rebotes Gmail',
+    title: 'Analista email',
     description: 'Revisión de rebotes de correo detectados en Gmail.',
     icon: Mail,
   },
   sistema: {
-    title: 'Registro del sistema',
+    title: 'Actividad usuarios',
     description: 'Histor de acciones de usuarios y módulos del sistema.',
     icon: Shield,
   },
