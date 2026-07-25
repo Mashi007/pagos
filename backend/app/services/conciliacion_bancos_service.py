@@ -551,6 +551,9 @@ def decidir_y_aplicar(
 
     # Conflicto de serial en otro pago -> no forzar
     if numero_documento_ya_registrado(db, serial_new, exclude_pago_id=pago.id):
+        # No forzar: dejar pendiente para discernimiento (Visto / otra fuente)
+        res.decision = "PENDIENTE"
+        res.fuente_elegida = None
         res.aplicado = False
         res.detalle_aplicacion = (
             "Serial banco ya existe en otro pago. Discernimiento manual (puede marcar Visto)."

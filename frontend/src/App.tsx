@@ -117,6 +117,7 @@ import {
   AmortizacionPage,
   Analistas,
   Auditoria,
+  ConciliacionBancosPage,
   ChatAI,
   Clientes,
   CobrosDetallePage,
@@ -454,6 +455,15 @@ function App() {
               />
 
               <Route path="auditoria" element={<Auditoria />} />
+
+              <Route
+                path="auditoria/conciliacion-bancos"
+                element={
+                  <SimpleProtectedRoute requireAdmin={true}>
+                    <ConciliacionBancosPage />
+                  </SimpleProtectedRoute>
+                }
+              />
 
               {/* Notificaciones (dentro de CRM en sidebar) */}
 

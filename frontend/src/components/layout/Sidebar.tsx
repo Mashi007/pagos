@@ -394,6 +394,12 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
           adminOnly: true,
         },
         {
+          title: 'Conciliacion Bancos',
+          href: '/auditoria/conciliacion-bancos',
+          icon: Building2,
+          adminOnly: true,
+        },
+        {
           title: 'Registro del sistema',
           href: '/auditoria?tab=sistema',
           icon: Shield,

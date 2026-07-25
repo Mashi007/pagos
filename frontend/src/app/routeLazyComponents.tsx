@@ -83,6 +83,10 @@ export const EditarRevisionManual = lazy(
 
 export const Auditoria = lazy(() => import('../pages/Auditoria'))
 
+export const ConciliacionBancosPage = lazy(
+  () => import('../pages/ConciliacionBancosPage')
+)
+
 export const Notificaciones = lazy(() => import('../pages/Notificaciones'))
 
 export const NotificacionesClientesDrive = lazy(
