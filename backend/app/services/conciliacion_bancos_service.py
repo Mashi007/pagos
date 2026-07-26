@@ -108,6 +108,74 @@ def _paquete_banco_coherente_con_pago(
     return True
 
 
+def _clave_paquete_ref(
+    referencia: Optional[str],
+    fecha: Optional[date],
+    monto: Optional[float],
+) -> Optional[tuple[str, Optional[str], Optional[float]]]:
+    """
+    Identidad de paquete (serial digitos + fecha + monto) para exclusiones.
+    No usar solo digitos: BNV/BDV reutiliza el mismo serial en otra fecha/monto.
+    """
+    dig = _ref_solo_digitos(referencia)
+    if not dig:
+        return None
+    fiso = fecha.isoformat() if fecha is not None else None
+    m = round(float(monto), 2) if monto is not None else None
+    return (dig, fiso, m)
+
+
+def _resolver_match_por_digitos(
+    candidatos: list[Pago],
+    *,
+    fecha_banco: Optional[date],
+    monto_usd: Optional[float],
+) -> tuple[str, Optional[Pago], list[Pago]]:
+    """
+    Clasifica candidatos con el mismo serial (digitos).
+
+    Returns:
+      ("MATCH_EXACTO", pago, []) |
+      ("AMBIGUO", None, pool) |
+      ("SERIAL_REUSADO", None, []) — hay serial igual pero ningun paquete coherente;
+        NO debe caer a MATCH_PARCIAL (sim=100 bypassearia monto y corrupcionaria el pago).
+      ("NONE", None, []) — sin candidatos por digitos.
+    """
+    if not candidatos:
+        return ("NONE", None, [])
+
+    if len(candidatos) == 1:
+        p = candidatos[0]
+        if _paquete_banco_coherente_con_pago(
+            p, fecha_banco=fecha_banco, monto_usd=monto_usd
+        ):
+            return ("MATCH_EXACTO", p, [])
+        return ("SERIAL_REUSADO", None, [])
+
+    pool = list(candidatos)
+    if monto_usd is not None:
+        por_monto = [
+            p
+            for p in pool
+            if abs(float(p.monto_pagado or 0) - monto_usd) <= MONTO_TOL
+        ]
+        if len(por_monto) >= 1:
+            pool = por_monto
+    if len(pool) > 1 and fecha_banco is not None:
+        por_fecha = [p for p in pool if _pago_fecha(p) == fecha_banco]
+        if len(por_fecha) >= 1:
+            pool = por_fecha
+
+    if len(pool) == 1 and _paquete_banco_coherente_con_pago(
+        pool[0], fecha_banco=fecha_banco, monto_usd=monto_usd
+    ):
+        return ("MATCH_EXACTO", pool[0], [])
+    if len(pool) > 1:
+        return ("AMBIGUO", None, pool)
+    # Unico candidato tras filtros pero paquete incoherente, o filtros vaciaron coherencia
+    return ("SERIAL_REUSADO", None, [])
+
+
 def categoria_institucion(inst: Optional[str]) -> str:
     """Misma clasificacion que dashboard pagos por institucion."""
     s = (inst or "").strip().lower()
@@ -395,18 +463,28 @@ def comparar_lote(
 
     excluir_pago_ids: set[int] = set()
     excluir_banco_ids: set[int] = set()
-    excluir_digitos: set[str] = set()
+    # Paquete completo (serial+fecha+monto). Excluir solo digitos ocultaria
+    # reutilizaciones reales del mismo serial en otra fecha/monto (BNV/BDV).
+    excluir_paquetes: set[tuple[str, Optional[str], Optional[float]]] = set()
     for c in list(confirmados_lote) + list(confirmados_global):
         if c.pago_id:
             excluir_pago_ids.add(int(c.pago_id))
         if c.banco_id:
             excluir_banco_ids.add(int(c.banco_id))
-        d1 = _ref_solo_digitos(c.referencia_banco)
-        d2 = _ref_solo_digitos(c.referencia_bd)
-        if d1:
-            excluir_digitos.add(d1)
-        if d2:
-            excluir_digitos.add(d2)
+        kb = _clave_paquete_ref(
+            c.referencia_banco,
+            c.fecha_banco,
+            float(c.monto_banco) if c.monto_banco is not None else None,
+        )
+        if kb:
+            excluir_paquetes.add(kb)
+        kbd = _clave_paquete_ref(
+            c.referencia_bd,
+            c.fecha_bd,
+            float(c.monto_bd) if c.monto_bd is not None else None,
+        )
+        if kbd:
+            excluir_paquetes.add(kbd)
 
     db.execute(
         delete(ConciliacionBancoOcrResultado).where(
@@ -428,7 +506,20 @@ def comparar_lote(
         b
         for b in bancos
         if int(b.id) not in excluir_banco_ids
-        and _ref_solo_digitos(b.ref_banco_norm or b.referencia_banco) not in excluir_digitos
+        and (
+            _clave_paquete_ref(
+                b.ref_banco_norm or b.referencia_banco,
+                b.fecha_banco,
+                float(b.monto_banco)
+                if b.monto_banco is not None
+                else (
+                    float(b.monto_banco_original)
+                    if b.monto_banco_original is not None
+                    else None
+                ),
+            )
+            not in excluir_paquetes
+        )
     ]
 
     pagos_raw = (
@@ -449,7 +540,14 @@ def comparar_lote(
         for p in pagos_raw
         if categoria_pago_conciliacion(p) in bancos_sel
         and int(p.id) not in excluir_pago_ids
-        and _ref_solo_digitos(p.numero_documento) not in excluir_digitos
+        and (
+            _clave_paquete_ref(
+                p.numero_documento,
+                _pago_fecha(p),
+                float(p.monto_pagado) if p.monto_pagado is not None else None,
+            )
+            not in excluir_paquetes
+        )
     ]
 
     by_digits: dict[str, list[Pago]] = {}
@@ -517,101 +615,80 @@ def comparar_lote(
             stats["SIN_TASA"] += 1
             continue
 
-        if len(candidatos_exactos) == 1:
-            p = candidatos_exactos[0]
-            # Serial igual no basta: BNV/BDV reutiliza refs (2058270) en fechas/montos distintos
-            if _paquete_banco_coherente_con_pago(
-                p, fecha_banco=fecha_b, monto_usd=monto_usd
-            ):
-                matched_pago_ids.add(p.id)
-                db.add(
-                    ConciliacionBancoOcrResultado(
-                        lote_id=lote_id,
-                        banco_id=b.id,
-                        pago_id=p.id,
-                        fecha_banco=fecha_b,
-                        fecha_bd=_pago_fecha(p),
-                        referencia_banco=b.referencia_banco,
-                        referencia_bd=p.numero_documento,
-                        monto_banco=Decimal(str(monto_usd)) if monto_usd is not None else None,
-                        monto_bd=p.monto_pagado,
-                        similitud_pct=Decimal("100"),
-                        tipo_novedad="MATCH_EXACTO",
-                        decision="PENDIENTE",
-                    )
+        accion_dig, pago_dig, pool_amb = _resolver_match_por_digitos(
+            candidatos_exactos, fecha_banco=fecha_b, monto_usd=monto_usd
+        )
+
+        if accion_dig == "MATCH_EXACTO" and pago_dig is not None:
+            p = pago_dig
+            matched_pago_ids.add(p.id)
+            detalle_exacto = None
+            if len(candidatos_exactos) > 1:
+                detalle_exacto = "Serial compartido desambiguado por monto/fecha."
+            db.add(
+                ConciliacionBancoOcrResultado(
+                    lote_id=lote_id,
+                    banco_id=b.id,
+                    pago_id=p.id,
+                    fecha_banco=fecha_b,
+                    fecha_bd=_pago_fecha(p),
+                    referencia_banco=b.referencia_banco,
+                    referencia_bd=p.numero_documento,
+                    monto_banco=Decimal(str(monto_usd)) if monto_usd is not None else None,
+                    monto_bd=p.monto_pagado,
+                    similitud_pct=Decimal("100"),
+                    tipo_novedad="MATCH_EXACTO",
+                    decision="PENDIENTE",
+                    detalle_aplicacion=detalle_exacto,
                 )
-                stats["MATCH_EXACTO"] += 1
-                continue
-            # Misma ref digitos pero paquete distinto: no forzar match; sigue a parcial/SIN_BD
+            )
+            stats["MATCH_EXACTO"] += 1
+            continue
 
-        if len(candidatos_exactos) > 1:
-            # Mercantil / refs cortas: desambiguar por monto y fecha
-            pool = list(candidatos_exactos)
-            if monto_usd is not None:
-                por_monto = [
-                    p
-                    for p in pool
-                    if abs(float(p.monto_pagado or 0) - monto_usd) <= MONTO_TOL
-                ]
-                if len(por_monto) == 1:
-                    pool = por_monto
-                elif len(por_monto) > 1:
-                    pool = por_monto
-            if len(pool) > 1 and fecha_b is not None:
-                por_fecha = [p for p in pool if _pago_fecha(p) == fecha_b]
-                if len(por_fecha) == 1:
-                    pool = por_fecha
-                elif len(por_fecha) > 1:
-                    pool = por_fecha
-
-            if len(pool) == 1 and _paquete_banco_coherente_con_pago(
-                pool[0], fecha_banco=fecha_b, monto_usd=monto_usd
-            ):
-                p = pool[0]
-                matched_pago_ids.add(p.id)
-                db.add(
-                    ConciliacionBancoOcrResultado(
-                        lote_id=lote_id,
-                        banco_id=b.id,
-                        pago_id=p.id,
-                        fecha_banco=fecha_b,
-                        fecha_bd=_pago_fecha(p),
-                        referencia_banco=b.referencia_banco,
-                        referencia_bd=p.numero_documento,
-                        monto_banco=Decimal(str(monto_usd)) if monto_usd is not None else None,
-                        monto_bd=p.monto_pagado,
-                        similitud_pct=Decimal("100"),
-                        tipo_novedad="MATCH_EXACTO",
-                        decision="PENDIENTE",
-                        detalle_aplicacion=(
-                            "Serial compartido desambiguado por monto/fecha."
-                        ),
-                    )
+        if accion_dig == "AMBIGUO":
+            cands = _candidatos_payload(pool_amb)
+            db.add(
+                ConciliacionBancoOcrResultado(
+                    lote_id=lote_id,
+                    banco_id=b.id,
+                    pago_id=None,
+                    fecha_banco=fecha_b,
+                    referencia_banco=b.referencia_banco,
+                    monto_banco=Decimal(str(monto_usd)) if monto_usd is not None else None,
+                    similitud_pct=Decimal("100"),
+                    tipo_novedad="AMBIGUO",
+                    decision="PENDIENTE",
+                    detalle_aplicacion=_detalle_ambiguo_serial(pool_amb),
+                    valores_antes=json.dumps({"candidatos": cands}, ensure_ascii=True),
                 )
-                stats["MATCH_EXACTO"] += 1
-                continue
+            )
+            stats["AMBIGUO"] += 1
+            continue
 
-            if len(pool) > 1:
-                cands = _candidatos_payload(pool)
-                db.add(
-                    ConciliacionBancoOcrResultado(
-                        lote_id=lote_id,
-                        banco_id=b.id,
-                        pago_id=None,
-                        fecha_banco=fecha_b,
-                        referencia_banco=b.referencia_banco,
-                        monto_banco=Decimal(str(monto_usd)) if monto_usd is not None else None,
-                        similitud_pct=Decimal("100"),
-                        tipo_novedad="AMBIGUO",
-                        decision="PENDIENTE",
-                        detalle_aplicacion=_detalle_ambiguo_serial(pool),
-                        valores_antes=json.dumps({"candidatos": cands}, ensure_ascii=True),
-                    )
+        if accion_dig == "SERIAL_REUSADO":
+            # Mismos digitos, paquete distinto: NO caer a MATCH_PARCIAL (sim=100
+            # ignoraba monto y CORREGIR+BANCO podia sobrescribir el pago historico).
+            db.add(
+                ConciliacionBancoOcrResultado(
+                    lote_id=lote_id,
+                    banco_id=b.id,
+                    pago_id=None,
+                    fecha_banco=fecha_b,
+                    referencia_banco=b.referencia_banco,
+                    monto_banco=Decimal(str(monto_usd)) if monto_usd is not None else None,
+                    similitud_pct=None,
+                    tipo_novedad="SIN_BD",
+                    decision="PENDIENTE",
+                    detalle_aplicacion=(
+                        "Serial banco coincide con un pago BD pero fecha/monto difieren "
+                        "(posible reutilizacion de referencia). No se enlaza automaticamente."
+                    ),
                 )
-                stats["AMBIGUO"] += 1
-                continue
+            )
+            stats["SIN_BD"] += 1
+            continue
 
-        # Match parcial: candidatos por monto cercano en el rango
+        # Match parcial: candidatos por similitud de ref (sin mismo serial exacto)
         mejores: list[tuple[float, Pago]] = []
         for p in pagos:
             if p.id in matched_pago_ids:
@@ -619,9 +696,11 @@ def comparar_lote(
             sim = _similitud(ref_b, p.numero_documento or "")
             if sim < SIMILITUD_MINIMA:
                 continue
+            # Exigir monto cuando hay USD: el bypass sim>=95 permitia enlazar
+            # seriales casi iguales con montos distintos (corrupcion vía CORREGIR).
             if monto_usd is not None:
                 md = float(p.monto_pagado or 0)
-                if abs(md - monto_usd) > MONTO_TOL and sim < 95.0:
+                if abs(md - monto_usd) > MONTO_TOL:
                     continue
             mejores.append((sim, p))
         mejores.sort(key=lambda x: x[0], reverse=True)
@@ -713,7 +792,7 @@ def comparar_lote(
         "bancos_filtro": bancos_sel,
         "pagos_universo": len(pagos),
         "confirmados_conservados": len(confirmados_lote),
-        "excluidos_por_confirmacion": len(excluir_pago_ids) + len(excluir_digitos),
+        "excluidos_por_confirmacion": len(excluir_pago_ids) + len(excluir_paquetes),
     }
 
 
