@@ -189,9 +189,19 @@ export default function ConciliacionBancosPage() {
       setStats(cmp.stats || null)
       setFiltroNovedad([])
       await refreshResultados(lote.id)
-      toast.success(
-        `Comparacion lista (bancos: ${bancosSel.join(', ')}). Pagos universo: ${cmp.pagos_universo ?? '-'}.`
-      )
+      const univ = cmp.pagos_universo ?? 0
+      const sinBd = Number(cmp.stats?.SIN_BD || 0)
+      if (univ === 0) {
+        toast.error(
+          `Sin pagos BD en el rango de fechas para ${bancosSel.join(', ')}. ` +
+            'Ajuste Fecha desde/hasta al periodo del Excel (no solo hoy) y vuelva a Conciliar. ' +
+            `Filas banco sin match: ${sinBd}.`
+        )
+      } else {
+        toast.success(
+          `Comparacion lista (bancos: ${bancosSel.join(', ')}). Pagos universo: ${univ}.`
+        )
+      }
     } catch (err) {
       toast.error(errMsg(err))
     } finally {
