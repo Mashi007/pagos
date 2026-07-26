@@ -12,7 +12,7 @@ from typing import Any, Optional
 
 from fastapi import HTTPException, UploadFile
 from openpyxl import Workbook, load_workbook
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.documento import normalize_documento, split_numero_documento_almacenado
@@ -274,9 +274,59 @@ def comparar_lote(
         )
     _guardar_bancos_en_lote(lote, bancos_sel)
 
+    # Conservar filas ya confirmadas (visto / corregir aplicado / omitir).
+    # Solo se regeneran las PENDIENTE: asi el reporte Excel no pierde lo confirmado
+    # y esas refs/pagos no vuelven a salir como trabajo pendiente.
+    confirmados_lote = (
+        db.execute(
+            select(ConciliacionBancoOcrResultado).where(
+                ConciliacionBancoOcrResultado.lote_id == lote_id,
+                or_(
+                    ConciliacionBancoOcrResultado.decision == "VISTO",
+                    ConciliacionBancoOcrResultado.decision == "OMITIR",
+                    (ConciliacionBancoOcrResultado.decision == "CORREGIR")
+                    & (ConciliacionBancoOcrResultado.aplicado.is_(True)),
+                ),
+            )
+        )
+        .scalars()
+        .all()
+    )
+    # Confirmados de cualquier lote (futuras conciliaciones)
+    confirmados_global = (
+        db.execute(
+            select(ConciliacionBancoOcrResultado).where(
+                or_(
+                    ConciliacionBancoOcrResultado.decision == "VISTO",
+                    ConciliacionBancoOcrResultado.decision == "OMITIR",
+                    (ConciliacionBancoOcrResultado.decision == "CORREGIR")
+                    & (ConciliacionBancoOcrResultado.aplicado.is_(True)),
+                ),
+            )
+        )
+        .scalars()
+        .all()
+    )
+
+    excluir_pago_ids: set[int] = set()
+    excluir_banco_ids: set[int] = set()
+    excluir_digitos: set[str] = set()
+    for c in list(confirmados_lote) + list(confirmados_global):
+        if c.pago_id:
+            excluir_pago_ids.add(int(c.pago_id))
+        if c.banco_id:
+            excluir_banco_ids.add(int(c.banco_id))
+        d1 = _ref_solo_digitos(c.referencia_banco)
+        d2 = _ref_solo_digitos(c.referencia_bd)
+        if d1:
+            excluir_digitos.add(d1)
+        if d2:
+            excluir_digitos.add(d2)
+
     db.execute(
         delete(ConciliacionBancoOcrResultado).where(
-            ConciliacionBancoOcrResultado.lote_id == lote_id
+            ConciliacionBancoOcrResultado.lote_id == lote_id,
+            ConciliacionBancoOcrResultado.decision == "PENDIENTE",
         )
     )
 
@@ -289,6 +339,12 @@ def comparar_lote(
         .scalars()
         .all()
     )
+    bancos = [
+        b
+        for b in bancos
+        if int(b.id) not in excluir_banco_ids
+        and _ref_solo_digitos(b.ref_banco_norm or b.referencia_banco) not in excluir_digitos
+    ]
 
     pagos_raw = (
         db.execute(
@@ -307,6 +363,8 @@ def comparar_lote(
         p
         for p in pagos_raw
         if categoria_institucion(p.institucion_bancaria) in bancos_sel
+        and int(p.id) not in excluir_pago_ids
+        and _ref_solo_digitos(p.numero_documento) not in excluir_digitos
     ]
 
     by_digits: dict[str, list[Pago]] = {}
@@ -316,7 +374,7 @@ def comparar_lote(
             continue
         by_digits.setdefault(key, []).append(p)
 
-    matched_pago_ids: set[int] = set()
+    matched_pago_ids: set[int] = set(excluir_pago_ids)
     stats = {
         "MATCH_EXACTO": 0,
         "MATCH_PARCIAL": 0,
@@ -507,6 +565,8 @@ def comparar_lote(
         "stats": stats,
         "bancos_filtro": bancos_sel,
         "pagos_universo": len(pagos),
+        "confirmados_conservados": len(confirmados_lote),
+        "excluidos_por_confirmacion": len(excluir_pago_ids) + len(excluir_digitos),
     }
 
 
@@ -804,54 +864,86 @@ def listar_resultados(db: Session, lote_id: int) -> list[dict[str, Any]]:
     return out
 
 
+_EXPORT_HEADERS = [
+    "referencia_banco",
+    "referencia_bd",
+    "similitud_pct",
+    "cedula",
+    "prestamo_id",
+    "institucion_bancaria",
+    "institucion_categoria",
+    "fecha_banco",
+    "fecha_bd",
+    "monto_banco_usd",
+    "monto_bd_usd",
+    "tipo_novedad",
+    "decision",
+    "fuente_elegida",
+    "aplicado",
+    "pago_id",
+    "detalle",
+]
+
+# Una pestana por caso (mismo orden que chips de la UI)
+_EXPORT_HOJAS_NOVEDAD = (
+    "MATCH_EXACTO",
+    "MATCH_PARCIAL",
+    "SIN_BD",
+    "SIN_BANCO",
+    "AMBIGUO",
+    "SIN_TASA",
+)
+
+
+def _fila_export_resultado(r: dict[str, Any]) -> list[Any]:
+    return [
+        r.get("referencia_banco"),
+        r.get("referencia_bd"),
+        r.get("similitud_pct"),
+        r.get("cedula"),
+        r.get("prestamo_id"),
+        r.get("institucion_bancaria"),
+        r.get("institucion_categoria"),
+        r.get("fecha_banco"),
+        r.get("fecha_bd"),
+        r.get("monto_banco"),
+        r.get("monto_bd"),
+        r.get("tipo_novedad"),
+        r.get("decision"),
+        r.get("fuente_elegida"),
+        r.get("aplicado"),
+        r.get("pago_id"),
+        r.get("detalle_aplicacion"),
+    ]
+
+
 def exportar_excel_lote(db: Session, lote_id: int) -> bytes:
+    """Excel con una hoja por tipo de novedad (MATCH_EXACTO, MATCH_PARCIAL, ...)."""
     rows = listar_resultados(db, lote_id)
-    wb = Workbook()
-    ws = wb.active
-    ws.title = "ConciliacionBancos"
-    ws.append(
-        [
-            "referencia_banco",
-            "referencia_bd",
-            "similitud_pct",
-            "cedula",
-            "prestamo_id",
-            "institucion_bancaria",
-            "institucion_categoria",
-            "fecha_banco",
-            "fecha_bd",
-            "monto_banco_usd",
-            "monto_bd_usd",
-            "tipo_novedad",
-            "decision",
-            "fuente_elegida",
-            "aplicado",
-            "pago_id",
-            "detalle",
-        ]
-    )
+    by_tipo: dict[str, list[dict[str, Any]]] = {k: [] for k in _EXPORT_HOJAS_NOVEDAD}
     for r in rows:
-        ws.append(
-            [
-                r.get("referencia_banco"),
-                r.get("referencia_bd"),
-                r.get("similitud_pct"),
-                r.get("cedula"),
-                r.get("prestamo_id"),
-                r.get("institucion_bancaria"),
-                r.get("institucion_categoria"),
-                r.get("fecha_banco"),
-                r.get("fecha_bd"),
-                r.get("monto_banco"),
-                r.get("monto_bd"),
-                r.get("tipo_novedad"),
-                r.get("decision"),
-                r.get("fuente_elegida"),
-                r.get("aplicado"),
-                r.get("pago_id"),
-                r.get("detalle_aplicacion"),
-            ]
-        )
+        tipo = (r.get("tipo_novedad") or "").strip() or "OTROS"
+        if tipo not in by_tipo:
+            by_tipo[tipo] = []
+        by_tipo[tipo].append(r)
+
+    wb = Workbook()
+    first = True
+    for tipo in list(_EXPORT_HOJAS_NOVEDAD) + [
+        k for k in by_tipo.keys() if k not in _EXPORT_HOJAS_NOVEDAD
+    ]:
+        items = by_tipo.get(tipo, [])
+        title = tipo[:31]
+        if first:
+            ws = wb.active
+            ws.title = title
+            first = False
+        else:
+            ws = wb.create_sheet(title=title)
+        ws.append(list(_EXPORT_HEADERS))
+        for r in items:
+            ws.append(_fila_export_resultado(r))
+
     buf = io.BytesIO()
     wb.save(buf)
     return buf.getvalue()

@@ -57,6 +57,7 @@ export default function ConciliacionBancosPage() {
     ConciliacionBancosBancoCategoria[]
   >([])
   const [filtroNovedad, setFiltroNovedad] = useState<string[]>([])
+  const [mostrarConfirmados, setMostrarConfirmados] = useState(false)
 
   const toggleBanco = (b: ConciliacionBancosBancoCategoria) => {
     setBancosSel(prev =>
@@ -76,9 +77,13 @@ export default function ConciliacionBancosPage() {
   )
 
   const itemsFiltrados = useMemo(() => {
-    if (filtroNovedad.length === 0) return items
-    return items.filter(i => filtroNovedad.includes(i.tipo_novedad))
-  }, [items, filtroNovedad])
+    let list = items
+    if (!mostrarConfirmados) {
+      list = list.filter(i => i.decision === 'PENDIENTE')
+    }
+    if (filtroNovedad.length === 0) return list
+    return list.filter(i => filtroNovedad.includes(i.tipo_novedad))
+  }, [items, filtroNovedad, mostrarConfirmados])
 
   const refreshResultados = async (loteId: number) => {
     const res = await conciliacionBancosService.listarResultados(loteId)
@@ -332,6 +337,16 @@ export default function ConciliacionBancosPage() {
                     </button>
                   )
                 })}
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={mostrarConfirmados ? 'default' : 'ghost'}
+                  onClick={() => setMostrarConfirmados(v => !v)}
+                >
+                  {mostrarConfirmados
+                    ? 'Ocultar confirmados'
+                    : 'Mostrar confirmados'}
+                </Button>
                 {filtroNovedad.length > 0 && (
                   <Button
                     type="button"
