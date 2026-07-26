@@ -1,5 +1,11 @@
 import { useMemo, useState } from 'react'
-import { Building2, Check, Download, Loader2, Upload } from 'lucide-react'
+import {
+  Building2,
+  Check,
+  Download,
+  Loader2,
+  Upload,
+} from 'lucide-react'
 import { toast } from 'sonner'
 
 import { ModulePageHeader } from '../components/ui/ModulePageHeader'
@@ -40,6 +46,15 @@ function errMsg(err: unknown): string {
   return e?.response?.data?.detail || e?.message || 'Error'
 }
 
+function filaBloqueada(row: ConciliacionBancosResultado): boolean {
+  return (
+    row.aplicado ||
+    row.decision === 'VISTO' ||
+    row.decision === 'OMITIR' ||
+    (row.decision === 'CORREGIR' && row.aplicado)
+  )
+}
+
 export default function ConciliacionBancosPage() {
   const [moneda, setMoneda] = useState<ConciliacionBancosMoneda>('USD')
   const [fechaDesde, setFechaDesde] = useState(hoyISO())
@@ -50,9 +65,12 @@ export default function ConciliacionBancosPage() {
   const [stats, setStats] = useState<Record<string, number> | null>(null)
   const [loading, setLoading] = useState(false)
   const [rowBusy, setRowBusy] = useState<number | null>(null)
+  const [bulkBusy, setBulkBusy] = useState(false)
   const [fuentePorFila, setFuentePorFila] = useState<
     Record<number, 'BD' | 'BANCO'>
   >({})
+  const [fuenteMasiva, setFuenteMasiva] = useState<'BD' | 'BANCO'>('BANCO')
+  const [seleccionados, setSeleccionados] = useState<Set<number>>(new Set())
   const [bancosSel, setBancosSel] = useState<
     ConciliacionBancosBancoCategoria[]
   >([])
@@ -85,9 +103,49 @@ export default function ConciliacionBancosPage() {
     return list.filter(i => filtroNovedad.includes(i.tipo_novedad))
   }, [items, filtroNovedad, mostrarConfirmados])
 
+  const elegiblesFiltrados = useMemo(
+    () =>
+      itemsFiltrados.filter(
+        r =>
+          !filaBloqueada(r) &&
+          !(r.tipo_novedad === 'AMBIGUO' && !r.pago_id)
+      ),
+    [itemsFiltrados]
+  )
+
+  const todosElegiblesMarcados =
+    elegiblesFiltrados.length > 0 &&
+    elegiblesFiltrados.every(r => seleccionados.has(r.id))
+
+  const toggleSeleccion = (id: number) => {
+    setSeleccionados(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const toggleSeleccionarTodos = () => {
+    if (todosElegiblesMarcados) {
+      setSeleccionados(prev => {
+        const next = new Set(prev)
+        for (const r of elegiblesFiltrados) next.delete(r.id)
+        return next
+      })
+      return
+    }
+    setSeleccionados(prev => {
+      const next = new Set(prev)
+      for (const r of elegiblesFiltrados) next.add(r.id)
+      return next
+    })
+  }
+
   const refreshResultados = async (loteId: number) => {
     const res = await conciliacionBancosService.listarResultados(loteId)
     setItems(res.items || [])
+    setSeleccionados(new Set())
   }
 
   const handleCargar = async () => {
@@ -107,6 +165,7 @@ export default function ConciliacionBancosPage() {
       setItems([])
       setStats(null)
       setFiltroNovedad([])
+      setSeleccionados(new Set())
       toast.success(`Lote #${res.lote.id} cargado (${moneda})`)
     } catch (err) {
       toast.error(errMsg(err))
@@ -173,6 +232,47 @@ export default function ConciliacionBancosPage() {
       if (lote) await refreshResultados(lote.id)
     } finally {
       setRowBusy(null)
+    }
+  }
+
+  const handleConfirmarMasivo = async () => {
+    const ids = [...seleccionados]
+    if (ids.length === 0) {
+      toast.error('Seleccione al menos una fila pendiente')
+      return
+    }
+    if (ids.length > 200) {
+      toast.error('Maximo 200 filas por confirmacion masiva')
+      return
+    }
+    setBulkBusy(true)
+    try {
+      const payload = ids.map(id => ({
+        resultado_id: id,
+        fuente_elegida: fuentePorFila[id] || fuenteMasiva,
+      }))
+      const r = await conciliacionBancosService.decidirMasivo({
+        items: payload,
+        fuente_default: fuenteMasiva,
+      })
+      if (r.errores === 0) {
+        toast.success(
+          `Confirmados ${r.exitosos}/${r.total}` +
+            (r.con_cambio ? ` (${r.con_cambio} con cambio BD)` : '')
+        )
+      } else {
+        toast.message(
+          `Masivo: ${r.exitosos} ok, ${r.errores} error(es), ${r.sin_pago_vistos} sin pago`
+        )
+        const firstErr = r.detalle.find(d => !d.ok)?.error
+        if (firstErr) toast.error(String(firstErr).slice(0, 180))
+      }
+      if (lote) await refreshResultados(lote.id)
+    } catch (err) {
+      toast.error(errMsg(err))
+      if (lote) await refreshResultados(lote.id)
+    } finally {
+      setBulkBusy(false)
     }
   }
 
@@ -268,8 +368,9 @@ export default function ConciliacionBancosPage() {
               ))}
             </div>
             <p className="mt-1 text-xs text-gray-500">
-              Solo se comparan pagos BD de los bancos marcados (segun
-              institucion_bancaria).
+              Solo se comparan pagos BD de los bancos marcados. Drive =
+              ABONOS-NOTIF / ABONOS-DRIVE (asientos Drive, a menudo suma de
+              pagos).
             </p>
           </div>
 
@@ -375,15 +476,80 @@ export default function ConciliacionBancosPage() {
             2) Resultados (referencia banco · similitud · decision)
           </CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-3">
+          {elegiblesFiltrados.length > 0 && (
+            <div className="flex flex-wrap items-center gap-3 rounded-md border bg-slate-50 px-3 py-2">
+              <label className="flex cursor-pointer items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={todosElegiblesMarcados}
+                  onChange={toggleSeleccionarTodos}
+                  disabled={bulkBusy || loading}
+                />
+                Seleccionar visibles ({elegiblesFiltrados.length})
+              </label>
+              <span className="text-sm text-gray-600">
+                {seleccionados.size} seleccionada
+                {seleccionados.size === 1 ? '' : 's'}
+              </span>
+              <label className="flex items-center gap-2 text-sm">
+                Fuente masiva
+                <select
+                  className="rounded border px-2 py-1 text-xs"
+                  value={fuenteMasiva}
+                  disabled={bulkBusy || seleccionados.size === 0}
+                  onChange={e => {
+                    const f = e.target.value as 'BD' | 'BANCO'
+                    setFuenteMasiva(f)
+                    setFuentePorFila(prev => {
+                      const next = { ...prev }
+                      for (const id of seleccionados) next[id] = f
+                      return next
+                    })
+                  }}
+                >
+                  <option value="BANCO">Ref. Banco</option>
+                  <option value="BD">Ref. BD</option>
+                </select>
+              </label>
+              <Button
+                size="sm"
+                disabled={
+                  bulkBusy ||
+                  loading ||
+                  seleccionados.size === 0 ||
+                  rowBusy != null
+                }
+                onClick={handleConfirmarMasivo}
+                className="bg-green-700 hover:bg-green-800"
+              >
+                {bulkBusy ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Check className="mr-2 h-4 w-4" />
+                )}
+                Confirmar seleccionados
+              </Button>
+            </div>
+          )}
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Ref. banco</TableHead>
-                <TableHead>Similitud</TableHead>
-                <TableHead>Ref. BD (OCR)</TableHead>
+                <TableHead className="w-10">
+                  <input
+                    type="checkbox"
+                    title="Seleccionar todas las filas visibles pendientes"
+                    checked={todosElegiblesMarcados}
+                    onChange={toggleSeleccionarTodos}
+                    disabled={
+                      bulkBusy || loading || elegiblesFiltrados.length === 0
+                    }
+                  />
+                </TableHead>
                 <TableHead>Cedula</TableHead>
                 <TableHead>Prestamo</TableHead>
+                <TableHead>Referencias</TableHead>
+                <TableHead>Similitud</TableHead>
                 <TableHead>Banco BD</TableHead>
                 <TableHead>Fechas</TableHead>
                 <TableHead>Montos USD</TableHead>
@@ -420,30 +586,51 @@ export default function ConciliacionBancosPage() {
                 </TableRow>
               ) : (
                 itemsFiltrados.map(row => {
-                  const busy = rowBusy === row.id
-                  const locked =
-                    row.aplicado ||
-                    row.decision === 'VISTO' ||
-                    row.decision === 'OMITIR' ||
-                    (row.decision === 'CORREGIR' && row.aplicado)
+                  const busy = rowBusy === row.id || bulkBusy
+                  const locked = filaBloqueada(row)
                   return (
                     <TableRow key={row.id}>
-                      <TableCell className="max-w-[160px] truncate font-mono text-xs">
-                        {row.referencia_banco || '-'}
+                      <TableCell>
+                        <input
+                          type="checkbox"
+                          disabled={locked || busy}
+                          checked={seleccionados.has(row.id)}
+                          onChange={() => toggleSeleccion(row.id)}
+                        />
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap text-xs">
+                        {row.candidatos && row.candidatos.length > 0 ? (
+                          row.candidatos.map((c, idx) => (
+                            <div key={`${row.id}-ced-${idx}`}>
+                              {c.cedula || '-'}
+                            </div>
+                          ))
+                        ) : (
+                          row.cedula || '-'
+                        )}
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap text-xs">
+                        {row.candidatos && row.candidatos.length > 0 ? (
+                          row.candidatos.map((c, idx) => (
+                            <div key={`${row.id}-pre-${idx}`}>
+                              {c.prestamo_id != null ? `#${c.prestamo_id}` : '-'}
+                            </div>
+                          ))
+                        ) : row.prestamo_id != null ? (
+                          `#${row.prestamo_id}`
+                        ) : (
+                          '-'
+                        )}
+                      </TableCell>
+                      <TableCell className="max-w-[200px] font-mono text-xs">
+                        Banco: {row.referencia_banco || '-'}
+                        <br />
+                        RapiC: {row.referencia_bd || '-'}
                       </TableCell>
                       <TableCell>
                         {row.similitud_pct != null
                           ? `${row.similitud_pct}%`
                           : '-'}
-                      </TableCell>
-                      <TableCell className="max-w-[160px] truncate font-mono text-xs">
-                        {row.referencia_bd || '-'}
-                      </TableCell>
-                      <TableCell className="whitespace-nowrap text-xs">
-                        {row.cedula || '-'}
-                      </TableCell>
-                      <TableCell className="whitespace-nowrap text-xs">
-                        {row.prestamo_id != null ? `#${row.prestamo_id}` : '-'}
                       </TableCell>
                       <TableCell className="text-xs">
                         {row.institucion_categoria || '-'}
@@ -481,6 +668,13 @@ export default function ConciliacionBancosPage() {
                           {row.decision}
                           {row.aplicado ? ' · aplicado' : ''}
                         </div>
+                        {row.tipo_novedad === 'AMBIGUO' &&
+                          (row.candidatos?.length || 0) > 1 && (
+                            <div className="mt-1 max-w-[160px] text-[11px] text-red-700">
+                              Mismo serial en {row.candidatos?.length} pagos
+                              (frecuente en Mercantil). Revisar manual.
+                            </div>
+                          )}
                       </TableCell>
                       <TableCell>
                         <select

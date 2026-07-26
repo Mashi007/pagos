@@ -8,6 +8,7 @@ export const INSTITUCIONES_BANCARIAS_PAGO: readonly string[] = [
   'BNV',
   'Binance',
   'Recibo',
+  'Drive',
 ]
 
 const SIN_ESPECIFICAR_VALUE = '__sin_especificar__'

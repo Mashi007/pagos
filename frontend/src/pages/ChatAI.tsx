@@ -493,7 +493,7 @@ export function ChatAI() {
         toast.error(
           'Sistema de calificaciones no disponible. Ejecuta la migración SQL para crear la tabla.',
           {
-            duration: 5000
+            duration: 5000,
           }
         )
       } else {
@@ -579,10 +579,10 @@ export function ChatAI() {
 
                 <p className="text-sm text-amber-700">
                   <>
-                      El Chat AI no esta disponible: la seccion de Inteligencia
-                      Artificial fue retirada de Configuracion. Contacta al
-                      administrador del sistema si necesitas habilitarlo.
-                    </>
+                    El Chat AI no esta disponible: la seccion de Inteligencia
+                    Artificial fue retirada de Configuracion. Contacta al
+                    administrador del sistema si necesitas habilitarlo.
+                  </>
                 </p>
               </div>
             </div>

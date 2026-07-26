@@ -32,7 +32,19 @@ class DecisionBody(BaseModel):
 class CompararBody(BaseModel):
     bancos: List[str] = Field(
         default_factory=list,
-        description="Categorias: Mercantil, BNC, Binance, BNV, Recibos, Otros",
+        description="Categorias: Mercantil, BNC, Binance, BNV, Recibos, Drive, Otros",
+    )
+
+
+class DecisionMasivaItem(BaseModel):
+    resultado_id: int
+    fuente_elegida: Optional[str] = None
+
+
+class DecisionMasivaBody(BaseModel):
+    items: List[DecisionMasivaItem]
+    fuente_default: str = Field(
+        default="BANCO", description="BD | BANCO si el item no trae fuente"
     )
 
 
@@ -121,6 +133,20 @@ def decidir(
         decision=body.decision,
         fuente_elegida=body.fuente_elegida,
         usuario_id=getattr(user, "id", None),
+    )
+
+
+@router.post("/resultados/decidir-masivo")
+def decidir_masivo(
+    body: DecisionMasivaBody,
+    db: Session = Depends(get_db),
+    user: UserResponse = Depends(require_admin),
+):
+    return svc.decidir_masivo(
+        db,
+        [i.model_dump() for i in body.items],
+        usuario_id=getattr(user, "id", None),
+        fuente_default=body.fuente_default,
     )
 
 

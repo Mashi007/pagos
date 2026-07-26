@@ -277,6 +277,16 @@ from .pago_serializacion_respuesta import (
 
 logger = logging.getLogger(__name__)
 
+def _institucion_bancaria_alta_pago(
+    numero_documento: Optional[str],
+    institucion: Optional[str],
+) -> Optional[str]:
+    """Drive en catalogo o ABONOS-* => institucion_bancaria Drive."""
+    from app.services.pago_autoconciliacion import forzar_institucion_drive_si_abonos
+
+    return forzar_institucion_drive_si_abonos(numero_documento, institucion)
+
+
 router = APIRouter(dependencies=[Depends(get_current_user)])
 
 @router.get("/{pago_id:int}", response_model=dict)
@@ -444,7 +454,10 @@ def crear_pago(payload: PagoCreate, db: Session = Depends(get_db), current_user:
 
             numero_documento=num_stored,
 
-            institucion_bancaria=payload.institucion_bancaria.strip() if payload.institucion_bancaria else None,
+            institucion_bancaria=_institucion_bancaria_alta_pago(
+                num_stored,
+                payload.institucion_bancaria.strip() if payload.institucion_bancaria else None,
+            ),
 
             estado="PAGADO" if conciliado else "PENDIENTE",
 
@@ -810,6 +823,12 @@ def actualizar_pago(
             setattr(row, k, v)
 
     _mark_fase("campos_basicos")
+
+    # ABONOS-NOTIF/DRIVE o seleccion Drive en revision manual => banco Drive
+    row.institucion_bancaria = _institucion_bancaria_alta_pago(
+        getattr(row, "numero_documento", None),
+        getattr(row, "institucion_bancaria", None),
+    )
 
     if monetario_up:
 

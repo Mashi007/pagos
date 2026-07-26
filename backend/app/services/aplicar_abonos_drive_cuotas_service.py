@@ -132,6 +132,7 @@ def aplicar_abonos_drive_a_cuotas_prestamo(
         fecha_pago=datetime.combine(fecha_date, dt_time.min),
         monto_pagado=monto_usd_g,
         numero_documento=ref_pago[:100],
+        institucion_bancaria="Drive",
         estado="PAGADO",
         referencia_pago=ref_pago,
         conciliado=True,

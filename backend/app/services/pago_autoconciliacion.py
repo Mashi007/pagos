@@ -15,6 +15,28 @@ _PREFIJOS_REF_AUTOCONCILIADO = (
     "CONC-IMG-",
 )
 
+INSTITUCION_BANCARIA_DRIVE = "Drive"
+
+
+def es_referencia_abonos_drive_notif(ref: Optional[str]) -> bool:
+    """ABONOS-NOTIF-* / ABONOS-DRIVE-* (asientos Drive / Notificaciones)."""
+    s = (ref or "").strip().upper()
+    return s.startswith("ABONOS-NOTIF-") or s.startswith("ABONOS-DRIVE-")
+
+
+def forzar_institucion_drive_si_abonos(
+    numero_documento: Optional[str],
+    institucion: Optional[str] = None,
+) -> Optional[str]:
+    """Si el serial es ABONOS-* o eligen Drive, institucion_bancaria = Drive."""
+    if es_referencia_abonos_drive_notif(numero_documento):
+        return INSTITUCION_BANCARIA_DRIVE
+    t = (institucion or "").strip()
+    if t.lower() == "drive":
+        return INSTITUCION_BANCARIA_DRIVE
+    return t or None
+
+
 _MARCADOR_NOTAS_CONCILIAR_CARTERA = "Conciliar cartera:"
 
 

@@ -45,6 +45,7 @@ export function normalizarInstitucionBancoEscaneo(raw: string): string | null {
   if (/^bnc$/i.test(t) || /^bnv$/i.test(t)) return 'BNC'
   if (/mercantil/i.test(t)) return 'Mercantil'
   if (/^recibo/i.test(t)) return 'Recibo'
+  if (/^drive$/i.test(t)) return 'Drive'
   if (/banco de venezuela|^bdv$/i.test(t)) return 'Banco de Venezuela'
   return t
 }
@@ -74,7 +75,7 @@ export function esNumeroDocumentoSinteticoOcrInvalido(num: string): boolean {
   const t = (num || '').trim().toUpperCase()
   if (!t) return false
   if (/^REOCR-PEND-\d+$/i.test(t)) return false
-  if (t.startsWith('ABONOS-DRIVE-')) return true
+  if (t.startsWith('ABONOS-DRIVE-') || t.startsWith('ABONOS-NOTIF-')) return true
   if (esCodigoDcmeMercantil(num)) return true
   return false
 }

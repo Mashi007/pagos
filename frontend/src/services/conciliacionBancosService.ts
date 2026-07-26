@@ -8,10 +8,11 @@ export type ConciliacionBancosBancoCategoria =
   | 'Binance'
   | 'BNV'
   | 'Recibos'
+  | 'Drive'
   | 'Otros'
 
 export const CONCILIACION_BANCOS_CATEGORIAS: ConciliacionBancosBancoCategoria[] =
-  ['Mercantil', 'BNC', 'Binance', 'BNV', 'Recibos', 'Otros']
+  ['Mercantil', 'BNC', 'Binance', 'BNV', 'Recibos', 'Drive', 'Otros']
 
 export interface ConciliacionBancosLote {
   id: number
@@ -46,6 +47,13 @@ export interface ConciliacionBancosResultado {
   fuente_elegida?: string | null
   aplicado: boolean
   detalle_aplicacion?: string | null
+  candidatos?: Array<{
+    pago_id: number
+    cedula?: string | null
+    prestamo_id?: number | null
+    monto?: number | null
+    institucion_categoria?: string | null
+  }> | null
 }
 
 const BASE = '/api/v1/conciliacion-bancos'
@@ -101,6 +109,30 @@ export const conciliacionBancosService = {
   ): Promise<Record<string, unknown>> {
     return apiClient.post(`${BASE}/resultados/${resultadoId}/decidir`, body, {
       timeout: 180000,
+    })
+  },
+
+  async decidirMasivo(body: {
+    items: Array<{ resultado_id: number; fuente_elegida?: 'BD' | 'BANCO' }>
+    fuente_default?: 'BD' | 'BANCO'
+  }): Promise<{
+    ok: boolean
+    total: number
+    exitosos: number
+    errores: number
+    sin_pago_vistos: number
+    con_cambio: number
+    detalle: Array<{
+      resultado_id: number
+      ok: boolean
+      modo?: string
+      fuente?: string
+      cambio?: boolean
+      error?: string
+    }>
+  }> {
+    return apiClient.post(`${BASE}/resultados/decidir-masivo`, body, {
+      timeout: 300000,
     })
   },
 

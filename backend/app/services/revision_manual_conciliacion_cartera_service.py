@@ -446,7 +446,7 @@ def _crear_pago_asiento_abonos_general(
         fecha_pago=datetime.combine(fecha_date, dt_time.min),
         monto_pagado=monto_usd,
         numero_documento=ref,
-        institucion_bancaria=None,
+        institucion_bancaria="Drive",
         estado="PAGADO",
         notas=nota,
         referencia_pago=ref,

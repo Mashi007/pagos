@@ -104,7 +104,6 @@ function renderSeccionPanel(id: ConfigSectionId) {
     case 'whatsappConfig':
       return <ConfigWhatsAppTab />
 
-
     case 'informePagosConfig':
       return <ConfigInformePagosTab />
 

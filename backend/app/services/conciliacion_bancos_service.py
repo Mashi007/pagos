@@ -35,7 +35,56 @@ SIMILITUD_MINIMA = 70.0
 MONTO_TOL = 0.02
 
 
-BANCOS_CATEGORIAS = ("Mercantil", "BNC", "Binance", "BNV", "Recibos", "Otros")
+def _candidatos_payload(pagos: list[Pago]) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    for p in pagos:
+        out.append(
+            {
+                "pago_id": int(p.id),
+                "cedula": p.cedula_cliente,
+                "prestamo_id": int(p.prestamo_id) if p.prestamo_id is not None else None,
+                "monto": float(p.monto_pagado) if p.monto_pagado is not None else None,
+                "institucion_categoria": categoria_pago_conciliacion(p),
+                "referencia_bd": p.numero_documento,
+            }
+        )
+    return out
+
+
+def _detalle_ambiguo_serial(pagos: list[Pago]) -> str:
+    cats = {categoria_pago_conciliacion(p) for p in pagos}
+    mercantil = cats == {"Mercantil"} or "Mercantil" in cats
+    lines = []
+    for p in pagos:
+        ced = p.cedula_cliente or "?"
+        pre = f"#{p.prestamo_id}" if p.prestamo_id is not None else "#?"
+        lines.append(f"{ced} {pre} (pago {p.id})")
+    base = (
+        f"Mismo serial en {len(pagos)} pagos"
+        + (" (patron tipico Mercantil)" if mercantil else "")
+        + ". Discernimiento manual."
+    )
+    return base + " Candidatos: " + "; ".join(lines)
+
+
+
+BANCOS_CATEGORIAS = ("Mercantil", "BNC", "Binance", "BNV", "Recibos", "Drive", "Otros")
+
+
+
+# Asientos sinteticos Drive / Notificaciones (a menudo suma de pagos)
+_PREFIJOS_DRIVE_ABONOS = (
+    "ABONOS-NOTIF-",
+    "ABONOS-DRIVE-",
+)
+
+
+def _es_asiento_drive_abonos(numero_documento: Optional[str]) -> bool:
+    """True si es referencia sintetica tipo ABONOS-NOTIF-911-B5 (Drive/Notificaciones)."""
+    s = (numero_documento or "").strip().upper()
+    if not s:
+        return False
+    return any(s.startswith(pref) for pref in _PREFIJOS_DRIVE_ABONOS)
 
 
 def categoria_institucion(inst: Optional[str]) -> str:
@@ -51,7 +100,16 @@ def categoria_institucion(inst: Optional[str]) -> str:
         return "BNV"
     if "recibo" in s:
         return "Recibos"
+    if "drive" in s:
+        return "Drive"
     return "Otros"
+
+
+def categoria_pago_conciliacion(pago: Pago) -> str:
+    """Categoria para filtro Conciliacion Bancos (Drive = ABONOS-NOTIF/DRIVE)."""
+    if _es_asiento_drive_abonos(getattr(pago, "numero_documento", None)):
+        return "Drive"
+    return categoria_institucion(getattr(pago, "institucion_bancaria", None))
 
 
 def normalizar_bancos_filtro(bancos: Optional[list[str]]) -> list[str]:
@@ -102,6 +160,7 @@ def _ref_solo_digitos(val: Optional[str]) -> str:
     - Ignora letras y signos agregados por digitacion (REF-, BNC/, puntos, guiones, etc.).
     - Quita sufijo interno §CD: (codigo desambiguador) para no contaminar la clave.
     - Maneja notacion cientifica via normalize_documento.
+    - Quita ceros a la izquierda (BD/OCR a veces guarda 00000019197881 == 19197881).
     """
     if val is None or val == "":
         return ""
@@ -117,7 +176,12 @@ def _ref_solo_digitos(val: Optional[str]) -> str:
         s = s2 if s2 else s
         break  # una pasada basta; el bucle evita bucles raros si regex vacia
     # Solo digitos: letras/signos no participan en similitud
-    return re.sub(r"\D+", "", s)
+    digitos = re.sub(r"\D+", "", s)
+    if not digitos:
+        return ""
+    # Normalizar padding de ceros (Rapi/OCR): 00000019197881 -> 19197881
+    sin_ceros = digitos.lstrip("0")
+    return sin_ceros if sin_ceros else "0"
 
 
 def _similitud(a: str, b: str) -> float:
@@ -358,17 +422,20 @@ def comparar_lote(
         .scalars()
         .all()
     )
-    # Solo pagos de las instituciones seleccionadas (evita ruido de otros bancos)
+    # Solo pagos de las categorias seleccionadas (Drive = ABONOS-NOTIF/DRIVE).
     pagos = [
         p
         for p in pagos_raw
-        if categoria_institucion(p.institucion_bancaria) in bancos_sel
+        if categoria_pago_conciliacion(p) in bancos_sel
         and int(p.id) not in excluir_pago_ids
         and _ref_solo_digitos(p.numero_documento) not in excluir_digitos
     ]
 
     by_digits: dict[str, list[Pago]] = {}
     for p in pagos:
+        # No indexar seriales sinteticos Drive (evita falsos match por digitos del codigo)
+        if _es_asiento_drive_abonos(p.numero_documento):
+            continue
         key = _ref_solo_digitos(normalize_documento(p.numero_documento) or p.numero_documento or "")
         if not key:
             continue
@@ -447,6 +514,53 @@ def comparar_lote(
             continue
 
         if len(candidatos_exactos) > 1:
+            # Mercantil suele reusar el mismo serial en 2+ prestamos/pagos.
+            # Intentar desambiguar por monto y luego fecha antes de marcar AMBIGUO.
+            pool = list(candidatos_exactos)
+            if monto_usd is not None:
+                por_monto = [
+                    p
+                    for p in pool
+                    if abs(float(p.monto_pagado or 0) - monto_usd) <= MONTO_TOL
+                ]
+                if len(por_monto) == 1:
+                    pool = por_monto
+                elif len(por_monto) > 1:
+                    pool = por_monto
+            if len(pool) > 1 and fecha_b is not None:
+                por_fecha = [p for p in pool if _pago_fecha(p) == fecha_b]
+                if len(por_fecha) == 1:
+                    pool = por_fecha
+                elif len(por_fecha) > 1:
+                    pool = por_fecha
+
+            if len(pool) == 1:
+                p = pool[0]
+                matched_pago_ids.add(p.id)
+                db.add(
+                    ConciliacionBancoOcrResultado(
+                        lote_id=lote_id,
+                        banco_id=b.id,
+                        pago_id=p.id,
+                        fecha_banco=fecha_b,
+                        fecha_bd=_pago_fecha(p),
+                        referencia_banco=b.referencia_banco,
+                        referencia_bd=p.numero_documento,
+                        monto_banco=Decimal(str(monto_usd)) if monto_usd is not None else None,
+                        monto_bd=p.monto_pagado,
+                        similitud_pct=Decimal("100"),
+                        tipo_novedad="MATCH_EXACTO",
+                        decision="PENDIENTE",
+                        detalle_aplicacion=(
+                            "Serial compartido desambiguado por monto/fecha "
+                            "(patron Mercantil)."
+                        ),
+                    )
+                )
+                stats["MATCH_EXACTO"] += 1
+                continue
+
+            cands = _candidatos_payload(pool)
             db.add(
                 ConciliacionBancoOcrResultado(
                     lote_id=lote_id,
@@ -458,10 +572,8 @@ def comparar_lote(
                     similitud_pct=Decimal("100"),
                     tipo_novedad="AMBIGUO",
                     decision="PENDIENTE",
-                    detalle_aplicacion=(
-                        f"Varios pagos con el mismo numero_documento normalizado "
-                        f"({len(candidatos_exactos)}). Discernimiento manual."
-                    ),
+                    detalle_aplicacion=_detalle_ambiguo_serial(pool),
+                    valores_antes=json.dumps({"candidatos": cands}, ensure_ascii=True),
                 )
             )
             stats["AMBIGUO"] += 1
@@ -501,6 +613,8 @@ def comparar_lote(
             continue
 
         if len(mejores) > 1 and abs(mejores[0][0] - mejores[1][0]) < 0.5:
+            top = [p for sim, p in mejores if abs(sim - mejores[0][0]) < 0.5][:8]
+            cands = _candidatos_payload(top)
             db.add(
                 ConciliacionBancoOcrResultado(
                     lote_id=lote_id,
@@ -512,7 +626,8 @@ def comparar_lote(
                     similitud_pct=Decimal(str(mejores[0][0])),
                     tipo_novedad="AMBIGUO",
                     decision="PENDIENTE",
-                    detalle_aplicacion="Varios candidatos con similitud similar. Discernimiento manual.",
+                    detalle_aplicacion=_detalle_ambiguo_serial(top),
+                    valores_antes=json.dumps({"candidatos": cands}, ensure_ascii=True),
                 )
             )
             stats["AMBIGUO"] += 1
@@ -817,6 +932,115 @@ def decidir_y_aplicar(
     }
 
 
+
+def decidir_masivo(
+    db: Session,
+    items: list[dict[str, Any]],
+    *,
+    usuario_id: Optional[int],
+    fuente_default: str = "BANCO",
+) -> dict[str, Any]:
+    """
+    Confirma varias filas. Cada una usa la misma logica que decidir_y_aplicar
+    (transaccion independiente): un fallo no detiene el resto.
+    """
+    if not items:
+        raise HTTPException(status_code=400, detail="No hay filas seleccionadas")
+    if len(items) > 200:
+        raise HTTPException(status_code=400, detail="Maximo 200 filas por lote masivo")
+
+    ok = 0
+    errores = 0
+    sin_pago = 0
+    cambios = 0
+    detalle: list[dict[str, Any]] = []
+    fuente_def = (fuente_default or "BANCO").strip().upper()
+    if fuente_def not in ("BD", "BANCO"):
+        fuente_def = "BANCO"
+
+    for raw in items:
+        rid = int(raw.get("resultado_id") or 0)
+        if rid <= 0:
+            errores += 1
+            detalle.append({"resultado_id": rid, "ok": False, "error": "id invalido"})
+            continue
+        fuente = (raw.get("fuente_elegida") or fuente_def or "BANCO").strip().upper()
+        if fuente not in ("BD", "BANCO"):
+            fuente = fuente_def
+        res = db.get(ConciliacionBancoOcrResultado, rid)
+        if not res:
+            errores += 1
+            detalle.append({"resultado_id": rid, "ok": False, "error": "no encontrado"})
+            continue
+        try:
+            if (
+                not res.pago_id
+                or res.tipo_novedad in ("SIN_BD", "SIN_TASA")
+            ):
+                r = decidir_y_aplicar(
+                    db,
+                    rid,
+                    decision="VISTO",
+                    fuente_elegida=None,
+                    usuario_id=usuario_id,
+                )
+                sin_pago += 1
+                ok += 1
+                detalle.append({"resultado_id": rid, "ok": True, "modo": "VISTO", **{k: r.get(k) for k in ("decision", "aplicado")}})
+            else:
+                r = decidir_y_aplicar(
+                    db,
+                    rid,
+                    decision="CORREGIR",
+                    fuente_elegida=fuente,
+                    usuario_id=usuario_id,
+                )
+                ok += 1
+                if r.get("cambio"):
+                    cambios += 1
+                detalle.append(
+                    {
+                        "resultado_id": rid,
+                        "ok": True,
+                        "modo": "CORREGIR",
+                        "fuente": fuente,
+                        "cambio": bool(r.get("cambio")),
+                    }
+                )
+        except HTTPException as he:
+            errores += 1
+            detalle.append(
+                {
+                    "resultado_id": rid,
+                    "ok": False,
+                    "error": str(he.detail),
+                }
+            )
+            try:
+                db.rollback()
+            except Exception:
+                pass
+        except Exception as e:
+            errores += 1
+            logger.exception("decidir_masivo fallo resultado_id=%s", rid)
+            detalle.append({"resultado_id": rid, "ok": False, "error": str(e)[:300]})
+            try:
+                db.rollback()
+            except Exception:
+                pass
+
+    return {
+        "ok": errores == 0,
+        "total": len(items),
+        "exitosos": ok,
+        "errores": errores,
+        "sin_pago_vistos": sin_pago,
+        "con_cambio": cambios,
+        "detalle": detalle[:200],
+    }
+
+
+
 def listar_resultados(db: Session, lote_id: int) -> list[dict[str, Any]]:
     rows = (
         db.execute(
@@ -835,6 +1059,14 @@ def listar_resultados(db: Session, lote_id: int) -> list[dict[str, Any]]:
     out = []
     for r in rows:
         pago = pagos_map.get(int(r.pago_id)) if r.pago_id else None
+        candidatos = None
+        if not pago and r.valores_antes:
+            try:
+                raw = json.loads(r.valores_antes)
+                if isinstance(raw, dict) and isinstance(raw.get("candidatos"), list):
+                    candidatos = raw["candidatos"]
+            except Exception:
+                candidatos = None
         out.append(
             {
                 "id": r.id,
@@ -845,7 +1077,7 @@ def listar_resultados(db: Session, lote_id: int) -> list[dict[str, Any]]:
                 "prestamo_id": (pago.prestamo_id if pago else None),
                 "institucion_bancaria": (pago.institucion_bancaria if pago else None),
                 "institucion_categoria": (
-                    categoria_institucion(pago.institucion_bancaria) if pago else None
+                    categoria_pago_conciliacion(pago) if pago else None
                 ),
                 "fecha_banco": r.fecha_banco.isoformat() if r.fecha_banco else None,
                 "fecha_bd": r.fecha_bd.isoformat() if r.fecha_bd else None,
@@ -859,6 +1091,7 @@ def listar_resultados(db: Session, lote_id: int) -> list[dict[str, Any]]:
                 "fuente_elegida": r.fuente_elegida,
                 "aplicado": bool(r.aplicado),
                 "detalle_aplicacion": r.detalle_aplicacion,
+                "candidatos": candidatos,
             }
         )
     return out

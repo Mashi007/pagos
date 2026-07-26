@@ -1067,17 +1067,21 @@ export function pagoInicialDesdeSugerenciaEscaneoRevision(
   const pid =
     prestamoId != null && Number(prestamoId) > 0 ? Number(prestamoId) : null
 
-  const inst =
+  const numDoc = numeroOperacionOcrParaReescaneo(sugerencia)
+  let inst =
     institucionDesdeSugerenciaOcr(sugerencia) ||
     normalizarInstitucionBancoEscaneo(
       (sugerencia.institucion_financiera || '').trim()
     )
+  if (/^ABONOS-(NOTIF|DRIVE)-/i.test(numDoc || '')) {
+    inst = 'Drive'
+  }
 
   const base: PagoInicialRegistrar = {
     cedula_cliente: cedula,
     prestamo_id: pid,
     fecha_pago: fechaPagoDesdeSugerenciaOcrReescaneo(sugerencia),
-    numero_documento: numeroOperacionOcrParaReescaneo(sugerencia),
+    numero_documento: numDoc,
     institucion_bancaria: inst || null,
     notas: (sugerencia.notas_modelo || '').trim() || null,
     link_comprobante: null,
