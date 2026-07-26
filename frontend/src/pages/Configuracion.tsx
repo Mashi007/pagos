@@ -21,7 +21,6 @@ import {
   ConfigPlantillasTab,
   ConfigEmailTab,
   ConfigWhatsAppTab,
-  ConfigAITab,
   ConfigValidadoresTab,
   ConfigInformePagosTab,
   ConfigAnalistasTab,
@@ -39,8 +38,6 @@ function tabToSeccion(tab: string | null): string {
     email: 'emailConfig',
 
     whatsapp: 'whatsappConfig',
-
-    ai: 'aiConfig',
 
     'informe-pagos': 'informePagosConfig',
 
@@ -77,7 +74,6 @@ const CONFIG_SECTION_IDS = [
   'plantillas',
   'emailConfig',
   'whatsappConfig',
-  'aiConfig',
   'informePagosConfig',
   'auditoria',
   'baseDatos',
@@ -108,8 +104,6 @@ function renderSeccionPanel(id: ConfigSectionId) {
     case 'whatsappConfig':
       return <ConfigWhatsAppTab />
 
-    case 'aiConfig':
-      return <ConfigAITab />
 
     case 'informePagosConfig':
       return <ConfigInformePagosTab />
@@ -155,7 +149,7 @@ const Configuracion = () => {
   useEffect(() => {
     const tab = searchParams.get('tab')
 
-    if (tab === 'programador') {
+    if (tab === 'programador' || tab === 'ai') {
       navigate('/configuracion?tab=general', { replace: true })
       return
     }
@@ -168,8 +162,7 @@ const Configuracion = () => {
 
   const nombresSeccionEspecial = NOMBRES_SECCION_ESPECIAL
 
-  const seccionActivaNormalizada =
-    seccionActiva === 'inteligenciaArtificial' ? 'aiConfig' : seccionActiva
+  const seccionActivaNormalizada = seccionActiva
 
   const activePanel: ConfigSectionId = (
     CONFIG_SECTION_IDS as readonly string[]

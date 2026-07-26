@@ -455,14 +455,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
           href: '/configuracion?tab=whatsapp',
           icon: MessageSquare,
         },
-
-        {
-          title: 'Configuración AI',
-          href: '/configuracion?tab=ai',
-          icon: Brain,
-        },
-
-        {
+{
           title: 'Google (Drive, Sheets, Gmail, OCR)',
           href: '/configuracion?tab=informe-pagos',
           icon: FileText,

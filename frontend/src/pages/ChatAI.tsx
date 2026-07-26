@@ -493,21 +493,7 @@ export function ChatAI() {
         toast.error(
           'Sistema de calificaciones no disponible. Ejecuta la migración SQL para crear la tabla.',
           {
-            duration: 5000,
-            ...(esAdministrador
-              ? {
-                  action: {
-                    label: 'Ver instrucciones',
-                    onClick: () => {
-                      window.open(
-                        BASE_PATH +
-                          '/configuracion?tab=ai&subtab=calificaciones-chat',
-                        '_blank'
-                      )
-                    },
-                  },
-                }
-              : {}),
+            duration: 5000
           }
         )
       } else {
@@ -592,26 +578,11 @@ export function ChatAI() {
                 </p>
 
                 <p className="text-sm text-amber-700">
-                  {esAdministrador ? (
-                    <>
-                      Para usar Chat AI, configura y activa la Inteligencia
-                      Artificial en{' '}
-                      <a
-                        href={BASE_PATH + '/configuracion?tab=ai'}
-                        className="font-medium underline"
-                      >
-                        Configuración &gt; Inteligencia Artificial
-                      </a>
-                      .
+                  <>
+                      El Chat AI no esta disponible: la seccion de Inteligencia
+                      Artificial fue retirada de Configuracion. Contacta al
+                      administrador del sistema si necesitas habilitarlo.
                     </>
-                  ) : (
-                    <>
-                      El Chat AI requiere que un <strong>administrador</strong>{' '}
-                      configure y active la Inteligencia Artificial (API y
-                      estado activo). Si necesitas acceso urgente, contacta al
-                      administrador del sistema.
-                    </>
-                  )}
                 </p>
               </div>
             </div>

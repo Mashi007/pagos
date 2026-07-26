@@ -9,7 +9,6 @@ import {
   FileText,
   Database,
   DollarSign,
-  Brain,
   CheckSquare,
   Building,
   Users,
@@ -85,12 +84,6 @@ export const SECCIONES_CONFIGURACION: SeccionConfig[] = [
 
   { id: 'facturacion', nombre: 'Facturación', icono: DollarSign },
 
-  {
-    id: 'inteligenciaArtificial',
-    nombre: 'Inteligencia Artificial',
-    icono: Brain,
-  },
-
   { id: 'validadores', nombre: 'Validadores', icono: CheckSquare },
 
   { id: 'concesionarios', nombre: 'Concesionarios', icono: Building },
@@ -109,8 +102,6 @@ export const NOMBRES_SECCION_ESPECIAL: Record<
   emailConfig: { nombre: 'Configuración Email', icono: Mail },
 
   whatsappConfig: { nombre: 'Configuración WhatsApp', icono: MessageSquare },
-
-  aiConfig: { nombre: 'Configuración AI', icono: Brain },
 
   informePagosConfig: {
     nombre: 'Google (Drive, Sheets, Gmail, OCR)',
