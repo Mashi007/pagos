@@ -27,6 +27,10 @@ class DecisionBody(BaseModel):
     fuente_elegida: Optional[str] = Field(
         None, description="BD | BANCO (requerido si decision=CORREGIR)"
     )
+    pago_id_elegido: Optional[int] = Field(
+        None,
+        description="Obligatorio en AMBIGUO+CORREGIR: pago/prestamo elegido entre candidatos",
+    )
 
 
 class CompararBody(BaseModel):
@@ -34,11 +38,18 @@ class CompararBody(BaseModel):
         default_factory=list,
         description="Categorias: Mercantil, BNC, Binance, BNV, Recibos, Drive, Otros",
     )
+    fecha_desde: Optional[date] = Field(
+        None, description="Opcional: actualiza rango BD del lote antes de comparar"
+    )
+    fecha_hasta: Optional[date] = Field(
+        None, description="Opcional: actualiza rango BD del lote antes de comparar"
+    )
 
 
 class DecisionMasivaItem(BaseModel):
     resultado_id: int
     fuente_elegida: Optional[str] = None
+    pago_id_elegido: Optional[int] = None
 
 
 class DecisionMasivaBody(BaseModel):
@@ -107,7 +118,13 @@ def comparar(
 ):
     return {
         "ok": True,
-        **svc.comparar_lote(db, lote_id, bancos_filtro=body.bancos),
+        **svc.comparar_lote(
+            db,
+            lote_id,
+            bancos_filtro=body.bancos,
+            fecha_desde=body.fecha_desde,
+            fecha_hasta=body.fecha_hasta,
+        ),
     }
 
 
@@ -133,6 +150,7 @@ def decidir(
         decision=body.decision,
         fuente_elegida=body.fuente_elegida,
         usuario_id=getattr(user, "id", None),
+        pago_id_elegido=body.pago_id_elegido,
     )
 
 

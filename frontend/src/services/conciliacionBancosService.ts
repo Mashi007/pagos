@@ -78,19 +78,26 @@ export const conciliacionBancosService = {
 
   async comparar(
     loteId: number,
-    bancos: ConciliacionBancosBancoCategoria[]
+    bancos: ConciliacionBancosBancoCategoria[],
+    fechas?: { fecha_desde?: string; fecha_hasta?: string }
   ): Promise<{
     ok: boolean
     lote_id: number
     estado: string
     stats: Record<string, number>
     bancos_filtro?: string[]
+    fecha_desde?: string
+    fecha_hasta?: string
     pagos_universo?: number
   }> {
     return apiClient.post(
       `${BASE}/lotes/${loteId}/comparar`,
-      { bancos },
-      { timeout: 180000 }
+      {
+        bancos,
+        fecha_desde: fechas?.fecha_desde || undefined,
+        fecha_hasta: fechas?.fecha_hasta || undefined,
+      },
+      { timeout: 300000 }
     )
   },
 
@@ -105,6 +112,7 @@ export const conciliacionBancosService = {
     body: {
       decision: 'VISTO' | 'CORREGIR' | 'OMITIR'
       fuente_elegida?: 'BD' | 'BANCO'
+      pago_id_elegido?: number
     }
   ): Promise<Record<string, unknown>> {
     return apiClient.post(`${BASE}/resultados/${resultadoId}/decidir`, body, {
@@ -113,7 +121,11 @@ export const conciliacionBancosService = {
   },
 
   async decidirMasivo(body: {
-    items: Array<{ resultado_id: number; fuente_elegida?: 'BD' | 'BANCO' }>
+    items: Array<{
+      resultado_id: number
+      fuente_elegida?: 'BD' | 'BANCO'
+      pago_id_elegido?: number
+    }>
     fuente_default?: 'BD' | 'BANCO'
   }): Promise<{
     ok: boolean

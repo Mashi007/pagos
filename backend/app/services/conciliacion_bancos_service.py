@@ -88,6 +88,22 @@ def _es_asiento_drive_abonos(numero_documento: Optional[str]) -> bool:
 
 
 
+def _clave_caso_banco(
+    referencia: Optional[str],
+    fecha_banco: Optional[date],
+    monto_usd: Optional[float],
+) -> str:
+    """
+    Identifica un movimiento banco ya gestionado (Visto/confirmado):
+    serial digitos + fecha + monto. Asi BNV puede reusar el mismo serial
+    en otra fecha/monto y ese otro caso SI aparece.
+    """
+    dig = _ref_solo_digitos(referencia)
+    if not dig or fecha_banco is None or monto_usd is None:
+        return ""
+    return f"{dig}|{fecha_banco.isoformat()}|{round(float(monto_usd), 2):.2f}"
+
+
 def _paquete_banco_coherente_con_pago(
     pago: Pago,
     *,
@@ -95,16 +111,16 @@ def _paquete_banco_coherente_con_pago(
     monto_usd: Optional[float],
 ) -> bool:
     """
-    True si el pago BD es usable como MATCH_EXACTO frente a la fila banco.
-    Evita enlazar el mismo serial reutilizado (ej. BNV 2058270) con montos/fechas distintos.
+    Coincidencia exacta de paquete: monto Y fecha (ademas del serial fuera).
+    Sin fecha o monto en banco no se considera match exacto/parcial firme.
     """
-    if monto_usd is not None:
-        if abs(float(pago.monto_pagado or 0) - float(monto_usd)) > MONTO_TOL:
-            return False
-    if fecha_banco is not None:
-        fd = _pago_fecha(pago)
-        if fd is not None and fd != fecha_banco:
-            return False
+    if monto_usd is None or fecha_banco is None:
+        return False
+    if abs(float(pago.monto_pagado or 0) - float(monto_usd)) > MONTO_TOL:
+        return False
+    fd = _pago_fecha(pago)
+    if fd is None or fd != fecha_banco:
+        return False
     return True
 
 
@@ -307,6 +323,7 @@ def crear_lote_desde_excel(
     db.flush()
 
     n = 0
+    fechas_excel: list[date] = []
     for i, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
         if not row:
             continue
@@ -331,10 +348,19 @@ def crear_lote_desde_excel(
             )
         )
         n += 1
+        if fecha_b is not None:
+            fechas_excel.append(fecha_b)
 
     if n == 0:
         db.rollback()
         raise HTTPException(status_code=400, detail="No hay filas validas (Fecha, Referencia, Monto)")
+
+    # Ampliar rango BD para cubrir el Excel (si el form quedo en "hoy" u otro rango corto)
+    if fechas_excel:
+        excel_min = min(fechas_excel)
+        excel_max = max(fechas_excel)
+        lote.fecha_desde = min(lote.fecha_desde, excel_min)
+        lote.fecha_hasta = max(lote.fecha_hasta, excel_max)
 
     db.commit()
     db.refresh(lote)
@@ -346,10 +372,20 @@ def comparar_lote(
     lote_id: int,
     *,
     bancos_filtro: Optional[list[str]] = None,
+    fecha_desde: Optional[date] = None,
+    fecha_hasta: Optional[date] = None,
 ) -> dict[str, Any]:
     lote = db.get(ConciliacionBancoOcrLote, lote_id)
     if not lote:
         raise HTTPException(status_code=404, detail="Lote no encontrado")
+
+    if fecha_desde is not None or fecha_hasta is not None:
+        fd = fecha_desde or lote.fecha_desde
+        fh = fecha_hasta or lote.fecha_hasta
+        if fh < fd:
+            raise HTTPException(status_code=400, detail="fecha_hasta debe ser >= fecha_desde")
+        lote.fecha_desde = fd
+        lote.fecha_hasta = fh
 
     bancos_sel = normalizar_bancos_filtro(bancos_filtro)
     if not bancos_sel:
@@ -395,18 +431,17 @@ def comparar_lote(
 
     excluir_pago_ids: set[int] = set()
     excluir_banco_ids: set[int] = set()
-    excluir_digitos: set[str] = set()
+    excluir_casos_banco: set[str] = set()
     for c in list(confirmados_lote) + list(confirmados_global):
         if c.pago_id:
             excluir_pago_ids.add(int(c.pago_id))
-        if c.banco_id:
+        if c.lote_id == lote_id and c.banco_id:
             excluir_banco_ids.add(int(c.banco_id))
-        d1 = _ref_solo_digitos(c.referencia_banco)
-        d2 = _ref_solo_digitos(c.referencia_bd)
-        if d1:
-            excluir_digitos.add(d1)
-        if d2:
-            excluir_digitos.add(d2)
+        # Caso = serial+fecha+monto (Visto/confirmado no reaparece en futuros lotes)
+        mb = float(c.monto_banco) if c.monto_banco is not None else None
+        clave = _clave_caso_banco(c.referencia_banco, c.fecha_banco, mb)
+        if clave:
+            excluir_casos_banco.add(clave)
 
     db.execute(
         delete(ConciliacionBancoOcrResultado).where(
@@ -424,11 +459,29 @@ def comparar_lote(
         .scalars()
         .all()
     )
+    def _monto_usd_fila_banco(brow: ConciliacionBancoOcrBanco) -> Optional[float]:
+        if lote.moneda_carga == "USD":
+            if brow.monto_banco_original is not None:
+                return float(brow.monto_banco_original)
+            if brow.monto_banco is not None:
+                return float(brow.monto_banco)
+            return None
+        if brow.monto_banco is not None:
+            return float(brow.monto_banco)
+        return None
+
     bancos = [
         b
         for b in bancos
         if int(b.id) not in excluir_banco_ids
-        and _ref_solo_digitos(b.ref_banco_norm or b.referencia_banco) not in excluir_digitos
+        and (
+            _clave_caso_banco(
+                b.referencia_banco,
+                b.fecha_banco,
+                _monto_usd_fila_banco(b),
+            )
+            not in excluir_casos_banco
+        )
     ]
 
     pagos_raw = (
@@ -449,7 +502,6 @@ def comparar_lote(
         for p in pagos_raw
         if categoria_pago_conciliacion(p) in bancos_sel
         and int(p.id) not in excluir_pago_ids
-        and _ref_solo_digitos(p.numero_documento) not in excluir_digitos
     ]
 
     by_digits: dict[str, list[Pago]] = {}
@@ -611,18 +663,20 @@ def comparar_lote(
                 stats["AMBIGUO"] += 1
                 continue
 
-        # Match parcial: candidatos por monto cercano en el rango
+        # Match parcial: serial parecido, pero monto Y fecha exactos (politica producto)
         mejores: list[tuple[float, Pago]] = []
         for p in pagos:
             if p.id in matched_pago_ids:
                 continue
+            if _es_asiento_drive_abonos(p.numero_documento):
+                continue
+            if not _paquete_banco_coherente_con_pago(
+                p, fecha_banco=fecha_b, monto_usd=monto_usd
+            ):
+                continue
             sim = _similitud(ref_b, p.numero_documento or "")
             if sim < SIMILITUD_MINIMA:
                 continue
-            if monto_usd is not None:
-                md = float(p.monto_pagado or 0)
-                if abs(md - monto_usd) > MONTO_TOL and sim < 95.0:
-                    continue
             mejores.append((sim, p))
         mejores.sort(key=lambda x: x[0], reverse=True)
 
@@ -711,9 +765,11 @@ def comparar_lote(
         "estado": lote.estado,
         "stats": stats,
         "bancos_filtro": bancos_sel,
+        "fecha_desde": lote.fecha_desde.isoformat() if lote.fecha_desde else None,
+        "fecha_hasta": lote.fecha_hasta.isoformat() if lote.fecha_hasta else None,
         "pagos_universo": len(pagos),
         "confirmados_conservados": len(confirmados_lote),
-        "excluidos_por_confirmacion": len(excluir_pago_ids) + len(excluir_digitos),
+        "excluidos_por_confirmacion": len(excluir_pago_ids) + len(excluir_casos_banco),
     }
 
 
@@ -736,6 +792,22 @@ def _paquetes_iguales(
     return abs(ma - mb) < MONTO_TOL
 
 
+def _candidatos_ids_desde_resultado(res: ConciliacionBancoOcrResultado) -> set[int]:
+    ids: set[int] = set()
+    raw = (res.valores_antes or "").strip()
+    if not raw:
+        return ids
+    try:
+        data = json.loads(raw)
+        if isinstance(data, dict) and isinstance(data.get("candidatos"), list):
+            for c in data["candidatos"]:
+                if isinstance(c, dict) and c.get("pago_id"):
+                    ids.add(int(c["pago_id"]))
+    except Exception:
+        return ids
+    return ids
+
+
 def decidir_y_aplicar(
     db: Session,
     resultado_id: int,
@@ -743,16 +815,40 @@ def decidir_y_aplicar(
     decision: str,
     fuente_elegida: Optional[str],
     usuario_id: Optional[int],
+    pago_id_elegido: Optional[int] = None,
 ) -> dict[str, Any]:
     res = db.get(ConciliacionBancoOcrResultado, resultado_id)
     if not res:
         raise HTTPException(status_code=404, detail="Resultado no encontrado")
-    if res.aplicado and res.decision in ("VISTO", "CORREGIR"):
+    if res.decision in ("VISTO", "OMITIR") or (
+        res.aplicado and res.decision == "CORREGIR"
+    ):
         raise HTTPException(status_code=400, detail="Esta fila ya fue procesada")
 
     dec = (decision or "").strip().upper()
     if dec not in ("VISTO", "CORREGIR", "OMITIR"):
         raise HTTPException(status_code=400, detail="decision invalida")
+
+    # AMBIGUO: el operador elige el pago/prestamo entre candidatos (p.ej. Mercantil)
+    if (
+        dec == "CORREGIR"
+        and res.tipo_novedad == "AMBIGUO"
+        and pago_id_elegido is not None
+    ):
+        permitidos = _candidatos_ids_desde_resultado(res)
+        pid = int(pago_id_elegido)
+        if not permitidos or pid not in permitidos:
+            raise HTTPException(
+                status_code=400,
+                detail="pago_id_elegido no esta entre los candidatos AMBIGUO de esta fila",
+            )
+        pago_chk = db.get(Pago, pid)
+        if not pago_chk:
+            raise HTTPException(status_code=404, detail="Pago elegido no encontrado")
+        res.pago_id = pid
+        res.referencia_bd = pago_chk.numero_documento
+        res.fecha_bd = _pago_fecha(pago_chk)
+        res.monto_bd = pago_chk.monto_pagado
 
     now = datetime.now()
     res.usuario_decision_id = usuario_id
@@ -783,7 +879,17 @@ def decidir_y_aplicar(
     res.decision = "CORREGIR"
     res.fuente_elegida = fuente
 
-    if res.tipo_novedad in ("SIN_BD", "SIN_TASA") or not res.pago_id:
+    if res.tipo_novedad in ("SIN_BD", "SIN_TASA"):
+        raise HTTPException(
+            status_code=400,
+            detail="No hay pago BD vinculado; no se puede corregir (no se crean pagos).",
+        )
+    if not res.pago_id:
+        if res.tipo_novedad == "AMBIGUO":
+            raise HTTPException(
+                status_code=400,
+                detail="AMBIGUO: elija el prestamo/pago candidato antes de confirmar.",
+            )
         raise HTTPException(
             status_code=400,
             detail="No hay pago BD vinculado; no se puede corregir (no se crean pagos).",
@@ -817,10 +923,11 @@ def decidir_y_aplicar(
 
     # fuente BANCO
     fecha_new = res.fecha_banco or _pago_fecha(pago)
-    # Preferir serial limpio (solo digitos) si tras quitar ruido queda un nucleo numerico
-    serial_raw = normalize_documento(res.referencia_banco) or (res.referencia_banco or "").strip()
-    serial_dig = _ref_solo_digitos(res.referencia_banco)
-    serial_new = serial_dig if serial_dig else serial_raw
+    # Serial como en banco (Excel); normalize_documento solo limpia notacion cientifica
+    serial_new = (
+        normalize_documento(res.referencia_banco)
+        or (res.referencia_banco or "").strip()
+    )
     if not serial_new:
         raise HTTPException(status_code=400, detail="Referencia banco vacia")
 
@@ -1005,10 +1112,44 @@ def decidir_masivo(
             detalle.append({"resultado_id": rid, "ok": False, "error": "no encontrado"})
             continue
         try:
-            if (
+            pago_eleg = raw.get("pago_id_elegido")
+            pago_eleg_i = int(pago_eleg) if pago_eleg not in (None, "") else None
+            if res.tipo_novedad == "AMBIGUO" and pago_eleg_i:
+                r = decidir_y_aplicar(
+                    db,
+                    rid,
+                    decision="CORREGIR",
+                    fuente_elegida=fuente,
+                    usuario_id=usuario_id,
+                    pago_id_elegido=pago_eleg_i,
+                )
+                ok += 1
+                if r.get("cambio"):
+                    cambios += 1
+                detalle.append(
+                    {
+                        "resultado_id": rid,
+                        "ok": True,
+                        "modo": "CORREGIR",
+                        "fuente": fuente,
+                        "pago_id": pago_eleg_i,
+                        "cambio": bool(r.get("cambio")),
+                    }
+                )
+            elif (
                 not res.pago_id
-                or res.tipo_novedad in ("SIN_BD", "SIN_TASA")
+                or res.tipo_novedad in ("SIN_BD", "SIN_TASA", "AMBIGUO")
             ):
+                if res.tipo_novedad == "AMBIGUO":
+                    errores += 1
+                    detalle.append(
+                        {
+                            "resultado_id": rid,
+                            "ok": False,
+                            "error": "AMBIGUO sin pago elegido",
+                        }
+                    )
+                    continue
                 r = decidir_y_aplicar(
                     db,
                     rid,
@@ -1026,6 +1167,7 @@ def decidir_masivo(
                     decision="CORREGIR",
                     fuente_elegida=fuente,
                     usuario_id=usuario_id,
+                    pago_id_elegido=pago_eleg_i,
                 )
                 ok += 1
                 if r.get("cambio"):

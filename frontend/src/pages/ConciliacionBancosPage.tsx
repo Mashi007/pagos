@@ -70,6 +70,9 @@ export default function ConciliacionBancosPage() {
     Record<number, 'BD' | 'BANCO'>
   >({})
   const [fuenteMasiva, setFuenteMasiva] = useState<'BD' | 'BANCO'>('BANCO')
+  const [pagoElegidoPorFila, setPagoElegidoPorFila] = useState<
+    Record<number, number>
+  >({})
   const [seleccionados, setSeleccionados] = useState<Set<number>>(new Set())
   const [bancosSel, setBancosSel] = useState<
     ConciliacionBancosBancoCategoria[]
@@ -105,12 +108,15 @@ export default function ConciliacionBancosPage() {
 
   const elegiblesFiltrados = useMemo(
     () =>
-      itemsFiltrados.filter(
-        r =>
-          !filaBloqueada(r) &&
-          !(r.tipo_novedad === 'AMBIGUO' && !r.pago_id)
-      ),
-    [itemsFiltrados]
+      itemsFiltrados.filter(r => {
+        if (filaBloqueada(r)) return false
+        if (r.tipo_novedad === 'AMBIGUO') {
+          // Masivo solo si ya eligio candidato
+          return Boolean(pagoElegidoPorFila[r.id] || r.pago_id)
+        }
+        return true
+      }),
+    [itemsFiltrados, pagoElegidoPorFila]
   )
 
   const todosElegiblesMarcados =
@@ -146,6 +152,7 @@ export default function ConciliacionBancosPage() {
     const res = await conciliacionBancosService.listarResultados(loteId)
     setItems(res.items || [])
     setSeleccionados(new Set())
+    setPagoElegidoPorFila({})
   }
 
   const handleCargar = async () => {
@@ -162,11 +169,15 @@ export default function ConciliacionBancosPage() {
         fecha_hasta: fechaHasta,
       })
       setLote(res.lote)
+      if (res.lote.fecha_desde) setFechaDesde(res.lote.fecha_desde)
+      if (res.lote.fecha_hasta) setFechaHasta(res.lote.fecha_hasta)
       setItems([])
       setStats(null)
       setFiltroNovedad([])
       setSeleccionados(new Set())
-      toast.success(`Lote #${res.lote.id} cargado (${moneda})`)
+      toast.success(
+        `Lote #${res.lote.id} cargado (${moneda}). Rango BD: ${res.lote.fecha_desde} → ${res.lote.fecha_hasta}`
+      )
     } catch (err) {
       toast.error(errMsg(err))
     } finally {
@@ -185,21 +196,37 @@ export default function ConciliacionBancosPage() {
     }
     setLoading(true)
     try {
-      const cmp = await conciliacionBancosService.comparar(lote.id, bancosSel)
+      const cmp = await conciliacionBancosService.comparar(lote.id, bancosSel, {
+        fecha_desde: fechaDesde,
+        fecha_hasta: fechaHasta,
+      })
       setStats(cmp.stats || null)
+      if (cmp.fecha_desde || cmp.fecha_hasta) {
+        setLote(prev =>
+          prev
+            ? {
+                ...prev,
+                fecha_desde: cmp.fecha_desde || prev.fecha_desde,
+                fecha_hasta: cmp.fecha_hasta || prev.fecha_hasta,
+              }
+            : prev
+        )
+        if (cmp.fecha_desde) setFechaDesde(cmp.fecha_desde)
+        if (cmp.fecha_hasta) setFechaHasta(cmp.fecha_hasta)
+      }
       setFiltroNovedad([])
       await refreshResultados(lote.id)
       const univ = cmp.pagos_universo ?? 0
       const sinBd = Number(cmp.stats?.SIN_BD || 0)
+      const rango = `${cmp.fecha_desde || fechaDesde} → ${cmp.fecha_hasta || fechaHasta}`
       if (univ === 0) {
         toast.error(
-          `Sin pagos BD en el rango de fechas para ${bancosSel.join(', ')}. ` +
-            'Ajuste Fecha desde/hasta al periodo del Excel (no solo hoy) y vuelva a Conciliar. ' +
-            `Filas banco sin match: ${sinBd}.`
+          `Sin pagos BD en ${rango} para ${bancosSel.join(', ')}. ` +
+            `Filas banco sin match: ${sinBd}. Revise bancos del filtro.`
         )
       } else {
         toast.success(
-          `Comparacion lista (bancos: ${bancosSel.join(', ')}). Pagos universo: ${univ}.`
+          `Comparacion lista (${rango}; bancos: ${bancosSel.join(', ')}). Pagos universo: ${univ}.`
         )
       }
     } catch (err) {
@@ -212,8 +239,29 @@ export default function ConciliacionBancosPage() {
   /** Fuente + visto = confirmar: Ref.BD mantiene; Ref.Banco graba (cascada si aplica). */
   const handleConfirmar = async (row: ConciliacionBancosResultado) => {
     const fuente = fuentePorFila[row.id] || 'BANCO'
+    const pagoElegido = pagoElegidoPorFila[row.id]
     setRowBusy(row.id)
     try {
+      if (row.tipo_novedad === 'AMBIGUO') {
+        if (!pagoElegido) {
+          toast.error('AMBIGUO: elija el prestamo/pago candidato antes de confirmar')
+          return
+        }
+        const r = await conciliacionBancosService.decidir(row.id, {
+          decision: 'CORREGIR',
+          fuente_elegida: fuente,
+          pago_id_elegido: pagoElegido,
+        })
+        if (fuente === 'BANCO' && r.cambio) {
+          toast.success('AMBIGUO resuelto: datos actualizados (Ref. Banco)')
+        } else if (fuente === 'BANCO') {
+          toast.message('AMBIGUO resuelto: ya coincidia con BD')
+        } else {
+          toast.message('AMBIGUO resuelto: se mantienen datos RapiC')
+        }
+        if (lote) await refreshResultados(lote.id)
+        return
+      }
       // Sin pago vinculado no hay que grabar/mantener paquete: solo cierra como revisado
       if (
         !row.pago_id ||
@@ -260,6 +308,9 @@ export default function ConciliacionBancosPage() {
       const payload = ids.map(id => ({
         resultado_id: id,
         fuente_elegida: fuentePorFila[id] || fuenteMasiva,
+        ...(pagoElegidoPorFila[id]
+          ? { pago_id_elegido: pagoElegidoPorFila[id] }
+          : {}),
       }))
       const r = await conciliacionBancosService.decidirMasivo({
         items: payload,
@@ -328,7 +379,7 @@ export default function ConciliacionBancosPage() {
           <div className="grid gap-3 md:grid-cols-3">
             <div>
               <label className="mb-1 block text-sm font-medium">
-                Fecha desde
+                Fecha desde (filtro pagos BD)
               </label>
               <Input
                 type="date"
@@ -338,7 +389,7 @@ export default function ConciliacionBancosPage() {
             </div>
             <div>
               <label className="mb-1 block text-sm font-medium">
-                Fecha hasta
+                Fecha hasta (filtro pagos BD)
               </label>
               <Input
                 type="date"
@@ -503,9 +554,10 @@ export default function ConciliacionBancosPage() {
                 {seleccionados.size === 1 ? '' : 's'}
               </span>
               <label className="flex items-center gap-2 text-sm">
-                Fuente masiva
+                Cambiar fuente de seleccionadas
                 <select
                   className="rounded border px-2 py-1 text-xs"
+                  title="Solo cambia el dropdown de las filas marcadas. Al confirmar, cada fila usa su propia fuente."
                   value={fuenteMasiva}
                   disabled={bulkBusy || seleccionados.size === 0}
                   onChange={e => {
@@ -519,7 +571,7 @@ export default function ConciliacionBancosPage() {
                   }}
                 >
                   <option value="BANCO">Ref. Banco</option>
-                  <option value="BD">Ref. BD</option>
+                  <option value="BD">Ref. RapiC</option>
                 </select>
               </label>
               <Button
@@ -603,29 +655,66 @@ export default function ConciliacionBancosPage() {
                       <TableCell>
                         <input
                           type="checkbox"
-                          disabled={locked || busy}
+                          disabled={
+                            locked ||
+                            busy ||
+                            (row.tipo_novedad === 'AMBIGUO' &&
+                              !pagoElegidoPorFila[row.id])
+                          }
                           checked={seleccionados.has(row.id)}
                           onChange={() => toggleSeleccion(row.id)}
+                          title={
+                            row.tipo_novedad === 'AMBIGUO' &&
+                            !pagoElegidoPorFila[row.id]
+                              ? 'Elija primero el prestamo candidato'
+                              : undefined
+                          }
                         />
                       </TableCell>
                       <TableCell className="whitespace-nowrap text-xs">
-                        {row.candidatos && row.candidatos.length > 0 ? (
-                          row.candidatos.map((c, idx) => (
-                            <div key={`${row.id}-ced-${idx}`}>
-                              {c.cedula || '-'}
-                            </div>
-                          ))
+                        {row.tipo_novedad === 'AMBIGUO' &&
+                        row.candidatos &&
+                        row.candidatos.length > 0 ? (
+                          <select
+                            className="max-w-[200px] rounded border px-1 py-1 text-xs"
+                            disabled={locked || busy}
+                            value={pagoElegidoPorFila[row.id] || ''}
+                            onChange={e => {
+                              const v = Number(e.target.value)
+                              setPagoElegidoPorFila(prev => {
+                                const next = { ...prev }
+                                if (!v) delete next[row.id]
+                                else next[row.id] = v
+                                return next
+                              })
+                            }}
+                          >
+                            <option value="">Elegir prestamo...</option>
+                            {row.candidatos.map(c => (
+                              <option key={c.pago_id} value={c.pago_id}>
+                                {c.cedula || '?'} · #
+                                {c.prestamo_id ?? '?'} · pago {c.pago_id}
+                                {c.monto != null ? ` · $${c.monto}` : ''}
+                              </option>
+                            ))}
+                          </select>
                         ) : (
                           row.cedula || '-'
                         )}
                       </TableCell>
                       <TableCell className="whitespace-nowrap text-xs">
-                        {row.candidatos && row.candidatos.length > 0 ? (
-                          row.candidatos.map((c, idx) => (
-                            <div key={`${row.id}-pre-${idx}`}>
-                              {c.prestamo_id != null ? `#${c.prestamo_id}` : '-'}
-                            </div>
-                          ))
+                        {row.tipo_novedad === 'AMBIGUO' &&
+                        pagoElegidoPorFila[row.id] ? (
+                          (() => {
+                            const c = row.candidatos?.find(
+                              x => x.pago_id === pagoElegidoPorFila[row.id]
+                            )
+                            return c?.prestamo_id != null
+                              ? `#${c.prestamo_id}`
+                              : '-'
+                          })()
+                        ) : row.tipo_novedad === 'AMBIGUO' ? (
+                          <span className="text-red-700">Elegir →</span>
                         ) : row.prestamo_id != null ? (
                           `#${row.prestamo_id}`
                         ) : (
@@ -681,8 +770,8 @@ export default function ConciliacionBancosPage() {
                         {row.tipo_novedad === 'AMBIGUO' &&
                           (row.candidatos?.length || 0) > 1 && (
                             <div className="mt-1 max-w-[160px] text-[11px] text-red-700">
-                              Mismo serial en {row.candidatos?.length} pagos
-                              (frecuente en Mercantil). Revisar manual.
+                              Mismo serial en {row.candidatos?.length}{' '}
+                              pagos (Mercantil). Elija prestamo y confirme.
                             </div>
                           )}
                       </TableCell>
@@ -699,7 +788,7 @@ export default function ConciliacionBancosPage() {
                           }
                         >
                           <option value="BANCO">Ref. Banco</option>
-                          <option value="BD">Ref. BD</option>
+                          <option value="BD">Ref. RapiC</option>
                         </select>
                       </TableCell>
                       <TableCell>
@@ -712,7 +801,12 @@ export default function ConciliacionBancosPage() {
                                 ? 'Confirmar: grabar paquete Ref. Banco'
                                 : 'Confirmar: mantener paquete Ref. BD'
                             }
-                            disabled={locked || busy}
+                            disabled={
+                              locked ||
+                              busy ||
+                              (row.tipo_novedad === 'AMBIGUO' &&
+                                !pagoElegidoPorFila[row.id])
+                            }
                             onClick={() => handleConfirmar(row)}
                           >
                             {busy ? (
