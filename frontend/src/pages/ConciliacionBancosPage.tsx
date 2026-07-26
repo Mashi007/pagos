@@ -16,6 +16,8 @@ import {
   TableRow,
 } from '../components/ui/table'
 import {
+  CONCILIACION_BANCOS_CATEGORIAS,
+  ConciliacionBancosBancoCategoria,
   ConciliacionBancosLote,
   ConciliacionBancosMoneda,
   ConciliacionBancosResultado,
@@ -51,11 +53,32 @@ export default function ConciliacionBancosPage() {
   const [fuentePorFila, setFuentePorFila] = useState<
     Record<number, 'BD' | 'BANCO'>
   >({})
+  const [bancosSel, setBancosSel] = useState<
+    ConciliacionBancosBancoCategoria[]
+  >([])
+  const [filtroNovedad, setFiltroNovedad] = useState<string[]>([])
+
+  const toggleBanco = (b: ConciliacionBancosBancoCategoria) => {
+    setBancosSel(prev =>
+      prev.includes(b) ? prev.filter(x => x !== b) : [...prev, b]
+    )
+  }
+
+  const toggleNovedad = (tipo: string) => {
+    setFiltroNovedad(prev =>
+      prev.includes(tipo) ? prev.filter(x => x !== tipo) : [...prev, tipo]
+    )
+  }
 
   const pendientes = useMemo(
     () => items.filter(i => i.decision === 'PENDIENTE').length,
     [items]
   )
+
+  const itemsFiltrados = useMemo(() => {
+    if (filtroNovedad.length === 0) return items
+    return items.filter(i => filtroNovedad.includes(i.tipo_novedad))
+  }, [items, filtroNovedad])
 
   const refreshResultados = async (loteId: number) => {
     const res = await conciliacionBancosService.listarResultados(loteId)
@@ -78,6 +101,7 @@ export default function ConciliacionBancosPage() {
       setLote(res.lote)
       setItems([])
       setStats(null)
+      setFiltroNovedad([])
       toast.success(`Lote #${res.lote.id} cargado (${moneda})`)
     } catch (err) {
       toast.error(errMsg(err))
@@ -91,12 +115,19 @@ export default function ConciliacionBancosPage() {
       toast.error('Cargue un Excel primero')
       return
     }
+    if (bancosSel.length === 0) {
+      toast.error('Seleccione al menos un banco del filtro')
+      return
+    }
     setLoading(true)
     try {
-      const cmp = await conciliacionBancosService.comparar(lote.id)
+      const cmp = await conciliacionBancosService.comparar(lote.id, bancosSel)
       setStats(cmp.stats || null)
+      setFiltroNovedad([])
       await refreshResultados(lote.id)
-      toast.success('Comparacion lista. Revise fila a fila (visto o X).')
+      toast.success(
+        `Comparacion lista (bancos: ${bancosSel.join(', ')}). Pagos universo: ${cmp.pagos_universo ?? '-'}.`
+      )
     } catch (err) {
       toast.error(errMsg(err))
     } finally {
@@ -208,6 +239,31 @@ export default function ConciliacionBancosPage() {
             </div>
           </div>
 
+          <div>
+            <label className="mb-2 block text-sm font-medium">
+              Filtro banco BD (seleccion multiple)
+            </label>
+            <div className="flex flex-wrap gap-3">
+              {CONCILIACION_BANCOS_CATEGORIAS.map(b => (
+                <label
+                  key={b}
+                  className="flex cursor-pointer items-center gap-2 text-sm"
+                >
+                  <input
+                    type="checkbox"
+                    checked={bancosSel.includes(b)}
+                    onChange={() => toggleBanco(b)}
+                  />
+                  {b}
+                </label>
+              ))}
+            </div>
+            <p className="mt-1 text-xs text-gray-500">
+              Solo se comparan pagos BD de los bancos marcados (segun
+              institucion_bancaria).
+            </p>
+          </div>
+
           <div className="flex flex-wrap gap-2">
             <Button onClick={handleCargar} disabled={loading || !file}>
               {loading ? (
@@ -219,7 +275,7 @@ export default function ConciliacionBancosPage() {
             </Button>
             <Button
               onClick={handleConciliar}
-              disabled={loading || !lote}
+              disabled={loading || !lote || bancosSel.length === 0}
               className="bg-blue-600 hover:bg-blue-700"
             >
               Conciliar
@@ -243,12 +299,52 @@ export default function ConciliacionBancosPage() {
           )}
 
           {stats && (
-            <div className="flex flex-wrap gap-2">
-              {Object.entries(stats).map(([k, v]) => (
-                <Badge key={k} variant="outline">
-                  {k}: {v}
-                </Badge>
-              ))}
+            <div className="space-y-2">
+              <div className="flex flex-wrap items-center gap-2">
+                {Object.entries(stats).map(([k, v]) => {
+                  const activo = filtroNovedad.includes(k)
+                  return (
+                    <button
+                      key={k}
+                      type="button"
+                      onClick={() => toggleNovedad(k)}
+                      title={
+                        activo
+                          ? 'Quitar filtro'
+                          : 'Filtrar tabla por esta novedad'
+                      }
+                      className="rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <Badge
+                        variant="outline"
+                        className={
+                          activo
+                            ? 'cursor-pointer border-blue-600 bg-blue-600 text-white hover:bg-blue-700'
+                            : 'cursor-pointer hover:border-blue-400 hover:bg-blue-50'
+                        }
+                      >
+                        {k}: {v}
+                      </Badge>
+                    </button>
+                  )
+                })}
+                {filtroNovedad.length > 0 && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setFiltroNovedad([])}
+                  >
+                    Ver todos
+                  </Button>
+                )}
+              </div>
+              <p className="text-xs text-gray-500">
+                Clic en un chip para filtrar la tabla (puede marcar varios).
+                {filtroNovedad.length > 0
+                  ? ` Mostrando ${itemsFiltrados.length} de ${items.length}.`
+                  : ''}
+              </p>
             </div>
           )}
         </CardContent>
@@ -267,6 +363,9 @@ export default function ConciliacionBancosPage() {
                 <TableHead>Ref. banco</TableHead>
                 <TableHead>Similitud</TableHead>
                 <TableHead>Ref. BD (OCR)</TableHead>
+                <TableHead>Cedula</TableHead>
+                <TableHead>Prestamo</TableHead>
+                <TableHead>Banco BD</TableHead>
                 <TableHead>Fechas</TableHead>
                 <TableHead>Montos USD</TableHead>
                 <TableHead>Novedad</TableHead>
@@ -278,14 +377,30 @@ export default function ConciliacionBancosPage() {
               {items.length === 0 ? (
                 <TableRow>
                   <TableCell
-                    colSpan={8}
+                    colSpan={11}
                     className="py-8 text-center text-gray-500"
                   >
                     Sin resultados. Suba Excel y pulse Conciliar.
                   </TableCell>
                 </TableRow>
+              ) : itemsFiltrados.length === 0 ? (
+                <TableRow>
+                  <TableCell
+                    colSpan={11}
+                    className="py-8 text-center text-gray-500"
+                  >
+                    No hay filas para el filtro de novedad seleccionado.{' '}
+                    <button
+                      type="button"
+                      className="text-blue-600 underline"
+                      onClick={() => setFiltroNovedad([])}
+                    >
+                      Ver todos
+                    </button>
+                  </TableCell>
+                </TableRow>
               ) : (
-                items.map(row => {
+                itemsFiltrados.map(row => {
                   const busy = rowBusy === row.id
                   const locked =
                     row.aplicado ||
@@ -303,6 +418,20 @@ export default function ConciliacionBancosPage() {
                       </TableCell>
                       <TableCell className="max-w-[160px] truncate font-mono text-xs">
                         {row.referencia_bd || '-'}
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap text-xs">
+                        {row.cedula || '-'}
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap text-xs">
+                        {row.prestamo_id != null ? `#${row.prestamo_id}` : '-'}
+                      </TableCell>
+                      <TableCell className="text-xs">
+                        {row.institucion_categoria || '-'}
+                        {row.institucion_bancaria ? (
+                          <div className="max-w-[120px] truncate text-[11px] text-gray-500">
+                            {row.institucion_bancaria}
+                          </div>
+                        ) : null}
                       </TableCell>
                       <TableCell className="text-xs">
                         B: {row.fecha_banco || '-'}

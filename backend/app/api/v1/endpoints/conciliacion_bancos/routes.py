@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from datetime import date
-from typing import Optional
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, File, Form, UploadFile
 from fastapi.responses import StreamingResponse
@@ -29,6 +29,13 @@ class DecisionBody(BaseModel):
     )
 
 
+class CompararBody(BaseModel):
+    bancos: List[str] = Field(
+        default_factory=list,
+        description="Categorias: Mercantil, BNC, Binance, BNV, Recibos, Otros",
+    )
+
+
 def _lote_dict(lote: ConciliacionBancoOcrLote) -> dict:
     return {
         "id": lote.id,
@@ -39,6 +46,7 @@ def _lote_dict(lote: ConciliacionBancoOcrLote) -> dict:
         "moneda_carga": lote.moneda_carga,
         "usuario_id": lote.usuario_id,
         "creado_en": lote.creado_en.isoformat() if lote.creado_en else None,
+        "bancos_filtro": svc._leer_bancos_de_lote(lote),
     }
 
 
@@ -81,10 +89,14 @@ def obtener_lote(
 @router.post("/lotes/{lote_id}/comparar")
 def comparar(
     lote_id: int,
+    body: CompararBody = CompararBody(),
     db: Session = Depends(get_db),
     _user: UserResponse = Depends(require_admin),
 ):
-    return {"ok": True, **svc.comparar_lote(db, lote_id)}
+    return {
+        "ok": True,
+        **svc.comparar_lote(db, lote_id, bancos_filtro=body.bancos),
+    }
 
 
 @router.get("/lotes/{lote_id}/resultados")

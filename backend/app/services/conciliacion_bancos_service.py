@@ -15,7 +15,7 @@ from openpyxl import Workbook, load_workbook
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
-from app.core.documento import normalize_documento
+from app.core.documento import normalize_documento, split_numero_documento_almacenado
 from app.models.conciliacion_banco_ocr import (
     ConciliacionBancoOcrBanco,
     ConciliacionBancoOcrLote,
@@ -35,18 +35,101 @@ SIMILITUD_MINIMA = 70.0
 MONTO_TOL = 0.02
 
 
-def _digits(val: Optional[str]) -> str:
-    if not val:
+BANCOS_CATEGORIAS = ("Mercantil", "BNC", "Binance", "BNV", "Recibos", "Otros")
+
+
+def categoria_institucion(inst: Optional[str]) -> str:
+    """Misma clasificacion que dashboard pagos por institucion."""
+    s = (inst or "").strip().lower()
+    if "mercantil" in s:
+        return "Mercantil"
+    if "bnc" in s or s == "banco nacional de credito":
+        return "BNC"
+    if "binance" in s:
+        return "Binance"
+    if "bnv" in s or "bdv" in s or "banco de venezuela" in s:
+        return "BNV"
+    if "recibo" in s:
+        return "Recibos"
+    return "Otros"
+
+
+def normalizar_bancos_filtro(bancos: Optional[list[str]]) -> list[str]:
+    allowed = set(BANCOS_CATEGORIAS)
+    out: list[str] = []
+    for b in bancos or []:
+        name = (b or "").strip()
+        if name in allowed and name not in out:
+            out.append(name)
+    return out
+
+
+def _guardar_bancos_en_lote(lote: ConciliacionBancoOcrLote, bancos: list[str]) -> None:
+    payload = {"bancos_filtro": bancos}
+    lote.notas = json.dumps(payload, ensure_ascii=True)
+
+
+def _leer_bancos_de_lote(lote: ConciliacionBancoOcrLote) -> list[str]:
+    raw = (lote.notas or "").strip()
+    if not raw:
+        return []
+    try:
+        data = json.loads(raw)
+        if isinstance(data, dict):
+            return normalizar_bancos_filtro(data.get("bancos_filtro") or [])
+    except Exception:
+        pass
+    return []
+
+
+
+# Prefijos/etiquetas frecuentes que operadores agregan al serial
+_REF_RUIDO_PREFIX = re.compile(
+    r"^(?:"
+    r"(?:bs\.?\s*)?(?:bnc|binance|mercantil|bnv|bdv|ve|zelle|paypal|banco)\s*"
+    r"(?:/\s*|[-–—]\s*|\s+)"
+    r"(?:ref\.?\s*)?"
+    r"|ref\.?\s*|nro\.?\s*|n[uú]m(?:ero)?\.?\s*|doc\.?\s*|comp(?:robante)?\.?\s*"
+    r")+",
+    re.IGNORECASE,
+)
+
+
+def _ref_solo_digitos(val: Optional[str]) -> str:
+    """
+    Clave de match/similitud: solo digitos del comprobante.
+
+    - Ignora letras y signos agregados por digitacion (REF-, BNC/, puntos, guiones, etc.).
+    - Quita sufijo interno §CD: (codigo desambiguador) para no contaminar la clave.
+    - Maneja notacion cientifica via normalize_documento.
+    """
+    if val is None or val == "":
         return ""
-    return re.sub(r"\D+", "", str(val))
+    base, _codigo = split_numero_documento_almacenado(val)
+    s = normalize_documento(base) or (base or str(val)).strip()
+    if not s:
+        return ""
+    # Quitar etiquetas al inicio en bucle (BNC/ REF. ...)
+    prev = None
+    while prev != s:
+        prev = s
+        s2 = _REF_RUIDO_PREFIX.sub("", s).strip()
+        s = s2 if s2 else s
+        break  # una pasada basta; el bucle evita bucles raros si regex vacia
+    # Solo digitos: letras/signos no participan en similitud
+    return re.sub(r"\D+", "", s)
 
 
 def _similitud(a: str, b: str) -> float:
-    da, db = _digits(a), _digits(b)
+    da, db = _ref_solo_digitos(a), _ref_solo_digitos(b)
     if not da or not db:
         return 0.0
     if da == db:
         return 100.0
+    # Contencion: "90694665" vs "00090694665" / extras de digitacion
+    shorter, longer = (da, db) if len(da) <= len(db) else (db, da)
+    if len(shorter) >= 6 and shorter in longer:
+        return round(100.0 * (len(shorter) / len(longer)), 2)
     return round(SequenceMatcher(None, da, db).ratio() * 100.0, 2)
 
 
@@ -173,10 +256,23 @@ def crear_lote_desde_excel(
     return lote
 
 
-def comparar_lote(db: Session, lote_id: int) -> dict[str, Any]:
+def comparar_lote(
+    db: Session,
+    lote_id: int,
+    *,
+    bancos_filtro: Optional[list[str]] = None,
+) -> dict[str, Any]:
     lote = db.get(ConciliacionBancoOcrLote, lote_id)
     if not lote:
         raise HTTPException(status_code=404, detail="Lote no encontrado")
+
+    bancos_sel = normalizar_bancos_filtro(bancos_filtro)
+    if not bancos_sel:
+        raise HTTPException(
+            status_code=400,
+            detail="Seleccione al menos un banco (Mercantil, BNC, Binance, BNV, Recibos, Otros).",
+        )
+    _guardar_bancos_en_lote(lote, bancos_sel)
 
     db.execute(
         delete(ConciliacionBancoOcrResultado).where(
@@ -194,7 +290,7 @@ def comparar_lote(db: Session, lote_id: int) -> dict[str, Any]:
         .all()
     )
 
-    pagos = (
+    pagos_raw = (
         db.execute(
             select(Pago).where(
                 func.date(Pago.fecha_pago) >= lote.fecha_desde,
@@ -206,10 +302,16 @@ def comparar_lote(db: Session, lote_id: int) -> dict[str, Any]:
         .scalars()
         .all()
     )
+    # Solo pagos de las instituciones seleccionadas (evita ruido de otros bancos)
+    pagos = [
+        p
+        for p in pagos_raw
+        if categoria_institucion(p.institucion_bancaria) in bancos_sel
+    ]
 
     by_digits: dict[str, list[Pago]] = {}
     for p in pagos:
-        key = _digits(normalize_documento(p.numero_documento) or p.numero_documento or "")
+        key = _ref_solo_digitos(normalize_documento(p.numero_documento) or p.numero_documento or "")
         if not key:
             continue
         by_digits.setdefault(key, []).append(p)
@@ -226,7 +328,7 @@ def comparar_lote(db: Session, lote_id: int) -> dict[str, Any]:
 
     for b in bancos:
         ref_b = b.ref_banco_norm or b.referencia_banco
-        dig_b = _digits(ref_b)
+        dig_b = _ref_solo_digitos(ref_b)
         fecha_b = b.fecha_banco
         monto_orig = float(b.monto_banco_original) if b.monto_banco_original is not None else None
         monto_usd: Optional[float] = None
@@ -399,7 +501,13 @@ def comparar_lote(db: Session, lote_id: int) -> dict[str, Any]:
 
     lote.estado = "COMPARADO"
     db.commit()
-    return {"lote_id": lote_id, "estado": lote.estado, "stats": stats}
+    return {
+        "lote_id": lote_id,
+        "estado": lote.estado,
+        "stats": stats,
+        "bancos_filtro": bancos_sel,
+        "pagos_universo": len(pagos),
+    }
 
 
 def _paquetes_iguales(
@@ -410,8 +518,8 @@ def _paquetes_iguales(
     monto_b: Optional[float],
     serial_b: Optional[str],
 ) -> bool:
-    sa = _digits(normalize_documento(serial_a) or serial_a or "")
-    sb = _digits(normalize_documento(serial_b) or serial_b or "")
+    sa = _ref_solo_digitos(normalize_documento(serial_a) or serial_a or "")
+    sb = _ref_solo_digitos(normalize_documento(serial_b) or serial_b or "")
     if sa != sb:
         return False
     if fecha_a != fecha_b:
@@ -502,7 +610,10 @@ def decidir_y_aplicar(
 
     # fuente BANCO
     fecha_new = res.fecha_banco or _pago_fecha(pago)
-    serial_new = normalize_documento(res.referencia_banco) or (res.referencia_banco or "").strip()
+    # Preferir serial limpio (solo digitos) si tras quitar ruido queda un nucleo numerico
+    serial_raw = normalize_documento(res.referencia_banco) or (res.referencia_banco or "").strip()
+    serial_dig = _ref_solo_digitos(res.referencia_banco)
+    serial_new = serial_dig if serial_dig else serial_raw
     if not serial_new:
         raise HTTPException(status_code=400, detail="Referencia banco vacia")
 
@@ -656,14 +767,26 @@ def listar_resultados(db: Session, lote_id: int) -> list[dict[str, Any]]:
         .scalars()
         .all()
     )
+    pago_ids = [int(r.pago_id) for r in rows if r.pago_id]
+    pagos_map: dict[int, Pago] = {}
+    if pago_ids:
+        for p in db.execute(select(Pago).where(Pago.id.in_(pago_ids))).scalars().all():
+            pagos_map[int(p.id)] = p
     out = []
     for r in rows:
+        pago = pagos_map.get(int(r.pago_id)) if r.pago_id else None
         out.append(
             {
                 "id": r.id,
                 "lote_id": r.lote_id,
                 "banco_id": r.banco_id,
                 "pago_id": r.pago_id,
+                "cedula": (pago.cedula_cliente if pago else None),
+                "prestamo_id": (pago.prestamo_id if pago else None),
+                "institucion_bancaria": (pago.institucion_bancaria if pago else None),
+                "institucion_categoria": (
+                    categoria_institucion(pago.institucion_bancaria) if pago else None
+                ),
                 "fecha_banco": r.fecha_banco.isoformat() if r.fecha_banco else None,
                 "fecha_bd": r.fecha_bd.isoformat() if r.fecha_bd else None,
                 "referencia_banco": r.referencia_banco,
@@ -691,6 +814,10 @@ def exportar_excel_lote(db: Session, lote_id: int) -> bytes:
             "referencia_banco",
             "referencia_bd",
             "similitud_pct",
+            "cedula",
+            "prestamo_id",
+            "institucion_bancaria",
+            "institucion_categoria",
             "fecha_banco",
             "fecha_bd",
             "monto_banco_usd",
@@ -709,6 +836,10 @@ def exportar_excel_lote(db: Session, lote_id: int) -> bytes:
                 r.get("referencia_banco"),
                 r.get("referencia_bd"),
                 r.get("similitud_pct"),
+                r.get("cedula"),
+                r.get("prestamo_id"),
+                r.get("institucion_bancaria"),
+                r.get("institucion_categoria"),
                 r.get("fecha_banco"),
                 r.get("fecha_bd"),
                 r.get("monto_banco"),

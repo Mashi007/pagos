@@ -2,6 +2,17 @@ import { apiClient } from './api'
 
 export type ConciliacionBancosMoneda = 'USD' | 'BS'
 
+export type ConciliacionBancosBancoCategoria =
+  | 'Mercantil'
+  | 'BNC'
+  | 'Binance'
+  | 'BNV'
+  | 'Recibos'
+  | 'Otros'
+
+export const CONCILIACION_BANCOS_CATEGORIAS: ConciliacionBancosBancoCategoria[] =
+  ['Mercantil', 'BNC', 'Binance', 'BNV', 'Recibos', 'Otros']
+
 export interface ConciliacionBancosLote {
   id: number
   archivo_nombre: string
@@ -11,6 +22,7 @@ export interface ConciliacionBancosLote {
   moneda_carga: string
   usuario_id?: number | null
   creado_en?: string | null
+  bancos_filtro?: string[]
 }
 
 export interface ConciliacionBancosResultado {
@@ -18,6 +30,10 @@ export interface ConciliacionBancosResultado {
   lote_id: number
   banco_id?: number | null
   pago_id?: number | null
+  cedula?: string | null
+  prestamo_id?: number | null
+  institucion_bancaria?: string | null
+  institucion_categoria?: string | null
   fecha_banco?: string | null
   fecha_bd?: string | null
   referencia_banco?: string | null
@@ -52,15 +68,22 @@ export const conciliacionBancosService = {
     })
   },
 
-  async comparar(loteId: number): Promise<{
+  async comparar(
+    loteId: number,
+    bancos: ConciliacionBancosBancoCategoria[]
+  ): Promise<{
     ok: boolean
     lote_id: number
     estado: string
     stats: Record<string, number>
+    bancos_filtro?: string[]
+    pagos_universo?: number
   }> {
-    return apiClient.post(`${BASE}/lotes/${loteId}/comparar`, null, {
-      timeout: 180000,
-    })
+    return apiClient.post(
+      `${BASE}/lotes/${loteId}/comparar`,
+      { bancos },
+      { timeout: 180000 }
+    )
   },
 
   async listarResultados(
