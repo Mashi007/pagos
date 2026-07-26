@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Building2, Check, Download, Loader2, Upload, X } from 'lucide-react'
+import { Building2, Check, Download, Loader2, Upload } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { ModulePageHeader } from '../components/ui/ModulePageHeader'
@@ -135,29 +135,33 @@ export default function ConciliacionBancosPage() {
     }
   }
 
-  const handleVisto = async (id: number) => {
-    setRowBusy(id)
+  /** Fuente + visto = confirmar: Ref.BD mantiene; Ref.Banco graba (cascada si aplica). */
+  const handleConfirmar = async (row: ConciliacionBancosResultado) => {
+    const fuente = fuentePorFila[row.id] || 'BANCO'
+    setRowBusy(row.id)
     try {
-      await conciliacionBancosService.decidir(id, { decision: 'VISTO' })
-      if (lote) await refreshResultados(lote.id)
-    } catch (err) {
-      toast.error(errMsg(err))
-    } finally {
-      setRowBusy(null)
-    }
-  }
-
-  const handleCorregir = async (id: number) => {
-    const fuente = fuentePorFila[id] || 'BANCO'
-    setRowBusy(id)
-    try {
-      const r = await conciliacionBancosService.decidir(id, {
+      // Sin pago vinculado no hay que grabar/mantener paquete: solo cierra como revisado
+      if (
+        !row.pago_id ||
+        row.tipo_novedad === 'SIN_BD' ||
+        row.tipo_novedad === 'SIN_TASA'
+      ) {
+        await conciliacionBancosService.decidir(row.id, { decision: 'VISTO' })
+        toast.message('Marcado como revisado (sin pago BD para aplicar)')
+        if (lote) await refreshResultados(lote.id)
+        return
+      }
+      const r = await conciliacionBancosService.decidir(row.id, {
         decision: 'CORREGIR',
         fuente_elegida: fuente,
       })
-      if (r.cambio)
-        toast.success('Actualizado y cascada aplicada si correspondia')
-      else toast.message('Sin cambios (paquete coincidente o se mantuvo BD)')
+      if (fuente === 'BANCO' && r.cambio) {
+        toast.success('Confirmado Ref. Banco: datos actualizados')
+      } else if (fuente === 'BANCO') {
+        toast.message('Confirmado Ref. Banco: ya coincidia con BD')
+      } else {
+        toast.message('Confirmado Ref. BD: se mantienen los datos')
+      }
       if (lote) await refreshResultados(lote.id)
     } catch (err) {
       toast.error(errMsg(err))
@@ -181,7 +185,7 @@ export default function ConciliacionBancosPage() {
       <ModulePageHeader
         icon={Building2}
         title="Conciliacion Bancos"
-        description="Compara el Excel del banco (fecha, referencia, monto) con pagos.numero_documento (OCR). Solo admin: nada se aplica hasta Visto o X por fila."
+        description="Compara el Excel del banco (fecha, referencia, monto) con pagos.numero_documento (OCR). Solo admin: elija fuente (Ref. Banco o Ref. BD) y confirme con el visto."
       />
 
       <Card>
@@ -405,7 +409,8 @@ export default function ConciliacionBancosPage() {
                   const locked =
                     row.aplicado ||
                     row.decision === 'VISTO' ||
-                    row.decision === 'OMITIR'
+                    row.decision === 'OMITIR' ||
+                    (row.decision === 'CORREGIR' && row.aplicado)
                   return (
                     <TableRow key={row.id}>
                       <TableCell className="max-w-[160px] truncate font-mono text-xs">
@@ -434,14 +439,14 @@ export default function ConciliacionBancosPage() {
                         ) : null}
                       </TableCell>
                       <TableCell className="text-xs">
-                        B: {row.fecha_banco || '-'}
+                        Banco: {row.fecha_banco || '-'}
                         <br />
-                        BD: {row.fecha_bd || '-'}
+                        RapiC: {row.fecha_bd || '-'}
                       </TableCell>
                       <TableCell className="text-xs">
-                        B: {row.monto_banco ?? '-'}
+                        Banco: {row.monto_banco ?? '-'}
                         <br />
-                        BD: {row.monto_bd ?? '-'}
+                        RapiC: {row.monto_bd ?? '-'}
                       </TableCell>
                       <TableCell>
                         <Badge
@@ -483,30 +488,19 @@ export default function ConciliacionBancosPage() {
                           <Button
                             size="sm"
                             variant="outline"
-                            title="Visto: sin cambios"
+                            title={
+                              (fuentePorFila[row.id] || 'BANCO') === 'BANCO'
+                                ? 'Confirmar: grabar paquete Ref. Banco'
+                                : 'Confirmar: mantener paquete Ref. BD'
+                            }
                             disabled={locked || busy}
-                            onClick={() => handleVisto(row.id)}
+                            onClick={() => handleConfirmar(row)}
                           >
                             {busy ? (
                               <Loader2 className="h-4 w-4 animate-spin" />
                             ) : (
                               <Check className="h-4 w-4 text-green-600" />
                             )}
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            title="X: corregir con fuente elegida"
-                            disabled={
-                              locked ||
-                              busy ||
-                              !row.pago_id ||
-                              row.tipo_novedad === 'SIN_BD' ||
-                              row.tipo_novedad === 'SIN_TASA'
-                            }
-                            onClick={() => handleCorregir(row.id)}
-                          >
-                            <X className="h-4 w-4 text-red-600" />
                           </Button>
                         </div>
                         {row.detalle_aplicacion && (
