@@ -62,7 +62,9 @@ export const userService = {
       params.is_active = is_active
     }
 
-    return await api.get<UserListResponse>('/api/v1/usuarios/', { params })
+    // Sin barra final: /usuarios/ provoca 307 al origen del API y el navegador
+    // pierde el header Authorization (pagina Usuarios queda sin detalles).
+    return await api.get<UserListResponse>('/api/v1/usuarios', { params })
   },
 
   // Obtener usuario por ID
@@ -74,7 +76,7 @@ export const userService = {
   // Crear usuario
 
   crearUsuario: async (userData: UserCreate): Promise<User> => {
-    return await api.post<User>('/api/v1/usuarios/', userData)
+    return await api.post<User>('/api/v1/usuarios', userData)
   },
 
   // Actualizar usuario

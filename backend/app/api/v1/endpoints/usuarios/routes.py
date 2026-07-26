@@ -36,12 +36,11 @@ _OPERATOR_ROL_DB_VARIANTS = (
 )
 
 
-@router.get("", response_model=dict)
-def listar_usuarios(
-    db: Session = Depends(get_db),
-    page: int = Query(1, ge=1),
-    page_size: int = Query(50, ge=1, le=2000),
-    is_active: Optional[bool] = Query(None),
+def _listar_usuarios_impl(
+    db: Session,
+    page: int,
+    page_size: int,
+    is_active: Optional[bool],
 ):
     """Listado de usuarios desde la tabla usuarios. Paginado y filtro is_active."""
     q = db.query(User)
@@ -59,6 +58,27 @@ def listar_usuarios(
     }
 
 
+@router.get("", response_model=dict)
+def listar_usuarios(
+    db: Session = Depends(get_db),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=2000),
+    is_active: Optional[bool] = Query(None),
+):
+    return _listar_usuarios_impl(db, page, page_size, is_active)
+
+
+# Misma ruta con barra final: evita 307 de redirect_slashes (rompe Authorization via proxy).
+@router.get("/", response_model=dict, include_in_schema=False)
+def listar_usuarios_slash(
+    db: Session = Depends(get_db),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=2000),
+    is_active: Optional[bool] = Query(None),
+):
+    return _listar_usuarios_impl(db, page, page_size, is_active)
+
+
 @router.get("/verificar-admin", response_model=dict)
 def verificar_admin(db: Session = Depends(get_db)):
     """Indica si existe al menos un usuario admin activo (para mostrar avisos en frontend)."""
@@ -71,6 +91,90 @@ def verificar_admin(db: Session = Depends(get_db)):
     )
     return {"tiene_admin": tiene}
 
+
+@router.get("/kpis", response_model=KpiUsuariosResponse)
+def obtener_kpis_usuarios(
+    db: Session = Depends(get_db),
+):
+    """Obtiene KPIs y estadísticas de usuarios del sistema."""
+    
+    # Total de usuarios
+    total_usuarios = db.query(func.count(User.id)).scalar() or 0
+    
+    # Usuarios activos
+    usuarios_activos = db.query(func.count(User.id)).filter(User.is_active == True).scalar() or 0
+    
+    # Usuarios inactivos
+    usuarios_inactivos = db.query(func.count(User.id)).filter(User.is_active == False).scalar() or 0
+    
+    # Administradores activos
+    admins_activos = db.query(func.count(User.id)).filter(
+        User.rol == "admin",
+        User.is_active == True
+    ).scalar() or 0
+    
+    # Managers activos
+    managers_activos = db.query(func.count(User.id)).filter(
+        User.rol == "manager",
+        User.is_active == True
+    ).scalar() or 0
+    
+    # Operators activos (incluye variantes en español hasta migrar BD)
+    _rol_norm = func.lower(func.trim(User.rol))
+    operators_activos = db.query(func.count(User.id)).filter(
+        _rol_norm.in_(_OPERATOR_ROL_DB_VARIANTS),
+        User.is_active == True,
+    ).scalar() or 0
+    
+    # Viewers activos
+    viewers_activos = db.query(func.count(User.id)).filter(
+        User.rol == "viewer",
+        User.is_active == True
+    ).scalar() or 0
+    
+    # Usuarios agregados en el último mes
+    hace_un_mes = datetime.utcnow() - timedelta(days=30)
+    usuarios_ultimo_mes = db.query(func.count(User.id)).filter(
+        User.created_at >= hace_un_mes
+    ).scalar() or 0
+    
+    # Usuarios agregados en últimos 7 días
+    hace_una_semana = datetime.utcnow() - timedelta(days=7)
+    usuarios_ultima_semana = db.query(func.count(User.id)).filter(
+        User.created_at >= hace_una_semana
+    ).scalar() or 0
+    
+    # Porcentaje de activos
+    porcentaje_activos = round((usuarios_activos / total_usuarios * 100) if total_usuarios > 0 else 0, 1)
+    
+    # Último usuario creado
+    ultimo_usuario = db.query(User).order_by(User.created_at.desc()).first()
+    
+    # Último login
+    ultimo_login = db.query(User).filter(User.last_login != None).order_by(User.last_login.desc()).first()
+    
+    return KpiUsuariosResponse(
+        total_usuarios=total_usuarios,
+        usuarios_activos=usuarios_activos,
+        usuarios_inactivos=usuarios_inactivos,
+        porcentaje_activos=porcentaje_activos,
+        por_rol={
+            "admin": admins_activos,
+            "manager": managers_activos,
+            "operator": operators_activos,
+            "viewer": viewers_activos,
+        },
+        usuarios_ultimo_mes=usuarios_ultimo_mes,
+        usuarios_ultima_semana=usuarios_ultima_semana,
+        ultimo_usuario_creado={
+            "email": ultimo_usuario.email if ultimo_usuario else None,
+            "fecha": ultimo_usuario.created_at.isoformat() if ultimo_usuario else None,
+        },
+        ultimo_login={
+            "email": ultimo_login.email if ultimo_login else None,
+            "fecha": ultimo_login.last_login.isoformat() if ultimo_login else None,
+        },
+    )
 
 @router.get("/{user_id}", response_model=UserResponse)
 def obtener_usuario(user_id: int, db: Session = Depends(get_db)):
@@ -120,6 +224,16 @@ def crear_usuario(
     db.refresh(u)
     return user_to_response(u)
 
+
+
+@router.post("/", response_model=UserResponse, include_in_schema=False)
+def crear_usuario_slash(
+    body: UserCreate,
+    admin: UserResponse = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """Alias con barra final para evitar 307 de redirect_slashes."""
+    return crear_usuario(body, admin, db)
 
 @router.put("/{user_id}", response_model=UserResponse)
 def actualizar_usuario(
@@ -270,89 +384,4 @@ def importar_usuarios_masivo(
         total_exitosos=total_exitosos,
         total_errores=total_errores,
         resultados=resultados,
-    )
-
-
-@router.get("/kpis", response_model=KpiUsuariosResponse)
-def obtener_kpis_usuarios(
-    db: Session = Depends(get_db),
-):
-    """Obtiene KPIs y estadísticas de usuarios del sistema."""
-    
-    # Total de usuarios
-    total_usuarios = db.query(func.count(User.id)).scalar() or 0
-    
-    # Usuarios activos
-    usuarios_activos = db.query(func.count(User.id)).filter(User.is_active == True).scalar() or 0
-    
-    # Usuarios inactivos
-    usuarios_inactivos = db.query(func.count(User.id)).filter(User.is_active == False).scalar() or 0
-    
-    # Administradores activos
-    admins_activos = db.query(func.count(User.id)).filter(
-        User.rol == "admin",
-        User.is_active == True
-    ).scalar() or 0
-    
-    # Managers activos
-    managers_activos = db.query(func.count(User.id)).filter(
-        User.rol == "manager",
-        User.is_active == True
-    ).scalar() or 0
-    
-    # Operators activos (incluye variantes en español hasta migrar BD)
-    _rol_norm = func.lower(func.trim(User.rol))
-    operators_activos = db.query(func.count(User.id)).filter(
-        _rol_norm.in_(_OPERATOR_ROL_DB_VARIANTS),
-        User.is_active == True,
-    ).scalar() or 0
-    
-    # Viewers activos
-    viewers_activos = db.query(func.count(User.id)).filter(
-        User.rol == "viewer",
-        User.is_active == True
-    ).scalar() or 0
-    
-    # Usuarios agregados en el último mes
-    hace_un_mes = datetime.utcnow() - timedelta(days=30)
-    usuarios_ultimo_mes = db.query(func.count(User.id)).filter(
-        User.created_at >= hace_un_mes
-    ).scalar() or 0
-    
-    # Usuarios agregados en últimos 7 días
-    hace_una_semana = datetime.utcnow() - timedelta(days=7)
-    usuarios_ultima_semana = db.query(func.count(User.id)).filter(
-        User.created_at >= hace_una_semana
-    ).scalar() or 0
-    
-    # Porcentaje de activos
-    porcentaje_activos = round((usuarios_activos / total_usuarios * 100) if total_usuarios > 0 else 0, 1)
-    
-    # Último usuario creado
-    ultimo_usuario = db.query(User).order_by(User.created_at.desc()).first()
-    
-    # Último login
-    ultimo_login = db.query(User).filter(User.last_login != None).order_by(User.last_login.desc()).first()
-    
-    return KpiUsuariosResponse(
-        total_usuarios=total_usuarios,
-        usuarios_activos=usuarios_activos,
-        usuarios_inactivos=usuarios_inactivos,
-        porcentaje_activos=porcentaje_activos,
-        por_rol={
-            "admin": admins_activos,
-            "manager": managers_activos,
-            "operator": operators_activos,
-            "viewer": viewers_activos,
-        },
-        usuarios_ultimo_mes=usuarios_ultimo_mes,
-        usuarios_ultima_semana=usuarios_ultima_semana,
-        ultimo_usuario_creado={
-            "email": ultimo_usuario.email if ultimo_usuario else None,
-            "fecha": ultimo_usuario.created_at.isoformat() if ultimo_usuario else None,
-        },
-        ultimo_login={
-            "email": ultimo_login.email if ultimo_login else None,
-            "fecha": ultimo_login.last_login.isoformat() if ultimo_login else None,
-        },
     )

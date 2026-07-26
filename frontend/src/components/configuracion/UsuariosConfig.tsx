@@ -524,8 +524,8 @@ export default function UsuariosConfig() {
                           <div className="h-10 w-10 flex-shrink-0">
                             <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100">
                               <span className="text-sm font-semibold text-blue-600">
-                                {usuario.nombre[0]}
-                                {usuario.apellido[0]}
+                                {(usuario.nombre || '?')[0]}
+                                {(usuario.apellido || '')[0]}
                               </span>
                             </div>
                           </div>
@@ -933,8 +933,8 @@ export default function UsuariosConfig() {
                 <div className="flex items-center gap-4 border-b pb-4">
                   <div className="flex h-16 w-16 items-center justify-center rounded-full bg-blue-100">
                     <span className="text-xl font-bold text-blue-600">
-                      {viewingUser.nombre[0]}
-                      {viewingUser.apellido[0]}
+                      {(viewingUser.nombre || '?')[0]}
+                      {(viewingUser.apellido || '')[0]}
                     </span>
                   </div>
 
@@ -1017,12 +1017,14 @@ export default function UsuariosConfig() {
                       className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
                         (viewingUser.rol || 'viewer') === 'admin'
                           ? 'bg-red-100 text-red-800'
-                          : 'bg-blue-100 text-blue-800'
+                          : (viewingUser.rol || 'viewer') === 'manager'
+                            ? 'bg-purple-100 text-purple-800'
+                            : (viewingUser.rol || 'viewer') === 'operator'
+                              ? 'bg-blue-100 text-blue-800'
+                              : 'bg-gray-100 text-gray-800'
                       }`}
                     >
-                      {(viewingUser.rol || 'viewer') === 'admin'
-                        ? 'admin'
-                        : 'viewer'}
+                      {viewingUser.rol || 'viewer'}
                     </span>
                   </p>
                 </div>

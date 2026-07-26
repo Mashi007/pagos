@@ -203,8 +203,16 @@ function locationHeaderSameOriginForProxy(locationHeader, apiBaseUrl) {
       apiBaseUrl.endsWith('/') ? apiBaseUrl.slice(0, -1) : apiBaseUrl
     )
     const loc = new URL(raw, base)
-    if (loc.origin !== base.origin) return locationHeader
-    return `${loc.pathname}${loc.search}${loc.hash}`
+    // Si el backend redirige a su propio origen (API), devolver path relativo
+    // para que el navegador siga en same-origin (/api) y conserve Authorization.
+    if (loc.origin === base.origin) {
+      return `${loc.pathname}${loc.search}${loc.hash}`
+    }
+    // Redirect absoluto a otro host: si el path es /api/..., forzar same-origin.
+    if (loc.pathname.startsWith('/api/') || loc.pathname === '/api') {
+      return `${loc.pathname}${loc.search}${loc.hash}`
+    }
+    return locationHeader
   } catch {
     return locationHeader
   }

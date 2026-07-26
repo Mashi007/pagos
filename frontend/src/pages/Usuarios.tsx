@@ -847,8 +847,8 @@ export function Usuarios() {
                     <TableCell>
                       <div className="flex items-center space-x-3">
                         <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary font-medium text-white">
-                          {usuario.nombre.charAt(0)}
-                          {usuario.apellido.charAt(0)}
+                          {(usuario.nombre || '?').charAt(0)}
+                          {(usuario.apellido || '').charAt(0)}
                         </div>
 
                         <div>
