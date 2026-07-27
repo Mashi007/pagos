@@ -421,7 +421,18 @@ export default function ConciliacionBancosPage() {
         if (polled.lote.estado === 'ERROR_COMPARAR') {
           throw new Error(
             polled.lote.comparar_error ||
-              'La comparacion fallo. Revise logs del servidor.'
+              'La comparacion fallo o se interrumpio. Pulse Conciliar de nuevo.'
+          )
+        }
+        // Si el backend ya no tiene job vivo y sigue COMPARANDO, el poll
+        // siguiente deberia sanear a ERROR; si no, cortar tras varios ciclos.
+        if (
+          polled.lote.estado === 'COMPARANDO' &&
+          polled.lote.job_vivo === false &&
+          i >= 2
+        ) {
+          throw new Error(
+            'La conciliacion no esta corriendo en el servidor (posible reinicio). Pulse Conciliar de nuevo.'
           )
         }
       }

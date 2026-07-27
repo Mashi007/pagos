@@ -29,6 +29,8 @@ export interface ConciliacionBancosLote {
   pagos_universo?: number | null
   comparar_elapsed_ms?: number | null
   comparar_error?: string | null
+  comparar_huerfano?: boolean
+  job_vivo?: boolean
 }
 
 export interface ConciliacionBancosResultado {

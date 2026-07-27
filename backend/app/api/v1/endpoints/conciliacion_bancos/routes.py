@@ -77,6 +77,15 @@ def _notas_lote(lote: ConciliacionBancoOcrLote) -> dict:
         return {}
 
 
+def _job_vivo(lote_id: int) -> bool:
+    try:
+        from app.services.conciliacion_bancos_bg_runner import comparar_activo
+
+        return bool(comparar_activo(int(lote_id)))
+    except Exception:
+        return False
+
+
 def _lote_dict(lote: ConciliacionBancoOcrLote) -> dict:
     notas = _notas_lote(lote)
     filas = notas.get("filas_banco")
@@ -95,6 +104,8 @@ def _lote_dict(lote: ConciliacionBancoOcrLote) -> dict:
         "pagos_universo": notas.get("pagos_universo"),
         "comparar_elapsed_ms": notas.get("comparar_elapsed_ms"),
         "comparar_error": notas.get("comparar_error"),
+        "comparar_huerfano": bool(notas.get("comparar_huerfano")),
+        "job_vivo": _job_vivo(lote.id),
     }
 
 
@@ -131,6 +142,9 @@ def obtener_lote(
         from fastapi import HTTPException
 
         raise HTTPException(status_code=404, detail="Lote no encontrado")
+    # Polling: si el worker reinicio, no dejar el UI colgado en COMPARANDO.
+    svc.sanear_comparando_huerfano(db, lote)
+    db.refresh(lote)
     return {"ok": True, "lote": _lote_dict(lote)}
 
 

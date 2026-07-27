@@ -96,7 +96,7 @@ export function ConcesionariosConfig() {
       // Confirmar eliminación permanente
 
       const confirmar = window.confirm(
-        'âš ï¸ ¿Estás seguro de que quieres ELIMINAR PERMANENTEMENTE este concesionario?\n\n' +
+        '¿Estás seguro de que quieres ELIMINAR PERMANENTEMENTE este concesionario?\n\n' +
           'Esta acción NO se puede deshacer y el concesionario será borrado completamente de la base de datos.'
       )
 
@@ -111,32 +111,18 @@ export function ConcesionariosConfig() {
   }
 
   const validateNombre = (nombre: string): string => {
-    if (!nombre.trim()) {
+    const nombreLimpio = nombre.trim().replace(/\s+/g, ' ')
+
+    if (!nombreLimpio) {
       return 'El nombre es requerido'
     }
 
-    // Limpiar espacios extras
-
-    const nombreLimpio = nombre.trim().replace(/\s+/g, ' ')
-
-    // Verificar cantidad de palabras (mínimo 2, máximo 4)
-
-    const palabras = nombreLimpio.split(' ')
-
-    if (palabras.length < 2) {
-      return 'Debe ingresar al menos 2 palabras (Nombre y Apellido)'
+    if (nombreLimpio.length < 2) {
+      return 'El nombre debe tener al menos 2 caracteres'
     }
 
-    if (palabras.length > 4) {
-      return 'Debe ingresar máximo 4 palabras'
-    }
-
-    // Verificar que cada palabra tenga al menos 2 caracteres
-
-    for (const palabra of palabras) {
-      if (palabra.length < 2) {
-        return 'Cada palabra debe tener al menos 2 caracteres'
-      }
+    if (nombreLimpio.length > 255) {
+      return 'El nombre no puede superar 255 caracteres'
     }
 
     return ''
@@ -201,8 +187,6 @@ export function ConcesionariosConfig() {
 
           data: { ...formData, nombre: nombreFormateado },
         })
-
-        toast.success('âœ… Concesionario actualizado exitosamente')
       } else {
         // Al crear, ya tiene activo: true por defecto
 
@@ -210,8 +194,6 @@ export function ConcesionariosConfig() {
           ...formData,
           nombre: nombreFormateado,
         })
-
-        toast.success('âœ… Concesionario creado exitosamente')
       }
 
       resetForm()
@@ -220,7 +202,7 @@ export function ConcesionariosConfig() {
     } catch (err) {
       console.error('Error:', err)
 
-      toast.error('âŒ Error al guardar concesionario')
+      toast.error('Error al guardar concesionario')
     }
   }
 
@@ -685,7 +667,7 @@ export function ConcesionariosConfig() {
 
                         setValidationError('') // Limpiar error al escribir
                       }}
-                      placeholder="Ingrese nombre completo (2-4 palabras)"
+                      placeholder="Ingrese nombre del concesionario"
                       required
                       autoFocus
                       className={validationError ? 'border-red-500' : ''}
@@ -699,7 +681,7 @@ export function ConcesionariosConfig() {
 
                     {!editingConcesionario && !validationError && (
                       <p className="mt-1 text-xs text-gray-500">
-                        Ejemplo: Juan Pérez (mínimo 2, máximo 4 palabras)
+                        Ejemplo: Automotriz del Este
                       </p>
                     )}
                   </div>

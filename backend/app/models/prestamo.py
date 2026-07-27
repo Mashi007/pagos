@@ -54,7 +54,12 @@ class Prestamo(Base):
     usuario_autoriza = Column(String(255), nullable=True, server_default=text("'operaciones@rapicreditca.com'"))
     ml_impago_nivel_riesgo_manual = Column(String(50), nullable=True)
     ml_impago_probabilidad_manual = Column(Numeric(10, 4), nullable=True)
-    concesionario_id = Column(Integer, nullable=True)
+    concesionario_id = Column(
+        Integer,
+        ForeignKey("concesionarios.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     analista_id = Column(Integer, ForeignKey("analistas.id", ondelete="SET NULL"), nullable=True, index=True)
     modelo_vehiculo_id = Column(Integer, nullable=True)
     valor_activo = Column(Numeric(14, 2), nullable=True)

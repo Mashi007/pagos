@@ -538,6 +538,44 @@ def crear_lote_desde_excel(
 
 
 
+
+def sanear_comparando_huerfano(db: Session, lote: ConciliacionBancoOcrLote) -> bool:
+    """
+    Tras deploy/restart el hilo muere y el lote queda en COMPARANDO para siempre.
+    Si no hay hilo vivo, marca ERROR_COMPARAR para que el front deje de hacer poll
+    y el usuario pueda pulsar Conciliar de nuevo.
+    """
+    from app.services.conciliacion_bancos_bg_runner import comparar_activo
+
+    if (lote.estado or "").strip().upper() != "COMPARANDO":
+        return False
+    if comparar_activo(int(lote.id)):
+        return False
+    payload: dict[str, Any] = {}
+    raw = (lote.notas or "").strip()
+    if raw:
+        try:
+            data = json.loads(raw)
+            if isinstance(data, dict):
+                payload = data
+        except Exception:
+            payload = {}
+    payload["comparar_error"] = (
+        "Comparacion interrumpida (reinicio del servidor o proceso caido). "
+        "Pulse Conciliar de nuevo."
+    )
+    payload["comparar_huerfano"] = True
+    lote.notas = json.dumps(payload, ensure_ascii=True)
+    lote.estado = "ERROR_COMPARAR"
+    db.commit()
+    db.refresh(lote)
+    logger.warning(
+        "[conciliacion-bancos] COMPARANDO huerfano saneado lote_id=%s -> ERROR_COMPARAR",
+        lote.id,
+    )
+    return True
+
+
 def iniciar_comparar_lote(
     db: Session,
     lote_id: int,
@@ -558,7 +596,10 @@ def iniciar_comparar_lote(
     lote = db.get(ConciliacionBancoOcrLote, lote_id)
     if not lote:
         raise HTTPException(status_code=404, detail="Lote no encontrado")
-    if lote.estado == "COMPARANDO" or comparar_activo(lote_id):
+    # Deploy/restart mata el hilo: liberar COMPARANDO huerfano para poder relanzar.
+    sanear_comparando_huerfano(db, lote)
+    db.refresh(lote)
+    if comparar_activo(lote_id):
         return {
             "ok": True,
             "async": True,
