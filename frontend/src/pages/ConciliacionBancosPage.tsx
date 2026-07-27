@@ -507,7 +507,11 @@ export default function ConciliacionBancosPage() {
         setBancosSel(bancosLote as ConciliacionBancosBancoCategoria[])
       }
       toast.success(
-        Serial encontrado. Lote # listo ( fila(s)). Pulse Conciliar.
+        'Serial encontrado. Lote #' +
+          String(res.lote.id) +
+          ' listo (' +
+          String(res.lote.filas_banco ?? 0) +
+          ' fila(s)). Pulse Conciliar.'
       )
       setSerialInfo({
         encontrado: true,
