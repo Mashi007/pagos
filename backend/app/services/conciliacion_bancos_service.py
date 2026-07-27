@@ -1470,7 +1470,20 @@ def decidir_masivo(
                         pago_ids_l.append(int(x))
                     except (TypeError, ValueError):
                         pass
-            if res.tipo_novedad == "AMBIGUO" and (pago_eleg_i or pago_ids_l):
+            if res.tipo_novedad == "AMBIGUO":
+                if not pago_ids_l and pago_eleg_i is None:
+                    # Masivo sin eleccion: todos los candidatos -> Ambiguo
+                    pago_ids_l = sorted(_candidatos_ids_desde_resultado(res))
+                if not pago_ids_l and pago_eleg_i is None:
+                    errores += 1
+                    detalle.append(
+                        {
+                            "resultado_id": rid,
+                            "ok": False,
+                            "error": "AMBIGUO sin candidatos",
+                        }
+                    )
+                    continue
                 r = decidir_y_aplicar(
                     db,
                     rid,
@@ -1493,20 +1506,7 @@ def decidir_masivo(
                         "cambio": bool(r.get("cambio")),
                     }
                 )
-            elif (
-                not res.pago_id
-                or res.tipo_novedad in ("SIN_BD", "SIN_TASA", "AMBIGUO")
-            ):
-                if res.tipo_novedad == "AMBIGUO":
-                    errores += 1
-                    detalle.append(
-                        {
-                            "resultado_id": rid,
-                            "ok": False,
-                            "error": "AMBIGUO sin pago elegido",
-                        }
-                    )
-                    continue
+            elif not res.pago_id or res.tipo_novedad in ("SIN_BD", "SIN_TASA"):
                 r = decidir_y_aplicar(
                     db,
                     rid,

@@ -200,16 +200,10 @@ export default function ConciliacionBancosPage() {
     () =>
       itemsFiltrados.filter(r => {
         if (filaBloqueada(r)) return false
-        if (r.tipo_novedad === 'AMBIGUO') {
-          // Masivo solo si ya eligio al menos un candidato
-          return (
-            idsElegidosFila(pagoElegidoPorFila, r.id).length > 0 ||
-            Boolean(r.pago_id)
-          )
-        }
+        // AMBIGUO tambien entra en seleccion masiva (confirma todos los candidatos)
         return true
       }),
-    [itemsFiltrados, pagoElegidoPorFila]
+    [itemsFiltrados]
   )
 
   /** Cap a max masivo: seleccionar visibles no supera el limite de confirmacion. */
@@ -248,6 +242,17 @@ export default function ConciliacionBancosPage() {
     setSeleccionados(prev => {
       const next = new Set(prev)
       for (const r of elegiblesParaSeleccionMasiva) next.add(r.id)
+      return next
+    })
+    // AMBIGUO masivo: por defecto todos los candidatos -> marca Ambiguo
+    setPagoElegidoPorFila(prev => {
+      const next = { ...prev }
+      for (const r of elegiblesParaSeleccionMasiva) {
+        if (r.tipo_novedad !== 'AMBIGUO') continue
+        if (idsElegidosFila(next, r.id).length > 0) continue
+        const all = (r.candidatos || []).map(c => c.pago_id).filter(Boolean)
+        if (all.length) next[r.id] = all
+      }
       return next
     })
   }
@@ -422,8 +427,17 @@ export default function ConciliacionBancosPage() {
     }
     setBulkBusy(true)
     try {
+      const byId = new Map(items.map(i => [i.id, i]))
       const payload = ids.map(id => {
-        const elegidos = idsElegidosFila(pagoElegidoPorFila, id)
+        const row = byId.get(id)
+        let elegidos = idsElegidosFila(pagoElegidoPorFila, id)
+        if (
+          row?.tipo_novedad === 'AMBIGUO' &&
+          elegidos.length === 0 &&
+          row.candidatos?.length
+        ) {
+          elegidos = row.candidatos.map(c => c.pago_id).filter(Boolean)
+        }
         return {
           resultado_id: id,
           fuente_elegida: fuentePorFila[id] || fuenteMasiva,
@@ -818,20 +832,31 @@ export default function ConciliacionBancosPage() {
                       <TableCell>
                         <input
                           type="checkbox"
-                          disabled={
-                            locked ||
-                            busy ||
-                            (row.tipo_novedad === 'AMBIGUO' &&
-                              idsElegidosFila(pagoElegidoPorFila, row.id)
-                                .length === 0)
-                          }
+                          disabled={locked || busy}
                           checked={seleccionados.has(row.id)}
-                          onChange={() => toggleSeleccion(row.id)}
+                          onChange={() => {
+                            toggleSeleccion(row.id)
+                            // Al marcar AMBIGUO en masivo, preseleccionar todos los candidatos
+                            if (
+                              row.tipo_novedad === 'AMBIGUO' &&
+                              !seleccionados.has(row.id) &&
+                              idsElegidosFila(pagoElegidoPorFila, row.id)
+                                .length === 0
+                            ) {
+                              const all = (row.candidatos || [])
+                                .map(c => c.pago_id)
+                                .filter(Boolean)
+                              if (all.length) {
+                                setPagoElegidoPorFila(prev => ({
+                                  ...prev,
+                                  [row.id]: all,
+                                }))
+                              }
+                            }
+                          }}
                           title={
-                            row.tipo_novedad === 'AMBIGUO' &&
-                            idsElegidosFila(pagoElegidoPorFila, row.id)
-                              .length === 0
-                              ? 'Elija uno o mas prestamos candidatos'
+                            row.tipo_novedad === 'AMBIGUO'
+                              ? 'AMBIGUO: seleccion masiva confirma todos los candidatos (Ambiguo)'
                               : undefined
                           }
                         />
@@ -988,7 +1013,7 @@ export default function ConciliacionBancosPage() {
                           (row.candidatos?.length || 0) > 1 && (
                             <div className="mt-1 max-w-[160px] text-[11px] text-red-700">
                               Mismo serial en {row.candidatos?.length}{' '}
-                              pagos. Elija uno, varios o todos y confirme.
+                              pagos. Seleccion masiva = todos (Ambiguo).
                             </div>
                           )}
                       </TableCell>
