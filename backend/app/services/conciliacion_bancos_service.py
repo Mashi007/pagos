@@ -1800,8 +1800,12 @@ def decidir_masivo(
     """
     if not items:
         raise HTTPException(status_code=400, detail="No hay filas seleccionadas")
-    if len(items) > 1000:
-        raise HTTPException(status_code=400, detail="Maximo 1000 filas por lote masivo")
+    # Tope por request HTTP (Cloudflare/Render ~100s). El front manda tandas de 50.
+    if len(items) > 100:
+        raise HTTPException(
+            status_code=400,
+            detail="Maximo 100 filas por request masivo; envie en tandas.",
+        )
 
     ok = 0
     errores = 0

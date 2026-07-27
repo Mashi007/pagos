@@ -183,7 +183,8 @@ export const conciliacionBancosService = {
     }>
   }> {
     return apiClient.post(`${BASE}/resultados/decidir-masivo`, body, {
-      timeout: 600000,
+      // Tandas pequenias (front: 50). Evita 520 Cloudflare a los ~3 min.
+      timeout: 180000,
     })
   },
 

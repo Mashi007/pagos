@@ -49,6 +49,8 @@ function errMsg(err: unknown): string {
 }
 
 const MAX_CONFIRMACION_MASIVA = 1000
+// Tamanio por request: 1000 seguidos tumba Render/Cloudflare (~520 a los 3 min).
+const CHUNK_CONFIRMACION_MASIVA = 50
 
 const CHIP_NOVEDAD_ORDEN = [
   'MATCH_EXACTO',
@@ -549,6 +551,9 @@ export default function ConciliacionBancosPage() {
       return
     }
     setBulkBusy(true)
+    const progressToast = toast.loading(
+      `Confirmando 0/${ids.length} (tandas de ${CHUNK_CONFIRMACION_MASIVA})...`
+    )
     try {
       const byId = new Map(items.map(i => [i.id, i]))
       const payload = ids.map(id => {
@@ -574,24 +579,67 @@ export default function ConciliacionBancosPage() {
             : {}),
         }
       })
-      const r = await conciliacionBancosService.decidirMasivo({
-        items: payload,
-        fuente_default: fuenteMasiva,
+
+      let exitosos = 0
+      let errores = 0
+      let sinPago = 0
+      let conCambio = 0
+      let firstErr: string | undefined
+      const okIds = new Set<number>()
+
+      for (let i = 0; i < payload.length; i += CHUNK_CONFIRMACION_MASIVA) {
+        const chunk = payload.slice(i, i + CHUNK_CONFIRMACION_MASIVA)
+        const desde = i + 1
+        const hasta = Math.min(i + chunk.length, payload.length)
+        toast.loading(
+          `Confirmando ${desde}-${hasta} de ${payload.length}...`,
+          { id: progressToast }
+        )
+        try {
+          const r = await conciliacionBancosService.decidirMasivo({
+            items: chunk,
+            fuente_default: fuenteMasiva,
+          })
+          exitosos += Number(r.exitosos || 0)
+          errores += Number(r.errores || 0)
+          sinPago += Number(r.sin_pago_vistos || 0)
+          conCambio += Number(r.con_cambio || 0)
+          for (const d of r.detalle || []) {
+            if (d.ok) okIds.add(Number(d.resultado_id))
+            else if (!firstErr && d.error) firstErr = String(d.error)
+          }
+        } catch (chunkErr) {
+          // Cloudflare 520 / timeout: lo ya commitado en tandas previas se conserva
+          errores += chunk.length
+          if (!firstErr) firstErr = errMsg(chunkErr)
+          toast.message(
+            `Tanda ${desde}-${hasta} interrumpida; se conserva lo confirmado antes.`
+          )
+          break
+        }
+      }
+
+      toast.dismiss(progressToast)
+      setSeleccionados(prev => {
+        const next = new Set(prev)
+        for (const id of okIds) next.delete(id)
+        return next
       })
-      if (r.errores === 0) {
+
+      if (errores === 0) {
         toast.success(
-          `Confirmados ${r.exitosos}/${r.total}` +
-            (r.con_cambio ? ` (${r.con_cambio} con cambio BD)` : '')
+          `Confirmados ${exitosos}/${payload.length}` +
+            (conCambio ? ` (${conCambio} con cambio BD)` : '')
         )
       } else {
         toast.message(
-          `Masivo: ${r.exitosos} ok, ${r.errores} error(es), ${r.sin_pago_vistos} sin pago`
+          `Masivo: ${exitosos} ok, ${errores} error(es), ${sinPago} sin pago`
         )
-        const firstErr = r.detalle.find(d => !d.ok)?.error
         if (firstErr) toast.error(String(firstErr).slice(0, 180))
       }
       if (lote) await refreshResultados(lote.id)
     } catch (err) {
+      toast.dismiss(progressToast)
       toast.error(errMsg(err))
       if (lote) await refreshResultados(lote.id)
     } finally {
