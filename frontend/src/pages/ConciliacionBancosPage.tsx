@@ -71,6 +71,13 @@ function esMatchSimple(row: ConciliacionBancosResultado): boolean {
   )
 }
 
+/** AMBIGUO: fuente predeterminada Ref. RapiC (BD). Resto: Ref. Banco. */
+function fuenteDefaultFila(
+  row: Pick<ConciliacionBancosResultado, 'tipo_novedad'>
+): 'BD' | 'BANCO' {
+  return row.tipo_novedad === 'AMBIGUO' ? 'BD' : 'BANCO'
+}
+
 function filaBloqueada(row: ConciliacionBancosResultado): boolean {
   return (
     row.aplicado ||
@@ -354,7 +361,7 @@ export default function ConciliacionBancosPage() {
 
   /** Fuente + visto = confirmar: Ref.BD mantiene; Ref.Banco graba (cascada si aplica). */
   const handleConfirmar = async (row: ConciliacionBancosResultado) => {
-    const fuente = fuentePorFila[row.id] || 'BANCO'
+    const fuente = fuentePorFila[row.id] || fuenteDefaultFila(row)
     const pagoElegido = pagoElegidoPorFila[row.id]
     setRowBusy(row.id)
     try {
@@ -447,7 +454,9 @@ export default function ConciliacionBancosPage() {
         }
         return {
           resultado_id: id,
-          fuente_elegida: fuentePorFila[id] || fuenteMasiva,
+          fuente_elegida:
+            fuentePorFila[id] ||
+            (row ? fuenteDefaultFila(row) : fuenteMasiva),
           ...(elegidos.length
             ? {
                 pago_ids_elegidos: elegidos,
@@ -1028,7 +1037,9 @@ export default function ConciliacionBancosPage() {
                         <select
                           className="rounded border px-2 py-1 text-xs"
                           disabled={locked || busy}
-                          value={fuentePorFila[row.id] || 'BANCO'}
+                          value={
+                            fuentePorFila[row.id] || fuenteDefaultFila(row)
+                          }
                           onChange={e =>
                             setFuentePorFila(prev => ({
                               ...prev,
@@ -1046,9 +1057,10 @@ export default function ConciliacionBancosPage() {
                             size="sm"
                             variant="outline"
                             title={
-                              (fuentePorFila[row.id] || 'BANCO') === 'BANCO'
+                              (fuentePorFila[row.id] ||
+                                fuenteDefaultFila(row)) === 'BANCO'
                                 ? 'Confirmar: grabar paquete Ref. Banco'
-                                : 'Confirmar: mantener paquete Ref. BD'
+                                : 'Confirmar: mantener paquete Ref. RapiC'
                             }
                             disabled={
                               locked ||
