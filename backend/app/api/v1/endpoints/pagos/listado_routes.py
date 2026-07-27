@@ -253,6 +253,9 @@ from .pago_conciliacion_estado import (
     _estado_conciliacion_post_cascada,
 )
 from .pago_cascada_reglas import _debe_aplicar_cascada_pago
+from app.services.conciliacion_bancos_service import (
+    contar_conciliacion_bancaria_prestamo,
+)
 from .pago_serializacion_respuesta import (
     _enriquecer_items_conciliacion_bancaria_confirmada,
     _enriquecer_items_duplicado_clave_misma_pagina,
