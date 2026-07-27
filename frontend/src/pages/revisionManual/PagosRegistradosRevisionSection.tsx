@@ -40,7 +40,7 @@ import {
   TableRow,
 } from '../../components/ui/table'
 import { formatDate } from '../../utils'
-import { getErrorMessage } from '../../utils/errorUtils'
+import { getErrorMessage } from '../../types/errors'
 import type { Pago } from '../../services/pagoService'
 import { pagoService } from '../../services/pagoService'
 import { ConciliarCarteraRevisionManualButton } from '../../components/pagos/ConciliarCarteraRevisionManualButton'
