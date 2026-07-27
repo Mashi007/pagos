@@ -197,6 +197,8 @@ class PagoResponse(BaseModel):
     fecha_conciliacion: Optional[datetime] = None
     conciliado: bool = False
     verificado_concordancia: Optional[str] = None
+    # Confirmacion en Auditoria > Conciliacion Bancos (check verde); no es autoconciliacion.
+    conciliacion_bancaria_confirmada: bool = False
     usuario_registro: Optional[str] = None
     notas: Optional[str] = None
     documento_nombre: Optional[str] = None

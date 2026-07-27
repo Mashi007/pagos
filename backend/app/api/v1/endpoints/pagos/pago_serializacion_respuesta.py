@@ -13,6 +13,7 @@ from app.core.documento import (
     split_numero_documento_almacenado,
 )
 from app.models.pago import Pago
+from app.models.conciliacion_banco_ocr import ConciliacionBancoOcrResultado
 from app.models.pago_reportado import PagoReportado
 from app.models.cuota_pago import CuotaPago
 from app.services.cobros.pago_reportado_documento import claves_documento_pago_desde_campos
@@ -99,6 +100,46 @@ def _enriquecer_items_tiene_aplicacion_cuotas(db: Session, items: list) -> None:
         except (TypeError, ValueError):
             it["tiene_aplicacion_cuotas"] = False
 
+
+
+def _enriquecer_items_conciliacion_bancaria_confirmada(db: Session, items: list) -> None:
+    """
+    True si el pago fue confirmado en Auditoria > Conciliacion Bancos
+    (check verde = CORREGIR con Ref. Banco o Ref. RapiC, aplicado).
+    Independiente de pagos.conciliado (autoconciliacion OCR/cuotas).
+    """
+    if not items:
+        return
+    ids: list[int] = []
+    for it in items:
+        pid = it.get("id")
+        if pid is not None:
+            try:
+                ids.append(int(pid))
+            except (TypeError, ValueError):
+                pass
+    if not ids:
+        for it in items:
+            it["conciliacion_bancaria_confirmada"] = False
+        return
+    q = (
+        select(ConciliacionBancoOcrResultado.pago_id)
+        .where(
+            ConciliacionBancoOcrResultado.pago_id.in_(ids),
+            ConciliacionBancoOcrResultado.decision == "CORREGIR",
+            ConciliacionBancoOcrResultado.aplicado.is_(True),
+        )
+        .distinct()
+    )
+    confirmed = {int(x[0]) for x in db.execute(q).all() if x[0] is not None}
+    for it in items:
+        pid = it.get("id")
+        try:
+            it["conciliacion_bancaria_confirmada"] = (
+                int(pid) in confirmed if pid is not None else False
+            )
+        except (TypeError, ValueError):
+            it["conciliacion_bancaria_confirmada"] = False
 
 def _enriquecer_pagos_pago_reportado_id(db: Session, items: list) -> None:
     """

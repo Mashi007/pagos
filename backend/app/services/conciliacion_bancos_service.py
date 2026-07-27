@@ -217,42 +217,6 @@ def _aplicar_institucion_desde_lote(pago: Pago, lote: ConciliacionBancoOcrLote) 
     return True
 
 
-def _pago_excluye_marcar_conciliado(pago: Pago) -> bool:
-    e = (getattr(pago, "estado", None) or "").strip().upper()
-    if e in (
-        "DUPLICADO",
-        "ANULADO_IMPORT",
-        "CANCELADO",
-        "RECHAZADO",
-        "REVERSADO",
-    ):
-        return True
-    if "ANUL" in e or "REVERS" in e:
-        return True
-    return False
-
-
-def _marcar_conciliado_tras_confirmar_fuente(pago: Pago) -> bool:
-    """
-    Al confirmar Ref. Banco o Ref. RapiC: conciliado=Si en BD (revision manual).
-    True si habia que marcar (no estaba conciliado/verificado).
-    """
-    if _pago_excluye_marcar_conciliado(pago):
-        return False
-    ya = bool(getattr(pago, "conciliado", False)) and (
-        str(getattr(pago, "verificado_concordancia", "") or "")
-        .strip()
-        .upper()
-        == "SI"
-    )
-    if ya:
-        return False
-    from app.services.pago_autoconciliacion import marcar_pago_autoconciliado
-
-    marcar_pago_autoconciliado(pago)
-    return True
-
-
 # Prefijos/etiquetas frecuentes que operadores agregan al serial
 _REF_RUIDO_PREFIX = re.compile(
     r"^(?:"
@@ -990,19 +954,14 @@ def decidir_y_aplicar(
     res.valores_antes = json.dumps(antes, ensure_ascii=True)
 
     if fuente == "BD":
-        # Mantener paquete BD; marcar conciliado=Si (revision manual)
-        conc_ok = _marcar_conciliado_tras_confirmar_fuente(pago)
-        despues = _snapshot_pago(pago)
+        # Mantener paquete BD. No toca pagos.conciliado (autoconciliacion/cuotas).
+        # La confirmacion bancaria queda en este resultado (CORREGIR+aplicado).
         res.aplicado = True
-        res.valores_despues = json.dumps(despues, ensure_ascii=True)
-        if conc_ok:
-            res.detalle_aplicacion = (
-                "Referencia RapiC/BD: sin cambios de paquete; marcado conciliado=Si."
-            )
-        else:
-            res.detalle_aplicacion = (
-                "Se eligio Referencia BD: sin cambios (paquete ya en BD)."
-            )
+        res.detalle_aplicacion = (
+            "Referencia RapiC/BD: sin cambios de paquete. "
+            "Confirmacion bancaria registrada (no altera autoconciliacion)."
+        )
+        res.valores_despues = json.dumps(antes, ensure_ascii=True)
         lote.estado = "APLICADO"
         db.commit()
         return {
@@ -1011,9 +970,7 @@ def decidir_y_aplicar(
             "decision": res.decision,
             "fuente_elegida": fuente,
             "aplicado": True,
-            "cambio": bool(conc_ok),
-            "antes": antes,
-            "despues": despues,
+            "cambio": False,
         }
 
     # fuente BANCO
@@ -1058,16 +1015,18 @@ def decidir_y_aplicar(
     )
 
     if paquetes_iguales:
-        # Digitos iguales: aun asi alinear texto serial banco + institucion + conciliado
+        # Digitos iguales: alinear texto serial + institucion. No toca pagos.conciliado.
         serial_changed = False
         if (pago.numero_documento or "").strip() != serial_new:
             pago.numero_documento = serial_new[:100]
             serial_changed = True
         inst_changed = _aplicar_institucion_desde_lote(pago, lote)
-        conc_ok = _marcar_conciliado_tras_confirmar_fuente(pago)
-        if not inst_changed and not conc_ok and not serial_changed:
+        if not inst_changed and not serial_changed:
             res.aplicado = True
-            res.detalle_aplicacion = "Paquete banco coincide con BD: sin cambios."
+            res.detalle_aplicacion = (
+                "Paquete banco coincide con BD: sin cambios de datos. "
+                "Confirmacion bancaria registrada."
+            )
             res.valores_despues = json.dumps(antes, ensure_ascii=True)
             db.commit()
             return {
@@ -1089,13 +1048,9 @@ def decidir_y_aplicar(
             partes.append(
                 f"Institucion actualizada a {pago.institucion_bancaria}"
             )
-        if conc_ok:
-            partes.append("marcado conciliado=Si")
-        if not partes:
-            partes.append("paquete fecha/monto/serial ya coincidia")
         res.detalle_aplicacion = (
             "; ".join(partes)
-            + " (fecha/monto ya coincidian)."
+            + " (fecha/monto ya coincidian). Confirmacion bancaria registrada."
         )
         lote.estado = "APLICADO"
         db.commit()
@@ -1184,7 +1139,6 @@ def decidir_y_aplicar(
         cc, cp = _aplicar_pago_a_cuotas_interno(pago, db)
         cascada_info = {"cuotas_completadas": cc, "cuotas_parciales": cp}
 
-    conc_ok = _marcar_conciliado_tras_confirmar_fuente(pago)
     despues = _snapshot_pago(pago)
     res.valores_despues = json.dumps(despues, ensure_ascii=True)
     res.aplicado = True
@@ -1196,12 +1150,11 @@ def decidir_y_aplicar(
         if inst_changed
         else ""
     )
-    extra_conc = " Conciliado=Si." if conc_ok else ""
     res.detalle_aplicacion = (
         "Actualizado con paquete banco (fecha/monto/serial) "
         + ("y cascada reaplicada." if cascada_info else "sin rearticulacion de cuotas.")
         + extra_inst
-        + extra_conc
+        + " Confirmacion bancaria registrada (sin alterar autoconciliacion)."
     )
     lote.estado = "APLICADO"
     db.commit()

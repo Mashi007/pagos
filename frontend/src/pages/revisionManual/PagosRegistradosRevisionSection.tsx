@@ -352,7 +352,10 @@ export function PagosRegistradosRevisionSection(
                       <TableHead className="whitespace-nowrap">
                         Nº documento
                       </TableHead>
-                      <TableHead className="whitespace-nowrap">
+                      <TableHead
+                        className="whitespace-nowrap"
+                        title="Confirmacion en Conciliacion Bancos (check verde). No es autoconciliacion OCR/cuotas."
+                      >
                         Conciliado
                       </TableHead>
                       <TableHead>Notas</TableHead>
@@ -477,17 +480,17 @@ export function PagosRegistradosRevisionSection(
                             </div>
                           </TableCell>
                           <TableCell className="whitespace-nowrap">
-                            {pagoEstaConciliadoOPagado(pago) ? (
+                            {pago.conciliacion_bancaria_confirmada ? (
                               <Badge
                                 className="bg-green-500 text-white"
-                                title="Conciliado por el proceso (Conciliacion Bancos u otra via automatica)"
+                                title="Confirmado en Conciliacion Bancos (Ref. Banco o Ref. RapiC)"
                               >
                                 Sí
                               </Badge>
                             ) : (
                               <Badge
                                 className="bg-gray-500 text-white"
-                                title="Aun no conciliado"
+                                title="Sin confirmacion en Conciliacion Bancos"
                               >
                                 No
                               </Badge>

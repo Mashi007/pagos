@@ -27,6 +27,9 @@ export interface Pago {
 
   verificado_concordancia?: string | null // SI/NO - Verificación de concordancia con módulo de pagos
 
+  /** Confirmado en Auditoria > Conciliacion Bancos (check verde). Distinto de autoconciliacion. */
+  conciliacion_bancaria_confirmada?: boolean
+
   usuario_registro: string
 
   notas: string | null

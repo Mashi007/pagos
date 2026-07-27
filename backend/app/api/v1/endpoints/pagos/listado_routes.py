@@ -254,6 +254,7 @@ from .pago_conciliacion_estado import (
 )
 from .pago_cascada_reglas import _debe_aplicar_cascada_pago
 from .pago_serializacion_respuesta import (
+    _enriquecer_items_conciliacion_bancaria_confirmada,
     _enriquecer_items_duplicado_clave_misma_pagina,
     _enriquecer_items_duplicado_serial_cartera,
     _enriquecer_items_tiene_aplicacion_cuotas,
@@ -574,6 +575,8 @@ def listar_pagos(
                 it["exceso_sobre_total_usd"] = None
 
         _enriquecer_items_tiene_aplicacion_cuotas(db, items)
+
+        _enriquecer_items_conciliacion_bancaria_confirmada(db, items)
 
         _enriquecer_pagos_pago_reportado_id(db, items)
 
