@@ -14,6 +14,7 @@ from app.core.documento import (
 )
 from app.models.pago import Pago
 from app.services.conciliacion_bancos_service import (
+    pago_ids_ambiguo_bancario_multi,
     pago_ids_conciliacion_bancaria_confirmada,
 )
 from app.models.pago_reportado import PagoReportado
@@ -124,16 +125,22 @@ def _enriquecer_items_conciliacion_bancaria_confirmada(db: Session, items: list)
     if not ids:
         for it in items:
             it["conciliacion_bancaria_confirmada"] = False
+            it["conciliacion_bancaria_ambigua"] = False
         return
     confirmed = pago_ids_conciliacion_bancaria_confirmada(db, ids)
+    ambiguos = pago_ids_ambiguo_bancario_multi(db, ids)
     for it in items:
         pid = it.get("id")
         try:
-            it["conciliacion_bancaria_confirmada"] = (
-                int(pid) in confirmed if pid is not None else False
-            )
+            pid_i = int(pid) if pid is not None else None
         except (TypeError, ValueError):
-            it["conciliacion_bancaria_confirmada"] = False
+            pid_i = None
+        it["conciliacion_bancaria_confirmada"] = (
+            pid_i in confirmed if pid_i is not None else False
+        )
+        it["conciliacion_bancaria_ambigua"] = (
+            pid_i in ambiguos if pid_i is not None else False
+        )
 
 def _enriquecer_pagos_pago_reportado_id(db: Session, items: list) -> None:
     """

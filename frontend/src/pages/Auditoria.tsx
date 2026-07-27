@@ -105,7 +105,8 @@ const AUDITORIA_TAB_META: Record<
   },
   sistema: {
     title: 'Actividad usuarios',
-    description: 'Histor de acciones de usuarios y módulos del sistema.',
+    description:
+      'Toda la actividad de administradores y operadores (login, altas, ediciones, borrados). El distintivo es el correo con el que ingresan.',
     icon: Shield,
   },
 }

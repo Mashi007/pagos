@@ -502,7 +502,14 @@ export function PagosRegistradosRevisionSection(
                             </div>
                           </TableCell>
                           <TableCell className="whitespace-nowrap">
-                            {pago.conciliacion_bancaria_confirmada ? (
+                            {pago.conciliacion_bancaria_ambigua ? (
+                              <Badge
+                                className="bg-orange-500 text-white"
+                                title="Serial banco aprobado en 2 o mas prestamos (AMBIGUO). Solo eliminar."
+                              >
+                                Ambiguo
+                              </Badge>
+                            ) : pago.conciliacion_bancaria_confirmada ? (
                               <Badge
                                 className="bg-green-500 text-white"
                                 title="Confirmado en Conciliacion Bancos (Ref. Banco o Ref. RapiC)"
@@ -551,13 +558,16 @@ export function PagosRegistradosRevisionSection(
                                 className="h-8 w-8 shrink-0 p-0"
                                 disabled={
                                   soloLectura ||
-                                  Boolean(pago.conciliacion_bancaria_confirmada)
+                                  Boolean(pago.conciliacion_bancaria_confirmada) ||
+                                  Boolean(pago.conciliacion_bancaria_ambigua)
                                 }
                                 onClick={() => abrirEditarPagoRevision(pago)}
                                 title={
                                   soloLectura
                                     ? 'Revision cerrada: solo lectura'
-                                    : pago.conciliacion_bancaria_confirmada
+                                    : pago.conciliacion_bancaria_ambigua
+                                      ? 'Ambiguo (2+ prestamos): solo se puede eliminar el pago'
+                                      : pago.conciliacion_bancaria_confirmada
                                       ? 'Conciliación Bancaria confirmada: solo se puede eliminar el pago'
                                       : pagoEstaConciliadoOPagado(pago) &&
                                           !isAdmin
@@ -580,7 +590,9 @@ export function PagosRegistradosRevisionSection(
                                 title={
                                   soloLectura
                                     ? 'Revision cerrada: solo lectura'
-                                    : pago.conciliacion_bancaria_confirmada
+                                    : pago.conciliacion_bancaria_ambigua
+                                      ? 'Eliminar pago (única acción permitida en Ambiguo)'
+                                      : pago.conciliacion_bancaria_confirmada
                                       ? 'Eliminar pago (única acción permitida tras Conciliación Bancaria)'
                                       : 'Eliminar pago'
                                 }

@@ -168,6 +168,74 @@ def pago_ids_conciliacion_bancaria_confirmada(
     return {int(x[0]) for x in db.execute(q).all() if x[0] is not None}
 
 
+def pago_ids_ambiguo_bancario_multi(db: Session, pago_ids: list[int]) -> set[int]:
+    """
+    Pagos confirmados en AMBIGUO donde el mismo caso banco (lote+banco_id)
+    se aprobo para 2+ préstamos/pagos distintos.
+    """
+    if not pago_ids:
+        return set()
+    ids = sorted({int(x) for x in pago_ids if x is not None})
+    if not ids:
+        return set()
+    mine = (
+        db.execute(
+            select(
+                ConciliacionBancoOcrResultado.pago_id,
+                ConciliacionBancoOcrResultado.lote_id,
+                ConciliacionBancoOcrResultado.banco_id,
+            ).where(
+                ConciliacionBancoOcrResultado.pago_id.in_(ids),
+                ConciliacionBancoOcrResultado.tipo_novedad == "AMBIGUO",
+                ConciliacionBancoOcrResultado.decision == "CORREGIR",
+                ConciliacionBancoOcrResultado.aplicado.is_(True),
+                ConciliacionBancoOcrResultado.banco_id.isnot(None),
+            )
+        )
+        .all()
+    )
+    if not mine:
+        return set()
+    keys = {(int(r[1]), int(r[2])) for r in mine if r[1] is not None and r[2] is not None}
+    if not keys:
+        return set()
+    lote_ids = sorted({k[0] for k in keys})
+    banco_ids = sorted({k[1] for k in keys})
+    siblings = (
+        db.execute(
+            select(
+                ConciliacionBancoOcrResultado.pago_id,
+                ConciliacionBancoOcrResultado.lote_id,
+                ConciliacionBancoOcrResultado.banco_id,
+            ).where(
+                ConciliacionBancoOcrResultado.lote_id.in_(lote_ids),
+                ConciliacionBancoOcrResultado.banco_id.in_(banco_ids),
+                ConciliacionBancoOcrResultado.tipo_novedad == "AMBIGUO",
+                ConciliacionBancoOcrResultado.decision == "CORREGIR",
+                ConciliacionBancoOcrResultado.aplicado.is_(True),
+                ConciliacionBancoOcrResultado.pago_id.isnot(None),
+            )
+        )
+        .all()
+    )
+    by_key: dict[tuple[int, int], set[int]] = {}
+    for pago_id, lote_id, banco_id in siblings:
+        if pago_id is None or lote_id is None or banco_id is None:
+            continue
+        key = (int(lote_id), int(banco_id))
+        if key not in keys:
+            continue
+        by_key.setdefault(key, set()).add(int(pago_id))
+    out: set[int] = set()
+    for pago_id, lote_id, banco_id in mine:
+        if pago_id is None or lote_id is None or banco_id is None:
+            continue
+        key = (int(lote_id), int(banco_id))
+        if len(by_key.get(key, set())) >= 2:
+            out.add(int(pago_id))
+    return out
+
+
 def contar_conciliacion_bancaria_prestamo(db: Session, prestamo_id: int) -> int:
     """Cuantos pagos del prestamo tienen confirmacion bancaria."""
     q = (

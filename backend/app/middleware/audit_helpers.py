@@ -39,13 +39,73 @@ def is_auth_credential_path(path: str) -> bool:
     )
 
 
+def email_from_login_body(body_data: Any) -> Optional[str]:
+    """Email del intento de login (sin password). Distintivo admin/operador."""
+    if not isinstance(body_data, dict):
+        return None
+    raw = body_data.get("email") or body_data.get("username")
+    if not raw:
+        return None
+    email = str(raw).strip().lower()
+    if not email:
+        return None
+    if "@" not in email:
+        email = f"{email}@admin.local"
+    return email
+
+
+def should_audit_request(path: str, *, has_staff_token: bool) -> bool:
+    """
+    Solo actividad de personal (Bearer) o login.
+    Evita llenar auditoria con trafico publico anonimo como usuario_id=1.
+    """
+    p = (path or "").lower()
+    if any(
+        x in p
+        for x in (
+            "/health",
+            "/openapi",
+            "/docs",
+            "/redoc",
+            "/favicon",
+            "/metrics",
+        )
+    ):
+        return False
+    if "/estado-cuenta/public" in p:
+        return False
+    if "/cobros/public" in p or "/cobros-publico" in p:
+        return False
+    if "/tasas-cambio/public" in p:
+        return False
+    if "/auth/login" in p:
+        return True
+    return bool(has_staff_token)
+
+
+def auth_accion_label(path: str, method: str, *, exito: bool) -> str:
+    """Etiquetas claras para auth; resto = metodo HTTP."""
+    p = (path or "").lower()
+    if "/auth/login" in p:
+        return "LOGIN" if exito else "LOGIN_FAIL"
+    if "/auth/logout" in p:
+        return "LOGOUT"
+    if "/auth/refresh" in p:
+        return "REFRESH" if exito else "REFRESH_FAIL"
+    return (method or "POST").upper()
+
+
 def redact_body_for_audit(path: str, body_data: Any, max_depth: int = 6) -> Any:
     """
     Devuelve una copia segura para JSON en columna detalles.
-    En rutas de credenciales devuelve un marcador fijo (sin parsear campos).
+    En rutas de credenciales: marcador + email (sin password).
     """
     if is_auth_credential_path(path):
-        return {"_redacted": "credentials"}
+        out: Dict[str, Any] = {"_redacted": "credentials"}
+        em = email_from_login_body(body_data)
+        if em:
+            out["email"] = em
+        return out
 
     if not isinstance(body_data, dict):
         return body_data

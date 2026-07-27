@@ -199,6 +199,8 @@ class PagoResponse(BaseModel):
     verificado_concordancia: Optional[str] = None
     # Confirmacion en Auditoria > Conciliacion Bancos (check verde); no es autoconciliacion.
     conciliacion_bancaria_confirmada: bool = False
+    # AMBIGUO aprobado en 2+ prestamos (mismo serial banco)
+    conciliacion_bancaria_ambigua: bool = False
     usuario_registro: Optional[str] = None
     notas: Optional[str] = None
     documento_nombre: Optional[str] = None

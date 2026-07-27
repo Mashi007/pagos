@@ -1,6 +1,6 @@
 """
 Middleware de auditoria automatico.
-Intercepta todos los POST/PUT/DELETE/PATCH y registra en tabla auditoria.
+Intercepta POST/PUT/DELETE/PATCH de personal (admin/operador) y login; registra en auditoria con email como distintivo.
 
 - Exito (2xx-3xx): exito=True, detalles con cuerpo enmascarado (sin passwords/tokens).
 - Fallo (4xx-5xx): exito=False, mensaje_error con codigo HTTP y request_id si existe;
@@ -22,26 +22,29 @@ from app.models.user import User
 from app.models.auditoria import Auditoria
 from app.middleware.audit_helpers import (
     audit_entity_from_path,
+    auth_accion_label,
+    email_from_login_body,
     format_http_error_message,
     redact_body_for_audit,
+    should_audit_request,
     skip_failed_audit_persist,
 )
 
 logger = logging.getLogger(__name__)
 
-def _usuario_id_desde_bearer(request: Request, db) -> Optional[int]:
-    """Resuelve usuario de personal (admin, manager, operator, viewer) desde JWT Bearer."""
+def _usuario_desde_bearer(request: Request, db) -> tuple[Optional[int], Optional[str]]:
+    """Resuelve (usuario_id, email) de personal desde JWT Bearer."""
     auth = (request.headers.get("authorization") or "").strip()
     if not auth.lower().startswith("bearer "):
-        return None
+        return None, None
     token = auth[7:].strip()
     payload = decode_token(token)
     if not payload or payload.get("type") != "access" or payload.get("scope") == "finiquito":
-        return None
-    sub = payload.get("sub") or payload.get("email")
-    if not sub:
-        return None
-    raw = str(sub).strip()
+        return None, None
+    email_claim = payload.get("email") or payload.get("sub")
+    if not email_claim:
+        return None, None
+    raw = str(email_claim).strip()
     # sub numerico (id de usuarios)
     if raw.isdigit():
         u = (
@@ -49,35 +52,46 @@ def _usuario_id_desde_bearer(request: Request, db) -> Optional[int]:
             .filter(User.id == int(raw), User.is_active.is_(True))
             .first()
         )
-        return int(u.id) if u else None
+        if u:
+            return int(u.id), (str(u.email).lower() if u.email else None)
+        return None, None
     email = raw.lower()
     if "@" not in email:
         email = f"{email}@admin.local"
-    # Comparacion case-insensitive: operadores/admins pueden tener email mixto en BD
     u = (
         db.query(User)
         .filter(func.lower(User.email) == email, User.is_active.is_(True))
         .first()
     )
-    return int(u.id) if u else None
+    if u:
+        return int(u.id), email
+    # Token valido con email pero sin fila: conservar email para la UI (admin env, etc.)
+    return None, email
 
 
-def _resolve_usuario_id(request: Request, db) -> int:
-    usuario_id = None
+def _resolve_usuario(request: Request, db) -> tuple[int, Optional[str]]:
+    """Prioriza Bearer (admin/operador). Evita depender de request.state (BaseHTTPMiddleware)."""
+    uid_bearer, email_bearer = _usuario_desde_bearer(request, db)
+    if uid_bearer:
+        return uid_bearer, email_bearer
     try:
         usuario_info = getattr(request.state, "user", None)
         if usuario_info and hasattr(usuario_info, "id"):
             uid = getattr(usuario_info, "id", None)
+            email = getattr(usuario_info, "email", None)
             if uid is not None:
-                usuario_id = int(uid)
+                return int(uid), (str(email).lower() if email else email_bearer)
     except Exception:
         pass
-    if not usuario_id:
-        usuario_id = _usuario_id_desde_bearer(request, db)
-    if not usuario_id:
-        # Usuario de sistema para eventos sin sesión de personal (p.ej. endpoints públicos).
-        usuario_id = 1
-    return usuario_id
+    if email_bearer:
+        # Hay email de token pero no id en BD: registrar bajo 1 y denormalizar email
+        logger.info(
+            "Auditoria: token con email %s sin usuario BD; se registra email en detalles",
+            email_bearer,
+        )
+        return 1, email_bearer
+    logger.warning("Auditoria: sin sesion de personal; fallback usuario_id=1")
+    return 1, None
 
 
 def _persist_auditoria_row(
@@ -90,18 +104,48 @@ def _persist_auditoria_row(
     mensaje_error: Optional[str],
 ) -> None:
     entidad, entidad_id = audit_entity_from_path(path)
+    # Auth: entidad clara
+    pl = (path or "").lower()
+    if "/auth/" in pl:
+        entidad = "auth"
     safe_body = redact_body_for_audit(path, body_data)
-    detalles = json.dumps(safe_body, default=str)[:500]
+    if not isinstance(safe_body, dict):
+        safe_body = {"_body": safe_body}
     client_ip = request.client.host if request.client else None
     ua = (request.headers.get("user-agent") or "")[:2000] or None
+    accion = auth_accion_label(path, method, exito=exito)
 
     db = SessionLocal()
     try:
-        usuario_id = _resolve_usuario_id(request, db)
+        usuario_id, usuario_email = _resolve_usuario(request, db)
+        # Login no trae Bearer: email del body es el distintivo
+        login_email = email_from_login_body(body_data) if "/auth/login" in pl else None
+        if login_email:
+            usuario_email = login_email
+            u = (
+                db.query(User)
+                .filter(func.lower(User.email) == login_email)
+                .first()
+            )
+            if u:
+                usuario_id = int(u.id)
+        if not usuario_email:
+            # Ultimo recurso: no dejar actividad staff sin correo visible
+            logger.warning(
+                "Auditoria sin email (path=%s accion=%s usuario_id=%s)",
+                path,
+                accion,
+                usuario_id,
+            )
+        detalles_obj: dict = {"_usuario_email": usuario_email} if usuario_email else {}
+        detalles_obj.update(safe_body)
+        if usuario_email:
+            detalles_obj["_usuario_email"] = usuario_email
+        detalles = json.dumps(detalles_obj, default=str)[:500]
         db.add(
             Auditoria(
                 usuario_id=usuario_id,
-                accion=method,
+                accion=accion,
                 entidad=entidad,
                 entidad_id=entidad_id,
                 detalles=detalles,
@@ -127,7 +171,14 @@ class AuditMiddleware(BaseHTTPMiddleware):
     """
 
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
+        # Actividad de admin/operador: mutaciones HTTP (+ login sin Bearer).
         if request.method not in ["POST", "PUT", "DELETE", "PATCH"]:
+            return await call_next(request)
+
+        path_pre = request.url.path or ""
+        auth_hdr = (request.headers.get("authorization") or "").strip()
+        has_staff_token = auth_hdr.lower().startswith("bearer ")
+        if not should_audit_request(path_pre, has_staff_token=has_staff_token):
             return await call_next(request)
 
         body_bytes = await request.body()

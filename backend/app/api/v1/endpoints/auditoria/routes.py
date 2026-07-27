@@ -23,6 +23,7 @@ from app.core.database import get_db
 from app.core.deps import (
     get_current_user,
     require_admin,
+    require_admin_or_operator,
     require_auditoria_cartera_access,
     require_operator_or_higher,
 )
@@ -147,6 +148,21 @@ def _emails_by_usuario_ids(db: Session, ids: List[int]) -> dict[int, str]:
     return {int(r[0]): str(r[1]) for r in rows if r[1]}
 
 
+def _email_from_detalles(detalles: Optional[str]) -> Optional[str]:
+    """Email denormalizado en detalles._usuario_email (operadores/admin)."""
+    if not detalles:
+        return None
+    try:
+        data = json.loads(detalles)
+        if isinstance(data, dict):
+            e = data.get("_usuario_email") or data.get("usuario_email")
+            if e:
+                return str(e).strip().lower() or None
+    except Exception:
+        return None
+    return None
+
+
 def _row_to_item(r: Auditoria, usuario_email: Optional[str] = None) -> AuditoriaItem:
     """Convierte fila BD a AuditoriaItem (entidad->modulo, entidad_id->registro_id, detalles->descripcion, exito->resultado)."""
     return AuditoriaItem(
@@ -171,7 +187,11 @@ def _row_to_item(r: Auditoria, usuario_email: Optional[str] = None) -> Auditoria
 
 def _items_from_rows(db: Session, rows: List[Auditoria]) -> List[AuditoriaItem]:
     emails = _emails_by_usuario_ids(db, [r.usuario_id for r in rows])
-    return [_row_to_item(r, emails.get(r.usuario_id)) for r in rows]
+    out: List[AuditoriaItem] = []
+    for r in rows:
+        email = emails.get(r.usuario_id) or _email_from_detalles(r.detalles)
+        out.append(_row_to_item(r, email))
+    return out
 
 
 @router.get("", response_model=AuditoriaListResponse)
@@ -1323,23 +1343,29 @@ def obtener_auditoria(
 def registrar_evento(
     body: RegistrarAuditoriaBody,
     db: Session = Depends(get_db),
-    current_user: UserResponse = Depends(require_admin),
+    current_user: UserResponse = Depends(require_admin_or_operator),
 ):
-    """Registra un evento de auditoría en BD. usuario_id se toma del usuario autenticado."""
+    """Registra evento de auditoria. Distintivo: email del admin/operador autenticado."""
     now = datetime.now(timezone.utc)
+    email = (getattr(current_user, "email", None) or "").strip().lower() or None
+    detalles = body.descripcion or ""
+    try:
+        import json as _json
+        payload = {"_usuario_email": email, "descripcion": detalles}
+        detalles_store = _json.dumps(payload, ensure_ascii=True)[:500]
+    except Exception:
+        detalles_store = (f"email={email}; {detalles}")[:500]
     row = Auditoria(
         usuario_id=current_user.id,
         accion=body.accion,
         entidad=body.modulo,
         entidad_id=body.registro_id,
-        detalles=body.descripcion,
+        detalles=detalles_store,
         exito=True,
         fecha=now,
     )
     db.add(row)
     db.commit()
     db.refresh(row)
-    email = getattr(current_user, "email", None) or _emails_by_usuario_ids(db, [row.usuario_id]).get(
-        row.usuario_id
-    )
+    email = email or _emails_by_usuario_ids(db, [row.usuario_id]).get(row.usuario_id)
     return _row_to_item(row, email)

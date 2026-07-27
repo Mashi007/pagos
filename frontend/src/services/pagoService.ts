@@ -30,6 +30,9 @@ export interface Pago {
   /** Confirmado en Auditoria > Conciliacion Bancos (check verde). Distinto de autoconciliacion. */
   conciliacion_bancaria_confirmada?: boolean
 
+  /** AMBIGUO aprobado en 2+ prestamos (mismo serial banco). */
+  conciliacion_bancaria_ambigua?: boolean
+
   usuario_registro: string
 
   notas: string | null
