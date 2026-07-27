@@ -113,6 +113,7 @@ export const conciliacionBancosService = {
       decision: 'VISTO' | 'CORREGIR' | 'OMITIR'
       fuente_elegida?: 'BD' | 'BANCO'
       pago_id_elegido?: number
+      pago_ids_elegidos?: number[]
     }
   ): Promise<Record<string, unknown>> {
     return apiClient.post(`${BASE}/resultados/${resultadoId}/decidir`, body, {
@@ -125,6 +126,7 @@ export const conciliacionBancosService = {
       resultado_id: number
       fuente_elegida?: 'BD' | 'BANCO'
       pago_id_elegido?: number
+      pago_ids_elegidos?: number[]
     }>
     fuente_default?: 'BD' | 'BANCO'
   }): Promise<{

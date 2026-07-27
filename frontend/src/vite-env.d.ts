@@ -126,6 +126,14 @@ declare module 'lucide-react' {
 
   export const ArrowDownToLine: any
 
+  export const ArrowDown: any
+
+  export const ArrowUp: any
+
+  export const ArrowDownWideNarrow: any
+
+  export const ArrowUpWideNarrow: any
+
   export const PlusCircle: any
 
   export const Play: any

@@ -59,6 +59,29 @@ function filaBloqueada(row: ConciliacionBancosResultado): boolean {
   )
 }
 
+
+function idsElegidosFila(
+  map: Record<number, number[]>,
+  rowId: number
+): number[] {
+  return map[rowId] || []
+}
+
+function togglePagoCandidato(
+  prev: Record<number, number[]>,
+  rowId: number,
+  pagoId: number,
+  checked: boolean
+): Record<number, number[]> {
+  const cur = new Set(prev[rowId] || [])
+  if (checked) cur.add(pagoId)
+  else cur.delete(pagoId)
+  const next = { ...prev }
+  if (cur.size === 0) delete next[rowId]
+  else next[rowId] = [...cur]
+  return next
+}
+
 export default function ConciliacionBancosPage() {
   const [moneda, setMoneda] = useState<ConciliacionBancosMoneda>('USD')
   const [fechaDesde, setFechaDesde] = useState(hoyISO())
@@ -75,7 +98,7 @@ export default function ConciliacionBancosPage() {
   >({})
   const [fuenteMasiva, setFuenteMasiva] = useState<'BD' | 'BANCO'>('BANCO')
   const [pagoElegidoPorFila, setPagoElegidoPorFila] = useState<
-    Record<number, number>
+    Record<number, number[]>
   >({})
   const [seleccionados, setSeleccionados] = useState<Set<number>>(new Set())
   const [ordenSimilitud, setOrdenSimilitud] = useState<'desc' | 'asc'>(
@@ -126,8 +149,11 @@ export default function ConciliacionBancosPage() {
       itemsFiltrados.filter(r => {
         if (filaBloqueada(r)) return false
         if (r.tipo_novedad === 'AMBIGUO') {
-          // Masivo solo si ya eligio candidato
-          return Boolean(pagoElegidoPorFila[r.id] || r.pago_id)
+          // Masivo solo si ya eligio al menos un candidato
+          return (
+            idsElegidosFila(pagoElegidoPorFila, r.id).length > 0 ||
+            Boolean(r.pago_id)
+          )
         }
         return true
       }),
@@ -269,21 +295,34 @@ export default function ConciliacionBancosPage() {
     setRowBusy(row.id)
     try {
       if (row.tipo_novedad === 'AMBIGUO') {
-        if (!pagoElegido) {
-          toast.error('AMBIGUO: elija el prestamo/pago candidato antes de confirmar')
+        const ids = Array.isArray(pagoElegido)
+          ? pagoElegido
+          : pagoElegido
+            ? [pagoElegido]
+            : []
+        if (ids.length === 0) {
+          toast.error(
+            'AMBIGUO: elija uno, varios o todos los prestamos/pagos candidatos'
+          )
           return
         }
         const r = await conciliacionBancosService.decidir(row.id, {
           decision: 'CORREGIR',
           fuente_elegida: fuente,
-          pago_id_elegido: pagoElegido,
+          pago_ids_elegidos: ids,
+          pago_id_elegido: ids[0],
         })
+        const aplicados = Number(r.aplicados || ids.length)
         if (fuente === 'BANCO' && r.cambio) {
-          toast.success('AMBIGUO resuelto: datos actualizados (Ref. Banco)')
+          toast.success(
+            `AMBIGUO: confirmados ${aplicados} pago(s) (Ref. Banco)`
+          )
         } else if (fuente === 'BANCO') {
-          toast.message('AMBIGUO resuelto: ya coincidia con BD')
+          toast.message(`AMBIGUO: confirmados ${aplicados} pago(s)`)
         } else {
-          toast.message('AMBIGUO resuelto: se mantienen datos RapiC')
+          toast.message(
+            `AMBIGUO: confirmados ${aplicados} pago(s) (Ref. RapiC)`
+          )
         }
         if (lote) await refreshResultados(lote.id)
         return
@@ -331,13 +370,19 @@ export default function ConciliacionBancosPage() {
     }
     setBulkBusy(true)
     try {
-      const payload = ids.map(id => ({
-        resultado_id: id,
-        fuente_elegida: fuentePorFila[id] || fuenteMasiva,
-        ...(pagoElegidoPorFila[id]
-          ? { pago_id_elegido: pagoElegidoPorFila[id] }
-          : {}),
-      }))
+      const payload = ids.map(id => {
+        const elegidos = idsElegidosFila(pagoElegidoPorFila, id)
+        return {
+          resultado_id: id,
+          fuente_elegida: fuentePorFila[id] || fuenteMasiva,
+          ...(elegidos.length
+            ? {
+                pago_ids_elegidos: elegidos,
+                pago_id_elegido: elegidos[0],
+              }
+            : {}),
+        }
+      })
       const r = await conciliacionBancosService.decidirMasivo({
         items: payload,
         fuente_default: fuenteMasiva,
@@ -712,14 +757,16 @@ export default function ConciliacionBancosPage() {
                             locked ||
                             busy ||
                             (row.tipo_novedad === 'AMBIGUO' &&
-                              !pagoElegidoPorFila[row.id])
+                              idsElegidosFila(pagoElegidoPorFila, row.id)
+                                .length === 0)
                           }
                           checked={seleccionados.has(row.id)}
                           onChange={() => toggleSeleccion(row.id)}
                           title={
                             row.tipo_novedad === 'AMBIGUO' &&
-                            !pagoElegidoPorFila[row.id]
-                              ? 'Elija primero el prestamo candidato'
+                            idsElegidosFila(pagoElegidoPorFila, row.id)
+                              .length === 0
+                              ? 'Elija uno o mas prestamos candidatos'
                               : undefined
                           }
                         />
@@ -728,43 +775,95 @@ export default function ConciliacionBancosPage() {
                         {row.tipo_novedad === 'AMBIGUO' &&
                         row.candidatos &&
                         row.candidatos.length > 0 ? (
-                          <select
-                            className="max-w-[200px] rounded border px-1 py-1 text-xs"
-                            disabled={locked || busy}
-                            value={pagoElegidoPorFila[row.id] || ''}
-                            onChange={e => {
-                              const v = Number(e.target.value)
-                              setPagoElegidoPorFila(prev => {
-                                const next = { ...prev }
-                                if (!v) delete next[row.id]
-                                else next[row.id] = v
-                                return next
-                              })
-                            }}
-                          >
-                            <option value="">Elegir prestamo...</option>
-                            {row.candidatos.map(c => (
-                              <option key={c.pago_id} value={c.pago_id}>
-                                {c.cedula || '?'} · #
-                                {c.prestamo_id ?? '?'} · pago {c.pago_id}
-                                {c.monto != null ? ` · $${c.monto}` : ''}
-                              </option>
-                            ))}
-                          </select>
+                          <div className="max-w-[260px] space-y-1 rounded border border-red-200 bg-red-50/40 p-1.5 text-xs">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="font-medium text-red-800">
+                                Elegir (uno/varios/todos)
+                              </span>
+                              <button
+                                type="button"
+                                className="text-[11px] text-blue-700 underline disabled:opacity-50"
+                                disabled={locked || busy}
+                                onClick={() => {
+                                  const all = row.candidatos!.map(c => c.pago_id)
+                                  const cur = idsElegidosFila(
+                                    pagoElegidoPorFila,
+                                    row.id
+                                  )
+                                  const todos =
+                                    cur.length === all.length &&
+                                    all.every(id => cur.includes(id))
+                                  setPagoElegidoPorFila(prev => {
+                                    const next = { ...prev }
+                                    if (todos) delete next[row.id]
+                                    else next[row.id] = all
+                                    return next
+                                  })
+                                }}
+                              >
+                                {idsElegidosFila(pagoElegidoPorFila, row.id)
+                                  .length === row.candidatos.length
+                                  ? 'Quitar todos'
+                                  : 'Todos'}
+                              </button>
+                            </div>
+                            {row.candidatos.map(c => {
+                              const checked = idsElegidosFila(
+                                pagoElegidoPorFila,
+                                row.id
+                              ).includes(c.pago_id)
+                              return (
+                                <label
+                                  key={c.pago_id}
+                                  className="flex cursor-pointer items-start gap-1.5"
+                                >
+                                  <input
+                                    type="checkbox"
+                                    className="mt-0.5"
+                                    disabled={locked || busy}
+                                    checked={checked}
+                                    onChange={e =>
+                                      setPagoElegidoPorFila(prev =>
+                                        togglePagoCandidato(
+                                          prev,
+                                          row.id,
+                                          c.pago_id,
+                                          e.target.checked
+                                        )
+                                      )
+                                    }
+                                  />
+                                  <span>
+                                    {c.cedula || '?'} · #
+                                    {c.prestamo_id ?? '?'} · pago {c.pago_id}
+                                    {c.monto != null ? ` · $${c.monto}` : ''}
+                                  </span>
+                                </label>
+                              )
+                            })}
+                          </div>
                         ) : (
                           row.cedula || '-'
                         )}
                       </TableCell>
                       <TableCell className="whitespace-nowrap text-xs">
                         {row.tipo_novedad === 'AMBIGUO' &&
-                        pagoElegidoPorFila[row.id] ? (
+                        idsElegidosFila(pagoElegidoPorFila, row.id).length >
+                          0 ? (
                           (() => {
-                            const c = row.candidatos?.find(
-                              x => x.pago_id === pagoElegidoPorFila[row.id]
+                            const ids = idsElegidosFila(
+                              pagoElegidoPorFila,
+                              row.id
                             )
-                            return c?.prestamo_id != null
-                              ? `#${c.prestamo_id}`
-                              : '-'
+                            const labels = ids.map(pid => {
+                              const c = row.candidatos?.find(
+                                x => x.pago_id === pid
+                              )
+                              return c?.prestamo_id != null
+                                ? `#${c.prestamo_id}`
+                                : `pago ${pid}`
+                            })
+                            return labels.join(', ')
                           })()
                         ) : row.tipo_novedad === 'AMBIGUO' ? (
                           <span className="text-red-700">Elegir →</span>
@@ -824,7 +923,7 @@ export default function ConciliacionBancosPage() {
                           (row.candidatos?.length || 0) > 1 && (
                             <div className="mt-1 max-w-[160px] text-[11px] text-red-700">
                               Mismo serial en {row.candidatos?.length}{' '}
-                              pagos (Mercantil). Elija prestamo y confirme.
+                              pagos. Elija uno, varios o todos y confirme.
                             </div>
                           )}
                       </TableCell>
@@ -858,7 +957,8 @@ export default function ConciliacionBancosPage() {
                               locked ||
                               busy ||
                               (row.tipo_novedad === 'AMBIGUO' &&
-                                !pagoElegidoPorFila[row.id])
+                                idsElegidosFila(pagoElegidoPorFila, row.id)
+                                  .length === 0)
                             }
                             onClick={() => handleConfirmar(row)}
                           >

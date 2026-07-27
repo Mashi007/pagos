@@ -947,34 +947,55 @@ def decidir_y_aplicar(
                 status_code=400,
                 detail="pago_ids_elegidos deben estar entre los candidatos AMBIGUO",
             )
+        # Clonar antes de aplicar: cada decide hace commit; asi no dependemos
+        # del estado post-commit del resultado original.
+        targets: list[tuple[int, int]] = [(int(resultado_id), int(pago_ids[0]))]
+        for pid in pago_ids[1:]:
+            clone = _clonar_resultado_ambiguo_para_pago(db, res, int(pid))
+            targets.append((int(clone.id), int(pid)))
+        db.flush()
+
         outs: list[dict[str, Any]] = []
         cambios = 0
-        for i, pid in enumerate(pago_ids):
-            if i == 0:
-                target_id = int(resultado_id)
-            else:
-                clone = _clonar_resultado_ambiguo_para_pago(db, res, pid)
-                target_id = int(clone.id)
-            r = decidir_y_aplicar(
-                db,
-                target_id,
-                decision="CORREGIR",
-                fuente_elegida=fuente_elegida,
-                usuario_id=usuario_id,
-                pago_id_elegido=pid,
-                pago_ids_elegidos=None,
+        errores_multi: list[dict[str, Any]] = []
+        for target_id, pid in targets:
+            try:
+                r = decidir_y_aplicar(
+                    db,
+                    target_id,
+                    decision="CORREGIR",
+                    fuente_elegida=fuente_elegida,
+                    usuario_id=usuario_id,
+                    pago_id_elegido=pid,
+                    pago_ids_elegidos=None,
+                )
+                outs.append(r)
+                if r.get("cambio"):
+                    cambios += 1
+            except HTTPException as he:
+                errores_multi.append(
+                    {
+                        "resultado_id": target_id,
+                        "pago_id": pid,
+                        "ok": False,
+                        "error": he.detail,
+                    }
+                )
+        if not outs and errores_multi:
+            raise HTTPException(
+                status_code=400,
+                detail=errores_multi[0].get("error")
+                or "No se pudo aplicar AMBIGUO multi",
             )
-            outs.append(r)
-            if r.get("cambio"):
-                cambios += 1
         return {
-            "ok": True,
+            "ok": len(errores_multi) == 0,
             "multiple": True,
             "resultado_id": int(resultado_id),
             "pago_ids": pago_ids,
             "aplicados": len(outs),
             "cambio": cambios > 0,
             "detalle": outs,
+            "errores": errores_multi,
         }
 
     # AMBIGUO: el operador elige el pago/prestamo entre candidatos (p.ej. Mercantil)
