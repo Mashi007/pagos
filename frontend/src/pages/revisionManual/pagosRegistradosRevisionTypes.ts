@@ -70,6 +70,8 @@ export type PagosRegistradosRevisionSectionProps = {
   alertasReescaneoPorPagoId: Record<number, string[]>
   abrirEditarPagoRevision: (pago: Pago) => void
   pagoEstaConciliadoOPagado: (pago: Pago) => boolean
+  /** Tras Si/No de Conciliado: refresca pagos, cuotas y coherencia. */
+  sincronizarTrasToggleConciliado: () => void | Promise<void>
   eliminandoPagoId: number | null
   eliminarPagoRevision: (pago: Pago) => void | Promise<void>
   pagePagosRegistrados: number

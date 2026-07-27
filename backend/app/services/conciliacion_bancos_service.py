@@ -177,6 +177,79 @@ def _leer_bancos_de_lote(lote: ConciliacionBancoOcrLote) -> list[str]:
     return []
 
 
+def _institucion_objetivo_desde_lote(lote: ConciliacionBancoOcrLote) -> Optional[str]:
+    """
+    Banco real del extracto (filtro del lote) para escribir en pagos.institucion_bancaria
+    al confirmar fuente Ref. Banco. Ej.: filtro BNV (o BNV+Otros) -> "BNV".
+    """
+    bancos = _leer_bancos_de_lote(lote)
+    if not bancos:
+        return None
+    if len(bancos) == 1:
+        cat = bancos[0]
+    else:
+        reales = [b for b in bancos if b != "Otros"]
+        if len(reales) != 1:
+            return None
+        cat = reales[0]
+    if cat == "Otros":
+        return None
+    # Catalogo UI usa "Recibo"; categoria de filtro es "Recibos"
+    if cat == "Recibos":
+        return "Recibo"
+    return cat
+
+
+def _aplicar_institucion_desde_lote(pago: Pago, lote: ConciliacionBancoOcrLote) -> bool:
+    """True si cambio institucion_bancaria del pago."""
+    if _es_asiento_drive_abonos(getattr(pago, "numero_documento", None)):
+        return False
+    objetivo = _institucion_objetivo_desde_lote(lote)
+    if not objetivo:
+        return False
+    cat_actual = categoria_institucion(getattr(pago, "institucion_bancaria", None))
+    cat_obj = categoria_institucion(objetivo)
+    if cat_actual == cat_obj:
+        return False
+    pago.institucion_bancaria = objetivo
+    return True
+
+
+def _pago_excluye_marcar_conciliado(pago: Pago) -> bool:
+    e = (getattr(pago, "estado", None) or "").strip().upper()
+    if e in (
+        "DUPLICADO",
+        "ANULADO_IMPORT",
+        "CANCELADO",
+        "RECHAZADO",
+        "REVERSADO",
+    ):
+        return True
+    if "ANUL" in e or "REVERS" in e:
+        return True
+    return False
+
+
+def _marcar_conciliado_tras_confirmar_fuente(pago: Pago) -> bool:
+    """
+    Al confirmar Ref. Banco o Ref. RapiC: conciliado=Si en BD (revision manual).
+    True si habia que marcar (no estaba conciliado/verificado).
+    """
+    if _pago_excluye_marcar_conciliado(pago):
+        return False
+    ya = bool(getattr(pago, "conciliado", False)) and (
+        str(getattr(pago, "verificado_concordancia", "") or "")
+        .strip()
+        .upper()
+        == "SI"
+    )
+    if ya:
+        return False
+    from app.services.pago_autoconciliacion import marcar_pago_autoconciliado
+
+    marcar_pago_autoconciliado(pago)
+    return True
+
 
 # Prefijos/etiquetas frecuentes que operadores agregan al serial
 _REF_RUIDO_PREFIX = re.compile(
@@ -278,6 +351,10 @@ def _snapshot_pago(p: Pago) -> dict[str, Any]:
         "fecha_pago": _pago_fecha(p).isoformat() if _pago_fecha(p) else None,
         "monto_pagado": float(p.monto_pagado or 0),
         "numero_documento": p.numero_documento,
+        "institucion_bancaria": p.institucion_bancaria,
+        "institucion_categoria": categoria_pago_conciliacion(p),
+        "conciliado": bool(p.conciliado),
+        "verificado_concordancia": p.verificado_concordancia,
         "moneda_registro": p.moneda_registro,
         "monto_bs_original": float(p.monto_bs_original) if p.monto_bs_original is not None else None,
         "tasa_cambio_bs_usd": float(p.tasa_cambio_bs_usd) if p.tasa_cambio_bs_usd is not None else None,
@@ -496,11 +573,15 @@ def comparar_lote(
         .scalars()
         .all()
     )
-    # Solo pagos de las categorias seleccionadas (Drive = ABONOS-NOTIF/DRIVE).
+    # Categorias seleccionadas + Otros si hay banco real (mal etiquetados en BD).
+    # Al confirmar Ref. Banco se corrige institucion (ej. Otros -> BNV).
+    cats_match = set(bancos_sel)
+    if any(b != "Otros" for b in bancos_sel):
+        cats_match.add("Otros")
     pagos = [
         p
         for p in pagos_raw
-        if categoria_pago_conciliacion(p) in bancos_sel
+        if categoria_pago_conciliacion(p) in cats_match
         and int(p.id) not in excluir_pago_ids
     ]
 
@@ -907,10 +988,20 @@ def decidir_y_aplicar(
     res.valores_antes = json.dumps(antes, ensure_ascii=True)
 
     if fuente == "BD":
-        # Mantener paquete BD: sin escritura operativa
+        # Mantener paquete BD; marcar conciliado=Si (revision manual)
+        conc_ok = _marcar_conciliado_tras_confirmar_fuente(pago)
+        despues = _snapshot_pago(pago)
         res.aplicado = True
-        res.detalle_aplicacion = "Se eligio Referencia BD: sin cambios (paquete ya en BD)."
-        res.valores_despues = json.dumps(antes, ensure_ascii=True)
+        res.valores_despues = json.dumps(despues, ensure_ascii=True)
+        if conc_ok:
+            res.detalle_aplicacion = (
+                "Referencia RapiC/BD: sin cambios de paquete; marcado conciliado=Si."
+            )
+        else:
+            res.detalle_aplicacion = (
+                "Se eligio Referencia BD: sin cambios (paquete ya en BD)."
+            )
+        lote.estado = "APLICADO"
         db.commit()
         return {
             "ok": True,
@@ -918,7 +1009,9 @@ def decidir_y_aplicar(
             "decision": res.decision,
             "fuente_elegida": fuente,
             "aplicado": True,
-            "cambio": False,
+            "cambio": bool(conc_ok),
+            "antes": antes,
+            "despues": despues,
         }
 
     # fuente BANCO
@@ -953,17 +1046,49 @@ def decidir_y_aplicar(
     else:
         monto_new_usd = float(res.monto_banco) if res.monto_banco is not None else float(pago.monto_pagado or 0)
 
-    if _paquetes_iguales(
+    paquetes_iguales = _paquetes_iguales(
         _pago_fecha(pago),
         float(pago.monto_pagado or 0),
         pago.numero_documento,
         fecha_new,
         monto_new_usd,
         serial_new,
-    ):
+    )
+
+    if paquetes_iguales:
+        # Institucion (ej. Otros -> BNV) + conciliado=Si; no toca serial/fecha/monto
+        inst_changed = _aplicar_institucion_desde_lote(pago, lote)
+        conc_ok = _marcar_conciliado_tras_confirmar_fuente(pago)
+        if not inst_changed and not conc_ok:
+            res.aplicado = True
+            res.detalle_aplicacion = "Paquete banco coincide con BD: sin cambios."
+            res.valores_despues = json.dumps(antes, ensure_ascii=True)
+            db.commit()
+            return {
+                "ok": True,
+                "resultado_id": res.id,
+                "decision": res.decision,
+                "fuente_elegida": fuente,
+                "aplicado": True,
+                "cambio": False,
+            }
+        despues = _snapshot_pago(pago)
+        res.valores_despues = json.dumps(despues, ensure_ascii=True)
         res.aplicado = True
-        res.detalle_aplicacion = "Paquete banco coincide con BD: sin cambios."
-        res.valores_despues = json.dumps(antes, ensure_ascii=True)
+        partes = []
+        if inst_changed:
+            partes.append(
+                f"Institucion actualizada a {pago.institucion_bancaria}"
+            )
+        if conc_ok:
+            partes.append("marcado conciliado=Si")
+        if not partes:
+            partes.append("paquete fecha/monto/serial ya coincidia")
+        res.detalle_aplicacion = (
+            "; ".join(partes)
+            + " (paquete fecha/monto/serial ya coincidia)."
+        )
+        lote.estado = "APLICADO"
         db.commit()
         return {
             "ok": True,
@@ -971,12 +1096,13 @@ def decidir_y_aplicar(
             "decision": res.decision,
             "fuente_elegida": fuente,
             "aplicado": True,
-            "cambio": False,
+            "cambio": True,
+            "antes": antes,
+            "despues": despues,
         }
 
-    # Conflicto de serial en otro pago -> no forzar
+    # Conflicto de serial en otro pago -> no forzar (sin tocar institucion)
     if numero_documento_ya_registrado(db, serial_new, exclude_pago_id=pago.id):
-        # No forzar: dejar pendiente para discernimiento (Visto / otra fuente)
         res.decision = "PENDIENTE"
         res.fuente_elegida = None
         res.aplicado = False
@@ -988,6 +1114,9 @@ def decidir_y_aplicar(
             status_code=409,
             detail=res.detalle_aplicacion,
         )
+
+    # Ref. Banco: alinear institucion al banco del extracto (ej. Otros -> BNV)
+    inst_changed = _aplicar_institucion_desde_lote(pago, lote)
 
     had_cp = pago_tiene_aplicaciones_cuotas(db, pago.id)
     old_fecha = _pago_fecha(pago)
@@ -1046,15 +1175,24 @@ def decidir_y_aplicar(
         cc, cp = _aplicar_pago_a_cuotas_interno(pago, db)
         cascada_info = {"cuotas_completadas": cc, "cuotas_parciales": cp}
 
+    conc_ok = _marcar_conciliado_tras_confirmar_fuente(pago)
     despues = _snapshot_pago(pago)
     res.valores_despues = json.dumps(despues, ensure_ascii=True)
     res.aplicado = True
     res.referencia_bd = pago.numero_documento
     res.fecha_bd = _pago_fecha(pago)
     res.monto_bd = pago.monto_pagado
+    extra_inst = (
+        f" Institucion -> {pago.institucion_bancaria}."
+        if inst_changed
+        else ""
+    )
+    extra_conc = " Conciliado=Si." if conc_ok else ""
     res.detalle_aplicacion = (
         "Actualizado con paquete banco (fecha/monto/serial) "
         + ("y cascada reaplicada." if cascada_info else "sin rearticulacion de cuotas.")
+        + extra_inst
+        + extra_conc
     )
     lote.estado = "APLICADO"
     db.commit()

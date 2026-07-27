@@ -2569,6 +2569,9 @@ export function EditarRevisionManual() {
                 alertasReescaneoPorPagoId={alertasReescaneoPorPagoId}
                 abrirEditarPagoRevision={abrirEditarPagoRevision}
                 pagoEstaConciliadoOPagado={pagoEstaConciliadoOPagado}
+                sincronizarTrasToggleConciliado={
+                  sincronizarDetalleCuotasTrasOperacionPagos
+                }
                 eliminandoPagoId={eliminandoPagoId}
                 eliminarPagoRevision={eliminarPagoRevision}
                 pagePagosRegistrados={pagePagosRegistrados}
