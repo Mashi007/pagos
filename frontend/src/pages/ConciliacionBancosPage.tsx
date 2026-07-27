@@ -48,7 +48,7 @@ function errMsg(err: unknown): string {
   return e?.response?.data?.detail || e?.message || 'Error'
 }
 
-const MAX_CONFIRMACION_MASIVA = 200
+const MAX_CONFIRMACION_MASIVA = 1000
 
 const CHIP_NOVEDAD_ORDEN = [
   'MATCH_EXACTO',

@@ -1669,8 +1669,8 @@ def decidir_masivo(
     """
     if not items:
         raise HTTPException(status_code=400, detail="No hay filas seleccionadas")
-    if len(items) > 200:
-        raise HTTPException(status_code=400, detail="Maximo 200 filas por lote masivo")
+    if len(items) > 1000:
+        raise HTTPException(status_code=400, detail="Maximo 1000 filas por lote masivo")
 
     ok = 0
     errores = 0

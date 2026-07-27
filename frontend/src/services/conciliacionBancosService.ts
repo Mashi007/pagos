@@ -181,7 +181,7 @@ export const conciliacionBancosService = {
     }>
   }> {
     return apiClient.post(`${BASE}/resultados/decidir-masivo`, body, {
-      timeout: 300000,
+      timeout: 600000,
     })
   },
 
