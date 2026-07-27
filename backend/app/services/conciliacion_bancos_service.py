@@ -169,12 +169,7 @@ def pago_ids_conciliacion_bancaria_confirmada(
 
 
 def pago_ids_ambiguo_bancario_multi(db: Session, pago_ids: list[int]) -> set[int]:
-    """
-    Pagos confirmados desde novedad AMBIGUO (CORREGIR+aplicado).
-
-    En revision manual cada prestamo/pago conciliado por esa via lleva
-    la etiqueta Ambiguo (uno o varios prestamos del mismo serial).
-    """
+    """Solo pagos confirmados con tipo_novedad AMBIGUO (CORREGIR+aplicado)."""
     if not pago_ids:
         return set()
     ids = sorted({int(x) for x in pago_ids if x is not None})
@@ -1031,21 +1026,6 @@ def decidir_y_aplicar(
                 detail=errores_multi[0].get("error")
                 or "No se pudo aplicar AMBIGUO multi",
             )
-        # Marca en cada prestamo conciliado via AMBIGUO
-        for target_id, _pid in targets:
-            row_m = db.get(ConciliacionBancoOcrResultado, int(target_id))
-            if not row_m or not row_m.aplicado:
-                continue
-            det = (row_m.detalle_aplicacion or "").strip()
-            tag = "AMBIGUO_MULTI" if len(pago_ids) > 1 else "AMBIGUO_FLAG"
-            if "AMBIGUO_MULTI" not in det and "AMBIGUO_FLAG" not in det:
-                row_m.detalle_aplicacion = (
-                    f"{det} | {tag}".strip(" |") if det else tag
-                )
-        try:
-            db.commit()
-        except Exception:
-            db.rollback()
         return {
             "ok": len(errores_multi) == 0,
             "multiple": True,
@@ -1143,8 +1123,6 @@ def decidir_y_aplicar(
             "Referencia RapiC/BD: sin cambios de paquete. "
             "Confirmacion bancaria registrada (no altera autoconciliacion)."
         )
-        if res.tipo_novedad == "AMBIGUO":
-            res.detalle_aplicacion = f"{res.detalle_aplicacion} | AMBIGUO_FLAG"
         res.valores_despues = json.dumps(antes, ensure_ascii=True)
         lote.estado = "APLICADO"
         db.commit()
