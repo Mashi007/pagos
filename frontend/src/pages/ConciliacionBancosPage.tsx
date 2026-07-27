@@ -48,9 +48,13 @@ function errMsg(err: unknown): string {
   return e?.response?.data?.detail || e?.message || 'Error'
 }
 
+// Tope blando de seleccion (evitar marcar decenas de miles por error).
+const MAX_SELECCION_MASIVA = 10000
+// Compat UI: "hasta N" en checkbox de visibles = pagina actual.
 const MAX_CONFIRMACION_MASIVA = 1000
-// Tamanio por request: 1000 seguidos tumba Render/Cloudflare (~520 a los 3 min).
-const CHUNK_CONFIRMACION_MASIVA = 50
+// Tandas HTTP: MATCH es rapido; AMBIGUO (multi-pago+cascada) es pesado.
+const CHUNK_MATCH_MASIVA = 100
+const CHUNK_AMBIGUO_MASIVA = 25
 
 const CHIP_NOVEDAD_ORDEN = [
   'MATCH_EXACTO',
@@ -295,6 +299,7 @@ export default function ConciliacionBancosPage() {
 
   const toggleSeleccionarTodos = () => {
     if (todosElegiblesMarcados) {
+      // Solo limpia la pagina actual (no toca otras si las hubiera)
       setSeleccionados(prev => {
         const next = new Set(prev)
         for (const r of elegiblesParaSeleccionMasiva) next.delete(r.id)
@@ -302,26 +307,23 @@ export default function ConciliacionBancosPage() {
       })
       return
     }
-    if (elegiblesFiltrados.length > MAX_CONFIRMACION_MASIVA) {
-      toast.message(
-        `Seleccionando las primeras ${MAX_CONFIRMACION_MASIVA} de ${elegiblesFiltrados.length} visibles (maximo por confirmacion masiva).`
-      )
-    }
-    setSeleccionados(prev => {
-      const next = new Set(prev)
-      for (const r of elegiblesParaSeleccionMasiva) next.add(r.id)
-      return next
-    })
+    // Reemplaza seleccion: no acumular paginas (evita 1000+1000=2000 y el bloqueo).
+    const next = new Set<number>()
+    for (const r of elegiblesParaSeleccionMasiva) next.add(r.id)
+    setSeleccionados(next)
+    toast.message(
+      `Seleccionadas ${next.size} filas de esta pagina (se confirmaran en tandas automaticas).`
+    )
     // AMBIGUO masivo: por defecto todos los candidatos -> marca Ambiguo
     setPagoElegidoPorFila(prev => {
-      const next = { ...prev }
+      const nextMap = { ...prev }
       for (const r of elegiblesParaSeleccionMasiva) {
         if (r.tipo_novedad !== 'AMBIGUO') continue
-        if (idsElegidosFila(next, r.id).length > 0) continue
+        if (idsElegidosFila(nextMap, r.id).length > 0) continue
         const all = (r.candidatos || []).map(c => c.pago_id).filter(Boolean)
-        if (all.length) next[r.id] = all
+        if (all.length) nextMap[r.id] = all
       }
-      return next
+      return nextMap
     })
   }
 
@@ -546,16 +548,20 @@ export default function ConciliacionBancosPage() {
       toast.error('Seleccione al menos una fila pendiente')
       return
     }
-    if (ids.length > MAX_CONFIRMACION_MASIVA) {
-      toast.error(`Maximo ${MAX_CONFIRMACION_MASIVA} filas por confirmacion masiva`)
+    if (ids.length > MAX_SELECCION_MASIVA) {
+      toast.error(
+        `Demasiadas filas (${ids.length}). Maximo ${MAX_SELECCION_MASIVA}; filtre por novedad o confirme por paginas.`
+      )
       return
     }
     setBulkBusy(true)
+    const byId = new Map(items.map(i => [i.id, i]))
+    const hayAmbiguo = ids.some(id => byId.get(id)?.tipo_novedad === 'AMBIGUO')
+    const chunkSize = hayAmbiguo ? CHUNK_AMBIGUO_MASIVA : CHUNK_MATCH_MASIVA
     const progressToast = toast.loading(
-      `Confirmando 0/${ids.length} (tandas de ${CHUNK_CONFIRMACION_MASIVA})...`
+      `Confirmando 0/${ids.length} (tandas de ${chunkSize})...`
     )
     try {
-      const byId = new Map(items.map(i => [i.id, i]))
       const payload = ids.map(id => {
         const row = byId.get(id)
         let elegidos = idsElegidosFila(pagoElegidoPorFila, id)
@@ -587,8 +593,8 @@ export default function ConciliacionBancosPage() {
       let firstErr: string | undefined
       const okIds = new Set<number>()
 
-      for (let i = 0; i < payload.length; i += CHUNK_CONFIRMACION_MASIVA) {
-        const chunk = payload.slice(i, i + CHUNK_CONFIRMACION_MASIVA)
+      for (let i = 0; i < payload.length; i += chunkSize) {
+        const chunk = payload.slice(i, i + chunkSize)
         const desde = i + 1
         const hasta = Math.min(i + chunk.length, payload.length)
         toast.loading(
@@ -613,7 +619,7 @@ export default function ConciliacionBancosPage() {
           errores += chunk.length
           if (!firstErr) firstErr = errMsg(chunkErr)
           toast.message(
-            `Tanda ${desde}-${hasta} interrumpida; se conserva lo confirmado antes.`
+            `Tanda ${desde}-${hasta} interrumpida; se conserva lo confirmado antes. Pulse de nuevo para continuar.`
           )
           break
         }
@@ -957,7 +963,7 @@ export default function ConciliacionBancosPage() {
                 <TableHead className="w-10">
                   <input
                     type="checkbox"
-                    title={`Seleccionar hasta ${MAX_CONFIRMACION_MASIVA} visibles pendientes (limite confirmacion masiva)`}
+                    title={`Seleccionar filas visibles de esta pagina (confirmacion en tandas automaticas)`}
                     checked={todosElegiblesMarcados}
                     onChange={toggleSeleccionarTodos}
                     disabled={
