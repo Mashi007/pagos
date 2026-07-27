@@ -1,0 +1,2 @@
+﻿inicio {200, 100} fin_intersect {200} fin_solo {200}
+date-only inicio {100} fin_intersect {100}

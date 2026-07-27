@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 
 from app.core.documento import normalize_documento, split_numero_documento_almacenado
 from app.models.conciliacion_banco_ocr import (
+    ConciliacionBancoExtracto,
     ConciliacionBancoOcrBanco,
     ConciliacionBancoOcrLote,
     ConciliacionBancoOcrResultado,
@@ -356,6 +357,145 @@ def _similitud(a: str, b: str) -> float:
     return round(SequenceMatcher(None, da, db).ratio() * 100.0, 2)
 
 
+
+def _normalizar_banco_categoria(val: Any) -> Optional[str]:
+    """Mapea texto Excel a categoria conocida (Mercantil, BNC, ...)."""
+    s = str(val or "").strip()
+    if not s:
+        return None
+    low = s.casefold()
+    for b in BANCOS_CATEGORIAS:
+        if low == b.casefold():
+            return b
+    return None
+
+
+def _clave_natural_extracto(
+    *,
+    banco: str,
+    fecha: Optional[date],
+    referencia_norm: str,
+    monto: Optional[Decimal],
+    moneda: str,
+) -> str:
+    f = fecha.isoformat() if fecha else ""
+    m = f"{float(monto):.2f}" if monto is not None else ""
+    return f"{banco}|{f}|{referencia_norm}|{m}|{moneda}"
+
+
+def _upsert_extracto_filas(
+    db: Session,
+    filas: list[dict[str, Any]],
+    *,
+    lote_id: int,
+    archivo_nombre: Optional[str],
+) -> int:
+    """Inserta/actualiza filas en conciliacion_banco_extracto. Retorna n afectadas."""
+    if not filas:
+        return 0
+    now = datetime.utcnow()
+    n = 0
+    chunk = 500
+    for i in range(0, len(filas), chunk):
+        batch = filas[i : i + chunk]
+        claves = [r["clave_natural"] for r in batch]
+        existentes = {
+            e.clave_natural: e
+            for e in db.execute(
+                select(ConciliacionBancoExtracto).where(
+                    ConciliacionBancoExtracto.clave_natural.in_(claves)
+                )
+            )
+            .scalars()
+            .all()
+        }
+        for row in batch:
+            clave = row["clave_natural"]
+            existing = existentes.get(clave)
+            if existing is None:
+                db.add(
+                    ConciliacionBancoExtracto(
+                        banco=row["banco"],
+                        fecha=row["fecha"],
+                        referencia=row["referencia"],
+                        referencia_norm=row["referencia_norm"],
+                        monto=row["monto"],
+                        moneda=row["moneda"],
+                        clave_natural=clave,
+                        lote_origen_id=lote_id,
+                        archivo_nombre=(archivo_nombre or None),
+                        actualizado_en=now,
+                    )
+                )
+            else:
+                existing.fecha = row["fecha"]
+                existing.referencia = row["referencia"]
+                existing.referencia_norm = row["referencia_norm"]
+                existing.monto = row["monto"]
+                existing.moneda = row["moneda"]
+                existing.lote_origen_id = lote_id
+                if archivo_nombre:
+                    existing.archivo_nombre = archivo_nombre
+                existing.actualizado_en = now
+            n += 1
+        db.flush()
+    return n
+
+
+def resumen_extracto_historico(
+    db: Session,
+    *,
+    bancos: Optional[list[str]] = None,
+    fecha_desde: Optional[date] = None,
+    fecha_hasta: Optional[date] = None,
+    moneda: Optional[str] = None,
+) -> dict[str, Any]:
+    q = select(
+        ConciliacionBancoExtracto.banco,
+        func.count(),
+        func.min(ConciliacionBancoExtracto.fecha),
+        func.max(ConciliacionBancoExtracto.fecha),
+    )
+    if bancos:
+        cats = [_normalizar_banco_categoria(b) or b for b in bancos]
+        cats = [c for c in cats if c]
+        if cats:
+            q = q.where(ConciliacionBancoExtracto.banco.in_(cats))
+    if fecha_desde is not None:
+        q = q.where(
+            or_(
+                ConciliacionBancoExtracto.fecha.is_(None),
+                ConciliacionBancoExtracto.fecha >= fecha_desde,
+            )
+        )
+    if fecha_hasta is not None:
+        q = q.where(
+            or_(
+                ConciliacionBancoExtracto.fecha.is_(None),
+                ConciliacionBancoExtracto.fecha <= fecha_hasta,
+            )
+        )
+    if moneda:
+        q = q.where(ConciliacionBancoExtracto.moneda == moneda.strip().upper())
+    q = q.group_by(ConciliacionBancoExtracto.banco).order_by(
+        ConciliacionBancoExtracto.banco.asc()
+    )
+    por_banco = []
+    total = 0
+    for banco, n, fmin, fmax in db.execute(q).all():
+        nn = int(n or 0)
+        total += nn
+        por_banco.append(
+            {
+                "banco": banco,
+                "filas": nn,
+                "fecha_min": fmin.isoformat() if fmin else None,
+                "fecha_max": fmax.isoformat() if fmax else None,
+            }
+        )
+    return {"ok": True, "total": total, "por_banco": por_banco}
+
+
 def _parse_fecha(val: Any) -> Optional[date]:
     if val is None or val == "":
         return None
@@ -411,6 +551,368 @@ def _snapshot_pago(p: Pago) -> dict[str, Any]:
     }
 
 
+
+def buscar_serial_en_extracto(
+    db: Session,
+    *,
+    serial: str,
+    moneda: Optional[str] = None,
+) -> dict[str, Any]:
+    """Busca serial/referencia en BD historica. Indica tambien si hay pago en pagos."""
+    raw = (serial or "").strip()
+    if not raw:
+        raise HTTPException(status_code=400, detail="Indique el serial / referencia")
+    norm = normalize_documento(raw) or raw
+    dig = _ref_solo_digitos(norm) or _ref_solo_digitos(raw)
+    if not dig and not norm:
+        raise HTTPException(status_code=400, detail="Serial invalido")
+
+    conds = [
+        ConciliacionBancoExtracto.referencia == raw,
+        ConciliacionBancoExtracto.referencia == norm,
+    ]
+    if dig:
+        conds.extend(
+            [
+                ConciliacionBancoExtracto.referencia_norm == dig,
+                ConciliacionBancoExtracto.referencia_norm == norm,
+                ConciliacionBancoExtracto.referencia == dig,
+            ]
+        )
+    q = select(ConciliacionBancoExtracto).where(or_(*conds))
+    if moneda:
+        q = q.where(ConciliacionBancoExtracto.moneda == moneda.strip().upper())
+    filas = list(
+        db.execute(q.order_by(ConciliacionBancoExtracto.id.asc())).scalars().all()
+    )
+
+    n_pagos = 0
+    pago_conds = [
+        Pago.numero_documento == raw,
+        Pago.numero_documento == norm,
+    ]
+    if dig:
+        pago_conds.extend(
+            [
+                Pago.numero_documento == dig,
+                Pago.numero_documento.like(f"%{dig}%"),
+            ]
+        )
+    n_pagos = int(
+        db.scalar(
+            select(func.count()).select_from(Pago).where(or_(*pago_conds))
+        )
+        or 0
+    )
+
+    items = [
+        {
+            "id": int(r.id),
+            "banco": r.banco,
+            "fecha": r.fecha.isoformat() if r.fecha else None,
+            "referencia": r.referencia,
+            "referencia_norm": r.referencia_norm,
+            "monto": float(r.monto) if r.monto is not None else None,
+            "moneda": r.moneda,
+        }
+        for r in filas
+    ]
+    pendientes = _filtrar_extracto_sin_cerrados(db, filas)
+    n_cerradas = len(filas) - len(pendientes)
+    items_pend = [
+        {
+            "id": int(r.id),
+            "banco": r.banco,
+            "fecha": r.fecha.isoformat() if r.fecha else None,
+            "referencia": r.referencia,
+            "referencia_norm": r.referencia_norm,
+            "monto": float(r.monto) if r.monto is not None else None,
+            "moneda": r.moneda,
+        }
+        for r in pendientes
+    ]
+    return {
+        "ok": True,
+        "encontrado": len(items) > 0,
+        "serial": raw,
+        "serial_norm": dig or norm,
+        "en_extracto": len(items) > 0,
+        "filas_extracto": len(items),
+        "filas_pendientes": len(items_pend),
+        "filas_ya_cerradas": n_cerradas,
+        "ya_visto_o_conciliado": len(items) > 0 and len(items_pend) == 0,
+        "items": items_pend,
+        "en_pagos": n_pagos > 0,
+        "pagos_count": n_pagos,
+    }
+
+
+def crear_lote_desde_serial(
+    db: Session,
+    *,
+    serial: str,
+    moneda_carga: str,
+    usuario_id: Optional[int],
+    bancos: Optional[list[str]] = None,
+) -> ConciliacionBancoOcrLote:
+    """Si el serial esta en BD historica, crea lote listo para conciliar."""
+    mon = (moneda_carga or "USD").strip().upper()
+    if mon not in ("USD", "BS"):
+        raise HTTPException(status_code=400, detail="moneda_carga debe ser USD o BS")
+    info = buscar_serial_en_extracto(db, serial=serial, moneda=mon)
+    if not info["encontrado"]:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Serial no esta en BD historica: {serial.strip()}",
+        )
+    ids = [int(x["id"]) for x in info["items"]]
+    rows = list(
+        db.execute(
+            select(ConciliacionBancoExtracto)
+            .where(ConciliacionBancoExtracto.id.in_(ids))
+            .order_by(ConciliacionBancoExtracto.id.asc())
+        )
+        .scalars()
+        .all()
+    )
+    rows = _filtrar_extracto_sin_cerrados(db, rows)
+    if not rows:
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                f"Serial {serial.strip()} ya esta VISTO/conciliado; "
+                "no se vuelve a cargar."
+            ),
+        )
+    cats: list[str] = []
+    if bancos:
+        for b in bancos:
+            nb = _normalizar_banco_categoria(b)
+            if nb and nb not in cats:
+                cats.append(nb)
+        if cats:
+            rows = [r for r in rows if r.banco in cats]
+            if not rows:
+                raise HTTPException(
+                    status_code=404,
+                    detail="Serial en historica pero no en los bancos del filtro",
+                )
+    else:
+        for r in rows:
+            if r.banco and r.banco not in cats:
+                cats.append(r.banco)
+
+    fechas = [r.fecha for r in rows if r.fecha is not None]
+    f_desde = min(fechas) if fechas else date.today()
+    f_hasta = max(fechas) if fechas else date.today()
+    dig = info.get("serial_norm") or serial.strip()
+    lote = ConciliacionBancoOcrLote(
+        usuario_id=usuario_id,
+        archivo_nombre=f"SERIAL_{dig}"[:255],
+        fecha_desde=f_desde,
+        fecha_hasta=f_hasta,
+        estado="CARGADO",
+        moneda_carga=mon,
+    )
+    db.add(lote)
+    db.flush()
+    batch = [
+        {
+            "lote_id": lote.id,
+            "fila_excel": i,
+            "fecha_banco": r.fecha,
+            "referencia_banco": r.referencia,
+            "ref_banco_norm": r.referencia_norm or r.referencia,
+            "monto_banco": r.monto if mon == "USD" else None,
+            "monto_banco_original": r.monto,
+            "moneda_fila": mon,
+        }
+        for i, r in enumerate(rows, start=1)
+    ]
+    db.bulk_insert_mappings(ConciliacionBancoOcrBanco, batch)
+    if cats:
+        _guardar_bancos_en_lote(lote, cats)
+    lote.notas = json.dumps(
+        {
+            "filas_banco": len(rows),
+            "fuente_carga": "serial",
+            "serial": serial.strip(),
+            "bancos": cats,
+            "en_pagos": info.get("en_pagos"),
+            "pagos_count": info.get("pagos_count"),
+        },
+        ensure_ascii=True,
+    )
+    db.commit()
+    db.refresh(lote)
+    return lote
+
+def _casos_banco_cerrados_globales(db: Session) -> set[str]:
+    """Claves dig|fecha|monto ya VISTO / OMITIR / CORREGIR+aplicado (cualquier lote)."""
+    rows = db.execute(
+        select(
+            ConciliacionBancoOcrResultado.referencia_banco,
+            ConciliacionBancoOcrResultado.fecha_banco,
+            ConciliacionBancoOcrResultado.monto_banco,
+        ).where(
+            or_(
+                ConciliacionBancoOcrResultado.decision == "VISTO",
+                ConciliacionBancoOcrResultado.decision == "OMITIR",
+                (
+                    (ConciliacionBancoOcrResultado.decision == "CORREGIR")
+                    & (ConciliacionBancoOcrResultado.aplicado.is_(True))
+                ),
+            )
+        )
+    ).all()
+    out: set[str] = set()
+    for r in rows:
+        mb = float(r.monto_banco) if r.monto_banco is not None else None
+        clave = _clave_caso_banco(r.referencia_banco, r.fecha_banco, mb)
+        if clave:
+            out.add(clave)
+    return out
+
+
+def _filtrar_extracto_sin_cerrados(
+    db: Session, rows: list
+) -> list:
+    """Quita filas de extracto ya vistas/conciliadas en conciliaciones previas."""
+    if not rows:
+        return rows
+    cerrados = _casos_banco_cerrados_globales(db)
+    if not cerrados:
+        return rows
+    out = []
+    for r in rows:
+        mb = float(r.monto) if getattr(r, "monto", None) is not None else None
+        clave = _clave_caso_banco(
+            getattr(r, "referencia", None),
+            getattr(r, "fecha", None),
+            mb,
+        )
+        if clave and clave in cerrados:
+            continue
+        out.append(r)
+    return out
+def crear_lote_desde_extracto(
+    db: Session,
+    *,
+    bancos: list[str],
+    fecha_desde: date,
+    fecha_hasta: date,
+    moneda_carga: str,
+    usuario_id: Optional[int],
+) -> ConciliacionBancoOcrLote:
+    """Arma un lote de conciliacion desde conciliacion_banco_extracto (BD historica)."""
+    mon = (moneda_carga or "USD").strip().upper()
+    if mon not in ("USD", "BS"):
+        raise HTTPException(status_code=400, detail="moneda_carga debe ser USD o BS")
+    if fecha_hasta < fecha_desde:
+        raise HTTPException(status_code=400, detail="fecha_hasta debe ser >= fecha_desde")
+    cats = []
+    for b in bancos or []:
+        nb = _normalizar_banco_categoria(b)
+        if nb and nb not in cats:
+            cats.append(nb)
+    if not cats:
+        raise HTTPException(
+            status_code=400,
+            detail="Indique al menos un banco (Mercantil, BNC, ...)",
+        )
+
+    q = (
+        select(ConciliacionBancoExtracto)
+        .where(ConciliacionBancoExtracto.banco.in_(cats))
+        .where(ConciliacionBancoExtracto.moneda == mon)
+        .where(
+            or_(
+                ConciliacionBancoExtracto.fecha.is_(None),
+                ConciliacionBancoExtracto.fecha >= fecha_desde,
+            )
+        )
+        .where(
+            or_(
+                ConciliacionBancoExtracto.fecha.is_(None),
+                ConciliacionBancoExtracto.fecha <= fecha_hasta,
+            )
+        )
+        .order_by(
+            ConciliacionBancoExtracto.fecha.asc().nulls_last(),
+            ConciliacionBancoExtracto.id.asc(),
+        )
+    )
+    rows = list(db.execute(q).scalars().all())
+    rows = _filtrar_extracto_sin_cerrados(db, rows)
+    if not rows:
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                "BD historica sin filas pendientes (bancos/fechas/moneda); "
+                "las ya VISTO/conciliadas no se vuelven a cargar."
+            ),
+        )
+    if len(rows) > MAX_FILAS_EXCEL_LOTE:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"BD historica tiene {len(rows)} filas (tope {MAX_FILAS_EXCEL_LOTE}). "
+                "Acote fechas o bancos."
+            ),
+        )
+
+    lote = ConciliacionBancoOcrLote(
+        usuario_id=usuario_id,
+        archivo_nombre="BD_HISTORICA",
+        fecha_desde=fecha_desde,
+        fecha_hasta=fecha_hasta,
+        estado="CARGADO",
+        moneda_carga=mon,
+    )
+    db.add(lote)
+    db.flush()
+
+    batch: list[dict[str, Any]] = []
+    for i, r in enumerate(rows, start=1):
+        batch.append(
+            {
+                "lote_id": lote.id,
+                "fila_excel": i,
+                "fecha_banco": r.fecha,
+                "referencia_banco": r.referencia,
+                "ref_banco_norm": r.referencia_norm or r.referencia,
+                "monto_banco": r.monto if mon == "USD" else None,
+                "monto_banco_original": r.monto,
+                "moneda_fila": mon,
+            }
+        )
+        if len(batch) >= BULK_INSERT_CHUNK:
+            db.bulk_insert_mappings(ConciliacionBancoOcrBanco, batch)
+            batch = []
+    if batch:
+        db.bulk_insert_mappings(ConciliacionBancoOcrBanco, batch)
+
+    _guardar_bancos_en_lote(lote, cats)
+    lote.notas = json.dumps(
+        {
+            "filas_banco": len(rows),
+            "fuente_carga": "historica",
+            "bancos": cats,
+            "max_filas_lote": MAX_FILAS_EXCEL_LOTE,
+        },
+        ensure_ascii=True,
+    )
+    db.commit()
+    db.refresh(lote)
+    logger.info(
+        "[conciliacion-bancos] lote historica id=%s filas=%s bancos=%s",
+        lote.id,
+        len(rows),
+        cats,
+    )
+    return lote
+
+
 def crear_lote_desde_excel(
     db: Session,
     *,
@@ -420,6 +922,7 @@ def crear_lote_desde_excel(
     fecha_desde: date,
     fecha_hasta: date,
     usuario_id: Optional[int],
+    banco: Optional[str] = None,
 ) -> ConciliacionBancoOcrLote:
     mon = (moneda_carga or "USD").strip().upper()
     if mon not in ("USD", "BS"):
@@ -462,12 +965,34 @@ def crear_lote_desde_excel(
         batch = []
 
     try:
+        banco_form = _normalizar_banco_categoria(banco)
+        extracto_filas: list[dict[str, Any]] = []
         for i, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
             if not row:
                 continue
-            fecha_b = _parse_fecha(row[0] if len(row) > 0 else None)
-            ref_raw = str(row[1]).strip() if len(row) > 1 and row[1] is not None else ""
-            monto_raw = _parse_monto(row[2] if len(row) > 2 else None)
+            # Formato: Banco | Fecha | Referencia | Monto
+            # Compat: Fecha | Referencia | Monto (+ banco form o Otros)
+            banco_celda = _normalizar_banco_categoria(
+                row[0] if len(row) > 0 else None
+            )
+            if banco_celda is not None:
+                fecha_b = _parse_fecha(row[1] if len(row) > 1 else None)
+                ref_raw = (
+                    str(row[2]).strip()
+                    if len(row) > 2 and row[2] is not None
+                    else ""
+                )
+                monto_raw = _parse_monto(row[3] if len(row) > 3 else None)
+                banco_fila = banco_celda
+            else:
+                fecha_b = _parse_fecha(row[0] if len(row) > 0 else None)
+                ref_raw = (
+                    str(row[1]).strip()
+                    if len(row) > 1 and row[1] is not None
+                    else ""
+                )
+                monto_raw = _parse_monto(row[2] if len(row) > 2 else None)
+                banco_fila = banco_form or "Otros"
             if not ref_raw and monto_raw is None and fecha_b is None:
                 continue
             if not ref_raw:
@@ -486,6 +1011,23 @@ def crear_lote_desde_excel(
                     "monto_banco": monto_raw if mon == "USD" else None,
                     "monto_banco_original": monto_raw,
                     "moneda_fila": mon,
+                }
+            )
+            extracto_filas.append(
+                {
+                    "banco": banco_fila,
+                    "fecha": fecha_b,
+                    "referencia": ref_raw,
+                    "referencia_norm": ref_norm,
+                    "monto": monto_raw,
+                    "moneda": mon,
+                    "clave_natural": _clave_natural_extracto(
+                        banco=banco_fila,
+                        fecha=fecha_b,
+                        referencia_norm=ref_norm,
+                        monto=monto_raw,
+                        moneda=mon,
+                    ),
                 }
             )
             n += 1
@@ -523,10 +1065,18 @@ def crear_lote_desde_excel(
         lote.fecha_desde = min(lote.fecha_desde, excel_min)
         lote.fecha_hasta = max(lote.fecha_hasta, excel_max)
 
+    n_extracto = _upsert_extracto_filas(
+        db,
+        extracto_filas,
+        lote_id=int(lote.id),
+        archivo_nombre=lote.archivo_nombre,
+    )
     lote.notas = json.dumps(
         {
             "filas_banco": n,
+            "filas_extracto_upsert": n_extracto,
             "max_filas_lote": MAX_FILAS_EXCEL_LOTE,
+            "fuente_carga": "excel",
         },
         ensure_ascii=True,
     )
@@ -713,22 +1263,9 @@ def comparar_lote(
             lote_id,
         )
 
-    # 1) Confirmados bancarios globales (solo CORREGIR+aplicado) — liviano
-    confirmados_global = db.execute(
-        select(
-            ConciliacionBancoOcrResultado.lote_id,
-            ConciliacionBancoOcrResultado.pago_id,
-            ConciliacionBancoOcrResultado.banco_id,
-            ConciliacionBancoOcrResultado.referencia_banco,
-            ConciliacionBancoOcrResultado.fecha_banco,
-            ConciliacionBancoOcrResultado.monto_banco,
-        ).where(
-            ConciliacionBancoOcrResultado.decision == "CORREGIR",
-            ConciliacionBancoOcrResultado.aplicado.is_(True),
-        )
-    ).all()
-    # 2) Cerrados de ESTE lote (VISTO/OMITIR/CORREGIR) — no barrer VISTO de todos los lotes
-    cerrados_lote = db.execute(
+    # 1) Cerrados GLOBALES: VISTO / OMITIR / CORREGIR+aplicado de CUALQUIER lote.
+    # Al reconcialiar con BD historica no deben reaparecer.
+    cerrados_global = db.execute(
         select(
             ConciliacionBancoOcrResultado.lote_id,
             ConciliacionBancoOcrResultado.pago_id,
@@ -739,40 +1276,41 @@ def comparar_lote(
             ConciliacionBancoOcrResultado.fecha_banco,
             ConciliacionBancoOcrResultado.monto_banco,
         ).where(
-            ConciliacionBancoOcrResultado.lote_id == lote_id,
             or_(
                 ConciliacionBancoOcrResultado.decision == "VISTO",
                 ConciliacionBancoOcrResultado.decision == "OMITIR",
-                (ConciliacionBancoOcrResultado.decision == "CORREGIR")
-                & (ConciliacionBancoOcrResultado.aplicado.is_(True)),
+                (
+                    (ConciliacionBancoOcrResultado.decision == "CORREGIR")
+                    & (ConciliacionBancoOcrResultado.aplicado.is_(True))
+                ),
             ),
         )
     ).all()
+    # 2) Cerrados de ESTE lote: excluir tambien por banco_id interno del lote
+    cerrados_lote = [c for c in cerrados_global if c.lote_id == lote_id]
 
     excluir_pago_ids: set[int] = set()
     excluir_banco_ids: set[int] = set()
     excluir_casos_banco: set[str] = set()
     confirmados_conservados = 0
 
-    for c in confirmados_global:
-        if c.pago_id:
+    for c in cerrados_global:
+        if c.pago_id and c.decision == "CORREGIR" and bool(c.aplicado):
             excluir_pago_ids.add(int(c.pago_id))
         mb = float(c.monto_banco) if c.monto_banco is not None else None
         clave = _clave_caso_banco(c.referencia_banco, c.fecha_banco, mb)
         if clave:
             excluir_casos_banco.add(clave)
-        if c.lote_id == lote_id:
+        if (
+            c.lote_id == lote_id
+            and c.decision == "CORREGIR"
+            and bool(c.aplicado)
+        ):
             confirmados_conservados += 1
-            if c.banco_id:
-                excluir_banco_ids.add(int(c.banco_id))
 
     for c in cerrados_lote:
         if c.banco_id:
             excluir_banco_ids.add(int(c.banco_id))
-        mb = float(c.monto_banco) if c.monto_banco is not None else None
-        clave = _clave_caso_banco(c.referencia_banco, c.fecha_banco, mb)
-        if clave:
-            excluir_casos_banco.add(clave)
 
     db.execute(
         delete(ConciliacionBancoOcrResultado).where(
@@ -1312,6 +1850,25 @@ def _clonar_resultado_ambiguo_para_pago(
     return clone
 
 
+
+def _resultado_bloqueado_permanente(res: ConciliacionBancoOcrResultado) -> Optional[str]:
+    """
+    Regla general: VISTO / OMITIR / CORREGIR+aplicado son definitivos.
+    VISTO: una vez marcado, la fila queda bloqueada y no se puede cambiar.
+    Retorna mensaje de error o None si sigue editable.
+    """
+    dec = (res.decision or "").strip().upper()
+    if dec == "VISTO":
+        return (
+            "Regla: decision VISTO es definitiva. La fila queda bloqueada "
+            "y no se puede cambiar."
+        )
+    if dec == "OMITIR":
+        return "Esta fila ya fue omitida y queda bloqueada."
+    if dec == "CORREGIR" and bool(res.aplicado):
+        return "Esta fila ya fue conciliada (CORREGIR) y queda bloqueada."
+    return None
+
 def decidir_y_aplicar(
     db: Session,
     resultado_id: int,
@@ -1325,10 +1882,9 @@ def decidir_y_aplicar(
     res = db.get(ConciliacionBancoOcrResultado, resultado_id)
     if not res:
         raise HTTPException(status_code=404, detail="Resultado no encontrado")
-    if res.decision in ("VISTO", "OMITIR") or (
-        res.aplicado and res.decision == "CORREGIR"
-    ):
-        raise HTTPException(status_code=400, detail="Esta fila ya fue procesada")
+    bloqueo = _resultado_bloqueado_permanente(res)
+    if bloqueo:
+        raise HTTPException(status_code=400, detail=bloqueo)
 
     dec = (decision or "").strip().upper()
     if dec not in ("VISTO", "CORREGIR", "OMITIR"):
@@ -1436,9 +1992,17 @@ def decidir_y_aplicar(
         res.decision = "VISTO"
         res.aplicado = False
         res.fuente_elegida = None
-        res.detalle_aplicacion = "Visto: sin cambios en BD"
+        res.detalle_aplicacion = (
+            "Visto: sin cambios en BD. Bloqueado definitivo (no se puede cambiar)."
+        )
         db.commit()
-        return {"ok": True, "resultado_id": res.id, "decision": res.decision, "aplicado": False}
+        return {
+            "ok": True,
+            "resultado_id": res.id,
+            "decision": res.decision,
+            "aplicado": False,
+            "bloqueado": True,
+        }
 
     # CORREGIR
     fuente = (fuente_elegida or "").strip().upper()
@@ -1982,6 +2546,50 @@ def _resultado_a_dict(
     }
 
 
+def kpis_vivos_lote(db: Session, lote_id: int) -> dict[str, int]:
+    """
+    KPIs actuales del lote (no el snapshot de comparar):
+    - por tipo_novedad: solo filas decision=PENDIENTE
+    - CONCILIADOS: decision=CORREGIR y aplicado=true
+    Asi al confirmar, MATCH_*/AMBIGUO bajan y CONCILIADOS sube.
+    """
+    out: dict[str, int] = {
+        "MATCH_EXACTO": 0,
+        "MATCH_PARCIAL": 0,
+        "SIN_BD": 0,
+        "SIN_BANCO": 0,
+        "AMBIGUO": 0,
+        "SIN_TASA": 0,
+        "CONCILIADOS": 0,
+    }
+    rows = db.execute(
+        select(
+            ConciliacionBancoOcrResultado.tipo_novedad,
+            func.count(),
+        )
+        .where(
+            ConciliacionBancoOcrResultado.lote_id == lote_id,
+            ConciliacionBancoOcrResultado.decision == "PENDIENTE",
+        )
+        .group_by(ConciliacionBancoOcrResultado.tipo_novedad)
+    ).all()
+    for tipo, n in rows:
+        k = str(tipo or "").upper()
+        if k in out:
+            out[k] = int(n or 0)
+    n_ok = db.scalar(
+        select(func.count())
+        .select_from(ConciliacionBancoOcrResultado)
+        .where(
+            ConciliacionBancoOcrResultado.lote_id == lote_id,
+            ConciliacionBancoOcrResultado.decision == "CORREGIR",
+            ConciliacionBancoOcrResultado.aplicado.is_(True),
+        )
+    )
+    out["CONCILIADOS"] = int(n_ok or 0)
+    return out
+
+
 def listar_resultados(
     db: Session,
     lote_id: int,
@@ -2052,6 +2660,7 @@ def listar_resultados(
         "page": page,
         "per_page": per_page,
         "pages": pages,
+        "stats": kpis_vivos_lote(db, lote_id),
     }
 
 

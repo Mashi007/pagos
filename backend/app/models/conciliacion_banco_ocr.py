@@ -92,3 +92,32 @@ class ConciliacionBancoOcrResultado(Base):
     creado_en = Column(
         DateTime(timezone=False), nullable=False, server_default=func.now()
     )
+
+
+class ConciliacionBancoExtracto(Base):
+    """Extracto bancario persistente (Banco/Fecha/Referencia/Monto) para re-conciliar."""
+
+    __tablename__ = "conciliacion_banco_extracto"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    banco = Column(String(40), nullable=False, index=True)
+    fecha = Column(Date, nullable=True, index=True)
+    referencia = Column(Text, nullable=False)
+    referencia_norm = Column(Text, nullable=True, index=True)
+    monto = Column(Numeric(14, 2), nullable=True)
+    moneda = Column(String(3), nullable=False, server_default=text("'USD'"))
+    clave_natural = Column(Text, nullable=False, unique=True)
+    lote_origen_id = Column(
+        Integer,
+        ForeignKey("conciliacion_banco_ocr_lote.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    archivo_nombre = Column(String(255), nullable=True)
+    creado_en = Column(
+        DateTime(timezone=False), nullable=False, server_default=func.now()
+    )
+    actualizado_en = Column(
+        DateTime(timezone=False), nullable=False, server_default=func.now()
+    )
+

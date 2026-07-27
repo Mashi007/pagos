@@ -71,15 +71,110 @@ export const conciliacionBancosService = {
     moneda_carga: ConciliacionBancosMoneda
     fecha_desde: string
     fecha_hasta: string
+    banco?: ConciliacionBancosBancoCategoria
   }): Promise<{ ok: boolean; lote: ConciliacionBancosLote }> {
     const fd = new FormData()
     fd.append('file', params.file)
     fd.append('moneda_carga', params.moneda_carga)
     fd.append('fecha_desde', params.fecha_desde)
     fd.append('fecha_hasta', params.fecha_hasta)
+    if (params.banco) fd.append('banco', params.banco)
     return apiClient.post(`${BASE}/lotes`, fd, {
       headers: { 'Content-Type': 'multipart/form-data' },
       timeout: 300000,
+    })
+  },
+
+  async crearLoteDesdeHistorica(params: {
+    bancos: ConciliacionBancosBancoCategoria[]
+    fecha_desde: string
+    fecha_hasta: string
+    moneda_carga: ConciliacionBancosMoneda
+  }): Promise<{ ok: boolean; lote: ConciliacionBancosLote }> {
+    return apiClient.post(
+      `${BASE}/lotes/desde-historica`,
+      {
+        bancos: params.bancos,
+        fecha_desde: params.fecha_desde,
+        fecha_hasta: params.fecha_hasta,
+        moneda_carga: params.moneda_carga,
+      },
+      { timeout: 180000 }
+    )
+  },
+
+  async buscarSerial(params: {
+    serial: string
+    moneda?: ConciliacionBancosMoneda
+  }): Promise<{
+    ok: boolean
+    encontrado: boolean
+    serial: string
+    serial_norm?: string
+    en_extracto: boolean
+    filas_extracto: number
+    filas_pendientes?: number
+    filas_ya_cerradas?: number
+    ya_visto_o_conciliado?: boolean
+    items: Array<{
+      id: number
+      banco: string
+      fecha?: string | null
+      referencia: string
+      referencia_norm?: string | null
+      monto?: number | null
+      moneda?: string
+    }>
+    en_pagos: boolean
+    pagos_count: number
+  }> {
+    const q: Record<string, string> = { serial: params.serial }
+    if (params.moneda) q.moneda = params.moneda
+    return apiClient.get(`${BASE}/extracto/por-serial`, {
+      params: q,
+      timeout: 60000,
+    })
+  },
+
+  async crearLoteDesdeSerial(params: {
+    serial: string
+    moneda_carga: ConciliacionBancosMoneda
+    bancos?: ConciliacionBancosBancoCategoria[]
+  }): Promise<{ ok: boolean; lote: ConciliacionBancosLote }> {
+    return apiClient.post(
+      `${BASE}/lotes/desde-serial`,
+      {
+        serial: params.serial,
+        moneda_carga: params.moneda_carga,
+        bancos: params.bancos || [],
+      },
+      { timeout: 120000 }
+    )
+  },
+
+  async resumenExtracto(params?: {
+    bancos?: ConciliacionBancosBancoCategoria[]
+    fecha_desde?: string
+    fecha_hasta?: string
+    moneda?: ConciliacionBancosMoneda
+  }): Promise<{
+    ok: boolean
+    total: number
+    por_banco: Array<{
+      banco: string
+      filas: number
+      fecha_min?: string | null
+      fecha_max?: string | null
+    }>
+  }> {
+    const q: Record<string, string> = {}
+    if (params?.bancos?.length) q.bancos = params.bancos.join(',')
+    if (params?.fecha_desde) q.fecha_desde = params.fecha_desde
+    if (params?.fecha_hasta) q.fecha_hasta = params.fecha_hasta
+    if (params?.moneda) q.moneda = params.moneda
+    return apiClient.get(`${BASE}/extracto/resumen`, {
+      params: q,
+      timeout: 60000,
     })
   },
 
@@ -127,6 +222,7 @@ export const conciliacionBancosService = {
     page: number
     per_page: number
     pages: number
+    stats?: Record<string, number>
   }> {
     const params: Record<string, string | number> = {
       page: opts?.page ?? 1,

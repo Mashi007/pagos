@@ -68,7 +68,9 @@ def _paid_at_caracas(
         if completo or acum + 1e-9 >= float(monto) - TOL_SALDO_CUOTA_NOTIFICACION:
             return ts
     if fecha_pago is not None:
-        return datetime.combine(fecha_pago, time(23, 59, 59), tzinfo=z)
+        # Solo fecha (sin cuota_pago): asumir pago en el dia, ANTES del corte Fin dia
+        # (23:00). Si se usara 23:59:59, Fin dia del mismo dia nunca bajaria.
+        return datetime.combine(fecha_pago, time(12, 0, 0), tzinfo=z)
     return None
 
 

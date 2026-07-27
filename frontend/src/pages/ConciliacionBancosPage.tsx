@@ -84,11 +84,12 @@ function fuenteDefaultFila(
   return row.tipo_novedad === 'AMBIGUO' ? 'BD' : 'BANCO'
 }
 
+/** Regla: VISTO (y OMITIR / CORREGIR aplicado) es definitivo: no se puede cambiar. */
 function filaBloqueada(row: ConciliacionBancosResultado): boolean {
   return (
-    row.aplicado ||
     row.decision === 'VISTO' ||
     row.decision === 'OMITIR' ||
+    Boolean(row.aplicado) ||
     (row.decision === 'CORREGIR' && row.aplicado)
   )
 }
@@ -118,6 +119,17 @@ function togglePagoCandidato(
 
 export default function ConciliacionBancosPage() {
   const [moneda, setMoneda] = useState<ConciliacionBancosMoneda>('USD')
+  /** excel = subir archivo (siempre guarda historica); historica = cargar desde BD */
+  const [fuenteExtracto, setFuenteExtracto] = useState<'excel' | 'historica'>('excel')
+  const [serialFiltro, setSerialFiltro] = useState('')
+  const [serialInfo, setSerialInfo] = useState<{
+    encontrado: boolean
+    en_extracto: boolean
+    filas_extracto: number
+    en_pagos: boolean
+    pagos_count: number
+    serial: string
+  } | null>(null)
   const [fechaDesde, setFechaDesde] = useState(hoyISO())
   const [fechaHasta, setFechaHasta] = useState(hoyISO())
   const [file, setFile] = useState<File | null>(null)
@@ -345,12 +357,13 @@ export default function ConciliacionBancosPage() {
     setPage(res.page || pg)
     setPages(res.pages || 1)
     setTotalResultados(res.total || 0)
+    if (res.stats) setStats(res.stats)
   }
 
 
   const handleCargar = async () => {
     if (!file) {
-      toast.error('Seleccione el Excel (Fecha, Referencia, Monto)')
+      toast.error('Seleccione el Excel (Banco, Fecha, Referencia, Monto)')
       return
     }
     setLoading(true)
@@ -362,6 +375,7 @@ export default function ConciliacionBancosPage() {
         fecha_hasta: fechaHasta,
       })
       setLote(res.lote)
+      setFuenteExtracto('excel')
       if (res.lote.fecha_desde) setFechaDesde(res.lote.fecha_desde)
       if (res.lote.fecha_hasta) setFechaHasta(res.lote.fecha_hasta)
       setItems([])
@@ -369,8 +383,140 @@ export default function ConciliacionBancosPage() {
       setFiltroNovedad([])
       setSeleccionados(new Set())
       toast.success(
-        `Lote #${res.lote.id} cargado (${moneda}${res.lote.filas_banco != null ? `, ${res.lote.filas_banco} filas` : ''}). Rango BD: ${res.lote.fecha_desde} → ${res.lote.fecha_hasta}`
+        `Lote #${res.lote.id} cargado y guardado en BD historica (${moneda}${res.lote.filas_banco != null ? `, ${res.lote.filas_banco} filas` : ''}). Rango: ${res.lote.fecha_desde} → ${res.lote.fecha_hasta}`
       )
+    } catch (err) {
+      toast.error(errMsg(err))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleCargarHistorica = async () => {
+    if (bancosSel.length === 0) {
+      toast.error('Seleccione al menos un banco del filtro')
+      return
+    }
+    if (!fechaDesde || !fechaHasta) {
+      toast.error('Indique fecha desde y hasta')
+      return
+    }
+    setLoading(true)
+    try {
+      const res = await conciliacionBancosService.crearLoteDesdeHistorica({
+        bancos: bancosSel,
+        fecha_desde: fechaDesde,
+        fecha_hasta: fechaHasta,
+        moneda_carga: moneda,
+      })
+      setLote(res.lote)
+      setFuenteExtracto('historica')
+      setFile(null)
+      setItems([])
+      setStats(null)
+      setFiltroNovedad([])
+      setSeleccionados(new Set())
+      toast.success(
+        `Lote #${res.lote.id} desde BD historica (${moneda}${res.lote.filas_banco != null ? `, ${res.lote.filas_banco} filas` : ''}). ${res.lote.fecha_desde} → ${res.lote.fecha_hasta}`
+      )
+    } catch (err) {
+      toast.error(errMsg(err))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleBuscarSerial = async () => {
+    const s = serialFiltro.trim()
+    if (!s) {
+      toast.error('Ingrese el serial / referencia')
+      return
+    }
+    setLoading(true)
+    setSerialInfo(null)
+    try {
+      const res = await conciliacionBancosService.buscarSerial({
+        serial: s,
+        moneda,
+      })
+      setSerialInfo({
+        encontrado: res.encontrado,
+        en_extracto: res.en_extracto,
+        filas_extracto: res.filas_extracto,
+        en_pagos: res.en_pagos,
+        pagos_count: res.pagos_count,
+        serial: res.serial,
+      })
+      if (res.encontrado) {
+        if (res.ya_visto_o_conciliado) {
+          toast.message(
+            'Serial en historica pero ya VISTO/conciliado (' +
+              String(res.filas_ya_cerradas ?? res.filas_extracto) +
+              '); no se vuelve a cargar'
+          )
+        } else {
+          toast.success(
+            'Serial en BD historica (' +
+              String(res.filas_pendientes ?? res.filas_extracto) +
+              ' pendiente(s))' +
+              (res.en_pagos
+                ? ' · tambien en pagos (' + String(res.pagos_count) + ')'
+                : ' · sin pago BD')
+          )
+        }
+      } else {
+        toast.message(
+          res.en_pagos
+            ? 'Serial NO en historica, pero hay ' +
+                String(res.pagos_count) +
+                ' pago(s) BD'
+            : 'Serial NO esta en BD historica'
+        )
+      }
+    } catch (err) {
+      toast.error(errMsg(err))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleConciliarSerial = async () => {
+    const s = serialFiltro.trim()
+    if (!s) {
+      toast.error('Ingrese el serial / referencia')
+      return
+    }
+    setLoading(true)
+    try {
+      const res = await conciliacionBancosService.crearLoteDesdeSerial({
+        serial: s,
+        moneda_carga: moneda,
+        bancos: bancosSel.length ? bancosSel : undefined,
+      })
+      setLote(res.lote)
+      setFuenteExtracto('historica')
+      setFile(null)
+      setItems([])
+      setStats(null)
+      setFiltroNovedad([])
+      setSeleccionados(new Set())
+      if (res.lote.fecha_desde) setFechaDesde(res.lote.fecha_desde)
+      if (res.lote.fecha_hasta) setFechaHasta(res.lote.fecha_hasta)
+      const bancosLote = res.lote.bancos_filtro || []
+      if (bancosLote.length && bancosSel.length === 0) {
+        setBancosSel(bancosLote as ConciliacionBancosBancoCategoria[])
+      }
+      toast.success(
+        Serial encontrado. Lote # listo ( fila(s)). Pulse Conciliar.
+      )
+      setSerialInfo({
+        encontrado: true,
+        en_extracto: true,
+        filas_extracto: res.lote.filas_banco ?? 1,
+        en_pagos: false,
+        pagos_count: 0,
+        serial: s,
+      })
     } catch (err) {
       toast.error(errMsg(err))
     } finally {
@@ -380,7 +526,7 @@ export default function ConciliacionBancosPage() {
 
   const handleConciliar = async () => {
     if (!lote) {
-      toast.error('Cargue un Excel primero')
+      toast.error('Cargue Excel nuevo o BD historica primero')
       return
     }
     if (bancosSel.length === 0) {
@@ -667,7 +813,7 @@ export default function ConciliacionBancosPage() {
       <ModulePageHeader
         icon={Building2}
         title="Conciliacion Bancos"
-        description="Compara el Excel del banco (fecha, referencia, monto) con pagos.numero_documento (OCR). Solo admin: elija fuente (Ref. Banco o Ref. BD) y confirme con el visto."
+        description="Excel Banco|Fecha|Referencia|Monto. Regla: VISTO es definitivo y deja la fila bloqueada. Match vs pagos.numero_documento (OCR)."
       />
 
       <Card>
@@ -713,16 +859,25 @@ export default function ConciliacionBancosPage() {
                 onChange={e => setFechaHasta(e.target.value)}
               />
             </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium">
-                Excel (A Fecha, B Referencia, C Monto)
-              </label>
-              <Input
-                type="file"
-                accept=".xlsx,.xls"
-                onChange={e => setFile(e.target.files?.[0] || null)}
-              />
-            </div>
+            {fuenteExtracto === 'excel' ? (
+              <div>
+                <label className="mb-1 block text-sm font-medium">
+                  Excel (A Banco, B Fecha, C Referencia, D Monto)
+                </label>
+                <Input
+                  type="file"
+                  accept=".xlsx,.xls"
+                  onChange={e => setFile(e.target.files?.[0] || null)}
+                />
+              </div>
+            ) : (
+              <div className="flex items-end">
+                <p className="text-sm text-gray-600">
+                  Sin archivo: se usan filas ya guardadas en BD historica
+                  (bancos + fechas + moneda).
+                </p>
+              </div>
+            )}
           </div>
 
           <div>
@@ -752,14 +907,108 @@ export default function ConciliacionBancosPage() {
           </div>
 
           <div className="flex flex-wrap gap-2">
-            <Button onClick={handleCargar} disabled={loading || !file}>
-              {loading ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <Upload className="mr-2 h-4 w-4" />
-              )}
-              Subir Excel
+            <Button
+              type="button"
+              variant={fuenteExtracto === 'excel' ? 'default' : 'outline'}
+              onClick={() => setFuenteExtracto('excel')}
+              disabled={loading}
+            >
+              Excel nuevo
             </Button>
+            <Button
+              type="button"
+              variant={fuenteExtracto === 'historica' ? 'default' : 'outline'}
+              onClick={() => setFuenteExtracto('historica')}
+              disabled={loading}
+            >
+              BD historica
+            </Button>
+          </div>
+          <p className="text-xs text-gray-500">
+            Cada Excel subido se almacena siempre en BD historica. Use{' '}
+            <strong>Excel nuevo</strong> para conciliar lo que acaba de subir, o{' '}
+            <strong>BD historica</strong> para cargar lo ya guardado (filtro
+            banco + fechas) y conciliar de nuevo.
+          </p>
+
+          <div className="rounded-lg border border-gray-200 bg-gray-50/80 p-3 space-y-2">
+            <label className="block text-sm font-medium">
+              Filtro por serial (referencia / documento)
+            </label>
+            <div className="flex flex-wrap gap-2 items-end">
+              <div className="min-w-[220px] flex-1">
+                <Input
+                  placeholder="Ej. 740087486821077"
+                  value={serialFiltro}
+                  onChange={e => {
+                    setSerialFiltro(e.target.value)
+                    setSerialInfo(null)
+                  }}
+                />
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleBuscarSerial}
+                disabled={loading || !serialFiltro.trim()}
+              >
+                Buscar serial
+              </Button>
+              <Button
+                type="button"
+                className="bg-emerald-600 hover:bg-emerald-700"
+                onClick={handleConciliarSerial}
+                disabled={loading || !serialFiltro.trim()}
+              >
+                Cargar serial y preparar
+              </Button>
+            </div>
+            <p className="text-xs text-gray-500">
+              La BD historica responde si el serial existe; si existe, se arma el
+              lote y luego pulse Conciliar.
+            </p>
+            {serialInfo && (
+              <p
+                className={
+                  serialInfo.encontrado
+                    ? 'text-sm text-emerald-700'
+                    : 'text-sm text-amber-700'
+                }
+              >
+                {serialInfo.encontrado
+                  ? `En historica: ${serialInfo.filas_extracto} fila(s)`
+                  : 'No esta en BD historica'}
+                {serialInfo.en_pagos
+                  ? ` · En pagos BD: ${serialInfo.pagos_count}`
+                  : ' · Sin pago BD'}
+              </p>
+            )}
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            {fuenteExtracto === 'excel' ? (
+              <Button onClick={handleCargar} disabled={loading || !file}>
+                {loading ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Upload className="mr-2 h-4 w-4" />
+                )}
+                Subir Excel (guarda en BD)
+              </Button>
+            ) : (
+              <Button
+                onClick={handleCargarHistorica}
+                disabled={loading || bancosSel.length === 0}
+                variant="secondary"
+              >
+                {loading ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Upload className="mr-2 h-4 w-4" />
+                )}
+                Cargar BD historica
+              </Button>
+            )}
             <Button
               onClick={handleConciliar}
               disabled={loading || !lote || bancosSel.length === 0}
@@ -767,7 +1016,9 @@ export default function ConciliacionBancosPage() {
             >
               {loading && lote?.estado === 'COMPARANDO'
                 ? 'Conciliando...'
-                : 'Conciliar'}
+                : fuenteExtracto === 'historica'
+                  ? 'Conciliar BD historica'
+                  : 'Conciliar Excel nuevo'}
             </Button>
             <Button
               variant="outline"
@@ -1217,6 +1468,15 @@ export default function ConciliacionBancosPage() {
                           {row.decision}
                           {row.aplicado ? ' · aplicado' : ''}
                         </div>
+                        {row.decision === 'VISTO' ? (
+                          <Badge
+                            variant="outline"
+                            className="mt-1 border-slate-400 text-[10px] text-slate-700"
+                            title="Regla: VISTO es definitivo y no se puede cambiar"
+                          >
+                            Bloqueado
+                          </Badge>
+                        ) : null}
                         {row.tipo_novedad === 'AMBIGUO' &&
                           (row.candidatos?.length || 0) > 1 && (
                             <div className="mt-1 max-w-[160px] text-[11px] text-red-700">
@@ -1249,10 +1509,14 @@ export default function ConciliacionBancosPage() {
                             size="sm"
                             variant="outline"
                             title={
-                              (fuentePorFila[row.id] ||
-                                fuenteDefaultFila(row)) === 'BANCO'
-                                ? 'Confirmar: grabar paquete Ref. Banco'
-                                : 'Confirmar: mantener paquete Ref. RapiC'
+                              locked
+                                ? row.decision === 'VISTO'
+                                  ? 'Bloqueado: VISTO definitivo, no se puede cambiar'
+                                  : 'Fila bloqueada (ya procesada)'
+                                : (fuentePorFila[row.id] ||
+                                      fuenteDefaultFila(row)) === 'BANCO'
+                                  ? 'Confirmar: grabar paquete Ref. Banco'
+                                  : 'Confirmar: mantener paquete Ref. RapiC'
                             }
                             disabled={
                               locked ||
