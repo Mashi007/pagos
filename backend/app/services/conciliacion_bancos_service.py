@@ -13,6 +13,7 @@ from typing import Any, Optional
 from fastapi import HTTPException, UploadFile
 from openpyxl import Workbook, load_workbook
 from sqlalchemy import delete, func, or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.documento import normalize_documento, split_numero_documento_almacenado
@@ -147,6 +148,39 @@ def categoria_pago_conciliacion(pago: Pago) -> str:
     if _es_asiento_drive_abonos(getattr(pago, "numero_documento", None)):
         return "Drive"
     return categoria_institucion(getattr(pago, "institucion_bancaria", None))
+
+
+def pago_ids_conciliacion_bancaria_confirmada(
+    db: Session, pago_ids: list[int]
+) -> set[int]:
+    """IDs con confirmacion en Conciliacion Bancos (CORREGIR + aplicado)."""
+    if not pago_ids:
+        return set()
+    q = (
+        select(ConciliacionBancoOcrResultado.pago_id)
+        .where(
+            ConciliacionBancoOcrResultado.pago_id.in_(pago_ids),
+            ConciliacionBancoOcrResultado.decision == "CORREGIR",
+            ConciliacionBancoOcrResultado.aplicado.is_(True),
+        )
+        .distinct()
+    )
+    return {int(x[0]) for x in db.execute(q).all() if x[0] is not None}
+
+
+def contar_conciliacion_bancaria_prestamo(db: Session, prestamo_id: int) -> int:
+    """Cuantos pagos del prestamo tienen confirmacion bancaria."""
+    q = (
+        select(func.count(func.distinct(ConciliacionBancoOcrResultado.pago_id)))
+        .select_from(ConciliacionBancoOcrResultado)
+        .join(Pago, Pago.id == ConciliacionBancoOcrResultado.pago_id)
+        .where(
+            Pago.prestamo_id == int(prestamo_id),
+            ConciliacionBancoOcrResultado.decision == "CORREGIR",
+            ConciliacionBancoOcrResultado.aplicado.is_(True),
+        )
+    )
+    return int(db.scalar(q) or 0)
 
 
 def normalizar_bancos_filtro(bancos: Optional[list[str]]) -> list[str]:
@@ -644,71 +678,27 @@ def comparar_lote(
             # Misma ref digitos pero paquete distinto: no forzar match; sigue a parcial/SIN_BD
 
         if len(candidatos_exactos) > 1:
-            # Mercantil / refs cortas: desambiguar por monto y fecha
+            # Varios pagos/prestamos con el mismo serial: eleccion manual (desplegable).
+            # No auto-desambiguar por monto/fecha.
             pool = list(candidatos_exactos)
-            if monto_usd is not None:
-                por_monto = [
-                    p
-                    for p in pool
-                    if abs(float(p.monto_pagado or 0) - monto_usd) <= MONTO_TOL
-                ]
-                if len(por_monto) == 1:
-                    pool = por_monto
-                elif len(por_monto) > 1:
-                    pool = por_monto
-            if len(pool) > 1 and fecha_b is not None:
-                por_fecha = [p for p in pool if _pago_fecha(p) == fecha_b]
-                if len(por_fecha) == 1:
-                    pool = por_fecha
-                elif len(por_fecha) > 1:
-                    pool = por_fecha
-
-            if len(pool) == 1 and _paquete_banco_coherente_con_pago(
-                pool[0], fecha_banco=fecha_b, monto_usd=monto_usd
-            ):
-                p = pool[0]
-                matched_pago_ids.add(p.id)
-                db.add(
-                    ConciliacionBancoOcrResultado(
-                        lote_id=lote_id,
-                        banco_id=b.id,
-                        pago_id=p.id,
-                        fecha_banco=fecha_b,
-                        fecha_bd=_pago_fecha(p),
-                        referencia_banco=b.referencia_banco,
-                        referencia_bd=p.numero_documento,
-                        monto_banco=Decimal(str(monto_usd)) if monto_usd is not None else None,
-                        monto_bd=p.monto_pagado,
-                        similitud_pct=Decimal("100"),
-                        tipo_novedad="MATCH_EXACTO",
-                        decision="PENDIENTE",
-                        detalle_aplicacion=(
-                            "Serial compartido desambiguado por monto/fecha."
-                        ),
-                    )
+            cands = _candidatos_payload(pool)
+            db.add(
+                ConciliacionBancoOcrResultado(
+                    lote_id=lote_id,
+                    banco_id=b.id,
+                    pago_id=None,
+                    fecha_banco=fecha_b,
+                    referencia_banco=b.referencia_banco,
+                    monto_banco=Decimal(str(monto_usd)) if monto_usd is not None else None,
+                    similitud_pct=Decimal("100"),
+                    tipo_novedad="AMBIGUO",
+                    decision="PENDIENTE",
+                    detalle_aplicacion=_detalle_ambiguo_serial(pool),
+                    valores_antes=json.dumps({"candidatos": cands}, ensure_ascii=True),
                 )
-                stats["MATCH_EXACTO"] += 1
-                continue
-
-            if len(pool) > 1:
-                cands = _candidatos_payload(pool)
-                db.add(
-                    ConciliacionBancoOcrResultado(
-                        lote_id=lote_id,
-                        banco_id=b.id,
-                        pago_id=None,
-                        fecha_banco=fecha_b,
-                        referencia_banco=b.referencia_banco,
-                        monto_banco=Decimal(str(monto_usd)) if monto_usd is not None else None,
-                        similitud_pct=Decimal("100"),
-                        tipo_novedad="AMBIGUO",
-                        decision="PENDIENTE",
-                        detalle_aplicacion=_detalle_ambiguo_serial(pool),
-                        valores_antes=json.dumps({"candidatos": cands}, ensure_ascii=True),
-                    )
-                )
-                stats["AMBIGUO"] += 1
-                continue
+            )
+            stats["AMBIGUO"] += 1
+            continue
 
         # Match parcial: serial parecido, pero monto Y fecha exactos (politica producto)
         mejores: list[tuple[float, Pago]] = []
@@ -818,6 +808,27 @@ def comparar_lote(
         "confirmados_conservados": len(confirmados_lote),
         "excluidos_por_confirmacion": len(excluir_pago_ids) + len(excluir_casos_banco),
     }
+
+
+
+def _serial_choca_unique_pagos(
+    db: Session, serial_new: str, *, exclude_pago_id: int
+) -> bool:
+    """True si grabar serial_new violaria ux_pagos_numero_documento_btrim u otro pago."""
+    if numero_documento_ya_registrado(db, serial_new, exclude_pago_id=exclude_pago_id):
+        return True
+    sn = (serial_new or "").strip()
+    if not sn:
+        return False
+    q = (
+        select(Pago.id)
+        .where(
+            func.btrim(Pago.numero_documento) == sn,
+            Pago.id != int(exclude_pago_id),
+        )
+        .limit(1)
+    )
+    return db.scalar(q) is not None
 
 
 def _paquetes_iguales(
@@ -1016,19 +1027,41 @@ def decidir_y_aplicar(
 
     if paquetes_iguales:
         # Digitos iguales: alinear texto serial + institucion. No toca pagos.conciliado.
+        # Si el texto banco (ej. 20582) ya esta en otro pago, no reescribir (unique).
         serial_changed = False
+        serial_omitido_dup = False
         if (pago.numero_documento or "").strip() != serial_new:
-            pago.numero_documento = serial_new[:100]
-            serial_changed = True
+            if _serial_choca_unique_pagos(db, serial_new, exclude_pago_id=int(pago.id)):
+                serial_omitido_dup = True
+            else:
+                pago.numero_documento = serial_new[:100]
+                serial_changed = True
         inst_changed = _aplicar_institucion_desde_lote(pago, lote)
         if not inst_changed and not serial_changed:
             res.aplicado = True
+            extra_dup = (
+                f" Serial banco '{serial_new}' ya existe en otro pago; se mantuvo "
+                f"'{pago.numero_documento}'."
+                if serial_omitido_dup
+                else ""
+            )
             res.detalle_aplicacion = (
                 "Paquete banco coincide con BD: sin cambios de datos. "
                 "Confirmacion bancaria registrada."
+                + extra_dup
             )
             res.valores_despues = json.dumps(antes, ensure_ascii=True)
-            db.commit()
+            try:
+                db.commit()
+            except IntegrityError as ie:
+                db.rollback()
+                raise HTTPException(
+                    status_code=409,
+                    detail=(
+                        "No se pudo confirmar: el serial choca con otro pago "
+                        f"({serial_new}). Discernimiento manual."
+                    ),
+                ) from ie
             return {
                 "ok": True,
                 "resultado_id": res.id,
@@ -1044,6 +1077,10 @@ def decidir_y_aplicar(
         partes = []
         if serial_changed:
             partes.append(f"serial -> {pago.numero_documento}")
+        if serial_omitido_dup:
+            partes.append(
+                f"serial banco '{serial_new}' omitido (ya existe en otro pago)"
+            )
         if inst_changed:
             partes.append(
                 f"Institucion actualizada a {pago.institucion_bancaria}"
@@ -1053,7 +1090,17 @@ def decidir_y_aplicar(
             + " (fecha/monto ya coincidian). Confirmacion bancaria registrada."
         )
         lote.estado = "APLICADO"
-        db.commit()
+        try:
+            db.commit()
+        except IntegrityError as ie:
+            db.rollback()
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "No se pudo confirmar: el serial choca con otro pago "
+                    f"({serial_new}). Discernimiento manual."
+                ),
+            ) from ie
         return {
             "ok": True,
             "resultado_id": res.id,
@@ -1066,7 +1113,7 @@ def decidir_y_aplicar(
         }
 
     # Conflicto de serial en otro pago -> no forzar (sin tocar institucion)
-    if numero_documento_ya_registrado(db, serial_new, exclude_pago_id=pago.id):
+    if _serial_choca_unique_pagos(db, serial_new, exclude_pago_id=int(pago.id)):
         res.decision = "PENDIENTE"
         res.fuente_elegida = None
         res.aplicado = False
@@ -1157,7 +1204,17 @@ def decidir_y_aplicar(
         + " Confirmacion bancaria registrada (sin alterar autoconciliacion)."
     )
     lote.estado = "APLICADO"
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError as ie:
+        db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "No se pudo confirmar: el serial choca con otro pago "
+                f"({serial_new}). Discernimiento manual."
+            ),
+        ) from ie
     return {
         "ok": True,
         "resultado_id": res.id,

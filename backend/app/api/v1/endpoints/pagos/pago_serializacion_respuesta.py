@@ -13,7 +13,9 @@ from app.core.documento import (
     split_numero_documento_almacenado,
 )
 from app.models.pago import Pago
-from app.models.conciliacion_banco_ocr import ConciliacionBancoOcrResultado
+from app.services.conciliacion_bancos_service import (
+    pago_ids_conciliacion_bancaria_confirmada,
+)
 from app.models.pago_reportado import PagoReportado
 from app.models.cuota_pago import CuotaPago
 from app.services.cobros.pago_reportado_documento import claves_documento_pago_desde_campos
@@ -102,6 +104,7 @@ def _enriquecer_items_tiene_aplicacion_cuotas(db: Session, items: list) -> None:
 
 
 
+
 def _enriquecer_items_conciliacion_bancaria_confirmada(db: Session, items: list) -> None:
     """
     True si el pago fue confirmado en Auditoria > Conciliacion Bancos
@@ -122,16 +125,7 @@ def _enriquecer_items_conciliacion_bancaria_confirmada(db: Session, items: list)
         for it in items:
             it["conciliacion_bancaria_confirmada"] = False
         return
-    q = (
-        select(ConciliacionBancoOcrResultado.pago_id)
-        .where(
-            ConciliacionBancoOcrResultado.pago_id.in_(ids),
-            ConciliacionBancoOcrResultado.decision == "CORREGIR",
-            ConciliacionBancoOcrResultado.aplicado.is_(True),
-        )
-        .distinct()
-    )
-    confirmed = {int(x[0]) for x in db.execute(q).all() if x[0] is not None}
+    confirmed = pago_ids_conciliacion_bancaria_confirmada(db, ids)
     for it in items:
         pid = it.get("id")
         try:

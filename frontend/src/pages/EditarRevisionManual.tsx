@@ -1058,6 +1058,17 @@ export function EditarRevisionManual() {
 
   const ejecutarReescaneoCartera = useCallback(async () => {
     if (soloLectura || reescaneandoCartera) return
+    const nCb = Number(
+      pagosRealizadosData?.resumen_prestamo?.cantidad_conciliacion_bancaria ?? 0
+    )
+    if (nCb > 0) {
+      toast.error(
+        nCb === 1
+          ? 'Hay 1 pago con Conciliación Bancaria confirmada. Reescanear está bloqueado.'
+          : `Hay ${nCb} pagos con Conciliación Bancaria confirmada. Reescanear está bloqueado.`
+      )
+      return
+    }
     const ced = cedulaParaPagosRealizados
     const pid = Number(prestamoData.prestamo_id)
     if (!ced || !Number.isFinite(pid) || pid <= 0) {
@@ -1136,6 +1147,7 @@ export function EditarRevisionManual() {
     reescaneandoCartera,
     cedulaParaPagosRealizados,
     prestamoData.prestamo_id,
+    pagosRealizadosData?.resumen_prestamo?.cantidad_conciliacion_bancaria,
     refrescarTrasCambioPagosRevision,
     refetchPagosRealizados,
     sincronizarDetalleCuotasTrasOperacionPagos,

@@ -362,8 +362,20 @@ export async function reescanearComprobantesCarteraPrestamo(opts: {
   }
 
   const pagos = await listarPagosPrestamo(opts.cedula, opts.prestamoId)
-  const pagosConImagen = pagos.filter(pagoTieneComprobanteInsertado)
-  const omitidosSinImagen = pagos.length - pagosConImagen.length
+  const omitidosConciliacionBancaria = pagos.filter(
+    p => Boolean(p.conciliacion_bancaria_confirmada)
+  ).length
+  if (omitidosConciliacionBancaria > 0 && omitidosConciliacionBancaria === pagos.length) {
+    throw new Error(
+      'Todos los pagos de este crédito tienen Conciliación Bancaria confirmada. Reescanear está bloqueado.'
+    )
+  }
+  const pagosElegibles = pagos.filter(
+    p => !Boolean(p.conciliacion_bancaria_confirmada)
+  )
+  const pagosConImagen = pagosElegibles.filter(pagoTieneComprobanteInsertado)
+  const omitidosSinImagen =
+    pagosElegibles.length - pagosConImagen.length + omitidosConciliacionBancaria
 
   const ids = pagosConImagen
     .map(p => Number(p.id))

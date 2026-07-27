@@ -29,6 +29,8 @@ export type PagosRealizadosQueryData = {
     suma_monto_pendiente?: number
     cantidad_pagado?: number
     suma_monto_estado_pagado?: number
+    /** Pagos con confirmacion en Conciliacion Bancos. */
+    cantidad_conciliacion_bancaria?: number
   }
 }
 

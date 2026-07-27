@@ -899,6 +899,23 @@ async def ejecutar_conciliar_cartera_revision_manual(
             "estado_actual": prestamo.estado,
         }
 
+    from app.services.conciliacion_bancos_service import (
+        contar_conciliacion_bancaria_prestamo,
+    )
+
+    n_cb = contar_conciliacion_bancaria_prestamo(db, prestamo_id)
+    if n_cb > 0:
+        return {
+            "ok": False,
+            "error": (
+                f"No se puede Conciliar cartera: hay {n_cb} pago(s) con "
+                "Conciliación Bancaria confirmada (Auditoría → Conciliación Bancos). "
+                "Esos casos están bloqueados y no pueden recrearse."
+            ),
+            "prestamo_id": prestamo_id,
+            "cantidad_conciliacion_bancaria": n_cb,
+        }
+
     purgar_reserva_conciliacion_prestamo(db, prestamo_id)
 
     snap = referencia_abonos_notificaciones_general(

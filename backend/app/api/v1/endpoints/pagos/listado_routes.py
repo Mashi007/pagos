@@ -664,6 +664,8 @@ def listar_pagos(
 
             ) or 0
 
+            n_cb = contar_conciliacion_bancaria_prestamo(db, pid)
+
             out["resumen_prestamo"] = {
 
                 "prestamo_id": pid,
@@ -685,6 +687,8 @@ def listar_pagos(
                 "cantidad_pagado": int(n_pag),
 
                 "suma_monto_estado_pagado": float(s_pag or 0),
+
+                "cantidad_conciliacion_bancaria": int(n_cb),
 
             }
 

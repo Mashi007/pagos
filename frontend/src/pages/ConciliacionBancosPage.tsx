@@ -46,6 +46,8 @@ function errMsg(err: unknown): string {
   return e?.response?.data?.detail || e?.message || 'Error'
 }
 
+const MAX_CONFIRMACION_MASIVA = 200
+
 function filaBloqueada(row: ConciliacionBancosResultado): boolean {
   return (
     row.aplicado ||
@@ -119,9 +121,15 @@ export default function ConciliacionBancosPage() {
     [itemsFiltrados, pagoElegidoPorFila]
   )
 
+  /** Cap a max masivo: seleccionar visibles no supera el limite de confirmacion. */
+  const elegiblesParaSeleccionMasiva = useMemo(
+    () => elegiblesFiltrados.slice(0, MAX_CONFIRMACION_MASIVA),
+    [elegiblesFiltrados]
+  )
+
   const todosElegiblesMarcados =
-    elegiblesFiltrados.length > 0 &&
-    elegiblesFiltrados.every(r => seleccionados.has(r.id))
+    elegiblesParaSeleccionMasiva.length > 0 &&
+    elegiblesParaSeleccionMasiva.every(r => seleccionados.has(r.id))
 
   const toggleSeleccion = (id: number) => {
     setSeleccionados(prev => {
@@ -136,14 +144,19 @@ export default function ConciliacionBancosPage() {
     if (todosElegiblesMarcados) {
       setSeleccionados(prev => {
         const next = new Set(prev)
-        for (const r of elegiblesFiltrados) next.delete(r.id)
+        for (const r of elegiblesParaSeleccionMasiva) next.delete(r.id)
         return next
       })
       return
     }
+    if (elegiblesFiltrados.length > MAX_CONFIRMACION_MASIVA) {
+      toast.message(
+        `Seleccionando las primeras ${MAX_CONFIRMACION_MASIVA} de ${elegiblesFiltrados.length} visibles (maximo por confirmacion masiva).`
+      )
+    }
     setSeleccionados(prev => {
       const next = new Set(prev)
-      for (const r of elegiblesFiltrados) next.add(r.id)
+      for (const r of elegiblesParaSeleccionMasiva) next.add(r.id)
       return next
     })
   }
@@ -299,8 +312,8 @@ export default function ConciliacionBancosPage() {
       toast.error('Seleccione al menos una fila pendiente')
       return
     }
-    if (ids.length > 200) {
-      toast.error('Maximo 200 filas por confirmacion masiva')
+    if (ids.length > MAX_CONFIRMACION_MASIVA) {
+      toast.error(`Maximo ${MAX_CONFIRMACION_MASIVA} filas por confirmacion masiva`)
       return
     }
     setBulkBusy(true)
@@ -547,7 +560,12 @@ export default function ConciliacionBancosPage() {
                   onChange={toggleSeleccionarTodos}
                   disabled={bulkBusy || loading}
                 />
-                Seleccionar visibles ({elegiblesFiltrados.length})
+                Seleccionar visibles (
+                  {elegiblesFiltrados.length >
+                  MAX_CONFIRMACION_MASIVA
+                    ? `${MAX_CONFIRMACION_MASIVA}/${elegiblesFiltrados.length}`
+                    : elegiblesFiltrados.length}
+                  )
               </label>
               <span className="text-sm text-gray-600">
                 {seleccionados.size} seleccionada
@@ -600,7 +618,7 @@ export default function ConciliacionBancosPage() {
                 <TableHead className="w-10">
                   <input
                     type="checkbox"
-                    title="Seleccionar todas las filas visibles pendientes"
+                    title={`Seleccionar hasta ${MAX_CONFIRMACION_MASIVA} visibles pendientes (limite confirmacion masiva)`}
                     checked={todosElegiblesMarcados}
                     onChange={toggleSeleccionarTodos}
                     disabled={

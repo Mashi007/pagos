@@ -41,6 +41,9 @@ type Props = {
 
   disabled?: boolean
 
+  /** Tooltip del boton (p. ej. bloqueo por Conciliacion Bancaria). */
+  title?: string
+
   faseTabla?: ConciliarCarteraFaseTabla | null
 
   idsAnterioresTabla?: number[]
@@ -64,6 +67,8 @@ export function ConciliarCarteraRevisionManualButton({
   cedula,
 
   disabled,
+
+  title,
 
   faseTabla,
 
@@ -458,7 +463,10 @@ export function ConciliarCarteraRevisionManualButton({
         className="gap-2 border-amber-300 bg-amber-50 text-amber-950 hover:bg-amber-100"
         disabled={disabled || ejecutando}
         onClick={abrir}
-        title="Reserva comprobantes, toma ABONOS de Notificaciones→General, recrea pagos por OCR y aplica cascada (solo admin)"
+        title={
+          title ||
+          'Reserva comprobantes, toma ABONOS de Notificaciones→General, recrea pagos por OCR y aplica cascada (solo admin)'
+        }
       >
         {ejecutando ? (
           <Loader2 className="h-4 w-4 animate-spin" />

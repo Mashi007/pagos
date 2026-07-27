@@ -95,7 +95,17 @@ export function PagosRegistradosRevisionSection(
     agregadosCuotasRevision,
   } = props
 
+  const nConciliacionBancaria = Number(
+    pagosRealizadosData?.resumen_prestamo?.cantidad_conciliacion_bancaria ?? 0
+  )
+  const bloqueadoPorConciliacionBancaria = nConciliacionBancaria > 0
+  const tituloBloqueoConciliacionBancaria =
+    nConciliacionBancaria === 1
+      ? 'Hay 1 pago con Conciliación Bancaria confirmada. Reescanear/Conciliar no pueden modificar esos casos.'
+      : `Hay ${nConciliacionBancaria} pagos con Conciliación Bancaria confirmada. Reescanear/Conciliar no pueden modificar esos casos.`
+
   return (
+
     <>
       <Card ref={pagosRegistradosCardRef}>
         <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-2 space-y-0 pb-2">
@@ -187,6 +197,7 @@ export function PagosRegistradosRevisionSection(
                 disabled={
                   soloLectura ||
                   reescaneandoCartera ||
+                  bloqueadoPorConciliacionBancaria ||
                   !prestamoData.prestamo_id ||
                   Number(prestamoData.prestamo_id) <= 0
                 }
@@ -194,7 +205,9 @@ export function PagosRegistradosRevisionSection(
                 title={
                   soloLectura
                     ? 'Revision cerrada: solo lectura'
-                    : 'Limpia fecha, banco, Nº, monto y moneda; re-escanea comprobantes guardados y persiste solo lo devuelto por OCR (sin mezclar con valores previos). Luego aplica cascada.'
+                    : bloqueadoPorConciliacionBancaria
+                      ? tituloBloqueoConciliacionBancaria
+                      : 'Limpia fecha, banco, Nº, monto y moneda; re-escanea comprobantes guardados y persiste solo lo devuelto por OCR (sin mezclar con valores previos). Luego aplica cascada.'
                 }
               >
                 {reescaneandoCartera ? (
@@ -228,7 +241,16 @@ export function PagosRegistradosRevisionSection(
               <ConciliarCarteraRevisionManualButton
                 prestamoId={Number(prestamoData.prestamo_id)}
                 cedula={cedulaParaPagosRealizados}
-                disabled={soloLectura || conciliarTablaUi != null}
+                disabled={
+                  soloLectura ||
+                  conciliarTablaUi != null ||
+                  bloqueadoPorConciliacionBancaria
+                }
+                title={
+                  bloqueadoPorConciliacionBancaria
+                    ? tituloBloqueoConciliacionBancaria
+                    : undefined
+                }
                 faseTabla={conciliarTablaUi?.fase ?? null}
                 idsAnterioresTabla={conciliarTablaUi?.idsAnteriores ?? []}
                 pagosAntesTabla={conciliarTablaUi?.pagosAntes ?? 0}
