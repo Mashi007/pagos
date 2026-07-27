@@ -50,6 +50,20 @@ function errMsg(err: unknown): string {
 
 const MAX_CONFIRMACION_MASIVA = 200
 
+const CHIP_NOVEDAD_ORDEN = [
+  'MATCH_EXACTO',
+  'MATCH_PARCIAL',
+  'SIN_BD',
+  'SIN_BANCO',
+  'AMBIGUO',
+  'SIN_TASA',
+  'CONCILIADOS',
+] as const
+
+function esConciliadoBancario(row: ConciliacionBancosResultado): boolean {
+  return row.decision === 'CORREGIR' && Boolean(row.aplicado)
+}
+
 function filaBloqueada(row: ConciliacionBancosResultado): boolean {
   return (
     row.aplicado ||
@@ -127,14 +141,52 @@ export default function ConciliacionBancosPage() {
     [items]
   )
 
+  /** Chips en vivo: MATCH_* = pendientes; CONCILIADOS = aprobados bancarios. */
+  const statsVivos = useMemo(() => {
+    const out: Record<string, number> = {
+      MATCH_EXACTO: 0,
+      MATCH_PARCIAL: 0,
+      SIN_BD: 0,
+      SIN_BANCO: 0,
+      AMBIGUO: 0,
+      SIN_TASA: 0,
+      CONCILIADOS: 0,
+    }
+    for (const i of items) {
+      if (esConciliadoBancario(i)) {
+        out.CONCILIADOS += 1
+        continue
+      }
+      if (i.decision !== 'PENDIENTE') continue
+      if (i.tipo_novedad in out) out[i.tipo_novedad] += 1
+    }
+    return out
+  }, [items])
+
+  const statsMostrar = items.length > 0 ? statsVivos : stats
+
   const itemsFiltrados = useMemo(() => {
     let list = items
-    if (!mostrarConfirmados) {
-      list = list.filter(i => i.decision === 'PENDIENTE')
+    const quiereConciliados = filtroNovedad.includes('CONCILIADOS')
+    const tiposPend = filtroNovedad.filter(x => x !== 'CONCILIADOS')
+
+    if (quiereConciliados && tiposPend.length === 0) {
+      list = list.filter(esConciliadoBancario)
+    } else if (quiereConciliados && tiposPend.length > 0) {
+      list = list.filter(
+        i =>
+          esConciliadoBancario(i) ||
+          (i.decision === 'PENDIENTE' && tiposPend.includes(i.tipo_novedad))
+      )
+    } else {
+      if (!mostrarConfirmados) {
+        list = list.filter(i => i.decision === 'PENDIENTE')
+      }
+      if (tiposPend.length > 0) {
+        list = list.filter(i => tiposPend.includes(i.tipo_novedad))
+      }
     }
-    if (filtroNovedad.length > 0) {
-      list = list.filter(i => filtroNovedad.includes(i.tipo_novedad))
-    }
+
     const mult = ordenSimilitud === 'desc' ? -1 : 1
     return [...list].sort((a, b) => {
       const sa = a.similitud_pct == null ? -1 : Number(a.similitud_pct)
@@ -536,24 +588,32 @@ export default function ConciliacionBancosPage() {
             <p className="text-sm text-gray-600">
               Lote #{lote.id} · {lote.archivo_nombre} · {lote.moneda_carga} ·{' '}
               {lote.fecha_desde} → {lote.fecha_hasta} · estado {lote.estado}
-              {stats ? ` · pendientes decision: ${pendientes}` : null}
+              {statsMostrar ? ` · pendientes decision: ${pendientes}` : null}
             </p>
           )}
 
-          {stats && (
+          {statsMostrar && (
             <div className="space-y-2">
               <div className="flex flex-wrap items-center gap-2">
-                {Object.entries(stats).map(([k, v]) => {
+                {CHIP_NOVEDAD_ORDEN.map(k => {
+                  const v = Number(statsMostrar[k] || 0)
+
                   const activo = filtroNovedad.includes(k)
+                  const esConc = k === 'CONCILIADOS'
                   return (
                     <button
                       key={k}
                       type="button"
-                      onClick={() => toggleNovedad(k)}
+                      onClick={() => {
+                        toggleNovedad(k)
+                        if (esConc && !activo) setMostrarConfirmados(true)
+                      }}
                       title={
-                        activo
-                          ? 'Quitar filtro'
-                          : 'Filtrar tabla por esta novedad'
+                        esConc
+                          ? 'Pagos con conciliacion bancaria aprobada'
+                          : activo
+                            ? 'Quitar filtro'
+                            : 'Filtrar pendientes por esta novedad'
                       }
                       className="rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                     >
@@ -561,8 +621,12 @@ export default function ConciliacionBancosPage() {
                         variant="outline"
                         className={
                           activo
-                            ? 'cursor-pointer border-blue-600 bg-blue-600 text-white hover:bg-blue-700'
-                            : 'cursor-pointer hover:border-blue-400 hover:bg-blue-50'
+                            ? esConc
+                              ? 'cursor-pointer border-emerald-700 bg-emerald-700 text-white hover:bg-emerald-800'
+                              : 'cursor-pointer border-blue-600 bg-blue-600 text-white hover:bg-blue-700'
+                            : esConc
+                              ? 'cursor-pointer border-emerald-600 text-emerald-800 hover:bg-emerald-50'
+                              : 'cursor-pointer hover:border-blue-400 hover:bg-blue-50'
                         }
                       >
                         {k}: {v}
@@ -592,10 +656,11 @@ export default function ConciliacionBancosPage() {
                 )}
               </div>
               <p className="text-xs text-gray-500">
-                Clic en un chip para filtrar la tabla (puede marcar varios).
+                Novedad = pendientes. Al aprobar bajan a CONCILIADOS. Re-subir
+                compara solo no conciliados bancarios + nuevos.
                 {filtroNovedad.length > 0
                   ? ` Mostrando ${itemsFiltrados.length} de ${items.length}.`
-                  : ''}
+                  : ` Pendientes: ${pendientes}.`}
               </p>
             </div>
           )}

@@ -472,10 +472,11 @@ def comparar_lote(
         )
     _guardar_bancos_en_lote(lote, bancos_sel)
 
-    # Conservar filas ya confirmadas (visto / corregir aplicado / omitir).
-    # Solo se regeneran las PENDIENTE: asi el reporte Excel no pierde lo confirmado
-    # y esas refs/pagos no vuelven a salir como trabajo pendiente.
-    confirmados_lote = (
+    # Conservar filas ya cerradas (visto / corregir aplicado / omitir).
+    # Solo se regeneran las PENDIENTE.
+    # Universo de pagos = no conciliados bancarios (CORREGIR+aplicado) + nuevos.
+    # Filas banco ya vistas/confirmadas no reaparecen (clave serial+fecha+monto).
+    cerrados_lote = (
         db.execute(
             select(ConciliacionBancoOcrResultado).where(
                 ConciliacionBancoOcrResultado.lote_id == lote_id,
@@ -490,8 +491,7 @@ def comparar_lote(
         .scalars()
         .all()
     )
-    # Confirmados de cualquier lote (futuras conciliaciones)
-    confirmados_global = (
+    cerrados_global = (
         db.execute(
             select(ConciliacionBancoOcrResultado).where(
                 or_(
@@ -506,19 +506,27 @@ def comparar_lote(
         .all()
     )
 
+    # Pagos: solo excluir confirmacion bancaria real (no VISTO/OMITIR).
     excluir_pago_ids: set[int] = set()
+    for c in list(cerrados_lote) + list(cerrados_global):
+        if (
+            c.pago_id
+            and c.decision == "CORREGIR"
+            and bool(c.aplicado)
+        ):
+            excluir_pago_ids.add(int(c.pago_id))
+
     excluir_banco_ids: set[int] = set()
     excluir_casos_banco: set[str] = set()
-    for c in list(confirmados_lote) + list(confirmados_global):
-        if c.pago_id:
-            excluir_pago_ids.add(int(c.pago_id))
+    for c in list(cerrados_lote) + list(cerrados_global):
         if c.lote_id == lote_id and c.banco_id:
             excluir_banco_ids.add(int(c.banco_id))
-        # Caso = serial+fecha+monto (Visto/confirmado no reaparece en futuros lotes)
         mb = float(c.monto_banco) if c.monto_banco is not None else None
         clave = _clave_caso_banco(c.referencia_banco, c.fecha_banco, mb)
         if clave:
             excluir_casos_banco.add(clave)
+
+    confirmados_lote = cerrados_lote  # compat nombres abajo
 
     db.execute(
         delete(ConciliacionBancoOcrResultado).where(
@@ -603,6 +611,7 @@ def comparar_lote(
         "SIN_BANCO": 0,
         "AMBIGUO": 0,
         "SIN_TASA": 0,
+        "CONCILIADOS": 0,
     }
 
     for b in bancos:
@@ -795,6 +804,13 @@ def comparar_lote(
         )
         stats["SIN_BANCO"] += 1
 
+    # KPI conciliados: filas CORREGIR+aplicado conservadas en este lote
+    stats["CONCILIADOS"] = sum(
+        1
+        for c in confirmados_lote
+        if c.decision == "CORREGIR" and bool(c.aplicado)
+    )
+
     lote.estado = "COMPARADO"
     db.commit()
     return {
@@ -806,6 +822,8 @@ def comparar_lote(
         "fecha_hasta": lote.fecha_hasta.isoformat() if lote.fecha_hasta else None,
         "pagos_universo": len(pagos),
         "confirmados_conservados": len(confirmados_lote),
+        "pagos_excluidos_conciliados": len(excluir_pago_ids),
+        "casos_banco_excluidos": len(excluir_casos_banco),
         "excluidos_por_confirmacion": len(excluir_pago_ids) + len(excluir_casos_banco),
     }
 
@@ -1570,7 +1588,7 @@ _EXPORT_HEADERS = [
     "detalle",
 ]
 
-# Una pestana por caso (mismo orden que chips de la UI)
+# Pestanas de novedad (pendientes) + CONCILIADOS (aprobados bancarios)
 _EXPORT_HOJAS_NOVEDAD = (
     "MATCH_EXACTO",
     "MATCH_PARCIAL",
@@ -1578,7 +1596,14 @@ _EXPORT_HOJAS_NOVEDAD = (
     "SIN_BANCO",
     "AMBIGUO",
     "SIN_TASA",
+    "CONCILIADOS",
 )
+
+
+def _es_resultado_conciliado_bancario(r: dict[str, Any]) -> bool:
+    return (r.get("decision") or "").strip().upper() == "CORREGIR" and bool(
+        r.get("aplicado")
+    )
 
 
 def _fila_export_resultado(r: dict[str, Any]) -> list[Any]:
@@ -1604,21 +1629,33 @@ def _fila_export_resultado(r: dict[str, Any]) -> list[Any]:
 
 
 def exportar_excel_lote(db: Session, lote_id: int) -> bytes:
-    """Excel con una hoja por tipo de novedad (MATCH_EXACTO, MATCH_PARCIAL, ...)."""
+    """Excel: una hoja por novedad (pendientes) + pestana CONCILIADOS."""
     rows = listar_resultados(db, lote_id)
     by_tipo: dict[str, list[dict[str, Any]]] = {k: [] for k in _EXPORT_HOJAS_NOVEDAD}
     for r in rows:
-        tipo = (r.get("tipo_novedad") or "").strip() or "OTROS"
+        if _es_resultado_conciliado_bancario(r):
+            by_tipo["CONCILIADOS"].append(r)
+            continue
+        # Hojas de novedad = trabajo pendiente (alineado a chips KPI)
+        if (r.get("decision") or "").strip().upper() != "PENDIENTE":
+            # VISTO/OMITIR u otros cerrados: hoja auxiliar
+            tipo = "CERRADOS_OTROS"
+        else:
+            tipo = (r.get("tipo_novedad") or "").strip() or "OTROS"
         if tipo not in by_tipo:
             by_tipo[tipo] = []
         by_tipo[tipo].append(r)
 
     wb = Workbook()
     first = True
-    for tipo in list(_EXPORT_HOJAS_NOVEDAD) + [
+    orden = list(_EXPORT_HOJAS_NOVEDAD) + [
         k for k in by_tipo.keys() if k not in _EXPORT_HOJAS_NOVEDAD
-    ]:
+    ]
+    for tipo in orden:
         items = by_tipo.get(tipo, [])
+        # Siempre crear CONCILIADOS aunque vacia; otras hojas solo si hay filas
+        if tipo != "CONCILIADOS" and not items:
+            continue
         title = tipo[:31]
         if first:
             ws = wb.active
@@ -1629,6 +1666,12 @@ def exportar_excel_lote(db: Session, lote_id: int) -> bytes:
         ws.append(list(_EXPORT_HEADERS))
         for r in items:
             ws.append(_fila_export_resultado(r))
+
+    if first:
+        # Lote sin filas: hoja vacia
+        ws = wb.active
+        ws.title = "CONCILIADOS"
+        ws.append(list(_EXPORT_HEADERS))
 
     buf = io.BytesIO()
     wb.save(buf)
