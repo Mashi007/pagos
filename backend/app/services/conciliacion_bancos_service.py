@@ -867,15 +867,98 @@ def comparar_lote(
 
     resultados_batch: list[dict[str, Any]] = []
 
+    def _sanear_pago_ids_batch(batch: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Quita pago_id huérfanos (FK) para no tumbar todo el bulk insert."""
+        ids = {
+            int(r["pago_id"])
+            for r in batch
+            if r.get("pago_id") is not None
+        }
+        if not ids:
+            return batch
+        existentes = set(
+            int(x)
+            for x in db.scalars(select(Pago.id).where(Pago.id.in_(list(ids)))).all()
+        )
+        faltan = ids - existentes
+        if not faltan:
+            return batch
+        logger.warning(
+            "[conciliacion-bancos] pago_id inexistentes omitidos en insert lote_id=%s n=%s ej=%s",
+            lote_id,
+            len(faltan),
+            sorted(faltan)[:8],
+        )
+        out: list[dict[str, Any]] = []
+        for r in batch:
+            pid = r.get("pago_id")
+            if pid is None or int(pid) in existentes:
+                out.append(r)
+                continue
+            # Match que apunto a pago borrado -> tratar como SIN_BD
+            if r.get("banco_id") is not None:
+                rr = dict(r)
+                rr["pago_id"] = None
+                rr["fecha_bd"] = None
+                rr["referencia_bd"] = None
+                rr["monto_bd"] = None
+                rr["similitud_pct"] = None
+                rr["tipo_novedad"] = "SIN_BD"
+                rr["detalle_aplicacion"] = (
+                    f"pago_id {pid} ya no existe en pagos; marcado SIN_BD."
+                )
+                rr.pop("valores_antes", None)
+                out.append(rr)
+                stats["SIN_BD"] += 1
+                tipo_prev = str(r.get("tipo_novedad") or "")
+                if tipo_prev in stats and stats[tipo_prev] > 0:
+                    stats[tipo_prev] -= 1
+            # SIN_BANCO sin pago valido: descartar fila y ajustar KPI
+            tipo_prev = str(r.get("tipo_novedad") or "")
+            if tipo_prev in stats and stats[tipo_prev] > 0:
+                stats[tipo_prev] -= 1
+        return out
+
     def _flush_resultados(*, commit: bool = True) -> None:
         nonlocal resultados_batch
         if not resultados_batch:
             return
-        db.bulk_insert_mappings(ConciliacionBancoOcrResultado, resultados_batch)
+        batch = _sanear_pago_ids_batch(resultados_batch)
         resultados_batch = []
-        if commit:
-            # Commits parciales: evita un solo statement/tx enorme y libera memoria.
-            db.commit()
+        if not batch:
+            return
+        try:
+            db.bulk_insert_mappings(ConciliacionBancoOcrResultado, batch)
+            if commit:
+                db.commit()
+        except IntegrityError as ie:
+            logger.warning(
+                "[conciliacion-bancos] bulk_insert IntegrityError lote_id=%s; reintento fila a fila: %s",
+                lote_id,
+                str(ie.orig)[:200] if getattr(ie, "orig", None) else str(ie)[:200],
+            )
+            try:
+                db.rollback()
+            except Exception:
+                pass
+            # Revalidar y insertar uno a uno para no perder el lote entero
+            batch2 = _sanear_pago_ids_batch(batch)
+            for row in batch2:
+                try:
+                    db.bulk_insert_mappings(ConciliacionBancoOcrResultado, [row])
+                    if commit:
+                        db.commit()
+                except IntegrityError:
+                    try:
+                        db.rollback()
+                    except Exception:
+                        pass
+                    logger.warning(
+                        "[conciliacion-bancos] fila omitida por FK lote_id=%s pago_id=%s banco_id=%s",
+                        lote_id,
+                        row.get("pago_id"),
+                        row.get("banco_id"),
+                    )
 
     def _add_resultado(**fields: Any) -> None:
         resultados_batch.append(fields)
