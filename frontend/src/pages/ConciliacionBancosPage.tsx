@@ -1,5 +1,7 @@
 import { useMemo, useState } from 'react'
 import {
+  ArrowDownWideNarrow,
+  ArrowUpWideNarrow,
   Building2,
   Check,
   Download,
@@ -76,6 +78,9 @@ export default function ConciliacionBancosPage() {
     Record<number, number>
   >({})
   const [seleccionados, setSeleccionados] = useState<Set<number>>(new Set())
+  const [ordenSimilitud, setOrdenSimilitud] = useState<'desc' | 'asc'>(
+    'desc'
+  )
   const [bancosSel, setBancosSel] = useState<
     ConciliacionBancosBancoCategoria[]
   >([])
@@ -104,9 +109,17 @@ export default function ConciliacionBancosPage() {
     if (!mostrarConfirmados) {
       list = list.filter(i => i.decision === 'PENDIENTE')
     }
-    if (filtroNovedad.length === 0) return list
-    return list.filter(i => filtroNovedad.includes(i.tipo_novedad))
-  }, [items, filtroNovedad, mostrarConfirmados])
+    if (filtroNovedad.length > 0) {
+      list = list.filter(i => filtroNovedad.includes(i.tipo_novedad))
+    }
+    const mult = ordenSimilitud === 'desc' ? -1 : 1
+    return [...list].sort((a, b) => {
+      const sa = a.similitud_pct == null ? -1 : Number(a.similitud_pct)
+      const sb = b.similitud_pct == null ? -1 : Number(b.similitud_pct)
+      if (sa !== sb) return (sa - sb) * mult
+      return a.id - b.id
+    })
+  }, [items, filtroNovedad, mostrarConfirmados, ordenSimilitud])
 
   const elegiblesFiltrados = useMemo(
     () =>
@@ -629,7 +642,29 @@ export default function ConciliacionBancosPage() {
                 <TableHead>Cedula</TableHead>
                 <TableHead>Prestamo</TableHead>
                 <TableHead>Referencias</TableHead>
-                <TableHead>Similitud</TableHead>
+                <TableHead>
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1 font-medium hover:text-foreground"
+                    title={
+                      ordenSimilitud === 'desc'
+                        ? 'Orden: mayor a menor. Clic para menor a mayor.'
+                        : 'Orden: menor a mayor. Clic para mayor a menor.'
+                    }
+                    onClick={() =>
+                      setOrdenSimilitud(prev =>
+                        prev === 'desc' ? 'asc' : 'desc'
+                      )
+                    }
+                  >
+                    Similitud
+                    {ordenSimilitud === 'desc' ? (
+                      <ArrowDownWideNarrow className="h-3.5 w-3.5" />
+                    ) : (
+                      <ArrowUpWideNarrow className="h-3.5 w-3.5" />
+                    )}
+                  </button>
+                </TableHead>
                 <TableHead>Banco BD</TableHead>
                 <TableHead>Fechas</TableHead>
                 <TableHead>Montos USD</TableHead>
