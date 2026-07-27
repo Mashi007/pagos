@@ -294,6 +294,11 @@ def _aplicar_institucion_desde_lote(pago: Pago, lote: ConciliacionBancoOcrLote) 
 
 
 # Prefijos/etiquetas frecuentes que operadores agregan al serial
+# Extension Visto (control 5 / carga masiva): _A#### o _P#### al final.
+# No debe entrar en la clave de match: si no, el mismo serial en varios prestamos
+# no colapsa a AMBIGUO (los 4 digitos del sufijo ensucian la clave).
+_SUFIJO_VISTO_DOC_RE = re.compile(r"_[AP]\d{4}$", re.IGNORECASE)
+
 _REF_RUIDO_PREFIX = re.compile(
     r"^(?:"
     r"(?:bs\.?\s*)?(?:bnc|binance|mercantil|bnv|bdv|ve|zelle|paypal|banco)\s*"
@@ -310,7 +315,7 @@ def _ref_solo_digitos(val: Optional[str]) -> str:
     Clave de match/similitud: solo digitos del comprobante.
 
     - Ignora letras y signos agregados por digitacion (REF-, BNC/, puntos, guiones, etc.).
-    - Quita sufijo interno ┬ºCD: (codigo desambiguador) para no contaminar la clave.
+    - Quita extension Visto _A####/_P#### y sufijo interno ┬ºCD: (codigo desambiguador) para no contaminar la clave.
     - Maneja notacion cientifica via normalize_documento.
     - Quita ceros a la izquierda (BD/OCR a veces guarda 00000019197881 == 19197881).
     """
@@ -318,6 +323,8 @@ def _ref_solo_digitos(val: Optional[str]) -> str:
         return ""
     base, _codigo = split_numero_documento_almacenado(val)
     s = normalize_documento(base) or (base or str(val)).strip()
+    # Quitar extension Visto _A####/_P#### (aprobacion manual); AMBIGUO por serial real.
+    s = _SUFIJO_VISTO_DOC_RE.sub("", s).strip() or s
     if not s:
         return ""
     # Quitar etiquetas al inicio en bucle (BNC/ REF. ...)
@@ -1976,13 +1983,13 @@ def listar_resultados(
     lote_id: int,
     *,
     page: int = 1,
-    per_page: int = 200,
+    per_page: int = 1000,
     tipos: Optional[list[str]] = None,
     decision: Optional[str] = None,
 ) -> dict[str, Any]:
     """Lista paginada (lotes de 25k no caben en una sola respuesta HTTP)."""
     page = max(1, int(page or 1))
-    per_page = min(500, max(1, int(per_page or 200)))
+    per_page = min(1000, max(1, int(per_page or 1000)))
     q = select(ConciliacionBancoOcrResultado).where(
         ConciliacionBancoOcrResultado.lote_id == lote_id
     )

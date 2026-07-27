@@ -140,7 +140,7 @@ export default function ConciliacionBancosPage() {
   const [page, setPage] = useState(1)
   const [pages, setPages] = useState(1)
   const [totalResultados, setTotalResultados] = useState(0)
-  const PER_PAGE = 200
+  const PER_PAGE = 1000
 
   const toggleBanco = (b: ConciliacionBancosBancoCategoria) => {
     setBancosSel(prev =>
@@ -852,11 +852,10 @@ export default function ConciliacionBancosPage() {
                   onChange={toggleSeleccionarTodos}
                   disabled={bulkBusy || loading}
                 />
-                Seleccionar visibles (
-                  {elegiblesFiltrados.length >
-                  MAX_CONFIRMACION_MASIVA
-                    ? `${MAX_CONFIRMACION_MASIVA}/${elegiblesFiltrados.length}`
-                    : elegiblesFiltrados.length}
+                Seleccionar visibles (hasta {MAX_CONFIRMACION_MASIVA}
+                  {elegiblesFiltrados.length > 0
+                    ? ` · ${Math.min(elegiblesFiltrados.length, MAX_CONFIRMACION_MASIVA)} en pantalla`
+                    : ''}
                   )
               </label>
               <span className="text-sm text-gray-600">

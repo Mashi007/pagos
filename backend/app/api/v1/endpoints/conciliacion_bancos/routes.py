@@ -169,7 +169,7 @@ def comparar(
 def resultados(
     lote_id: int,
     page: int = 1,
-    per_page: int = 200,
+    per_page: int = 1000,
     tipo_novedad: Optional[str] = None,
     decision: Optional[str] = None,
     db: Session = Depends(get_db),
