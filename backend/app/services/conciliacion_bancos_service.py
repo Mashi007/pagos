@@ -866,6 +866,51 @@ def _candidatos_ids_desde_resultado(res: ConciliacionBancoOcrResultado) -> set[i
     return ids
 
 
+def _normalizar_pago_ids_elegidos(
+    pago_id_elegido: Optional[int],
+    pago_ids_elegidos: Optional[list[int]],
+) -> list[int]:
+    out: list[int] = []
+    seen: set[int] = set()
+    for raw in list(pago_ids_elegidos or []) + (
+        [pago_id_elegido] if pago_id_elegido is not None else []
+    ):
+        try:
+            pid = int(raw)
+        except (TypeError, ValueError):
+            continue
+        if pid <= 0 or pid in seen:
+            continue
+        seen.add(pid)
+        out.append(pid)
+    return out
+
+
+def _clonar_resultado_ambiguo_para_pago(
+    db: Session,
+    origen: ConciliacionBancoOcrResultado,
+    pago_id: int,
+) -> ConciliacionBancoOcrResultado:
+    """Nueva fila resultado (mismo caso banco) para aprobar otro candidato AMBIGUO."""
+    clone = ConciliacionBancoOcrResultado(
+        lote_id=origen.lote_id,
+        banco_id=origen.banco_id,
+        pago_id=None,
+        fecha_banco=origen.fecha_banco,
+        referencia_banco=origen.referencia_banco,
+        monto_banco=origen.monto_banco,
+        similitud_pct=origen.similitud_pct,
+        tipo_novedad="AMBIGUO",
+        decision="PENDIENTE",
+        aplicado=False,
+        detalle_aplicacion=origen.detalle_aplicacion,
+        valores_antes=origen.valores_antes,
+    )
+    db.add(clone)
+    db.flush()
+    return clone
+
+
 def decidir_y_aplicar(
     db: Session,
     resultado_id: int,
@@ -874,6 +919,7 @@ def decidir_y_aplicar(
     fuente_elegida: Optional[str],
     usuario_id: Optional[int],
     pago_id_elegido: Optional[int] = None,
+    pago_ids_elegidos: Optional[list[int]] = None,
 ) -> dict[str, Any]:
     res = db.get(ConciliacionBancoOcrResultado, resultado_id)
     if not res:
@@ -887,14 +933,59 @@ def decidir_y_aplicar(
     if dec not in ("VISTO", "CORREGIR", "OMITIR"):
         raise HTTPException(status_code=400, detail="decision invalida")
 
-    # AMBIGUO: el operador elige el pago/prestamo entre candidatos (p.ej. Mercantil)
+    pago_ids = _normalizar_pago_ids_elegidos(pago_id_elegido, pago_ids_elegidos)
+
+    # AMBIGUO multi: uno, varios o todos los candidatos → aprobar conciliacion en cada uno
     if (
         dec == "CORREGIR"
         and res.tipo_novedad == "AMBIGUO"
-        and pago_id_elegido is not None
+        and len(pago_ids) > 1
     ):
         permitidos = _candidatos_ids_desde_resultado(res)
-        pid = int(pago_id_elegido)
+        if not permitidos or any(pid not in permitidos for pid in pago_ids):
+            raise HTTPException(
+                status_code=400,
+                detail="pago_ids_elegidos deben estar entre los candidatos AMBIGUO",
+            )
+        outs: list[dict[str, Any]] = []
+        cambios = 0
+        for i, pid in enumerate(pago_ids):
+            if i == 0:
+                target_id = int(resultado_id)
+            else:
+                clone = _clonar_resultado_ambiguo_para_pago(db, res, pid)
+                target_id = int(clone.id)
+            r = decidir_y_aplicar(
+                db,
+                target_id,
+                decision="CORREGIR",
+                fuente_elegida=fuente_elegida,
+                usuario_id=usuario_id,
+                pago_id_elegido=pid,
+                pago_ids_elegidos=None,
+            )
+            outs.append(r)
+            if r.get("cambio"):
+                cambios += 1
+        return {
+            "ok": True,
+            "multiple": True,
+            "resultado_id": int(resultado_id),
+            "pago_ids": pago_ids,
+            "aplicados": len(outs),
+            "cambio": cambios > 0,
+            "detalle": outs,
+        }
+
+    # AMBIGUO: el operador elige el pago/prestamo entre candidatos (p.ej. Mercantil)
+    if dec == "CORREGIR" and res.tipo_novedad == "AMBIGUO":
+        if not pago_ids:
+            raise HTTPException(
+                status_code=400,
+                detail="AMBIGUO: elija uno o mas prestamos/pagos candidatos antes de confirmar.",
+            )
+        permitidos = _candidatos_ids_desde_resultado(res)
+        pid = int(pago_ids[0])
         if not permitidos or pid not in permitidos:
             raise HTTPException(
                 status_code=400,
@@ -1271,7 +1362,16 @@ def decidir_masivo(
         try:
             pago_eleg = raw.get("pago_id_elegido")
             pago_eleg_i = int(pago_eleg) if pago_eleg not in (None, "") else None
-            if res.tipo_novedad == "AMBIGUO" and pago_eleg_i:
+            raw_ids = raw.get("pago_ids_elegidos")
+            pago_ids_l = None
+            if isinstance(raw_ids, list) and raw_ids:
+                pago_ids_l = []
+                for x in raw_ids:
+                    try:
+                        pago_ids_l.append(int(x))
+                    except (TypeError, ValueError):
+                        pass
+            if res.tipo_novedad == "AMBIGUO" and (pago_eleg_i or pago_ids_l):
                 r = decidir_y_aplicar(
                     db,
                     rid,
@@ -1279,6 +1379,7 @@ def decidir_masivo(
                     fuente_elegida=fuente,
                     usuario_id=usuario_id,
                     pago_id_elegido=pago_eleg_i,
+                    pago_ids_elegidos=pago_ids_l,
                 )
                 ok += 1
                 if r.get("cambio"):

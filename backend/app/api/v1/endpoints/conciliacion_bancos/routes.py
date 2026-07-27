@@ -29,7 +29,11 @@ class DecisionBody(BaseModel):
     )
     pago_id_elegido: Optional[int] = Field(
         None,
-        description="Obligatorio en AMBIGUO+CORREGIR: pago/prestamo elegido entre candidatos",
+        description="AMBIGUO+CORREGIR: un pago elegido (compat). Preferir pago_ids_elegidos.",
+    )
+    pago_ids_elegidos: Optional[List[int]] = Field(
+        None,
+        description="AMBIGUO+CORREGIR: uno, varios o todos los candidatos a aprobar",
     )
 
 
@@ -50,6 +54,7 @@ class DecisionMasivaItem(BaseModel):
     resultado_id: int
     fuente_elegida: Optional[str] = None
     pago_id_elegido: Optional[int] = None
+    pago_ids_elegidos: Optional[List[int]] = None
 
 
 class DecisionMasivaBody(BaseModel):
@@ -151,6 +156,7 @@ def decidir(
         fuente_elegida=body.fuente_elegida,
         usuario_id=getattr(user, "id", None),
         pago_id_elegido=body.pago_id_elegido,
+        pago_ids_elegidos=body.pago_ids_elegidos,
     )
 
 
