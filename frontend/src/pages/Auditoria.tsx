@@ -11,7 +11,6 @@ import {
   Activity,
   BarChart3,
   Loader2,
-  CheckCircle,
   Mail,
   Scale,
 } from 'lucide-react'
@@ -52,7 +51,6 @@ import {
 import { toast } from 'sonner'
 
 import { AuditoriaCarteraTab } from '../components/auditoria/AuditoriaCarteraTab'
-import { AuditoriaLiquidadosIntensivaTab } from '../components/auditoria/AuditoriaLiquidadosIntensivaTab'
 import { AuditoriaRebotesGmailTab } from '../components/auditoria/AuditoriaRebotesGmailTab'
 import { useSimpleAuth } from '../store/simpleAuthStore'
 import { canonicalRol } from '../utils/rol'
@@ -76,7 +74,7 @@ function labelUsuarioAuditoria(a: AuditoriaType): string {
   return 'N/A'
 }
 
-type AuditoriaTab = 'cartera' | 'liquidados' | 'rebotes-gmail' | 'sistema'
+type AuditoriaTab = 'cartera' | 'rebotes-gmail' | 'sistema'
 
 const AUDITORIA_TAB_META: Record<
   AuditoriaTab,
@@ -92,13 +90,7 @@ const AUDITORIA_TAB_META: Record<
       'Controles de cartera desde la base de datos (descuadres, estados y correcciones).',
     icon: Scale,
   },
-  liquidados: {
-    title: 'Liquidados',
-    description:
-      'Auditoría intensiva de préstamos liquidados y consistencia de pagos/cuotas.',
-    icon: CheckCircle,
-  },
-  'rebotes-gmail': {
+'rebotes-gmail': {
     title: 'Analista email',
     description: 'Revisión de rebotes de correo detectados en Gmail.',
     icon: Mail,
@@ -118,7 +110,6 @@ function tabPorDefecto(puedeAvanzadas: boolean): AuditoriaTab {
 function parseAuditoriaTab(raw: string | null): AuditoriaTab | null {
   if (
     raw === 'cartera' ||
-    raw === 'liquidados' ||
     raw === 'rebotes-gmail' ||
     raw === 'sistema'
   ) {
@@ -142,6 +133,16 @@ export function Auditoria() {
 
   useEffect(() => {
     const defaultTab = tabPorDefecto(puedeTabsAvanzadas)
+
+    // Tab liquidados retirada: redirigir enlaces viejos a cartera
+    if (tabParam === 'liquidados') {
+      navigate(
+        `/auditoria?tab=${puedeTabsAvanzadas ? 'cartera' : 'sistema'}`,
+        { replace: true }
+      )
+      return
+    }
+
     const parsed = parseAuditoriaTab(tabParam)
 
     if (!parsed) {
@@ -149,10 +150,7 @@ export function Auditoria() {
       return
     }
 
-    if (
-      (parsed === 'cartera' || parsed === 'liquidados') &&
-      !puedeTabsAvanzadas
-    ) {
+    if (parsed === 'cartera' && !puedeTabsAvanzadas) {
       navigate('/auditoria?tab=sistema', { replace: true })
       return
     }
@@ -427,10 +425,6 @@ export function Auditoria() {
 
       {puedeTabsAvanzadas && tabAuditoria === 'cartera' && (
         <AuditoriaCarteraTab />
-      )}
-
-      {puedeTabsAvanzadas && tabAuditoria === 'liquidados' && (
-        <AuditoriaLiquidadosIntensivaTab />
       )}
 
       {puedeRebotesGmail && tabAuditoria === 'rebotes-gmail' && (

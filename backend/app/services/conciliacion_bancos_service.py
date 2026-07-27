@@ -170,70 +170,28 @@ def pago_ids_conciliacion_bancaria_confirmada(
 
 def pago_ids_ambiguo_bancario_multi(db: Session, pago_ids: list[int]) -> set[int]:
     """
-    Pagos confirmados en AMBIGUO donde el mismo caso banco (lote+banco_id)
-    se aprobo para 2+ préstamos/pagos distintos.
+    Pagos confirmados desde novedad AMBIGUO (CORREGIR+aplicado).
+
+    En revision manual cada prestamo/pago conciliado por esa via lleva
+    la etiqueta Ambiguo (uno o varios prestamos del mismo serial).
     """
     if not pago_ids:
         return set()
     ids = sorted({int(x) for x in pago_ids if x is not None})
     if not ids:
         return set()
-    mine = (
+    rows = (
         db.execute(
-            select(
-                ConciliacionBancoOcrResultado.pago_id,
-                ConciliacionBancoOcrResultado.lote_id,
-                ConciliacionBancoOcrResultado.banco_id,
-            ).where(
+            select(ConciliacionBancoOcrResultado.pago_id).where(
                 ConciliacionBancoOcrResultado.pago_id.in_(ids),
                 ConciliacionBancoOcrResultado.tipo_novedad == "AMBIGUO",
                 ConciliacionBancoOcrResultado.decision == "CORREGIR",
                 ConciliacionBancoOcrResultado.aplicado.is_(True),
-                ConciliacionBancoOcrResultado.banco_id.isnot(None),
             )
         )
         .all()
     )
-    if not mine:
-        return set()
-    keys = {(int(r[1]), int(r[2])) for r in mine if r[1] is not None and r[2] is not None}
-    if not keys:
-        return set()
-    lote_ids = sorted({k[0] for k in keys})
-    banco_ids = sorted({k[1] for k in keys})
-    siblings = (
-        db.execute(
-            select(
-                ConciliacionBancoOcrResultado.pago_id,
-                ConciliacionBancoOcrResultado.lote_id,
-                ConciliacionBancoOcrResultado.banco_id,
-            ).where(
-                ConciliacionBancoOcrResultado.lote_id.in_(lote_ids),
-                ConciliacionBancoOcrResultado.banco_id.in_(banco_ids),
-                ConciliacionBancoOcrResultado.tipo_novedad == "AMBIGUO",
-                ConciliacionBancoOcrResultado.decision == "CORREGIR",
-                ConciliacionBancoOcrResultado.aplicado.is_(True),
-                ConciliacionBancoOcrResultado.pago_id.isnot(None),
-            )
-        )
-        .all()
-    )
-    by_key: dict[tuple[int, int], set[int]] = {}
-    for pago_id, lote_id, banco_id in siblings:
-        if pago_id is None or lote_id is None or banco_id is None:
-            continue
-        key = (int(lote_id), int(banco_id))
-        if key not in keys:
-            continue
-        by_key.setdefault(key, set()).add(int(pago_id))
-    out: set[int] = set()
-    for pago_id, lote_id, banco_id in mine:
-        if pago_id is None or lote_id is None or banco_id is None:
-            continue
-        key = (int(lote_id), int(banco_id))
-        if len(by_key.get(key, set())) >= 2:
-            out.add(int(pago_id))
-    return out
+    return {int(r[0]) for r in rows if r[0] is not None}
 
 
 def contar_conciliacion_bancaria_prestamo(db: Session, prestamo_id: int) -> int:
@@ -1073,6 +1031,21 @@ def decidir_y_aplicar(
                 detail=errores_multi[0].get("error")
                 or "No se pudo aplicar AMBIGUO multi",
             )
+        # Marca en cada prestamo conciliado via AMBIGUO
+        for target_id, _pid in targets:
+            row_m = db.get(ConciliacionBancoOcrResultado, int(target_id))
+            if not row_m or not row_m.aplicado:
+                continue
+            det = (row_m.detalle_aplicacion or "").strip()
+            tag = "AMBIGUO_MULTI" if len(pago_ids) > 1 else "AMBIGUO_FLAG"
+            if "AMBIGUO_MULTI" not in det and "AMBIGUO_FLAG" not in det:
+                row_m.detalle_aplicacion = (
+                    f"{det} | {tag}".strip(" |") if det else tag
+                )
+        try:
+            db.commit()
+        except Exception:
+            db.rollback()
         return {
             "ok": len(errores_multi) == 0,
             "multiple": True,
@@ -1170,6 +1143,8 @@ def decidir_y_aplicar(
             "Referencia RapiC/BD: sin cambios de paquete. "
             "Confirmacion bancaria registrada (no altera autoconciliacion)."
         )
+        if res.tipo_novedad == "AMBIGUO":
+            res.detalle_aplicacion = f"{res.detalle_aplicacion} | AMBIGUO_FLAG"
         res.valores_despues = json.dumps(antes, ensure_ascii=True)
         lote.estado = "APLICADO"
         db.commit()

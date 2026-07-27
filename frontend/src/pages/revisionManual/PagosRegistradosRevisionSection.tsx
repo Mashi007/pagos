@@ -504,8 +504,10 @@ export function PagosRegistradosRevisionSection(
                           <TableCell className="whitespace-nowrap">
                             {pago.conciliacion_bancaria_ambigua ? (
                               <Badge
-                                className="bg-orange-500 text-white"
-                                title="Serial banco aprobado en 2 o mas prestamos (AMBIGUO). Solo eliminar."
+                                variant="outline"
+                                className="border-orange-600 bg-orange-500 font-semibold text-white hover:bg-orange-600"
+                                style={{ backgroundColor: '#f97316', color: '#fff' }}
+                                title="Conciliado desde AMBIGUO en Conciliacion Bancos. Solo eliminar."
                               >
                                 Ambiguo
                               </Badge>
@@ -566,7 +568,7 @@ export function PagosRegistradosRevisionSection(
                                   soloLectura
                                     ? 'Revision cerrada: solo lectura'
                                     : pago.conciliacion_bancaria_ambigua
-                                      ? 'Ambiguo (2+ prestamos): solo se puede eliminar el pago'
+                                      ? 'Ambiguo: solo se puede eliminar el pago'
                                       : pago.conciliacion_bancaria_confirmada
                                       ? 'Conciliación Bancaria confirmada: solo se puede eliminar el pago'
                                       : pagoEstaConciliadoOPagado(pago) &&

@@ -382,12 +382,6 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
           managerOrAdminOnly: true,
         },
         {
-          title: 'Liquidados',
-          href: '/auditoria?tab=liquidados',
-          icon: CheckCircle,
-          managerOrAdminOnly: true,
-        },
-        {
           title: 'Analista email',
           href: '/auditoria?tab=rebotes-gmail',
           icon: Mail,
