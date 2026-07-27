@@ -1,17 +1,17 @@
 # -*- coding: utf-8 -*-
 """
-Regla critica de negocio para envios de notificaciones:
+Regla INNEGOCIABLE de negocio para envios al cliente (cualquier tipo):
 
-1) Por prestamo del item: NUNCA enviar si ese prestamo esta en LIQUIDADO o DESISTIMIENTO.
-2) Por cliente: NUNCA enviar si el cliente tiene al menos un prestamo en DESISTIMIENTO
-   (incluye masivos, cobranza, WhatsApp y correos aunque el item no traiga prestamo_id).
-3) Por cliente: NUNCA enviar si el cliente solo tiene prestamos LIQUIDADO/DESISTIMIENTO
-   (sin cartera activa): persona liquidada / desistida.
+- Prestamo en LIQUIDADO o DESISTIMIENTO: NUNCA notificar (deuda inexistente / no cobrable).
+- Cliente solo con cartera LIQUIDADO/DESISTIMIENTO (sin APROBADO u otro activo): NUNCA.
+- Cliente con al menos un prestamo DESISTIMIENTO: NUNCA (regla global por titular).
+- Si el prestamo vuelve a APROBADO: SI puede recibir (listado/envio revalidan estado actual).
+- Multi-prestamo: se puede notificar un APROBADO aunque exista otro LIQUIDADO del mismo titular;
+  el item con prestamo_id LIQUIDADO/DESISTIMIENTO siempre se bloquea.
 
 Comparacion de estados case-insensitive (trim + upper).
 
-La exclusion en listados (query base) usa los mismos estados; este modulo es la red de
-seguridad en el momento del envio (revalidar justo antes de send_email).
+Listados (query base) y este modulo (corte pre-send_email) deben usar los mismos estados.
 """
 from __future__ import annotations
 
@@ -177,12 +177,18 @@ def cliente_bloqueado_por_desistimiento(
     email: Optional[str] = None,
 ) -> bool:
     """
-    Regla global para correos al cliente:
-    bloquea si el cliente (resuelto por id, cedula o email) tiene
-    al menos un prestamo en DESISTIMIENTO.
+    Corte global para CUALQUIER correo/notificacion al cliente.
+
+    Bloquea si aplica cliente_bloqueado_para_notificacion:
+    DESISTIMIENTO (cualquier prestamo) o sin cartera activa (solo LIQUIDADO/DESISTIMIENTO).
+
+    Nombre historico; no limita el bloqueo a DESISTIMIENTO. Preferir
+    cliente_bloqueado_para_notificacion cuando se necesite el motivo.
     """
-    ids = _resolver_cliente_ids(db, cliente_id=cliente_id, cedula=cedula, email=email)
-    return any(cliente_tiene_prestamo_desistimiento(db, cid) for cid in ids)
+    bloqueado, _motivo = cliente_bloqueado_para_notificacion(
+        db, cliente_id=cliente_id, cedula=cedula, email=email
+    )
+    return bloqueado
 
 
 def cliente_bloqueado_para_notificacion(

@@ -49,7 +49,9 @@ from app.services.documentos_cliente_centro import (
     obtener_datos_estado_cuenta_cliente,
     obtener_recibos_cliente_estado_cuenta,
 )
-from app.services.notificaciones_exclusion_desistimiento import cliente_bloqueado_por_desistimiento
+from app.services.notificaciones_exclusion_desistimiento import (
+    cliente_bloqueado_para_notificacion,
+)
 from app.utils.cedula_almacenamiento import texto_cedula_comparable_bd
 
 logger = logging.getLogger(__name__)
@@ -367,9 +369,17 @@ def ejecutar_recibos_envio_slot(
             continue
 
         email0 = (emails[0] or "").strip() if emails else ""
-        if cliente_bloqueado_por_desistimiento(db, cedula=cedula_norm, email=email0):
+        bloq_cli, motivo_cli = cliente_bloqueado_para_notificacion(
+            db, cedula=cedula_norm, email=email0
+        )
+        if bloq_cli:
             omitidos_desistimiento += 1
-            detalles.append({"cedula": cedula_norm, "motivo": "desistimiento"})
+            detalles.append(
+                {
+                    "cedula": cedula_norm,
+                    "motivo": (motivo_cli or "LIQUIDADO_O_DESISTIMIENTO").lower(),
+                }
+            )
             continue
 
         cedula_raw_ventana = next(
@@ -652,8 +662,16 @@ def enviar_correo_prueba_recibos_datos_reales(
             continue
 
         email0 = (emails[0] or "").strip() if emails else ""
-        if cliente_bloqueado_por_desistimiento(db, cedula=cedula_norm, email=email0):
-            intentos.append({"cedula": cedula_norm, "motivo": "desistimiento"})
+        bloq_cli, motivo_cli = cliente_bloqueado_para_notificacion(
+            db, cedula=cedula_norm, email=email0
+        )
+        if bloq_cli:
+            intentos.append(
+                {
+                    "cedula": cedula_norm,
+                    "motivo": (motivo_cli or "LIQUIDADO_O_DESISTIMIENTO").lower(),
+                }
+            )
             continue
 
         cedula_raw_ventana = next(

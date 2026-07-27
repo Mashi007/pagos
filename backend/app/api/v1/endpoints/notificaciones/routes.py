@@ -1445,7 +1445,7 @@ def enviar_con_plantilla(
     ):
         raise HTTPException(
             status_code=400,
-            detail="Envio bloqueado: cliente con prestamo en estado DESISTIMIENTO.",
+            detail="Envio bloqueado: cliente en LIQUIDADO o DESISTIMIENTO (sin cartera activa para notificar).",
         )
     if not get_email_activo_servicio("notificaciones"):
         raise HTTPException(status_code=400, detail="El envio de email para notificaciones esta desactivado. Activalo en Configuracion > Email.")

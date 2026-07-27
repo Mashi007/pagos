@@ -1104,7 +1104,7 @@ def solicitar_codigo_estado_cuenta(
     if not get_email_activo_servicio("estado_cuenta") or bloquear_email:
         if bloquear_email:
             logger.info(
-                "estado_cuenta solicitar: bloqueo por DESISTIMIENTO cedula_suffix=***%s",
+                "estado_cuenta solicitar: bloqueo por LIQUIDADO/DESISTIMIENTO cedula_suffix=***%s",
                 cedula_lookup[-4:] if len(cedula_lookup) >= 4 else "****",
             )
 

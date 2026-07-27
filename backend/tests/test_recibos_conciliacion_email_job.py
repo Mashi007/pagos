@@ -93,8 +93,8 @@ def test_ejecutar_simulacion_genera_pdf_sin_smtp_si_no_modo_pruebas():
         "app.services.recibos_conciliacion_email_job.obtener_datos_estado_cuenta_cliente",
         return_value=datos,
     ), patch(
-        "app.services.recibos_conciliacion_email_job.cliente_bloqueado_por_desistimiento",
-        return_value=False,
+        "app.services.recibos_conciliacion_email_job.cliente_bloqueado_para_notificacion",
+        return_value=(False, ""),
     ), patch(
         "app.services.recibos_conciliacion_email_job.obtener_recibos_cliente_estado_cuenta",
         return_value=[],
@@ -156,8 +156,8 @@ def test_ejecutar_envio_mockea_smtp_y_pdf_valido():
         "app.services.recibos_conciliacion_email_job.obtener_datos_estado_cuenta_cliente",
         return_value=datos,
     ), patch(
-        "app.services.recibos_conciliacion_email_job.cliente_bloqueado_por_desistimiento",
-        return_value=False,
+        "app.services.recibos_conciliacion_email_job.cliente_bloqueado_para_notificacion",
+        return_value=(False, ""),
     ), patch(
         "app.services.recibos_conciliacion_email_job.obtener_recibos_cliente_estado_cuenta",
         return_value=[],
@@ -225,8 +225,8 @@ def test_ejecutar_pasa_base_url_y_recibo_token_al_pdf_cuando_hay_base_publica():
         "app.services.recibos_conciliacion_email_job.obtener_datos_estado_cuenta_cliente",
         return_value=datos,
     ), patch(
-        "app.services.recibos_conciliacion_email_job.cliente_bloqueado_por_desistimiento",
-        return_value=False,
+        "app.services.recibos_conciliacion_email_job.cliente_bloqueado_para_notificacion",
+        return_value=(False, ""),
     ), patch(
         "app.services.recibos_conciliacion_email_job.obtener_recibos_cliente_estado_cuenta",
         return_value=[],

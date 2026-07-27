@@ -112,7 +112,7 @@ def _procesar_recibo_y_correo_aprobado_background(
             email=(to_emails[0] if to_emails else ""),
         ):
             logger.info(
-                "[%s] Bloqueo recibo ref=%s: cliente_id=%s con prestamo DESISTIMIENTO",
+                "[%s] Bloqueo recibo ref=%s: cliente_id=%s LIQUIDADO/DESISTIMIENTO (sin cartera activa)",
                 canal,
                 referencia,
                 cliente.id,

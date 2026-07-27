@@ -5,6 +5,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 from app.services.notificaciones_exclusion_desistimiento import (
+    cliente_bloqueado_por_desistimiento,
     cliente_ids_bloqueados_para_notificacion,
     cliente_sin_cartera_activa_notif,
     item_bloqueado_para_envio_notificacion,
@@ -143,3 +144,17 @@ def test_cliente_ids_bloqueados_batch():
     db.execute.side_effect = _exec
     bloq = cliente_ids_bloqueados_para_notificacion(db, {1, 2, 3, 4})
     assert bloq == {1, 3}
+
+
+def test_cliente_bloqueado_por_desistimiento_incluye_solo_liquidado():
+    """Compat: helper historico tambien bloquea cartera solo LIQUIDADO."""
+    calls = {"n": 0}
+
+    def _scalar(stmt):
+        calls["n"] += 1
+        # 1 desistimiento count, 2 total prestamos, 3 activos
+        return {1: 0, 2: 1, 3: 0}.get(calls["n"], 0)
+
+    db = MagicMock()
+    db.scalar.side_effect = _scalar
+    assert cliente_bloqueado_por_desistimiento(db, cliente_id=9) is True

@@ -1253,7 +1253,7 @@ def aprobar_pago_reportado(
         db, cedula=cedula_cli, email=(to_emails[0] if to_emails else "")
     ):
         logger.info(
-            "[COBROS] Bloqueo correo ref=%s: cliente con prestamo DESISTIMIENTO",
+            "[COBROS] Bloqueo correo ref=%s: cliente LIQUIDADO/DESISTIMIENTO (sin cartera activa)",
             pr.referencia_interna,
         )
         to_emails = []
@@ -1372,7 +1372,7 @@ def rechazar_pago_reportado(
         db, cedula=cedula_cli, email=(to_emails[0] if to_emails else "")
     ):
         logger.info(
-            "[COBROS] Bloqueo correo rechazo ref=%s: cliente con prestamo DESISTIMIENTO",
+            "[COBROS] Bloqueo correo rechazo ref=%s: cliente LIQUIDADO/DESISTIMIENTO (sin cartera activa)",
             pr.referencia_interna,
         )
         to_emails = []
@@ -1582,7 +1582,7 @@ def enviar_recibo_manual(
         db, cedula=cedula_cli, email=(to_emails[0] if to_emails else "")
     ):
         logger.info(
-            "[COBROS] Bloqueo enviar-recibo ref=%s: cliente con prestamo DESISTIMIENTO",
+            "[COBROS] Bloqueo enviar-recibo ref=%s: cliente LIQUIDADO/DESISTIMIENTO (sin cartera activa)",
             pr.referencia_interna,
         )
         to_emails = []
@@ -2034,7 +2034,7 @@ def cambiar_estado_pago(
             db, cedula=cedula_cli, email=(to_emails[0] if to_emails else "")
         ):
             logger.info(
-                "[COBROS] Bloqueo PATCH rechazado ref=%s: cliente con prestamo DESISTIMIENTO",
+                "[COBROS] Bloqueo PATCH rechazado ref=%s: cliente LIQUIDADO/DESISTIMIENTO (sin cartera activa)",
                 pr.referencia_interna,
             )
             to_emails = []

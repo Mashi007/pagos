@@ -16,7 +16,7 @@ def prestamo_estado_exige_fecha_aprobacion(estado: Optional[str]) -> bool:
         return False
     return estado.strip().upper() in ESTADOS_PRESTAMO_EXIGEN_FECHA_APROBACION
 
-# Prestamos que no deben entrar en listas ni recibir envio de notificaciones por cuota.
+# Prestamos excluidos de listas y de CUALQUIER envio de notificacion al cliente.
 ESTADOS_PRESTAMO_EXCLUIDOS_COBRANZA_NOTIF = ("LIQUIDADO", ESTADO_PRESTAMO_DESISTIMIENTO)
 
 # Envio: corte por prestamo_id (LIQUIDADO/DESISTIMIENTO) + regla global por cliente
