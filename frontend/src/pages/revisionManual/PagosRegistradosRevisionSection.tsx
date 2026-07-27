@@ -1,5 +1,3 @@
-import { useState } from 'react'
-import { isAxiosError } from 'axios'
 import {
   AlertTriangle,
   BarChart3,
@@ -15,7 +13,6 @@ import {
   Trash2,
   Upload,
 } from 'lucide-react'
-import { toast } from 'sonner'
 import { Button } from '../../components/ui/button'
 import { Badge } from '../../components/ui/badge'
 import {
@@ -25,13 +22,6 @@ import {
   CardTitle,
 } from '../../components/ui/card'
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '../../components/ui/select'
-import {
   Table,
   TableBody,
   TableCell,
@@ -40,9 +30,7 @@ import {
   TableRow,
 } from '../../components/ui/table'
 import { formatDate } from '../../utils'
-import { getErrorMessage } from '../../types/errors'
 import type { Pago } from '../../services/pagoService'
-import { pagoService } from '../../services/pagoService'
 import { ConciliarCarteraRevisionManualButton } from '../../components/pagos/ConciliarCarteraRevisionManualButton'
 import { ConciliarCarteraPagosProgreso } from '../../components/pagos/ConciliarCarteraPagosProgreso'
 import {
@@ -61,8 +49,6 @@ import {
 import {
   COHERENCIA_USD_TOL,
   esInstitucionMercantilRevision,
-  pagoCarteraRevisionBloquearToggleCerrado,
-  pagoEstadoExcluyeToggleConciliadoRevision,
   pagoSerialYaAplicadoEnOtroRegistroCartera,
 } from './EditarRevisionManual.helpers'
 import type { PagosRegistradosRevisionSectionProps } from './pagosRegistradosRevisionTypes'
@@ -99,7 +85,6 @@ export function PagosRegistradosRevisionSection(
     alertasReescaneoPorPagoId,
     abrirEditarPagoRevision,
     pagoEstaConciliadoOPagado,
-    sincronizarTrasToggleConciliado,
     eliminandoPagoId,
     eliminarPagoRevision,
     pagePagosRegistrados,
@@ -109,54 +94,6 @@ export function PagosRegistradosRevisionSection(
     estadoPrestamoNorm,
     agregadosCuotasRevision,
   } = props
-
-  const [conciliandoPagoId, setConciliandoPagoId] = useState<number | null>(
-    null
-  )
-
-  const cambiarConciliadoRevision = async (pago: Pago, value: 'si' | 'no') => {
-    const next = value === 'si'
-    const actual =
-      Boolean(pago.conciliado) ||
-      String(pago.verificado_concordancia ?? '')
-        .trim()
-        .toUpperCase() === 'SI'
-    if (next === actual) return
-    setConciliandoPagoId(pago.id)
-    try {
-      await pagoService.updateConciliado(pago.id, next)
-      if (next && pago.prestamo_id) {
-        try {
-          const res = await pagoService.aplicarPagoACuotas(pago.id)
-          if (res.ya_aplicado) {
-            toast.success(res.message)
-          } else if (
-            res.cuotas_completadas > 0 ||
-            res.cuotas_parciales > 0
-          ) {
-            toast.success(`Conciliado. ${res.message}`)
-          } else {
-            toast.success('Pago marcado como conciliado')
-          }
-        } catch (applyErr) {
-          if (isAxiosError(applyErr) && applyErr.response?.status === 409) {
-            toast.error(getErrorMessage(applyErr))
-          } else {
-            toast.success('Pago marcado como conciliado')
-          }
-        }
-      } else if (next) {
-        toast.success('Pago marcado como conciliado')
-      } else {
-        toast.success('Pago marcado como NO conciliado')
-      }
-      await sincronizarTrasToggleConciliado()
-    } catch (error) {
-      toast.error(getErrorMessage(error) || 'Error al actualizar conciliacion')
-    } finally {
-      setConciliandoPagoId(null)
-    }
-  }
 
   return (
     <>
@@ -540,56 +477,21 @@ export function PagosRegistradosRevisionSection(
                             </div>
                           </TableCell>
                           <TableCell className="whitespace-nowrap">
-                            {(() => {
-                              const excluido =
-                                pagoEstadoExcluyeToggleConciliadoRevision(
-                                  pago.estado
-                                )
-                              const cerrado =
-                                pagoCarteraRevisionBloquearToggleCerrado(pago)
-                              const valor =
-                                Boolean(pago.conciliado) ||
-                                String(pago.verificado_concordancia ?? '')
-                                  .trim()
-                                  .toUpperCase() === 'SI'
-                                  ? 'si'
-                                  : 'no'
-                              const bloqueado =
-                                soloLectura ||
-                                excluido ||
-                                cerrado ||
-                                conciliandoPagoId === pago.id
-                              return (
-                                <Select
-                                  value={valor}
-                                  disabled={bloqueado}
-                                  onValueChange={v => {
-                                    if (v === 'si' || v === 'no') {
-                                      void cambiarConciliadoRevision(pago, v)
-                                    }
-                                  }}
-                                >
-                                  <SelectTrigger
-                                    className="h-8 w-[88px] text-xs"
-                                    title={
-                                      soloLectura
-                                        ? 'Revision cerrada: solo lectura'
-                                        : excluido
-                                          ? 'Estado no permite cambiar conciliado'
-                                          : cerrado
-                                            ? 'Pago cerrado en cartera (aplicado a cuotas)'
-                                            : 'Marcar conciliado Si/No'
-                                    }
-                                  >
-                                    <SelectValue />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="si">Sí</SelectItem>
-                                    <SelectItem value="no">No</SelectItem>
-                                  </SelectContent>
-                                </Select>
-                              )
-                            })()}
+                            {pagoEstaConciliadoOPagado(pago) ? (
+                              <Badge
+                                className="bg-green-500 text-white"
+                                title="Conciliado por el proceso (Conciliacion Bancos u otra via automatica)"
+                              >
+                                Sí
+                              </Badge>
+                            ) : (
+                              <Badge
+                                className="bg-gray-500 text-white"
+                                title="Aun no conciliado"
+                              >
+                                No
+                              </Badge>
+                            )}
                           </TableCell>
                           <TableCell className="max-w-[320px] align-top text-sm">
                             {serialDuplicadoCartera ? (

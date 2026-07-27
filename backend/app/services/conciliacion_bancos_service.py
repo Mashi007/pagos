@@ -179,25 +179,27 @@ def _leer_bancos_de_lote(lote: ConciliacionBancoOcrLote) -> list[str]:
 
 def _institucion_objetivo_desde_lote(lote: ConciliacionBancoOcrLote) -> Optional[str]:
     """
-    Banco real del extracto (filtro del lote) para escribir en pagos.institucion_bancaria
-    al confirmar fuente Ref. Banco. Ej.: filtro BNV (o BNV+Otros) -> "BNV".
+    Banco del extracto (filtro del lote) para pagos.institucion_bancaria con Ref. Banco.
+    Ignora Otros/Recibos/Drive al desambiguar: filtro BNV+Recibos+Otros -> BNV.
     """
     bancos = _leer_bancos_de_lote(lote)
     if not bancos:
         return None
+    # Bancos de extracto Excel (no auxiliares de busqueda)
+    extracto = ("Mercantil", "BNC", "Binance", "BNV")
+    candidatos = [b for b in bancos if b in extracto]
+    if len(candidatos) == 1:
+        return candidatos[0]
     if len(bancos) == 1:
         cat = bancos[0]
-    else:
-        reales = [b for b in bancos if b != "Otros"]
-        if len(reales) != 1:
+        if cat == "Otros":
             return None
-        cat = reales[0]
-    if cat == "Otros":
-        return None
-    # Catalogo UI usa "Recibo"; categoria de filtro es "Recibos"
-    if cat == "Recibos":
-        return "Recibo"
-    return cat
+        if cat == "Recibos":
+            return "Recibo"
+        if cat == "Drive":
+            return "Drive"
+        return cat
+    return None
 
 
 def _aplicar_institucion_desde_lote(pago: Pago, lote: ConciliacionBancoOcrLote) -> bool:
@@ -1056,10 +1058,14 @@ def decidir_y_aplicar(
     )
 
     if paquetes_iguales:
-        # Institucion (ej. Otros -> BNV) + conciliado=Si; no toca serial/fecha/monto
+        # Digitos iguales: aun asi alinear texto serial banco + institucion + conciliado
+        serial_changed = False
+        if (pago.numero_documento or "").strip() != serial_new:
+            pago.numero_documento = serial_new[:100]
+            serial_changed = True
         inst_changed = _aplicar_institucion_desde_lote(pago, lote)
         conc_ok = _marcar_conciliado_tras_confirmar_fuente(pago)
-        if not inst_changed and not conc_ok:
+        if not inst_changed and not conc_ok and not serial_changed:
             res.aplicado = True
             res.detalle_aplicacion = "Paquete banco coincide con BD: sin cambios."
             res.valores_despues = json.dumps(antes, ensure_ascii=True)
@@ -1075,7 +1081,10 @@ def decidir_y_aplicar(
         despues = _snapshot_pago(pago)
         res.valores_despues = json.dumps(despues, ensure_ascii=True)
         res.aplicado = True
+        res.referencia_bd = pago.numero_documento
         partes = []
+        if serial_changed:
+            partes.append(f"serial -> {pago.numero_documento}")
         if inst_changed:
             partes.append(
                 f"Institucion actualizada a {pago.institucion_bancaria}"
@@ -1086,7 +1095,7 @@ def decidir_y_aplicar(
             partes.append("paquete fecha/monto/serial ya coincidia")
         res.detalle_aplicacion = (
             "; ".join(partes)
-            + " (paquete fecha/monto/serial ya coincidia)."
+            + " (fecha/monto ya coincidian)."
         )
         lote.estado = "APLICADO"
         db.commit()
