@@ -1058,17 +1058,7 @@ export function EditarRevisionManual() {
 
   const ejecutarReescaneoCartera = useCallback(async () => {
     if (soloLectura || reescaneandoCartera) return
-    const nCb = Number(
-      pagosRealizadosData?.resumen_prestamo?.cantidad_conciliacion_bancaria ?? 0
-    )
-    if (nCb > 0) {
-      toast.error(
-        nCb === 1
-          ? 'Hay 1 pago con Conciliación Bancaria confirmada. Reescanear está bloqueado.'
-          : `Hay ${nCb} pagos con Conciliación Bancaria confirmada. Reescanear está bloqueado.`
-      )
-      return
-    }
+    // Conciliación Bancaria Sí/Ambiguo: se omiten; solo se tocan los No.
     const ced = cedulaParaPagosRealizados
     const pid = Number(prestamoData.prestamo_id)
     if (!ced || !Number.isFinite(pid) || pid <= 0) {
@@ -1216,9 +1206,11 @@ export function EditarRevisionManual() {
 
   const abrirEditarPagoRevision = (pago: Pago) => {
     if (soloLectura) return
-    if (pago.conciliacion_bancaria_confirmada) {
+    if (pago.conciliacion_bancaria_ambigua || pago.conciliacion_bancaria_confirmada) {
       toast.error(
-        'Conciliación Bancaria confirmada: no se puede editar. Solo eliminar el pago.'
+        pago.conciliacion_bancaria_ambigua
+          ? 'Conciliación Bancaria Ambiguo: no se puede editar. Solo eliminar.'
+          : 'Conciliación Bancaria Sí: no se puede editar. Solo eliminar.'
       )
       return
     }

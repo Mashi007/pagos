@@ -101,8 +101,12 @@ export function PagosRegistradosRevisionSection(
   const bloqueadoPorConciliacionBancaria = nConciliacionBancaria > 0
   const tituloBloqueoConciliacionBancaria =
     nConciliacionBancaria === 1
-      ? 'Hay 1 pago con Conciliación Bancaria confirmada. Reescanear/Conciliar no pueden modificar esos casos.'
-      : `Hay ${nConciliacionBancaria} pagos con Conciliación Bancaria confirmada. Reescanear/Conciliar no pueden modificar esos casos.`
+      ? 'Hay 1 pago con Conciliación Bancaria Sí/Ambiguo. Conciliar no puede modificar ese caso; Reescanear omite esos pagos.'
+      : `Hay ${nConciliacionBancaria} pagos con Conciliación Bancaria Sí/Ambiguo. Conciliar no puede modificarlos; Reescanear omite esos pagos.`
+  const tituloReescaneo =
+    soloLectura
+      ? 'Revision cerrada: solo lectura'
+      : 'Reescanea solo pagos con Conciliación Bancaria = No. Omite Sí/Ambiguo.'
 
   return (
 
@@ -197,18 +201,11 @@ export function PagosRegistradosRevisionSection(
                 disabled={
                   soloLectura ||
                   reescaneandoCartera ||
-                  bloqueadoPorConciliacionBancaria ||
                   !prestamoData.prestamo_id ||
                   Number(prestamoData.prestamo_id) <= 0
                 }
                 onClick={() => void ejecutarReescaneoCartera()}
-                title={
-                  soloLectura
-                    ? 'Revision cerrada: solo lectura'
-                    : bloqueadoPorConciliacionBancaria
-                      ? tituloBloqueoConciliacionBancaria
-                      : 'Limpia fecha, banco, Nº, monto y moneda; re-escanea comprobantes guardados y persiste solo lo devuelto por OCR (sin mezclar con valores previos). Luego aplica cascada.'
-                }
+                title={tituloReescaneo}
               >
                 {reescaneandoCartera ? (
                   <Loader2 className="h-4 w-4 animate-spin" />

@@ -1263,8 +1263,47 @@ def decidir_y_aplicar(
             "despues": despues,
         }
 
-    # Conflicto de serial en otro pago -> no forzar (sin tocar institucion)
+    # Conflicto de serial en otro pago
     if _serial_choca_unique_pagos(db, serial_new, exclude_pago_id=int(pago.id)):
+        # AMBIGUO = mismo serial en mas de 1 prestamo: confirmar sin reescribir serial.
+        # Revision manual marca Ambiguo (tipo_novedad AMBIGUO + CORREGIR+aplicado).
+        if res.tipo_novedad == "AMBIGUO":
+            inst_changed = _aplicar_institucion_desde_lote(pago, lote)
+            res.decision = "CORREGIR"
+            res.fuente_elegida = fuente
+            res.aplicado = True
+            partes = [
+                "AMBIGUO: confirmacion bancaria registrada",
+                f"serial banco '{serial_new}' no reescrito (ya en otro pago)",
+            ]
+            if inst_changed:
+                partes.append(
+                    f"Institucion actualizada a {pago.institucion_bancaria}"
+                )
+            res.detalle_aplicacion = "; ".join(partes)
+            res.valores_despues = json.dumps(_snapshot_pago(pago), ensure_ascii=True)
+            lote.estado = "APLICADO"
+            try:
+                db.commit()
+            except IntegrityError as ie:
+                db.rollback()
+                raise HTTPException(
+                    status_code=409,
+                    detail=(
+                        "No se pudo confirmar AMBIGUO: conflicto al guardar. "
+                        "Discernimiento manual."
+                    ),
+                ) from ie
+            return {
+                "ok": True,
+                "resultado_id": res.id,
+                "decision": res.decision,
+                "fuente_elegida": fuente,
+                "aplicado": True,
+                "cambio": bool(inst_changed),
+                "ambiguo": True,
+            }
+        # Otros tipos: no forzar (sin tocar institucion)
         res.decision = "PENDIENTE"
         res.fuente_elegida = None
         res.aplicado = False

@@ -367,7 +367,7 @@ export async function reescanearComprobantesCarteraPrestamo(opts: {
   ).length
   if (omitidosConciliacionBancaria > 0 && omitidosConciliacionBancaria === pagos.length) {
     throw new Error(
-      'Todos los pagos de este crédito tienen Conciliación Bancaria confirmada. Reescanear está bloqueado.'
+      'Todos los pagos de este crédito tienen Conciliación Bancaria Sí/Ambiguo. Solo se puede eliminar; no reescanear.'
     )
   }
   const pagosElegibles = pagos.filter(
