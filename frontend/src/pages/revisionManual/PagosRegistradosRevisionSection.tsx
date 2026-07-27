@@ -549,15 +549,20 @@ export function PagosRegistradosRevisionSection(
                                 variant="ghost"
                                 size="sm"
                                 className="h-8 w-8 shrink-0 p-0"
-                                disabled={soloLectura}
+                                disabled={
+                                  soloLectura ||
+                                  Boolean(pago.conciliacion_bancaria_confirmada)
+                                }
                                 onClick={() => abrirEditarPagoRevision(pago)}
                                 title={
                                   soloLectura
                                     ? 'Revision cerrada: solo lectura'
-                                    : pagoEstaConciliadoOPagado(pago) &&
-                                        !isAdmin
-                                      ? 'Editar pago conciliado (monto, fecha y Nº documento; código/comprobante solo administrador)'
-                                      : 'Editar pago'
+                                    : pago.conciliacion_bancaria_confirmada
+                                      ? 'Conciliación Bancaria confirmada: solo se puede eliminar el pago'
+                                      : pagoEstaConciliadoOPagado(pago) &&
+                                          !isAdmin
+                                        ? 'Editar pago conciliado (monto, fecha y Nº documento; código/comprobante solo administrador)'
+                                        : 'Editar pago'
                                 }
                                 aria-label="Editar pago"
                               >
@@ -575,7 +580,9 @@ export function PagosRegistradosRevisionSection(
                                 title={
                                   soloLectura
                                     ? 'Revision cerrada: solo lectura'
-                                    : 'Eliminar pago'
+                                    : pago.conciliacion_bancaria_confirmada
+                                      ? 'Eliminar pago (única acción permitida tras Conciliación Bancaria)'
+                                      : 'Eliminar pago'
                                 }
                                 aria-label="Eliminar pago"
                               >

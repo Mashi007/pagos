@@ -1216,6 +1216,12 @@ export function EditarRevisionManual() {
 
   const abrirEditarPagoRevision = (pago: Pago) => {
     if (soloLectura) return
+    if (pago.conciliacion_bancaria_confirmada) {
+      toast.error(
+        'Conciliación Bancaria confirmada: no se puede editar. Solo eliminar el pago.'
+      )
+      return
+    }
     setPagoModalComprobanteInicial(null)
     setPagoModalId(pago.id)
     setPagoModalConciliadoPagado(pagoEstaConciliadoOPagado(pago))
