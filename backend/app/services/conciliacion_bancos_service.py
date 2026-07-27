@@ -5,14 +5,14 @@ import io
 import json
 import logging
 import re
-from datetime import date, datetime
+from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 from difflib import SequenceMatcher
 from typing import Any, Optional
 
 from fastapi import HTTPException, UploadFile
 from openpyxl import Workbook, load_workbook
-from sqlalchemy import delete, func, or_, select
+from sqlalchemy import delete, func, or_, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -34,6 +34,18 @@ logger = logging.getLogger(__name__)
 
 SIMILITUD_MINIMA = 70.0
 MONTO_TOL = 0.02
+# Capacidad de un lote Excel (extracto banco): hasta 25_000 filas de datos.
+MAX_FILAS_EXCEL_LOTE = 25000
+BULK_INSERT_CHUNK = 2000
+
+
+def _clave_paquete_fecha_monto(
+    fecha: Optional[date], monto: Optional[float]
+) -> Optional[tuple[date, float]]:
+    """Clave de indice para match parcial (paquete fecha+monto a 2 decimales)."""
+    if fecha is None or monto is None:
+        return None
+    return (fecha, round(float(monto), 2))
 
 
 def _candidatos_payload(pagos: list[Pago]) -> list[dict[str, Any]]:
@@ -215,7 +227,16 @@ def normalizar_bancos_filtro(bancos: Optional[list[str]]) -> list[str]:
 
 
 def _guardar_bancos_en_lote(lote: ConciliacionBancoOcrLote, bancos: list[str]) -> None:
-    payload = {"bancos_filtro": bancos}
+    payload: dict[str, Any] = {}
+    raw = (lote.notas or "").strip()
+    if raw:
+        try:
+            data = json.loads(raw)
+            if isinstance(data, dict):
+                payload = data
+        except Exception:
+            payload = {}
+    payload["bancos_filtro"] = bancos
     lote.notas = json.dumps(payload, ensure_ascii=True)
 
 
@@ -276,9 +297,9 @@ def _aplicar_institucion_desde_lote(pago: Pago, lote: ConciliacionBancoOcrLote) 
 _REF_RUIDO_PREFIX = re.compile(
     r"^(?:"
     r"(?:bs\.?\s*)?(?:bnc|binance|mercantil|bnv|bdv|ve|zelle|paypal|banco)\s*"
-    r"(?:/\s*|[-–—]\s*|\s+)"
+    r"(?:/\s*|[-ΓÇôΓÇö]\s*|\s+)"
     r"(?:ref\.?\s*)?"
-    r"|ref\.?\s*|nro\.?\s*|n[uú]m(?:ero)?\.?\s*|doc\.?\s*|comp(?:robante)?\.?\s*"
+    r"|ref\.?\s*|nro\.?\s*|n[u├║]m(?:ero)?\.?\s*|doc\.?\s*|comp(?:robante)?\.?\s*"
     r")+",
     re.IGNORECASE,
 )
@@ -289,7 +310,7 @@ def _ref_solo_digitos(val: Optional[str]) -> str:
     Clave de match/similitud: solo digitos del comprobante.
 
     - Ignora letras y signos agregados por digitacion (REF-, BNC/, puntos, guiones, etc.).
-    - Quita sufijo interno §CD: (codigo desambiguador) para no contaminar la clave.
+    - Quita sufijo interno ┬ºCD: (codigo desambiguador) para no contaminar la clave.
     - Maneja notacion cientifica via normalize_documento.
     - Quita ceros a la izquierda (BD/OCR a veces guarda 00000019197881 == 19197881).
     """
@@ -422,47 +443,172 @@ def crear_lote_desde_excel(
 
     n = 0
     fechas_excel: list[date] = []
-    for i, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
-        if not row:
-            continue
-        fecha_b = _parse_fecha(row[0] if len(row) > 0 else None)
-        ref_raw = str(row[1]).strip() if len(row) > 1 and row[1] is not None else ""
-        monto_raw = _parse_monto(row[2] if len(row) > 2 else None)
-        if not ref_raw and monto_raw is None and fecha_b is None:
-            continue
-        if not ref_raw:
-            continue
-        ref_norm = normalize_documento(ref_raw) or ref_raw.strip()
-        db.add(
-            ConciliacionBancoOcrBanco(
-                lote_id=lote.id,
-                fila_excel=i,
-                fecha_banco=fecha_b,
-                referencia_banco=ref_raw,
-                ref_banco_norm=ref_norm,
-                monto_banco=monto_raw if mon == "USD" else None,
-                monto_banco_original=monto_raw,
-                moneda_fila=mon,
+    batch: list[dict[str, Any]] = []
+    t0 = datetime.utcnow()
+    excede_tope = False
+
+    def _flush_batch() -> None:
+        nonlocal batch
+        if not batch:
+            return
+        db.bulk_insert_mappings(ConciliacionBancoOcrBanco, batch)
+        batch = []
+
+    try:
+        for i, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
+            if not row:
+                continue
+            fecha_b = _parse_fecha(row[0] if len(row) > 0 else None)
+            ref_raw = str(row[1]).strip() if len(row) > 1 and row[1] is not None else ""
+            monto_raw = _parse_monto(row[2] if len(row) > 2 else None)
+            if not ref_raw and monto_raw is None and fecha_b is None:
+                continue
+            if not ref_raw:
+                continue
+            if n >= MAX_FILAS_EXCEL_LOTE:
+                excede_tope = True
+                break
+            ref_norm = normalize_documento(ref_raw) or ref_raw.strip()
+            batch.append(
+                {
+                    "lote_id": lote.id,
+                    "fila_excel": i,
+                    "fecha_banco": fecha_b,
+                    "referencia_banco": ref_raw,
+                    "ref_banco_norm": ref_norm,
+                    "monto_banco": monto_raw if mon == "USD" else None,
+                    "monto_banco_original": monto_raw,
+                    "moneda_fila": mon,
+                }
             )
-        )
-        n += 1
-        if fecha_b is not None:
-            fechas_excel.append(fecha_b)
+            n += 1
+            if fecha_b is not None:
+                fechas_excel.append(fecha_b)
+            if len(batch) >= BULK_INSERT_CHUNK:
+                _flush_batch()
+        _flush_batch()
+    finally:
+        try:
+            wb.close()
+        except Exception:
+            pass
 
     if n == 0:
         db.rollback()
-        raise HTTPException(status_code=400, detail="No hay filas validas (Fecha, Referencia, Monto)")
+        raise HTTPException(
+            status_code=400,
+            detail="No hay filas validas (Fecha, Referencia, Monto)",
+        )
 
-    # Ampliar rango BD para cubrir el Excel (si el form quedo en "hoy" u otro rango corto)
+    if excede_tope:
+        db.rollback()
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"El Excel tiene mas de {MAX_FILAS_EXCEL_LOTE} filas validas. "
+                f"Divida el extracto en lotes de hasta {MAX_FILAS_EXCEL_LOTE} filas."
+            ),
+        )
+
     if fechas_excel:
         excel_min = min(fechas_excel)
         excel_max = max(fechas_excel)
         lote.fecha_desde = min(lote.fecha_desde, excel_min)
         lote.fecha_hasta = max(lote.fecha_hasta, excel_max)
 
+    lote.notas = json.dumps(
+        {
+            "filas_banco": n,
+            "max_filas_lote": MAX_FILAS_EXCEL_LOTE,
+        },
+        ensure_ascii=True,
+    )
+
     db.commit()
     db.refresh(lote)
+    elapsed_ms = int((datetime.utcnow() - t0).total_seconds() * 1000)
+    logger.info(
+        "[conciliacion-bancos] crear_lote id=%s filas=%s elapsed_ms=%s archivo=%s",
+        lote.id,
+        n,
+        elapsed_ms,
+        lote.archivo_nombre,
+    )
     return lote
+
+
+
+def iniciar_comparar_lote(
+    db: Session,
+    lote_id: int,
+    *,
+    bancos_filtro: Optional[list[str]] = None,
+    fecha_desde: Optional[date] = None,
+    fecha_hasta: Optional[date] = None,
+) -> dict[str, Any]:
+    """
+    Valida y lanza comparar en background. Responde al instante (evita timeout HTTP).
+    Polling: GET /lotes/{id} hasta estado COMPARADO | ERROR_COMPARAR.
+    """
+    from app.services.conciliacion_bancos_bg_runner import (
+        comparar_activo,
+        spawn_comparar_lote,
+    )
+
+    lote = db.get(ConciliacionBancoOcrLote, lote_id)
+    if not lote:
+        raise HTTPException(status_code=404, detail="Lote no encontrado")
+    if lote.estado == "COMPARANDO" or comparar_activo(lote_id):
+        return {
+            "ok": True,
+            "async": True,
+            "lote_id": lote_id,
+            "estado": "COMPARANDO",
+            "message": "Comparacion ya en curso; espere o recargue el lote.",
+        }
+
+    bancos_sel = normalizar_bancos_filtro(bancos_filtro)
+    if not bancos_sel:
+        raise HTTPException(
+            status_code=400,
+            detail="Seleccione al menos un banco (Mercantil, BNC, Binance, BNV, Recibos, Otros).",
+        )
+    if fecha_desde is not None or fecha_hasta is not None:
+        fd = fecha_desde or lote.fecha_desde
+        fh = fecha_hasta or lote.fecha_hasta
+        if fh < fd:
+            raise HTTPException(status_code=400, detail="fecha_hasta debe ser >= fecha_desde")
+        lote.fecha_desde = fd
+        lote.fecha_hasta = fh
+
+    _guardar_bancos_en_lote(lote, bancos_sel)
+    lote.estado = "COMPARANDO"
+    db.commit()
+
+    started = spawn_comparar_lote(
+        lote_id,
+        bancos_filtro=bancos_sel,
+        fecha_desde=fecha_desde,
+        fecha_hasta=fecha_hasta,
+    )
+    if not started:
+        return {
+            "ok": True,
+            "async": True,
+            "lote_id": lote_id,
+            "estado": "COMPARANDO",
+            "message": "Comparacion ya en curso.",
+        }
+    return {
+        "ok": True,
+        "async": True,
+        "lote_id": lote_id,
+        "estado": "COMPARANDO",
+        "message": "Comparacion iniciada en segundo plano.",
+        "fecha_desde": lote.fecha_desde.isoformat() if lote.fecha_desde else None,
+        "fecha_hasta": lote.fecha_hasta.isoformat() if lote.fecha_hasta else None,
+        "bancos_filtro": bancos_sel,
+    }
 
 
 def comparar_lote(
@@ -492,62 +638,93 @@ def comparar_lote(
             detail="Seleccione al menos un banco (Mercantil, BNC, Binance, BNV, Recibos, Otros).",
         )
     _guardar_bancos_en_lote(lote, bancos_sel)
+    lote.estado = "COMPARANDO"
+    # Limpiar error previo de corrida fallida
+    try:
+        payload_n: dict[str, Any] = {}
+        raw_n = (lote.notas or "").strip()
+        if raw_n:
+            data_n = json.loads(raw_n)
+            if isinstance(data_n, dict):
+                payload_n = data_n
+        payload_n.pop("comparar_error", None)
+        payload_n["comparar_started_at"] = datetime.utcnow().isoformat() + "Z"
+        lote.notas = json.dumps(payload_n, ensure_ascii=True)
+    except Exception:
+        pass
+    db.commit()
+    db.refresh(lote)
 
-    # Conservar filas ya cerradas (visto / corregir aplicado / omitir).
-    # Solo se regeneran las PENDIENTE.
-    # Universo de pagos = no conciliados bancarios (CORREGIR+aplicado) + nuevos.
-    # Filas banco ya vistas/confirmadas no reaparecen (clave serial+fecha+monto).
-    cerrados_lote = (
-        db.execute(
-            select(ConciliacionBancoOcrResultado).where(
-                ConciliacionBancoOcrResultado.lote_id == lote_id,
-                or_(
-                    ConciliacionBancoOcrResultado.decision == "VISTO",
-                    ConciliacionBancoOcrResultado.decision == "OMITIR",
-                    (ConciliacionBancoOcrResultado.decision == "CORREGIR")
-                    & (ConciliacionBancoOcrResultado.aplicado.is_(True)),
-                ),
-            )
+    t0 = datetime.utcnow()
+    # Comparar 25k filas puede superar el statement_timeout global (5 min).
+    try:
+        db.execute(text("SET LOCAL statement_timeout = '900000'"))  # 15 min
+    except Exception:
+        logger.warning(
+            "[conciliacion-bancos] no se pudo subir statement_timeout lote_id=%s",
+            lote_id,
         )
-        .scalars()
-        .all()
-    )
-    cerrados_global = (
-        db.execute(
-            select(ConciliacionBancoOcrResultado).where(
-                or_(
-                    ConciliacionBancoOcrResultado.decision == "VISTO",
-                    ConciliacionBancoOcrResultado.decision == "OMITIR",
-                    (ConciliacionBancoOcrResultado.decision == "CORREGIR")
-                    & (ConciliacionBancoOcrResultado.aplicado.is_(True)),
-                ),
-            )
-        )
-        .scalars()
-        .all()
-    )
 
-    # Pagos: solo excluir confirmacion bancaria real (no VISTO/OMITIR).
+    # 1) Confirmados bancarios globales (solo CORREGIR+aplicado) — liviano
+    confirmados_global = db.execute(
+        select(
+            ConciliacionBancoOcrResultado.lote_id,
+            ConciliacionBancoOcrResultado.pago_id,
+            ConciliacionBancoOcrResultado.banco_id,
+            ConciliacionBancoOcrResultado.referencia_banco,
+            ConciliacionBancoOcrResultado.fecha_banco,
+            ConciliacionBancoOcrResultado.monto_banco,
+        ).where(
+            ConciliacionBancoOcrResultado.decision == "CORREGIR",
+            ConciliacionBancoOcrResultado.aplicado.is_(True),
+        )
+    ).all()
+    # 2) Cerrados de ESTE lote (VISTO/OMITIR/CORREGIR) — no barrer VISTO de todos los lotes
+    cerrados_lote = db.execute(
+        select(
+            ConciliacionBancoOcrResultado.lote_id,
+            ConciliacionBancoOcrResultado.pago_id,
+            ConciliacionBancoOcrResultado.banco_id,
+            ConciliacionBancoOcrResultado.decision,
+            ConciliacionBancoOcrResultado.aplicado,
+            ConciliacionBancoOcrResultado.referencia_banco,
+            ConciliacionBancoOcrResultado.fecha_banco,
+            ConciliacionBancoOcrResultado.monto_banco,
+        ).where(
+            ConciliacionBancoOcrResultado.lote_id == lote_id,
+            or_(
+                ConciliacionBancoOcrResultado.decision == "VISTO",
+                ConciliacionBancoOcrResultado.decision == "OMITIR",
+                (ConciliacionBancoOcrResultado.decision == "CORREGIR")
+                & (ConciliacionBancoOcrResultado.aplicado.is_(True)),
+            ),
+        )
+    ).all()
+
     excluir_pago_ids: set[int] = set()
-    for c in list(cerrados_lote) + list(cerrados_global):
-        if (
-            c.pago_id
-            and c.decision == "CORREGIR"
-            and bool(c.aplicado)
-        ):
-            excluir_pago_ids.add(int(c.pago_id))
-
     excluir_banco_ids: set[int] = set()
     excluir_casos_banco: set[str] = set()
-    for c in list(cerrados_lote) + list(cerrados_global):
-        if c.lote_id == lote_id and c.banco_id:
+    confirmados_conservados = 0
+
+    for c in confirmados_global:
+        if c.pago_id:
+            excluir_pago_ids.add(int(c.pago_id))
+        mb = float(c.monto_banco) if c.monto_banco is not None else None
+        clave = _clave_caso_banco(c.referencia_banco, c.fecha_banco, mb)
+        if clave:
+            excluir_casos_banco.add(clave)
+        if c.lote_id == lote_id:
+            confirmados_conservados += 1
+            if c.banco_id:
+                excluir_banco_ids.add(int(c.banco_id))
+
+    for c in cerrados_lote:
+        if c.banco_id:
             excluir_banco_ids.add(int(c.banco_id))
         mb = float(c.monto_banco) if c.monto_banco is not None else None
         clave = _clave_caso_banco(c.referencia_banco, c.fecha_banco, mb)
         if clave:
             excluir_casos_banco.add(clave)
-
-    confirmados_lote = cerrados_lote  # compat nombres abajo
 
     db.execute(
         delete(ConciliacionBancoOcrResultado).where(
@@ -565,6 +742,7 @@ def comparar_lote(
         .scalars()
         .all()
     )
+
     def _monto_usd_fila_banco(brow: ConciliacionBancoOcrBanco) -> Optional[float]:
         if lote.moneda_carga == "USD":
             if brow.monto_banco_original is not None:
@@ -590,11 +768,13 @@ def comparar_lote(
         )
     ]
 
+    fp_ini = datetime.combine(lote.fecha_desde, time.min)
+    fp_fin_excl = datetime.combine(lote.fecha_hasta + timedelta(days=1), time.min)
     pagos_raw = (
         db.execute(
             select(Pago).where(
-                func.date(Pago.fecha_pago) >= lote.fecha_desde,
-                func.date(Pago.fecha_pago) <= lote.fecha_hasta,
+                Pago.fecha_pago >= fp_ini,
+                Pago.fecha_pago < fp_fin_excl,
                 Pago.numero_documento.isnot(None),
                 Pago.numero_documento != "",
             )
@@ -602,8 +782,6 @@ def comparar_lote(
         .scalars()
         .all()
     )
-    # Categorias seleccionadas + Otros si hay banco real (mal etiquetados en BD).
-    # Al confirmar Ref. Banco se corrige institucion (ej. Otros -> BNV).
     cats_match = set(bancos_sel)
     if any(b != "Otros" for b in bancos_sel):
         cats_match.add("Otros")
@@ -615,14 +793,25 @@ def comparar_lote(
     ]
 
     by_digits: dict[str, list[Pago]] = {}
+    by_paquete: dict[tuple[date, float], list[Pago]] = {}
     for p in pagos:
-        # No indexar seriales sinteticos Drive (evita falsos match por digitos del codigo)
         if _es_asiento_drive_abonos(p.numero_documento):
             continue
-        key = _ref_solo_digitos(normalize_documento(p.numero_documento) or p.numero_documento or "")
-        if not key:
-            continue
-        by_digits.setdefault(key, []).append(p)
+        key = _ref_solo_digitos(
+            normalize_documento(p.numero_documento) or p.numero_documento or ""
+        )
+        if key:
+            by_digits.setdefault(key, []).append(p)
+        pk = _clave_paquete_fecha_monto(_pago_fecha(p), float(p.monto_pagado or 0))
+        if pk:
+            by_paquete.setdefault(pk, []).append(p)
+
+    tasas_memo: dict[date, Any] = {}
+
+    def _tasas_por_fecha_memo(f: date):
+        if f not in tasas_memo:
+            tasas_memo[f] = obtener_tasa_por_fecha(db, f)
+        return {f: tasas_memo[f]}
 
     matched_pago_ids: set[int] = set(excluir_pago_ids)
     stats = {
@@ -635,18 +824,43 @@ def comparar_lote(
         "CONCILIADOS": 0,
     }
 
+    resultados_batch: list[dict[str, Any]] = []
+
+    def _flush_resultados(*, commit: bool = True) -> None:
+        nonlocal resultados_batch
+        if not resultados_batch:
+            return
+        db.bulk_insert_mappings(ConciliacionBancoOcrResultado, resultados_batch)
+        resultados_batch = []
+        if commit:
+            # Commits parciales: evita un solo statement/tx enorme y libera memoria.
+            db.commit()
+
+    def _add_resultado(**fields: Any) -> None:
+        resultados_batch.append(fields)
+        if len(resultados_batch) >= BULK_INSERT_CHUNK:
+            _flush_resultados()
+
     for b in bancos:
         ref_b = b.ref_banco_norm or b.referencia_banco
         dig_b = _ref_solo_digitos(ref_b)
         fecha_b = b.fecha_banco
-        monto_orig = float(b.monto_banco_original) if b.monto_banco_original is not None else None
+        monto_orig = (
+            float(b.monto_banco_original) if b.monto_banco_original is not None else None
+        )
         monto_usd: Optional[float] = None
         tipo_extra = None
 
         if lote.moneda_carga == "USD":
             monto_usd = monto_orig
         elif monto_orig is not None and fecha_b is not None:
-            tasa, usd = tasa_y_equivalente_usd_excel(db, fecha_b, monto_orig, "BS")
+            _tasa, usd = tasa_y_equivalente_usd_excel(
+                db,
+                fecha_b,
+                monto_orig,
+                "BS",
+                tasas_por_fecha=_tasas_por_fecha_memo(fecha_b),
+            )
             if usd is None:
                 tipo_extra = "SIN_TASA"
             else:
@@ -655,7 +869,6 @@ def comparar_lote(
         elif monto_orig is not None:
             tipo_extra = "SIN_TASA"
 
-        # No reutilizar un pago ya emparejado en otra fila del Excel
         candidatos_exactos = [
             p
             for p in (by_digits.get(dig_b, []) if dig_b else [])
@@ -663,76 +876,78 @@ def comparar_lote(
         ]
 
         if tipo_extra == "SIN_TASA" and lote.moneda_carga == "BS":
-            db.add(
-                ConciliacionBancoOcrResultado(
-                    lote_id=lote_id,
-                    banco_id=b.id,
-                    pago_id=None,
-                    fecha_banco=fecha_b,
-                    referencia_banco=b.referencia_banco,
-                    monto_banco=None,
-                    similitud_pct=None,
-                    tipo_novedad="SIN_TASA",
-                    decision="PENDIENTE",
-                    detalle_aplicacion="Sin tasa Bs/USD para la fecha del banco; no se puede comparar monto.",
-                )
+            _add_resultado(
+                lote_id=lote_id,
+                banco_id=b.id,
+                pago_id=None,
+                fecha_banco=fecha_b,
+                referencia_banco=b.referencia_banco,
+                monto_banco=None,
+                similitud_pct=None,
+                tipo_novedad="SIN_TASA",
+                decision="PENDIENTE",
+                detalle_aplicacion=(
+                    "Sin tasa Bs/USD para la fecha del banco; no se puede comparar monto."
+                ),
             )
             stats["SIN_TASA"] += 1
             continue
 
         if len(candidatos_exactos) == 1:
             p = candidatos_exactos[0]
-            # Serial igual no basta: BNV/BDV reutiliza refs (2058270) en fechas/montos distintos
             if _paquete_banco_coherente_con_pago(
                 p, fecha_banco=fecha_b, monto_usd=monto_usd
             ):
                 matched_pago_ids.add(p.id)
-                db.add(
-                    ConciliacionBancoOcrResultado(
-                        lote_id=lote_id,
-                        banco_id=b.id,
-                        pago_id=p.id,
-                        fecha_banco=fecha_b,
-                        fecha_bd=_pago_fecha(p),
-                        referencia_banco=b.referencia_banco,
-                        referencia_bd=p.numero_documento,
-                        monto_banco=Decimal(str(monto_usd)) if monto_usd is not None else None,
-                        monto_bd=p.monto_pagado,
-                        similitud_pct=Decimal("100"),
-                        tipo_novedad="MATCH_EXACTO",
-                        decision="PENDIENTE",
-                    )
+                _add_resultado(
+                    lote_id=lote_id,
+                    banco_id=b.id,
+                    pago_id=p.id,
+                    fecha_banco=fecha_b,
+                    fecha_bd=_pago_fecha(p),
+                    referencia_banco=b.referencia_banco,
+                    referencia_bd=p.numero_documento,
+                    monto_banco=Decimal(str(monto_usd)) if monto_usd is not None else None,
+                    monto_bd=p.monto_pagado,
+                    similitud_pct=Decimal("100"),
+                    tipo_novedad="MATCH_EXACTO",
+                    decision="PENDIENTE",
                 )
                 stats["MATCH_EXACTO"] += 1
                 continue
-            # Misma ref digitos pero paquete distinto: no forzar match; sigue a parcial/SIN_BD
 
         if len(candidatos_exactos) > 1:
-            # Varios pagos/prestamos con el mismo serial: eleccion manual (desplegable).
-            # No auto-desambiguar por monto/fecha.
             pool = list(candidatos_exactos)
             cands = _candidatos_payload(pool)
-            db.add(
-                ConciliacionBancoOcrResultado(
-                    lote_id=lote_id,
-                    banco_id=b.id,
-                    pago_id=None,
-                    fecha_banco=fecha_b,
-                    referencia_banco=b.referencia_banco,
-                    monto_banco=Decimal(str(monto_usd)) if monto_usd is not None else None,
-                    similitud_pct=Decimal("100"),
-                    tipo_novedad="AMBIGUO",
-                    decision="PENDIENTE",
-                    detalle_aplicacion=_detalle_ambiguo_serial(pool),
-                    valores_antes=json.dumps({"candidatos": cands}, ensure_ascii=True),
-                )
+            _add_resultado(
+                lote_id=lote_id,
+                banco_id=b.id,
+                pago_id=None,
+                fecha_banco=fecha_b,
+                referencia_banco=b.referencia_banco,
+                monto_banco=Decimal(str(monto_usd)) if monto_usd is not None else None,
+                similitud_pct=Decimal("100"),
+                tipo_novedad="AMBIGUO",
+                decision="PENDIENTE",
+                detalle_aplicacion=_detalle_ambiguo_serial(pool),
+                valores_antes=json.dumps({"candidatos": cands}, ensure_ascii=True),
             )
             stats["AMBIGUO"] += 1
             continue
 
-        # Match parcial: serial parecido, pero monto Y fecha exactos (politica producto)
+        pk_b = _clave_paquete_fecha_monto(fecha_b, monto_usd)
+        pool_parcial: list[Pago] = []
+        if pk_b:
+            seen_p: set[int] = set()
+            f_pk, m_pk = pk_b
+            for dm in (0.0, -0.01, 0.01, -0.02, 0.02):
+                bucket = by_paquete.get((f_pk, round(m_pk + dm, 2)), [])
+                for p in bucket:
+                    if p.id not in seen_p:
+                        seen_p.add(p.id)
+                        pool_parcial.append(p)
         mejores: list[tuple[float, Pago]] = []
-        for p in pagos:
+        for p in pool_parcial:
             if p.id in matched_pago_ids:
                 continue
             if _es_asiento_drive_abonos(p.numero_documento):
@@ -748,19 +963,19 @@ def comparar_lote(
         mejores.sort(key=lambda x: x[0], reverse=True)
 
         if not mejores:
-            db.add(
-                ConciliacionBancoOcrResultado(
-                    lote_id=lote_id,
-                    banco_id=b.id,
-                    pago_id=None,
-                    fecha_banco=fecha_b,
-                    referencia_banco=b.referencia_banco,
-                    monto_banco=Decimal(str(monto_usd)) if monto_usd is not None else None,
-                    similitud_pct=None,
-                    tipo_novedad="SIN_BD",
-                    decision="PENDIENTE",
-                    detalle_aplicacion="Referencia banco sin match en BD (voucher no digitalizado / no reportado).",
-                )
+            _add_resultado(
+                lote_id=lote_id,
+                banco_id=b.id,
+                pago_id=None,
+                fecha_banco=fecha_b,
+                referencia_banco=b.referencia_banco,
+                monto_banco=Decimal(str(monto_usd)) if monto_usd is not None else None,
+                similitud_pct=None,
+                tipo_novedad="SIN_BD",
+                decision="PENDIENTE",
+                detalle_aplicacion=(
+                    "Referencia banco sin match en BD (voucher no digitalizado / no reportado)."
+                ),
             )
             stats["SIN_BD"] += 1
             continue
@@ -768,72 +983,88 @@ def comparar_lote(
         if len(mejores) > 1 and abs(mejores[0][0] - mejores[1][0]) < 0.5:
             top = [p for sim, p in mejores if abs(sim - mejores[0][0]) < 0.5][:8]
             cands = _candidatos_payload(top)
-            db.add(
-                ConciliacionBancoOcrResultado(
-                    lote_id=lote_id,
-                    banco_id=b.id,
-                    pago_id=None,
-                    fecha_banco=fecha_b,
-                    referencia_banco=b.referencia_banco,
-                    monto_banco=Decimal(str(monto_usd)) if monto_usd is not None else None,
-                    similitud_pct=Decimal(str(mejores[0][0])),
-                    tipo_novedad="AMBIGUO",
-                    decision="PENDIENTE",
-                    detalle_aplicacion=_detalle_ambiguo_serial(top),
-                    valores_antes=json.dumps({"candidatos": cands}, ensure_ascii=True),
-                )
+            _add_resultado(
+                lote_id=lote_id,
+                banco_id=b.id,
+                pago_id=None,
+                fecha_banco=fecha_b,
+                referencia_banco=b.referencia_banco,
+                monto_banco=Decimal(str(monto_usd)) if monto_usd is not None else None,
+                similitud_pct=Decimal(str(mejores[0][0])),
+                tipo_novedad="AMBIGUO",
+                decision="PENDIENTE",
+                detalle_aplicacion=_detalle_ambiguo_serial(top),
+                valores_antes=json.dumps({"candidatos": cands}, ensure_ascii=True),
             )
             stats["AMBIGUO"] += 1
             continue
 
         sim, p = mejores[0]
         matched_pago_ids.add(p.id)
-        db.add(
-            ConciliacionBancoOcrResultado(
-                lote_id=lote_id,
-                banco_id=b.id,
-                pago_id=p.id,
-                fecha_banco=fecha_b,
-                fecha_bd=_pago_fecha(p),
-                referencia_banco=b.referencia_banco,
-                referencia_bd=p.numero_documento,
-                monto_banco=Decimal(str(monto_usd)) if monto_usd is not None else None,
-                monto_bd=p.monto_pagado,
-                similitud_pct=Decimal(str(sim)),
-                tipo_novedad="MATCH_PARCIAL",
-                decision="PENDIENTE",
-            )
+        _add_resultado(
+            lote_id=lote_id,
+            banco_id=b.id,
+            pago_id=p.id,
+            fecha_banco=fecha_b,
+            fecha_bd=_pago_fecha(p),
+            referencia_banco=b.referencia_banco,
+            referencia_bd=p.numero_documento,
+            monto_banco=Decimal(str(monto_usd)) if monto_usd is not None else None,
+            monto_bd=p.monto_pagado,
+            similitud_pct=Decimal(str(sim)),
+            tipo_novedad="MATCH_PARCIAL",
+            decision="PENDIENTE",
         )
         stats["MATCH_PARCIAL"] += 1
 
     for p in pagos:
         if p.id in matched_pago_ids:
             continue
-        db.add(
-            ConciliacionBancoOcrResultado(
-                lote_id=lote_id,
-                banco_id=None,
-                pago_id=p.id,
-                fecha_bd=_pago_fecha(p),
-                referencia_bd=p.numero_documento,
-                monto_bd=p.monto_pagado,
-                similitud_pct=None,
-                tipo_novedad="SIN_BANCO",
-                decision="PENDIENTE",
-                detalle_aplicacion="Pago en BD del rango sin fila correspondiente en Excel banco.",
-            )
+        _add_resultado(
+            lote_id=lote_id,
+            banco_id=None,
+            pago_id=p.id,
+            fecha_bd=_pago_fecha(p),
+            referencia_bd=p.numero_documento,
+            monto_bd=p.monto_pagado,
+            similitud_pct=None,
+            tipo_novedad="SIN_BANCO",
+            decision="PENDIENTE",
+            detalle_aplicacion="Pago en BD del rango sin fila correspondiente en Excel banco.",
         )
         stats["SIN_BANCO"] += 1
 
-    # KPI conciliados: filas CORREGIR+aplicado conservadas en este lote
-    stats["CONCILIADOS"] = sum(
-        1
-        for c in confirmados_lote
-        if c.decision == "CORREGIR" and bool(c.aplicado)
-    )
+    _flush_resultados(commit=False)
+    stats["CONCILIADOS"] = confirmados_conservados
 
+    lote = db.get(ConciliacionBancoOcrLote, lote_id)
+    if not lote:
+        raise HTTPException(status_code=404, detail="Lote no encontrado tras comparar")
+    elapsed_ms = int((datetime.utcnow() - t0).total_seconds() * 1000)
+    try:
+        payload_f: dict[str, Any] = {}
+        raw_f = (lote.notas or "").strip()
+        if raw_f:
+            data_f = json.loads(raw_f)
+            if isinstance(data_f, dict):
+                payload_f = data_f
+        payload_f["stats"] = stats
+        payload_f["pagos_universo"] = len(pagos)
+        payload_f["comparar_elapsed_ms"] = elapsed_ms
+        payload_f.pop("comparar_error", None)
+        lote.notas = json.dumps(payload_f, ensure_ascii=True)
+    except Exception:
+        pass
     lote.estado = "COMPARADO"
     db.commit()
+    logger.info(
+        "[conciliacion-bancos] comparar_lote lote_id=%s bancos=%s pagos=%s elapsed_ms=%s stats=%s",
+        lote_id,
+        len(bancos),
+        len(pagos),
+        elapsed_ms,
+        stats,
+    )
     return {
         "lote_id": lote_id,
         "estado": lote.estado,
@@ -842,12 +1073,12 @@ def comparar_lote(
         "fecha_desde": lote.fecha_desde.isoformat() if lote.fecha_desde else None,
         "fecha_hasta": lote.fecha_hasta.isoformat() if lote.fecha_hasta else None,
         "pagos_universo": len(pagos),
-        "confirmados_conservados": len(confirmados_lote),
+        "confirmados_conservados": confirmados_conservados,
         "pagos_excluidos_conciliados": len(excluir_pago_ids),
         "casos_banco_excluidos": len(excluir_casos_banco),
         "excluidos_por_confirmacion": len(excluir_pago_ids) + len(excluir_casos_banco),
+        "elapsed_ms": elapsed_ms,
     }
-
 
 
 def _serial_choca_unique_pagos(
@@ -974,7 +1205,7 @@ def decidir_y_aplicar(
 
     pago_ids = _normalizar_pago_ids_elegidos(pago_id_elegido, pago_ids_elegidos)
 
-    # AMBIGUO multi: uno, varios o todos los candidatos → aprobar conciliacion en cada uno
+    # AMBIGUO multi: uno, varios o todos los candidatos ΓåÆ aprobar conciliacion en cada uno
     if (
         dec == "CORREGIR"
         and res.tipo_novedad == "AMBIGUO"
@@ -1578,7 +1809,119 @@ def decidir_masivo(
 
 
 
-def listar_resultados(db: Session, lote_id: int) -> list[dict[str, Any]]:
+def _resultado_a_dict(
+    r: ConciliacionBancoOcrResultado, pago: Optional[Pago]
+) -> dict[str, Any]:
+    candidatos = None
+    if not pago and r.valores_antes:
+        try:
+            raw = json.loads(r.valores_antes)
+            if isinstance(raw, dict) and isinstance(raw.get("candidatos"), list):
+                candidatos = raw["candidatos"]
+        except Exception:
+            candidatos = None
+    return {
+        "id": r.id,
+        "lote_id": r.lote_id,
+        "banco_id": r.banco_id,
+        "pago_id": r.pago_id,
+        "cedula": (pago.cedula_cliente if pago else None),
+        "prestamo_id": (pago.prestamo_id if pago else None),
+        "institucion_bancaria": (pago.institucion_bancaria if pago else None),
+        "institucion_categoria": (
+            categoria_pago_conciliacion(pago) if pago else None
+        ),
+        "fecha_banco": r.fecha_banco.isoformat() if r.fecha_banco else None,
+        "fecha_bd": r.fecha_bd.isoformat() if r.fecha_bd else None,
+        "referencia_banco": r.referencia_banco,
+        "referencia_bd": r.referencia_bd,
+        "monto_banco": float(r.monto_banco) if r.monto_banco is not None else None,
+        "monto_bd": float(r.monto_bd) if r.monto_bd is not None else None,
+        "similitud_pct": float(r.similitud_pct) if r.similitud_pct is not None else None,
+        "tipo_novedad": r.tipo_novedad,
+        "decision": r.decision,
+        "fuente_elegida": r.fuente_elegida,
+        "aplicado": bool(r.aplicado),
+        "detalle_aplicacion": r.detalle_aplicacion,
+        "candidatos": candidatos,
+    }
+
+
+def listar_resultados(
+    db: Session,
+    lote_id: int,
+    *,
+    page: int = 1,
+    per_page: int = 200,
+    tipos: Optional[list[str]] = None,
+    decision: Optional[str] = None,
+) -> dict[str, Any]:
+    """Lista paginada (lotes de 25k no caben en una sola respuesta HTTP)."""
+    page = max(1, int(page or 1))
+    per_page = min(500, max(1, int(per_page or 200)))
+    q = select(ConciliacionBancoOcrResultado).where(
+        ConciliacionBancoOcrResultado.lote_id == lote_id
+    )
+    tipos_n = [str(x).strip().upper() for x in (tipos or []) if str(x).strip()]
+    quiere_conciliados = "CONCILIADOS" in tipos_n
+    tipos_n = [x for x in tipos_n if x != "CONCILIADOS"]
+    if quiere_conciliados and not tipos_n:
+        q = q.where(
+            ConciliacionBancoOcrResultado.decision == "CORREGIR",
+            ConciliacionBancoOcrResultado.aplicado.is_(True),
+        )
+    elif quiere_conciliados and tipos_n:
+        q = q.where(
+            or_(
+                (
+                    (ConciliacionBancoOcrResultado.decision == "CORREGIR")
+                    & (ConciliacionBancoOcrResultado.aplicado.is_(True))
+                ),
+                (
+                    (ConciliacionBancoOcrResultado.decision == "PENDIENTE")
+                    & (ConciliacionBancoOcrResultado.tipo_novedad.in_(tipos_n))
+                ),
+            )
+        )
+    elif tipos_n:
+        q = q.where(ConciliacionBancoOcrResultado.tipo_novedad.in_(tipos_n))
+    if decision:
+        q = q.where(ConciliacionBancoOcrResultado.decision == decision.strip().upper())
+
+    total = int(
+        db.scalar(select(func.count()).select_from(q.order_by(None).subquery()))
+        or 0
+    )
+    rows = (
+        db.execute(
+            q.order_by(ConciliacionBancoOcrResultado.id.asc())
+            .offset((page - 1) * per_page)
+            .limit(per_page)
+        )
+        .scalars()
+        .all()
+    )
+    pago_ids = [int(r.pago_id) for r in rows if r.pago_id]
+    pagos_map: dict[int, Pago] = {}
+    if pago_ids:
+        for p in db.execute(select(Pago).where(Pago.id.in_(pago_ids))).scalars().all():
+            pagos_map[int(p.id)] = p
+    items = [
+        _resultado_a_dict(r, pagos_map.get(int(r.pago_id)) if r.pago_id else None)
+        for r in rows
+    ]
+    pages = (total + per_page - 1) // per_page if per_page else 1
+    return {
+        "items": items,
+        "total": total,
+        "page": page,
+        "per_page": per_page,
+        "pages": pages,
+    }
+
+
+def listar_resultados_todos(db: Session, lote_id: int) -> list[dict[str, Any]]:
+    """Solo para export Excel: carga completa (puede ser pesado)."""
     rows = (
         db.execute(
             select(ConciliacionBancoOcrResultado)
@@ -1591,47 +1934,15 @@ def listar_resultados(db: Session, lote_id: int) -> list[dict[str, Any]]:
     pago_ids = [int(r.pago_id) for r in rows if r.pago_id]
     pagos_map: dict[int, Pago] = {}
     if pago_ids:
-        for p in db.execute(select(Pago).where(Pago.id.in_(pago_ids))).scalars().all():
-            pagos_map[int(p.id)] = p
-    out = []
-    for r in rows:
-        pago = pagos_map.get(int(r.pago_id)) if r.pago_id else None
-        candidatos = None
-        if not pago and r.valores_antes:
-            try:
-                raw = json.loads(r.valores_antes)
-                if isinstance(raw, dict) and isinstance(raw.get("candidatos"), list):
-                    candidatos = raw["candidatos"]
-            except Exception:
-                candidatos = None
-        out.append(
-            {
-                "id": r.id,
-                "lote_id": r.lote_id,
-                "banco_id": r.banco_id,
-                "pago_id": r.pago_id,
-                "cedula": (pago.cedula_cliente if pago else None),
-                "prestamo_id": (pago.prestamo_id if pago else None),
-                "institucion_bancaria": (pago.institucion_bancaria if pago else None),
-                "institucion_categoria": (
-                    categoria_pago_conciliacion(pago) if pago else None
-                ),
-                "fecha_banco": r.fecha_banco.isoformat() if r.fecha_banco else None,
-                "fecha_bd": r.fecha_bd.isoformat() if r.fecha_bd else None,
-                "referencia_banco": r.referencia_banco,
-                "referencia_bd": r.referencia_bd,
-                "monto_banco": float(r.monto_banco) if r.monto_banco is not None else None,
-                "monto_bd": float(r.monto_bd) if r.monto_bd is not None else None,
-                "similitud_pct": float(r.similitud_pct) if r.similitud_pct is not None else None,
-                "tipo_novedad": r.tipo_novedad,
-                "decision": r.decision,
-                "fuente_elegida": r.fuente_elegida,
-                "aplicado": bool(r.aplicado),
-                "detalle_aplicacion": r.detalle_aplicacion,
-                "candidatos": candidatos,
-            }
-        )
-    return out
+        # Chunk IN para no saturar
+        for i in range(0, len(pago_ids), 2000):
+            chunk = pago_ids[i : i + 2000]
+            for p in db.execute(select(Pago).where(Pago.id.in_(chunk))).scalars().all():
+                pagos_map[int(p.id)] = p
+    return [
+        _resultado_a_dict(r, pagos_map.get(int(r.pago_id)) if r.pago_id else None)
+        for r in rows
+    ]
 
 
 _EXPORT_HEADERS = [
@@ -1696,7 +2007,7 @@ def _fila_export_resultado(r: dict[str, Any]) -> list[Any]:
 
 def exportar_excel_lote(db: Session, lote_id: int) -> bytes:
     """Excel: una hoja por novedad (pendientes) + pestana CONCILIADOS."""
-    rows = listar_resultados(db, lote_id)
+    rows = listar_resultados_todos(db, lote_id)
     by_tipo: dict[str, list[dict[str, Any]]] = {k: [] for k in _EXPORT_HOJAS_NOVEDAD}
     for r in rows:
         if _es_resultado_conciliado_bancario(r):

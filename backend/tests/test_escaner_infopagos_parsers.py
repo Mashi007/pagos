@@ -16,6 +16,7 @@ from app.services.pagos_gmail.parse_campos_comprobante import (
     serial_ocr_borrosa_revision_manual,
     numeros_operacion_coinciden_o_evasion,
     parse_fecha_comprobante,
+    parse_fecha_comprobante_escaner,
     parse_monto_comprobante,
     sanitizar_numero_operacion_comprobante,
 )
@@ -118,6 +119,14 @@ def test_parse_fecha_comprobante():
     ) == date(2025, 7, 3)
     assert parse_fecha_comprobante("2027-01-01", REF) is None
     assert parse_fecha_comprobante("", REF) is None
+    # ISO con dia<=12: orden fijo, no rechazar como ambigua DD/MM vs MM/DD
+    ref_jul = date(2026, 7, 27)
+    assert parse_fecha_comprobante(
+        "2026-07-12", ref_jul, conservador=True
+    ) == date(2026, 7, 12)
+    assert parse_fecha_comprobante_escaner("2026-07-12", ref_jul) == date(
+        2026, 7, 12
+    )
 
 
 def test_format_monto_excel_pagos_gmail_miles():

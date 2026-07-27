@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   ArrowDownWideNarrow,
   ArrowUpWideNarrow,
@@ -137,6 +137,10 @@ export default function ConciliacionBancosPage() {
   >([])
   const [filtroNovedad, setFiltroNovedad] = useState<string[]>([])
   const [mostrarConfirmados, setMostrarConfirmados] = useState(false)
+  const [page, setPage] = useState(1)
+  const [pages, setPages] = useState(1)
+  const [totalResultados, setTotalResultados] = useState(0)
+  const PER_PAGE = 200
 
   const toggleBanco = (b: ConciliacionBancosBancoCategoria) => {
     setBancosSel(prev =>
@@ -145,15 +149,58 @@ export default function ConciliacionBancosPage() {
   }
 
   const toggleNovedad = (tipo: string) => {
-    setFiltroNovedad(prev =>
-      prev.includes(tipo) ? prev.filter(x => x !== tipo) : [...prev, tipo]
-    )
+    setFiltroNovedad(prev => {
+      const next = prev.includes(tipo)
+        ? prev.filter(x => x !== tipo)
+        : [...prev, tipo]
+      return next
+    })
+    setPage(1)
   }
 
-  const pendientes = useMemo(
-    () => items.filter(i => i.decision === 'PENDIENTE').length,
-    [items]
-  )
+  // Recargar pagina al cambiar filtro o pagina (solo si hay lote comparado)
+  useEffect(() => {
+    if (!lote || lote.estado === 'COMPARANDO') return
+    if (lote.estado !== 'COMPARADO' && lote.estado !== 'APLICADO') return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const quiereConc = filtroNovedad.includes('CONCILIADOS')
+        const res = await conciliacionBancosService.listarResultados(lote.id, {
+          page,
+          per_page: PER_PAGE,
+          tipo_novedad: filtroNovedad.length ? filtroNovedad : undefined,
+          decision:
+            !quiereConc && !mostrarConfirmados ? 'PENDIENTE' : undefined,
+        })
+        if (cancelled) return
+        setItems(res.items || [])
+        setPages(res.pages || 1)
+        setTotalResultados(res.total || 0)
+      } catch {
+        /* ignore */
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtroNovedad, page, lote?.id, lote?.estado, mostrarConfirmados])
+
+  const pendientes = useMemo(() => {
+    const src = stats || lote?.stats
+    if (src) {
+      return (
+        Number(src.MATCH_EXACTO || 0) +
+        Number(src.MATCH_PARCIAL || 0) +
+        Number(src.SIN_BD || 0) +
+        Number(src.SIN_BANCO || 0) +
+        Number(src.AMBIGUO || 0) +
+        Number(src.SIN_TASA || 0)
+      )
+    }
+    return items.filter(i => i.decision === 'PENDIENTE').length
+  }, [stats, lote?.stats, items])
 
   /** Chips en vivo: MATCH_* = pendientes; CONCILIADOS = aprobados bancarios. */
   const statsVivos = useMemo(() => {
@@ -177,7 +224,12 @@ export default function ConciliacionBancosPage() {
     return out
   }, [items])
 
-  const statsMostrar = items.length > 0 ? statsVivos : stats
+  // Con paginacion, los chips deben usar stats del lote (no solo la pagina actual).
+  const statsMostrar = stats || lote?.stats || null
+
+  useEffect(() => {
+    if (lote?.stats) setStats(lote.stats)
+  }, [lote?.stats])
 
   const itemsFiltrados = useMemo(() => {
     let list = items
@@ -271,12 +323,26 @@ export default function ConciliacionBancosPage() {
     })
   }
 
-  const refreshResultados = async (loteId: number) => {
-    const res = await conciliacionBancosService.listarResultados(loteId)
+  const refreshResultados = async (
+    loteId: number,
+    opts?: { page?: number; tipos?: string[] }
+  ) => {
+    const pg = opts?.page ?? page
+    const tipos = opts?.tipos ?? filtroNovedad
+    const quiereConc = tipos.includes('CONCILIADOS')
+    const res = await conciliacionBancosService.listarResultados(loteId, {
+      page: pg,
+      per_page: PER_PAGE,
+      tipo_novedad: tipos.length ? tipos : undefined,
+      decision:
+        !quiereConc && !mostrarConfirmados ? 'PENDIENTE' : undefined,
+    })
     setItems(res.items || [])
-    setSeleccionados(new Set())
-    setPagoElegidoPorFila({})
+    setPage(res.page || pg)
+    setPages(res.pages || 1)
+    setTotalResultados(res.total || 0)
   }
+
 
   const handleCargar = async () => {
     if (!file) {
@@ -299,7 +365,7 @@ export default function ConciliacionBancosPage() {
       setFiltroNovedad([])
       setSeleccionados(new Set())
       toast.success(
-        `Lote #${res.lote.id} cargado (${moneda}). Rango BD: ${res.lote.fecha_desde} → ${res.lote.fecha_hasta}`
+        `Lote #${res.lote.id} cargado (${moneda}${res.lote.filas_banco != null ? `, ${res.lote.filas_banco} filas` : ''}). Rango BD: ${res.lote.fecha_desde} → ${res.lote.fecha_hasta}`
       )
     } catch (err) {
       toast.error(errMsg(err))
@@ -319,29 +385,61 @@ export default function ConciliacionBancosPage() {
     }
     setLoading(true)
     try {
-      const cmp = await conciliacionBancosService.comparar(lote.id, bancosSel, {
-        fecha_desde: fechaDesde,
-        fecha_hasta: fechaHasta,
-      })
-      setStats(cmp.stats || null)
-      if (cmp.fecha_desde || cmp.fecha_hasta) {
-        setLote(prev =>
-          prev
-            ? {
-                ...prev,
-                fecha_desde: cmp.fecha_desde || prev.fecha_desde,
-                fecha_hasta: cmp.fecha_hasta || prev.fecha_hasta,
-              }
-            : prev
-        )
-        if (cmp.fecha_desde) setFechaDesde(cmp.fecha_desde)
-        if (cmp.fecha_hasta) setFechaHasta(cmp.fecha_hasta)
+      const start = await conciliacionBancosService.comparar(
+        lote.id,
+        bancosSel,
+        {
+          fecha_desde: fechaDesde,
+          fecha_hasta: fechaHasta,
+        }
+      )
+      setLote(prev =>
+        prev
+          ? {
+              ...prev,
+              estado: start.estado || 'COMPARANDO',
+              fecha_desde: start.fecha_desde || prev.fecha_desde,
+              fecha_hasta: start.fecha_hasta || prev.fecha_hasta,
+            }
+          : prev
+      )
+      if (start.fecha_desde) setFechaDesde(start.fecha_desde)
+      if (start.fecha_hasta) setFechaHasta(start.fecha_hasta)
+      toast.message(
+        'Conciliando en segundo plano (lotes grandes pueden tardar varios minutos)...'
+      )
+
+      const loteId = lote.id
+      const maxPolls = 180 // ~15 min @ 5s
+      let finalLote = null as ConciliacionBancosLote | null
+      for (let i = 0; i < maxPolls; i++) {
+        await new Promise(r => setTimeout(r, 5000))
+        const polled = await conciliacionBancosService.obtenerLote(loteId)
+        finalLote = polled.lote
+        setLote(polled.lote)
+        if (polled.lote.estado === 'COMPARADO') break
+        if (polled.lote.estado === 'ERROR_COMPARAR') {
+          throw new Error(
+            polled.lote.comparar_error ||
+              'La comparacion fallo. Revise logs del servidor.'
+          )
+        }
       }
+      if (!finalLote || finalLote.estado !== 'COMPARADO') {
+        throw new Error(
+          'La comparacion sigue en curso o tardo demasiado. Recargue el lote mas tarde.'
+        )
+      }
+      setStats(finalLote.stats || null)
       setFiltroNovedad([])
-      await refreshResultados(lote.id)
-      const univ = cmp.pagos_universo ?? 0
-      const sinBd = Number(cmp.stats?.SIN_BD || 0)
-      const rango = `${cmp.fecha_desde || fechaDesde} → ${cmp.fecha_hasta || fechaHasta}`
+      setPage(1)
+      await refreshResultados(loteId, { page: 1, tipos: [] })
+      const univ = finalLote.pagos_universo ?? 0
+      const sinBd = Number(finalLote.stats?.SIN_BD || 0)
+      const rango = `${finalLote.fecha_desde || fechaDesde} → ${finalLote.fecha_hasta || fechaHasta}`
+      const elapsed = finalLote.comparar_elapsed_ms
+        ? ` (${Math.round(finalLote.comparar_elapsed_ms / 1000)}s)`
+        : ''
       if (univ === 0) {
         toast.error(
           `Sin pagos BD en ${rango} para ${bancosSel.join(', ')}. ` +
@@ -349,7 +447,7 @@ export default function ConciliacionBancosPage() {
         )
       } else {
         toast.success(
-          `Comparacion lista (${rango}; bancos: ${bancosSel.join(', ')}). Pagos universo: ${univ}.`
+          `Comparacion lista${elapsed}. ${rango}; bancos: ${bancosSel.join(', ')}. Pagos universo: ${univ}.`
         )
       }
     } catch (err) {
@@ -602,12 +700,14 @@ export default function ConciliacionBancosPage() {
               disabled={loading || !lote || bancosSel.length === 0}
               className="bg-blue-600 hover:bg-blue-700"
             >
-              Conciliar
+              {loading && lote?.estado === 'COMPARANDO'
+                ? 'Conciliando...'
+                : 'Conciliar'}
             </Button>
             <Button
               variant="outline"
               onClick={handleExport}
-              disabled={!lote || items.length === 0}
+              disabled={!lote || (lote.estado !== 'COMPARADO' && lote.estado !== 'APLICADO')}
             >
               <Download className="mr-2 h-4 w-4" />
               Reporte Excel
@@ -616,11 +716,39 @@ export default function ConciliacionBancosPage() {
 
           {lote && (
             <p className="text-sm text-gray-600">
-              Lote #{lote.id} · {lote.archivo_nombre} · {lote.moneda_carga} ·{' '}
+              Lote #{lote.id} · {lote.archivo_nombre} · {lote.moneda_carga}
+              {lote.filas_banco != null ? ` · ${lote.filas_banco} filas` : ''} ·{' '}
               {lote.fecha_desde} → {lote.fecha_hasta} · estado {lote.estado}
               {statsMostrar ? ` · pendientes decision: ${pendientes}` : null}
             </p>
           )}
+
+            {lote && totalResultados > 0 && (
+              <div className="flex flex-wrap items-center gap-2 text-sm text-gray-600">
+                <span>
+                  Mostrando {items.length} de {totalResultados} (pag. {page}/{pages})
+                </span>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={loading || page <= 1}
+                  onClick={() => setPage(p => Math.max(1, p - 1))}
+                >
+                  Anterior
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={loading || page >= pages}
+                  onClick={() => setPage(p => Math.min(pages, p + 1))}
+                >
+                  Siguiente
+                </Button>
+              </div>
+            )}
+
 
           {statsMostrar && (
             <div className="space-y-2">

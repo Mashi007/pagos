@@ -24,6 +24,11 @@ export interface ConciliacionBancosLote {
   usuario_id?: number | null
   creado_en?: string | null
   bancos_filtro?: string[]
+  filas_banco?: number | null
+  stats?: Record<string, number> | null
+  pagos_universo?: number | null
+  comparar_elapsed_ms?: number | null
+  comparar_error?: string | null
 }
 
 export interface ConciliacionBancosResultado {
@@ -72,7 +77,7 @@ export const conciliacionBancosService = {
     fd.append('fecha_hasta', params.fecha_hasta)
     return apiClient.post(`${BASE}/lotes`, fd, {
       headers: { 'Content-Type': 'multipart/form-data' },
-      timeout: 120000,
+      timeout: 300000,
     })
   },
 
@@ -82,14 +87,17 @@ export const conciliacionBancosService = {
     fechas?: { fecha_desde?: string; fecha_hasta?: string }
   ): Promise<{
     ok: boolean
+    async?: boolean
     lote_id: number
     estado: string
-    stats: Record<string, number>
+    message?: string
+    stats?: Record<string, number>
     bancos_filtro?: string[]
     fecha_desde?: string
     fecha_hasta?: string
     pagos_universo?: number
   }> {
+    // Arranca en background; el cliente hace polling del lote.
     return apiClient.post(
       `${BASE}/lotes/${loteId}/comparar`,
       {
@@ -97,14 +105,41 @@ export const conciliacionBancosService = {
         fecha_desde: fechas?.fecha_desde || undefined,
         fecha_hasta: fechas?.fecha_hasta || undefined,
       },
-      { timeout: 300000 }
+      { timeout: 60000 }
     )
   },
 
-  async listarResultados(
+  async obtenerLote(
     loteId: number
-  ): Promise<{ ok: boolean; items: ConciliacionBancosResultado[] }> {
-    return apiClient.get(`${BASE}/lotes/${loteId}/resultados`)
+  ): Promise<{ ok: boolean; lote: ConciliacionBancosLote }> {
+    return apiClient.get(`${BASE}/lotes/${loteId}`, { timeout: 60000 })
+  },
+
+  async listarResultados(
+    loteId: number,
+    opts?: { page?: number; per_page?: number; tipo_novedad?: string[]; decision?: string }
+  ): Promise<{
+    ok: boolean
+    items: ConciliacionBancosResultado[]
+    total: number
+    page: number
+    per_page: number
+    pages: number
+  }> {
+    const params: Record<string, string | number> = {
+      page: opts?.page ?? 1,
+      per_page: opts?.per_page ?? 200,
+    }
+    if (opts?.tipo_novedad?.length) {
+      params.tipo_novedad = opts.tipo_novedad.join(',')
+    }
+    if (opts?.decision) {
+      params.decision = opts.decision
+    }
+    return apiClient.get(`${BASE}/lotes/${loteId}/resultados`, {
+      params,
+      timeout: 120000,
+    })
   },
 
   async decidir(

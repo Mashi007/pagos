@@ -734,16 +734,24 @@ def _fecha_ambigua_dd_mm(d: int, mo: int, y: int) -> bool:
 
 
 def _parse_fecha_dmy_parts(
-    d: int, mo: int, y: int, ref_hoy: date, *, conservador: bool = False
+    d: int,
+    mo: int,
+    y: int,
+    ref_hoy: date,
+    *,
+    conservador: bool = False,
+    orden_fijo: bool = False,
 ) -> Optional[date]:
-    if conservador and _fecha_ambigua_dd_mm(d, mo, y):
+    # ISO/YYYYMMDD y similares ya traen mes/dia en orden fijo: no aplicar
+    # ambiguedad DD/MM vs MM/DD (evita descartar p.ej. 2026-07-12 en escanner).
+    if not orden_fijo and conservador and _fecha_ambigua_dd_mm(d, mo, y):
         return None
     opts: List[Optional[date]] = []
     try:
         opts.append(date(y, mo, d))
     except ValueError:
         pass
-    if d != mo and d <= 12 and mo <= 12:
+    if not orden_fijo and d != mo and d <= 12 and mo <= 12:
         try:
             opts.append(date(y, d, mo))
         except ValueError:
@@ -787,7 +795,9 @@ def parse_fecha_comprobante(
     try:
         if len(s10) >= 10 and s10[4] in "-/" and s10[7] in "-/" and s10[4] == s10[7]:
             y, m, d = int(s10[0:4]), int(s10[5:7]), int(s10[8:10])
-            parsed = _parse_fecha_dmy_parts(d, m, y, ref_hoy, conservador=conservador)
+            parsed = _parse_fecha_dmy_parts(
+                d, m, y, ref_hoy, conservador=conservador, orden_fijo=True
+            )
             if parsed:
                 return parsed
     except (ValueError, TypeError):
@@ -823,6 +833,7 @@ def parse_fecha_comprobante(
             int(m_iso.group(1)),
             ref_hoy,
             conservador=conservador,
+            orden_fijo=True,
         )
         if parsed:
             return parsed
@@ -834,6 +845,7 @@ def parse_fecha_comprobante(
             int(m_merc_ref.group(1)),
             ref_hoy,
             conservador=conservador,
+            orden_fijo=True,
         )
         if parsed:
             return parsed

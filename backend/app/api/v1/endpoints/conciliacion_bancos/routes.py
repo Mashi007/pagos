@@ -64,7 +64,22 @@ class DecisionMasivaBody(BaseModel):
     )
 
 
+def _notas_lote(lote: ConciliacionBancoOcrLote) -> dict:
+    raw = (lote.notas or "").strip()
+    if not raw:
+        return {}
+    try:
+        import json
+
+        data = json.loads(raw)
+        return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
 def _lote_dict(lote: ConciliacionBancoOcrLote) -> dict:
+    notas = _notas_lote(lote)
+    filas = notas.get("filas_banco")
     return {
         "id": lote.id,
         "archivo_nombre": lote.archivo_nombre,
@@ -75,6 +90,11 @@ def _lote_dict(lote: ConciliacionBancoOcrLote) -> dict:
         "usuario_id": lote.usuario_id,
         "creado_en": lote.creado_en.isoformat() if lote.creado_en else None,
         "bancos_filtro": svc._leer_bancos_de_lote(lote),
+        "filas_banco": int(filas) if filas is not None else None,
+        "stats": notas.get("stats"),
+        "pagos_universo": notas.get("pagos_universo"),
+        "comparar_elapsed_ms": notas.get("comparar_elapsed_ms"),
+        "comparar_error": notas.get("comparar_error"),
     }
 
 
@@ -121,25 +141,38 @@ def comparar(
     db: Session = Depends(get_db),
     _user: UserResponse = Depends(require_admin),
 ):
-    return {
-        "ok": True,
-        **svc.comparar_lote(
-            db,
-            lote_id,
-            bancos_filtro=body.bancos,
-            fecha_desde=body.fecha_desde,
-            fecha_hasta=body.fecha_hasta,
-        ),
-    }
+    """Inicia comparar en background (lotes grandes ~25k). Polling GET /lotes/{id}."""
+    return svc.iniciar_comparar_lote(
+        db,
+        lote_id,
+        bancos_filtro=body.bancos,
+        fecha_desde=body.fecha_desde,
+        fecha_hasta=body.fecha_hasta,
+    )
 
 
 @router.get("/lotes/{lote_id}/resultados")
 def resultados(
     lote_id: int,
+    page: int = 1,
+    per_page: int = 200,
+    tipo_novedad: Optional[str] = None,
+    decision: Optional[str] = None,
     db: Session = Depends(get_db),
     _user: UserResponse = Depends(require_admin),
 ):
-    return {"ok": True, "items": svc.listar_resultados(db, lote_id)}
+    tipos = None
+    if tipo_novedad:
+        tipos = [x.strip() for x in tipo_novedad.split(",") if x.strip()]
+    data = svc.listar_resultados(
+        db,
+        lote_id,
+        page=page,
+        per_page=per_page,
+        tipos=tipos,
+        decision=decision,
+    )
+    return {"ok": True, **data}
 
 
 @router.post("/resultados/{resultado_id}/decidir")
