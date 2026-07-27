@@ -356,7 +356,7 @@ export function PagosRegistradosRevisionSection(
                         className="whitespace-nowrap"
                         title="Confirmacion en Conciliacion Bancos (check verde). No es autoconciliacion OCR/cuotas."
                       >
-                        Conciliado
+                        Conciliación Bancaria
                       </TableHead>
                       <TableHead>Notas</TableHead>
                       <TableHead className="min-w-[88px] whitespace-nowrap text-right">
