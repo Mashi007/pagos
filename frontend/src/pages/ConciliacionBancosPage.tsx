@@ -64,6 +64,13 @@ function esConciliadoBancario(row: ConciliacionBancosResultado): boolean {
   return row.decision === 'CORREGIR' && Boolean(row.aplicado)
 }
 
+function esMatchSimple(row: ConciliacionBancosResultado): boolean {
+  // MATCH_EXACTO y MATCH_PARCIAL: mismo pipeline (confirmacion directa, sin candidatos)
+  return (
+    row.tipo_novedad === 'MATCH_EXACTO' || row.tipo_novedad === 'MATCH_PARCIAL'
+  )
+}
+
 function filaBloqueada(row: ConciliacionBancosResultado): boolean {
   return (
     row.aplicado ||
@@ -994,7 +1001,7 @@ export default function ConciliacionBancosPage() {
                       <TableCell>
                         <Badge
                           className={
-                            row.tipo_novedad === 'MATCH_EXACTO'
+                            esMatchSimple(row)
                               ? 'bg-green-600'
                               : row.tipo_novedad === 'SIN_BD'
                                 ? 'bg-amber-600'

@@ -1265,17 +1265,23 @@ def decidir_y_aplicar(
 
     # Conflicto de serial en otro pago
     if _serial_choca_unique_pagos(db, serial_new, exclude_pago_id=int(pago.id)):
-        # AMBIGUO = mismo serial en mas de 1 prestamo: confirmar sin reescribir serial.
-        # Revision manual marca Ambiguo (tipo_novedad AMBIGUO + CORREGIR+aplicado).
-        if res.tipo_novedad == "AMBIGUO":
+        # MATCH_EXACTO y MATCH_PARCIAL: mismo mecanismo (confirmar sin reescribir serial).
+        # AMBIGUO: igual confirmacion, pero revision marca Ambiguo (tipo_novedad).
+        if res.tipo_novedad in ("MATCH_EXACTO", "MATCH_PARCIAL", "AMBIGUO"):
             inst_changed = _aplicar_institucion_desde_lote(pago, lote)
             res.decision = "CORREGIR"
             res.fuente_elegida = fuente
             res.aplicado = True
-            partes = [
-                "AMBIGUO: confirmacion bancaria registrada",
-                f"serial banco '{serial_new}' no reescrito (ya en otro pago)",
-            ]
+            if res.tipo_novedad == "AMBIGUO":
+                partes = [
+                    "AMBIGUO: confirmacion bancaria registrada",
+                    f"serial banco '{serial_new}' no reescrito (ya en otro pago)",
+                ]
+            else:
+                partes = [
+                    f"{res.tipo_novedad}: confirmacion bancaria registrada",
+                    f"serial banco '{serial_new}' no reescrito (ya en otro pago)",
+                ]
             if inst_changed:
                 partes.append(
                     f"Institucion actualizada a {pago.institucion_bancaria}"
@@ -1290,7 +1296,7 @@ def decidir_y_aplicar(
                 raise HTTPException(
                     status_code=409,
                     detail=(
-                        "No se pudo confirmar AMBIGUO: conflicto al guardar. "
+                        f"No se pudo confirmar {res.tipo_novedad}: conflicto al guardar. "
                         "Discernimiento manual."
                     ),
                 ) from ie
@@ -1301,9 +1307,9 @@ def decidir_y_aplicar(
                 "fuente_elegida": fuente,
                 "aplicado": True,
                 "cambio": bool(inst_changed),
-                "ambiguo": True,
+                "ambiguo": res.tipo_novedad == "AMBIGUO",
             }
-        # Otros tipos: no forzar (sin tocar institucion)
+        # Otros tipos: no forzar
         res.decision = "PENDIENTE"
         res.fuente_elegida = None
         res.aplicado = False
