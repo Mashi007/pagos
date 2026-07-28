@@ -383,8 +383,28 @@ export default function ConciliacionBancosPage() {
       setFiltroNovedad([])
       setSeleccionados(new Set())
       toast.success(
-        `Lote #${res.lote.id} cargado y guardado en BD historica (${moneda}${res.lote.filas_banco != null ? `, ${res.lote.filas_banco} filas` : ''}). Rango: ${res.lote.fecha_desde} → ${res.lote.fecha_hasta}`
+        'Lote #' +
+          String(res.lote.id) +
+          ' cargado (' +
+          moneda +
+          (res.lote.filas_banco != null
+            ? ', ' + String(res.lote.filas_banco) + ' filas'
+            : '') +
+          '). Rango: ' +
+          String(res.lote.fecha_desde) +
+          ' -> ' +
+          String(res.lote.fecha_hasta)
       )
+      if (res.lote.extracto_error) {
+        toast.message(String(res.lote.extracto_error))
+      } else if (res.lote.filas_extracto_upsert != null) {
+        toast.message(
+          'BD historica: ' +
+            String(res.lote.filas_extracto_upsert) +
+            ' filas guardadas'
+        )
+      }
+
     } catch (err) {
       toast.error(errMsg(err))
     } finally {

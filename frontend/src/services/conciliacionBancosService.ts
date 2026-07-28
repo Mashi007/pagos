@@ -31,6 +31,9 @@ export interface ConciliacionBancosLote {
   comparar_error?: string | null
   comparar_huerfano?: boolean
   job_vivo?: boolean
+  filas_extracto_upsert?: number | null
+  extracto_error?: string | null
+  fuente_carga?: string | null
 }
 
 export interface ConciliacionBancosResultado {

@@ -110,6 +110,9 @@ def _lote_dict(lote: ConciliacionBancoOcrLote, db: Session | None = None) -> dic
         "comparar_error": notas.get("comparar_error"),
         "comparar_huerfano": bool(notas.get("comparar_huerfano")),
         "job_vivo": _job_vivo(lote.id),
+        "filas_extracto_upsert": notas.get("filas_extracto_upsert"),
+        "extracto_error": notas.get("extracto_error"),
+        "fuente_carga": notas.get("fuente_carga"),
     }
 
 

@@ -13,7 +13,7 @@ from typing import Any, Optional
 from fastapi import HTTPException, UploadFile
 from openpyxl import Workbook, load_workbook
 from sqlalchemy import delete, func, or_, select, text
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, ProgrammingError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.core.documento import normalize_documento, split_numero_documento_almacenado
@@ -954,6 +954,7 @@ def crear_lote_desde_excel(
     n = 0
     fechas_excel: list[date] = []
     batch: list[dict[str, Any]] = []
+    extracto_filas: list[dict[str, Any]] = []
     t0 = datetime.utcnow()
     excede_tope = False
 
@@ -966,7 +967,6 @@ def crear_lote_desde_excel(
 
     try:
         banco_form = _normalizar_banco_categoria(banco)
-        extracto_filas: list[dict[str, Any]] = []
         for i, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
             if not row:
                 continue
@@ -1065,21 +1065,45 @@ def crear_lote_desde_excel(
         lote.fecha_desde = min(lote.fecha_desde, excel_min)
         lote.fecha_hasta = max(lote.fecha_hasta, excel_max)
 
-    n_extracto = _upsert_extracto_filas(
-        db,
-        extracto_filas,
-        lote_id=int(lote.id),
-        archivo_nombre=lote.archivo_nombre,
-    )
-    lote.notas = json.dumps(
-        {
-            "filas_banco": n,
-            "filas_extracto_upsert": n_extracto,
-            "max_filas_lote": MAX_FILAS_EXCEL_LOTE,
-            "fuente_carga": "excel",
-        },
-        ensure_ascii=True,
-    )
+    n_extracto = 0
+    extracto_error = None
+    try:
+        # SAVEPOINT: si falta la tabla, no tumba el lote del Excel.
+        with db.begin_nested():
+            n_extracto = _upsert_extracto_filas(
+                db,
+                extracto_filas,
+                lote_id=int(lote.id),
+                archivo_nombre=lote.archivo_nombre,
+            )
+    except (ProgrammingError, SQLAlchemyError) as e:
+        msg = str(getattr(e, "orig", None) or e)
+        logger.exception(
+            "[conciliacion-bancos] upsert extracto fallo lote_id=%s: %s",
+            lote.id,
+            msg,
+        )
+        low = msg.lower()
+        if (
+            "conciliacion_banco_extracto" in low
+            or "does not exist" in low
+            or "undefinedtable" in low
+        ):
+            extracto_error = (
+                "Falta tabla conciliacion_banco_extracto. "
+                "Ejecute en DBeaver: scripts/sql/conciliacion_banco_extracto.sql"
+            )
+        else:
+            extracto_error = msg[:280]
+    notas_payload: dict[str, Any] = {
+        "filas_banco": n,
+        "filas_extracto_upsert": n_extracto,
+        "max_filas_lote": MAX_FILAS_EXCEL_LOTE,
+        "fuente_carga": "excel",
+    }
+    if extracto_error:
+        notas_payload["extracto_error"] = extracto_error
+    lote.notas = json.dumps(notas_payload, ensure_ascii=True)
 
     db.commit()
     db.refresh(lote)
