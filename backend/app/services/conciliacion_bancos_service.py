@@ -885,7 +885,7 @@ def _snapshot_sin_bd_diario(
         {
             "fecha": f,
             "cantidad": int(cantidad or 0),
-            "monto_usd": round(float(monto_usd or 0), 2),
+            "monto_usd": round(abs(float(monto_usd or 0)), 2),
         },
     )
     db.flush()
@@ -920,7 +920,7 @@ def _serie_sin_bd_diario(db: Session, *, dias: int = 6) -> list[dict[str, Any]]:
                 "fecha": f.isoformat(),
                 "label": label,
                 "cantidad": int(cant),
-                "monto_usd": round(float(monto), 2),
+                "monto_usd": round(abs(float(monto)), 2),
             }
         )
     return out
@@ -1064,7 +1064,7 @@ def resumen_sin_bd_por_banco(
         elif clave in extracto_monto:
             monto = float(extracto_monto[clave])
         if monto is not None:
-            slot["monto_total"] += monto
+            slot["monto_total"] += abs(float(monto))
 
     por_banco = sorted(
         [

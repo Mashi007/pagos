@@ -91,7 +91,7 @@ export function AuditoriaExtractoBancosTab() {
             fecha: p.fecha,
             label: p.label,
             cantidad: Number(p.cantidad || 0),
-            monto_usd: Number(p.monto_usd || 0),
+            monto_usd: Math.abs(Number(p.monto_usd || 0)),
           })
         )
       )
@@ -220,7 +220,7 @@ export function AuditoriaExtractoBancosTab() {
         <Card className="border-slate-200 shadow-sm">
           <CardHeader className="pb-2">
             <CardTitle className="text-lg font-bold text-slate-900">
-              Totales SIN_BD — hoy y 5 dias atras
+              Totales USD SIN_BD — hoy y 5 dias atras
             </CardTitle>
           </CardHeader>
           <CardContent className="h-[360px]">
@@ -245,20 +245,14 @@ export function AuditoriaExtractoBancosTab() {
                     axisLine={{ stroke: '#64748b' }}
                   />
                   <YAxis
-                    yAxisId="usd"
                     tick={{ fill: '#0f172a', fontSize: 12, fontWeight: 600 }}
                     axisLine={{ stroke: '#64748b' }}
-                    tickFormatter={(v) =>
-                      Number(v) >= 1000
-                        ? (Number(v) / 1000).toFixed(0) + 'k'
-                        : String(v)
-                    }
-                  />
-                  <YAxis
-                    yAxisId="cant"
-                    orientation="right"
-                    tick={{ fill: '#0f172a', fontSize: 12, fontWeight: 600 }}
-                    axisLine={{ stroke: '#64748b' }}
+                    tickFormatter={(v) => {
+                      const n = Math.abs(Number(v || 0))
+                      if (n >= 1000000) return '$' + (n / 1000000).toFixed(1) + 'M'
+                      if (n >= 1000) return '$' + (n / 1000).toFixed(0) + 'k'
+                      return '$' + String(n)
+                    }}
                   />
                   <Tooltip
                     contentStyle={{
@@ -268,35 +262,23 @@ export function AuditoriaExtractoBancosTab() {
                       color: '#0f172a',
                       fontWeight: 600,
                     }}
-                    formatter={(value: number, name: string) =>
-                      name === 'monto_usd' || name === 'USD'
-                        ? [formatCurrency(Number(value || 0)), 'USD']
-                        : [fmtNum(Number(value || 0)), 'Cantidad']
-                    }
+                    formatter={(value: number) => [
+                      formatCurrency(Math.abs(Number(value || 0))),
+                      'USD',
+                    ]}
                   />
                   <Legend
-                    formatter={(v: string) => (
-                      <span className="font-semibold text-slate-900">{v}</span>
+                    formatter={() => (
+                      <span className="font-semibold text-slate-900">USD</span>
                     )}
                   />
                   <Line
-                    yAxisId="usd"
                     type="monotone"
                     dataKey="monto_usd"
                     name="USD"
                     stroke="#2563eb"
                     strokeWidth={3}
                     dot={{ r: 5, fill: '#1d4ed8', stroke: '#fff', strokeWidth: 2 }}
-                    activeDot={{ r: 7 }}
-                  />
-                  <Line
-                    yAxisId="cant"
-                    type="monotone"
-                    dataKey="cantidad"
-                    name="Cantidad"
-                    stroke="#0d9488"
-                    strokeWidth={3}
-                    dot={{ r: 5, fill: '#0f766e', stroke: '#fff', strokeWidth: 2 }}
                     activeDot={{ r: 7 }}
                   />
                 </LineChart>
